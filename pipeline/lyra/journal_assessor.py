@@ -64,58 +64,6 @@ SPELLING_FIXES = {
 
 _MAX_TOKENS = 16384
 
-# JSON schema for the combined D1+D4+D6+D9 assessment (enforced via tool-use trick)
-_ASSESS_SCHEMA = {
-    "type": "object",
-    "properties": {
-        "d1_proper_nouns": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "properties": {
-                    "find": {"type": "string"},
-                    "replace": {"type": "string"},
-                    "reason": {"type": "string"},
-                },
-                "required": ["find", "replace"],
-            },
-        },
-        "d4_screenshots": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "properties": {
-                    "image_alt": {"type": "string"},
-                    "correct_position": {"type": "string"},
-                    "reason": {"type": "string"},
-                },
-                "required": ["image_alt"],
-            },
-        },
-        "d6_spelling": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "properties": {
-                    "find": {"type": "string"},
-                    "replace": {"type": "string"},
-                },
-                "required": ["find", "replace"],
-            },
-        },
-        "d9_summary": {
-            "type": "object",
-            "properties": {
-                "accurate": {"type": "boolean"},
-                "issues": {"type": "array", "items": {"type": "string"}},
-                "corrected_summary": {"type": "string"},
-            },
-            "required": ["accurate"],
-        },
-    },
-    "required": ["d1_proper_nouns", "d4_screenshots", "d6_spelling", "d9_summary"],
-}
-
 
 def _llm_call(system: str, user: str, settings: LyraSettings, max_tokens: int = 0) -> str:
     """Make an LLM call via the unified call_api path with timeout protection."""
@@ -569,75 +517,263 @@ def _fix_d10_section_balance(
 
 
 # ---------------------------------------------------------------------------
-# D1+D4+D6+D9: Combined LLM check
+# D1: Proper Nouns (LLM)
 # ---------------------------------------------------------------------------
 
+_D1_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "corrections": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "find": {"type": "string"},
+                    "replace": {"type": "string"},
+                    "reason": {"type": "string"},
+                },
+                "required": ["find", "replace"],
+            },
+        },
+    },
+    "required": ["corrections"],
+}
 
-def _check_d1_d4_d6_d9(
-    body: str,
-    sources: list[dict],
-    settings: LyraSettings,
-) -> dict:
-    """Combined LLM check for proper nouns, screenshots, spelling, summary."""
-    prompt = _load_prompt("journal_assess_full")
+
+def _check_d1_proper_nouns(body: str, sources: list[dict], settings: LyraSettings) -> dict:
+    """Check proper nouns against source titles."""
     source_block = _format_sources_for_prompt(sources)
+    system = (
+        "Compare every proper noun in the journal (site names, people, caves, "
+        "cultures, locations) against the source titles/URLs. Sources have the "
+        "CORRECT spelling. Return corrections for any mismatches.\n\n"
+        "Examples: Monteppi→Montesiepi, Galano Giati→Galgano Guidotti, "
+        "Vulcansky Dolman→Volkonsky Dolmen, Goff's Cave→Gough's Cave"
+    )
+    user = f"## Source List\n{source_block}\n\n## Journal Text\n{body[:15000]}"
 
-    user = f"## Journal Body\n{body}\n\n## Source List\n{source_block}"
-
-    # Use structured output (tool-use trick on MiniMax) for reliable JSON
     try:
         response = call_api(
-            system=prompt,
+            system=system,
             messages=[{"role": "user", "content": user}],
-            max_tokens=_MAX_TOKENS,
+            max_tokens=4096,
             temperature=0.0,
-            timeout=180.0,
+            timeout=120.0,
             response_format={
                 "type": "json_schema",
-                "json_schema": {
-                    "name": "JournalAssessment",
-                    "strict": True,
-                    "schema": _ASSESS_SCHEMA,
-                },
+                "json_schema": {"name": "ProperNouns", "strict": True, "schema": _D1_SCHEMA},
             },
         )
-        raw = response.text or ""
+        parsed = _parse_json(response.text or "")
     except (LyraAPIError, Exception) as e:
-        logger.warning("[assessor] D1+D4+D6+D9 LLM call failed: %s", e)
-        raw = ""
+        logger.warning("[assessor] D1 call failed: %s", e)
+        parsed = {}
 
-    parsed = _parse_json(raw)
+    issues = parsed.get("corrections", []) if isinstance(parsed, dict) else []
+    return {"passed": len(issues) == 0, "issues": issues}
+
+
+# ---------------------------------------------------------------------------
+# D4: Screenshot Placement (LLM)
+# ---------------------------------------------------------------------------
+
+_D4_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "misplacements": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "image_alt": {"type": "string"},
+                    "correct_position": {"type": "string"},
+                    "reason": {"type": "string"},
+                },
+                "required": ["image_alt"],
+            },
+        },
+    },
+    "required": ["misplacements"],
+}
+
+
+def _check_d4_screenshots(body: str, settings: LyraSettings) -> dict:
+    """Check if screenshots are placed after matching paragraphs."""
+    # Extract image lines and their surrounding context
+    lines = body.split("\n")
+    img_contexts = []
+    for i, line in enumerate(lines):
+        if line.strip().startswith("!["):
+            before = "\n".join(lines[max(0, i - 5) : i])
+            img_contexts.append(f"Image: {line.strip()}\nPreceding paragraph: {before[-300:]}")
+
+    if not img_contexts:
+        return {"passed": True, "issues": []}
+
+    system = (
+        "For each image, check if its alt text topic matches the paragraph before it. "
+        "Return misplacements only — images correctly placed should not appear in the list."
+    )
+    user = "\n\n".join(img_contexts)
+
+    try:
+        response = call_api(
+            system=system,
+            messages=[{"role": "user", "content": user}],
+            max_tokens=4096,
+            temperature=0.0,
+            timeout=60.0,
+            response_format={
+                "type": "json_schema",
+                "json_schema": {"name": "Screenshots", "strict": True, "schema": _D4_SCHEMA},
+            },
+        )
+        parsed = _parse_json(response.text or "")
+    except (LyraAPIError, Exception) as e:
+        logger.warning("[assessor] D4 call failed: %s", e)
+        parsed = {}
+
+    issues = parsed.get("misplacements", []) if isinstance(parsed, dict) else []
+    return {"passed": len(issues) == 0, "issues": issues}
+
+
+# ---------------------------------------------------------------------------
+# D6: Spelling (LLM)
+# ---------------------------------------------------------------------------
+
+_D6_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "corrections": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "find": {"type": "string"},
+                    "replace": {"type": "string"},
+                },
+                "required": ["find", "replace"],
+            },
+        },
+    },
+    "required": ["corrections"],
+}
+
+
+def _check_d6_spelling(body: str, settings: LyraSettings) -> dict:
+    """Check for misspelled archaeological terms."""
+    # Apply dictionary fixes first
+    issues_from_dict = []
+    for wrong, right in SPELLING_FIXES.items():
+        if wrong in body:
+            issues_from_dict.append({"find": wrong, "replace": right})
+
+    # LLM check for unknown misspellings (only send first 10K to keep it fast)
+    system = (
+        "Check this archaeology journal for misspelled archaeological terms. "
+        "Common errors: dolman→dolmen, synamic→synodic, Nufian→Natufian. "
+        "Return only clear misspellings, not stylistic preferences."
+    )
+    user = body[:10000]
+
+    try:
+        response = call_api(
+            system=system,
+            messages=[{"role": "user", "content": user}],
+            max_tokens=4096,
+            temperature=0.0,
+            timeout=60.0,
+            response_format={
+                "type": "json_schema",
+                "json_schema": {"name": "Spelling", "strict": True, "schema": _D6_SCHEMA},
+            },
+        )
+        parsed = _parse_json(response.text or "")
+    except (LyraAPIError, Exception) as e:
+        logger.warning("[assessor] D6 LLM call failed: %s", e)
+        parsed = {}
+
+    llm_issues = parsed.get("corrections", []) if isinstance(parsed, dict) else []
+    all_issues = issues_from_dict + llm_issues
+    return {"passed": len(all_issues) == 0, "issues": all_issues}
+
+
+# ---------------------------------------------------------------------------
+# D9: Summary Accuracy (LLM)
+# ---------------------------------------------------------------------------
+
+_D9_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "accurate": {"type": "boolean"},
+        "issues": {"type": "array", "items": {"type": "string"}},
+        "corrected_summary": {"type": "string"},
+    },
+    "required": ["accurate"],
+}
+
+
+def _check_d9_summary(body: str, settings: LyraSettings) -> dict:
+    """Check summary accuracy against body content."""
+    # Extract summary (italic text between --- markers at top)
+    summary = ""
+    if body.startswith("*"):
+        end = body.find("\n---")
+        if end > 0:
+            summary = body[:end].strip()
+    elif "\n*" in body[:500]:
+        start = body.find("\n*")
+        end = body.find("\n---", start)
+        if end > 0:
+            summary = body[start:end].strip()
+
+    if not summary:
+        return {"passed": True, "issues": [], "d9_data": {}}
+
+    # Get first 200 chars of each section for comparison
+    sections = _get_sections(body)
+    section_summaries = []
+    for sec in sections[:8]:
+        if sec["header"]:
+            section_summaries.append(f"{sec['header']}: {sec['content'][:200]}")
+
+    system = (
+        "Compare this journal summary against the section content. "
+        "Check that proper nouns and claims in the summary match the body. "
+        "If inaccurate, provide a corrected summary."
+    )
+    user = f"## Summary\n{summary}\n\n## Section Content\n" + "\n\n".join(section_summaries)
+
+    try:
+        response = call_api(
+            system=system,
+            messages=[{"role": "user", "content": user}],
+            max_tokens=4096,
+            temperature=0.0,
+            timeout=60.0,
+            response_format={
+                "type": "json_schema",
+                "json_schema": {"name": "SummaryCheck", "strict": True, "schema": _D9_SCHEMA},
+            },
+        )
+        parsed = _parse_json(response.text or "")
+    except (LyraAPIError, Exception) as e:
+        logger.warning("[assessor] D9 call failed: %s", e)
+        parsed = {"accurate": True}
+
     if not isinstance(parsed, dict):
-        logger.warning("[assessor] D1+D4+D6+D9: LLM returned non-dict, treating as pass")
-        return {
-            "d1_passed": True,
-            "d4_passed": True,
-            "d6_passed": True,
-            "d9_passed": True,
-            "raw": parsed,
-        }
+        parsed = {"accurate": True}
 
-    d1_issues = parsed.get("d1_proper_nouns", [])
-    d4_issues = parsed.get("d4_screenshots", [])
-    d6_issues = parsed.get("d6_spelling", [])
-    d9_data = parsed.get("d9_summary", {})
-    d9_accurate = d9_data.get("accurate", True) if isinstance(d9_data, dict) else True
-
+    accurate = parsed.get("accurate", True)
     return {
-        "d1_passed": len(d1_issues) == 0,
-        "d4_passed": len(d4_issues) == 0,
-        "d6_passed": len(d6_issues) == 0,
-        "d9_passed": d9_accurate,
-        "d1_issues": d1_issues,
-        "d4_issues": d4_issues,
-        "d6_issues": d6_issues,
-        "d9_data": d9_data,
-        "raw": parsed,
+        "passed": accurate,
+        "issues": parsed.get("issues", []),
+        "d9_data": parsed,
     }
 
 
 def _fix_d1_d4_d6_d9(body: str, check_result: dict) -> tuple[str, list[dict]]:
-    """Apply mechanical fixes from the combined LLM check result."""
+    """Apply mechanical fixes from the separate LLM check results."""
     fixes: list[dict] = []
 
     # D1: Proper noun fixes
@@ -803,14 +939,36 @@ def assess_and_fix(
             all_fixes.append({"dimension": "D10", "issues": d10["issues"]})
             logger.info("[assessor] D10: fixing section balance")
 
-        # --- Combined LLM check (D1+D4+D6+D9) ---
-        combined = _check_d1_d4_d6_d9(best_body, sources, settings)
-        dims["D1_proper_nouns"] = combined["d1_passed"]
-        dims["D4_screenshot_placement"] = combined["d4_passed"]
-        dims["D6_spelling"] = combined["d6_passed"]
-        dims["D9_summary_accuracy"] = combined["d9_passed"]
+        # --- Separate LLM checks (D1, D4, D6, D9) ---
+        d1 = _check_d1_proper_nouns(best_body, sources, settings)
+        dims["D1_proper_nouns"] = d1["passed"]
+        if not d1["passed"]:
+            logger.info("[assessor] D1: found %d proper noun issues", len(d1["issues"]))
 
-        if not all(combined[k] for k in ("d1_passed", "d4_passed", "d6_passed", "d9_passed")):
+        d4 = _check_d4_screenshots(best_body, settings)
+        dims["D4_screenshot_placement"] = d4["passed"]
+        if not d4["passed"]:
+            logger.info("[assessor] D4: found %d misplaced screenshots", len(d4["issues"]))
+
+        d6 = _check_d6_spelling(best_body, settings)
+        dims["D6_spelling"] = d6["passed"]
+        if not d6["passed"]:
+            logger.info("[assessor] D6: found %d spelling issues", len(d6["issues"]))
+
+        d9 = _check_d9_summary(best_body, settings)
+        dims["D9_summary_accuracy"] = d9["passed"]
+        if not d9["passed"]:
+            logger.info("[assessor] D9: summary inaccurate")
+
+        # Apply fixes from all 4 LLM checks
+        combined = {
+            "d1_issues": d1.get("issues", []),
+            "d4_issues": d4.get("issues", []),
+            "d6_issues": d6.get("issues", []),
+            "d9_data": d9.get("d9_data", {}),
+        }
+        any_failed = not all([d1["passed"], d4["passed"], d6["passed"], d9["passed"]])
+        if any_failed:
             best_body, llm_fixes = _fix_d1_d4_d6_d9(best_body, combined)
             all_fixes.extend(llm_fixes)
 
