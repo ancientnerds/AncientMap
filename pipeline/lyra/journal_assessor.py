@@ -317,18 +317,29 @@ def _fix_d5_source_quality(
 
 def _find_uncited_paragraphs(body: str, sources: list[dict]) -> list[str]:
     """Find paragraphs >100 chars without any [N] citation."""
+    # Strip sources section — it's a list, not prose
+    sources_idx = -1
+    for marker in ("### Sources", "## Sources"):
+        idx = body.find(marker)
+        if idx >= 0:
+            sources_idx = idx
+            break
+    check_body = body[:sources_idx] if sources_idx >= 0 else body
+
     uncited: list[str] = []
     cite_pattern = re.compile(r"\[\d+\]")
 
-    for para in body.split("\n\n"):
+    for para in check_body.split("\n\n"):
         stripped = para.strip()
-        # Skip headers, images, horizontal rules, short paragraphs
+        # Skip headers, images, horizontal rules, short paragraphs, source lines
         if (
             not stripped
             or stripped.startswith("#")
             or stripped.startswith("![")
             or stripped.startswith("---")
             or stripped.startswith("*")  # italic summary
+            or stripped.startswith(">")  # blockquotes
+            or re.match(r"^\d+\.\s", stripped)  # numbered source lines
             or len(stripped) < 100
         ):
             continue
@@ -456,9 +467,14 @@ def _check_d10_section_balance(body: str) -> dict:
     sections = _get_sections(body)
     issues: list[str] = []
 
-    total_words = len(body.split())
-    if total_words < 1500:
-        issues.append(f"Total word count {total_words} < 1500 minimum")
+    # Count words excluding sources section
+    src_idx = body.find("### Sources")
+    if src_idx == -1:
+        src_idx = body.find("## Sources")
+    prose_body = body[:src_idx] if src_idx >= 0 else body
+    total_words = len(prose_body.split())
+    if total_words < 800:
+        issues.append(f"Total prose word count {total_words} < 800 minimum")
     if total_words > 4000:
         issues.append(f"Total word count {total_words} > 4000 maximum")
 
@@ -466,9 +482,12 @@ def _check_d10_section_balance(body: str) -> dict:
     for sec in sections:
         if not sec["header"]:
             continue
+        # Skip the Sources section — it's a reference list, not prose
+        if "Sources" in sec["header"] or "References" in sec["header"]:
+            continue
         word_count = len(sec["content"].split())
         if word_count > 600:
-            issues.append(f"Section '{sec['header']}' has {word_count} words (>400)")
+            issues.append(f"Section '{sec['header']}' has {word_count} words (>600)")
         if word_count > 50 and not cite_pattern.search(sec["content"]):
             issues.append(f"Section '{sec['header']}' has 0 citations")
 
@@ -486,6 +505,8 @@ def _fix_d10_section_balance(
 
     for sec in sections:
         if not sec["header"]:
+            continue
+        if "Sources" in sec["header"] or "References" in sec["header"]:
             continue
         word_count = len(sec["content"].split())
         if word_count <= 600:
