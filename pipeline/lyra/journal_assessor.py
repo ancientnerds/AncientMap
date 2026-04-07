@@ -617,7 +617,9 @@ def _check_d1_proper_nouns(body: str, sources: list[dict], settings: LyraSetting
         logger.warning("[assessor] D1 call failed: %s", e)
         parsed = {}
 
-    issues = parsed.get("corrections", []) if isinstance(parsed, dict) else []
+    raw_issues = parsed.get("corrections", []) if isinstance(parsed, dict) else []
+    # Filter out identity replacements (find == replace) — these are false positives
+    issues = [c for c in raw_issues if c.get("find", "") != c.get("replace", "")]
     return {"passed": len(issues) == 0, "issues": issues}
 
 
