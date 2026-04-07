@@ -648,6 +648,21 @@ def assess_and_fix(
     if settings is None:
         settings = _get_settings()
 
+    # Safety guard: if no sources provided, skip assessment to avoid destroying content
+    if not sources:
+        logger.warning("[assessor] No sources provided — skipping assessment to protect content")
+        return body, AssessmentResult(
+            score=0, passed=False, dimensions={}, fixes_applied=[], iteration=0
+        )
+
+    # Preserve the sources section — never modify or remove it
+    original_sources_section = ""
+    for marker in ("### Sources", "## Sources"):
+        idx = body.find(marker)
+        if idx >= 0:
+            original_sources_section = body[idx:]
+            break
+
     best_body = body
     best_result = AssessmentResult(score=0, passed=False, iteration=0)
 
@@ -724,6 +739,22 @@ def assess_and_fix(
         if not all(combined[k] for k in ("d1_passed", "d4_passed", "d6_passed", "d9_passed")):
             best_body, llm_fixes = _fix_d1_d4_d6_d9(best_body, combined)
             all_fixes.extend(llm_fixes)
+
+        # --- Safety: restore sources section if damaged ---
+        if original_sources_section:
+            for marker in ("### Sources", "## Sources"):
+                curr_idx = best_body.find(marker)
+                if curr_idx >= 0:
+                    current_sources = best_body[curr_idx:]
+                    # If sources section shrank dramatically, restore it
+                    if len(current_sources) < len(original_sources_section) * 0.5:
+                        logger.warning("[assessor] Sources section damaged — restoring original")
+                        best_body = best_body[:curr_idx] + original_sources_section
+                    break
+            else:
+                # Sources section completely removed — restore it
+                logger.warning("[assessor] Sources section removed — restoring original")
+                best_body = best_body.rstrip() + "\n\n" + original_sources_section
 
         # --- Score ---
         score = sum(1 for v in dims.values() if v)
