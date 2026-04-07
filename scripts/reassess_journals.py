@@ -27,11 +27,15 @@ import sys
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# Use tunnel port if available
-if not os.environ.get("DATABASE_URL"):
-    os.environ["DATABASE_URL"] = (
-        "postgresql://ancient_map:ancient_map_dev_password@localhost:15432/ancient_map"
-    )
+# Override DB settings to use tunnel port (must be set BEFORE importing pipeline modules)
+os.environ["POSTGRES_HOST"] = "localhost"
+os.environ["POSTGRES_PORT"] = "15432"
+os.environ["POSTGRES_USER"] = "ancient_map"
+os.environ["POSTGRES_PASSWORD"] = "ancient_map_dev_password"
+os.environ["POSTGRES_DB"] = "ancient_map"
+os.environ["DATABASE_URL"] = (
+    "postgresql://ancient_map:ancient_map_dev_password@localhost:15432/ancient_map"
+)
 
 logging.basicConfig(
     level=logging.INFO,

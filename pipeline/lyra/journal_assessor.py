@@ -20,8 +20,7 @@ from datetime import datetime
 from pathlib import Path
 from urllib.parse import urlparse
 
-from pipeline.lyra.config import LyraSettings, _get_settings
-from pipeline.lyra.minimax_shared import minimax_chat_anthropic
+from pipeline.lyra.config import LyraAPIError, LyraSettings, _get_settings, call_api
 
 logger = logging.getLogger(__name__)
 
@@ -63,8 +62,23 @@ SPELLING_FIXES = {
     "Epipalaeolithic": "Epipaleolithic",
 }
 
-_MAX_TOKENS_ASSESS = 4096
-_MAX_TOKENS_FIX = 4096
+_MAX_TOKENS_ASSESS = 8192
+_MAX_TOKENS_FIX = 8192
+
+
+def _llm_call(system: str, user: str, settings: LyraSettings) -> str:
+    """Make an LLM call via the unified call_api path (uses tool-use trick on MiniMax)."""
+    try:
+        response = call_api(
+            system=system,
+            messages=[{"role": "user", "content": user}],
+            max_tokens=_MAX_TOKENS_FIX,
+            temperature=0.0,
+        )
+        return response.text or ""
+    except LyraAPIError as e:
+        logger.warning("[assessor] LLM call failed: %s", e)
+        return ""
 
 
 # ---------------------------------------------------------------------------
@@ -350,7 +364,7 @@ def _fix_d2_citation_coverage(
         )
         user = f"## Paragraph\n{para}\n\n## Sources\n{source_block}"
 
-        raw = minimax_chat_anthropic(system, user, _MAX_TOKENS_FIX, settings=settings)
+        raw = _llm_call(system, user, settings)
         if raw and raw.strip() and len(raw.strip()) > 50:
             # Replace the original paragraph
             body = body.replace(para, raw.strip())
@@ -417,7 +431,7 @@ def _fix_d3_academic_citations(
         '[{"find": "exact text", "replace": "corrected text"}]'
     )
 
-    raw = minimax_chat_anthropic(system, user, _MAX_TOKENS_FIX, settings=settings)
+    raw = _llm_call(system, user, settings)
     parsed = _parse_json(raw)
     if isinstance(parsed, list):
         for fix in parsed:
@@ -486,7 +500,7 @@ def _fix_d10_section_balance(
             f"## Sources for reference\n{source_block}"
         )
 
-        raw = minimax_chat_anthropic(system, user, _MAX_TOKENS_FIX, settings=settings)
+        raw = _llm_call(system, user, settings)
         if raw and raw.strip() and len(raw.strip()) > 50:
             # Replace section content in the body
             old_block = f"{sec['header']}\n\n{sec['content']}"
@@ -518,7 +532,7 @@ def _check_d1_d4_d6_d9(
 
     user = f"## Journal Body\n{body}\n\n## Source List\n{source_block}"
 
-    raw = minimax_chat_anthropic(prompt, user, _MAX_TOKENS_ASSESS, settings=settings)
+    raw = _llm_call(prompt, user, settings)
     parsed = _parse_json(raw)
     if not isinstance(parsed, dict):
         logger.warning("[assessor] D1+D4+D6+D9: LLM returned non-dict, treating as pass")
