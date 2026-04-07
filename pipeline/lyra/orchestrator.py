@@ -466,6 +466,11 @@ def _run_migrations(engine) -> None:
         """)
         )
 
+        # Journal active flag (for regeneration workflow)
+        conn.execute(
+            text("ALTER TABLE news_articles ADD COLUMN IF NOT EXISTS active BOOLEAN DEFAULT true")
+        )
+
         # Lyra auto-discovery migrations: new columns on user_contributions
         conn.execute(
             text(

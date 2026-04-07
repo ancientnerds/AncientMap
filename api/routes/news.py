@@ -478,7 +478,13 @@ async def get_news_articles(
     db: Session = Depends(get_db),
 ):
     """Get weekly digest articles, newest first."""
-    articles = db.query(NewsArticle).order_by(NewsArticle.created_at.desc()).limit(limit).all()
+    articles = (
+        db.query(NewsArticle)
+        .filter(NewsArticle.active.is_(True))
+        .order_by(NewsArticle.created_at.desc())
+        .limit(limit)
+        .all()
+    )
 
     return [
         NewsArticleResponse(

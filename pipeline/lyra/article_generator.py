@@ -1246,11 +1246,12 @@ def generate_weekly_article(
             session.query(NewsArticle)
             .filter(
                 NewsArticle.week_start == week_start,
+                NewsArticle.active.is_(True),
             )
             .first()
         )
         if existing:
-            logger.info("Article for this week already exists")
+            logger.info("Active article for this week already exists")
             return False
 
     with get_session() as session:
