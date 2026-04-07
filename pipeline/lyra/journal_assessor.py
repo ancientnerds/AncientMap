@@ -292,18 +292,20 @@ def _fix_d5_source_quality(
     """Remove citations to blocked sources, ask LLM to re-cite affected text."""
     bad_nums = {b["citation"] for b in bad_sources}
 
-    # Remove bad citation markers
+    # Remove bad citation markers from body
     for num in bad_nums:
         body = re.sub(rf"\s*\[{num}\]", "", body)
 
-    # Clean up double spaces
-    body = re.sub(r"  +", " ", body)
+    # Remove bad sources from the sources list (in-place so next iteration sees the change)
+    sources[:] = [s for s in sources if s.get("citation") not in bad_nums]
 
-    # Find paragraphs that lost all citations
-    uncited = _find_uncited_paragraphs(body, sources)
-    if uncited:
-        good_sources = [s for s in sources if s.get("citation") not in bad_nums]
-        body = _fix_d2_citation_coverage(body, good_sources, uncited, settings)
+    # Also remove from the ### Sources / ## Sources section in the body
+    for num in bad_nums:
+        body = re.sub(rf"^{num}\.\s+.*$", "", body, flags=re.MULTILINE)
+
+    # Clean up double spaces and blank lines
+    body = re.sub(r"  +", " ", body)
+    body = re.sub(r"\n{3,}", "\n\n", body)
 
     return body
 
@@ -486,17 +488,19 @@ def _fix_d10_section_balance(
         if not sec["header"]:
             continue
         word_count = len(sec["content"].split())
-        if word_count <= 400:
+        if word_count <= 600:
             continue
 
+        target = min(500, word_count // 2)  # aim for 500 or half, whichever is smaller
         system = (
-            "You are an editor. Condense this section to under 600 words while "
-            "preserving all [N] citation markers and key facts. Keep the same tone "
-            "and structure. Return ONLY the condensed section text (no header)."
+            f"You are an editor. Condense this section to UNDER {target} words. "
+            "Cut less important details, merge similar points, remove redundancy. "
+            "Preserve ALL [N] citation markers and the most significant facts. "
+            "Return ONLY the condensed text (no header, no commentary)."
         )
         user = (
             f"## Section header\n{sec['header']}\n\n"
-            f"## Section content ({word_count} words, must be <600)\n{sec['content']}\n\n"
+            f"## Section content ({word_count} words, target: {target} words)\n{sec['content']}\n\n"
             f"## Sources for reference\n{source_block}"
         )
 
@@ -828,12 +832,21 @@ def _fix_d1_d4_d6_d9(body: str, check_result: dict) -> tuple[str, list[dict]]:
     if isinstance(d9_data, dict) and not d9_data.get("accurate", True):
         corrected = d9_data.get("corrected_summary", "")
         if corrected:
-            # Replace the italic summary between first --- markers
-            summary_pattern = re.compile(r"(---\s*\n)(\*.*?\*)([\s\n]*---)", re.DOTALL)
+            # Summary is italic text at the top: *text*\n\n---
+            summary_pattern = re.compile(r"^\*[^*]+\*", re.MULTILINE)
             m = summary_pattern.search(body)
             if m:
-                body = body[: m.start(2)] + corrected + body[m.end(2) :]
-                fixes.append({"dimension": "D9", "summary_corrected": True})
+                # Ensure corrected summary is wrapped in * for italic
+                if not corrected.startswith("*"):
+                    corrected = f"*{corrected.strip()}*"
+                body = body[: m.start()] + corrected + body[m.end() :]
+                fixes.append(
+                    {
+                        "dimension": "D9",
+                        "summary_corrected": True,
+                        "corrected_summary": corrected,
+                    }
+                )
                 logger.info("[assessor] D9: corrected summary")
 
     return body, fixes
