@@ -340,7 +340,7 @@ def _find_uncited_paragraphs(body: str, sources: list[dict]) -> list[str]:
             or stripped.startswith("*")  # italic summary
             or stripped.startswith(">")  # blockquotes
             or re.match(r"^\d+\.\s", stripped)  # numbered source lines
-            or len(stripped) < 100
+            or len(stripped) < 200  # short paragraphs are transitions, not claims
         ):
             continue
         if not cite_pattern.search(stripped):
@@ -506,8 +506,10 @@ def _check_d10_section_balance(body: str) -> dict:
         if "Sources" in sec["header"] or "References" in sec["header"]:
             continue
         word_count = len(sec["content"].split())
-        if word_count > 600:
-            issues.append(f"Section '{sec['header']}' has {word_count} words (>600)")
+        # "In Brief" covers many topics — allow more words
+        limit = 1000 if "Brief" in sec["header"] else 600
+        if word_count > limit:
+            issues.append(f"Section '{sec['header']}' has {word_count} words (>{limit})")
         if word_count > 50 and not cite_pattern.search(sec["content"]):
             issues.append(f"Section '{sec['header']}' has 0 citations")
 
@@ -529,7 +531,8 @@ def _fix_d10_section_balance(
         if "Sources" in sec["header"] or "References" in sec["header"]:
             continue
         word_count = len(sec["content"].split())
-        if word_count <= 600:
+        limit = 1000 if "Brief" in sec["header"] else 600
+        if word_count <= limit:
             continue
 
         target = min(500, word_count // 2)  # aim for 500 or half, whichever is smaller
