@@ -378,10 +378,30 @@ def _fix_d2_citation_coverage(
         user = f"## Paragraph\n{para}\n\n## Sources\n{source_block}"
 
         raw = _llm_call(system, user, settings)
-        if raw and raw.strip() and len(raw.strip()) > 50:
-            # Replace the original paragraph
-            body = body.replace(para, raw.strip())
+        cleaned = raw.strip() if raw else ""
+        # Validate: must contain [N] citation, must look like prose (not meta-commentary),
+        # and must be similar length to original (not a refusal or question)
+        has_citation = bool(re.search(r"\[\d+\]", cleaned))
+        is_prose = not any(
+            cleaned.lower().startswith(p)
+            for p in (
+                "based on",
+                "i notice",
+                "if you",
+                "none of",
+                "could you",
+                "since no",
+                "the paragraph",
+            )
+        )
+        similar_length = len(cleaned) >= len(para) * 0.5
+        if cleaned and has_citation and is_prose and similar_length:
+            body = body.replace(para, cleaned)
             logger.info("[assessor] D2: re-cited paragraph (%d chars)", len(para))
+        else:
+            logger.debug(
+                "[assessor] D2: skipped bad LLM response for paragraph (%d chars)", len(para)
+            )
 
     return body
 
@@ -989,22 +1009,30 @@ def assess_and_fix(
         if not d6["passed"]:
             logger.info("[assessor] D6: found %d spelling issues", len(d6["issues"]))
 
+        # Apply D1/D4/D6 fixes first (before D9 checks the summary)
+        combined_pre = {
+            "d1_issues": d1.get("issues", []),
+            "d4_issues": d4.get("issues", []),
+            "d6_issues": d6.get("issues", []),
+            "d9_data": {},
+        }
+        if not all([d1["passed"], d4["passed"], d6["passed"]]):
+            best_body, llm_fixes = _fix_d1_d4_d6_d9(best_body, combined_pre)
+            all_fixes.extend(llm_fixes)
+
+        # D9: Summary accuracy (runs AFTER other fixes so it checks corrected body)
         d9 = _check_d9_summary(best_body, settings)
         dims["D9_summary_accuracy"] = d9["passed"]
         if not d9["passed"]:
             logger.info("[assessor] D9: summary inaccurate")
-
-        # Apply fixes from all 4 LLM checks
-        combined = {
-            "d1_issues": d1.get("issues", []),
-            "d4_issues": d4.get("issues", []),
-            "d6_issues": d6.get("issues", []),
-            "d9_data": d9.get("d9_data", {}),
-        }
-        any_failed = not all([d1["passed"], d4["passed"], d6["passed"], d9["passed"]])
-        if any_failed:
-            best_body, llm_fixes = _fix_d1_d4_d6_d9(best_body, combined)
-            all_fixes.extend(llm_fixes)
+            d9_combined = {
+                "d1_issues": [],
+                "d4_issues": [],
+                "d6_issues": [],
+                "d9_data": d9.get("d9_data", {}),
+            }
+            best_body, d9_fixes = _fix_d1_d4_d6_d9(best_body, d9_combined)
+            all_fixes.extend(d9_fixes)
 
         # --- Safety: restore sources section if damaged ---
         if original_sources_section:
