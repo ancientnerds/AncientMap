@@ -849,7 +849,7 @@ def assess_and_fix(
     sources: list[dict],
     week_start: datetime | None = None,
     settings: LyraSettings | None = None,
-    max_iterations: int = 2,
+    max_iterations: int = 5,
 ) -> tuple[str, AssessmentResult]:
     """Assess journal quality and fix issues. Returns (fixed_body, result).
 
