@@ -185,7 +185,7 @@ async def remove_image(
     db: Session = Depends(get_db),
     _user: DiscordUser = Depends(require_founder),
 ):
-    """Remove a wiki image from a site (DB row + file on disk)."""
+    """Exclude a wiki image from a site gallery (soft-delete, prevents re-fetching)."""
     try:
         # Find the image row
         row = db.execute(
@@ -195,18 +195,24 @@ async def remove_image(
             {"sid": site_id, "url": body.image_url},
         ).fetchone()
         if not row:
-            raise HTTPException(status_code=404, detail="Image not found")
-
-        # Delete file from disk
-        site_id_short = site_id.replace("-", "")[:8]
-        file_path = IMAGE_DIR / site_id_short / row[1]
-        if file_path.exists():
-            file_path.unlink()
-            print(f"[remove-image] Deleted file: {file_path}", flush=True)
-
-        # Delete DB row
-        db.execute(text("DELETE FROM wiki_images WHERE id = :id"), {"id": row[0]})
-        db.commit()
+            # Image not in our DB yet — insert as excluded so connectors won't show it
+            db.execute(
+                text("""
+                    INSERT INTO wiki_images (site_id, filename, original_url, is_hero, is_lead, is_excluded, sort_order, source_type)
+                    VALUES (:sid, 'excluded', :url, false, false, true, 0, 'manual')
+                """),
+                {"sid": site_id, "url": body.image_url},
+            )
+            db.commit()
+            print(f"[remove-image] Inserted excluded row for: {body.image_url}", flush=True)
+        else:
+            # Mark as excluded
+            db.execute(
+                text("UPDATE wiki_images SET is_excluded = true, is_hero = false WHERE id = :id"),
+                {"id": row[0]},
+            )
+            db.commit()
+            print(f"[remove-image] Excluded image id={row[0]}", flush=True)
         print(f"[remove-image] Deleted row id={row[0]} for site {site_id}", flush=True)
         return {"success": True}
 
@@ -229,7 +235,7 @@ async def get_wiki_images(site_id: str, db: Session = Depends(get_db)):
             title, is_hero, is_lead, sort_order,
             source_type, width, height, site_id
         FROM wiki_images
-        WHERE site_id = :site_id
+        WHERE site_id = :site_id AND (is_excluded = false OR is_excluded IS NULL)
         ORDER BY is_hero DESC, is_lead DESC, sort_order
     """),
         {"site_id": site_id},

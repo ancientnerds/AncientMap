@@ -624,6 +624,7 @@ class WikiImage(Base):
     # Display flags
     is_hero: Mapped[bool] = mapped_column(Boolean, default=False)
     is_lead: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_excluded: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
 
     # Source tracking
