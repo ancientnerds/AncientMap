@@ -73,6 +73,12 @@ function parseWebCitations(content: string): Map<number, string> {
 }
 
 function enrichCitations(content: string, webCites: Map<number, string>): string {
+  // Normalize multi-citations: [6, 7] → [6] [7], [3][5] → [3] [5]
+  content = content.replace(/\[(\d+)(?:\s*,\s*(\d+))+\]/g, (match) => {
+    const nums = match.match(/\d+/g) || []
+    return nums.map(n => `[${n}]`).join(' ')
+  })
+  content = content.replace(/\](\[)/g, '] [')
   // Replace [N] with markdown links.
   // Link text uses Unicode brackets ［N］ to avoid markdown parsing issues,
   // then the 'a' renderer displays them as normal [N].
