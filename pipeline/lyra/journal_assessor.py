@@ -374,50 +374,112 @@ def _check_d2_citation_coverage(body: str, sources: list[dict]) -> dict:
     }
 
 
+_D2_FIX_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "sentence_citations": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "sentence_index": {"type": "integer"},
+                    "source_number": {"type": "integer"},
+                    "confidence": {"type": "string"},
+                },
+                "required": ["sentence_index", "source_number", "confidence"],
+            },
+        },
+    },
+    "required": ["sentence_citations"],
+}
+
+
 def _fix_d2_citation_coverage(
     body: str,
     sources: list[dict],
     uncited: list[str],
     settings: LyraSettings,
 ) -> str:
-    """Ask LLM to add citations to uncited paragraphs."""
+    """Add citations to uncited paragraphs via sentence-to-source matching.
+
+    LLM classifies which source supports each sentence; Python inserts [N].
+    No paragraph rewriting — only mechanical citation insertion.
+    """
     source_block = _format_sources_for_prompt(sources)
 
     for para in uncited[:5]:  # Cap at 5 to limit LLM calls
-        system = (
-            "You are a citation editor. You receive a paragraph and a source list. "
-            "Rewrite the paragraph adding [N] citations where claims are supported by "
-            "the sources. Keep the text identical except for inserting [N] markers. "
-            "Only cite sources that actually support the claim. If no source fits, "
-            "leave the paragraph unchanged."
-        )
-        user = f"## Paragraph\n{para}\n\n## Sources\n{source_block}"
+        sentences = re.split(r"(?<=[.!?])\s+", para)
+        if not sentences:
+            continue
 
-        raw = _llm_call(system, user, settings)
-        cleaned = raw.strip() if raw else ""
-        # Validate: must contain [N] citation, must look like prose (not meta-commentary),
-        # and must be similar length to original (not a refusal or question)
-        has_citation = bool(re.search(r"\[\d+\]", cleaned))
-        is_prose = not any(
-            cleaned.lower().startswith(p)
-            for p in (
-                "based on",
-                "i notice",
-                "if you",
-                "none of",
-                "could you",
-                "since no",
-                "the paragraph",
-            )
+        numbered = "\n".join(f"[{i}] {s}" for i, s in enumerate(sentences))
+        system = (
+            "You are a citation matcher. For each numbered sentence, determine which "
+            "source (by number) best supports the factual claims in that sentence. "
+            "Set confidence to 'high' only if the source clearly covers the claim, "
+            "'medium' if partially relevant, 'none' if no source fits. "
+            "Use source_number -1 for 'none' confidence."
         )
-        similar_length = len(cleaned) >= len(para) * 0.5
-        if cleaned and has_citation and is_prose and similar_length:
-            body = body.replace(para, cleaned)
-            logger.info("[assessor] D2: re-cited paragraph (%d chars)", len(para))
-        else:
-            logger.debug(
-                "[assessor] D2: skipped bad LLM response for paragraph (%d chars)", len(para)
+        user = f"## Numbered Sentences\n{numbered}\n\n## Sources\n{source_block}"
+
+        try:
+            response = call_api(
+                system=system,
+                messages=[{"role": "user", "content": user}],
+                max_tokens=4096,
+                temperature=0.0,
+                timeout=120.0,
+                response_format={
+                    "type": "json_schema",
+                    "json_schema": {
+                        "name": "SentenceCitations",
+                        "strict": True,
+                        "schema": _D2_FIX_SCHEMA,
+                    },
+                },
             )
+            parsed = _parse_json(response.text or "")
+        except (LyraAPIError, Exception) as e:
+            logger.warning("[assessor] D2 fix call failed: %s", e)
+            continue
+
+        if not isinstance(parsed, dict):
+            continue
+
+        matches = parsed.get("sentence_citations", [])
+        valid_nums = {s.get("citation") for s in sources}
+
+        # Build a map of sentence_index -> source_number for high-confidence matches
+        cite_map: dict[int, int] = {}
+        for m in matches:
+            idx = m.get("sentence_index", -1)
+            src = m.get("source_number", -1)
+            conf = m.get("confidence", "none")
+            if conf == "high" and 0 <= idx < len(sentences) and src in valid_nums:
+                cite_map[idx] = src
+
+        if not cite_map:
+            logger.debug(
+                "[assessor] D2: no high-confidence matches for paragraph (%d chars)", len(para)
+            )
+            continue
+
+        # Mechanically insert [N] after each matched sentence's terminal punctuation
+        new_sentences = []
+        for i, s in enumerate(sentences):
+            if i in cite_map:
+                new_sentences.append(f"{s} [{cite_map[i]}]")
+            else:
+                new_sentences.append(s)
+
+        new_para = " ".join(new_sentences)
+        body = body.replace(para, new_para)
+        logger.info(
+            "[assessor] D2: cited %d/%d sentences in paragraph (%d chars)",
+            len(cite_map),
+            len(sentences),
+            len(para),
+        )
 
     return body
 
@@ -532,14 +594,29 @@ def _check_d10_section_balance(body: str) -> dict:
     return {"passed": len(issues) == 0, "issues": issues}
 
 
+_D10_FIX_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "keep_indices": {
+            "type": "array",
+            "items": {"type": "integer"},
+        },
+    },
+    "required": ["keep_indices"],
+}
+
+
 def _fix_d10_section_balance(
     body: str,
     sources: list[dict],
     settings: LyraSettings,
 ) -> str:
-    """Condense overlong sections via LLM."""
+    """Condense overlong sections via LLM sentence selection.
+
+    LLM picks which sentences to keep; Python reassembles from indices.
+    No prose rewriting — only sentence selection and reassembly.
+    """
     sections = _get_sections(body)
-    source_block = _format_sources_for_prompt(sources)
 
     for sec in sections:
         if not sec["header"]:
@@ -551,31 +628,80 @@ def _fix_d10_section_balance(
         if word_count <= limit:
             continue
 
-        target = min(500, word_count // 2)  # aim for 500 or half, whichever is smaller
+        sentences = re.split(r"(?<=[.!?])\s+", sec["content"])
+        if not sentences:
+            continue
+
+        target_words = min(limit - 50, word_count // 2)  # aim for under limit
+        max_sentences = max(1, target_words * len(sentences) // word_count)
+
+        numbered = "\n".join(f"[{i}] {s}" for i, s in enumerate(sentences))
         system = (
-            f"You are an editor. Condense this section to UNDER {target} words. "
-            "Cut less important details, merge similar points, remove redundancy. "
-            "Preserve ALL [N] citation markers and the most significant facts. "
-            "Return ONLY the condensed text (no header, no commentary)."
+            f"You are an editor selecting the most important sentences to keep. "
+            f"Pick at most {max_sentences} sentence indices that preserve the key "
+            f"facts, findings, and [N] citations. Drop redundant or less important "
+            f"sentences. Return the indices in order."
         )
         user = (
-            f"## Section header\n{sec['header']}\n\n"
-            f"## Section content ({word_count} words, target: {target} words)\n{sec['content']}\n\n"
-            f"## Sources for reference\n{source_block}"
+            f"## Section: {sec['header']}\n"
+            f"## Current: {word_count} words, target: under {target_words} words\n"
+            f"## Numbered sentences\n{numbered}"
         )
 
-        raw = _llm_call(system, user, settings)
-        if raw and raw.strip() and len(raw.strip()) > 50:
-            # Replace section content in the body
-            old_block = f"{sec['header']}\n\n{sec['content']}"
-            new_block = f"{sec['header']}\n\n{raw.strip()}"
-            body = body.replace(old_block, new_block, 1)
-            logger.info(
-                "[assessor] D10: condensed '%s' from %d to ~%d words",
-                sec["header"],
-                word_count,
-                len(raw.split()),
+        try:
+            response = call_api(
+                system=system,
+                messages=[{"role": "user", "content": user}],
+                max_tokens=4096,
+                temperature=0.0,
+                timeout=120.0,
+                response_format={
+                    "type": "json_schema",
+                    "json_schema": {
+                        "name": "SectionBalance",
+                        "strict": True,
+                        "schema": _D10_FIX_SCHEMA,
+                    },
+                },
             )
+            parsed = _parse_json(response.text or "")
+        except (LyraAPIError, Exception) as e:
+            logger.warning("[assessor] D10 fix call failed for '%s': %s", sec["header"], e)
+            continue
+
+        if not isinstance(parsed, dict):
+            continue
+
+        keep_indices = parsed.get("keep_indices", [])
+        # Validate indices — must be in range and sorted
+        keep_indices = sorted({i for i in keep_indices if 0 <= i < len(sentences)})
+
+        if not keep_indices:
+            logger.debug("[assessor] D10: LLM returned no valid indices for '%s'", sec["header"])
+            continue
+
+        # Reassemble from selected sentences
+        kept = [sentences[i] for i in keep_indices]
+        new_content = " ".join(kept)
+
+        # Hard validation: if still over limit, drop sentences from end until compliant
+        new_words = len(new_content.split())
+        while new_words > limit and len(kept) > 1:
+            kept.pop()
+            new_content = " ".join(kept)
+            new_words = len(new_content.split())
+
+        old_block = f"{sec['header']}\n\n{sec['content']}"
+        new_block = f"{sec['header']}\n\n{new_content}"
+        body = body.replace(old_block, new_block, 1)
+        logger.info(
+            "[assessor] D10: trimmed '%s' from %d to %d words (%d/%d sentences kept)",
+            sec["header"],
+            word_count,
+            new_words,
+            len(kept),
+            len(sentences),
+        )
 
     return body
 
@@ -604,13 +730,73 @@ _D1_SCHEMA = {
 }
 
 
+def _validate_d1_correction(find: str, replace: str, sources: list[dict]) -> bool:
+    """Validate a D1 proper noun correction. Rejects unreliable fixes.
+
+    Rejects:
+    - Identity replacements (find == replace)
+    - Corrections where `replace` contains a known-bad spelling from SPELLING_FIXES
+    - Corrections sourced ONLY from YouTube (no academic backing)
+    - Case-only changes (e.g. "cave" -> "Cave")
+    """
+    # Identity
+    if find == replace:
+        return False
+
+    # Case-only change
+    if find.lower() == replace.lower():
+        logger.debug("[assessor] D1: rejected case-only change: %s → %s", find, replace)
+        return False
+
+    # Replace introduces a known-bad spelling
+    for bad_word in SPELLING_FIXES:
+        if bad_word in replace:
+            logger.debug(
+                "[assessor] D1: rejected — replace contains known-bad spelling '%s': %s → %s",
+                bad_word,
+                find,
+                replace,
+            )
+            return False
+
+    # Check if the correction has academic backing (not just YouTube)
+    # Look for the replacement text in non-YouTube sources
+    has_academic_backing = False
+    has_youtube_only = False
+    for s in sources:
+        url = s.get("url", "")
+        label = s.get("label", "")
+        source_text = f"{label} {url}".lower()
+        if replace.lower() in source_text:
+            domain = _extract_domain(url)
+            if domain not in ("youtube.com", "youtu.be", "m.youtube.com"):
+                has_academic_backing = True
+                break
+            else:
+                has_youtube_only = True
+
+    if has_youtube_only and not has_academic_backing:
+        logger.debug(
+            "[assessor] D1: rejected — only YouTube sources back '%s' → '%s'",
+            find,
+            replace,
+        )
+        return False
+
+    return True
+
+
 def _check_d1_proper_nouns(body: str, sources: list[dict], settings: LyraSettings) -> dict:
-    """Check proper nouns against source titles."""
+    """Check proper nouns against source titles with three-tier authority."""
     source_block = _format_sources_for_prompt(sources)
     system = (
         "Compare every proper noun in the journal (site names, people, caves, "
         "cultures, locations) against the source titles/URLs. Sources have the "
         "CORRECT spelling. Return corrections for any mismatches.\n\n"
+        "IMPORTANT: YouTube titles may have INCORRECT spellings from auto-generated "
+        "transcripts. Academic sources and Wikipedia have HIGHER authority. When "
+        "sources disagree, prefer academic/Wikipedia. If only YouTube sources show "
+        "a different spelling, do NOT correct.\n\n"
         "Examples: Monteppi→Montesiepi, Galano Giati→Galgano Guidotti, "
         "Vulcansky Dolman→Volkonsky Dolmen, Goff's Cave→Gough's Cave"
     )
@@ -634,8 +820,12 @@ def _check_d1_proper_nouns(body: str, sources: list[dict], settings: LyraSetting
         parsed = {}
 
     raw_issues = parsed.get("corrections", []) if isinstance(parsed, dict) else []
-    # Filter out identity replacements (find == replace) — these are false positives
-    issues = [c for c in raw_issues if c.get("find", "") != c.get("replace", "")]
+    # Filter through validation — rejects identity, case-only, YouTube-only, bad spellings
+    issues = [
+        c
+        for c in raw_issues
+        if _validate_d1_correction(c.get("find", ""), c.get("replace", ""), sources)
+    ]
     return {"passed": len(issues) == 0, "issues": issues}
 
 
@@ -996,12 +1186,16 @@ def assess_and_fix(
                 "[assessor] D3: fixing %d academic citations", len(d3["academic_citations"])
             )
 
-        # D2: Citation coverage (check only — fixing is destructive, LLM injects garbage)
+        # D2: Citation coverage (sentence-level matching, no prose rewriting)
         d2 = _check_d2_citation_coverage(best_body, sources)
         dims["D2_citation_coverage"] = d2["passed"]
         if not d2["passed"]:
+            best_body = _fix_d2_citation_coverage(
+                best_body, sources, d2["uncited_paragraphs"], settings
+            )
+            all_fixes.append({"dimension": "D2", "uncited": len(d2["uncited_paragraphs"])})
             logger.info(
-                "[assessor] D2: %d uncited paragraphs (check only, no fix)",
+                "[assessor] D2: fixing %d uncited paragraphs",
                 len(d2["uncited_paragraphs"]),
             )
 
