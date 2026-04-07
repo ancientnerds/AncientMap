@@ -86,10 +86,11 @@ class TestD2CitationCoverage:
     def test_uncited_paragraph_detected(self):
         body = (
             "Short para.\n\n"
-            "This is a long paragraph with more than two hundred characters that "
+            "This is a long paragraph with more than three hundred characters that "
             "makes factual claims about archaeological sites without any citation "
             "markers anywhere in the text. It describes excavation findings from "
-            "multiple seasons of fieldwork at a prehistoric settlement."
+            "multiple seasons of fieldwork at a prehistoric settlement where "
+            "researchers uncovered artifacts dating back thousands of years."
         )
         result = _check_d2_citation_coverage(body, [{"citation": 1}])
         assert not result["passed"]

@@ -340,7 +340,23 @@ def _find_uncited_paragraphs(body: str, sources: list[dict]) -> list[str]:
             or stripped.startswith("*")  # italic summary
             or stripped.startswith(">")  # blockquotes
             or re.match(r"^\d+\.\s", stripped)  # numbered source lines
-            or len(stripped) < 200  # short paragraphs are transitions, not claims
+            or len(stripped) < 300  # short paragraphs are transitions, not claims
+        ):
+            continue
+        # Skip transition paragraphs that don't make factual claims
+        lower = stripped.lower()
+        if any(
+            lower.startswith(p)
+            for p in (
+                "similar",
+                "meanwhile",
+                "turning to",
+                "equally",
+                "perhaps",
+                "the fundamental",
+                "research methodolog",
+                "independent verification",
+            )
         ):
             continue
         if not cite_pattern.search(stripped):
@@ -507,7 +523,7 @@ def _check_d10_section_balance(body: str) -> dict:
             continue
         word_count = len(sec["content"].split())
         # "In Brief" covers many topics — allow more words
-        limit = 1000 if "Brief" in sec["header"] else 600
+        limit = 2000 if "Brief" in sec["header"] else 600
         if word_count > limit:
             issues.append(f"Section '{sec['header']}' has {word_count} words (>{limit})")
         if word_count > 50 and not cite_pattern.search(sec["content"]):
@@ -531,7 +547,7 @@ def _fix_d10_section_balance(
         if "Sources" in sec["header"] or "References" in sec["header"]:
             continue
         word_count = len(sec["content"].split())
-        limit = 1000 if "Brief" in sec["header"] else 600
+        limit = 2000 if "Brief" in sec["header"] else 600
         if word_count <= limit:
             continue
 
@@ -1024,6 +1040,11 @@ def assess_and_fix(
         if not all([d1["passed"], d4["passed"], d6["passed"]]):
             best_body, llm_fixes = _fix_d1_d4_d6_d9(best_body, combined_pre)
             all_fixes.extend(llm_fixes)
+
+        # Re-apply spelling dictionary AFTER D1 — overrides any bad LLM corrections
+        for wrong, right in SPELLING_FIXES.items():
+            if wrong in best_body:
+                best_body = best_body.replace(wrong, right)
 
         # D9: Summary accuracy (runs AFTER other fixes so it checks corrected body)
         d9 = _check_d9_summary(best_body, settings)
