@@ -117,7 +117,9 @@ async def set_hero(
         hero_path.write_bytes(buf.getvalue())
         print(f"[set-hero] Saved hero to {hero_path}", flush=True)
 
-        thumb_path = f"/data/images/wiki/{site_id_short}/hero.webp"
+        import time
+
+        thumb_path = f"/data/images/wiki/{site_id_short}/hero.webp?v={int(time.time())}"
 
         # Clear all hero flags for this site
         db.execute(
