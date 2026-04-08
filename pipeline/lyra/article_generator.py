@@ -727,10 +727,15 @@ def _assess_journal(
 def _generate_headline_tldr(
     body: str,
     settings: LyraSettings,
+    week_start: datetime | None = None,
 ) -> tuple[str, str]:
     """Generate headline + TLDR from the assembled article body."""
     prompt_template = _load_prompt("headline.txt")
-    prompt = prompt_template.format(content=body)
+    # Inject the correct week date so the LLM doesn't have to guess
+    week_label = ""
+    if week_start:
+        week_label = f"\n\nIMPORTANT: The week date for the title is: Week of {week_start.strftime('%B')} {week_start.day}\n"
+    prompt = prompt_template.format(content=body) + week_label
 
     try:
         response = call_api(
@@ -1370,7 +1375,7 @@ def generate_weekly_article(
         _write_article_heartbeat(step_data, "headline", t0_total)
         logger.info("Generating headline and TLDR")
         t0 = time.time()
-        headline, tldr = _generate_headline_tldr(polished_body, settings)
+        headline, tldr = _generate_headline_tldr(polished_body, settings, week_start=week_start)
         is_fallback = headline == "Weekly Archaeological Digest"
         step_data["headline"] = {
             "count": 0 if is_fallback else 1,
