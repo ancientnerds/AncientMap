@@ -90,7 +90,7 @@ _load_persisted_state()
 
 class ReindexRequest(BaseModel):
     collection: str | None = (
-        None  # "sites" | "news" | "transcripts" | "articles" | "empires" | None (all)
+        None  # "sites" | "news" | "transcripts" | "articles" | "empires" | "research" | None (all)
     )
     rebuild: bool = False
     backend: str | None = None  # "voyage" | "local" | None (both)
@@ -110,11 +110,14 @@ async def vector_sync_status():
             text("SELECT COUNT(*) FROM news_videos WHERE transcript_text IS NOT NULL")
         ).scalar()
         pg_articles = session.execute(text("SELECT COUNT(*) FROM news_articles")).scalar()
+        pg_research = session.execute(
+            text("SELECT COUNT(*) FROM research_requests WHERE is_public = TRUE")
+        ).scalar()
 
     # Qdrant counts — both voyage and local collection sets
     qdrant_available = True
     qdrant_counts: dict[str, int] = {}
-    _COLLECTION_NAMES = ["sites", "news", "transcripts", "articles", "empires"]
+    _COLLECTION_NAMES = ["sites", "news", "transcripts", "articles", "empires", "research"]
     try:
         from api.services.lyra_embeddings import get_qdrant_client
 
@@ -168,8 +171,9 @@ async def vector_sync_status():
         "transcripts": pg_transcripts,
         "articles": pg_articles,
         "empires": seshat_polity_count,
+        "research": pg_research,
     }
-    _no_delta = {"transcripts", "articles"}  # chunk counts aren't comparable to PG counts
+    _no_delta = {"transcripts", "articles", "research"}  # chunk counts aren't comparable to PG counts
 
     collections_status = {}
     for name in _COLLECTION_NAMES:
