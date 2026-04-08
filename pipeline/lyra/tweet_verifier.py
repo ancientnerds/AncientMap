@@ -85,7 +85,7 @@ def verify_single_post(
     if video_title:
         metadata_lines.append(f"Video title: {video_title}")
     if video_tags:
-        metadata_lines.append(f"Video tags: {', '.join(video_tags)}")
+        metadata_lines.append(f"Video tags: {', '.join(t for t in video_tags if t)}")
     metadata_block = "\n".join(metadata_lines)
 
     ts_label = item.timestamp_range or "start of video"
