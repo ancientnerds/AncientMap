@@ -262,7 +262,11 @@ def _web_verify_items(items: list[NewsItem], settings: LyraSettings) -> int:
         return 0
 
     try:
-        from pipeline.lyra.minimax_shared import create_minimax_client, minimax_search, minimax_chat
+        from pipeline.lyra.minimax_shared import (
+            create_minimax_client,
+            minimax_chat,
+            minimax_search,
+        )
     except ImportError:
         logger.warning("MiniMax shared module not available, skipping web verification")
         return 0
