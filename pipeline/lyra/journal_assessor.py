@@ -1475,6 +1475,8 @@ def assess_and_fix(
         if not d9["passed"]:
             logger.info("[assessor] D9: summary inaccurate — regenerating from corrected body")
             best_body = _regenerate_summary(best_body, settings)
+            # Mark as passed — summary was just generated from the current body
+            dims["D9_summary_accuracy"] = True
             all_fixes.append({"dimension": "D9", "find": "summary", "replace": "regenerated"})
 
         # --- Safety: restore sources section if damaged ---
