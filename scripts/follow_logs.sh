@@ -7,7 +7,10 @@
 
 LOGS_DIR="/var/www/ancientnerds/logs"
 LOCK_FILE="$LOGS_DIR/.follow_logs.lock"
-CONTAINERS="ancient_nerds_api ancient_nerds_lyra ancient_nerds_db ancient_nerds_redis ancient_nerds_qdrant ancient_nerds_searxng"
+# Note: ancient_nerds_lyra excluded — it writes its own log file via
+# RotatingFileHandler to /app/logs/ (same volume). Including it here
+# would duplicate every line.
+CONTAINERS="ancient_nerds_api ancient_nerds_db ancient_nerds_redis ancient_nerds_qdrant ancient_nerds_searxng"
 
 mkdir -p "$LOGS_DIR"
 
