@@ -973,6 +973,7 @@ class NewsArticle(Base):
     published_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     active: Mapped[bool] = mapped_column(Boolean, server_default="true", nullable=False)
+    quality_report: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
 
     def __repr__(self) -> str:
         return f"<NewsArticle {self.id}: {self.title[:40]}>"

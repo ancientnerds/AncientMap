@@ -17621,6 +17621,76 @@ div.lyra-inline-video-wrap {
 }
 
 /* Reader footer */
+/* Quality audit report (collapsed) */
+.articles-quality-report {
+  margin-top: 32px;
+  border: 1px solid var(--border-accent);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.articles-quality-summary {
+  padding: 12px 16px;
+  cursor: pointer;
+  font-size: 0.85em;
+  font-weight: 500;
+  color: var(--text-secondary);
+  background: rgba(var(--bg-panel-rgb, 20, 30, 35), 0.5);
+  user-select: none;
+}
+.articles-quality-summary:hover { color: var(--text-primary); }
+.articles-quality-body {
+  padding: 16px;
+  font-size: 0.8em;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+.articles-quality-meta { margin: 0 0 12px; opacity: 0.7; }
+.articles-quality-dimensions h4,
+.articles-quality-clusters h4,
+.articles-quality-fixes h4 {
+  font-size: 0.9em;
+  margin: 12px 0 6px;
+  color: var(--text-primary);
+  border: none;
+  padding: 0;
+}
+.articles-quality-dim {
+  display: inline-block;
+  padding: 2px 8px;
+  margin: 2px 4px 2px 0;
+  border-radius: 4px;
+  font-size: 0.85em;
+}
+.articles-quality-dim.pass { background: rgba(40, 167, 69, 0.15); color: #5cb85c; }
+.articles-quality-dim.fail { background: rgba(220, 53, 69, 0.15); color: #d9534f; }
+.articles-quality-cluster {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+}
+.articles-quality-score {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  font-size: 0.75em;
+  font-weight: 600;
+}
+.articles-quality-score.pass { background: rgba(40, 167, 69, 0.2); color: #5cb85c; }
+.articles-quality-score.fail { background: rgba(220, 53, 69, 0.2); color: #d9534f; }
+.articles-quality-cluster-name { flex: 1; }
+.articles-quality-cluster-meta { opacity: 0.5; font-size: 0.85em; }
+.articles-quality-fix {
+  display: block;
+  padding: 2px 0;
+  font-family: monospace;
+  font-size: 0.85em;
+  opacity: 0.7;
+}
+
 .articles-reader-footer {
   margin-top: 40px;
   padding-top: 24px;

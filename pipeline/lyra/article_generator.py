@@ -1392,6 +1392,29 @@ def generate_weekly_article(
         # Collect unique video IDs from original items
         video_ids = list({item["video_id"] for item in all_items})
 
+        # Build quality report
+        research_scores = {}
+        for k, v in step_data.items():
+            if k.startswith("research_") and isinstance(v, dict):
+                research_scores[k.replace("research_", "")] = {
+                    "score": v.get("score", 0),
+                    "sources": v.get("count", 0),
+                    "elapsed": v.get("elapsed", 0),
+                    "status": v.get("status", ""),
+                }
+        quality_report = {
+            "assessment_score": assess_result.score,
+            "assessment_iterations": assess_result.iteration,
+            "assessment_dimensions": assess_result.dimensions,
+            "fixes_applied": [
+                {k: v for k, v in f.items() if k != "corrected_summary"}
+                for f in assess_result.fixes_applied
+            ],
+            "research_clusters": research_scores,
+            "total_sources": len(unified_sources),
+            "total_elapsed_seconds": round(time.time() - t0_total, 1),
+        }
+
         article = NewsArticle(
             title=headline,
             content=article_content,
@@ -1400,6 +1423,7 @@ def generate_weekly_article(
             week_end=week_end,
             video_ids=video_ids,
             published_at=datetime.now(UTC),
+            quality_report=quality_report,
         )
         session.add(article)
 

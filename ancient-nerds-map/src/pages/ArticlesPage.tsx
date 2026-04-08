@@ -21,6 +21,16 @@ import type { NewsItemData } from '../types/news'
 import type { NewsCardProps } from '../components/news/NewsCard'
 import '../components/news/news-cards.css'
 
+interface QualityReport {
+  assessment_score: number
+  assessment_iterations: number
+  assessment_dimensions: Record<string, boolean>
+  fixes_applied: Array<Record<string, unknown>>
+  research_clusters: Record<string, { score: number; sources: number; elapsed: number; status: string }>
+  total_sources: number
+  total_elapsed_seconds: number
+}
+
 interface Article {
   id: number
   title: string
@@ -29,6 +39,7 @@ interface Article {
   week_start: string
   week_end: string
   published_at: string | null
+  quality_report: QualityReport | null
 }
 
 function slugify(title: string): string {
@@ -841,6 +852,53 @@ export default function ArticlesPage() {
                   })()}
                 </ReactMarkdown>
               </div>
+              {selectedArticle.quality_report && (
+                <details className="articles-quality-report">
+                  <summary className="articles-quality-summary">
+                    Quality Audit — {selectedArticle.quality_report.assessment_score}/10
+                    {selectedArticle.quality_report.assessment_score === 10 && ' ✓'}
+                  </summary>
+                  <div className="articles-quality-body">
+                    <p className="articles-quality-meta">
+                      Converged in {selectedArticle.quality_report.assessment_iterations} iteration{selectedArticle.quality_report.assessment_iterations !== 1 ? 's' : ''}
+                      {' · '}{selectedArticle.quality_report.total_sources} sources
+                      {' · '}{Math.round(selectedArticle.quality_report.total_elapsed_seconds / 60)} min generation time
+                    </p>
+                    <div className="articles-quality-dimensions">
+                      <h4>Quality Dimensions</h4>
+                      {Object.entries(selectedArticle.quality_report.assessment_dimensions).map(([dim, passed]) => (
+                        <span key={dim} className={`articles-quality-dim ${passed ? 'pass' : 'fail'}`}>
+                          {passed ? '✓' : '✗'} {dim.replace(/_/g, ' ').replace(/^D\d+\s*/, '')}
+                        </span>
+                      ))}
+                    </div>
+                    {Object.keys(selectedArticle.quality_report.research_clusters).length > 0 && (
+                      <div className="articles-quality-clusters">
+                        <h4>Research Clusters</h4>
+                        {Object.entries(selectedArticle.quality_report.research_clusters).map(([name, data]) => (
+                          <div key={name} className="articles-quality-cluster">
+                            <span className={`articles-quality-score ${data.score >= 72 ? 'pass' : 'fail'}`}>
+                              {data.score}
+                            </span>
+                            <span className="articles-quality-cluster-name">{name}</span>
+                            <span className="articles-quality-cluster-meta">{data.sources} sources · {Math.round(data.elapsed)}s</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {selectedArticle.quality_report.fixes_applied.length > 0 && (
+                      <div className="articles-quality-fixes">
+                        <h4>Fixes Applied</h4>
+                        {selectedArticle.quality_report.fixes_applied.map((fix, i) => (
+                          <span key={i} className="articles-quality-fix">
+                            {fix.dimension}: {fix.find ? `${String(fix.find).slice(0, 30)} → ${String(fix.replace).slice(0, 30)}` : 'corrected'}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </details>
+              )}
               <footer className="articles-reader-footer">
                 <button className="articles-reader-back-link" onClick={backToListing}>
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

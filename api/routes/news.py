@@ -115,6 +115,7 @@ class NewsArticleResponse(BaseModel):
     week_start: str
     week_end: str
     published_at: str | None = None
+    quality_report: dict | None = None
 
 
 class RejectionBreakdown(BaseModel):
@@ -495,6 +496,7 @@ async def get_news_articles(
             week_start=a.week_start.isoformat() if a.week_start else "",
             week_end=a.week_end.isoformat() if a.week_end else "",
             published_at=a.published_at.isoformat() if a.published_at else None,
+            quality_report=a.quality_report,
         )
         for a in articles
     ]

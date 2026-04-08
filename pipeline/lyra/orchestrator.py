@@ -466,9 +466,12 @@ def _run_migrations(engine) -> None:
         """)
         )
 
-        # Journal active flag (for regeneration workflow)
+        # Journal active flag + quality report (for regeneration workflow)
         conn.execute(
             text("ALTER TABLE news_articles ADD COLUMN IF NOT EXISTS active BOOLEAN DEFAULT true")
+        )
+        conn.execute(
+            text("ALTER TABLE news_articles ADD COLUMN IF NOT EXISTS quality_report JSONB")
         )
 
         # Lyra auto-discovery migrations: new columns on user_contributions
