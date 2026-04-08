@@ -414,6 +414,46 @@ class TheoPipeline:
                 }
             )
 
+        # ====== PRESENTATION ASSESSOR (runs once after judge passes) ======
+        # Same 10-dimension quality assessor used by the journal pipeline.
+        # Catches proper noun errors, spelling, citation format, section balance.
+        # Skips D4 (screenshots) and D8 (week date) — not applicable to research papers.
+        try:
+            from pipeline.lyra.journal_assessor import assess_and_fix
+
+            # Build sources list from citation registry
+            assess_sources = []
+            for sid, num in sorted(ctx.registry.reference_numbers.items(), key=lambda kv: kv[1]):
+                source = ctx.registry.get_reference(sid)
+                if source:
+                    assess_sources.append(
+                        {
+                            "citation": num,
+                            "url": source.url,
+                            "label": source.title,
+                            "type": "academic" if source.reliability_tier == 1 else "news",
+                        }
+                    )
+
+            emit({"type": "status", "content": "Running presentation quality assessor..."})
+            ctx.paper_text, assess_result = assess_and_fix(
+                ctx.paper_text,
+                assess_sources,
+                week_start=None,  # skip D8 week date check
+                settings=self._settings,
+                max_iterations=3,
+            )
+            emit(
+                {
+                    "type": "status",
+                    "content": f"Presentation assessor: {assess_result.score}/10 "
+                    f"in {assess_result.iteration} iteration(s), "
+                    f"{len(assess_result.fixes_applied)} fix(es) applied.",
+                }
+            )
+        except Exception as exc:
+            logger.warning("Presentation assessor failed (non-fatal): %s", exc)
+
         # ====== POST-LOOP STAGES (run once) ======
         # Stage 9 — Cover image
         try:
