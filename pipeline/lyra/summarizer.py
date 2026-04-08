@@ -300,6 +300,14 @@ def summarize_video(
         return False
 
     key_topics = summary_data.get("key_topics", [])
+    # MiniMax tool-use trick sometimes returns key_topics as a JSON string
+    if isinstance(key_topics, str):
+        try:
+            key_topics = json.loads(key_topics)
+            logger.info(f"Parsed double-encoded key_topics string for {video.id}")
+        except json.JSONDecodeError:
+            logger.warning(f"key_topics is a malformed string for {video.id}, skipping")
+            return False
     if not key_topics:
         logger.warning(f"No key topics found for {video.id}")
         return False
