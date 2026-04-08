@@ -709,6 +709,11 @@ _RERANK_INSTRUCTIONS = {
         "geographic region, or specific attributes (warfare, economy, governance). "
         "Rank empires with directly relevant characteristics higher than tangential matches."
     ),
+    "research": (
+        "Prioritize research paper sections that directly address the queried topic with "
+        "in-depth analysis, cited evidence, and expert synthesis. Rank sections with "
+        "specific archaeological findings and scholarly argumentation higher than summaries."
+    ),
 }
 
 _THEORY_RERANK_INSTRUCTIONS = {
@@ -733,6 +738,11 @@ _THEORY_RERANK_INSTRUCTIONS = {
         "or construction method analysis. Rank sections with substantive argumentation higher."
     ),
     "empires": _RERANK_INSTRUCTIONS["empires"],
+    "research": (
+        "Prioritize research paper sections discussing theories, hypotheses, or alternative "
+        "explanations with scholarly evidence and critical analysis. Rank sections with "
+        "substantive argumentation and cited sources higher than passing mentions."
+    ),
 }
 
 _THEORY_KEYWORDS = frozenset(
@@ -1042,7 +1052,7 @@ def _hybrid_search_inner(
         items.append(payload)
 
     # Step 5: Compress transcript/article chunks — extract query-relevant sentences
-    if collection in ("transcripts", "articles") and items:
+    if collection in ("transcripts", "articles", "research") and items:
         items = _compress_chunks(query, items, reranker, RERANK_MODEL)
 
     return items, voyage_tokens
@@ -1058,22 +1068,22 @@ def vector_search(
     site_type: str | None = None,
     channel: str | None = None,
 ) -> str:
-    """Deep semantic search across sites, news, transcripts, articles, or empires using hybrid dense+BM25 vectors.
+    """Deep semantic search across sites, news, transcripts, articles, empires, or research using hybrid dense+BM25 vectors.
 
     Use for deep semantic search when keyword search (search_sites, search_news) didn't find enough.
-    Works across sites, news, transcripts, articles, and empires collections. Results contain
+    Works across sites, news, transcripts, articles, empires, and research collections. Results contain
     collection-specific fields for creating the appropriate marker types.
 
     Args:
         query: Natural language query.
-        collection: Which collection to search: 'sites', 'news', 'transcripts', 'articles', or 'empires'.
+        collection: Which collection to search: 'sites', 'news', 'transcripts', 'articles', 'empires', or 'research'.
         limit: Max results (default 5).
         country: Filter by country name (e.g. 'Turkey', 'Egypt').
         period: Filter by period name (e.g. 'Bronze Age', 'Neolithic').
         site_type: Filter by site type (e.g. 'settlement', 'temple').
         channel: Filter by channel name (e.g. 'World of Antiquity'). Works on news and transcripts collections.
     """
-    _VALID_COLLECTIONS = {"sites", "news", "transcripts", "articles", "empires"}
+    _VALID_COLLECTIONS = {"sites", "news", "transcripts", "articles", "empires", "research"}
     if collection not in _VALID_COLLECTIONS:
         return f"Invalid collection '{collection}'. Must be one of: {', '.join(sorted(_VALID_COLLECTIONS))}"
     query = (query or "")[:500]
