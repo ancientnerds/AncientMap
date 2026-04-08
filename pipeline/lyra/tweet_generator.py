@@ -237,7 +237,23 @@ def generate_posts_for_video(
             item.news_category = "general"
             count += 1
 
-        db_video.status = "posted"
+        # Only mark as "posted" if all items got posts — otherwise the video
+        # stays "summarized" and the post generator retries next cycle.
+        # Safety: if this round produced zero new matches, mark as "posted"
+        # anyway to avoid infinite retry loops.
+        remaining = (
+            session.query(NewsItem)
+            .filter(NewsItem.video_id == video.id, NewsItem.post_text.is_(None))
+            .count()
+        )
+        if remaining == 0 or count == 0:
+            db_video.status = "posted"
+            if remaining > 0:
+                logger.warning(
+                    f"Video {video.id}: {remaining} items orphaned (no matching posts generated)"
+                )
+        else:
+            logger.info(f"Video {video.id}: {remaining} items still need posts — keeping as summarized")
 
     logger.info(
         f"Video {video.id}: {count} posts written "

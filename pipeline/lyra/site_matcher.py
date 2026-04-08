@@ -165,8 +165,11 @@ def _find_site_by_name(
     source_filter = UnifiedSite.source_id.in_(matchable_sources)
     spaceless = normalized.replace(" ", "")
 
+    # Collect ALL candidates from both primary names and alternate names,
+    # then pick the best by source priority. This prevents early return on a
+    # low-priority match when a better one exists in alternate names.
+
     # 1+1.5. Exact + spaceless match on unified_sites.name_normalized
-    # Merged so "gobekli tepe" (exact) and "gobeklitepe" (spaceless) compete on priority.
     exact = (
         session.query(UnifiedSite)
         .filter(
@@ -185,12 +188,7 @@ def _find_site_by_name(
     )
     combined = {m.id: m for m in exact + spaceless_matches}
 
-    if len(combined) == 1:
-        return list(combined.values())[0]
-    if len(combined) > 1:
-        return _pick_best_match(list(combined.values()), source_priority)
-
-    # 2+2.5. Exact + spaceless match on unified_site_names (alternate names)
+    # 2+2.5. Also check alternate names (unified_site_names)
     alt_exact = (
         session.query(UnifiedSiteName).filter(UnifiedSiteName.name_normalized == normalized).all()
     )
@@ -199,18 +197,20 @@ def _find_site_by_name(
         .filter(func.replace(UnifiedSiteName.name_normalized, " ", "") == spaceless)
         .all()
     )
-    alt_site_ids = {m.site_id for m in alt_exact + alt_spaceless}
+    alt_site_ids = {m.site_id for m in alt_exact + alt_spaceless} - set(combined.keys())
 
     if alt_site_ids:
-        candidates = (
+        alt_candidates = (
             session.query(UnifiedSite).filter(UnifiedSite.id.in_(alt_site_ids), source_filter).all()
         )
-        if len(candidates) == 1:
-            return candidates[0]
-        if len(candidates) > 1:
-            return _pick_best_match(candidates, source_priority)
+        for c in alt_candidates:
+            combined[c.id] = c
 
-    return None
+    if not combined:
+        return None
+    if len(combined) == 1:
+        return list(combined.values())[0]
+    return _pick_best_match(list(combined.values()), source_priority)
 
 
 def _pick_best_match(
