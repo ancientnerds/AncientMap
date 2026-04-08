@@ -1,4 +1,4 @@
-"""LLM summarization of video transcripts -> news items."""
+"""LLM summarization of video transcripts → news items."""
 
 from __future__ import annotations
 
