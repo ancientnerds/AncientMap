@@ -862,7 +862,9 @@ export default function ArticlesPage() {
                     <p className="articles-quality-meta">
                       Converged in {selectedArticle.quality_report.assessment_iterations} iteration{selectedArticle.quality_report.assessment_iterations !== 1 ? 's' : ''}
                       {' · '}{selectedArticle.quality_report.total_sources} sources
-                      {' · '}{Math.round(selectedArticle.quality_report.total_elapsed_seconds / 60)} min generation time
+                      {selectedArticle.quality_report.total_elapsed_seconds > 0
+                        ? ` · ${Math.round(selectedArticle.quality_report.total_elapsed_seconds / 60)} min generation time`
+                        : ' · retroactive assessment'}
                     </p>
                     <div className="articles-quality-dimensions">
                       <h4>Quality Dimensions</h4>
@@ -889,11 +891,19 @@ export default function ArticlesPage() {
                     {selectedArticle.quality_report.fixes_applied.length > 0 && (
                       <div className="articles-quality-fixes">
                         <h4>Fixes Applied</h4>
-                        {selectedArticle.quality_report.fixes_applied.map((fix, i) => (
-                          <span key={i} className="articles-quality-fix">
-                            {String(fix.dimension)}: {fix.find ? `${String(fix.find).slice(0, 30)} → ${String(fix.replace).slice(0, 30)}` : 'corrected'}
-                          </span>
-                        ))}
+                        {selectedArticle.quality_report.fixes_applied.map((fix, i) => {
+                          const dimName: Record<string, string> = {
+                            D1: 'Proper noun', D2: 'Citation', D3: 'Academic style',
+                            D4: 'Screenshot', D5: 'Source quality', D6: 'Spelling',
+                            D7: 'Citation format', D8: 'Week date', D9: 'Summary', D10: 'Balance',
+                          }
+                          const label = dimName[String(fix.dimension)] || String(fix.dimension)
+                          return (
+                            <span key={i} className="articles-quality-fix">
+                              {label}: {fix.find ? `${String(fix.find).slice(0, 40)} → ${String(fix.replace).slice(0, 40)}` : 'corrected'}
+                            </span>
+                          )
+                        })}
                       </div>
                     )}
                   </div>
