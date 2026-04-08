@@ -283,8 +283,8 @@ def _collect_article_items(
         .join(NewsVideo, NewsItem.video_id == NewsVideo.id)
         .join(NewsChannel, NewsVideo.channel_id == NewsChannel.id)
         .filter(
-            NewsItem.created_at >= week_start,
-            NewsItem.created_at <= week_end,
+            NewsVideo.published_at >= week_start,
+            NewsVideo.published_at <= week_end,
             NewsItem.significance.isnot(None),
             NewsItem.post_text.isnot(None),
         )
