@@ -254,10 +254,7 @@ def _web_verify_items(items: list[NewsItem], settings: LyraSettings) -> int:
     if min_sig <= 0:
         return 0
 
-    eligible = [
-        i for i in items
-        if i.significance and i.significance >= min_sig and i.post_text
-    ]
+    eligible = [i for i in items if i.significance and i.significance >= min_sig and i.post_text]
     if not eligible:
         return 0
 
@@ -285,9 +282,7 @@ def _web_verify_items(items: list[NewsItem], settings: LyraSettings) -> int:
         if not results:
             continue
 
-        search_text = "\n".join(
-            f"- [{r.title}]({r.url}): {r.snippet}" for r in results[:5]
-        )
+        search_text = "\n".join(f"- [{r.title}]({r.url}): {r.snippet}" for r in results[:5])
         facts_text = "\n".join(f"- {f}" for f in (item.facts or [])[:5])
 
         user_msg = web_prompt.replace("{post_text}", item.post_text or "")
@@ -317,9 +312,7 @@ def _web_verify_items(items: list[NewsItem], settings: LyraSettings) -> int:
 
         verdict = result.get("verdict", "")
         if verdict == "CORRECTED" and result.get("corrected_text"):
-            logger.info(
-                f"Web verify corrected item {item.id}: {result.get('reason', '')}"
-            )
+            logger.info(f"Web verify corrected item {item.id}: {result.get('reason', '')}")
             item.post_text = result["corrected_text"]
         elif verdict == "REJECT":
             logger.info(f"Web verify rejected item {item.id}: {result.get('reason', '')}")
