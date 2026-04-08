@@ -69,45 +69,82 @@ def _verify_one_citation(
         f"Content snippet: {source_snippet[:3000]}"
     )
 
-    try:
-        response = call_api(
-            system=system,
-            messages=[{"role": "user", "content": user}],
-            max_tokens=512,
-            temperature=0.0,
-            timeout=30.0,
-            response_format={
-                "type": "json_schema",
-                "json_schema": {
-                    "name": "CitationCheck",
-                    "strict": True,
-                    "schema": _VERIFY_SCHEMA,
-                },
-            },
-        )
-        text = response.text or ""
-        # Parse JSON
-        import json
+    import json
 
-        cleaned = text.strip()
-        if cleaned.startswith("```"):
-            cleaned = cleaned.split("\n", 1)[1] if "\n" in cleaned else cleaned[3:]
-            cleaned = cleaned.rsplit("```", 1)[0].strip()
-        result = json.loads(cleaned)
-        supported = result.get("supported", False)
-        reason = result.get("reason", "")
-        if not supported:
-            logger.info(
-                "[verifier] REJECTED [%d] on: %s | Reason: %s",
-                cite_num,
-                clean_sentence[:60],
-                reason[:80],
+    # Try structured output first, fall back to plain text parsing
+    for attempt in range(3):
+        try:
+            if attempt < 2:
+                # Structured output via tool-use trick
+                response = call_api(
+                    system=system,
+                    messages=[{"role": "user", "content": user}],
+                    max_tokens=512,
+                    temperature=0.0,
+                    timeout=30.0,
+                    response_format={
+                        "type": "json_schema",
+                        "json_schema": {
+                            "name": "CitationCheck",
+                            "strict": True,
+                            "schema": _VERIFY_SCHEMA,
+                        },
+                    },
+                )
+            else:
+                # Fallback: plain text — ask for yes/no
+                response = call_api(
+                    system=system + "\n\nRespond with ONLY the word 'true' or 'false'.",
+                    messages=[{"role": "user", "content": user}],
+                    max_tokens=64,
+                    temperature=0.0,
+                    timeout=30.0,
+                )
+
+            text = (response.text or "").strip()
+
+            # Try JSON parse first
+            try:
+                cleaned = text
+                if cleaned.startswith("```"):
+                    cleaned = cleaned.split("\n", 1)[1] if "\n" in cleaned else cleaned[3:]
+                    cleaned = cleaned.rsplit("```", 1)[0].strip()
+                result = json.loads(cleaned)
+                supported = result.get("supported", False)
+                reason = result.get("reason", "")
+            except (json.JSONDecodeError, ValueError):
+                # Plain text fallback — look for true/false
+                lower = text.lower()
+                if "true" in lower and "false" not in lower:
+                    supported = True
+                    reason = ""
+                elif "false" in lower:
+                    supported = False
+                    reason = text[:100]
+                else:
+                    # Can't parse — retry
+                    continue
+
+            if not supported:
+                logger.info(
+                    "[verifier] REJECTED [%d] on: %s | Reason: %s",
+                    cite_num,
+                    clean_sentence[:60],
+                    reason[:80],
+                )
+            return supported
+
+        except (LyraAPIError, Exception) as e:
+            if attempt < 2:
+                logger.debug("[verifier] Attempt %d failed for [%d]: %s", attempt + 1, cite_num, e)
+                continue
+            logger.warning(
+                "[verifier] Citation check failed for [%d] after 3 attempts: %s", cite_num, e
             )
-        return supported
-    except (LyraAPIError, Exception) as e:
-        logger.warning("[verifier] Citation check failed for [%d]: %s", cite_num, e)
-        # On failure, reject the citation — better to remove than to keep unverified
-        return False
+            return False
+
+    logger.warning("[verifier] Citation check exhausted retries for [%d]", cite_num)
+    return False
 
 
 def verify_all_citations(
