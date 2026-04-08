@@ -57,6 +57,23 @@ def _load_source_priority(session: Session) -> dict[str, int]:
     return {row.id: row.priority for row in rows}
 
 
+# Country/region names that should never match as archaeological sites
+_GENERIC_NAME_BLOCKLIST = {
+    "egypt", "peru", "turkey", "greece", "italy", "spain", "france", "germany",
+    "england", "scotland", "ireland", "wales", "india", "china", "japan", "mexico",
+    "brazil", "colombia", "bolivia", "chile", "argentina", "iran", "iraq", "syria",
+    "jordan", "israel", "palestine", "lebanon", "libya", "tunisia", "morocco",
+    "algeria", "ethiopia", "kenya", "tanzania", "sudan", "cambodia", "indonesia",
+    "thailand", "vietnam", "australia", "canada", "iceland", "norway", "sweden",
+    "denmark", "finland", "russia", "ukraine", "portugal", "croatia", "serbia",
+    "africa", "europe", "asia", "americas", "sahara", "sahara desert",
+    "mediterranean", "atlantic", "pacific", "siberia", "anatolia", "mesopotamia",
+    "levant", "balkans", "scandinavia", "polynesia", "melanesia", "micronesia",
+    "north america", "south america", "central america", "middle east",
+    "near east", "far east", "north africa", "west africa", "east africa",
+}
+
+
 def _find_site_by_name(
     session: Session,
     extracted_name: str,
@@ -74,6 +91,8 @@ def _find_site_by_name(
     """
     normalized = normalize_name(extracted_name)
     if not normalized or len(normalized) < 3:
+        return None
+    if normalized in _GENERIC_NAME_BLOCKLIST:
         return None
 
     source_filter = UnifiedSite.source_id.in_(matchable_sources)

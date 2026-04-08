@@ -168,6 +168,10 @@ def generate_posts_for_video(
                 headline_to_item[item.headline.strip().lower()] = item
             items_by_order.append(item)
 
+        def _normalize_headline(h: str) -> str:
+            """Strip punctuation and extra spaces for fuzzy headline matching."""
+            return re.sub(r"[^a-z0-9 ]", "", h.lower()).strip()
+
         matched_by_headline = 0
         matched_by_position = 0
         unmatched = 0
@@ -184,9 +188,17 @@ def generate_posts_for_video(
             if not post_text:
                 continue
 
-            # Primary: match by headline
+            # Primary: exact headline match
             key = headline.strip().lower()
             item = headline_to_item.pop(key, None)
+
+            # Secondary: normalized headline match (strip punctuation)
+            if item is None and headline:
+                norm_key = _normalize_headline(headline)
+                for db_key, db_item in list(headline_to_item.items()):
+                    if _normalize_headline(db_key) == norm_key:
+                        item = headline_to_item.pop(db_key)
+                        break
 
             if item is not None:
                 matched_by_headline += 1
