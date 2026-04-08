@@ -761,7 +761,7 @@ def _extract_proper_nouns(text: str) -> set[str]:
         parts = noun.split()
         while parts and parts[0] in _LEADING_NOISE:
             parts = parts[1:]
-        if len(parts) >= 2:
+        if 2 <= len(parts) <= 4:  # real proper nouns are 2-4 words max
             cleaned.add(" ".join(parts))
     return cleaned
 
@@ -875,7 +875,7 @@ def _check_d1_proper_nouns(body: str, sources: list[dict], settings: LyraSetting
                     None, body_noun.lower(), source_noun.lower()
                 ).ratio()
                 # Similar but not identical — potential mismatch
-                if 0.7 < ratio < 1.0:
+                if 0.8 < ratio < 1.0:
                     corrections.append({"find": body_noun, "replace": source_noun})
                     break
 
@@ -1142,10 +1142,10 @@ def _check_d9_summary(body: str, sources: list[dict] | None = None) -> dict:
                 best_ratio = ratio
                 best_match = b_noun
 
-        if best_ratio >= 0.7 and best_match:
+        if best_ratio >= 0.8 and best_match:
             # Close match but not identical — likely a typo/mismatch
             mismatches.append({"find": s_noun, "replace": best_match})
-        elif best_ratio < 0.7:
+        elif best_ratio < 0.8:
             # No close match at all — summary noun not grounded in body
             mismatches.append({"find": s_noun, "replace": ""})
 
