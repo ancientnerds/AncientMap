@@ -761,7 +761,7 @@ def _apply_relevance_filter(
 
 def _auto_retrieve(
     queries: list[str], context_type: str
-) -> tuple[str, list[dict], list[dict], float | None, int, list[dict], list[dict]]:
+) -> tuple[str, list[dict], list[dict], float | None, int, list[dict], list[dict], list[dict]]:
     """Run automatic hybrid retrieval BEFORE the LLM sees the message.
 
     Searches Qdrant collections on every sub-query (from decomposition):
@@ -769,6 +769,7 @@ def _auto_retrieve(
     - News collection (limit=3) for semantically relevant news items
     - Transcripts collection (limit=3) for relevant transcript passages
     - Articles collection (limit=3) for relevant weekly digest articles
+    - Research collection (limit=3) for relevant research paper sections
 
     All searches run in parallel via ThreadPoolExecutor for speed.
 
@@ -778,7 +779,8 @@ def _auto_retrieve(
     Returns:
         Tuple of (formatted context string, list of site result dicts for map highlighting,
         list of news result dicts for sidebar cards, average relevance score or None,
-        total Voyage tokens used, list of transcript chunk dicts, list of article chunk dicts).
+        total Voyage tokens used, list of transcript chunk dicts, list of article chunk dicts,
+        list of research chunk dicts).
     """
     from concurrent.futures import ThreadPoolExecutor
 
@@ -800,6 +802,8 @@ def _auto_retrieve(
         search_tasks.append(("transcripts", sub_q, 3))
     for sub_q in queries:
         search_tasks.append(("articles", sub_q, 3))
+    for sub_q in queries:
+        search_tasks.append(("research", sub_q, 3))
 
     # Execute all Qdrant searches in parallel (was sequential: 200-500ms each)
     def _do_search(task: tuple[str, str, int]) -> tuple[str, list[dict], int]:
@@ -815,8 +819,10 @@ def _auto_retrieve(
     seen_news_keys: set[str] = set()
     seen_transcript_keys: set[str] = set()
     seen_article_ids: set[int] = set()
+    seen_paper_ids: set[str] = set()
     transcript_chunks: list[dict] = []
     article_chunks: list[dict] = []
+    research_chunks: list[dict] = []
 
     for coll, results, vt in search_results:
         total_voyage_tokens += vt
@@ -848,6 +854,12 @@ def _auto_retrieve(
                 if aid is not None and aid not in seen_article_ids:
                     seen_article_ids.add(aid)
                     article_chunks.append(r)
+        elif coll == "research":
+            for r in results:
+                pid = r.get("paper_id")
+                if pid and pid not in seen_paper_ids:
+                    seen_paper_ids.add(pid)
+                    research_chunks.append(r)
 
     # Format site results
     sites_for_context = _apply_relevance_filter(site_results)
@@ -915,10 +927,28 @@ def _auto_retrieve(
             if preview:
                 line += f"\n  > {preview}"
             lines.append(line)
-        context_parts.append("### Weekly Articles\n" + "\n".join(lines))
+        context_parts.append("### Weekly Journals\n" + "\n".join(lines))
+
+    # Format research paper results
+    research_chunks_filtered = _apply_relevance_filter(research_chunks)
+    if research_chunks_filtered:
+        research_chunks_filtered = _semantic_dedup(research_chunks_filtered, text_key="text_preview")
+        lines = []
+        for r in research_chunks_filtered:
+            paper_title = r.get("paper_title", "")
+            section_title = r.get("section_title", "")
+            author = r.get("author_username", "")
+            effort = r.get("effort", "")
+            slug = r.get("paper_slug", "")
+            preview = r.get("text_preview", "")[:500]
+            line = f"- **{paper_title}** > {section_title} (by {author}, {effort}, slug: {slug})"
+            if preview:
+                line += f"\n  > {preview}"
+            lines.append(line)
+        context_parts.append("### Research Papers\n" + "\n".join(lines))
 
     if not context_parts:
-        return "", [], [], None, total_voyage_tokens, [], article_chunks
+        return "", [], [], None, total_voyage_tokens, [], article_chunks, research_chunks
 
     # Semantic dedup: remove near-duplicate results across retrieval sources
     site_results = _semantic_dedup(site_results, text_key="description")
@@ -944,6 +974,7 @@ def _auto_retrieve(
         total_voyage_tokens,
         transcript_chunks,
         article_chunks,
+        research_chunks,
     )
 
 
@@ -1546,6 +1577,7 @@ async def run_agent_stream(
                 vt,
                 auto_transcript_results,
                 auto_article_results,
+                _auto_research_results,
             ) = auto_result_or_exc
             total_voyage_tokens += vt
             # Extend all_transcripts (deduped by video_id)
