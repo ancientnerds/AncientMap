@@ -206,7 +206,11 @@ async def get_news_feed(
             joinedload(NewsItem.video).joinedload(NewsVideo.channel),
             joinedload(NewsItem.site),
         )
-        .filter(NewsItem.post_text.isnot(None))
+        .filter(
+            NewsItem.post_text.isnot(None),
+            NewsItem.significance.isnot(None),
+            NewsItem.significance >= 2,
+        )
     )
 
     if channel_id:
@@ -253,7 +257,7 @@ async def get_news_feed(
         query = query.filter(NewsItem.news_category == news_category)
     elif not include_speculative:
         query = query.filter(
-            (NewsItem.news_category != "speculative") | (NewsItem.news_category.is_(None))
+            (NewsItem.news_category != "speculative") | (NewsItem.significance >= 3)
         )
 
     total_count = query.count()

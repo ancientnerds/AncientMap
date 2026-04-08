@@ -36,7 +36,7 @@ TIMESTAMP REQUIREMENTS:
 - If no clear timestamp range exists, use null
 - Timestamp should correspond to the specific content of the tweet
 
-IMPORTANT: Write exactly ONE tweet PER key topic! MAX 170 chars!
+IMPORTANT: Write exactly ONE tweet PER key topic! Target 200-300 chars.
 For each post, echo back the EXACT headline string from the corresponding key topic so posts can be matched to their source.
 
 Respond with ONLY a JSON object: {"posts": [{"headline": "str", "tweet": "str", "timestamp_range": "MM:SS-MM:SS" or null}]}

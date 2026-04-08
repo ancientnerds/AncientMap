@@ -147,6 +147,9 @@ class LyraSettings(BaseSettings):
     # Deduplication
     dedup_similarity_threshold: float = 0.25
 
+    # Web verification for stories (0 = disabled)
+    story_web_verify_min_significance: int = 5
+
     # Webshare proxy (for YouTube transcript fetching from VPS)
     webshare_username: str = ""
     webshare_password: str = ""

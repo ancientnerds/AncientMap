@@ -19,6 +19,7 @@ from pipeline.lyra.transcript_fetcher import extract_transcript_segment, parse_t
 logger = logging.getLogger(__name__)
 
 PROMPT_PATH = Path(__file__).parent / "prompts" / "verify_tweets.txt"
+WEB_VERIFY_PROMPT_PATH = Path(__file__).parent / "prompts" / "story_web_verify.txt"
 
 VERIFY_SCHEMA = {
     "type": "object",
@@ -55,6 +56,8 @@ def verify_single_post(
     model: str,
     system_prompt: str | None = None,
     max_tokens: int | None = None,
+    video_title: str | None = None,
+    video_tags: list[str] | None = None,
 ) -> dict | None:
     """Verify a single post against the transcript.
 
@@ -77,9 +80,18 @@ def verify_single_post(
     if system_prompt is None:
         system_prompt = _load_prompt()
 
+    # Build context with video metadata for proper noun checking
+    metadata_lines = []
+    if video_title:
+        metadata_lines.append(f"Video title: {video_title}")
+    if video_tags:
+        metadata_lines.append(f"Video tags: {', '.join(video_tags)}")
+    metadata_block = "\n".join(metadata_lines)
+
     ts_label = item.timestamp_range or "start of video"
     user_content = (
         f"Tweet to verify:\n{item.post_text}\n\n"
+        f"{metadata_block}\n\n"
         f"Relevant transcript segment (roughly from {ts_label}):\n"
         f"<transcript_segment>\n{segment}\n</transcript_segment>"
     )
@@ -164,6 +176,8 @@ def verify_video_posts(
                 settings.model_verify,
                 system_prompt,
                 max_tokens=settings.max_tokens,
+                video_title=video.title,
+                video_tags=video.tags,
             )
             if not result:
                 skipped += 1
@@ -203,6 +217,9 @@ def verify_video_posts(
 
         session.flush()
 
+        # Web fact-check high-significance items after transcript verification
+        _web_verify_items(items, settings)
+
         # Count remaining unverified items for this video
         remaining = (
             session.query(NewsItem)
@@ -225,6 +242,90 @@ def verify_video_posts(
 
     logger.info(f"Verified {verified}/{len(items)} posts for video {video.id} ({skipped} skipped)")
     return verified
+
+
+def _web_verify_items(items: list[NewsItem], settings: LyraSettings) -> int:
+    """Web fact-check high-significance items using MiniMax search.
+
+    Only processes items with significance >= story_web_verify_min_significance.
+    Returns number of items web-checked.
+    """
+    min_sig = getattr(settings, "story_web_verify_min_significance", 5)
+    if min_sig <= 0:
+        return 0
+
+    eligible = [
+        i for i in items
+        if i.significance and i.significance >= min_sig and i.post_text
+    ]
+    if not eligible:
+        return 0
+
+    try:
+        from pipeline.lyra.minimax_shared import create_minimax_client, minimax_search, minimax_chat
+    except ImportError:
+        logger.warning("MiniMax shared module not available, skipping web verification")
+        return 0
+
+    if not settings.minimax_api_key:
+        return 0
+
+    client = create_minimax_client(settings.minimax_base_url, settings.minimax_api_key)
+    web_prompt = WEB_VERIFY_PROMPT_PATH.read_text(encoding="utf-8")
+    checked = 0
+
+    for item in eligible:
+        # Build search query from the most specific fact
+        claim = item.facts[0] if item.facts else item.headline
+        results = minimax_search(client, claim)
+        if not results:
+            continue
+
+        search_text = "\n".join(
+            f"- [{r.title}]({r.url}): {r.snippet}" for r in results[:5]
+        )
+        facts_text = "\n".join(f"- {f}" for f in (item.facts or [])[:5])
+
+        user_msg = web_prompt.replace("{post_text}", item.post_text or "")
+        user_msg = user_msg.replace("{facts}", facts_text)
+        user_msg = user_msg.replace("{search_results}", search_text)
+
+        try:
+            response_text = minimax_chat(client, "MiniMax-M2.7", "", user_msg, 4096)
+        except Exception as e:
+            logger.warning(f"Web verify failed for item {item.id}: {e}")
+            continue
+
+        if not response_text:
+            continue
+
+        # Parse JSON — handle markdown fencing
+        cleaned = response_text.strip()
+        if cleaned.startswith("```"):
+            cleaned = cleaned.split("\n", 1)[1] if "\n" in cleaned else cleaned[3:]
+            cleaned = cleaned.rsplit("```", 1)[0].strip()
+
+        try:
+            result = json.loads(cleaned)
+        except (json.JSONDecodeError, ValueError):
+            logger.warning(f"Failed to parse web verify response for item {item.id}")
+            continue
+
+        verdict = result.get("verdict", "")
+        if verdict == "CORRECTED" and result.get("corrected_text"):
+            logger.info(
+                f"Web verify corrected item {item.id}: {result.get('reason', '')}"
+            )
+            item.post_text = result["corrected_text"]
+        elif verdict == "REJECT":
+            logger.info(f"Web verify rejected item {item.id}: {result.get('reason', '')}")
+            item.post_text = None
+            item.news_category = "rejected"
+        checked += 1
+
+    if checked:
+        logger.info(f"Web-verified {checked} high-significance items")
+    return checked
 
 
 def verify_pending_posts(settings: LyraSettings) -> int:

@@ -40,8 +40,19 @@ RESCORE_SCHEMA = {
             ],
         },
         "reason": {"type": "string"},
+        "entities": {
+            "type": "object",
+            "properties": {
+                "sites": {"type": "array", "items": {"type": "string"}},
+                "people": {"type": "array", "items": {"type": "string"}},
+                "cultures": {"type": "array", "items": {"type": "string"}},
+            },
+            "required": ["sites", "people", "cultures"],
+            "additionalProperties": False,
+        },
+        "tags": {"type": "array", "items": {"type": "string"}},
     },
-    "required": ["significance", "news_category", "speculative_tag", "reason"],
+    "required": ["significance", "news_category", "speculative_tag", "reason", "entities", "tags"],
     "additionalProperties": False,
 }
 
@@ -125,6 +136,14 @@ def rescore_pending_items(settings: LyraSettings) -> int:
                     item.speculative_tag = tag if tag in VALID_SPECULATIVE_TAGS else None
                 else:
                     item.speculative_tag = None
+
+                # Save extracted entities and tags
+                entities = result.get("entities")
+                if entities and isinstance(entities, dict):
+                    item.entities = entities
+                tags = result.get("tags")
+                if tags and isinstance(tags, list):
+                    item.tags = tags
 
                 if new_sig == 1:
                     # Not archaeology — remove from feed
