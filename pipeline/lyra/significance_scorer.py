@@ -158,6 +158,11 @@ def rescore_pending_items(settings: LyraSettings) -> int:
 
                 rescored_count += 1
 
+            # Web fact-check high-significance items (now that significance is set)
+            from pipeline.lyra.tweet_verifier import _web_verify_items
+
+            _web_verify_items(items, settings)
+
             # Only transition if all items were processed
             v = session.get(NewsVideo, video.id)
             if v:

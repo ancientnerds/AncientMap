@@ -217,9 +217,6 @@ def verify_video_posts(
 
         session.flush()
 
-        # Web fact-check high-significance items after transcript verification
-        _web_verify_items(items, settings)
-
         # Count remaining unverified items for this video
         remaining = (
             session.query(NewsItem)
