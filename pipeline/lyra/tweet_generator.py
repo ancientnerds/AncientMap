@@ -211,6 +211,8 @@ def generate_posts_for_video(
 
             # Strip any hashtags the LLM sneaks in despite the prompt
             post_text = re.sub(r"#\w+", "", post_text).strip()
+            # Strip timestamp ranges the LLM includes in the text (e.g. "(08:58-11:48)")
+            post_text = re.sub(r"\s*\(\d{1,2}:\d{2}\s*[-–—]\s*\d{1,2}:\d{2}\)", "", post_text)
             post_text = re.sub(r"  +", " ", post_text)
             item.post_text = post_text
             if ts_range:
