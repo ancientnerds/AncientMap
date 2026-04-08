@@ -173,7 +173,11 @@ async def vector_sync_status():
         "empires": seshat_polity_count,
         "research": pg_research,
     }
-    _no_delta = {"transcripts", "articles", "research"}  # chunk counts aren't comparable to PG counts
+    _no_delta = {
+        "transcripts",
+        "articles",
+        "research",
+    }  # chunk counts aren't comparable to PG counts
 
     collections_status = {}
     for name in _COLLECTION_NAMES:

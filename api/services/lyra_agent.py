@@ -932,7 +932,9 @@ def _auto_retrieve(
     # Format research paper results
     research_chunks_filtered = _apply_relevance_filter(research_chunks)
     if research_chunks_filtered:
-        research_chunks_filtered = _semantic_dedup(research_chunks_filtered, text_key="text_preview")
+        research_chunks_filtered = _semantic_dedup(
+            research_chunks_filtered, text_key="text_preview"
+        )
         lines = []
         for r in research_chunks_filtered:
             paper_title = r.get("paper_title", "")
