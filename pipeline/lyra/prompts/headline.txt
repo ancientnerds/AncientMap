@@ -5,7 +5,7 @@ This is a WEEKLY JOURNAL covering multiple archaeological topics. Create:
    - "Week of March 23: 303 New Nazca Lines Discovered, Olmec Ceremony Unearthed, and More"
    - "Week of Feb 16: 1.5M-Year-Old Bone Tools Found in Tanzania, Norfolk Carnyx, and More"
    The week date comes from the content's date range. If the journal only covers 2 topics, drop "and More".
-2. A 2-3 sentence TLDR summary covering the week's TOP 3-4 findings across different sections. Each sentence should mention a different discovery or topic.
+2. A 2-3 sentence TLDR summary covering the week's TOP 3-4 findings across different sections. Each sentence should mention a different discovery or topic. Use ONLY proper nouns and facts that appear in the body text below — do not add context from your own knowledge.
 
 Return a JSON object with "headline" and "tldr" fields:
 - "headline": your journal title (max 90 characters)

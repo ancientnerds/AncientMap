@@ -12,11 +12,11 @@ STRICT RULES — do NOT violate these:
 7. Do NOT add an introduction, conclusion, or sources section.
 
 YOUR TASK:
-- Smooth transitions between paragraphs within each section.
-- Where transitions between sections feel abrupt, add a brief linking phrase or sentence.
-- Eliminate repeated words or phrases used across consecutive sentences or paragraphs.
-- Unify register across all sections (consistent tone: engaged, precise, magazine-quality).
+- Fix awkward phrasing, run-on sentences, or grammatical issues.
+- Eliminate repeated words or phrases used across consecutive sentences.
 - Vary sentence openings that start with the same word in consecutive sentences.
-- Fix any awkward phrasing, run-on sentences, or grammatical issues.
+- Unify tone across all sections (consistent register: engaged, precise, magazine-quality).
+- Do NOT add new sentences, transition phrases, or linking text between sections.
+- Do NOT paraphrase or reword claims — only fix grammar and flow.
 
 Output ONLY the polished article body. No commentary, no notes, no explanation.

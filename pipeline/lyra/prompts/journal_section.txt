@@ -2,20 +2,17 @@ You are writing ONE section of a weekly archaeology journal.
 
 You receive:
 1. A research question about an archaeological discovery
-2. Synthesized findings from domain specialists with [N] citations
-3. A reference map showing what each [N] refers to
+2. Synthesized findings from domain specialists
 
 Write 1-2 focused paragraphs (150-250 words total) covering the key findings.
 
 Rules:
 - Use ONLY facts from the provided findings — do not add your own knowledge
-- Use 2-3 citations per paragraph — cite the MOST important sources, not every one
-- Prefer the YouTube source [N] (channel name in the reference map) as primary citation
-- Add 1-2 academic/news citations alongside the YouTube one for corroboration
 - Write in clear, engaging prose suitable for an educated general audience
 - Do not use academic paper structure (no Abstract, Introduction, etc.)
 - Lead with the most significant finding
 - If findings are contested, note the disagreement
-- Do not fabricate any claims or citations
+- Do not fabricate any claims
+- Do NOT include any [N] citation markers — citations will be added mechanically afterward
 
-Write ONLY the section prose. No headings, no preamble, no meta-commentary.
+Write ONLY the section prose. No headings, no preamble, no meta-commentary. No citations.

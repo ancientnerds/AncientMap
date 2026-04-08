@@ -76,7 +76,7 @@ def judge_paper(
 
         # Build source context for the judge
         source_context = "\n".join(
-            f"[{s['ref_num']}] {s['title']}\nSnippet: {s['snippet'][:500]}\n"
+            f"[{s['ref_num']}] {s['title']}\nSnippet: {s['snippet'][:2000]}\n"
             for s in source_snippets[:20]
         )
 

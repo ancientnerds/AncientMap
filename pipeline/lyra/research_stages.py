@@ -377,9 +377,17 @@ def _stage_write_section(
     registry: CitationRegistry,
     settings: LyraSettings,
 ) -> str:
-    """Write the journal section prose with [N] citations."""
+    """Write journal section prose, then mechanically insert citations.
+
+    Two-step process to guarantee citation accuracy:
+    1. LLM writes prose WITHOUT any [N] markers (pure content)
+    2. Python matches each sentence to synthesis claims and inserts
+       the correct [N] citations mechanically
+
+    This prevents the LLM from placing wrong citation numbers.
+    """
     t0 = time.monotonic()
-    logger.info("[journal] Writing section prose...")
+    logger.info("[journal] Writing section prose (two-step)...")
 
     # Assign reference numbers to all cited source_ids from synthesis
     all_source_ids: set[str] = set()
@@ -390,7 +398,6 @@ def _stage_write_section(
     for claim in registry.claims:
         all_source_ids.update(claim.source_ids)
 
-    ref_map_lines: list[str] = []
     sid_to_num: dict[str, int] = {}
     for sid in sorted(all_source_ids):
         source = registry.get_reference(sid)
@@ -398,40 +405,158 @@ def _stage_write_section(
             continue
         num = registry.assign_reference_number(sid)
         sid_to_num[sid] = num
-        ref_map_lines.append(f"[{num}] {source.title} - {source.url}")
 
-    ref_map_text = "\n".join(ref_map_lines) if ref_map_lines else "(no references)"
+    # Build claim-to-citations mapping for mechanical insertion
+    # Each claim has text + the [N] numbers that support it
+    claim_citations: list[tuple[str, str]] = []  # (claim_text, "[N] [M]")
+    for claim_data in synthesis.get("consensus_claims", []):
+        claim_text = claim_data.get("claim", "")
+        source_ids = claim_data.get("source_ids", [])
+        nums = " ".join(f"[{sid_to_num[sid]}]" for sid in source_ids if sid in sid_to_num)
+        if claim_text and nums:
+            claim_citations.append((claim_text, nums))
+    for claim_data in synthesis.get("contested_claims", []):
+        claim_text = claim_data.get("claim", "")
+        source_ids = claim_data.get("source_ids", [])
+        nums = " ".join(f"[{sid_to_num[sid]}]" for sid in source_ids if sid in sid_to_num)
+        if claim_text and nums:
+            claim_citations.append((claim_text, nums))
+    for claim_data in synthesis.get("unique_insights", []):
+        claim_text = claim_data.get("claim", claim_data.get("insight", ""))
+        source_ids = claim_data.get("source_ids", [])
+        nums = " ".join(f"[{sid_to_num[sid]}]" for sid in source_ids if sid in sid_to_num)
+        if claim_text and nums:
+            claim_citations.append((claim_text, nums))
 
-    # Replace source_ids with [N] numbers in synthesis
-    def _replace_source_ids(obj):
-        if isinstance(obj, dict):
-            result = {}
-            for k, v in obj.items():
-                if k == "source_ids" and isinstance(v, list):
-                    result["citations"] = " ".join(
-                        f"[{sid_to_num[sid]}]" for sid in v if sid in sid_to_num
-                    )
-                else:
-                    result[k] = _replace_source_ids(v)
-            return result
-        elif isinstance(obj, list):
-            return [_replace_source_ids(item) for item in obj]
-        return obj
-
-    cleaned_synthesis = _replace_source_ids(synthesis)
-
+    # Step 1: LLM writes prose WITHOUT citations
     system = _load_prompt("journal_section")
-    user_msg = (
-        f"## Research question\n\n{question}\n\n"
-        f"## Reference map (use ONLY these [N] numbers for citations)\n\n{ref_map_text}\n\n"
-        f"## Synthesized findings\n\n{json.dumps(cleaned_synthesis, indent=2)}"
+    # Give the LLM the synthesis findings (without source_ids — just the claims)
+    findings_text = []
+    for claim_text, _nums in claim_citations:
+        findings_text.append(f"- {claim_text}")
+    user_msg = f"## Research question\n\n{question}\n\n## Key findings to cover\n\n" + "\n".join(
+        findings_text
     )
 
     prose = minimax_chat_anthropic(system, user_msg, _MAX_TOKENS_SYNTHESIS, settings=settings)
 
+    # Strip any [N] markers the LLM might have added despite instructions
+    prose = re.sub(r"\[\d+\]", "", prose)
+
+    # Step 2: Mechanically insert citations by matching sentences to claims
+    sentences = re.split(r"(?<=[.!?])\s+", prose)
+    cited_sentences = []
+
+    for sentence in sentences:
+        sent_lower = sentence.lower()
+        sent_words = set(sent_lower.split())
+
+        # Find the best matching claim for this sentence
+        best_match_nums = ""
+        best_overlap = 0
+
+        for claim_text, nums in claim_citations:
+            claim_words = set(claim_text.lower().split())
+            # Remove stop words for matching
+            stop = {
+                "the",
+                "a",
+                "an",
+                "is",
+                "are",
+                "was",
+                "were",
+                "of",
+                "in",
+                "to",
+                "and",
+                "that",
+                "this",
+                "for",
+                "with",
+                "from",
+                "has",
+                "have",
+                "had",
+                "been",
+                "not",
+                "but",
+                "its",
+                "also",
+            }
+            claim_content = claim_words - stop
+            sent_content = sent_words - stop
+
+            if not claim_content:
+                continue
+
+            overlap = len(claim_content & sent_content)
+            overlap_ratio = overlap / len(claim_content)
+
+            if overlap_ratio > best_overlap and overlap_ratio >= 0.3:
+                best_overlap = overlap_ratio
+                best_match_nums = nums
+
+        if best_match_nums:
+            # Insert citation at end of sentence (before period)
+            cited_sentences.append(f"{sentence.rstrip('.')} {best_match_nums}.")
+        else:
+            cited_sentences.append(sentence)
+
+    prose = " ".join(cited_sentences)
+
     ms = int((time.monotonic() - t0) * 1000)
-    logger.info("[journal] Section written in %dms (%d chars)", ms, len(prose))
+    cited_count = len(re.findall(r"\[\d+\]", prose))
+    logger.info(
+        "[journal] Section written in %dms (%d chars, %d citations inserted mechanically)",
+        ms,
+        len(prose),
+        cited_count,
+    )
     return prose
+
+
+def _strip_unsupported_claims(prose: str, problems: list[dict]) -> str:
+    """Remove sentences containing claims the judge identified as unsupported.
+
+    Each problem has a 'claim' field with the text of the unsupported claim.
+    We find the sentence in the prose that contains this claim and remove it entirely.
+    An unsupported claim must not exist in the output — not even without a citation.
+    """
+    for problem in problems:
+        claim = problem.get("claim", "")
+        if not claim or len(claim) < 10:
+            continue
+
+        # Find sentences in prose that contain the claim text (or a close match)
+        sentences = re.split(r"(?<=[.!?])\s+", prose)
+        claim_lower = claim.lower()
+
+        kept = []
+        removed = 0
+        for sentence in sentences:
+            # Check if this sentence contains the unsupported claim
+            if claim_lower in sentence.lower():
+                removed += 1
+                logger.info("[journal] Stripped unsupported claim: %s", sentence[:80])
+            else:
+                # Also check for partial match (claim may be paraphrased)
+                # Use word overlap — if >60% of claim words appear in sentence, strip it
+                claim_words = set(claim_lower.split())
+                sent_words = set(sentence.lower().split())
+                if claim_words and len(claim_words & sent_words) / len(claim_words) > 0.6:
+                    removed += 1
+                    logger.info("[journal] Stripped paraphrased claim: %s", sentence[:80])
+                else:
+                    kept.append(sentence)
+
+        if removed > 0:
+            prose = " ".join(kept)
+
+    # Clean up double spaces and orphaned citations
+    prose = re.sub(r"  +", " ", prose)
+    prose = re.sub(r"\n\n\n+", "\n\n", prose)
+    return prose.strip()
 
 
 def _stage_judge(
@@ -618,6 +743,18 @@ def research_cluster(
         score = judge_result.get("score", 0)
         passed = judge_result.get("passed", False)
 
+        # Strip claims the judge identified as unsupported BEFORE tracking
+        problems = judge_result.get("problems", [])
+        critical = [
+            p
+            for p in problems
+            if p.get("type") in ("source_fidelity_failure", "attribution_failure")
+            and p.get("action") == "strip_claim"
+        ]
+        if critical:
+            prose = _strip_unsupported_claims(prose, critical)
+            logger.info("[journal] Stripped %d unsupported claims from prose", len(critical))
+
         # Track best attempt
         if score > best_score:
             best_prose = prose
@@ -636,7 +773,6 @@ def research_cluster(
             )
             break
 
-        problems = judge_result.get("problems", [])
         if not problems:
             logger.info("[journal] Judge failed but no actionable problems, shipping as-is")
             break
