@@ -1213,6 +1213,56 @@ def _check_d9_summary(body: str, sources: list[dict] | None = None) -> dict:
     }
 
 
+def _regenerate_summary(body: str, settings: LyraSettings) -> str:
+    """Regenerate the italic summary from the corrected body.
+
+    Instead of patching the old summary, generate a fresh one from the
+    current body so it's guaranteed to match.
+    """
+    # Extract body without summary (everything after ---)
+    sep_idx = body.find("\n---")
+    if sep_idx < 0:
+        return body
+    body_after = body[sep_idx + 4 :].strip()
+
+    # Get first 300 chars of each section for context
+    sections = _get_sections(body_after)
+    snippets = []
+    for sec in sections[:8]:
+        if sec["header"] and "Sources" not in sec["header"]:
+            snippets.append(f"{sec['header']}: {sec['content'][:300]}")
+
+    try:
+        response = call_api(
+            system=(
+                "Write a 3-4 sentence summary of this archaeology journal. "
+                "Cover the top 3-4 findings. Use proper nouns exactly as they appear. "
+                "No label, no heading — just the summary sentences in italic markdown (*text*)."
+            ),
+            messages=[{"role": "user", "content": "\n\n".join(snippets)}],
+            max_tokens=1024,
+            temperature=0.0,
+            top_p=0.1,
+            timeout=60.0,
+        )
+        new_summary = (response.text or "").strip()
+        if not new_summary or len(new_summary) < 50:
+            return body
+
+        # Ensure it's wrapped in *italic*
+        if not new_summary.startswith("*"):
+            new_summary = f"*{new_summary}*"
+
+        # Replace the old summary
+        old_summary_end = sep_idx
+        body = new_summary + "\n" + body[old_summary_end:]
+        logger.info("[assessor] D9: regenerated summary (%d chars)", len(new_summary))
+    except Exception as e:
+        logger.warning("[assessor] D9: summary regeneration failed: %s", e)
+
+    return body
+
+
 def _fix_d1_d4_d6_d9(body: str, check_result: dict) -> tuple[str, list[dict]]:
     """Apply mechanical fixes from the separate LLM check results."""
     fixes: list[dict] = []
@@ -1423,15 +1473,9 @@ def assess_and_fix(
         d9 = _check_d9_summary(best_body)
         dims["D9_summary_accuracy"] = d9["passed"]
         if not d9["passed"]:
-            logger.info("[assessor] D9: summary inaccurate")
-            d9_combined = {
-                "d1_issues": [],
-                "d4_issues": [],
-                "d6_issues": [],
-                "d9_data": d9.get("d9_data", {}),
-            }
-            best_body, d9_fixes = _fix_d1_d4_d6_d9(best_body, d9_combined)
-            all_fixes.extend(d9_fixes)
+            logger.info("[assessor] D9: summary inaccurate — regenerating from corrected body")
+            best_body = _regenerate_summary(best_body, settings)
+            all_fixes.append({"dimension": "D9", "find": "summary", "replace": "regenerated"})
 
         # --- Safety: restore sources section if damaged ---
         if original_sources_section:
