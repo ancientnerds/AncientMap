@@ -253,7 +253,9 @@ def generate_posts_for_video(
                     f"Video {video.id}: {remaining} items orphaned (no matching posts generated)"
                 )
         else:
-            logger.info(f"Video {video.id}: {remaining} items still need posts — keeping as summarized")
+            logger.info(
+                f"Video {video.id}: {remaining} items still need posts — keeping as summarized"
+            )
 
     logger.info(
         f"Video {video.id}: {count} posts written "
