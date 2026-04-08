@@ -195,7 +195,7 @@ def generate_posts_for_video(
             # Secondary: normalized headline match (strip punctuation)
             if item is None and headline:
                 norm_key = _normalize_headline(headline)
-                for db_key, db_item in list(headline_to_item.items()):
+                for db_key, _db_item in list(headline_to_item.items()):
                     if _normalize_headline(db_key) == norm_key:
                         item = headline_to_item.pop(db_key)
                         break
