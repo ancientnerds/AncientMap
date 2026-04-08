@@ -1682,6 +1682,10 @@ class TheoPipeline:
             ctx.tier.max_tokens_synthesis,
         )
 
+        # Two-step citation: strip any [N] the LLM placed, then re-insert mechanically
+        raw_paper = re.sub(r"\[\d+\]", "", raw_paper)
+        raw_paper = self._insert_citations_mechanically(raw_paper, ctx, sid_to_num)
+
         ctx.paper_text = raw_paper
 
         # Extract title from the first # heading
@@ -1920,6 +1924,141 @@ class TheoPipeline:
             f"This question doesn't appear to be related to archaeology, "
             f"ancient history, or the ancient world. {reason}"
         )
+
+    # ==================================================================
+    # Mechanical citation insertion
+    # ==================================================================
+
+    def _insert_citations_mechanically(
+        self,
+        paper_text: str,
+        ctx: PipelineContext,
+        sid_to_num: dict[str, int],
+    ) -> str:
+        """Insert [N] citations mechanically by matching sentences to claims.
+
+        The LLM writes prose WITHOUT citations. This method matches each
+        sentence to synthesis/moderated claims via keyword overlap, then
+        appends the correct [N] markers. Guarantees every citation traces
+        back to the claim it was assigned to.
+        """
+        # Build claim → citations mapping from all available findings
+        claim_citations: list[tuple[str, str]] = []
+
+        # From moderated results (thesis/review tiers)
+        for claim_data in ctx.moderated_result.get("final_claims", []):
+            claim_text = claim_data.get("claim", "")
+            source_ids = claim_data.get("source_ids", [])
+            nums = " ".join(f"[{sid_to_num[sid]}]" for sid in source_ids if sid in sid_to_num)
+            if claim_text and nums:
+                claim_citations.append((claim_text, nums))
+        for claim_data in ctx.moderated_result.get("revised_claims", []):
+            claim_text = claim_data.get("claim", "")
+            source_ids = claim_data.get("source_ids", [])
+            nums = " ".join(f"[{sid_to_num[sid]}]" for sid in source_ids if sid in sid_to_num)
+            if claim_text and nums:
+                claim_citations.append((claim_text, nums))
+
+        # From synthesis (note/article tiers without moderation)
+        for claim_data in ctx.synthesis.get("consensus_claims", []):
+            claim_text = claim_data.get("claim", "")
+            source_ids = claim_data.get("source_ids", [])
+            nums = " ".join(f"[{sid_to_num[sid]}]" for sid in source_ids if sid in sid_to_num)
+            if claim_text and nums:
+                claim_citations.append((claim_text, nums))
+        for claim_data in ctx.synthesis.get("contested_claims", []):
+            claim_text = claim_data.get("claim", "")
+            source_ids = claim_data.get("source_ids", [])
+            nums = " ".join(f"[{sid_to_num[sid]}]" for sid in source_ids if sid in sid_to_num)
+            if claim_text and nums:
+                claim_citations.append((claim_text, nums))
+        for claim_data in ctx.synthesis.get("unique_insights", []):
+            claim_text = claim_data.get("claim", claim_data.get("insight", ""))
+            source_ids = claim_data.get("source_ids", [])
+            nums = " ".join(f"[{sid_to_num[sid]}]" for sid in source_ids if sid in sid_to_num)
+            if claim_text and nums:
+                claim_citations.append((claim_text, nums))
+
+        # From specialist claims
+        for claim in ctx.registry.claims:
+            claim_text = claim.claim_text
+            nums = " ".join(f"[{sid_to_num[sid]}]" for sid in claim.source_ids if sid in sid_to_num)
+            if claim_text and nums:
+                claim_citations.append((claim_text, nums))
+
+        if not claim_citations:
+            logger.warning("[theo] No claims found for mechanical citation insertion")
+            return paper_text
+
+        # Stop words for matching
+        stop = {
+            "the",
+            "a",
+            "an",
+            "is",
+            "are",
+            "was",
+            "were",
+            "of",
+            "in",
+            "to",
+            "and",
+            "that",
+            "this",
+            "for",
+            "with",
+            "from",
+            "has",
+            "have",
+            "had",
+            "been",
+            "not",
+            "but",
+            "its",
+            "also",
+            "by",
+            "on",
+            "as",
+            "at",
+            "or",
+        }
+
+        # Match each sentence to claims and insert citations
+        sentences = re.split(r"(?<=[.!?])\s+", paper_text)
+        cited_sentences = []
+        citations_inserted = 0
+
+        for sentence in sentences:
+            # Skip headings, short lines, abstract markers
+            if sentence.startswith("#") or len(sentence) < 30:
+                cited_sentences.append(sentence)
+                continue
+
+            sent_words = set(sentence.lower().split()) - stop
+            best_nums = ""
+            best_overlap = 0.0
+
+            for claim_text, nums in claim_citations:
+                claim_words = set(claim_text.lower().split()) - stop
+                if not claim_words:
+                    continue
+                overlap = len(claim_words & sent_words) / len(claim_words)
+                if overlap > best_overlap and overlap >= 0.3:
+                    best_overlap = overlap
+                    best_nums = nums
+
+            if best_nums:
+                cited_sentences.append(f"{sentence.rstrip('.')} {best_nums}.")
+                citations_inserted += 1
+            else:
+                cited_sentences.append(sentence)
+
+        logger.info(
+            "[theo] Mechanical citation: inserted %d citations across %d sentences",
+            citations_inserted,
+            len(sentences),
+        )
+        return " ".join(cited_sentences)
 
     # ==================================================================
     # Helpers

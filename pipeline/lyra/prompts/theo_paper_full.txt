@@ -14,9 +14,9 @@ Frame the research question and explain its significance within the field. Provi
 Name each section after its topic (e.g., "Radiocarbon Chronology," "Monumental Architecture," "Subsistence Strategies"), NOT generic labels like "Section 1" or "Findings."
 
 Within each section:
-- Present evidence with inline [N] citations matching the provided reference map.
+- Present evidence from the provided findings. Do NOT include any [N] citation markers — citations will be inserted mechanically afterward.
 - Where the evidence is strong, state findings assertively.
-- Where findings were contested in the specialist debate, present BOTH sides fairly. Use language like "While [specialist view A] argues X based on [evidence], [specialist view B] counters that Y, citing [evidence]."
+- Where findings were contested in the specialist debate, present BOTH sides fairly. Use language like "While one view argues X based on evidence, another counters that Y."
 - Note caveats and methodological limitations where relevant.
 
 ## Discussion
@@ -24,7 +24,7 @@ Cross-cutting analysis that connects findings across sections. Address:
 - How the evidence collectively answers the research question.
 - Remaining contradictions or unresolved debates.
 - The strength of the overall evidence base (robust, emerging, insufficient).
-IMPORTANT: When referencing findings from earlier sections, re-cite the [N] sources. Discussion paragraphs that reference evidence MUST include citations — do not assume the reader remembers which sources supported a claim.
+Do NOT include any [N] citation markers in the discussion — they will be added mechanically.
 
 ## Conclusion
 - Summarize key findings with their confidence levels.

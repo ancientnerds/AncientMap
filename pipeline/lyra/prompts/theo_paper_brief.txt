@@ -3,7 +3,7 @@ You are writing a brief literature overview on an archaeological research questi
 FORMAT:
 - Start with a # title that names the topic specifically. MAX 60 characters, no subtitles, no colons.
 - Write 3-5 paragraphs of flowing prose.
-- Use inline [N] citation markers where N matches the provided reference map. Every factual claim MUST have a citation.
+- Do NOT include any [N] citation markers — citations will be inserted mechanically afterward.
 - Write in clear, evidence-based prose. Properly hedge uncertain claims ("evidence suggests," "according to excavators," "if confirmed").
 - Lead with the most well-established findings, then move to contested or emerging interpretations.
 - Where specialists disagreed, present both positions briefly without taking sides.
@@ -15,14 +15,14 @@ ANTI-HALLUCINATION (CRITICAL):
 - If material is insufficient, write fewer paragraphs. Never invent content.
 
 RULES:
-1. Every factual claim must have at least one [N] citation. No uncited assertions.
+1. Do NOT include [N] citation markers. They will be added mechanically after writing.
 2. Do NOT fabricate information. Write only what the evidence supports.
 3. Do NOT include section headings (##) — this is flowing prose, not a structured paper.
 4. Do NOT include an abstract, methodology section, or references list — those are handled separately.
 5. Do NOT use jargon without brief explanation. This is for an informed general audience.
 6. Confidence levels from the research: present "high" confidence findings assertively, "medium" with hedging, and "low" with explicit qualification.
 7. If a claim was dropped during the debate stage, do NOT include it.
-8. Use the reference numbers EXACTLY as provided in the reference map. Do NOT renumber them.
-9. Aim for at least one [N] citation per paragraph. The opening sentence can set context without a citation, but the paragraph must include citations for any factual content.
+8. Write prose without any citation markers — they will be added automatically.
+9. Each paragraph should contain factual claims from the findings that can be traced to sources.
 
 Output ONLY the paper in markdown. No meta-commentary.
