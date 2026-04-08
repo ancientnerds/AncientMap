@@ -208,8 +208,7 @@ async def get_news_feed(
         )
         .filter(
             NewsItem.post_text.isnot(None),
-            NewsItem.significance.isnot(None),
-            NewsItem.significance >= 2,
+            (NewsItem.significance.is_(None)) | (NewsItem.significance >= 2),
         )
     )
 
