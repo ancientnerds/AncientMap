@@ -891,7 +891,7 @@ export default function ArticlesPage() {
                         <h4>Fixes Applied</h4>
                         {selectedArticle.quality_report.fixes_applied.map((fix, i) => (
                           <span key={i} className="articles-quality-fix">
-                            {fix.dimension}: {fix.find ? `${String(fix.find).slice(0, 30)} → ${String(fix.replace).slice(0, 30)}` : 'corrected'}
+                            {String(fix.dimension)}: {fix.find ? `${String(fix.find).slice(0, 30)} → ${String(fix.replace).slice(0, 30)}` : 'corrected'}
                           </span>
                         ))}
                       </div>
