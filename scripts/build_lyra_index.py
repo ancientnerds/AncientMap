@@ -2,12 +2,13 @@
 """
 Build Lyra Vector Index — Qdrant collections for hybrid semantic search.
 
-Creates five collections with named vectors:
+Creates six collections with named vectors:
   - sites: dense (voyage-4-large, 1024-dim) + bm25 (sparse, IDF-weighted)
   - news: dense (voyage-4-large, 1024-dim) + bm25 (sparse, IDF-weighted)
   - transcripts: dense (voyage-4-large, 1024-dim) + bm25 (sparse, IDF-weighted)
   - articles: dense (voyage-4-large, 1024-dim) + bm25 (sparse, IDF-weighted)
   - empires: dense (voyage-4-large, 1024-dim) + bm25 (sparse, IDF-weighted)
+  - research: dense (voyage-4-large, 1024-dim) + bm25 (sparse, IDF-weighted)
 
 Queries use voyage-4 for dense (shared embedding space, cheaper) + Qdrant/bm25 for sparse.
 RRF fusion merges results, then Voyage rerank-2.5-lite scores the top-K.
@@ -21,6 +22,7 @@ Usage:
   python scripts/build_lyra_index.py --collection transcripts
   python scripts/build_lyra_index.py --collection articles
   python scripts/build_lyra_index.py --collection empires
+  python scripts/build_lyra_index.py --collection research
   python scripts/build_lyra_index.py --rebuild  # wipe and rebuild
 """
 
@@ -959,6 +961,170 @@ def index_empires(
     logger.info(f"Indexed {len(points)} empires")
 
 
+def index_research(
+    client: QdrantClient,
+    embeddings,
+    sparse_model,
+    rebuild: bool = False,
+    *,
+    vector_size: int = 1024,
+    suffix: str = "",
+):
+    """Index published Theo research papers into Qdrant for semantic search.
+
+    Splits papers by ## headings into sections, same chunking as theo_research_index.py.
+    """
+    collection = f"research{suffix}"
+
+    if rebuild:
+        try:
+            client.delete_collection(collection)
+        except Exception as exc:
+            logger.warning(f"Could not delete collection '{collection}': {exc}")
+
+    ensure_collection(client, collection, vector_size)
+    create_payload_indexes(client, collection, ["paper_id", "effort"])
+
+    existing_hashes = {} if rebuild else get_existing_hashes(client, collection)
+    logger.info(f"Research collection has {len(existing_hashes)} existing points")
+
+    sql = """
+        SELECT id::text AS id, question, result_json, effort,
+               published_at::text AS published_at,
+               published_by, slug
+        FROM research_requests
+        WHERE is_public = TRUE AND result_json IS NOT NULL
+        ORDER BY published_at DESC
+    """
+
+    with get_session() as session:
+        result = session.execute(text(sql))
+        rows = result.fetchall()
+
+    logger.info(f"Found {len(rows)} published research papers")
+
+    # Split sections using the same logic as theo_research_index
+    _SKIP_SECTIONS = frozenset({"references", "methodology", "appendix: specialist debate summary"})
+
+    all_chunks = []
+    for r in rows:
+        try:
+            result_data = json.loads(r.result_json) if r.result_json else {}
+        except (json.JSONDecodeError, TypeError):
+            continue
+
+        paper_text = result_data.get("report", "")
+        paper_title = result_data.get("title", r.question)
+        if not paper_text:
+            continue
+
+        # Content hash from first 2000 chars of report
+        content_hash = _content_hash(paper_text[:2000])
+
+        # Split by ## headings (same logic as theo_research_index._split_sections)
+        sections = []
+        current_title = ""
+        current_lines = []
+        section_index = 0
+        for line in paper_text.split("\n"):
+            heading_match = re.match(r"^##\s+(.+)$", line)
+            if heading_match:
+                if current_title and current_lines:
+                    section_text = "\n".join(current_lines).strip()
+                    if section_text and current_title.lower() not in _SKIP_SECTIONS:
+                        sections.append({
+                            "title": current_title,
+                            "text": section_text[:2000],
+                            "index": section_index,
+                        })
+                        section_index += 1
+                current_title = heading_match.group(1).strip()
+                current_lines = []
+            elif line.startswith("# ") and not current_title:
+                continue  # Paper title heading — skip
+            else:
+                current_lines.append(line)
+
+        # Last section
+        if current_title and current_lines:
+            section_text = "\n".join(current_lines).strip()
+            if section_text and current_title.lower() not in _SKIP_SECTIONS:
+                sections.append({
+                    "title": current_title,
+                    "text": section_text[:2000],
+                    "index": section_index,
+                })
+
+        for section in sections:
+            point_id = str(uuid.uuid5(uuid.NAMESPACE_URL, f"theo:{r.id}:{section['index']}"))
+            if point_id in existing_hashes and existing_hashes[point_id] == content_hash:
+                continue
+            all_chunks.append({
+                "point_id": point_id,
+                "paper_id": r.id,
+                "paper_title": paper_title,
+                "paper_slug": r.slug or "",
+                "section_title": section["title"],
+                "section_text": section["text"],
+                "section_index": section["index"],
+                "author_username": r.published_by or "",
+                "effort": r.effort,
+                "published_at": r.published_at or "",
+                "content_hash": content_hash,
+            })
+
+    logger.info(f"Research sections to index (new + changed): {len(all_chunks)}")
+
+    if not all_chunks:
+        logger.info("Nothing to index for research")
+        return
+
+    total_indexed = 0
+    for i in range(0, len(all_chunks), BATCH_SIZE):
+        batch = all_chunks[i : i + BATCH_SIZE]
+
+        texts = []
+        for c in batch:
+            texts.append(f"{c['paper_title']} — {c['section_title']} | {c['section_text']}")
+
+        dense_vectors = embeddings.embed_documents(texts)
+        sparse_vectors = list(sparse_model.embed(texts))
+
+        points = []
+        for c, dense_vec, sparse_vec in zip(batch, dense_vectors, sparse_vectors):
+            points.append(
+                PointStruct(
+                    id=c["point_id"],
+                    vector={
+                        "dense": dense_vec,
+                        "bm25": SparseVector(
+                            indices=sparse_vec.indices.tolist(),
+                            values=sparse_vec.values.tolist(),
+                        ),
+                    },
+                    payload={
+                        "paper_id": c["paper_id"],
+                        "paper_title": c["paper_title"],
+                        "paper_slug": c["paper_slug"],
+                        "section_title": c["section_title"],
+                        "section_index": c["section_index"],
+                        "title": f"{c['paper_title']} — {c['section_title']}",
+                        "text_preview": c["section_text"][:2000],
+                        "author_username": c["author_username"],
+                        "effort": c["effort"],
+                        "published_at": c["published_at"],
+                        "content_hash": c["content_hash"],
+                    },
+                )
+            )
+
+        client.upsert(collection_name=collection, points=points)
+        total_indexed += len(points)
+        logger.info(f"Indexed {total_indexed}/{len(all_chunks)} research sections")
+
+    logger.info(f"Done indexing {total_indexed} research sections")
+
+
 def polity_id_to_region(polity_id: str) -> str:
     """Map a polity ID prefix to a readable region name."""
     prefix = polity_id.split("_")[0] if "_" in polity_id else polity_id
@@ -989,7 +1155,7 @@ def main():
     parser = argparse.ArgumentParser(description="Build Lyra vector index")
     parser.add_argument(
         "--collection",
-        choices=["sites", "news", "transcripts", "articles", "empires"],
+        choices=["sites", "news", "transcripts", "articles", "empires", "research"],
         help="Only index this collection",
     )
     parser.add_argument("--rebuild", action="store_true", help="Wipe and rebuild from scratch")
@@ -1017,6 +1183,9 @@ def main():
 
     if args.collection is None or args.collection == "empires":
         index_empires(client, embeddings, sparse_model, **kwargs)
+
+    if args.collection is None or args.collection == "research":
+        index_research(client, embeddings, sparse_model, **kwargs)
 
     logger.info("All done!")
 
