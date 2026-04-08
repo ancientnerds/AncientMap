@@ -329,8 +329,16 @@ export default function DbAuditPage() {
   interface QdrantReindex { running: boolean; started_at: string | null; collection: string | null; last_completed_at: string | null; last_duration_seconds: number | null; last_result: string | null }
   interface QdrantEmpires { empire_count: number; boundary_count: number }
   interface QdrantAutoReindex { enabled: boolean; next_run_utc: string | null }
-  interface QdrantStatus { qdrant_available: boolean; collections: { sites: QdrantCollection; news: QdrantCollection; transcripts: QdrantCollection; articles: QdrantCollection; empires: QdrantCollection }; empires: QdrantEmpires; reindex: QdrantReindex; auto_reindex?: QdrantAutoReindex }
+  interface QdrantStatus { qdrant_available: boolean; collections: { sites: QdrantCollection; news: QdrantCollection; transcripts: QdrantCollection; articles: QdrantCollection; empires: QdrantCollection; research: QdrantCollection }; empires: QdrantEmpires; reindex: QdrantReindex; auto_reindex?: QdrantAutoReindex }
   const [qdrantStatus, setQdrantStatus] = useState<QdrantStatus | null>(null)
+  const qdrantDisplayNames: Record<string, string> = {
+    sites: 'Sites',
+    news: 'Stories',
+    transcripts: 'Transcripts',
+    articles: 'Journals',
+    empires: 'Empires',
+    research: 'Research Papers',
+  }
   const [qdrantOpen, setQdrantOpen] = useState(false)
   const qdrantRef = useRef<HTMLDivElement>(null)
 
@@ -1309,7 +1317,7 @@ export default function DbAuditPage() {
                 className={`db-qdrant-pill ${
                   qdrantStatus.reindex.running ? 'db-qdrant-indexing' :
                   !qdrantStatus.qdrant_available ? 'db-qdrant-offline' :
-                  (qdrantStatus.collections.sites.delta !== 0 || qdrantStatus.collections.news.delta !== 0 || (qdrantStatus.collections.empires.delta != null && qdrantStatus.collections.empires.delta !== 0) || (qdrantStatus.collections.transcripts.qdrant_count === 0 && qdrantStatus.collections.transcripts.pg_count > 0) || (qdrantStatus.collections.articles.qdrant_count === 0 && qdrantStatus.collections.articles.pg_count > 0)) ? 'db-qdrant-stale' :
+                  (qdrantStatus.collections.sites.delta !== 0 || qdrantStatus.collections.news.delta !== 0 || (qdrantStatus.collections.empires.delta != null && qdrantStatus.collections.empires.delta !== 0) || (qdrantStatus.collections.transcripts.qdrant_count === 0 && qdrantStatus.collections.transcripts.pg_count > 0) || (qdrantStatus.collections.articles.qdrant_count === 0 && qdrantStatus.collections.articles.pg_count > 0) || (qdrantStatus.collections.research.qdrant_count === 0 && qdrantStatus.collections.research.pg_count > 0)) ? 'db-qdrant-stale' :
                   'db-qdrant-ok'
                 }`}
                 onClick={() => setQdrantOpen(o => !o)}
@@ -1321,7 +1329,7 @@ export default function DbAuditPage() {
                   qdrantStatus.reindex.running ? 'indexing...' :
                   !qdrantStatus.qdrant_available ? 'offline' :
                   (() => {
-                    const chunkedDelta = (['transcripts', 'articles'] as const).reduce((sum, col) => {
+                    const chunkedDelta = (['transcripts', 'articles', 'research'] as const).reduce((sum, col) => {
                       const cc = qdrantStatus.collections[col]
                       return sum + (cc.qdrant_count === 0 && cc.pg_count > 0 ? cc.pg_count : 0)
                     }, 0)
@@ -1334,13 +1342,13 @@ export default function DbAuditPage() {
               {qdrantOpen && (
                 <div className="db-qdrant-dropdown">
                   <div className="db-qdrant-section-title">Collection Counts</div>
-                  {(['sites', 'news', 'transcripts', 'articles', 'empires'] as const).map(col => {
+                  {(['sites', 'news', 'transcripts', 'articles', 'empires', 'research'] as const).map(col => {
                     const c = qdrantStatus.collections[col]
                     const isChunked = !!c.note
                     const chunkedDelta = c.qdrant_count === 0 && c.pg_count > 0 ? c.pg_count : 0
                     return (
                       <div key={col} className="db-qdrant-row">
-                        <span className="db-qdrant-col-name">{col}</span>
+                        <span className="db-qdrant-col-name">{qdrantDisplayNames[col] || col}</span>
                         {isChunked ? (
                           <>
                             <span className="db-qdrant-counts">
@@ -1398,10 +1406,11 @@ export default function DbAuditPage() {
                     <div className="db-qdrant-actions">
                       <button onClick={() => handleReindex()}>Reindex All</button>
                       <button onClick={() => handleReindex('sites')}>Sites</button>
-                      <button onClick={() => handleReindex('news')}>News</button>
+                      <button onClick={() => handleReindex('news')}>Stories</button>
                       <button onClick={() => handleReindex('transcripts')}>Transcripts</button>
-                      <button onClick={() => handleReindex('articles')}>Articles</button>
+                      <button onClick={() => handleReindex('articles')}>Journals</button>
                       <button onClick={() => handleReindex('empires')}>Empires</button>
+                      <button onClick={() => handleReindex('research')}>Research</button>
                       <button onClick={() => handleReindex(undefined, true)}>Rebuild All</button>
                     </div>
                   )}
