@@ -273,6 +273,7 @@ def _call_anthropic_api(
     model = kwargs.pop("model", settings.model_summarize)
     max_tokens = kwargs.pop("max_tokens", settings.max_tokens)
     temperature = kwargs.pop("temperature", None)
+    top_p = kwargs.pop("top_p", None)
 
     # [MINIMAX] Adaptation 1: Model override — all calls use MiniMax-M2.7
     if is_minimax:
@@ -377,6 +378,9 @@ def _call_anthropic_api(
         else:
             temperature = max(settings.temperature_min, temperature)
         create_kwargs["temperature"] = temperature
+
+    if top_p is not None:
+        create_kwargs["top_p"] = top_p
 
     if timeout is not None:
         import httpx

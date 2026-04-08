@@ -1,19 +1,27 @@
 """Tests for journal_assessor.py."""
 
 from datetime import UTC, datetime
+from unittest.mock import MagicMock
 
 from pipeline.lyra.journal_assessor import (
     QUALITY_BLOCKED_DOMAINS,
     SPELLING_FIXES,
     AssessmentResult,
+    _check_d1_proper_nouns,
     _check_d2_citation_coverage,
     _check_d3_academic_citations,
+    _check_d4_screenshots,
     _check_d5_source_quality,
+    _check_d6_spelling,
     _check_d7_citation_format,
     _check_d8_week_date,
+    _check_d9_summary,
     _check_d10_section_balance,
+    _extract_proper_nouns,
     _fix_d7_citation_format,
     _fix_d8_week_date,
+    _significant_keywords,
+    _validate_d1_correction,
 )
 
 
@@ -230,3 +238,170 @@ class TestAssessmentResult:
         )
         assert not r.passed
         assert r.score == 8
+
+
+class TestD1ProperNouns:
+    """Test mechanical fuzzy-match proper noun checking."""
+
+    def test_extract_proper_nouns(self):
+        text = "The Montesiepi Chapel was built by Galgano Guidotti near San Galgano."
+        nouns = _extract_proper_nouns(text)
+        assert "Montesiepi Chapel" in nouns
+        assert "Galgano Guidotti" in nouns
+        assert "San Galgano" in nouns
+
+    def test_exact_match_passes(self):
+        body = "The Montesiepi Chapel is notable."
+        sources = [{"label": "Montesiepi Chapel - Wikipedia", "url": "https://en.wikipedia.org"}]
+        settings = MagicMock()
+        result = _check_d1_proper_nouns(body, sources, settings)
+        assert result["passed"]
+
+    def test_fuzzy_mismatch_detected(self):
+        body = "The Monteppi Chapel is notable."
+        sources = [
+            {
+                "label": "Montesiepi Chapel - Wikipedia",
+                "url": "https://en.wikipedia.org/wiki/Montesiepi_Chapel",
+            }
+        ]
+        settings = MagicMock()
+        result = _check_d1_proper_nouns(body, sources, settings)
+        assert not result["passed"]
+        assert len(result["issues"]) >= 1
+        assert result["issues"][0]["find"] == "Monteppi Chapel"
+        assert result["issues"][0]["replace"] == "Montesiepi Chapel"
+
+    def test_no_nouns_passes(self):
+        body = "this is all lowercase text."
+        sources = [{"label": "some source", "url": "https://example.com"}]
+        settings = MagicMock()
+        result = _check_d1_proper_nouns(body, sources, settings)
+        assert result["passed"]
+
+    def test_validate_rejects_identity(self):
+        assert not _validate_d1_correction("Foo Bar", "Foo Bar", [])
+
+    def test_validate_rejects_case_only(self):
+        assert not _validate_d1_correction("Foo Bar", "foo bar", [])
+
+    def test_validate_rejects_bad_spelling(self):
+        assert not _validate_d1_correction("Foo Bar", "Foo dolman", [])
+
+    def test_validate_rejects_youtube_only(self):
+        sources = [{"url": "https://youtube.com/watch?v=abc", "label": "Galgano Guidotti"}]
+        assert not _validate_d1_correction("Galano Giati", "Galgano Guidotti", sources)
+
+    def test_validate_accepts_academic(self):
+        sources = [{"url": "https://en.wikipedia.org/wiki/Galgano", "label": "Galgano Guidotti"}]
+        assert _validate_d1_correction("Galano Giati", "Galgano Guidotti", sources)
+
+    def test_spelling_fixes_in_proper_nouns(self):
+        body = "The Volkonsky Dolman stands tall."
+        sources = [{"label": "Volkonsky Dolmen", "url": "https://example.com"}]
+        settings = MagicMock()
+        result = _check_d1_proper_nouns(body, sources, settings)
+        assert not result["passed"]
+        fix = result["issues"][0]
+        assert fix["find"] == "Volkonsky Dolman"
+        assert fix["replace"] == "Volkonsky Dolmen"
+
+
+class TestD4Screenshots:
+    """Test mechanical keyword overlap for screenshot placement."""
+
+    def test_well_placed_image_passes(self):
+        body = (
+            "## Ancient Temples\n\n"
+            "The ancient temple of Karnak features massive stone columns and intricate carvings.\n\n"
+            "![Ancient temple Karnak stone columns](https://example.com/img.jpg)\n\n"
+            "More text here."
+        )
+        result = _check_d4_screenshots(body)
+        assert result["passed"]
+
+    def test_no_images_passes(self):
+        body = "Just text, no images at all."
+        result = _check_d4_screenshots(body)
+        assert result["passed"]
+
+    def test_significant_keywords(self):
+        kw = _significant_keywords("Ancient temple Karnak stone columns")
+        assert "ancient" in kw
+        assert "temple" in kw
+        assert "karnak" in kw
+        assert "stone" in kw
+        # "of" (3 chars) should be excluded
+        kw2 = _significant_keywords("The cat sat on the mat")
+        assert "the" not in kw2  # only 3 chars
+
+    def test_too_few_alt_keywords_skipped(self):
+        """Images with <2 significant keywords in alt text are skipped."""
+        body = "Some paragraph text.\n\n![Map](https://example.com/img.jpg)\n\nMore text."
+        result = _check_d4_screenshots(body)
+        assert result["passed"]  # "Map" is only 3 chars, skipped
+
+
+class TestD6SpellingMechanical:
+    """Test dictionary-only spelling check."""
+
+    def test_known_misspelling_detected(self):
+        body = "The dolman was erected in the Bronze Age."
+        result = _check_d6_spelling(body)
+        assert not result["passed"]
+        assert result["issues"][0]["find"] == "dolman"
+        assert result["issues"][0]["replace"] == "dolmen"
+
+    def test_correct_spelling_passes(self):
+        body = "The dolmen was erected in the Bronze Age."
+        result = _check_d6_spelling(body)
+        assert result["passed"]
+
+    def test_multiple_fixes(self):
+        body = "The dolman culture was Nufian in origin."
+        result = _check_d6_spelling(body)
+        assert not result["passed"]
+        finds = {i["find"] for i in result["issues"]}
+        assert "dolman" in finds
+        assert "Nufian" in finds
+
+
+class TestD9SummaryMechanical:
+    """Test mechanical proper noun check for summary accuracy."""
+
+    def test_accurate_summary_passes(self):
+        body = (
+            "*This week covers discoveries at Galgano Guidotti site.*\n\n"
+            "---\n\n"
+            "## Main Story\n\n"
+            "Galgano Guidotti was a medieval knight."
+        )
+        result = _check_d9_summary(body)
+        assert result["passed"]
+
+    def test_mismatched_noun_detected(self):
+        body = (
+            "*This week covers discoveries at Galano Giati site.*\n\n"
+            "---\n\n"
+            "## Main Story\n\n"
+            "Galgano Guidotti was a medieval knight."
+        )
+        result = _check_d9_summary(body)
+        assert not result["passed"]
+        assert len(result["issues"]) >= 1
+
+    def test_no_summary_passes(self):
+        body = "## Just a header\n\nNo italic summary here."
+        result = _check_d9_summary(body)
+        assert result["passed"]
+
+    def test_summary_noun_not_in_body_flagged(self):
+        body = (
+            "*Amazing finds at Xanadu Palace revealed.*\n\n"
+            "---\n\n"
+            "## Main Story\n\n"
+            "Completely different topic about something else entirely."
+        )
+        result = _check_d9_summary(body)
+        assert not result["passed"]
+        assert any("Xanadu Palace" in issue for issue in result["issues"])

@@ -12,6 +12,7 @@ Usage:
 
 from __future__ import annotations
 
+import difflib
 import json
 import logging
 import re
@@ -73,6 +74,7 @@ def _llm_call(system: str, user: str, settings: LyraSettings, max_tokens: int = 
             messages=[{"role": "user", "content": user}],
             max_tokens=max_tokens or _MAX_TOKENS,
             temperature=0.0,
+            top_p=0.1,  # narrow sampling for near-deterministic output
             timeout=120.0,  # 2 min max per call
         )
         return response.text or ""
@@ -428,6 +430,7 @@ def _fix_d2_citation_coverage(
                 messages=[{"role": "user", "content": user}],
                 max_tokens=4096,
                 temperature=0.0,
+                top_p=0.1,  # narrow sampling for near-deterministic output
                 timeout=120.0,
                 response_format={
                     "type": "json_schema",
@@ -654,6 +657,7 @@ def _fix_d10_section_balance(
                 messages=[{"role": "user", "content": user}],
                 max_tokens=4096,
                 temperature=0.0,
+                top_p=0.1,  # narrow sampling for near-deterministic output
                 timeout=120.0,
                 response_format={
                     "type": "json_schema",
@@ -707,27 +711,59 @@ def _fix_d10_section_balance(
 
 
 # ---------------------------------------------------------------------------
-# D1: Proper Nouns (LLM)
+# D1: Proper Nouns (mechanical fuzzy match)
 # ---------------------------------------------------------------------------
 
-_D1_SCHEMA = {
-    "type": "object",
-    "properties": {
-        "corrections": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "properties": {
-                    "find": {"type": "string"},
-                    "replace": {"type": "string"},
-                    "reason": {"type": "string"},
-                },
-                "required": ["find", "replace"],
-            },
-        },
-    },
-    "required": ["corrections"],
-}
+_PROPER_NOUN_RE = re.compile(r"\b([A-Z][a-z]+(?:[ \t]+[A-Z][a-z]+)+)\b")
+
+# Common words that start capitalized at sentence beginnings but aren't proper nouns
+_LEADING_NOISE = frozenset(
+    {
+        "The",
+        "This",
+        "That",
+        "These",
+        "Those",
+        "And",
+        "But",
+        "With",
+        "From",
+        "Into",
+        "For",
+        "Its",
+        "Our",
+        "His",
+        "Her",
+        "Their",
+        "Each",
+        "Some",
+        "Many",
+        "Most",
+        "Such",
+        "Both",
+        "New",
+        "One",
+        "Two",
+    }
+)
+
+
+def _extract_proper_nouns(text: str) -> set[str]:
+    """Extract all capitalized multi-word names (proper nouns) from text.
+
+    Strips leading common words (The, This, etc.) that appear capitalized
+    at sentence starts but aren't part of the proper noun.
+    """
+    raw = _PROPER_NOUN_RE.findall(text)
+    cleaned: set[str] = set()
+    for noun in raw:
+        # Strip leading noise words
+        parts = noun.split()
+        while parts and parts[0] in _LEADING_NOISE:
+            parts = parts[1:]
+        if len(parts) >= 2:
+            cleaned.add(" ".join(parts))
+    return cleaned
 
 
 def _validate_d1_correction(find: str, replace: str, sources: list[dict]) -> bool:
@@ -787,190 +823,160 @@ def _validate_d1_correction(find: str, replace: str, sources: list[dict]) -> boo
 
 
 def _check_d1_proper_nouns(body: str, sources: list[dict], settings: LyraSettings) -> dict:
-    """Check proper nouns against source titles with three-tier authority."""
-    source_block = _format_sources_for_prompt(sources)
-    system = (
-        "Compare every proper noun in the journal (site names, people, caves, "
-        "cultures, locations) against the source titles/URLs. Sources have the "
-        "CORRECT spelling. Return corrections for any mismatches.\n\n"
-        "IMPORTANT: YouTube titles may have INCORRECT spellings from auto-generated "
-        "transcripts. Academic sources and Wikipedia have HIGHER authority. When "
-        "sources disagree, prefer academic/Wikipedia. If only YouTube sources show "
-        "a different spelling, do NOT correct.\n\n"
-        "Examples: Monteppi→Montesiepi, Galano Giati→Galgano Guidotti, "
-        "Vulcansky Dolman→Volkonsky Dolmen, Goff's Cave→Gough's Cave"
-    )
-    user = f"## Source List\n{source_block}\n\n## Journal Text\n{body[:15000]}"
+    """Check proper nouns in body against source titles via mechanical fuzzy match.
 
-    try:
-        response = call_api(
-            system=system,
-            messages=[{"role": "user", "content": user}],
-            max_tokens=4096,
-            temperature=0.0,
-            timeout=120.0,
-            response_format={
-                "type": "json_schema",
-                "json_schema": {"name": "ProperNouns", "strict": True, "schema": _D1_SCHEMA},
-            },
-        )
-        parsed = _parse_json(response.text or "")
-    except (LyraAPIError, Exception) as e:
-        logger.warning("[assessor] D1 call failed: %s", e)
-        parsed = {}
+    No LLM call — pure string matching with difflib.SequenceMatcher.
+    """
+    # Extract proper nouns from the body
+    body_nouns = _extract_proper_nouns(body)
 
-    raw_issues = parsed.get("corrections", []) if isinstance(parsed, dict) else []
-    # Filter through validation — rejects identity, case-only, YouTube-only, bad spellings
+    # Extract proper nouns from source titles/labels
+    source_text_combined = " ".join(f"{s.get('label', '')} {s.get('title', '')}" for s in sources)
+    source_nouns = _extract_proper_nouns(source_text_combined)
+
+    if not body_nouns or not source_nouns:
+        return {"passed": True, "issues": []}
+
+    # Also check SPELLING_FIXES for known corrections
+    corrections: list[dict] = []
+
+    for body_noun in body_nouns:
+        # Check if body noun is a known bad spelling
+        for wrong, right in SPELLING_FIXES.items():
+            if wrong in body_noun:
+                corrected = body_noun.replace(wrong, right)
+                if corrected != body_noun:
+                    corrections.append({"find": body_noun, "replace": corrected})
+                    break
+        else:
+            # Fuzzy match against source nouns
+            for source_noun in source_nouns:
+                ratio = difflib.SequenceMatcher(
+                    None, body_noun.lower(), source_noun.lower()
+                ).ratio()
+                # Similar but not identical — potential mismatch
+                if 0.7 < ratio < 1.0:
+                    corrections.append({"find": body_noun, "replace": source_noun})
+                    break
+
+    # Filter through validation
     issues = [
         c
-        for c in raw_issues
+        for c in corrections
         if _validate_d1_correction(c.get("find", ""), c.get("replace", ""), sources)
     ]
     return {"passed": len(issues) == 0, "issues": issues}
 
 
 # ---------------------------------------------------------------------------
-# D4: Screenshot Placement (LLM)
+# D4: Screenshot Placement (mechanical keyword overlap)
 # ---------------------------------------------------------------------------
 
-_D4_SCHEMA = {
-    "type": "object",
-    "properties": {
-        "misplacements": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "properties": {
-                    "image_alt": {"type": "string"},
-                    "correct_position": {"type": "string"},
-                    "reason": {"type": "string"},
-                },
-                "required": ["image_alt"],
-            },
-        },
-    },
-    "required": ["misplacements"],
-}
+_IMG_PATTERN = re.compile(r"!\[([^\]]*)\]\([^)]+\)")
 
 
-def _check_d4_screenshots(body: str, settings: LyraSettings) -> dict:
-    """Check if screenshots are placed after matching paragraphs."""
-    # Extract image lines and their surrounding context
+def _significant_keywords(text: str) -> set[str]:
+    """Extract significant keywords (4+ chars, lowercased) from text."""
+    return {w.lower() for w in re.findall(r"[A-Za-z]+", text) if len(w) >= 4}
+
+
+def _check_d4_screenshots(body: str, sources: list[dict] | None = None) -> dict:
+    """Check if screenshots are placed after matching paragraphs.
+
+    No LLM call — pure keyword overlap between alt text and preceding paragraph.
+    """
     lines = body.split("\n")
-    img_contexts = []
+    sections = _get_sections(body)
+    issues: list[dict] = []
+
     for i, line in enumerate(lines):
-        if line.strip().startswith("!["):
-            before = "\n".join(lines[max(0, i - 5) : i])
-            img_contexts.append(f"Image: {line.strip()}\nPreceding paragraph: {before[-300:]}")
+        m = _IMG_PATTERN.search(line.strip())
+        if not m:
+            continue
 
-    if not img_contexts:
-        return {"passed": True, "issues": []}
+        alt_text = m.group(1)
+        alt_keywords = _significant_keywords(alt_text)
+        if len(alt_keywords) < 2:
+            continue  # too few keywords to judge placement
 
-    system = (
-        "For each image, check if its alt text topic matches the paragraph before it. "
-        "Return misplacements only — images correctly placed should not appear in the list."
-    )
-    user = "\n\n".join(img_contexts)
+        # Find the paragraph immediately before the image
+        preceding_para = ""
+        for j in range(i - 1, -1, -1):
+            stripped = lines[j].strip()
+            if stripped and not stripped.startswith("![") and not stripped.startswith("#"):
+                preceding_para = stripped
+                break
 
-    try:
-        response = call_api(
-            system=system,
-            messages=[{"role": "user", "content": user}],
-            max_tokens=4096,
-            temperature=0.0,
-            timeout=60.0,
-            response_format={
-                "type": "json_schema",
-                "json_schema": {"name": "Screenshots", "strict": True, "schema": _D4_SCHEMA},
-            },
-        )
-        parsed = _parse_json(response.text or "")
-    except (LyraAPIError, Exception) as e:
-        logger.warning("[assessor] D4 call failed: %s", e)
-        parsed = {}
+        preceding_keywords = _significant_keywords(preceding_para)
+        overlap = alt_keywords & preceding_keywords
 
-    issues = parsed.get("misplacements", []) if isinstance(parsed, dict) else []
+        if len(overlap) >= 2:
+            continue  # well-placed: at least 2 keyword matches
+
+        # Image may be misplaced. Find the best matching paragraph in the same section.
+        best_para = ""
+        best_overlap = 0
+        img_pos = sum(len(l) + 1 for l in lines[:i])  # approximate char position
+
+        # Find which section the image belongs to
+        current_section = None
+        for sec in sections:
+            if sec["start"] <= img_pos < sec["end"]:
+                current_section = sec
+                break
+
+        if current_section:
+            for para in current_section["content"].split("\n\n"):
+                para_stripped = para.strip()
+                if not para_stripped or para_stripped.startswith("!["):
+                    continue
+                para_kw = _significant_keywords(para_stripped)
+                this_overlap = len(alt_keywords & para_kw)
+                if this_overlap > best_overlap:
+                    best_overlap = this_overlap
+                    best_para = para_stripped
+
+        if best_overlap >= 2 and best_para:
+            issues.append(
+                {
+                    "image_alt": alt_text,
+                    "correct_position": best_para[:200],
+                    "reason": f"keyword overlap: {best_overlap} vs {len(overlap)} with preceding",
+                }
+            )
+
     return {"passed": len(issues) == 0, "issues": issues}
 
 
 # ---------------------------------------------------------------------------
-# D6: Spelling (LLM)
+# D6: Spelling (dictionary only — no LLM)
 # ---------------------------------------------------------------------------
 
-_D6_SCHEMA = {
-    "type": "object",
-    "properties": {
-        "corrections": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "properties": {
-                    "find": {"type": "string"},
-                    "replace": {"type": "string"},
-                },
-                "required": ["find", "replace"],
-            },
-        },
-    },
-    "required": ["corrections"],
-}
 
+def _check_d6_spelling(body: str, sources: list[dict] | None = None) -> dict:
+    """Check for misspelled archaeological terms using SPELLING_FIXES dictionary.
 
-def _check_d6_spelling(body: str, settings: LyraSettings) -> dict:
-    """Check for misspelled archaeological terms."""
-    # Apply dictionary fixes first
-    issues_from_dict = []
+    No LLM call — purely deterministic dictionary lookup.
+    Expand SPELLING_FIXES to cover more terms if needed.
+    """
+    issues: list[dict] = []
     for wrong, right in SPELLING_FIXES.items():
         if wrong in body:
-            issues_from_dict.append({"find": wrong, "replace": right})
+            issues.append({"find": wrong, "replace": right})
 
-    # LLM check for unknown misspellings (only send first 10K to keep it fast)
-    system = (
-        "Check this archaeology journal for misspelled archaeological terms. "
-        "Common errors: dolman→dolmen, synamic→synodic, Nufian→Natufian. "
-        "Return only clear misspellings, not stylistic preferences."
-    )
-    user = body[:10000]
-
-    try:
-        response = call_api(
-            system=system,
-            messages=[{"role": "user", "content": user}],
-            max_tokens=4096,
-            temperature=0.0,
-            timeout=60.0,
-            response_format={
-                "type": "json_schema",
-                "json_schema": {"name": "Spelling", "strict": True, "schema": _D6_SCHEMA},
-            },
-        )
-        parsed = _parse_json(response.text or "")
-    except (LyraAPIError, Exception) as e:
-        logger.warning("[assessor] D6 LLM call failed: %s", e)
-        parsed = {}
-
-    llm_issues = parsed.get("corrections", []) if isinstance(parsed, dict) else []
-    all_issues = issues_from_dict + llm_issues
-    return {"passed": len(all_issues) == 0, "issues": all_issues}
+    return {"passed": len(issues) == 0, "issues": issues}
 
 
 # ---------------------------------------------------------------------------
-# D9: Summary Accuracy (LLM)
+# D9: Summary Accuracy (mechanical proper noun check)
 # ---------------------------------------------------------------------------
 
-_D9_SCHEMA = {
-    "type": "object",
-    "properties": {
-        "accurate": {"type": "boolean"},
-        "issues": {"type": "array", "items": {"type": "string"}},
-        "corrected_summary": {"type": "string"},
-    },
-    "required": ["accurate"],
-}
 
+def _check_d9_summary(body: str, sources: list[dict] | None = None) -> dict:
+    """Check that proper nouns in the summary all appear in the body.
 
-def _check_d9_summary(body: str, settings: LyraSettings) -> dict:
-    """Check summary accuracy against body content."""
+    No LLM call — pure string comparison and fuzzy matching.
+    """
     # Extract summary (italic text between --- markers at top)
     summary = ""
     if body.startswith("*"):
@@ -986,45 +992,53 @@ def _check_d9_summary(body: str, settings: LyraSettings) -> dict:
     if not summary:
         return {"passed": True, "issues": [], "d9_data": {}}
 
-    # Get first 200 chars of each section for comparison
-    sections = _get_sections(body)
-    section_summaries = []
-    for sec in sections[:8]:
-        if sec["header"]:
-            section_summaries.append(f"{sec['header']}: {sec['content'][:200]}")
+    # Extract proper nouns from summary and body (after summary)
+    summary_nouns = _extract_proper_nouns(summary)
 
-    system = (
-        "Compare this journal summary against the section content. "
-        "Check that proper nouns and claims in the summary match the body. "
-        "If inaccurate, provide a corrected summary."
-    )
-    user = f"## Summary\n{summary}\n\n## Section Content\n" + "\n\n".join(section_summaries)
+    # Body after the summary (skip the summary + --- separator)
+    body_after_summary = body
+    sep_idx = body.find("\n---")
+    if sep_idx > 0:
+        body_after_summary = body[sep_idx:]
 
-    try:
-        response = call_api(
-            system=system,
-            messages=[{"role": "user", "content": user}],
-            max_tokens=4096,
-            temperature=0.0,
-            timeout=60.0,
-            response_format={
-                "type": "json_schema",
-                "json_schema": {"name": "SummaryCheck", "strict": True, "schema": _D9_SCHEMA},
-            },
-        )
-        parsed = _parse_json(response.text or "")
-    except (LyraAPIError, Exception) as e:
-        logger.warning("[assessor] D9 call failed: %s", e)
-        parsed = {"accurate": True}
+    body_nouns = _extract_proper_nouns(body_after_summary)
 
-    if not isinstance(parsed, dict):
-        parsed = {"accurate": True}
+    # Check: every summary noun must appear in the body
+    mismatches: list[dict] = []
+    for s_noun in summary_nouns:
+        if s_noun in body_nouns:
+            continue  # exact match — fine
 
-    accurate = parsed.get("accurate", True)
+        # Fuzzy match: find closest body noun
+        best_match = ""
+        best_ratio = 0.0
+        for b_noun in body_nouns:
+            ratio = difflib.SequenceMatcher(None, s_noun.lower(), b_noun.lower()).ratio()
+            if ratio > best_ratio:
+                best_ratio = ratio
+                best_match = b_noun
+
+        if best_ratio >= 0.7 and best_match:
+            # Close match but not identical — likely a typo/mismatch
+            mismatches.append({"find": s_noun, "replace": best_match})
+        elif best_ratio < 0.7:
+            # No close match at all — summary noun not grounded in body
+            mismatches.append({"find": s_noun, "replace": ""})
+
+    accurate = len(mismatches) == 0
+    issue_strs = [
+        f"Summary noun '{m['find']}' not in body"
+        + (f" (closest: '{m['replace']}')" if m["replace"] else "")
+        for m in mismatches
+    ]
+
     return {
         "passed": accurate,
-        "issues": parsed.get("issues", []),
-        "d9_data": parsed,
+        "issues": issue_strs,
+        "d9_data": {
+            "accurate": accurate,
+            "mismatches": mismatches,
+        },
     }
 
 
@@ -1079,27 +1093,22 @@ def _fix_d1_d4_d6_d9(body: str, check_result: dict) -> tuple[str, list[dict]]:
             fixes.append({"dimension": "D6", "find": wrong, "replace": correct})
             logger.info("[assessor] D6 (dict): %s → %s", wrong, correct)
 
-    # D9: Summary accuracy fix
+    # D9: Summary accuracy fix — replace mismatched proper nouns in summary
     d9_data = check_result.get("d9_data", {})
     if isinstance(d9_data, dict) and not d9_data.get("accurate", True):
-        corrected = d9_data.get("corrected_summary", "")
-        if corrected:
-            # Summary is italic text at the top: *text*\n\n---
-            summary_pattern = re.compile(r"^\*[^*]+\*", re.MULTILINE)
-            m = summary_pattern.search(body)
-            if m:
-                # Ensure corrected summary is wrapped in * for italic
-                if not corrected.startswith("*"):
-                    corrected = f"*{corrected.strip()}*"
-                body = body[: m.start()] + corrected + body[m.end() :]
-                fixes.append(
-                    {
-                        "dimension": "D9",
-                        "summary_corrected": True,
-                        "corrected_summary": corrected,
-                    }
-                )
-                logger.info("[assessor] D9: corrected summary")
+        mismatches = d9_data.get("mismatches", [])
+        # Extract summary region to apply fixes only there
+        summary_end = body.find("\n---")
+        if summary_end > 0:
+            summary_text = body[:summary_end]
+            for mm in mismatches:
+                find = mm.get("find", "")
+                replace = mm.get("replace", "")
+                if find and replace and find in summary_text:
+                    summary_text = summary_text.replace(find, replace)
+                    fixes.append({"dimension": "D9", "find": find, "replace": replace})
+                    logger.info("[assessor] D9: %s → %s in summary", find, replace)
+            body = summary_text + body[summary_end:]
 
     return body, fixes
 
@@ -1207,18 +1216,18 @@ def assess_and_fix(
             all_fixes.append({"dimension": "D10", "issues": d10["issues"]})
             logger.info("[assessor] D10: fixing section balance")
 
-        # --- Separate LLM checks (D1, D4, D6, D9) ---
+        # --- Mechanical checks (D1, D4, D6, D9) ---
         d1 = _check_d1_proper_nouns(best_body, sources, settings)
         dims["D1_proper_nouns"] = d1["passed"]
         if not d1["passed"]:
             logger.info("[assessor] D1: found %d proper noun issues", len(d1["issues"]))
 
-        d4 = _check_d4_screenshots(best_body, settings)
+        d4 = _check_d4_screenshots(best_body)
         dims["D4_screenshot_placement"] = d4["passed"]
         if not d4["passed"]:
             logger.info("[assessor] D4: found %d misplaced screenshots", len(d4["issues"]))
 
-        d6 = _check_d6_spelling(best_body, settings)
+        d6 = _check_d6_spelling(best_body)
         dims["D6_spelling"] = d6["passed"]
         if not d6["passed"]:
             logger.info("[assessor] D6: found %d spelling issues", len(d6["issues"]))
@@ -1231,16 +1240,16 @@ def assess_and_fix(
             "d9_data": {},
         }
         if not all([d1["passed"], d4["passed"], d6["passed"]]):
-            best_body, llm_fixes = _fix_d1_d4_d6_d9(best_body, combined_pre)
-            all_fixes.extend(llm_fixes)
+            best_body, pre_fixes = _fix_d1_d4_d6_d9(best_body, combined_pre)
+            all_fixes.extend(pre_fixes)
 
-        # Re-apply spelling dictionary AFTER D1 — overrides any bad LLM corrections
+        # Re-apply spelling dictionary AFTER D1 — overrides any bad corrections
         for wrong, right in SPELLING_FIXES.items():
             if wrong in best_body:
                 best_body = best_body.replace(wrong, right)
 
         # D9: Summary accuracy (runs AFTER other fixes so it checks corrected body)
-        d9 = _check_d9_summary(best_body, settings)
+        d9 = _check_d9_summary(best_body)
         dims["D9_summary_accuracy"] = d9["passed"]
         if not d9["passed"]:
             logger.info("[assessor] D9: summary inaccurate")
