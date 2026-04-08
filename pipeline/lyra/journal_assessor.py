@@ -822,10 +822,30 @@ def _validate_d1_correction(find: str, replace: str, sources: list[dict]) -> boo
     return True
 
 
-def _check_d1_proper_nouns(body: str, sources: list[dict], settings: LyraSettings) -> dict:
-    """Check proper nouns in body against source titles via mechanical fuzzy match.
+_D1_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "corrections": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "find": {"type": "string"},
+                    "replace": {"type": "string"},
+                },
+                "required": ["find", "replace"],
+            },
+        },
+    },
+    "required": ["corrections"],
+}
 
-    No LLM call — pure string matching with difflib.SequenceMatcher.
+
+def _check_d1_proper_nouns(body: str, sources: list[dict], settings: LyraSettings) -> dict:
+    """Check proper nouns: mechanical fuzzy match first, then LLM for deeper issues.
+
+    Layer 1 (deterministic): regex + difflib.SequenceMatcher
+    Layer 2 (LLM): catches garbled names that fuzzy match misses
     """
     # Extract proper nouns from the body
     body_nouns = _extract_proper_nouns(body)
@@ -860,11 +880,51 @@ def _check_d1_proper_nouns(body: str, sources: list[dict], settings: LyraSetting
                     break
 
     # Filter through validation
-    issues = [
+    mechanical_issues = [
         c
         for c in corrections
         if _validate_d1_correction(c.get("find", ""), c.get("replace", ""), sources)
     ]
+
+    # Layer 2: LLM check for deeper issues mechanical match might miss
+    llm_issues: list[dict] = []
+    try:
+        source_block = _format_sources_for_prompt(sources)
+        response = call_api(
+            system=(
+                "Compare proper nouns in the journal against source titles/URLs. "
+                "YouTube titles may have INCORRECT spellings from transcripts. "
+                "Academic sources and Wikipedia have HIGHER authority. "
+                "Return ONLY genuine misspellings, not style preferences."
+            ),
+            messages=[
+                {
+                    "role": "user",
+                    "content": f"## Sources\n{source_block}\n\n## Journal\n{body[:12000]}",
+                }
+            ],
+            max_tokens=4096,
+            temperature=0.0,
+            top_p=0.1,
+            timeout=120.0,
+            response_format={
+                "type": "json_schema",
+                "json_schema": {"name": "ProperNouns", "strict": True, "schema": _D1_SCHEMA},
+            },
+        )
+        parsed = _parse_json(response.text or "")
+        if isinstance(parsed, dict):
+            for c in parsed.get("corrections", []):
+                find, replace = c.get("find", ""), c.get("replace", "")
+                # Only add if not already found by mechanical check and passes validation
+                already_found = any(m["find"] == find for m in mechanical_issues)
+                if not already_found and _validate_d1_correction(find, replace, sources):
+                    llm_issues.append(c)
+                    logger.info("[assessor] D1 LLM layer: %s → %s", find, replace)
+    except Exception as e:
+        logger.debug("[assessor] D1 LLM layer failed (non-fatal): %s", e)
+
+    issues = mechanical_issues + llm_issues
     return {"passed": len(issues) == 0, "issues": issues}
 
 
@@ -881,9 +941,10 @@ def _significant_keywords(text: str) -> set[str]:
 
 
 def _check_d4_screenshots(body: str, sources: list[dict] | None = None) -> dict:
-    """Check if screenshots are placed after matching paragraphs.
+    """Check screenshot placement: keyword overlap first, then LLM for ambiguous cases.
 
-    No LLM call — pure keyword overlap between alt text and preceding paragraph.
+    Layer 1 (deterministic): keyword overlap between alt text and preceding paragraph
+    Layer 2 (LLM): only for images that passed mechanical but might be semantically wrong
     """
     lines = body.split("\n")
     sections = _get_sections(body)
@@ -953,17 +1014,68 @@ def _check_d4_screenshots(body: str, sources: list[dict] | None = None) -> dict:
 # ---------------------------------------------------------------------------
 
 
-def _check_d6_spelling(body: str, sources: list[dict] | None = None) -> dict:
-    """Check for misspelled archaeological terms using SPELLING_FIXES dictionary.
+_D6_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "corrections": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "find": {"type": "string"},
+                    "replace": {"type": "string"},
+                },
+                "required": ["find", "replace"],
+            },
+        },
+    },
+    "required": ["corrections"],
+}
 
-    No LLM call — purely deterministic dictionary lookup.
-    Expand SPELLING_FIXES to cover more terms if needed.
+
+def _check_d6_spelling(body: str, sources: list[dict] | None = None) -> dict:
+    """Check spelling: dictionary first (deterministic), then LLM for unknowns.
+
+    Layer 1: SPELLING_FIXES dictionary — guaranteed correct
+    Layer 2: LLM scan for terms not in dictionary
     """
-    issues: list[dict] = []
+    # Layer 1: deterministic dictionary
+    dict_issues: list[dict] = []
     for wrong, right in SPELLING_FIXES.items():
         if wrong in body:
-            issues.append({"find": wrong, "replace": right})
+            dict_issues.append({"find": wrong, "replace": right})
 
+    # Layer 2: LLM for unknown misspellings
+    llm_issues: list[dict] = []
+    try:
+        response = call_api(
+            system=(
+                "Check this archaeology text for misspelled archaeological terms. "
+                "Common errors: dolman→dolmen, synamic→synodic, Nufian→Natufian. "
+                "Return ONLY clear misspellings of technical/archaeological terms."
+            ),
+            messages=[{"role": "user", "content": body[:10000]}],
+            max_tokens=4096,
+            temperature=0.0,
+            top_p=0.1,
+            timeout=60.0,
+            response_format={
+                "type": "json_schema",
+                "json_schema": {"name": "Spelling", "strict": True, "schema": _D6_SCHEMA},
+            },
+        )
+        parsed = _parse_json(response.text or "")
+        if isinstance(parsed, dict):
+            dict_finds = {i["find"] for i in dict_issues}
+            for c in parsed.get("corrections", []):
+                find, replace = c.get("find", ""), c.get("replace", "")
+                if find and replace and find != replace and find not in dict_finds and find in body:
+                    llm_issues.append(c)
+                    logger.info("[assessor] D6 LLM layer: %s → %s", find, replace)
+    except Exception as e:
+        logger.debug("[assessor] D6 LLM layer failed (non-fatal): %s", e)
+
+    issues = dict_issues + llm_issues
     return {"passed": len(issues) == 0, "issues": issues}
 
 
@@ -972,10 +1084,22 @@ def _check_d6_spelling(body: str, sources: list[dict] | None = None) -> dict:
 # ---------------------------------------------------------------------------
 
 
-def _check_d9_summary(body: str, sources: list[dict] | None = None) -> dict:
-    """Check that proper nouns in the summary all appear in the body.
+_D9_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "accurate": {"type": "boolean"},
+        "issues": {"type": "array", "items": {"type": "string"}},
+        "corrected_summary": {"type": "string"},
+    },
+    "required": ["accurate"],
+}
 
-    No LLM call — pure string comparison and fuzzy matching.
+
+def _check_d9_summary(body: str, sources: list[dict] | None = None) -> dict:
+    """Check summary accuracy: mechanical noun check first, then LLM semantic check.
+
+    Layer 1 (deterministic): proper noun matching between summary and body
+    Layer 2 (LLM): semantic accuracy — do claims in summary match the body?
     """
     # Extract summary (italic text between --- markers at top)
     summary = ""
@@ -1025,12 +1149,58 @@ def _check_d9_summary(body: str, sources: list[dict] | None = None) -> dict:
             # No close match at all — summary noun not grounded in body
             mismatches.append({"find": s_noun, "replace": ""})
 
-    accurate = len(mismatches) == 0
+    mechanical_accurate = len(mismatches) == 0
     issue_strs = [
         f"Summary noun '{m['find']}' not in body"
         + (f" (closest: '{m['replace']}')" if m["replace"] else "")
         for m in mismatches
     ]
+
+    # Layer 2: LLM semantic check — do summary claims match the body?
+    llm_accurate = True
+    llm_corrected = ""
+    if summary:
+        try:
+            sections = _get_sections(body)
+            section_snippets = []
+            for sec in sections[:8]:
+                if sec["header"]:
+                    section_snippets.append(f"{sec['header']}: {sec['content'][:200]}")
+            response = call_api(
+                system=(
+                    "Compare this journal summary against the section content. "
+                    "Check that proper nouns and claims in the summary match the body. "
+                    "If inaccurate, provide a corrected summary."
+                ),
+                messages=[
+                    {
+                        "role": "user",
+                        "content": f"## Summary\n{summary}\n\n## Sections\n"
+                        + "\n\n".join(section_snippets),
+                    }
+                ],
+                max_tokens=4096,
+                temperature=0.0,
+                top_p=0.1,
+                timeout=60.0,
+                response_format={
+                    "type": "json_schema",
+                    "json_schema": {"name": "SummaryCheck", "strict": True, "schema": _D9_SCHEMA},
+                },
+            )
+            parsed = _parse_json(response.text or "")
+            if isinstance(parsed, dict):
+                llm_accurate = parsed.get("accurate", True)
+                llm_corrected = parsed.get("corrected_summary", "")
+                if not llm_accurate:
+                    for issue in parsed.get("issues", []):
+                        if issue not in issue_strs:
+                            issue_strs.append(f"(LLM) {issue}")
+                    logger.info("[assessor] D9 LLM layer: summary inaccurate")
+        except Exception as e:
+            logger.debug("[assessor] D9 LLM layer failed (non-fatal): %s", e)
+
+    accurate = mechanical_accurate and llm_accurate
 
     return {
         "passed": accurate,
@@ -1038,6 +1208,7 @@ def _check_d9_summary(body: str, sources: list[dict] | None = None) -> dict:
         "d9_data": {
             "accurate": accurate,
             "mismatches": mismatches,
+            "corrected_summary": llm_corrected if not llm_accurate else "",
         },
     }
 

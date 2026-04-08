@@ -369,7 +369,14 @@ class TestD6SpellingMechanical:
 class TestD9SummaryMechanical:
     """Test mechanical proper noun check for summary accuracy."""
 
-    def test_accurate_summary_passes(self):
+    def test_accurate_summary_passes(self, monkeypatch):
+        # Mock the LLM layer so it doesn't make real API calls
+        from pipeline.lyra import journal_assessor
+        from pipeline.lyra.config import NormalizedResponse, TextBlock
+        monkeypatch.setattr(
+            journal_assessor, "call_api",
+            lambda **kwargs: NormalizedResponse(content=[TextBlock(text='{"accurate": true}')]),
+        )
         body = (
             "*This week covers discoveries at Galgano Guidotti site.*\n\n"
             "---\n\n"
@@ -379,7 +386,13 @@ class TestD9SummaryMechanical:
         result = _check_d9_summary(body)
         assert result["passed"]
 
-    def test_mismatched_noun_detected(self):
+    def test_mismatched_noun_detected(self, monkeypatch):
+        from pipeline.lyra import journal_assessor
+        from pipeline.lyra.config import NormalizedResponse, TextBlock
+        monkeypatch.setattr(
+            journal_assessor, "call_api",
+            lambda **kwargs: NormalizedResponse(content=[TextBlock(text='{"accurate": false, "issues": ["mismatch"]}')]),
+        )
         body = (
             "*This week covers discoveries at Galano Giati site.*\n\n"
             "---\n\n"
@@ -395,7 +408,13 @@ class TestD9SummaryMechanical:
         result = _check_d9_summary(body)
         assert result["passed"]
 
-    def test_summary_noun_not_in_body_flagged(self):
+    def test_summary_noun_not_in_body_flagged(self, monkeypatch):
+        from pipeline.lyra import journal_assessor
+        from pipeline.lyra.config import NormalizedResponse, TextBlock
+        monkeypatch.setattr(
+            journal_assessor, "call_api",
+            lambda **kwargs: NormalizedResponse(content=[TextBlock(text='{"accurate": false, "issues": ["not in body"]}')]),
+        )
         body = (
             "*Amazing finds at Xanadu Palace revealed.*\n\n"
             "---\n\n"
