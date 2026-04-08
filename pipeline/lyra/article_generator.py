@@ -1067,6 +1067,7 @@ def _assemble_from_clusters(
                         "citation": next_citation,
                         "url": src["url"],
                         "label": src["label"],
+                        "snippet": src.get("snippet", src["label"]),
                         "type": src.get("type", "news"),
                     }
                 )

@@ -151,6 +151,7 @@ def _build_source_list(registry: CitationRegistry) -> list[dict]:
                 "citation": num,
                 "url": source.url,
                 "label": source.title,
+                "snippet": source.snippet or source.title,
                 "type": _classify_source_type(source.url),
             }
         )
