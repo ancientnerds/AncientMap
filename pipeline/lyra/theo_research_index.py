@@ -1,7 +1,7 @@
 """Qdrant indexing for published Theo research papers.
 
 Splits papers by ## headings, embeds each section via Voyage AI,
-and stores in the `theo_research_sections` Qdrant collection.
+and stores in the `research` Qdrant collection.
 
 Used by:
   - Publish endpoint: index_paper() on publish
@@ -18,7 +18,7 @@ import uuid
 
 logger = logging.getLogger(__name__)
 
-COLLECTION_NAME = "theo_research_sections"
+COLLECTION_NAME = "research"
 VECTOR_DIM = 1024  # voyage-4-large output dimension
 
 # Sections to skip — not useful for semantic matching or citation
@@ -87,7 +87,7 @@ def _deterministic_uuid(paper_id: str, section_index: int) -> str:
 
 def _ensure_collection() -> None:
     """Create the Qdrant collection if it doesn't exist."""
-    from qdrant_client.models import Distance, VectorParams
+    from qdrant_client.models import Distance, Modifier, SparseVectorParams, VectorParams
 
     from api.services.lyra_embeddings import get_qdrant_client
 
@@ -96,7 +96,12 @@ def _ensure_collection() -> None:
     if COLLECTION_NAME not in collections:
         client.create_collection(
             collection_name=COLLECTION_NAME,
-            vectors_config=VectorParams(size=VECTOR_DIM, distance=Distance.COSINE),
+            vectors_config={
+                "dense": VectorParams(size=VECTOR_DIM, distance=Distance.COSINE),
+            },
+            sparse_vectors_config={
+                "bm25": SparseVectorParams(modifier=Modifier.IDF),
+            },
         )
         logger.info("Created Qdrant collection: %s", COLLECTION_NAME)
 
@@ -115,9 +120,9 @@ def index_paper(
 
     Returns the number of sections indexed.
     """
-    from qdrant_client.models import PointStruct
+    from qdrant_client.models import PointStruct, SparseVector
 
-    from api.services.lyra_embeddings import get_embeddings, get_qdrant_client
+    from api.services.lyra_embeddings import get_embeddings, get_qdrant_client, get_sparse_model
 
     sections = _split_sections(paper_text)
     if not sections:
@@ -126,19 +131,27 @@ def index_paper(
 
     _ensure_collection()
 
-    # Embed all sections in one batch
+    # Embed all sections in one batch — dense + BM25
     embedder = get_embeddings("index")
+    sparse_model = get_sparse_model()
     texts = [f"{s['title']}\n\n{s['text']}" for s in sections]
-    vectors = embedder.embed_documents(texts)
+    dense_vectors = embedder.embed_documents(texts)
+    sparse_vectors = list(sparse_model.embed(texts))
 
-    # Build Qdrant points
+    # Build Qdrant points with named vectors
     points = []
-    for section, vector in zip(sections, vectors, strict=True):
+    for section, dense_vec, sparse_vec in zip(sections, dense_vectors, sparse_vectors, strict=True):
         point_id = _deterministic_uuid(paper_id, section["index"])
         points.append(
             PointStruct(
                 id=point_id,
-                vector=vector,
+                vector={
+                    "dense": dense_vec,
+                    "bm25": SparseVector(
+                        indices=sparse_vec.indices.tolist(),
+                        values=sparse_vec.values.tolist(),
+                    ),
+                },
                 payload={
                     "paper_id": paper_id,
                     "paper_title": paper_title,
@@ -146,6 +159,8 @@ def index_paper(
                     "section_title": section["title"],
                     "section_text": section["text"],
                     "section_index": section["index"],
+                    "title": f"{paper_title} — {section['title']}",
+                    "text_preview": section["text"][:2000],
                     "author_username": author_username,
                     "author_discord_id": author_discord_id,
                     "effort": effort,
@@ -204,7 +219,7 @@ def search_similar(question: str, limit: int = 5) -> list[dict]:
 
     results = client.search(
         collection_name=COLLECTION_NAME,
-        query_vector=query_vector,
+        query_vector=("dense", query_vector),
         limit=limit * 3,  # oversample then deduplicate by paper
         score_threshold=0.3,
     )
@@ -252,7 +267,7 @@ def search_sections(query: str, limit: int = 3) -> list[dict]:
 
     results = client.search(
         collection_name=COLLECTION_NAME,
-        query_vector=query_vector,
+        query_vector=("dense", query_vector),
         limit=limit * 3,
         score_threshold=0.35,
     )
