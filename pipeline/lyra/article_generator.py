@@ -1350,6 +1350,23 @@ def generate_weekly_article(
             len(assess_result.fixes_applied),
         )
 
+        # -- verify citations (FINAL GATE — every [N] must be confirmed) --
+        _write_article_heartbeat(step_data, "verify_citations", t0_total)
+        logger.info("Verifying every citation against its source")
+        t0 = time.time()
+        from pipeline.lyra.citation_verifier import verify_all_citations
+
+        body = verify_all_citations(body, unified_sources, settings=settings)
+        step_data["verify_citations"] = {
+            "count": len(re.findall(r"\[\d+\]", body)),
+            "elapsed": round(time.time() - t0, 1),
+            "status": "done",
+        }
+        logger.info(
+            "Citation verification complete: %d verified citations remain",
+            len(re.findall(r"\[\d+\]", body)),
+        )
+
         # -- polish --
         _write_article_heartbeat(step_data, "polish", t0_total)
         logger.info("Polishing article for coherence")

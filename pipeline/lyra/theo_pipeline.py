@@ -1686,6 +1686,26 @@ class TheoPipeline:
         raw_paper = re.sub(r"\[\d+\]", "", raw_paper)
         raw_paper = self._insert_citations_mechanically(raw_paper, ctx, sid_to_num)
 
+        # Verify every citation — the FINAL GATE
+        from pipeline.lyra.citation_verifier import verify_all_citations
+
+        # Build sources list for the verifier
+        verify_sources = []
+        for sid, num in sorted(sid_to_num.items(), key=lambda kv: kv[1]):
+            source = ctx.registry.get_reference(sid)
+            if source:
+                verify_sources.append(
+                    {
+                        "citation": num,
+                        "label": source.title,
+                        "url": source.url,
+                        "snippet": source.snippet,
+                    }
+                )
+
+        emit({"type": "status", "content": "Verifying every citation against its source..."})
+        raw_paper = verify_all_citations(raw_paper, verify_sources, settings=self._settings)
+
         ctx.paper_text = raw_paper
 
         # Extract title from the first # heading
