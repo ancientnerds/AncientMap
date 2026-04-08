@@ -481,7 +481,7 @@ async def get_news_articles(
     articles = (
         db.query(NewsArticle)
         .filter(NewsArticle.active.is_(True))
-        .order_by(NewsArticle.created_at.desc())
+        .order_by(NewsArticle.week_start.desc())
         .limit(limit)
         .all()
     )
