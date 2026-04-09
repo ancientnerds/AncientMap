@@ -279,6 +279,17 @@ def _web_verify_items(items: list[NewsItem], settings: LyraSettings) -> int:
         if not results:
             continue
 
+        # Filter blocked domains
+        from urllib.parse import urlparse
+
+        from pipeline.lyra.blocked_domains import BLOCKED_DOMAINS
+
+        results = [
+            r for r in results if urlparse(r.url).netloc.replace("www.", "") not in BLOCKED_DOMAINS
+        ]
+        if not results:
+            continue
+
         search_text = "\n".join(f"- [{r.title}]({r.url}): {r.snippet}" for r in results[:5])
         facts_text = "\n".join(f"- {f}" for f in (item.facts or [])[:5])
 

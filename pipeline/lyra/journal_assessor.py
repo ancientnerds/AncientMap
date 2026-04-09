@@ -31,26 +31,7 @@ PROMPTS_DIR = Path(__file__).parent / "prompts"
 # Constants
 # ---------------------------------------------------------------------------
 
-QUALITY_BLOCKED_DOMAINS = frozenset(
-    {
-        "tripadvisor.com",
-        "gaia.com",
-        "ancient-origins.net",
-        "ancient-code.com",
-        "yelp.com",
-        "booking.com",
-        "amazon.com",
-        "ebay.com",
-        "etsy.com",
-        "quizlet.com",
-        "brainly.com",
-        "chegg.com",
-        "coursehero.com",
-        "answers.yahoo.com",
-        "yahoo.com",
-        "readmultiplex.com",
-    }
-)
+from pipeline.lyra.blocked_domains import BLOCKED_DOMAINS as QUALITY_BLOCKED_DOMAINS
 
 SPELLING_FIXES = {
     "dolman": "dolmen",

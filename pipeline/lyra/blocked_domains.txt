@@ -1,0 +1,38 @@
+# Domains blocked from web verification sources.
+# One domain per line. Lines starting with # are comments.
+# Used by both article and story pipelines.
+
+# Social media / UGC
+youtube.com
+facebook.com
+reddit.com
+twitter.com
+x.com
+instagram.com
+tiktok.com
+pinterest.com
+quora.com
+answers.yahoo.com
+
+# Tourism / commerce
+tripadvisor.com
+yelp.com
+booking.com
+amazon.com
+ebay.com
+etsy.com
+
+# Pseudoscience / low quality
+gaia.com
+ancient-origins.net
+ancient-code.com
+readmultiplex.com
+
+# Homework / AI slop
+quizlet.com
+brainly.com
+chegg.com
+coursehero.com
+
+# Generic
+yahoo.com
