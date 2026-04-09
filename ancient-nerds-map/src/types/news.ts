@@ -33,6 +33,9 @@ export interface NewsItemData {
   significance: number | null
   news_category: string | null
   speculative_tag: string | null
+  verified: boolean
+  verified_at: string | null
+  web_sources: Array<{ title: string; url: string; snippet: string }> | null
 }
 
 export interface NewsFeedResponse {

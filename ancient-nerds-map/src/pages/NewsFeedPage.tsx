@@ -649,6 +649,7 @@ export default function NewsFeedPage() {
                       sitePeriodName={item.site_period_name}
                       sitePeriodStart={item.site_period_start}
                       facts={item.facts}
+                      webSources={item.web_sources}
                       onSiteLoaded={setSelectedSite}
                     />
                   </div>

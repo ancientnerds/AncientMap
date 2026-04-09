@@ -61,6 +61,9 @@ export interface NewsCardProps {
   // Facts (from API expand)
   facts?: string[] | null
 
+  // Web verification sources
+  webSources?: Array<{ title: string; url: string; snippet: string }> | null
+
   // Size
   size?: 'sm' | 'md' | 'lg'
 }
@@ -93,6 +96,7 @@ function NewsCard({
   onSiteHover,
   onAskLyra,
   facts,
+  webSources,
   size = 'md',
 }: NewsCardProps) {
   const [expanded, setExpanded] = useState(false)
@@ -255,6 +259,25 @@ function NewsCard({
             <div className="news-card-facts">
               {facts.map((fact, i) => (
                 <div key={i} className="news-card-fact">{fact}</div>
+              ))}
+            </div>
+          )}
+
+          {webSources && webSources.length > 0 && (
+            <div style={{ margin: '8px 0', padding: '6px 0', borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+              <div style={{ fontSize: '0.7em', opacity: 0.5, marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Sources</div>
+              {webSources.map((src, i) => (
+                <a
+                  key={i}
+                  href={src.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={e => e.stopPropagation()}
+                  title={src.snippet}
+                  style={{ display: 'block', fontSize: '0.75em', color: 'var(--accent-blue, #4a9eff)', opacity: 0.7, textDecoration: 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: 2 }}
+                >
+                  {src.title}
+                </a>
               ))}
             </div>
           )}
