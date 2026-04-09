@@ -146,10 +146,8 @@ def rescore_pending_items(settings: LyraSettings) -> int:
                     item.tags = tags
 
                 if new_sig == 1:
-                    # Not archaeology — remove from feed
-                    item.post_text = None
                     logger.info(
-                        f"Rescore item {item.id}: {old_sig} -> 1 (removed) — {result['reason']}"
+                        f"Rescore item {item.id}: {old_sig} -> 1 (flagged) — {result['reason']}"
                     )
                 elif old_sig != new_sig:
                     logger.info(

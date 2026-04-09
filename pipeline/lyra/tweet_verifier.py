@@ -193,9 +193,8 @@ def verify_video_posts(
                 continue
 
             if level == "REJECT":
-                item.post_text = None
                 item.news_category = "rejected"
-                logger.info(f"Rejected item {item.id} (soft-delete)")
+                logger.info(f"Rejected item {item.id} (flagged as rejected)")
             elif level == "MODIFY":
                 mod = result.get("suggested_modification", {})
                 modified = mod.get("modified_text", "") if mod else ""
