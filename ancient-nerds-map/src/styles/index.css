@@ -18649,3 +18649,6 @@ body.demo-mode.demo-show-popups .site-popup {
 .news-card-web-source { display: block; font-size: 0.75em; color: var(--accent-blue, #4a9eff); opacity: 0.7; text-decoration: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-bottom: 2px; transition: color 0.15s, opacity 0.15s; }
 .news-card-web-source:hover { color: var(--accent-primary); opacity: 1; }
 
+/* Unverified badge */
+.news-card-unverified-badge { display: inline-block; font-size: 0.65em; padding: 1px 6px; margin-bottom: 4px; border: 1px solid var(--primary-red, #c02023); color: var(--primary-red, #c02023); border-radius: 3px; text-transform: uppercase; letter-spacing: 0.05em; opacity: 0.8; }
+

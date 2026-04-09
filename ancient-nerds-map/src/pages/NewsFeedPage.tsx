@@ -650,6 +650,7 @@ export default function NewsFeedPage() {
                       sitePeriodStart={item.site_period_start}
                       facts={item.facts}
                       webSources={item.web_sources}
+                      verified={item.verified}
                       onSiteLoaded={setSelectedSite}
                     />
                   </div>

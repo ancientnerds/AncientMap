@@ -64,6 +64,9 @@ export interface NewsCardProps {
   // Web verification sources
   webSources?: Array<{ title: string; url: string; snippet: string }> | null
 
+  // Verification status
+  verified?: boolean
+
   // Size
   size?: 'sm' | 'md' | 'lg'
 }
@@ -97,6 +100,7 @@ function NewsCard({
   onAskLyra,
   facts,
   webSources,
+  verified,
   size = 'md',
 }: NewsCardProps) {
   const [expanded, setExpanded] = useState(false)
@@ -170,6 +174,10 @@ function NewsCard({
         <div className="news-significance-stamp" style={{ color: getSignificanceColor(significance) }}>
           {getSignificanceLabel(significance)}
         </div>
+      )}
+
+      {newsCategory === 'unverified' && (
+        <div className="news-card-unverified-badge">Unverified</div>
       )}
 
       <div className="news-card-post-text">{postText || headline}</div>
@@ -263,9 +271,9 @@ function NewsCard({
             </div>
           )}
 
-          {webSources && webSources.length > 0 && (
+          {webSources && webSources.length > 0 ? (
             <div className="news-card-web-sources">
-              <div className="news-card-web-sources-label">Sources</div>
+              <div className="news-card-web-sources-label">{verified ? '\u2713 Verified' : 'Sources'}</div>
               {webSources.map((src, i) => (
                 <a
                   key={i}
@@ -280,7 +288,11 @@ function NewsCard({
                 </a>
               ))}
             </div>
-          )}
+          ) : verified ? (
+            <div className="news-card-web-sources">
+              <div className="news-card-web-sources-label">No external sources</div>
+            </div>
+          ) : null}
 
           {deepLink && deepLink !== '#' && (
             <a

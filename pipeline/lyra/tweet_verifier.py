@@ -330,8 +330,11 @@ def verify_video_posts(
                 seen = {s["url"] for s in existing if isinstance(s, dict)}
                 for url in desc_source_urls:
                     if url not in seen:
+                        from urllib.parse import urlparse
+
+                        domain = urlparse(url).netloc.replace("www.", "")
                         existing.append(
-                            {"title": "From video description", "url": url, "snippet": ""}
+                            {"title": domain, "url": url, "snippet": "Linked in video description"}
                         )
                         seen.add(url)
                 item.web_sources = existing

@@ -178,6 +178,7 @@ export default function NewsFeedPanel({ onClose, onSiteHover, onSiteClick, onAsk
               sitePeriodStart={item.site_period_start}
               facts={item.facts}
               webSources={item.web_sources}
+              verified={item.verified}
               onSiteLoaded={(site) => onSiteClick?.(site.title, site.coordinates[1], site.coordinates[0])}
               onSiteHover={(hovering) => onSiteHover?.(hovering && item.site_id ? item.site_id : null)}
               onAskLyra={onAskLyra ? () => onAskLyra(item.id) : undefined}
