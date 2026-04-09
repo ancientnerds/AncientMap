@@ -1054,7 +1054,7 @@ def _assemble_from_clusters(
     next_citation = 1
 
     for label, results in label_groups.items():
-        body_parts.append(f"## {label}\n")
+        body_parts.append(f"\n\n## {label}\n\n")
 
         for result in results:
             # Build citation remapping: old [N] -> new [N]

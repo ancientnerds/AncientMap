@@ -240,66 +240,7 @@ def verify_all_citations(
         for cite_num in rejected_cites:
             text = re.sub(rf"\s*\[{cite_num}\]", "", text)
 
-        # Remove sentences that lost ALL their citations (uncitable claims)
-        if src_idx > 0:
-            body_part = text[:src_idx]
-        else:
-            body_part = text
-
-        sentences = re.split(r"(?<=[.!?])\s+", body_part)
-        kept = []
-        removed_count = 0
-        for sentence in sentences:
-            # Skip headings, images, short lines
-            if (
-                sentence.startswith("#")
-                or sentence.startswith("![")
-                or sentence.startswith("*")
-                or sentence.startswith("---")
-                or len(sentence) < 50
-            ):
-                kept.append(sentence)
-                continue
-
-            # If this sentence had citations before but now has none, remove it
-            # (We check if the original text had a citation for this sentence)
-            has_cite = bool(re.search(r"\[\d+\]", sentence))
-            if has_cite or len(sentence) < 100:
-                kept.append(sentence)
-            else:
-                # Long sentence with no citation — check if it's a factual claim
-                # Keep introductory/contextual sentences, remove factual claims
-                lower = sentence.lower()
-                is_factual = any(
-                    w in lower
-                    for w in (
-                        "discovered",
-                        "found",
-                        "dated",
-                        "confirmed",
-                        "revealed",
-                        "published",
-                        "excavat",
-                        "evidence",
-                        "analysis",
-                        "study",
-                        "research",
-                    )
-                )
-                if is_factual:
-                    removed_count += 1
-                    logger.info("[verifier] Removed uncitable claim: %s", sentence[:80])
-                else:
-                    kept.append(sentence)
-
-        if removed_count > 0:
-            new_body = " ".join(kept)
-            if src_idx > 0:
-                text = new_body + text[src_idx:]
-            else:
-                text = new_body
-
-        # Clean up
+        # Clean up — preserve markdown structure (paragraphs, headings)
         text = re.sub(r"  +", " ", text)
         text = re.sub(r"\n{3,}", "\n\n", text)
 
