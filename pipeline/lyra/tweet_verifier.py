@@ -21,6 +21,78 @@ logger = logging.getLogger(__name__)
 PROMPT_PATH = Path(__file__).parent / "prompts" / "verify_tweets.txt"
 WEB_VERIFY_PROMPT_PATH = Path(__file__).parent / "prompts" / "story_web_verify.txt"
 
+_DESC_EXTRACT_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "names": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "Correct spellings of site names, researcher names, culture names",
+        },
+        "source_urls": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "URLs to papers, articles, or references about the topic (not social media, merch, courses)",
+        },
+    },
+    "required": ["names", "source_urls"],
+    "additionalProperties": False,
+}
+
+
+def _extract_from_description(
+    description: str, headline: str, settings: LyraSettings
+) -> tuple[list[str], list[str]]:
+    """Use LLM to extract correct names and source URLs from a YouTube description.
+
+    Returns (names, source_urls).
+    """
+    try:
+        response = call_api(
+            model=settings.model_relevance,
+            max_tokens=1024,
+            temperature=0.0,
+            system=(
+                "Extract from this YouTube video description:\n"
+                "1. Correct spellings of archaeological site names, researcher names, and culture names\n"
+                "2. URLs that link to papers, news articles, or academic sources about the topic\n\n"
+                "IGNORE: social media links, merch/shop links, course links, Patreon, "
+                "subscribe prompts, affiliate links, hashtags, timestamps.\n"
+                "Only extract names and URLs relevant to archaeology/history content."
+            ),
+            messages=[
+                {
+                    "role": "user",
+                    "content": f"Topic: {headline}\n\nDescription:\n{description[:1500]}",
+                }
+            ],
+            response_format={
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "DescriptionExtract",
+                    "strict": True,
+                    "schema": _DESC_EXTRACT_SCHEMA,
+                },
+            },
+        )
+    except LyraAPIError:
+        return [], []
+
+    text = response.text
+    if not text:
+        return [], []
+    try:
+        data = json.loads(text)
+        # Double-encoded string fallback
+        if isinstance(data.get("names"), str):
+            data["names"] = json.loads(data["names"])
+        if isinstance(data.get("source_urls"), str):
+            data["source_urls"] = json.loads(data["source_urls"])
+        return data.get("names", []), data.get("source_urls", [])
+    except (json.JSONDecodeError, ValueError):
+        return [], []
+
+
 VERIFY_SCHEMA = {
     "type": "object",
     "properties": {
@@ -88,7 +160,13 @@ def verify_single_post(
     if video_tags:
         metadata_lines.append(f"Video tags: {', '.join(t for t in video_tags if t)}")
     if video_description:
-        metadata_lines.append(f"Video description: {video_description[:500]}")
+        names, source_urls = _extract_from_description(
+            video_description, item.headline or "", _get_settings()
+        )
+        if names:
+            metadata_lines.append(f"Correct names from description: {', '.join(names)}")
+        if source_urls:
+            metadata_lines.append(f"Source links from description: {', '.join(source_urls)}")
     metadata_block = "\n".join(metadata_lines)
 
     ts_label = item.timestamp_range or "start of video"
