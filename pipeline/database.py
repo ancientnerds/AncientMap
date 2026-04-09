@@ -954,6 +954,9 @@ class NewsItem(Base):
     # Web verification sources (populated during rescore web-check)
     web_sources: Mapped[list | None] = mapped_column(JSONB, nullable=True)
 
+    # Editorial judgment from the significance scorer (why this score?)
+    score_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+
     video: Mapped["NewsVideo"] = relationship("NewsVideo", back_populates="items")
     site: Mapped[Optional["UnifiedSite"]] = relationship("UnifiedSite", lazy="joined")
 

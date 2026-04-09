@@ -137,6 +137,9 @@ def rescore_pending_items(settings: LyraSettings) -> int:
                 else:
                     item.speculative_tag = None
 
+                # Save editorial judgment
+                item.score_reason = result.get("reason")
+
                 # Save extracted entities and tags
                 entities = result.get("entities")
                 if entities and isinstance(entities, dict):
