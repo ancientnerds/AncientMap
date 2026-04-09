@@ -160,13 +160,11 @@ def verify_single_post(
     if video_tags:
         metadata_lines.append(f"Video tags: {', '.join(t for t in video_tags if t)}")
     if video_description:
-        names, source_urls = _extract_from_description(
+        names, _ = _extract_from_description(
             video_description, item.headline or "", _get_settings()
         )
         if names:
             metadata_lines.append(f"Correct names from description: {', '.join(names)}")
-        if source_urls:
-            metadata_lines.append(f"Source links from description: {', '.join(source_urls)}")
     metadata_block = "\n".join(metadata_lines)
 
     ts_label = item.timestamp_range or "start of video"
@@ -248,6 +246,13 @@ def verify_video_posts(
                 )
             return 0
 
+        # Extract description source URLs once per video
+        desc_source_urls: list[str] = []
+        if video.description:
+            _, desc_source_urls = _extract_from_description(
+                video.description, video.title or "", settings
+            )
+
         verified = 0
         skipped = 0
         for item in items:
@@ -318,6 +323,18 @@ def verify_video_posts(
                 secs = parse_timestamp_to_seconds(ts)
                 if secs is not None:
                     item.timestamp_seconds = secs
+
+            # Save description source URLs (deduped with any existing web sources)
+            if desc_source_urls:
+                existing = item.web_sources or []
+                seen = {s["url"] for s in existing if isinstance(s, dict)}
+                for url in desc_source_urls:
+                    if url not in seen:
+                        existing.append(
+                            {"title": "From video description", "url": url, "snippet": ""}
+                        )
+                        seen.add(url)
+                item.web_sources = existing
 
             item.verified_at = datetime.now(UTC)
             verified += 1
@@ -427,10 +444,14 @@ def _web_verify_items(items: list[NewsItem], settings: LyraSettings) -> int:
 
         verdict = result.get("verdict", "")
 
-        # Save web sources regardless of verdict
-        item.web_sources = [
-            {"title": r.title, "url": r.url, "snippet": r.snippet} for r in results[:5]
-        ]
+        # Merge web search sources with existing (description) sources, deduped by URL
+        existing = item.web_sources or []
+        seen = {s["url"] for s in existing if isinstance(s, dict)}
+        for r in results[:5]:
+            if r.url not in seen:
+                existing.append({"title": r.title, "url": r.url, "snippet": r.snippet})
+                seen.add(r.url)
+        item.web_sources = existing
 
         if verdict == "CORRECTED" and result.get("corrected_text"):
             logger.info(f"Web verify corrected item {item.id}: {result.get('reason', '')}")
