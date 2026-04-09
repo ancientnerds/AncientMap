@@ -273,9 +273,9 @@ def _web_verify_items(items: list[NewsItem], settings: LyraSettings) -> int:
     checked = 0
 
     for item in eligible:
-        # Build search query from the most specific fact
-        claim = item.facts[0] if item.facts else item.headline
-        results = minimax_search(client, claim)
+        # Search using headline (most specific claim) — facts[0] is often too vague
+        query = item.headline
+        results = minimax_search(client, query)
         if not results:
             continue
 

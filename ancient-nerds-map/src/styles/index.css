@@ -18643,3 +18643,9 @@ body.demo-mode.demo-show-popups .site-popup {
   display: flex !important;
 }
 
+/* Web verification sources */
+.news-card-web-sources { margin: 8px 0; padding: 6px 0; border-top: 1px solid rgba(255,255,255,0.08); }
+.news-card-web-sources-label { font-size: 0.7em; opacity: 0.5; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.05em; }
+.news-card-web-source { display: block; font-size: 0.75em; color: var(--accent-blue, #4a9eff); opacity: 0.7; text-decoration: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-bottom: 2px; transition: color 0.15s, opacity 0.15s; }
+.news-card-web-source:hover { color: var(--accent-primary); opacity: 1; }
+

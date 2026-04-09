@@ -264,17 +264,17 @@ function NewsCard({
           )}
 
           {webSources && webSources.length > 0 && (
-            <div style={{ margin: '8px 0', padding: '6px 0', borderTop: '1px solid rgba(255,255,255,0.08)' }}>
-              <div style={{ fontSize: '0.7em', opacity: 0.5, marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Sources</div>
+            <div className="news-card-web-sources">
+              <div className="news-card-web-sources-label">Sources</div>
               {webSources.map((src, i) => (
                 <a
                   key={i}
+                  className="news-card-web-source"
                   href={src.url}
                   target="_blank"
                   rel="noopener noreferrer"
                   onClick={e => e.stopPropagation()}
                   title={src.snippet}
-                  style={{ display: 'block', fontSize: '0.75em', color: 'var(--accent-blue, #4a9eff)', opacity: 0.7, textDecoration: 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: 2 }}
                 >
                   {src.title}
                 </a>
