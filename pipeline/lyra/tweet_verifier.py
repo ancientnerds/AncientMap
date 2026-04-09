@@ -130,7 +130,7 @@ def verify_single_post(
     max_tokens: int | None = None,
     video_title: str | None = None,
     video_tags: list[str] | None = None,
-    video_description: str | None = None,
+    desc_names: list[str] | None = None,
 ) -> dict | None:
     """Verify a single post against the transcript.
 
@@ -159,12 +159,8 @@ def verify_single_post(
         metadata_lines.append(f"Video title: {video_title}")
     if video_tags:
         metadata_lines.append(f"Video tags: {', '.join(t for t in video_tags if t)}")
-    if video_description:
-        names, _ = _extract_from_description(
-            video_description, item.headline or "", _get_settings()
-        )
-        if names:
-            metadata_lines.append(f"Correct names from description: {', '.join(names)}")
+    if desc_names:
+        metadata_lines.append(f"Correct names from description: {', '.join(desc_names)}")
     metadata_block = "\n".join(metadata_lines)
 
     ts_label = item.timestamp_range or "start of video"
@@ -246,10 +242,11 @@ def verify_video_posts(
                 )
             return 0
 
-        # Extract description source URLs once per video
+        # Extract names + source URLs from description once per video
+        desc_names: list[str] = []
         desc_source_urls: list[str] = []
         if video.description:
-            _, desc_source_urls = _extract_from_description(
+            desc_names, desc_source_urls = _extract_from_description(
                 video.description, video.title or "", settings
             )
 
@@ -264,7 +261,7 @@ def verify_video_posts(
                 max_tokens=settings.max_tokens,
                 video_title=video.title,
                 video_tags=video.tags,
-                video_description=video.description,
+                desc_names=desc_names,
             )
             if not result:
                 skipped += 1
@@ -420,12 +417,14 @@ def _web_verify_items(items: list[NewsItem], settings: LyraSettings) -> int:
         search_text = "\n".join(f"- [{r.title}]({r.url}): {r.snippet}" for r in results[:5])
         facts_text = "\n".join(f"- {f}" for f in (item.facts or [])[:5])
 
-        user_msg = web_prompt.replace("{post_text}", item.post_text or "")
-        user_msg = user_msg.replace("{facts}", facts_text)
-        user_msg = user_msg.replace("{search_results}", search_text)
+        user_msg = (
+            f"Post: {item.post_text or ''}\n\n"
+            f"Key facts claimed:\n{facts_text}\n\n"
+            f"Web search results:\n{search_text}"
+        )
 
         try:
-            response_text = minimax_chat(client, "MiniMax-M2.7", "", user_msg, 4096)
+            response_text = minimax_chat(client, "MiniMax-M2.7", web_prompt, user_msg, 4096)
         except Exception as e:
             logger.warning(f"Web verify failed for item {item.id}: {e}")
             continue
