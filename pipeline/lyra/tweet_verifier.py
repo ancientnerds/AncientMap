@@ -444,6 +444,10 @@ def _web_verify_items(items: list[NewsItem], settings: LyraSettings) -> int:
             logger.warning(f"Failed to parse web verify response for item {item.id}")
             continue
 
+        if not isinstance(result, dict):
+            logger.warning(f"Web verify returned {type(result).__name__} for item {item.id}, skipping")
+            continue
+
         verdict = result.get("verdict", "")
 
         # Merge web search sources with existing (description) sources, deduped by URL
