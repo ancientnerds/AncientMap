@@ -58,6 +58,7 @@ def verify_single_post(
     max_tokens: int | None = None,
     video_title: str | None = None,
     video_tags: list[str] | None = None,
+    video_description: str | None = None,
 ) -> dict | None:
     """Verify a single post against the transcript.
 
@@ -86,6 +87,8 @@ def verify_single_post(
         metadata_lines.append(f"Video title: {video_title}")
     if video_tags:
         metadata_lines.append(f"Video tags: {', '.join(t for t in video_tags if t)}")
+    if video_description:
+        metadata_lines.append(f"Video description: {video_description[:500]}")
     metadata_block = "\n".join(metadata_lines)
 
     ts_label = item.timestamp_range or "start of video"
@@ -178,6 +181,7 @@ def verify_video_posts(
                 max_tokens=settings.max_tokens,
                 video_title=video.title,
                 video_tags=video.tags,
+                video_description=video.description,
             )
             if not result:
                 skipped += 1
