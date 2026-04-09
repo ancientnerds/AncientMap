@@ -193,8 +193,8 @@ def verify_video_posts(
                 continue
 
             if level == "REJECT":
-                item.news_category = "rejected"
-                logger.info(f"Rejected item {item.id} (flagged as rejected)")
+                item.news_category = "unverified"
+                logger.info(f"Unverified item {item.id} (claims not supported by transcript)")
             elif level == "MODIFY":
                 mod = result.get("suggested_modification", {})
                 modified = mod.get("modified_text", "") if mod else ""

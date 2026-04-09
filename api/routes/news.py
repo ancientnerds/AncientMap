@@ -98,6 +98,8 @@ class NewsItemResponse(BaseModel):
     significance: int | None = None
     news_category: str | None = None
     speculative_tag: str | None = None
+    verified: bool = False
+    verified_at: str | None = None
 
 
 class NewsFeedResponse(BaseModel):
@@ -328,6 +330,8 @@ async def get_news_feed(
                 significance=item.significance,
                 news_category=item.news_category,
                 speculative_tag=item.speculative_tag,
+                verified=item.verified_at is not None,
+                verified_at=item.verified_at.isoformat() if item.verified_at else None,
             )
         )
 
@@ -662,8 +666,8 @@ async def get_news_stats(db: Session = Depends(get_db)):
 
         breakdown = RejectionBreakdown()
         for category, count in null_items:
-            if category == "rejected":
-                breakdown.verified_rejected = count
+            if category in ("rejected", "unverified"):
+                breakdown.verified_rejected += count
             elif category == "duplicate":
                 breakdown.duplicate = count
             else:
