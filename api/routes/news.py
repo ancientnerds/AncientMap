@@ -100,6 +100,7 @@ class NewsItemResponse(BaseModel):
     speculative_tag: str | None = None
     verified: bool = False
     verified_at: str | None = None
+    web_sources: list[dict] | None = None
 
 
 class NewsFeedResponse(BaseModel):
@@ -332,6 +333,7 @@ async def get_news_feed(
                 speculative_tag=item.speculative_tag,
                 verified=item.verified_at is not None,
                 verified_at=item.verified_at.isoformat() if item.verified_at else None,
+                web_sources=item.web_sources,
             )
         )
 

@@ -194,6 +194,7 @@ def verify_video_posts(
 
             if level == "REJECT":
                 item.news_category = "unverified"
+                item.significance = 1
                 logger.info(f"Unverified item {item.id} (claims not supported by transcript)")
             elif level == "MODIFY":
                 mod = result.get("suggested_modification", {})
@@ -307,13 +308,19 @@ def _web_verify_items(items: list[NewsItem], settings: LyraSettings) -> int:
             continue
 
         verdict = result.get("verdict", "")
+
+        # Save web sources regardless of verdict
+        item.web_sources = [
+            {"title": r.title, "url": r.url, "snippet": r.snippet} for r in results[:5]
+        ]
+
         if verdict == "CORRECTED" and result.get("corrected_text"):
             logger.info(f"Web verify corrected item {item.id}: {result.get('reason', '')}")
             item.post_text = result["corrected_text"]
         elif verdict == "REJECT":
-            logger.info(f"Web verify rejected item {item.id}: {result.get('reason', '')}")
-            item.post_text = None
-            item.news_category = "rejected"
+            logger.info(f"Web verify unverified item {item.id}: {result.get('reason', '')}")
+            item.news_category = "unverified"
+            item.significance = 1
         checked += 1
 
     if checked:

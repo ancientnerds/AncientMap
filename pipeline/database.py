@@ -951,6 +951,9 @@ class NewsItem(Base):
     entities: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     tags: Mapped[list | None] = mapped_column(JSONB, nullable=True)
 
+    # Web verification sources (populated during rescore web-check)
+    web_sources: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+
     video: Mapped["NewsVideo"] = relationship("NewsVideo", back_populates="items")
     site: Mapped[Optional["UnifiedSite"]] = relationship("UnifiedSite", lazy="joined")
 
