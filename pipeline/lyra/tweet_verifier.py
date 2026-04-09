@@ -200,7 +200,32 @@ def verify_video_posts(
                 mod = result.get("suggested_modification", {})
                 modified = mod.get("modified_text", "") if mod else ""
                 if modified:
+                    # Extract name corrections by comparing old and new text
+                    # Apply them to headline, facts, and summary too
+                    old_text = item.post_text or ""
                     item.post_text = modified
+
+                    # Find words that changed between old and new post_text
+                    old_words = set(old_text.split())
+                    new_words = set(modified.split())
+                    # Look for capitalized words that appeared in new but not old
+                    for new_w in new_words - old_words:
+                        if not new_w[0].isupper() or len(new_w) < 3:
+                            continue
+                        # Find the old word it likely replaced (same prefix)
+                        for old_w in old_words - new_words:
+                            if not old_w[0].isupper() or len(old_w) < 3:
+                                continue
+                            # Simple heuristic: first 3 chars match = likely same name
+                            if old_w[:3].lower() == new_w[:3].lower() and old_w != new_w:
+                                if item.headline:
+                                    item.headline = item.headline.replace(old_w, new_w)
+                                if item.summary:
+                                    item.summary = item.summary.replace(old_w, new_w)
+                                if item.facts:
+                                    item.facts = [f.replace(old_w, new_w) for f in item.facts]
+                                logger.info(f"Name fix in item {item.id}: {old_w} -> {new_w}")
+
                     logger.info(
                         f"Modified post for item {item.id}: {mod.get('changes_explained', '')}"
                     )
