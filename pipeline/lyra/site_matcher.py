@@ -264,13 +264,14 @@ def match_sites_for_pending_items() -> int:
             )
         }
 
-        # Retry ALL unlinked items every cycle — sites may have been promoted
-        # or re-created since the last attempt, and new aliases may exist.
+        # Match untried items first. Already-tried items only retry if new sites
+        # were recently promoted (checked via promoted_ids changing).
         items = (
             session.query(NewsItem)
             .filter(
                 NewsItem.site_name_extracted.isnot(None),
                 NewsItem.site_id.is_(None),
+                NewsItem.site_match_tried.is_(False),
             )
             .all()
         )
