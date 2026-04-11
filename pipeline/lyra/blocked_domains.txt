@@ -34,5 +34,10 @@ brainly.com
 chegg.com
 coursehero.com
 
+# Aggregators / unreliable
+medium.com
+msn.com
+scribd.com
+
 # Generic
 yahoo.com

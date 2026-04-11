@@ -397,10 +397,9 @@ def _web_verify_items(items: list[NewsItem], settings: LyraSettings) -> int:
     checked = 0
 
     for item in eligible:
-        # Combine headline + first fact for a specific search query
-        query = item.headline or ""
-        if item.facts:
-            query = f"{query} {item.facts[0]}"
+        # Use post_text (truncated to 150 chars) — has specific names, dates, details
+        # Full post_text is too long for search; headline alone is too vague
+        query = (item.post_text or item.headline or "")[:150]
         results = minimax_search(client, query)
         if not results:
             continue
@@ -447,7 +446,9 @@ def _web_verify_items(items: list[NewsItem], settings: LyraSettings) -> int:
             continue
 
         if not isinstance(result, dict):
-            logger.warning(f"Web verify returned {type(result).__name__} for item {item.id}, skipping")
+            logger.warning(
+                f"Web verify returned {type(result).__name__} for item {item.id}, skipping"
+            )
             continue
 
         verdict = result.get("verdict", "")
