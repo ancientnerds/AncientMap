@@ -673,40 +673,61 @@ def _assemble_from_clusters(
 
     body_parts: list[str] = []
     unified_sources: list[dict] = []
-    next_citation = 1
+    unified_videos: list[dict] = []
+    next_web = 1
+    next_vid = 1
 
     for label, results in label_groups.items():
         body_parts.append(f"\n\n## {label}\n\n")
 
         for result in results:
-            # Build citation remapping: old [N] -> new [N]
-            remap: dict[int, int] = {}
+            prose = result.prose
+
+            # Remap web citations: old [N] -> new [N]
+            web_remap: dict[int, int] = {}
             for src in result.sources:
                 old_num = src["citation"]
-                remap[old_num] = next_citation
+                web_remap[old_num] = next_web
                 unified_sources.append(
                     {
-                        "citation": next_citation,
+                        "citation": next_web,
                         "url": src["url"],
                         "label": src["label"],
                         "snippet": src.get("snippet", src["label"]),
                         "type": src.get("type", "news"),
                     }
                 )
-                next_citation += 1
+                next_web += 1
 
-            # Renumber citations in prose
-            prose = result.prose
-            # Replace in reverse order to avoid [1] matching part of [10]
-            for old_num in sorted(remap.keys(), reverse=True):
-                prose = prose.replace(f"[{old_num}]", f"[__CITE_{remap[old_num]}__]")
-            for new_num in sorted(remap.values()):
+            for old_num in sorted(web_remap.keys(), reverse=True):
+                prose = prose.replace(f"[{old_num}]", f"[__CITE_{web_remap[old_num]}__]")
+            for new_num in sorted(web_remap.values()):
                 prose = prose.replace(f"[__CITE_{new_num}__]", f"[{new_num}]")
 
-            body_parts.append(prose)
-            body_parts.append("")  # blank line between clusters in same section
+            # Remap video citations: old [VN] -> new [VN]
+            vid_remap: dict[int, int] = {}
+            for src in result.video_sources:
+                old_num = src["v_citation"]
+                vid_remap[old_num] = next_vid
+                unified_videos.append(
+                    {
+                        "v_citation": next_vid,
+                        "url": src["url"],
+                        "label": src["label"],
+                        "type": "youtube",
+                    }
+                )
+                next_vid += 1
 
-    return "\n".join(body_parts).strip(), unified_sources
+            for old_num in sorted(vid_remap.keys(), reverse=True):
+                prose = prose.replace(f"[V{old_num}]", f"[__VCITE_{vid_remap[old_num]}__]")
+            for new_num in sorted(vid_remap.values()):
+                prose = prose.replace(f"[__VCITE_{new_num}__]", f"[V{new_num}]")
+
+            body_parts.append(prose)
+            body_parts.append("")
+
+    return "\n".join(body_parts).strip(), unified_sources, unified_videos
 
 
 def _inject_screenshots(body: str, items: list[dict]) -> str:
@@ -764,22 +785,18 @@ def _inject_screenshots(body: str, items: list[dict]) -> str:
     return "\n\n".join(result_parts)
 
 
-def _format_videos(items: list[dict]) -> str:
-    """Build numbered markdown list of YouTube video links from items."""
-    seen: dict[str, int] = {}  # video_id -> line number
+def _format_videos(unified_videos: list[dict]) -> str:
+    """Build numbered markdown list of YouTube video links with V-prefix."""
     lines: list[str] = []
-    for item in items:
-        vid = item.get("video_id", "")
-        if not vid or vid in seen:
+    seen_urls: set[str] = set()
+    for src in unified_videos:
+        url = src.get("url", "")
+        if url in seen_urls:
             continue
-        ts = item.get("timestamp_seconds", 0)
-        url = f"https://youtu.be/{vid}?t={ts}" if ts else f"https://youtu.be/{vid}"
-        channel = item.get("channel_name", "")
-        title = item.get("video_title", "")
-        label = f'{channel} \u2014 "{title}"' if channel else title
-        num = len(lines) + 1
-        lines.append(f"{num}. [{label}]({url})")
-        seen[vid] = num
+        seen_urls.add(url)
+        num = src["v_citation"]
+        label = src.get("label", "")
+        lines.append(f"V{num}. [{label}]({url})")
     return "\n".join(lines)
 
 
@@ -985,7 +1002,7 @@ def generate_weekly_article(
 
     # ── 4. ASSEMBLE ──────────────────────────────────────────────
     with _step(step_data, "assemble", t0_total) as s:
-        body, unified_sources = _assemble_from_clusters(section_results)
+        body, unified_sources, unified_videos = _assemble_from_clusters(section_results)
         body = _inject_screenshots(body, all_items)
         s["count"] = len(unified_sources)
 
@@ -1037,7 +1054,7 @@ def generate_weekly_article(
 
     # ── 11. CHECKLIST (programmatic quality gate) ────────────────
     with _step(step_data, "checklist", t0_total) as s:
-        videos_md = _format_videos(all_items)
+        videos_md = _format_videos(unified_videos)
         checklist = run_checklist(
             polished_body,
             unified_sources,

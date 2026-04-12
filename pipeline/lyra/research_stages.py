@@ -61,7 +61,8 @@ class ClusterResult:
     """Result of researching a single question cluster."""
 
     prose: str
-    sources: list[dict]
+    sources: list[dict]  # web/academic sources with [N] citations
+    video_sources: list[dict]  # YouTube sources with [VN] citations
     score: int
     passed: bool
     error: str = ""
@@ -140,7 +141,7 @@ def _build_sources_context(registry: CitationRegistry) -> str:
 
 
 def _build_source_list(registry: CitationRegistry) -> list[dict]:
-    """Build the unified sources list for ClusterResult."""
+    """Build the web/academic sources list for ClusterResult (excludes YouTube)."""
     result: list[dict] = []
     for sid, num in sorted(registry.reference_numbers.items(), key=lambda kv: kv[1]):
         source = registry.get_reference(sid)
@@ -153,6 +154,30 @@ def _build_source_list(registry: CitationRegistry) -> list[dict]:
                 "label": source.title,
                 "snippet": source.snippet or source.title,
                 "type": _classify_source_type(source.url),
+            }
+        )
+    return result
+
+
+def _build_video_source_list(registry: CitationRegistry) -> list[dict]:
+    """Build the YouTube video sources list for ClusterResult."""
+    yt_domains = ("youtu.be/", "youtube.com/")
+    result: list[dict] = []
+    num = 0
+    for sid in sorted(registry.sources.keys()):
+        source = registry.get_reference(sid)
+        if source is None:
+            continue
+        if not (source.url and any(d in source.url for d in yt_domains)):
+            continue
+        num += 1
+        result.append(
+            {
+                "v_citation": num,
+                "url": source.url,
+                "label": source.title,
+                "snippet": source.snippet or source.title,
+                "type": "youtube",
             }
         )
     return result
@@ -397,7 +422,7 @@ def _stage_write_section(
     t0 = time.monotonic()
     logger.info("[journal] Writing section prose with inline citations...")
 
-    # Assign reference numbers to all cited source_ids from synthesis
+    # Assign reference numbers: [N] for web sources, [VN] for YouTube
     all_source_ids: set[str] = set()
     for claim in synthesis.get("consensus_claims", []):
         all_source_ids.update(claim.get("source_ids", []))
@@ -406,53 +431,68 @@ def _stage_write_section(
     for claim in registry.claims:
         all_source_ids.update(claim.source_ids)
 
-    # YouTube sources are listed separately in the Videos section — don't
-    # assign them [N] citation numbers (they're origins, not evidence).
+    # Also include YouTube sources so they get [VN] markers
     yt_domains = ("youtu.be/", "youtube.com/")
+    for sid, source in registry.sources.items():
+        if source.url and any(d in source.url for d in yt_domains):
+            all_source_ids.add(sid)
 
-    sid_to_num: dict[str, int] = {}
+    # Split into web and YouTube, assign numbers separately
+    sid_to_label: dict[str, str] = {}  # sid -> "[N]" or "[VN]"
+    web_num = 0
+    yt_num = 0
     for sid in sorted(all_source_ids):
         source = registry.get_reference(sid)
         if source is None:
             continue
-        # Skip YouTube — listed in Videos section, not cited with [N]
-        if source.url and any(d in source.url for d in yt_domains):
-            continue
-        num = registry.assign_reference_number(sid)
-        sid_to_num[sid] = num
+        is_yt = source.url and any(d in source.url for d in yt_domains)
+        if is_yt:
+            yt_num += 1
+            sid_to_label[sid] = f"[V{yt_num}]"
+        else:
+            web_num += 1
+            registry.assign_reference_number(sid)
+            sid_to_label[sid] = f"[{web_num}]"
 
-    # Build findings with [N] markers already attached
+    # Build findings with citation markers attached
     findings_lines: list[str] = []
     for claim_data in synthesis.get("consensus_claims", []):
         claim_text = claim_data.get("claim", "")
         source_ids = claim_data.get("source_ids", [])
-        nums = " ".join(f"[{sid_to_num[sid]}]" for sid in source_ids if sid in sid_to_num)
-        if claim_text and nums:
-            findings_lines.append(f"- {claim_text} {nums}")
+        markers = " ".join(sid_to_label[sid] for sid in source_ids if sid in sid_to_label)
+        if claim_text and markers:
+            findings_lines.append(f"- {claim_text} {markers}")
     for claim_data in synthesis.get("contested_claims", []):
         claim_text = claim_data.get("claim", "")
         source_ids = claim_data.get("source_ids", [])
-        nums = " ".join(f"[{sid_to_num[sid]}]" for sid in source_ids if sid in sid_to_num)
-        if claim_text and nums:
-            findings_lines.append(f"- CONTESTED: {claim_text} {nums}")
+        markers = " ".join(sid_to_label[sid] for sid in source_ids if sid in sid_to_label)
+        if claim_text and markers:
+            findings_lines.append(f"- CONTESTED: {claim_text} {markers}")
     for claim_data in synthesis.get("unique_insights", []):
         claim_text = claim_data.get("claim", claim_data.get("insight", ""))
         source_ids = claim_data.get("source_ids", [])
-        nums = " ".join(f"[{sid_to_num[sid]}]" for sid in source_ids if sid in sid_to_num)
-        if claim_text and nums:
-            findings_lines.append(f"- {claim_text} {nums}")
+        markers = " ".join(sid_to_label[sid] for sid in source_ids if sid in sid_to_label)
+        if claim_text and markers:
+            findings_lines.append(f"- {claim_text} {markers}")
 
-    # Build source key so the LLM knows what each [N] refers to
+    # Build source key — web [N] and YouTube [VN] clearly separated
     source_key_lines: list[str] = []
-    for sid, num in sorted(sid_to_num.items(), key=lambda kv: kv[1]):
+    source_key_lines.append("Web/academic sources:")
+    for sid, label in sorted(sid_to_label.items(), key=lambda kv: kv[1]):
         source = registry.get_reference(sid)
-        if source:
-            source_key_lines.append(f"[{num}] {source.title}")
+        if source and not label.startswith("[V"):
+            source_key_lines.append(f"{label} {source.title}")
+    source_key_lines.append("")
+    source_key_lines.append("YouTube videos:")
+    for sid, label in sorted(sid_to_label.items(), key=lambda kv: kv[1]):
+        source = registry.get_reference(sid)
+        if source and label.startswith("[V"):
+            source_key_lines.append(f"{label} {source.title}")
 
     system = _load_prompt("journal_section")
     user_msg = (
         f"## Research question\n\n{question}\n\n"
-        f"## Key findings (use the [N] markers shown when citing)\n\n"
+        f"## Key findings (use the [N] and [VN] markers shown when citing)\n\n"
         + "\n".join(findings_lines)
         + "\n\n## Source key\n\n"
         + "\n".join(source_key_lines)
@@ -466,14 +506,15 @@ def _stage_write_section(
             break
         logger.info("[journal] Write returned empty, retrying (%d/3)", _write_attempt + 1)
 
-    # Strip only invalid [N] markers (numbers not in our source key)
-    valid_nums = set(sid_to_num.values())
+    # Strip invalid markers — keep only valid [N] and [VN]
+    valid_web = {str(i) for i in range(1, web_num + 1)}
+    valid_yt = {f"V{i}" for i in range(1, yt_num + 1)}
 
     def _filter_citation(m: re.Match) -> str:
-        num = int(m.group(1))
-        return m.group() if num in valid_nums else ""
+        ref = m.group(1)
+        return m.group() if ref in valid_web or ref in valid_yt else ""
 
-    prose = re.sub(r"\[(\d+)\]", _filter_citation, prose)
+    prose = re.sub(r"\[(V?\d+)\]", _filter_citation, prose)
 
     ms = int((time.monotonic() - t0) * 1000)
     cited_count = len(re.findall(r"\[\d+\]", prose))
@@ -673,6 +714,7 @@ def research_cluster(
         return ClusterResult(
             prose="",
             sources=[],
+            video_sources=[],
             score=0,
             passed=False,
             error="No sources found for this research question.",
@@ -687,6 +729,7 @@ def research_cluster(
         return ClusterResult(
             prose="",
             sources=[],
+            video_sources=[],
             score=0,
             passed=False,
             error="All sources were rejected during reliability audit.",
@@ -717,6 +760,7 @@ def research_cluster(
                 return ClusterResult(
                     prose=best_prose,
                     sources=_build_source_list(registry),
+                    video_sources=_build_video_source_list(registry),
                     score=best_score,
                     passed=False,
                     error="All specialist analyses failed.",
@@ -801,6 +845,7 @@ def research_cluster(
     return ClusterResult(
         prose=best_prose,
         sources=_build_source_list(registry),
+        video_sources=_build_video_source_list(registry),
         score=best_score,
         passed=best_passed,
     )
