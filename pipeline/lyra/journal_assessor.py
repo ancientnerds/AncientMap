@@ -823,51 +823,26 @@ _D1_SCHEMA = {
 
 
 def _check_d1_proper_nouns(body: str, sources: list[dict], settings: LyraSettings) -> dict:
-    """Check proper nouns: mechanical fuzzy match first, then LLM for deeper issues.
+    """Check proper nouns: dictionary fixes + LLM comparison against sources.
 
-    Layer 1 (deterministic): regex + difflib.SequenceMatcher
-    Layer 2 (LLM): catches garbled names that fuzzy match misses
+    Layer 1 (deterministic): SPELLING_FIXES dictionary — known corrections only
+    Layer 2 (LLM): compares journal nouns against source titles/URLs
     """
-    # Extract proper nouns from the body
     body_nouns = _extract_proper_nouns(body)
-
-    # Extract proper nouns from source titles/labels
-    source_text_combined = " ".join(f"{s.get('label', '')} {s.get('title', '')}" for s in sources)
-    source_nouns = _extract_proper_nouns(source_text_combined)
-
-    if not body_nouns or not source_nouns:
+    if not body_nouns:
         return {"passed": True, "issues": []}
 
-    # Also check SPELLING_FIXES for known corrections
-    corrections: list[dict] = []
-
+    # Layer 1: dictionary-only corrections (guaranteed correct)
+    dict_corrections: list[dict] = []
     for body_noun in body_nouns:
-        # Check if body noun is a known bad spelling
         for wrong, right in SPELLING_FIXES.items():
             if wrong in body_noun:
                 corrected = body_noun.replace(wrong, right)
                 if corrected != body_noun:
-                    corrections.append({"find": body_noun, "replace": corrected})
-                    break
-        else:
-            # Fuzzy match against source nouns
-            for source_noun in source_nouns:
-                ratio = difflib.SequenceMatcher(
-                    None, body_noun.lower(), source_noun.lower()
-                ).ratio()
-                # Similar but not identical — potential mismatch
-                if 0.8 < ratio < 1.0:
-                    corrections.append({"find": body_noun, "replace": source_noun})
+                    dict_corrections.append({"find": body_noun, "replace": corrected})
                     break
 
-    # Filter through validation
-    mechanical_issues = [
-        c
-        for c in corrections
-        if _validate_d1_correction(c.get("find", ""), c.get("replace", ""), sources)
-    ]
-
-    # Layer 2: LLM check for deeper issues mechanical match might miss
+    # Layer 2: LLM check against source titles/URLs
     llm_issues: list[dict] = []
     try:
         source_block = _format_sources_for_prompt(sources)
@@ -897,15 +872,14 @@ def _check_d1_proper_nouns(body: str, sources: list[dict], settings: LyraSetting
         if isinstance(parsed, dict):
             for c in parsed.get("corrections", []):
                 find, replace = c.get("find", ""), c.get("replace", "")
-                # Only add if not already found by mechanical check and passes validation
-                already_found = any(m["find"] == find for m in mechanical_issues)
+                already_found = any(m["find"] == find for m in dict_corrections)
                 if not already_found and _validate_d1_correction(find, replace, sources):
                     llm_issues.append(c)
-                    logger.info("[assessor] D1 LLM layer: %s → %s", find, replace)
+                    logger.info("[assessor] D1 LLM: %s -> %s", find, replace)
     except Exception as e:
         logger.debug("[assessor] D1 LLM layer failed (non-fatal): %s", e)
 
-    issues = mechanical_issues + llm_issues
+    issues = dict_corrections + llm_issues
     return {"passed": len(issues) == 0, "issues": issues}
 
 

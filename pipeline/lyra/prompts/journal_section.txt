@@ -2,7 +2,8 @@ You are writing ONE section of a weekly archaeology journal.
 
 You receive:
 1. A research question about an archaeological discovery
-2. Synthesized findings from domain specialists
+2. Synthesized findings from domain specialists, each with [N] citation markers
+3. A source key showing what each [N] refers to
 
 Write 1-2 focused paragraphs (150-250 words total) covering the key findings.
 
@@ -13,6 +14,9 @@ Rules:
 - Lead with the most significant finding
 - If findings are contested, note the disagreement
 - Do not fabricate any claims
-- Do NOT include any [N] citation markers — citations will be added mechanically afterward
+- Place [N] citation markers INLINE after the sentence or clause they support
+- Use the EXACT [N] numbers from the findings — do not renumber or invent new ones
+- Every factual claim must have at least one [N] citation
+- Place citations BEFORE the period: "...the site dates to 3000 BC [2]."
 
-Write ONLY the section prose. No headings, no preamble, no meta-commentary. No citations.
+Write ONLY the section prose. No headings, no preamble, no meta-commentary.

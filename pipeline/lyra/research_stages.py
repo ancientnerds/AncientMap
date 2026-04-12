@@ -378,17 +378,14 @@ def _stage_write_section(
     registry: CitationRegistry,
     settings: LyraSettings,
 ) -> str:
-    """Write journal section prose, then mechanically insert citations.
+    """Write journal section prose with inline [N] citations.
 
-    Two-step process to guarantee citation accuracy:
-    1. LLM writes prose WITHOUT any [N] markers (pure content)
-    2. Python matches each sentence to synthesis claims and inserts
-       the correct [N] citations mechanically
-
-    This prevents the LLM from placing wrong citation numbers.
+    Gives the LLM numbered findings + a source key so it places [N]
+    citations naturally in prose.  The downstream citation verifier
+    (verify_all_citations) catches any wrong attributions.
     """
     t0 = time.monotonic()
-    logger.info("[journal] Writing section prose (two-step)...")
+    logger.info("[journal] Writing section prose with inline citations...")
 
     # Assign reference numbers to all cited source_ids from synthesis
     all_source_ids: set[str] = set()
@@ -399,6 +396,13 @@ def _stage_write_section(
     for claim in registry.claims:
         all_source_ids.update(claim.source_ids)
 
+    # ALWAYS include YouTube sources — they're the primary sources the story
+    # came from. Synthesis may not reference them (it prefers academic sources),
+    # but the journal must cite where the story originated.
+    for sid, source in registry.sources.items():
+        if source.url and ("youtu.be/" in source.url or "youtube.com/" in source.url):
+            all_source_ids.add(sid)
+
     sid_to_num: dict[str, int] = {}
     for sid in sorted(all_source_ids):
         source = registry.get_reference(sid)
@@ -407,109 +411,72 @@ def _stage_write_section(
         num = registry.assign_reference_number(sid)
         sid_to_num[sid] = num
 
-    # Build claim-to-citations mapping for mechanical insertion
-    # Each claim has text + the [N] numbers that support it
-    claim_citations: list[tuple[str, str]] = []  # (claim_text, "[N] [M]")
+    # Build findings with [N] markers already attached
+    findings_lines: list[str] = []
     for claim_data in synthesis.get("consensus_claims", []):
         claim_text = claim_data.get("claim", "")
         source_ids = claim_data.get("source_ids", [])
         nums = " ".join(f"[{sid_to_num[sid]}]" for sid in source_ids if sid in sid_to_num)
         if claim_text and nums:
-            claim_citations.append((claim_text, nums))
+            findings_lines.append(f"- {claim_text} {nums}")
     for claim_data in synthesis.get("contested_claims", []):
         claim_text = claim_data.get("claim", "")
         source_ids = claim_data.get("source_ids", [])
         nums = " ".join(f"[{sid_to_num[sid]}]" for sid in source_ids if sid in sid_to_num)
         if claim_text and nums:
-            claim_citations.append((claim_text, nums))
+            findings_lines.append(f"- CONTESTED: {claim_text} {nums}")
     for claim_data in synthesis.get("unique_insights", []):
         claim_text = claim_data.get("claim", claim_data.get("insight", ""))
         source_ids = claim_data.get("source_ids", [])
         nums = " ".join(f"[{sid_to_num[sid]}]" for sid in source_ids if sid in sid_to_num)
         if claim_text and nums:
-            claim_citations.append((claim_text, nums))
+            findings_lines.append(f"- {claim_text} {nums}")
 
-    # Step 1: LLM writes prose WITHOUT citations
+    # Build source key so the LLM knows what each [N] refers to
+    source_key_lines: list[str] = []
+    yt_source_lines: list[str] = []
+    for sid, num in sorted(sid_to_num.items(), key=lambda kv: kv[1]):
+        source = registry.get_reference(sid)
+        if source:
+            is_yt = "youtu.be/" in source.url or "youtube.com/" in source.url
+            label = f"[{num}] {source.title}"
+            if is_yt:
+                label += " (PRIMARY — YouTube video this story comes from)"
+                yt_source_lines.append(f"[{num}]")
+            source_key_lines.append(label)
+
+    # Tell the LLM to cite the primary YouTube source(s)
+    yt_note = ""
+    if yt_source_lines:
+        yt_refs = " ".join(yt_source_lines)
+        yt_note = (
+            f"\n\nIMPORTANT: This story originates from YouTube video(s) {yt_refs}. "
+            f"You MUST cite them at least once in the prose — they are the primary source."
+        )
+
     system = _load_prompt("journal_section")
-    # Give the LLM the synthesis findings (without source_ids — just the claims)
-    findings_text = []
-    for claim_text, _nums in claim_citations:
-        findings_text.append(f"- {claim_text}")
-    user_msg = f"## Research question\n\n{question}\n\n## Key findings to cover\n\n" + "\n".join(
-        findings_text
+    user_msg = (
+        f"## Research question\n\n{question}\n\n"
+        f"## Key findings (use the [N] markers shown when citing)\n\n"
+        + "\n".join(findings_lines)
+        + yt_note
+        + f"\n\n## Source key\n\n"
+        + "\n".join(source_key_lines)
     )
 
     prose = minimax_chat_anthropic(system, user_msg, _MAX_TOKENS_SYNTHESIS, settings=settings)
 
-    # Strip any [N] markers the LLM might have added despite instructions
-    prose = re.sub(r"\[\d+\]", "", prose)
-
-    # Step 2: Mechanically insert citations by matching sentences to claims
-    sentences = re.split(r"(?<=[.!?])\s+", prose)
-    cited_sentences = []
-
-    for sentence in sentences:
-        sent_lower = sentence.lower()
-        sent_words = set(sent_lower.split())
-
-        # Find the best matching claim for this sentence
-        best_match_nums = ""
-        best_overlap = 0
-
-        for claim_text, nums in claim_citations:
-            claim_words = set(claim_text.lower().split())
-            # Remove stop words for matching
-            stop = {
-                "the",
-                "a",
-                "an",
-                "is",
-                "are",
-                "was",
-                "were",
-                "of",
-                "in",
-                "to",
-                "and",
-                "that",
-                "this",
-                "for",
-                "with",
-                "from",
-                "has",
-                "have",
-                "had",
-                "been",
-                "not",
-                "but",
-                "its",
-                "also",
-            }
-            claim_content = claim_words - stop
-            sent_content = sent_words - stop
-
-            if not claim_content:
-                continue
-
-            overlap = len(claim_content & sent_content)
-            overlap_ratio = overlap / len(claim_content)
-
-            if overlap_ratio > best_overlap and overlap_ratio >= 0.3:
-                best_overlap = overlap_ratio
-                best_match_nums = nums
-
-        if best_match_nums:
-            # Insert citation at end of sentence (before period)
-            cited_sentences.append(f"{sentence.rstrip('.')} {best_match_nums}.")
-        else:
-            cited_sentences.append(sentence)
-
-    prose = " ".join(cited_sentences)
+    # Strip only invalid [N] markers (numbers not in our source key)
+    valid_nums = set(sid_to_num.values())
+    def _filter_citation(m: re.Match) -> str:
+        num = int(m.group(1))
+        return m.group() if num in valid_nums else ""
+    prose = re.sub(r"\[(\d+)\]", _filter_citation, prose)
 
     ms = int((time.monotonic() - t0) * 1000)
     cited_count = len(re.findall(r"\[\d+\]", prose))
     logger.info(
-        "[journal] Section written in %dms (%d chars, %d citations inserted mechanically)",
+        "[journal] Section written in %dms (%d chars, %d inline citations)",
         ms,
         len(prose),
         cited_count,
@@ -523,40 +490,38 @@ def _strip_unsupported_claims(prose: str, problems: list[dict]) -> str:
     Each problem has a 'claim' field with the text of the unsupported claim.
     We find the sentence in the prose that contains this claim and remove it entirely.
     An unsupported claim must not exist in the output — not even without a citation.
+
+    Preserves paragraph structure by processing each paragraph independently.
     """
+    claims_lower = []
     for problem in problems:
         claim = problem.get("claim", "")
-        if not claim or len(claim) < 10:
-            continue
+        if claim and len(claim) >= 10:
+            claims_lower.append(claim.lower())
 
-        # Find sentences in prose that contain the claim text (or a close match)
-        sentences = re.split(r"(?<=[.!?])\s+", prose)
-        claim_lower = claim.lower()
+    if not claims_lower:
+        return prose
 
+    # Process per-paragraph to preserve structure
+    paragraphs = prose.split("\n\n")
+    result_paragraphs: list[str] = []
+
+    for para in paragraphs:
+        sentences = re.split(r"(?<=[.!?])\s+", para)
         kept = []
-        removed = 0
         for sentence in sentences:
-            # Check if this sentence contains the unsupported claim
-            if claim_lower in sentence.lower():
-                removed += 1
+            sent_lower = sentence.lower()
+            # Only strip on exact substring match — no fuzzy overlap
+            if any(claim in sent_lower for claim in claims_lower):
                 logger.info("[journal] Stripped unsupported claim: %s", sentence[:80])
             else:
-                # Also check for partial match (claim may be paraphrased)
-                # Use word overlap — if >60% of claim words appear in sentence, strip it
-                claim_words = set(claim_lower.split())
-                sent_words = set(sentence.lower().split())
-                if claim_words and len(claim_words & sent_words) / len(claim_words) > 0.6:
-                    removed += 1
-                    logger.info("[journal] Stripped paraphrased claim: %s", sentence[:80])
-                else:
-                    kept.append(sentence)
+                kept.append(sentence)
 
-        if removed > 0:
-            prose = " ".join(kept)
+        if kept:
+            result_paragraphs.append(" ".join(kept))
 
-    # Clean up double spaces and orphaned citations
+    prose = "\n\n".join(result_paragraphs)
     prose = re.sub(r"  +", " ", prose)
-    prose = re.sub(r"\n\n\n+", "\n\n", prose)
     return prose.strip()
 
 
@@ -622,6 +587,8 @@ def research_cluster(
     question: str,
     youtube_facts: list[dict],
     settings: LyraSettings | None = None,
+    *,
+    web_sources: list[dict] | None = None,
 ) -> ClusterResult:
     """Run a single research question through all stages.
 
@@ -634,6 +601,8 @@ def research_cluster(
         youtube_facts: Pre-existing facts from YouTube. Each dict has keys:
             title, url, snippet, facts, video_id, timestamp_seconds, channel_name.
         settings: LyraSettings instance (uses default if None).
+        web_sources: Pre-verified web sources from the story's tweet verifier.
+            Each dict has keys: title, url, snippet.
 
     Returns:
         ClusterResult with prose, sources, score, passed, and error fields.
@@ -663,6 +632,25 @@ def research_cluster(
         source = registry.get_reference(sid)
         if source:
             source.reliability_tier = 2
+
+    # Register pre-verified web sources from the story (tweet verifier / Lyra agent)
+    if web_sources:
+        for ws in web_sources:
+            url = ws.get("url", "")
+            if not url:
+                continue
+            sid = registry.register_source(
+                url=url,
+                title=ws.get("title", ""),
+                snippet=ws.get("snippet", ""),
+            )
+            source = registry.get_reference(sid)
+            if source and source.reliability_tier == 0:
+                source.reliability_tier = 2
+        logger.info(
+            "[journal] Pre-registered %d web sources from story",
+            len([ws for ws in web_sources if ws.get("url")]),
+        )
 
     # Build initial search queries from the question
     search_queries = [question]
@@ -706,6 +694,7 @@ def research_cluster(
     best_prose = ""
     best_score = 0
     best_passed = False
+    restart_stage = 4  # start from specialists on first iteration
     specialist_analyses: dict[str, dict] = {}
     synthesis: dict = {}
 
@@ -717,21 +706,35 @@ def research_cluster(
                 _MAX_PIPELINE_ITERATIONS,
             )
 
-        # ---- Stage 4: Specialists ----
-        specialist_analyses = _stage_specialists(question, sources_context, registry, settings)
-        if not specialist_analyses:
-            total_ms = int((time.monotonic() - t0) * 1000)
-            logger.warning("[journal] No specialist analyses completed (%dms)", total_ms)
-            return ClusterResult(
-                prose=best_prose,
-                sources=_build_source_list(registry),
-                score=best_score,
-                passed=False,
-                error="All specialist analyses failed.",
+        # ---- Stage 4: Specialists (skip if restart_stage > 4) ----
+        if iteration == 0 or restart_stage <= 4:
+            specialist_analyses = _stage_specialists(
+                question, sources_context, registry, settings
             )
+            if not specialist_analyses:
+                total_ms = int((time.monotonic() - t0) * 1000)
+                logger.warning("[journal] No specialist analyses completed (%dms)", total_ms)
+                return ClusterResult(
+                    prose=best_prose,
+                    sources=_build_source_list(registry),
+                    score=best_score,
+                    passed=False,
+                    error="All specialist analyses failed.",
+                )
 
-        # ---- Stage 5: Synthesis ----
-        synthesis = _stage_synthesis(question, specialist_analyses, settings)
+        # ---- Stage 5: Synthesis (skip if restart_stage > 5) ----
+        if iteration == 0 or restart_stage <= 5:
+            synthesis = _stage_synthesis(question, specialist_analyses, settings)
+
+        # Guard: empty synthesis means the LLM call failed silently
+        has_findings = (
+            synthesis.get("consensus_claims")
+            or synthesis.get("contested_claims")
+            or synthesis.get("unique_insights")
+        )
+        if not has_findings:
+            logger.warning("[journal] Synthesis produced no findings, skipping write")
+            continue
 
         # ---- Write section ----
         prose = _stage_write_section(question, synthesis, registry, settings)

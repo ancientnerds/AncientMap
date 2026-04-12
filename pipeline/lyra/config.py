@@ -390,8 +390,33 @@ def _call_anthropic_api(
 
         create_kwargs["timeout"] = httpx.Timeout(timeout, connect=30.0)
 
-    # --- Make the API call ---
-    response = client.messages.create(**create_kwargs)
+    # --- Make the API call (with retry on transient errors) ---
+    last_exc = None
+    for _attempt in range(3):
+        try:
+            response = client.messages.create(**create_kwargs)
+            break
+        except Exception as exc:
+            last_exc = exc
+            error_str = str(exc)
+            is_transient = any(
+                code in error_str for code in ("500", "529", "503", "timeout", "timed out")
+            )
+            if is_transient and _attempt < 2:
+                import time as _time
+
+                delay = (_attempt + 1) * 3
+                logger.warning(
+                    "LLM call transient error (attempt %d/3), retrying in %ds: %s",
+                    _attempt + 1,
+                    delay,
+                    exc,
+                )
+                _time.sleep(delay)
+                continue
+            raise
+    else:
+        raise last_exc  # type: ignore[misc]
 
     # --- Normalize the response ---
     # [MINIMAX] Adaptation 5: Extract tool result if tool-use trick was used

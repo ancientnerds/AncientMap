@@ -59,7 +59,7 @@ def main():
 
     settings = LyraSettings()
     logger.info(f"Backend: {settings.llm_backend}")
-    logger.info(f"Model: {settings.minimax_model}")
+    logger.info(f"Model: MiniMax-M2.7")
     logger.info(f"Web backend: {settings.article_web_backend}")
 
     week_start = datetime.fromisoformat(args.week_start).replace(tzinfo=UTC)
@@ -103,6 +103,15 @@ def main():
                 with open(outfile, "w", encoding="utf-8") as f:
                     f.write(f"# {article.title}\n\n{article.content}")
                 logger.info(f"Saved to {outfile}")
+
+                # Print checklist results from quality_report
+                qr = article.quality_report or {}
+                cl = qr.get("checklist", {})
+                if cl:
+                    logger.info("Checklist: %s", cl.get("summary", "N/A"))
+                    for name, check in cl.get("checks", {}).items():
+                        status = "PASS" if check.get("passed") else "FAIL"
+                        logger.info("  %s %s: %s", status, name, check.get("message", ""))
     else:
         logger.error(f"Article generation failed after {elapsed:.0f}s")
         sys.exit(1)

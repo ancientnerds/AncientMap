@@ -33,7 +33,6 @@ from pipeline.lyra.config import (
     call_api,
     parse_json_response,
 )
-from pipeline.lyra.web_research import WebSearchResult, get_web_research_backend
 
 logger = logging.getLogger(__name__)
 
@@ -148,14 +147,6 @@ def _get_week_range() -> tuple[datetime, datetime]:
     start = start.replace(hour=0, minute=0, second=0, microsecond=0)
     end = start + timedelta(days=6, hours=23, minutes=59, seconds=59)
     return start, end
-
-
-def _fmt_timestamp(seconds: int | None) -> str:
-    """Convert seconds to MM:SS string."""
-    if seconds is None or seconds < 0:
-        return "0:00"
-    m, s = divmod(seconds, 60)
-    return f"{m}:{s:02d}"
 
 
 # ---------------------------------------------------------------------------
@@ -308,6 +299,7 @@ def _collect_article_items(
                 "channel_name": channel.name,
                 "timestamp_seconds": item.timestamp_seconds,
                 "screenshot_url": item.screenshot_url,
+                "web_sources": item.web_sources or [],
             }
         )
 
@@ -452,276 +444,6 @@ def _group_and_cite(
     return sections, speculative, sources
 
 
-# ---------------------------------------------------------------------------
-# Step 3: Build LLM payloads
-# ---------------------------------------------------------------------------
-
-
-def _build_section_payload(section: dict) -> str:
-    """Format a section's items into structured text for the LLM prompt."""
-    lines = [f"## {section['label']}"]
-    lines.append("")
-
-    for item in section["items"]:
-        tier = _get_channel_tier(item["channel_name"])
-        tier_label = TIER_LABELS[tier]
-        lines.append(f"### [{item['citation']}] {item['headline']}")
-        lines.append(f"Significance: {item.get('significance', '?')}/10")
-        lines.append(f"Tier: {tier} ({tier_label})")
-        if item.get("site_name"):
-            lines.append(f"Site: {item['site_name']}")
-        lines.append(f"Summary: {item['summary']}")
-
-        if item.get("facts"):
-            lines.append("Key facts:")
-            for fact in item["facts"]:
-                lines.append(f"  - {fact}")
-
-        for ms in item.get("merged_sources", []):
-            ms_tier = _get_channel_tier(ms["channel_name"])
-            ms_tier_label = TIER_LABELS[ms_tier]
-            lines.append(
-                f"Corroborated by [{ms['citation']}] ({ms['channel_name']}, "
-                f"tier {ms_tier}: {ms_tier_label}):"
-            )
-            for fact in ms["facts"]:
-                lines.append(f"  - {fact}")
-
-        if item.get("screenshot_url"):
-            alt = item["headline"]
-            lines.append(f"Screenshot: ![{alt}]({item['screenshot_url']})")
-
-        lines.append("")
-
-    return "\n".join(lines)
-
-
-def _build_speculative_payload(items: list[dict]) -> str:
-    """Format speculative items for the LLM prompt."""
-    lines = ["## Beyond the Mainstream", ""]
-    for item in items:
-        tier = _get_channel_tier(item["channel_name"])
-        tier_label = TIER_LABELS[tier]
-        lines.append(f"### [{item['citation']}] {item['headline']}")
-        lines.append(f"Tag: {item.get('speculative_tag', 'speculative')}")
-        lines.append(f"Tier: {tier} ({tier_label})")
-        if item.get("site_name"):
-            lines.append(f"Site: {item['site_name']}")
-        lines.append(f"Summary: {item['summary']}")
-        if item.get("facts"):
-            lines.append("Claims:")
-            for fact in item["facts"]:
-                lines.append(f"  - {fact}")
-        if item.get("screenshot_url"):
-            alt = item["headline"]
-            lines.append(f"Screenshot: ![{alt}]({item['screenshot_url']})")
-        lines.append("")
-    return "\n".join(lines)
-
-
-# ---------------------------------------------------------------------------
-# Step 4: LLM calls
-# ---------------------------------------------------------------------------
-
-
-def _write_article_body(
-    sections: list[dict],
-    speculative: list[dict],
-    settings: LyraSettings,
-) -> str:
-    """Write the complete article body in a single LLM call.
-
-    Section payloads are passed as plain text in the user message so the
-    model sees the [N] citation numbers and writes them inline naturally.
-    (The citations API feature returns metadata instead of inline markers,
-    which is wrong for article writing.)
-    """
-    instructions = _load_prompt("article_body.txt")
-
-    # Build section payloads as plain text
-    all_payloads: list[str] = []
-    section_order: list[str] = []
-    for section in sections:
-        payload = _build_section_payload(section)
-        all_payloads.append(payload)
-        section_order.append(f"## {section['label']}")
-
-    if speculative:
-        payload = _build_speculative_payload(speculative)
-        all_payloads.append(payload)
-        section_order.append("## Beyond the Mainstream")
-
-    section_list = "\n".join(f"  {i + 1}. {s}" for i, s in enumerate(section_order))
-    source_material = "\n\n".join(all_payloads)
-    user_message = (
-        f"Write the complete weekly archaeological digest.\n\n"
-        f"Sections in order:\n{section_list}\n\n"
-        f"Write all sections in this exact order. Each section uses facts "
-        f"from its corresponding source material only.\n\n"
-        f"Each section should have 1-2 focused paragraphs (100-200 words each). "
-        f"Cover the most important facts — don't pad or repeat. "
-        f"The full article should be 1500-2500 words total.\n\n"
-        f"<source_material>\n{source_material}\n</source_material>"
-    )
-
-    try:
-        response = call_api(
-            model=settings.model_article,
-            max_tokens=128000,
-            thinking={"type": "adaptive"},
-            timeout=ARTICLE_TIMEOUT,
-            system=instructions,
-            messages=[{"role": "user", "content": user_message}],
-        )
-    except LyraAPIError as e:
-        logger.error(f"Article body API error: {e}")
-        return ""
-    text = response.text
-    return text.strip()
-
-
-def _verify_article(
-    full_body: str,
-    facts_by_citation: dict[int, list[str]],
-    settings: LyraSettings,
-) -> str:
-    """Fact-check the assembled article against source facts."""
-    instructions = _load_prompt("article_verify.txt")
-
-    facts_block = ""
-    for cit, facts in sorted(facts_by_citation.items()):
-        facts_block += f"\n[{cit}] Facts:\n"
-        for f in facts:
-            facts_block += f"  - {f}\n"
-
-    user_content = (
-        "Verify the article draft against the source facts.\n\n"
-        "<article_draft>\n" + full_body + "\n</article_draft>\n\n"
-        "<source_facts>\n" + facts_block.strip() + "\n</source_facts>"
-    )
-
-    try:
-        response = call_api(
-            model=settings.model_article_verify,
-            max_tokens=128000,
-            thinking={"type": "adaptive"},
-            timeout=ARTICLE_TIMEOUT,
-            system=instructions,
-            messages=[{"role": "user", "content": user_content}],
-        )
-    except LyraAPIError as e:
-        logger.error(f"Article verification API error: {e}")
-        return full_body
-    text = response.text
-
-    # Prompt order: [CHANGES]...[/CHANGES] then [START_VERIFIED]...[END_VERIFIED]
-    # Extract the verified article between the markers.
-    start_idx = text.find("[START_VERIFIED]")
-    if start_idx == -1:
-        logger.warning(
-            "Verification response missing [START_VERIFIED] marker, using unverified body"
-        )
-        return full_body
-    article_text = text[start_idx + len("[START_VERIFIED]") :]
-
-    end_idx = article_text.find("[END_VERIFIED]")
-    if end_idx != -1:
-        article_text = article_text[:end_idx]
-    else:
-        logger.warning("Verification response missing [END_VERIFIED] marker (truncated)")
-
-    article_text = article_text.strip()
-
-    # Post-extraction cleanup: strip any reasoning that leaked before the first heading
-    reasoning_patterns = (
-        "I need to",
-        "Let me verify",
-        "Verification Results",
-        "Checking ",
-        "Looking at ",
-    )
-    if any(article_text.startswith(p) for p in reasoning_patterns):
-        heading_idx = article_text.find("## ")
-        if heading_idx > 0:
-            logger.warning("Stripping leaked reasoning from verification output")
-            article_text = article_text[heading_idx:]
-        else:
-            logger.warning(
-                "Verification output is reasoning, not article prose — using unverified body"
-            )
-            return full_body
-
-    return article_text if article_text else full_body
-
-
-def _assess_journal(
-    body: str,
-    unified_sources: list[dict],
-    settings: LyraSettings,
-) -> str:
-    """Final quality check: fix proper nouns, misspellings, factual errors.
-
-    Uses MiniMax M2.7 via minimax_shared to cross-check the journal text
-    against the source list.  Returns the corrected body.
-    """
-    from pipeline.lyra.minimax_shared import create_minimax_client, minimax_chat
-
-    if not settings.minimax_api_key:
-        logger.info("Assess step skipped — no MiniMax API key")
-        return body
-
-    system = _load_prompt("journal_assess.txt")
-
-    # Build a compact source reference for the LLM
-    source_lines = []
-    for src in unified_sources:
-        source_lines.append(f"[{src['citation']}] {src['label']}")
-    sources_text = "\n".join(source_lines)
-
-    user_message = f"<journal>\n{body}\n</journal>\n\n<sources>\n{sources_text}\n</sources>"
-
-    client = create_minimax_client(settings.minimax_base_url, settings.minimax_api_key)
-    text = minimax_chat(client, "MiniMax-M2.7", system, user_message, 8192)
-
-    if not text:
-        logger.warning("Assess step: empty response from M2.7")
-        return body
-
-    # Parse corrections array
-    try:
-        cleaned = text.strip()
-        if cleaned.startswith("```"):
-            cleaned = cleaned.split("\n", 1)[1] if "\n" in cleaned else cleaned[3:]
-            cleaned = cleaned.rsplit("```", 1)[0].strip()
-        corrections = json.loads(cleaned)
-    except (json.JSONDecodeError, ValueError):
-        logger.warning(f"Assess step: failed to parse JSON: {text[:200]}")
-        return body
-
-    if not isinstance(corrections, list) or not corrections:
-        logger.info("Assess step: no corrections needed")
-        return body
-
-    # Apply corrections
-    corrected = body
-    applied = 0
-    for c in corrections:
-        if not isinstance(c, dict):
-            continue
-        find = c.get("find", "")
-        replace = c.get("replace", "")
-        reason = c.get("reason", "")
-        if not find or not replace or find == replace:
-            continue
-        if find in corrected:
-            corrected = corrected.replace(find, replace, 1)
-            applied += 1
-            logger.info(f"Assess fix: {find!r} → {replace!r} ({reason})")
-        else:
-            logger.debug(f"Assess correction target not found: {find[:60]}")
-
-    logger.info(f"Assess step: applied {applied}/{len(corrections)} corrections")
-    return corrected
 
 
 def _generate_headline_tldr(
@@ -818,53 +540,6 @@ def _cleanup_citations(body: str, sources: list[dict]) -> tuple[str, list[dict]]
     return body, cited_sources
 
 
-def _format_sources(sources: list[dict]) -> str:
-    """Build numbered markdown list linking to YouTube videos at timestamps."""
-    lines = []
-    for src in sources:
-        ts = src["timestamp_seconds"]
-        ts_param = f"?t={ts}" if ts else ""
-        ts_display = f" ({_fmt_timestamp(ts)})" if ts else ""
-        url = f"https://youtu.be/{src['video_id']}{ts_param}"
-        line = (
-            f"{src['citation']}. "
-            f'[{src["channel_name"]} — "{src["video_title"]}"]({url})'
-            f"{ts_display}"
-        )
-        lines.append(line)
-    return "\n".join(lines)
-
-
-def _web_verify_article(
-    verified_body: str,
-    settings: LyraSettings,
-) -> tuple[str, list[WebSearchResult]]:
-    """Web-grounded fact-check via pluggable backend (Anthropic or MiniMax).
-
-    Runs a single verification pass.  Each section is searched and verified
-    independently, with [wN] markers inserted at correction/confirmation
-    sites.  Returns the corrected body (with [wN] markers) and the ordered
-    list of web citations.
-
-    Returns (corrected_body, web_citations).
-    """
-    backend = get_web_research_backend(settings)
-    backend_name = type(backend).__name__
-    logger.info(f"Using web verification backend: {backend_name}")
-
-    corrected, web_refs = backend.verify_article(verified_body)
-
-    if len(corrected) < 200:
-        logger.warning(
-            "Web-verified body too short (%d chars), using source-verified body",
-            len(corrected),
-        )
-        return verified_body, []
-
-    logger.info(f"Web verification done: {len(web_refs)} web refs")
-    return corrected, web_refs
-
-
 def _polish_article(
     verified_body: str,
     settings: LyraSettings,
@@ -899,69 +574,6 @@ def _polish_article(
     return text.strip() or verified_body
 
 
-def _merge_all_citations(
-    body: str,
-    yt_sources: list[dict],
-    web_citations: list[WebSearchResult],
-) -> tuple[str, list[dict]]:
-    """Merge YouTube [N] and web [wN] citations into one continuous [N] sequence.
-
-    Converts [wN] markers (inserted by web verification) into sequential
-    numbers continuing after the last YouTube citation.  Each [wN] maps
-    to exactly one URL via the web_citations list — no collisions.
-    """
-    # Build unified source list: start with YouTube sources (already numbered)
-    unified: list[dict] = []
-    for src in yt_sources:
-        ts = src.get("timestamp_seconds")
-        ts_param = f"?t={ts}" if ts else ""
-        ts_display = f" ({_fmt_timestamp(ts)})" if ts else ""
-        url = f"https://youtu.be/{src['video_id']}{ts_param}"
-        label = f'[{src["channel_name"]} — "{src["video_title"]}"]({url}){ts_display}'
-        unified.append({"citation": src["citation"], "url": url, "label": label})
-
-    next_num = max((s["citation"] for s in unified), default=0) + 1
-
-    # Find all [wN] markers in body, in order of first appearance
-    w_markers: list[int] = []
-    seen_w: set[int] = set()
-    for m in re.finditer(r"\[w(\d+)\]", body):
-        wn = int(m.group(1))
-        if wn not in seen_w:
-            w_markers.append(wn)
-            seen_w.add(wn)
-
-    # Map each [wN] to its web citation and assign a final number
-    w_to_num: dict[int, int] = {}
-    for wn in w_markers:
-        idx = wn - 1  # [w1] → web_citations[0]
-        if idx < 0 or idx >= len(web_citations):
-            continue
-        ref = web_citations[idx]
-        if not ref.url.startswith(("http://", "https://")):
-            continue
-        w_to_num[wn] = next_num
-        label = f"[{ref.title}]({ref.url})"
-        if ref.date:
-            label += f" ({ref.date})"
-        unified.append({"citation": next_num, "url": ref.url, "label": label})
-        next_num += 1
-
-    # Replace [wN] → [number] in body (use placeholder to avoid partial matches)
-    for wn in sorted(w_to_num, reverse=True):
-        body = body.replace(f"[w{wn}]", f"[__WCITE_{w_to_num[wn]}__]")
-    for _wn, num in w_to_num.items():
-        body = body.replace(f"[__WCITE_{num}__]", f"[{num}]")
-
-    # Strip any remaining [wN] markers that didn't map to a citation
-    body = re.sub(r"\[w\d+\]", "", body)
-
-    logger.info(
-        f"Merged citations: {len(yt_sources)} YouTube + {len(w_to_num)} web = {len(unified)} total"
-    )
-    return body, unified
-
-
 def _format_all_sources(unified_sources: list[dict]) -> str:
     """Build numbered markdown list of all sources (YouTube + web)."""
     lines = []
@@ -976,17 +588,29 @@ def _format_all_sources(unified_sources: list[dict]) -> str:
 
 
 def _formulate_question(item: dict) -> str:
-    """Convert a news item into a research question for Theo stages."""
+    """Convert a news item into a research question for Theo stages.
+
+    Uses web_source titles (from Wikipedia, news sites, etc.) to get correct
+    proper noun spellings, since YouTube headlines may have transcript typos.
+    """
     headline = item["headline"]
     site = item.get("site_name") or ""
     facts_str = "; ".join(item.get("facts", [])[:3])
 
+    # Add web source context so the research question has correct proper nouns
+    ws_context = ""
+    web_sources = item.get("web_sources") or []
+    if web_sources:
+        ws_titles = [s.get("title", "") for s in web_sources[:3] if s.get("title")]
+        if ws_titles:
+            ws_context = f" Reference sources: {'; '.join(ws_titles)}."
+
     if site:
         return (
             f"What is known about {headline.rstrip('.')}? "
-            f"Context: site {site}. Key facts: {facts_str}"
+            f"Context: site {site}. Key facts: {facts_str}{ws_context}"
         )
-    return f"What is known about {headline.rstrip('.')}? Key facts: {facts_str}"
+    return f"What is known about {headline.rstrip('.')}? Key facts: {facts_str}{ws_context}"
 
 
 def _build_youtube_facts(item: dict) -> list[dict]:
@@ -1212,6 +836,30 @@ def _write_final_heartbeat(step_data: dict, t0_total: float, *, error: str | Non
         logger.warning("Failed to write article heartbeat", exc_info=True)
 
 
+def _step(step_data: dict, name: str, t0_total: float):
+    """Context manager for pipeline steps — handles heartbeat + timing."""
+    import contextlib
+
+    @contextlib.contextmanager
+    def _ctx():
+        _write_article_heartbeat(step_data, name, t0_total)
+        t0 = time.time()
+        result = {"count": 0, "elapsed": 0, "status": "run"}
+        try:
+            yield result
+            result["status"] = result.get("status", "done")
+            if result["status"] == "run":
+                result["status"] = "done"
+        except Exception:
+            result["status"] = "fail"
+            raise
+        finally:
+            result["elapsed"] = round(time.time() - t0, 1)
+            step_data[name] = result
+
+    return _ctx()
+
+
 def generate_weekly_article(
     settings: LyraSettings,
     *,
@@ -1219,24 +867,29 @@ def generate_weekly_article(
 ) -> bool:
     """Generate a weekly article from this week's NewsItems.
 
-    Uses Theo research stages (search, audit, specialists, synthesis,
-    write, judge) per-cluster instead of the old single-pass
-    write/verify/web_verify/assess flow.
-
-    Args:
-        settings: Pipeline settings.
-        week_override: Optional (week_start, week_end) to generate for a past week.
+    Pipeline stages:
+      1. collect     — query NewsItems, cluster duplicates, diversity-select
+      2. organize    — group by category, filter speculative
+      3. research    — per-cluster Theo pipeline (search/audit/specialists/synthesis/write/judge)
+      4. assemble    — merge cluster prose + screenshots, renumber citations globally
+      5. verify      — per-citation LLM verification
+      6. cleanup     — remove uncited sources, renumber sequentially
+      7. youtube     — ensure every item's YouTube video is in sources (hard guarantee)
+      8. assess      — 10-dimension quality convergence loop
+      9. polish      — editorial smoothing
+     10. headline    — generate title + TLDR
+     11. checklist   — programmatic quality gate (no LLM)
+     12. store       — assemble final markdown, persist to DB
 
     Returns True if an article was created.
     """
-    if not settings.anthropic_api_key:
-        logger.error("No LLM API key configured — required for polish and headline steps")
-        return False
-
     if not settings.minimax_api_key:
         logger.error("No MiniMax API key configured — required for Theo research stages")
         return False
 
+    from pipeline.lyra.article_checklist import ensure_youtube_sources, run_checklist
+    from pipeline.lyra.citation_verifier import verify_all_citations
+    from pipeline.lyra.journal_assessor import assess_and_fix
     from pipeline.lyra.research_stages import ClusterResult, research_cluster
 
     t0_total = time.time()
@@ -1247,6 +900,7 @@ def generate_weekly_article(
     else:
         week_start, week_end = _get_week_range()
 
+    # Check for existing article
     with get_session() as session:
         existing = (
             session.query(NewsArticle)
@@ -1260,90 +914,86 @@ def generate_weekly_article(
             logger.info("Active article for this week already exists")
             return False
 
+    # Collect items in a short-lived session (don't hold DB connection
+    # open for the full 60-90 minute pipeline run)
     with get_session() as session:
-        # -- collect --
-        _write_article_heartbeat(step_data, "collect", t0_total)
-        t0 = time.time()
-        items = _collect_article_items(week_start, week_end, session, settings)
-        step_data["collect"] = {
-            "count": len(items),
-            "elapsed": round(time.time() - t0, 1),
-            "status": "done" if items else "fail",
-        }
+        with _step(step_data, "collect", t0_total) as s:
+            items = _collect_article_items(week_start, week_end, session, settings)
+            s["count"] = len(items)
 
-        if not items:
-            logger.info("No significant items this week for article")
-            _write_final_heartbeat(step_data, t0_total, error="No significant items")
-            return False
+    if not items:
+        logger.info("No significant items this week for article")
+        _write_final_heartbeat(step_data, t0_total, error="No significant items")
+        return False
 
-        logger.info(f"Collected {len(items)} items for article generation")
+    logger.info("Collected %d items for article generation", len(items))
 
-        # Group and assign citations — filter out speculative items
-        sections, _speculative, _sources = _group_and_cite(items)
+    # ── 2. ORGANIZE ──────────────────────────────────────────────
+    sections, _speculative, _sources = _group_and_cite(items)
+    all_items = [i for s in sections for i in s["items"]]
 
-        # Build all_items for video_ids collection (mainstream only)
-        all_items = [i for s in sections for i in s["items"]]
+    # ── 3. RESEARCH (per cluster via Theo stages) ─────────────────
+    section_results: list[tuple[str, str, ClusterResult]] = []
 
-        # -- research (per cluster via Theo stages) --
-        section_results: list[tuple[str, str, ClusterResult]] = []
+    for section in sections:
+        for item in section["items"]:
+            question = _formulate_question(item)
+            youtube_facts = _build_youtube_facts(item)
+            step_key = f"research_{item['headline'][:30]}"
 
-        for section in sections:
-            label = section["label"]
-            _write_article_heartbeat(step_data, f"research_{label[:20]}", t0_total)
+            logger.info("Researching: %s", question[:80])
+            with _step(step_data, step_key, t0_total) as s:
+                result = research_cluster(
+                    question,
+                    youtube_facts,
+                    settings,
+                    web_sources=item.get("web_sources") or [],
+                )
+                s["count"] = len(result.sources)
+                s["score"] = result.score
+                s["status"] = "done" if result.passed else "partial"
 
-            for item in section["items"]:
-                question = _formulate_question(item)
-                youtube_facts = _build_youtube_facts(item)
+            if result.prose:
+                section_results.append((section["category"], section["label"], result))
+            else:
+                logger.warning("Cluster returned empty prose: %s", question[:60])
 
-                logger.info("Researching: %s", question[:80])
-                t0 = time.time()
-                result = research_cluster(question, youtube_facts, settings)
+    if not section_results:
+        _write_final_heartbeat(step_data, t0_total, error="All clusters failed")
+        return False
 
-                step_key = f"research_{item['headline'][:30]}"
-                step_data[step_key] = {
-                    "count": len(result.sources),
-                    "score": result.score,
-                    "elapsed": round(time.time() - t0, 1),
-                    "status": "done" if result.passed else "partial",
-                }
-
-                if result.prose:
-                    section_results.append((section["category"], label, result))
-                else:
-                    logger.warning("Cluster returned empty prose: %s", question[:60])
-
-        if not section_results:
-            _write_final_heartbeat(step_data, t0_total, error="All clusters failed")
-            return False
-
-        # -- assemble --
-        _write_article_heartbeat(step_data, "assemble", t0_total)
-        t0 = time.time()
+    # ── 4. ASSEMBLE ──────────────────────────────────────────────
+    with _step(step_data, "assemble", t0_total) as s:
         body, unified_sources = _assemble_from_clusters(section_results)
-
-        # Inject screenshots from original news items
         body = _inject_screenshots(body, all_items)
+        s["count"] = len(unified_sources)
 
-        step_data["assemble"] = {
-            "count": len(unified_sources),
-            "elapsed": round(time.time() - t0, 1),
-            "status": "done",
-        }
+    # ── 5. VERIFY CITATIONS ──────────────────────────────────────
+    with _step(step_data, "verify_citations", t0_total) as s:
+        logger.info("Verifying every citation against its source")
+        body = verify_all_citations(body, unified_sources, settings=settings)
+        s["count"] = len(re.findall(r"\[\d+\]", body))
+        logger.info("Citation verification: %d verified citations remain", s["count"])
 
-        # -- assess (quality convergence loop) --
-        _write_article_heartbeat(step_data, "assess", t0_total)
+    # ── 6. CLEANUP ───────────────────────────────────────────────
+    body, unified_sources = _cleanup_citations(body, unified_sources)
+
+    # ── 7. YOUTUBE GUARANTEE ─────────────────────────────────────
+    with _step(step_data, "youtube_guarantee", t0_total) as s:
+        before = len(unified_sources)
+        body, unified_sources = ensure_youtube_sources(body, unified_sources, all_items)
+        s["count"] = len(unified_sources) - before
+        if s["count"]:
+            logger.info("Added %d missing YouTube sources", s["count"])
+
+    # ── 8. ASSESS (10-dimension quality loop) ────────────────────
+    with _step(step_data, "assess", t0_total) as s:
         logger.info("Running quality assessment convergence loop")
-        t0 = time.time()
-        from pipeline.lyra.journal_assessor import assess_and_fix
-
         body, assess_result = assess_and_fix(
             body, unified_sources, week_start=week_start, settings=settings
         )
-        step_data["assess"] = {
-            "count": assess_result.score,
-            "elapsed": round(time.time() - t0, 1),
-            "status": "done" if assess_result.passed else "partial",
-        }
+        s["count"] = assess_result.score
+        s["status"] = "done" if assess_result.passed else "partial"
         logger.info(
             "Assessment: %d/10 in %d iterations, %d fixes applied",
             assess_result.score,
@@ -1351,102 +1001,86 @@ def generate_weekly_article(
             len(assess_result.fixes_applied),
         )
 
-        # -- verify citations (FINAL GATE — every [N] must be confirmed) --
-        _write_article_heartbeat(step_data, "verify_citations", t0_total)
-        logger.info("Verifying every citation against its source")
-        t0 = time.time()
-        from pipeline.lyra.citation_verifier import verify_all_citations
-
-        body = verify_all_citations(body, unified_sources, settings=settings)
-        step_data["verify_citations"] = {
-            "count": len(re.findall(r"\[\d+\]", body)),
-            "elapsed": round(time.time() - t0, 1),
-            "status": "done",
-        }
-        logger.info(
-            "Citation verification complete: %d verified citations remain",
-            len(re.findall(r"\[\d+\]", body)),
-        )
-
-        # -- polish --
-        _write_article_heartbeat(step_data, "polish", t0_total)
+    # ── 9. POLISH ────────────────────────────────────────────────
+    with _step(step_data, "polish", t0_total) as s:
         logger.info("Polishing article for coherence")
-        t0 = time.time()
         polished_body = _polish_article(body, settings)
-        step_data["polish"] = {
-            "count": len(polished_body),
-            "elapsed": round(time.time() - t0, 1),
-            "status": "done" if len(polished_body) >= 200 else "fail",
-        }
+        s["count"] = len(polished_body)
+        s["status"] = "done" if len(polished_body) >= 200 else "fail"
 
-        if len(polished_body) < 200:
-            error_msg = f"Polished body too short ({len(polished_body)} chars)"
-            logger.error(
-                "Polished article body too short (%d chars), aborting. First 200 chars: %s",
-                len(polished_body),
-                polished_body[:200],
-            )
-            _write_final_heartbeat(step_data, t0_total, error=error_msg)
-            return False
+    if len(polished_body) < 200:
+        error_msg = f"Polished body too short ({len(polished_body)} chars)"
+        logger.error(error_msg)
+        _write_final_heartbeat(step_data, t0_total, error=error_msg)
+        return False
 
-        # -- headline --
-        _write_article_heartbeat(step_data, "headline", t0_total)
+    # ── 10. HEADLINE + TLDR ──────────────────────────────────────
+    with _step(step_data, "headline", t0_total) as s:
         logger.info("Generating headline and TLDR")
-        t0 = time.time()
-        headline, tldr = _generate_headline_tldr(polished_body, settings, week_start=week_start)
-        is_fallback = headline == "Weekly Archaeological Digest"
-        step_data["headline"] = {
-            "count": 0 if is_fallback else 1,
-            "elapsed": round(time.time() - t0, 1),
-            "status": "done" if not is_fallback else "fail",
-        }
-
-        # Format unified sources
-        sources_md = _format_all_sources(unified_sources)
-
-        # Assemble final markdown
-        article_content = _assemble_article(tldr, polished_body, sources_md)
-
-        # Collect unique video IDs from original items
-        video_ids = list({item["video_id"] for item in all_items})
-
-        # Build quality report
-        research_scores = {}
-        for k, v in step_data.items():
-            if k.startswith("research_") and isinstance(v, dict):
-                research_scores[k.replace("research_", "")] = {
-                    "score": v.get("score", 0),
-                    "sources": v.get("count", 0),
-                    "elapsed": v.get("elapsed", 0),
-                    "status": v.get("status", ""),
-                }
-        quality_report = {
-            "assessment_score": assess_result.score,
-            "assessment_iterations": assess_result.iteration,
-            "assessment_dimensions": assess_result.dimensions,
-            "fixes_applied": [
-                {k: v for k, v in f.items() if k != "corrected_summary"}
-                for f in assess_result.fixes_applied
-            ],
-            "research_clusters": research_scores,
-            "total_sources": len(unified_sources),
-            "total_elapsed_seconds": round(time.time() - t0_total, 1),
-        }
-
-        article = NewsArticle(
-            title=headline,
-            content=article_content,
-            summary=tldr,
-            week_start=week_start,
-            week_end=week_end,
-            video_ids=video_ids,
-            published_at=datetime.now(UTC),
-            quality_report=quality_report,
+        headline, tldr = _generate_headline_tldr(
+            polished_body, settings, week_start=week_start
         )
+        is_fallback = headline == "Weekly Archaeological Digest"
+        s["count"] = 0 if is_fallback else 1
+        s["status"] = "done" if not is_fallback else "fail"
+
+    # ── 11. CHECKLIST (programmatic quality gate) ────────────────
+    with _step(step_data, "checklist", t0_total) as s:
+        checklist = run_checklist(
+            polished_body, unified_sources, all_items,
+            headline, tldr, week_start,
+        )
+        s["count"] = sum(1 for c in checklist.checks.values() if c.passed)
+        s["total"] = len(checklist.checks)
+        s["status"] = "done" if checklist.passed else "warn"
+        logger.info("Checklist: %s", checklist.summary)
+
+    # ── 12. STORE ────────────────────────────────────────────────
+    sources_md = _format_all_sources(unified_sources)
+    article_content = _assemble_article(tldr, polished_body, sources_md)
+    video_ids = list({item["video_id"] for item in all_items})
+
+    research_scores = {}
+    for k, v in step_data.items():
+        if k.startswith("research_") and isinstance(v, dict):
+            research_scores[k.replace("research_", "")] = {
+                "score": v.get("score", 0),
+                "sources": v.get("count", 0),
+                "elapsed": v.get("elapsed", 0),
+                "status": v.get("status", ""),
+            }
+
+    quality_report = {
+        "assessment_score": assess_result.score,
+        "assessment_iterations": assess_result.iteration,
+        "assessment_dimensions": assess_result.dimensions,
+        "fixes_applied": [
+            {k: v for k, v in f.items() if k != "corrected_summary"}
+            for f in assess_result.fixes_applied
+        ],
+        "checklist": checklist.to_dict(),
+        "research_clusters": research_scores,
+        "total_sources": len(unified_sources),
+        "total_elapsed_seconds": round(time.time() - t0_total, 1),
+    }
+
+    article = NewsArticle(
+        title=headline,
+        content=article_content,
+        summary=tldr,
+        week_start=week_start,
+        week_end=week_end,
+        video_ids=video_ids,
+        published_at=datetime.now(UTC),
+        quality_report=quality_report,
+    )
+
+    # Store in a fresh session (don't hold DB connection during the full pipeline)
+    with get_session() as session:
         session.add(article)
 
     _write_final_heartbeat(step_data, t0_total)
-    logger.info(f"Generated weekly article: {headline}")
+    logger.info("Generated weekly article: %s", headline)
     return True
 
 
