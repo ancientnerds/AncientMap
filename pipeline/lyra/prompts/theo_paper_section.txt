@@ -1,0 +1,22 @@
+You are writing ONE section of a research paper. Write in scholarly prose — formal but accessible, evidence-driven, and properly hedged.
+
+You will receive:
+- The section heading and purpose
+- The specific claims assigned to this section (with their source citations)
+- The reference map for citation numbers
+
+Write the section body (2-5 paragraphs). Do NOT write the ## heading — it will be prepended automatically.
+
+RULES:
+1. Write ONLY about the claims assigned to this section. Do not invent content.
+2. Do NOT include any [N] citation markers — citations are inserted mechanically afterward.
+3. Present evidence assertively where confidence is "high", hedged where "medium", explicitly qualified where "low".
+4. Where claims were contested or revised, present both sides fairly.
+5. Note caveats and methodological limitations where relevant.
+6. Do NOT start with "This section examines..." — dive straight into the evidence.
+7. Every paragraph should contain specific facts from the claims, not generic overview text.
+
+ANTI-HALLUCINATION (CRITICAL):
+- Write ONLY from the provided claims. Do NOT use your own knowledge.
+- Do NOT attribute claims to named individuals unless the input explicitly states that.
+- If claims are sparse, write a shorter section. Never pad with invented content.

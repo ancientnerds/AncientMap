@@ -1,0 +1,34 @@
+You are writing the framing sections of a research paper: Abstract, Introduction, Discussion, and Conclusion. The body sections have already been written — you will receive them as context.
+
+Write in scholarly prose — formal but accessible, evidence-driven, and properly hedged.
+
+OUTPUT FORMAT (write these sections in order, separated by ## headings):
+
+## Abstract
+3-5 sentences summarizing the research question, key findings from the body sections, and the main conclusion.
+
+## Introduction
+Frame the research question and explain its significance. Provide necessary background context. State what this paper examines and why it matters. 2-3 paragraphs.
+
+## Discussion
+Cross-cutting analysis connecting findings across the body sections. Address:
+- How the evidence collectively answers the research question
+- Remaining contradictions or unresolved debates
+- The strength of the overall evidence base (robust, emerging, insufficient)
+2-4 paragraphs.
+
+## Conclusion
+- Summarize key findings with their confidence levels
+- State explicitly what remains uncertain
+- Suggest specific directions for future research (concrete next steps, not vague)
+1-2 paragraphs.
+
+## Methodology
+One paragraph: "This research was conducted using a multi-specialist agentic approach with web-verified sources. Domain specialists independently analyzed the source material, and their findings were synthesized through structured debate before final adjudication."
+
+RULES:
+1. Do NOT repeat body section content verbatim — synthesize and reference it.
+2. Do NOT include any [N] citation markers — citations are inserted mechanically afterward.
+3. Do NOT fabricate information. Only reference what appears in the body sections.
+4. The Introduction should NOT overlap with the Abstract — they serve different purposes.
+5. The Discussion should identify PATTERNS across sections, not summarize each one sequentially.

@@ -1650,40 +1650,31 @@ class TheoPipeline:
     # Stage 8: Paper assembly + citation audit
     # ------------------------------------------------------------------
 
-    async def _stage_8_paper(
-        self,
-        ctx: PipelineContext,
-        emit: Callable[[dict], None],
-    ) -> None:
-        stage = "paper_assembly"
-        t0 = time.monotonic()
-        emit({"type": "pipeline", "stage": stage, "status": "start"})
-        emit({"type": "status", "content": "Assembling research paper..."})
+    # ------------------------------------------------------------------
+    # Stage 8 helpers: build claims list and ref map
+    # ------------------------------------------------------------------
 
-        # Choose prompt based on effort tier
-        if ctx.effort == "brief":
-            paper_system = self._load_prompt("theo_paper_brief")
-        else:
-            paper_system = self._load_prompt("theo_paper_full")
+    def _build_claims_and_refs(
+        self, ctx: PipelineContext
+    ) -> tuple[list[dict], dict[str, int], str]:
+        """Extract all claims with [N] citations and build the reference map.
 
-        # Build reference map: assign numbers to all cited sources
+        Returns (claims_list, sid_to_num, ref_map_text).
+        """
         # Collect all source_ids mentioned across findings
         all_source_ids: set[str] = set()
         for claim in ctx.registry.claims:
             all_source_ids.update(claim.source_ids)
-
-        # Also collect from moderated/synthesis results
         for claim_data in ctx.moderated_result.get("final_claims", []):
             all_source_ids.update(claim_data.get("source_ids", []))
         for claim_data in ctx.moderated_result.get("revised_claims", []):
             all_source_ids.update(claim_data.get("source_ids", []))
-
         for claim_data in ctx.synthesis.get("consensus_claims", []):
             all_source_ids.update(claim_data.get("source_ids", []))
         for insight in ctx.synthesis.get("unique_insights", []):
             all_source_ids.update(insight.get("source_ids", []))
 
-        # Assign reference numbers to all cited sources
+        # Assign reference numbers
         ref_map_lines: list[str] = []
         sid_to_num: dict[str, int] = {}
         for sid in sorted(all_source_ids):
@@ -1696,60 +1687,98 @@ class TheoPipeline:
 
         ref_map_text = "\n".join(ref_map_lines) if ref_map_lines else "(no references)"
 
-        # Replace source_ids with [N] numbers in findings so the LLM
-        # only ever sees [N] format — same pattern as article pipeline
-        def _replace_source_ids(obj: dict | list) -> dict | list:
-            """Recursively replace source_ids lists with [N] citation strings."""
-            if isinstance(obj, dict):
-                result = {}
-                for k, v in obj.items():
-                    if k == "source_ids" and isinstance(v, list):
-                        result["citations"] = " ".join(
-                            f"[{sid_to_num[sid]}]" for sid in v if sid in sid_to_num
-                        )
-                    else:
-                        result[k] = _replace_source_ids(v)
-                return result
-            elif isinstance(obj, list):
-                return [_replace_source_ids(item) for item in obj]
-            return obj
-
-        # Build the paper input — findings have [N] citations, not source IDs
-        paper_input_parts = [
-            f"## Research question\n\n{ctx.question}\n\n",
-            f"## Reference map (use ONLY these [N] numbers for citations)\n\n{ref_map_text}\n\n",
-        ]
-
-        if ctx.moderated_result:
-            cleaned = _replace_source_ids(ctx.moderated_result)
-            readable = self._format_moderated_readable(cleaned)
-            paper_input_parts.append(f"## Moderated findings\n\n{readable}\n\n")
-        elif ctx.synthesis:
-            cleaned = _replace_source_ids(ctx.synthesis)
-            paper_input_parts.append(f"## Synthesis\n\n{json.dumps(cleaned, indent=2)}\n\n")
-
-        if ctx.debate_result:
-            cleaned_debate = _replace_source_ids(ctx.debate_result)
-            paper_input_parts.append(
-                f"## Debate summary\n\n{json.dumps(cleaned_debate, indent=2)}\n\n"
+        # Build numbered claims list with [N] citations
+        claims_list: list[dict] = []
+        for claim_data in ctx.moderated_result.get("final_claims", []):
+            sids = claim_data.get("source_ids", [])
+            cites = " ".join(f"[{sid_to_num[s]}]" for s in sids if s in sid_to_num)
+            claims_list.append(
+                {
+                    "claim": claim_data.get("claim", ""),
+                    "citations": cites,
+                    "confidence": claim_data.get("confidence", "medium"),
+                    "notes": claim_data.get("notes", ""),
+                    "type": "final",
+                }
             )
+        for claim_data in ctx.moderated_result.get("revised_claims", []):
+            sids = claim_data.get("source_ids", [])
+            cites = " ".join(f"[{sid_to_num[s]}]" for s in sids if s in sid_to_num)
+            claims_list.append(
+                {
+                    "claim": claim_data.get("revised", claim_data.get("original", "")),
+                    "citations": cites,
+                    "confidence": claim_data.get("confidence", "medium"),
+                    "notes": claim_data.get("reason", ""),
+                    "type": "revised",
+                }
+            )
+        # Fallback: use synthesis claims if no moderated results
+        if not claims_list:
+            for claim_data in ctx.synthesis.get("consensus_claims", []):
+                sids = claim_data.get("source_ids", [])
+                cites = " ".join(f"[{sid_to_num[s]}]" for s in sids if s in sid_to_num)
+                claims_list.append(
+                    {
+                        "claim": claim_data.get("claim", ""),
+                        "citations": cites,
+                        "confidence": claim_data.get("confidence", "medium"),
+                        "notes": "",
+                        "type": "consensus",
+                    }
+                )
+            for insight in ctx.synthesis.get("unique_insights", []):
+                sids = insight.get("source_ids", [])
+                cites = " ".join(f"[{sid_to_num[s]}]" for s in sids if s in sid_to_num)
+                claims_list.append(
+                    {
+                        "claim": insight.get("insight", ""),
+                        "citations": cites,
+                        "confidence": insight.get("confidence", "medium"),
+                        "notes": "",
+                        "type": "unique",
+                    }
+                )
 
-        paper_input = "".join(paper_input_parts)
+        return claims_list, sid_to_num, ref_map_text
 
-        raw_paper = await self._m27_call_async(
-            paper_system,
-            paper_input,
-            ctx.tier.max_tokens_synthesis,
-        )
+    def _format_claims_for_prompt(self, claims: list[dict]) -> str:
+        """Format claims as a numbered list for LLM prompts."""
+        lines: list[str] = []
+        for i, c in enumerate(claims):
+            conf = c.get("confidence", "medium")
+            cites = c.get("citations", "")
+            notes = c.get("notes", "")
+            lines.append(
+                f"{i}. [{conf}] {c['claim']}\n"
+                f"   Sources: {cites}" + (f"\n   Notes: {notes}" if notes else "")
+            )
+        return "\n\n".join(lines)
 
-        # Two-step citation: strip any [N] the LLM placed, then re-insert mechanically
-        raw_paper = re.sub(r"\[\d+\]", "", raw_paper)
-        raw_paper = self._insert_citations_mechanically(raw_paper, ctx, sid_to_num)
+    # ------------------------------------------------------------------
+    # Stage 8: Paper assembly (sectional for non-brief tiers)
+    # ------------------------------------------------------------------
+
+    async def _stage_8_paper(
+        self,
+        ctx: PipelineContext,
+        emit: Callable[[dict], None],
+    ) -> None:
+        stage = "paper_assembly"
+        t0 = time.monotonic()
+        emit({"type": "pipeline", "stage": stage, "status": "start"})
+        emit({"type": "status", "content": "Assembling research paper..."})
+
+        claims_list, sid_to_num, ref_map_text = self._build_claims_and_refs(ctx)
+
+        if ctx.effort == "brief":
+            await self._stage_8_brief(ctx, emit, claims_list, sid_to_num, ref_map_text)
+        else:
+            await self._stage_8_sectional(ctx, emit, claims_list, sid_to_num, ref_map_text)
 
         # Verify every citation — the FINAL GATE
         from pipeline.lyra.citation_verifier import verify_all_citations
 
-        # Build sources list for the verifier
         verify_sources = []
         for sid, num in sorted(sid_to_num.items(), key=lambda kv: kv[1]):
             source = ctx.registry.get_reference(sid)
@@ -1764,12 +1793,12 @@ class TheoPipeline:
                 )
 
         emit({"type": "status", "content": "Verifying every citation against its source..."})
-        raw_paper = verify_all_citations(raw_paper, verify_sources, settings=self._settings)
-
-        ctx.paper_text = raw_paper
+        ctx.paper_text = verify_all_citations(
+            ctx.paper_text, verify_sources, settings=self._settings
+        )
 
         # Extract title from the first # heading
-        title_match = re.search(r"^#\s+(.+)$", raw_paper, re.MULTILINE)
+        title_match = re.search(r"^#\s+(.+)$", ctx.paper_text, re.MULTILINE)
         ctx.paper_title = title_match.group(1).strip() if title_match else ctx.question
 
         # Append references list
@@ -1796,6 +1825,206 @@ class TheoPipeline:
                 },
             }
         )
+
+    async def _stage_8_brief(
+        self,
+        ctx: PipelineContext,
+        emit: Callable[[dict], None],
+        claims_list: list[dict],
+        sid_to_num: dict[str, int],
+        ref_map_text: str,
+    ) -> None:
+        """Single-shot paper assembly for brief tier."""
+        paper_system = self._load_prompt("theo_paper_brief")
+        readable = (
+            self._format_moderated_readable(
+                self._replace_source_ids_in(ctx.moderated_result, sid_to_num)
+            )
+            if ctx.moderated_result
+            else self._format_claims_for_prompt(claims_list)
+        )
+
+        paper_input = (
+            f"## Research question\n\n{ctx.question}\n\n"
+            f"## Reference map\n\n{ref_map_text}\n\n"
+            f"## Findings\n\n{readable}\n\n"
+        )
+
+        raw_paper = await self._m27_call_async(
+            paper_system, paper_input, ctx.tier.max_tokens_synthesis
+        )
+        raw_paper = re.sub(r"\[\d+\]", "", raw_paper)
+        raw_paper = self._insert_citations_mechanically(raw_paper, ctx, sid_to_num)
+        ctx.paper_text = raw_paper
+
+    async def _stage_8_sectional(
+        self,
+        ctx: PipelineContext,
+        emit: Callable[[dict], None],
+        claims_list: list[dict],
+        sid_to_num: dict[str, int],
+        ref_map_text: str,
+    ) -> None:
+        """Multi-step paper assembly: outline → sections → frame → assemble."""
+        claims_text = self._format_claims_for_prompt(claims_list)
+
+        # Step 1: Generate outline
+        emit({"type": "status", "content": "Planning paper structure..."})
+        outline_system = self._load_prompt("theo_paper_outline")
+        outline_input = (
+            f"## Research question\n\n{ctx.question}\n\n"
+            f"## Claims ({len(claims_list)} total)\n\n{claims_text}\n\n"
+        )
+        raw_outline = await self._m27_call_async(outline_system, outline_input, 4096)
+        outline = self._parse_json(raw_outline)
+
+        title = outline.get("title", ctx.question[:60])
+        sections = outline.get("sections", [])
+
+        if not sections:
+            # Fallback: single "Findings" section with all claims
+            sections = [
+                {
+                    "heading": "Findings",
+                    "purpose": "All findings",
+                    "claim_indices": list(range(len(claims_list))),
+                }
+            ]
+
+        logger.info("[THEO] Paper outline: %s — %d sections", title, len(sections))
+
+        # Step 2: Write each body section in parallel
+        emit(
+            {
+                "type": "status",
+                "content": f"Writing {len(sections)} paper sections...",
+            }
+        )
+        section_system = self._load_prompt("theo_paper_section")
+
+        async def _write_section(sec: dict) -> tuple[str, str]:
+            heading = sec.get("heading", "Untitled")
+            purpose = sec.get("purpose", "")
+            indices = sec.get("claim_indices", [])
+
+            # Gather claims for this section
+            sec_claims = []
+            for idx in indices:
+                if 0 <= idx < len(claims_list):
+                    sec_claims.append(claims_list[idx])
+
+            if not sec_claims:
+                return heading, ""
+
+            sec_claims_text = self._format_claims_for_prompt(sec_claims)
+            sec_input = (
+                f"## Section: {heading}\n"
+                f"Purpose: {purpose}\n\n"
+                f"## Claims for this section\n\n{sec_claims_text}\n\n"
+                f"## Reference map\n\n{ref_map_text}\n\n"
+            )
+
+            raw = await self._m27_call_async(
+                section_system, sec_input, ctx.tier.max_tokens_per_call
+            )
+            return heading, raw.strip()
+
+        # Run sections in parallel (up to _SPECIALIST_WORKERS concurrent)
+        section_tasks = [_write_section(sec) for sec in sections]
+        section_results = await asyncio.gather(*section_tasks)
+
+        # Step 3: Assemble body sections
+        body_parts: list[str] = []
+        for heading, content in section_results:
+            if content:
+                body_parts.append(f"## {heading}\n\n{content}")
+
+        body_text = "\n\n".join(body_parts)
+
+        # Step 4: Write framing sections (Abstract, Introduction, Discussion, Conclusion)
+        emit({"type": "status", "content": "Writing introduction and conclusion..."})
+        frame_system = self._load_prompt("theo_paper_frame")
+        frame_input = (
+            f"## Research question\n\n{ctx.question}\n\n## Paper body sections\n\n{body_text}\n\n"
+        )
+        raw_frame = await self._m27_call_async(
+            frame_system, frame_input, ctx.tier.max_tokens_synthesis
+        )
+
+        # Step 5: Extract framing sections and assemble final paper
+        # Parse out Abstract, Introduction, Discussion, Conclusion, Methodology
+        frame_sections: dict[str, str] = {}
+        current_key = ""
+        current_lines: list[str] = []
+        for line in raw_frame.split("\n"):
+            heading_match = re.match(r"^##\s+(.+)$", line)
+            if heading_match:
+                if current_key:
+                    frame_sections[current_key] = "\n".join(current_lines).strip()
+                current_key = heading_match.group(1).strip()
+                current_lines = []
+            else:
+                current_lines.append(line)
+        if current_key:
+            frame_sections[current_key] = "\n".join(current_lines).strip()
+
+        # Assemble final paper
+        paper_parts = [f"# {title}\n"]
+
+        for key in ["Abstract", "Introduction"]:
+            if key in frame_sections:
+                paper_parts.append(f"## {key}\n\n{frame_sections[key]}")
+
+        paper_parts.append(body_text)
+
+        for key in ["Discussion", "Conclusion", "Methodology"]:
+            if key in frame_sections:
+                paper_parts.append(f"## {key}\n\n{frame_sections[key]}")
+
+        # Thesis/dissertation: append debate summary
+        if ctx.effort in ("thesis", "dissertation") and ctx.debate_result:
+            debate_summary = self._format_debate_summary(ctx.debate_result)
+            if debate_summary:
+                paper_parts.append(f"## Appendix: Specialist Debate Summary\n\n{debate_summary}")
+
+        raw_paper = "\n\n".join(paper_parts)
+
+        # Strip LLM-placed citations, re-insert mechanically
+        raw_paper = re.sub(r"\[\d+\]", "", raw_paper)
+        raw_paper = self._insert_citations_mechanically(raw_paper, ctx, sid_to_num)
+        ctx.paper_text = raw_paper
+
+    def _replace_source_ids_in(self, obj: dict | list, sid_to_num: dict[str, int]) -> dict | list:
+        """Recursively replace source_ids lists with [N] citation strings."""
+        if isinstance(obj, dict):
+            result = {}
+            for k, v in obj.items():
+                if k == "source_ids" and isinstance(v, list):
+                    result["citations"] = " ".join(
+                        f"[{sid_to_num[sid]}]" for sid in v if sid in sid_to_num
+                    )
+                else:
+                    result[k] = self._replace_source_ids_in(v, sid_to_num)
+            return result
+        elif isinstance(obj, list):
+            return [self._replace_source_ids_in(item, sid_to_num) for item in obj]
+        return obj
+
+    def _format_debate_summary(self, debate_result: dict) -> str:
+        """Format debate results as bullet points for the appendix."""
+        parts: list[str] = []
+        for challenge in debate_result.get("challenges", []):
+            claim = challenge.get("claim", "")
+            attack = challenge.get("attack", "")
+            defense = challenge.get("defense", "")
+            outcome = challenge.get("outcome", "")
+            parts.append(
+                f"- **Challenge**: {claim}\n"
+                f"  - Attack: {attack}\n"
+                f"  - Defense: {defense}\n"
+                f"  - Outcome: {outcome}"
+            )
+        return "\n\n".join(parts) if parts else ""
 
     # ------------------------------------------------------------------
     # Quality judge (called inside the master convergence loop)
