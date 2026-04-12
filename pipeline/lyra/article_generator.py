@@ -764,12 +764,32 @@ def _inject_screenshots(body: str, items: list[dict]) -> str:
     return "\n\n".join(result_parts)
 
 
+def _format_videos(items: list[dict]) -> str:
+    """Build numbered markdown list of YouTube video links from items."""
+    seen: dict[str, int] = {}  # video_id -> line number
+    lines: list[str] = []
+    for item in items:
+        vid = item.get("video_id", "")
+        if not vid or vid in seen:
+            continue
+        ts = item.get("timestamp_seconds", 0)
+        url = f"https://youtu.be/{vid}?t={ts}" if ts else f"https://youtu.be/{vid}"
+        channel = item.get("channel_name", "")
+        title = item.get("video_title", "")
+        label = f'{channel} \u2014 "{title}"' if channel else title
+        num = len(lines) + 1
+        lines.append(f"{num}. [{label}]({url})")
+        seen[vid] = num
+    return "\n".join(lines)
+
+
 def _assemble_article(
     tldr: str,
     body: str,
     sources_md: str,
+    videos_md: str,
 ) -> str:
-    """Combine TLDR + article body + unified sources footer."""
+    """Combine TLDR + article body + sources + videos."""
     parts: list[str] = []
 
     if tldr:
@@ -777,6 +797,9 @@ def _assemble_article(
 
     parts.append(body)
     parts.append(f"### Sources\n\n{sources_md}")
+
+    if videos_md:
+        parts.append(f"### Videos\n\n{videos_md}")
 
     return "\n\n---\n\n".join(parts)
 
@@ -885,7 +908,7 @@ def generate_weekly_article(
         logger.error("No MiniMax API key configured — required for Theo research stages")
         return False
 
-    from pipeline.lyra.article_checklist import ensure_youtube_sources, run_checklist
+    from pipeline.lyra.article_checklist import run_checklist
     from pipeline.lyra.citation_verifier import verify_all_citations
     from pipeline.lyra.journal_assessor import assess_and_fix
     from pipeline.lyra.research_stages import ClusterResult, research_cluster
@@ -976,15 +999,7 @@ def generate_weekly_article(
     # ── 6. CLEANUP ───────────────────────────────────────────────
     body, unified_sources = _cleanup_citations(body, unified_sources)
 
-    # ── 7. YOUTUBE GUARANTEE ─────────────────────────────────────
-    with _step(step_data, "youtube_guarantee", t0_total) as s:
-        before = len(unified_sources)
-        body, unified_sources = ensure_youtube_sources(body, unified_sources, all_items)
-        s["count"] = len(unified_sources) - before
-        if s["count"]:
-            logger.info("Added %d missing YouTube sources", s["count"])
-
-    # ── 8. ASSESS (10-dimension quality loop) ────────────────────
+    # ── 7. ASSESS (10-dimension quality loop) ────────────────────
     with _step(step_data, "assess", t0_total) as s:
         logger.info("Running quality assessment convergence loop")
         body, assess_result = assess_and_fix(
@@ -1022,6 +1037,7 @@ def generate_weekly_article(
 
     # ── 11. CHECKLIST (programmatic quality gate) ────────────────
     with _step(step_data, "checklist", t0_total) as s:
+        videos_md = _format_videos(all_items)
         checklist = run_checklist(
             polished_body,
             unified_sources,
@@ -1029,6 +1045,7 @@ def generate_weekly_article(
             headline,
             tldr,
             week_start,
+            videos_md=videos_md,
         )
         s["count"] = sum(1 for c in checklist.checks.values() if c.passed)
         s["total"] = len(checklist.checks)
@@ -1037,7 +1054,7 @@ def generate_weekly_article(
 
     # ── 12. STORE ────────────────────────────────────────────────
     sources_md = _format_all_sources(unified_sources)
-    article_content = _assemble_article(tldr, polished_body, sources_md)
+    article_content = _assemble_article(tldr, polished_body, sources_md, videos_md)
     video_ids = list({item["video_id"] for item in all_items})
 
     research_scores = {}

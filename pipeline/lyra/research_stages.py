@@ -406,17 +406,17 @@ def _stage_write_section(
     for claim in registry.claims:
         all_source_ids.update(claim.source_ids)
 
-    # ALWAYS include YouTube sources — they're the primary sources the story
-    # came from. Synthesis may not reference them (it prefers academic sources),
-    # but the journal must cite where the story originated.
-    for sid, source in registry.sources.items():
-        if source.url and ("youtu.be/" in source.url or "youtube.com/" in source.url):
-            all_source_ids.add(sid)
+    # YouTube sources are listed separately in the Videos section — don't
+    # assign them [N] citation numbers (they're origins, not evidence).
+    yt_domains = ("youtu.be/", "youtube.com/")
 
     sid_to_num: dict[str, int] = {}
     for sid in sorted(all_source_ids):
         source = registry.get_reference(sid)
         if source is None:
+            continue
+        # Skip YouTube — listed in Videos section, not cited with [N]
+        if source.url and any(d in source.url for d in yt_domains):
             continue
         num = registry.assign_reference_number(sid)
         sid_to_num[sid] = num
@@ -444,32 +444,16 @@ def _stage_write_section(
 
     # Build source key so the LLM knows what each [N] refers to
     source_key_lines: list[str] = []
-    yt_source_lines: list[str] = []
     for sid, num in sorted(sid_to_num.items(), key=lambda kv: kv[1]):
         source = registry.get_reference(sid)
         if source:
-            is_yt = "youtu.be/" in source.url or "youtube.com/" in source.url
-            label = f"[{num}] {source.title}"
-            if is_yt:
-                label += " (PRIMARY — YouTube video this story comes from)"
-                yt_source_lines.append(f"[{num}]")
-            source_key_lines.append(label)
-
-    # Tell the LLM to cite the primary YouTube source(s)
-    yt_note = ""
-    if yt_source_lines:
-        yt_refs = " ".join(yt_source_lines)
-        yt_note = (
-            f"\n\nIMPORTANT: This story originates from YouTube video(s) {yt_refs}. "
-            f"You MUST cite them at least once in the prose — they are the primary source."
-        )
+            source_key_lines.append(f"[{num}] {source.title}")
 
     system = _load_prompt("journal_section")
     user_msg = (
         f"## Research question\n\n{question}\n\n"
         f"## Key findings (use the [N] markers shown when citing)\n\n"
         + "\n".join(findings_lines)
-        + yt_note
         + "\n\n## Source key\n\n"
         + "\n".join(source_key_lines)
     )
