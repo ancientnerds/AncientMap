@@ -317,6 +317,16 @@ export default function NewsFeedPage() {
     }))
   }
 
+  const isBreakthroughMode = activeFilters.min_significance === 7 && activeFilters.sort === 'significance'
+
+  const handleBreakthroughToggle = () => {
+    if (isBreakthroughMode) {
+      setActiveFilters(prev => ({ ...prev, min_significance: null, sort: null }))
+    } else {
+      setActiveFilters(prev => ({ ...prev, min_significance: 7, sort: 'significance' }))
+    }
+  }
+
 
   const activeFilterCount = Object.values(activeFilters).filter(Boolean).length
 
@@ -390,10 +400,16 @@ export default function NewsFeedPage() {
                 Latest
               </button>
               <button
-                className={`news-page-chip${activeFilters.sort === 'significance' ? ' active' : ''}`}
+                className={`news-page-chip${activeFilters.sort === 'significance' && !isBreakthroughMode ? ' active' : ''}`}
                 onClick={() => handleFilterToggle('sort', 'significance')}
               >
                 Top Rated
+              </button>
+              <button
+                className={`news-page-chip news-page-chip-breakthrough${isBreakthroughMode ? ' active' : ''}`}
+                onClick={handleBreakthroughToggle}
+              >
+                Breakthroughs
               </button>
             </div>
           </div>
