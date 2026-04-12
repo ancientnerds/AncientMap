@@ -6,7 +6,7 @@
  * and rejected items. Matched items are excluded (already in DB).
  */
 
-import { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense } from 'react'
+import { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react'
 import { config } from '../config'
 import { formatCoord, timeAgo } from '../utils/formatters'
 import { getCountryFlatFlagUrl } from '../utils/countryFlags'
@@ -82,6 +82,11 @@ interface RadarItem {
   commons_url: string | null
   nearby_an_site: { name: string; distance_km: number } | null
   source: string | null
+  avg_significance: number | null
+  top_news_category: string | null
+  is_speculative: boolean
+  speculative_tag: string | null
+  ai_reasoning: string | null
 }
 
 interface RadarResponse {
@@ -584,39 +589,18 @@ export default function LyraRadarPage() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const sentinelRef = useRef<HTMLDivElement>(null)
   const gridRef = useRef<HTMLDivElement>(null)
-  const [columnCount, setColumnCount] = useState(3)
   const [showScrollTop, setShowScrollTop] = useState(false)
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>('all')
-  const [showMap, setShowMap] = useState(false)
   const [allRadarMapItems, setAllRadarMapItems] = useState<RadarItem[]>([])
+  const [highlightedCardId, _setHighlightedCardId] = useState<string | null>(null)
   const radarMapFetched = useRef(false)
 
   // Auth (founder role check)
   const { user, token } = useAuth()
   const isFounder = !!user?.is_founder
-  const [mapHoveredId, setMapHoveredId] = useState<string | null>(null)
+  const [_mapHoveredId, setMapHoveredId] = useState<string | null>(null)
   const [mapPinnedId, setMapPinnedId] = useState<string | null>(null)
   const hoverTimeoutRef = useRef<number>(0)
-
-  const itemsById = useMemo(() => {
-    const map = new Map<string, RadarItem>()
-    for (const item of items) map.set(item.id, item)
-    return map
-  }, [items])
-
-  const mapItemsById = useMemo(() => {
-    const map = new Map<string, RadarItem>()
-    for (const item of allRadarMapItems) map.set(item.id, item)
-    return map
-  }, [allRadarMapItems])
-
-  // Hovered item takes priority (preview), pinned is fallback
-  // Prefer full paginated item (has videos/facts/suggestions), fall back to map item
-  const mapActiveItem = useMemo(() => {
-    const id = mapHoveredId || mapPinnedId
-    if (!id) return null
-    return itemsById.get(id) || mapItemsById.get(id) || null
-  }, [mapHoveredId, mapPinnedId, itemsById, mapItemsById])
 
   const handleMapHover = useCallback((id: string | null) => {
     clearTimeout(hoverTimeoutRef.current)
@@ -633,16 +617,6 @@ export default function LyraRadarPage() {
       setMapPinnedId(null)  // toggle off
     } else {
       setMapPinnedId(id)
-    }
-  }, [mapPinnedId])
-
-  const handleCardEnter = useCallback(() => {
-    clearTimeout(hoverTimeoutRef.current)
-  }, [])
-
-  const handleCardLeave = useCallback(() => {
-    if (!mapPinnedId) {
-      hoverTimeoutRef.current = window.setTimeout(() => setMapHoveredId(null), 300)
     }
   }, [mapPinnedId])
 
@@ -671,18 +645,6 @@ export default function LyraRadarPage() {
     const onScroll = () => setShowScrollTop(window.scrollY > 400)
     window.addEventListener('scroll', onScroll, { passive: true })
     return () => window.removeEventListener('scroll', onScroll)
-  }, [])
-
-  useEffect(() => {
-    const el = gridRef.current
-    if (!el) return
-    const ro = new ResizeObserver(([entry]) => {
-      const w = entry.contentRect.width
-      const cols = Math.max(1, Math.floor(w / 300))
-      setColumnCount(cols)
-    })
-    ro.observe(el)
-    return () => ro.disconnect()
   }, [])
 
   const fetchRadar = useCallback(async (
@@ -723,9 +685,9 @@ export default function LyraRadarPage() {
       .catch(() => {})
   }, [])
 
-  // Fetch all radar items for map (once, when map is first shown)
+  // Fetch all radar items for map (once on mount)
   useEffect(() => {
-    if (!showMap || radarMapFetched.current) return
+    if (radarMapFetched.current) return
     radarMapFetched.current = true
     fetch(`${config.api.baseUrl}/radar/map`)
       .then(r => r.ok ? r.json() : null)
@@ -762,11 +724,15 @@ export default function LyraRadarPage() {
           data_sources: [],
           commons_url: null,
           nearby_an_site: null,
+          avg_significance: null,
+          top_news_category: null,
+          is_speculative: false,
+          speculative_tag: null,
+          ai_reasoning: null,
         })))
-
       })
       .catch(() => {})
-  }, [showMap])
+  }, [])
 
   // Infinite scroll
   useEffect(() => {
@@ -832,150 +798,124 @@ export default function LyraRadarPage() {
         <span>Experimental — sites are AI-detected and may contain false positives, misidentifications, or inaccurate metadata. Always verify before citing.</span>
       </div>
 
-      {/* Stats bar */}
-      {stats && (
-        <PageStatsBar items={[
-          { value: stats.enriched_count, label: 'enriched' } as StatItem,
-          { value: stats.pending_count, label: 'pending', sep: '·' } as StatItem,
-          { value: stats.added_count, label: 'added', sep: '·' } as StatItem,
-          { value: stats.total_sites_known, label: 'known sites', sep: '·' } as StatItem,
-        ]} />
-      )}
-
-      {/* Filter bar */}
-      <div className="lyra-discoveries-filters">
-        <div className="lyra-filter-group">
-          <span className="lyra-discoveries-filter-label">Status:</span>
-          <div className="lyra-discoveries-filter-chips">
-            {([['all', 'All'], ['enriched', 'Enriched'], ['pending', 'Pending'], ['added', 'Added'], ['rejected', 'Rejected']] as const).map(([val, label]) => (
-              <button
-                key={val}
-                className={`news-page-chip${statusFilter === val ? ' active' : ''}`}
-                onClick={() => handleStatusChange(val)}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-        </div>
-        <div className="lyra-filter-group">
-          <span className="lyra-discoveries-filter-label">Database:</span>
-          <div className="lyra-discoveries-filter-chips">
-            {([['all', 'All'], ['lyra', 'Radar'], ['user', 'Community']] as const).map(([val, label]) => (
-              <button
-                key={val}
-                className={`news-page-chip${sourceFilter === val ? ' active' : ''}`}
-                onClick={() => handleSourceChange(val)}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-        </div>
-        <div className="lyra-filter-group">
-          <span className="lyra-discoveries-filter-label">Min. mentions:</span>
-          <div className="lyra-discoveries-filter-chips">
-            {[1, 2, 3, 5, 10].map(n => (
-              <button
-                key={n}
-                className={`news-page-chip${minMentions === n ? ' active' : ''}`}
-                onClick={() => handleMinMentionsChange(n)}
-              >
-                {n}+
-              </button>
-            ))}
-          </div>
-        </div>
-        <div className="lyra-filter-group">
-          <span className="lyra-discoveries-filter-label">Sort by:</span>
-          <div className="lyra-discoveries-filter-chips">
-            <button
-              className={`news-page-chip${sortBy === 'score' ? ' active' : ''}`}
-              onClick={() => handleSortChange('score')}
-            >
-              Score
-            </button>
-            <button
-              className={`news-page-chip${sortBy === 'mentions' ? ' active' : ''}`}
-              onClick={() => handleSortChange('mentions')}
-            >
-              Mentions
-            </button>
-            <button
-              className={`news-page-chip${sortBy === 'recency' ? ' active' : ''}`}
-              onClick={() => handleSortChange('recency')}
-            >
-              Recent
-            </button>
-          </div>
-        </div>
-        <div className="lyra-filter-group">
-          <button
-            className={`news-page-chip${showMap ? ' active' : ''}`}
-            onClick={() => setShowMap(v => !v)}
-          >
-            Map
-          </button>
-        </div>
-      </div>
-
-      {/* AI disclosure */}
-      <AiNoticeBanner />
-
-      {/* Map */}
-      {showMap && (
-        <div className="radar-map-wrapper">
-          <Suspense fallback={<div style={{ height: 'calc(100vh - 180px)' }} />}>
-            <RadarMap items={allRadarMapItems} onHoverItem={handleMapHover} onPinItem={handleMapPin}>
-              {mapActiveItem && (
-                <div
-                  className={`radar-map-card-overlay${mapPinnedId ? ' pinned' : ''}`}
-                  onMouseEnter={handleCardEnter}
-                  onMouseLeave={handleCardLeave}
-                >
-                  {mapPinnedId && (
-                    <button className="radar-map-card-close" onClick={() => setMapPinnedId(null)} aria-label="Close">×</button>
-                  )}
-                  <RadarCard item={mapActiveItem} onViewSite={setSelectedSite} onPromote={isFounder ? handlePromote : undefined} />
-                </div>
-              )}
-            </RadarMap>
+      <div className="radar-split-view">
+        {/* LEFT: Map pane */}
+        <div className="radar-split-map">
+          <Suspense fallback={<div style={{ width: '100%', height: '100%' }} />}>
+            <RadarMap items={allRadarMapItems} onHoverItem={handleMapHover} onPinItem={handleMapPin} />
           </Suspense>
+
+          {/* Floating filters over map */}
+          <div className="radar-map-overlay-filters">
+            <div className="lyra-filter-group">
+              <span className="lyra-discoveries-filter-label">Status:</span>
+              <div className="lyra-discoveries-filter-chips">
+                {([['all', 'All'], ['enriched', 'Enriched'], ['pending', 'Pending'], ['added', 'Added'], ['rejected', 'Rejected']] as const).map(([val, label]) => (
+                  <button
+                    key={val}
+                    className={`news-page-chip${statusFilter === val ? ' active' : ''}`}
+                    onClick={() => handleStatusChange(val)}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="lyra-filter-group">
+              <span className="lyra-discoveries-filter-label">Database:</span>
+              <div className="lyra-discoveries-filter-chips">
+                {([['all', 'All'], ['lyra', 'Radar'], ['user', 'Community']] as const).map(([val, label]) => (
+                  <button
+                    key={val}
+                    className={`news-page-chip${sourceFilter === val ? ' active' : ''}`}
+                    onClick={() => handleSourceChange(val)}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="lyra-filter-group">
+              <span className="lyra-discoveries-filter-label">Min. mentions:</span>
+              <div className="lyra-discoveries-filter-chips">
+                {[1, 2, 3, 5, 10].map(n => (
+                  <button
+                    key={n}
+                    className={`news-page-chip${minMentions === n ? ' active' : ''}`}
+                    onClick={() => handleMinMentionsChange(n)}
+                  >
+                    {n}+
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="lyra-filter-group">
+              <span className="lyra-discoveries-filter-label">Sort by:</span>
+              <div className="lyra-discoveries-filter-chips">
+                <button
+                  className={`news-page-chip${sortBy === 'score' ? ' active' : ''}`}
+                  onClick={() => handleSortChange('score')}
+                >
+                  Score
+                </button>
+                <button
+                  className={`news-page-chip${sortBy === 'mentions' ? ' active' : ''}`}
+                  onClick={() => handleSortChange('mentions')}
+                >
+                  Mentions
+                </button>
+                <button
+                  className={`news-page-chip${sortBy === 'recency' ? ' active' : ''}`}
+                  onClick={() => handleSortChange('recency')}
+                >
+                  Recent
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Floating stats */}
+          {stats && (
+            <div className="radar-map-overlay-stats">
+              <PageStatsBar items={[
+                { value: stats.enriched_count, label: 'enriched' } as StatItem,
+                { value: stats.pending_count, label: 'pending', sep: '·' } as StatItem,
+                { value: stats.added_count, label: 'added', sep: '·' } as StatItem,
+                { value: stats.total_sites_known, label: 'known sites', sep: '·' } as StatItem,
+              ]} />
+            </div>
+          )}
         </div>
-      )}
 
-      {/* Error state */}
-      {error && (
-        <div className="news-page-error">
-          {error}
-          <button onClick={() => fetchRadar(1)}>Retry</button>
-        </div>
-      )}
+        {/* RIGHT: Card list */}
+        <div className="radar-split-cards">
+          <AiNoticeBanner />
 
-      {/* Empty state */}
-      {!error && items.length === 0 && !loading && (
-        <div className="news-page-empty">No radar items yet. Lyra is still watching...</div>
-      )}
+          {error && (
+            <div className="news-page-error">
+              {error}
+              <button onClick={() => fetchRadar(1)}>Retry</button>
+            </div>
+          )}
 
-      {/* Grid */}
-      <div className="lyra-discoveries-grid" ref={gridRef}>
-        {Array.from({ length: columnCount }, (_, colIdx) => (
-          <div key={colIdx} className="lyra-discoveries-column">
-            {/* Radar cards */}
-            {items.filter((_, i) => i % columnCount === colIdx).map(item => (
-              <div key={item.id} data-radar-id={item.id}>
-                <RadarCard item={item} onViewSite={setSelectedSite} onPromote={isFounder ? handlePromote : undefined} />
+          {!error && items.length === 0 && !loading && (
+            <div className="news-page-empty">No radar items yet. Lyra is still watching...</div>
+          )}
+
+          <div className="lyra-discoveries-grid" ref={gridRef}>
+            {items.map(item => (
+              <div key={item.id} data-radar-id={item.id}
+                   className={highlightedCardId === item.id ? 'radar-card-highlighted' : ''}>
+                <RadarCard item={item} onViewSite={setSelectedSite}
+                           onPromote={isFounder ? handlePromote : undefined} />
               </div>
             ))}
           </div>
-        ))}
-      </div>
 
-      {/* Loading / infinite scroll sentinel */}
-      {loading && (
-        <div className="news-page-loading">Loading...</div>
-      )}
-      <div ref={sentinelRef} style={{ height: 1 }} />
+          {loading && <div className="news-page-loading">Loading...</div>}
+          <div ref={sentinelRef} style={{ height: 1 }} />
+        </div>
+      </div>
 
       {/* Scroll to top button */}
       {showScrollTop && (

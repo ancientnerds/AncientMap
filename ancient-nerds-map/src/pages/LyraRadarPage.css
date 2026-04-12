@@ -910,3 +910,119 @@
   border-color: rgba(34, 197, 94, 0.5);
   color: var(--status-ok-light);
 }
+
+/* =============================================================================
+   Split-view layout: map (left) + card list (right)
+   ============================================================================= */
+
+.radar-split-view {
+  display: flex;
+  height: calc(100vh - 180px);
+  overflow: hidden;
+}
+
+.radar-split-map {
+  position: relative;
+  flex: 0 0 60%;
+  min-width: 0;
+}
+
+.radar-split-map .radar-map-container {
+  height: 100%;
+  border-radius: 0;
+  margin-bottom: 0;
+  border: none;
+  border-right: 1px solid rgba(78, 205, 196, 0.15);
+}
+
+.radar-split-cards {
+  flex: 0 0 40%;
+  min-width: 0;
+  overflow-y: auto;
+  padding: 12px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(78, 205, 196, 0.3) transparent;
+}
+
+.radar-split-cards .lyra-discoveries-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 0;
+  max-width: none;
+}
+
+.radar-split-cards .lyra-discoveries-column {
+  flex: none;
+  width: 100%;
+}
+
+/* Map overlay: filters + stats float over the map */
+.radar-map-overlay-filters {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  right: 10px;
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  pointer-events: none;
+}
+
+.radar-map-overlay-filters > * {
+  pointer-events: auto;
+}
+
+.radar-map-overlay-filters .lyra-filter-group {
+  background: rgba(10, 26, 31, 0.85);
+  border: 1px solid rgba(78, 205, 196, 0.15);
+  border-radius: 8px;
+  padding: 4px 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.radar-map-overlay-stats {
+  position: absolute;
+  top: 50px;
+  left: 10px;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.radar-map-overlay-stats > * {
+  pointer-events: auto;
+}
+
+/* Card highlight when hovered via map */
+.radar-card-highlighted {
+  outline: 1px solid rgba(78, 205, 196, 0.6);
+  outline-offset: -1px;
+  box-shadow: 0 0 12px rgba(78, 205, 196, 0.15);
+}
+
+/* Mobile: stacked layout */
+@media (max-width: 768px) {
+  .radar-split-view {
+    flex-direction: column;
+    height: calc(100vh - 120px);
+  }
+
+  .radar-split-map {
+    flex: 1 1 auto;
+    min-height: 40vh;
+  }
+
+  .radar-split-map .radar-map-container {
+    border-right: none;
+    border-bottom: 1px solid rgba(78, 205, 196, 0.15);
+  }
+
+  .radar-split-cards {
+    flex: 0 0 auto;
+    max-height: 50vh;
+    border-top: 2px solid rgba(78, 205, 196, 0.3);
+  }
+}
