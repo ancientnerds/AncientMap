@@ -785,17 +785,21 @@ def _inject_screenshots(body: str, items: list[dict]) -> str:
     return "\n\n".join(result_parts)
 
 
-def _format_videos(unified_videos: list[dict]) -> str:
-    """Build numbered markdown list of YouTube video links with V-prefix."""
+def _format_videos(items: list[dict]) -> str:
+    """Build the ### Videos section from original items — channel, title, timestamp."""
+    seen: set[str] = set()
     lines: list[str] = []
-    seen_urls: set[str] = set()
-    for src in unified_videos:
-        url = src.get("url", "")
-        if url in seen_urls:
+    for item in items:
+        vid = item.get("video_id", "")
+        if not vid or vid in seen:
             continue
-        seen_urls.add(url)
-        num = src["v_citation"]
-        label = src.get("label", "")
+        seen.add(vid)
+        ts = item.get("timestamp_seconds", 0)
+        url = f"https://youtu.be/{vid}?t={ts}" if ts else f"https://youtu.be/{vid}"
+        channel = item.get("channel_name", "")
+        title = item.get("video_title", "")
+        label = f'{channel} \u2014 "{title}"' if channel else title
+        num = len(lines) + 1
         lines.append(f"V{num}. [{label}]({url})")
     return "\n".join(lines)
 
@@ -1054,7 +1058,7 @@ def generate_weekly_article(
 
     # ── 11. CHECKLIST (programmatic quality gate) ────────────────
     with _step(step_data, "checklist", t0_total) as s:
-        videos_md = _format_videos(unified_videos)
+        videos_md = _format_videos(all_items)
         checklist = run_checklist(
             polished_body,
             unified_sources,
