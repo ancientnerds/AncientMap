@@ -304,6 +304,8 @@ async def get_radar(
     sort_by: str = Query("score", pattern="^(score|mentions|recency)$"),
     status: str = Query("all", pattern="^(all|enriched|pending|added|rejected)$"),
     source_filter: str = Query("all", pattern="^(all|lyra|user)$"),
+    news_category: str = Query("all"),
+    hide_speculative: bool = Query(False),
     db: Session = Depends(get_db),
 ):
     """
@@ -314,7 +316,7 @@ async def get_radar(
     """
     if not _radar_limiter.check(get_client_ip(req)):
         raise HTTPException(status_code=429, detail="Too many requests")
-    cache_key = f"radar:list:{page}:{page_size}:{min_mentions}:{sort_by}:{status}:{source_filter}"
+    cache_key = f"radar:list:{page}:{page_size}:{min_mentions}:{sort_by}:{status}:{source_filter}:{news_category}:{hide_speculative}"
     cached = cache_get(cache_key)
     if cached:
         return cached
@@ -390,12 +392,18 @@ async def get_radar(
                 COUNT(DISTINCT ni.video_id) AS unique_videos,
                 COUNT(DISTINCT nc.id) AS unique_channels,
                 MAX(ni.created_at) AS last_mentioned,
-                (ARRAY_AGG(ni.screenshot_url ORDER BY ni.created_at DESC) FILTER (WHERE ni.screenshot_url IS NOT NULL))[1] AS latest_screenshot_url
+                (ARRAY_AGG(ni.screenshot_url ORDER BY ni.created_at DESC) FILTER (WHERE ni.screenshot_url IS NOT NULL))[1] AS latest_screenshot_url,
+                AVG(ni.significance) FILTER (WHERE ni.significance IS NOT NULL) AS avg_significance,
+                MODE() WITHIN GROUP (ORDER BY ni.news_category) FILTER (WHERE ni.news_category IS NOT NULL) AS top_news_category,
+                BOOL_OR(ni.speculative_tag IS NOT NULL) AS is_speculative,
+                (ARRAY_AGG(ni.speculative_tag) FILTER (WHERE ni.speculative_tag IS NOT NULL))[1] AS speculative_tag
             FROM contrib c
             JOIN news_items ni ON lower(trim(ni.site_name_extracted)) = lower(trim(c.name))
             JOIN news_videos nv ON nv.id = ni.video_id
             JOIN news_channels nc ON nc.id = nv.channel_id
             GROUP BY c.id
+            HAVING (:news_category = 'all' OR MODE() WITHIN GROUP (ORDER BY ni.news_category) FILTER (WHERE ni.news_category IS NOT NULL) = :news_category)
+               AND (:hide_speculative = false OR NOT BOOL_OR(ni.speculative_tag IS NOT NULL))
         )
         SELECT
             COUNT(*) OVER() AS _total_count,
@@ -423,7 +431,11 @@ async def get_radar(
             va.last_mentioned,
             va.videos,
             va.all_facts,
-            va.latest_screenshot_url
+            va.latest_screenshot_url,
+            va.avg_significance,
+            va.top_news_category,
+            COALESCE(va.is_speculative, false) AS is_speculative,
+            va.speculative_tag
         FROM contrib c
         LEFT JOIN video_agg va ON va.contrib_id = c.id
         ORDER BY {order_clause}
@@ -433,6 +445,8 @@ async def get_radar(
     params = {
         "min_mentions": min_mentions,
         "source_filter": source_filter,
+        "news_category": news_category,
+        "hide_speculative": hide_speculative,
         "limit": page_size,
         "offset": offset,
     }
@@ -457,6 +471,7 @@ async def get_radar(
             period_name = categorize_period(row.period_start)
 
         confidence = None
+        ai_reasoning = None
         data_sources = []
         external_sources = []
         if row.enrichment_data and isinstance(row.enrichment_data, dict):
@@ -464,6 +479,7 @@ async def get_radar(
             ident = row.enrichment_data.get("identification", {})
             if isinstance(ident, dict):
                 confidence = ident.get("confidence")
+                ai_reasoning = ident.get("reasoning")
             if row.enrichment_data.get("wikidata"):
                 data_sources.append("wikidata")
                 if isinstance(row.enrichment_data["wikidata"], dict) and row.enrichment_data[
@@ -512,6 +528,11 @@ async def get_radar(
             "period_start": row.period_start,
             "thumbnail_url": row.thumbnail_url,
             "screenshot_url": getattr(row, "latest_screenshot_url", None),
+            "avg_significance": round(float(row.avg_significance), 1) if row.avg_significance else None,
+            "top_news_category": getattr(row, "top_news_category", None),
+            "is_speculative": getattr(row, "is_speculative", False),
+            "speculative_tag": getattr(row, "speculative_tag", None),
+            "ai_reasoning": ai_reasoning,
             "wikipedia_url": row.wikipedia_url,
             "lat": row.lat,
             "lon": row.lon,
