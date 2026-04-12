@@ -307,7 +307,10 @@ def verify_video_posts(
                                 if item.summary:
                                     item.summary = item.summary.replace(old_w, new_w)
                                 if item.facts:
-                                    item.facts = [f.replace(old_w, new_w) for f in item.facts]
+                                    item.facts = [
+                                        f.replace(old_w, new_w) if isinstance(f, str) else f
+                                        for f in item.facts
+                                    ]
                                 logger.info(f"Name fix in item {item.id}: {old_w} -> {new_w}")
 
                     logger.info(
