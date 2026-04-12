@@ -343,8 +343,14 @@ function RadarCard({ item, onViewSite, onPromote }: { item: RadarItem; onViewSit
         >
           <LazyImage
             src={(item.thumbnail_url || item.screenshot_url)!}
+            fallbackSrc={item.thumbnail_url && item.screenshot_url ? item.screenshot_url : undefined}
             alt={item.display_name || ''}
             className="lyra-discovery-image"
+            onError={(e) => {
+              // Hide entire image wrapper if all sources fail
+              const wrap = (e.target as HTMLElement).closest('.lyra-discovery-image-wrap')
+              if (wrap) (wrap as HTMLElement).style.display = 'none'
+            }}
           />
           <div className="lyra-image-hover-overlay">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
