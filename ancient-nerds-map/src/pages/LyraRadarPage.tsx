@@ -637,12 +637,7 @@ export default function LyraRadarPage() {
     if (id) {
       setMapHoveredId(id)
       setHighlightedCardId(id)
-      const cardEl = document.querySelector(`[data-radar-id="${id}"]`)
-      if (cardEl) {
-        cardEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
-      }
     } else {
-      // 300ms grace period so user can reach the card overlay
       hoverTimeoutRef.current = window.setTimeout(() => {
         setMapHoveredId(null)
         setHighlightedCardId(null)
@@ -652,9 +647,18 @@ export default function LyraRadarPage() {
 
   const handleMapPin = useCallback((id: string | null) => {
     if (id && id === mapPinnedId) {
-      setMapPinnedId(null)  // toggle off
+      setMapPinnedId(null)
     } else {
       setMapPinnedId(id)
+      // Scroll to the card in the right pane
+      if (id) {
+        requestAnimationFrame(() => {
+          const cardEl = document.querySelector(`[data-radar-id="${CSS.escape(id)}"]`)
+          if (cardEl) {
+            cardEl.scrollIntoView({ behavior: 'smooth', block: 'center' })
+          }
+        })
+      }
     }
   }, [mapPinnedId])
 

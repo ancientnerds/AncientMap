@@ -74,6 +74,8 @@ export default function RadarMap({ items, highlightId, filterFn, onHoverItem, on
   const mapRef = useRef<mapboxgl.Map | null>(null)
   const scanAnimRef = useRef<number>(0)
   const glowTimers = useRef<Map<string, number>>(new Map())
+  const hoverPopupRef = useRef<mapboxgl.Popup | null>(null)
+  const hoverTimerRef = useRef<number>(0)
   const prevScanDegRef = useRef(0)
   const filteredItems = filterFn ? items.filter(filterFn) : items
   const geojsonRef = useRef<GeoJSON.FeatureCollection>(buildGeoJSON(filteredItems))
@@ -167,12 +169,34 @@ export default function RadarMap({ items, highlightId, filterFn, onHoverItem, on
       map.on('mouseenter', 'radar-dots', (e) => {
         map.getCanvas().style.cursor = 'pointer'
         const id = e.features?.[0]?.properties?.id
+        const name = e.features?.[0]?.properties?.name
         if (id) onHoverItemRef.current?.(id)
+
+        // Show tooltip after 200ms
+        clearTimeout(hoverTimerRef.current)
+        if (name && e.features?.[0]) {
+          const coords = (e.features[0].geometry as GeoJSON.Point).coordinates.slice() as [number, number]
+          hoverTimerRef.current = window.setTimeout(() => {
+            hoverPopupRef.current?.remove()
+            hoverPopupRef.current = new mapboxgl.Popup({
+              closeButton: false,
+              closeOnClick: false,
+              offset: 12,
+              className: 'radar-dot-tooltip',
+            })
+              .setLngLat(coords)
+              .setHTML(`<span>${name}</span>`)
+              .addTo(map)
+          }, 200)
+        }
       })
 
       map.on('mouseleave', 'radar-dots', () => {
         map.getCanvas().style.cursor = ''
         onHoverItemRef.current?.(null)
+        clearTimeout(hoverTimerRef.current)
+        hoverPopupRef.current?.remove()
+        hoverPopupRef.current = null
       })
 
       map.on('click', (e) => {
@@ -269,6 +293,8 @@ export default function RadarMap({ items, highlightId, filterFn, onHoverItem, on
       cancelAnimationFrame(scanAnimRef.current)
       glowTimers.current.forEach(t => clearTimeout(t))
       glowTimers.current.clear()
+      clearTimeout(hoverTimerRef.current)
+      hoverPopupRef.current?.remove()
       resizeObserver.disconnect()
       mapRef.current = null
       map.remove()
