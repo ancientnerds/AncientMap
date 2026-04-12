@@ -528,7 +528,9 @@ async def get_radar(
             "period_start": row.period_start,
             "thumbnail_url": row.thumbnail_url,
             "screenshot_url": getattr(row, "latest_screenshot_url", None),
-            "avg_significance": round(float(row.avg_significance), 1) if row.avg_significance else None,
+            "avg_significance": round(float(row.avg_significance), 1)
+            if row.avg_significance
+            else None,
             "top_news_category": getattr(row, "top_news_category", None),
             "is_speculative": getattr(row, "is_speculative", False),
             "speculative_tag": getattr(row, "speculative_tag", None),
