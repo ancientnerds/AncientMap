@@ -110,16 +110,12 @@ export default function RadarMap({ items, highlightId, filterFn, onHoverItem, on
         type: 'geojson',
         data: geojsonRef.current,
         promoteId: 'id',
-        cluster: true,
-        clusterMaxZoom: 8,
-        clusterRadius: 40,
       })
 
       map.addLayer({
         id: 'radar-glow',
         type: 'circle',
         source: 'radar-sites',
-        filter: ['!', ['has', 'point_count']],
         paint: {
           'circle-radius': ['case', ['boolean', ['feature-state', 'glow'], false], 14, 0],
           'circle-color': ['get', 'color'],
@@ -132,40 +128,10 @@ export default function RadarMap({ items, highlightId, filterFn, onHoverItem, on
         id: 'radar-dots',
         type: 'circle',
         source: 'radar-sites',
-        filter: ['!', ['has', 'point_count']],
         paint: {
           'circle-radius': ['case', ['boolean', ['feature-state', 'glow'], false], 7, 5],
           'circle-color': ['get', 'color'],
           'circle-opacity': 0.85,
-        },
-      })
-
-      // Cluster circles
-      map.addLayer({
-        id: 'radar-clusters',
-        type: 'circle',
-        source: 'radar-sites',
-        filter: ['has', 'point_count'],
-        paint: {
-          'circle-color': 'rgba(78, 205, 196, 0.6)',
-          'circle-radius': ['step', ['get', 'point_count'], 15, 10, 20, 50, 25],
-          'circle-stroke-width': 1,
-          'circle-stroke-color': 'rgba(78, 205, 196, 0.8)',
-        },
-      })
-
-      // Cluster count labels
-      map.addLayer({
-        id: 'radar-cluster-count',
-        type: 'symbol',
-        source: 'radar-sites',
-        filter: ['has', 'point_count'],
-        layout: {
-          'text-field': '{point_count_abbreviated}',
-          'text-size': 11,
-        },
-        paint: {
-          'text-color': '#ffffff',
         },
       })
 
@@ -217,28 +183,6 @@ export default function RadarMap({ items, highlightId, filterFn, onHoverItem, on
         } else {
           onPinItemRef.current?.(null)
         }
-      })
-
-      map.on('click', 'radar-clusters', (e) => {
-        const features = map.queryRenderedFeatures(e.point, { layers: ['radar-clusters'] })
-        const clusterId = features[0]?.properties?.cluster_id
-        if (clusterId != null) {
-          const source = map.getSource('radar-sites') as mapboxgl.GeoJSONSource
-          source.getClusterExpansionZoom(clusterId, (err, zoom) => {
-            if (err || zoom == null) return
-            map.easeTo({
-              center: (features[0].geometry as GeoJSON.Point).coordinates as [number, number],
-              zoom,
-            })
-          })
-        }
-      })
-
-      map.on('mouseenter', 'radar-clusters', () => {
-        map.getCanvas().style.cursor = 'pointer'
-      })
-      map.on('mouseleave', 'radar-clusters', () => {
-        map.getCanvas().style.cursor = ''
       })
 
       startScan()

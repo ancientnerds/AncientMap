@@ -844,17 +844,8 @@ export default function LyraRadarPage() {
         <span>Experimental — sites are AI-detected and may contain false positives, misidentifications, or inaccurate metadata. Always verify before citing.</span>
       </div>
 
-      <div className="radar-split-view">
-        {/* LEFT: Map pane */}
-        <div className="radar-split-map">
-          <Suspense fallback={<div style={{ width: '100%', height: '100%' }} />}>
-            <RadarMap items={allRadarMapItems} highlightId={highlightedCardId}
-                      filterFn={mapFilterFn}
-                      onHoverItem={handleMapHover} onPinItem={handleMapPin} />
-          </Suspense>
-
-          {/* Floating filters over map */}
-          <div className="radar-map-overlay-filters">
+      {/* Filter bar */}
+      <div className="lyra-discoveries-filters">
             <div className="lyra-filter-group">
               <span className="lyra-discoveries-filter-label">Status:</span>
               <div className="lyra-discoveries-filter-chips">
@@ -939,19 +930,26 @@ export default function LyraRadarPage() {
                 Hide speculative
               </button>
             </div>
-          </div>
+      </div>
 
-          {/* Floating stats */}
-          {stats && (
-            <div className="radar-map-overlay-stats">
-              <PageStatsBar items={[
-                { value: stats.enriched_count, label: 'enriched' } as StatItem,
-                { value: stats.pending_count, label: 'pending', sep: '·' } as StatItem,
-                { value: stats.added_count, label: 'added', sep: '·' } as StatItem,
-                { value: stats.total_sites_known, label: 'known sites', sep: '·' } as StatItem,
-              ]} />
-            </div>
-          )}
+      {/* Stats bar */}
+      {stats && (
+        <PageStatsBar items={[
+          { value: stats.enriched_count, label: 'enriched' } as StatItem,
+          { value: stats.pending_count, label: 'pending', sep: '·' } as StatItem,
+          { value: stats.added_count, label: 'added', sep: '·' } as StatItem,
+          { value: stats.total_sites_known, label: 'known sites', sep: '·' } as StatItem,
+        ]} />
+      )}
+
+      <div className="radar-split-view">
+        {/* LEFT: Map pane */}
+        <div className="radar-split-map">
+          <Suspense fallback={<div style={{ width: '100%', height: '100%' }} />}>
+            <RadarMap items={allRadarMapItems} highlightId={highlightedCardId}
+                      filterFn={mapFilterFn}
+                      onHoverItem={handleMapHover} onPinItem={handleMapPin} />
+          </Suspense>
         </div>
 
         {/* RIGHT: Card list */}

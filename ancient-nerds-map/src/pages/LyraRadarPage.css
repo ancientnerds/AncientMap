@@ -20,13 +20,13 @@
 }
 
 .lyra-discoveries-page {
-  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
   height: 100vh;
-  overflow-y: auto;
+  overflow: hidden;
   background: var(--surface-page);
   color: rgba(255, 255, 255, 0.85);
   font-family: var(--font-body);
-  padding-bottom: 40px;
 }
 
 .lyra-discoveries-filters {
@@ -917,7 +917,8 @@
 
 .radar-split-view {
   display: flex;
-  height: calc(100vh - 180px);
+  flex: 1 1 auto;
+  min-height: 0;
   overflow: hidden;
 }
 
@@ -954,44 +955,6 @@
   max-width: none;
 }
 
-/* Map overlay: filters + stats float over the map */
-.radar-map-overlay-filters {
-  position: absolute;
-  top: 10px;
-  left: 10px;
-  right: 10px;
-  z-index: 2;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  pointer-events: none;
-}
-
-.radar-map-overlay-filters > * {
-  pointer-events: auto;
-}
-
-.radar-map-overlay-filters .lyra-filter-group {
-  background: rgba(10, 26, 31, 0.85);
-  border: 1px solid rgba(78, 205, 196, 0.15);
-  border-radius: 8px;
-  padding: 4px 8px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.radar-map-overlay-stats {
-  position: absolute;
-  top: 50px;
-  left: 10px;
-  z-index: 2;
-  pointer-events: none;
-}
-
-.radar-map-overlay-stats > * {
-  pointer-events: auto;
-}
 
 /* Card highlight when hovered via map */
 .radar-card-highlighted {
