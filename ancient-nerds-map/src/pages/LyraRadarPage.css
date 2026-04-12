@@ -1112,3 +1112,36 @@
 .radar-confidence-wrapper:hover .radar-ai-tooltip {
   display: block;
 }
+
+/* Score legend overlay */
+.radar-map-legend {
+  position: absolute;
+  bottom: 30px;
+  left: 10px;
+  z-index: 2;
+  padding: 8px 12px;
+  background: rgba(10, 26, 31, 0.85);
+  border: 1px solid rgba(78, 205, 196, 0.2);
+  border-radius: 6px;
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.radar-map-legend-title {
+  margin-bottom: 4px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.radar-map-legend-bar {
+  width: 120px;
+  height: 6px;
+  border-radius: 3px;
+  background: linear-gradient(to right, hsl(0, 72%, 55%), hsl(40, 72%, 55%), hsl(80, 72%, 55%), hsl(120, 72%, 55%));
+}
+
+.radar-map-legend-labels {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 2px;
+}

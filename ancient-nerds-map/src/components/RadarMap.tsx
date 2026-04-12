@@ -12,7 +12,7 @@ import 'mapbox-gl/dist/mapbox-gl.css'
 import { MAPBOX } from '../config/mapboxConstants'
 import { applyDarkTealTheme, setupDarkFog } from '../utils/mapboxTheme'
 
-interface RadarMapItem {
+export interface RadarMapItem {
   id: string
   display_name: string
   enrichment_status: string
@@ -27,6 +27,7 @@ interface RadarMapItem {
 interface RadarMapProps {
   items: RadarMapItem[]
   highlightId?: string | null
+  filterFn?: (item: RadarMapItem) => boolean
   onHoverItem?: (id: string | null) => void
   onPinItem?: (id: string | null) => void
   children?: ReactNode
@@ -68,19 +69,20 @@ function lonToDeg(lon: number): number {
   return lon < 0 ? lon + 360 : lon
 }
 
-export default function RadarMap({ items, highlightId, onHoverItem, onPinItem, children }: RadarMapProps) {
+export default function RadarMap({ items, highlightId, filterFn, onHoverItem, onPinItem, children }: RadarMapProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<mapboxgl.Map | null>(null)
   const scanAnimRef = useRef<number>(0)
   const glowTimers = useRef<Map<string, number>>(new Map())
   const prevScanDegRef = useRef(0)
-  const geojsonRef = useRef<GeoJSON.FeatureCollection>(buildGeoJSON(items))
+  const filteredItems = filterFn ? items.filter(filterFn) : items
+  const geojsonRef = useRef<GeoJSON.FeatureCollection>(buildGeoJSON(filteredItems))
   const onHoverItemRef = useRef(onHoverItem)
   const onPinItemRef = useRef(onPinItem)
   onHoverItemRef.current = onHoverItem
   onPinItemRef.current = onPinItem
 
-  geojsonRef.current = buildGeoJSON(items)
+  geojsonRef.current = buildGeoJSON(filteredItems)
 
   useEffect(() => {
     if (!containerRef.current || !MAPBOX.ACCESS_TOKEN) return
@@ -108,12 +110,16 @@ export default function RadarMap({ items, highlightId, onHoverItem, onPinItem, c
         type: 'geojson',
         data: geojsonRef.current,
         promoteId: 'id',
+        cluster: true,
+        clusterMaxZoom: 8,
+        clusterRadius: 40,
       })
 
       map.addLayer({
         id: 'radar-glow',
         type: 'circle',
         source: 'radar-sites',
+        filter: ['!', ['has', 'point_count']],
         paint: {
           'circle-radius': ['case', ['boolean', ['feature-state', 'glow'], false], 14, 0],
           'circle-color': ['get', 'color'],
@@ -126,10 +132,40 @@ export default function RadarMap({ items, highlightId, onHoverItem, onPinItem, c
         id: 'radar-dots',
         type: 'circle',
         source: 'radar-sites',
+        filter: ['!', ['has', 'point_count']],
         paint: {
           'circle-radius': ['case', ['boolean', ['feature-state', 'glow'], false], 7, 5],
           'circle-color': ['get', 'color'],
           'circle-opacity': 0.85,
+        },
+      })
+
+      // Cluster circles
+      map.addLayer({
+        id: 'radar-clusters',
+        type: 'circle',
+        source: 'radar-sites',
+        filter: ['has', 'point_count'],
+        paint: {
+          'circle-color': 'rgba(78, 205, 196, 0.6)',
+          'circle-radius': ['step', ['get', 'point_count'], 15, 10, 20, 50, 25],
+          'circle-stroke-width': 1,
+          'circle-stroke-color': 'rgba(78, 205, 196, 0.8)',
+        },
+      })
+
+      // Cluster count labels
+      map.addLayer({
+        id: 'radar-cluster-count',
+        type: 'symbol',
+        source: 'radar-sites',
+        filter: ['has', 'point_count'],
+        layout: {
+          'text-field': '{point_count_abbreviated}',
+          'text-size': 11,
+        },
+        paint: {
+          'text-color': '#ffffff',
         },
       })
 
@@ -181,6 +217,28 @@ export default function RadarMap({ items, highlightId, onHoverItem, onPinItem, c
         } else {
           onPinItemRef.current?.(null)
         }
+      })
+
+      map.on('click', 'radar-clusters', (e) => {
+        const features = map.queryRenderedFeatures(e.point, { layers: ['radar-clusters'] })
+        const clusterId = features[0]?.properties?.cluster_id
+        if (clusterId != null) {
+          const source = map.getSource('radar-sites') as mapboxgl.GeoJSONSource
+          source.getClusterExpansionZoom(clusterId, (err, zoom) => {
+            if (err || zoom == null) return
+            map.easeTo({
+              center: (features[0].geometry as GeoJSON.Point).coordinates as [number, number],
+              zoom,
+            })
+          })
+        }
+      })
+
+      map.on('mouseenter', 'radar-clusters', () => {
+        map.getCanvas().style.cursor = 'pointer'
+      })
+      map.on('mouseleave', 'radar-clusters', () => {
+        map.getCanvas().style.cursor = ''
       })
 
       startScan()
@@ -278,7 +336,7 @@ export default function RadarMap({ items, highlightId, onHoverItem, onPinItem, c
     if (!map || !map.isStyleLoaded()) return
     const source = map.getSource('radar-sites') as mapboxgl.GeoJSONSource
     if (source) source.setData(geojsonRef.current)
-  }, [items]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [items, filterFn]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const prevHighlightRef = useRef<string | null>(null)
 
@@ -308,6 +366,14 @@ export default function RadarMap({ items, highlightId, onHoverItem, onPinItem, c
   return (
     <div className="radar-map-container">
       <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
+      <div className="radar-map-legend">
+        <div className="radar-map-legend-title">Enrichment Score</div>
+        <div className="radar-map-legend-bar" />
+        <div className="radar-map-legend-labels">
+          <span>0%</span>
+          <span>100%</span>
+        </div>
+      </div>
       {children}
     </div>
   )

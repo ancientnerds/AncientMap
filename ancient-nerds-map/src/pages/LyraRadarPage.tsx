@@ -24,6 +24,7 @@ import './LyraRadarPage.css'
 
 const LyraProfileModal = lazy(() => import('../components/LyraProfileModal'))
 const RadarMap = lazy(() => import('../components/RadarMap'))
+import type { RadarMapItem } from '../components/RadarMap'
 
 interface VideoReference {
   video_id: string
@@ -655,6 +656,14 @@ export default function LyraRadarPage() {
     }
   }, [mapPinnedId])
 
+  const mapFilterFn = useCallback((item: RadarMapItem) => {
+    if (statusFilter !== 'all') {
+      const mapped = statusFilter === 'added' ? 'promoted' : statusFilter
+      if (item.enrichment_status !== mapped) return false
+    }
+    return true
+  }, [statusFilter])
+
   const handlePromote = useCallback(async (itemId: string) => {
     if (!token) return
     try {
@@ -840,6 +849,7 @@ export default function LyraRadarPage() {
         <div className="radar-split-map">
           <Suspense fallback={<div style={{ width: '100%', height: '100%' }} />}>
             <RadarMap items={allRadarMapItems} highlightId={highlightedCardId}
+                      filterFn={mapFilterFn}
                       onHoverItem={handleMapHover} onPinItem={handleMapPin} />
           </Suspense>
 
