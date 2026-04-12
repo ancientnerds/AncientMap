@@ -118,6 +118,9 @@ class PipelineContext:
     audit_result: dict = field(default_factory=dict)
     quality_score: dict = field(default_factory=dict)
 
+    # Source images (populated in Stage 3.5, injected in Stage 9.5)
+    source_images: list = field(default_factory=list)
+
     # Tracking
     total_tokens: int = 0
     pipeline_trace: list[dict] = field(default_factory=list)
@@ -441,7 +444,7 @@ class TheoPipeline:
                 assess_sources,
                 week_start=None,  # skip D8 week date check
                 settings=self._settings,
-                max_iterations=3,
+                max_iterations=5,
             )
             emit(
                 {
@@ -454,12 +457,48 @@ class TheoPipeline:
         except Exception as exc:
             logger.warning("Presentation assessor failed (non-fatal): %s", exc)
 
+        # ====== PROGRAMMATIC CHECKLIST (runs once after assessor) ======
+        try:
+            from pipeline.lyra.research_checklist import run_research_checklist
+
+            emit({"type": "status", "content": "Running programmatic quality checklist..."})
+            checklist_result = run_research_checklist(ctx.paper_text, ctx.registry, ctx.effort)
+            ctx.audit_result["checklist"] = checklist_result.to_dict()
+            emit(
+                {
+                    "type": "status",
+                    "content": f"Checklist: {checklist_result.summary}",
+                }
+            )
+        except Exception as exc:
+            logger.warning("Research checklist failed (non-fatal): %s", exc)
+
         # ====== POST-LOOP STAGES (run once) ======
         # Stage 9 — Cover image
         try:
             await self._stage_9_images(ctx, emit)
         except Exception as exc:
             logger.warning("Image generation failed (non-fatal): %s", exc)
+
+        # Stage 9.5 — Source image injection (licensed images only)
+        if ctx.source_images:
+            try:
+                from pipeline.lyra.research_images import inject_source_images
+
+                emit({"type": "pipeline", "stage": "source_image_injection", "status": "start"})
+                ctx.paper_text = inject_source_images(
+                    ctx.paper_text, ctx.source_images, max_images=4
+                )
+                emit(
+                    {
+                        "type": "pipeline",
+                        "stage": "source_image_injection",
+                        "status": "done",
+                        "meta": {"candidates": len(ctx.source_images)},
+                    }
+                )
+            except Exception as exc:
+                logger.warning("Source image injection failed (non-fatal): %s", exc)
 
         # Stage 10 — Card description
         try:
@@ -1183,6 +1222,27 @@ class TheoPipeline:
                 f"Snippet: {source.snippet}\n"
             )
         ctx.sources_context = "\n".join(lines)
+
+        # Licensed image search — Wikimedia Commons + Met Museum (parallel)
+        try:
+            from pipeline.lyra.research_images import search_museum_images, search_wikimedia_images
+
+            wiki_imgs, museum_imgs = await asyncio.gather(
+                asyncio.to_thread(search_wikimedia_images, ctx.question, ctx.domain_tags[:5]),
+                asyncio.to_thread(search_museum_images, ctx.question, ctx.domain_tags[:5]),
+            )
+            ctx.source_images.extend(wiki_imgs)
+            ctx.source_images.extend(museum_imgs)
+            if ctx.source_images:
+                emit(
+                    {
+                        "type": "status",
+                        "content": f"Found {len(ctx.source_images)} licensed images "
+                        f"(Wikimedia: {len(wiki_imgs)}, Met Museum: {len(museum_imgs)})",
+                    }
+                )
+        except Exception as exc:
+            logger.warning("Licensed image search failed (non-fatal): %s", exc)
 
         ms = int((time.monotonic() - t0) * 1000)
         emit(
