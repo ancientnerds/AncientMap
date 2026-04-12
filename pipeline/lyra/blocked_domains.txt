@@ -4,6 +4,7 @@
 
 # Social media / UGC
 youtube.com
+youtu.be
 facebook.com
 reddit.com
 twitter.com
@@ -13,6 +14,8 @@ tiktok.com
 pinterest.com
 quora.com
 answers.yahoo.com
+linkedin.com
+threads.net
 
 # Tourism / commerce
 tripadvisor.com
@@ -38,6 +41,20 @@ coursehero.com
 medium.com
 msn.com
 scribd.com
+
+# Link shorteners / maps
+maps.app.goo.gl
+goo.gl
+bit.ly
+t.co
+
+# Podcast / merch platforms
+open.spotify.com
+podcasts.apple.com
+patreon.com
+ko-fi.com
+redbubble.com
+teespring.com
 
 # Generic
 yahoo.com

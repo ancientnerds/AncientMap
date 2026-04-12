@@ -324,15 +324,17 @@ def verify_video_posts(
                 if secs is not None:
                     item.timestamp_seconds = secs
 
-            # Save description source URLs (deduped with any existing web sources)
+            # Save description source URLs (filtered + deduped)
             if desc_source_urls:
+                from urllib.parse import urlparse
+
+                from pipeline.lyra.blocked_domains import BLOCKED_DOMAINS
+
                 existing = item.web_sources or []
                 seen = {s["url"] for s in existing if isinstance(s, dict)}
                 for url in desc_source_urls:
-                    if url not in seen:
-                        from urllib.parse import urlparse
-
-                        domain = urlparse(url).netloc.replace("www.", "")
+                    domain = urlparse(url).netloc.replace("www.", "")
+                    if url not in seen and domain not in BLOCKED_DOMAINS:
                         existing.append(
                             {"title": domain, "url": url, "snippet": "Linked in video description"}
                         )
