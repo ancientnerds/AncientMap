@@ -1026,3 +1026,89 @@
     border-top: 2px solid rgba(78, 205, 196, 0.3);
   }
 }
+
+/* Speculative warning badge */
+.radar-speculative-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #f59e0b;
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  border-radius: 4px;
+}
+
+/* News category chip */
+.radar-category-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 6px;
+  font-size: 10px;
+  font-weight: 500;
+  border-radius: 3px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.radar-category-chip--fieldwork { color: #60a5fa; background: rgba(96, 165, 250, 0.12); }
+.radar-category-chip--analysis { color: #a78bfa; background: rgba(167, 139, 250, 0.12); }
+.radar-category-chip--tech { color: #22d3ee; background: rgba(34, 211, 238, 0.12); }
+.radar-category-chip--heritage { color: #fbbf24; background: rgba(251, 191, 36, 0.12); }
+.radar-category-chip--other { color: #9ca3af; background: rgba(156, 163, 175, 0.12); }
+
+/* Significance bar */
+.radar-significance {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.radar-significance-bar {
+  flex: 1;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 2px;
+  overflow: hidden;
+  max-width: 80px;
+}
+
+.radar-significance-fill {
+  height: 100%;
+  border-radius: 2px;
+  background: rgba(78, 205, 196, 0.6);
+}
+
+/* AI reasoning tooltip */
+.radar-confidence-wrapper {
+  position: relative;
+  cursor: help;
+}
+
+.radar-ai-tooltip {
+  display: none;
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 8px 10px;
+  font-size: 11px;
+  line-height: 1.4;
+  color: rgba(255, 255, 255, 0.85);
+  background: rgba(10, 26, 31, 0.95);
+  border: 1px solid rgba(78, 205, 196, 0.3);
+  border-radius: 6px;
+  white-space: normal;
+  max-width: 280px;
+  z-index: 10;
+  margin-bottom: 4px;
+}
+
+.radar-confidence-wrapper:hover .radar-ai-tooltip {
+  display: block;
+}

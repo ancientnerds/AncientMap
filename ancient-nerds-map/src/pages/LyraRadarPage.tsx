@@ -143,23 +143,6 @@ function StatusPill({ status }: { status: string }) {
   return <span className={`lyra-status-pill ${cls}`} title={hint}>{label}</span>
 }
 
-function ConfidenceBadge({ level }: { level: string }) {
-  let cls: string
-  switch (level) {
-    case 'high':
-      cls = 'lyra-confidence-high'
-      break
-    case 'medium':
-      cls = 'lyra-confidence-medium'
-      break
-    case 'low':
-      cls = 'lyra-confidence-low'
-      break
-    default:
-      return null
-  }
-  return <span className={`lyra-status-pill ${cls}`} title={`AI confidence: ${level}`}>{level}</span>
-}
 
 const DATA_SOURCE_LABELS: Record<string, { abbr: string; title: string }> = {
   wikidata: { abbr: 'W', title: 'Wikidata' },
@@ -186,6 +169,18 @@ function scoreColor(pct: number): string {
   return `hsl(${hue}, 72%, 55%)`
 }
 
+const CATEGORY_GROUPS: Record<string, string> = {
+  excavation: 'fieldwork', survey: 'fieldwork', underwater: 'fieldwork',
+  artifact: 'analysis', dating: 'analysis', bioarchaeology: 'analysis', epigraphy: 'analysis',
+  remote_sensing: 'tech', technology: 'tech', archaeoastronomy: 'tech',
+  conservation: 'heritage', heritage: 'heritage', art: 'heritage', architecture: 'heritage',
+  theory: 'other', general: 'other', speculative: 'other',
+}
+
+function getCategoryGroup(category: string): string {
+  return CATEGORY_GROUPS[category] || 'other'
+}
+
 function ScoreBreakdown({ item }: { item: RadarItem }) {
   let earned = 0
   for (const w of SCORE_WEIGHTS) {
@@ -199,7 +194,16 @@ function ScoreBreakdown({ item }: { item: RadarItem }) {
         <span className="lyra-discovery-percentage" style={{ color: scoreColor(pct) }}>{pct}%</span>
         <span className="lyra-score-badges">
           <StatusPill status={item.enrichment_status} />
-          {item.confidence && <ConfidenceBadge level={item.confidence} />}
+          {item.confidence && (
+            <div className="radar-confidence-wrapper">
+              <span className={`lyra-status-pill lyra-confidence-${item.confidence}`} title={`AI confidence: ${item.confidence}`}>
+                {item.confidence}
+              </span>
+              {item.ai_reasoning && (
+                <div className="radar-ai-tooltip">{item.ai_reasoning}</div>
+              )}
+            </div>
+          )}
           {item.mention_count > 1 && (
             <span className="lyra-discovery-mentions" title={`Mentioned in ${item.mention_count} news items`}>
               {item.mention_count}x
@@ -230,6 +234,16 @@ function ScoreBreakdown({ item }: { item: RadarItem }) {
           <span className="lyra-source-empty">&mdash;</span>
         )}
       </div>
+      {item.avg_significance != null && (
+        <div className="radar-significance">
+          <span>Story importance</span>
+          <div className="radar-significance-bar">
+            <div className="radar-significance-fill"
+                 style={{ width: `${(item.avg_significance / 10) * 100}%` }} />
+          </div>
+          <span>{item.avg_significance}/10</span>
+        </div>
+      )}
     </div>
   )
 }
@@ -304,6 +318,12 @@ function RadarCard({ item, onViewSite, onPromote }: { item: RadarItem; onViewSit
         )}
       </div>
 
+      {item.is_speculative && item.speculative_tag && (
+        <span className="radar-speculative-badge">
+          &#9888; Speculative: {item.speculative_tag.replace(/_/g, ' ')}
+        </span>
+      )}
+
       {/* Rejection reason */}
       {item.rejection_reason && (
         <div className="lyra-discovery-rejection">
@@ -338,6 +358,11 @@ function RadarCard({ item, onViewSite, onPromote }: { item: RadarItem; onViewSit
 
       {/* 4. Metadata tags (type + period) */}
       <SiteBadges category={item.site_type} period={item.period_name} periodStart={item.period_start} size="md" />
+      {item.top_news_category && item.top_news_category !== 'general' && (
+        <span className={`radar-category-chip radar-category-chip--${getCategoryGroup(item.top_news_category)}`}>
+          {item.top_news_category.replace(/_/g, ' ')}
+        </span>
+      )}
 
       {/* 5. Thumbnail — click opens SitePopup (fallback to story screenshot) */}
       {(item.thumbnail_url || item.screenshot_url) && (
@@ -587,6 +612,8 @@ export default function LyraRadarPage() {
   const [minMentions, setMinMentions] = useState(1)
   const [sortBy, setSortBy] = useState<'score' | 'mentions' | 'recency'>('score')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
+  const [categoryFilter, setCategoryFilter] = useState('all')
+  const [hideSpeculative, setHideSpeculative] = useState(false)
   const sentinelRef = useRef<HTMLDivElement>(null)
   const gridRef = useRef<HTMLDivElement>(null)
   const [showScrollTop, setShowScrollTop] = useState(false)
@@ -661,12 +688,14 @@ export default function LyraRadarPage() {
     mentions: number = minMentions,
     sort: string = sortBy,
     statusParam: string = statusFilter,
-    srcParam: string = sourceFilter
+    srcParam: string = sourceFilter,
+    catParam: string = categoryFilter,
+    specParam: boolean = hideSpeculative
   ) => {
     try {
       setLoading(true)
       setError(null)
-      const url = `${config.api.baseUrl}/radar/list?page=${pageNum}&page_size=24&min_mentions=${mentions}&sort_by=${sort}&status=${statusParam}&source_filter=${srcParam}`
+      const url = `${config.api.baseUrl}/radar/list?page=${pageNum}&page_size=24&min_mentions=${mentions}&sort_by=${sort}&status=${statusParam}&source_filter=${srcParam}&news_category=${catParam}&hide_speculative=${specParam}`
       const resp = await fetch(url)
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
       const data: RadarResponse = await resp.json()
@@ -678,12 +707,12 @@ export default function LyraRadarPage() {
     } finally {
       setLoading(false)
     }
-  }, [minMentions, sortBy, statusFilter, sourceFilter])
+  }, [minMentions, sortBy, statusFilter, sourceFilter, categoryFilter, hideSpeculative])
 
   // Initial load & filter changes
   useEffect(() => {
-    fetchRadar(1, false, minMentions, sortBy, statusFilter, sourceFilter)
-  }, [minMentions, sortBy, statusFilter, sourceFilter])
+    fetchRadar(1, false, minMentions, sortBy, statusFilter, sourceFilter, categoryFilter, hideSpeculative)
+  }, [minMentions, sortBy, statusFilter, sourceFilter, categoryFilter, hideSpeculative])
 
   // Fetch stats
   useEffect(() => {
@@ -748,14 +777,14 @@ export default function LyraRadarPage() {
     const observer = new IntersectionObserver(
       entries => {
         if (entries[0].isIntersecting && hasMore && !loading) {
-          fetchRadar(page + 1, true, minMentions, sortBy, statusFilter, sourceFilter)
+          fetchRadar(page + 1, true, minMentions, sortBy, statusFilter, sourceFilter, categoryFilter, hideSpeculative)
         }
       },
       { rootMargin: '200px' }
     )
     observer.observe(sentinelRef.current)
     return () => observer.disconnect()
-  }, [hasMore, loading, page, fetchRadar, minMentions, sortBy, statusFilter, sourceFilter])
+  }, [hasMore, loading, page, fetchRadar, minMentions, sortBy, statusFilter, sourceFilter, categoryFilter, hideSpeculative])
 
   const handleMinMentionsChange = (value: number) => {
     setMinMentions(value)
@@ -880,6 +909,25 @@ export default function LyraRadarPage() {
                   Recent
                 </button>
               </div>
+            </div>
+            <div className="lyra-filter-group">
+              <span className="lyra-discoveries-filter-label">Category:</span>
+              <div className="lyra-discoveries-filter-chips">
+                {(['all', 'excavation', 'artifact', 'dating', 'remote_sensing', 'architecture'] as const).map(val => (
+                  <button key={val}
+                    className={`news-page-chip${categoryFilter === val ? ' active' : ''}`}
+                    onClick={() => { setCategoryFilter(val); setItems([]); setPage(1); setHasMore(false) }}>
+                    {val === 'all' ? 'All' : val.replace(/_/g, ' ')}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="lyra-filter-group">
+              <button
+                className={`news-page-chip${hideSpeculative ? ' active' : ''}`}
+                onClick={() => { setHideSpeculative(v => !v); setItems([]); setPage(1); setHasMore(false) }}>
+                Hide speculative
+              </button>
             </div>
           </div>
 
