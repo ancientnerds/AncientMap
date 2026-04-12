@@ -3,6 +3,7 @@
    ============================================================================= */
 
 .lyra-discoveries-page {
+  --radar-chrome-height: 140px;
   display: flex;
   flex-direction: column;
   height: 100vh;
@@ -928,8 +929,9 @@
 .radar-split-map {
   position: relative;
   flex: 0 0 auto;
-  aspect-ratio: 1;
   height: 100%;
+  width: calc(100vh - var(--radar-chrome-height, 140px));
+  max-width: 55%;
   min-width: 0;
 }
 
@@ -976,7 +978,7 @@
 
   .radar-split-map {
     flex: 0 0 auto;
-    aspect-ratio: auto;
+    width: 100%;
     height: 40vh;
   }
 
@@ -993,6 +995,10 @@
 }
 
 /* Radar dot tooltip */
+.radar-dot-tooltip {
+  max-width: none !important;
+}
+
 .radar-dot-tooltip .mapboxgl-popup-content {
   background: rgba(10, 26, 31, 0.92);
   border: 1px solid rgba(78, 205, 196, 0.3);
@@ -1003,6 +1009,8 @@
   color: rgba(255, 255, 255, 0.9);
   font-family: var(--font-body);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  white-space: nowrap;
+  width: fit-content;
 }
 
 .radar-dot-tooltip .mapboxgl-popup-tip {
