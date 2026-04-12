@@ -40,18 +40,8 @@ RESCORE_SCHEMA = {
             ],
         },
         "reason": {"type": "string"},
-        "entities": {
-            "type": "object",
-            "properties": {
-                "sites": {"type": "array", "items": {"type": "string"}},
-                "people": {"type": "array", "items": {"type": "string"}},
-                "cultures": {"type": "array", "items": {"type": "string"}},
-            },
-            "required": ["sites", "people", "cultures"],
-            "additionalProperties": False,
-        },
     },
-    "required": ["significance", "news_category", "speculative_tag", "reason", "entities"],
+    "required": ["significance", "news_category", "speculative_tag", "reason"],
     "additionalProperties": False,
 }
 
@@ -139,10 +129,6 @@ def rescore_pending_items(settings: LyraSettings) -> int:
                 # Save editorial judgment
                 item.score_reason = result.get("reason")
 
-                # Save extracted entities and tags
-                entities = result.get("entities")
-                if entities and isinstance(entities, dict):
-                    item.entities = entities
                 if new_sig == 1:
                     logger.info(
                         f"Rescore item {item.id}: {old_sig} -> 1 (flagged) — {result['reason']}"

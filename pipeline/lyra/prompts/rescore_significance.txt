@@ -65,7 +65,4 @@ excavation, artifact, architecture, bioarchaeology, dating, remote_sensing,
 underwater, epigraphy, conservation, heritage, theory, technology,
 archaeoastronomy, survey, art, general, speculative
 
-ENTITIES: Extract key named entities explicitly mentioned in the facts/post.
-Only include entities actually stated — do not infer or guess.
-
-Respond with ONLY a JSON object: {"significance": int (1-10), "news_category": "one of categories above", "speculative_tag": "str (optional)", "reason": "str", "entities": {"sites": ["str"], "people": ["str"], "cultures": ["str"]}}
+Respond with ONLY a JSON object: {"significance": int (1-10), "news_category": "one of categories above", "speculative_tag": "str (optional)", "reason": "str"}
