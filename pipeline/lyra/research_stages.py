@@ -460,7 +460,7 @@ def _stage_write_section(
         f"## Key findings (use the [N] markers shown when citing)\n\n"
         + "\n".join(findings_lines)
         + yt_note
-        + f"\n\n## Source key\n\n"
+        + "\n\n## Source key\n\n"
         + "\n".join(source_key_lines)
     )
 
