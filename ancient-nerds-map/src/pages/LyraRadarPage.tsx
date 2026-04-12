@@ -619,6 +619,8 @@ export default function LyraRadarPage() {
   const gridRef = useRef<HTMLDivElement>(null)
   const [showScrollTop, setShowScrollTop] = useState(false)
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>('all')
+  const [filtersExpanded, setFiltersExpanded] = useState(false)
+  const [columnCount, setColumnCount] = useState(1)
   const [allRadarMapItems, setAllRadarMapItems] = useState<RadarItem[]>([])
   const [highlightedCardId, setHighlightedCardId] = useState<string | null>(null)
   const radarMapFetched = useRef(false)
@@ -795,6 +797,18 @@ export default function LyraRadarPage() {
     return () => observer.disconnect()
   }, [hasMore, loading, page, fetchRadar, minMentions, sortBy, statusFilter, sourceFilter, categoryFilter, hideSpeculative])
 
+  // Auto-detect column count for card grid
+  useEffect(() => {
+    const el = gridRef.current
+    if (!el) return
+    const ro = new ResizeObserver(([entry]) => {
+      const w = entry.contentRect.width
+      setColumnCount(Math.max(1, Math.floor(w / 300)))
+    })
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+
   const handleMinMentionsChange = (value: number) => {
     setMinMentions(value)
     setItems([])
@@ -844,8 +858,14 @@ export default function LyraRadarPage() {
         <span>Experimental — sites are AI-detected and may contain false positives, misidentifications, or inaccurate metadata. Always verify before citing.</span>
       </div>
 
-      {/* Filter bar */}
+      {/* Filter bar — collapsed by default */}
       <div className="lyra-discoveries-filters">
+        <button className="radar-filter-toggle" onClick={() => setFiltersExpanded(v => !v)}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+          Filters
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ transform: filtersExpanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}><path d="M6 9l6 6 6-6"/></svg>
+        </button>
+        {filtersExpanded && <>
             <div className="lyra-filter-group">
               <span className="lyra-discoveries-filter-label">Status:</span>
               <div className="lyra-discoveries-filter-chips">
@@ -930,6 +950,7 @@ export default function LyraRadarPage() {
                 Hide speculative
               </button>
             </div>
+        </>}
       </div>
 
       {/* Stats bar */}
@@ -968,13 +989,16 @@ export default function LyraRadarPage() {
           )}
 
           <div className="lyra-discoveries-grid" ref={gridRef}>
-            {items.map(item => (
-              <div key={item.id} data-radar-id={item.id}
-                   className={highlightedCardId === item.id ? 'radar-card-highlighted' : ''}
-                   onMouseEnter={() => setHighlightedCardId(item.id)}
-                   onMouseLeave={() => setHighlightedCardId(null)}>
-                <RadarCard item={item} onViewSite={setSelectedSite}
-                           onPromote={isFounder ? handlePromote : undefined} />
+            {Array.from({ length: columnCount }, (_, colIdx) => (
+              <div key={colIdx} className="lyra-discoveries-column">
+                {items.filter((_, i) => i % columnCount === colIdx).map(item => (
+                  <div key={item.id} data-radar-id={item.id}
+                       onMouseEnter={() => setHighlightedCardId(item.id)}
+                       onMouseLeave={() => setHighlightedCardId(null)}>
+                    <RadarCard item={item} onViewSite={setSelectedSite}
+                               onPromote={isFounder ? handlePromote : undefined} />
+                  </div>
+                ))}
               </div>
             ))}
           </div>
