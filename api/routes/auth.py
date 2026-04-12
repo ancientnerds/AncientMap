@@ -756,6 +756,7 @@ async def admin_adjust_credits(
                     user_id=user.id,
                     amount=0,
                     reason="unlimited_set" if user.is_unlimited else "unlimited_removed",
+                    grant_period=str(int(datetime.utcnow().timestamp())),
                 )
             )
         elif body.action == "set":
@@ -765,7 +766,7 @@ async def admin_adjust_credits(
                     user_id=user.id,
                     amount=body.amount,
                     reason="founder_grant",
-                    grant_period=f"manual_{int(datetime.utcnow().timestamp())}",
+                    grant_period=str(int(datetime.utcnow().timestamp())),
                 )
             )
         elif body.action == "add":
@@ -775,7 +776,7 @@ async def admin_adjust_credits(
                     user_id=user.id,
                     amount=body.amount,
                     reason="founder_grant",
-                    grant_period=f"manual_{int(datetime.utcnow().timestamp())}",
+                    grant_period=str(int(datetime.utcnow().timestamp())),
                 )
             )
         elif body.action == "remove":
@@ -785,7 +786,7 @@ async def admin_adjust_credits(
                     user_id=user.id,
                     amount=-body.amount,
                     reason="founder_grant",
-                    grant_period=f"manual_{int(datetime.utcnow().timestamp())}",
+                    grant_period=str(int(datetime.utcnow().timestamp())),
                 )
             )
 
@@ -839,6 +840,7 @@ async def admin_bulk_credits(
                     user_id=u.id,
                     amount=body.amount,
                     reason="bulk_role_grant",
+                    grant_period=str(int(datetime.utcnow().timestamp())),
                 )
             )
 
