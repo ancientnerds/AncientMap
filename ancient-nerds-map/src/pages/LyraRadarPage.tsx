@@ -617,6 +617,8 @@ export default function LyraRadarPage() {
   const [hideSpeculative, setHideSpeculative] = useState(false)
   const sentinelRef = useRef<HTMLDivElement>(null)
   const gridRef = useRef<HTMLDivElement>(null)
+  const splitRef = useRef<HTMLDivElement>(null)
+  const mapPaneRef = useRef<HTMLDivElement>(null)
   const [showScrollTop, setShowScrollTop] = useState(false)
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>('all')
   const [filtersExpanded, setFiltersExpanded] = useState(false)
@@ -801,6 +803,19 @@ export default function LyraRadarPage() {
     return () => observer.disconnect()
   }, [hasMore, loading, page, fetchRadar, minMentions, sortBy, statusFilter, sourceFilter, categoryFilter, hideSpeculative])
 
+  // Keep map pane square (width = height of split container)
+  useEffect(() => {
+    const split = splitRef.current
+    const mapPane = mapPaneRef.current
+    if (!split || !mapPane) return
+    const ro = new ResizeObserver(([entry]) => {
+      const h = entry.contentRect.height
+      mapPane.style.width = `${h}px`
+    })
+    ro.observe(split)
+    return () => ro.disconnect()
+  }, [])
+
   // Auto-detect column count for card grid
   useEffect(() => {
     const el = gridRef.current
@@ -959,9 +974,9 @@ export default function LyraRadarPage() {
         ]} />
       )}
 
-      <div className="radar-split-view">
+      <div className="radar-split-view" ref={splitRef}>
         {/* LEFT: Map pane */}
-        <div className="radar-split-map">
+        <div className="radar-split-map" ref={mapPaneRef}>
           <Suspense fallback={<div style={{ width: '100%', height: '100%' }} />}>
             <RadarMap items={allRadarMapItems} highlightId={highlightedCardId}
                       filterFn={mapFilterFn}

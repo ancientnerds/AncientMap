@@ -182,6 +182,7 @@ export default function RadarMap({ items, highlightId, filterFn, onHoverItem, on
               closeButton: false,
               closeOnClick: false,
               offset: 12,
+              maxWidth: 'none',
               className: 'radar-dot-tooltip',
             })
               .setLngLat(coords)

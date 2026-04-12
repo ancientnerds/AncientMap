@@ -3,7 +3,6 @@
    ============================================================================= */
 
 .lyra-discoveries-page {
-  --radar-chrome-height: 140px;
   display: flex;
   flex-direction: column;
   height: 100vh;
@@ -930,8 +929,6 @@
   position: relative;
   flex: 0 0 auto;
   height: 100%;
-  width: calc(100vh - var(--radar-chrome-height, 140px));
-  max-width: 55%;
   min-width: 0;
 }
 
