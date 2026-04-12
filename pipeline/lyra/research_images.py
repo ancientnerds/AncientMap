@@ -35,29 +35,37 @@ logger = logging.getLogger(__name__)
 # License allowlist — ONLY these are legal to embed
 # ---------------------------------------------------------------------------
 
-ALLOWED_LICENSES = frozenset({
-    "CC0",
-    "CC0 1.0",
-    "Public domain",
-    "Public Domain",
-    "CC BY 1.0",
-    "CC BY 2.0",
-    "CC BY 2.5",
-    "CC BY 3.0",
-    "CC BY 4.0",
-    "CC BY-SA 1.0",
-    "CC BY-SA 2.0",
-    "CC BY-SA 2.5",
-    "CC BY-SA 3.0",
-    "CC BY-SA 4.0",
-})
+ALLOWED_LICENSES = frozenset(
+    {
+        "CC0",
+        "CC0 1.0",
+        "Public domain",
+        "Public Domain",
+        "CC BY 1.0",
+        "CC BY 2.0",
+        "CC BY 2.5",
+        "CC BY 3.0",
+        "CC BY 4.0",
+        "CC BY-SA 1.0",
+        "CC BY-SA 2.0",
+        "CC BY-SA 2.5",
+        "CC BY-SA 3.0",
+        "CC BY-SA 4.0",
+    }
+)
 
 # Normalized prefix check for license variants (e.g. "CC BY-SA 4.0 International")
 _LICENSE_PREFIXES = (
     "cc0",
     "public domain",
-    "cc by 1", "cc by 2", "cc by 3", "cc by 4",
-    "cc by-sa 1", "cc by-sa 2", "cc by-sa 3", "cc by-sa 4",
+    "cc by 1",
+    "cc by 2",
+    "cc by 3",
+    "cc by 4",
+    "cc by-sa 1",
+    "cc by-sa 2",
+    "cc by-sa 3",
+    "cc by-sa 4",
 )
 
 COMMONS_API_URL = "https://commons.wikimedia.org/w/api.php"
@@ -184,8 +192,9 @@ def search_wikimedia_images(topic: str, keywords: list[str]) -> list[SourceImage
 
         # HARD FILTER: reject unlicensed images
         if not _is_license_allowed(license_name):
-            logger.debug("Skipping unlicensed image: %s (license: %s)",
-                         page.get("title", ""), license_name)
+            logger.debug(
+                "Skipping unlicensed image: %s (license: %s)", page.get("title", ""), license_name
+            )
             continue
 
         # Clean HTML from metadata fields
@@ -210,16 +219,18 @@ def search_wikimedia_images(topic: str, keywords: list[str]) -> list[SourceImage
         # Quality score: with description = 3, without = 1
         quality = 3 if description else 1
 
-        results.append(SourceImage(
-            url=thumb_url,
-            alt_text=alt_text,
-            attribution=attribution,
-            source_url=source_url,
-            license=license_name,
-            keywords=_significant_keywords(f"{alt_text} {title} {description}"),
-            quality_score=quality,
-            author=author,
-        ))
+        results.append(
+            SourceImage(
+                url=thumb_url,
+                alt_text=alt_text,
+                attribution=attribution,
+                source_url=source_url,
+                license=license_name,
+                keywords=_significant_keywords(f"{alt_text} {title} {description}"),
+                quality_score=quality,
+                author=author,
+            )
+        )
 
         if len(results) >= 5:
             break
@@ -308,21 +319,25 @@ def search_museum_images(topic: str, keywords: list[str]) -> list[SourceImage]:
             alt_text = ", ".join(parts)
 
             # Source URL
-            source_url = obj.get("objectURL", f"https://www.metmuseum.org/art/collection/search/{obj_id}")
+            source_url = obj.get(
+                "objectURL", f"https://www.metmuseum.org/art/collection/search/{obj_id}"
+            )
 
             # Attribution (always CC0)
             attribution = "Metropolitan Museum of Art, Public Domain (CC0)"
 
-            results.append(SourceImage(
-                url=image_url,
-                alt_text=alt_text,
-                attribution=attribution,
-                source_url=source_url,
-                license="CC0",
-                keywords=_significant_keywords(f"{title} {culture} {department} {artist}"),
-                quality_score=2,
-                author=artist or "Metropolitan Museum of Art",
-            ))
+            results.append(
+                SourceImage(
+                    url=image_url,
+                    alt_text=alt_text,
+                    attribution=attribution,
+                    source_url=source_url,
+                    license="CC0",
+                    keywords=_significant_keywords(f"{title} {culture} {department} {artist}"),
+                    quality_score=2,
+                    author=artist or "Metropolitan Museum of Art",
+                )
+            )
 
             # Be polite to the API
             time.sleep(0.1)
@@ -363,7 +378,7 @@ def inject_source_images(
 
     # Sort by quality_score descending, take top candidates
     safe_images.sort(key=lambda img: img.quality_score, reverse=True)
-    candidates = safe_images[:max_images * 2]  # Keep extras for matching
+    candidates = safe_images[: max_images * 2]  # Keep extras for matching
 
     # Split paper into paragraphs with section awareness
     _SKIP_SECTIONS = frozenset({"abstract", "introduction", "references", "sources"})
@@ -392,12 +407,14 @@ def inject_source_images(
             para_text = "\n".join(para_lines)
             # Only consider substantial paragraphs (>80 chars)
             if len(para_text) > 80 and not para_text.startswith("!["):
-                paragraphs.append({
-                    "text": para_text,
-                    "line_idx": start_idx,
-                    "section": current_section,
-                    "keywords": _significant_keywords(para_text),
-                })
+                paragraphs.append(
+                    {
+                        "text": para_text,
+                        "line_idx": start_idx,
+                        "section": current_section,
+                        "keywords": _significant_keywords(para_text),
+                    }
+                )
         else:
             i += 1
 

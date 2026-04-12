@@ -24,15 +24,17 @@ from pipeline.lyra.theo_citations import CitationRegistry
 logger = logging.getLogger(__name__)
 
 # Sections exempt from citation requirements
-_EXEMPT_SECTIONS = frozenset({
-    "abstract",
-    "introduction",
-    "methodology",
-    "references",
-    "sources",
-    "acknowledgements",
-    "acknowledgments",
-})
+_EXEMPT_SECTIONS = frozenset(
+    {
+        "abstract",
+        "introduction",
+        "methodology",
+        "references",
+        "sources",
+        "acknowledgements",
+        "acknowledgments",
+    }
+)
 
 
 # ---------------------------------------------------------------------------
@@ -139,7 +141,9 @@ def _check_section_structure(body: str, effort: str = "article") -> CheckResult:
 
         body_sections = [h for h in headings if h not in _EXEMPT_SECTIONS]
         if not body_sections:
-            issues.append("No body sections (need at least one ## section beyond Abstract/Introduction/References)")
+            issues.append(
+                "No body sections (need at least one ## section beyond Abstract/Introduction/References)"
+            )
 
     if issues:
         return CheckResult(passed=False, message="; ".join(issues), details=issues)
