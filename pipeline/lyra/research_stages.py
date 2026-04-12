@@ -285,9 +285,17 @@ def _stage_audit(
                 if rid:
                     rejected_ids.add(rid)
 
-    # Remove rejected sources
+    # Remove rejected sources (protect YouTube — they're primary sources)
+    yt_domains = ("youtu.be/", "youtube.com/")
+    protected = 0
     for rid in rejected_ids:
+        source = registry.sources.get(rid)
+        if source and source.url and any(d in source.url for d in yt_domains):
+            protected += 1
+            continue  # never reject the video the story came from
         registry.sources.pop(rid, None)
+    if protected:
+        logger.info("[journal] Protected %d YouTube source(s) from rejection", protected)
 
     ms = int((time.monotonic() - t0) * 1000)
     logger.info(

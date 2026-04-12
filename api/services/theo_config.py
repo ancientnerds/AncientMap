@@ -22,6 +22,7 @@ THEO_CREDIT_COSTS: dict[str, int] = {
     "article": 600,  # ~30 min
     "review": 1000,  # ~50 min
     "thesis": 1800,  # ~90 min
+    "dissertation": 3600,  # ~3 hours
 }
 
 # M2.7 token budget per individual call (not total).
@@ -125,5 +126,20 @@ EFFORT_CONFIG: dict[str, TierConfig] = {
         max_tokens_synthesis=THEO_MAX_TOKENS_SYNTHESIS,
         source_apis="exhaustive",
         max_pipeline_iterations=5,
+    ),
+    "dissertation": TierConfig(
+        academic_format="Dissertation",
+        specialists_count=14,
+        max_search_queries=40,
+        convergence_stage1=5,
+        convergence_stage3=True,
+        convergence_stage5=2,
+        debate_rounds=4,
+        devils_advocate=True,
+        simplified_moderator=False,
+        max_tokens_per_call=THEO_MAX_TOKENS,
+        max_tokens_synthesis=THEO_MAX_TOKENS_SYNTHESIS,
+        source_apis="exhaustive",
+        max_pipeline_iterations=8,
     ),
 }

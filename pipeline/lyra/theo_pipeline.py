@@ -48,7 +48,7 @@ logger = logging.getLogger(__name__)
 PROMPTS_DIR = Path(__file__).parent / "prompts"
 
 # Max parallel specialist calls to MiniMax
-_SPECIALIST_WORKERS = 3
+_SPECIALIST_WORKERS = 5
 
 
 # ---------------------------------------------------------------------------

@@ -541,9 +541,20 @@
   text-transform: uppercase;
 }
 
-.theo-spec-icon {
-  font-size: 16px;
-  line-height: 1;
+.theo-spec-pfp {
+  width: 36px;
+  height: 36px;
+  object-fit: cover;
+  border: 1px solid var(--border-default);
+}
+
+.theo-spec-pfp-fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface-sunken);
+  color: var(--text-muted);
+  font-size: 14px;
 }
 
 .theo-spec-notice {
@@ -1046,6 +1057,85 @@
   padding-left: 14px;
   color: var(--text-muted);
   margin: 12px 0;
+}
+
+/* — Citation links (superscript style, matching journal articles) — */
+.theo-citation-link {
+  color: var(--text-link);
+  font-size: 11px;
+  font-weight: 600;
+  vertical-align: super;
+  line-height: 0;
+  text-decoration: none;
+  padding: 0 1px;
+}
+.theo-citation-link:hover {
+  text-decoration: underline;
+}
+
+/* — Source images with attribution — */
+.theo-source-image {
+  margin: 16px 0;
+  max-width: 600px;
+}
+.theo-source-image img {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+.theo-source-image figcaption {
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.4;
+  margin-top: 4px;
+  font-style: italic;
+}
+.theo-image-attribution {
+  display: block;
+  font-size: 11px;
+  color: var(--text-dimmed);
+  margin-top: -8px;
+  margin-bottom: 12px;
+}
+
+/* — Quality audit bars — */
+.theo-audit-body {
+  padding: 12px 20px;
+  border-top: 1px solid var(--border-default);
+}
+.theo-audit-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.theo-audit-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.theo-audit-label {
+  font-size: 12px;
+  color: var(--text-muted);
+  min-width: 140px;
+  text-align: right;
+}
+.theo-audit-bar-bg {
+  flex: 1;
+  height: 6px;
+  background: var(--surface-sunken);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.theo-audit-bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+.theo-audit-score {
+  font-size: 12px;
+  color: var(--text-dimmed);
+  min-width: 36px;
+  font-variant-numeric: tabular-nums;
 }
 
 /* — Report Body container — */

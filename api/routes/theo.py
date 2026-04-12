@@ -101,7 +101,7 @@ class DuplicateCheckRequest(BaseModel):
 
 def _estimate_minutes(effort: str, queue_position: int) -> int:
     """Rough estimate based on effort and queue position."""
-    base = {"brief": 5, "note": 15, "article": 30, "review": 50, "thesis": 90}.get(effort, 30)
+    base = {"brief": 5, "note": 15, "article": 30, "review": 50, "thesis": 90, "dissertation": 180}.get(effort, 30)
     return base * max(queue_position, 1)
 
 

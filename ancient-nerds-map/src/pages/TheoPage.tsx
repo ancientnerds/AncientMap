@@ -22,14 +22,15 @@ const EFFORTS = [
   { key: 'article', label: 'Journal Article', time: '~30 min', desc: '5 specialists, quality verified', credits: 600 },
   { key: 'review', label: 'Literature Review', time: '~50 min', desc: '6 specialists, debate + verification', credits: 1000 },
   { key: 'thesis', label: 'Thesis Chapter', time: '~90 min', desc: '8 specialists, multi-round debate', credits: 1800 },
+  { key: 'dissertation', label: 'Dissertation', time: '~3 hours', desc: '14 specialists, exhaustive multi-round debate', credits: 3600 },
 ] as const
 
 const EFFORT_LABELS: Record<string, string> = {
-  brief: 'Brief', note: 'Note', article: 'Article', review: 'Review', thesis: 'Thesis',
+  brief: 'Brief', note: 'Note', article: 'Article', review: 'Review', thesis: 'Thesis', dissertation: 'Dissertation',
 }
 
 const SPECIALIST_COUNTS: Record<string, number> = {
-  brief: 1, note: 3, article: 5, review: 6, thesis: 8,
+  brief: 1, note: 3, article: 5, review: 6, thesis: 8, dissertation: 14,
 }
 
 function TruncatedQuestion({ text, max = 200 }: { text: string; max?: number }) {
@@ -49,40 +50,40 @@ function TruncatedQuestion({ text, max = 200 }: { text: string; max?: number }) 
   )
 }
 
-const SPECIALIST_ICONS: Record<string, string> = {
-  field_archaeologist: '\u26cf\ufe0f',     // pick
-  ceramic_analyst: '\ud83c\udffa',         // amphora
-  lithics_specialist: '\ud83e\udea8',      // rock
-  bioarchaeologist: '\ud83e\uddb4',        // bone
-  geoarchaeologist: '\ud83c\udf0d',        // globe
-  dating_specialist: '\u231b',             // hourglass
-  epigrapher: '\ud83d\udcdc',             // scroll
-  ancient_historian: '\ud83d\udcda',       // books
-  anthropologist: '\ud83e\uddd1\u200d\ud83c\udfeb', // teacher
-  underwater_archaeologist: '\ud83c\udf0a', // wave
-  remote_sensing_expert: '\ud83d\udef0\ufe0f', // satellite
-  conservation_specialist: '\ud83d\udee1\ufe0f', // shield
-  archaeobotanist: '\ud83c\udf3f',         // herb
-  numismatist: '\ud83e\ude99',             // coin
-  archaeoastronomer: '\ud83d\udd2d',       // telescope
-  zooarchaeologist: '\ud83e\uddb7',        // mammoth
-  classical_archaeologist: '\ud83c\udfdb\ufe0f', // classical building
-  prehistorian: '\ud83e\uddac',            // bison
-  geologist: '\u26f0\ufe0f',               // mountain
-  paleoclimatologist: '\ud83c\udf21\ufe0f', // thermometer
-  ancient_dna_specialist: '\ud83e\uddec',  // DNA
-  archaeometallurgist: '\u2699\ufe0f',     // gear
-  volcanologist: '\ud83c\udf0b',           // volcano
-  physicist: '\u269b\ufe0f',               // atom
-  archaeochemist: '\ud83e\uddea',          // test tube
-  paleoanthropologist: '\ud83e\uddd1\u200d\ud83d\udd2c', // scientist
-  structural_engineer: '\ud83c\udfd7\ufe0f', // construction
-  historical_linguist: '\ud83d\udde3\ufe0f', // speaking
-  architect: '\ud83d\udcd0',               // triangular ruler
-  alternative_history_researcher: '\ud83d\udd0d', // magnifier
-  comparative_mythologist: '\ud83d\udc09', // dragon
-  esoteric_traditions_scholar: '\u2721\ufe0f', // star of david
-  anomalous_phenomena_analyst: '\ud83d\udef8', // UFO
+const SPECIALIST_PFPS: Record<string, string> = {
+  field_archaeologist: 'artemis-greenleaf.webp',
+  ceramic_analyst: 'carina-firetail.webp',
+  lithics_specialist: 'nova-stonepaw.webp',
+  bioarchaeologist: 'arcturus-frostbite.webp',
+  geoarchaeologist: 'gaia-earthsong.webp',
+  dating_specialist: 'chronos-timewalker.webp',
+  epigrapher: 'astra-quilldancer.webp',
+  ancient_historian: 'aeon-timegazer.webp',
+  anthropologist: 'libra-balancerider.webp',
+  underwater_archaeologist: 'thalassa-seaglider.webp',
+  remote_sensing_expert: 'hyperion-techspine.webp',
+  conservation_specialist: 'elara-lightweaver.webp',
+  archaeobotanist: 'mira-petalweaver.webp',
+  numismatist: 'mercury-silversurge.webp',
+  archaeoastronomer: 'pleiades-starchaser.webp',
+  zooarchaeologist: 'leo-blazeclaw.webp',
+  classical_archaeologist: 'helios-lightbringer.webp',
+  prehistorian: 'eos-dawnseeker.webp',
+  geologist: 'titan-stoneshard.webp',
+  paleoclimatologist: 'rhea-stormweaver.webp',
+  ancient_dna_specialist: 'spectra-prismshifter.webp',
+  archaeometallurgist: 'talos-ironsight.webp',
+  volcanologist: 'solara-emberwave.webp',
+  alternative_history_researcher: 'nox-shadowmender.webp',
+  comparative_mythologist: 'spica-dreamweaver.webp',
+  esoteric_traditions_scholar: 'vesper-twilightbound.webp',
+  anomalous_phenomena_analyst: 'nix-voidseeker.webp',
+  physicist: 'pulsar-quickscale.webp',
+  archaeochemist: 'pandora-luminescent.webp',
+  paleoanthropologist: 'osiris-spiritbound.webp',
+  structural_engineer: 'aegis-steelmane.webp',
+  historical_linguist: 'lyre-moonstrider.webp',
+  architect: 'seraphina-skygazer.webp',
 }
 
 const ADAPTER_GROUP_ORDER = ['internal', 'academic', 'heritage', 'web'] as const
@@ -813,6 +814,11 @@ export default function TheoPage() {
           {/* ═══════ STAGE 1: Topic + Scope ═══════ */}
           {wizardStep === 1 && (
             <div className="theo-form">
+              {activeItems.length > 0 && (
+                <div className="theo-auto-info" style={{ marginBottom: 12 }}>
+                  Theo is currently working on a research task. Wait for it to finish before submitting a new one.
+                </div>
+              )}
               <div className="theo-input-wrap">
                 <textarea
                   ref={inputRef}
@@ -827,6 +833,8 @@ export default function TheoPage() {
                     sessionStorage.setItem('theo_question', v)
                   }}
                   rows={3}
+                  disabled={activeItems.length > 0}
+                  style={activeItems.length > 0 ? { opacity: 0.5 } : undefined}
                 />
               </div>
 
@@ -854,6 +862,7 @@ export default function TheoPage() {
                       key={e.key}
                       className={`theo-scope-card${effort === e.key ? ' active' : ''}`}
                       onClick={() => { setEffort(e.key); sessionStorage.setItem('theo_effort', e.key) }}
+                      disabled={activeItems.length > 0}
                     >
                       <span className="theo-scope-name">{e.label}</span>
                       <span className="theo-scope-time">{e.time} &middot; {e.credits} credits</span>
@@ -867,7 +876,7 @@ export default function TheoPage() {
               <div className="theo-relevance-row">
                 <button
                   className="theo-check-btn"
-                  disabled={question.trim().length < 10 || checkingRelevance}
+                  disabled={question.trim().length < 10 || checkingRelevance || activeItems.length > 0}
                   onClick={handleCheckTopic}
                 >
                   {checkingRelevance ? 'Checking...' : 'Check Topic'}
@@ -1174,7 +1183,11 @@ export default function TheoPage() {
                             onClick={() => toggleSpecialist(s.id)}
                             data-tooltip={s.perspective}
                           >
-                            <span className="theo-spec-icon">{SPECIALIST_ICONS[s.id] || '🔬'}</span>
+                            {SPECIALIST_PFPS[s.id] ? (
+                              <img src={`/data/specialists/${SPECIALIST_PFPS[s.id]}`} alt="" className="theo-spec-pfp" />
+                            ) : (
+                              <div className="theo-spec-pfp theo-spec-pfp-fallback">?</div>
+                            )}
                             <span className="theo-spec-name">{s.name}</span>
                             <span className="theo-spec-title">{s.title}</span>
                           </button>

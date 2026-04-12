@@ -1,6 +1,7 @@
 /**
  * TheoReportOverlay — Full-screen report viewer for completed research.
- * Uses ReactMarkdown with custom site: link handling (same as LyraChatModal).
+ * Renders the full paper with clickable citation links, formatted references,
+ * inline source images with attribution, and quality audit results.
  * Supports inline WYSIWYG editing via TheoEditor when isOwner is true.
  */
 
@@ -41,6 +42,65 @@ interface TheoReportOverlayProps {
   onSaveEdit?: (report: string) => void
 }
 
+const EFFORT_LABELS: Record<string, string> = {
+  brief: 'Brief', note: 'Note', article: 'Article',
+  review: 'Review', thesis: 'Thesis', dissertation: 'Dissertation',
+}
+
+// ---------------------------------------------------------------------------
+// Citation enrichment — same pattern as ArticlesPage
+// ---------------------------------------------------------------------------
+
+/** Parse the References section and return a map of [N] → URL. */
+function parseReferenceCitations(content: string): Map<number, string> {
+  const cites = new Map<number, string>()
+  // Research papers use "## References" with format: [N] Title — URL (accessed ...)
+  const refsIdx = content.search(/^## References/m)
+  if (refsIdx === -1) return cites
+  const refsList = content.slice(refsIdx)
+  // Match: [N] ... — https://... or [N] ... https://...
+  const pattern = /^\[(\d+)\].*?(https?:\/\/\S+)/gm
+  let m: RegExpExecArray | null
+  while ((m = pattern.exec(refsList)) !== null) {
+    cites.set(parseInt(m[1], 10), m[2].replace(/[)\]>,;]+$/, ''))
+  }
+  return cites
+}
+
+/** Convert [N] in body text to clickable markdown links. */
+function enrichCitations(content: string, cites: Map<number, string>): string {
+  // Don't touch the References section itself
+  const refsIdx = content.search(/^## References/m)
+  if (refsIdx === -1) {
+    return replaceInBody(content, cites)
+  }
+  const body = content.slice(0, refsIdx)
+  const refs = content.slice(refsIdx)
+  return replaceInBody(body, cites) + refs
+}
+
+function replaceInBody(body: string, cites: Map<number, string>): string {
+  // Normalize multi-citations: [6, 7] → [6] [7]
+  body = body.replace(/\[(\d+)(?:\s*,\s*(\d+))+\]/g, (match) => {
+    const nums = match.match(/\d+/g) || []
+    return nums.map(n => `[${n}]`).join(' ')
+  })
+  body = body.replace(/\](\[)/g, '] [')
+  // Replace [N] with links — use ［N］ to avoid markdown re-parsing
+  return body.replace(/(?<!\[)\[(\d+)\](?!\()/g, (_match, numStr) => {
+    const num = parseInt(numStr, 10)
+    const url = cites.get(num)
+    if (url) {
+      return `[［${num}］](${url})`
+    }
+    return `[［${num}］](#references)`
+  })
+}
+
+// ---------------------------------------------------------------------------
+// Component
+// ---------------------------------------------------------------------------
+
 export default function TheoReportOverlay({
   question,
   result,
@@ -52,6 +112,7 @@ export default function TheoReportOverlay({
   onSaveEdit,
 }: TheoReportOverlayProps) {
   const [showTrace, setShowTrace] = useState(false)
+  const [showAudit, setShowAudit] = useState(false)
   const [editing, setEditing] = useState(false)
 
   // Escape key to close (not while editing)
@@ -79,6 +140,10 @@ export default function TheoReportOverlay({
   const handleDiscardEdit = useCallback(() => {
     setEditing(false)
   }, [])
+
+  // Enrich citations: parse references, convert [N] to clickable links
+  const refCites = useMemo(() => parseReferenceCitations(result.report), [result.report])
+  const enrichedReport = useMemo(() => enrichCitations(result.report, refCites), [result.report, refCites])
 
   const mdComponents = useMemo(() => ({
     a: ({ href, children, ...props }: React.AnchorHTMLAttributes<HTMLAnchorElement>) => {
@@ -111,13 +176,50 @@ export default function TheoReportOverlay({
           </a>
         )
       }
+      // Citation links — render as superscript
+      const text = String(children).trim()
+      const numMatch = text.match(/[［\[]*(\d+)[］\]]*/)
+      if (numMatch && (href === '#references' || refCites.has(parseInt(numMatch[1], 10)))) {
+        const num = parseInt(numMatch[1], 10)
+        return (
+          <a
+            {...props}
+            href={href}
+            target={href === '#references' ? undefined : '_blank'}
+            rel={href === '#references' ? undefined : 'noopener noreferrer'}
+            className="theo-citation-link"
+          >
+            [{num}]
+          </a>
+        )
+      }
       return <a {...props} href={href} target="_blank" rel="noopener noreferrer">{children}</a>
     },
-  }), [])
+    img: ({ src, alt }: React.ImgHTMLAttributes<HTMLImageElement>) => (
+      <figure className="theo-source-image">
+        <img src={src} alt={alt || ''} loading="lazy" />
+        {alt && <figcaption>{alt}</figcaption>}
+      </figure>
+    ),
+    h2: ({ children }: React.HTMLAttributes<HTMLHeadingElement>) => {
+      const text = String(children)
+      const id = text.toLowerCase().replace(/[^\w\s-]/g, '').replace(/[\s]+/g, '-')
+      return <h2 id={id}>{children}</h2>
+    },
+    // Style italic lines after images as attribution
+    em: ({ children }: React.HTMLAttributes<HTMLElement>) => {
+      const text = String(children)
+      // Attribution lines: "Author, Wikimedia Commons, CC BY-SA 4.0" or "Metropolitan Museum..."
+      if (text.includes('Wikimedia Commons') || text.includes('Metropolitan Museum') || text.includes('Public Domain') || text.includes('CC BY')) {
+        return <span className="theo-image-attribution">{children}</span>
+      }
+      return <em>{children}</em>
+    },
+  }), [refCites])
 
   const doneStages = pipelineTrace?.filter(e => e.status === 'done' && e.stage) ?? []
-
   const readingMinutes = Math.ceil(result.report.split(/\s+/).length / 200)
+  const qs = result.quality_score
 
   return (
     <div className="theo-overlay" onClick={handleBackdropClick}>
@@ -138,7 +240,7 @@ export default function TheoReportOverlay({
               </button>
             </div>
             <div className="theo-report-meta-row">
-              <span className="theo-badge theo-badge-effort">{{ brief: 'Brief', note: 'Note', article: 'Article', review: 'Review', thesis: 'Thesis' }[effort] || effort}</span>
+              <span className="theo-badge theo-badge-effort">{EFFORT_LABELS[effort] || effort}</span>
               <QualityBadge qualityScore={result.quality_score} effort={effort} />
               <span className="theo-badge" style={{ border: '1px solid var(--border-default)', color: 'var(--text-dimmed)' }}>
                 {readingMinutes} min read
@@ -187,9 +289,47 @@ export default function TheoReportOverlay({
         ) : (
           <div className="theo-report-body theo-md-body">
             <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>
-              {result.report}
+              {enrichedReport}
             </ReactMarkdown>
           </div>
+        )}
+
+        {/* Quality Audit (collapsible) — shows dimension scores */}
+        {!editing && qs && typeof qs.total === 'number' && (
+          <>
+            <button
+              className="theo-trace-toggle"
+              onClick={() => setShowAudit(!showAudit)}
+            >
+              {showAudit ? '▾' : '▸'} Quality audit — {qs.total}/100 ({qs.badge})
+            </button>
+            {showAudit && (
+              <div className="theo-audit-body">
+                <div className="theo-audit-grid">
+                  {Object.entries(qs.dimensions).map(([dim, score]) => {
+                    const max = dim === 'citation_coverage' ? 20 : 10
+                    const pct = (score as number) / max * 100
+                    const label = dim.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+                    return (
+                      <div key={dim} className="theo-audit-row">
+                        <span className="theo-audit-label">{label}</span>
+                        <div className="theo-audit-bar-bg">
+                          <div
+                            className="theo-audit-bar-fill"
+                            style={{
+                              width: `${pct}%`,
+                              background: pct >= 80 ? '#2e7d32' : pct >= 60 ? '#f57f17' : '#c62828',
+                            }}
+                          />
+                        </div>
+                        <span className="theo-audit-score">{score as number}/{max}</span>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+          </>
         )}
 
         {/* Pipeline Trace (collapsible) — hidden during editing */}

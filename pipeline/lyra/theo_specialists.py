@@ -49,14 +49,14 @@ class Specialist:
 
 
 # ---------------------------------------------------------------------------
-# The 18 specialists
+# The 33 specialists
 # ---------------------------------------------------------------------------
 
 SPECIALIST_POOL: list[Specialist] = [
     # 1
     Specialist(
         id="field_archaeologist",
-        name="Dr. Elena Vasquez",
+        name="Artemis Greenleaf",
         title="Field Archaeologist",
         domain="Field Methods",
         perspective=(
@@ -92,7 +92,7 @@ SPECIALIST_POOL: list[Specialist] = [
     # 2
     Specialist(
         id="ceramic_analyst",
-        name="Dr. Kenji Tanaka",
+        name="Carina Firetail",
         title="Ceramic Typologist",
         domain="Ceramic Studies",
         perspective=(
@@ -128,7 +128,7 @@ SPECIALIST_POOL: list[Specialist] = [
     # 3
     Specialist(
         id="lithics_specialist",
-        name="Dr. Amara Osei",
+        name="Nova Stonepaw",
         title="Lithic Technology Specialist",
         domain="Lithic Analysis",
         perspective=(
@@ -164,7 +164,7 @@ SPECIALIST_POOL: list[Specialist] = [
     # 4
     Specialist(
         id="bioarchaeologist",
-        name="Dr. Sven Lindqvist",
+        name="Arcturus Frostbite",
         title="Bioarchaeologist",
         domain="Bioarchaeology",
         perspective=(
@@ -200,7 +200,7 @@ SPECIALIST_POOL: list[Specialist] = [
     # 5
     Specialist(
         id="geoarchaeologist",
-        name="Dr. Fatima Al-Rashid",
+        name="Gaia Earthsong",
         title="Geoarchaeologist",
         domain="Geoarchaeology",
         perspective=(
@@ -236,7 +236,7 @@ SPECIALIST_POOL: list[Specialist] = [
     # 6
     Specialist(
         id="dating_specialist",
-        name="Dr. Mikhail Petrov",
+        name="Chronos Timewalker",
         title="Chronometry Specialist",
         domain="Archaeological Dating",
         perspective=(
@@ -272,7 +272,7 @@ SPECIALIST_POOL: list[Specialist] = [
     # 7
     Specialist(
         id="epigrapher",
-        name="Dr. Camille Beaumont",
+        name="Astra Quilldancer",
         title="Epigrapher and Philologist",
         domain="Epigraphy",
         perspective=(
@@ -308,7 +308,7 @@ SPECIALIST_POOL: list[Specialist] = [
     # 8
     Specialist(
         id="ancient_historian",
-        name="Dr. Marcus Chen",
+        name="Aeon Timegazer",
         title="Ancient Historian",
         domain="Ancient History",
         perspective=(
@@ -343,7 +343,7 @@ SPECIALIST_POOL: list[Specialist] = [
     # 9
     Specialist(
         id="anthropologist",
-        name="Dr. Ingrid Solheim",
+        name="Libra Balancerider",
         title="Cultural Anthropologist",
         domain="Cultural Anthropology",
         perspective=(
@@ -378,7 +378,7 @@ SPECIALIST_POOL: list[Specialist] = [
     # 10
     Specialist(
         id="underwater_archaeologist",
-        name="Dr. Carlos Rivera",
+        name="Thalassa Seaglider",
         title="Maritime Archaeologist",
         domain="Maritime Archaeology",
         perspective=(
@@ -414,7 +414,7 @@ SPECIALIST_POOL: list[Specialist] = [
     # 11
     Specialist(
         id="remote_sensing_expert",
-        name="Dr. Sarah Okonkwo",
+        name="Hyperion Techspine",
         title="Remote Sensing Specialist",
         domain="Remote Sensing",
         perspective=(
@@ -450,7 +450,7 @@ SPECIALIST_POOL: list[Specialist] = [
     # 12
     Specialist(
         id="conservation_specialist",
-        name="Dr. Tomoko Hayashi",
+        name="Elara Lightweaver",
         title="Heritage Conservation Expert",
         domain="Heritage Conservation",
         perspective=(
@@ -485,7 +485,7 @@ SPECIALIST_POOL: list[Specialist] = [
     # 13
     Specialist(
         id="archaeobotanist",
-        name="Dr. Priya Sharma",
+        name="Mira Petalweaver",
         title="Archaeobotanist",
         domain="Archaeobotany",
         perspective=(
@@ -521,7 +521,7 @@ SPECIALIST_POOL: list[Specialist] = [
     # 14
     Specialist(
         id="numismatist",
-        name="Dr. Alexandros Papadopoulos",
+        name="Mercury Silversurge",
         title="Numismatist",
         domain="Numismatics",
         perspective=(
@@ -557,7 +557,7 @@ SPECIALIST_POOL: list[Specialist] = [
     # 15
     Specialist(
         id="archaeoastronomer",
-        name="Dr. Quilla Mamani",
+        name="Pleiades Starchaser",
         title="Archaeoastronomer",
         domain="Archaeoastronomy",
         perspective=(
@@ -593,7 +593,7 @@ SPECIALIST_POOL: list[Specialist] = [
     # 16
     Specialist(
         id="zooarchaeologist",
-        name="Dr. Brendan O'Neill",
+        name="Leo Blazeclaw",
         title="Zooarchaeologist",
         domain="Zooarchaeology",
         perspective=(
@@ -630,7 +630,7 @@ SPECIALIST_POOL: list[Specialist] = [
     # 17
     Specialist(
         id="classical_archaeologist",
-        name="Dr. Livia Fontana",
+        name="Helios Lightbringer",
         title="Classical Archaeologist",
         domain="Classical Archaeology",
         perspective=(
@@ -666,7 +666,7 @@ SPECIALIST_POOL: list[Specialist] = [
     # 18
     Specialist(
         id="prehistorian",
-        name="Dr. Nkechi Adeyemi",
+        name="Eos Dawnseeker",
         title="Prehistorian",
         domain="Prehistory",
         perspective=(
@@ -701,7 +701,7 @@ SPECIALIST_POOL: list[Specialist] = [
     # --- Interdisciplinary science specialists ---
     Specialist(
         id="geologist",
-        name="Dr. Henrik Johansson",
+        name="Titan Stoneshard",
         title="Geologist",
         domain="Geology",
         perspective=(
@@ -745,7 +745,7 @@ SPECIALIST_POOL: list[Specialist] = [
     ),
     Specialist(
         id="paleoclimatologist",
-        name="Dr. Yuki Nakamura",
+        name="Rhea Stormweaver",
         title="Paleoclimatologist",
         domain="Paleoclimatology",
         perspective=(
@@ -788,7 +788,7 @@ SPECIALIST_POOL: list[Specialist] = [
     ),
     Specialist(
         id="ancient_dna_specialist",
-        name="Dr. Elif Demir",
+        name="Spectra Prismshifter",
         title="Ancient DNA Specialist",
         domain="Archaeogenomics",
         perspective=(
@@ -830,7 +830,7 @@ SPECIALIST_POOL: list[Specialist] = [
     ),
     Specialist(
         id="archaeometallurgist",
-        name="Dr. Rajesh Gupta",
+        name="Talos Ironsight",
         title="Archaeometallurgist",
         domain="Ancient Metallurgy",
         perspective=(
@@ -872,7 +872,7 @@ SPECIALIST_POOL: list[Specialist] = [
     ),
     Specialist(
         id="volcanologist",
-        name="Dr. Maria Papadaki",
+        name="Solara Emberwave",
         title="Volcanologist",
         domain="Volcanology",
         perspective=(
@@ -914,7 +914,7 @@ SPECIALIST_POOL: list[Specialist] = [
     # --- Fringe / alternative history specialists ---
     Specialist(
         id="alternative_history_researcher",
-        name="Dr. Julian Graves",
+        name="Nox Shadowmender",
         title="Alternative History Researcher",
         domain="Alternative Archaeology",
         perspective=(
@@ -962,7 +962,7 @@ SPECIALIST_POOL: list[Specialist] = [
     ),
     Specialist(
         id="comparative_mythologist",
-        name="Dr. Ariadne Kostopoulos",
+        name="Spica Dreamweaver",
         title="Comparative Mythologist",
         domain="Comparative Mythology",
         perspective=(
@@ -1014,7 +1014,7 @@ SPECIALIST_POOL: list[Specialist] = [
     ),
     Specialist(
         id="esoteric_traditions_scholar",
-        name="Dr. Tomas Verdier",
+        name="Vesper Twilightbound",
         title="Esoteric Traditions Scholar",
         domain="Esoteric Studies",
         perspective=(
@@ -1065,7 +1065,7 @@ SPECIALIST_POOL: list[Specialist] = [
     ),
     Specialist(
         id="anomalous_phenomena_analyst",
-        name="Dr. Kenji Murakami",
+        name="Nix Voidseeker",
         title="Anomalous Phenomena Analyst",
         domain="Anomalistics",
         perspective=(
@@ -1114,7 +1114,7 @@ SPECIALIST_POOL: list[Specialist] = [
     # --- Physics, chemistry, engineering, linguistics, anthropology ---
     Specialist(
         id="physicist",
-        name="Dr. Niels Ashworth",
+        name="Pulsar Quickscale",
         title="Archaeological Physicist",
         domain="Physics",
         perspective=(
@@ -1161,7 +1161,7 @@ SPECIALIST_POOL: list[Specialist] = [
     ),
     Specialist(
         id="archaeochemist",
-        name="Dr. Clara Monteiro",
+        name="Pandora Luminescent",
         title="Archaeological Chemist",
         domain="Archaeological Chemistry",
         perspective=(
@@ -1207,7 +1207,7 @@ SPECIALIST_POOL: list[Specialist] = [
     ),
     Specialist(
         id="paleoanthropologist",
-        name="Dr. Amani Okafor",
+        name="Osiris Spiritbound",
         title="Paleoanthropologist",
         domain="Paleoanthropology",
         perspective=(
@@ -1252,7 +1252,7 @@ SPECIALIST_POOL: list[Specialist] = [
     ),
     Specialist(
         id="structural_engineer",
-        name="Dr. Amir Rostami",
+        name="Aegis Steelmane",
         title="Structural Engineer",
         domain="Ancient Construction",
         perspective=(
@@ -1301,7 +1301,7 @@ SPECIALIST_POOL: list[Specialist] = [
     ),
     Specialist(
         id="historical_linguist",
-        name="Dr. Saga Eriksdóttir",
+        name="Lyre Moonstrider",
         title="Historical Linguist",
         domain="Historical Linguistics",
         perspective=(
@@ -1347,7 +1347,7 @@ SPECIALIST_POOL: list[Specialist] = [
     ),
     Specialist(
         id="architect",
-        name="Dr. Leila Hadid",
+        name="Seraphina Skygazer",
         title="Architectural Historian",
         domain="Ancient Architecture",
         perspective=(
