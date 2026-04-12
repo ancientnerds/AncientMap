@@ -765,6 +765,7 @@ async def admin_adjust_credits(
                     user_id=user.id,
                     amount=body.amount,
                     reason="founder_grant",
+                    grant_period=f"manual_{int(datetime.utcnow().timestamp())}",
                 )
             )
         elif body.action == "add":
@@ -774,6 +775,7 @@ async def admin_adjust_credits(
                     user_id=user.id,
                     amount=body.amount,
                     reason="founder_grant",
+                    grant_period=f"manual_{int(datetime.utcnow().timestamp())}",
                 )
             )
         elif body.action == "remove":
@@ -783,6 +785,7 @@ async def admin_adjust_credits(
                     user_id=user.id,
                     amount=-body.amount,
                     reason="founder_grant",
+                    grant_period=f"manual_{int(datetime.utcnow().timestamp())}",
                 )
             )
 
