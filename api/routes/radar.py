@@ -389,7 +389,8 @@ async def get_radar(
                 jsonb_agg(ni.facts) FILTER (WHERE ni.facts IS NOT NULL) AS all_facts,
                 COUNT(DISTINCT ni.video_id) AS unique_videos,
                 COUNT(DISTINCT nc.id) AS unique_channels,
-                MAX(ni.created_at) AS last_mentioned
+                MAX(ni.created_at) AS last_mentioned,
+                (ARRAY_AGG(ni.screenshot_url ORDER BY ni.created_at DESC) FILTER (WHERE ni.screenshot_url IS NOT NULL))[1] AS latest_screenshot_url
             FROM contrib c
             JOIN news_items ni ON lower(trim(ni.site_name_extracted)) = lower(trim(c.name))
             JOIN news_videos nv ON nv.id = ni.video_id
@@ -421,7 +422,8 @@ async def get_radar(
             c.mention_count,
             va.last_mentioned,
             va.videos,
-            va.all_facts
+            va.all_facts,
+            va.latest_screenshot_url
         FROM contrib c
         LEFT JOIN video_agg va ON va.contrib_id = c.id
         ORDER BY {order_clause}
@@ -509,6 +511,7 @@ async def get_radar(
             "period_name": period_name,
             "period_start": row.period_start,
             "thumbnail_url": row.thumbnail_url,
+            "screenshot_url": getattr(row, "latest_screenshot_url", None),
             "wikipedia_url": row.wikipedia_url,
             "lat": row.lat,
             "lon": row.lon,

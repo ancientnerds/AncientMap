@@ -34,9 +34,9 @@ interface RadarMapProps {
 const SWEEP_MS = 12000 // 12 seconds per full rotation
 const GLOW_MS = 1200
 
-/** 0% → red (hsl 0), 100% → green (hsl 120) — matches LyraRadarPage scoreColor */
+/** Power curve so 75% = yellow, 85% = yellow-green, 95%+ = green — matches LyraRadarPage scoreColor */
 function scoreToColor(pct: number): string {
-  const hue = Math.round((pct / 100) * 120)
+  const hue = Math.round(Math.pow(pct / 100, 2.5) * 120)
   return `hsl(${hue}, 72%, 55%)`
 }
 

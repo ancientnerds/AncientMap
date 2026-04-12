@@ -62,6 +62,7 @@ interface RadarItem {
   period_name: string | null
   period_start: number | null
   thumbnail_url: string | null
+  screenshot_url: string | null
   wikipedia_url: string | null
   lat: number | null
   lon: number | null
@@ -175,8 +176,8 @@ const SCORE_WEIGHTS = [
 ] as const
 
 function scoreColor(pct: number): string {
-  // 0% = red (hsl 0), 100% = green (hsl 120)
-  const hue = Math.round((pct / 100) * 120)
+  // Power curve so 75% = yellow, 85% = yellow-green, 95%+ = green
+  const hue = Math.round(Math.pow(pct / 100, 2.5) * 120)
   return `hsl(${hue}, 72%, 55%)`
 }
 
@@ -333,15 +334,15 @@ function RadarCard({ item, onViewSite, onPromote }: { item: RadarItem; onViewSit
       {/* 4. Metadata tags (type + period) */}
       <SiteBadges category={item.site_type} period={item.period_name} periodStart={item.period_start} size="md" />
 
-      {/* 5. Thumbnail — click opens SitePopup */}
-      {item.thumbnail_url && (
+      {/* 5. Thumbnail — click opens SitePopup (fallback to story screenshot) */}
+      {(item.thumbnail_url || item.screenshot_url) && (
         <div
           className="lyra-discovery-image-wrap lyra-image-clickable"
-          key={item.thumbnail_url}
+          key={item.thumbnail_url || item.screenshot_url}
           onClick={() => onViewSite?.(radarItemToSiteData(item))}
         >
           <LazyImage
-            src={item.thumbnail_url}
+            src={(item.thumbnail_url || item.screenshot_url)!}
             alt={item.display_name || ''}
             className="lyra-discovery-image"
           />
@@ -739,6 +740,7 @@ export default function LyraRadarPage() {
           description: d.description ?? null,
           wikipedia_url: d.wikipedia_url ?? null,
           thumbnail_url: d.thumbnail_url ?? null,
+          screenshot_url: d.screenshot_url ?? null,
           wikidata_id: d.wikidata_id ?? null,
           original_name: null,
           rejection_reason: null,

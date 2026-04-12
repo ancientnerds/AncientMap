@@ -18,7 +18,15 @@ Example: Input name "Bees Bejisultan Huyek" → correct output:
 Determine whether the extracted name refers to a specific, named archaeological site. If yes, identify it with the correct name.
 
 If NOT a specific archaeological site (e.g. a region like "Egypt", a people like "the Maya", a method like "LIDAR", a person, or a vague reference like "the ruins"), set is_site to false.
-An archaeological site is any named physical location where archaeological remains exist — excavation sites, caves, temples, ruins, rock shelters, monuments, stone circles, tells, mounds, etc. The is_site field asks ONLY whether this is a real archaeological location.
+An archaeological site is a named physical location primarily known for archaeological remains that were built or significantly modified by ancient humans — excavation sites, temples, ruins, rock shelters with artifacts, monuments, stone circles, tells, mounds, etc. The is_site field asks whether this is a real archaeological location of human-made heritage.
+
+Explicitly set is_site to FALSE for:
+- Natural geographic features: canyons, mountains, rivers, lakes, valleys, waterfalls, reefs, deserts (e.g., Grand Canyon, Mount Everest, the Nile, Great Barrier Reef)
+- Caves without documented archaeological significance (a cave is only a "site" if it contains known artifacts, paintings, or human remains — e.g., Lascaux Cave = site, Mammoth Cave = not a site)
+- National parks and nature reserves (e.g., Yellowstone, Serengeti)
+- Modern tourist attractions or sightseeing destinations not primarily known for archaeological heritage
+- Living cities unless specifically referring to ancient ruins within them (e.g., "Rome" alone = false, "Forum Romanum" = true; "Athens" alone = false, "Acropolis of Athens" = true)
+- The key test: Is this place primarily known for its archaeological or historical significance, not its natural beauty or modern function?
 
 Rules:
 - Use video titles, descriptions, and tags for correct spelling when available
