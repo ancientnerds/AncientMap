@@ -415,6 +415,15 @@ def _web_verify_items(items: list[NewsItem], settings: LyraSettings) -> int:
         if not results:
             continue
 
+        # Save web search sources IMMEDIATELY — don't wait for LLM verdict
+        existing = item.web_sources or []
+        seen = {s["url"] for s in existing if isinstance(s, dict)}
+        for r in results[:5]:
+            if r.url not in seen:
+                existing.append({"title": r.title, "url": r.url, "snippet": r.snippet})
+                seen.add(r.url)
+        item.web_sources = existing
+
         search_text = "\n".join(f"- [{r.title}]({r.url}): {r.snippet}" for r in results[:5])
         facts_text = "\n".join(f"- {f}" for f in (item.facts or [])[:5])
 
@@ -428,9 +437,11 @@ def _web_verify_items(items: list[NewsItem], settings: LyraSettings) -> int:
             response_text = minimax_chat(client, "MiniMax-M2.7", web_prompt, user_msg, 4096)
         except Exception as e:
             logger.warning(f"Web verify failed for item {item.id}: {e}")
+            checked += 1
             continue
 
         if not response_text:
+            checked += 1
             continue
 
         # Parse JSON — handle markdown fencing
@@ -443,24 +454,17 @@ def _web_verify_items(items: list[NewsItem], settings: LyraSettings) -> int:
             result = json.loads(cleaned)
         except (json.JSONDecodeError, ValueError):
             logger.warning(f"Failed to parse web verify response for item {item.id}")
+            checked += 1
             continue
 
         if not isinstance(result, dict):
             logger.warning(
                 f"Web verify returned {type(result).__name__} for item {item.id}, skipping"
             )
+            checked += 1
             continue
 
         verdict = result.get("verdict", "")
-
-        # Merge web search sources with existing (description) sources, deduped by URL
-        existing = item.web_sources or []
-        seen = {s["url"] for s in existing if isinstance(s, dict)}
-        for r in results[:5]:
-            if r.url not in seen:
-                existing.append({"title": r.title, "url": r.url, "snippet": r.snippet})
-                seen.add(r.url)
-        item.web_sources = existing
 
         if verdict == "CORRECTED" and result.get("corrected_text"):
             logger.info(f"Web verify corrected item {item.id}: {result.get('reason', '')}")
