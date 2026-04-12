@@ -300,22 +300,32 @@ def _stage_specialists(
 
     def _run_one(spec):
         system_prompt, user_prompt = build_specialist_prompt(spec, question, sources_context)
-        raw = minimax_chat_anthropic(
-            system_prompt, user_prompt, _MAX_TOKENS_PER_CALL, settings=settings
-        )
-        return spec.id, raw
+        # Retry up to 2 times on unparseable JSON
+        for attempt in range(3):
+            raw = minimax_chat_anthropic(
+                system_prompt, user_prompt, _MAX_TOKENS_PER_CALL, settings=settings
+            )
+            parsed = _parse_json(raw)
+            if isinstance(parsed, dict) and parsed:
+                return spec.id, parsed
+            if attempt < 2:
+                logger.info(
+                    "[journal] Specialist %s returned unparseable output, retrying (%d/3)",
+                    spec.id,
+                    attempt + 1,
+                )
+        logger.warning("[journal] Specialist %s failed after 3 attempts", spec.id)
+        return spec.id, {}
 
     with ThreadPoolExecutor(max_workers=_SPECIALISTS_COUNT) as pool:
         futures = [pool.submit(_run_one, spec) for spec in specialists]
         for future in futures:
             try:
-                spec_id, raw = future.result(timeout=180)
+                spec_id, parsed = future.result(timeout=300)
             except Exception as exc:
                 logger.warning("[journal] Specialist call failed: %s", exc)
                 continue
-            parsed = _parse_json(raw)
             if not isinstance(parsed, dict) or not parsed:
-                logger.warning("[journal] Specialist %s returned unparseable output", spec_id)
                 continue
             analyses[spec_id] = parsed
 
@@ -464,7 +474,13 @@ def _stage_write_section(
         + "\n".join(source_key_lines)
     )
 
-    prose = minimax_chat_anthropic(system, user_msg, _MAX_TOKENS_SYNTHESIS, settings=settings)
+    # Retry up to 2 times on empty prose
+    prose = ""
+    for _write_attempt in range(3):
+        prose = minimax_chat_anthropic(system, user_msg, _MAX_TOKENS_SYNTHESIS, settings=settings)
+        if prose.strip():
+            break
+        logger.info("[journal] Write returned empty, retrying (%d/3)", _write_attempt + 1)
 
     # Strip only invalid [N] markers (numbers not in our source key)
     valid_nums = set(sid_to_num.values())
