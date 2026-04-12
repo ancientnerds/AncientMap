@@ -444,8 +444,6 @@ def _group_and_cite(
     return sections, speculative, sources
 
 
-
-
 def _generate_headline_tldr(
     body: str,
     settings: LyraSettings,
@@ -1017,9 +1015,7 @@ def generate_weekly_article(
     # ── 10. HEADLINE + TLDR ──────────────────────────────────────
     with _step(step_data, "headline", t0_total) as s:
         logger.info("Generating headline and TLDR")
-        headline, tldr = _generate_headline_tldr(
-            polished_body, settings, week_start=week_start
-        )
+        headline, tldr = _generate_headline_tldr(polished_body, settings, week_start=week_start)
         is_fallback = headline == "Weekly Archaeological Digest"
         s["count"] = 0 if is_fallback else 1
         s["status"] = "done" if not is_fallback else "fail"
@@ -1027,8 +1023,12 @@ def generate_weekly_article(
     # ── 11. CHECKLIST (programmatic quality gate) ────────────────
     with _step(step_data, "checklist", t0_total) as s:
         checklist = run_checklist(
-            polished_body, unified_sources, all_items,
-            headline, tldr, week_start,
+            polished_body,
+            unified_sources,
+            all_items,
+            headline,
+            tldr,
+            week_start,
         )
         s["count"] = sum(1 for c in checklist.checks.values() if c.passed)
         s["total"] = len(checklist.checks)

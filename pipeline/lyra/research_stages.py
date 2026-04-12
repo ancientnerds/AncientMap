@@ -468,9 +468,11 @@ def _stage_write_section(
 
     # Strip only invalid [N] markers (numbers not in our source key)
     valid_nums = set(sid_to_num.values())
+
     def _filter_citation(m: re.Match) -> str:
         num = int(m.group(1))
         return m.group() if num in valid_nums else ""
+
     prose = re.sub(r"\[(\d+)\]", _filter_citation, prose)
 
     ms = int((time.monotonic() - t0) * 1000)
@@ -708,9 +710,7 @@ def research_cluster(
 
         # ---- Stage 4: Specialists (skip if restart_stage > 4) ----
         if iteration == 0 or restart_stage <= 4:
-            specialist_analyses = _stage_specialists(
-                question, sources_context, registry, settings
-            )
+            specialist_analyses = _stage_specialists(question, sources_context, registry, settings)
             if not specialist_analyses:
                 total_ms = int((time.monotonic() - t0) * 1000)
                 logger.warning("[journal] No specialist analyses completed (%dms)", total_ms)

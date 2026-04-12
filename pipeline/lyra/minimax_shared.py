@@ -161,17 +161,24 @@ def minimax_chat_anthropic(
             last_error = e
             error_str = str(e)
             # Retry on transient server errors (500, 529, timeout)
-            is_transient = any(code in error_str for code in ("500", "529", "503", "timeout", "timed out"))
+            is_transient = any(
+                code in error_str for code in ("500", "529", "503", "timeout", "timed out")
+            )
             if is_transient and attempt < 2:
                 delay = (attempt + 1) * 3  # 3s, 6s
                 logger.warning(
                     "MiniMax M2.7 transient error (attempt %d/3), retrying in %ds: %s",
-                    attempt + 1, delay, e,
+                    attempt + 1,
+                    delay,
+                    e,
                 )
                 import time
+
                 time.sleep(delay)
                 continue
             break
 
-    logger.warning(f"MiniMax M2.7 Anthropic SDK call failed after {attempt + 1} attempts: {last_error}")
+    logger.warning(
+        f"MiniMax M2.7 Anthropic SDK call failed after {attempt + 1} attempts: {last_error}"
+    )
     return ""
