@@ -68,6 +68,4 @@ archaeoastronomy, survey, art, general, speculative
 ENTITIES: Extract key named entities explicitly mentioned in the facts/post.
 Only include entities actually stated — do not infer or guess.
 
-TAGS: Generate 3-5 descriptive tags (e.g. "megalithic", "bronze-age", "underwater", "DNA", "LiDAR", "catastrophism").
-
-Respond with ONLY a JSON object: {"significance": int (1-10), "news_category": "one of categories above", "speculative_tag": "str (optional)", "reason": "str", "entities": {"sites": ["str"], "people": ["str"], "cultures": ["str"]}, "tags": ["str"]}
+Respond with ONLY a JSON object: {"significance": int (1-10), "news_category": "one of categories above", "speculative_tag": "str (optional)", "reason": "str", "entities": {"sites": ["str"], "people": ["str"], "cultures": ["str"]}}

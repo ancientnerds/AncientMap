@@ -50,9 +50,8 @@ RESCORE_SCHEMA = {
             "required": ["sites", "people", "cultures"],
             "additionalProperties": False,
         },
-        "tags": {"type": "array", "items": {"type": "string"}},
     },
-    "required": ["significance", "news_category", "speculative_tag", "reason", "entities", "tags"],
+    "required": ["significance", "news_category", "speculative_tag", "reason", "entities"],
     "additionalProperties": False,
 }
 
@@ -144,10 +143,6 @@ def rescore_pending_items(settings: LyraSettings) -> int:
                 entities = result.get("entities")
                 if entities and isinstance(entities, dict):
                     item.entities = entities
-                tags = result.get("tags")
-                if tags and isinstance(tags, list):
-                    item.tags = tags
-
                 if new_sig == 1:
                     logger.info(
                         f"Rescore item {item.id}: {old_sig} -> 1 (flagged) — {result['reason']}"
