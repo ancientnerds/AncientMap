@@ -26,6 +26,7 @@ interface RadarMapItem {
 
 interface RadarMapProps {
   items: RadarMapItem[]
+  highlightId?: string | null
   onHoverItem?: (id: string | null) => void
   onPinItem?: (id: string | null) => void
   children?: ReactNode
@@ -67,7 +68,7 @@ function lonToDeg(lon: number): number {
   return lon < 0 ? lon + 360 : lon
 }
 
-export default function RadarMap({ items, onHoverItem, onPinItem, children }: RadarMapProps) {
+export default function RadarMap({ items, highlightId, onHoverItem, onPinItem, children }: RadarMapProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<mapboxgl.Map | null>(null)
   const scanAnimRef = useRef<number>(0)
@@ -278,6 +279,31 @@ export default function RadarMap({ items, onHoverItem, onPinItem, children }: Ra
     const source = map.getSource('radar-sites') as mapboxgl.GeoJSONSource
     if (source) source.setData(geojsonRef.current)
   }, [items]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const prevHighlightRef = useRef<string | null>(null)
+
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map || !map.isStyleLoaded()) return
+
+    // Clear previous highlight
+    if (prevHighlightRef.current) {
+      map.setFeatureState(
+        { source: 'radar-sites', id: prevHighlightRef.current },
+        { glow: false }
+      )
+    }
+
+    // Set new highlight
+    if (highlightId) {
+      map.setFeatureState(
+        { source: 'radar-sites', id: highlightId },
+        { glow: true }
+      )
+    }
+
+    prevHighlightRef.current = highlightId ?? null
+  }, [highlightId])
 
   return (
     <div className="radar-map-container">

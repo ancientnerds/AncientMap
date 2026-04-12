@@ -592,7 +592,7 @@ export default function LyraRadarPage() {
   const [showScrollTop, setShowScrollTop] = useState(false)
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>('all')
   const [allRadarMapItems, setAllRadarMapItems] = useState<RadarItem[]>([])
-  const [highlightedCardId, _setHighlightedCardId] = useState<string | null>(null)
+  const [highlightedCardId, setHighlightedCardId] = useState<string | null>(null)
   const radarMapFetched = useRef(false)
 
   // Auth (founder role check)
@@ -606,9 +606,17 @@ export default function LyraRadarPage() {
     clearTimeout(hoverTimeoutRef.current)
     if (id) {
       setMapHoveredId(id)
+      setHighlightedCardId(id)
+      const cardEl = document.querySelector(`[data-radar-id="${id}"]`)
+      if (cardEl) {
+        cardEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+      }
     } else {
       // 300ms grace period so user can reach the card overlay
-      hoverTimeoutRef.current = window.setTimeout(() => setMapHoveredId(null), 300)
+      hoverTimeoutRef.current = window.setTimeout(() => {
+        setMapHoveredId(null)
+        setHighlightedCardId(null)
+      }, 300)
     }
   }, [])
 
@@ -802,7 +810,8 @@ export default function LyraRadarPage() {
         {/* LEFT: Map pane */}
         <div className="radar-split-map">
           <Suspense fallback={<div style={{ width: '100%', height: '100%' }} />}>
-            <RadarMap items={allRadarMapItems} onHoverItem={handleMapHover} onPinItem={handleMapPin} />
+            <RadarMap items={allRadarMapItems} highlightId={highlightedCardId}
+                      onHoverItem={handleMapHover} onPinItem={handleMapPin} />
           </Suspense>
 
           {/* Floating filters over map */}
@@ -905,7 +914,9 @@ export default function LyraRadarPage() {
           <div className="lyra-discoveries-grid" ref={gridRef}>
             {items.map(item => (
               <div key={item.id} data-radar-id={item.id}
-                   className={highlightedCardId === item.id ? 'radar-card-highlighted' : ''}>
+                   className={highlightedCardId === item.id ? 'radar-card-highlighted' : ''}
+                   onMouseEnter={() => setHighlightedCardId(item.id)}
+                   onMouseLeave={() => setHighlightedCardId(null)}>
                 <RadarCard item={item} onViewSite={setSelectedSite}
                            onPromote={isFounder ? handlePromote : undefined} />
               </div>
