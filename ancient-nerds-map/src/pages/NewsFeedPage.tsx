@@ -394,14 +394,14 @@ export default function NewsFeedPage() {
             )}
             <div className="news-page-filters-bar-actions">
               <button
-                className={`news-page-chip${activeFilters.sort == null ? ' active' : ''}`}
-                onClick={() => handleFilterToggle('sort', null)}
+                className={`news-page-chip${!isBreakthroughMode && activeFilters.sort == null ? ' active' : ''}`}
+                onClick={() => setActiveFilters(prev => ({ ...prev, sort: null, min_significance: null }))}
               >
                 Latest
               </button>
               <button
-                className={`news-page-chip${activeFilters.sort === 'significance' && !isBreakthroughMode ? ' active' : ''}`}
-                onClick={() => handleFilterToggle('sort', 'significance')}
+                className={`news-page-chip${!isBreakthroughMode && activeFilters.sort === 'significance' ? ' active' : ''}`}
+                onClick={() => setActiveFilters(prev => ({ ...prev, sort: 'significance', min_significance: null }))}
               >
                 Top Rated
               </button>
