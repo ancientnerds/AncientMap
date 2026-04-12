@@ -567,9 +567,9 @@ def _get_bot() -> LyraBot:
 
             tier = get_user_tier(roles)
             tier_names = {
-                "scholar": "Scholar (Patron)",
-                "archaeologist": "Archaeologist (Patron)",
-                "explorer": "Explorer (Patron)",
+                "scholar": "Scholar",
+                "pathfinder": "Pathfinder",
+                "explorer": "Explorer",
                 "founder": "Founder",
                 "team": "Team",
                 "researcher": "Researcher",
@@ -591,7 +591,7 @@ def _get_bot() -> LyraBot:
             if tier != "scholar":
                 embed.add_field(
                     name="Upgrade",
-                    value="[Subscribe on Patreon](https://www.patreon.com/join/AncientNerds)",
+                    value="[Subscribe](https://mee6.xyz/m/932330696956063765)",
                     inline=False,
                 )
             embed.set_footer(text="ancientnerds.com")

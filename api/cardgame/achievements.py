@@ -708,7 +708,7 @@ _a(
     "archaeologist_patreon",
     "archaeologist",
     "Patron of the Arts",
-    "Become a Patreon supporter at any tier",
+    "Subscribe at any tier",
     "gold",
     1000,
     10,
@@ -2358,8 +2358,8 @@ def _check_single(
         user = session.get(DiscordUser, user_id)
         if not user or not user.roles:
             return False
-        patron_roles = {"1083785196861657198", "1083785565398380544", "1083785826586075278"}
-        return bool(set(user.roles) & patron_roles)
+        tier_roles = {"1083785196861657198", "1083785565398380544", "1083785826586075278"}
+        return bool(set(user.roles) & tier_roles)
 
     return False
 

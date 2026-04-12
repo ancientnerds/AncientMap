@@ -39,10 +39,10 @@ DISCORD_GUILD_ID = os.getenv("DISCORD_GUILD_ID", "932330696956063765")
 DISCORD_BOT_TOKEN = os.getenv("DISCORD_BOT_TOKEN", "")
 OG_NERD_ROLE_ID = "972439407086944266"
 
-# Patreon tier role IDs (configured in Discord server)
-PATRON_EXPLORER_ROLE_ID = "1083785196861657198"
-PATRON_ARCHAEOLOGIST_ROLE_ID = "1083785565398380544"
-PATRON_SCHOLAR_ROLE_ID = "1083785826586075278"
+# MEE6 Monetize tier role IDs (configured in Discord server + MEE6 dashboard)
+MEE6_EXPLORER_ROLE_ID = "1083785196861657198"
+MEE6_PATHFINDER_ROLE_ID = "1083785565398380544"
+MEE6_SCHOLAR_ROLE_ID = "1083785826586075278"
 
 # One-time credit role IDs
 TEAM_ROLE_ID = "933104896310378546"
@@ -67,22 +67,22 @@ CREDIT_ROLES: dict[str, dict] = {
     },
 }
 
-CREDIT_ROLES[PATRON_EXPLORER_ROLE_ID] = {
-    "name": "Patron Explorer",
+CREDIT_ROLES[MEE6_EXPLORER_ROLE_ID] = {
+    "name": "Explorer",
     "type": "monthly",
     "amount": 5000,
     "cap_multiplier": 1,
     "reason": "monthly_patron_explorer",
 }
-CREDIT_ROLES[PATRON_ARCHAEOLOGIST_ROLE_ID] = {
-    "name": "Patron Archaeologist",
+CREDIT_ROLES[MEE6_PATHFINDER_ROLE_ID] = {
+    "name": "Pathfinder",
     "type": "monthly",
     "amount": 15000,
     "cap_multiplier": 2,
     "reason": "monthly_patron_archaeologist",
 }
-CREDIT_ROLES[PATRON_SCHOLAR_ROLE_ID] = {
-    "name": "Patron Scholar",
+CREDIT_ROLES[MEE6_SCHOLAR_ROLE_ID] = {
+    "name": "Scholar",
     "type": "monthly",
     "amount": 50000,
     "cap_multiplier": 3,
@@ -142,14 +142,14 @@ CREDIT_ROLES[ANCIENT_NERDS_ROLE_ID] = {
 def get_user_tier(roles: list[str]) -> str:
     """Return the highest tier name for a user's roles.
 
-    Priority: Patreon tiers first, then Discord-only tiers.
+    Priority: MEE6 Monetize tiers first, then Discord-only tiers.
     """
-    # Patreon tiers (highest first)
-    if PATRON_SCHOLAR_ROLE_ID and PATRON_SCHOLAR_ROLE_ID in roles:
+    # MEE6 Monetize tiers (highest first)
+    if MEE6_SCHOLAR_ROLE_ID in roles:
         return "scholar"
-    if PATRON_ARCHAEOLOGIST_ROLE_ID and PATRON_ARCHAEOLOGIST_ROLE_ID in roles:
-        return "archaeologist"
-    if PATRON_EXPLORER_ROLE_ID and PATRON_EXPLORER_ROLE_ID in roles:
+    if MEE6_PATHFINDER_ROLE_ID in roles:
+        return "pathfinder"
+    if MEE6_EXPLORER_ROLE_ID in roles:
         return "explorer"
     # Discord-only tiers
     if FOUNDER_ROLE_ID in roles:
@@ -474,16 +474,16 @@ async def discord_oauth_callback(
                 .first()
             )
             if user:
-                # Detect newly gained patron roles → reset anchor so no backdated credits
+                # Detect newly gained tier roles → reset anchor so no backdated credits
                 old_roles = set(user.roles or [])
                 new_roles = set(roles)
-                patron_role_ids = {
-                    PATRON_EXPLORER_ROLE_ID,
-                    PATRON_ARCHAEOLOGIST_ROLE_ID,
-                    PATRON_SCHOLAR_ROLE_ID,
+                tier_role_ids = {
+                    MEE6_EXPLORER_ROLE_ID,
+                    MEE6_PATHFINDER_ROLE_ID,
+                    MEE6_SCHOLAR_ROLE_ID,
                 }
-                newly_gained_patron = (new_roles & patron_role_ids) - (old_roles & patron_role_ids)
-                if newly_gained_patron:
+                newly_gained_tier = (new_roles & tier_role_ids) - (old_roles & tier_role_ids)
+                if newly_gained_tier:
                     user.grant_anchor_date = datetime.now(UTC)
 
                 user.username = username
@@ -551,11 +551,7 @@ async def get_me(user: DiscordUser = Depends(get_current_user)):
 
         # Next grant date for monthly tiers
         next_grant_date = None
-        if (
-            tier in ("explorer", "archaeologist", "scholar")
-            and db_user
-            and db_user.grant_anchor_date
-        ):
+        if tier in ("explorer", "pathfinder", "scholar") and db_user and db_user.grant_anchor_date:
             from datetime import timedelta
 
             anchor = db_user.grant_anchor_date

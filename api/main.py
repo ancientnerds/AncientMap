@@ -45,7 +45,6 @@ from api.routes import (
     lyra,
     news,
     og,
-    patreon,
     radar,
     seo,
     sitemap,
@@ -616,7 +615,7 @@ app.mount("/api/v1", create_public_api())
 app.include_router(snapshots.router, prefix="/api/snapshots", tags=["snapshots"])
 app.include_router(vector_sync.router, prefix="/api/vector-sync", tags=["vector-sync"])
 app.include_router(wiki_images.router, prefix="/api/wiki-images", tags=["wiki-images"])
-app.include_router(patreon.router, prefix="/api/patreon", tags=["patreon"])
+
 app.include_router(interactions.router, prefix="/api/interactions", tags=["interactions"])
 app.include_router(cardgame_router, prefix="/api/cards", tags=["cards"])
 app.include_router(theo.router, prefix="/api/theo", tags=["theo"])
