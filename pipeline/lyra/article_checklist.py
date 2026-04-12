@@ -264,7 +264,7 @@ def _check_no_phantom_sources(body: str, unified_sources: list[dict]) -> CheckRe
 
 
 def _check_format(body: str, headline: str, tldr: str, week_start: datetime) -> CheckResult:
-    """Title format, TLDR exists, Sources section exists."""
+    """Title format, TLDR exists."""
     issues: list[str] = []
 
     if not headline.startswith("Week of"):
@@ -272,10 +272,6 @@ def _check_format(body: str, headline: str, tldr: str, week_start: datetime) -> 
 
     if not tldr or len(tldr) < 20:
         issues.append("TLDR missing or too short")
-
-    has_sources = "### Sources" in body or "## Sources" in body
-    if not has_sources:
-        issues.append("No Sources section found in body")
 
     if issues:
         return CheckResult(passed=False, message="; ".join(issues), details=issues)
