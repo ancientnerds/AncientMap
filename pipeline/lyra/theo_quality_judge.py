@@ -67,51 +67,53 @@ def judge_paper(
     d2 = _score_d2(audit_result)
 
     # D3-D7: LLM judge call with routing
-    d3 = d4 = d5 = d6 = d7 = 0  # worst case if judge fails
+    d3 = d4 = d5 = d6 = d7 = 0
     problems: list[dict] = []
     judge_data: dict = {}
 
-    try:
-        system = (PROMPTS_DIR / "theo_quality_judge.txt").read_text(encoding="utf-8")
+    system = (PROMPTS_DIR / "theo_quality_judge.txt").read_text(encoding="utf-8")
 
-        # Build source context for the judge
-        source_context = "\n".join(
-            f"[{s['ref_num']}] {s['title']}\nSnippet: {s['snippet'][:2000]}\n"
-            for s in source_snippets[:20]
-        )
+    source_context = "\n".join(
+        f"[{s['ref_num']}] {s['title']}\nSnippet: {s['snippet'][:2000]}\n"
+        for s in source_snippets[:20]
+    )
 
-        # Send full paper (up to 12K) for thorough review
-        paper_excerpt = paper_text[:12000]
+    paper_excerpt = paper_text[:12000]
 
-        user_msg = (
-            f"## Research question\n\n{question}\n\n"
-            f"## Paper text (first 12000 chars)\n\n{paper_excerpt}\n\n"
-            f"## Source snippets (for verification)\n\n{source_context}"
-        )
+    user_msg = (
+        f"## Research question\n\n{question}\n\n"
+        f"## Paper text (first 12000 chars)\n\n{paper_excerpt}\n\n"
+        f"## Source snippets (for verification)\n\n{source_context}"
+    )
 
-        raw = chat_fn(model, system, user_msg, 4096)
+    # Retry the judge call up to 2 times on JSON parse failure
+    for attempt in range(2):
+        try:
+            raw = chat_fn(model, system, user_msg, 4096)
 
-        # Parse JSON
-        cleaned = raw.strip()
-        if cleaned.startswith("```"):
-            cleaned = cleaned.split("\n", 1)[1] if "\n" in cleaned else cleaned[3:]
-            cleaned = cleaned.rsplit("```", 1)[0].strip()
+            cleaned = raw.strip()
+            if cleaned.startswith("```"):
+                cleaned = cleaned.split("\n", 1)[1] if "\n" in cleaned else cleaned[3:]
+                cleaned = cleaned.rsplit("```", 1)[0].strip()
 
-        judge_data = json.loads(cleaned)
+            judge_data = json.loads(cleaned)
+            break  # Success
+        except json.JSONDecodeError as exc:
+            logger.warning("Quality judge JSON parse failed (attempt %d): %s", attempt + 1, exc)
+            if attempt == 1:
+                logger.error("Quality judge failed after 2 attempts — scores will be 0")
+        except Exception as exc:
+            logger.error("Quality judge call failed: %s", exc)
+            break  # Don't retry on non-parse errors (API already retries internally)
 
-        # Extract dimension scores
-        dims = judge_data.get("dimensions", {})
-        d3 = min(10, max(0, dims.get("attribution_accuracy", 0)))
-        d4 = min(10, max(0, dims.get("source_fidelity", 0)))
-        d5 = min(10, max(0, dims.get("hedging", 0)))
-        d6 = min(10, max(0, dims.get("coherence", 0)))
-        d7 = min(10, max(0, dims.get("question_fidelity", 0)))
+    dims = judge_data.get("dimensions", {})
+    d3 = min(10, max(0, dims.get("attribution_accuracy", 0)))
+    d4 = min(10, max(0, dims.get("source_fidelity", 0)))
+    d5 = min(10, max(0, dims.get("hedging", 0)))
+    d6 = min(10, max(0, dims.get("coherence", 0)))
+    d7 = min(10, max(0, dims.get("question_fidelity", 0)))
 
-        # Extract problems
-        problems = judge_data.get("problems", [])
-
-    except Exception as exc:
-        logger.warning("Quality judge call failed: %s", exc)
+    problems = judge_data.get("problems", [])
 
     # Calculate total score
     raw_score = d1 * 2 + d2 + d3 + d4 + d5 + d6 + d7

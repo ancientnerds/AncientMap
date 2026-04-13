@@ -1867,6 +1867,7 @@ class TheoPipeline:
     ) -> None:
         """Multi-step paper assembly: outline → sections → frame → assemble."""
         claims_text = self._format_claims_for_prompt(claims_list)
+        logger.info("[THEO] Sectional writing with %d claims", len(claims_list))
 
         # Step 1: Generate outline
         emit({"type": "status", "content": "Planning paper structure..."})
@@ -1882,7 +1883,6 @@ class TheoPipeline:
         sections = outline.get("sections", [])
 
         if not sections:
-            # Fallback: single "Findings" section with all claims
             sections = [
                 {
                     "heading": "Findings",
@@ -1891,7 +1891,12 @@ class TheoPipeline:
                 }
             ]
 
-        logger.info("[THEO] Paper outline: %s — %d sections", title, len(sections))
+        logger.info(
+            "[THEO] Paper outline: %s — %d sections: %s",
+            title,
+            len(sections),
+            [s.get("heading", "?") for s in sections],
+        )
 
         # Step 2: Write each body section in parallel
         emit(
@@ -1907,13 +1912,15 @@ class TheoPipeline:
             purpose = sec.get("purpose", "")
             indices = sec.get("claim_indices", [])
 
-            # Gather claims for this section
             sec_claims = []
             for idx in indices:
                 if 0 <= idx < len(claims_list):
                     sec_claims.append(claims_list[idx])
 
             if not sec_claims:
+                logger.warning(
+                    "[THEO] Section '%s' has no valid claims (indices: %s)", heading, indices
+                )
                 return heading, ""
 
             sec_claims_text = self._format_claims_for_prompt(sec_claims)
@@ -1927,9 +1934,9 @@ class TheoPipeline:
             raw = await self._m27_call_async(
                 section_system, sec_input, ctx.tier.max_tokens_per_call
             )
+            logger.info("[THEO] Section '%s': %d chars", heading, len(raw))
             return heading, raw.strip()
 
-        # Run sections in parallel (up to _SPECIALIST_WORKERS concurrent)
         section_tasks = [_write_section(sec) for sec in sections]
         section_results = await asyncio.gather(*section_tasks)
 
@@ -1941,6 +1948,10 @@ class TheoPipeline:
 
         body_text = "\n\n".join(body_parts)
 
+        logger.info(
+            "[THEO] Body assembled: %d chars across %d sections", len(body_text), len(body_parts)
+        )
+
         # Step 4: Write framing sections (Abstract, Introduction, Discussion, Conclusion)
         emit({"type": "status", "content": "Writing introduction and conclusion..."})
         frame_system = self._load_prompt("theo_paper_frame")
@@ -1951,8 +1962,7 @@ class TheoPipeline:
             frame_system, frame_input, ctx.tier.max_tokens_synthesis
         )
 
-        # Step 5: Extract framing sections and assemble final paper
-        # Parse out Abstract, Introduction, Discussion, Conclusion, Methodology
+        # Step 5: Parse framing sections
         frame_sections: dict[str, str] = {}
         current_key = ""
         current_lines: list[str] = []
@@ -1968,17 +1978,24 @@ class TheoPipeline:
         if current_key:
             frame_sections[current_key] = "\n".join(current_lines).strip()
 
-        # Assemble final paper
+        logger.info("[THEO] Frame sections parsed: %s", list(frame_sections.keys()))
+
+        # Guard: if frame parsing got nothing, use raw text as abstract
+        if not frame_sections:
+            logger.warning("[THEO] Frame parsing found no ## headings — using raw text as abstract")
+            frame_sections["Abstract"] = raw_frame.strip()[:2000]
+
+        # Step 6: Assemble final paper
         paper_parts = [f"# {title}\n"]
 
         for key in ["Abstract", "Introduction"]:
-            if key in frame_sections:
+            if key in frame_sections and frame_sections[key]:
                 paper_parts.append(f"## {key}\n\n{frame_sections[key]}")
 
         paper_parts.append(body_text)
 
         for key in ["Discussion", "Conclusion", "Methodology"]:
-            if key in frame_sections:
+            if key in frame_sections and frame_sections[key]:
                 paper_parts.append(f"## {key}\n\n{frame_sections[key]}")
 
         # Thesis/dissertation: append debate summary
@@ -1993,6 +2010,12 @@ class TheoPipeline:
         raw_paper = re.sub(r"\[\d+\]", "", raw_paper)
         raw_paper = self._insert_citations_mechanically(raw_paper, ctx, sid_to_num)
         ctx.paper_text = raw_paper
+
+        logger.info(
+            "[THEO] Sectional paper complete: %d chars, %d body sections",
+            len(raw_paper),
+            len(body_parts),
+        )
 
     def _replace_source_ids_in(self, obj: dict | list, sid_to_num: dict[str, int]) -> dict | list:
         """Recursively replace source_ids lists with [N] citation strings."""
