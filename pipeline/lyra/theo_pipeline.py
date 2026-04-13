@@ -268,6 +268,9 @@ class TheoPipeline:
         # ====== MASTER CONVERGENCE LOOP ======
         max_iterations = ctx.tier.max_pipeline_iterations
         restart_stage = 2  # start from search
+        best_paper_text = ""
+        best_paper_title = ""
+        best_score = 0
 
         for iteration in range(max_iterations):
             ctx.pipeline_iteration = iteration + 1
@@ -376,6 +379,13 @@ class TheoPipeline:
                 "dimensions": judge_result.get("dimensions", {}),
             }
 
+            # Keep the best paper across iterations
+            current_score = judge_result.get("score", 0)
+            if current_score > best_score or not best_paper_text:
+                best_paper_text = ctx.paper_text
+                best_paper_title = ctx.paper_title
+                best_score = current_score
+
             if judge_result.get("passed", False):
                 emit(
                     {
@@ -416,6 +426,16 @@ class TheoPipeline:
                     f"Re-running from stage {restart_stage}...",
                 }
             )
+
+        # Restore best paper if current iteration produced worse results
+        if best_paper_text and best_score > ctx.quality_score.get("total", 0):
+            logger.info(
+                "[THEO] Restoring best paper from earlier iteration (score %d > %d)",
+                best_score,
+                ctx.quality_score.get("total", 0),
+            )
+            ctx.paper_text = best_paper_text
+            ctx.paper_title = best_paper_title
 
         # ====== PRESENTATION ASSESSOR (runs once after judge passes) ======
         # Same 10-dimension quality assessor used by the journal pipeline.
