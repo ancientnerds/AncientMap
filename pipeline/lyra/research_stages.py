@@ -229,6 +229,7 @@ def _stage_audit(
     question: str,
     registry: CitationRegistry,
     settings: LyraSettings,
+    protected_sids: set[str] | None = None,
 ) -> str:
     """Stage 3: Source reliability audit. Returns updated sources_context."""
     t0 = time.monotonic()
@@ -285,17 +286,20 @@ def _stage_audit(
                 if rid:
                     rejected_ids.add(rid)
 
-    # Remove rejected sources (protect YouTube — they're primary sources)
+    # Remove rejected sources — protect YouTube and pre-verified story sources
     yt_domains = ("youtu.be/", "youtube.com/")
+    _protected_sids = protected_sids or set()
     protected = 0
     for rid in rejected_ids:
         source = registry.sources.get(rid)
-        if source and source.url and any(d in source.url for d in yt_domains):
+        is_youtube = source and source.url and any(d in source.url for d in yt_domains)
+        is_story_source = rid in _protected_sids
+        if is_youtube or is_story_source:
             protected += 1
-            continue  # never reject the video the story came from
+            continue
         registry.sources.pop(rid, None)
     if protected:
-        logger.info("[journal] Protected %d YouTube source(s) from rejection", protected)
+        logger.info("[journal] Protected %d source(s) from rejection (YouTube + story)", protected)
 
     ms = int((time.monotonic() - t0) * 1000)
     logger.info(
@@ -685,6 +689,8 @@ def research_cluster(
             source.reliability_tier = 2
 
     # Register pre-verified web sources from the story (tweet verifier / Lyra agent)
+    # Track their SIDs so the audit stage won't reject them
+    story_source_sids: set[str] = set()
     if web_sources:
         for ws in web_sources:
             url = ws.get("url", "")
@@ -695,12 +701,13 @@ def research_cluster(
                 title=ws.get("title", ""),
                 snippet=ws.get("snippet", ""),
             )
+            story_source_sids.add(sid)
             source = registry.get_reference(sid)
             if source and source.reliability_tier == 0:
                 source.reliability_tier = 2
         logger.info(
             "[journal] Pre-registered %d web sources from story",
-            len([ws for ws in web_sources if ws.get("url")]),
+            len(story_source_sids),
         )
 
     # Build initial search queries from the question
@@ -729,7 +736,7 @@ def research_cluster(
         )
 
     # ---- Stage 3: Audit ----
-    sources_context = _stage_audit(question, registry, settings)
+    sources_context = _stage_audit(question, registry, settings, protected_sids=story_source_sids)
     if not registry.sources:
         # All sources rejected
         total_ms = int((time.monotonic() - t0) * 1000)
