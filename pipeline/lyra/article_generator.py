@@ -785,21 +785,42 @@ def _inject_screenshots(body: str, items: list[dict]) -> str:
     return "\n\n".join(result_parts)
 
 
-def _format_videos(items: list[dict]) -> str:
-    """Build the ### Videos section from original items — channel, title, timestamp."""
-    seen: set[str] = set()
-    lines: list[str] = []
+def _format_videos(unified_videos: list[dict], items: list[dict]) -> str:
+    """Build ### Videos section using unified_videos numbering + items data.
+
+    unified_videos has v_citation numbers that match [VN] markers in the body.
+    items has rich data (channel_name, video_title, timestamp_seconds).
+    We merge: numbering from unified_videos, labels from items where possible.
+    """
+    # Build lookup: video_id -> rich item data
+    import re as _re
+
+    item_by_vid: dict[str, dict] = {}
     for item in items:
         vid = item.get("video_id", "")
-        if not vid or vid in seen:
+        if vid and vid not in item_by_vid:
+            item_by_vid[vid] = item
+
+    seen_urls: set[str] = set()
+    lines: list[str] = []
+    for src in unified_videos:
+        url = src.get("url", "")
+        if url in seen_urls:
             continue
-        seen.add(vid)
-        ts = item.get("timestamp_seconds", 0)
-        url = f"https://youtu.be/{vid}?t={ts}" if ts else f"https://youtu.be/{vid}"
-        channel = item.get("channel_name", "")
-        title = item.get("video_title", "")
-        label = f'{channel} \u2014 "{title}"' if channel else title
-        num = len(lines) + 1
+        seen_urls.add(url)
+        num = src["v_citation"]
+
+        # Try to get rich label from items (channel + title)
+        vid_match = _re.search(r"youtu\.be/([a-zA-Z0-9_-]{11})", url)
+        vid_id = vid_match.group(1) if vid_match else ""
+        rich = item_by_vid.get(vid_id)
+        if rich:
+            channel = rich.get("channel_name", "")
+            title = rich.get("video_title", "")
+            label = f'{channel} \u2014 "{title}"' if channel else title
+        else:
+            label = src.get("label", "YouTube")
+
         lines.append(f"V{num}. [{label}]({url})")
     return "\n".join(lines)
 
@@ -1058,7 +1079,7 @@ def generate_weekly_article(
 
     # ── 11. CHECKLIST (programmatic quality gate) ────────────────
     with _step(step_data, "checklist", t0_total) as s:
-        videos_md = _format_videos(all_items)
+        videos_md = _format_videos(unified_videos, all_items)
         checklist = run_checklist(
             polished_body,
             unified_sources,
