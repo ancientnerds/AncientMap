@@ -511,10 +511,11 @@ async def get_news_articles(
     ]
 
 
-# Regex to parse citation lines from the ### Sources section:
-# e.g. "1. [Channel — "Title"](https://youtu.be/VIDEO_ID?t=123) (2:03)"
+# Regex to parse citation lines from ### Sources and ### Videos sections.
+# Matches both "1. [...](...)" and "V1. [...](...)" formats.
+# e.g. "V1. [Channel — "Title"](https://youtu.be/VIDEO_ID?t=123)"
 _CITATION_RE = re.compile(
-    r"^(\d+)\.\s*\[.*?\]\("
+    r"^V?(\d+)\.\s*\[.*?\]\("
     r"https?://(?:youtu\.be/([^?\s)]+)(?:\?t=(\d+))?|"
     r"(?:www\.)?youtube\.com/watch\?v=([^&\s)]+)(?:&t=(\d+))?)"
     r"\)",
@@ -522,14 +523,21 @@ _CITATION_RE = re.compile(
 )
 
 
-def _parse_citation_match(m: re.Match) -> tuple[int, str, int | None]:
-    """Extract (citation_num, video_id, timestamp) from either URL format."""
-    cit = int(m.group(1))
+def _parse_citation_match(m: re.Match) -> tuple[str, str, int | None]:
+    """Extract (citation_key, video_id, timestamp) from either URL format.
+
+    citation_key is "V1", "V2" etc for video citations (from ### Videos),
+    or "1", "2" etc for source citations (from ### Sources).
+    The full match line determines which — the regex captures the number.
+    """
+    num = m.group(1)
+    # Check if original line started with V
+    key = f"V{num}" if m.group(0).startswith("V") else num
     if m.group(2):  # youtu.be format
-        return cit, m.group(2), int(m.group(3)) if m.group(3) else None
+        return key, m.group(2), int(m.group(3)) if m.group(3) else None
     if m.group(4):  # youtube.com format
-        return cit, m.group(4), int(m.group(5)) if m.group(5) else None
-    return cit, "", None
+        return key, m.group(4), int(m.group(5)) if m.group(5) else None
+    return key, "", None
 
 
 @router.get("/articles/{article_id}/citations")
@@ -544,8 +552,10 @@ async def article_citations(article_id: int, db: Session = Depends(get_db)):
     if not article:
         raise HTTPException(status_code=404, detail="Article not found")
 
-    # Parse (citation_number, video_id, timestamp_seconds) from Sources section
+    # Parse (citation_key, video_id, timestamp_seconds) from Sources + Videos sections
     sources_idx = article.content.find("### Sources")
+    if sources_idx == -1:
+        sources_idx = article.content.find("### Videos")
     if sources_idx == -1:
         return {}
     sources_text = article.content[sources_idx:]
