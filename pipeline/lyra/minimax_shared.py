@@ -160,12 +160,13 @@ def minimax_chat_anthropic(
         except Exception as e:
             last_error = e
             error_str = str(e)
-            # Retry on transient server errors (500, 529, timeout)
+            # Retry on transient server errors (500, 520, 529, timeout)
             is_transient = any(
-                code in error_str for code in ("500", "529", "503", "timeout", "timed out")
+                code in error_str for code in ("500", "520", "529", "503", "timeout", "timed out")
             )
             if is_transient and attempt < 2:
-                delay = (attempt + 1) * 3  # 3s, 6s
+                is_overload = "529" in error_str or "overloaded" in error_str
+                delay = (attempt + 1) * (10 if is_overload else 3)
                 logger.warning(
                     "MiniMax M2.7 transient error (attempt %d/3), retrying in %ds: %s",
                     attempt + 1,

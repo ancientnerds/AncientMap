@@ -400,12 +400,14 @@ def _call_anthropic_api(
             last_exc = exc
             error_str = str(exc)
             is_transient = any(
-                code in error_str for code in ("500", "529", "503", "timeout", "timed out")
+                code in error_str for code in ("500", "520", "529", "503", "timeout", "timed out")
             )
             if is_transient and _attempt < 2:
                 import time as _time
 
-                delay = (_attempt + 1) * 3
+                # 529 = system-wide overload, needs longer backoff
+                is_overload = "529" in error_str or "overloaded" in error_str
+                delay = (_attempt + 1) * (10 if is_overload else 3)
                 logger.warning(
                     "LLM call transient error (attempt %d/3), retrying in %ds: %s",
                     _attempt + 1,
