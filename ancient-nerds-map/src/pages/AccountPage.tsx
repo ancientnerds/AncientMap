@@ -128,9 +128,9 @@ const REASON_LABELS: Record<string, string> = {
   founder_grant: 'Founder Grant',
   unlimited_set: 'Unlimited Enabled',
   unlimited_removed: 'Unlimited Removed',
-  monthly_patron_explorer: 'Patron Explorer (Monthly)',
-  monthly_patron_archaeologist: 'Patron Archaeologist (Monthly)',
-  monthly_patron_scholar: 'Patron Scholar (Monthly)',
+  monthly_patron_explorer: 'Explorer (Monthly)',
+  monthly_patron_archaeologist: 'Pathfinder (Monthly)',
+  monthly_patron_scholar: 'Scholar (Monthly)',
   team_role: 'Team Role',
   researcher_role: 'Researcher Role',
   adeptus_major_role: 'Adeptus Major Role',
@@ -155,7 +155,7 @@ const ROLE_DISPLAY: Record<string, { name: string; color: string }> = {
   '1083088078379417630': { name: 'Neophyte', color: '#f1dd80' },
   '968574705760100392': { name: 'Ancient Nerds', color: '#db2424' },
   '1083785196861657198': { name: 'Explorer', color: '#c34586' },
-  '1083785565398380544': { name: 'Archaeologist', color: '#9553ff' },
+  '1083785565398380544': { name: 'Pathfinder', color: '#9553ff' },
   '1083785826586075278': { name: 'Scholar', color: '#00b0fc' },
 }
 
@@ -172,12 +172,12 @@ const ROLE_SHORT: Record<string, string> = {
   '1083088078379417630': 'NP',
   '968574705760100392': 'AN',
   '1083785196861657198': 'EX',
-  '1083785565398380544': 'AR',
+  '1083785565398380544': 'PF',
   '1083785826586075278': 'SC',
 }
 
 const DISCORD_INVITE_URL = 'https://discord.gg/ancientnerds'
-const PATREON_URL = 'https://patreon.com/ancientnerds'
+const MEE6_URL = 'https://mee6.xyz/m/932330696956063765'
 
 type AccountTab = 'profile' | 'likes' | 'bookmarks' | 'achievements' | 'collection' | 'deckbuilder' | 'admin'
 
@@ -746,7 +746,7 @@ export default function AccountPage() {
   }
 
   const handleSignIn = () => {
-    window.location.href = `${config.api.baseUrl}/auth/discord`
+    window.location.href = `${config.api.baseUrl}/auth/discord?return_to=${encodeURIComponent('/account.html')}`
   }
 
   // Determine which tabs to show
@@ -879,7 +879,7 @@ export default function AccountPage() {
                       )}
                       {user && !user.is_unlimited && user.tier === 'free' && (
                         <a
-                          href={PATREON_URL}
+                          href={MEE6_URL}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="account-upgrade-link"
@@ -887,14 +887,14 @@ export default function AccountPage() {
                             display: 'inline-block',
                             marginTop: '8px',
                             padding: '6px 14px',
-                            background: '#f96854',
+                            background: '#c02023',
                             color: '#fff',
                             borderRadius: 0,
                             fontSize: '0.85em',
                             textDecoration: 'none',
                           }}
                         >
-                          Upgrade on Patreon
+                          Subscribe
                         </a>
                       )}
                     </div>

@@ -20,6 +20,7 @@ interface ResearchResult {
   effort: string
   duration_ms: number
   quality_score?: QualityScore | null
+  edited_at?: string | null
 }
 
 interface PipelineEntry {
@@ -65,6 +66,15 @@ function parseReferenceCitations(content: string): Map<number, string> {
     cites.set(parseInt(m[1], 10), m[2].replace(/[)\]>,;]+$/, ''))
   }
   return cites
+}
+
+/** Fix inline ## headings — ensure they're on their own line with a blank line before. */
+function fixHeadings(content: string): string {
+  // Strip trailing --- from paragraphs
+  content = content.replace(/\s*---\s*$/gm, '')
+  // Ensure ## headings have a blank line before them
+  content = content.replace(/([^\n])\s*(## )/g, '$1\n\n$2')
+  return content
 }
 
 /** Convert [N] in body text to clickable markdown links. */
@@ -133,17 +143,23 @@ export default function TheoReportOverlay({
   }, [onClose, editing])
 
   const handleSaveEdit = useCallback((markdown: string) => {
+    if (isPublic) {
+      if (!window.confirm('This paper is published. Save and update the public version?')) {
+        return
+      }
+    }
     onSaveEdit?.(markdown)
     setEditing(false)
-  }, [onSaveEdit])
+  }, [onSaveEdit, isPublic])
 
   const handleDiscardEdit = useCallback(() => {
     setEditing(false)
   }, [])
 
-  // Enrich citations: parse references, convert [N] to clickable links
-  const refCites = useMemo(() => parseReferenceCitations(result.report), [result.report])
-  const enrichedReport = useMemo(() => enrichCitations(result.report, refCites), [result.report, refCites])
+  // Fix headings + enrich citations
+  const fixedReport = useMemo(() => fixHeadings(result.report), [result.report])
+  const refCites = useMemo(() => parseReferenceCitations(fixedReport), [fixedReport])
+  const enrichedReport = useMemo(() => enrichCitations(fixedReport, refCites), [fixedReport, refCites])
 
   const mdComponents = useMemo(() => ({
     a: ({ href, children, ...props }: React.AnchorHTMLAttributes<HTMLAnchorElement>) => {
@@ -245,6 +261,11 @@ export default function TheoReportOverlay({
               <span className="theo-badge" style={{ border: '1px solid var(--border-default)', color: 'var(--text-dimmed)' }}>
                 {readingMinutes} min read
               </span>
+              {result.edited_at && (
+                <span className="theo-badge" style={{ border: '1px solid var(--border-default)', color: 'var(--text-dimmed)' }} title={new Date(result.edited_at + (result.edited_at.endsWith('Z') ? '' : 'Z')).toLocaleString()}>
+                  edited {new Date(result.edited_at + (result.edited_at.endsWith('Z') ? '' : 'Z')).toLocaleDateString()}
+                </span>
+              )}
               <button
                 className="theo-report-share"
                 onClick={() => { navigator.clipboard.writeText(window.location.href); }}
@@ -256,14 +277,13 @@ export default function TheoReportOverlay({
             </div>
           </div>
 
-          {/* Edit button — only for owner, disabled when public */}
+          {/* Edit button — owner can always edit */}
           {isOwner && (
             <button
               className="theo-edit-btn"
               onClick={() => setEditing(true)}
-              disabled={isPublic}
-              title={isPublic ? 'Unpublish to edit' : 'Edit paper'}
-              aria-label={isPublic ? 'Unpublish to edit' : 'Edit paper'}
+              title="Edit paper"
+              aria-label="Edit paper"
             >
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>

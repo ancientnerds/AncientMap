@@ -856,9 +856,6 @@ async def edit_research(
             raise HTTPException(status_code=403, detail="Not your research request")
         if row.status != "completed":
             raise HTTPException(status_code=409, detail="Only completed research can be edited")
-        if row.is_public:
-            raise HTTPException(status_code=409, detail="Unpublish before editing")
-
         # Load existing result, update report field
         try:
             result = json.loads(row.result_json) if row.result_json else {}
@@ -866,6 +863,7 @@ async def edit_research(
             result = {}
 
         result["report"] = body.report
+        result["edited_at"] = datetime.now(UTC).isoformat()
 
         # Re-audit citations on the new text (mechanical check only)
         try:

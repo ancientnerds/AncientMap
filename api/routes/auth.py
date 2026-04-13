@@ -342,7 +342,7 @@ async def discord_oauth_redirect(req: Request, return_to: str | None = None):
         raise HTTPException(status_code=429, detail="Too many pending logins. Try again later.")
 
     # Sanitize return_to: allowlist known routes to prevent open redirect
-    _ALLOWED_RETURN_PATHS = {"/", "/account.html", "/news.html", "/game.html", "/index.html"}
+    _ALLOWED_RETURN_PATHS = {"/", "/account.html", "/news.html", "/game.html", "/index.html", "/theo.html", "/cards.html"}
     if not return_to or return_to not in _ALLOWED_RETURN_PATHS:
         return_to = "/account.html"
 

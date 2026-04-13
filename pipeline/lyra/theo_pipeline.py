@@ -2026,9 +2026,11 @@ class TheoPipeline:
 
         raw_paper = "\n\n".join(paper_parts)
 
-        # Clean up LLM artifacts: strip --- separators and stray horizontal rules
+        # Clean up LLM artifacts
         raw_paper = re.sub(r"\s*---\s*$", "", raw_paper, flags=re.MULTILINE)
         raw_paper = re.sub(r"^\s*---\s*$", "", raw_paper, flags=re.MULTILINE)
+        # Ensure ## headings are on their own line with a blank line before them
+        raw_paper = re.sub(r"([^\n])\s*(## )", r"\1\n\n\2", raw_paper)
 
         # Strip LLM-placed citations, re-insert mechanically
         raw_paper = re.sub(r"\[\d+\]", "", raw_paper)
