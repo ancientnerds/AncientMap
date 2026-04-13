@@ -68,6 +68,7 @@ def generate_posts_for_video(
             .filter(
                 NewsItem.video_id == video.id,
                 NewsItem.post_text.is_(None),
+                NewsItem.news_category != "duplicate",
             )
             .count()
         )
@@ -243,7 +244,11 @@ def generate_posts_for_video(
         # anyway to avoid infinite retry loops.
         remaining = (
             session.query(NewsItem)
-            .filter(NewsItem.video_id == video.id, NewsItem.post_text.is_(None))
+            .filter(
+                NewsItem.video_id == video.id,
+                NewsItem.post_text.is_(None),
+                NewsItem.news_category != "duplicate",
+            )
             .count()
         )
         if remaining == 0 or count == 0:
