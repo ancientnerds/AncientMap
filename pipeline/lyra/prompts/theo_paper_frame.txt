@@ -32,3 +32,5 @@ RULES:
 3. Do NOT fabricate information. Only reference what appears in the body sections.
 4. The Introduction should NOT overlap with the Abstract — they serve different purposes.
 5. The Discussion should identify PATTERNS across sections, not summarize each one sequentially.
+6. Do NOT use --- horizontal rules or separators between sections. Use ONLY ## headings.
+7. Each section MUST start with ## on its own line. Do NOT append --- to the end of paragraphs.

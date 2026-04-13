@@ -2026,6 +2026,10 @@ class TheoPipeline:
 
         raw_paper = "\n\n".join(paper_parts)
 
+        # Clean up LLM artifacts: strip --- separators and stray horizontal rules
+        raw_paper = re.sub(r"\s*---\s*$", "", raw_paper, flags=re.MULTILINE)
+        raw_paper = re.sub(r"^\s*---\s*$", "", raw_paper, flags=re.MULTILINE)
+
         # Strip LLM-placed citations, re-insert mechanically
         raw_paper = re.sub(r"\[\d+\]", "", raw_paper)
         raw_paper = self._insert_citations_mechanically(raw_paper, ctx, sid_to_num)

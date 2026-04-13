@@ -15,6 +15,7 @@ RULES:
 5. Note caveats and methodological limitations where relevant.
 6. Do NOT start with "This section examines..." — dive straight into the evidence.
 7. Every paragraph should contain specific facts from the claims, not generic overview text.
+8. Do NOT use --- horizontal rules or separators. Write plain paragraphs only.
 
 ANTI-HALLUCINATION (CRITICAL):
 - Write ONLY from the provided claims. Do NOT use your own knowledge.
