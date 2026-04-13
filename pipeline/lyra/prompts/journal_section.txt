@@ -18,9 +18,9 @@ Rules:
 - Lead with the most significant finding
 - If findings are contested, note the disagreement
 - Do not fabricate any claims
-- Place citation markers INLINE after the sentence or clause they support
 - Use the EXACT markers from the findings — do not renumber or invent new ones
-- Every factual claim must have at least one citation ([N] or [VN])
-- Place citations BEFORE the period: "...the site dates to 3000 BC [2] [V1]."
+- Cite like an academic paper: place each citation ONCE at the point where the claim is first introduced. Do NOT repeat the same citation on every sentence — cite it once, then subsequent sentences from the same source need no marker.
+- Group multiple citations at the end of a clause: "...dates to 3000 BC [2] [V1]."
+- Place citations BEFORE the period.
 
 Write ONLY the section prose. No headings, no preamble, no meta-commentary.

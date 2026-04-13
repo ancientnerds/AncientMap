@@ -730,6 +730,49 @@ def _assemble_from_clusters(
     return "\n".join(body_parts).strip(), unified_sources, unified_videos
 
 
+def _deduplicate_citations(body: str) -> str:
+    """Academic-style citation deduplication.
+
+    Within each paragraph, keep only the first occurrence of each citation
+    marker ([N] or [VN]). Academic papers cite a source once at the point
+    of first reference, not after every sentence.
+    """
+    paragraphs = body.split("\n\n")
+    result = []
+    for para in paragraphs:
+        # Skip non-prose (headings, images, rules, short lines)
+        stripped = para.strip()
+        if (
+            not stripped
+            or stripped.startswith("#")
+            or stripped.startswith("![")
+            or stripped.startswith("---")
+            or stripped.startswith("*")
+            or len(stripped) < 50
+        ):
+            result.append(para)
+            continue
+
+        # Track which citations we've already seen in this paragraph
+        seen: set[str] = set()
+
+        def _dedup(m: re.Match) -> str:
+            cite = m.group(0)  # e.g. "[V4]" or "[12]"
+            if cite in seen:
+                return ""  # remove duplicate
+            seen.add(cite)
+            return cite
+
+        deduped = re.sub(r"\[V?\d+\]", _dedup, para)
+        # Clean up extra spaces left by removal
+        deduped = re.sub(r"  +", " ", deduped)
+        deduped = re.sub(r" +\.", ".", deduped)
+        deduped = re.sub(r" +,", ",", deduped)
+        result.append(deduped)
+
+    return "\n\n".join(result)
+
+
 def _inject_screenshots(body: str, items: list[dict]) -> str:
     """Insert a screenshot after each cluster's first paragraph.
 
@@ -1029,6 +1072,7 @@ def generate_weekly_article(
     with _step(step_data, "assemble", t0_total) as s:
         body, unified_sources, unified_videos = _assemble_from_clusters(section_results)
         body = _inject_screenshots(body, all_items)
+        body = _deduplicate_citations(body)
         s["count"] = len(unified_sources)
 
     # ── 5. VERIFY CITATIONS ──────────────────────────────────────
