@@ -90,11 +90,15 @@ function enrichCitations(content: string, webCites: Map<number, string>): string
     return nums.map(n => `[${n}]`).join(' ')
   })
   content = content.replace(/\](\[)/g, '] [')
-  // Replace [N] with markdown links.
-  // Link text uses Unicode brackets ［N］ to avoid markdown parsing issues,
-  // then the 'a' renderer displays them as normal [N].
-  return content.replace(/(?<!\[)\[(\d+)\](?!\()/g, (_match, numStr) => {
-    const num = parseInt(numStr, 10)
+  // Replace [N] and [VN] with markdown links.
+  // Link text uses Unicode brackets ［N］ / ［VN］ to avoid markdown parsing issues,
+  // then the 'a' renderer displays them as normal [N] / [VN].
+  return content.replace(/(?<!\[)\[(V?\d+)\](?!\()/g, (_match, key: string) => {
+    if (key.startsWith('V')) {
+      // YouTube video citation → links to #sources for hover card
+      return `[［${key}］](#sources)`
+    }
+    const num = parseInt(key, 10)
     const webUrl = webCites.get(num)
     if (webUrl) {
       return `[［${num}］](${webUrl})`
@@ -103,27 +107,21 @@ function enrichCitations(content: string, webCites: Map<number, string>): string
   })
 }
 
-/** Strip the YouTube sources from markdown (rich attribution handles them).
- *  Keeps web reference entries visible in the rendered output. */
-function stripSourcesList(content: string, webCites: Map<number, string>): string {
-  const idx = content.indexOf('### Sources')
-  if (idx === -1) return content
-  const before = content.slice(0, idx)
-
-  // If there are web references, keep them as a visible list
-  if (webCites.size > 0) {
-    const sourcesList = content.slice(idx)
-    const lines = sourcesList.split('\n')
-    const webLines = lines.filter(line => {
-      const m = line.match(/^(\d+)\./)
-      if (!m) return false
-      return webCites.has(parseInt(m[1], 10))
-    })
-    if (webLines.length > 0) {
-      return before + '### Sources\n\n' + '### Web References\n\n' + webLines.join('\n')
+/** Strip the ### Videos section from markdown (rich attribution handles it).
+ *  Keeps ### Sources (web references) visible in the rendered output. */
+function stripSourcesList(content: string, _webCites: Map<number, string>): string {
+  // Remove ### Videos section — the rich attribution component renders it
+  const videosIdx = content.indexOf('### Videos')
+  if (videosIdx !== -1) {
+    // Find the --- separator before ### Videos and strip from there
+    const sepBefore = content.lastIndexOf('---', videosIdx)
+    if (sepBefore !== -1 && videosIdx - sepBefore < 20) {
+      content = content.slice(0, sepBefore).trimEnd()
+    } else {
+      content = content.slice(0, videosIdx).trimEnd()
     }
   }
-  return before + '### Sources'
+  return content
 }
 
 function firstImageUrl(article: Article): string | null {
@@ -216,7 +214,7 @@ function itemToCardProps(item: NewsItemData): NewsCardProps {
 function ArticleScreenshot({ src, alt, citationItems }: {
   src: string
   alt: string
-  citationItems: Map<number, NewsItemData>
+  citationItems: Map<string, NewsItemData>
 }) {
   const [playing, setPlaying] = useState(false)
   const parsed = parseScreenshotUrl(src || '')
@@ -279,10 +277,10 @@ function ArticleScreenshot({ src, alt, citationItems }: {
 }
 
 /** Rich attribution section — grouped source cards with channel links. */
-function SourcesAttribution({ citationItems }: { citationItems: Map<number, NewsItemData> }) {
+function SourcesAttribution({ citationItems }: { citationItems: Map<string, NewsItemData> }) {
   // Group citations by channel
   const channelGroups = useMemo(() => {
-    const groups = new Map<string, { channelName: string; channelId: string; items: { num: number; item: NewsItemData }[] }>()
+    const groups = new Map<string, { channelName: string; channelId: string; items: { num: string; item: NewsItemData }[] }>()
     for (const [num, item] of citationItems) {
       const key = item.video.channel_id || item.video.channel_name
       if (!groups.has(key)) {
@@ -295,7 +293,7 @@ function SourcesAttribution({ citationItems }: { citationItems: Map<number, News
       groups.get(key)!.items.push({ num, item })
     }
     // Sort groups by earliest citation number
-    return [...groups.values()].sort((a, b) => a.items[0].num - b.items[0].num)
+    return [...groups.values()].sort((a, b) => a.items[0].num.localeCompare(b.items[0].num))
   }, [citationItems])
 
   if (channelGroups.length === 0) return null
@@ -399,10 +397,10 @@ function TableOfContents({ headings, activeSlug }: {
 }
 
 function makeArticleComponents(
-  citationItems: Map<number, NewsItemData>,
-  onCitationEnter: (num: number, rect: DOMRect) => void,
+  citationItems: Map<string, NewsItemData>,
+  onCitationEnter: (key: string, rect: DOMRect) => void,
   onCitationLeave: () => void,
-  onCitationClick: (num: number, rect: DOMRect) => void,
+  onCitationClick: (key: string, rect: DOMRect) => void,
   renderSources: boolean,
 ): Components {
   return {
@@ -412,11 +410,11 @@ function makeArticleComponents(
     a: ({ href, children }) => {
       // Detect citation links — both YouTube (#sources) and web (external URL)
       const text = String(children).trim()
-      const numMatch = text.match(/[［\[]*(\d+)[］\]]*/)
-      if (numMatch && (href === '#sources' || /^\d+$/.test(text.replace(/[[\]／（））［］\\]/g, '')))) {
-        const num = parseInt(numMatch[1], 10)
-        const displayText = `[${num}]`
-        const hasCard = citationItems.has(num)
+      const numMatch = text.match(/[［\[]*(V?\d+)[］\]]*/)
+      if (numMatch && (href === '#sources' || /^V?\d+$/.test(text.replace(/[[\]／（））［］\\]/g, '')))) {
+        const key = numMatch[1]
+        const displayText = `[${key}]`
+        const hasCard = citationItems.has(key)
         const isYoutube = href === '#sources'
         return (
           <a
@@ -424,9 +422,9 @@ function makeArticleComponents(
             target={isYoutube ? undefined : '_blank'}
             rel={isYoutube ? undefined : 'noopener noreferrer'}
             className={`article-citation-link${hasCard ? ' has-popover' : ''}`}
-            onMouseEnter={hasCard ? (e) => onCitationEnter(num, e.currentTarget.getBoundingClientRect()) : undefined}
+            onMouseEnter={hasCard ? (e) => onCitationEnter(key, e.currentTarget.getBoundingClientRect()) : undefined}
             onMouseLeave={hasCard ? onCitationLeave : undefined}
-            onClick={hasCard ? (e) => { e.preventDefault(); onCitationClick(num, e.currentTarget.getBoundingClientRect()) } : undefined}
+            onClick={hasCard ? (e) => { e.preventDefault(); onCitationClick(key, e.currentTarget.getBoundingClientRect()) } : undefined}
           >
             {displayText}
           </a>
@@ -509,9 +507,9 @@ export default function ArticlesPage() {
   const [showLyraProfile, setShowLyraProfile] = useState(false)
 
   // Citation hover + pinned state
-  const [citationItems, setCitationItems] = useState<Map<number, NewsItemData>>(new Map())
-  const [hoverCitation, setHoverCitation] = useState<{ num: number; rect: DOMRect } | null>(null)
-  const [pinnedCitations, setPinnedCitations] = useState<{ num: number; rect: DOMRect }[]>([])
+  const [citationItems, setCitationItems] = useState<Map<string, NewsItemData>>(new Map())
+  const [hoverCitation, setHoverCitation] = useState<{ num: string; rect: DOMRect } | null>(null)
+  const [pinnedCitations, setPinnedCitations] = useState<{ num: string; rect: DOMRect }[]>([])
   const hoverTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // TOC active heading tracking
@@ -529,12 +527,12 @@ export default function ArticlesPage() {
     hoverTimeout.current = setTimeout(() => setHoverCitation(null), 150)
   }, [])
 
-  const handleCitationEnter = useCallback((num: number, rect: DOMRect) => {
+  const handleCitationEnter = useCallback((num: string, rect: DOMRect) => {
     cancelHoverClose()
     setHoverCitation({ num, rect })
   }, [])
 
-  const handleCitationClick = useCallback((num: number, rect: DOMRect) => {
+  const handleCitationClick = useCallback((num: string, rect: DOMRect) => {
     setHoverCitation(null)
     cancelHoverClose()
     // Toggle: if already pinned, unpin; otherwise add
@@ -544,7 +542,7 @@ export default function ArticlesPage() {
     })
   }, [])
 
-  const dismissPinnedNum = useCallback((num: number) => {
+  const dismissPinnedNum = useCallback((num: string) => {
     setPinnedCitations(prev => prev.filter(p => p.num !== num))
   }, [])
 
@@ -629,9 +627,9 @@ export default function ArticlesPage() {
       .then(r => r.ok ? r.json() : {})
       .then((data: Record<string, NewsItemData>) => {
         if (cancelled) return
-        const map = new Map<number, NewsItemData>()
+        const map = new Map<string, NewsItemData>()
         for (const [key, item] of Object.entries(data)) {
-          map.set(parseInt(key, 10), item)
+          map.set(key, item)
         }
         setCitationItems(map)
       })
