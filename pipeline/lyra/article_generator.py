@@ -866,26 +866,6 @@ def _format_videos(unified_videos: list[dict], items: list[dict]) -> str:
 
         lines.append(f"V{num}. [{label}]({url})")
 
-    # Add videos from items whose clusters failed (no [VN] in body, but
-    # still list them so every story's video appears in the footer)
-    seen_vids: set[str] = set()
-    for url in seen_urls:
-        vid_match = _re.search(r"youtu\.be/([a-zA-Z0-9_-]{11})", url)
-        if vid_match:
-            seen_vids.add(vid_match.group(1))
-
-    for item in items:
-        vid = item.get("video_id", "")
-        if not vid or vid in seen_vids:
-            continue
-        seen_vids.add(vid)
-        ts = item.get("timestamp_seconds", 0)
-        url = f"https://youtu.be/{vid}?t={ts}" if ts else f"https://youtu.be/{vid}"
-        channel = item.get("channel_name", "")
-        title = item.get("video_title", "")
-        label = f'{channel} \u2014 "{title}"' if channel else title
-        lines.append(f"- [{label}]({url})")
-
     return "\n".join(lines)
 
 

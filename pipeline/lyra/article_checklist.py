@@ -205,26 +205,21 @@ def ensure_youtube_sources(
 # ---------------------------------------------------------------------------
 
 
-def _check_youtube_coverage(items: list[dict], videos_md: str) -> CheckResult:
-    """Every item's YouTube video_id appears in the Videos section."""
-    missing: list[str] = []
-    seen_vids: set[str] = set()
-    for item in items:
-        vid = item.get("video_id", "")
-        if not vid or vid in seen_vids:
-            continue
-        seen_vids.add(vid)
-        if vid not in videos_md:
-            headline = item.get("headline", "?")[:60]
-            missing.append(f"{vid} ({headline})")
+def _check_youtube_coverage(body: str, videos_md: str) -> CheckResult:
+    """Every [VN] cited in the body has a matching VN. entry in the Videos section."""
+    import re
 
+    body_vns = set(re.findall(r"\[V(\d+)\]", _body_without_sources(body)))
+    footer_vns = set(re.findall(r"^V(\d+)\.", videos_md, re.MULTILINE))
+
+    missing = body_vns - footer_vns
     if missing:
         return CheckResult(
             passed=False,
-            message=f"{len(missing)} YouTube video(s) missing from Videos section",
-            details=missing,
+            message=f"{len(missing)} [VN] citation(s) in body missing from Videos section",
+            details=[f"[V{n}] cited but not listed" for n in sorted(missing)],
         )
-    return CheckResult(passed=True, message=f"All {len(seen_vids)} videos covered")
+    return CheckResult(passed=True, message=f"All {len(body_vns)} video citations covered")
 
 
 def _check_citation_integrity(body: str, unified_sources: list[dict]) -> CheckResult:
@@ -312,7 +307,7 @@ def run_checklist(
     """Run all programmatic quality checks. No LLM calls — purely mechanical."""
     checks: dict[str, CheckResult] = {}
 
-    checks["youtube_coverage"] = _check_youtube_coverage(items, videos_md)
+    checks["youtube_coverage"] = _check_youtube_coverage(body, videos_md)
     checks["citation_integrity"] = _check_citation_integrity(body, unified_sources)
     checks["no_phantom_sources"] = _check_no_phantom_sources(body, unified_sources)
     checks["format_compliance"] = _check_format(body, headline, tldr, week_start)
