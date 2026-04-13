@@ -310,7 +310,7 @@ def _find_uncited_paragraphs(body: str, sources: list[dict]) -> list[str]:
     check_body = body[:sources_idx] if sources_idx >= 0 else body
 
     uncited: list[str] = []
-    cite_pattern = re.compile(r"\[\d+\]")
+    cite_pattern = re.compile(r"\[V?\d+\]")
 
     for para in check_body.split("\n\n"):
         stripped = para.strip()
@@ -560,7 +560,7 @@ def _check_d10_section_balance(body: str) -> dict:
     if total_words > 4000:
         issues.append(f"Total word count {total_words} > 4000 maximum")
 
-    cite_pattern = re.compile(r"\[\d+\]")
+    cite_pattern = re.compile(r"\[V?\d+\]")
     for sec in sections:
         if not sec["header"]:
             continue
