@@ -33,7 +33,9 @@ export default function TheoResearchLive({ requestId, question, startedAt, onClo
   const bodyRef = useRef<HTMLDivElement>(null)
 
   // Elapsed timer — uses the actual request creation time so it persists across open/close
-  const startEpoch = startedAt ? new Date(startedAt).getTime() : Date.now()
+  // Ensure UTC parsing: DB timestamps may lack the Z suffix
+  const startIso = startedAt && !startedAt.endsWith('Z') ? startedAt + 'Z' : startedAt
+  const startEpoch = startIso ? new Date(startIso).getTime() : Date.now()
   useEffect(() => {
     if (done) return
     const iv = setInterval(() => {
