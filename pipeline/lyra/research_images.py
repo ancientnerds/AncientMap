@@ -244,11 +244,25 @@ def search_wikimedia_images(topic: str, keywords: list[str]) -> list[SourceImage
 # ---------------------------------------------------------------------------
 
 
+_MET_ARCHAEOLOGICAL_DEPTS = frozenset(
+    {
+        "Ancient Near Eastern Art",
+        "Asian Art",
+        "Egyptian Art",
+        "Greek and Roman Art",
+        "Medieval Art",
+        "Islamic Art",
+        "Arms and Armor",
+        "The Cloisters",
+    }
+)
+
+
 def search_museum_images(topic: str, keywords: list[str]) -> list[SourceImage]:
     """Search Met Museum for public domain artifact images.
 
     All Met Open Access images are CC0 — no license ambiguity.
-    Uses the Met's free REST API (no auth required).
+    Filters to archaeological/ancient art departments only.
 
     Returns at most 3 images.
     """
@@ -293,8 +307,10 @@ def search_museum_images(topic: str, keywords: list[str]) -> list[SourceImage]:
             except Exception:
                 continue
 
-            # Only public domain
+            # Only public domain + archaeological departments
             if not obj.get("isPublicDomain"):
+                continue
+            if obj.get("department", "") not in _MET_ARCHAEOLOGICAL_DEPTS:
                 continue
 
             image_url = obj.get("primaryImageSmall") or obj.get("primaryImage")
@@ -351,6 +367,68 @@ def search_museum_images(topic: str, keywords: list[str]) -> list[SourceImage]:
 
 
 # ---------------------------------------------------------------------------
+# LLM relevance verification
+# ---------------------------------------------------------------------------
+
+
+def verify_image_relevance(
+    image: SourceImage,
+    section_heading: str,
+    section_text: str,
+) -> bool:
+    """Check whether an image is relevant to a paper section.
+
+    Uses strict keyword matching — the image title/description must share
+    significant proper nouns or place names with the section text.
+    No LLM call needed — this is fast, deterministic, and reliable.
+
+    Requires at least one proper-noun match (capitalized words 4+ chars)
+    between the image metadata and the section content.
+    """
+    # Extract proper nouns from section (capitalized words, 4+ chars)
+    section_words = set(re.findall(r"\b[A-Z][a-z]{3,}\b", section_heading + " " + section_text))
+    # Also include significant lowercase keywords
+    section_kw = _significant_keywords(section_heading + " " + section_text)
+
+    # Extract from image metadata
+    image_text = f"{image.alt_text} {image.author}"
+    image_words = set(re.findall(r"\b[A-Z][a-z]{3,}\b", image_text))
+    image_kw = _significant_keywords(image_text)
+
+    # Must share at least 1 proper noun (site name, culture, etc.)
+    proper_overlap = section_words & image_words
+    keyword_overlap = section_kw & image_kw
+
+    if proper_overlap:
+        logger.debug(
+            "Image relevance PASS (proper nouns: %s): '%s' for '%s'",
+            proper_overlap,
+            image.alt_text[:40],
+            section_heading,
+        )
+        return True
+
+    # Fallback: need 3+ keyword overlap if no proper noun match
+    if len(keyword_overlap) >= 3:
+        logger.debug(
+            "Image relevance PASS (keywords: %d): '%s' for '%s'",
+            len(keyword_overlap),
+            image.alt_text[:40],
+            section_heading,
+        )
+        return True
+
+    logger.debug(
+        "Image relevance FAIL (proper: %d, kw: %d): '%s' for '%s'",
+        len(proper_overlap),
+        len(keyword_overlap),
+        image.alt_text[:40],
+        section_heading,
+    )
+    return False
+
+
+# ---------------------------------------------------------------------------
 # Image injection into paper
 # ---------------------------------------------------------------------------
 
@@ -362,8 +440,10 @@ def inject_source_images(
 ) -> str:
     """Inject source images into research paper at relevant sections.
 
-    Uses keyword overlap between image metadata and paper paragraphs
-    to place images at the most topically relevant locations.
+    For each candidate image:
+    1. Match to best section by keyword overlap
+    2. Verify relevance with LLM (reject if not directly relevant)
+    3. Inject with attribution
 
     Every injected image includes a mandatory attribution line.
     Images are never placed in Abstract, Sources, or References sections.
@@ -443,9 +523,19 @@ def inject_source_images(
                 best_score = overlap
                 best_para_idx = pi
 
-        # Require minimum 2 keyword overlap
+        # Require minimum 2 keyword overlap + LLM relevance verification
         if best_score >= 2 and best_para_idx >= 0:
             para = paragraphs[best_para_idx]
+
+            # LLM relevance check — reject irrelevant images
+            if not verify_image_relevance(img, para["section"], para["text"]):
+                logger.info(
+                    "Image rejected by relevance check: '%s' for section '%s'",
+                    img.alt_text[:50],
+                    para["section"],
+                )
+                continue
+
             # Find the end of this paragraph in the original lines
             end_idx = para["line_idx"]
             while end_idx < len(lines) and lines[end_idx].strip():
