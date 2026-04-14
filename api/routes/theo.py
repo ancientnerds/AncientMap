@@ -477,8 +477,7 @@ async def list_research(req: Request):
                        duration_ms, error_message, is_public, created_at, completed_at
                 FROM research_requests
                 WHERE user_id = :uid
-                  AND (is_public = TRUE OR expires_at IS NULL OR expires_at > NOW())
-                  AND (is_public = TRUE OR created_at > NOW() - INTERVAL '24 hours')
+                  AND (expires_at IS NULL OR expires_at > NOW())
                 ORDER BY created_at DESC
                 LIMIT 50
             """),
