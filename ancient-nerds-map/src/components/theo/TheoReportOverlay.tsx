@@ -125,13 +125,13 @@ export default function TheoReportOverlay({
   isOwner,
   isPublic,
   requestId,
-
+  initialEditing,
   onSaveEdit,
   onApprove,
 }: TheoReportOverlayProps) {
   const [showTrace, setShowTrace] = useState(false)
   const [showAudit, setShowAudit] = useState(false)
-  const [editing, setEditing] = useState(false)
+  const [editing, setEditing] = useState(initialEditing ?? false)
   const [scrolledToBottom, setScrolledToBottom] = useState(false)
   const [approving, setApproving] = useState(false)
   const bodyRef = useRef<HTMLDivElement>(null)
