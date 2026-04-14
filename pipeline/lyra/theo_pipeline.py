@@ -270,6 +270,7 @@ class TheoPipeline:
         restart_stage = 2  # start from search
         best_paper_text = ""
         best_paper_title = ""
+        best_audit_result: dict = {}
         best_score = 0
 
         for iteration in range(max_iterations):
@@ -379,11 +380,12 @@ class TheoPipeline:
                 "dimensions": judge_result.get("dimensions", {}),
             }
 
-            # Keep the best paper across iterations
+            # Keep the best paper across iterations (including refs + audit)
             current_score = judge_result.get("score", 0)
             if current_score > best_score or not best_paper_text:
                 best_paper_text = ctx.paper_text
                 best_paper_title = ctx.paper_title
+                best_audit_result = dict(ctx.audit_result)
                 best_score = current_score
 
             if judge_result.get("passed", False):
@@ -436,6 +438,7 @@ class TheoPipeline:
             )
             ctx.paper_text = best_paper_text
             ctx.paper_title = best_paper_title
+            ctx.audit_result = best_audit_result
 
         # ====== PRESENTATION ASSESSOR (runs once after judge passes) ======
         # Same 10-dimension quality assessor used by the journal pipeline.
@@ -1826,6 +1829,32 @@ class TheoPipeline:
         if refs_md:
             ctx.paper_text += f"\n\n## References\n\n{refs_md}"
 
+        # Check paper length against tier expectations
+        _MIN_WORDS = {
+            "brief": 200,
+            "note": 500,
+            "article": 1200,
+            "review": 2000,
+            "thesis": 3000,
+            "dissertation": 4000,
+        }
+        word_count = len(ctx.paper_text.split())
+        min_words = _MIN_WORDS.get(ctx.effort, 500)
+        if word_count < min_words:
+            logger.warning(
+                "[THEO] Paper too short: %d words (min %d for %s tier)",
+                word_count,
+                min_words,
+                ctx.effort,
+            )
+            emit(
+                {
+                    "type": "status",
+                    "content": f"Warning: paper is {word_count} words "
+                    f"(expected {min_words}+ for {ctx.effort} tier)",
+                }
+            )
+
         # Run citation audit
         emit({"type": "status", "content": "Auditing citations..."})
         ctx.audit_result = audit_citations(ctx.paper_text, ctx.registry)
@@ -2035,6 +2064,9 @@ class TheoPipeline:
         # Strip LLM-placed citations, re-insert mechanically
         raw_paper = re.sub(r"\[\d+\]", "", raw_paper)
         raw_paper = self._insert_citations_mechanically(raw_paper, ctx, sid_to_num)
+        # Clean up orphaned punctuation from stripped citations (" ." → ".")
+        raw_paper = re.sub(r" +([.,;])", r"\1", raw_paper)
+        raw_paper = re.sub(r"  +", " ", raw_paper)
         ctx.paper_text = raw_paper
 
         logger.info(

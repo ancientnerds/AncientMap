@@ -256,6 +256,7 @@ def verify_all_citations(
             text = re.sub(rf"\s*\[{cite_num}\]", "", text)
 
         # Clean up — preserve markdown structure (paragraphs, headings)
+        text = re.sub(r" +([.,;])", r"\1", text)  # " ." → "."
         text = re.sub(r"  +", " ", text)
         text = re.sub(r"\n{3,}", "\n\n", text)
 
