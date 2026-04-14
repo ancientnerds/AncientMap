@@ -1294,6 +1294,125 @@
   background: rgba(255, 183, 77, 0.1) !important;
 }
 
+/* — NERV Progress Bar in Live Overlay — */
+.theo-live-progress {
+  border-bottom: 1px solid var(--border-default);
+}
+.theo-live-progress .nerv-lb {
+  border: none;
+  background: none;
+}
+
+/* — Heartbeat LED Strip — */
+.theo-heartbeat-leds {
+  display: inline-flex;
+  gap: 3px;
+  align-items: center;
+  margin-right: 4px;
+}
+.theo-hb-led {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #1a1a1a;
+  border: 1px solid #2a2a2a;
+  transition: background 0.3s, box-shadow 0.3s;
+}
+.theo-hb-led--alive {
+  background: var(--nerv-g, #00cc66);
+  border-color: var(--nerv-g, #00cc66);
+  box-shadow: 0 0 4px rgba(0, 204, 102, 0.6);
+  animation: led-breathe-pulse 1.5s ease-in-out infinite;
+}
+.theo-hb-led--dead {
+  background: var(--nerv-r, #bb0a0a);
+  border-color: var(--nerv-r, #bb0a0a);
+  box-shadow: 0 0 4px rgba(187, 10, 10, 0.4);
+  animation: none;
+}
+.theo-hb-led--done {
+  background: var(--nerv-g, #00cc66);
+  border-color: var(--nerv-g, #00cc66);
+  box-shadow: 0 0 4px rgba(0, 204, 102, 0.4);
+  animation: none;
+}
+
+/* — Active Stage Readout — */
+.theo-live-stage-readout {
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  font-size: 11px;
+  color: var(--nerv-g, #00cc66);
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  text-shadow: 0 0 6px rgba(0, 204, 102, 0.4);
+}
+
+/* — Trace LED Indicators — */
+.theo-trace-led {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #1a1a1a;
+  border: 1px solid #2a2a2a;
+  vertical-align: middle;
+  margin-right: 6px;
+  flex-shrink: 0;
+}
+.theo-trace-led--active {
+  background: var(--nerv-g, #00cc66);
+  border-color: var(--nerv-g, #00cc66);
+  box-shadow: 0 0 4px rgba(0, 204, 102, 0.6);
+  animation: led-breathe-pulse 1.5s ease-in-out infinite;
+}
+.theo-trace-led--done {
+  background: var(--nerv-g, #00cc66);
+  border-color: var(--nerv-g, #00cc66);
+  box-shadow: 0 0 3px rgba(0, 204, 102, 0.4);
+}
+.theo-trace-led--error {
+  background: var(--nerv-r, #bb0a0a);
+  border-color: var(--nerv-r, #bb0a0a);
+  box-shadow: 0 0 3px rgba(187, 10, 10, 0.4);
+}
+.theo-trace-led--skip {
+  background: #333;
+  border-color: #444;
+}
+
+/* — Card Progress Bar — */
+.theo-card-progress {
+  margin-top: 8px;
+}
+
+/* — NERV-style counters (LLM calls, sources) — */
+.theo-live-counter--nerv {
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  font-variant-numeric: tabular-nums;
+  color: var(--nerv-g, #00cc66);
+  text-shadow: 0 0 6px rgba(0, 204, 102, 0.4);
+  letter-spacing: 0.5px;
+}
+
+/* — Quality score flash — */
+.theo-quality-flash {
+  text-align: center;
+  padding: 8px 12px;
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--nerv-g, #00cc66);
+  text-shadow: 0 0 8px rgba(0, 204, 102, 0.5);
+  border-bottom: 1px solid var(--border-default);
+  animation: theo-quality-fade 5s ease-in-out forwards;
+}
+@keyframes theo-quality-fade {
+  0% { opacity: 0; transform: translateY(-4px); }
+  15% { opacity: 1; transform: translateY(0); }
+  85% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
 /* — Pipeline Trace (collapsible) — */
 .theo-trace-toggle {
   display: flex;

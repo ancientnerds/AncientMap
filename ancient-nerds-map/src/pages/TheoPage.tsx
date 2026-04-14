@@ -12,6 +12,7 @@ import AiNoticeBanner from '../components/layout/AiNoticeBanner'
 import PageHeader from '../components/layout/PageHeader'
 import '../styles/theo.css'
 import QualityBadge, { type QualityScore } from '../components/theo/QualityBadge'
+import { NervLoadingBar } from '../components/NervLoadingBar'
 
 const TheoReportOverlay = lazy(() => import('../components/theo/TheoReportOverlay'))
 const TheoResearchLive = lazy(() => import('../components/theo/TheoResearchLive'))
@@ -762,8 +763,13 @@ export default function TheoPage() {
           className="theo-investigating-banner"
           onClick={() => handleWatchLive(runningItem!)}
         >
-          <span className="theo-live-dot" style={{ display: 'inline-block' }} />
-          Theo is investigating... Watch live
+          <span className="theo-heartbeat-leds">
+            {[0, 1, 2].map(i => (
+              <span key={i} className="theo-hb-led theo-hb-led--alive" style={{ animationDelay: `${i * 0.3}s` }} />
+            ))}
+          </span>
+          <span style={{ fontFamily: 'var(--font-stamp)', letterSpacing: '1.5px', textTransform: 'uppercase' as const }}>INVESTIGATING</span>
+          — Watch live
         </button>
       )}
 
@@ -1331,10 +1337,15 @@ export default function TheoPage() {
                     </span>
                   </div>
                   {item.status === 'running' && (
-                    <div className="theo-card-actions">
-                      <button className="theo-btn-view" onClick={() => handleWatchLive(item)}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>Live</button>
-                      <button className="theo-btn-cancel" onClick={() => handleCancel(item.id)}>Cancel</button>
-                    </div>
+                    <>
+                      <div className="theo-card-progress">
+                        <NervLoadingBar compact sublabel="INVESTIGATING" />
+                      </div>
+                      <div className="theo-card-actions">
+                        <button className="theo-btn-view" onClick={() => handleWatchLive(item)}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>Live</button>
+                        <button className="theo-btn-cancel" onClick={() => handleCancel(item.id)}>Cancel</button>
+                      </div>
+                    </>
                   )}
                   {item.status === 'queued' && (
                     <div className="theo-card-actions">

@@ -123,8 +123,21 @@ class PipelineContext:
 
     # Tracking
     total_tokens: int = 0
+    llm_call_count: int = 0
     pipeline_trace: list[dict] = field(default_factory=list)
+    debug_log: list[dict] = field(default_factory=list)
     error: str = ""
+
+    def log(self, stage: str, msg: str, level: str = "info", **data) -> None:
+        """Append a structured debug entry."""
+        from datetime import datetime, timezone
+        self.debug_log.append({
+            "ts": datetime.now(timezone.utc).isoformat(),
+            "stage": stage,
+            "level": level,
+            "msg": msg,
+            "data": data if data else {},
+        })
 
 
 # ---------------------------------------------------------------------------
@@ -202,6 +215,7 @@ class TheoPipeline:
             disabled_adapters=disabled_adapters or [],
         )
 
+        self._ctx = ctx
         pipeline_start = time.monotonic()
 
         # Relevancy gate
@@ -248,6 +262,7 @@ class TheoPipeline:
                         "stage": stage_name,
                         "status": "error",
                         "error": str(exc),
+                        "meta": {"llm_calls": ctx.llm_call_count},
                     }
                 )
                 return ctx
@@ -258,6 +273,7 @@ class TheoPipeline:
                         "stage": stage_name,
                         "status": "error",
                         "error": ctx.error,
+                        "meta": {"llm_calls": ctx.llm_call_count},
                     }
                 )
                 return ctx
@@ -517,7 +533,7 @@ class TheoPipeline:
                         "type": "pipeline",
                         "stage": "source_image_injection",
                         "status": "done",
-                        "meta": {"candidates": len(ctx.source_images)},
+                        "meta": {"candidates": len(ctx.source_images), "llm_calls": ctx.llm_call_count},
                     }
                 )
             except Exception as exc:
@@ -540,6 +556,7 @@ class TheoPipeline:
                     "total_sources": len(ctx.registry.sources),
                     "specialists": len(ctx.specialists),
                     "effort": effort,
+                    "llm_calls": ctx.llm_call_count,
                 },
             }
         )
@@ -730,7 +747,7 @@ class TheoPipeline:
                 "stage": stage,
                 "status": "done",
                 "duration_ms": ms,
-                "meta": {"extracted": extracted, "skipped": skipped},
+                "meta": {"extracted": extracted, "skipped": skipped, "llm_calls": ctx.llm_call_count},
             }
         )
 
@@ -920,6 +937,8 @@ class TheoPipeline:
             force_exclude=ctx.force_exclude or None,
         )
 
+        ctx.log("question_analysis", f"Selected {len(ctx.specialists)} specialists", specialists=[s.id for s in ctx.specialists], domain_tags=ctx.domain_tags)
+
         ms = int((time.monotonic() - t0) * 1000)
         emit(
             {
@@ -931,6 +950,8 @@ class TheoPipeline:
                     "domain_tags": ctx.domain_tags,
                     "queries": len(ctx.search_queries),
                     "specialists": [s.id for s in ctx.specialists],
+                    "specialist_names": [s.name for s in ctx.specialists],
+                    "llm_calls": ctx.llm_call_count,
                 },
             }
         )
@@ -1001,6 +1022,8 @@ class TheoPipeline:
         total_results = len(ctx.registry.sources)
         academic_count = sum(1 for s in ctx.registry.sources.values() if s.reliability_tier == 1)
 
+        ctx.log("web_search", f"Found {total_results} sources ({academic_count} academic)", queries_run=len(queries), source_group=source_group)
+
         ms = int((time.monotonic() - t0) * 1000)
         emit(
             {
@@ -1013,6 +1036,8 @@ class TheoPipeline:
                     "unique_sources": total_results,
                     "academic_sources": academic_count,
                     "source_group": source_group,
+                    "sources_found": total_results,
+                    "llm_calls": ctx.llm_call_count,
                 },
             }
         )
@@ -1032,7 +1057,7 @@ class TheoPipeline:
 
         if not ctx.sources_context.strip():
             ctx.error = "No sources available for reliability audit."
-            emit({"type": "pipeline", "stage": stage, "status": "error"})
+            emit({"type": "pipeline", "stage": stage, "status": "error", "meta": {"llm_calls": ctx.llm_call_count}})
             return
 
         # 1 source per prompt, 10 parallel — quality over speed.
@@ -1133,6 +1158,9 @@ class TheoPipeline:
             )
         ctx.sources_context = "\n".join(lines)
 
+        accepted_count = total_scored - len(rejected_ids)
+        ctx.log("source_audit", f"Audited {total_scored} sources: {accepted_count} accepted, {len(rejected_ids)} rejected", accepted=accepted_count, rejected=len(rejected_ids))
+
         ms = int((time.monotonic() - t0) * 1000)
         emit(
             {
@@ -1143,6 +1171,8 @@ class TheoPipeline:
                 "meta": {
                     "scored": total_scored,
                     "rejected": len(rejected_ids),
+                    "accepted": accepted_count,
+                    "llm_calls": ctx.llm_call_count,
                 },
             }
         )
@@ -1274,7 +1304,7 @@ class TheoPipeline:
                 "stage": stage,
                 "status": "done",
                 "duration_ms": ms,
-                "meta": {"candidates": len(candidates), "fetched": fetched},
+                "meta": {"candidates": len(candidates), "fetched": fetched, "llm_calls": ctx.llm_call_count},
             }
         )
 
@@ -1327,12 +1357,14 @@ class TheoPipeline:
 
         results = await asyncio.gather(*futures, return_exceptions=True)
 
+        completed_count = 0
         for result in results:
             if isinstance(result, Exception):
                 logger.warning("Specialist call failed: %s", result)
                 continue
 
             spec_id, raw = result
+            ctx.llm_call_count += 1  # specialist calls bypass _m27_call
             try:
                 parsed = self._parse_json(raw)
             except (json.JSONDecodeError, ValueError):
@@ -1351,7 +1383,21 @@ class TheoPipeline:
                     confidence=finding.get("confidence", "medium"),
                 )
 
-            emit({"type": "status", "content": f"Specialist {spec_id} completed analysis."})
+            completed_count += 1
+            # Find specialist name for enriched status
+            spec_name = spec_id
+            for s in ctx.specialists:
+                if s.id == spec_id:
+                    spec_name = s.name
+                    break
+            emit({
+                "type": "status",
+                "content": f"Specialist {spec_name} completed analysis.",
+                "specialist_name": spec_name,
+                "specialist_index": completed_count,
+                "specialist_total": len(ctx.specialists),
+            })
+            ctx.log("specialist_analysis", f"Specialist {spec_name} completed", specialist_id=spec_id, findings=len(parsed.get("findings", [])))
 
         executor.shutdown(wait=False)
 
@@ -1365,6 +1411,8 @@ class TheoPipeline:
                 "meta": {
                     "completed": len(ctx.specialist_analyses),
                     "requested": len(ctx.specialists),
+                    "specialist_names": {s.id: s.name for s in ctx.specialists},
+                    "llm_calls": ctx.llm_call_count,
                 },
             }
         )
@@ -1396,7 +1444,7 @@ class TheoPipeline:
                     "stage": stage,
                     "status": "done",
                     "duration_ms": 0,
-                    "meta": {"consensus": 0, "contested": 0, "unique": 0},
+                    "meta": {"consensus": 0, "contested": 0, "unique": 0, "llm_calls": ctx.llm_call_count},
                 }
             )
             return
@@ -1431,6 +1479,11 @@ class TheoPipeline:
 
         ctx.synthesis = self._parse_json(raw)
 
+        consensus_count = len(ctx.synthesis.get("consensus_claims", []))
+        contested_count = len(ctx.synthesis.get("contested_claims", []))
+        unique_count = len(ctx.synthesis.get("unique_insights", []))
+        ctx.log("synthesis", f"Synthesized: {consensus_count} consensus, {contested_count} contested, {unique_count} unique", consensus=consensus_count, contested=contested_count, unique=unique_count)
+
         ms = int((time.monotonic() - t0) * 1000)
         emit(
             {
@@ -1439,9 +1492,10 @@ class TheoPipeline:
                 "status": "done",
                 "duration_ms": ms,
                 "meta": {
-                    "consensus": len(ctx.synthesis.get("consensus_claims", [])),
-                    "contested": len(ctx.synthesis.get("contested_claims", [])),
-                    "unique": len(ctx.synthesis.get("unique_insights", [])),
+                    "consensus": consensus_count,
+                    "contested": contested_count,
+                    "unique": unique_count,
+                    "llm_calls": ctx.llm_call_count,
                 },
             }
         )
@@ -1476,6 +1530,7 @@ class TheoPipeline:
         all_defenses: list[dict] = []
 
         for rnd in range(1, ctx.tier.debate_rounds + 1):
+            emit({"type": "status", "content": f"Debate round {rnd}/{ctx.tier.debate_rounds}...", "round": rnd, "total_rounds": ctx.tier.debate_rounds})
             emit(
                 {
                     "type": "status",
@@ -1550,6 +1605,8 @@ class TheoPipeline:
                     d["defender_id"] = spec.id
                 all_defenses.extend(defenses)
 
+            ctx.log("debate", f"Round {rnd}: {len(round_challenges)} challenges, defenses collected", round=rnd, challenges=len(round_challenges))
+
         ctx.debate_result = {
             "rounds": ctx.tier.debate_rounds,
             "challenges": all_challenges,
@@ -1563,7 +1620,7 @@ class TheoPipeline:
                 "stage": stage,
                 "status": "done",
                 "duration_ms": ms,
-                "meta": {"challenges": len(all_challenges), "defenses": len(all_defenses)},
+                "meta": {"challenges": len(all_challenges), "defenses": len(all_defenses), "llm_calls": ctx.llm_call_count},
             }
         )
 
@@ -1654,6 +1711,11 @@ class TheoPipeline:
 
         ctx.moderated_result = moderated
 
+        final_count = len(moderated.get("final_claims", []))
+        revised_count = len(moderated.get("revised_claims", []))
+        dropped_count = len(moderated.get("dropped_claims", []))
+        ctx.log("moderator", f"Moderated: {final_count} final, {revised_count} revised, {dropped_count} dropped", final_claims=final_count, revised=revised_count, dropped=dropped_count)
+
         ms = int((time.monotonic() - t0) * 1000)
         emit(
             {
@@ -1662,9 +1724,10 @@ class TheoPipeline:
                 "status": "done",
                 "duration_ms": ms,
                 "meta": {
-                    "final_claims": len(moderated.get("final_claims", [])),
-                    "revised": len(moderated.get("revised_claims", [])),
-                    "dropped": len(moderated.get("dropped_claims", [])),
+                    "final_claims": final_count,
+                    "revised": revised_count,
+                    "dropped": dropped_count,
+                    "llm_calls": ctx.llm_call_count,
                 },
             }
         )
@@ -1859,6 +1922,9 @@ class TheoPipeline:
         emit({"type": "status", "content": "Auditing citations..."})
         ctx.audit_result = audit_citations(ctx.paper_text, ctx.registry)
 
+        paper_word_count = len(ctx.paper_text.split())
+        ctx.log("paper_assembly", f"Paper assembled: {paper_word_count} words, {ctx.audit_result.get('total_citations', 0)} citations, {ctx.audit_result.get('total_references', 0)} references", word_count=paper_word_count, total_citations=ctx.audit_result.get("total_citations", 0), total_references=ctx.audit_result.get("total_references", 0))
+
         ms = int((time.monotonic() - t0) * 1000)
         emit(
             {
@@ -1871,6 +1937,8 @@ class TheoPipeline:
                     "audit_passed": ctx.audit_result.get("passed", False),
                     "total_citations": ctx.audit_result.get("total_citations", 0),
                     "total_references": ctx.audit_result.get("total_references", 0),
+                    "word_count": paper_word_count,
+                    "llm_calls": ctx.llm_call_count,
                 },
             }
         )
@@ -2069,6 +2137,7 @@ class TheoPipeline:
         )
         source_assessment = raw_assessment.strip()
         logger.info("[THEO] Source Assessment: %d chars", len(source_assessment))
+        ctx.log("source_assessment", f"Source assessment: {len(source_assessment)} chars, {tier_summary}", tier_summary=tier_summary)
 
         # Step 7: Assemble final paper
         paper_parts = [f"# {title}\n"]
@@ -2187,6 +2256,14 @@ class TheoPipeline:
             self._model,
         )
 
+        ctx.llm_call_count += 1  # judge_paper calls minimax_chat_anthropic directly
+
+        judge_score = result.get("score", 0)
+        judge_badge = result.get("badge", "")
+        judge_passed = result.get("passed", False)
+        judge_dimensions = result.get("dimensions", {})
+        ctx.log("quality_judge", f"Score {judge_score}/100 ({judge_badge}), passed={judge_passed}", score=judge_score, badge=judge_badge, passed=judge_passed, dimensions=judge_dimensions)
+
         ms = int((time.monotonic() - t0) * 1000)
         emit(
             {
@@ -2195,10 +2272,11 @@ class TheoPipeline:
                 "status": "done",
                 "duration_ms": ms,
                 "meta": {
-                    "score": result.get("score", 0),
-                    "badge": result.get("badge", ""),
-                    "passed": result.get("passed", False),
+                    "score": judge_score,
+                    "badge": judge_badge,
+                    "passed": judge_passed,
                     "problems": len(result.get("problems", [])),
+                    "llm_calls": ctx.llm_call_count,
                 },
             }
         )
@@ -2236,7 +2314,7 @@ class TheoPipeline:
                 "stage": stage,
                 "status": "done",
                 "duration_ms": ms,
-                "meta": {"cover_image": bool(cover_url)},
+                "meta": {"cover_image": bool(cover_url), "llm_calls": ctx.llm_call_count},
             }
         )
 
@@ -2495,6 +2573,8 @@ class TheoPipeline:
 
     def _m27_call(self, system: str, user_message: str, max_tokens: int) -> str:
         """Synchronous M2.7 call via Anthropic SDK (unified path)."""
+        if hasattr(self, '_ctx') and self._ctx:
+            self._ctx.llm_call_count += 1
         return minimax_chat_anthropic(
             system,
             user_message,

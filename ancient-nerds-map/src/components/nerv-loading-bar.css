@@ -135,3 +135,14 @@
   border-color: var(--nerv-g, #00cc66);
   box-shadow: 0 0 5px rgba(0, 204, 102, 0.8);
 }
+
+/* Compact mode — track only, no header/LEDs/border */
+.nerv-lb--compact {
+  padding: 0;
+  min-width: unset;
+  background: none;
+  border: none;
+}
+.nerv-lb--compact .nerv-lb-track {
+  height: 14px;
+}

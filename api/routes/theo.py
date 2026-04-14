@@ -518,8 +518,8 @@ async def get_research(request_id: str, req: Request):
         row = session.execute(
             text("""
                 SELECT id::text, user_id, question, effort, status, result_json,
-                       pipeline_trace, sites_found, tools_used, total_tokens,
-                       duration_ms, error_message, created_at, completed_at, expires_at
+                       pipeline_trace, debug_log, sites_found, tools_used, total_tokens,
+                       llm_calls, duration_ms, error_message, created_at, completed_at, expires_at
                 FROM research_requests
                 WHERE id = :id
             """),
@@ -548,11 +548,56 @@ async def get_research(request_id: str, req: Request):
         "sites_found": row.sites_found,
         "tools_used": row.tools_used,
         "total_tokens": row.total_tokens,
+        "llm_calls": row.llm_calls or 0,
         "duration_ms": row.duration_ms,
         "error_message": row.error_message,
+        "debug_log": row.debug_log,
         "created_at": row.created_at.isoformat() if row.created_at else None,
         "completed_at": row.completed_at.isoformat() if row.completed_at else None,
     }
+
+
+# ---------------------------------------------------------------------------
+# GET /theo/research/{id}/log — Download debug log
+# ---------------------------------------------------------------------------
+
+
+@router.get("/research/{request_id}/log")
+async def get_research_log(request_id: str, req: Request, format: str = "json"):
+    """Download the structured debug log for a research request."""
+    _validate_uuid(request_id)
+    user_id = _get_user_id(req)
+
+    with get_session() as session:
+        row = session.execute(
+            text("SELECT user_id, debug_log, question FROM research_requests WHERE id = :id"),
+            {"id": request_id},
+        ).fetchone()
+
+    if not row:
+        raise HTTPException(status_code=404, detail="Research request not found")
+    if row.user_id != user_id:
+        raise HTTPException(status_code=403, detail="Not your research request")
+
+    debug_log = row.debug_log or []
+
+    if format == "md":
+        lines = [f"# Research Debug Log\n", f"**Question:** {row.question[:200]}\n"]
+        for entry in debug_log:
+            ts = entry.get("ts", "")[:19]
+            level = entry.get("level", "info").upper()
+            stage = entry.get("stage", "")
+            msg = entry.get("msg", "")
+            icon = {"INFO": "o", "WARN": "!", "ERROR": "x"}.get(level, "o")
+            lines.append(f"- `{ts}` [{stage}] ({icon}) {msg}")
+            data = entry.get("data", {})
+            if data:
+                for k, v in data.items():
+                    lines.append(f"  - {k}: `{v}`")
+        from fastapi.responses import PlainTextResponse
+        return PlainTextResponse("\n".join(lines), media_type="text/markdown")
+
+    return {"debug_log": debug_log}
 
 
 # ---------------------------------------------------------------------------

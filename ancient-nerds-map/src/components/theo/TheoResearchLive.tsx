@@ -1,6 +1,7 @@
 /**
  * TheoResearchLive — Full-screen overlay for live research streaming.
  * Connects to SSE stream and renders markdown in real-time with throttled updates.
+ * Features NERV-style progress bar, heartbeat LEDs, and pipeline trace with LED indicators.
  */
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
@@ -8,8 +9,71 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { config } from '../../config'
 import type { PipelineEvent, PipelineNodeInstance } from '../../types/pipeline'
-import { applyPipelineEvent } from '../../types/pipeline'
+import { applyPipelineEvent, PIPELINE_STAGES } from '../../types/pipeline'
 import { formatDurationMs } from '../../utils/formatters'
+import { NervLoadingBar } from '../NervLoadingBar'
+
+// ---------------------------------------------------------------------------
+// Theo pipeline progress — weighted stages
+// ---------------------------------------------------------------------------
+
+const THEO_STAGE_WEIGHTS: Record<string, number> = {
+  question_analysis: 5,
+  web_search: 15,
+  source_audit: 5,
+  specialist_analysis: 30,
+  synthesis: 10,
+  debate: 10,
+  moderator: 5,
+  paper_assembly: 10,
+  quality_judge: 5,
+  image_generation: 5,
+}
+
+const THEO_STAGE_ORDER = Object.keys(THEO_STAGE_WEIGHTS)
+
+function computeTheoProgress(nodes: PipelineNodeInstance[]) {
+  let progress = 0
+  let activeLabel = ''
+  let doneCount = 0
+  const totalCount = THEO_STAGE_ORDER.length
+
+  for (const stageId of THEO_STAGE_ORDER) {
+    const weight = THEO_STAGE_WEIGHTS[stageId]
+    const instances = nodes.filter(n => n.stageId === stageId)
+
+    if (stageId === 'specialist_analysis' && instances.length > 0) {
+      // Repeatable — proportional progress
+      const doneInstances = instances.filter(n => n.status === 'done' || n.status === 'skip')
+      const activeInstances = instances.filter(n => n.status === 'active')
+      const total = Math.max(instances.length, 1)
+      const completed = doneInstances.length + activeInstances.length * 0.5
+      progress += weight * (completed / total)
+      if (doneInstances.length === instances.length && instances.length > 0) {
+        doneCount++
+      } else if (activeInstances.length > 0) {
+        const def = PIPELINE_STAGES.find(s => s.id === stageId)
+        activeLabel = def?.label?.toUpperCase() || stageId.replace(/_/g, ' ').toUpperCase()
+      }
+    } else if (instances.length > 0) {
+      const node = instances[0]
+      if (node.status === 'done' || node.status === 'skip') {
+        progress += weight
+        doneCount++
+      } else if (node.status === 'active') {
+        progress += weight * 0.5
+        const def = PIPELINE_STAGES.find(s => s.id === stageId)
+        activeLabel = def?.label?.toUpperCase() || stageId.replace(/_/g, ' ').toUpperCase()
+      }
+    }
+  }
+
+  return { progress: Math.min(Math.round(progress), 100), activeLabel, doneCount, totalCount }
+}
+
+// ---------------------------------------------------------------------------
+// Component
+// ---------------------------------------------------------------------------
 
 interface TheoResearchLiveProps {
   requestId: string
@@ -26,14 +90,20 @@ export default function TheoResearchLive({ requestId, question, startedAt, onClo
   const [elapsedMs, setElapsedMs] = useState(0)
   const [done, setDone] = useState(false)
   const [showThinking, setShowThinking] = useState(true)
-  const [showTrace, setShowTrace] = useState(false)
+  const [showTrace, setShowTrace] = useState(true)
+  const [connectionAlive, setConnectionAlive] = useState(true)
+  const [llmCalls, setLlmCalls] = useState(0)
+  const [sourcesFound, setSourcesFound] = useState(0)
+  const [specialistInfo, setSpecialistInfo] = useState('')
+  const [debateRound, setDebateRound] = useState('')
+  const [qualityFlash, setQualityFlash] = useState<{ score: number; badge: string } | null>(null)
 
   const reportTextRef = useRef('')
   const thinkingRef = useRef('')
   const bodyRef = useRef<HTMLDivElement>(null)
+  const lastEventTimeRef = useRef(Date.now())
 
   // Elapsed timer — uses the actual request creation time so it persists across open/close
-  // Ensure UTC parsing: DB timestamps may lack the Z suffix
   const startIso = startedAt && !startedAt.endsWith('Z') ? startedAt + 'Z' : startedAt
   const startEpoch = startIso ? new Date(startIso).getTime() : Date.now()
   useEffect(() => {
@@ -68,6 +138,15 @@ export default function TheoResearchLive({ requestId, question, startedAt, onClo
     document.addEventListener('keydown', handler)
     return () => document.removeEventListener('keydown', handler)
   }, [onClose])
+
+  // Heartbeat check — if no SSE event in 15s, connection is stale
+  useEffect(() => {
+    if (done) return
+    const iv = setInterval(() => {
+      setConnectionAlive(Date.now() - lastEventTimeRef.current < 15000)
+    }, 5000)
+    return () => clearInterval(iv)
+  }, [done])
 
   // SSE connection
   useEffect(() => {
@@ -124,6 +203,8 @@ export default function TheoResearchLive({ requestId, question, startedAt, onClo
   }, [requestId])
 
   const handleEvent = useCallback((eventType: string, data: Record<string, unknown>) => {
+    lastEventTimeRef.current = Date.now()
+
     switch (eventType) {
       case 'pipeline': {
         const pEvent: PipelineEvent = {
@@ -134,6 +215,18 @@ export default function TheoResearchLive({ requestId, question, startedAt, onClo
         }
         setNodes(prev => applyPipelineEvent(prev, pEvent))
 
+        // Extract enriched metadata from pipeline events
+        const meta = data.meta as Record<string, unknown> | undefined
+        if (meta) {
+          if (typeof meta.llm_calls === 'number') setLlmCalls(meta.llm_calls)
+          if (data.stage === 'web_search' && data.status === 'done' && typeof meta.sources_found === 'number') {
+            setSourcesFound(meta.sources_found)
+          }
+          if (data.stage === 'quality_judge' && data.status === 'done' && typeof meta.score === 'number') {
+            setQualityFlash({ score: meta.score as number, badge: (meta.badge as string) || '' })
+            setTimeout(() => setQualityFlash(null), 5000)
+          }
+        }
         break
       }
       case 'token':
@@ -142,9 +235,18 @@ export default function TheoResearchLive({ requestId, question, startedAt, onClo
       case 'thinking':
         thinkingRef.current += (data.content as string || '')
         break
-      case 'status':
+      case 'status': {
         setStatusMsg(data.content as string || '')
+        // Specialist progress
+        if (data.specialist_name) {
+          setSpecialistInfo(`${data.specialist_name} (${data.specialist_index}/${data.specialist_total})`)
+        }
+        // Debate round
+        if (typeof data.round === 'number') {
+          setDebateRound(`ROUND ${data.round}/${data.total_rounds}`)
+        }
         break
+      }
       case 'sites':
         break
       case 'done':
@@ -202,6 +304,11 @@ export default function TheoResearchLive({ requestId, question, startedAt, onClo
   const doneNodes = nodes.filter(n => n.status === 'done')
   const activeNode = nodes.find(n => n.status === 'active')
 
+  // Progress computation
+  const { progress, activeLabel, doneCount, totalCount } = useMemo(
+    () => computeTheoProgress(nodes), [nodes]
+  )
+
   const handleBackdropClick = useCallback((e: React.MouseEvent) => {
     if (e.target === e.currentTarget) onClose()
   }, [onClose])
@@ -216,15 +323,55 @@ export default function TheoResearchLive({ requestId, question, startedAt, onClo
             <div className="theo-live-question">{question}</div>
             <div className="theo-live-counters" style={{ marginTop: 6 }}>
               <span className="theo-live-counter">
-                <span className="theo-live-dot" />
+                <span className="theo-heartbeat-leds">
+                  {Array.from({ length: 5 }, (_, i) => (
+                    <span
+                      key={i}
+                      className={`theo-hb-led ${
+                        done ? 'theo-hb-led--done' :
+                        connectionAlive ? 'theo-hb-led--alive' :
+                        'theo-hb-led--dead'
+                      }`}
+                      style={{ animationDelay: `${i * 0.3}s` }}
+                    />
+                  ))}
+                </span>
                 {formatDurationMs(elapsedMs)}
               </span>
+              {llmCalls > 0 && (
+                <span className="theo-live-counter theo-live-counter--nerv">{llmCalls} LLM calls</span>
+              )}
+              {sourcesFound > 0 && (
+                <span className="theo-live-counter theo-live-counter--nerv">{sourcesFound} sources</span>
+              )}
+              {activeNode && !done && (
+                <span className="theo-live-stage-readout">
+                  {activeNode.meta?.tool as string || activeNode.stageId.replace(/_/g, ' ').toUpperCase()}
+                </span>
+              )}
             </div>
           </div>
           <button className="theo-live-close" onClick={onClose} aria-label="Close live view">
             ✕
           </button>
         </div>
+
+        {/* NERV Progress Bar */}
+        <div className="theo-live-progress">
+          {done ? (
+            <NervLoadingBar label="COMPLETE" sublabel="RESEARCH FINISHED" progress={100} counter={`${doneNodes.length} stages`} />
+          ) : nodes.length > 0 ? (
+            <NervLoadingBar label="RESEARCH" sublabel={specialistInfo.toUpperCase() || debateRound || activeLabel || 'PROCESSING'} progress={progress} counter={`${doneCount} / ${totalCount}`} />
+          ) : (
+            <NervLoadingBar label="CONNECTING" sublabel="AWAITING PIPELINE" />
+          )}
+        </div>
+
+        {qualityFlash && (
+          <div className="theo-quality-flash">
+            Quality: {qualityFlash.score}/100 — {qualityFlash.badge}
+          </div>
+        )}
 
         {!done && (
           <div style={{ textAlign: 'center', padding: '4px 12px', fontSize: 11, color: 'var(--text-dimmed)', borderBottom: '1px solid var(--border-default)' }}>
@@ -266,7 +413,7 @@ export default function TheoResearchLive({ requestId, question, startedAt, onClo
             </div>
           )}
 
-          {/* Pipeline trace */}
+          {/* Pipeline trace — LED indicators */}
           {nodes.length > 0 && (
             <>
               <button
@@ -277,28 +424,20 @@ export default function TheoResearchLive({ requestId, question, startedAt, onClo
               </button>
               {showTrace && (
                 <div className="theo-trace-body">
-                  {(() => {
-                    let cumulative = 0
-                    return nodes.map(node => {
-                      if (node.duration_ms != null) cumulative += node.duration_ms
-                      return (
-                        <div key={node.instanceId} className="theo-trace-entry">
-                          <span className="theo-trace-stage">
-                            {node.status === 'active' ? '◉ ' :
-                             node.status === 'done' ? '✓ ' :
-                             node.status === 'error' ? '✗ ' : '○ '}
-                            {node.meta?.tool as string || node.stageId.replace(/_/g, ' ')}
-                          </span>
-                          <span className="theo-trace-dur">
-                            {node.duration_ms != null ? formatDurationMs(cumulative) : node.status === 'active' ? '...' : ''}
-                          </span>
-                          {node.status === 'error' && node.meta?.error ? (
-                            <div className="theo-trace-error">{String(node.meta.error)}</div>
-                          ) : null}
-                        </div>
-                      )
-                    })
-                  })()}
+                  {nodes.map(node => (
+                    <div key={node.instanceId} className="theo-trace-entry">
+                      <span className="theo-trace-stage">
+                        <span className={`theo-trace-led theo-trace-led--${node.status}`} />
+                        {node.meta?.tool as string || node.stageId.replace(/_/g, ' ')}
+                      </span>
+                      <span className="theo-trace-dur">
+                        {node.duration_ms != null ? formatDurationMs(node.duration_ms) : node.status === 'active' ? '...' : ''}
+                      </span>
+                      {node.status === 'error' && node.meta?.error ? (
+                        <div className="theo-trace-error">{String(node.meta.error)}</div>
+                      ) : null}
+                    </div>
+                  ))}
                 </div>
               )}
             </>
