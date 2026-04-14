@@ -687,6 +687,57 @@ async def delete_research(request_id: str, req: Request):
 
 
 # ---------------------------------------------------------------------------
+# POST /theo/research/{id}/approve — Human review approval
+# ---------------------------------------------------------------------------
+
+
+@router.post("/research/{request_id}/approve")
+async def approve_research(
+    request_id: str,
+    user: DiscordUser = Depends(get_current_user),
+):
+    """Approve a research paper after human review.
+
+    Stores approved_by (username) and approved_at (ISO timestamp)
+    in result_json. Required before publishing.
+    """
+    _validate_uuid(request_id)
+
+    with get_session() as session:
+        row = session.execute(
+            text("SELECT user_id, status, result_json FROM research_requests WHERE id = :id"),
+            {"id": request_id},
+        ).fetchone()
+
+        if not row:
+            raise HTTPException(status_code=404, detail="Not found")
+        if row.user_id != user.discord_id:
+            raise HTTPException(status_code=403, detail="Not your request")
+        if row.status != "completed":
+            raise HTTPException(status_code=409, detail="Only completed research can be approved")
+
+        try:
+            result = json.loads(row.result_json) if row.result_json else {}
+        except (json.JSONDecodeError, TypeError):
+            result = {}
+
+        result["approved_by"] = user.username
+        result["approved_at"] = datetime.now(UTC).isoformat()
+
+        session.execute(
+            text("UPDATE research_requests SET result_json = :result WHERE id = :id"),
+            {"id": request_id, "result": json.dumps(result)},
+        )
+        session.commit()
+
+    return {
+        "status": "approved",
+        "approved_by": user.username,
+        "approved_at": result["approved_at"],
+    }
+
+
+# ---------------------------------------------------------------------------
 # POST /theo/research/{id}/publish — Publish to public library
 # ---------------------------------------------------------------------------
 
@@ -721,6 +772,17 @@ async def publish_research(
             raise HTTPException(status_code=409, detail="Only completed research can be published")
         if row.is_public:
             raise HTTPException(status_code=409, detail="Already published")
+
+        # Require human approval before publishing
+        try:
+            result_check = json.loads(row.result_json) if row.result_json else {}
+        except (json.JSONDecodeError, TypeError):
+            result_check = {}
+        if not result_check.get("approved_by"):
+            raise HTTPException(
+                status_code=409,
+                detail="Paper must be reviewed and approved before publishing",
+            )
 
         # Parse result to get paper title for slug
         try:

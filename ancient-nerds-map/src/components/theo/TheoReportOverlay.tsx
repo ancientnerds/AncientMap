@@ -5,7 +5,7 @@
  * Supports inline WYSIWYG editing via TheoEditor when isOwner is true.
  */
 
-import { useState, useMemo, useCallback, useEffect, lazy, Suspense } from 'react'
+import { useState, useMemo, useCallback, useEffect, useRef, lazy, Suspense } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import QualityBadge, { type QualityScore } from './QualityBadge'
@@ -21,6 +21,8 @@ interface ResearchResult {
   duration_ms: number
   quality_score?: QualityScore | null
   edited_at?: string | null
+  approved_by?: string | null
+  approved_at?: string | null
 }
 
 interface PipelineEntry {
@@ -40,7 +42,9 @@ interface TheoReportOverlayProps {
   onClose: () => void
   isOwner?: boolean
   isPublic?: boolean
+  requestId?: string
   onSaveEdit?: (report: string) => void
+  onApprove?: (approvedBy: string, approvedAt: string) => void
 }
 
 const EFFORT_LABELS: Record<string, string> = {
@@ -119,11 +123,27 @@ export default function TheoReportOverlay({
   onClose,
   isOwner,
   isPublic,
+  requestId,
   onSaveEdit,
+  onApprove,
 }: TheoReportOverlayProps) {
   const [showTrace, setShowTrace] = useState(false)
   const [showAudit, setShowAudit] = useState(false)
   const [editing, setEditing] = useState(false)
+  const [scrolledToBottom, setScrolledToBottom] = useState(false)
+  const [approving, setApproving] = useState(false)
+  const bodyRef = useRef<HTMLDivElement>(null)
+
+  // Track scroll position — user must scroll to bottom to approve
+  const handleBodyScroll = useCallback(() => {
+    const el = bodyRef.current
+    if (!el || scrolledToBottom) return
+    const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80
+    if (atBottom) setScrolledToBottom(true)
+  }, [scrolledToBottom])
+
+  // Tutorial: show expanded guidance if user hasn't published any paper yet
+  const hasPublishedBefore = localStorage.getItem('theo_has_published') === 'true'
 
   // Escape key to close (not while editing)
   useEffect(() => {
@@ -307,10 +327,67 @@ export default function TheoReportOverlay({
             />
           </Suspense>
         ) : (
-          <div className="theo-report-body theo-md-body">
+          <div className="theo-report-body theo-md-body" ref={bodyRef} onScroll={handleBodyScroll}>
             <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>
               {enrichedReport}
             </ReactMarkdown>
+          </div>
+        )}
+
+        {/* Human Review & Approval */}
+        {!editing && isOwner && (
+          <div className="theo-approval-section">
+            {result.approved_by ? (
+              <div className="theo-approval-done">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2e7d32" strokeWidth="2"><path d="M20 6L9 17l-5-5"/></svg>
+                <span>Reviewed and approved by <strong>{result.approved_by}</strong> on {new Date(result.approved_at + (result.approved_at?.endsWith('Z') ? '' : 'Z')).toLocaleDateString()}</span>
+              </div>
+            ) : (
+              <div className="theo-approval-pending">
+                {!hasPublishedBefore && (
+                  <div className="theo-approval-tutorial">
+                    <strong>Why does this need approval?</strong>
+                    <p>
+                      AI-generated research can contain errors, hallucinations, or misattributed claims.
+                      Before publishing, you must review the paper to ensure accuracy. Your name will be
+                      attached as the reviewer — this creates accountability and trust in the research library.
+                    </p>
+                    <p>
+                      Scroll through the entire paper, then approve it below. After your first published paper,
+                      this guide won't appear again.
+                    </p>
+                  </div>
+                )}
+                <div className="theo-approval-action">
+                  {!scrolledToBottom ? (
+                    <span className="theo-approval-hint">Scroll to the bottom of the paper to enable approval</span>
+                  ) : (
+                    <button
+                      className="theo-approval-btn"
+                      disabled={approving}
+                      onClick={async () => {
+                        if (!requestId) return
+                        setApproving(true)
+                        try {
+                          const token = localStorage.getItem('an_auth_token')
+                          const resp = await fetch(`/api/theo/research/${requestId}/approve`, {
+                            method: 'POST',
+                            headers: { Authorization: `Bearer ${token}` },
+                          })
+                          if (resp.ok) {
+                            const data = await resp.json()
+                            onApprove?.(data.approved_by, data.approved_at)
+                          }
+                        } catch { /* network error */ }
+                        setApproving(false)
+                      }}
+                    >
+                      {approving ? 'Approving...' : 'I have reviewed this paper — Approve for publishing'}
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         )}
 

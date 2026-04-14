@@ -1145,6 +1145,110 @@
   padding: 20px;
 }
 
+/* — Tutorial hints — */
+.theo-tutorial-hint {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  margin-bottom: 12px;
+  background: rgba(255, 183, 77, 0.08);
+  border: 1px solid rgba(255, 183, 77, 0.2);
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-body);
+}
+.theo-tutorial-step {
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--primary-amber);
+  background: rgba(255, 183, 77, 0.15);
+  padding: 2px 8px;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+}
+.theo-tutorial-body {
+  flex: 1;
+}
+.theo-tutorial-dismiss {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  color: var(--text-dimmed);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 0;
+  line-height: 1;
+}
+.theo-tutorial-dismiss:hover {
+  color: var(--text-muted);
+}
+
+/* — Human Review & Approval — */
+.theo-approval-section {
+  border-top: 1px solid var(--border-default);
+  padding: 16px 20px;
+}
+.theo-approval-done {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+.theo-approval-pending {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.theo-approval-tutorial {
+  background: var(--surface-sunken);
+  border: 1px solid var(--border-default);
+  padding: 14px 16px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-body);
+}
+.theo-approval-tutorial strong {
+  color: var(--text-primary);
+  display: block;
+  margin-bottom: 6px;
+}
+.theo-approval-tutorial p {
+  margin: 6px 0;
+}
+.theo-approval-action {
+  display: flex;
+  align-items: center;
+}
+.theo-approval-hint {
+  font-size: 12px;
+  color: var(--text-dimmed);
+  font-style: italic;
+}
+.theo-approval-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  background: #2e7d32;
+  color: white;
+  border: none;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: var(--font-body);
+  transition: background 0.2s;
+}
+.theo-approval-btn:hover {
+  background: #1b5e20;
+}
+.theo-approval-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 /* — Pipeline Trace (collapsible) — */
 .theo-trace-toggle {
   display: flex;

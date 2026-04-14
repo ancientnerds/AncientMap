@@ -33,6 +33,23 @@ const SPECIALIST_COUNTS: Record<string, number> = {
   brief: 1, note: 3, article: 5, review: 6, thesis: 8, dissertation: 14,
 }
 
+// ---------------------------------------------------------------------------
+// Tutorial hints — shown until the user publishes their first paper
+// ---------------------------------------------------------------------------
+
+function TutorialHint({ children, step }: { children: React.ReactNode; step?: string }) {
+  const show = localStorage.getItem('theo_has_published') !== 'true'
+  const [dismissed, setDismissed] = useState(false)
+  if (!show || dismissed) return null
+  return (
+    <div className="theo-tutorial-hint">
+      {step && <span className="theo-tutorial-step">{step}</span>}
+      <div className="theo-tutorial-body">{children}</div>
+      <button className="theo-tutorial-dismiss" onClick={() => setDismissed(true)} aria-label="Dismiss hint">✕</button>
+    </div>
+  )
+}
+
 function TruncatedQuestion({ text, max = 200 }: { text: string; max?: number }) {
   const truncated = text.length > max ? text.slice(0, max) + '...' : text
   return (
@@ -555,6 +572,7 @@ export default function TheoPage() {
         method: 'POST', headers: getAuthHeaders(),
       })
       if (resp.ok) {
+        localStorage.setItem('theo_has_published', 'true')
         setToast({ msg: 'Published to the public library', type: 'ok' })
       } else {
         const err = await resp.json().catch(() => ({ detail: 'Failed to publish' }))
@@ -822,6 +840,11 @@ export default function TheoPage() {
                   Theo is currently working on a research task. Wait for it to finish before submitting a new one.
                 </div>
               )}
+              <TutorialHint step="1/5">
+                Theo is an AI research agent. Write a focused question about archaeology, ancient history,
+                or the ancient world. The more specific your question, the better the research — name sites,
+                time periods, and what you want investigated.
+              </TutorialHint>
               <div className="theo-input-wrap">
                 <textarea
                   ref={inputRef}
@@ -947,6 +970,11 @@ export default function TheoPage() {
                 <span className="theo-stage-title">Sources</span>
               </div>
 
+              <TutorialHint step="2/5">
+                Theo searches academic databases, web sources, and Wikipedia automatically. You can
+                optionally add YouTube videos or web articles as additional sources. The source adapters
+                below control which databases are searched — the defaults work well for most topics.
+              </TutorialHint>
               {/* YouTube Sources */}
               <div className="theo-video-section">
                 <div className="theo-video-label">YouTube Sources <span style={{ opacity: 0.5, fontWeight: 400 }}>(optional)</span></div>
@@ -1163,9 +1191,15 @@ export default function TheoPage() {
                 <span className="theo-stage-title">AI Specialist Panel</span>
               </div>
 
+              <TutorialHint step="3/5">
+                Each specialist is an AI persona with a unique analytical lens — they look at your
+                question from different angles (field methods, dating, geology, etc.). Theo auto-selects
+                the most relevant ones, but you can exclude any that don't fit your topic.
+                Their analyses are debated and synthesized before the paper is written.
+              </TutorialHint>
               <div className="theo-spec-notice">
-                These are AI-generated specialist perspectives, not real humans. Theo auto-selects the most relevant{' '}
-                <strong>{SPECIALIST_COUNTS[effort] ?? '?'}</strong> based on your question.
+                Theo auto-selects the most relevant{' '}
+                <strong>{SPECIALIST_COUNTS[effort] ?? '?'}</strong> specialists based on your question.
                 Deselect any you want to exclude.
               </div>
 
@@ -1217,6 +1251,12 @@ export default function TheoPage() {
                 <span className="theo-stage-title">Review & Launch</span>
               </div>
 
+              <TutorialHint step="4/5">
+                Review your research prompt below — you can still edit it. Once you launch, Theo will
+                search sources, run specialist analyses, debate findings, and assemble a structured paper.
+                This takes {EFFORTS.find(e => e.key === effort)?.time ?? 'a few minutes'} depending on
+                the scope. You'll see live progress while it runs.
+              </TutorialHint>
               {/* Editable enriched research prompt */}
               <div className="theo-launch-section">
                 <div className="theo-launch-label">
@@ -1300,6 +1340,14 @@ export default function TheoPage() {
           )}
 
           {/* ═══════ Completed Results ═══════ */}
+          {doneItems.length > 0 && doneItems.some(i => i.status === 'completed') && (
+            <TutorialHint step="5/5">
+              Your research is complete. Open a paper to read it, then scroll to the bottom and approve it.
+              Approval is required before publishing — your name is attached as the reviewer, creating
+              accountability for the research. After your first published paper, these tutorial hints
+              will disappear.
+            </TutorialHint>
+          )}
           <div className="theo-list">
             <div className="theo-list-header" style={{ display: 'flex', alignItems: 'center' }}>
               <span>{doneItems.length > 0 ? `Results (${doneItems.length})` : 'Results'}</span>
@@ -1456,7 +1504,16 @@ export default function TheoPage() {
             onClose={handleCloseReport}
             isOwner={true}
             isPublic={viewingData.is_public}
+            requestId={viewingId}
             onSaveEdit={handleSaveEdit}
+            onApprove={(approvedBy, approvedAt) => {
+              setViewingData(prev => {
+                if (!prev?.result) return prev
+                return { ...prev, result: { ...prev.result, approved_by: approvedBy, approved_at: approvedAt } }
+              })
+              fetchList()
+              setToast({ msg: 'Paper approved for publishing', type: 'ok' })
+            }}
           />
         </Suspense>
       )}
