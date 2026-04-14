@@ -218,14 +218,12 @@ class SpecialistHandler(BaseHandler):
         if not angle.saturated:
             from pipeline.lyra.handlers.angle_search import SearchHandler
 
-            for handler_list in self.bus._handlers.values():
-                for handler in handler_list:
-                    if isinstance(handler, SearchHandler):
-                        if specialist_gaps and new_claims_total > 0:
-                            await handler.refine_and_search(angle.id, specialist_gaps)
-                        else:
-                            await handler.search_angle(angle.id)
-                        break
+            search_handler = self.bus.get_handler(SearchHandler)
+            if search_handler:
+                if specialist_gaps and new_claims_total > 0:
+                    await search_handler.refine_and_search(angle.id, specialist_gaps)
+                else:
+                    await search_handler.search_angle(angle.id)
 
     # ------------------------------------------------------------------
     # Panel initialization

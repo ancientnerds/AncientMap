@@ -409,8 +409,16 @@ export default function TheoResearchLive({ requestId, question, startedAt, onClo
         {/* NERV Progress Bar */}
         <div className="theo-live-progress">
           {done ? (
-            <NervLoadingBar label="COMPLETE" sublabel="RESEARCH FINISHED" progress={100} counter={`${doneNodes.length} stages`} ledsDone={totalCount} ledsTotal={totalCount} />
-          ) : nodes.length > 0 ? (
+            <NervLoadingBar label="COMPLETE" sublabel="RESEARCH FINISHED" progress={100} counter={`${doneNodes.length || Object.keys(angles).length} stages`} ledsDone={totalCount || Object.keys(angles).length} ledsTotal={totalCount || Object.keys(angles).length} />
+          ) : Object.keys(angles).length > 0 ? (() => {
+            const angleList = Object.values(angles)
+            const saturatedCount = angleList.filter(a => a.saturated).length
+            const angleTotal = angleList.length
+            const angleProgress = Math.round((saturatedCount / Math.max(angleTotal, 1)) * 100)
+            const currentAngle = angleList.find(a => a.status === 'analyzing' || a.status === 'auditing')
+            const sublabel = currentAngle ? currentAngle.topic.toUpperCase() : statusMsg.toUpperCase() || 'RESEARCHING'
+            return <NervLoadingBar label="RESEARCH" sublabel={sublabel} progress={angleProgress} counter={`${saturatedCount} / ${angleTotal} angles`} ledsDone={saturatedCount} ledsTotal={angleTotal} />
+          })() : nodes.length > 0 ? (
             <NervLoadingBar label="RESEARCH" sublabel={specialistInfo.toUpperCase() || debateRound || activeLabel || 'PROCESSING'} progress={progress} counter={`${doneCount} / ${totalCount}`} ledsDone={subtaskProgress.done} ledsTotal={subtaskProgress.total} />
           ) : (
             <NervLoadingBar label="CONNECTING" sublabel="AWAITING PIPELINE" />

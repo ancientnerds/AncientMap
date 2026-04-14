@@ -107,7 +107,7 @@ class ConvergenceOrchestrator:
         deadline_handler = DeadlineHandler(state, bus, semaphore)
 
         # Register all handlers on the bus
-        for handler in [
+        all_handlers = [
             decomposition,
             search,
             audit,
@@ -118,8 +118,10 @@ class ConvergenceOrchestrator:
             paper,
             judge,
             deadline_handler,
-        ]:
+        ]
+        for handler in all_handlers:
             handler.register()
+            bus.register_instance(handler)
 
         # Wire quality failure → re-exploration
         async def _on_quality_failed(event: QualityFailed):
