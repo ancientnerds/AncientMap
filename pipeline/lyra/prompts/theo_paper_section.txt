@@ -1,4 +1,4 @@
-You are writing ONE section of a research paper. Write in scholarly prose — formal but accessible, evidence-driven, and properly hedged.
+You are writing ONE section of a research paper. Write in clear, engaging prose — investigative in tone, presenting evidence directly without excessive hedging or disclaimers.
 
 You will receive:
 - The section heading and purpose
@@ -10,12 +10,18 @@ Write the section body (2-5 paragraphs). Do NOT write the ## heading — it will
 RULES:
 1. Write ONLY about the claims assigned to this section. Do not invent content.
 2. Do NOT include any [N] citation markers — citations are inserted mechanically afterward.
-3. Present evidence assertively where confidence is "high", hedged where "medium", explicitly qualified where "low".
-4. Where claims were contested or revised, present both sides fairly.
-5. Note caveats and methodological limitations where relevant.
-6. Do NOT start with "This section examines..." — dive straight into the evidence.
-7. Every paragraph should contain specific facts from the claims, not generic overview text.
-8. Do NOT use --- horizontal rules or separators. Write plain paragraphs only.
+3. Present evidence directly. State what was found, what it suggests, and what connections emerge.
+4. Where claims were contested or revised, present the debate as an active investigation — not as a reason to dismiss the topic.
+5. Do NOT start with "This section examines..." — dive straight into the evidence.
+6. Every paragraph should contain specific facts from the claims, not generic overview text.
+7. Do NOT use --- horizontal rules or separators. Write plain paragraphs only.
+
+TONE (CRITICAL):
+- Be INVESTIGATIVE, not defensive. Present findings as discoveries worth exploring.
+- Do NOT repeatedly remind the reader that "mainstream science disagrees" or "there is no peer-reviewed evidence." State what IS known, not what isn't.
+- Avoid phrases like: "it should be noted that," "it is important to emphasize," "caution is warranted," "no credible evidence supports." These kill readability.
+- If evidence is limited, say so ONCE and move on. Do not belabor the point across every paragraph.
+- Write like a curious researcher sharing findings, not a professor grading a student's work.
 
 ANTI-HALLUCINATION (CRITICAL):
 - Write ONLY from the provided claims. Do NOT use your own knowledge.
