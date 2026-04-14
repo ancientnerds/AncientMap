@@ -15,7 +15,6 @@ PROMPTS_DIR = Path(__file__).resolve().parent.parent / "prompts"
 
 
 class SearchHandler(BaseHandler):
-
     def register(self):
         self.bus.on(AngleCreated, self._on_angle_created)
 
@@ -29,23 +28,41 @@ class SearchHandler(BaseHandler):
             return
 
         from pipeline.lyra.theo_sources import MultiSourceSearch
+
         settings = _get_settings()
         searcher = MultiSourceSearch(settings)
 
-        queries = angle.search_queries[:self.state.config.queries_per_angle]
+        queries = angle.search_queries[: self.state.config.queries_per_angle]
         if not queries:
             return
 
-        self.emit_sse({"type": "pipeline", "stage": f"search_{angle_id}", "status": "start", "meta": {"subtask_total": len(queries), "angle": angle.topic}})
-        self.emit_sse({"type": "status", "content": f"Searching for '{angle.topic}' ({len(queries)} queries)..."})
+        self.emit_sse(
+            {
+                "type": "pipeline",
+                "stage": f"search_{angle_id}",
+                "status": "start",
+                "meta": {"subtask_total": len(queries), "angle": angle.topic},
+            }
+        )
+        self.emit_sse(
+            {
+                "type": "status",
+                "content": f"Searching for '{angle.topic}' ({len(queries)} queries)...",
+            }
+        )
 
         async with self.semaphore:
-            results = await searcher.search(queries, self.state.config.source_apis, self.state.disabled_adapters)
+            results = await searcher.search(
+                queries, self.state.config.source_apis, self.state.disabled_adapters
+            )
 
         new_sources = 0
         for r in results:
             sid = self.state.registry.register_source(
-                url=r.url, title=r.title, snippet=r.snippet, date=r.date,
+                url=r.url,
+                title=r.title,
+                snippet=r.snippet,
+                date=r.date,
             )
             if sid not in angle.source_ids:
                 angle.source_ids.append(sid)
@@ -56,11 +73,22 @@ class SearchHandler(BaseHandler):
 
         angle.search_rounds += 1
 
-        self.emit_sse({
-            "type": "pipeline", "stage": f"search_{angle_id}", "status": "done",
-            "meta": {"new_sources": new_sources, "total_sources": len(angle.source_ids), "round": angle.search_rounds},
-        })
-        self.state.log("search", f"Angle '{angle.topic}' round {angle.search_rounds}: {new_sources} new sources ({len(angle.source_ids)} total)")
+        self.emit_sse(
+            {
+                "type": "pipeline",
+                "stage": f"search_{angle_id}",
+                "status": "done",
+                "meta": {
+                    "new_sources": new_sources,
+                    "total_sources": len(angle.source_ids),
+                    "round": angle.search_rounds,
+                },
+            }
+        )
+        self.state.log(
+            "search",
+            f"Angle '{angle.topic}' round {angle.search_rounds}: {new_sources} new sources ({len(angle.source_ids)} total)",
+        )
 
         await self.bus.emit(SourcesFound(angle_id=angle_id, count=new_sources))
 
@@ -72,7 +100,9 @@ class SearchHandler(BaseHandler):
 
         if angle.search_rounds >= self.state.config.max_search_rounds_per_angle:
             angle.saturated = True
-            self.state.log("search", f"Angle '{angle.topic}' hit max search rounds ({angle.search_rounds})")
+            self.state.log(
+                "search", f"Angle '{angle.topic}' hit max search rounds ({angle.search_rounds})"
+            )
             return
 
         # Generate refined queries using LLM
@@ -82,18 +112,22 @@ class SearchHandler(BaseHandler):
             user_msg = (
                 f"## Angle topic\n\n{angle.topic}\n\n"
                 f"## Previous queries\n\n{json.dumps(angle.search_queries)}\n\n"
-                f"## Gaps identified by specialists\n\n" + "\n".join(f"- {g}" for g in specialist_gaps)
+                f"## Gaps identified by specialists\n\n"
+                + "\n".join(f"- {g}" for g in specialist_gaps)
             )
             async with self.semaphore:
                 raw = await asyncio.to_thread(
-                    minimax_chat_anthropic, prompt, user_msg,
-                    4096, _get_settings(),
+                    minimax_chat_anthropic,
+                    prompt,
+                    user_msg,
+                    4096,
+                    _get_settings(),
                 )
             self.state.llm_call_count += 1
             parsed = self._parse_json(raw)
             new_queries = parsed.get("refined_queries", [])
             if new_queries:
-                angle.search_queries = new_queries[:self.state.config.queries_per_angle]
+                angle.search_queries = new_queries[: self.state.config.queries_per_angle]
 
         await self.search_angle(angle_id)
 

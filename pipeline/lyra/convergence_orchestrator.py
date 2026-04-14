@@ -103,16 +103,31 @@ class ConvergenceOrchestrator:
 
         # Register all handlers on the bus
         for handler in [
-            decomposition, search, audit, specialist, convergence,
-            synthesis, debate, paper, judge, deadline_handler,
+            decomposition,
+            search,
+            audit,
+            specialist,
+            convergence,
+            synthesis,
+            debate,
+            paper,
+            judge,
+            deadline_handler,
         ]:
             handler.register()
 
         # Wire quality failure → re-exploration
         async def _on_quality_failed(event: QualityFailed):
             """Re-explore weak angles when quality judge fails."""
-            state.log("orchestrator", f"Quality failed (score={event.score}), weak: {event.weak_areas}")
-            emit({"type": "status", "content": f"Quality check failed (score {event.score}), refining research..."})
+            state.log(
+                "orchestrator", f"Quality failed (score={event.score}), weak: {event.weak_areas}"
+            )
+            emit(
+                {
+                    "type": "status",
+                    "content": f"Quality check failed (score {event.score}), refining research...",
+                }
+            )
 
             # Un-saturate angles related to weak areas and trigger re-search
             for angle in state.angles:
@@ -165,7 +180,12 @@ class ConvergenceOrchestrator:
         ]
 
         state.log("orchestrator", f"Initial panel: {[s.name for s in initial_specialists]}")
-        emit({"type": "status", "content": f"Assembled panel of {len(initial_specialists)} specialists"})
+        emit(
+            {
+                "type": "status",
+                "content": f"Assembled panel of {len(initial_specialists)} specialists",
+            }
+        )
 
         # --- Run the pipeline ---
         t0 = time.monotonic()
@@ -201,14 +221,19 @@ class ConvergenceOrchestrator:
                     saturated = sum(1 for a in state.angles if a.saturated)
                     total = len(state.angles)
                     elapsed = int(time.monotonic() - t0)
-                    state.log("orchestrator", f"Progress: {saturated}/{total} angles saturated, phase={state.phase.value}, elapsed={elapsed}s")
+                    state.log(
+                        "orchestrator",
+                        f"Progress: {saturated}/{total} angles saturated, phase={state.phase.value}, elapsed={elapsed}s",
+                    )
 
         except Exception as exc:
             state.error = f"Pipeline error: {exc}"
             logger.exception("Convergence pipeline failed")
 
         duration_ms = int((time.monotonic() - t0) * 1000)
-        state.log("orchestrator", f"Pipeline finished in {duration_ms}ms, phase={state.phase.value}")
+        state.log(
+            "orchestrator", f"Pipeline finished in {duration_ms}ms, phase={state.phase.value}"
+        )
 
         # Build specialist_analyses dict for backward compat (worker uses len() for tools_used)
         for angle in state.angles:

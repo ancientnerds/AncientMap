@@ -17,7 +17,6 @@ PROMPTS_DIR = Path(__file__).resolve().parent.parent / "prompts"
 
 
 class DebateHandler(BaseHandler):
-
     def register(self):
         self.bus.on(SynthesisReady, self._on_synthesis_ready)
 
@@ -30,7 +29,14 @@ class DebateHandler(BaseHandler):
             await self.bus.emit(DebateComplete())
             return
 
-        self.emit_sse({"type": "pipeline", "stage": "debate", "status": "start", "meta": {"subtask_total": max_rounds}})
+        self.emit_sse(
+            {
+                "type": "pipeline",
+                "stage": "debate",
+                "status": "start",
+                "meta": {"subtask_total": max_rounds},
+            }
+        )
 
         challenge_prompt = (PROMPTS_DIR / "theo_debate_challenge.txt").read_text(encoding="utf-8")
         defense_prompt = (PROMPTS_DIR / "theo_debate_defense.txt").read_text(encoding="utf-8")
@@ -56,7 +62,14 @@ class DebateHandler(BaseHandler):
 
         rnd = 0
         for rnd in range(1, max_rounds + 1):
-            self.emit_sse({"type": "status", "content": f"Debate round {rnd}/{max_rounds}...", "subtask_done": rnd - 1, "subtask_total": max_rounds})
+            self.emit_sse(
+                {
+                    "type": "status",
+                    "content": f"Debate round {rnd}/{max_rounds}...",
+                    "subtask_done": rnd - 1,
+                    "subtask_total": max_rounds,
+                }
+            )
 
             # Challenge phase
             round_challenges: list[dict] = []
@@ -69,8 +82,11 @@ class DebateHandler(BaseHandler):
 
                 async with self.semaphore:
                     raw = await asyncio.to_thread(
-                        minimax_chat_anthropic, system_msg, user_msg,
-                        self.state.config.max_tokens_per_call, _get_settings(),
+                        minimax_chat_anthropic,
+                        system_msg,
+                        user_msg,
+                        self.state.config.max_tokens_per_call,
+                        _get_settings(),
                     )
                 self.state.llm_call_count += 1
                 parsed = self._parse_json(raw)
@@ -82,17 +98,23 @@ class DebateHandler(BaseHandler):
             all_challenges.extend(round_challenges)
 
             if not round_challenges:
-                self.emit_sse({"type": "status", "content": f"Round {rnd}: no challenges — debate converged"})
+                self.emit_sse(
+                    {"type": "status", "content": f"Round {rnd}: no challenges — debate converged"}
+                )
                 self.state.log("debate", f"Debate converged at round {rnd} (no challenges)")
                 break
 
             # Defense phase
             for spec in active_specs:
-                my_challenges = [c for c in round_challenges if c.get("target_specialist") == spec.id]
+                my_challenges = [
+                    c for c in round_challenges if c.get("target_specialist") == spec.id
+                ]
                 if not my_challenges:
                     continue
 
-                system_msg = f"You are {spec.name}, {spec.title}.\n\n{spec.perspective}\n\n{defense_prompt}"
+                system_msg = (
+                    f"You are {spec.name}, {spec.title}.\n\n{spec.perspective}\n\n{defense_prompt}"
+                )
                 user_msg = (
                     f"## Challenges directed at you\n\n{json.dumps(my_challenges, indent=2)}\n\n"
                     f"## Your original findings\n\n{json.dumps(spec_findings.get(spec.id, []), indent=2)}"
@@ -100,8 +122,11 @@ class DebateHandler(BaseHandler):
 
                 async with self.semaphore:
                     raw = await asyncio.to_thread(
-                        minimax_chat_anthropic, system_msg, user_msg,
-                        self.state.config.max_tokens_per_call, _get_settings(),
+                        minimax_chat_anthropic,
+                        system_msg,
+                        user_msg,
+                        self.state.config.max_tokens_per_call,
+                        _get_settings(),
                     )
                 self.state.llm_call_count += 1
                 parsed = self._parse_json(raw)
@@ -110,7 +135,9 @@ class DebateHandler(BaseHandler):
                     d["defender_id"] = spec.id
                 all_defenses.extend(defenses)
 
-            self.state.log("debate", f"Round {rnd}: {len(round_challenges)} challenges, defenses collected")
+            self.state.log(
+                "debate", f"Round {rnd}: {len(round_challenges)} challenges, defenses collected"
+            )
 
         self.state.debate_result = {
             "rounds": rnd,
@@ -118,10 +145,18 @@ class DebateHandler(BaseHandler):
             "defenses": all_defenses,
         }
 
-        self.emit_sse({
-            "type": "pipeline", "stage": "debate", "status": "done",
-            "meta": {"rounds": rnd, "challenges": len(all_challenges), "defenses": len(all_defenses)},
-        })
+        self.emit_sse(
+            {
+                "type": "pipeline",
+                "stage": "debate",
+                "status": "done",
+                "meta": {
+                    "rounds": rnd,
+                    "challenges": len(all_challenges),
+                    "defenses": len(all_defenses),
+                },
+            }
+        )
 
         await self.bus.emit(DebateComplete())
 

@@ -29,7 +29,6 @@ logger = logging.getLogger(__name__)
 
 
 class SpecialistHandler(BaseHandler):
-
     def register(self):
         self.bus.on(SourcesAudited, self._on_sources_audited)
 
@@ -51,33 +50,43 @@ class SpecialistHandler(BaseHandler):
             self.state.log("specialist", "No active specialists in panel")
             return
 
-        self.emit_sse({
-            "type": "pipeline",
-            "stage": f"specialist_{angle.id}",
-            "status": "start",
-            "meta": {
-                "subtask_total": len(active),
-                "angle": angle.topic,
-                "specialists": [s.name for s in active],
-            },
-        })
-        self.emit_sse({
-            "type": "status",
-            "content": (
-                f"Running {len(active)} specialists on '{angle.topic}' "
-                f"({len(angle.source_ids)} sources)..."
-            ),
-        })
+        self.emit_sse(
+            {
+                "type": "pipeline",
+                "stage": f"specialist_{angle.id}",
+                "status": "start",
+                "meta": {
+                    "subtask_total": len(active),
+                    "angle": angle.topic,
+                    "specialists": [s.name for s in active],
+                },
+            }
+        )
+        self.emit_sse(
+            {
+                "type": "status",
+                "content": (
+                    f"Running {len(active)} specialists on '{angle.topic}' "
+                    f"({len(angle.source_ids)} sources)..."
+                ),
+            }
+        )
 
         # Build sources_context scoped to this angle's sources only
         sources_context = self._build_angle_sources_context(angle)
         if not sources_context.strip():
-            self.state.log("specialist", f"No source content for angle '{angle.topic}', skipping analysis")
+            self.state.log(
+                "specialist", f"No source content for angle '{angle.topic}', skipping analysis"
+            )
             angle.recent_claim_counts.append(0)
             self._check_saturation(angle)
-            await self.bus.emit(FindingsProduced(
-                angle_id=angle.id, new_claims=0, total_claims=len(angle.findings),
-            ))
+            await self.bus.emit(
+                FindingsProduced(
+                    angle_id=angle.id,
+                    new_claims=0,
+                    total_claims=len(angle.findings),
+                )
+            )
             return
 
         # Run all active specialists in parallel
@@ -149,27 +158,30 @@ class SpecialistHandler(BaseHandler):
 
             # Check for cross-angle connections
             cross_topics = self._detect_cross_angle_connections(
-                new_findings, angle, panel_spec,
+                new_findings,
+                angle,
+                panel_spec,
             )
             cross_angle_topics.extend(cross_topics)
 
         # Track claim count for convergence detection
         angle.recent_claim_counts.append(new_claims_total)
 
-        self.emit_sse({
-            "type": "pipeline",
-            "stage": f"specialist_{angle.id}",
-            "status": "done",
-            "meta": {
-                "new_claims": new_claims_total,
-                "total_claims": len(angle.findings),
-                "round": angle.search_rounds,
-            },
-        })
+        self.emit_sse(
+            {
+                "type": "pipeline",
+                "stage": f"specialist_{angle.id}",
+                "status": "done",
+                "meta": {
+                    "new_claims": new_claims_total,
+                    "total_claims": len(angle.findings),
+                    "round": angle.search_rounds,
+                },
+            }
+        )
         self.state.log(
             "specialist",
-            f"Angle '{angle.topic}': {new_claims_total} new claims "
-            f"({len(angle.findings)} total)",
+            f"Angle '{angle.topic}': {new_claims_total} new claims ({len(angle.findings)} total)",
         )
 
         # Prune underperforming specialists
@@ -183,22 +195,27 @@ class SpecialistHandler(BaseHandler):
 
         # Emit cross-angle discoveries as new angles
         for topic, spawned_from in cross_angle_topics:
-            await self.bus.emit(NewAngleDiscovered(
-                topic=topic,
-                description=f"Cross-angle connection discovered from '{angle.topic}'",
-                spawned_from=spawned_from,
-            ))
+            await self.bus.emit(
+                NewAngleDiscovered(
+                    topic=topic,
+                    description=f"Cross-angle connection discovered from '{angle.topic}'",
+                    spawned_from=spawned_from,
+                )
+            )
 
         # Emit findings event
-        await self.bus.emit(FindingsProduced(
-            angle_id=angle.id,
-            new_claims=new_claims_total,
-            total_claims=len(angle.findings),
-        ))
+        await self.bus.emit(
+            FindingsProduced(
+                angle_id=angle.id,
+                new_claims=new_claims_total,
+                total_claims=len(angle.findings),
+            )
+        )
 
         # If gaps were found and angle isn't saturated, trigger refinement
         if specialist_gaps and not angle.saturated and new_claims_total > 0:
             from pipeline.lyra.handlers.angle_search import SearchHandler
+
             # Find the search handler instance via bus handlers
             for handler_list in self.bus._handlers.values():
                 for handler in handler_list:
@@ -225,11 +242,13 @@ class SpecialistHandler(BaseHandler):
         )
 
         for spec in specialists:
-            self.state.panel.append(ActiveSpecialist(
-                specialist_id=spec.id,
-                name=spec.name,
-                domain=spec.domain,
-            ))
+            self.state.panel.append(
+                ActiveSpecialist(
+                    specialist_id=spec.id,
+                    name=spec.name,
+                    domain=spec.domain,
+                )
+            )
 
         self.state.log(
             "specialist",
@@ -284,12 +303,17 @@ class SpecialistHandler(BaseHandler):
                 return panel_spec.specialist_id, {}
 
             system_prompt, user_prompt = build_specialist_prompt(
-                spec, question, sources_context,
+                spec,
+                question,
+                sources_context,
             )
 
             for attempt in range(3):
                 raw = minimax_chat_anthropic(
-                    system_prompt, user_prompt, max_tokens, settings=settings,
+                    system_prompt,
+                    user_prompt,
+                    max_tokens,
+                    settings=settings,
                 )
                 self.state.llm_call_count += 1
                 parsed = _parse_json(raw)
@@ -298,7 +322,8 @@ class SpecialistHandler(BaseHandler):
                 if attempt < 2:
                     logger.info(
                         "Specialist %s returned unparseable output, retrying (%d/3)",
-                        panel_spec.specialist_id, attempt + 1,
+                        panel_spec.specialist_id,
+                        attempt + 1,
                     )
             logger.warning("Specialist %s failed after 3 attempts", panel_spec.specialist_id)
             return panel_spec.specialist_id, {}
@@ -308,10 +333,7 @@ class SpecialistHandler(BaseHandler):
         analyses: dict[str, dict] = {}
 
         with ThreadPoolExecutor(max_workers=worker_count) as pool:
-            futures = {
-                loop.run_in_executor(pool, _run_one, ps): ps
-                for ps in panel
-            }
+            futures = {loop.run_in_executor(pool, _run_one, ps): ps for ps in panel}
             results = await asyncio.gather(*futures.keys(), return_exceptions=True)
 
         for result in results:
@@ -385,12 +407,14 @@ class SpecialistHandler(BaseHandler):
                 matches = sum(1 for w in meaningful if w in combined)
                 if matches >= 2:
                     panel_spec.interdisciplinary_hits += 1
-                    self.state.cross_angle_connections.append({
-                        "from_angle": current_angle.id,
-                        "to_angle": other.id,
-                        "claim": finding.get("claim", ""),
-                        "specialist": panel_spec.specialist_id,
-                    })
+                    self.state.cross_angle_connections.append(
+                        {
+                            "from_angle": current_angle.id,
+                            "to_angle": other.id,
+                            "claim": finding.get("claim", ""),
+                            "specialist": panel_spec.specialist_id,
+                        }
+                    )
 
         # Look for genuinely NEW sub-topics: terms that appear in findings
         # but don't match any existing angle topic
@@ -406,7 +430,12 @@ class SpecialistHandler(BaseHandler):
                 # If a caveat mentions an unexplored area that doesn't match any angle
                 if any(
                     phrase in caveat_lower
-                    for phrase in ("unexplored", "further research", "not yet investigated", "requires investigation")
+                    for phrase in (
+                        "unexplored",
+                        "further research",
+                        "not yet investigated",
+                        "requires investigation",
+                    )
                 ):
                     # Extract a potential topic from the caveat
                     # Only flag if it's genuinely different from all existing angles
@@ -449,10 +478,12 @@ class SpecialistHandler(BaseHandler):
                 )
 
         for spec_id in pruned:
-            self.emit_sse({
-                "type": "status",
-                "content": f"Specialist '{spec_id}' pruned (no contributions)",
-            })
+            self.emit_sse(
+                {
+                    "type": "status",
+                    "content": f"Specialist '{spec_id}' pruned (no contributions)",
+                }
+            )
             await self.bus.emit(SpecialistPruned(specialist_id=spec_id))
 
     # ------------------------------------------------------------------
@@ -460,7 +491,8 @@ class SpecialistHandler(BaseHandler):
     # ------------------------------------------------------------------
 
     async def _recruit_from_connections(
-        self, cross_angle_topics: list[tuple[str, str]],
+        self,
+        cross_angle_topics: list[tuple[str, str]],
     ):
         """If cross-angle connections reveal a domain not covered by the panel,
         recruit a matching specialist from SPECIALIST_POOL."""
@@ -497,10 +529,12 @@ class SpecialistHandler(BaseHandler):
                 f"Recruited specialist '{best_candidate.name}' ({best_candidate.id}) "
                 f"based on cross-angle connections (score={best_score})",
             )
-            self.emit_sse({
-                "type": "status",
-                "content": f"Recruited specialist '{best_candidate.name}' for emerging topic",
-            })
+            self.emit_sse(
+                {
+                    "type": "status",
+                    "content": f"Recruited specialist '{best_candidate.name}' for emerging topic",
+                }
+            )
             await self.bus.emit(SpecialistRecruited(specialist_id=best_candidate.id))
 
 

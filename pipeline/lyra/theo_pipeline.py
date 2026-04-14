@@ -131,13 +131,16 @@ class PipelineContext:
     def log(self, stage: str, msg: str, level: str = "info", **data) -> None:
         """Append a structured debug entry."""
         from datetime import UTC, datetime
-        self.debug_log.append({
-            "ts": datetime.now(UTC).isoformat(),
-            "stage": stage,
-            "level": level,
-            "msg": msg,
-            "data": data if data else {},
-        })
+
+        self.debug_log.append(
+            {
+                "ts": datetime.now(UTC).isoformat(),
+                "stage": stage,
+                "level": level,
+                "msg": msg,
+                "data": data if data else {},
+            }
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -533,7 +536,10 @@ class TheoPipeline:
                         "type": "pipeline",
                         "stage": "source_image_injection",
                         "status": "done",
-                        "meta": {"candidates": len(ctx.source_images), "llm_calls": ctx.llm_call_count},
+                        "meta": {
+                            "candidates": len(ctx.source_images),
+                            "llm_calls": ctx.llm_call_count,
+                        },
                     }
                 )
             except Exception as exc:
@@ -747,7 +753,11 @@ class TheoPipeline:
                 "stage": stage,
                 "status": "done",
                 "duration_ms": ms,
-                "meta": {"extracted": extracted, "skipped": skipped, "llm_calls": ctx.llm_call_count},
+                "meta": {
+                    "extracted": extracted,
+                    "skipped": skipped,
+                    "llm_calls": ctx.llm_call_count,
+                },
             }
         )
 
@@ -901,7 +911,14 @@ class TheoPipeline:
         stage = "question_analysis"
         t0 = time.monotonic()
         emit({"type": "pipeline", "stage": stage, "status": "start", "meta": {"subtask_total": 2}})
-        emit({"type": "status", "content": "Analyzing research question...", "subtask_done": 0, "subtask_total": 2})
+        emit(
+            {
+                "type": "status",
+                "content": "Analyzing research question...",
+                "subtask_done": 0,
+                "subtask_total": 2,
+            }
+        )
 
         system = self._load_prompt("theo_question_analysis")
 
@@ -928,7 +945,14 @@ class TheoPipeline:
         ctx.geographic_scope = parsed.get("geographic_scope", "")
 
         # Select specialists based on domain tags
-        emit({"type": "status", "content": "Selecting specialist panel...", "subtask_done": 1, "subtask_total": 2})
+        emit(
+            {
+                "type": "status",
+                "content": "Selecting specialist panel...",
+                "subtask_done": 1,
+                "subtask_total": 2,
+            }
+        )
         ctx.specialists = select_specialists(
             domain_tags=ctx.domain_tags,
             question=ctx.question,
@@ -937,7 +961,12 @@ class TheoPipeline:
             force_exclude=ctx.force_exclude or None,
         )
 
-        ctx.log("question_analysis", f"Selected {len(ctx.specialists)} specialists", specialists=[s.id for s in ctx.specialists], domain_tags=ctx.domain_tags)
+        ctx.log(
+            "question_analysis",
+            f"Selected {len(ctx.specialists)} specialists",
+            specialists=[s.id for s in ctx.specialists],
+            domain_tags=ctx.domain_tags,
+        )
 
         ms = int((time.monotonic() - t0) * 1000)
         emit(
@@ -1022,7 +1051,12 @@ class TheoPipeline:
         total_results = len(ctx.registry.sources)
         academic_count = sum(1 for s in ctx.registry.sources.values() if s.reliability_tier == 1)
 
-        ctx.log("web_search", f"Found {total_results} sources ({academic_count} academic)", queries_run=len(queries), source_group=source_group)
+        ctx.log(
+            "web_search",
+            f"Found {total_results} sources ({academic_count} academic)",
+            queries_run=len(queries),
+            source_group=source_group,
+        )
 
         ms = int((time.monotonic() - t0) * 1000)
         emit(
@@ -1056,8 +1090,22 @@ class TheoPipeline:
 
         if not ctx.sources_context.strip():
             ctx.error = "No sources available for reliability audit."
-            emit({"type": "pipeline", "stage": stage, "status": "start", "meta": {"subtask_total": 0}})
-            emit({"type": "pipeline", "stage": stage, "status": "error", "meta": {"llm_calls": ctx.llm_call_count}})
+            emit(
+                {
+                    "type": "pipeline",
+                    "stage": stage,
+                    "status": "start",
+                    "meta": {"subtask_total": 0},
+                }
+            )
+            emit(
+                {
+                    "type": "pipeline",
+                    "stage": stage,
+                    "status": "error",
+                    "meta": {"llm_calls": ctx.llm_call_count},
+                }
+            )
             return
 
         # 1 source per prompt, 10 parallel — quality over speed.
@@ -1065,7 +1113,14 @@ class TheoPipeline:
         source_items = list(ctx.registry.sources.items())
         max_parallel = 10
 
-        emit({"type": "pipeline", "stage": stage, "status": "start", "meta": {"subtask_total": len(source_items)}})
+        emit(
+            {
+                "type": "pipeline",
+                "stage": stage,
+                "status": "start",
+                "meta": {"subtask_total": len(source_items)},
+            }
+        )
         emit(
             {
                 "type": "status",
@@ -1164,7 +1219,12 @@ class TheoPipeline:
         ctx.sources_context = "\n".join(lines)
 
         accepted_count = total_scored - len(rejected_ids)
-        ctx.log("source_audit", f"Audited {total_scored} sources: {accepted_count} accepted, {len(rejected_ids)} rejected", accepted=accepted_count, rejected=len(rejected_ids))
+        ctx.log(
+            "source_audit",
+            f"Audited {total_scored} sources: {accepted_count} accepted, {len(rejected_ids)} rejected",
+            accepted=accepted_count,
+            rejected=len(rejected_ids),
+        )
 
         ms = int((time.monotonic() - t0) * 1000)
         emit(
@@ -1309,7 +1369,11 @@ class TheoPipeline:
                 "stage": stage,
                 "status": "done",
                 "duration_ms": ms,
-                "meta": {"candidates": len(candidates), "fetched": fetched, "llm_calls": ctx.llm_call_count},
+                "meta": {
+                    "candidates": len(candidates),
+                    "fetched": fetched,
+                    "llm_calls": ctx.llm_call_count,
+                },
             }
         )
 
@@ -1324,7 +1388,14 @@ class TheoPipeline:
     ) -> None:
         stage = "specialist_analysis"
         t0 = time.monotonic()
-        emit({"type": "pipeline", "stage": stage, "status": "start", "meta": {"subtask_total": len(ctx.specialists)}})
+        emit(
+            {
+                "type": "pipeline",
+                "stage": stage,
+                "status": "start",
+                "meta": {"subtask_total": len(ctx.specialists)},
+            }
+        )
 
         loop = asyncio.get_running_loop()
         executor = ThreadPoolExecutor(max_workers=_SPECIALIST_WORKERS)
@@ -1395,16 +1466,23 @@ class TheoPipeline:
                 if s.id == spec_id:
                     spec_name = s.name
                     break
-            emit({
-                "type": "status",
-                "content": f"Specialist {spec_name} completed analysis.",
-                "specialist_name": spec_name,
-                "specialist_index": completed_count,
-                "specialist_total": len(ctx.specialists),
-                "subtask_done": completed_count,
-                "subtask_total": len(ctx.specialists),
-            })
-            ctx.log("specialist_analysis", f"Specialist {spec_name} completed", specialist_id=spec_id, findings=len(parsed.get("findings", [])))
+            emit(
+                {
+                    "type": "status",
+                    "content": f"Specialist {spec_name} completed analysis.",
+                    "specialist_name": spec_name,
+                    "specialist_index": completed_count,
+                    "specialist_total": len(ctx.specialists),
+                    "subtask_done": completed_count,
+                    "subtask_total": len(ctx.specialists),
+                }
+            )
+            ctx.log(
+                "specialist_analysis",
+                f"Specialist {spec_name} completed",
+                specialist_id=spec_id,
+                findings=len(parsed.get("findings", [])),
+            )
 
         executor.shutdown(wait=False)
 
@@ -1451,7 +1529,12 @@ class TheoPipeline:
                     "stage": stage,
                     "status": "done",
                     "duration_ms": 0,
-                    "meta": {"consensus": 0, "contested": 0, "unique": 0, "llm_calls": ctx.llm_call_count},
+                    "meta": {
+                        "consensus": 0,
+                        "contested": 0,
+                        "unique": 0,
+                        "llm_calls": ctx.llm_call_count,
+                    },
                 }
             )
             return
@@ -1489,7 +1572,13 @@ class TheoPipeline:
         consensus_count = len(ctx.synthesis.get("consensus_claims", []))
         contested_count = len(ctx.synthesis.get("contested_claims", []))
         unique_count = len(ctx.synthesis.get("unique_insights", []))
-        ctx.log("synthesis", f"Synthesized: {consensus_count} consensus, {contested_count} contested, {unique_count} unique", consensus=consensus_count, contested=contested_count, unique=unique_count)
+        ctx.log(
+            "synthesis",
+            f"Synthesized: {consensus_count} consensus, {contested_count} contested, {unique_count} unique",
+            consensus=consensus_count,
+            contested=contested_count,
+            unique=unique_count,
+        )
 
         ms = int((time.monotonic() - t0) * 1000)
         emit(
@@ -1521,7 +1610,14 @@ class TheoPipeline:
 
         stage = "debate"
         t0 = time.monotonic()
-        emit({"type": "pipeline", "stage": stage, "status": "start", "meta": {"subtask_total": ctx.tier.debate_rounds}})
+        emit(
+            {
+                "type": "pipeline",
+                "stage": stage,
+                "status": "start",
+                "meta": {"subtask_total": ctx.tier.debate_rounds},
+            }
+        )
         emit(
             {
                 "type": "status",
@@ -1539,7 +1635,16 @@ class TheoPipeline:
         all_defenses: list[dict] = []
 
         for rnd in range(1, ctx.tier.debate_rounds + 1):
-            emit({"type": "status", "content": f"Debate round {rnd}/{ctx.tier.debate_rounds}...", "round": rnd, "total_rounds": ctx.tier.debate_rounds, "subtask_done": rnd - 1, "subtask_total": ctx.tier.debate_rounds})
+            emit(
+                {
+                    "type": "status",
+                    "content": f"Debate round {rnd}/{ctx.tier.debate_rounds}...",
+                    "round": rnd,
+                    "total_rounds": ctx.tier.debate_rounds,
+                    "subtask_done": rnd - 1,
+                    "subtask_total": ctx.tier.debate_rounds,
+                }
+            )
             emit(
                 {
                     "type": "status",
@@ -1614,7 +1719,12 @@ class TheoPipeline:
                     d["defender_id"] = spec.id
                 all_defenses.extend(defenses)
 
-            ctx.log("debate", f"Round {rnd}: {len(round_challenges)} challenges, defenses collected", round=rnd, challenges=len(round_challenges))
+            ctx.log(
+                "debate",
+                f"Round {rnd}: {len(round_challenges)} challenges, defenses collected",
+                round=rnd,
+                challenges=len(round_challenges),
+            )
 
         ctx.debate_result = {
             "rounds": ctx.tier.debate_rounds,
@@ -1629,7 +1739,11 @@ class TheoPipeline:
                 "stage": stage,
                 "status": "done",
                 "duration_ms": ms,
-                "meta": {"challenges": len(all_challenges), "defenses": len(all_defenses), "llm_calls": ctx.llm_call_count},
+                "meta": {
+                    "challenges": len(all_challenges),
+                    "defenses": len(all_defenses),
+                    "llm_calls": ctx.llm_call_count,
+                },
             }
         )
 
@@ -1723,7 +1837,13 @@ class TheoPipeline:
         final_count = len(moderated.get("final_claims", []))
         revised_count = len(moderated.get("revised_claims", []))
         dropped_count = len(moderated.get("dropped_claims", []))
-        ctx.log("moderator", f"Moderated: {final_count} final, {revised_count} revised, {dropped_count} dropped", final_claims=final_count, revised=revised_count, dropped=dropped_count)
+        ctx.log(
+            "moderator",
+            f"Moderated: {final_count} final, {revised_count} revised, {dropped_count} dropped",
+            final_claims=final_count,
+            revised=revised_count,
+            dropped=dropped_count,
+        )
 
         ms = int((time.monotonic() - t0) * 1000)
         emit(
@@ -1863,8 +1983,22 @@ class TheoPipeline:
         t0 = time.monotonic()
         # Brief: write + verify = 2 subtasks; sectional: outline + sections + frame + verify = 4
         paper_subtasks = 2 if ctx.effort == "brief" else 4
-        emit({"type": "pipeline", "stage": stage, "status": "start", "meta": {"subtask_total": paper_subtasks}})
-        emit({"type": "status", "content": "Assembling research paper...", "subtask_done": 0, "subtask_total": paper_subtasks})
+        emit(
+            {
+                "type": "pipeline",
+                "stage": stage,
+                "status": "start",
+                "meta": {"subtask_total": paper_subtasks},
+            }
+        )
+        emit(
+            {
+                "type": "status",
+                "content": "Assembling research paper...",
+                "subtask_done": 0,
+                "subtask_total": paper_subtasks,
+            }
+        )
 
         claims_list, sid_to_num, ref_map_text = self._build_claims_and_refs(ctx)
 
@@ -1891,7 +2025,14 @@ class TheoPipeline:
 
         # For sectional: step 3 = frame done, now verifying. For brief: step 1 = write done.
         verify_subtask = 3 if ctx.effort != "brief" else 1
-        emit({"type": "status", "content": "Verifying every citation against its source...", "subtask_done": verify_subtask, "subtask_total": paper_subtasks})
+        emit(
+            {
+                "type": "status",
+                "content": "Verifying every citation against its source...",
+                "subtask_done": verify_subtask,
+                "subtask_total": paper_subtasks,
+            }
+        )
         ctx.paper_text = verify_all_citations(
             ctx.paper_text, verify_sources, settings=self._settings
         )
@@ -1936,7 +2077,13 @@ class TheoPipeline:
         ctx.audit_result = audit_citations(ctx.paper_text, ctx.registry)
 
         paper_word_count = len(ctx.paper_text.split())
-        ctx.log("paper_assembly", f"Paper assembled: {paper_word_count} words, {ctx.audit_result.get('total_citations', 0)} citations, {ctx.audit_result.get('total_references', 0)} references", word_count=paper_word_count, total_citations=ctx.audit_result.get("total_citations", 0), total_references=ctx.audit_result.get("total_references", 0))
+        ctx.log(
+            "paper_assembly",
+            f"Paper assembled: {paper_word_count} words, {ctx.audit_result.get('total_citations', 0)} citations, {ctx.audit_result.get('total_references', 0)} references",
+            word_count=paper_word_count,
+            total_citations=ctx.audit_result.get("total_citations", 0),
+            total_references=ctx.audit_result.get("total_references", 0),
+        )
 
         ms = int((time.monotonic() - t0) * 1000)
         emit(
@@ -2000,7 +2147,14 @@ class TheoPipeline:
         logger.info("[THEO] Sectional writing with %d claims", len(claims_list))
 
         # Step 1: Generate outline
-        emit({"type": "status", "content": "Planning paper structure...", "subtask_done": 0, "subtask_total": 4})
+        emit(
+            {
+                "type": "status",
+                "content": "Planning paper structure...",
+                "subtask_done": 0,
+                "subtask_total": 4,
+            }
+        )
         outline_system = self._load_prompt("theo_paper_outline")
         outline_input = (
             f"## Research question\n\n{ctx.question}\n\n"
@@ -2085,7 +2239,14 @@ class TheoPipeline:
         )
 
         # Step 4: Write framing sections (Abstract, Introduction, Discussion, Conclusion)
-        emit({"type": "status", "content": "Writing introduction and conclusion...", "subtask_done": 2, "subtask_total": 4})
+        emit(
+            {
+                "type": "status",
+                "content": "Writing introduction and conclusion...",
+                "subtask_done": 2,
+                "subtask_total": 4,
+            }
+        )
         frame_system = self._load_prompt("theo_paper_frame")
         frame_input = (
             f"## Research question\n\n{ctx.question}\n\n## Paper body sections\n\n{body_text}\n\n"
@@ -2152,7 +2313,11 @@ class TheoPipeline:
         )
         source_assessment = raw_assessment.strip()
         logger.info("[THEO] Source Assessment: %d chars", len(source_assessment))
-        ctx.log("source_assessment", f"Source assessment: {len(source_assessment)} chars, {tier_summary}", tier_summary=tier_summary)
+        ctx.log(
+            "source_assessment",
+            f"Source assessment: {len(source_assessment)} chars, {tier_summary}",
+            tier_summary=tier_summary,
+        )
 
         # Step 7: Assemble final paper
         paper_parts = [f"# {title}\n"]
@@ -2240,7 +2405,14 @@ class TheoPipeline:
         emit: Callable[[dict], None],
     ) -> dict:
         """Run the quality judge on the assembled paper. Returns routing decisions."""
-        emit({"type": "pipeline", "stage": "quality_judge", "status": "start", "meta": {"subtask_total": 1}})
+        emit(
+            {
+                "type": "pipeline",
+                "stage": "quality_judge",
+                "status": "start",
+                "meta": {"subtask_total": 1},
+            }
+        )
         emit({"type": "status", "content": "Running quality judge..."})
         t0 = time.monotonic()
 
@@ -2277,7 +2449,14 @@ class TheoPipeline:
         judge_badge = result.get("badge", "")
         judge_passed = result.get("passed", False)
         judge_dimensions = result.get("dimensions", {})
-        ctx.log("quality_judge", f"Score {judge_score}/100 ({judge_badge}), passed={judge_passed}", score=judge_score, badge=judge_badge, passed=judge_passed, dimensions=judge_dimensions)
+        ctx.log(
+            "quality_judge",
+            f"Score {judge_score}/100 ({judge_badge}), passed={judge_passed}",
+            score=judge_score,
+            badge=judge_badge,
+            passed=judge_passed,
+            dimensions=judge_dimensions,
+        )
 
         ms = int((time.monotonic() - t0) * 1000)
         emit(
@@ -2588,7 +2767,7 @@ class TheoPipeline:
 
     def _m27_call(self, system: str, user_message: str, max_tokens: int) -> str:
         """Synchronous M2.7 call via Anthropic SDK (unified path)."""
-        if hasattr(self, '_ctx') and self._ctx:
+        if hasattr(self, "_ctx") and self._ctx:
             self._ctx.llm_call_count += 1
         return minimax_chat_anthropic(
             system,

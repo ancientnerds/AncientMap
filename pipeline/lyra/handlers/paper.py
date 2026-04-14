@@ -16,12 +16,47 @@ logger = logging.getLogger(__name__)
 PROMPTS_DIR = Path(__file__).resolve().parent.parent / "prompts"
 
 # Stop words for keyword-overlap matching during mechanical citation insertion
-_STOP_WORDS = frozenset({
-    "the", "a", "an", "is", "are", "was", "were", "of", "in", "to",
-    "and", "that", "this", "for", "with", "from", "has", "have", "had",
-    "been", "not", "but", "its", "also", "by", "on", "as", "at", "or",
-    "it", "be", "can", "may", "would", "could", "should", "will",
-})
+_STOP_WORDS = frozenset(
+    {
+        "the",
+        "a",
+        "an",
+        "is",
+        "are",
+        "was",
+        "were",
+        "of",
+        "in",
+        "to",
+        "and",
+        "that",
+        "this",
+        "for",
+        "with",
+        "from",
+        "has",
+        "have",
+        "had",
+        "been",
+        "not",
+        "but",
+        "its",
+        "also",
+        "by",
+        "on",
+        "as",
+        "at",
+        "or",
+        "it",
+        "be",
+        "can",
+        "may",
+        "would",
+        "could",
+        "should",
+        "will",
+    }
+)
 
 
 class PaperHandler(BaseHandler):
@@ -41,10 +76,14 @@ class PaperHandler(BaseHandler):
 
     async def _on_debate_complete(self, event: DebateComplete):
         self.state.phase = ResearchPhase.WRITING
-        self.emit_sse({
-            "type": "pipeline", "stage": "paper_assembly", "status": "start",
-            "meta": {"subtask_total": 6},
-        })
+        self.emit_sse(
+            {
+                "type": "pipeline",
+                "stage": "paper_assembly",
+                "status": "start",
+                "meta": {"subtask_total": 6},
+            }
+        )
         self.state.log("paper", "Paper assembly started")
 
         settings = _get_settings()
@@ -58,11 +97,14 @@ class PaperHandler(BaseHandler):
         # ---------------------------------------------------------------
         # Step 1: Generate outline
         # ---------------------------------------------------------------
-        self.emit_sse({
-            "type": "status",
-            "content": "Planning paper structure...",
-            "subtask_done": 0, "subtask_total": 6,
-        })
+        self.emit_sse(
+            {
+                "type": "status",
+                "content": "Planning paper structure...",
+                "subtask_done": 0,
+                "subtask_total": 6,
+            }
+        )
 
         outline = await self._generate_outline(sid_to_num, settings)
         title = outline.get("title", self.state.question[:60])
@@ -72,25 +114,29 @@ class PaperHandler(BaseHandler):
             # Minimal fallback structure
             sections = [
                 {
-                    "id": 1, "type": "investigation",
+                    "id": 1,
+                    "type": "investigation",
                     "title": "Findings",
                     "assigned_claims": [c["claim"] for c in all_claims[:20]],
                     "narrative_goal": "Present the evidence",
                 },
                 {
-                    "id": 2, "type": "connecting",
+                    "id": 2,
+                    "type": "connecting",
                     "title": "Connecting the Dots",
                     "connections": [],
                     "narrative_goal": "Synthesize threads",
                 },
                 {
-                    "id": 3, "type": "other_side",
+                    "id": 3,
+                    "type": "other_side",
                     "title": "The Other Side",
                     "counter_claims": [],
                     "narrative_goal": "Present counter-evidence",
                 },
                 {
-                    "id": 4, "type": "assessment",
+                    "id": 4,
+                    "type": "assessment",
                     "title": "What We Actually Know",
                     "narrative_goal": "Honest assessment",
                 },
@@ -98,7 +144,8 @@ class PaperHandler(BaseHandler):
 
         logger.info(
             "[paper] Outline: '%s' — %d sections: %s",
-            title, len(sections),
+            title,
+            len(sections),
             [s.get("title", "?") for s in sections],
         )
         self.state.log("paper", f"Outline generated: {title}, {len(sections)} sections")
@@ -106,11 +153,14 @@ class PaperHandler(BaseHandler):
         # ---------------------------------------------------------------
         # Step 2: Write hook
         # ---------------------------------------------------------------
-        self.emit_sse({
-            "type": "status",
-            "content": "Writing opening hook...",
-            "subtask_done": 1, "subtask_total": 6,
-        })
+        self.emit_sse(
+            {
+                "type": "status",
+                "content": "Writing opening hook...",
+                "subtask_done": 1,
+                "subtask_total": 6,
+            }
+        )
 
         hook = await self._write_hook(title, all_claims, settings)
         logger.info("[paper] Hook: %d chars", len(hook))
@@ -122,11 +172,14 @@ class PaperHandler(BaseHandler):
         connecting_section = next((s for s in sections if s.get("type") == "connecting"), None)
         other_side_section = next((s for s in sections if s.get("type") == "other_side"), None)
 
-        self.emit_sse({
-            "type": "status",
-            "content": f"Writing {len(investigation_sections)} investigation sections...",
-            "subtask_done": 2, "subtask_total": 6,
-        })
+        self.emit_sse(
+            {
+                "type": "status",
+                "content": f"Writing {len(investigation_sections)} investigation sections...",
+                "subtask_done": 2,
+                "subtask_total": 6,
+            }
+        )
 
         section_tasks = [
             self._write_investigation_section(sec, all_claims, ref_map_text, settings)
@@ -140,27 +193,39 @@ class PaperHandler(BaseHandler):
         # ---------------------------------------------------------------
         # Step 4: Write Connecting the Dots + The Other Side
         # ---------------------------------------------------------------
-        self.emit_sse({
-            "type": "status",
-            "content": "Writing cross-angle analysis...",
-            "subtask_done": 3, "subtask_total": 6,
-        })
+        self.emit_sse(
+            {
+                "type": "status",
+                "content": "Writing cross-angle analysis...",
+                "subtask_done": 3,
+                "subtask_total": 6,
+            }
+        )
 
         connecting_prose = await self._write_connecting_section(
-            connecting_section, all_claims, ref_map_text, settings,
+            connecting_section,
+            all_claims,
+            ref_map_text,
+            settings,
         )
         other_side_prose = await self._write_other_side_section(
-            other_side_section, all_claims, ref_map_text, settings,
+            other_side_section,
+            all_claims,
+            ref_map_text,
+            settings,
         )
 
         # ---------------------------------------------------------------
         # Step 5: Write assessment
         # ---------------------------------------------------------------
-        self.emit_sse({
-            "type": "status",
-            "content": "Writing honest assessment...",
-            "subtask_done": 4, "subtask_total": 6,
-        })
+        self.emit_sse(
+            {
+                "type": "status",
+                "content": "Writing honest assessment...",
+                "subtask_done": 4,
+                "subtask_total": 6,
+            }
+        )
 
         assessment = await self._write_assessment(all_claims, settings)
         logger.info("[paper] Assessment: %d chars", len(assessment))
@@ -201,11 +266,14 @@ class PaperHandler(BaseHandler):
         # ---------------------------------------------------------------
         # Step 7: Citation verification
         # ---------------------------------------------------------------
-        self.emit_sse({
-            "type": "status",
-            "content": "Verifying every citation against its source...",
-            "subtask_done": 5, "subtask_total": 6,
-        })
+        self.emit_sse(
+            {
+                "type": "status",
+                "content": "Verifying every citation against its source...",
+                "subtask_done": 5,
+                "subtask_total": 6,
+            }
+        )
 
         from pipeline.lyra.citation_verifier import verify_all_citations
 
@@ -213,15 +281,19 @@ class PaperHandler(BaseHandler):
         for sid, num in sorted(sid_to_num.items(), key=lambda kv: kv[1]):
             source = self.state.registry.get_reference(sid)
             if source:
-                verify_sources.append({
-                    "citation": num,
-                    "label": source.title,
-                    "url": source.url,
-                    "snippet": source.snippet,
-                })
+                verify_sources.append(
+                    {
+                        "citation": num,
+                        "label": source.title,
+                        "url": source.url,
+                        "snippet": source.snippet,
+                    }
+                )
 
         self.state.paper_text = verify_all_citations(
-            self.state.paper_text, verify_sources, settings=settings,
+            self.state.paper_text,
+            verify_sources,
+            settings=settings,
         )
 
         # ---------------------------------------------------------------
@@ -230,7 +302,8 @@ class PaperHandler(BaseHandler):
         from pipeline.lyra.theo_citations import audit_citations
 
         self.state.audit_result = audit_citations(
-            self.state.paper_text, self.state.registry,
+            self.state.paper_text,
+            self.state.registry,
         )
 
         # ---------------------------------------------------------------
@@ -244,7 +317,9 @@ class PaperHandler(BaseHandler):
         # Step 10: Extract title
         # ---------------------------------------------------------------
         title_match = re.search(r"^#\s+(.+)$", self.state.paper_text, re.MULTILINE)
-        self.state.paper_title = title_match.group(1).strip() if title_match else self.state.question
+        self.state.paper_title = (
+            title_match.group(1).strip() if title_match else self.state.question
+        )
 
         word_count = len(self.state.paper_text.split())
         total_citations = self.state.audit_result.get("total_citations", 0)
@@ -260,17 +335,21 @@ class PaperHandler(BaseHandler):
             total_references=total_references,
         )
 
-        self.emit_sse({
-            "type": "pipeline", "stage": "paper_assembly", "status": "done",
-            "meta": {
-                "title": self.state.paper_title,
-                "audit_passed": audit_passed,
-                "total_citations": total_citations,
-                "total_references": total_references,
-                "word_count": word_count,
-                "llm_calls": self.state.llm_call_count,
-            },
-        })
+        self.emit_sse(
+            {
+                "type": "pipeline",
+                "stage": "paper_assembly",
+                "status": "done",
+                "meta": {
+                    "title": self.state.paper_title,
+                    "audit_passed": audit_passed,
+                    "total_citations": total_citations,
+                    "total_references": total_references,
+                    "word_count": word_count,
+                    "llm_calls": self.state.llm_call_count,
+                },
+            }
+        )
 
         await self.bus.emit(PaperReady())
 
@@ -339,49 +418,57 @@ class PaperHandler(BaseHandler):
         for claim_data in self.state.synthesis.get("consensus_claims", []):
             sids = claim_data.get("source_ids", [])
             cites = " ".join(f"[{sid_to_num[s]}]" for s in sids if s in sid_to_num)
-            claims.append({
-                "claim": claim_data.get("claim", ""),
-                "citations": cites,
-                "confidence": claim_data.get("confidence", "medium"),
-                "source_ids": sids,
-                "type": "consensus",
-            })
+            claims.append(
+                {
+                    "claim": claim_data.get("claim", ""),
+                    "citations": cites,
+                    "confidence": claim_data.get("confidence", "medium"),
+                    "source_ids": sids,
+                    "type": "consensus",
+                }
+            )
 
         # From synthesis contested
         for claim_data in self.state.synthesis.get("contested_claims", []):
             sids = claim_data.get("source_ids", [])
             cites = " ".join(f"[{sid_to_num[s]}]" for s in sids if s in sid_to_num)
-            claims.append({
-                "claim": claim_data.get("claim", ""),
-                "citations": cites,
-                "confidence": claim_data.get("confidence", "low"),
-                "source_ids": sids,
-                "type": "contested",
-            })
+            claims.append(
+                {
+                    "claim": claim_data.get("claim", ""),
+                    "citations": cites,
+                    "confidence": claim_data.get("confidence", "low"),
+                    "source_ids": sids,
+                    "type": "contested",
+                }
+            )
 
         # From synthesis unique insights
         for insight in self.state.synthesis.get("unique_insights", []):
             sids = insight.get("source_ids", [])
             cites = " ".join(f"[{sid_to_num[s]}]" for s in sids if s in sid_to_num)
-            claims.append({
-                "claim": insight.get("insight", insight.get("claim", "")),
-                "citations": cites,
-                "confidence": insight.get("confidence", "medium"),
-                "source_ids": sids,
-                "type": "unique",
-            })
+            claims.append(
+                {
+                    "claim": insight.get("insight", insight.get("claim", "")),
+                    "citations": cites,
+                    "confidence": insight.get("confidence", "medium"),
+                    "source_ids": sids,
+                    "type": "unique",
+                }
+            )
 
         # From registry claims (specialist-level)
         for claim in self.state.registry.claims:
             sids = claim.source_ids
             cites = " ".join(f"[{sid_to_num[s]}]" for s in sids if s in sid_to_num)
-            claims.append({
-                "claim": claim.claim_text,
-                "citations": cites,
-                "confidence": claim.confidence,
-                "source_ids": sids,
-                "type": "specialist",
-            })
+            claims.append(
+                {
+                    "claim": claim.claim_text,
+                    "citations": cites,
+                    "confidence": claim.confidence,
+                    "source_ids": sids,
+                    "type": "specialist",
+                }
+            )
 
         return claims
 
@@ -393,7 +480,11 @@ class PaperHandler(BaseHandler):
         """Async LLM call with semaphore gating and call count tracking."""
         async with self.semaphore:
             result = await asyncio.to_thread(
-                minimax_chat_anthropic, system, user_msg, max_tokens, settings,
+                minimax_chat_anthropic,
+                system,
+                user_msg,
+                max_tokens,
+                settings,
             )
         self.state.llm_call_count += 1
         return result
@@ -405,9 +496,11 @@ class PaperHandler(BaseHandler):
         # Build angle summaries
         angle_summaries = []
         for angle in self.state.angles:
-            findings_text = "\n".join(
-                f"- {f.get('claim', f.get('finding', ''))}" for f in angle.findings
-            ) if angle.findings else "No findings"
+            findings_text = (
+                "\n".join(f"- {f.get('claim', f.get('finding', ''))}" for f in angle.findings)
+                if angle.findings
+                else "No findings"
+            )
             angle_summaries.append(
                 f"### Angle: {angle.topic} (id={angle.id})\n"
                 f"{angle.description}\n"
@@ -420,7 +513,9 @@ class PaperHandler(BaseHandler):
             connections_text = json.dumps(self.state.cross_angle_connections, indent=2)
 
         # Synthesis summary
-        synthesis_text = json.dumps(self.state.synthesis, indent=2) if self.state.synthesis else "{}"
+        synthesis_text = (
+            json.dumps(self.state.synthesis, indent=2) if self.state.synthesis else "{}"
+        )
 
         # Debate results
         debate_text = ""
@@ -474,8 +569,11 @@ class PaperHandler(BaseHandler):
         return raw.strip()
 
     async def _write_investigation_section(
-        self, section: dict, all_claims: list[dict],
-        ref_map_text: str, settings,
+        self,
+        section: dict,
+        all_claims: list[dict],
+        ref_map_text: str,
+        settings,
     ) -> tuple[str, str]:
         """Write a single investigation section. Returns (title, prose)."""
         section_prompt = (PROMPTS_DIR / "v2_paper_section.txt").read_text(encoding="utf-8")
@@ -491,9 +589,11 @@ class PaperHandler(BaseHandler):
             return sec_title, ""
 
         # Format claims for the prompt
-        claims_text = self._format_claims_for_prompt(matched_claims if matched_claims else [
-            {"claim": c, "citations": "", "confidence": "medium"} for c in assigned_claims
-        ])
+        claims_text = self._format_claims_for_prompt(
+            matched_claims
+            if matched_claims
+            else [{"claim": c, "citations": "", "confidence": "medium"} for c in assigned_claims]
+        )
 
         user_msg = (
             f"## Section: {sec_title}\n"
@@ -503,14 +603,19 @@ class PaperHandler(BaseHandler):
         )
 
         raw = await self._llm_call(
-            section_prompt, user_msg,
-            self.state.config.max_tokens_per_call, settings,
+            section_prompt,
+            user_msg,
+            self.state.config.max_tokens_per_call,
+            settings,
         )
         return sec_title, raw.strip()
 
     async def _write_connecting_section(
-        self, section: dict | None, all_claims: list[dict],
-        ref_map_text: str, settings,
+        self,
+        section: dict | None,
+        all_claims: list[dict],
+        ref_map_text: str,
+        settings,
     ) -> str:
         """Write the Connecting the Dots section."""
         section_prompt = (PROMPTS_DIR / "v2_paper_section.txt").read_text(encoding="utf-8")
@@ -543,14 +648,19 @@ class PaperHandler(BaseHandler):
         )
 
         raw = await self._llm_call(
-            section_prompt, user_msg,
-            self.state.config.max_tokens_per_call, settings,
+            section_prompt,
+            user_msg,
+            self.state.config.max_tokens_per_call,
+            settings,
         )
         return raw.strip()
 
     async def _write_other_side_section(
-        self, section: dict | None, all_claims: list[dict],
-        ref_map_text: str, settings,
+        self,
+        section: dict | None,
+        all_claims: list[dict],
+        ref_map_text: str,
+        settings,
     ) -> str:
         """Write The Other Side section with counter-evidence."""
         section_prompt = (PROMPTS_DIR / "v2_paper_section.txt").read_text(encoding="utf-8")
@@ -587,8 +697,10 @@ class PaperHandler(BaseHandler):
         )
 
         raw = await self._llm_call(
-            section_prompt, user_msg,
-            self.state.config.max_tokens_per_call, settings,
+            section_prompt,
+            user_msg,
+            self.state.config.max_tokens_per_call,
+            settings,
         )
         return raw.strip()
 
@@ -614,8 +726,10 @@ class PaperHandler(BaseHandler):
         )
 
         raw = await self._llm_call(
-            assessment_prompt, user_msg,
-            self.state.config.max_tokens_per_call, settings,
+            assessment_prompt,
+            user_msg,
+            self.state.config.max_tokens_per_call,
+            settings,
         )
         return raw.strip()
 
@@ -624,7 +738,10 @@ class PaperHandler(BaseHandler):
     # ===================================================================
 
     def _insert_citations_mechanically(
-        self, paper_text: str, claims: list[dict], sid_to_num: dict[str, int],
+        self,
+        paper_text: str,
+        claims: list[dict],
+        sid_to_num: dict[str, int],
     ) -> str:
         """Insert [N] citations by matching sentences to claims via keyword overlap.
 
@@ -680,7 +797,8 @@ class PaperHandler(BaseHandler):
 
         logger.info(
             "[paper] Mechanical citation: inserted %d citations across %d sentences",
-            citations_inserted, len(sentences),
+            citations_inserted,
+            len(sentences),
         )
         return " ".join(cited_sentences)
 
@@ -689,7 +807,9 @@ class PaperHandler(BaseHandler):
     # ===================================================================
 
     def _match_assigned_claims(
-        self, assigned: list[str], all_claims: list[dict],
+        self,
+        assigned: list[str],
+        all_claims: list[dict],
     ) -> list[dict]:
         """Match outline-assigned claim strings to full claim objects.
 
@@ -723,11 +843,13 @@ class PaperHandler(BaseHandler):
                 used_indices.add(best_idx)
             else:
                 # No match found -- include as bare claim
-                matched.append({
-                    "claim": assigned_text,
-                    "citations": "",
-                    "confidence": "medium",
-                })
+                matched.append(
+                    {
+                        "claim": assigned_text,
+                        "citations": "",
+                        "confidence": "medium",
+                    }
+                )
 
         return matched
 

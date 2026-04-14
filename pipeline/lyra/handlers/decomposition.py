@@ -17,7 +17,6 @@ PROMPTS_DIR = Path(__file__).resolve().parent.parent / "prompts"
 
 
 class DecompositionHandler(BaseHandler):
-
     def register(self):
         # No event triggers — called directly by orchestrator at start
         pass
@@ -25,8 +24,22 @@ class DecompositionHandler(BaseHandler):
     async def decompose(self):
         """Phase A+B: Propose angles, validate with quick search, register on state."""
         self.state.phase = ResearchPhase.DECOMPOSING
-        self.emit_sse({"type": "pipeline", "stage": "decomposition", "status": "start", "meta": {"subtask_total": 2}})
-        self.emit_sse({"type": "status", "content": "Decomposing research question into angles...", "subtask_done": 0, "subtask_total": 2})
+        self.emit_sse(
+            {
+                "type": "pipeline",
+                "stage": "decomposition",
+                "status": "start",
+                "meta": {"subtask_total": 2},
+            }
+        )
+        self.emit_sse(
+            {
+                "type": "status",
+                "content": "Decomposing research question into angles...",
+                "subtask_done": 0,
+                "subtask_total": 2,
+            }
+        )
 
         # Phase A: LLM proposes angles
         prompt = (PROMPTS_DIR / "v2_decomposition.txt").read_text(encoding="utf-8")
@@ -45,15 +58,23 @@ class DecompositionHandler(BaseHandler):
             self.state.error = "Decomposition produced no research angles"
             return
 
-        self.emit_sse({"type": "status", "content": f"Proposed {len(angles_data)} research angles, validating...", "subtask_done": 1, "subtask_total": 2})
+        self.emit_sse(
+            {
+                "type": "status",
+                "content": f"Proposed {len(angles_data)} research angles, validating...",
+                "subtask_done": 1,
+                "subtask_total": 2,
+            }
+        )
 
         # Phase B: Validation search per angle
         from pipeline.lyra.theo_sources import MultiSourceSearch
+
         settings = _get_settings()
         searcher = MultiSourceSearch(settings)
 
         validated: list[ResearchAngle] = []
-        for ad in angles_data[:self.state.config.max_angles]:
+        for ad in angles_data[: self.state.config.max_angles]:
             queries = ad.get("search_queries", [])[:3]  # 2-3 validation queries
             if not queries:
                 continue
@@ -62,21 +83,27 @@ class DecompositionHandler(BaseHandler):
                 results = await searcher.search(queries, "standard", self.state.disabled_adapters)
 
             if len(results) < 2:
-                self.state.log("decomposition", f"Dropped angle '{ad.get('topic', '?')}' — insufficient sources ({len(results)})")
+                self.state.log(
+                    "decomposition",
+                    f"Dropped angle '{ad.get('topic', '?')}' — insufficient sources ({len(results)})",
+                )
                 continue
 
             angle = ResearchAngle(
                 id=uuid.uuid4().hex[:8],
                 topic=ad.get("topic", ""),
                 description=ad.get("description", ""),
-                search_queries=ad.get("search_queries", [])[:self.state.config.queries_per_angle],
+                search_queries=ad.get("search_queries", [])[: self.state.config.queries_per_angle],
                 specialist_domains=ad.get("specialist_domains", []),
             )
 
             # Register validation sources in registry
             for r in results:
                 sid = self.state.registry.register_source(
-                    url=r.url, title=r.title, snippet=r.snippet, date=r.date,
+                    url=r.url,
+                    title=r.title,
+                    snippet=r.snippet,
+                    date=r.date,
                 )
                 angle.source_ids.append(sid)
                 source = self.state.registry.get_reference(sid)
@@ -92,13 +119,26 @@ class DecompositionHandler(BaseHandler):
         self.state.angles = validated
         self.state.phase = ResearchPhase.EXPLORING
 
-        self.emit_sse({
-            "type": "pipeline", "stage": "decomposition", "status": "done",
-            "meta": {"angles": len(validated), "angle_topics": [a.topic for a in validated]},
-        })
-        self.emit_sse({"type": "status", "content": f"Research decomposed into {len(validated)} angles", "subtask_done": 2, "subtask_total": 2})
+        self.emit_sse(
+            {
+                "type": "pipeline",
+                "stage": "decomposition",
+                "status": "done",
+                "meta": {"angles": len(validated), "angle_topics": [a.topic for a in validated]},
+            }
+        )
+        self.emit_sse(
+            {
+                "type": "status",
+                "content": f"Research decomposed into {len(validated)} angles",
+                "subtask_done": 2,
+                "subtask_total": 2,
+            }
+        )
 
-        self.state.log("decomposition", f"Validated {len(validated)} angles from {len(angles_data)} proposed")
+        self.state.log(
+            "decomposition", f"Validated {len(validated)} angles from {len(angles_data)} proposed"
+        )
 
         # Emit AngleCreated for each validated angle
         for angle in validated:

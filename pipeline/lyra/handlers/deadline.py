@@ -27,20 +27,35 @@ class DeadlineHandler(BaseHandler):
         if hours_left <= 0:
             # Deadline passed — force completion
             self.state.log("deadline", "Deadline reached — forcing completion")
-            self.emit_sse({"type": "status", "content": "Deadline reached — finalizing research..."})
+            self.emit_sse(
+                {"type": "status", "content": "Deadline reached — finalizing research..."}
+            )
             await self._force_convergence()
             return True
 
         if hours_left <= 3 and self.state.phase == ResearchPhase.EXPLORING:
             # Less than 3 hours — force-saturate all angles
-            self.state.log("deadline", f"Deadline approaching ({hours_left:.1f}h left) — forcing saturation")
-            self.emit_sse({"type": "status", "content": f"Deadline approaching ({hours_left:.1f}h left) — finalizing research..."})
+            self.state.log(
+                "deadline", f"Deadline approaching ({hours_left:.1f}h left) — forcing saturation"
+            )
+            self.emit_sse(
+                {
+                    "type": "status",
+                    "content": f"Deadline approaching ({hours_left:.1f}h left) — finalizing research...",
+                }
+            )
             await self._force_convergence()
             return True
 
-        if hours_left <= 1 and self.state.phase in (ResearchPhase.SYNTHESIZING, ResearchPhase.DEBATING):
+        if hours_left <= 1 and self.state.phase in (
+            ResearchPhase.SYNTHESIZING,
+            ResearchPhase.DEBATING,
+        ):
             # Less than 1 hour — skip to writing
-            self.state.log("deadline", f"Deadline imminent ({hours_left:.1f}h left) — skipping to paper assembly")
+            self.state.log(
+                "deadline",
+                f"Deadline imminent ({hours_left:.1f}h left) — skipping to paper assembly",
+            )
             self.state.phase = ResearchPhase.WRITING
             return True
 

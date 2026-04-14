@@ -17,7 +17,6 @@ logger = logging.getLogger(__name__)
 
 
 class ConvergenceChecker(BaseHandler):
-
     def register(self):
         self.bus.on(AngleSaturated, self._on_angle_saturated)
         self.bus.on(FindingsProduced, self._on_findings_produced)
@@ -26,23 +25,26 @@ class ConvergenceChecker(BaseHandler):
     async def _on_angle_saturated(self, event: AngleSaturated):
         angle = next((a for a in self.state.angles if a.id == event.angle_id), None)
         if angle:
-            self.emit_sse({
-                "type": "status",
-                "content": f"Angle '{angle.topic}' saturated -- no new findings",
-            })
+            self.emit_sse(
+                {
+                    "type": "status",
+                    "content": f"Angle '{angle.topic}' saturated -- no new findings",
+                }
+            )
             self.state.log(
                 "convergence",
                 f"Angle '{angle.topic}' saturated after {angle.search_rounds} rounds",
             )
 
         if self.state.all_angles_saturated:
-            self.emit_sse({
-                "type": "status",
-                "content": (
-                    f"All {len(self.state.angles)} angles saturated "
-                    "-- proceeding to synthesis"
-                ),
-            })
+            self.emit_sse(
+                {
+                    "type": "status",
+                    "content": (
+                        f"All {len(self.state.angles)} angles saturated -- proceeding to synthesis"
+                    ),
+                }
+            )
             self.state.phase = ResearchPhase.SYNTHESIZING
             await self.bus.emit(AllAnglesSaturated())
 
@@ -55,10 +57,12 @@ class ConvergenceChecker(BaseHandler):
 
         total_saturated = sum(1 for a in self.state.angles if a.saturated)
         total = len(self.state.angles)
-        self.emit_sse({
-            "type": "status",
-            "content": f"Progress: {total_saturated}/{total} angles saturated",
-        })
+        self.emit_sse(
+            {
+                "type": "status",
+                "content": f"Progress: {total_saturated}/{total} angles saturated",
+            }
+        )
 
     async def _on_new_angle(self, event: NewAngleDiscovered):
         """Handle dynamically spawned rabbit-hole angles."""
@@ -77,10 +81,12 @@ class ConvergenceChecker(BaseHandler):
             spawned_from=event.spawned_from,
         )
         self.state.angles.append(new_angle)
-        self.emit_sse({
-            "type": "status",
-            "content": f"New research angle discovered: '{event.topic}'",
-        })
+        self.emit_sse(
+            {
+                "type": "status",
+                "content": f"New research angle discovered: '{event.topic}'",
+            }
+        )
         self.state.log(
             "convergence",
             f"Spawned new angle '{event.topic}' from '{event.spawned_from}'",

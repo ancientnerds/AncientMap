@@ -15,7 +15,6 @@ PROMPTS_DIR = Path(__file__).resolve().parent.parent / "prompts"
 
 
 class AuditHandler(BaseHandler):
-
     def register(self):
         self.bus.on(SourcesFound, self._on_sources_found)
 
@@ -44,8 +43,20 @@ class AuditHandler(BaseHandler):
             await self.bus.emit(SourcesAudited(angle_id=angle_id, accepted=0, rejected=0))
             return
 
-        self.emit_sse({"type": "pipeline", "stage": f"audit_{angle_id}", "status": "start", "meta": {"subtask_total": len(source_items), "angle": angle.topic}})
-        self.emit_sse({"type": "status", "content": f"Auditing {len(source_items)} sources for '{angle.topic}'..."})
+        self.emit_sse(
+            {
+                "type": "pipeline",
+                "stage": f"audit_{angle_id}",
+                "status": "start",
+                "meta": {"subtask_total": len(source_items), "angle": angle.topic},
+            }
+        )
+        self.emit_sse(
+            {
+                "type": "status",
+                "content": f"Auditing {len(source_items)} sources for '{angle.topic}'...",
+            }
+        )
 
         system = (PROMPTS_DIR / "theo_source_audit.txt").read_text(encoding="utf-8")
         rejected_ids: set[str] = set()
@@ -68,8 +79,11 @@ class AuditHandler(BaseHandler):
             )
             async with self.semaphore:
                 raw = await asyncio.to_thread(
-                    minimax_chat_anthropic, system, user_msg,
-                    self.state.config.max_tokens_per_call, _get_settings(),
+                    minimax_chat_anthropic,
+                    system,
+                    user_msg,
+                    self.state.config.max_tokens_per_call,
+                    _get_settings(),
                 )
             self.state.llm_call_count += 1
             parsed = self._parse_json(raw)
@@ -78,14 +92,17 @@ class AuditHandler(BaseHandler):
 
         # Run in parallel batches
         for group_start in range(0, len(source_items), max_parallel):
-            group = source_items[group_start:group_start + max_parallel]
+            group = source_items[group_start : group_start + max_parallel]
             done_count = group_start + len(group)
 
-            self.emit_sse({
-                "type": "status",
-                "content": f"Auditing sources {group_start + 1}-{done_count} of {len(source_items)} for '{angle.topic}'...",
-                "subtask_done": done_count, "subtask_total": len(source_items),
-            })
+            self.emit_sse(
+                {
+                    "type": "status",
+                    "content": f"Auditing sources {group_start + 1}-{done_count} of {len(source_items)} for '{angle.topic}'...",
+                    "subtask_done": done_count,
+                    "subtask_total": len(source_items),
+                }
+            )
 
             results = await asyncio.gather(
                 *[_audit_one(sid, source) for sid, source in group],
@@ -116,13 +133,26 @@ class AuditHandler(BaseHandler):
             self.state.registry.sources.pop(rid, None)
 
         accepted = total_scored - len(rejected_ids)
-        self.emit_sse({
-            "type": "pipeline", "stage": f"audit_{angle_id}", "status": "done",
-            "meta": {"scored": total_scored, "rejected": len(rejected_ids), "accepted": accepted},
-        })
-        self.state.log("audit", f"Angle '{angle.topic}': {total_scored} scored, {len(rejected_ids)} rejected, {accepted} accepted")
+        self.emit_sse(
+            {
+                "type": "pipeline",
+                "stage": f"audit_{angle_id}",
+                "status": "done",
+                "meta": {
+                    "scored": total_scored,
+                    "rejected": len(rejected_ids),
+                    "accepted": accepted,
+                },
+            }
+        )
+        self.state.log(
+            "audit",
+            f"Angle '{angle.topic}': {total_scored} scored, {len(rejected_ids)} rejected, {accepted} accepted",
+        )
 
-        await self.bus.emit(SourcesAudited(angle_id=angle_id, accepted=accepted, rejected=len(rejected_ids)))
+        await self.bus.emit(
+            SourcesAudited(angle_id=angle_id, accepted=accepted, rejected=len(rejected_ids))
+        )
 
     @staticmethod
     def _parse_json(text: str) -> dict:
