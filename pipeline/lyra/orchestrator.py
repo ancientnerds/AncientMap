@@ -1661,11 +1661,11 @@ def _run_migrations(engine) -> None:
         )
 
         # Theo debug log + LLM call tracking
+        conn.execute(text("ALTER TABLE research_requests ADD COLUMN IF NOT EXISTS debug_log JSONB"))
         conn.execute(
-            text("ALTER TABLE research_requests ADD COLUMN IF NOT EXISTS debug_log JSONB")
-        )
-        conn.execute(
-            text("ALTER TABLE research_requests ADD COLUMN IF NOT EXISTS llm_calls INTEGER DEFAULT 0")
+            text(
+                "ALTER TABLE research_requests ADD COLUMN IF NOT EXISTS llm_calls INTEGER DEFAULT 0"
+            )
         )
 
         conn.commit()

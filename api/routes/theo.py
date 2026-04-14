@@ -596,6 +596,7 @@ async def get_research_log(request_id: str, req: Request, format: str = "json"):
                 for k, v in data.items():
                     lines.append(f"  - {k}: `{v}`")
         from fastapi.responses import PlainTextResponse
+
         return PlainTextResponse("\n".join(lines), media_type="text/markdown")
 
     return {"debug_log": debug_log}
