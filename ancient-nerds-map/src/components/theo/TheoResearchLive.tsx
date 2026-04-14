@@ -91,17 +91,17 @@ export default function TheoResearchLive({ requestId, question, startedAt, onClo
   const [done, setDone] = useState(false)
   const [showThinking, setShowThinking] = useState(true)
   const [showTrace, setShowTrace] = useState(true)
-  const [connectionAlive, setConnectionAlive] = useState(true)
+  const [hasError, setHasError] = useState(false)
   const [llmCalls, setLlmCalls] = useState(0)
   const [sourcesFound, setSourcesFound] = useState(0)
   const [specialistInfo, setSpecialistInfo] = useState('')
   const [debateRound, setDebateRound] = useState('')
   const [qualityFlash, setQualityFlash] = useState<{ score: number; badge: string } | null>(null)
+  const [subtaskProgress, setSubtaskProgress] = useState<{ done: number; total: number }>({ done: 0, total: 1 })
 
   const reportTextRef = useRef('')
   const thinkingRef = useRef('')
   const bodyRef = useRef<HTMLDivElement>(null)
-  const lastEventTimeRef = useRef(Date.now())
 
   // Elapsed timer — uses the actual request creation time so it persists across open/close
   const startIso = startedAt && !startedAt.endsWith('Z') ? startedAt + 'Z' : startedAt
@@ -138,15 +138,6 @@ export default function TheoResearchLive({ requestId, question, startedAt, onClo
     document.addEventListener('keydown', handler)
     return () => document.removeEventListener('keydown', handler)
   }, [onClose])
-
-  // Heartbeat check — if no SSE event in 15s, connection is stale
-  useEffect(() => {
-    if (done) return
-    const iv = setInterval(() => {
-      setConnectionAlive(Date.now() - lastEventTimeRef.current < 15000)
-    }, 5000)
-    return () => clearInterval(iv)
-  }, [done])
 
   // SSE connection
   useEffect(() => {
@@ -203,8 +194,6 @@ export default function TheoResearchLive({ requestId, question, startedAt, onClo
   }, [requestId])
 
   const handleEvent = useCallback((eventType: string, data: Record<string, unknown>) => {
-    lastEventTimeRef.current = Date.now()
-
     switch (eventType) {
       case 'pipeline': {
         const pEvent: PipelineEvent = {
@@ -227,6 +216,14 @@ export default function TheoResearchLive({ requestId, question, startedAt, onClo
             setTimeout(() => setQualityFlash(null), 5000)
           }
         }
+
+        // Subtask LED tracking — reset on stage start, fill on stage done
+        if (data.status === 'start') {
+          const subtaskTotal = (meta?.subtask_total as number) || 1
+          setSubtaskProgress({ done: 0, total: subtaskTotal })
+        } else if (data.status === 'done' || data.status === 'skip') {
+          setSubtaskProgress(prev => ({ ...prev, done: prev.total }))
+        }
         break
       }
       case 'token':
@@ -245,16 +242,25 @@ export default function TheoResearchLive({ requestId, question, startedAt, onClo
         if (typeof data.round === 'number') {
           setDebateRound(`ROUND ${data.round}/${data.total_rounds}`)
         }
+        // Subtask progress from status events
+        if (typeof data.subtask_done === 'number' && typeof data.subtask_total === 'number') {
+          setSubtaskProgress({ done: data.subtask_done as number, total: data.subtask_total as number })
+        }
         break
       }
       case 'sites':
         break
       case 'done':
-      case 'error':
-      case 'timeout':
         // Final sync to ensure complete text
         setDisplayText(reportTextRef.current)
         setDisplayThinking(thinkingRef.current)
+        setDone(true)
+        break
+      case 'error':
+      case 'timeout':
+        setDisplayText(reportTextRef.current)
+        setDisplayThinking(thinkingRef.current)
+        setHasError(true)
         setDone(true)
         break
     }
@@ -328,9 +334,9 @@ export default function TheoResearchLive({ requestId, question, startedAt, onClo
                     <span
                       key={i}
                       className={`theo-hb-led ${
-                        done ? 'theo-hb-led--done' :
-                        connectionAlive ? 'theo-hb-led--alive' :
-                        'theo-hb-led--dead'
+                        done && !hasError ? 'theo-hb-led--done' :
+                        hasError ? 'theo-hb-led--dead' :
+                        'theo-hb-led--alive'
                       }`}
                       style={{ animationDelay: `${i * 0.3}s` }}
                     />
@@ -359,9 +365,9 @@ export default function TheoResearchLive({ requestId, question, startedAt, onClo
         {/* NERV Progress Bar */}
         <div className="theo-live-progress">
           {done ? (
-            <NervLoadingBar label="COMPLETE" sublabel="RESEARCH FINISHED" progress={100} counter={`${doneNodes.length} stages`} />
+            <NervLoadingBar label="COMPLETE" sublabel="RESEARCH FINISHED" progress={100} counter={`${doneNodes.length} stages`} ledsDone={totalCount} ledsTotal={totalCount} />
           ) : nodes.length > 0 ? (
-            <NervLoadingBar label="RESEARCH" sublabel={specialistInfo.toUpperCase() || debateRound || activeLabel || 'PROCESSING'} progress={progress} counter={`${doneCount} / ${totalCount}`} />
+            <NervLoadingBar label="RESEARCH" sublabel={specialistInfo.toUpperCase() || debateRound || activeLabel || 'PROCESSING'} progress={progress} counter={`${doneCount} / ${totalCount}`} ledsDone={subtaskProgress.done} ledsTotal={subtaskProgress.total} />
           ) : (
             <NervLoadingBar label="CONNECTING" sublabel="AWAITING PIPELINE" />
           )}

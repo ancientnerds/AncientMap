@@ -900,8 +900,8 @@ class TheoPipeline:
     ) -> None:
         stage = "question_analysis"
         t0 = time.monotonic()
-        emit({"type": "pipeline", "stage": stage, "status": "start"})
-        emit({"type": "status", "content": "Analyzing research question..."})
+        emit({"type": "pipeline", "stage": stage, "status": "start", "meta": {"subtask_total": 2}})
+        emit({"type": "status", "content": "Analyzing research question...", "subtask_done": 0, "subtask_total": 2})
 
         system = self._load_prompt("theo_question_analysis")
 
@@ -928,7 +928,7 @@ class TheoPipeline:
         ctx.geographic_scope = parsed.get("geographic_scope", "")
 
         # Select specialists based on domain tags
-        emit({"type": "status", "content": "Selecting specialist panel..."})
+        emit({"type": "status", "content": "Selecting specialist panel...", "subtask_done": 1, "subtask_total": 2})
         ctx.specialists = select_specialists(
             domain_tags=ctx.domain_tags,
             question=ctx.question,
@@ -967,7 +967,7 @@ class TheoPipeline:
     ) -> None:
         stage = "web_search"
         t0 = time.monotonic()
-        emit({"type": "pipeline", "stage": stage, "status": "start"})
+        emit({"type": "pipeline", "stage": stage, "status": "start", "meta": {"subtask_total": 1}})
 
         queries = ctx.search_queries[: ctx.tier.max_search_queries]
         source_group = ctx.tier.source_apis
@@ -1053,10 +1053,10 @@ class TheoPipeline:
     ) -> None:
         stage = "source_audit"
         t0 = time.monotonic()
-        emit({"type": "pipeline", "stage": stage, "status": "start"})
 
         if not ctx.sources_context.strip():
             ctx.error = "No sources available for reliability audit."
+            emit({"type": "pipeline", "stage": stage, "status": "start", "meta": {"subtask_total": 0}})
             emit({"type": "pipeline", "stage": stage, "status": "error", "meta": {"llm_calls": ctx.llm_call_count}})
             return
 
@@ -1065,11 +1065,14 @@ class TheoPipeline:
         source_items = list(ctx.registry.sources.items())
         max_parallel = 10
 
+        emit({"type": "pipeline", "stage": stage, "status": "start", "meta": {"subtask_total": len(source_items)}})
         emit(
             {
                 "type": "status",
                 "content": f"Auditing {len(source_items)} sources individually "
                 f"({max_parallel} parallel)...",
+                "subtask_done": 0,
+                "subtask_total": len(source_items),
             }
         )
 
@@ -1106,6 +1109,8 @@ class TheoPipeline:
                     "type": "status",
                     "content": f"Auditing sources {group_start + 1}-{done_count}"
                     f" of {len(source_items)}...",
+                    "subtask_done": done_count,
+                    "subtask_total": len(source_items),
                 }
             )
 
@@ -1319,7 +1324,7 @@ class TheoPipeline:
     ) -> None:
         stage = "specialist_analysis"
         t0 = time.monotonic()
-        emit({"type": "pipeline", "stage": stage, "status": "start"})
+        emit({"type": "pipeline", "stage": stage, "status": "start", "meta": {"subtask_total": len(ctx.specialists)}})
 
         loop = asyncio.get_running_loop()
         executor = ThreadPoolExecutor(max_workers=_SPECIALIST_WORKERS)
@@ -1396,6 +1401,8 @@ class TheoPipeline:
                 "specialist_name": spec_name,
                 "specialist_index": completed_count,
                 "specialist_total": len(ctx.specialists),
+                "subtask_done": completed_count,
+                "subtask_total": len(ctx.specialists),
             })
             ctx.log("specialist_analysis", f"Specialist {spec_name} completed", specialist_id=spec_id, findings=len(parsed.get("findings", [])))
 
@@ -1428,7 +1435,7 @@ class TheoPipeline:
     ) -> None:
         stage = "synthesis"
         t0 = time.monotonic()
-        emit({"type": "pipeline", "stage": stage, "status": "start"})
+        emit({"type": "pipeline", "stage": stage, "status": "start", "meta": {"subtask_total": 1}})
 
         if not ctx.specialist_analyses:
             logger.warning("[THEO] Stage 5: No specialist analyses — using empty synthesis")
@@ -1514,11 +1521,13 @@ class TheoPipeline:
 
         stage = "debate"
         t0 = time.monotonic()
-        emit({"type": "pipeline", "stage": stage, "status": "start"})
+        emit({"type": "pipeline", "stage": stage, "status": "start", "meta": {"subtask_total": ctx.tier.debate_rounds}})
         emit(
             {
                 "type": "status",
                 "content": f"Running {ctx.tier.debate_rounds}-round specialist debate...",
+                "subtask_done": 0,
+                "subtask_total": ctx.tier.debate_rounds,
             }
         )
 
@@ -1530,7 +1539,7 @@ class TheoPipeline:
         all_defenses: list[dict] = []
 
         for rnd in range(1, ctx.tier.debate_rounds + 1):
-            emit({"type": "status", "content": f"Debate round {rnd}/{ctx.tier.debate_rounds}...", "round": rnd, "total_rounds": ctx.tier.debate_rounds})
+            emit({"type": "status", "content": f"Debate round {rnd}/{ctx.tier.debate_rounds}...", "round": rnd, "total_rounds": ctx.tier.debate_rounds, "subtask_done": rnd - 1, "subtask_total": ctx.tier.debate_rounds})
             emit(
                 {
                     "type": "status",
@@ -1639,7 +1648,7 @@ class TheoPipeline:
 
         stage = "moderator"
         t0 = time.monotonic()
-        emit({"type": "pipeline", "stage": stage, "status": "start"})
+        emit({"type": "pipeline", "stage": stage, "status": "start", "meta": {"subtask_total": 1}})
         emit({"type": "status", "content": "Moderator reviewing findings..."})
 
         moderator_system = self._load_prompt("theo_moderator")
@@ -1852,8 +1861,10 @@ class TheoPipeline:
     ) -> None:
         stage = "paper_assembly"
         t0 = time.monotonic()
-        emit({"type": "pipeline", "stage": stage, "status": "start"})
-        emit({"type": "status", "content": "Assembling research paper..."})
+        # Brief: write + verify = 2 subtasks; sectional: outline + sections + frame + verify = 4
+        paper_subtasks = 2 if ctx.effort == "brief" else 4
+        emit({"type": "pipeline", "stage": stage, "status": "start", "meta": {"subtask_total": paper_subtasks}})
+        emit({"type": "status", "content": "Assembling research paper...", "subtask_done": 0, "subtask_total": paper_subtasks})
 
         claims_list, sid_to_num, ref_map_text = self._build_claims_and_refs(ctx)
 
@@ -1878,7 +1889,9 @@ class TheoPipeline:
                     }
                 )
 
-        emit({"type": "status", "content": "Verifying every citation against its source..."})
+        # For sectional: step 3 = frame done, now verifying. For brief: step 1 = write done.
+        verify_subtask = 3 if ctx.effort != "brief" else 1
+        emit({"type": "status", "content": "Verifying every citation against its source...", "subtask_done": verify_subtask, "subtask_total": paper_subtasks})
         ctx.paper_text = verify_all_citations(
             ctx.paper_text, verify_sources, settings=self._settings
         )
@@ -1987,7 +2000,7 @@ class TheoPipeline:
         logger.info("[THEO] Sectional writing with %d claims", len(claims_list))
 
         # Step 1: Generate outline
-        emit({"type": "status", "content": "Planning paper structure..."})
+        emit({"type": "status", "content": "Planning paper structure...", "subtask_done": 0, "subtask_total": 4})
         outline_system = self._load_prompt("theo_paper_outline")
         outline_input = (
             f"## Research question\n\n{ctx.question}\n\n"
@@ -2020,6 +2033,8 @@ class TheoPipeline:
             {
                 "type": "status",
                 "content": f"Writing {len(sections)} paper sections...",
+                "subtask_done": 1,
+                "subtask_total": 4,
             }
         )
         section_system = self._load_prompt("theo_paper_section")
@@ -2070,7 +2085,7 @@ class TheoPipeline:
         )
 
         # Step 4: Write framing sections (Abstract, Introduction, Discussion, Conclusion)
-        emit({"type": "status", "content": "Writing introduction and conclusion..."})
+        emit({"type": "status", "content": "Writing introduction and conclusion...", "subtask_done": 2, "subtask_total": 4})
         frame_system = self._load_prompt("theo_paper_frame")
         frame_input = (
             f"## Research question\n\n{ctx.question}\n\n## Paper body sections\n\n{body_text}\n\n"
@@ -2225,7 +2240,7 @@ class TheoPipeline:
         emit: Callable[[dict], None],
     ) -> dict:
         """Run the quality judge on the assembled paper. Returns routing decisions."""
-        emit({"type": "pipeline", "stage": "quality_judge", "status": "start"})
+        emit({"type": "pipeline", "stage": "quality_judge", "status": "start", "meta": {"subtask_total": 1}})
         emit({"type": "status", "content": "Running quality judge..."})
         t0 = time.monotonic()
 
@@ -2297,7 +2312,7 @@ class TheoPipeline:
 
         stage = "image_generation"
         t0 = time.monotonic()
-        emit({"type": "pipeline", "stage": stage, "status": "start"})
+        emit({"type": "pipeline", "stage": stage, "status": "start", "meta": {"subtask_total": 1}})
 
         from pipeline.lyra.theo_images import generate_cover_image, insert_cover_image
 

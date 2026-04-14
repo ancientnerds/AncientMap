@@ -6,12 +6,23 @@ interface NervLoadingBarProps {
   progress?: number    // 0–100 for determinate; omit for indeterminate
   counter?: string     // e.g. "47 / 200 sites"
   compact?: boolean    // true = track only, no header/LEDs
+  ledsDone?: number    // subtask completion count (fills LEDs left→right)
+  ledsTotal?: number   // subtask total count (determines LED count, capped at 10)
 }
 
-const LED_COUNT = 7
+const MAX_LEDS = 10
 
-export function NervLoadingBar({ label = 'LOADING', sublabel, progress, counter, compact }: NervLoadingBarProps) {
+export function NervLoadingBar({ label = 'LOADING', sublabel, progress, counter, compact, ledsDone, ledsTotal }: NervLoadingBarProps) {
   const det = progress != null
+
+  // Dynamic LED count based on subtask info
+  const hasSubtasks = ledsDone != null && ledsTotal != null && ledsTotal > 0
+  const ledCount = hasSubtasks ? Math.min(ledsTotal, MAX_LEDS) : 7
+  const litCount = hasSubtasks
+    ? (ledsTotal <= MAX_LEDS
+        ? Math.min(ledsDone, ledCount)            // 1:1 mapping
+        : Math.floor((ledsDone / ledsTotal) * ledCount))  // proportional
+    : -1  // fallback to percentage-based
 
   return (
     <div className={`nerv-lb${compact ? ' nerv-lb--compact' : ''}`}>
@@ -29,10 +40,15 @@ export function NervLoadingBar({ label = 'LOADING', sublabel, progress, counter,
       </div>
       {!compact && det && (
         <div className="nerv-lb-leds">
-          {Array.from({ length: LED_COUNT }, (_, i) => (
+          {Array.from({ length: ledCount }, (_, i) => (
             <div
               key={i}
-              className={`nerv-lb-led${progress! >= ((i + 1) / LED_COUNT) * 100 ? ' nerv-lb-led--on' : ''}`}
+              className={`nerv-lb-led${
+                hasSubtasks
+                  ? (i < litCount ? ' nerv-lb-led--on' : '')
+                  : (progress! >= ((i + 1) / ledCount) * 100 ? ' nerv-lb-led--on' : '')
+              }`}
+              style={{ animationDelay: `${i * 0.15}s` }}
             />
           ))}
         </div>

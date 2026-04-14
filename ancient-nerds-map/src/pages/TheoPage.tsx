@@ -1337,28 +1337,25 @@ export default function TheoPage() {
             <div className="theo-list">
               <div className="theo-list-header">Active ({activeItems.length})</div>
               {activeItems.map(item => (
-                <div key={item.id} className="theo-card">
+                <div
+                  key={item.id}
+                  className={`theo-card${item.status === 'running' ? ' theo-card--running' : ''}`}
+                  onClick={item.status === 'running' ? () => handleWatchLive(item) : undefined}
+                >
                   <div className="theo-card-top">
-                    <TruncatedQuestion text={item.question} />
-                    <span className="theo-badge theo-badge-effort">{EFFORT_LABELS[item.effort] || item.effort}</span>
-                    <span className={`theo-badge theo-badge-status theo-badge-${item.status}`}>
-                      {item.status === 'running' ? <>● Running</> : <><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{flexShrink:0}}><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>{`#${activeItems.indexOf(item) + 1} Queued`}</>}
-                    </span>
+                    <TruncatedQuestion text={item.question} max={80} />
+                    <span className="theo-badge theo-badge-effort">{EFFORT_LABELS[item.effort] || item.effort} · {SPECIALIST_COUNTS[item.effort] || '?'} spec</span>
+                    {item.status === 'queued' && (
+                      <span className="theo-badge theo-badge-status theo-badge-queued">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{flexShrink:0}}><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                        {`#${activeItems.indexOf(item) + 1} Queued`}
+                      </span>
+                    )}
+                    <button className="theo-btn-cancel" onClick={(e) => { e.stopPropagation(); handleCancel(item.id) }}>Cancel</button>
                   </div>
                   {item.status === 'running' && (
-                    <>
-                      <div className="theo-card-progress">
-                        <NervLoadingBar compact sublabel="INVESTIGATING" />
-                      </div>
-                      <div className="theo-card-actions">
-                        <button className="theo-btn-view" onClick={() => handleWatchLive(item)}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>Live</button>
-                        <button className="theo-btn-cancel" onClick={() => handleCancel(item.id)}>Cancel</button>
-                      </div>
-                    </>
-                  )}
-                  {item.status === 'queued' && (
-                    <div className="theo-card-actions">
-                      <button className="theo-btn-cancel" onClick={() => handleCancel(item.id)}>Cancel</button>
+                    <div className="theo-card-progress">
+                      <NervLoadingBar compact sublabel="INVESTIGATING" />
                     </div>
                   )}
                 </div>

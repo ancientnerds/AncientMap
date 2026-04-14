@@ -748,6 +748,13 @@
   transition: border-color 0.2s;
 }
 
+.theo-card--running {
+  cursor: pointer;
+}
+.theo-card--running:hover {
+  border-color: rgba(0, 204, 102, 0.3);
+}
+
 /* hover → nerv-ui/hover.css */
 
 .theo-card-top {
