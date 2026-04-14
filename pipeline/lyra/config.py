@@ -390,33 +390,40 @@ def _call_anthropic_api(
 
         create_kwargs["timeout"] = httpx.Timeout(timeout, connect=30.0)
 
-    # --- Make the API call (with retry on transient errors) ---
+    # --- Make the API call (with retry + global rate limiter) ---
+    from pipeline.lyra.minimax_limiter import limiter
+
     last_exc = None
     for _attempt in range(3):
-        try:
-            response = client.messages.create(**create_kwargs)
-            break
-        except Exception as exc:
-            last_exc = exc
-            error_str = str(exc)
-            is_transient = any(
-                code in error_str for code in ("500", "520", "529", "503", "timeout", "timed out")
-            )
-            if is_transient and _attempt < 2:
-                import time as _time
-
-                # 529 = system-wide overload, needs longer backoff
-                is_overload = "529" in error_str or "overloaded" in error_str
-                delay = (_attempt + 1) * (10 if is_overload else 3)
-                logger.warning(
-                    "LLM call transient error (attempt %d/3), retrying in %ds: %s",
-                    _attempt + 1,
-                    delay,
-                    exc,
+        with limiter.request() as slot:
+            try:
+                response = client.messages.create(**create_kwargs)
+                slot.report_success()
+                break
+            except Exception as exc:
+                last_exc = exc
+                error_str = str(exc)
+                is_rate_limit = "429" in error_str or "rate_limit" in error_str
+                is_transient = is_rate_limit or any(
+                    code in error_str
+                    for code in ("500", "520", "529", "503", "timeout", "timed out")
                 )
-                _time.sleep(delay)
-                continue
-            raise
+                if is_rate_limit:
+                    slot.report_rate_limit()
+                if is_transient and _attempt < 2:
+                    import time as _time
+
+                    is_overload = "529" in error_str or "overloaded" in error_str
+                    delay = (_attempt + 1) * (10 if is_overload else 3)
+                    logger.warning(
+                        "LLM call transient error (attempt %d/3), retrying in %ds: %s",
+                        _attempt + 1,
+                        delay,
+                        exc,
+                    )
+                    _time.sleep(delay)
+                    continue
+                raise
     else:
         raise last_exc  # type: ignore[misc]
 

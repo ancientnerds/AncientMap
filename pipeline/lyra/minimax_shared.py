@@ -139,45 +139,52 @@ def minimax_chat_anthropic(
 
     client = _get_minimax_anthropic_client(settings)
 
+    from pipeline.lyra.minimax_limiter import limiter
+
     last_error = None
     for attempt in range(3):
-        try:
-            response = client.messages.create(
-                model="MiniMax-M2.7",
-                max_tokens=max_tokens,
-                system=system,
-                messages=[{"role": "user", "content": user_message}],
-            )
-            # Extract text from response, skipping ThinkingBlock objects
-            parts = []
-            for block in response.content or []:
-                if hasattr(block, "text"):
-                    parts.append(block.text)
-            content = "\n".join(parts)
-            # M2.7 may still wrap reasoning in <think>...</think> tags -- strip them
-            clean = re.sub(r"<think>.*?</think>", "", content, flags=re.DOTALL).strip()
-            return clean
-        except Exception as e:
-            last_error = e
-            error_str = str(e)
-            # Retry on transient server errors (500, 520, 529, timeout)
-            is_transient = any(
-                code in error_str for code in ("500", "520", "529", "503", "timeout", "timed out")
-            )
-            if is_transient and attempt < 2:
-                is_overload = "529" in error_str or "overloaded" in error_str
-                delay = (attempt + 1) * (10 if is_overload else 3)
-                logger.warning(
-                    "MiniMax M2.7 transient error (attempt %d/3), retrying in %ds: %s",
-                    attempt + 1,
-                    delay,
-                    e,
+        with limiter.request() as slot:
+            try:
+                response = client.messages.create(
+                    model="MiniMax-M2.7",
+                    max_tokens=max_tokens,
+                    system=system,
+                    messages=[{"role": "user", "content": user_message}],
                 )
-                import time
+                slot.report_success()
+                # Extract text from response, skipping ThinkingBlock objects
+                parts = []
+                for block in response.content or []:
+                    if hasattr(block, "text"):
+                        parts.append(block.text)
+                content = "\n".join(parts)
+                # M2.7 may still wrap reasoning in <think>...</think> tags -- strip them
+                clean = re.sub(r"<think>.*?</think>", "", content, flags=re.DOTALL).strip()
+                return clean
+            except Exception as e:
+                last_error = e
+                error_str = str(e)
+                is_rate_limit = "429" in error_str or "rate_limit" in error_str
+                is_transient = is_rate_limit or any(
+                    code in error_str
+                    for code in ("500", "520", "529", "503", "timeout", "timed out")
+                )
+                if is_rate_limit:
+                    slot.report_rate_limit()
+                if is_transient and attempt < 2:
+                    is_overload = "529" in error_str or "overloaded" in error_str
+                    delay = (attempt + 1) * (10 if is_overload else 3)
+                    logger.warning(
+                        "MiniMax M2.7 transient error (attempt %d/3), retrying in %ds: %s",
+                        attempt + 1,
+                        delay,
+                        e,
+                    )
+                    import time
 
-                time.sleep(delay)
-                continue
-            break
+                    time.sleep(delay)
+                    continue
+                break
 
     logger.warning(
         f"MiniMax M2.7 Anthropic SDK call failed after {attempt + 1} attempts: {last_error}"
