@@ -358,6 +358,12 @@ export default function TheoReportOverlay({
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2e7d32" strokeWidth="2"><path d="M20 6L9 17l-5-5"/></svg>
                 <span>Reviewed and approved by <strong>{result.approved_by}</strong> on {new Date(result.approved_at + (result.approved_at?.endsWith('Z') ? '' : 'Z')).toLocaleDateString()}</span>
               </div>
+            ) : editing ? (
+              <div className="theo-approval-pending">
+                <div className="theo-approval-action">
+                  <span className="theo-approval-hint">Save your edits, then scroll to the bottom to approve</span>
+                </div>
+              </div>
             ) : (
               <div className="theo-approval-pending">
                 {!hasPublishedBefore && (
