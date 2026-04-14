@@ -27,7 +27,7 @@ function buildTooltip(qs: QualityScore): string {
     `References: ${d.reference_integrity ?? '—'}/10`,
     `Attribution: ${d.attribution_accuracy ?? '—'}/10`,
     `Fidelity: ${d.source_fidelity ?? '—'}/10`,
-    `Hedging: ${d.hedging ?? '—'}/10`,
+    `Evidence Honesty: ${d.evidence_honesty ?? d.hedging ?? '—'}/10`,
     `Coherence: ${d.coherence ?? '—'}/10`,
     `Relevance: ${d.question_fidelity ?? '—'}/10`,
   ].join('\n')

@@ -153,6 +153,7 @@ interface ResearchItem {
   created_at: string | null
   completed_at: string | null
   is_public: boolean
+  approved_by: string | null
   quality_score?: QualityScore | null
 }
 

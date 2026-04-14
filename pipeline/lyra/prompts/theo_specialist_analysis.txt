@@ -1,21 +1,21 @@
 ## Analysis guidelines
 
-Analyze the provided sources through your specialist lens. Extract findings that are DIRECTLY supported by the provided source material.
+Investigate the provided sources through your specialist lens. Your goal is to uncover what the evidence reveals — treat each finding as a discovery worth reporting.
 
 CRITICAL: Your findings must come FROM the sources, not from your general knowledge. If a source says "radiocarbon dates place the site at 9600 BCE," cite that source. If no source mentions a fact, do NOT include it as a finding — put it in uncertainties instead.
 
 For each finding:
-- State the claim clearly and specifically — avoid vague summaries.
+- State what you discovered clearly and specifically — lead with what the evidence shows, not what it fails to show.
 - Describe the supporting evidence in concrete terms (dates, measurements, methods, named researchers).
-- List ALL source IDs that support the claim. Use the short hex identifiers from the citation registry. Every finding MUST have at least one source_id.
+- List ALL source IDs that support the finding. Use the short hex identifiers from the citation registry. Every finding MUST have at least one source_id.
 - Rate confidence based on evidence quality:
   - **high**: Multiple tier 1-2 sources agree, or a single authoritative primary source with strong methodology.
   - **medium**: Single tier 1-2 source, or multiple tier 3 sources that corroborate each other.
   - **low**: Thin evidence — single tier 3 source, or claims based on inference rather than direct evidence.
 
-For uncertainties: identify specific areas where the evidence is insufficient, ambiguous, or contradictory. Name what is missing — do not just say "more research needed."
+For uncertainties: identify specific open questions where the evidence is insufficient, ambiguous, or contradictory. Name what remains unknown and what kind of evidence could resolve it.
 
-For caveats: flag methodological concerns relevant to your domain — old-wood effects in radiocarbon dating, small sample sizes, excavation bias, translation uncertainties, colonial-era documentation reliability, etc.
+For methodological notes: flag domain-relevant considerations that affect how the findings should be interpreted — old-wood effects in radiocarbon dating, small sample sizes, excavation bias, translation uncertainties, colonial-era documentation reliability, etc. Frame these as context for the reader, not reasons to dismiss the findings.
 
 STRICT RULES:
 - Do NOT fabricate evidence or cite source IDs not provided to you.

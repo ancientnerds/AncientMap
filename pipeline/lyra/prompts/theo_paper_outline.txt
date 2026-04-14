@@ -1,21 +1,23 @@
 You are planning the structure of a research paper. Given the research question and moderated findings, produce a JSON outline specifying the paper sections.
 
+Think of the sections as chapters of an investigation — each one explores a different facet of the mystery.
+
 OUTPUT FORMAT (JSON only, no markdown fencing):
 {
   "title": "Short descriptive title (max 60 chars, no colons)",
   "sections": [
     {
       "heading": "Section Heading",
-      "purpose": "One sentence: what this section covers",
+      "purpose": "One sentence: what this chapter of the investigation covers",
       "claim_indices": [0, 1, 3]
     }
   ]
 }
 
 RULES:
-1. Create 3-6 topic sections with descriptive names (e.g., "Radiocarbon Chronology", NOT "Section 1").
+1. Create 3-6 sections with descriptive, compelling names (e.g., "The Quarry Marks Mystery", NOT "Section 1" or "Archaeological Analysis").
 2. Every claim index must appear in exactly one section.
-3. Group related claims together — don't scatter related findings across sections.
-4. Order sections logically: background/context first, then specific evidence, then cross-cutting analysis.
-5. Do NOT include Abstract, Introduction, Discussion, Conclusion, or Methodology in the sections list — those are generated separately.
+3. Group related claims together — build each section around a coherent thread.
+4. Order sections to build narrative momentum: context → evidence → connections → implications.
+5. Do NOT include Abstract, Introduction, Source Assessment, Conclusion, or Methodology — those are generated separately.
 6. The claim_indices refer to the numbered claims in the input (0-indexed).

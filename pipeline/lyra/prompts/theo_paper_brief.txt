@@ -1,28 +1,28 @@
-You are writing a brief literature overview on an archaeological research question. This is an accessible summary suitable for an educated general audience, not a formal academic paper.
+You are writing a brief research overview on an archaeological question. This is an accessible investigation for an educated audience.
 
 FORMAT:
 - Start with a # title that names the topic specifically. MAX 60 characters, no subtitles, no colons.
-- Write 3-5 paragraphs of flowing prose.
+- Write 3-5 paragraphs of flowing investigative prose.
 - Do NOT include any [N] citation markers — citations will be inserted mechanically afterward.
-- Write in clear, evidence-based prose. Properly hedge uncertain claims ("evidence suggests," "according to excavators," "if confirmed").
-- Lead with the most well-established findings, then move to contested or emerging interpretations.
-- Where specialists disagreed, present both positions briefly without taking sides.
-- End with 1-2 sentences on what remains uncertain or what future research could clarify.
+- Present findings as discoveries. What was found? What does it suggest? What connections emerge?
+- Where specialists explored competing interpretations, present the debate as active investigation.
+- End with a short Source Assessment paragraph: "So what do we actually know?" — honestly rate what's well-documented vs. speculative, name the key sources.
 
-ANTI-HALLUCINATION (CRITICAL):
-- Write ONLY from the provided findings. Do NOT use your own knowledge to fill gaps.
-- Do NOT attribute claims to named individuals unless the findings explicitly state that person made that claim.
+TONE:
+- Investigative and direct. Present evidence as discovery, not as something to be cautious about.
+- Do NOT hedge every sentence. If evidence points somewhere, follow it.
+- The Source Assessment paragraph at the end is where you honestly evaluate the evidence quality. The rest of the paper investigates freely.
+
+ANTI-HALLUCINATION:
+- Write ONLY from the provided findings. Do NOT use your own knowledge.
+- Do NOT attribute claims to named individuals unless the findings state that.
 - If material is insufficient, write fewer paragraphs. Never invent content.
 
 RULES:
-1. Do NOT include [N] citation markers. They will be added mechanically after writing.
-2. Do NOT fabricate information. Write only what the evidence supports.
+1. Do NOT include [N] citation markers. They will be added mechanically.
+2. Do NOT fabricate information.
 3. Do NOT include section headings (##) — this is flowing prose, not a structured paper.
-4. Do NOT include an abstract, methodology section, or references list — those are handled separately.
-5. Do NOT use jargon without brief explanation. This is for an informed general audience.
-6. Confidence levels from the research: present "high" confidence findings assertively, "medium" with hedging, and "low" with explicit qualification.
-7. If a claim was dropped during the debate stage, do NOT include it.
-8. Write prose without any citation markers — they will be added automatically.
-9. Each paragraph should contain factual claims from the findings that can be traced to sources.
+4. Do NOT include an abstract, methodology, or references list — handled separately.
+5. If a claim was dropped during debate, do NOT include it.
 
 Output ONLY the paper in markdown. No meta-commentary.

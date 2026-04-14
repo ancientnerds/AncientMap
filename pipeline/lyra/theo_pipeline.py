@@ -2034,7 +2034,43 @@ class TheoPipeline:
             logger.warning("[THEO] Frame parsing found no ## headings — using raw text as abstract")
             frame_sections["Abstract"] = raw_frame.strip()[:2000]
 
-        # Step 6: Assemble final paper
+        # Step 6: Source Assessment — the "reality check"
+        emit({"type": "status", "content": "Writing source assessment..."})
+        assessment_system = self._load_prompt("theo_source_assessment")
+
+        # Build source tier summary for the assessment
+        tier_counts = {"Academic": 0, "Reputable": 0, "General": 0}
+        source_lines: list[str] = []
+        for sid, num in sorted(ctx.registry.reference_numbers.items(), key=lambda kv: kv[1]):
+            source = ctx.registry.get_reference(sid)
+            if source:
+                tier_label = (
+                    "Academic"
+                    if source.reliability_tier == 1
+                    else "Reputable"
+                    if source.reliability_tier == 2
+                    else "General"
+                )
+                tier_counts[tier_label] += 1
+                source_lines.append(f"[{num}] {source.title} — {source.url} [{tier_label}]")
+
+        tier_summary = ", ".join(f"{v} {k}" for k, v in tier_counts.items() if v > 0)
+        sources_text = "\n".join(source_lines) if source_lines else "(no sources)"
+
+        assessment_input = (
+            f"## Research question\n\n{ctx.question}\n\n"
+            f"## Paper body\n\n{body_text[:8000]}\n\n"
+            f"## Sources ({tier_summary})\n\n{sources_text}\n\n"
+            f"## Effort tier: {ctx.effort}\n"
+        )
+
+        raw_assessment = await self._m27_call_async(
+            assessment_system, assessment_input, ctx.tier.max_tokens_per_call
+        )
+        source_assessment = raw_assessment.strip()
+        logger.info("[THEO] Source Assessment: %d chars", len(source_assessment))
+
+        # Step 7: Assemble final paper
         paper_parts = [f"# {title}\n"]
 
         for key in ["Abstract", "Introduction"]:
@@ -2043,7 +2079,10 @@ class TheoPipeline:
 
         paper_parts.append(body_text)
 
-        for key in ["Discussion", "Conclusion", "Methodology"]:
+        if source_assessment:
+            paper_parts.append(f"## Source Assessment\n\n{source_assessment}")
+
+        for key in ["Conclusion", "Methodology"]:
             if key in frame_sections and frame_sections[key]:
                 paper_parts.append(f"## {key}\n\n{frame_sections[key]}")
 

@@ -109,7 +109,7 @@ def judge_paper(
     dims = judge_data.get("dimensions", {})
     d3 = min(10, max(0, dims.get("attribution_accuracy", 0)))
     d4 = min(10, max(0, dims.get("source_fidelity", 0)))
-    d5 = min(10, max(0, dims.get("hedging", 0)))
+    d5 = min(10, max(0, dims.get("evidence_honesty", dims.get("hedging", 0))))
     d6 = min(10, max(0, dims.get("coherence", 0)))
     d7 = min(10, max(0, dims.get("question_fidelity", 0)))
 
@@ -145,7 +145,7 @@ def judge_paper(
             "reference_integrity": d2,
             "attribution_accuracy": d3,
             "source_fidelity": d4,
-            "hedging": d5,
+            "evidence_honesty": d5,
             "coherence": d6,
             "question_fidelity": d7,
         },

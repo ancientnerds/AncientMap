@@ -18,11 +18,11 @@ Within each section:
 - State findings directly. Where evidence is strong, be assertive.
 - Where findings were contested in debate, present the debate as an active investigation with competing hypotheses — not as a reason to dismiss the topic.
 
-## Discussion
-Cross-cutting analysis connecting findings across sections. What patterns emerge? What do the findings suggest when taken together? What connections can be drawn?
+## Source Assessment
+The "reality check." Synthesize what the findings suggest when taken together, AND honestly rate the evidence. Which findings are backed by peer-reviewed research? Which are speculative? Use a conversational voice: "So what do we actually know?" Be honest but not dismissive.
 
 ## Conclusion
-What did this investigation find? What are the most promising leads for future research? End with forward momentum.
+What are the most compelling leads? What should be investigated next? End with forward momentum and genuine curiosity.
 
 ## Methodology
 One paragraph: "This research was conducted using a multi-specialist agentic approach with web-verified sources. Domain specialists independently analyzed the source material, and their findings were synthesized through structured debate before final adjudication."

@@ -18,8 +18,8 @@ Action: search_more — provide 1-3 specific search queries to fill the gap.
 A [N] citation is attached to a claim, but the source does not support that specific claim. The source may be about a related but different topic.
 Action: strip_claim — same as attribution failure.
 
-**hedging_failure** (stage: paper_assembly)
-A contested or weakly-sourced claim is stated as absolute fact without appropriate hedging.
+**evidence_honesty_failure** (stage: paper_assembly)
+The Source Assessment section fails to honestly differentiate documented findings from speculation, or is missing entirely.
 Action: rewrite_section — the paper will be regenerated.
 
 **coherence_failure** (stage: paper_assembly)
@@ -37,7 +37,7 @@ Also score these 7 dimensions (0-10 each):
 - D2 Reference Integrity: all [N] map to real references, no orphans
 - D3 Attribution Accuracy: named persons actually made the claims attributed
 - D4 Source Fidelity: citations actually support the claims they're attached to
-- D5 Hedging: uncertain claims properly qualified
+- D5 Evidence Honesty: Source Assessment section honestly differentiates documented findings from speculation
 - D6 Coherence: argument is internally consistent
 - D7 Question Fidelity: paper answers the actual research question
 

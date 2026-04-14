@@ -474,7 +474,7 @@ async def list_research(req: Request):
         rows = session.execute(
             text("""
                 SELECT id::text, question, effort, status, sites_found, tools_used,
-                       duration_ms, error_message, is_public, created_at, completed_at
+                       duration_ms, error_message, is_public, approved_by, created_at, completed_at
                 FROM research_requests
                 WHERE user_id = :uid
                   AND (expires_at IS NULL OR expires_at > NOW())
@@ -495,6 +495,7 @@ async def list_research(req: Request):
             "duration_ms": r.duration_ms,
             "error_message": r.error_message,
             "is_public": r.is_public,
+            "approved_by": r.approved_by,
             "created_at": r.created_at.isoformat() if r.created_at else None,
             "completed_at": r.completed_at.isoformat() if r.completed_at else None,
         }

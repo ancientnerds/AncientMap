@@ -1262,6 +1262,38 @@
   cursor: not-allowed;
 }
 
+/* — Scroll-down indicator — */
+.theo-scroll-indicator {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 12px 0 14px;
+  background: linear-gradient(transparent, var(--surface-raised) 60%);
+  color: var(--primary-amber);
+  font-size: 12px;
+  letter-spacing: 0.5px;
+  pointer-events: none;
+  animation: theo-bounce-down 1.5s ease-in-out infinite;
+}
+@keyframes theo-bounce-down {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(4px); }
+}
+
+/* — Review button accent — */
+.theo-btn-review {
+  color: var(--primary-amber) !important;
+  border-color: rgba(255, 183, 77, 0.3) !important;
+}
+.theo-btn-review:hover {
+  background: rgba(255, 183, 77, 0.1) !important;
+}
+
 /* — Pipeline Trace (collapsible) — */
 .theo-trace-toggle {
   display: flex;

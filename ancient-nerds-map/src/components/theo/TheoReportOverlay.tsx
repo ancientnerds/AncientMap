@@ -43,6 +43,7 @@ interface TheoReportOverlayProps {
   isOwner?: boolean
   isPublic?: boolean
   requestId?: string
+  initialEditing?: boolean
   onSaveEdit?: (report: string) => void
   onApprove?: (approvedBy: string, approvedAt: string) => void
 }
@@ -124,6 +125,7 @@ export default function TheoReportOverlay({
   isOwner,
   isPublic,
   requestId,
+
   onSaveEdit,
   onApprove,
 }: TheoReportOverlayProps) {
@@ -327,10 +329,18 @@ export default function TheoReportOverlay({
             />
           </Suspense>
         ) : (
-          <div className="theo-report-body theo-md-body" ref={bodyRef} onScroll={handleBodyScroll}>
-            <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>
-              {enrichedReport}
-            </ReactMarkdown>
+          <div style={{ position: 'relative' }}>
+            <div className="theo-report-body theo-md-body" ref={bodyRef} onScroll={handleBodyScroll}>
+              <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>
+                {enrichedReport}
+              </ReactMarkdown>
+            </div>
+            {isOwner && !result.approved_by && !scrolledToBottom && (
+              <div className="theo-scroll-indicator">
+                <span>Scroll down to approve</span>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 12 15 18 9"/></svg>
+              </div>
+            )}
           </div>
         )}
 
