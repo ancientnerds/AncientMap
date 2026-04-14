@@ -545,6 +545,38 @@ def _cleanup_citations(body: str, sources: list[dict]) -> tuple[str, list[dict]]
     return body, cited_sources
 
 
+def _cleanup_video_citations(body: str, videos: list[dict]) -> tuple[str, list[dict]]:
+    """Remove uncited video sources and renumber [VN] citations sequentially.
+
+    Same logic as _cleanup_citations but for [VN] markers and unified_videos.
+    Multiple story items from the same video at different timestamps each get
+    their own [VN], but only some get cited — this removes the phantoms.
+    """
+    used = {int(m) for m in re.findall(r"\[V(\d+)\]", body)}
+    if not used:
+        return body, videos
+
+    cited = [v for v in videos if v["v_citation"] in used]
+    if len(cited) == len(videos):
+        return body, videos
+
+    # Build old → new sequential mapping
+    old_to_new: dict[int, int] = {}
+    for new_num, vid in enumerate(cited, 1):
+        old_to_new[vid["v_citation"]] = new_num
+        vid["v_citation"] = new_num
+
+    # Replace in body: largest old numbers first to avoid [V1] matching part of [V10]
+    for old_num in sorted(old_to_new, reverse=True):
+        body = body.replace(f"[V{old_num}]", f"[__VCITE_{old_to_new[old_num]}__]")
+    for new_num in sorted(old_to_new.values()):
+        body = body.replace(f"[__VCITE_{new_num}__]", f"[V{new_num}]")
+
+    removed = len(videos) - len(cited)
+    logger.info(f"Removed {removed} uncited video(s), renumbered to V1-V{len(cited)}")
+    return body, cited
+
+
 def _polish_article(
     verified_body: str,
     settings: LyraSettings,
@@ -1092,6 +1124,7 @@ def generate_weekly_article(
 
     # ── 6. CLEANUP ───────────────────────────────────────────────
     body, unified_sources = _cleanup_citations(body, unified_sources)
+    body, unified_videos = _cleanup_video_citations(body, unified_videos)
 
     # ── 7. ASSESS (10-dimension quality loop) ────────────────────
     with _step(step_data, "assess", t0_total) as s:
