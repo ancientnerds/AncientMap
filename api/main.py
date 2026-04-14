@@ -114,6 +114,11 @@ async def lifespan(app: FastAPI):
             "ALTER TABLE token_usage_logs ADD COLUMN IF NOT EXISTS web_search_requests INTEGER NOT NULL DEFAULT 0",
             # Strip orphaned [N] citation markers from sites lacking citation metadata
             "UPDATE unified_sites SET description = regexp_replace(description, '\\s*\\[\\d+\\]', '', 'g') WHERE description ~ '\\[\\d+\\]' AND NOT jsonb_exists(COALESCE(raw_data, '{}'), 'description_citations')",
+            # Theo research: approval tracking, debug log, LLM call count
+            "ALTER TABLE research_requests ADD COLUMN IF NOT EXISTS approved_by VARCHAR(100)",
+            "ALTER TABLE research_requests ADD COLUMN IF NOT EXISTS approved_at TIMESTAMP",
+            "ALTER TABLE research_requests ADD COLUMN IF NOT EXISTS debug_log JSONB",
+            "ALTER TABLE research_requests ADD COLUMN IF NOT EXISTS llm_calls INTEGER DEFAULT 0",
         ]
 
         # Populate description_citations for 10 enriched sites (one-time prod data fix).

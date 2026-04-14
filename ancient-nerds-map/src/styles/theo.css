@@ -2279,6 +2279,7 @@
 .theo-adapter-toggle-track {
   position: absolute;
   inset: 0;
+  border-radius: 9px;
   background: var(--border-default);
   transition: background 0.15s;
 }
