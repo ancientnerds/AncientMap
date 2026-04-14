@@ -17,12 +17,12 @@ const TheoReportOverlay = lazy(() => import('../components/theo/TheoReportOverla
 const TheoResearchLive = lazy(() => import('../components/theo/TheoResearchLive'))
 
 const EFFORTS = [
-  { key: 'brief', label: 'Research Brief', time: '~5 min', desc: 'Quick literature overview', credits: 100 },
-  { key: 'note', label: 'Research Note', time: '~15 min', desc: '3 specialists, structured analysis', credits: 300 },
-  { key: 'article', label: 'Journal Article', time: '~30 min', desc: '5 specialists, quality verified', credits: 600 },
-  { key: 'review', label: 'Literature Review', time: '~50 min', desc: '6 specialists, debate + verification', credits: 1000 },
+  { key: 'brief', label: 'Research Brief', time: '~10 min', desc: 'Quick literature overview', credits: 100 },
+  { key: 'note', label: 'Research Note', time: '~25 min', desc: '3 specialists, structured analysis', credits: 300 },
+  { key: 'article', label: 'Journal Article', time: '~45 min', desc: '5 specialists, quality verified', credits: 600 },
+  { key: 'review', label: 'Literature Review', time: '~60 min', desc: '6 specialists, debate + verification', credits: 1000 },
   { key: 'thesis', label: 'Thesis Chapter', time: '~90 min', desc: '8 specialists, multi-round debate', credits: 1800 },
-  { key: 'dissertation', label: 'Dissertation', time: '~3 hours', desc: '14 specialists, exhaustive multi-round debate', credits: 3600 },
+  { key: 'dissertation', label: 'Dissertation', time: '~2 hours', desc: '14 specialists, exhaustive multi-round debate', credits: 3600 },
 ] as const
 
 const EFFORT_LABELS: Record<string, string> = {
@@ -1343,14 +1343,6 @@ export default function TheoPage() {
           )}
 
           {/* ═══════ Completed Results ═══════ */}
-          {doneItems.length > 0 && doneItems.some(i => i.status === 'completed') && (
-            <TutorialHint step="5/5">
-              Your research is complete. Open a paper to read it, then scroll to the bottom and approve it.
-              Approval is required before publishing — your name is attached as the reviewer, creating
-              accountability for the research. After your first published paper, these tutorial hints
-              will disappear.
-            </TutorialHint>
-          )}
           <div className="theo-list">
             <div className="theo-list-header" style={{ display: 'flex', alignItems: 'center' }}>
               <span>{doneItems.length > 0 ? `Results (${doneItems.length})` : 'Results'}</span>
@@ -1366,6 +1358,14 @@ export default function TheoPage() {
                 </button>
               )}
             </div>
+            {doneItems.length > 0 && doneItems.some(i => i.status === 'completed') && (
+              <TutorialHint step="5/5">
+                Your research is complete. Open a paper to read it, then scroll to the bottom and approve it.
+                Approval is required before publishing — your name is attached as the reviewer, creating
+                accountability for the research. After your first published paper, these tutorial hints
+                will disappear.
+              </TutorialHint>
+            )}
             {doneItems.length === 0 ? (
               <div className="theo-empty">
                 No research results yet. Submit a question above and Theo will investigate.
