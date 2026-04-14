@@ -259,6 +259,12 @@ export default function TheoReportOverlay({
   const readingMinutes = Math.ceil(result.report.split(/\s+/).length / 200)
   const qs = result.quality_score
 
+  // Extract paper title from first # heading
+  const paperTitle = useMemo(() => {
+    const match = result.report.match(/^#\s+(.+)$/m)
+    return match ? match[1].trim() : null
+  }, [result.report])
+
   return (
     <div className="theo-overlay" onClick={handleBackdropClick}>
       <div className="theo-overlay-inner" onClick={e => e.stopPropagation()}>
@@ -266,8 +272,8 @@ export default function TheoReportOverlay({
         <div className="theo-report-header">
           <img src="/images/theo.png" alt="Theo" className="theo-avatar" style={{ width: 48, height: 48 }} />
           <div className="theo-report-header-text">
-            <div className="theo-report-question">
-              {question.length > 200 ? question.slice(0, 200) + '...' : question}
+            <div className="theo-report-question" title={question}>
+              {paperTitle || (question.length > 120 ? question.slice(0, 120) + '...' : question)}
               <button
                 className="theo-copy-question"
                 onClick={() => navigator.clipboard.writeText(question)}

@@ -152,7 +152,7 @@ export default function TheoEditor({ content, onSave, onDiscard }: TheoEditorPro
         heading: { levels: [1, 2, 3] },
       }),
       Link.configure({
-        openOnClick: false,
+        openOnClick: true,
         HTMLAttributes: { target: '_blank', rel: 'noopener noreferrer' },
       }),
       Image.configure({
