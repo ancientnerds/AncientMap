@@ -1302,6 +1302,10 @@
   border: none;
   background: none;
 }
+.theo-live-progress .nerv-lb::before,
+.theo-live-progress .nerv-lb::after {
+  display: none;
+}
 
 /* — Heartbeat LED Strip — */
 .theo-heartbeat-leds {
