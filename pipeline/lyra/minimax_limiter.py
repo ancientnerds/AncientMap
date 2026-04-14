@@ -71,7 +71,7 @@ class MiniMaxLimiter:
 
     def __init__(
         self,
-        max_concurrency: int = 3,
+        max_concurrency: int = 20,
         base_delay: float = 0.3,
         max_delay: float = 30.0,
     ):

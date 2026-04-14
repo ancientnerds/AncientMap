@@ -99,6 +99,9 @@ export default function TheoResearchLive({ requestId, question, startedAt, onClo
   const [qualityFlash, setQualityFlash] = useState<{ score: number; badge: string } | null>(null)
   const [subtaskProgress, setSubtaskProgress] = useState<{ done: number; total: number }>({ done: 0, total: 1 })
 
+  // V2 angle tracking
+  const [angles, setAngles] = useState<Record<string, { topic: string; status: string; claims: number; sources: number; round: number; saturated: boolean }>>({})
+
   const reportTextRef = useRef('')
   const thinkingRef = useRef('')
   const bodyRef = useRef<HTMLDivElement>(null)
@@ -223,6 +226,47 @@ export default function TheoResearchLive({ requestId, question, startedAt, onClo
           setSubtaskProgress({ done: 0, total: subtaskTotal })
         } else if (data.status === 'done' || data.status === 'skip') {
           setSubtaskProgress(prev => ({ ...prev, done: prev.total }))
+        }
+
+        // V2 angle tracking — extract from stage names like search_XXXX, audit_XXXX, specialist_XXXX
+        const stage = data.stage as string
+        if (meta?.angle && typeof meta.angle === 'string') {
+          const angleId = stage.includes('_') ? stage.split('_').slice(1).join('_') : ''
+          if (angleId) {
+            setAngles(prev => {
+              const existing = prev[angleId] || { topic: meta.angle as string, status: 'queued', claims: 0, sources: 0, round: 0, saturated: false }
+              const updated = { ...existing, topic: meta.angle as string }
+
+              if (stage.startsWith('search_') && data.status === 'done') {
+                updated.status = 'searched'
+                updated.sources = (meta.total_sources as number) || existing.sources
+                updated.round = (meta.round as number) || existing.round
+              } else if (stage.startsWith('audit_') && data.status === 'start') {
+                updated.status = 'auditing'
+              } else if (stage.startsWith('audit_') && data.status === 'done') {
+                updated.status = 'audited'
+              } else if (stage.startsWith('specialist_') && data.status === 'start') {
+                updated.status = 'analyzing'
+              } else if (stage.startsWith('specialist_') && data.status === 'done') {
+                updated.status = 'analyzed'
+                updated.claims = (meta.total_claims as number) || existing.claims
+              }
+
+              return { ...prev, [angleId]: updated }
+            })
+          }
+        }
+
+        // Detect saturation from status messages
+        if (stage === 'synthesis' && data.status === 'start') {
+          // All angles saturated — mark them
+          setAngles(prev => {
+            const next = { ...prev }
+            for (const id of Object.keys(next)) {
+              next[id] = { ...next[id], saturated: true, status: 'saturated' }
+            }
+            return next
+          })
         }
         break
       }
@@ -372,6 +416,23 @@ export default function TheoResearchLive({ requestId, question, startedAt, onClo
             <NervLoadingBar label="CONNECTING" sublabel="AWAITING PIPELINE" />
           )}
         </div>
+
+        {/* V2 Angle Progress Table */}
+        {Object.keys(angles).length > 0 && (
+          <div className="theo-angles-table">
+            {Object.entries(angles).map(([id, angle]) => (
+              <div key={id} className={`theo-angle-row theo-angle-row--${angle.saturated ? 'saturated' : angle.status}`}>
+                <span className={`theo-angle-led ${angle.saturated ? 'theo-angle-led--done' : angle.status === 'analyzing' || angle.status === 'auditing' ? 'theo-angle-led--active' : angle.claims > 0 ? 'theo-angle-led--has-claims' : ''}`} />
+                <span className="theo-angle-topic">{angle.topic}</span>
+                <span className="theo-angle-stats">
+                  {angle.claims > 0 && <span>{angle.claims} claims</span>}
+                  {angle.round > 0 && <span>R{angle.round}</span>}
+                </span>
+                {angle.saturated && <span className="theo-angle-check">&#10003;</span>}
+              </div>
+            ))}
+          </div>
+        )}
 
         {qualityFlash && (
           <div className="theo-quality-flash">

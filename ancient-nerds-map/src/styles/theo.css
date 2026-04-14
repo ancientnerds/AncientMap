@@ -1314,6 +1314,74 @@
   display: none;
 }
 
+/* — V2 Angle Progress Table — */
+.theo-angles-table {
+  padding: 6px 16px 8px;
+  border-bottom: 1px solid var(--border-default);
+  max-height: 200px;
+  overflow-y: auto;
+}
+.theo-angle-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 0;
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.theo-angle-led {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #1a1a1a;
+  border: 1px solid #2a2a2a;
+  flex-shrink: 0;
+}
+.theo-angle-led--active {
+  background: var(--nerv-g, #00cc66);
+  border-color: var(--nerv-g, #00cc66);
+  box-shadow: 0 0 4px rgba(0, 204, 102, 0.6);
+  animation: led-breathe-pulse 1.5s ease-in-out infinite;
+}
+.theo-angle-led--done {
+  background: var(--nerv-g, #00cc66);
+  border-color: var(--nerv-g, #00cc66);
+  box-shadow: 0 0 3px rgba(0, 204, 102, 0.4);
+}
+.theo-angle-led--has-claims {
+  background: var(--theo-amber, #d4912a);
+  border-color: var(--theo-amber, #d4912a);
+  box-shadow: 0 0 3px rgba(212, 145, 42, 0.4);
+}
+.theo-angle-topic {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-secondary);
+}
+.theo-angle-row--saturated .theo-angle-topic {
+  color: var(--nerv-g, #00cc66);
+}
+.theo-angle-row--analyzing .theo-angle-topic,
+.theo-angle-row--auditing .theo-angle-topic {
+  color: var(--text-primary);
+}
+.theo-angle-stats {
+  display: flex;
+  gap: 6px;
+  font-size: 10px;
+  color: var(--text-dimmed);
+  flex-shrink: 0;
+}
+.theo-angle-check {
+  color: var(--nerv-g, #00cc66);
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
 /* — Heartbeat LED Strip — */
 .theo-heartbeat-leds {
   display: inline-flex;
