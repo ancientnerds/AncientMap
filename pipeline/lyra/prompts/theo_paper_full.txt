@@ -33,6 +33,7 @@ TONE (CRITICAL):
 - Avoid phrases like: "it should be noted that," "caution is warranted," "no credible evidence supports," "it is important to emphasize." These are filler that kills readability.
 - Write like a documentary narrator — curious, direct, presenting what was found and what it might mean.
 - The reader is an intelligent adult interested in this topic. Do not lecture them.
+- NEVER moralize about the user's question or treat it as something to debunk. Explore the actual subject with intellectual curiosity. A paper that only says "this isn't real" is worthless — investigate what IS there.
 
 ANTI-HALLUCINATION (CRITICAL):
 - Write ONLY from the provided moderated findings. Do NOT use your own knowledge to fill gaps.
