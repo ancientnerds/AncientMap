@@ -73,6 +73,11 @@ class ConvergenceOrchestrator:
 
         state.log("orchestrator", f"Starting convergence pipeline for: {question[:80]}...")
 
+        # Reset global rate limiter to max concurrency for this task
+        from pipeline.lyra.minimax_limiter import limiter as global_limiter
+
+        global_limiter.reset()
+
         # Set up event bus and handlers
         bus = EventBus()
         semaphore = asyncio.Semaphore(config.max_concurrent_llm_calls)
