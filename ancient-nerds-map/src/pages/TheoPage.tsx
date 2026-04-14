@@ -849,7 +849,7 @@ export default function TheoPage() {
                 <textarea
                   ref={inputRef}
                   className="theo-input"
-                  placeholder="What should Theo investigate?"
+                  placeholder="What should Theo investigate? Be specific — name sites, periods, cultures, and what you want to know. (min 200 characters)"
                   value={question}
                   onChange={e => {
                     const v = e.target.value
@@ -862,6 +862,9 @@ export default function TheoPage() {
                   disabled={activeItems.length > 0}
                   style={activeItems.length > 0 ? { opacity: 0.5 } : undefined}
                 />
+                <span className={`theo-input-counter${question.length >= 200 ? ' met' : ''}`}>
+                  {question.length}/200
+                </span>
               </div>
 
               <button className="theo-tips-toggle" onClick={() => setShowTips(!showTips)}>
@@ -902,7 +905,7 @@ export default function TheoPage() {
               <div className="theo-relevance-row">
                 <button
                   className="theo-check-btn"
-                  disabled={question.trim().length < 10 || checkingRelevance || activeItems.length > 0}
+                  disabled={question.trim().length < 200 || checkingRelevance || activeItems.length > 0}
                   onClick={handleCheckTopic}
                 >
                   {checkingRelevance ? 'Checking...' : 'Check Topic'}
