@@ -79,7 +79,7 @@ class SpecialistHandler(BaseHandler):
                 "specialist", f"No source content for angle '{angle.topic}', skipping analysis"
             )
             angle.recent_claim_counts.append(0)
-            self._check_saturation(angle)
+            await self._check_saturation(angle)
             await self.bus.emit(
                 FindingsProduced(
                     angle_id=angle.id,
@@ -191,7 +191,7 @@ class SpecialistHandler(BaseHandler):
         await self._recruit_from_connections(cross_angle_topics)
 
         # Check saturation
-        self._check_saturation(angle)
+        await self._check_saturation(angle)
 
         # Emit cross-angle discoveries as new angles
         for topic, spawned_from in cross_angle_topics:
@@ -212,15 +212,19 @@ class SpecialistHandler(BaseHandler):
             )
         )
 
-        # If gaps were found and angle isn't saturated, trigger refinement
-        if specialist_gaps and not angle.saturated and new_claims_total > 0:
+        # If angle isn't saturated, trigger another search round to verify convergence.
+        # With gaps: refine queries based on specialist feedback.
+        # Without gaps: re-search with existing queries to confirm no new claims.
+        if not angle.saturated:
             from pipeline.lyra.handlers.angle_search import SearchHandler
 
-            # Find the search handler instance via bus handlers
             for handler_list in self.bus._handlers.values():
                 for handler in handler_list:
                     if isinstance(handler, SearchHandler):
-                        await handler.refine_and_search(angle.id, specialist_gaps)
+                        if specialist_gaps and new_claims_total > 0:
+                            await handler.refine_and_search(angle.id, specialist_gaps)
+                        else:
+                            await handler.search_angle(angle.id)
                         break
 
     # ------------------------------------------------------------------
@@ -350,7 +354,7 @@ class SpecialistHandler(BaseHandler):
     # Saturation detection
     # ------------------------------------------------------------------
 
-    def _check_saturation(self, angle: ResearchAngle):
+    async def _check_saturation(self, angle: ResearchAngle):
         """Mark angle as saturated if last N rounds all produced zero new claims."""
         threshold = self.state.config.saturation_threshold
         recent = angle.recent_claim_counts[-threshold:]
@@ -360,14 +364,19 @@ class SpecialistHandler(BaseHandler):
                 "specialist",
                 f"Angle '{angle.topic}' saturated: {threshold} consecutive zero-claim rounds",
             )
+            await self.bus.emit(AngleSaturated(angle_id=angle.id))
 
         # Also saturate if we hit the hard cap on search rounds
-        if angle.search_rounds >= self.state.config.max_search_rounds_per_angle:
+        if (
+            angle.search_rounds >= self.state.config.max_search_rounds_per_angle
+            and not angle.saturated
+        ):
             angle.saturated = True
             self.state.log(
                 "specialist",
                 f"Angle '{angle.topic}' saturated: hit max search rounds ({angle.search_rounds})",
             )
+            await self.bus.emit(AngleSaturated(angle_id=angle.id))
 
     # ------------------------------------------------------------------
     # Cross-angle connection detection

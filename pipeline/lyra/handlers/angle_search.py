@@ -51,10 +51,10 @@ class SearchHandler(BaseHandler):
             }
         )
 
-        async with self.semaphore:
-            results = await searcher.search(
-                queries, self.state.config.source_apis, self.state.disabled_adapters
-            )
+        # No semaphore — search uses HTTP APIs, not LLM calls
+        results = await searcher.search(
+            queries, self.state.config.source_apis, self.state.disabled_adapters
+        )
 
         new_sources = 0
         for r in results:
