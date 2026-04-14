@@ -583,7 +583,7 @@ async def get_research_log(request_id: str, req: Request, format: str = "json"):
     debug_log = row.debug_log or []
 
     if format == "md":
-        lines = [f"# Research Debug Log\n", f"**Question:** {row.question[:200]}\n"]
+        lines = ["# Research Debug Log\n", f"**Question:** {row.question[:200]}\n"]
         for entry in debug_log:
             ts = entry.get("ts", "")[:19]
             level = entry.get("level", "info").upper()
