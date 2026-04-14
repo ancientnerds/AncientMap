@@ -134,7 +134,7 @@ async def _process_request(
             from pipeline.lyra.convergence_orchestrator import ConvergenceOrchestrator
 
             orchestrator = ConvergenceOrchestrator()
-            ctx = await orchestrator.run(
+            ctx = await orchestrator.run(  # type: ignore[assignment]
                 question,
                 emit,
                 request_id=request_id,
