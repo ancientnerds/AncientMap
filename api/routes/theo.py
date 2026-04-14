@@ -59,7 +59,7 @@ class RelevanceCheckRequest(BaseModel):
 
 class ResearchSubmitRequest(BaseModel):
     question: str = Field(..., min_length=10, max_length=4000)
-    effort: str = Field(default="article")
+    effort: str = Field(default="research")
     force_include: list[str] = Field(default_factory=list)
     force_exclude: list[str] = Field(default_factory=list)
     video_ids: list[str] = Field(default_factory=list, max_length=5)
@@ -108,6 +108,7 @@ def _estimate_minutes(effort: str, queue_position: int) -> int:
         "review": 50,
         "thesis": 90,
         "dissertation": 180,
+        "research": 120,  # v2 convergence — varies, estimate high
     }.get(effort, 30)
     return base * max(queue_position, 1)
 

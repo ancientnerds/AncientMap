@@ -17,7 +17,8 @@ import { NervLoadingBar } from '../components/NervLoadingBar'
 const TheoReportOverlay = lazy(() => import('../components/theo/TheoReportOverlay'))
 const TheoResearchLive = lazy(() => import('../components/theo/TheoResearchLive'))
 
-const EFFORTS = [
+// V1 effort tiers (kept for backward compat with existing published papers)
+const _EFFORTS_V1 = [
   { key: 'brief', label: 'Research Brief', time: '~10 min', desc: 'Quick literature overview', credits: 100 },
   { key: 'note', label: 'Research Note', time: '~25 min', desc: '3 specialists, structured analysis', credits: 300 },
   { key: 'article', label: 'Journal Article', time: '~45 min', desc: '5 specialists, quality verified', credits: 600 },
@@ -25,6 +26,7 @@ const EFFORTS = [
   { key: 'thesis', label: 'Thesis Chapter', time: '~90 min', desc: '8 specialists, multi-round debate', credits: 1800 },
   { key: 'dissertation', label: 'Dissertation', time: '~2 hours', desc: '14 specialists, exhaustive multi-round debate', credits: 3600 },
 ] as const
+void _EFFORTS_V1  // suppress unused warning
 
 const EFFORT_LABELS: Record<string, string> = {
   brief: 'Brief', note: 'Note', article: 'Article', review: 'Review', thesis: 'Thesis', dissertation: 'Dissertation',
@@ -215,7 +217,7 @@ export default function TheoPage() {
   // Wizard state — 4 steps: Topic, Sources, Specialists, Launch
   const [wizardStep, setWizardStep] = useState<1 | 2 | 3 | 4>(1)
   const [question, setQuestion] = useState(() => sessionStorage.getItem('theo_question') || '')
-  const [effort, setEffort] = useState<string>(() => sessionStorage.getItem('theo_effort') || 'article')
+  const effort = 'research'  // v2: always convergence pipeline, no tier selection
 
   // Stage 2: YouTube video IDs
   const [videoIds, setVideoIds] = useState<string[]>(() => {
@@ -539,7 +541,6 @@ export default function TheoPage() {
       setQuestion('')
       setWizardStep(1)
       sessionStorage.removeItem('theo_question')
-      sessionStorage.removeItem('theo_effort')
       setVideoIds([])
       setVideoInput('')
       sessionStorage.removeItem('theo_video_ids')
@@ -723,7 +724,6 @@ export default function TheoPage() {
     })
   }, [])
 
-  const selectedEffort = EFFORTS.find(e => e.key === effort)
   const activeItems = items.filter(i => i.status === 'queued' || i.status === 'running')
   const doneItems = items.filter(i => i.status !== 'queued' && i.status !== 'running')
 
@@ -901,25 +901,6 @@ export default function TheoPage() {
                   </ul>
                 </div>
               )}
-
-              {/* Tier selector */}
-              <div className="theo-scope-section">
-                <div className="theo-scope-label">Scope</div>
-                <div className="theo-scope-grid">
-                  {EFFORTS.map(e => (
-                    <button
-                      key={e.key}
-                      className={`theo-scope-card${effort === e.key ? ' active' : ''}`}
-                      onClick={() => { setEffort(e.key); sessionStorage.setItem('theo_effort', e.key) }}
-                      disabled={activeItems.length > 0}
-                    >
-                      <span className="theo-scope-name">{e.label}</span>
-                      <span className="theo-scope-time">{e.time} &middot; {e.credits} credits</span>
-                      <span className="theo-scope-desc">{e.desc}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
 
               {/* Relevance check */}
               <div className="theo-relevance-row">
@@ -1276,9 +1257,8 @@ export default function TheoPage() {
 
               <TutorialHint step="4/5">
                 Review your research prompt below — you can still edit it. Once you launch, Theo will
-                search sources, run specialist analyses, debate findings, and assemble a structured paper.
-                This takes {EFFORTS.find(e => e.key === effort)?.time ?? 'a few minutes'} depending on
-                the scope. You'll see live progress while it runs.
+                decompose your question into research angles, search sources, run specialist analyses,
+                debate findings, and assemble a narrative paper. You'll see live progress while it runs.
               </TutorialHint>
               {/* Editable enriched research prompt */}
               <div className="theo-launch-section">
@@ -1297,11 +1277,6 @@ export default function TheoPage() {
 
               {/* Settings summary — each clickable to jump back */}
               <div className="theo-launch-settings">
-                <div className="theo-launch-setting" onClick={() => setWizardStep(1)} role="button" tabIndex={0}>
-                  <span className="theo-launch-setting-label">Scope</span>
-                  <span className="theo-launch-setting-value">{selectedEffort?.label} ({selectedEffort?.time})</span>
-                  <span className="theo-launch-setting-edit">change</span>
-                </div>
                 <div className="theo-launch-setting" onClick={() => setWizardStep(2)} role="button" tabIndex={0}>
                   <span className="theo-launch-setting-label">Sources</span>
                   <span className="theo-launch-setting-value">
@@ -1314,7 +1289,7 @@ export default function TheoPage() {
                   <span className="theo-launch-setting-label">Specialists</span>
                   <span className="theo-launch-setting-value">
                     {excludedSpecialists.size === 0
-                      ? `Auto (${SPECIALIST_COUNTS[effort] ?? '?'} will be selected)`
+                      ? 'Auto (6+ will be selected based on topic)'
                       : `${excludedSpecialists.size} excluded`}
                   </span>
                   <span className="theo-launch-setting-edit">change</span>
@@ -1327,7 +1302,7 @@ export default function TheoPage() {
                   disabled={submitting || activeItems.length > 0}
                   onClick={handleSubmit}
                 >
-                  {submitting ? 'Submitting...' : `Start Research (${selectedEffort?.credits ?? 0} credits)`}
+                  {submitting ? 'Submitting...' : 'Start Research'}
                 </button>
               </div>
             </div>

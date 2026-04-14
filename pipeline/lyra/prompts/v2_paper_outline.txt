@@ -1,0 +1,83 @@
+You are generating a structured outline for a Why Files style research paper. The outline determines the paper's narrative arc and assigns findings to sections.
+
+PAPER STRUCTURE (in order):
+
+1. **Hook**: Already written separately. Not part of this outline.
+
+2. **Investigation sections** (2-4 sections): One per major research angle or thematic cluster. Each section follows a thread of evidence like a detective following leads. Name each section after its topic — descriptive, specific titles. NOT "Section 1" or "Evidence Review."
+
+3. **Connecting the Dots**: Where cross-angle connections, convergent findings, and interdisciplinary patterns are presented. This is the paper's climax — the moment where separate threads come together. If the cross-angle analysis found convergent findings, they go here.
+
+4. **The Other Side**: Counter-evidence, skeptical perspectives, and contradictions. Present them fairly and specifically. This is NOT a strawman section — if the counter-evidence is strong, say so.
+
+5. **What We Actually Know**: The honest assessment. Three tiers of confidence. This is the paper's landing.
+
+SECTION DESIGN RULES:
+1. Each investigation section gets a descriptive title (e.g., "The Radiocarbon Problem", "Luminous Beings in Sumerian Texts", "What the Excavations Actually Found").
+2. Assign specific claims and findings to each section. Every substantive finding should appear in exactly one section.
+3. Do NOT create a section for an angle that produced no usable findings.
+4. If two angles produced closely related findings, merge them into one section.
+5. The Connecting the Dots section must reference specific findings from specific investigation sections — it ties threads together, it does not introduce new evidence.
+6. The Other Side section must contain specific counter-arguments, not generic skepticism.
+7. Order the investigation sections for narrative flow — build toward the most interesting findings.
+
+TITLE:
+- MAX 60 characters.
+- Specific to the topic. Not generic.
+- No subtitles, no colons.
+
+Output a JSON object matching this schema:
+
+```json
+{
+  "title": "Short descriptive paper title",
+  "sections": [
+    {
+      "id": 1,
+      "type": "investigation",
+      "title": "Descriptive section title",
+      "angle_ids": [1, 3],
+      "assigned_claims": [
+        "Specific claim or finding to cover in this section",
+        "Another specific claim"
+      ],
+      "narrative_goal": "One sentence: what should the reader understand after this section?"
+    },
+    {
+      "id": 2,
+      "type": "investigation",
+      "title": "Another descriptive title",
+      "angle_ids": [2],
+      "assigned_claims": ["Claim from angle 2"],
+      "narrative_goal": "What this section accomplishes"
+    },
+    {
+      "id": 3,
+      "type": "connecting",
+      "title": "Connecting the Dots",
+      "connections": [
+        "Cross-angle connection 1: how finding X from section 1 relates to finding Y from section 2",
+        "Convergent finding: independently discovered pattern"
+      ],
+      "narrative_goal": "Synthesize the separate threads into a coherent picture"
+    },
+    {
+      "id": 4,
+      "type": "other_side",
+      "title": "The Other Side",
+      "counter_claims": [
+        "Specific counter-argument or contradicting evidence"
+      ],
+      "narrative_goal": "Present the strongest counter-evidence fairly"
+    },
+    {
+      "id": 5,
+      "type": "assessment",
+      "title": "What We Actually Know",
+      "narrative_goal": "Honest confidence-tiered summary of the evidence"
+    }
+  ]
+}
+```
+
+ONLY output valid JSON. No text outside the JSON object.

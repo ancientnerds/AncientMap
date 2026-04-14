@@ -123,26 +123,43 @@ async def _process_request(
         pipeline_trace.append(event)
 
     try:
-        # Lazy import to avoid circular: theo_pipeline -> theo_config -> api -> theo_worker
-        from pipeline.lyra.theo_pipeline import TheoPipeline
-
-        pipeline = TheoPipeline()
         force_include = (specialist_options or {}).get("force_include", [])
         force_exclude = (specialist_options or {}).get("force_exclude", [])
         video_ids = (specialist_options or {}).get("video_ids", [])
         web_urls = (specialist_options or {}).get("web_urls", [])
         disabled_adapters = (specialist_options or {}).get("disabled_adapters", [])
-        ctx = await pipeline.run(
-            question,
-            effort,
-            emit,
-            force_include=force_include,
-            force_exclude=force_exclude,
-            request_id=request_id,
-            video_ids=video_ids,
-            web_urls=web_urls,
-            disabled_adapters=disabled_adapters,
-        )
+
+        if effort == "research":
+            # V2 convergence pipeline — event-driven, no fixed tiers
+            from pipeline.lyra.convergence_orchestrator import ConvergenceOrchestrator
+
+            orchestrator = ConvergenceOrchestrator()
+            ctx = await orchestrator.run(
+                question,
+                emit,
+                request_id=request_id,
+                force_include=force_include,
+                force_exclude=force_exclude,
+                video_ids=video_ids,
+                web_urls=web_urls,
+                disabled_adapters=disabled_adapters,
+            )
+        else:
+            # V1 fixed-tier pipeline (backward compat for existing tiers)
+            from pipeline.lyra.theo_pipeline import TheoPipeline
+
+            pipeline = TheoPipeline()
+            ctx = await pipeline.run(
+                question,
+                effort,
+                emit,
+                force_include=force_include,
+                force_exclude=force_exclude,
+                request_id=request_id,
+                video_ids=video_ids,
+                web_urls=web_urls,
+                disabled_adapters=disabled_adapters,
+            )
 
         duration_ms = int((time.monotonic() - start) * 1000)
 

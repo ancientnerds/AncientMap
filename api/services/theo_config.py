@@ -23,6 +23,7 @@ THEO_CREDIT_COSTS: dict[str, int] = {
     "review": 1000,  # ~50 min
     "thesis": 1800,  # ~90 min
     "dissertation": 3600,  # ~3 hours
+    "research": 600,  # v2 convergence pipeline — flat cost (reserve, refund delta)
 }
 
 # M2.7 token budget per individual call (not total).

@@ -135,6 +135,9 @@ class ResearchState:
     debug_log: list[dict] = field(default_factory=list)
     error: str = ""
 
+    # Backward compat — worker uses len(ctx.specialist_analyses) for tools_used
+    specialist_analyses: dict = field(default_factory=dict)
+
     # SSE callback
     emit: Callable[[dict], None] | None = None
 
