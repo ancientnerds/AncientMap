@@ -559,6 +559,7 @@ export default function TheoPage() {
 
   // --- Result actions ---
   const handleCancel = useCallback(async (id: string) => {
+    if (!window.confirm('Cancel this research? This cannot be undone.')) return
     try {
       await fetch(`${config.api.baseUrl}/theo/research/${id}`, {
         method: 'DELETE', headers: getAuthHeaders(),
