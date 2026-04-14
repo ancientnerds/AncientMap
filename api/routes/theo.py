@@ -350,7 +350,8 @@ async def submit_research(
     if not _theo_limiter.check(get_client_ip(req)):
         raise HTTPException(status_code=429, detail="Too many requests. Please wait.")
 
-    if body.effort not in EFFORT_CONFIG:
+    valid_efforts = set(EFFORT_CONFIG.keys()) | {"research"}
+    if body.effort not in valid_efforts:
         raise HTTPException(status_code=400, detail=f"Invalid effort: {body.effort}")
 
     credit_cost = THEO_CREDIT_COSTS.get(body.effort, 300)
