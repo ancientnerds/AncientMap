@@ -56,7 +56,6 @@ a:not([class]):hover,
 .panel-label a:hover,
 .connector-link:hover,
 .news-link:hover,
-.theo-card-question:hover,
 .site-name-link:hover {
   color: var(--nerv-hover-color);
   text-shadow: 0 0 6px var(--nerv-hover-glow);
@@ -69,7 +68,6 @@ a:not([class]):hover,
 .connector-row,
 .news-item,
 .db-row,
-.theo-card,
 .api-card,
 .db-stat-card {
   transition:
@@ -82,7 +80,6 @@ a:not([class]):hover,
 .connector-row:hover,
 .news-item:hover,
 .db-row:hover,
-.theo-card:hover,
 .api-card:hover,
 .db-stat-card:hover {
   background: var(--nerv-hover-bg);
