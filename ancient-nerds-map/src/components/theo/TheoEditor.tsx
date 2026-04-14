@@ -7,6 +7,7 @@ import { useCallback, useMemo } from 'react'
 import { useEditor, EditorContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Link from '@tiptap/extension-link'
+import Image from '@tiptap/extension-image'
 
 // ---------------------------------------------------------------------------
 // Markdown -> HTML (simple regex, no library)
@@ -32,6 +33,9 @@ function markdownToHtml(md: string): string {
   html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>')
   html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>')
   html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>')
+
+  // Images ![alt](url)
+  html = html.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1" />')
 
   // Bold + italic combined
   html = html.replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>')
@@ -77,6 +81,10 @@ function markdownToHtml(md: string): string {
 
 function htmlToMarkdown(html: string): string {
   let md = html
+
+  // Images
+  md = md.replace(/<img[^>]*src="([^"]*)"[^>]*alt="([^"]*)"[^>]*\/?>/gi, '![$2]($1)\n\n')
+  md = md.replace(/<img[^>]*alt="([^"]*)"[^>]*src="([^"]*)"[^>]*\/?>/gi, '![$1]($2)\n\n')
 
   // Headings
   md = md.replace(/<h1[^>]*>([\s\S]*?)<\/h1>/gi, '# $1\n\n')
@@ -146,6 +154,10 @@ export default function TheoEditor({ content, onSave, onDiscard }: TheoEditorPro
       Link.configure({
         openOnClick: false,
         HTMLAttributes: { target: '_blank', rel: 'noopener noreferrer' },
+      }),
+      Image.configure({
+        inline: false,
+        HTMLAttributes: { loading: 'lazy' },
       }),
     ],
     content: initialHtml,

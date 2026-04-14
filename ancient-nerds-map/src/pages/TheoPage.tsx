@@ -1345,14 +1345,16 @@ export default function TheoPage() {
                 >
                   <div className="theo-card-top">
                     <TruncatedQuestion text={item.question} max={80} />
-                    <span className="theo-badge theo-badge-effort">{EFFORT_LABELS[item.effort] || item.effort} · {SPECIALIST_COUNTS[item.effort] || '?'} spec</span>
-                    {item.status === 'queued' && (
-                      <span className="theo-badge theo-badge-status theo-badge-queued">
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{flexShrink:0}}><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-                        {`#${activeItems.indexOf(item) + 1} Queued`}
-                      </span>
-                    )}
-                    <button className="theo-btn-cancel" onClick={(e) => { e.stopPropagation(); handleCancel(item.id) }}>Cancel</button>
+                    <div className="theo-card-badges">
+                      <span className="theo-badge theo-badge-effort theo-badge-stacked">{EFFORT_LABELS[item.effort] || item.effort} · {SPECIALIST_COUNTS[item.effort] || '?'} spec</span>
+                      {item.status === 'queued' && (
+                        <span className="theo-badge theo-badge-status theo-badge-queued theo-badge-stacked">
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{flexShrink:0}}><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                          {`#${activeItems.indexOf(item) + 1} Queued`}
+                        </span>
+                      )}
+                      <button className="theo-btn-cancel theo-badge-stacked" onClick={(e) => { e.stopPropagation(); handleCancel(item.id) }}>Cancel</button>
+                    </div>
                   </div>
                   {item.status === 'running' && (
                     <div className="theo-card-progress">

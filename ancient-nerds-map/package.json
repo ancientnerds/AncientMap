@@ -14,6 +14,7 @@
     "video:all": "npm run video:record && npm run video:encode"
   },
   "dependencies": {
+    "@tiptap/extension-image": "^3.22.3",
     "@tiptap/extension-link": "^3.22.2",
     "@tiptap/pm": "^3.22.2",
     "@tiptap/react": "^3.22.2",

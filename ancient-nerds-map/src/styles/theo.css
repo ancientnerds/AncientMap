@@ -926,7 +926,7 @@
 .theo-overlay {
   position: fixed;
   inset: 0;
-  z-index: 9000;
+  z-index: 10001;
   background: var(--surface-overlay);
   display: flex;
   align-items: center;
@@ -1391,9 +1391,26 @@
   border-color: #444;
 }
 
+/* — Stacked badges (scope + cancel aligned vertically, same width) — */
+.theo-card-badges {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.theo-badge-stacked {
+  width: 100%;
+  text-align: center;
+  justify-content: center;
+  box-sizing: border-box;
+}
+
 /* — Card Progress Bar — */
 .theo-card-progress {
   margin-top: 8px;
+}
+.theo-card-progress .nerv-lb-track {
+  height: 22px;
 }
 
 /* — NERV-style counters (LLM calls, sources) — */
@@ -2537,6 +2554,13 @@
 }
 .theo-editor-content .ProseMirror li {
   margin: 4px 0;
+}
+
+.theo-editor-content .ProseMirror img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 4px;
+  margin: 12px 0;
 }
 
 .theo-editor-footer {

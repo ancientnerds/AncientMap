@@ -345,7 +345,7 @@ export default function TheoReportOverlay({
         )}
 
         {/* Human Review & Approval */}
-        {!editing && isOwner && (
+        {isOwner && (
           <div className="theo-approval-section">
             {result.approved_by ? (
               <div className="theo-approval-done">
