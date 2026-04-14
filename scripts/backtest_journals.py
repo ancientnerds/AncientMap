@@ -58,23 +58,17 @@ from pipeline.lyra.article_generator import generate_weekly_article
 from pipeline.lyra.config import LyraSettings
 
 
-def discover_available_weeks(
-    session, *, min_scored: int = 8
-) -> list[tuple[datetime, datetime]]:
+def discover_available_weeks(session, *, min_scored: int = 8) -> list[tuple[datetime, datetime]]:
     """Find weeks with enough scored NewsItems for article generation."""
     rows = (
         session.query(
             func.date_trunc("week", NewsVideo.published_at).label("week"),
-            func.count(
-                func.nullif(NewsItem.significance, None)
-            ).label("scored"),
+            func.count(func.nullif(NewsItem.significance, None)).label("scored"),
         )
         .join(NewsVideo, NewsItem.video_id == NewsVideo.id)
         .filter(NewsItem.post_text.isnot(None))
         .group_by("week")
-        .having(
-            func.count(func.nullif(NewsItem.significance, None)) >= min_scored
-        )
+        .having(func.count(func.nullif(NewsItem.significance, None)) >= min_scored)
         .order_by(func.date_trunc("week", NewsVideo.published_at).desc())
         .all()
     )
@@ -107,14 +101,16 @@ def _load_article_items(session, week_start, week_end) -> list[dict]:
     )
     items = []
     for item, video, _ws in rows:
-        items.append({
-            "headline": item.headline,
-            "video_id": video.id,
-            "video_title": video.title,
-            "channel_name": "",  # not loaded here, but checklist only needs video_id
-            "timestamp_seconds": item.timestamp_seconds,
-            "facts": item.facts or [],
-        })
+        items.append(
+            {
+                "headline": item.headline,
+                "video_id": video.id,
+                "video_title": video.title,
+                "channel_name": "",  # not loaded here, but checklist only needs video_id
+                "timestamp_seconds": item.timestamp_seconds,
+                "facts": item.facts or [],
+            }
+        )
     return items
 
 
@@ -131,11 +127,13 @@ def _parse_sources_from_content(content: str) -> list[dict]:
 
     src_text = content[src_idx:]
     for m in re.finditer(r"^(\d+)\.\s+\[([^\]]*)\]\(([^)]*)\)", src_text, re.MULTILINE):
-        sources.append({
-            "citation": int(m.group(1)),
-            "label": m.group(2),
-            "url": m.group(3),
-        })
+        sources.append(
+            {
+                "citation": int(m.group(1)),
+                "label": m.group(2),
+                "url": m.group(3),
+            }
+        )
     return sources
 
 
@@ -166,12 +164,12 @@ def run_backtest_week(
             # Delete existing article
             with get_session() as session:
                 existing = (
-                    session.query(NewsArticle)
-                    .filter(NewsArticle.week_start == week_start)
-                    .first()
+                    session.query(NewsArticle).filter(NewsArticle.week_start == week_start).first()
                 )
                 if existing:
-                    logger.info("[%s] Deleting existing article: %s", week_label, existing.title[:50])
+                    logger.info(
+                        "[%s] Deleting existing article: %s", week_label, existing.title[:50]
+                    )
                     session.delete(existing)
 
             # Generate
@@ -185,9 +183,7 @@ def run_backtest_week(
         # Load the article
         with get_session() as session:
             article = (
-                session.query(NewsArticle)
-                .filter(NewsArticle.week_start == week_start)
-                .first()
+                session.query(NewsArticle).filter(NewsArticle.week_start == week_start).first()
             )
             if not article:
                 result["error"] = "No article found after generation"
@@ -237,7 +233,9 @@ def print_report(results: list[dict]) -> None:
     """Print a formatted table of backtest results."""
     print()
     print("=" * 100)
-    print(f"{'Week':<12} {'Score':>5} {'Checklist':<30} {'Sources':>10} {'YT':>4} {'Chars':>7} {'Time':>7} {'Error'}")
+    print(
+        f"{'Week':<12} {'Score':>5} {'Checklist':<30} {'Sources':>10} {'YT':>4} {'Chars':>7} {'Time':>7} {'Error'}"
+    )
     print("-" * 100)
 
     for r in results:
@@ -247,7 +245,7 @@ def print_report(results: list[dict]) -> None:
 
         print(
             f"{r['week']:<12} "
-            f"{r.get('assessment_score', '?'):>5} "
+            f"{str(r.get('assessment_score') or '?'):>5} "
             f"{cl_summary:<30} "
             f"{sc.get('total', 0):>10} "
             f"{sc.get('youtube', 0):>4} "
@@ -273,8 +271,12 @@ def main():
     group.add_argument("--week", help="Single week to test (YYYY-MM-DD)")
     group.add_argument("--weeks", help="Comma-separated weeks (YYYY-MM-DD,YYYY-MM-DD)")
     group.add_argument("--all", action="store_true", help="Test all available weeks")
-    parser.add_argument("--checklist-only", action="store_true", help="Only run checklist on existing articles")
-    parser.add_argument("--min-scored", type=int, default=8, help="Min scored items per week (default 8)")
+    parser.add_argument(
+        "--checklist-only", action="store_true", help="Only run checklist on existing articles"
+    )
+    parser.add_argument(
+        "--min-scored", type=int, default=8, help="Min scored items per week (default 8)"
+    )
     parser.add_argument("--limit", type=int, default=0, help="Max weeks to process (0=all)")
     args = parser.parse_args()
 
@@ -312,7 +314,9 @@ def main():
     for i, (ws, we) in enumerate(weeks, 1):
         logger.info(
             "=== Week %d/%d: %s ===",
-            i, len(weeks), ws.strftime("%Y-%m-%d"),
+            i,
+            len(weeks),
+            ws.strftime("%Y-%m-%d"),
         )
         r = run_backtest_week(ws, we, settings, checklist_only=args.checklist_only)
         results.append(r)

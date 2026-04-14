@@ -209,8 +209,15 @@ def _cluster_related_items(
     runner_indices: set[int] = set()
 
     for cluster in clusters:
-        # Validate indices
-        valid = [i for i in cluster if 0 <= i < len(items)]
+        # Validate indices (LLM may return strings instead of ints)
+        valid = []
+        for i in cluster:
+            try:
+                idx = int(i)
+            except (ValueError, TypeError):
+                continue
+            if 0 <= idx < len(items):
+                valid.append(idx)
         if len(valid) < 2:
             continue
 
