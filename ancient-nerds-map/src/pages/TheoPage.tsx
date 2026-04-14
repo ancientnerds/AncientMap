@@ -526,6 +526,15 @@ export default function TheoPage() {
         setToast({ msg: err.detail || 'Failed to submit', type: 'error' })
         return
       }
+      const result = await resp.json().catch(() => null)
+
+      // Immediately open the live overlay so user sees progress instantly
+      if (result?.id) {
+        setLiveOverlayId(result.id)
+        setLiveOverlayQuestion(question.trim())
+        setLiveOverlayStartedAt(new Date().toISOString())
+      }
+
       // Reset wizard
       setQuestion('')
       setWizardStep(1)
