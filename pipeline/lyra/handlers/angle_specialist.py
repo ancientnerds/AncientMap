@@ -19,8 +19,8 @@ from pipeline.lyra.research_events import (
 )
 from pipeline.lyra.research_state import ActiveSpecialist, ResearchAngle
 from pipeline.lyra.theo_specialists import (
-    SPECIALIST_POOL,
     _SPECIALIST_BY_ID,
+    SPECIALIST_POOL,
     build_specialist_prompt,
     select_specialists,
 )
@@ -396,7 +396,6 @@ class SpecialistHandler(BaseHandler):
         # but don't match any existing angle topic
         existing_topics_lower = {a.topic.lower() for a in self.state.angles}
         for finding in new_findings:
-            claim = finding.get("claim", "")
             # If a finding mentions a specific sub-topic not covered by any angle,
             # flag it. We rely on the claim text containing a nameable sub-topic.
             # This is a lightweight heuristic — the convergence checker handles

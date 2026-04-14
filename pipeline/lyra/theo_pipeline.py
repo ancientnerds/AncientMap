@@ -130,9 +130,9 @@ class PipelineContext:
 
     def log(self, stage: str, msg: str, level: str = "info", **data) -> None:
         """Append a structured debug entry."""
-        from datetime import datetime, timezone
+        from datetime import UTC, datetime
         self.debug_log.append({
-            "ts": datetime.now(timezone.utc).isoformat(),
+            "ts": datetime.now(UTC).isoformat(),
             "stage": stage,
             "level": level,
             "msg": msg,

@@ -4,7 +4,7 @@ import asyncio
 import logging
 
 from pipeline.lyra.handlers import BaseHandler
-from pipeline.lyra.research_events import DeadlineApproaching, AllAnglesSaturated
+from pipeline.lyra.research_events import AllAnglesSaturated, DeadlineApproaching
 from pipeline.lyra.research_state import ResearchPhase
 
 logger = logging.getLogger(__name__)

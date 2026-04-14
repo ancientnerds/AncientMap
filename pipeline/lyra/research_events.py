@@ -7,8 +7,8 @@ events to all registered handlers, keeping a full history for debugging.
 from __future__ import annotations
 
 import logging
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from typing import Awaitable, Callable
 
 logger = logging.getLogger(__name__)
 

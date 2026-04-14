@@ -15,8 +15,8 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
+from collections.abc import Callable
 from datetime import datetime, timedelta
-from typing import Callable
 
 from pipeline.lyra.config import _get_settings
 from pipeline.lyra.research_events import EventBus, QualityFailed, QualityPassed
@@ -82,12 +82,12 @@ class ConvergenceOrchestrator:
         from pipeline.lyra.handlers.angle_search import SearchHandler
         from pipeline.lyra.handlers.angle_specialist import SpecialistHandler
         from pipeline.lyra.handlers.convergence_checker import ConvergenceChecker
+        from pipeline.lyra.handlers.deadline import DeadlineHandler
         from pipeline.lyra.handlers.debate import DebateHandler
         from pipeline.lyra.handlers.decomposition import DecompositionHandler
         from pipeline.lyra.handlers.judge import JudgeHandler
         from pipeline.lyra.handlers.paper import PaperHandler
         from pipeline.lyra.handlers.synthesis import SynthesisHandler
-        from pipeline.lyra.handlers.deadline import DeadlineHandler
 
         # Instantiate handlers
         decomposition = DecompositionHandler(state, bus, semaphore)
@@ -193,7 +193,7 @@ class ConvergenceOrchestrator:
                 # Wait a bit for events to process
                 try:
                     await asyncio.wait_for(done_event.wait(), timeout=30)
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     # Check if we're stuck
                     if state.error:
                         break

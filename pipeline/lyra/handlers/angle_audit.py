@@ -5,10 +5,10 @@ import json
 import logging
 from pathlib import Path
 
+from pipeline.lyra.config import _get_settings
 from pipeline.lyra.handlers import BaseHandler
 from pipeline.lyra.minimax_shared import minimax_chat_anthropic
-from pipeline.lyra.research_events import SourcesFound, SourcesAudited
-from pipeline.lyra.config import _get_settings
+from pipeline.lyra.research_events import SourcesAudited, SourcesFound
 
 logger = logging.getLogger(__name__)
 PROMPTS_DIR = Path(__file__).resolve().parent.parent / "prompts"

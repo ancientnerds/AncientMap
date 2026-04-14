@@ -11,9 +11,9 @@ from __future__ import annotations
 
 import enum
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Callable
 
 from pipeline.lyra.theo_citations import CitationRegistry
 

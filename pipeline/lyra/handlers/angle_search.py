@@ -1,14 +1,14 @@
 """Per-angle search — iterative query execution with source registration."""
 
 import asyncio
+import json
 import logging
 from pathlib import Path
-import json
 
+from pipeline.lyra.config import _get_settings
 from pipeline.lyra.handlers import BaseHandler
 from pipeline.lyra.minimax_shared import minimax_chat_anthropic
 from pipeline.lyra.research_events import AngleCreated, SourcesFound
-from pipeline.lyra.config import _get_settings
 
 logger = logging.getLogger(__name__)
 PROMPTS_DIR = Path(__file__).resolve().parent.parent / "prompts"
