@@ -32,7 +32,7 @@ class ResearchPhase(enum.Enum):
 class ResearchConfig:
     """Global config for the convergence pipeline (replaces per-tier TierConfig)."""
 
-    max_concurrent_llm_calls: int = 12
+    max_concurrent_llm_calls: int = 100
     deadline_hours: int = 24
     # Convergence
     saturation_threshold: int = 2  # consecutive zero-claim rounds to saturate an angle

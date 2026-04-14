@@ -61,7 +61,7 @@ class AuditHandler(BaseHandler):
         system = (PROMPTS_DIR / "theo_source_audit.txt").read_text(encoding="utf-8")
         rejected_ids: set[str] = set()
         total_scored = 0
-        max_parallel = 10
+        max_parallel = self.state.config.max_concurrent_llm_calls
 
         async def _audit_one(sid: str, source) -> dict:
             tier_str = ""
