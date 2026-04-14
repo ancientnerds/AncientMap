@@ -31,7 +31,6 @@ export function NervLoadingBar({ label = 'LOADING', sublabel, progress, counter,
         <div className="nerv-lb-header">
           <span className="nerv-lb-stamp">{label}</span>
           {counter && <span className="nerv-lb-counter">{counter}</span>}
-          {det && <span className="nerv-lb-pct">{Math.round(progress!)}%</span>}
         </div>
       )}
       <div className={`nerv-lb-track${det ? '' : ' nerv-lb-track--indet'}`}>
