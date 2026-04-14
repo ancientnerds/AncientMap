@@ -5,10 +5,13 @@ Polls the research_requests table for queued requests (FIFO),
 runs the agent pipeline, and saves structured reports to the DB.
 """
 
+from __future__ import annotations
+
 import asyncio
 import json
 import logging
 import time
+from typing import Any
 
 from sqlalchemy import text
 
@@ -129,12 +132,13 @@ async def _process_request(
         web_urls = (specialist_options or {}).get("web_urls", [])
         disabled_adapters = (specialist_options or {}).get("disabled_adapters", [])
 
+        ctx: Any  # PipelineContext (v1) or ResearchState (v2) — duck-type compatible
         if effort == "research":
             # V2 convergence pipeline — event-driven, no fixed tiers
             from pipeline.lyra.convergence_orchestrator import ConvergenceOrchestrator
 
             orchestrator = ConvergenceOrchestrator()
-            ctx = await orchestrator.run(  # type: ignore[assignment]
+            ctx = await orchestrator.run(
                 question,
                 emit,
                 request_id=request_id,
