@@ -228,14 +228,38 @@ export default function TheoResearchLive({ requestId, question, startedAt, onClo
           setSubtaskProgress(prev => ({ ...prev, done: prev.total }))
         }
 
-        // V2 angle tracking — extract from stage names like search_XXXX, audit_XXXX, specialist_XXXX
+        // V2 angle tracking
         const stage = data.stage as string
+
+        // Initialize ALL angles from decomposition done event
+        if (stage === 'decomposition' && data.status === 'done' && meta?.angle_topics) {
+          const topics = meta.angle_topics as string[]
+          setAngles(() => {
+            const init: Record<string, { topic: string; status: string; claims: number; sources: number; round: number; saturated: boolean }> = {}
+            topics.forEach((topic, i) => {
+              init[`pending_${i}`] = { topic, status: 'queued', claims: 0, sources: 0, round: 0, saturated: false }
+            })
+            return init
+          })
+        }
+
+        // Update angle status from search/audit/specialist events
         if (meta?.angle && typeof meta.angle === 'string') {
           const angleId = stage.includes('_') ? stage.split('_').slice(1).join('_') : ''
           if (angleId) {
             setAngles(prev => {
-              const existing = prev[angleId] || { topic: meta.angle as string, status: 'queued', claims: 0, sources: 0, round: 0, saturated: false }
-              const updated = { ...existing, topic: meta.angle as string }
+              // Find existing by ID, or match a pending entry by topic name
+              let existing = prev[angleId]
+              const next = { ...prev }
+              if (!existing) {
+                const pendingKey = Object.keys(prev).find(k => k.startsWith('pending_') && prev[k].topic === (meta.angle as string))
+                if (pendingKey) {
+                  existing = prev[pendingKey]
+                  delete next[pendingKey]  // remove pending, will be re-added with real ID
+                }
+              }
+              const base = existing || { topic: meta.angle as string, status: 'queued', claims: 0, sources: 0, round: 0, saturated: false }
+              const updated = { ...base, topic: meta.angle as string }
 
               if (stage.startsWith('search_') && data.status === 'done') {
                 updated.status = 'searched'
@@ -252,7 +276,7 @@ export default function TheoResearchLive({ requestId, question, startedAt, onClo
                 updated.claims = (meta.total_claims as number) || existing.claims
               }
 
-              return { ...prev, [angleId]: updated }
+              return { ...next, [angleId]: updated }
             })
           }
         }
@@ -414,9 +438,13 @@ export default function TheoResearchLive({ requestId, question, startedAt, onClo
             const angleList = Object.values(angles)
             const saturatedCount = angleList.filter(a => a.saturated).length
             const angleTotal = angleList.length
-            const angleProgress = Math.round((saturatedCount / Math.max(angleTotal, 1)) * 100)
-            const currentAngle = angleList.find(a => a.status === 'analyzing' || a.status === 'auditing')
+            const currentAngle = angleList.find(a => a.status === 'analyzing' || a.status === 'auditing' || a.status === 'searched' || a.status === 'audited')
             const sublabel = currentAngle ? currentAngle.topic.toUpperCase() : statusMsg.toUpperCase() || 'RESEARCHING'
+            // Use indeterminate (no progress prop) until first angle saturates, then show percentage
+            if (saturatedCount === 0) {
+              return <NervLoadingBar label="RESEARCH" sublabel={sublabel} counter={`0 / ${angleTotal} angles`} ledsDone={0} ledsTotal={angleTotal} />
+            }
+            const angleProgress = Math.round((saturatedCount / Math.max(angleTotal, 1)) * 100)
             return <NervLoadingBar label="RESEARCH" sublabel={sublabel} progress={angleProgress} counter={`${saturatedCount} / ${angleTotal} angles`} ledsDone={saturatedCount} ledsTotal={angleTotal} />
           })() : nodes.length > 0 ? (
             <NervLoadingBar label="RESEARCH" sublabel={specialistInfo.toUpperCase() || debateRound || activeLabel || 'PROCESSING'} progress={progress} counter={`${doneCount} / ${totalCount}`} ledsDone={subtaskProgress.done} ledsTotal={subtaskProgress.total} />

@@ -61,7 +61,6 @@ class AuditHandler(BaseHandler):
         system = (PROMPTS_DIR / "theo_source_audit.txt").read_text(encoding="utf-8")
         rejected_ids: set[str] = set()
         total_scored = 0
-        max_parallel = self.state.config.max_concurrent_llm_calls
 
         async def _audit_one(sid: str, source) -> dict:
             tier_str = ""
@@ -90,41 +89,37 @@ class AuditHandler(BaseHandler):
             parsed["_sid"] = sid
             return parsed
 
-        # Run in parallel batches
-        for group_start in range(0, len(source_items), max_parallel):
-            group = source_items[group_start : group_start + max_parallel]
-            done_count = group_start + len(group)
+        # Run ALL audits at once — the global MiniMax limiter handles concurrency
+        self.emit_sse(
+            {
+                "type": "status",
+                "content": f"Auditing {len(source_items)} sources for '{angle.topic}'...",
+                "subtask_done": 0,
+                "subtask_total": len(source_items),
+            }
+        )
 
-            self.emit_sse(
-                {
-                    "type": "status",
-                    "content": f"Auditing sources {group_start + 1}-{done_count} of {len(source_items)} for '{angle.topic}'...",
-                    "subtask_done": done_count,
-                    "subtask_total": len(source_items),
-                }
-            )
+        results = await asyncio.gather(
+            *[_audit_one(sid, source) for sid, source in source_items],
+            return_exceptions=True,
+        )
 
-            results = await asyncio.gather(
-                *[_audit_one(sid, source) for sid, source in group],
-                return_exceptions=True,
-            )
-
-            for result in results:
-                if isinstance(result, Exception):
-                    logger.warning("Audit failed: %s", result)
-                    continue
-                original_sid = result.get("_sid", "")
-                for entry in result.get("scored_sources", []):
-                    sid = entry.get("id", "") or original_sid
-                    tier_val = entry.get("reliability_tier", 0)
-                    source = self.state.registry.sources.get(sid)
-                    if source:
-                        source.reliability_tier = tier_val
-                        total_scored += 1
-                for entry in result.get("rejected_sources", []):
-                    rid = entry.get("id", "") or original_sid
-                    if rid:
-                        rejected_ids.add(rid)
+        for result in results:
+            if isinstance(result, Exception):
+                logger.warning("Audit failed: %s", result)
+                continue
+            original_sid = result.get("_sid", "")
+            for entry in result.get("scored_sources", []):
+                sid = entry.get("id", "") or original_sid
+                tier_val = entry.get("reliability_tier", 0)
+                source = self.state.registry.sources.get(sid)
+                if source:
+                    source.reliability_tier = tier_val
+                    total_scored += 1
+            for entry in result.get("rejected_sources", []):
+                rid = entry.get("id", "") or original_sid
+                if rid:
+                    rejected_ids.add(rid)
 
         # Remove rejected sources from angle
         for rid in rejected_ids:
