@@ -36,7 +36,7 @@ class ResearchConfig:
     deadline_hours: int = 24
     # Convergence
     saturation_threshold: int = 2  # consecutive zero-claim rounds to saturate an angle
-    max_search_rounds_per_angle: int = 8  # hard cap per angle
+    max_search_rounds_per_angle: int = 4  # round 1 + cross-pollinated round 2 + 2 verification
     max_angles: int = 12  # cap on total angles (including spawned)
     # Specialists
     initial_specialist_count: int = 6

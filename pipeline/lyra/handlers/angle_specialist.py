@@ -173,6 +173,7 @@ class SpecialistHandler(BaseHandler):
                 "stage": f"specialist_{angle.id}",
                 "status": "done",
                 "meta": {
+                    "angle": angle.topic,
                     "new_claims": new_claims_total,
                     "total_claims": len(angle.findings),
                     "round": angle.search_rounds,
