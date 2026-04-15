@@ -94,3 +94,14 @@ def search_library(
     ]
 
     return LibrarySearchResponse(items=items, total=total, page=page, page_size=page_size)
+
+
+@router.post("/refresh")
+def refresh_library():
+    """Re-run the library aggregator and static export."""
+    from pipeline.library_aggregator import aggregate_library
+    from pipeline.static_exporter import StaticExporter
+
+    count = aggregate_library()
+    StaticExporter()._export_library()
+    return {"status": "ok", "sources": count}
