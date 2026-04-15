@@ -11,6 +11,7 @@ from pydantic import BaseModel
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from api.cache import cache_delete_pattern
 from api.services.jwt_auth import require_founder
 from pipeline.database import DiscordUser, get_db
 
@@ -162,6 +163,8 @@ async def set_hero(
         )
 
         db.commit()
+        # Invalidate /sites/all cache so the new hero shows immediately
+        cache_delete_pattern("sites:all:*")
         print(f"[set-hero] Success! thumbnail_url={thumb_path}", flush=True)
         return {"success": True, "path": thumb_path}
 
