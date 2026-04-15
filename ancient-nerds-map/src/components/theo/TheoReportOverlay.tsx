@@ -144,6 +144,20 @@ export default function TheoReportOverlay({
     if (atBottom) setScrolledToBottom(true)
   }, [scrolledToBottom])
 
+  // If content fits without scrolling, approve immediately
+  useEffect(() => {
+    if (scrolledToBottom || editing) return
+    const el = bodyRef.current
+    if (!el) return
+    // Check after render — content may need a frame to lay out
+    const timer = setTimeout(() => {
+      if (el.scrollHeight - el.clientHeight < 80) {
+        setScrolledToBottom(true)
+      }
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [scrolledToBottom, editing, result.report])
+
   // Tutorial: show expanded guidance if user hasn't published any paper yet
   const hasPublishedBefore = localStorage.getItem('theo_has_published') === 'true'
 
