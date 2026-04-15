@@ -1,9 +1,12 @@
-"""Cross-pollination — share findings across angles between round 1 and round 2.
+"""Cross-pollination --- share findings across angles between round 1 and round 2.
 
 After all angles complete their first specialist round, this handler examines
 all findings together and enriches each angle with insights from other angles.
 This enables round 2 to search for interdisciplinary connections that isolated
 research would miss.
+
+Also runs a second cross-pollination after round 2 completes, enriching angles
+with deeper connections discovered during the verification phase.
 """
 
 from __future__ import annotations
@@ -16,7 +19,11 @@ from pathlib import Path
 from pipeline.lyra.config import _get_settings
 from pipeline.lyra.handlers import BaseHandler
 from pipeline.lyra.minimax_shared import minimax_chat_anthropic
-from pipeline.lyra.research_events import AllAnglesRound1Complete, CrossPollinationComplete
+from pipeline.lyra.research_events import (
+    AllAnglesRound1Complete,
+    AllAnglesRound2Complete,
+    CrossPollinationComplete,
+)
 
 logger = logging.getLogger(__name__)
 PROMPTS_DIR = Path(__file__).resolve().parent.parent / "prompts"
@@ -25,19 +32,29 @@ PROMPTS_DIR = Path(__file__).resolve().parent.parent / "prompts"
 class CrossPollinationHandler(BaseHandler):
     def register(self):
         self.bus.on(AllAnglesRound1Complete, self._on_round1_complete)
+        self.bus.on(AllAnglesRound2Complete, self._on_round1_complete)
 
-    async def _on_round1_complete(self, event: AllAnglesRound1Complete):
+    async def _on_round1_complete(self, event: AllAnglesRound1Complete | AllAnglesRound2Complete):
         """Cross-pollinate findings across all angles."""
+        round_label = "round 2" if isinstance(event, AllAnglesRound2Complete) else "round 1"
+
         self.emit_sse(
             {
                 "type": "pipeline",
                 "stage": "cross_pollination",
                 "status": "start",
-                "meta": {"subtask_total": 1, "angles": len(self.state.angles)},
+                "meta": {
+                    "subtask_total": 1,
+                    "angles": len(self.state.angles),
+                    "after_round": round_label,
+                },
             }
         )
         self.emit_sse(
-            {"type": "status", "content": "Cross-pollinating findings across research angles..."}
+            {
+                "type": "status",
+                "content": f"Cross-pollinating findings across research angles (after {round_label})...",
+            }
         )
 
         # Build input: all angle summaries
@@ -62,7 +79,7 @@ class CrossPollinationHandler(BaseHandler):
         prompt = (PROMPTS_DIR / "v2_cross_pollination.txt").read_text(encoding="utf-8")
         user_msg = (
             f"## Research question\n\n{self.state.question}\n\n"
-            f"## Angle findings from round 1\n\n{all_summaries}"
+            f"## Angle findings from {round_label}\n\n{all_summaries}"
         )
 
         async with self.semaphore:
@@ -88,7 +105,7 @@ class CrossPollinationHandler(BaseHandler):
             if not angle:
                 continue
 
-            # Add enriched queries for round 2
+            # Add enriched queries for the next round
             if enriched_queries:
                 angle.search_queries = enriched_queries[: self.state.config.queries_per_angle]
                 enriched_count += 1
@@ -117,15 +134,17 @@ class CrossPollinationHandler(BaseHandler):
                 "meta": {
                     "enriched_angles": enriched_count,
                     "convergent_patterns": len(result.get("convergent_patterns", [])),
+                    "after_round": round_label,
                 },
             }
         )
         self.state.log(
             "cross_pollination",
-            f"Enriched {enriched_count}/{len(self.state.angles)} angles with cross-angle queries",
+            f"Enriched {enriched_count}/{len(self.state.angles)} angles "
+            f"with cross-angle queries (after {round_label})",
         )
 
-        # Now trigger round 2 search for all angles
+        # Now trigger next round search for all angles
         await self.bus.emit(CrossPollinationComplete())
 
     @staticmethod

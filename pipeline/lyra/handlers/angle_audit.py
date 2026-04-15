@@ -31,12 +31,13 @@ class AuditHandler(BaseHandler):
         if not angle:
             return
 
-        # Find sources that haven't been scored yet (tier == 0 from search default)
-        # Actually, re-audit all angle sources each round for relevance to THIS angle
+        # Only audit unscored sources (reliability_tier == 0).
+        # Sources already scored by this or any other angle are skipped,
+        # which also handles cross-angle dedup automatically.
         source_items = []
         for sid in angle.source_ids:
             source = self.state.registry.get_reference(sid)
-            if source:
+            if source and source.reliability_tier == 0:
                 source_items.append((sid, source))
 
         if not source_items:
@@ -107,7 +108,7 @@ class AuditHandler(BaseHandler):
                 ),
                 timeout=300,  # 5 min max for all audits
             )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.warning("Audit timed out for angle '%s' after 300s", angle.topic)
             self.state.log(
                 "audit",

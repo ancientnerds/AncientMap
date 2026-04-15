@@ -53,13 +53,45 @@ class SpecialistHandler(BaseHandler):
         if expected_rounds > 0 and expected_rounds >= angle.search_rounds:
             return  # already processed this round
 
-        # Ensure we have a specialist panel
-        if not self.state.panel:
-            self._init_panel()
+        # Select specialists for this angle based on its domains
+        if not angle.assigned_specialists:
+            count = max(3, min(6, len(angle.specialist_domains) + 2))
+            specs = select_specialists(
+                domain_tags=angle.specialist_domains,
+                question=self.state.question,
+                count=count,
+                force_include=self.state.force_include or None,
+                force_exclude=self.state.force_exclude or None,
+            )
+            angle.assigned_specialists = [s.id for s in specs]
 
-        active = self.state.active_specialists
-        if not active:
-            self.state.log("specialist", "No active specialists in panel")
+        # Use this angle's specialists instead of the global panel
+        active_spec_ids = angle.assigned_specialists
+
+        if not active_spec_ids:
+            self.state.log("specialist", "No specialists assigned to angle")
+            return
+
+        # Build ActiveSpecialist wrappers for tracking (reuse from panel if exists)
+        panel_lookup = {s.specialist_id: s for s in self.state.panel}
+        active_panel: list[ActiveSpecialist] = []
+        for spec_id in active_spec_ids:
+            if spec_id in panel_lookup:
+                active_panel.append(panel_lookup[spec_id])
+            else:
+                # Create a new panel entry for this specialist
+                spec = _SPECIALIST_BY_ID.get(spec_id)
+                if spec:
+                    new_panel_spec = ActiveSpecialist(
+                        specialist_id=spec.id,
+                        name=spec.name,
+                        domain=spec.domain,
+                    )
+                    self.state.panel.append(new_panel_spec)
+                    active_panel.append(new_panel_spec)
+
+        if not active_panel:
+            self.state.log("specialist", "No valid specialists found for angle")
             return
 
         self.emit_sse(
@@ -68,9 +100,9 @@ class SpecialistHandler(BaseHandler):
                 "stage": f"specialist_{angle.id}",
                 "status": "start",
                 "meta": {
-                    "subtask_total": len(active),
+                    "subtask_total": len(active_panel),
                     "angle": angle.topic,
-                    "specialists": [s.name for s in active],
+                    "specialists": [s.name for s in active_panel],
                 },
             }
         )
@@ -78,7 +110,7 @@ class SpecialistHandler(BaseHandler):
             {
                 "type": "status",
                 "content": (
-                    f"Running {len(active)} specialists on '{angle.topic}' "
+                    f"Running {len(active_panel)} specialists on '{angle.topic}' "
                     f"({len(angle.source_ids)} sources)..."
                 ),
             }
@@ -117,14 +149,14 @@ class SpecialistHandler(BaseHandler):
             return
 
         # Run all active specialists in parallel
-        analyses = await self._run_specialists_parallel(active, angle, sources_context)
+        analyses = await self._run_specialists_parallel(active_panel, angle, sources_context)
 
         # Process results: count new claims, update scores, register claims
         new_claims_total = 0
         specialist_gaps: list[str] = []
         cross_angle_topics: list[tuple[str, str]] = []  # (topic, source_angle_id)
 
-        for panel_spec in active:
+        for panel_spec in active_panel:
             analysis = analyses.get(panel_spec.specialist_id)
             panel_spec.rounds_participated += 1
 
@@ -288,39 +320,6 @@ class SpecialistHandler(BaseHandler):
                 else:
                     await search_handler.search_angle(angle.id)
         # Round 1 done but not yet cross-pollinated --- convergence checker will handle it
-
-    # ------------------------------------------------------------------
-    # Panel initialization
-    # ------------------------------------------------------------------
-
-    def _init_panel(self):
-        """Initialize the specialist panel from the research question."""
-        all_domains = []
-        for angle in self.state.angles:
-            all_domains.extend(angle.specialist_domains)
-
-        specialists = select_specialists(
-            domain_tags=all_domains,
-            question=self.state.question,
-            count=self.state.config.initial_specialist_count,
-            force_include=self.state.force_include,
-            force_exclude=self.state.force_exclude,
-        )
-
-        for spec in specialists:
-            self.state.panel.append(
-                ActiveSpecialist(
-                    specialist_id=spec.id,
-                    name=spec.name,
-                    domain=spec.domain,
-                )
-            )
-
-        self.state.log(
-            "specialist",
-            f"Panel initialized with {len(self.state.panel)} specialists",
-            ids=[s.specialist_id for s in self.state.panel],
-        )
 
     # ------------------------------------------------------------------
     # Sources context (per-angle, not full registry)

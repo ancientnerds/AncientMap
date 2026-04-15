@@ -65,6 +65,7 @@ class ResearchAngle:
     description: str  # fuller description
     search_queries: list[str] = field(default_factory=list)
     specialist_domains: list[str] = field(default_factory=list)  # suggested domains
+    assigned_specialists: list[str] = field(default_factory=list)  # specialist IDs for this angle
     source_ids: list[str] = field(default_factory=list)  # registry source IDs
     findings: list[dict] = field(default_factory=list)  # accumulated claims
     search_rounds: int = 0

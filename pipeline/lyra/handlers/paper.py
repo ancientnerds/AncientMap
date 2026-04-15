@@ -117,7 +117,7 @@ class PaperHandler(BaseHandler):
                     "id": 1,
                     "type": "investigation",
                     "title": "Findings",
-                    "assigned_claims": [c["claim"] for c in all_claims[:20]],
+                    "angle_ids": [a.id for a in self.state.angles],
                     "narrative_goal": "Present the evidence",
                 },
                 {
@@ -539,7 +539,7 @@ class PaperHandler(BaseHandler):
         """Generate the paper outline from synthesis, debate, and angle data."""
         outline_prompt = (PROMPTS_DIR / "v2_paper_outline.txt").read_text(encoding="utf-8")
 
-        # Build angle summaries
+        # Build angle summaries with IDs for angle-based routing
         angle_summaries = []
         for angle in self.state.angles:
             findings_text = (
@@ -552,6 +552,12 @@ class PaperHandler(BaseHandler):
                 f"{angle.description}\n"
                 f"Findings ({len(angle.findings)}):\n{findings_text}"
             )
+
+        # Build angle ID reference list for the LLM
+        angle_id_ref = "\n".join(
+            f"- {angle.id}: {angle.topic} ({len(angle.findings)} findings)"
+            for angle in self.state.angles
+        )
 
         # Cross-angle connections
         connections_text = ""
@@ -594,6 +600,7 @@ class PaperHandler(BaseHandler):
 
         user_msg = (
             f"## Research question\n\n{self.state.question}\n\n"
+            f"## Available angle IDs\n\n{angle_id_ref}\n\n"
             f"## Angle summaries\n\n{'---'.join(angle_summaries)}\n\n"
             f"## Cross-angle connections\n\n{connections_text or 'None detected'}\n\n"
             f"## Synthesis\n\n{synthesis_text}\n\n"
@@ -641,22 +648,20 @@ class PaperHandler(BaseHandler):
         """Write a single investigation section. Returns (title, prose)."""
         section_prompt = (PROMPTS_DIR / "v2_paper_section.txt").read_text(encoding="utf-8")
         sec_title = section.get("title", "Untitled")
-        assigned_claims = section.get("assigned_claims", [])
         narrative_goal = section.get("narrative_goal", "")
 
-        # Match assigned claim strings to actual claims with source info
-        matched_claims = self._match_assigned_claims(assigned_claims, all_claims)
+        # Collect claims from the assigned angles
+        angle_ids = section.get("angle_ids", [])
+        matched_claims = self._collect_claims_for_angles(angle_ids, all_claims)
 
-        if not matched_claims and not assigned_claims:
-            logger.warning("[paper] Section '%s' has no assigned claims", sec_title)
+        if not matched_claims:
+            logger.warning(
+                "[paper] Section '%s' has no claims from angles %s", sec_title, angle_ids
+            )
             return sec_title, ""
 
         # Format claims for the prompt
-        claims_text = self._format_claims_for_prompt(
-            matched_claims
-            if matched_claims
-            else [{"claim": c, "citations": "", "confidence": "medium"} for c in assigned_claims]
-        )
+        claims_text = self._format_claims_for_prompt(matched_claims)
 
         user_msg = (
             f"## Section: {sec_title}\n"
@@ -911,48 +916,52 @@ class PaperHandler(BaseHandler):
     # Helpers
     # ===================================================================
 
-    def _match_assigned_claims(
+    def _collect_claims_for_angles(
         self,
-        assigned: list[str],
+        angle_ids: list[str],
         all_claims: list[dict],
     ) -> list[dict]:
-        """Match outline-assigned claim strings to full claim objects.
+        """Collect claims from the specified angles' findings.
 
-        Uses keyword overlap to find the best matching claim from all_claims
-        for each assigned claim string from the outline.
+        Looks up angle findings directly from state, then enriches with
+        citation info from all_claims where possible.
         """
+        # Normalize angle_ids to strings (LLM may return ints)
+        str_ids = {str(aid) for aid in angle_ids}
+
+        # Collect findings from matching angles
+        angle_findings: list[dict] = []
+        for angle in self.state.angles:
+            if angle.id in str_ids:
+                angle_findings.extend(angle.findings)
+
+        if not angle_findings:
+            return []
+
+        # Build lookup from all_claims for citation enrichment
+        claim_lookup: dict[str, dict] = {}
+        for c in all_claims:
+            key = c.get("claim", "").lower().strip()
+            if key:
+                claim_lookup[key] = c
+
+        # Match angle findings to enriched claims
         matched: list[dict] = []
-        used_indices: set[int] = set()
-
-        for assigned_text in assigned:
-            assigned_words = set(assigned_text.lower().split()) - _STOP_WORDS
-            if not assigned_words:
+        for finding in angle_findings:
+            claim_text = finding.get("claim", "").strip()
+            if not claim_text:
                 continue
-
-            best_idx = -1
-            best_overlap = 0.0
-
-            for i, c in enumerate(all_claims):
-                if i in used_indices:
-                    continue
-                claim_words = set(c["claim"].lower().split()) - _STOP_WORDS
-                if not claim_words:
-                    continue
-                overlap = len(assigned_words & claim_words) / max(len(assigned_words), 1)
-                if overlap > best_overlap and overlap >= 0.25:
-                    best_overlap = overlap
-                    best_idx = i
-
-            if best_idx >= 0:
-                matched.append(all_claims[best_idx])
-                used_indices.add(best_idx)
+            key = claim_text.lower().strip()
+            if key in claim_lookup:
+                matched.append(claim_lookup[key])
             else:
-                # No match found -- include as bare claim
+                # Use the finding directly as a bare claim
                 matched.append(
                     {
-                        "claim": assigned_text,
+                        "claim": claim_text,
                         "citations": "",
-                        "confidence": "medium",
+                        "confidence": finding.get("confidence", "medium"),
+                        "source_ids": finding.get("source_ids", []),
                     }
                 )
 

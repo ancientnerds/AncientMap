@@ -90,8 +90,22 @@ class PaperReady(ResearchEvent):
 
 
 @dataclass
+class FactCheckComplete(ResearchEvent):
+    """Fact-checking stage has verified citations in the paper."""
+
+    pass
+
+
+@dataclass
 class PresentationChecked(ResearchEvent):
     """Presentation assessor has reviewed and corrected the paper."""
+
+    pass
+
+
+@dataclass
+class ImageGenComplete(ResearchEvent):
+    """Cover image generation is complete (or skipped)."""
 
     pass
 
@@ -117,6 +131,13 @@ class NewAngleDiscovered(ResearchEvent):
 @dataclass
 class AllAnglesRound1Complete(ResearchEvent):
     """All angles have completed at least one specialist round."""
+
+    pass
+
+
+@dataclass
+class AllAnglesRound2Complete(ResearchEvent):
+    """All original angles have completed round 2+ (post cross-pollination)."""
 
     pass
 

@@ -6,6 +6,7 @@ import uuid
 from pipeline.lyra.handlers import BaseHandler
 from pipeline.lyra.research_events import (
     AllAnglesRound1Complete,
+    AllAnglesRound2Complete,
     AllAnglesSaturated,
     AngleCreated,
     AngleSaturated,
@@ -21,6 +22,7 @@ class ConvergenceChecker(BaseHandler):
     def __init__(self, state, bus, semaphore):
         super().__init__(state, bus, semaphore)
         self._round1_triggered = False
+        self._round2_triggered = False
 
     def register(self):
         self.bus.on(AngleSaturated, self._on_angle_saturated)
@@ -54,7 +56,7 @@ class ConvergenceChecker(BaseHandler):
             await self.bus.emit(AllAnglesSaturated())
 
     async def _on_findings_produced(self, event: FindingsProduced):
-        """After findings, report progress and detect round 1 completion."""
+        """After findings, report progress and detect round 1/2 completion."""
         angle = next((a for a in self.state.angles if a.id == event.angle_id), None)
         if not angle or angle.saturated:
             return
@@ -85,6 +87,25 @@ class ConvergenceChecker(BaseHandler):
                     "convergence", "All angles completed round 1, triggering cross-pollination"
                 )
                 await self.bus.emit(AllAnglesRound1Complete())
+
+        # Detect when ALL original angles have completed round 2+
+        # (post cross-pollination), trigger second cross-pollination
+        if self.state.cross_pollinated and not self._round2_triggered:
+            original = [a for a in self.state.angles if a.spawned_from is None]
+            all_have_r2 = all(len(a.recent_claim_counts) >= 2 for a in original)
+            if all_have_r2:
+                self._round2_triggered = True
+                self.state.log(
+                    "convergence",
+                    "All original angles completed round 2, triggering second cross-pollination",
+                )
+                self.emit_sse(
+                    {
+                        "type": "status",
+                        "content": "All angles completed round 2 -- second cross-pollination...",
+                    }
+                )
+                await self.bus.emit(AllAnglesRound2Complete())
 
     async def _on_new_angle(self, event: NewAngleDiscovered):
         """Handle dynamically spawned rabbit-hole angles."""

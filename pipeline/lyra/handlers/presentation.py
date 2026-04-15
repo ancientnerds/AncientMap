@@ -7,7 +7,7 @@ import logging
 from pipeline.lyra.config import _get_settings
 from pipeline.lyra.handlers import BaseHandler
 from pipeline.lyra.minimax_shared import minimax_chat_anthropic
-from pipeline.lyra.research_events import PaperReady, PresentationChecked
+from pipeline.lyra.research_events import FactCheckComplete, PresentationChecked
 
 logger = logging.getLogger(__name__)
 
@@ -46,9 +46,9 @@ class PresentationHandler(BaseHandler):
     """Checks paper presentation quality before the judge evaluates it."""
 
     def register(self):
-        self.bus.on(PaperReady, self._on_paper_ready)
+        self.bus.on(FactCheckComplete, self._on_fact_check_complete)
 
-    async def _on_paper_ready(self, event: PaperReady):
+    async def _on_fact_check_complete(self, event: FactCheckComplete):
         self.emit_sse(
             {
                 "type": "pipeline",

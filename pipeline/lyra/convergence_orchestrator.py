@@ -27,12 +27,10 @@ from pipeline.lyra.research_events import (
     QualityPassed,
 )
 from pipeline.lyra.research_state import (
-    ActiveSpecialist,
     ResearchConfig,
     ResearchPhase,
     ResearchState,
 )
-from pipeline.lyra.theo_specialists import select_specialists
 
 logger = logging.getLogger(__name__)
 
@@ -98,6 +96,8 @@ class ConvergenceOrchestrator:
         from pipeline.lyra.handlers.deadline import DeadlineHandler
         from pipeline.lyra.handlers.debate import DebateHandler
         from pipeline.lyra.handlers.decomposition import DecompositionHandler
+        from pipeline.lyra.handlers.fact_check import FactCheckHandler
+        from pipeline.lyra.handlers.image_generation import ImageGenerationHandler
         from pipeline.lyra.handlers.judge import JudgeHandler
         from pipeline.lyra.handlers.moderator import ModeratorHandler
         from pipeline.lyra.handlers.paper import PaperHandler
@@ -116,7 +116,9 @@ class ConvergenceOrchestrator:
         debate = DebateHandler(state, bus, semaphore)
         moderator = ModeratorHandler(state, bus, semaphore)
         paper = PaperHandler(state, bus, semaphore)
+        fact_check = FactCheckHandler(state, bus, semaphore)
         presentation = PresentationHandler(state, bus, semaphore)
+        image_gen = ImageGenerationHandler(state, bus, semaphore)
         judge = JudgeHandler(state, bus, semaphore)
         deadline_handler = DeadlineHandler(state, bus, semaphore)
 
@@ -127,7 +129,8 @@ class ConvergenceOrchestrator:
         # -> convergence check -> (loop or saturate)
         # AllAnglesSaturated -> synthesis -> SynthesisReady -> debate
         # -> DebateComplete -> moderator -> ModeratorComplete -> paper
-        # -> PaperReady -> presentation -> PresentationChecked -> judge
+        # -> PaperReady -> fact_check -> FactCheckComplete -> presentation
+        # -> PresentationChecked -> image_gen -> ImageGenComplete -> judge
         # -> QualityPassed/QualityFailed
         all_handlers = [
             decomposition,
@@ -141,7 +144,9 @@ class ConvergenceOrchestrator:
             debate,
             moderator,
             paper,
+            fact_check,
             presentation,
+            image_gen,
             judge,
             deadline_handler,
         ]
@@ -174,6 +179,8 @@ class ConvergenceOrchestrator:
             state.cross_pollinated = False
             if hasattr(convergence, "_round1_triggered"):
                 convergence._round1_triggered = False
+            if hasattr(convergence, "_round2_triggered"):
+                convergence._round2_triggered = False
             if hasattr(synthesis, "_synthesis_started"):
                 synthesis._synthesis_started = False
 
@@ -189,9 +196,14 @@ class ConvergenceOrchestrator:
         # The specialist handler skips its own search trigger for round 2
         # (only triggers for round 3+), preventing double-triggering.
         async def _on_cross_pollination_complete(event: CrossPollinationComplete):
-            """After cross-pollination, kick off round 2 for all unsaturated angles."""
-            state.log("orchestrator", "Cross-pollination complete, starting round 2")
-            emit({"type": "status", "content": "Cross-pollination complete -- starting round 2..."})
+            """After cross-pollination, kick off next round for all unsaturated angles."""
+            state.log("orchestrator", "Cross-pollination complete, starting next round")
+            emit(
+                {
+                    "type": "status",
+                    "content": "Cross-pollination complete -- starting next round...",
+                }
+            )
             for angle in state.angles:
                 if not angle.saturated:
                     await bus.emit(AngleCreated(angle_id=angle.id))
@@ -216,31 +228,11 @@ class ConvergenceOrchestrator:
                 snippet="User-provided source -- content will be fetched",
             )
 
-        # Select initial specialist panel
-        # Use a preliminary set of domain tags based on question keywords
-        initial_specialists = select_specialists(
-            domain_tags=[],
-            question=question,
-            count=config.initial_specialist_count,
-            force_include=force_include or None,
-            force_exclude=force_exclude or None,
-        )
-        state.panel = [
-            ActiveSpecialist(
-                specialist_id=s.id,
-                name=s.name,
-                domain=s.domain,
-            )
-            for s in initial_specialists
-        ]
-
-        state.log("orchestrator", f"Initial panel: {[s.name for s in initial_specialists]}")
-        emit(
-            {
-                "type": "status",
-                "content": f"Assembled panel of {len(initial_specialists)} specialists",
-            }
-        )
+        # Specialist panel is no longer selected globally at startup.
+        # Each angle selects its own specialists dynamically based on its domains
+        # (see SpecialistHandler._on_content_fetched). The state.panel list is
+        # populated lazily as angles assign specialists.
+        state.log("orchestrator", "Specialist selection deferred to per-angle assignment")
 
         # --- Run the pipeline ---
         t0 = time.monotonic()
@@ -258,7 +250,8 @@ class ConvergenceOrchestrator:
             # -> FindingsProduced -> convergence check -> (loop or saturate)
             # AllAnglesSaturated -> synthesis -> SynthesisReady -> debate
             # -> DebateComplete -> moderator -> ModeratorComplete -> paper
-            # -> PaperReady -> presentation -> PresentationChecked -> judge
+            # -> PaperReady -> fact_check -> FactCheckComplete -> presentation
+            # -> PresentationChecked -> image_gen -> ImageGenComplete -> judge
             # -> QualityPassed/QualityFailed
 
             # Wait for completion with deadline checks

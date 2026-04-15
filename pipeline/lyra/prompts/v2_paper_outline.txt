@@ -1,25 +1,25 @@
-You are generating a structured outline for a Why Files style research paper. The outline determines the paper's narrative arc and assigns findings to sections.
+You are generating a structured outline for a Why Files style research paper. The outline determines the paper's narrative arc and assigns research angles to sections.
 
 PAPER STRUCTURE (in order):
 
 1. **Hook**: Already written separately. Not part of this outline.
 
-2. **Investigation sections** (2-4 sections): One per major research angle or thematic cluster. Each section follows a thread of evidence like a detective following leads. Name each section after its topic — descriptive, specific titles. NOT "Section 1" or "Evidence Review."
+2. **Investigation sections** (2-4 sections): One per major research angle or thematic cluster. Each section follows a thread of evidence like a detective following leads. Name each section after its topic --- descriptive, specific titles. NOT "Section 1" or "Evidence Review."
 
-3. **Connecting the Dots**: Where cross-angle connections, convergent findings, and interdisciplinary patterns are presented. This is the paper's climax — the moment where separate threads come together. If the cross-angle analysis found convergent findings, they go here.
+3. **Connecting the Dots**: Where cross-angle connections, convergent findings, and interdisciplinary patterns are presented. This is the paper's climax --- the moment where separate threads come together. If the cross-angle analysis found convergent findings, they go here.
 
-4. **The Other Side**: Counter-evidence, skeptical perspectives, and contradictions. Present them fairly and specifically. This is NOT a strawman section — if the counter-evidence is strong, say so.
+4. **The Other Side**: Counter-evidence, skeptical perspectives, and contradictions. Present them fairly and specifically. This is NOT a strawman section --- if the counter-evidence is strong, say so.
 
 5. **What We Actually Know**: The honest assessment. Three tiers of confidence. This is the paper's landing.
 
 SECTION DESIGN RULES:
 1. Each investigation section gets a descriptive title (e.g., "The Radiocarbon Problem", "Luminous Beings in Sumerian Texts", "What the Excavations Actually Found").
-2. Assign specific claims and findings to each section. Every substantive finding should appear in exactly one section.
+2. Assign research angles to each section using their IDs from the angle list below. Every angle with usable findings should appear in exactly one investigation section.
 3. Do NOT create a section for an angle that produced no usable findings.
-4. If two angles produced closely related findings, merge them into one section.
-5. The Connecting the Dots section must reference specific findings from specific investigation sections — it ties threads together, it does not introduce new evidence.
+4. If two angles produced closely related findings, merge them into one section by listing both angle IDs.
+5. The Connecting the Dots section must reference specific findings from specific investigation sections --- it ties threads together, it does not introduce new evidence.
 6. The Other Side section must contain specific counter-arguments, not generic skepticism.
-7. Order the investigation sections for narrative flow — build toward the most interesting findings.
+7. Order the investigation sections for narrative flow --- build toward the most interesting findings.
 
 TITLE:
 - MAX 60 characters.
@@ -36,19 +36,14 @@ Output a JSON object matching this schema:
       "id": 1,
       "type": "investigation",
       "title": "Descriptive section title",
-      "angle_ids": [1, 3],
-      "assigned_claims": [
-        "Specific claim or finding to cover in this section",
-        "Another specific claim"
-      ],
+      "angle_ids": ["abc123", "def456"],
       "narrative_goal": "One sentence: what should the reader understand after this section?"
     },
     {
       "id": 2,
       "type": "investigation",
       "title": "Another descriptive title",
-      "angle_ids": [2],
-      "assigned_claims": ["Claim from angle 2"],
+      "angle_ids": ["ghi789"],
       "narrative_goal": "What this section accomplishes"
     },
     {
