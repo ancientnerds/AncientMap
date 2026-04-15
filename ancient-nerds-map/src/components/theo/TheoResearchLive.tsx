@@ -100,7 +100,10 @@ export default function TheoResearchLive({ requestId, question, startedAt, onClo
   const [subtaskProgress, setSubtaskProgress] = useState<{ done: number; total: number }>({ done: 0, total: 1 })
 
   // V2 angle tracking
-  const [angles, setAngles] = useState<Record<string, { topic: string; status: string; claims: number; sources: number; round: number; saturated: boolean; consecutiveZeros: number }>>({})
+  const [angles, setAngles] = useState<Record<string, { topic: string; status: string; claims: number; sources: number; round: number; saturated: boolean; consecutiveZeros: number; rabbitHoles: number; spawnedFrom: string | null }>>({})
+  const [researchPhase, setResearchPhase] = useState<string>('connecting')
+  const [totalRabbitHoles, setTotalRabbitHoles] = useState(0)
+  const [rabbitHoleFlash, setRabbitHoleFlash] = useState<string | null>(null)
 
   const reportTextRef = useRef('')
   const thinkingRef = useRef('')
@@ -235,9 +238,9 @@ export default function TheoResearchLive({ requestId, question, startedAt, onClo
         if (stage === 'decomposition' && data.status === 'done' && meta?.angle_topics) {
           const topics = meta.angle_topics as string[]
           setAngles(() => {
-            const init: Record<string, { topic: string; status: string; claims: number; sources: number; round: number; saturated: boolean; consecutiveZeros: number }> = {}
+            const init: typeof angles = {}
             topics.forEach((topic, i) => {
-              init[`pending_${i}`] = { topic, status: 'queued', claims: 0, sources: 0, round: 0, saturated: false, consecutiveZeros: 0 }
+              init[`pending_${i}`] = { topic, status: 'queued', claims: 0, sources: 0, round: 0, saturated: false, consecutiveZeros: 0, rabbitHoles: 0, spawnedFrom: null }
             })
             return init
           })
@@ -258,7 +261,7 @@ export default function TheoResearchLive({ requestId, question, startedAt, onClo
                   delete next[pendingKey]  // remove pending, will be re-added with real ID
                 }
               }
-              const base = existing || { topic: meta.angle as string, status: 'queued', claims: 0, sources: 0, round: 0, saturated: false, consecutiveZeros: 0 }
+              const base = existing || { topic: meta.angle as string, status: 'queued', claims: 0, sources: 0, round: 0, saturated: false, consecutiveZeros: 0, rabbitHoles: 0, spawnedFrom: null }
               const updated = { ...base, topic: meta.angle as string }
 
               if (stage.startsWith('search_') && data.status === 'done') {
@@ -276,6 +279,18 @@ export default function TheoResearchLive({ requestId, question, startedAt, onClo
                 updated.claims = (meta.total_claims as number) || base.claims
                 const newClaims = (meta.new_claims as number) || 0
                 updated.consecutiveZeros = newClaims === 0 ? base.consecutiveZeros + 1 : 0
+                // Rabbit hole tracking
+                const rh = (meta.rabbit_holes as number) || 0
+                if (rh > 0) {
+                  updated.rabbitHoles = base.rabbitHoles + rh
+                  setTotalRabbitHoles(prev => prev + rh)
+                  // Flash notification
+                  const topics = (meta.rabbit_hole_topics as string[]) || []
+                  if (topics.length > 0) {
+                    setRabbitHoleFlash(topics[0])
+                    setTimeout(() => setRabbitHoleFlash(null), 5000)
+                  }
+                }
               }
 
               return { ...next, [angleId]: updated }
@@ -283,9 +298,17 @@ export default function TheoResearchLive({ requestId, question, startedAt, onClo
           }
         }
 
-        // Detect saturation from status messages
+        // Track research phase from pipeline stage names
+        if (stage === 'decomposition') setResearchPhase(data.status === 'done' ? 'exploring' : 'decomposing')
+        else if (stage.startsWith('search_') || stage.startsWith('audit_') || stage.startsWith('specialist_')) setResearchPhase('exploring')
+        else if (stage === 'cross_pollination') setResearchPhase(data.status === 'done' ? 'exploring' : 'cross_pollinating')
+        else if (stage === 'synthesis') setResearchPhase(data.status === 'done' ? 'debating' : 'synthesizing')
+        else if (stage === 'debate') setResearchPhase(data.status === 'done' ? 'writing' : 'debating')
+        else if (stage === 'paper') setResearchPhase(data.status === 'done' ? 'judging' : 'writing')
+        else if (stage === 'quality_judge') setResearchPhase(data.status === 'done' ? 'done' : 'judging')
+
+        // Detect saturation
         if (stage === 'synthesis' && data.status === 'start') {
-          // All angles saturated — mark them
           setAngles(prev => {
             const next = { ...prev }
             for (const id of Object.keys(next)) {
@@ -417,6 +440,9 @@ export default function TheoResearchLive({ requestId, question, startedAt, onClo
               {llmCalls > 0 && (
                 <span className="theo-live-counter theo-live-counter--nerv">{llmCalls} LLM calls</span>
               )}
+              {totalRabbitHoles > 0 && (
+                <span className="theo-live-counter theo-live-counter--nerv">&#128007; {totalRabbitHoles}</span>
+              )}
               {sourcesFound > 0 && (
                 <span className="theo-live-counter theo-live-counter--nerv">{sourcesFound} sources</span>
               )}
@@ -431,6 +457,31 @@ export default function TheoResearchLive({ requestId, question, startedAt, onClo
             ✕
           </button>
         </div>
+
+        {/* Phase Indicator */}
+        {!done && (
+          <div className="theo-phase-strip">
+            {(['decomposing', 'exploring', 'cross_pollinating', 'synthesizing', 'debating', 'writing', 'judging'] as const).map(phase => {
+              const labels: Record<string, string> = { decomposing: 'DECOMPOSE', exploring: 'EXPLORE', cross_pollinating: 'CROSS-POLL', synthesizing: 'SYNTHESIZE', debating: 'DEBATE', writing: 'WRITE', judging: 'JUDGE' }
+              const phaseOrder = ['connecting', 'decomposing', 'exploring', 'cross_pollinating', 'synthesizing', 'debating', 'writing', 'judging', 'done']
+              const currentIdx = phaseOrder.indexOf(researchPhase)
+              const thisIdx = phaseOrder.indexOf(phase)
+              const status = thisIdx < currentIdx ? 'done' : thisIdx === currentIdx ? 'active' : 'pending'
+              return (
+                <span key={phase} className={`theo-phase-box theo-phase-box--${status}`}>
+                  {labels[phase]}
+                </span>
+              )
+            })}
+          </div>
+        )}
+
+        {/* Rabbit hole flash */}
+        {rabbitHoleFlash && (
+          <div className="theo-rabbit-flash">
+            &#128007; Rabbit hole: {rabbitHoleFlash}
+          </div>
+        )}
 
         {/* NERV Progress Bar */}
         <div className="theo-live-progress">
@@ -478,6 +529,7 @@ export default function TheoResearchLive({ requestId, question, startedAt, onClo
                 <span className="theo-angle-stats">
                   {angle.claims > 0 && <span>{angle.claims} claims</span>}
                 </span>
+                {angle.rabbitHoles > 0 && <span className="theo-angle-rabbit">&#128007;{angle.rabbitHoles}</span>}
                 <span className="theo-angle-convergence">
                   {angle.saturated ? <span className="theo-angle-check">&#10003;</span> : angle.claims > 0 ? <span>{angle.consecutiveZeros}/2</span> : null}
                 </span>

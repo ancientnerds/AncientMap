@@ -1313,6 +1313,62 @@
 .theo-live-progress .nerv-lb::after {
   display: none;
 }
+/* — Phase Indicator Strip — */
+.theo-phase-strip {
+  display: flex;
+  gap: 2px;
+  padding: 6px 16px;
+  border-bottom: 1px solid var(--border-default);
+}
+.theo-phase-box {
+  flex: 1;
+  text-align: center;
+  padding: 4px 2px;
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  border: 1px solid #1a1a1a;
+  transition: all 0.3s;
+}
+.theo-phase-box--pending {
+  background: #0a0a0a;
+  color: #333;
+  border-color: #1a1a1a;
+}
+.theo-phase-box--active {
+  background: rgba(0, 204, 102, 0.12);
+  color: var(--nerv-g, #00cc66);
+  border-color: rgba(0, 204, 102, 0.4);
+  box-shadow: 0 0 8px rgba(0, 204, 102, 0.15);
+  animation: led-breathe-pulse 1.5s ease-in-out infinite;
+}
+.theo-phase-box--done {
+  background: rgba(0, 204, 102, 0.06);
+  color: rgba(0, 204, 102, 0.5);
+  border-color: rgba(0, 204, 102, 0.2);
+}
+
+/* — Rabbit Hole Flash — */
+.theo-rabbit-flash {
+  text-align: center;
+  padding: 6px 12px;
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  font-size: 12px;
+  color: var(--theo-amber, #d4912a);
+  text-shadow: 0 0 8px rgba(212, 145, 42, 0.4);
+  border-bottom: 1px solid var(--border-default);
+  animation: theo-quality-fade 5s ease-in-out forwards;
+}
+
+/* — Rabbit Hole per-angle indicator — */
+.theo-angle-rabbit {
+  font-size: 10px;
+  color: var(--theo-amber, #d4912a);
+  flex-shrink: 0;
+  margin-right: 4px;
+}
+
 .theo-live-progress .nerv-lb-track {
   height: 40px;
 }

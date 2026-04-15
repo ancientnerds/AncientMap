@@ -20,6 +20,7 @@ from datetime import datetime, timedelta
 
 from pipeline.lyra.config import _get_settings
 from pipeline.lyra.research_events import (
+    AngleCreated,
     CrossPollinationComplete,
     EventBus,
     QualityFailed,
@@ -131,7 +132,7 @@ class ConvergenceOrchestrator:
             handler.register()
             bus.register_instance(handler)
 
-        # Wire quality failure → re-exploration
+        # Wire quality failure -> re-exploration
         async def _on_quality_failed(event: QualityFailed):
             """Re-explore weak angles when quality judge fails."""
             state.log(
@@ -158,18 +159,21 @@ class ConvergenceOrchestrator:
 
         bus.on(QualityFailed, _on_quality_failed)
 
-        # Wire cross-pollination complete → trigger round 2 for all angles
+        # Wire cross-pollination complete -> trigger round 2 via AngleCreated events.
+        # This naturally flows: AngleCreated -> search -> audit -> specialist.
+        # The specialist handler skips its own search trigger for round 2
+        # (only triggers for round 3+), preventing double-triggering.
         async def _on_cross_pollination_complete(event: CrossPollinationComplete):
-            """After cross-pollination, trigger round 2 search for all angles."""
-            state.log("orchestrator", "Cross-pollination complete, starting round 2 for all angles")
-            emit({"type": "status", "content": "Starting round 2 with cross-angle insights..."})
+            """After cross-pollination, kick off round 2 for all unsaturated angles."""
+            state.log("orchestrator", "Cross-pollination complete, starting round 2")
+            emit({"type": "status", "content": "Cross-pollination complete -- starting round 2..."})
             for angle in state.angles:
                 if not angle.saturated:
-                    await search.search_angle(angle.id)
+                    await bus.emit(AngleCreated(angle_id=angle.id))
 
         bus.on(CrossPollinationComplete, _on_cross_pollination_complete)
 
-        # Wire quality passed → done
+        # Wire quality passed -> done
         done_event = asyncio.Event()
 
         async def _on_quality_passed(event: QualityPassed):
@@ -184,7 +188,7 @@ class ConvergenceOrchestrator:
             state.registry.register_source(
                 url=url,
                 title=url.split("/")[-1].replace("-", " ").replace("_", " ")[:80] or url[:80],
-                snippet="User-provided source — content will be fetched",
+                snippet="User-provided source -- content will be fetched",
             )
 
         # Select initial specialist panel
@@ -222,12 +226,12 @@ class ConvergenceOrchestrator:
             if state.error:
                 return state
 
-            # Phase 2+: Event-driven — handlers react to events
+            # Phase 2+: Event-driven --- handlers react to events
             # The decomposition emits AngleCreated events which trigger:
-            # AngleCreated → search → SourcesFound → audit → SourcesAudited → specialist
-            # → FindingsProduced → convergence check → (loop or saturate)
-            # AllAnglesSaturated → synthesis → SynthesisReady → debate → DebateComplete
-            # → paper → PaperReady → judge → QualityPassed/QualityFailed
+            # AngleCreated -> search -> SourcesFound -> audit -> SourcesAudited -> specialist
+            # -> FindingsProduced -> convergence check -> (loop or saturate)
+            # AllAnglesSaturated -> synthesis -> SynthesisReady -> debate -> DebateComplete
+            # -> paper -> PaperReady -> judge -> QualityPassed/QualityFailed
 
             # Wait for completion with deadline checks
             while not done_event.is_set():

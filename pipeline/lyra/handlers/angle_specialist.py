@@ -1,4 +1,4 @@
-"""Specialist analysis — runs specialists on per-angle sources, tracks
+"""Specialist analysis --- runs specialists on per-angle sources, tracks
 contribution scores, handles convergence detection and panel management."""
 
 import asyncio
@@ -147,6 +147,7 @@ class SpecialistHandler(BaseHandler):
 
             # Add new findings to angle
             for finding in new_findings:
+                finding["specialist_id"] = panel_spec.specialist_id
                 angle.findings.append(finding)
                 # Register in citation registry
                 self.state.registry.add_claim(
@@ -167,7 +168,7 @@ class SpecialistHandler(BaseHandler):
             )
             cross_angle_topics.extend(cross_topics)
 
-        # Novelty check — classify new claims as restatement/incremental/rabbit_hole
+        # Novelty check --- classify new claims as restatement/incremental/rabbit_hole
         genuine_novelty = 0
         rabbit_holes_found: list[str] = []
         if new_claims_total > 0 and len(angle.findings) > new_claims_total:
@@ -193,7 +194,7 @@ class SpecialistHandler(BaseHandler):
                         f"Angle '{angle.topic}' granted {bonus} bonus rounds (max now {effective_max})",
                     )
         else:
-            # First round — all claims are novel by definition
+            # First round --- all claims are novel by definition
             genuine_novelty = new_claims_total
 
         # Track GENUINE novelty for convergence (not raw claim count)
@@ -249,7 +250,9 @@ class SpecialistHandler(BaseHandler):
 
         # After round 1: wait for cross-pollination before triggering round 2.
         # After cross-pollination: trigger subsequent rounds for convergence verification.
-        if not angle.saturated and self.state.cross_pollinated:
+        # Skip round 2 trigger here --- the orchestrator handles it via AngleCreated
+        # after cross-pollination completes. Only trigger for round 3+.
+        if not angle.saturated and self.state.cross_pollinated and angle.search_rounds > 1:
             from pipeline.lyra.handlers.angle_search import SearchHandler
 
             search_handler = self.bus.get_handler(SearchHandler)
@@ -258,7 +261,7 @@ class SpecialistHandler(BaseHandler):
                     await search_handler.refine_and_search(angle.id, specialist_gaps)
                 else:
                     await search_handler.search_angle(angle.id)
-        # Round 1 done but not yet cross-pollinated — convergence checker will handle it
+        # Round 1 done but not yet cross-pollinated --- convergence checker will handle it
 
     # ------------------------------------------------------------------
     # Panel initialization
@@ -514,7 +517,7 @@ class SpecialistHandler(BaseHandler):
         for finding in new_findings:
             # If a finding mentions a specific sub-topic not covered by any angle,
             # flag it. We rely on the claim text containing a nameable sub-topic.
-            # This is a lightweight heuristic — the convergence checker handles
+            # This is a lightweight heuristic --- the convergence checker handles
             # whether to actually spawn a new angle.
             caveats = finding.get("caveats", []) if isinstance(finding.get("caveats"), list) else []
             for caveat in caveats:

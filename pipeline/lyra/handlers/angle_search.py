@@ -1,4 +1,4 @@
-"""Per-angle search — iterative query execution with source registration."""
+"""Per-angle search --- iterative query execution with source registration."""
 
 import asyncio
 import json
@@ -8,7 +8,7 @@ from pathlib import Path
 from pipeline.lyra.config import _get_settings
 from pipeline.lyra.handlers import BaseHandler
 from pipeline.lyra.minimax_shared import minimax_chat_anthropic
-from pipeline.lyra.research_events import AngleCreated, SourcesFound
+from pipeline.lyra.research_events import AngleCreated, AngleSaturated, SourcesFound
 
 logger = logging.getLogger(__name__)
 PROMPTS_DIR = Path(__file__).resolve().parent.parent / "prompts"
@@ -51,7 +51,7 @@ class SearchHandler(BaseHandler):
             }
         )
 
-        # No semaphore — search uses HTTP APIs, not LLM calls
+        # No semaphore --- search uses HTTP APIs, not LLM calls
         results = await searcher.search(
             queries, self.state.config.source_apis, self.state.disabled_adapters
         )
@@ -103,6 +103,7 @@ class SearchHandler(BaseHandler):
             self.state.log(
                 "search", f"Angle '{angle.topic}' hit max search rounds ({angle.search_rounds})"
             )
+            await self.bus.emit(AngleSaturated(angle_id=angle.id))
             return
 
         # Generate refined queries using LLM
@@ -126,6 +127,10 @@ class SearchHandler(BaseHandler):
             self.state.llm_call_count += 1
             parsed = self._parse_json(raw)
             new_queries = parsed.get("refined_queries", [])
+            # The prompt may return objects {"query": "...", "targets_gap": "..."}
+            new_queries = [
+                item["query"] if isinstance(item, dict) else item for item in new_queries
+            ]
             if new_queries:
                 angle.search_queries = new_queries[: self.state.config.queries_per_angle]
 

@@ -1,4 +1,4 @@
-"""Cross-angle synthesis — combines findings from all saturated angles."""
+"""Cross-angle synthesis --- combines findings from all saturated angles."""
 
 import asyncio
 import json
@@ -16,10 +16,21 @@ PROMPTS_DIR = Path(__file__).resolve().parent.parent / "prompts"
 
 
 class SynthesisHandler(BaseHandler):
+    def __init__(self, state, bus, semaphore):
+        super().__init__(state, bus, semaphore)
+        self._synthesis_started = False
+
     def register(self):
         self.bus.on(AllAnglesSaturated, self._on_all_saturated)
 
     async def _on_all_saturated(self, event: AllAnglesSaturated):
+        # Idempotency guard: skip if synthesis already started or past synthesis
+        if self._synthesis_started:
+            return
+        if self.state.phase not in (ResearchPhase.EXPLORING, ResearchPhase.SYNTHESIZING):
+            return
+        self._synthesis_started = True
+
         self.state.phase = ResearchPhase.SYNTHESIZING
         self.emit_sse(
             {

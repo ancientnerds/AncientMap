@@ -18,6 +18,10 @@ logger = logging.getLogger(__name__)
 
 
 class ConvergenceChecker(BaseHandler):
+    def __init__(self, state, bus, semaphore):
+        super().__init__(state, bus, semaphore)
+        self._round1_triggered = False
+
     def register(self):
         self.bus.on(AngleSaturated, self._on_angle_saturated)
         self.bus.on(FindingsProduced, self._on_findings_produced)
@@ -65,13 +69,14 @@ class ConvergenceChecker(BaseHandler):
         )
 
         # Detect when ALL angles have completed at least 1 specialist round
-        if not self.state.cross_pollinated:
+        if not self.state.cross_pollinated and not self._round1_triggered:
             all_have_findings = all(len(a.findings) > 0 for a in self.state.angles)
             if all_have_findings:
+                self._round1_triggered = True
                 self.emit_sse(
                     {
                         "type": "status",
-                        "content": "All angles completed round 1 — cross-pollinating findings...",
+                        "content": "All angles completed round 1 -- cross-pollinating findings...",
                     }
                 )
                 self.state.log(

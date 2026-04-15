@@ -143,7 +143,7 @@ class PaperHandler(BaseHandler):
             ]
 
         logger.info(
-            "[paper] Outline: '%s' — %d sections: %s",
+            "[paper] Outline: '%s' -- %d sections: %s",
             title,
             len(sections),
             [s.get("title", "?") for s in sections],
@@ -320,6 +320,27 @@ class PaperHandler(BaseHandler):
         self.state.paper_title = (
             title_match.group(1).strip() if title_match else self.state.question
         )
+
+        # ---------------------------------------------------------------
+        # Step 11: Generate card description
+        # ---------------------------------------------------------------
+        card_system = (
+            "Write a 1-3 sentence description of this research paper for a card preview. "
+            "Be specific. No citations, no markdown. Plain text only."
+        )
+        card_input = (
+            f"## Title\n\n{self.state.paper_title}\n\n"
+            f"## First 500 words\n\n{self.state.paper_text[:2000]}"
+        )
+        async with self.semaphore:
+            self.state.card_description = await asyncio.to_thread(
+                minimax_chat_anthropic,
+                card_system,
+                card_input,
+                256,
+                _get_settings(),
+            )
+        self.state.llm_call_count += 1
 
         word_count = len(self.state.paper_text.split())
         total_citations = self.state.audit_result.get("total_citations", 0)
@@ -749,6 +770,9 @@ class PaperHandler(BaseHandler):
         sentence to claims via keyword overlap and appends the correct [N]
         markers. Guarantees every citation traces back to the claim it was
         assigned to.
+
+        Processes paragraph-by-paragraph to preserve markdown structure
+        (headings, blank lines, list items).
         """
         # Build claim -> citation strings list
         claim_citations: list[tuple[str, str]] = []
@@ -765,42 +789,53 @@ class PaperHandler(BaseHandler):
             logger.warning("[paper] No claims found for mechanical citation insertion")
             return paper_text
 
-        # Split text into sentences and match
-        sentences = re.split(r"(?<=[.!?])\s+", paper_text)
-        cited_sentences: list[str] = []
+        # Process paragraph by paragraph to preserve newlines
+        paragraphs = paper_text.split("\n\n")
+        cited_paragraphs: list[str] = []
         citations_inserted = 0
 
-        for sentence in sentences:
-            # Skip headings, short lines
-            if sentence.startswith("#") or len(sentence) < 30:
-                cited_sentences.append(sentence)
+        for paragraph in paragraphs:
+            # Skip headings and short fragments
+            if paragraph.startswith("#") or len(paragraph.strip()) < 30:
+                cited_paragraphs.append(paragraph)
                 continue
 
-            sent_words = set(sentence.lower().split()) - _STOP_WORDS
-            best_nums = ""
-            best_overlap = 0.0
+            # Split paragraph into sentences, cite each, rejoin with spaces
+            sentences = re.split(r"(?<=[.!?])\s+", paragraph)
+            cited_sentences: list[str] = []
 
-            for claim_text, nums in claim_citations:
-                claim_words = set(claim_text.lower().split()) - _STOP_WORDS
-                if not claim_words:
+            for sentence in sentences:
+                if sentence.startswith("#") or len(sentence) < 30:
+                    cited_sentences.append(sentence)
                     continue
-                overlap = len(claim_words & sent_words) / len(claim_words)
-                if overlap > best_overlap and overlap >= 0.3:
-                    best_overlap = overlap
-                    best_nums = nums
 
-            if best_nums:
-                cited_sentences.append(f"{sentence.rstrip('.')} {best_nums}.")
-                citations_inserted += 1
-            else:
-                cited_sentences.append(sentence)
+                sent_words = set(sentence.lower().split()) - _STOP_WORDS
+                best_nums = ""
+                best_overlap = 0.0
+
+                for claim_text, nums in claim_citations:
+                    claim_words = set(claim_text.lower().split()) - _STOP_WORDS
+                    if not claim_words:
+                        continue
+                    overlap = len(claim_words & sent_words) / len(claim_words)
+                    if overlap > best_overlap and overlap >= 0.3:
+                        best_overlap = overlap
+                        best_nums = nums
+
+                if best_nums:
+                    cited_sentences.append(f"{sentence.rstrip('.')} {best_nums}.")
+                    citations_inserted += 1
+                else:
+                    cited_sentences.append(sentence)
+
+            cited_paragraphs.append(" ".join(cited_sentences))
 
         logger.info(
-            "[paper] Mechanical citation: inserted %d citations across %d sentences",
+            "[paper] Mechanical citation: inserted %d citations across %d paragraphs",
             citations_inserted,
-            len(sentences),
+            len(paragraphs),
         )
-        return " ".join(cited_sentences)
+        return "\n\n".join(cited_paragraphs)
 
     # ===================================================================
     # Helpers

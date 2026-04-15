@@ -1,4 +1,4 @@
-"""Per-angle source audit — reliability scoring and rejection."""
+"""Per-angle source audit --- reliability scoring and rejection."""
 
 import asyncio
 import json
@@ -20,7 +20,7 @@ class AuditHandler(BaseHandler):
 
     async def _on_sources_found(self, event: SourcesFound):
         if event.count == 0:
-            # No new sources — pass through with zero audit
+            # No new sources --- pass through with zero audit
             await self.bus.emit(SourcesAudited(angle_id=event.angle_id, accepted=0, rejected=0))
             return
         await self.audit_angle(event.angle_id)
@@ -89,7 +89,7 @@ class AuditHandler(BaseHandler):
             parsed["_sid"] = sid
             return parsed
 
-        # Run ALL audits at once — the global MiniMax limiter handles concurrency
+        # Run ALL audits at once --- the global MiniMax limiter handles concurrency
         self.emit_sse(
             {
                 "type": "status",
@@ -121,13 +121,13 @@ class AuditHandler(BaseHandler):
                 if rid:
                     rejected_ids.add(rid)
 
-        # Remove rejected sources from angle
+        # Remove rejected sources from this angle only.
+        # DON'T pop from registry --- other angles may reference this source.
         for rid in rejected_ids:
             if rid in angle.source_ids:
                 angle.source_ids.remove(rid)
-            self.state.registry.sources.pop(rid, None)
 
-        accepted = total_scored - len(rejected_ids)
+        accepted = len(angle.source_ids)
         self.emit_sse(
             {
                 "type": "pipeline",
