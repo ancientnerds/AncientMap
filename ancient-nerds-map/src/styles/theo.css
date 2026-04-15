@@ -1241,6 +1241,7 @@
 .theo-approval-action {
   display: flex;
   align-items: center;
+  gap: 12px;
 }
 .theo-approval-hint {
   font-size: 12px;
