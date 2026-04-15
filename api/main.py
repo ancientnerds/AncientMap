@@ -42,6 +42,7 @@ from api.routes import (
     content,
     contributions,
     interactions,
+    library,
     lyra,
     news,
     og,
@@ -622,6 +623,7 @@ app.include_router(vector_sync.router, prefix="/api/vector-sync", tags=["vector-
 app.include_router(wiki_images.router, prefix="/api/wiki-images", tags=["wiki-images"])
 
 app.include_router(interactions.router, prefix="/api/interactions", tags=["interactions"])
+app.include_router(library.router, prefix="/api/library", tags=["library"])
 app.include_router(cardgame_router, prefix="/api/cards", tags=["cards"])
 app.include_router(theo.router, prefix="/api/theo", tags=["theo"])
 
