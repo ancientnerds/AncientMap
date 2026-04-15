@@ -97,19 +97,12 @@ class DecompositionHandler(BaseHandler):
                 specialist_domains=ad.get("specialist_domains", []),
             )
 
-            # Register validation sources in registry
-            for r in results:
-                sid = self.state.registry.register_source(
-                    url=r.url,
-                    title=r.title,
-                    snippet=r.snippet,
-                    date=r.date,
-                )
-                angle.source_ids.append(sid)
-                source = self.state.registry.get_reference(sid)
-                if source and source.reliability_tier == 0:
-                    source.reliability_tier = r.default_tier
-
+            # Validation only checks existence — don't register sources here.
+            # The search handler registers sources properly during the research loop.
+            self.state.log(
+                "decomposition",
+                f"Validated angle '{ad.get('topic', '?')}' — {len(results)} sources available",
+            )
             validated.append(angle)
 
         if not validated:
