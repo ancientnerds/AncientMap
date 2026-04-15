@@ -45,9 +45,6 @@ class ResearchConfig:
     prune_after_zero_rounds: int = 2  # consecutive zero-contribution rounds to prune
     # Debate
     max_debate_rounds: int = 4  # hard cap, converges earlier if no new challenges
-    # Quality
-    quality_pass_threshold: int = 75
-    max_judge_failures: int = 3  # ship best after N failures
     # Search
     source_apis: str = "standard"  # "minimal", "standard", "full", "exhaustive"
     queries_per_angle: int = 5

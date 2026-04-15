@@ -23,7 +23,6 @@ from pipeline.lyra.research_events import (
     AngleCreated,
     CrossPollinationComplete,
     EventBus,
-    QualityFailed,
     QualityPassed,
 )
 from pipeline.lyra.research_state import (
@@ -131,7 +130,7 @@ class ConvergenceOrchestrator:
         # -> DebateComplete -> moderator -> ModeratorComplete -> paper
         # -> PaperReady -> fact_check -> FactCheckComplete -> presentation
         # -> PresentationChecked -> image_gen -> ImageGenComplete -> judge
-        # -> QualityPassed/QualityFailed
+        # -> QualityPassed
         all_handlers = [
             decomposition,
             search,
@@ -153,43 +152,6 @@ class ConvergenceOrchestrator:
         for handler in all_handlers:
             handler.register()
             bus.register_instance(handler)
-
-        # Wire quality failure -> re-exploration
-        async def _on_quality_failed(event: QualityFailed):
-            """Re-explore weak angles when quality judge fails."""
-            state.log(
-                "orchestrator", f"Quality failed (score={event.score}), weak: {event.weak_areas}"
-            )
-            emit(
-                {
-                    "type": "status",
-                    "content": f"Quality check failed (score {event.score}), refining research...",
-                }
-            )
-
-            # Un-saturate angles related to weak areas and trigger re-search
-            for angle in state.angles:
-                if angle.saturated:
-                    angle.saturated = False
-                    angle.recent_claim_counts = []  # reset convergence tracking
-
-            state.phase = ResearchPhase.EXPLORING
-
-            # Reset handler flags so convergence/synthesis can re-trigger
-            state.cross_pollinated = False
-            if hasattr(convergence, "_round1_triggered"):
-                convergence._round1_triggered = False
-            if hasattr(convergence, "_round2_triggered"):
-                convergence._round2_triggered = False
-            if hasattr(synthesis, "_synthesis_started"):
-                synthesis._synthesis_started = False
-
-            # Trigger refined search for each angle
-            for angle in state.angles:
-                gaps = [f"Quality judge flagged: {wa}" for wa in event.weak_areas]
-                await search.refine_and_search(angle.id, gaps)
-
-        bus.on(QualityFailed, _on_quality_failed)
 
         # Wire cross-pollination complete -> trigger round 2 via AngleCreated events.
         # This naturally flows: AngleCreated -> search -> audit -> content_fetch -> specialist.
@@ -252,7 +214,7 @@ class ConvergenceOrchestrator:
             # -> DebateComplete -> moderator -> ModeratorComplete -> paper
             # -> PaperReady -> fact_check -> FactCheckComplete -> presentation
             # -> PresentationChecked -> image_gen -> ImageGenComplete -> judge
-            # -> QualityPassed/QualityFailed
+            # -> QualityPassed
 
             # Wait for completion with deadline checks
             while not done_event.is_set():

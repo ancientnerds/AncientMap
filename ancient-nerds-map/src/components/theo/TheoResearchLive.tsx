@@ -223,7 +223,7 @@ export default function TheoResearchLive({ requestId, question, startedAt, onClo
           }
           if (data.stage === 'quality_judge' && data.status === 'done' && typeof meta.score === 'number') {
             setQualityFlash({ score: meta.score as number, badge: (meta.badge as string) || '' })
-            setTimeout(() => setQualityFlash(null), 5000)
+            setTimeout(() => setQualityFlash(null), 8000)
           }
         }
 
