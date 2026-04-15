@@ -1205,49 +1205,7 @@
   color: var(--text-muted);
 }
 
-/* — Human Review & Approval — */
-.theo-approval-section {
-  border-top: 1px solid var(--border-default);
-  padding: 16px 20px;
-}
-.theo-approval-done {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 13px;
-  color: var(--text-muted);
-}
-.theo-approval-pending {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-.theo-approval-tutorial {
-  background: var(--surface-sunken);
-  border: 1px solid var(--border-default);
-  padding: 14px 16px;
-  font-size: 13px;
-  line-height: 1.6;
-  color: var(--text-body);
-}
-.theo-approval-tutorial strong {
-  color: var(--text-primary);
-  display: block;
-  margin-bottom: 6px;
-}
-.theo-approval-tutorial p {
-  margin: 6px 0;
-}
-.theo-approval-action {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-.theo-approval-hint {
-  font-size: 12px;
-  color: var(--text-dimmed);
-  font-style: italic;
-}
+/* — Approve button (in editor footer) — */
 .theo-approval-btn {
   display: inline-flex;
   align-items: center;
@@ -1269,28 +1227,13 @@
   opacity: 0.5;
   cursor: not-allowed;
 }
-
-/* — Scroll-down indicator — */
-.theo-scroll-indicator {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  display: flex;
+.theo-approval-done-inline {
+  display: inline-flex;
   align-items: center;
-  justify-content: center;
   gap: 6px;
-  padding: 12px 0 14px;
-  background: linear-gradient(transparent, var(--surface-raised) 60%);
-  color: var(--primary-amber);
-  font-size: 12px;
-  letter-spacing: 0.5px;
-  pointer-events: none;
-  animation: theo-bounce-down 1.5s ease-in-out infinite;
-}
-@keyframes theo-bounce-down {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(4px); }
+  font-size: 13px;
+  color: #2e7d32;
+  font-weight: 600;
 }
 
 /* — Review button accent — */

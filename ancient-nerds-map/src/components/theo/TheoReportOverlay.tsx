@@ -132,34 +132,8 @@ export default function TheoReportOverlay({
   const [showTrace, setShowTrace] = useState(false)
   const [showAudit, setShowAudit] = useState(false)
   const [editing, setEditing] = useState(initialEditing ?? false)
-  const [scrolledToBottom, setScrolledToBottom] = useState(false)
   const [approving, setApproving] = useState(false)
   const bodyRef = useRef<HTMLDivElement>(null)
-
-  // Track scroll position — user must scroll to bottom to approve
-  const handleBodyScroll = useCallback(() => {
-    const el = bodyRef.current
-    if (!el || scrolledToBottom) return
-    const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80
-    if (atBottom) setScrolledToBottom(true)
-  }, [scrolledToBottom])
-
-  // If content fits without scrolling, approve immediately
-  useEffect(() => {
-    if (scrolledToBottom || editing) return
-    const el = bodyRef.current
-    if (!el) return
-    // Check after render — content may need a frame to lay out
-    const timer = setTimeout(() => {
-      if (el.scrollHeight - el.clientHeight < 80) {
-        setScrolledToBottom(true)
-      }
-    }, 300)
-    return () => clearTimeout(timer)
-  }, [scrolledToBottom, editing, result.report])
-
-  // Tutorial: show expanded guidance if user hasn't published any paper yet
-  const hasPublishedBefore = localStorage.getItem('theo_has_published') === 'true'
 
   // Escape key to close (not while editing)
   useEffect(() => {
@@ -346,94 +320,30 @@ export default function TheoReportOverlay({
               content={result.report}
               onSave={handleSaveEdit}
               onDiscard={handleDiscardEdit}
+              approving={approving}
+              approved={!!result.approved_by}
+              onApprove={isOwner && requestId ? async () => {
+                setApproving(true)
+                try {
+                  const token = localStorage.getItem('an_auth_token')
+                  const resp = await fetch(`/api/theo/research/${requestId}/approve`, {
+                    method: 'POST',
+                    headers: { Authorization: `Bearer ${token}` },
+                  })
+                  if (resp.ok) {
+                    const data = await resp.json()
+                    onApprove?.(data.approved_by, data.approved_at)
+                  }
+                } catch { /* network error */ }
+                setApproving(false)
+              } : undefined}
             />
           </Suspense>
         ) : (
-          <div style={{ position: 'relative' }}>
-            <div className="theo-report-body theo-md-body" ref={bodyRef} onScroll={handleBodyScroll}>
-              <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>
-                {enrichedReport}
-              </ReactMarkdown>
-            </div>
-            {isOwner && !result.approved_by && !scrolledToBottom && (
-              <div className="theo-scroll-indicator">
-                <span>Scroll down to approve</span>
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 12 15 18 9"/></svg>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Human Review & Approval */}
-        {isOwner && (
-          <div className="theo-approval-section">
-            {result.approved_by ? (
-              <div className="theo-approval-done">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2e7d32" strokeWidth="2"><path d="M20 6L9 17l-5-5"/></svg>
-                <span>Reviewed and approved by <strong>{result.approved_by}</strong> on {new Date(result.approved_at + (result.approved_at?.endsWith('Z') ? '' : 'Z')).toLocaleDateString()}</span>
-              </div>
-            ) : editing ? (
-              <div className="theo-approval-pending">
-                <div className="theo-approval-action">
-                  <span className="theo-approval-hint">Save your edits, then scroll to the bottom to approve</span>
-                </div>
-              </div>
-            ) : (
-              <div className="theo-approval-pending">
-                {!hasPublishedBefore && (
-                  <div className="theo-approval-tutorial">
-                    <strong>Why does this need approval?</strong>
-                    <p>
-                      AI-generated research can contain errors, hallucinations, or misattributed claims.
-                      Before publishing, you must review the paper to ensure accuracy. Your name will be
-                      attached as the reviewer — this creates accountability and trust in the research library.
-                    </p>
-                    <p>
-                      Scroll through the entire paper, then approve it below. After your first published paper,
-                      this guide won't appear again.
-                    </p>
-                  </div>
-                )}
-                <div className="theo-approval-action">
-                  <button
-                    className="theo-editor-discard"
-                    onClick={() => setEditing(true)}
-                  >
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
-                      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
-                    </svg>
-                    Edit
-                  </button>
-                  {!scrolledToBottom ? (
-                    <span className="theo-approval-hint">Scroll to the bottom of the paper to enable approval</span>
-                  ) : (
-                    <button
-                      className="theo-approval-btn"
-                      disabled={approving}
-                      onClick={async () => {
-                        if (!requestId) return
-                        setApproving(true)
-                        try {
-                          const token = localStorage.getItem('an_auth_token')
-                          const resp = await fetch(`/api/theo/research/${requestId}/approve`, {
-                            method: 'POST',
-                            headers: { Authorization: `Bearer ${token}` },
-                          })
-                          if (resp.ok) {
-                            const data = await resp.json()
-                            onApprove?.(data.approved_by, data.approved_at)
-                          }
-                        } catch { /* network error */ }
-                        setApproving(false)
-                      }}
-                    >
-                      {approving ? 'Approving...' : 'I have reviewed this paper — Approve for publishing'}
-                    </button>
-                  )}
-                </div>
-              </div>
-            )}
+          <div className="theo-report-body theo-md-body" ref={bodyRef}>
+            <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>
+              {enrichedReport}
+            </ReactMarkdown>
           </div>
         )}
 

@@ -141,9 +141,12 @@ interface TheoEditorProps {
   content: string        // markdown input
   onSave: (markdown: string) => void
   onDiscard: () => void
+  onApprove?: () => void
+  approving?: boolean
+  approved?: boolean
 }
 
-export default function TheoEditor({ content, onSave, onDiscard }: TheoEditorProps) {
+export default function TheoEditor({ content, onSave, onDiscard, onApprove, approving, approved }: TheoEditorProps) {
   const initialHtml = useMemo(() => markdownToHtml(content), [content])
 
   const editor = useEditor({
@@ -305,6 +308,17 @@ export default function TheoEditor({ content, onSave, onDiscard }: TheoEditorPro
         <button type="button" className="theo-editor-save" onClick={handleSave}>
           Save changes
         </button>
+        {onApprove && !approved && (
+          <button type="button" className="theo-approval-btn" disabled={approving} onClick={onApprove}>
+            {approving ? 'Approving...' : 'Approve for publishing'}
+          </button>
+        )}
+        {approved && (
+          <span className="theo-approval-done-inline">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#2e7d32" strokeWidth="2"><path d="M20 6L9 17l-5-5"/></svg>
+            Approved
+          </span>
+        )}
       </div>
     </div>
   )
