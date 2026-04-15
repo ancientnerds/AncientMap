@@ -100,7 +100,7 @@ export default function TheoResearchLive({ requestId, question, startedAt, onClo
   const [subtaskProgress, setSubtaskProgress] = useState<{ done: number; total: number }>({ done: 0, total: 1 })
 
   // V2 angle tracking
-  const [angles, setAngles] = useState<Record<string, { topic: string; status: string; claims: number; sources: number; round: number; saturated: boolean }>>({})
+  const [angles, setAngles] = useState<Record<string, { topic: string; status: string; claims: number; sources: number; round: number; saturated: boolean; consecutiveZeros: number }>>({})
 
   const reportTextRef = useRef('')
   const thinkingRef = useRef('')
@@ -235,9 +235,9 @@ export default function TheoResearchLive({ requestId, question, startedAt, onClo
         if (stage === 'decomposition' && data.status === 'done' && meta?.angle_topics) {
           const topics = meta.angle_topics as string[]
           setAngles(() => {
-            const init: Record<string, { topic: string; status: string; claims: number; sources: number; round: number; saturated: boolean }> = {}
+            const init: Record<string, { topic: string; status: string; claims: number; sources: number; round: number; saturated: boolean; consecutiveZeros: number }> = {}
             topics.forEach((topic, i) => {
-              init[`pending_${i}`] = { topic, status: 'queued', claims: 0, sources: 0, round: 0, saturated: false }
+              init[`pending_${i}`] = { topic, status: 'queued', claims: 0, sources: 0, round: 0, saturated: false, consecutiveZeros: 0 }
             })
             return init
           })
@@ -258,7 +258,7 @@ export default function TheoResearchLive({ requestId, question, startedAt, onClo
                   delete next[pendingKey]  // remove pending, will be re-added with real ID
                 }
               }
-              const base = existing || { topic: meta.angle as string, status: 'queued', claims: 0, sources: 0, round: 0, saturated: false }
+              const base = existing || { topic: meta.angle as string, status: 'queued', claims: 0, sources: 0, round: 0, saturated: false, consecutiveZeros: 0 }
               const updated = { ...base, topic: meta.angle as string }
 
               if (stage.startsWith('search_') && data.status === 'done') {
@@ -273,7 +273,9 @@ export default function TheoResearchLive({ requestId, question, startedAt, onClo
                 updated.status = 'analyzing'
               } else if (stage.startsWith('specialist_') && data.status === 'done') {
                 updated.status = 'analyzed'
-                updated.claims = (meta.total_claims as number) || existing.claims
+                updated.claims = (meta.total_claims as number) || base.claims
+                const newClaims = (meta.new_claims as number) || 0
+                updated.consecutiveZeros = newClaims === 0 ? base.consecutiveZeros + 1 : 0
               }
 
               return { ...next, [angleId]: updated }
@@ -392,7 +394,7 @@ export default function TheoResearchLive({ requestId, question, startedAt, onClo
       <div className="theo-overlay-inner" onClick={e => e.stopPropagation()}>
         {/* Header */}
         <div className="theo-live-header">
-          <img src="/images/theo.png" alt="Theo" className="theo-avatar" style={{ width: 40, height: 40, flexShrink: 0 }} />
+          <img src="/images/theo.png" alt="Theo" className="theo-avatar" style={{ width: 80, height: 80, flexShrink: 0 }} />
           <div className="theo-live-header-text">
             <div className="theo-live-question">{question}</div>
             <div className="theo-live-counters" style={{ marginTop: 6 }}>
@@ -437,15 +439,22 @@ export default function TheoResearchLive({ requestId, question, startedAt, onClo
           ) : Object.keys(angles).length > 0 ? (() => {
             const angleList = Object.values(angles)
             const saturatedCount = angleList.filter(a => a.saturated).length
+            const processedCount = angleList.filter(a => a.claims > 0 || a.saturated).length
             const angleTotal = angleList.length
-            const currentAngle = angleList.find(a => a.status === 'analyzing' || a.status === 'auditing' || a.status === 'searched' || a.status === 'audited')
-            const sublabel = currentAngle ? currentAngle.topic.toUpperCase() : statusMsg.toUpperCase() || 'RESEARCHING'
-            // Use indeterminate (no progress prop) until first angle saturates, then show percentage
-            if (saturatedCount === 0) {
+            // Show phase-level description, not individual angle name
+            const hasAuditing = angleList.some(a => a.status === 'auditing')
+            const hasAnalyzing = angleList.some(a => a.status === 'analyzing')
+            const sublabel = saturatedCount === angleTotal ? 'SYNTHESIZING FINDINGS'
+              : hasAnalyzing ? 'SPECIALIST ANALYSIS'
+              : hasAuditing ? 'AUDITING SOURCES'
+              : processedCount > 0 ? 'EXPLORING ANGLES'
+              : 'SEARCHING SOURCES'
+            // Use indeterminate until first angle gets processed
+            if (processedCount === 0) {
               return <NervLoadingBar label="RESEARCH" sublabel={sublabel} counter={`0 / ${angleTotal} angles`} ledsDone={0} ledsTotal={angleTotal} />
             }
-            const angleProgress = Math.round((saturatedCount / Math.max(angleTotal, 1)) * 100)
-            return <NervLoadingBar label="RESEARCH" sublabel={sublabel} progress={angleProgress} counter={`${saturatedCount} / ${angleTotal} angles`} ledsDone={saturatedCount} ledsTotal={angleTotal} />
+            const angleProgress = Math.round((processedCount / Math.max(angleTotal, 1)) * 100)
+            return <NervLoadingBar label="RESEARCH" sublabel={sublabel} progress={angleProgress} counter={`${processedCount} / ${angleTotal} angles`} ledsDone={processedCount} ledsTotal={angleTotal} />
           })() : nodes.length > 0 ? (
             <NervLoadingBar label="RESEARCH" sublabel={specialistInfo.toUpperCase() || debateRound || activeLabel || 'PROCESSING'} progress={progress} counter={`${doneCount} / ${totalCount}`} ledsDone={subtaskProgress.done} ledsTotal={subtaskProgress.total} />
           ) : (
@@ -456,15 +465,22 @@ export default function TheoResearchLive({ requestId, question, startedAt, onClo
         {/* V2 Angle Progress Table */}
         {Object.keys(angles).length > 0 && (
           <div className="theo-angles-table">
-            {Object.entries(angles).map(([id, angle]) => (
+            {Object.entries(angles)
+              .sort(([, a], [, b]) => {
+                // Active first, then has-claims, then queued, saturated last
+                const statusOrder = (s: typeof a) => s.status === 'analyzing' || s.status === 'auditing' ? 0 : s.status === 'searched' || s.status === 'audited' ? 1 : s.claims > 0 ? 2 : s.saturated ? 4 : 3
+                return statusOrder(a) - statusOrder(b)
+              })
+              .map(([id, angle]) => (
               <div key={id} className={`theo-angle-row theo-angle-row--${angle.saturated ? 'saturated' : angle.status}`}>
                 <span className={`theo-angle-led ${angle.saturated ? 'theo-angle-led--done' : angle.status === 'analyzing' || angle.status === 'auditing' ? 'theo-angle-led--active' : angle.claims > 0 ? 'theo-angle-led--has-claims' : ''}`} />
                 <span className="theo-angle-topic">{angle.topic}</span>
                 <span className="theo-angle-stats">
                   {angle.claims > 0 && <span>{angle.claims} claims</span>}
-                  {angle.round > 0 && <span>R{angle.round}</span>}
                 </span>
-                {angle.saturated && <span className="theo-angle-check">&#10003;</span>}
+                <span className="theo-angle-convergence">
+                  {angle.saturated ? <span className="theo-angle-check">&#10003;</span> : angle.claims > 0 ? <span>{angle.consecutiveZeros}/2</span> : null}
+                </span>
               </div>
             ))}
           </div>

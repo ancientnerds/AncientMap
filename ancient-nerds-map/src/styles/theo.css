@@ -1313,6 +1313,13 @@
 .theo-live-progress .nerv-lb::after {
   display: none;
 }
+.theo-live-progress .nerv-lb-track {
+  height: 40px;
+}
+.theo-live-progress .nerv-lb-track-label {
+  font-size: 12px;
+  letter-spacing: 2px;
+}
 
 /* — V2 Angle Progress Table — */
 .theo-angles-table {
@@ -1376,10 +1383,16 @@
   color: var(--text-dimmed);
   flex-shrink: 0;
 }
+.theo-angle-convergence {
+  flex-shrink: 0;
+  font-size: 10px;
+  color: var(--text-dimmed);
+  min-width: 28px;
+  text-align: right;
+}
 .theo-angle-check {
   color: var(--nerv-g, #00cc66);
   font-size: 12px;
-  flex-shrink: 0;
 }
 
 /* — Heartbeat LED Strip — */

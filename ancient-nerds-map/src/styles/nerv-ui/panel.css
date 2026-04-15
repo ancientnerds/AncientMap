@@ -136,7 +136,8 @@ body.satellite-mode {
 .news-page-card::before,
 .articles-hero::before,
 .articles-grid-card::before,
-.articles-attribution-channel::before {
+.articles-attribution-channel::before,
+.theo-overlay-inner::before {
   content: '';
   position: absolute;
   inset: 0;
