@@ -94,6 +94,20 @@ class NewAngleDiscovered(ResearchEvent):
 
 
 @dataclass
+class AllAnglesRound1Complete(ResearchEvent):
+    """All angles have completed at least one specialist round."""
+
+    pass
+
+
+@dataclass
+class CrossPollinationComplete(ResearchEvent):
+    """Cross-angle insights have been shared, round 2 can begin."""
+
+    pass
+
+
+@dataclass
 class DeadlineApproaching(ResearchEvent):
     hours_remaining: float
 

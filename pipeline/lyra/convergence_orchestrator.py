@@ -19,7 +19,12 @@ from collections.abc import Callable
 from datetime import datetime, timedelta
 
 from pipeline.lyra.config import _get_settings
-from pipeline.lyra.research_events import EventBus, QualityFailed, QualityPassed
+from pipeline.lyra.research_events import (
+    CrossPollinationComplete,
+    EventBus,
+    QualityFailed,
+    QualityPassed,
+)
 from pipeline.lyra.research_state import (
     ActiveSpecialist,
     ResearchConfig,
@@ -87,6 +92,7 @@ class ConvergenceOrchestrator:
         from pipeline.lyra.handlers.angle_search import SearchHandler
         from pipeline.lyra.handlers.angle_specialist import SpecialistHandler
         from pipeline.lyra.handlers.convergence_checker import ConvergenceChecker
+        from pipeline.lyra.handlers.cross_pollination import CrossPollinationHandler
         from pipeline.lyra.handlers.deadline import DeadlineHandler
         from pipeline.lyra.handlers.debate import DebateHandler
         from pipeline.lyra.handlers.decomposition import DecompositionHandler
@@ -100,6 +106,7 @@ class ConvergenceOrchestrator:
         audit = AuditHandler(state, bus, semaphore)
         specialist = SpecialistHandler(state, bus, semaphore)
         convergence = ConvergenceChecker(state, bus, semaphore)
+        cross_poll = CrossPollinationHandler(state, bus, semaphore)
         synthesis = SynthesisHandler(state, bus, semaphore)
         debate = DebateHandler(state, bus, semaphore)
         paper = PaperHandler(state, bus, semaphore)
@@ -113,6 +120,7 @@ class ConvergenceOrchestrator:
             audit,
             specialist,
             convergence,
+            cross_poll,
             synthesis,
             debate,
             paper,
@@ -149,6 +157,17 @@ class ConvergenceOrchestrator:
                 await search.refine_and_search(angle.id, gaps)
 
         bus.on(QualityFailed, _on_quality_failed)
+
+        # Wire cross-pollination complete → trigger round 2 for all angles
+        async def _on_cross_pollination_complete(event: CrossPollinationComplete):
+            """After cross-pollination, trigger round 2 search for all angles."""
+            state.log("orchestrator", "Cross-pollination complete, starting round 2 for all angles")
+            emit({"type": "status", "content": "Starting round 2 with cross-angle insights..."})
+            for angle in state.angles:
+                if not angle.saturated:
+                    await search.search_angle(angle.id)
+
+        bus.on(CrossPollinationComplete, _on_cross_pollination_complete)
 
         # Wire quality passed → done
         done_event = asyncio.Event()

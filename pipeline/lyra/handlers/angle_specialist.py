@@ -212,10 +212,9 @@ class SpecialistHandler(BaseHandler):
             )
         )
 
-        # If angle isn't saturated, trigger another search round to verify convergence.
-        # With gaps: refine queries based on specialist feedback.
-        # Without gaps: re-search with existing queries to confirm no new claims.
-        if not angle.saturated:
+        # After round 1: wait for cross-pollination before triggering round 2.
+        # After cross-pollination: trigger subsequent rounds for convergence verification.
+        if not angle.saturated and self.state.cross_pollinated:
             from pipeline.lyra.handlers.angle_search import SearchHandler
 
             search_handler = self.bus.get_handler(SearchHandler)
@@ -224,6 +223,7 @@ class SpecialistHandler(BaseHandler):
                     await search_handler.refine_and_search(angle.id, specialist_gaps)
                 else:
                     await search_handler.search_angle(angle.id)
+        # Round 1 done but not yet cross-pollinated — convergence checker will handle it
 
     # ------------------------------------------------------------------
     # Panel initialization

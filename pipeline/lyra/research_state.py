@@ -117,6 +117,9 @@ class ResearchState:
     # Sources & citations
     registry: CitationRegistry = field(default_factory=CitationRegistry)
 
+    # Cross-pollination
+    cross_pollinated: bool = False
+
     # Synthesis & debate
     synthesis: dict = field(default_factory=dict)
     cross_angle_connections: list[dict] = field(default_factory=list)

@@ -5,6 +5,7 @@ import uuid
 
 from pipeline.lyra.handlers import BaseHandler
 from pipeline.lyra.research_events import (
+    AllAnglesRound1Complete,
     AllAnglesSaturated,
     AngleCreated,
     AngleSaturated,
@@ -49,8 +50,7 @@ class ConvergenceChecker(BaseHandler):
             await self.bus.emit(AllAnglesSaturated())
 
     async def _on_findings_produced(self, event: FindingsProduced):
-        """After findings, report progress. Saturation and query refinement
-        are handled by the specialist handler itself."""
+        """After findings, report progress and detect round 1 completion."""
         angle = next((a for a in self.state.angles if a.id == event.angle_id), None)
         if not angle or angle.saturated:
             return
@@ -63,6 +63,21 @@ class ConvergenceChecker(BaseHandler):
                 "content": f"Progress: {total_saturated}/{total} angles saturated",
             }
         )
+
+        # Detect when ALL angles have completed at least 1 specialist round
+        if not self.state.cross_pollinated:
+            all_have_findings = all(len(a.findings) > 0 for a in self.state.angles)
+            if all_have_findings:
+                self.emit_sse(
+                    {
+                        "type": "status",
+                        "content": "All angles completed round 1 — cross-pollinating findings...",
+                    }
+                )
+                self.state.log(
+                    "convergence", "All angles completed round 1, triggering cross-pollination"
+                )
+                await self.bus.emit(AllAnglesRound1Complete())
 
     async def _on_new_angle(self, event: NewAngleDiscovered):
         """Handle dynamically spawned rabbit-hole angles."""
