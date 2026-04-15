@@ -99,10 +99,21 @@ class AuditHandler(BaseHandler):
             }
         )
 
-        results = await asyncio.gather(
-            *[_audit_one(sid, source) for sid, source in source_items],
-            return_exceptions=True,
-        )
+        try:
+            results = await asyncio.wait_for(
+                asyncio.gather(
+                    *[_audit_one(sid, source) for sid, source in source_items],
+                    return_exceptions=True,
+                ),
+                timeout=300,  # 5 min max for all audits
+            )
+        except asyncio.TimeoutError:
+            logger.warning("Audit timed out for angle '%s' after 300s", angle.topic)
+            self.state.log(
+                "audit",
+                f"Angle '{angle.topic}': audit timed out, proceeding with unaudited sources",
+            )
+            results = []
 
         for result in results:
             if isinstance(result, Exception):

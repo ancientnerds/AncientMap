@@ -92,39 +92,56 @@ class ConvergenceOrchestrator:
         from pipeline.lyra.handlers.angle_audit import AuditHandler
         from pipeline.lyra.handlers.angle_search import SearchHandler
         from pipeline.lyra.handlers.angle_specialist import SpecialistHandler
+        from pipeline.lyra.handlers.content_fetch import ContentFetchHandler
         from pipeline.lyra.handlers.convergence_checker import ConvergenceChecker
         from pipeline.lyra.handlers.cross_pollination import CrossPollinationHandler
         from pipeline.lyra.handlers.deadline import DeadlineHandler
         from pipeline.lyra.handlers.debate import DebateHandler
         from pipeline.lyra.handlers.decomposition import DecompositionHandler
         from pipeline.lyra.handlers.judge import JudgeHandler
+        from pipeline.lyra.handlers.moderator import ModeratorHandler
         from pipeline.lyra.handlers.paper import PaperHandler
+        from pipeline.lyra.handlers.presentation import PresentationHandler
         from pipeline.lyra.handlers.synthesis import SynthesisHandler
 
         # Instantiate handlers
         decomposition = DecompositionHandler(state, bus, semaphore)
         search = SearchHandler(state, bus, semaphore)
         audit = AuditHandler(state, bus, semaphore)
+        content_fetch = ContentFetchHandler(state, bus, semaphore)
         specialist = SpecialistHandler(state, bus, semaphore)
         convergence = ConvergenceChecker(state, bus, semaphore)
         cross_poll = CrossPollinationHandler(state, bus, semaphore)
         synthesis = SynthesisHandler(state, bus, semaphore)
         debate = DebateHandler(state, bus, semaphore)
+        moderator = ModeratorHandler(state, bus, semaphore)
         paper = PaperHandler(state, bus, semaphore)
+        presentation = PresentationHandler(state, bus, semaphore)
         judge = JudgeHandler(state, bus, semaphore)
         deadline_handler = DeadlineHandler(state, bus, semaphore)
 
         # Register all handlers on the bus
+        # Event flow:
+        # AngleCreated -> search -> SourcesFound -> audit -> SourcesAudited
+        # -> content_fetch -> ContentFetched -> specialist -> FindingsProduced
+        # -> convergence check -> (loop or saturate)
+        # AllAnglesSaturated -> synthesis -> SynthesisReady -> debate
+        # -> DebateComplete -> moderator -> ModeratorComplete -> paper
+        # -> PaperReady -> presentation -> PresentationChecked -> judge
+        # -> QualityPassed/QualityFailed
         all_handlers = [
             decomposition,
             search,
             audit,
+            content_fetch,
             specialist,
             convergence,
             cross_poll,
             synthesis,
             debate,
+            moderator,
             paper,
+            presentation,
             judge,
             deadline_handler,
         ]
@@ -168,7 +185,7 @@ class ConvergenceOrchestrator:
         bus.on(QualityFailed, _on_quality_failed)
 
         # Wire cross-pollination complete -> trigger round 2 via AngleCreated events.
-        # This naturally flows: AngleCreated -> search -> audit -> specialist.
+        # This naturally flows: AngleCreated -> search -> audit -> content_fetch -> specialist.
         # The specialist handler skips its own search trigger for round 2
         # (only triggers for round 3+), preventing double-triggering.
         async def _on_cross_pollination_complete(event: CrossPollinationComplete):
@@ -236,10 +253,13 @@ class ConvergenceOrchestrator:
 
             # Phase 2+: Event-driven --- handlers react to events
             # The decomposition emits AngleCreated events which trigger:
-            # AngleCreated -> search -> SourcesFound -> audit -> SourcesAudited -> specialist
+            # AngleCreated -> search -> SourcesFound -> audit -> SourcesAudited
+            # -> content_fetch -> ContentFetched -> specialist
             # -> FindingsProduced -> convergence check -> (loop or saturate)
-            # AllAnglesSaturated -> synthesis -> SynthesisReady -> debate -> DebateComplete
-            # -> paper -> PaperReady -> judge -> QualityPassed/QualityFailed
+            # AllAnglesSaturated -> synthesis -> SynthesisReady -> debate
+            # -> DebateComplete -> moderator -> ModeratorComplete -> paper
+            # -> PaperReady -> presentation -> PresentationChecked -> judge
+            # -> QualityPassed/QualityFailed
 
             # Wait for completion with deadline checks
             while not done_event.is_set():
