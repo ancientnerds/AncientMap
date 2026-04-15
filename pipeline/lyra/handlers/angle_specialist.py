@@ -16,6 +16,7 @@ from pipeline.lyra.research_events import (
     AngleSaturated,
     ContentFetched,
     FindingsProduced,
+    SourcesAudited,
     NewAngleDiscovered,
     SpecialistPruned,
     SpecialistRecruited,
@@ -33,16 +34,24 @@ logger = logging.getLogger(__name__)
 
 class SpecialistHandler(BaseHandler):
     def register(self):
+        # Listen on BOTH — SourcesAudited (direct) and ContentFetched (after fetch)
+        # Whichever fires first triggers the specialist. ContentFetched is optional.
+        self.bus.on(SourcesAudited, self._on_content_fetched)
         self.bus.on(ContentFetched, self._on_content_fetched)
 
     # ------------------------------------------------------------------
     # Event entry point
     # ------------------------------------------------------------------
 
-    async def _on_content_fetched(self, event: ContentFetched):
+    async def _on_content_fetched(self, event: ContentFetched | SourcesAudited):
+        # Guard: don't run specialist twice for the same angle+round
         angle = next((a for a in self.state.angles if a.id == event.angle_id), None)
         if not angle or angle.saturated:
             return
+        # Skip if we already ran specialists for this search round
+        expected_rounds = len(angle.recent_claim_counts)
+        if expected_rounds > 0 and expected_rounds >= angle.search_rounds:
+            return  # already processed this round
 
         # Ensure we have a specialist panel
         if not self.state.panel:
