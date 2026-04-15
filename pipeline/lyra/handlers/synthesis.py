@@ -105,6 +105,12 @@ class SynthesisHandler(BaseHandler):
             self.state.llm_call_count += 1
             cross_result = self._parse_json(raw_cross)
             self.state.cross_angle_connections = cross_result.get("connections", [])
+            # Store convergent findings and contradictions for the paper's Connecting the Dots section
+            self.state.synthesis["convergent_findings"] = cross_result.get(
+                "convergent_findings", []
+            )
+            self.state.synthesis["contradictions"] = cross_result.get("contradictions", [])
+            self.state.synthesis["cross_angle_gaps"] = cross_result.get("gaps", [])
 
             convergent = len(cross_result.get("convergent_findings", []))
             contradictions = len(cross_result.get("contradictions", []))

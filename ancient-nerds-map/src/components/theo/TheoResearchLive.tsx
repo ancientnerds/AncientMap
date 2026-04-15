@@ -104,6 +104,10 @@ export default function TheoResearchLive({ requestId, question, startedAt, onClo
   const [researchPhase, setResearchPhase] = useState<string>('connecting')
   const [totalRabbitHoles, setTotalRabbitHoles] = useState(0)
   const [rabbitHoleFlash, setRabbitHoleFlash] = useState<string | null>(null)
+  const [selectedPhase, setSelectedPhase] = useState<string | null>(null)
+
+  // Phase detail data collected from events
+  const [phaseDetails, setPhaseDetails] = useState<Record<string, string[]>>({})
 
   const reportTextRef = useRef('')
   const thinkingRef = useRef('')
@@ -307,6 +311,30 @@ export default function TheoResearchLive({ requestId, question, startedAt, onClo
         else if (stage === 'paper') setResearchPhase(data.status === 'done' ? 'judging' : 'writing')
         else if (stage === 'quality_judge') setResearchPhase(data.status === 'done' ? 'done' : 'judging')
 
+        // Collect phase details for clickable drilldown
+        if (data.status === 'done' && meta) {
+          const phaseKey =
+            stage === 'decomposition' ? 'decomposing'
+            : stage === 'cross_pollination' ? 'cross_pollinating'
+            : stage === 'synthesis' ? 'synthesizing'
+            : stage === 'debate' ? 'debating'
+            : stage === 'quality_judge' ? 'judging'
+            : stage.startsWith('search_') || stage.startsWith('audit_') || stage.startsWith('specialist_') ? 'exploring'
+            : null
+          if (phaseKey) {
+            let detail = ''
+            if (stage === 'decomposition' && meta.angles) detail = `${meta.angles} angles created`
+            else if (stage.startsWith('specialist_') && meta.angle) detail = `${meta.angle}: ${meta.new_claims || 0} new claims (round ${meta.round || '?'})`
+            else if (stage === 'cross_pollination' && meta.enriched_angles) detail = `Enriched ${meta.enriched_angles} angles, ${meta.convergent_patterns || 0} convergent patterns`
+            else if (stage === 'synthesis' && meta.consensus != null) detail = `${meta.consensus} consensus, ${meta.contested || 0} contested, ${meta.unique || 0} unique`
+            else if (stage === 'debate' && meta.rounds) detail = `${meta.rounds} rounds, ${meta.challenges || 0} challenges, ${meta.defenses || 0} defenses`
+            else if (stage === 'quality_judge' && meta.score) detail = `Score: ${meta.score}/100 (${meta.badge || '?'})`
+            if (detail) {
+              setPhaseDetails(prev => ({ ...prev, [phaseKey]: [...(prev[phaseKey] || []), detail] }))
+            }
+          }
+        }
+
         // Detect saturation
         if (stage === 'synthesis' && data.status === 'start') {
           setAngles(prev => {
@@ -467,12 +495,26 @@ export default function TheoResearchLive({ requestId, question, startedAt, onClo
               const currentIdx = phaseOrder.indexOf(researchPhase)
               const thisIdx = phaseOrder.indexOf(phase)
               const status = thisIdx < currentIdx ? 'done' : thisIdx === currentIdx ? 'active' : 'pending'
+              const hasDetails = (phaseDetails[phase] || []).length > 0
               return (
-                <span key={phase} className={`theo-phase-box theo-phase-box--${status}`}>
+                <button
+                  key={phase}
+                  className={`theo-phase-box theo-phase-box--${status}${selectedPhase === phase ? ' theo-phase-box--selected' : ''}${hasDetails ? ' theo-phase-box--has-detail' : ''}`}
+                  onClick={() => setSelectedPhase(selectedPhase === phase ? null : phase)}
+                >
                   {labels[phase]}
-                </span>
+                </button>
               )
             })}
+          </div>
+        )}
+
+        {/* Phase detail drilldown */}
+        {selectedPhase && (phaseDetails[selectedPhase] || []).length > 0 && (
+          <div className="theo-phase-detail">
+            {phaseDetails[selectedPhase].map((detail, i) => (
+              <div key={i} className="theo-phase-detail-item">{detail}</div>
+            ))}
           </div>
         )}
 
