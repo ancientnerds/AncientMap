@@ -680,9 +680,13 @@ class StaticExporter:
                 for period in periods:
                     period_groups.setdefault(period, []).append(row)
 
-            # Write period files
+            # Write period files — sort Uncategorized last
             index = []
-            for period_name in sorted(period_groups.keys()):
+            sorted_periods = sorted(
+                period_groups.keys(),
+                key=lambda p: (p == "Uncategorized", p),
+            )
+            for period_name in sorted_periods:
                 group = period_groups[period_name]
                 slug = _slugify_period(period_name)
 

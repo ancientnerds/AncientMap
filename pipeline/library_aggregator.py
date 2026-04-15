@@ -21,8 +21,15 @@ from pipeline.database import (
     UnifiedSite,
     get_session,
 )
+from pipeline.utils.text import PERIOD_BUCKETS
 
 logger = logging.getLogger(__name__)
+
+# Only accept known period bucket labels — everything else becomes Uncategorized
+_VALID_PERIODS = {label for label, _, _ in PERIOD_BUCKETS}
+
+# Skip these domains — they're video refs, not library sources
+_SKIP_DOMAINS = {"youtube.com", "youtu.be", "m.youtube.com"}
 
 
 def _url_id(url: str) -> str:
@@ -62,6 +69,15 @@ class LibraryAggregator:
         url = url.strip()
         if not url or not title:
             return
+
+        # Skip video URLs — not library material
+        domain = _extract_domain(url)
+        if domain in _SKIP_DOMAINS:
+            return
+
+        # Only accept known period bucket labels
+        if period_name and period_name not in _VALID_PERIODS:
+            period_name = None
 
         uid = _url_id(url)
         now = datetime.now(UTC)

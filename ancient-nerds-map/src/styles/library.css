@@ -61,6 +61,46 @@
   padding: 2px 6px;
 }
 
+/* Filter chips */
+.library-filter-chips {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.library-filter-chip {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  padding: 5px 12px;
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: transparent;
+  color: var(--text-dimmed, #888);
+  cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.library-filter-chip:hover {
+  border-color: rgba(255, 255, 255, 0.2);
+  color: var(--text-primary, #e0e0e0);
+}
+
+.library-filter-chip.active {
+  border-color: var(--primary-red, #c02023);
+  color: var(--primary-red, #c02023);
+}
+
+.library-filter-chip-count {
+  font-size: 10px;
+  opacity: 0.6;
+}
+
 /* Stats bar */
 .library-stats-bar {
   font-family: 'JetBrains Mono', monospace;

@@ -23,6 +23,7 @@ export default function LibraryPage() {
   const [searchTotal, setSearchTotal] = useState(0)
   const [searchLoading, setSearchLoading] = useState(false)
   const [searchError, setSearchError] = useState(false)
+  const [activeType, setActiveType] = useState<string | null>(null)
   const [selectedSource, setSelectedSource] = useState<LibrarySource | null>(null)
   const sectionRefs = useRef<Map<string, HTMLDivElement>>(new Map())
   const searchTimer = useRef<ReturnType<typeof setTimeout>>()
@@ -74,38 +75,55 @@ export default function LibraryPage() {
     return () => observers.forEach(o => o.disconnect())
   }, [periods])
 
+  // Fetch from search API (used by both text search and type filter)
+  const fetchSearch = useCallback(async (q: string, type: string | null) => {
+    setSearchLoading(true)
+    setSearchError(false)
+    try {
+      const params = new URLSearchParams({ page_size: '50' })
+      if (q) params.set('q', q)
+      if (type) params.set('type', type)
+      const resp = await fetch(`${config.api.baseUrl}/library/search?${params}`)
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
+      const data: LibrarySearchResponse = await resp.json()
+      setSearchResults(data.items)
+      setSearchTotal(data.total)
+    } catch {
+      setSearchResults([])
+      setSearchTotal(0)
+      setSearchError(true)
+    } finally {
+      setSearchLoading(false)
+    }
+  }, [])
+
   // Search with debounce
   const handleSearch = useCallback((value: string) => {
     setSearchQuery(value)
     if (searchTimer.current) clearTimeout(searchTimer.current)
 
-    if (!value.trim()) {
+    if (!value.trim() && !activeType) {
       setSearchResults(null)
       return
     }
 
-    searchTimer.current = setTimeout(async () => {
-      setSearchLoading(true)
-      setSearchError(false)
-      try {
-        const params = new URLSearchParams({ q: value, page_size: '50' })
-        const resp = await fetch(`${config.api.baseUrl}/library/search?${params}`)
-        if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
-        const data: LibrarySearchResponse = await resp.json()
-        setSearchResults(data.items)
-        setSearchTotal(data.total)
-      } catch {
-        setSearchResults([])
-        setSearchTotal(0)
-        setSearchError(true)
-      } finally {
-        setSearchLoading(false)
-      }
-    }, 300)
-  }, [])
+    searchTimer.current = setTimeout(() => fetchSearch(value, activeType), 300)
+  }, [activeType, fetchSearch])
+
+  // Type filter chip toggle
+  const handleTypeFilter = useCallback((type: string) => {
+    const newType = activeType === type ? null : type
+    setActiveType(newType)
+    if (!newType && !searchQuery.trim()) {
+      setSearchResults(null)
+    } else {
+      fetchSearch(searchQuery, newType)
+    }
+  }, [activeType, searchQuery, fetchSearch])
 
   const clearSearch = () => {
     setSearchQuery('')
+    setActiveType(null)
     setSearchResults(null)
     setSearchError(false)
   }
@@ -142,6 +160,20 @@ export default function LibraryPage() {
           )}
         </div>
 
+        {/* Source type filter chips */}
+        <div className="library-filter-chips">
+          {['story', 'journal', 'research', 'site'].map(type => (
+            <button
+              key={type}
+              className={`library-filter-chip${activeType === type ? ' active' : ''}`}
+              onClick={() => handleTypeFilter(type)}
+            >
+              {type === 'story' ? 'Stories' : type === 'journal' ? 'Journals' : type === 'research' ? 'Research' : 'Sites'}
+              {stats && <span className="library-filter-chip-count">{stats.by_type[type] || 0}</span>}
+            </button>
+          ))}
+        </div>
+
         {/* Stats bar */}
         {stats && !isSearchActive && (
           <div className="library-stats-bar">
@@ -153,7 +185,7 @@ export default function LibraryPage() {
         {isSearchActive && (
           <div className="library-search-results">
             <div className="library-stats-bar">
-              {searchLoading ? 'Searching...' : `${searchTotal.toLocaleString()} results for "${searchQuery}"`}
+              {searchLoading ? 'Searching...' : `${searchTotal.toLocaleString()} results${searchQuery ? ` for "${searchQuery}"` : ''}${activeType ? ` in ${activeType}` : ''}`}
             </div>
             <div className="library-card-grid">
               {searchResults?.map(source => (
