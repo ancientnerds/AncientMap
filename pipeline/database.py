@@ -22,7 +22,7 @@ from sqlalchemy import (
     UniqueConstraint,
     create_engine,
 )
-from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
 from sqlalchemy.orm import (
     DeclarativeBase,
     Mapped,
@@ -983,6 +983,40 @@ class NewsArticle(Base):
 
     def __repr__(self) -> str:
         return f"<NewsArticle {self.id}: {self.title[:40]}>"
+
+
+# =============================================================================
+# Library Sources (Deduplicated Web Citations)
+# =============================================================================
+
+
+class LibrarySource(Base):
+    """Aggregated citation/web source from across all content types."""
+
+    __tablename__ = "library_sources"
+
+    id: Mapped[str] = mapped_column(String(12), primary_key=True)  # sha256(url)[:12]
+    url: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
+    title: Mapped[str] = mapped_column(String(500), nullable=False)
+    domain: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    snippet: Mapped[str | None] = mapped_column(Text, nullable=True)
+    reliability_tier: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    period_tags: Mapped[list | None] = mapped_column(ARRAY(String(100)), nullable=True)
+    source_types: Mapped[list | None] = mapped_column(ARRAY(String(20)), nullable=True)
+    first_seen: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    last_seen: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    citation_count: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
+    parent_refs: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    __table_args__ = (
+        Index("idx_library_sources_citation_count", "citation_count"),
+        Index("idx_library_sources_period_tags", "period_tags", postgresql_using="gin"),
+        Index("idx_library_sources_source_types", "source_types", postgresql_using="gin"),
+    )
+
+    def __repr__(self) -> str:
+        return f"<LibrarySource {self.id}: {self.domain}>"
 
 
 # =============================================================================

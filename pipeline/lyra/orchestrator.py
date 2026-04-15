@@ -1668,6 +1668,42 @@ def _run_migrations(engine) -> None:
             )
         )
 
+        # Library sources table (2026-04-15)
+        conn.execute(
+            text("""
+            CREATE TABLE IF NOT EXISTS library_sources (
+                id VARCHAR(12) PRIMARY KEY,
+                url TEXT NOT NULL UNIQUE,
+                title VARCHAR(500) NOT NULL,
+                domain VARCHAR(255),
+                snippet TEXT,
+                reliability_tier INTEGER DEFAULT 0,
+                period_tags TEXT[],
+                source_types VARCHAR(20)[],
+                first_seen TIMESTAMP DEFAULT NOW(),
+                last_seen TIMESTAMP DEFAULT NOW(),
+                citation_count INTEGER DEFAULT 1,
+                parent_refs JSONB,
+                created_at TIMESTAMP DEFAULT NOW()
+            )
+        """)
+        )
+        conn.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS idx_library_sources_citation_count ON library_sources (citation_count DESC)"
+            )
+        )
+        conn.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS idx_library_sources_period_tags ON library_sources USING gin (period_tags)"
+            )
+        )
+        conn.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS idx_library_sources_source_types ON library_sources USING gin (source_types)"
+            )
+        )
+
         conn.commit()
 
 
