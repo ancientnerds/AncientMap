@@ -264,25 +264,45 @@ class LibraryAggregator:
         logger.info(f"  Scanned articles: {count} citations")
 
     def _flush_to_db(self, session):
-        """Upsert all pending records into library_sources."""
+        """Upsert all pending records into library_sources. Never deletes existing rows."""
         if not self.pending:
             logger.info("  No citations to flush")
             return 0
 
-        from sqlalchemy import text
-
-        # Truncate and rewrite — simpler than merging with existing rows
-        session.execute(text("DELETE FROM library_sources"))
+        from sqlalchemy.dialects.postgresql import insert as pg_insert
 
         rows = list(self.pending.values())
-        for row in rows:
-            row["created_at"] = datetime.now(UTC)
+        now = datetime.now(UTC)
+        inserted = 0
+        updated = 0
 
-        session.bulk_insert_mappings(LibrarySource, rows)
+        for row in rows:
+            row["created_at"] = now
+            stmt = pg_insert(LibrarySource).values(**row)
+            stmt = stmt.on_conflict_do_update(
+                index_elements=["id"],
+                set_={
+                    "title": stmt.excluded.title,
+                    "snippet": stmt.excluded.snippet,
+                    "reliability_tier": stmt.excluded.reliability_tier,
+                    "period_tags": stmt.excluded.period_tags,
+                    "source_types": stmt.excluded.source_types,
+                    "last_seen": stmt.excluded.last_seen,
+                    "citation_count": stmt.excluded.citation_count,
+                    "parent_refs": stmt.excluded.parent_refs,
+                },
+            )
+            result = session.execute(stmt)
+            if result.rowcount:
+                # rowcount=1 for both insert and update, but we count new URLs
+                updated += 1
+
         session.flush()
 
-        total = len(rows)
-        logger.info(f"  Flushed {total} unique sources to library_sources")
+        # Count total rows in table (includes old ones we didn't touch)
+        total = session.query(LibrarySource).count()
+        new_this_run = len(rows)
+        logger.info(f"  Upserted {new_this_run} sources ({total} total in library)")
         return total
 
     def aggregate_all(self) -> int:
