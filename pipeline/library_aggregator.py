@@ -273,8 +273,6 @@ class LibraryAggregator:
 
         rows = list(self.pending.values())
         now = datetime.now(UTC)
-        inserted = 0
-        updated = 0
 
         for row in rows:
             row["created_at"] = now
@@ -292,10 +290,7 @@ class LibraryAggregator:
                     "parent_refs": stmt.excluded.parent_refs,
                 },
             )
-            result = session.execute(stmt)
-            if result.rowcount:
-                # rowcount=1 for both insert and update, but we count new URLs
-                updated += 1
+            session.execute(stmt)
 
         session.flush()
 
