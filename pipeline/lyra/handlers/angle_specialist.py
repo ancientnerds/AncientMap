@@ -5,9 +5,12 @@ import asyncio
 import json
 import logging
 from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 
 from pipeline.lyra.config import _get_settings
 from pipeline.lyra.handlers import BaseHandler
+
+PROMPTS_DIR = Path(__file__).resolve().parent.parent / "prompts"
 from pipeline.lyra.minimax_shared import minimax_chat_anthropic
 from pipeline.lyra.research_events import (
     AngleSaturated,
@@ -164,8 +167,37 @@ class SpecialistHandler(BaseHandler):
             )
             cross_angle_topics.extend(cross_topics)
 
-        # Track claim count for convergence detection
-        angle.recent_claim_counts.append(new_claims_total)
+        # Novelty check — classify new claims as restatement/incremental/rabbit_hole
+        genuine_novelty = 0
+        rabbit_holes_found: list[str] = []
+        if new_claims_total > 0 and len(angle.findings) > new_claims_total:
+            # Only run novelty check if we have existing findings to compare against
+            novelty = await self._check_novelty(angle, new_claims_total)
+            genuine_novelty = novelty.get("incremental", 0) + novelty.get("rabbit_holes", 0)
+            rabbit_holes_found = novelty.get("rabbit_hole_topics", [])
+
+            # Extend max rounds if rabbit holes found
+            if rabbit_holes_found:
+                self.state.log(
+                    "specialist",
+                    f"Rabbit holes in '{angle.topic}': {rabbit_holes_found}",
+                )
+                # Grant bonus rounds for each rabbit hole (up to double the base max)
+                angle_max = self.state.config.max_search_rounds_per_angle
+                bonus = min(len(rabbit_holes_found), angle_max)
+                # Track bonus via a dynamic cap (don't exceed 2x base)
+                effective_max = angle_max + bonus
+                if angle.search_rounds < effective_max:
+                    self.state.log(
+                        "specialist",
+                        f"Angle '{angle.topic}' granted {bonus} bonus rounds (max now {effective_max})",
+                    )
+        else:
+            # First round — all claims are novel by definition
+            genuine_novelty = new_claims_total
+
+        # Track GENUINE novelty for convergence (not raw claim count)
+        angle.recent_claim_counts.append(genuine_novelty)
 
         self.emit_sse(
             {
@@ -174,7 +206,9 @@ class SpecialistHandler(BaseHandler):
                 "status": "done",
                 "meta": {
                     "angle": angle.topic,
-                    "new_claims": new_claims_total,
+                    "new_claims": genuine_novelty,
+                    "raw_new_claims": new_claims_total,
+                    "rabbit_holes": len(rabbit_holes_found),
                     "total_claims": len(angle.findings),
                     "round": angle.search_rounds,
                 },
@@ -348,6 +382,56 @@ class SpecialistHandler(BaseHandler):
                 analyses[spec_id] = parsed
 
         return analyses
+
+    # ------------------------------------------------------------------
+    # Novelty assessment
+    # ------------------------------------------------------------------
+
+    async def _check_novelty(self, angle: ResearchAngle, new_count: int) -> dict:
+        """Classify new findings as restatement/incremental/rabbit_hole."""
+        prompt_path = PROMPTS_DIR / "v2_novelty_check.txt"
+        if not prompt_path.exists():
+            return {"incremental": new_count, "rabbit_holes": 0, "rabbit_hole_topics": []}
+
+        prompt = prompt_path.read_text(encoding="utf-8")
+
+        # Build existing vs new findings for comparison
+        existing = angle.findings[:-new_count] if len(angle.findings) > new_count else []
+        new = angle.findings[-new_count:]
+
+        existing_text = json.dumps([{"claim": f.get("claim", "")} for f in existing[:20]], indent=2)
+        new_text = json.dumps([{"claim": f.get("claim", "")} for f in new], indent=2)
+
+        user_msg = (
+            f"## Research angle: {angle.topic}\n\n"
+            f"## Existing findings ({len(existing)} total, showing top 20)\n\n{existing_text}\n\n"
+            f"## New findings from this round ({len(new)})\n\n{new_text}"
+        )
+
+        async with self.semaphore:
+            raw = await asyncio.to_thread(
+                minimax_chat_anthropic,
+                prompt,
+                user_msg,
+                4096,
+                _get_settings(),
+            )
+        self.state.llm_call_count += 1
+
+        parsed = _parse_json(raw)
+        summary = parsed.get("summary", {})
+
+        self.state.log(
+            "novelty",
+            f"Angle '{angle.topic}': {summary.get('restatements', 0)} restatements, "
+            f"{summary.get('incremental', 0)} incremental, {summary.get('rabbit_holes', 0)} rabbit holes",
+        )
+
+        return {
+            "incremental": summary.get("incremental", 0),
+            "rabbit_holes": summary.get("rabbit_holes", 0),
+            "rabbit_hole_topics": parsed.get("rabbit_hole_topics", []),
+        }
 
     # ------------------------------------------------------------------
     # Saturation detection
