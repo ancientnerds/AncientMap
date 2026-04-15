@@ -310,10 +310,22 @@ class SpecialistHandler(BaseHandler):
     # Sources context (per-angle, not full registry)
     # ------------------------------------------------------------------
 
-    def _build_angle_sources_context(self, angle: ResearchAngle) -> str:
-        """Format only this angle's sources into a text block for prompts."""
-        lines: list[str] = []
+    def _build_angle_sources_context(self, angle: ResearchAngle, max_sources: int = 50) -> str:
+        """Format only this angle's sources into a text block for prompts.
+
+        Caps at max_sources to prevent context overflow on large source pools.
+        Prioritizes higher-tier sources.
+        """
+        # Sort by tier (1=academic first) then take top N
+        scored = []
         for sid in angle.source_ids:
+            source = self.state.registry.get_reference(sid)
+            if source:
+                scored.append((source.reliability_tier or 3, sid, source))
+        scored.sort(key=lambda x: x[0])
+
+        lines: list[str] = []
+        for _tier, sid, source in scored[:max_sources]:
             source = self.state.registry.get_reference(sid)
             if not source:
                 continue
