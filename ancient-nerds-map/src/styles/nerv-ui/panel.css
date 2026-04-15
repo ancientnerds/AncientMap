@@ -63,7 +63,9 @@ body.satellite-mode {
 .news-page-card,
 .articles-hero,
 .articles-grid-card,
-.articles-attribution-channel {
+.articles-attribution-channel,
+.library-card,
+.library-detail-card {
   background: var(--nerv-panel-bg);
   backdrop-filter: blur(var(--nerv-panel-blur));
   -webkit-backdrop-filter: blur(var(--nerv-panel-blur));
@@ -80,7 +82,8 @@ body.satellite-mode {
 .disclaimer-modal,
 .signin-popup,
 .download-manager-modal,
-.hamburger-dropdown {
+.hamburger-dropdown,
+.library-detail-card {
   box-shadow: var(--nerv-panel-shadow), 0 20px 60px rgba(0, 0, 0, 0.5);
 }
 
@@ -137,6 +140,7 @@ body.satellite-mode {
 .articles-hero::before,
 .articles-grid-card::before,
 .articles-attribution-channel::before,
+.library-card::before,
 .theo-overlay-inner::before {
   content: '';
   position: absolute;
