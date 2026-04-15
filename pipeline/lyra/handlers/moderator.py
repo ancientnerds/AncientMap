@@ -34,6 +34,11 @@ class ModeratorHandler(BaseHandler):
         self.emit_sse({"type": "status", "content": "Moderator reviewing claims..."})
 
         prompt_path = PROMPTS_DIR / "theo_moderator.txt"
+        if not prompt_path.exists():
+            self.state.log("moderator", "Moderator prompt not found, skipping moderation")
+            self.state.moderated_result = {}
+            await self.bus.emit(ModeratorComplete())
+            return
         system_prompt = prompt_path.read_text(encoding="utf-8")
 
         # Build input: research question + synthesis JSON + debate result

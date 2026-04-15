@@ -88,7 +88,7 @@ class SpecialistHandler(BaseHandler):
         # Previous rounds' findings are passed as context summary instead of
         # re-sending all old sources. This keeps specialist input bounded
         # without throwing away any research.
-        analyzed_sids = {f.get("_source_id") for f in angle.findings if f.get("_source_id")}
+        analyzed_sids = {sid for f in angle.findings for sid in f.get("_source_ids", [])}
         new_source_ids = [sid for sid in angle.source_ids if sid not in analyzed_sids]
         sources_context = self._build_angle_sources_context(angle, source_ids=new_source_ids)
 
@@ -172,9 +172,7 @@ class SpecialistHandler(BaseHandler):
             # Add new findings to angle
             for finding in new_findings:
                 finding["specialist_id"] = panel_spec.specialist_id
-                # Track which sources contributed to this finding
-                for sid in finding.get("source_ids", []):
-                    finding["_source_id"] = sid  # mark source as analyzed
+                finding["_source_ids"] = list(finding.get("source_ids", []))
                 angle.findings.append(finding)
                 # Register in citation registry
                 self.state.registry.add_claim(
