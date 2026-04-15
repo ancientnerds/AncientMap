@@ -181,7 +181,7 @@
   padding: 12px;
   cursor: pointer;
   text-align: left;
-  transition: border-color 0.15s;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -191,7 +191,8 @@
 }
 
 .library-card:hover {
-  border-color: rgba(255, 255, 255, 0.15);
+  border-color: rgba(0, 204, 102, 0.45);
+  box-shadow: 0 0 16px rgba(0, 204, 102, 0.12), 0 4px 24px rgba(0, 0, 0, 0.5);
 }
 
 .library-card-header {

@@ -139,7 +139,7 @@ export default function LibraryPage() {
 
   return (
     <div className="library-page">
-      <PageHeader currentPage="library">
+      <PageHeader currentPage="library" speechBubble="Every source and citation from our Stories, Journals, and Research — organized by period">
         <span className="page-header-title">Library</span>
       </PageHeader>
 
