@@ -255,23 +255,19 @@ export default function TheoResearchLive({ requestId, question, startedAt, onClo
           const angleId = stage.includes('_') ? stage.split('_').slice(1).join('_') : ''
           if (angleId) {
             setAngles(prev => {
-              // Find existing by ID, or match a pending entry by topic name
-              let existing = prev[angleId]
+              // Find existing by real ID or by topic name (pending entries)
+              const matchKey = prev[angleId]
+                ? angleId
+                : Object.keys(prev).find(k => prev[k].topic === (meta.angle as string))
+              if (!matchKey) return prev  // unknown angle, skip
+              const base = prev[matchKey]
               const next = { ...prev }
-              if (!existing) {
-                const pendingKey = Object.keys(prev).find(k => k.startsWith('pending_') && prev[k].topic === (meta.angle as string))
-                if (pendingKey) {
-                  existing = prev[pendingKey]
-                  delete next[pendingKey]  // remove pending, will be re-added with real ID
-                }
-              }
-              const base = existing || { topic: meta.angle as string, status: 'queued', claims: 0, sources: 0, round: 0, saturated: false, consecutiveZeros: 0, rabbitHoles: 0, spawnedFrom: null }
-              const updated = { ...base, topic: meta.angle as string }
+              const updated = { ...base }
 
               if (stage.startsWith('search_') && data.status === 'done') {
                 updated.status = 'searched'
-                updated.sources = (meta.total_sources as number) || existing.sources
-                updated.round = (meta.round as number) || existing.round
+                updated.sources = (meta.total_sources as number) || base.sources
+                updated.round = (meta.round as number) || base.round
               } else if (stage.startsWith('audit_') && data.status === 'start') {
                 updated.status = 'auditing'
               } else if (stage.startsWith('audit_') && data.status === 'done') {
@@ -297,7 +293,7 @@ export default function TheoResearchLive({ requestId, question, startedAt, onClo
                 }
               }
 
-              return { ...next, [angleId]: updated }
+              return { ...next, [matchKey]: updated }
             })
           }
         }
@@ -558,13 +554,7 @@ export default function TheoResearchLive({ requestId, question, startedAt, onClo
         {/* V2 Angle Progress Table */}
         {Object.keys(angles).length > 0 && (
           <div className="theo-angles-table">
-            {Object.entries(angles)
-              .sort(([, a], [, b]) => {
-                // Active first, then has-claims, then queued, saturated last
-                const statusOrder = (s: typeof a) => s.status === 'analyzing' || s.status === 'auditing' ? 0 : s.status === 'searched' || s.status === 'audited' ? 1 : s.claims > 0 ? 2 : s.saturated ? 4 : 3
-                return statusOrder(a) - statusOrder(b)
-              })
-              .map(([id, angle]) => (
+            {Object.entries(angles).map(([id, angle]) => (
               <div key={id} className={`theo-angle-row theo-angle-row--${angle.saturated ? 'saturated' : angle.status}`}>
                 <span className={`theo-angle-led ${angle.saturated ? 'theo-angle-led--done' : angle.status === 'analyzing' || angle.status === 'auditing' ? 'theo-angle-led--active' : angle.claims > 0 ? 'theo-angle-led--has-claims' : ''}`} />
                 <span className="theo-angle-topic">{angle.topic}</span>
@@ -573,7 +563,7 @@ export default function TheoResearchLive({ requestId, question, startedAt, onClo
                 </span>
                 {angle.rabbitHoles > 0 && <span className="theo-angle-rabbit">&#128007;{angle.rabbitHoles}</span>}
                 <span className="theo-angle-convergence">
-                  {angle.saturated ? <span className="theo-angle-check">&#10003;</span> : angle.claims > 0 ? <span>{angle.consecutiveZeros}/2</span> : null}
+                  {angle.saturated ? <span className="theo-angle-check">&#10003;</span> : angle.claims > 0 ? <span>{angle.consecutiveZeros}/2 rounds</span> : null}
                 </span>
               </div>
             ))}
