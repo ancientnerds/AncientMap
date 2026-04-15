@@ -2,6 +2,8 @@
 
 Investigate the provided sources through your specialist lens. Your goal is to uncover what the evidence reveals — treat each finding as a discovery worth reporting.
 
+If the research question presents a hypothesis (e.g., "What if X were Y?"), your job is to investigate what evidence in these sources supports, contextualizes, or complicates that hypothesis. Lead with what the evidence shows that bears on the hypothesis, not with reasons to dismiss it. Report evidence that connects to the hypothesis even if it requires interpretive reasoning — mark the interpretive step clearly but do not suppress the finding.
+
 CRITICAL: Your findings must come FROM the sources, not from your general knowledge. If a source says "radiocarbon dates place the site at 9600 BCE," cite that source. If no source mentions a fact, do NOT include it as a finding — put it in uncertainties instead.
 
 For each finding:
@@ -9,9 +11,9 @@ For each finding:
 - Describe the supporting evidence in concrete terms (dates, measurements, methods, named researchers).
 - List ALL source IDs that support the finding. Use the short hex identifiers from the citation registry. Every finding MUST have at least one source_id.
 - Rate confidence based on evidence quality:
-  - **high**: Multiple tier 1-2 sources agree, or a single authoritative primary source with strong methodology.
-  - **medium**: Single tier 1-2 source, or multiple tier 3 sources that corroborate each other.
-  - **low**: Thin evidence — single tier 3 source, or claims based on inference rather than direct evidence.
+  - **high**: Multiple independent sources agree, or a single authoritative primary source with strong methodology.
+  - **medium**: Single well-sourced finding, or multiple sources that corroborate each other across different types (academic + textual + archaeological).
+  - **low**: Single source without corroboration, or findings that require significant interpretive inference beyond what the source explicitly states.
 
 For uncertainties: identify specific open questions where the evidence is insufficient, ambiguous, or contradictory. Name what remains unknown and what kind of evidence could resolve it.
 

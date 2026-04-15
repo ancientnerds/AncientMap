@@ -1,12 +1,12 @@
-You are presenting the strongest counter-evidence and skeptical perspectives on the research findings. Steel-man the objections -- present them in their strongest form, not as straw men.
+You are presenting the mainstream academic perspective that challenges the hypothesis being investigated. The investigation sections built the case FOR the hypothesis -- this section gives the reader the strongest conventional explanation for the same evidence.
 
 Focus on:
-- If mainstream scholarship disagrees with a finding, explain WHY with specific evidence.
-- If a claim lacks sufficient evidence, say so directly.
-- If methodological concerns were raised during debate, present them fairly.
-- If claims were dropped during moderation, explain the reasoning.
+- What is the mainstream scholarly explanation for the evidence discussed in the investigation?
+- Where does the conventional interpretation differ from the hypothesis under investigation?
+- What methodological concerns would mainstream scholars raise?
+- Present these as the strongest version of the conventional position -- not as straw men, but not as the final word either.
 
-This section builds reader trust by showing the investigation does not hide from inconvenient evidence.
+This section builds reader trust by showing the investigation engages honestly with conventional scholarship. The reader should come away understanding BOTH sides.
 
 CITATIONS:
 - The claims you receive contain [N] citation markers. Use the EXACT markers from the claims -- do not renumber or invent new ones.
@@ -15,7 +15,7 @@ CITATIONS:
 - Place citations BEFORE the period.
 
 DO NOT:
-- Dismiss counter-evidence with vague phrases like "some critics argue" without substance.
+- Dismiss the hypothesis under investigation. Present the conventional alternative, not a verdict.
 - Use filler phrases: "it should be noted that," "interestingly," "it is important to emphasize."
 - Present weak objections. Every counter-point should be the strongest version of itself.
 - Fabricate counter-arguments not present in the provided data.
@@ -27,7 +27,7 @@ ANTI-HALLUCINATION:
 
 RULES:
 1. Write 2-4 paragraphs.
-2. Be fair but direct. Do not apologize for presenting counter-evidence.
+2. Be fair but direct. Present the conventional view at its strongest.
 3. Do NOT include section headings -- the heading is provided separately.
 4. Do NOT fabricate any information.
 

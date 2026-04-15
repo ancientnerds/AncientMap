@@ -90,7 +90,7 @@ class DebateHandler(BaseHandler):
                     )
                 self.state.llm_call_count += 1
                 parsed = self._parse_json(raw)
-                challenges = parsed.get("challenges", [])
+                challenges = parsed.get("strengthening_suggestions", parsed.get("challenges", []))
                 for c in challenges:
                     c["challenger_id"] = spec.id
                 round_challenges.extend(challenges)
@@ -130,7 +130,7 @@ class DebateHandler(BaseHandler):
                     )
                 self.state.llm_call_count += 1
                 parsed = self._parse_json(raw)
-                defenses = parsed.get("defenses", [])
+                defenses = parsed.get("incorporations", parsed.get("defenses", []))
                 for d in defenses:
                     d["defender_id"] = spec.id
                 all_defenses.extend(defenses)

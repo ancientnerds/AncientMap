@@ -163,6 +163,7 @@ class PaperHandler(BaseHandler):
             connecting_section,
             all_claims,
             ref_map_text,
+            sid_to_num,
             settings,
         )
         other_side_prose = await self._write_other_side_section(
@@ -469,6 +470,21 @@ class PaperHandler(BaseHandler):
                 }
             )
 
+        # From moderated speculative claims
+        for claim_data in self.state.moderated_result.get("speculative_claims", []):
+            sids = claim_data.get("source_ids", [])
+            cites = " ".join(f"[{sid_to_num[s]}]" for s in sids if s in sid_to_num)
+            claims.append(
+                {
+                    "claim": claim_data.get("claim", ""),
+                    "citations": cites,
+                    "confidence": claim_data.get("confidence", "low"),
+                    "source_ids": sids,
+                    "type": "moderated_speculative",
+                    "notes": claim_data.get("notes", ""),
+                }
+            )
+
         return claims
 
     # ===================================================================
@@ -636,43 +652,65 @@ class PaperHandler(BaseHandler):
         section: dict | None,
         all_claims: list[dict],
         ref_map_text: str,
+        sid_to_num: dict[str, int],
         settings,
     ) -> str:
         """Write the Connecting the Dots section."""
-        # Use dedicated connecting prompt
         prompt_path = PROMPTS_DIR / "v2_paper_connecting.txt"
         section_prompt = prompt_path.read_text(encoding="utf-8")
 
-        # Gather cross-angle connections
-        connections = []
-        if section and section.get("connections"):
-            connections = section["connections"]
-        elif self.state.cross_angle_connections:
-            connections = [
-                c.get("description", c.get("connection", str(c)))
-                for c in self.state.cross_angle_connections
-            ]
+        # Gather cross-angle connections with CONCRETE findings
+        connection_lines: list[str] = []
+        if self.state.cross_angle_connections:
+            for c in self.state.cross_angle_connections:
+                from_finding = ""
+                to_finding = ""
+                if isinstance(c.get("from_angle"), dict):
+                    from_finding = c["from_angle"].get("finding", "")
+                if isinstance(c.get("to_angle"), dict):
+                    to_finding = c["to_angle"].get("finding", "")
 
-        if not connections:
-            # Build from synthesis if no explicit connections
+                if from_finding and to_finding:
+                    connection_lines.append(f"{from_finding} — connects to — {to_finding}")
+                elif c.get("description"):
+                    connection_lines.append(c["description"])
+
+        if section and section.get("connections") and not connection_lines:
+            connection_lines = [str(c) for c in section["connections"]]
+
+        if not connection_lines:
             convergent = self.state.synthesis.get("convergent_findings", [])
-            if convergent:
-                connections = [f.get("finding", str(f)) for f in convergent]
+            for f in convergent:
+                if isinstance(f, dict) and f.get("angles_involved"):
+                    angle_findings = [
+                        a.get("finding", "") for a in f["angles_involved"] if a.get("finding")
+                    ]
+                    if angle_findings:
+                        connection_lines.append(" — ".join(angle_findings))
+                elif isinstance(f, dict):
+                    connection_lines.append(f.get("pattern", f.get("finding", str(f))))
 
-        if not connections:
+        if not connection_lines:
             return ""
 
-        # Include angle summaries for context
+        # Build angle summaries with concrete findings + citation markers
         angle_summaries = []
         for angle in self.state.angles:
-            top_findings = [f.get("claim", "") for f in angle.findings[:5]]
-            angle_summaries.append(f"Angle '{angle.topic}': {', '.join(top_findings[:3])}")
+            top_findings = []
+            for f in angle.findings[:5]:
+                claim_text = f.get("claim", "")
+                sids = f.get("source_ids", [])
+                cites = " ".join(f"[{sid_to_num[s]}]" for s in sids if s in sid_to_num)
+                top_findings.append(f"{claim_text} {cites}" if cites else claim_text)
+            angle_summaries.append(
+                f"Angle '{angle.topic}':\n" + "\n".join(f"  - {tf}" for tf in top_findings)
+            )
 
-        claims_text = "\n".join(f"- {c}" for c in connections)
-        angles_text = "\n".join(f"- {a}" for a in angle_summaries)
+        claims_text = "\n".join(f"- {c}" for c in connection_lines)
+        angles_text = "\n\n".join(angle_summaries)
         user_msg = (
             f"## Research question\n\n{self.state.question}\n\n"
-            f"## Angle summaries\n\n{angles_text}\n\n"
+            f"## Angle findings\n\n{angles_text}\n\n"
             f"## Cross-angle connections\n\n{claims_text}\n\n"
             f"## Reference map\n\n{ref_map_text}\n"
         )
@@ -723,6 +761,13 @@ class PaperHandler(BaseHandler):
             reason = dc.get("reason", "")
             if claim_text:
                 counter_claims.append(f"{claim_text} -- Dropped: {reason}")
+
+        # Add speculative claims as context — The Other Side should address
+        # what mainstream scholarship says about these
+        for sc in self.state.moderated_result.get("speculative_claims", []):
+            claim_text = sc.get("claim", "")
+            if claim_text:
+                counter_claims.append(f"Hypothesis claim: {claim_text}")
 
         if not counter_claims:
             return ""

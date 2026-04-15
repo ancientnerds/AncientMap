@@ -71,18 +71,21 @@ class ModeratorHandler(BaseHandler):
 
         final_claims = parsed.get("final_claims", [])
         revised_claims = parsed.get("revised_claims", [])
+        speculative_claims = parsed.get("speculative_claims", [])
         dropped_claims = parsed.get("dropped_claims", [])
 
         self.state.moderated_result = {
             "final_claims": final_claims,
             "revised_claims": revised_claims,
+            "speculative_claims": speculative_claims,
             "dropped_claims": dropped_claims,
         }
 
         self.state.log(
             "moderator",
             f"Moderation complete: {len(final_claims)} final, "
-            f"{len(revised_claims)} revised, {len(dropped_claims)} dropped",
+            f"{len(revised_claims)} revised, {len(speculative_claims)} speculative, "
+            f"{len(dropped_claims)} dropped",
         )
 
         self.emit_sse(
@@ -93,6 +96,7 @@ class ModeratorHandler(BaseHandler):
                 "meta": {
                     "final_claims": len(final_claims),
                     "revised_claims": len(revised_claims),
+                    "speculative_claims": len(speculative_claims),
                     "dropped_claims": len(dropped_claims),
                 },
             }

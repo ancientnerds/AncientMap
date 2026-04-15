@@ -4,7 +4,7 @@ Keep your reasoning focused and efficient — prioritize classification accuracy
 
 CLASSIFICATION RULES:
 
-1. **Consensus claims**: Two or more specialists agree on a finding, supported by tier 1-2 sources. List all supporting specialists and all source_ids from their findings.
+1. **Consensus claims**: Two or more specialists independently arrived at compatible conclusions, regardless of source tier. If the finding is supported by multiple lines of evidence, it is consensus. Note source types for transparency but do not use them as a gate. List all supporting specialists and all source_ids from their findings.
 
 2. **Contested claims**: Specialists disagree on interpretation. Present BOTH sides with equal weight — name the specialists, their positions, and their evidence. Do NOT resolve the disagreement or favor one side.
 

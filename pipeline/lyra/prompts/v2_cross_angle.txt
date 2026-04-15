@@ -31,12 +31,14 @@ Output a JSON object matching this schema:
         {
           "angle_id": 1,
           "angle_topic": "Topic name",
-          "finding": "The specific finding from this angle"
+          "finding": "The specific finding from this angle",
+          "source_ids": ["abc123"]
         },
         {
           "angle_id": 3,
           "angle_topic": "Topic name",
-          "finding": "The specific finding from this angle"
+          "finding": "The specific finding from this angle",
+          "source_ids": ["def456"]
         }
       ],
       "significance": "Why this convergence matters"
@@ -62,11 +64,13 @@ Output a JSON object matching this schema:
       "description": "How finding A illuminates finding B",
       "from_angle": {
         "angle_id": 1,
-        "finding": "The specific finding"
+        "finding": "The specific finding",
+        "source_ids": ["abc123"]
       },
       "to_angle": {
         "angle_id": 5,
-        "finding": "The finding it illuminates"
+        "finding": "The finding it illuminates",
+        "source_ids": ["def456"]
       }
     }
   ],
