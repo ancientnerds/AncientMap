@@ -1,4 +1,4 @@
-"""Quality judge — evaluates paper quality and routes feedback."""
+"""Quality judge --- evaluates paper quality and routes feedback."""
 
 import asyncio
 import logging
@@ -6,7 +6,7 @@ import logging
 from pipeline.lyra.config import _get_settings
 from pipeline.lyra.handlers import BaseHandler
 from pipeline.lyra.minimax_shared import minimax_chat_anthropic
-from pipeline.lyra.research_events import PaperReady, QualityFailed, QualityPassed
+from pipeline.lyra.research_events import PresentationChecked, QualityFailed, QualityPassed
 from pipeline.lyra.research_state import ResearchPhase
 
 logger = logging.getLogger(__name__)
@@ -22,11 +22,17 @@ class JudgeHandler(BaseHandler):
         self._best_quality = {}
 
     def register(self):
-        self.bus.on(PaperReady, self._on_paper_ready)
+        self.bus.on(PresentationChecked, self._on_presentation_checked)
 
-    async def _on_paper_ready(self, event: PaperReady):
+    async def _on_presentation_checked(self, event: PresentationChecked):
         self.state.phase = ResearchPhase.JUDGING
         self._judge_attempts += 1
+
+        # Initialize best paper from current paper if empty (first attempt)
+        if not self._best_paper:
+            self._best_paper = self.state.paper_text
+            self._best_audit = self.state.audit_result
+            self._best_quality = self.state.quality_score
 
         self.emit_sse(
             {

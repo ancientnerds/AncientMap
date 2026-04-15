@@ -98,7 +98,12 @@ class SearchHandler(BaseHandler):
         if not angle or angle.saturated:
             return
 
-        if angle.search_rounds >= self.state.config.max_search_rounds_per_angle:
+        # Use effective_max_rounds if rabbit holes granted bonus rounds
+        max_rounds = max(
+            self.state.config.max_search_rounds_per_angle,
+            angle.effective_max_rounds,
+        )
+        if angle.search_rounds >= max_rounds:
             angle.saturated = True
             self.state.log(
                 "search", f"Angle '{angle.topic}' hit max search rounds ({angle.search_rounds})"

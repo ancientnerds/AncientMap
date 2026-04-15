@@ -71,6 +71,7 @@ class ResearchAngle:
     recent_claim_counts: list[int] = field(default_factory=list)  # last N rounds' new claims
     saturated: bool = False
     spawned_from: str | None = None  # parent angle ID if rabbit hole
+    effective_max_rounds: int = 0  # bonus rounds from rabbit holes (0 = use config default)
 
 
 @dataclass
@@ -124,6 +125,7 @@ class ResearchState:
     synthesis: dict = field(default_factory=dict)
     cross_angle_connections: list[dict] = field(default_factory=list)
     debate_result: dict = field(default_factory=dict)
+    moderated_result: dict = field(default_factory=dict)
 
     # Paper
     paper_text: str = ""
@@ -138,7 +140,7 @@ class ResearchState:
     debug_log: list[dict] = field(default_factory=list)
     error: str = ""
 
-    # Backward compat — worker uses len(ctx.specialist_analyses) for tools_used
+    # Backward compat -- worker uses len(ctx.specialist_analyses) for tools_used
     specialist_analyses: dict = field(default_factory=dict)
 
     # SSE callback

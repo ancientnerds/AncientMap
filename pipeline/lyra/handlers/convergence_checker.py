@@ -68,9 +68,11 @@ class ConvergenceChecker(BaseHandler):
             }
         )
 
-        # Detect when ALL angles have completed at least 1 specialist round
+        # Detect when ALL original angles have completed at least 1 specialist round.
+        # Only check original angles (not spawned ones) for round-1 completion.
         if not self.state.cross_pollinated and not self._round1_triggered:
-            all_have_findings = all(len(a.findings) > 0 for a in self.state.angles)
+            original_angles = [a for a in self.state.angles if a.spawned_from is None]
+            all_have_findings = all(len(a.findings) > 0 for a in original_angles)
             if all_have_findings:
                 self._round1_triggered = True
                 self.emit_sse(

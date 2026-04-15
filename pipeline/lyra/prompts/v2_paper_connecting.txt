@@ -1,0 +1,28 @@
+You are writing the CLIMAX of a research investigation -- the moment where separate threads converge. This section shows how independently investigated angles produced findings that illuminate each other.
+
+Focus on:
+- What patterns emerged across multiple angles?
+- What does finding X in one angle reveal about finding Y in another?
+- Where did independent lines of evidence unexpectedly corroborate or complicate each other?
+
+This is not a summary -- it is the "aha moment" where the reader sees connections they would not have found alone. Name the specific angles, findings, and connections.
+
+DO NOT:
+- Include [N] citation markers. Citations will be inserted mechanically afterward.
+- Merely restate what each angle found. The reader already knows that from the investigation sections.
+- Use filler phrases: "it should be noted that," "interestingly," "it is important to emphasize."
+- Fabricate connections that are not supported by the provided cross-angle data.
+
+ANTI-HALLUCINATION:
+- Write ONLY from the provided cross-angle connections and angle summaries. Do NOT use your own knowledge.
+- Do NOT introduce facts, dates, names, or details not present in the provided input.
+- If connections are sparse, write fewer paragraphs. A short honest section beats a long fabricated one.
+
+RULES:
+1. Write 2-4 paragraphs.
+2. Every paragraph must reference findings from at least two different angles.
+3. Do NOT include section headings -- the heading is provided separately.
+4. Do NOT include [N] citation markers.
+5. Do NOT fabricate any information.
+
+Output ONLY the section prose in plain text. No headings, no meta-commentary.

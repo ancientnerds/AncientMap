@@ -9,7 +9,7 @@ from pathlib import Path
 from pipeline.lyra.config import _get_settings
 from pipeline.lyra.handlers import BaseHandler
 from pipeline.lyra.minimax_shared import minimax_chat_anthropic
-from pipeline.lyra.research_events import DebateComplete, PaperReady
+from pipeline.lyra.research_events import ModeratorComplete, PaperReady
 from pipeline.lyra.research_state import ResearchPhase
 
 logger = logging.getLogger(__name__)
@@ -62,7 +62,7 @@ _STOP_WORDS = frozenset(
 class PaperHandler(BaseHandler):
     """Assembles the final research paper using the Why Files narrative structure.
 
-    Triggered by DebateComplete. Produces a complete markdown paper with:
+    Triggered by ModeratorComplete. Produces a complete markdown paper with:
     - Hook (vivid opening)
     - Investigation sections (per angle, parallel)
     - Connecting the Dots (cross-angle synthesis)
@@ -72,9 +72,9 @@ class PaperHandler(BaseHandler):
     """
 
     def register(self):
-        self.bus.on(DebateComplete, self._on_debate_complete)
+        self.bus.on(ModeratorComplete, self._on_moderator_complete)
 
-    async def _on_debate_complete(self, event: DebateComplete):
+    async def _on_moderator_complete(self, event: ModeratorComplete):
         self.state.phase = ResearchPhase.WRITING
         self.emit_sse(
             {
@@ -402,6 +402,12 @@ class PaperHandler(BaseHandler):
         for defense in self.state.debate_result.get("defenses", []):
             all_source_ids.update(defense.get("source_ids", []))
 
+        # Also from moderated results
+        for claim_data in self.state.moderated_result.get("final_claims", []):
+            all_source_ids.update(claim_data.get("source_ids", []))
+        for claim_data in self.state.moderated_result.get("revised_claims", []):
+            all_source_ids.update(claim_data.get("source_ids", []))
+
         # Also from angle findings
         for angle in self.state.angles:
             for finding in angle.findings:
@@ -429,6 +435,10 @@ class PaperHandler(BaseHandler):
 
     def _collect_all_claims(self, sid_to_num: dict[str, int]) -> list[dict]:
         """Collect all claims into a flat list with citation strings.
+
+        Only collects from synthesis output (consensus + contested + unique)
+        plus moderated results. Registry.claims are the raw specialist inputs
+        that synthesis already processed, so including them would double-count.
 
         Each entry: {"claim": str, "citations": str, "confidence": str,
                      "source_ids": list[str], "type": str}
@@ -477,17 +487,32 @@ class PaperHandler(BaseHandler):
                 }
             )
 
-        # From registry claims (specialist-level)
-        for claim in self.state.registry.claims:
-            sids = claim.source_ids
+        # From moderated final claims
+        for claim_data in self.state.moderated_result.get("final_claims", []):
+            sids = claim_data.get("source_ids", [])
             cites = " ".join(f"[{sid_to_num[s]}]" for s in sids if s in sid_to_num)
             claims.append(
                 {
-                    "claim": claim.claim_text,
+                    "claim": claim_data.get("claim", ""),
                     "citations": cites,
-                    "confidence": claim.confidence,
+                    "confidence": claim_data.get("confidence", "medium"),
                     "source_ids": sids,
-                    "type": "specialist",
+                    "type": "moderated_final",
+                }
+            )
+
+        # From moderated revised claims
+        for claim_data in self.state.moderated_result.get("revised_claims", []):
+            sids = claim_data.get("source_ids", [])
+            cites = " ".join(f"[{sid_to_num[s]}]" for s in sids if s in sid_to_num)
+            claims.append(
+                {
+                    "claim": claim_data.get("revised", claim_data.get("original", "")),
+                    "citations": cites,
+                    "confidence": "medium",
+                    "source_ids": sids,
+                    "type": "moderated_revised",
+                    "notes": claim_data.get("reason", ""),
                 }
             )
 
@@ -551,12 +576,29 @@ class PaperHandler(BaseHandler):
                 + "\n".join(f"- {d.get('defense', d.get('response', ''))}" for d in defenses[:20])
             )
 
+        # Moderated results
+        moderated_text = ""
+        if self.state.moderated_result:
+            final_ct = len(self.state.moderated_result.get("final_claims", []))
+            revised_ct = len(self.state.moderated_result.get("revised_claims", []))
+            dropped_ct = len(self.state.moderated_result.get("dropped_claims", []))
+            moderated_text = (
+                f"Moderated: {final_ct} final, {revised_ct} revised, {dropped_ct} dropped\n"
+            )
+            for rc in self.state.moderated_result.get("revised_claims", []):
+                moderated_text += (
+                    f"- Revised: {rc.get('original', '')} -> {rc.get('revised', '')}\n"
+                )
+            for dc in self.state.moderated_result.get("dropped_claims", []):
+                moderated_text += f"- Dropped: {dc.get('claim', '')} ({dc.get('reason', '')})\n"
+
         user_msg = (
             f"## Research question\n\n{self.state.question}\n\n"
             f"## Angle summaries\n\n{'---'.join(angle_summaries)}\n\n"
             f"## Cross-angle connections\n\n{connections_text or 'None detected'}\n\n"
             f"## Synthesis\n\n{synthesis_text}\n\n"
-            f"## Debate results\n\n{debate_text or 'No debate conducted'}\n"
+            f"## Debate results\n\n{debate_text or 'No debate conducted'}\n\n"
+            f"## Moderator results\n\n{moderated_text or 'No moderation conducted'}\n"
         )
 
         raw = await self._llm_call(outline_prompt, user_msg, 4096, settings)
@@ -639,7 +681,9 @@ class PaperHandler(BaseHandler):
         settings,
     ) -> str:
         """Write the Connecting the Dots section."""
-        section_prompt = (PROMPTS_DIR / "v2_paper_section.txt").read_text(encoding="utf-8")
+        # Use dedicated connecting prompt
+        prompt_path = PROMPTS_DIR / "v2_paper_connecting.txt"
+        section_prompt = prompt_path.read_text(encoding="utf-8")
 
         # Gather cross-angle connections
         connections = []
@@ -660,10 +704,17 @@ class PaperHandler(BaseHandler):
         if not connections:
             return ""
 
+        # Include angle summaries for context
+        angle_summaries = []
+        for angle in self.state.angles:
+            top_findings = [f.get("claim", "") for f in angle.findings[:5]]
+            angle_summaries.append(f"Angle '{angle.topic}': {', '.join(top_findings[:3])}")
+
         claims_text = "\n".join(f"- {c}" for c in connections)
+        angles_text = "\n".join(f"- {a}" for a in angle_summaries)
         user_msg = (
-            f"## Section: Connecting the Dots\n"
-            f"Narrative goal: Show how separate threads of investigation converge.\n\n"
+            f"## Research question\n\n{self.state.question}\n\n"
+            f"## Angle summaries\n\n{angles_text}\n\n"
             f"## Cross-angle connections\n\n{claims_text}\n\n"
             f"## Reference map\n\n{ref_map_text}\n"
         )
@@ -684,7 +735,9 @@ class PaperHandler(BaseHandler):
         settings,
     ) -> str:
         """Write The Other Side section with counter-evidence."""
-        section_prompt = (PROMPTS_DIR / "v2_paper_section.txt").read_text(encoding="utf-8")
+        # Use dedicated other-side prompt
+        prompt_path = PROMPTS_DIR / "v2_paper_otherside.txt"
+        section_prompt = prompt_path.read_text(encoding="utf-8")
 
         # Gather counter-evidence
         counter_claims = []
@@ -706,13 +759,19 @@ class PaperHandler(BaseHandler):
             if challenge_text:
                 counter_claims.append(challenge_text)
 
+        # Add dropped claims from moderator
+        for dc in self.state.moderated_result.get("dropped_claims", []):
+            claim_text = dc.get("claim", "")
+            reason = dc.get("reason", "")
+            if claim_text:
+                counter_claims.append(f"{claim_text} -- Dropped: {reason}")
+
         if not counter_claims:
             return ""
 
         claims_text = "\n".join(f"- {c}" for c in counter_claims[:15])
         user_msg = (
-            f"## Section: The Other Side\n"
-            f"Narrative goal: Present the strongest counter-evidence and skeptical perspectives fairly.\n\n"
+            f"## Research question\n\n{self.state.question}\n\n"
             f"## Counter-evidence and challenges\n\n{claims_text}\n\n"
             f"## Reference map\n\n{ref_map_text}\n"
         )
@@ -745,6 +804,13 @@ class PaperHandler(BaseHandler):
             f"## Plausible but uncertain (medium confidence)\n\n{_format_tier(medium_confidence)}\n\n"
             f"## Speculative (low confidence)\n\n{_format_tier(low_confidence)}\n"
         )
+
+        # Include open questions from synthesis if available
+        open_qs = self.state.synthesis.get("open_questions", [])
+        if open_qs:
+            user_msg += "\n\n## Open questions from synthesis\n\n" + "\n".join(
+                f"- {q}" for q in open_qs
+            )
 
         raw = await self._llm_call(
             assessment_prompt,
@@ -823,7 +889,11 @@ class PaperHandler(BaseHandler):
                         best_nums = nums
 
                 if best_nums:
-                    cited_sentences.append(f"{sentence.rstrip('.')} {best_nums}.")
+                    # Preserve original terminal punctuation (don't corrupt ? and !)
+                    terminal = sentence[-1] if sentence and sentence[-1] in ".?!" else "."
+                    clean = sentence.rstrip(".?!")
+                    cited_sentence = f"{clean} {best_nums}{terminal}"
+                    cited_sentences.append(cited_sentence)
                     citations_inserted += 1
                 else:
                     cited_sentences.append(sentence)

@@ -1,10 +1,9 @@
-"""24h deadline safety net — forces convergence if time is running out."""
+"""24h deadline safety net --- forces convergence if time is running out."""
 
-import asyncio
 import logging
 
 from pipeline.lyra.handlers import BaseHandler
-from pipeline.lyra.research_events import AllAnglesSaturated, DeadlineApproaching
+from pipeline.lyra.research_events import AllAnglesSaturated, DeadlineApproaching, DebateComplete
 from pipeline.lyra.research_state import ResearchPhase
 
 logger = logging.getLogger(__name__)
@@ -14,7 +13,7 @@ class DeadlineHandler(BaseHandler):
     """Monitors deadline and forces convergence when time runs out."""
 
     def register(self):
-        # No event trigger — called periodically by orchestrator
+        # No event trigger --- called periodically by orchestrator
         pass
 
     async def check_deadline(self) -> bool:
@@ -25,23 +24,23 @@ class DeadlineHandler(BaseHandler):
         hours_left = self.state.time_remaining_hours
 
         if hours_left <= 0:
-            # Deadline passed — force completion
-            self.state.log("deadline", "Deadline reached — forcing completion")
+            # Deadline passed --- force completion
+            self.state.log("deadline", "Deadline reached --- forcing completion")
             self.emit_sse(
-                {"type": "status", "content": "Deadline reached — finalizing research..."}
+                {"type": "status", "content": "Deadline reached --- finalizing research..."}
             )
             await self._force_convergence()
             return True
 
         if hours_left <= 3 and self.state.phase == ResearchPhase.EXPLORING:
-            # Less than 3 hours — force-saturate all angles
+            # Less than 3 hours --- force-saturate all angles
             self.state.log(
-                "deadline", f"Deadline approaching ({hours_left:.1f}h left) — forcing saturation"
+                "deadline", f"Deadline approaching ({hours_left:.1f}h left) --- forcing saturation"
             )
             self.emit_sse(
                 {
                     "type": "status",
-                    "content": f"Deadline approaching ({hours_left:.1f}h left) — finalizing research...",
+                    "content": f"Deadline approaching ({hours_left:.1f}h left) --- finalizing research...",
                 }
             )
             await self._force_convergence()
@@ -51,12 +50,13 @@ class DeadlineHandler(BaseHandler):
             ResearchPhase.SYNTHESIZING,
             ResearchPhase.DEBATING,
         ):
-            # Less than 1 hour — skip to writing
+            # Less than 1 hour --- skip to writing and emit DebateComplete to trigger paper
             self.state.log(
                 "deadline",
-                f"Deadline imminent ({hours_left:.1f}h left) — skipping to paper assembly",
+                f"Deadline imminent ({hours_left:.1f}h left) --- forcing paper assembly",
             )
             self.state.phase = ResearchPhase.WRITING
+            await self.bus.emit(DebateComplete())
             return True
 
         return False

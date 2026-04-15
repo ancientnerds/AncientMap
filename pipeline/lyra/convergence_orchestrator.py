@@ -152,6 +152,14 @@ class ConvergenceOrchestrator:
                     angle.recent_claim_counts = []  # reset convergence tracking
 
             state.phase = ResearchPhase.EXPLORING
+
+            # Reset handler flags so convergence/synthesis can re-trigger
+            state.cross_pollinated = False
+            if hasattr(convergence, "_round1_triggered"):
+                convergence._round1_triggered = False
+            if hasattr(synthesis, "_synthesis_started"):
+                synthesis._synthesis_started = False
+
             # Trigger refined search for each angle
             for angle in state.angles:
                 gaps = [f"Quality judge flagged: {wa}" for wa in event.weak_areas]

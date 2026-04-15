@@ -1,4 +1,4 @@
-"""Topic decomposition — break question into independent research angles."""
+"""Topic decomposition --- break question into independent research angles."""
 
 import asyncio
 import json
@@ -9,7 +9,7 @@ from pathlib import Path
 from pipeline.lyra.config import _get_settings
 from pipeline.lyra.handlers import BaseHandler
 from pipeline.lyra.minimax_shared import minimax_chat_anthropic
-from pipeline.lyra.research_events import AngleCreated, SourcesFound
+from pipeline.lyra.research_events import AngleCreated
 from pipeline.lyra.research_state import ResearchAngle, ResearchPhase
 
 logger = logging.getLogger(__name__)
@@ -18,7 +18,7 @@ PROMPTS_DIR = Path(__file__).resolve().parent.parent / "prompts"
 
 class DecompositionHandler(BaseHandler):
     def register(self):
-        # No event triggers — called directly by orchestrator at start
+        # No event triggers --- called directly by orchestrator at start
         pass
 
     async def decompose(self):
@@ -85,7 +85,7 @@ class DecompositionHandler(BaseHandler):
             if len(results) < 2:
                 self.state.log(
                     "decomposition",
-                    f"Dropped angle '{ad.get('topic', '?')}' — insufficient sources ({len(results)})",
+                    f"Dropped angle '{ad.get('topic', '?')}' --- insufficient sources ({len(results)})",
                 )
                 continue
 
@@ -97,11 +97,11 @@ class DecompositionHandler(BaseHandler):
                 specialist_domains=ad.get("specialist_domains", []),
             )
 
-            # Validation only checks existence — don't register sources here.
+            # Validation only checks existence --- don't register sources here.
             # The search handler registers sources properly during the research loop.
             self.state.log(
                 "decomposition",
-                f"Validated angle '{ad.get('topic', '?')}' — {len(results)} sources available",
+                f"Validated angle '{ad.get('topic', '?')}' --- {len(results)} sources available",
             )
             validated.append(angle)
 

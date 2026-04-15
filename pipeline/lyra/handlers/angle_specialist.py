@@ -14,9 +14,9 @@ PROMPTS_DIR = Path(__file__).resolve().parent.parent / "prompts"
 from pipeline.lyra.minimax_shared import minimax_chat_anthropic
 from pipeline.lyra.research_events import (
     AngleSaturated,
+    ContentFetched,
     FindingsProduced,
     NewAngleDiscovered,
-    SourcesAudited,
     SpecialistPruned,
     SpecialistRecruited,
 )
@@ -33,13 +33,13 @@ logger = logging.getLogger(__name__)
 
 class SpecialistHandler(BaseHandler):
     def register(self):
-        self.bus.on(SourcesAudited, self._on_sources_audited)
+        self.bus.on(ContentFetched, self._on_content_fetched)
 
     # ------------------------------------------------------------------
     # Event entry point
     # ------------------------------------------------------------------
 
-    async def _on_sources_audited(self, event: SourcesAudited):
+    async def _on_content_fetched(self, event: ContentFetched):
         angle = next((a for a in self.state.angles if a.id == event.angle_id), None)
         if not angle or angle.saturated:
             return
@@ -186,8 +186,9 @@ class SpecialistHandler(BaseHandler):
                 # Grant bonus rounds for each rabbit hole (up to double the base max)
                 angle_max = self.state.config.max_search_rounds_per_angle
                 bonus = min(len(rabbit_holes_found), angle_max)
-                # Track bonus via a dynamic cap (don't exceed 2x base)
+                # Store effective max on the angle so saturation checks use it
                 effective_max = angle_max + bonus
+                angle.effective_max_rounds = effective_max
                 if angle.search_rounds < effective_max:
                     self.state.log(
                         "specialist",
@@ -422,18 +423,31 @@ class SpecialistHandler(BaseHandler):
         self.state.llm_call_count += 1
 
         parsed = _parse_json(raw)
-        summary = parsed.get("summary", {})
+
+        # Count from assessments array instead of trusting LLM summary
+        assessments = parsed.get("assessments", [])
+        if assessments:
+            incremental = sum(1 for a in assessments if a.get("classification") == "incremental")
+            rabbit_holes = sum(1 for a in assessments if a.get("classification") == "rabbit_hole")
+            rabbit_hole_topics = parsed.get("rabbit_hole_topics", [])
+        else:
+            # Fallback to summary if no assessments array
+            summary = parsed.get("summary", {})
+            incremental = summary.get("incremental", 0)
+            rabbit_holes = summary.get("rabbit_holes", 0)
+            rabbit_hole_topics = parsed.get("rabbit_hole_topics", [])
 
         self.state.log(
             "novelty",
-            f"Angle '{angle.topic}': {summary.get('restatements', 0)} restatements, "
-            f"{summary.get('incremental', 0)} incremental, {summary.get('rabbit_holes', 0)} rabbit holes",
+            f"Angle '{angle.topic}': "
+            f"{len(assessments) - incremental - rabbit_holes if assessments else 'N/A'} restatements, "
+            f"{incremental} incremental, {rabbit_holes} rabbit holes",
         )
 
         return {
-            "incremental": summary.get("incremental", 0),
-            "rabbit_holes": summary.get("rabbit_holes", 0),
-            "rabbit_hole_topics": parsed.get("rabbit_hole_topics", []),
+            "incremental": incremental,
+            "rabbit_holes": rabbit_holes,
+            "rabbit_hole_topics": rabbit_hole_topics,
         }
 
     # ------------------------------------------------------------------
@@ -453,10 +467,12 @@ class SpecialistHandler(BaseHandler):
             await self.bus.emit(AngleSaturated(angle_id=angle.id))
 
         # Also saturate if we hit the hard cap on search rounds
-        if (
-            angle.search_rounds >= self.state.config.max_search_rounds_per_angle
-            and not angle.saturated
-        ):
+        # Use effective_max_rounds if rabbit holes granted bonus rounds
+        max_rounds = max(
+            self.state.config.max_search_rounds_per_angle,
+            angle.effective_max_rounds,
+        )
+        if angle.search_rounds >= max_rounds and not angle.saturated:
             angle.saturated = True
             self.state.log(
                 "specialist",

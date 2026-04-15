@@ -44,6 +44,13 @@ class SourcesAudited(ResearchEvent):
 
 
 @dataclass
+class ContentFetched(ResearchEvent):
+    """Content fetch complete for an angle's sources."""
+
+    angle_id: str
+
+
+@dataclass
 class FindingsProduced(ResearchEvent):
     angle_id: str
     new_claims: int
@@ -71,7 +78,21 @@ class DebateComplete(ResearchEvent):
 
 
 @dataclass
+class ModeratorComplete(ResearchEvent):
+    """Moderator has reviewed and filtered claims from debate."""
+
+    pass
+
+
+@dataclass
 class PaperReady(ResearchEvent):
+    pass
+
+
+@dataclass
+class PresentationChecked(ResearchEvent):
+    """Presentation assessor has reviewed and corrected the paper."""
+
     pass
 
 
@@ -135,7 +156,7 @@ class EventBus:
     def __init__(self):
         self._handlers: dict[type, list[EventHandler]] = {}
         self._history: list[ResearchEvent] = []
-        self._handler_instances: dict[type, object] = {}  # class → instance registry
+        self._handler_instances: dict[type, object] = {}  # class -> instance registry
 
     def register_instance(self, instance: object):
         """Register a handler instance for lookup by class."""
