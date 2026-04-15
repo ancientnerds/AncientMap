@@ -27,7 +27,7 @@ from typing import Any
 from loguru import logger
 from sqlalchemy import text
 
-from pipeline.database import get_session
+from pipeline.database import LibrarySource, get_session
 
 # Output configuration
 OUTPUT_DIR = Path("public/data")
@@ -68,6 +68,15 @@ REGIONS = {
         "bounds": {"min_lat": -35, "max_lat": 38, "min_lon": -20, "max_lon": 55},
     },
 }
+
+
+def _slugify_period(period_name: str) -> str:
+    """Convert period label to URL slug."""
+    s = period_name.lower().strip()
+    s = s.replace("<", "before").replace("+", "plus").replace(" - ", "-").replace(" ", "-")
+    while "--" in s:
+        s = s.replace("--", "-")
+    return s.strip("-")
 
 
 def save_json(path: Path, data: Any, compress: bool = True):
@@ -125,6 +134,9 @@ class StaticExporter:
 
             # Export content data
             self._export_content()
+
+            # Export library sources by period
+            self._export_library()
 
         # Save dated audit snapshot for version history
         self._save_audit_snapshot()
@@ -615,6 +627,88 @@ class StaticExporter:
                 save_json(content_dir / f"{content_type}s.json", output)
                 self.stats[f"content_{content_type}"] = len(items)
                 logger.info(f"  {content_type}: {len(items):,} items")
+
+    def _export_library(self):
+        """Export library sources organized by period."""
+        logger.info("\nExporting library data...")
+
+        lib_dir = self.output_dir / "library"
+        lib_dir.mkdir(parents=True, exist_ok=True)
+        periods_dir = lib_dir / "periods"
+        periods_dir.mkdir(parents=True, exist_ok=True)
+
+        with get_session() as session:
+            sources = session.query(LibrarySource).order_by(LibrarySource.citation_count.desc()).all()
+
+            if not sources:
+                logger.info("  No library sources to export")
+                save_json(lib_dir / "index.json", [])
+                save_json(lib_dir / "stats.json", {"total": 0})
+                return
+
+            # Group by period
+            period_groups: dict[str, list[dict]] = {}
+            type_counts: dict[str, int] = {}
+            tier_counts: dict[int, int] = {}
+            domain_counts: dict[str, int] = {}
+
+            for src in sources:
+                row = {
+                    "id": src.id,
+                    "url": src.url,
+                    "title": src.title,
+                    "domain": src.domain,
+                    "snippet": src.snippet,
+                    "reliability_tier": src.reliability_tier,
+                    "citation_count": src.citation_count,
+                    "source_types": src.source_types or [],
+                    "parent_refs": src.parent_refs or [],
+                }
+
+                # Stats
+                for st in (src.source_types or []):
+                    type_counts[st] = type_counts.get(st, 0) + 1
+                tier_counts[src.reliability_tier] = tier_counts.get(src.reliability_tier, 0) + 1
+                if src.domain:
+                    domain_counts[src.domain] = domain_counts.get(src.domain, 0) + 1
+
+                periods = src.period_tags or []
+                if not periods:
+                    periods = ["Uncategorized"]
+                for period in periods:
+                    period_groups.setdefault(period, []).append(row)
+
+            # Write period files
+            index = []
+            for period_name in sorted(period_groups.keys()):
+                group = period_groups[period_name]
+                slug = _slugify_period(period_name)
+
+                period_data = {
+                    "period": period_name,
+                    "slug": slug,
+                    "total": len(group),
+                    "sources": group,
+                }
+                save_json(periods_dir / f"{slug}.json", period_data)
+                index.append({"period": period_name, "slug": slug, "count": len(group)})
+
+            save_json(lib_dir / "index.json", index)
+
+            # Stats
+            top_domains = sorted(domain_counts.items(), key=lambda x: -x[1])[:20]
+            stats = {
+                "total_sources": len(sources),
+                "by_type": type_counts,
+                "by_tier": tier_counts,
+                "top_domains": [{"domain": d, "count": c} for d, c in top_domains],
+                "period_count": len(index),
+                "exported_at": datetime.now(UTC).isoformat(),
+            }
+            save_json(lib_dir / "stats.json", stats)
+
+            self.stats["library_sources"] = len(sources)
+            logger.info(f"  Library: {len(sources)} sources across {len(index)} periods")
 
     def _save_audit_snapshot(self):
         """Save a dated snapshot of audit-source sites for version history."""
