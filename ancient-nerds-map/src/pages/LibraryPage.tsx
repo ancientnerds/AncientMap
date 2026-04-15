@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { config } from '../config'
+import { getPeriodColor } from '../data/sites'
 import PageHeader from '../components/layout/PageHeader'
 import LibraryCard from '../components/library/LibraryCard'
 import LibraryDetailCard from '../components/library/LibraryDetailCard'
@@ -160,6 +161,13 @@ export default function LibraryPage() {
           )}
         </div>
 
+        {/* Stats bar */}
+        {stats && !isSearchActive && (
+          <div className="library-stats-bar">
+            {stats.total_sources.toLocaleString()} sources across {stats.period_count} periods in {Object.keys(stats.by_type).length} categories
+          </div>
+        )}
+
         {/* Source type filter chips */}
         <div className="library-filter-chips">
           {['story', 'journal', 'research', 'site'].map(type => (
@@ -173,13 +181,6 @@ export default function LibraryPage() {
             </button>
           ))}
         </div>
-
-        {/* Stats bar */}
-        {stats && !isSearchActive && (
-          <div className="library-stats-bar">
-            {stats.total_sources.toLocaleString()} sources across {stats.period_count} periods
-          </div>
-        )}
 
         {/* Search results mode */}
         {isSearchActive && (
@@ -208,8 +209,8 @@ export default function LibraryPage() {
             className="library-period-section"
             ref={el => { if (el) sectionRefs.current.set(section.meta.slug, el) }}
           >
-            <div className="library-period-header">
-              <h2 className="library-period-title">{section.meta.period}</h2>
+            <div className="library-period-header" style={{ borderBottomColor: getPeriodColor(section.meta.period) + '40' }}>
+              <h2 className="library-period-title" style={{ color: getPeriodColor(section.meta.period) }}>{section.meta.period}</h2>
               <span className="library-period-count">{section.meta.count} sources</span>
             </div>
 
