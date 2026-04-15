@@ -16,8 +16,8 @@ from pipeline.lyra.research_events import (
     AngleSaturated,
     ContentFetched,
     FindingsProduced,
-    SourcesAudited,
     NewAngleDiscovered,
+    SourcesAudited,
     SpecialistPruned,
     SpecialistRecruited,
 )
@@ -84,8 +84,23 @@ class SpecialistHandler(BaseHandler):
             }
         )
 
-        # Build sources_context scoped to this angle's sources only
-        sources_context = self._build_angle_sources_context(angle)
+        # Build sources_context with only NEW sources (not yet analyzed).
+        # Previous rounds' findings are passed as context summary instead of
+        # re-sending all old sources. This keeps specialist input bounded
+        # without throwing away any research.
+        analyzed_sids = {f.get("_source_id") for f in angle.findings if f.get("_source_id")}
+        new_source_ids = [sid for sid in angle.source_ids if sid not in analyzed_sids]
+        sources_context = self._build_angle_sources_context(angle, source_ids=new_source_ids)
+
+        # Add previous findings as context summary
+        if angle.findings:
+            prev_summary = "\n".join(f"- {f.get('claim', '')}" for f in angle.findings[:30])
+            sources_context = (
+                f"## Previously established findings ({len(angle.findings)} claims)\n\n"
+                f"{prev_summary}\n\n"
+                f"## New sources to analyze ({len(new_source_ids)} sources)\n\n"
+                f"{sources_context}"
+            )
         if not sources_context.strip():
             self.state.log(
                 "specialist", f"No source content for angle '{angle.topic}', skipping analysis"
@@ -157,6 +172,9 @@ class SpecialistHandler(BaseHandler):
             # Add new findings to angle
             for finding in new_findings:
                 finding["specialist_id"] = panel_spec.specialist_id
+                # Track which sources contributed to this finding
+                for sid in finding.get("source_ids", []):
+                    finding["_source_id"] = sid  # mark source as analyzed
                 angle.findings.append(finding)
                 # Register in citation registry
                 self.state.registry.add_claim(
@@ -310,22 +328,17 @@ class SpecialistHandler(BaseHandler):
     # Sources context (per-angle, not full registry)
     # ------------------------------------------------------------------
 
-    def _build_angle_sources_context(self, angle: ResearchAngle, max_sources: int = 50) -> str:
-        """Format only this angle's sources into a text block for prompts.
+    def _build_angle_sources_context(
+        self, angle: ResearchAngle, source_ids: list[str] | None = None
+    ) -> str:
+        """Format sources into a text block for specialist prompts.
 
-        Caps at max_sources to prevent context overflow on large source pools.
-        Prioritizes higher-tier sources.
+        If source_ids is provided, only those sources are included (for new-only mode).
+        Otherwise falls back to all angle sources (round 1).
         """
-        # Sort by tier (1=academic first) then take top N
-        scored = []
-        for sid in angle.source_ids:
-            source = self.state.registry.get_reference(sid)
-            if source:
-                scored.append((source.reliability_tier or 3, sid, source))
-        scored.sort(key=lambda x: x[0])
-
+        ids_to_use = source_ids if source_ids is not None else angle.source_ids
         lines: list[str] = []
-        for _tier, sid, source in scored[:max_sources]:
+        for sid in ids_to_use:
             source = self.state.registry.get_reference(sid)
             if not source:
                 continue
