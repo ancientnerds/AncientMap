@@ -680,11 +680,18 @@ class StaticExporter:
                 for period in periods:
                     period_groups.setdefault(period, []).append(row)
 
-            # Write period files — sort Uncategorized last
+            # Write period files — chronological (oldest first), Uncategorized last
+            from pipeline.utils.text import PERIOD_BUCKETS
+
+            period_order = {label: i for i, (label, _, _) in enumerate(PERIOD_BUCKETS)}
             index = []
             sorted_periods = sorted(
                 period_groups.keys(),
-                key=lambda p: (p == "Uncategorized", p),
+                key=lambda p: (
+                    p == "Uncategorized",  # Uncategorized always last
+                    period_order.get(p, 999),  # known periods in chronological order
+                    p,  # alphabetical fallback for unknowns
+                ),
             )
             for period_name in sorted_periods:
                 group = period_groups[period_name]

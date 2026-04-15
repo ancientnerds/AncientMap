@@ -1,7 +1,8 @@
 /* ===== Library Page ===== */
 
 .library-page {
-  min-height: 100vh;
+  height: 100vh;
+  overflow-y: auto;
   background: var(--bg-primary, #0a1a1f);
   color: var(--text-primary, #e0e0e0);
 }
