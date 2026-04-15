@@ -72,13 +72,9 @@ class JudgeHandler(BaseHandler):
         # M3: Section completeness (0-20)
         # Check for required Why Files sections
         paper_lower = self.state.paper_text.lower()
-        headings_found = sum(
-            1 for sec in _REQUIRED_SECTIONS if f"## {sec}" in paper_lower
-        )
+        headings_found = sum(1 for sec in _REQUIRED_SECTIONS if f"## {sec}" in paper_lower)
         # Also check for at least one investigation section (any ## heading before Connecting)
-        has_investigation = bool(
-            re.search(r"^## .+", self.state.paper_text, re.MULTILINE)
-        )
+        has_investigation = bool(re.search(r"^## .+", self.state.paper_text, re.MULTILINE))
         section_score = (headings_found / len(_REQUIRED_SECTIONS)) * 15
         if has_investigation:
             section_score += 5
