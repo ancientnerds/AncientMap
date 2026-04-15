@@ -22,6 +22,7 @@ export default function LibraryPage() {
   const [searchResults, setSearchResults] = useState<LibrarySource[] | null>(null)
   const [searchTotal, setSearchTotal] = useState(0)
   const [searchLoading, setSearchLoading] = useState(false)
+  const [searchError, setSearchError] = useState(false)
   const [selectedSource, setSelectedSource] = useState<LibrarySource | null>(null)
   const sectionRefs = useRef<Map<string, HTMLDivElement>>(new Map())
   const searchTimer = useRef<ReturnType<typeof setTimeout>>()
@@ -85,6 +86,7 @@ export default function LibraryPage() {
 
     searchTimer.current = setTimeout(async () => {
       setSearchLoading(true)
+      setSearchError(false)
       try {
         const params = new URLSearchParams({ q: value, page_size: '50' })
         const resp = await fetch(`${config.api.baseUrl}/library/search?${params}`)
@@ -95,6 +97,7 @@ export default function LibraryPage() {
       } catch {
         setSearchResults([])
         setSearchTotal(0)
+        setSearchError(true)
       } finally {
         setSearchLoading(false)
       }
@@ -104,6 +107,7 @@ export default function LibraryPage() {
   const clearSearch = () => {
     setSearchQuery('')
     setSearchResults(null)
+    setSearchError(false)
   }
 
   const toggleExpand = (slug: string) => {
@@ -156,8 +160,11 @@ export default function LibraryPage() {
                 <LibraryCard key={source.id} source={source} onClick={() => setSelectedSource(source)} />
               ))}
             </div>
-            {!searchLoading && searchResults?.length === 0 && (
+            {!searchLoading && searchResults?.length === 0 && !searchError && (
               <div className="library-empty">No sources found.</div>
+            )}
+            {searchError && (
+              <div className="library-empty">Search unavailable. Try browsing by period instead.</div>
             )}
           </div>
         )}

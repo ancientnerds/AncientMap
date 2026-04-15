@@ -35,7 +35,7 @@ class LibrarySearchResponse(BaseModel):
 def search_library(
     q: str | None = Query(None, description="Full-text search on title, snippet, domain"),
     period: str | None = Query(None, description="Filter by period tag"),
-    type: str | None = Query(None, description="Filter by source type: story, journal, research, site"),
+    source_type: str | None = Query(None, alias="type", description="Filter by source type: story, journal, research, site"),
     tier: int | None = Query(None, description="Filter by reliability tier: 1=academic, 2=reputable, 3=general"),
     sort: str = Query("citations", description="Sort: citations, recent, title"),
     page: int = Query(1, ge=1),
@@ -56,8 +56,8 @@ def search_library(
     if period:
         query = query.filter(LibrarySource.period_tags.any(period))
 
-    if type:
-        query = query.filter(LibrarySource.source_types.any(type))
+    if source_type:
+        query = query.filter(LibrarySource.source_types.any(source_type))
 
     if tier is not None:
         query = query.filter(LibrarySource.reliability_tier == tier)
@@ -90,12 +90,3 @@ def search_library(
     ]
 
     return LibrarySearchResponse(items=items, total=total, page=page, page_size=page_size)
-
-
-@router.post("/refresh")
-def refresh_library():
-    """Re-run the library aggregator. Admin-only (no auth gate for now)."""
-    from pipeline.library_aggregator import aggregate_library
-
-    count = aggregate_library()
-    return {"status": "ok", "sources": count}

@@ -108,6 +108,13 @@ class LibraryAggregator:
 
     def _scan_news_items(self, session):
         """Scan NewsItem.web_sources for citations."""
+        # Pre-load site periods to avoid N+1 queries
+        site_periods = dict(
+            session.query(UnifiedSite.id, UnifiedSite.period_name)
+            .filter(UnifiedSite.period_name.isnot(None))
+            .all()
+        )
+
         items = (
             session.query(NewsItem)
             .filter(NewsItem.web_sources.isnot(None))
@@ -117,12 +124,7 @@ class LibraryAggregator:
         for item in items:
             if not item.web_sources:
                 continue
-            # Get period from linked site
-            period = None
-            if item.site_id:
-                site = session.get(UnifiedSite, item.site_id)
-                if site:
-                    period = site.period_name
+            period = site_periods.get(item.site_id) if item.site_id else None
             for src in item.web_sources:
                 url = src.get("url", "")
                 title = src.get("title", "")
