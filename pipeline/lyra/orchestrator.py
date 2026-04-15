@@ -108,6 +108,12 @@ STEPS = {
         True,
         "Identified/enriched {n} site discoveries",
     ),
+    "library": (
+        "pipeline.library_aggregator",
+        "aggregate_library",
+        False,
+        "Aggregated {n} library sources",
+    ),
 }
 
 # Ordered step list matching the full pipeline sequence
@@ -123,12 +129,14 @@ STEP_ORDER = [
     "screenshots",
     "backfill",
     "identify",
+    "library",
 ]
 
 # Steps that run less often than every cycle. Value = run every N cycles.
 # Unlisted steps run every cycle. With CYCLE_INTERVAL=3600, 24 ≈ daily.
 STEP_INTERVALS: dict[str, int] = {
     "backfill": 24,
+    "library": 24,  # Run every 24 cycles (daily)
 }
 
 # Named groups for --group CLI flag
@@ -144,6 +152,7 @@ STEP_GROUPS: dict[str, list[str]] = {
         "dedup",
         "screenshots",
         "backfill",
+        "library",
     ],
     "radar": ["identify"],
 }
