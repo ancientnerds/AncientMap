@@ -638,7 +638,9 @@ class StaticExporter:
         periods_dir.mkdir(parents=True, exist_ok=True)
 
         with get_session() as session:
-            sources = session.query(LibrarySource).order_by(LibrarySource.citation_count.desc()).all()
+            sources = (
+                session.query(LibrarySource).order_by(LibrarySource.citation_count.desc()).all()
+            )
 
             if not sources:
                 logger.info("  No library sources to export")
@@ -666,7 +668,7 @@ class StaticExporter:
                 }
 
                 # Stats
-                for st in (src.source_types or []):
+                for st in src.source_types or []:
                     type_counts[st] = type_counts.get(st, 0) + 1
                 tier_counts[src.reliability_tier] = tier_counts.get(src.reliability_tier, 0) + 1
                 if src.domain:

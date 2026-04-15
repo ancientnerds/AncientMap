@@ -35,8 +35,12 @@ class LibrarySearchResponse(BaseModel):
 def search_library(
     q: str | None = Query(None, description="Full-text search on title, snippet, domain"),
     period: str | None = Query(None, description="Filter by period tag"),
-    source_type: str | None = Query(None, alias="type", description="Filter by source type: story, journal, research, site"),
-    tier: int | None = Query(None, description="Filter by reliability tier: 1=academic, 2=reputable, 3=general"),
+    source_type: str | None = Query(
+        None, alias="type", description="Filter by source type: story, journal, research, site"
+    ),
+    tier: int | None = Query(
+        None, description="Filter by reliability tier: 1=academic, 2=reputable, 3=general"
+    ),
     sort: str = Query("citations", description="Sort: citations, recent, title"),
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=200),

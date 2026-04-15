@@ -115,11 +115,7 @@ class LibraryAggregator:
             .all()
         )
 
-        items = (
-            session.query(NewsItem)
-            .filter(NewsItem.web_sources.isnot(None))
-            .yield_per(500)
-        )
+        items = session.query(NewsItem).filter(NewsItem.web_sources.isnot(None)).yield_per(500)
         count = 0
         for item in items:
             if not item.web_sources:
@@ -157,7 +153,11 @@ class LibraryAggregator:
         count = 0
         for req in requests:
             try:
-                result = json.loads(req.result_json) if isinstance(req.result_json, str) else req.result_json
+                result = (
+                    json.loads(req.result_json)
+                    if isinstance(req.result_json, str)
+                    else req.result_json
+                )
             except (json.JSONDecodeError, TypeError):
                 continue
 
@@ -174,7 +174,9 @@ class LibraryAggregator:
                     break
 
             # Parse reference lines: [N] Title — URL or [N] Title (URL)
-            for match in re.finditer(r'\[(\d+)\]\s*(.+?)(?:\s*[—–-]\s*|\s*\()(https?://[^\s)]+)', refs_section):
+            for match in re.finditer(
+                r"\[(\d+)\]\s*(.+?)(?:\s*[—–-]\s*|\s*\()(https?://[^\s)]+)", refs_section
+            ):
                 _num, title, url = match.groups()
                 self._register(
                     url=url.rstrip(".),;"),
@@ -194,11 +196,7 @@ class LibraryAggregator:
 
     def _scan_sites(self, session):
         """Scan UnifiedSite.raw_data['description_citations']."""
-        sites = (
-            session.query(UnifiedSite)
-            .filter(UnifiedSite.raw_data.isnot(None))
-            .yield_per(1000)
-        )
+        sites = session.query(UnifiedSite).filter(UnifiedSite.raw_data.isnot(None)).yield_per(1000)
         count = 0
         for site in sites:
             raw = site.raw_data or {}
@@ -224,17 +222,13 @@ class LibraryAggregator:
 
     def _scan_articles(self, session):
         """Scan active NewsArticles for web source URLs in markdown content."""
-        articles = (
-            session.query(NewsArticle)
-            .filter(NewsArticle.active.is_(True))
-            .all()
-        )
+        articles = session.query(NewsArticle).filter(NewsArticle.active.is_(True)).all()
         count = 0
         for article in articles:
             if not article.content:
                 continue
             # Extract markdown links: [text](url)
-            for match in re.finditer(r'\[([^\]]+)\]\((https?://[^)]+)\)', article.content):
+            for match in re.finditer(r"\[([^\]]+)\]\((https?://[^)]+)\)", article.content):
                 title, url = match.groups()
                 # Skip YouTube links (those are video refs, not web sources)
                 if "youtube.com" in url or "youtu.be" in url:
@@ -260,6 +254,7 @@ class LibraryAggregator:
             return 0
 
         from sqlalchemy import text
+
         # Truncate and rewrite — simpler than merging with existing rows
         session.execute(text("DELETE FROM library_sources"))
 
