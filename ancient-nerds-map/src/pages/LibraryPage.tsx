@@ -161,25 +161,25 @@ export default function LibraryPage() {
           )}
         </div>
 
-        {/* Stats bar */}
-        {stats && !isSearchActive && (
-          <div className="library-stats-bar">
-            {stats.total_sources.toLocaleString()} sources across {stats.period_count} periods in {Object.keys(stats.by_type).length} categories
+        {/* Stats + filter chips — single row on desktop */}
+        <div className="library-toolbar">
+          {stats && !isSearchActive && (
+            <span className="library-stats-bar">
+              {stats.total_sources.toLocaleString()} sources across {stats.period_count} periods in {Object.keys(stats.by_type).length} categories
+            </span>
+          )}
+          <div className="library-filter-chips">
+            {['story', 'journal', 'research', 'site'].map(type => (
+              <button
+                key={type}
+                className={`library-filter-chip${activeType === type ? ' active' : ''}`}
+                onClick={() => handleTypeFilter(type)}
+              >
+                {type === 'story' ? 'Stories' : type === 'journal' ? 'Journals' : type === 'research' ? 'Research' : 'Sites'}
+                {stats && <span className="library-filter-chip-count">{stats.by_type[type] || 0}</span>}
+              </button>
+            ))}
           </div>
-        )}
-
-        {/* Source type filter chips */}
-        <div className="library-filter-chips">
-          {['story', 'journal', 'research', 'site'].map(type => (
-            <button
-              key={type}
-              className={`library-filter-chip${activeType === type ? ' active' : ''}`}
-              onClick={() => handleTypeFilter(type)}
-            >
-              {type === 'story' ? 'Stories' : type === 'journal' ? 'Journals' : type === 'research' ? 'Research' : 'Sites'}
-              {stats && <span className="library-filter-chip-count">{stats.by_type[type] || 0}</span>}
-            </button>
-          ))}
         </div>
 
         {/* Search results mode */}
