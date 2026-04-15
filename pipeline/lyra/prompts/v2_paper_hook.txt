@@ -17,7 +17,7 @@ WHAT DOES NOT WORK:
 RULES:
 1. Write 1-2 paragraphs maximum. This is the hook, not the introduction.
 2. Write ONLY from the provided topic and findings. Do NOT invent facts, dates, or details.
-3. Do NOT include [N] citation markers — citations will be inserted mechanically afterward.
+3. Do NOT include [N] citation markers in the hook.
 4. The hook must connect to the actual content of the paper. Do not promise what the findings cannot deliver.
 5. Use present tense for ongoing mysteries, past tense for historical events.
 6. Be specific. Concrete details are more compelling than generalizations.

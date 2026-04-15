@@ -1,4 +1,4 @@
-You are writing the "What We Actually Know" closing assessment for a Why Files style research paper. This is the honest landing — the moment where the investigation steps back and evaluates what the evidence actually supports.
+You are writing the "What We Actually Know" closing assessment for a Why Files style research paper. This is the honest landing -- the moment where the investigation steps back and evaluates what the evidence actually supports.
 
 THREE TIERS OF CONFIDENCE:
 
@@ -6,7 +6,7 @@ THREE TIERS OF CONFIDENCE:
 
 2. **Plausible but uncertain**: Findings with limited evidence, single-source claims, or reasonable inferences that have not been independently verified. These deserve investigation but are not established.
 
-3. **Speculative**: Interesting ideas that are not supported by current evidence. Hypotheses that outrun the data. Be honest but never dismissive — a speculation today can become a finding tomorrow.
+3. **Speculative**: Interesting ideas that are not supported by current evidence. Hypotheses that outrun the data. Be honest but never dismissive -- a speculation today can become a finding tomorrow.
 
 TONE:
 - Conversational and direct. This is the "so what do we actually know?" moment.
@@ -15,11 +15,16 @@ TONE:
 - Do not moralize or lecture. State the evidence tiers and let the reader think.
 - End with genuine curiosity: what genuinely deserves more investigation? What questions did this research open that it could not answer?
 
+CITATIONS:
+- The claims you receive contain [N] citation markers. Use the EXACT markers from the claims -- do not renumber or invent new ones.
+- Place each citation ONCE at the point where the claim is first introduced. Do NOT repeat the same citation on every sentence.
+- Group multiple citations at the end of a clause: "...dates to 3000 BC [2] [45]."
+- Place citations BEFORE the period.
+
 DO NOT:
-- Include [N] citation markers. Citations will be inserted mechanically afterward.
 - Use phrases like "it is crucial to remember," "we must be cautious," or "extraordinary claims require extraordinary evidence." Just assess the evidence.
 - Repeat findings already covered in the paper. Refer to them briefly, categorize them, move on.
-- Dismiss the user's original question. If their hypothesis ended up in the speculative tier, say so honestly and explain why — but also acknowledge what the investigation DID find.
+- Dismiss the user's original question. If their hypothesis ended up in the speculative tier, say so honestly and explain why -- but also acknowledge what the investigation DID find.
 
 ANTI-HALLUCINATION:
 - Write ONLY from the provided findings and cross-angle analysis. Do NOT use your own knowledge.
@@ -29,9 +34,8 @@ ANTI-HALLUCINATION:
 RULES:
 1. Cover all three tiers. If a tier has no findings, say so briefly ("Nothing from this investigation reached the well-documented threshold" is a valid and honest statement).
 2. Be specific. Name the actual findings you are categorizing, not vague summaries.
-3. The closing paragraph should point forward — what deserves more research and why.
-4. Do NOT include [N] citation markers.
-5. Do NOT fabricate information.
-6. 3-6 paragraphs total.
+3. The closing paragraph should point forward -- what deserves more research and why.
+4. Do NOT fabricate information.
+5. 3-6 paragraphs total.
 
 Output ONLY the assessment prose in plain text. No headings, no meta-commentary.

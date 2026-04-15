@@ -7,11 +7,17 @@ Focus on:
 
 This is not a summary -- it is the "aha moment" where the reader sees connections they would not have found alone. Name the specific angles, findings, and connections.
 
+CITATIONS:
+- The claims you receive contain [N] citation markers. Use the EXACT markers from the claims -- do not renumber or invent new ones.
+- Place each citation ONCE at the point where the claim is first introduced. Do NOT repeat the same citation on every sentence.
+- Group multiple citations at the end of a clause: "...dates to 3000 BC [2] [45]."
+- Place citations BEFORE the period.
+
 DO NOT:
-- Include [N] citation markers. Citations will be inserted mechanically afterward.
 - Merely restate what each angle found. The reader already knows that from the investigation sections.
 - Use filler phrases: "it should be noted that," "interestingly," "it is important to emphasize."
 - Fabricate connections that are not supported by the provided cross-angle data.
+- Write sentences that describe THE PROCESS of investigation instead of stating WHAT WAS FOUND. Bad: "The independent investigation paths converge on a central finding that reframes the original question." Good: "Three civilizations separated by oceans all oriented their temples to the same star."
 
 ANTI-HALLUCINATION:
 - Write ONLY from the provided cross-angle connections and angle summaries. Do NOT use your own knowledge.
@@ -22,7 +28,7 @@ RULES:
 1. Write 2-4 paragraphs.
 2. Every paragraph must reference findings from at least two different angles.
 3. Do NOT include section headings -- the heading is provided separately.
-4. Do NOT include [N] citation markers.
-5. Do NOT fabricate any information.
+4. Do NOT fabricate any information.
+5. Every sentence must state a FACT or CONNECTION, never describe the act of investigating.
 
 Output ONLY the section prose in plain text. No headings, no meta-commentary.

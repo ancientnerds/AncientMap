@@ -15,49 +15,6 @@ from pipeline.lyra.research_state import ResearchPhase
 logger = logging.getLogger(__name__)
 PROMPTS_DIR = Path(__file__).resolve().parent.parent / "prompts"
 
-# Stop words for keyword-overlap matching during mechanical citation insertion
-_STOP_WORDS = frozenset(
-    {
-        "the",
-        "a",
-        "an",
-        "is",
-        "are",
-        "was",
-        "were",
-        "of",
-        "in",
-        "to",
-        "and",
-        "that",
-        "this",
-        "for",
-        "with",
-        "from",
-        "has",
-        "have",
-        "had",
-        "been",
-        "not",
-        "but",
-        "its",
-        "also",
-        "by",
-        "on",
-        "as",
-        "at",
-        "or",
-        "it",
-        "be",
-        "can",
-        "may",
-        "would",
-        "could",
-        "should",
-        "will",
-    }
-)
-
 
 class PaperHandler(BaseHandler):
     """Assembles the final research paper using the Why Files narrative structure.
@@ -254,10 +211,6 @@ class PaperHandler(BaseHandler):
         raw_paper = re.sub(r"\s*---\s*$", "", raw_paper, flags=re.MULTILINE)
         raw_paper = re.sub(r"^\s*---\s*$", "", raw_paper, flags=re.MULTILINE)
         raw_paper = re.sub(r"([^\n])\s*(## )", r"\1\n\n\2", raw_paper)
-
-        # Strip any [N] markers the LLM snuck in, then insert mechanically
-        raw_paper = re.sub(r"\[\d+\]", "", raw_paper)
-        raw_paper = self._insert_citations_mechanically(raw_paper, all_claims, sid_to_num)
         raw_paper = re.sub(r" +([.,;])", r"\1", raw_paper)
         raw_paper = re.sub(r"  +", " ", raw_paper)
 
@@ -826,93 +779,6 @@ class PaperHandler(BaseHandler):
         return raw.strip()
 
     # ===================================================================
-    # Mechanical citation insertion
-    # ===================================================================
-
-    def _insert_citations_mechanically(
-        self,
-        paper_text: str,
-        claims: list[dict],
-        sid_to_num: dict[str, int],
-    ) -> str:
-        """Insert [N] citations by matching sentences to claims via keyword overlap.
-
-        The LLM writes prose WITHOUT citations. This method matches each
-        sentence to claims via keyword overlap and appends the correct [N]
-        markers. Guarantees every citation traces back to the claim it was
-        assigned to.
-
-        Processes paragraph-by-paragraph to preserve markdown structure
-        (headings, blank lines, list items).
-        """
-        # Build claim -> citation strings list
-        claim_citations: list[tuple[str, str]] = []
-
-        # From collected claims (synthesis + registry)
-        for c in claims:
-            claim_text = c.get("claim", "")
-            sids = c.get("source_ids", [])
-            nums = " ".join(f"[{sid_to_num[sid]}]" for sid in sids if sid in sid_to_num)
-            if claim_text and nums:
-                claim_citations.append((claim_text, nums))
-
-        if not claim_citations:
-            logger.warning("[paper] No claims found for mechanical citation insertion")
-            return paper_text
-
-        # Process paragraph by paragraph to preserve newlines
-        paragraphs = paper_text.split("\n\n")
-        cited_paragraphs: list[str] = []
-        citations_inserted = 0
-
-        for paragraph in paragraphs:
-            # Skip headings and short fragments
-            if paragraph.startswith("#") or len(paragraph.strip()) < 30:
-                cited_paragraphs.append(paragraph)
-                continue
-
-            # Split paragraph into sentences, cite each, rejoin with spaces
-            sentences = re.split(r"(?<=[.!?])\s+", paragraph)
-            cited_sentences: list[str] = []
-
-            for sentence in sentences:
-                if sentence.startswith("#") or len(sentence) < 30:
-                    cited_sentences.append(sentence)
-                    continue
-
-                sent_words = set(sentence.lower().split()) - _STOP_WORDS
-                best_nums = ""
-                best_overlap = 0.0
-
-                for claim_text, nums in claim_citations:
-                    claim_words = set(claim_text.lower().split()) - _STOP_WORDS
-                    if not claim_words:
-                        continue
-                    overlap = len(claim_words & sent_words) / len(claim_words)
-                    if overlap > best_overlap and overlap >= 0.3:
-                        best_overlap = overlap
-                        best_nums = nums
-
-                if best_nums:
-                    # Preserve original terminal punctuation (don't corrupt ? and !)
-                    terminal = sentence[-1] if sentence and sentence[-1] in ".?!" else "."
-                    clean = sentence.rstrip(".?!")
-                    cited_sentence = f"{clean} {best_nums}{terminal}"
-                    cited_sentences.append(cited_sentence)
-                    citations_inserted += 1
-                else:
-                    cited_sentences.append(sentence)
-
-            cited_paragraphs.append(" ".join(cited_sentences))
-
-        logger.info(
-            "[paper] Mechanical citation: inserted %d citations across %d paragraphs",
-            citations_inserted,
-            len(paragraphs),
-        )
-        return "\n\n".join(cited_paragraphs)
-
-    # ===================================================================
     # Helpers
     # ===================================================================
 
@@ -969,15 +835,23 @@ class PaperHandler(BaseHandler):
 
     @staticmethod
     def _format_claims_for_prompt(claims: list[dict]) -> str:
-        """Format claims as a numbered list for LLM prompts."""
+        """Format claims with inline [N] markers for LLM prompts.
+
+        Embeds citation markers directly in the claim text so the LLM
+        can carry them into its prose naturally. Matches the journal
+        pipeline approach.
+        """
         lines: list[str] = []
         for i, c in enumerate(claims):
             conf = c.get("confidence", "medium")
             cites = c.get("citations", "")
+            claim_text = c.get("claim", "")
             notes = c.get("notes", "")
-            line = f"{i}. [{conf}] {c.get('claim', '')}"
+            # Embed [N] markers at the end of the claim text
             if cites:
-                line += f"\n   Sources: {cites}"
+                line = f"{i}. [{conf}] {claim_text} {cites}"
+            else:
+                line = f"{i}. [{conf}] {claim_text}"
             if notes:
                 line += f"\n   Notes: {notes}"
             lines.append(line)

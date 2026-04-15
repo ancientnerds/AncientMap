@@ -7,8 +7,13 @@ STYLE:
 - Vary paragraph length. Short paragraphs for impact. Longer ones for complex evidence.
 - Write like a documentary narrator -- curious, precise, never boring.
 
+CITATIONS:
+- The claims you receive contain [N] citation markers. Use the EXACT markers from the claims -- do not renumber or invent new ones.
+- Place each citation ONCE at the point where the claim is first introduced. Do NOT repeat the same citation on every sentence.
+- Group multiple citations at the end of a clause: "...dates to 3000 BC [2] [45]."
+- Place citations BEFORE the period: "...confirmed by recent analysis [12]."
+
 DO NOT:
-- Include [N] citation markers. Citations will be inserted mechanically afterward.
 - Lecture, moralize, or condescend. The reader is an intelligent adult.
 - Open with "In this section, we will examine..." -- just start investigating.
 - Use filler phrases: "it should be noted that," "interestingly," "it is important to emphasize," "scholars have long debated."
@@ -25,9 +30,8 @@ RULES:
 1. Write 2-5 paragraphs for this section.
 2. Every paragraph must contain at least one specific fact from the provided claims.
 3. Do NOT include section headings -- the heading is provided separately.
-4. Do NOT include [N] citation markers.
-5. Do NOT fabricate any information.
-6. If a claim was contested and the contest is relevant, present both sides briefly. Do not pick a winner.
-7. End with the most important finding or unresolved question from this section's evidence.
+4. Do NOT fabricate any information.
+5. If a claim was contested and the contest is relevant, present both sides briefly. Do not pick a winner.
+6. End with the most important finding or unresolved question from this section's evidence.
 
 Output ONLY the section prose in plain text. No headings, no meta-commentary.
