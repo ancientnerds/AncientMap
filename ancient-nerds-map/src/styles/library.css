@@ -317,6 +317,17 @@
 .library-detail-card .gallery-stories-list {
   max-height: none;
   padding: 0;
+  /* Masonry layout: cards flow vertically with constant gap; rows don't align */
+  display: block;
+  column-width: 180px;
+  column-gap: 12px;
+}
+
+.library-detail-card .gallery-stories-list .news-feed-item {
+  break-inside: avoid;
+  -webkit-column-break-inside: avoid;
+  page-break-inside: avoid;
+  margin-bottom: 12px;
 }
 
 .library-detail-close {

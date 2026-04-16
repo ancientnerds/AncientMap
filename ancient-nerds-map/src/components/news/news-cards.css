@@ -462,6 +462,12 @@
   line-height: 1;
 }
 
+/* Reserve right space on meta row when a badge is present so the date
+   doesn't collide with the absolute-positioned badge in narrow cards. */
+.news-category-badge ~ .news-card-meta {
+  padding-right: 80px;
+}
+
 /* Scrollable filter chips row */
 .news-page-chips-scroll {
   overflow-x: auto;
