@@ -430,14 +430,13 @@
 }
 
 .library-story-preview {
-  width: 380px;
+  width: 460px;
   flex-shrink: 0;
-  max-height: 80vh;
-  overflow-y: auto;
 }
 
 .library-story-preview .news-page-card {
-  max-width: 100%;
+  width: 100%;
+  overflow: visible;
 }
 
 /* Loading & empty states */
