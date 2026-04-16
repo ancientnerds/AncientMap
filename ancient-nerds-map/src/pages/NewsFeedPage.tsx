@@ -75,7 +75,7 @@ export default function NewsFeedPage() {
   const [hasMore, setHasMore] = useState(false)
   const [totalCount, setTotalCount] = useState(0)
   const [showLyraProfile, setShowLyraProfile] = useState(false)
-  const [headlinesOnly, setHeadlinesOnly] = useState(false)
+  const [headlinesOnly, setHeadlinesOnly] = useState(() => localStorage.getItem('stories_headlines_only') === 'true')
   const sentinelRef = useRef<HTMLDivElement>(null)
   const gridRef = useRef<HTMLDivElement>(null)
   const pageRef = useRef<HTMLDivElement>(null)
@@ -415,7 +415,11 @@ export default function NewsFeedPage() {
               <span className="news-page-filters-bar-separator" />
               <button
                 className={`news-page-chip${headlinesOnly ? ' active' : ''}`}
-                onClick={() => setHeadlinesOnly(prev => !prev)}
+                onClick={() => setHeadlinesOnly(prev => {
+                  const next = !prev
+                  localStorage.setItem('stories_headlines_only', String(next))
+                  return next
+                })}
               >
                 Headlines
               </button>
