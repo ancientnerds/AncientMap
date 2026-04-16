@@ -13099,6 +13099,10 @@ body.news-feed-open .empire-borders-window {
   background: var(--accent-glow-05);
 }
 
+.news-feed-btn.active {
+  color: var(--accent-primary);
+}
+
 .news-feed-content {
   overflow-y: auto;
   flex: 1;
@@ -13346,6 +13350,13 @@ body.news-feed-open .empire-borders-window {
 .news-page-filters-bar-actions .news-page-chip {
   padding: 3px 10px;
   font-size: 10px;
+}
+
+.news-page-filters-bar-separator {
+  width: 1px;
+  height: 14px;
+  background: var(--accent-glow-20);
+  flex-shrink: 0;
 }
 
 .news-page-filters-toggle {

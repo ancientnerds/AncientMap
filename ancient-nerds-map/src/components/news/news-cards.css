@@ -38,6 +38,14 @@
   font-weight: 700;
 }
 
+.news-card-headline {
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: 11px;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
 .news-card-post-text {
   font-size: 14px;
   color: rgba(232, 232, 232, 0.85);
@@ -217,6 +225,7 @@
 
 /* Compact overrides for sidebar panel */
 .news-feed-panel .news-card-meta { font-size: 10px; }
+.news-feed-panel .news-card-headline { font-size: 10px; }
 .news-feed-panel .news-card-post-text { font-size: 12px; }
 .news-feed-panel .news-card-duration { font-size: 10px; padding: 1px 4px; }
 .news-feed-panel .news-card-timestamp { font-size: 10px; padding: 1px 4px; }

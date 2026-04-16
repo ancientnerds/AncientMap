@@ -75,6 +75,7 @@ export default function NewsFeedPage() {
   const [hasMore, setHasMore] = useState(false)
   const [totalCount, setTotalCount] = useState(0)
   const [showLyraProfile, setShowLyraProfile] = useState(false)
+  const [headlinesOnly, setHeadlinesOnly] = useState(false)
   const sentinelRef = useRef<HTMLDivElement>(null)
   const gridRef = useRef<HTMLDivElement>(null)
   const pageRef = useRef<HTMLDivElement>(null)
@@ -411,6 +412,13 @@ export default function NewsFeedPage() {
               >
                 Breakthroughs
               </button>
+              <span className="news-page-filters-bar-separator" />
+              <button
+                className={`news-page-chip${headlinesOnly ? ' active' : ''}`}
+                onClick={() => setHeadlinesOnly(prev => !prev)}
+              >
+                Headlines
+              </button>
             </div>
           </div>
 
@@ -644,6 +652,7 @@ export default function NewsFeedPage() {
                   <div className="news-page-card-body">
                     <NewsCard
                       size="lg"
+                      headlinesOnly={headlinesOnly}
                       headline={item.headline}
                       postText={item.post_text}
                       channelName={item.video.channel_name}

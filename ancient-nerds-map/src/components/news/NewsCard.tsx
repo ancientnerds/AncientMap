@@ -68,8 +68,9 @@ export interface NewsCardProps {
   // Verification status
   verified?: boolean
 
-  // Size
+  // Display modes
   size?: 'sm' | 'md' | 'lg'
+  headlinesOnly?: boolean
 }
 
 const PLAY_SIZE = { sm: 20, md: 24, lg: 32 }
@@ -103,6 +104,7 @@ function NewsCard({
   webSources,
   verified,
   size = 'md',
+  headlinesOnly,
 }: NewsCardProps) {
   const [expanded, setExpanded] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -181,7 +183,8 @@ function NewsCard({
         <div className="news-card-unverified-badge">Unverified</div>
       )}
 
-      <div className="news-card-post-text">{postText || headline}</div>
+      <div className="news-card-headline">{headline}</div>
+      {!headlinesOnly && postText && <div className="news-card-post-text">{postText}</div>}
 
       {hasMatchedSite && (
         <div className="news-feed-site-block">
@@ -223,7 +226,7 @@ function NewsCard({
         </div>
       )}
 
-      {screenshotUrl && (
+      {!headlinesOnly && screenshotUrl && (
         playing && videoId ? (
           <div className="news-card-embed" onClick={e => e.stopPropagation()}>
             <iframe

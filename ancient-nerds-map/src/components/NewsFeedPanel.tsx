@@ -30,6 +30,7 @@ export default function NewsFeedPanel({ onClose, onSiteHover, onSiteClick, onAsk
   const [error, setError] = useState<string | null>(null)
   const [showLyraProfile, setShowLyraProfile] = useState(false)
   const [online, setOnline] = useState(false)
+  const [headlinesOnly, setHeadlinesOnly] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
 
   const fetchFeed = useCallback(async (pageNum: number, append: boolean = false, signal?: AbortSignal) => {
@@ -92,6 +93,18 @@ export default function NewsFeedPanel({ onClose, onSiteHover, onSiteClick, onAsk
           <span className="news-feed-live-text">{online ? 'LIVE' : 'OFFLINE'}</span>
         </div>
         <div className="news-feed-actions">
+          <button
+            className={`news-feed-btn${headlinesOnly ? ' active' : ''}`}
+            onClick={() => setHeadlinesOnly(prev => !prev)}
+            title={headlinesOnly ? 'Show full cards' : 'Headlines only'}
+            aria-label="Toggle headlines only"
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <line x1="3" y1="6" x2="21" y2="6" />
+              <line x1="3" y1="12" x2="21" y2="12" />
+              <line x1="3" y1="18" x2="21" y2="18" />
+            </svg>
+          </button>
           <button className="news-feed-btn" onClick={onClose} title="Close" aria-label="Close stories">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <line x1="18" y1="6" x2="6" y2="18"></line>
@@ -156,6 +169,7 @@ export default function NewsFeedPanel({ onClose, onSiteHover, onSiteClick, onAsk
             <NewsCard
               key={item.id}
               size="sm"
+              headlinesOnly={headlinesOnly}
               headline={item.headline}
               postText={item.post_text}
               channelName={item.video.channel_name}
