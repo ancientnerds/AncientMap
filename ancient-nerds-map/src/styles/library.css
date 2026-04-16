@@ -415,16 +415,20 @@
   color: #fff;
 }
 
-/* Story preview — reuse citation-popover look, pin to top-right above backdrop */
-.citation-popover.library-story-fixed {
-  top: 60px !important;
-  right: 20px !important;
-  left: auto !important;
-  z-index: 1100 !important;
-}
-
-.citation-popover.library-story-fixed::before {
-  display: none;
+/* Story preview — same visual as citation-popover, pinned top-right */
+.library-story-fixed {
+  position: fixed;
+  top: 60px;
+  right: 20px;
+  z-index: 1100;
+  width: 380px;
+  max-width: calc(100vw - 16px);
+  background: #08121a;
+  border: 1px solid var(--border-accent, rgba(0, 180, 180, 0.2));
+  border-radius: 8px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+  pointer-events: auto;
 }
 
 /* Story hover refs */
