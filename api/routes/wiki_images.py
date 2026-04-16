@@ -139,7 +139,12 @@ async def set_hero(
                 text(
                     "UPDATE wiki_images SET filename = 'hero.webp', is_hero = true, source_type = 'manual', commons_page_url = :attr, width = :w, height = :h WHERE id = :id"
                 ),
-                {"id": existing[0], "attr": body.attribution_url, "w": final_width, "h": final_height},
+                {
+                    "id": existing[0],
+                    "attr": body.attribution_url,
+                    "w": final_width,
+                    "h": final_height,
+                },
             )
         else:
             db.execute(
