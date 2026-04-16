@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import { config } from '../../config'
 import { newsItemToCardProps } from '../news/NewsCard'
 import CitationPopover from '../news/CitationPopover'
@@ -124,14 +125,15 @@ export default function LibraryDetailCard({ source, onClose }: LibraryDetailCard
         )}
       </div>
 
-      {/* Story hover popover — same CitationPopover used by Articles page */}
-      {hoverStory && (
+      {/* Story hover popover — portaled to body to escape backdrop stacking context */}
+      {hoverStory && createPortal(
         <CitationPopover
           cardProps={newsItemToCardProps(hoverStory.data)}
           anchorRect={hoverStory.rect}
           onMouseEnter={() => {}}
           onMouseLeave={handleStoryLeave}
-        />
+        />,
+        document.body
       )}
     </div>
   )
