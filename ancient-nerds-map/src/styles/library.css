@@ -415,30 +415,6 @@
   color: #fff;
 }
 
-/* Story preview — same visual as citation-popover, pinned top-right */
-.library-story-fixed {
-  position: fixed;
-  top: 60px;
-  right: 20px;
-  z-index: 1100;
-  width: 380px;
-  max-width: calc(100vw - 16px);
-  background: #08121a;
-  border: 1px solid var(--border-accent, rgba(0, 180, 180, 0.2));
-  border-radius: 8px;
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
-  overflow: hidden;
-  pointer-events: auto;
-}
-
-/* Story hover refs */
-.library-ref-story {
-  cursor: pointer;
-}
-
-.library-ref-story:hover span:last-child {
-  color: var(--primary-red, #c02023);
-}
 
 /* Loading & empty states */
 .library-loading,

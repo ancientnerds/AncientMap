@@ -1,9 +1,5 @@
-import { useEffect, useState, useRef, useCallback } from 'react'
-import { createPortal } from 'react-dom'
-import { config } from '../../config'
-import NewsCard, { newsItemToCardProps } from '../news/NewsCard'
+import { useEffect } from 'react'
 import type { LibrarySource, ParentRef } from '../../types/library'
-import type { NewsItemData } from '../../types/news'
 
 const TIER_LABELS: Record<number, { label: string; className: string }> = {
   1: { label: 'Academic', className: 'library-tier-academic' },
@@ -12,6 +8,7 @@ const TIER_LABELS: Record<number, { label: string; className: string }> = {
 }
 
 const PARENT_LINKS: Record<string, { label: string; href: (id: string) => string }> = {
+  story: { label: 'Story', href: () => '/news.html' },
   journal: { label: 'Journal', href: () => '/articles.html' },
   research: { label: 'Research', href: (id) => `/research.html?id=${id}` },
   site: { label: 'Site', href: (id) => `/site.html?id=${id}` },
@@ -24,45 +21,12 @@ interface LibraryDetailCardProps {
 
 export default function LibraryDetailCard({ source, onClose }: LibraryDetailCardProps) {
   const tier = TIER_LABELS[source.reliability_tier]
-  const [storyData, setStoryData] = useState<NewsItemData | null>(null)
-  const hoverTimer = useRef<ReturnType<typeof setTimeout>>()
-  const leaveTimer = useRef<ReturnType<typeof setTimeout>>()
-  const cache = useRef<Map<string, NewsItemData>>(new Map())
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
   }, [onClose])
-
-  const handleStoryEnter = useCallback((ref: ParentRef) => {
-    if (hoverTimer.current) clearTimeout(hoverTimer.current)
-    if (leaveTimer.current) clearTimeout(leaveTimer.current)
-    hoverTimer.current = setTimeout(async () => {
-      const cached = cache.current.get(ref.id)
-      if (cached) { setStoryData(cached); return }
-      try {
-        const resp = await fetch(`${config.api.baseUrl}/news/item/${ref.id}`)
-        if (!resp.ok) return
-        const data: NewsItemData = await resp.json()
-        cache.current.set(ref.id, data)
-        setStoryData(data)
-      } catch { /* ignore */ }
-    }, 200)
-  }, [])
-
-  const handleStoryLeave = useCallback(() => {
-    if (hoverTimer.current) clearTimeout(hoverTimer.current)
-    leaveTimer.current = setTimeout(() => setStoryData(null), 200)
-  }, [])
-
-  const keepOpen = useCallback(() => {
-    if (leaveTimer.current) clearTimeout(leaveTimer.current)
-  }, [])
-
-  const dismiss = useCallback(() => {
-    setStoryData(null)
-  }, [])
 
   return (
     <div className="library-detail-backdrop" onClick={onClose}>
@@ -104,19 +68,11 @@ export default function LibraryDetailCard({ source, onClose }: LibraryDetailCard
             <h4>Cited in</h4>
             <ul className="library-detail-refs">
               {source.parent_refs.map((ref: ParentRef, i: number) => {
-                const isStory = ref.type === 'story'
                 const link = PARENT_LINKS[ref.type]
                 return (
-                  <li
-                    key={`${ref.type}-${ref.id}-${i}`}
-                    className={isStory ? 'library-ref-story' : undefined}
-                    onMouseEnter={isStory ? () => handleStoryEnter(ref) : undefined}
-                    onMouseLeave={isStory ? handleStoryLeave : undefined}
-                  >
-                    <span className="library-card-type-pill">{isStory ? 'Story' : link?.label || ref.type}</span>
-                    {isStory ? (
-                      <span>{ref.title}</span>
-                    ) : link ? (
+                  <li key={`${ref.type}-${ref.id}-${i}`}>
+                    <span className="library-card-type-pill">{link?.label || ref.type}</span>
+                    {link ? (
                       <a href={link.href(ref.id)} target="_blank" rel="noopener noreferrer">{ref.title}</a>
                     ) : (
                       <span>{ref.title}</span>
@@ -128,18 +84,6 @@ export default function LibraryDetailCard({ source, onClose }: LibraryDetailCard
           </div>
         )}
       </div>
-
-      {/* Story preview — fixed top-right, uses citation-popover class for identical look */}
-      {storyData && createPortal(
-        <div
-          className="library-story-fixed"
-          onMouseEnter={keepOpen}
-          onMouseLeave={dismiss}
-        >
-          <NewsCard size="sm" {...newsItemToCardProps(storyData)} />
-        </div>,
-        document.body
-      )}
     </div>
   )
 }
