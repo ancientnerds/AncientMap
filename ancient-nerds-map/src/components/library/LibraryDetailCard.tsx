@@ -36,11 +36,16 @@ export default function LibraryDetailCard({ source, onClose }: LibraryDetailCard
     return () => window.removeEventListener('keydown', handler)
   }, [onClose])
 
-  const handleStoryHover = useCallback((ref: ParentRef, li: HTMLElement) => {
+  const mousePos = useRef<{ x: number; y: number }>({ x: 0, y: 0 })
+
+  const handleStoryHover = useCallback((ref: ParentRef, e: React.MouseEvent) => {
+    mousePos.current = { x: e.clientX, y: e.clientY }
     if (hoverTimer.current) clearTimeout(hoverTimer.current)
     if (leaveTimer.current) clearTimeout(leaveTimer.current)
     hoverTimer.current = setTimeout(async () => {
-      const rect = li.getBoundingClientRect()
+      // Build a small rect at the cursor position
+      const { x, y } = mousePos.current
+      const rect = new DOMRect(x - 1, y - 1, 2, 2)
       const cached = hoverCache.current.get(ref.id)
       if (cached) {
         setHoverStory({ data: cached, rect })
@@ -119,7 +124,7 @@ export default function LibraryDetailCard({ source, onClose }: LibraryDetailCard
                   <li
                     key={`${ref.type}-${ref.id}-${i}`}
                     className={isStory ? 'library-ref-story' : undefined}
-                    onMouseEnter={isStory ? (e) => handleStoryHover(ref, e.currentTarget) : undefined}
+                    onMouseEnter={isStory ? (e) => handleStoryHover(ref, e) : undefined}
                     onMouseLeave={isStory ? handleStoryLeave : undefined}
                   >
                     <span className="library-card-type-pill">{isStory ? 'Story' : link?.label || ref.type}</span>
