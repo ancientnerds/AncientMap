@@ -142,7 +142,10 @@ jobs:
 
       - name: Deploy via SSH
         run: |
-          ssh -o StrictHostKeyChecking=accept-new -p ${{ secrets.VPS_PORT }} ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} 'set -e
+          ssh -o StrictHostKeyChecking=accept-new \
+              -o ServerAliveInterval=30 \
+              -o ServerAliveCountMax=20 \
+              -p ${{ secrets.VPS_PORT }} ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} 'set -e
             cd /var/www/ancientnerds
             BEFORE=$(git rev-parse HEAD)
             echo "==> Preserving snapshots..."
@@ -262,7 +265,7 @@ jobs:
             echo "==> Waiting for API health..."
             for i in $(seq 1 24); do
               sleep 5
-              if curl -sf http://localhost:8000/; then
+              if curl -sf --connect-timeout 5 --max-time 5 http://localhost:8000/; then
                 echo " API healthy after $((i * 5))s"
                 break
               fi
