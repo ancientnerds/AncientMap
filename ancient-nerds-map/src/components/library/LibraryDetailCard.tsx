@@ -55,6 +55,15 @@ export default function LibraryDetailCard({ source, onClose }: LibraryDetailCard
           <p className="library-detail-snippet">{source.snippet}</p>
         )}
 
+        <a
+          className="library-detail-visit"
+          href={source.url}
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          Visit source &rarr;
+        </a>
+
         {source.parent_refs.length > 0 && (
           <div className="library-detail-cited-in">
             <h4>Cited in</h4>
@@ -75,15 +84,6 @@ export default function LibraryDetailCard({ source, onClose }: LibraryDetailCard
             </ul>
           </div>
         )}
-
-        <a
-          className="library-detail-visit"
-          href={source.url}
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Visit source &rarr;
-        </a>
       </div>
     </div>
   )

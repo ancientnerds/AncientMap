@@ -394,19 +394,22 @@
 
 .library-detail-visit {
   display: inline-block;
-  padding: 8px 20px;
-  background: var(--primary-red, #c02023);
-  color: white;
-  border-radius: 4px;
+  padding: 8px 16px;
+  border: 1px solid var(--primary-red, #c02023);
+  background: transparent;
+  color: var(--primary-red, #c02023);
+  border-radius: 6px;
   text-decoration: none;
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+  font-family: var(--font-body, 'JetBrains Mono', monospace);
+  font-size: 13px;
+  font-weight: 500;
+  transition: background 0.2s, color 0.2s;
+  margin-bottom: 16px;
 }
 
 .library-detail-visit:hover {
-  opacity: 0.9;
+  background: var(--primary-red, #c02023);
+  color: #fff;
 }
 
 /* Loading & empty states */
