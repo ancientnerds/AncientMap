@@ -315,15 +315,8 @@
 }
 
 .library-detail-card .gallery-stories-list {
-  display: flex;
-  flex-direction: column;
   max-height: none;
   padding: 0;
-  gap: 8px;
-}
-
-.library-detail-card .gallery-stories-list .news-feed-item {
-  width: 100%;
 }
 
 .library-detail-close {
