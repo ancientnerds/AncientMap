@@ -103,13 +103,6 @@ export function GalleryContent({
               videoTitle={item.video.title}
               durationMinutes={item.video.duration_minutes}
               timestampSeconds={item.timestamp_seconds}
-              siteName={item.site_name || item.site_name_extracted}
-              siteNameExtracted={item.site_name_extracted}
-              siteId={item.site_id}
-              siteCountry={item.site_country}
-              siteType={item.site_type}
-              sitePeriodName={item.site_period_name}
-              sitePeriodStart={item.site_period_start}
               facts={item.facts}
             />
           )
