@@ -412,6 +412,25 @@
   color: #fff;
 }
 
+/* Story hover preview */
+.library-ref-story {
+  cursor: pointer;
+}
+
+.library-ref-story:hover a {
+  color: var(--primary-red, #c02023);
+}
+
+.library-story-preview {
+  margin-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding-top: 16px;
+}
+
+.library-story-preview .news-page-card {
+  max-width: 100%;
+}
+
 /* Loading & empty states */
 .library-loading,
 .library-empty {

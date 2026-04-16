@@ -348,6 +348,69 @@ async def get_news_feed(
     return response
 
 
+@router.get("/item/{item_id}", response_model=NewsItemResponse)
+async def get_news_item(item_id: int, db: Session = Depends(get_db)):
+    """Get a single news item by ID."""
+    item = (
+        db.query(NewsItem)
+        .options(
+            joinedload(NewsItem.video).joinedload(NewsVideo.channel),
+            joinedload(NewsItem.site),
+        )
+        .filter(NewsItem.id == item_id)
+        .first()
+    )
+    if not item:
+        raise HTTPException(status_code=404, detail="News item not found")
+
+    video = item.video
+    channel = video.channel if video else None
+    site = item.site
+
+    youtube_url = f"https://www.youtube.com/watch?v={video.id}" if video else None
+    youtube_deep_url = None
+    if video and item.timestamp_seconds:
+        youtube_deep_url = f"https://www.youtube.com/watch?v={video.id}&t={item.timestamp_seconds}s"
+
+    return NewsItemResponse(
+        id=item.id,
+        headline=item.headline,
+        summary=item.summary,
+        post_text=item.post_text,
+        facts=item.facts,
+        timestamp_range=item.timestamp_range,
+        timestamp_seconds=item.timestamp_seconds,
+        screenshot_url=item.screenshot_url,
+        youtube_url=youtube_url,
+        youtube_deep_url=youtube_deep_url,
+        video=NewsVideoInfo(
+            id=video.id,
+            title=video.title,
+            channel_name=channel.name if channel else "Unknown",
+            channel_id=video.channel_id,
+            published_at=video.published_at.isoformat() if video.published_at else "",
+            thumbnail_url=video.thumbnail_url,
+            duration_minutes=video.duration_minutes,
+        ),
+        created_at=item.created_at.isoformat() if item.created_at else "",
+        site_id=str(site.id) if site else None,
+        site_name=site.name if site else None,
+        site_lat=site.lat if site else None,
+        site_lon=site.lon if site else None,
+        site_type=site.site_type if site else None,
+        site_period_name=site.period_name if site else None,
+        site_period_start=site.period_start if site else None,
+        site_country=site.country if site else None,
+        site_name_extracted=item.site_name_extracted if not site else None,
+        significance=item.significance,
+        news_category=item.news_category,
+        speculative_tag=item.speculative_tag,
+        verified=item.verified_at is not None,
+        verified_at=item.verified_at.isoformat() if item.verified_at else None,
+        web_sources=item.web_sources,
+    )
+
+
 @router.get("/filters", response_model=NewsFiltersResponse)
 async def get_news_filters(db: Session = Depends(get_db)):
     """Get available filter options based on existing news data."""
