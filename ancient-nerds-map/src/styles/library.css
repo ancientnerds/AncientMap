@@ -294,13 +294,6 @@
   padding: 20px;
 }
 
-.library-detail-layout {
-  display: flex;
-  align-items: flex-start;
-  gap: 16px;
-  max-height: 80vh;
-}
-
 .library-detail-card {
   /* NERV panel styling from panel.css */
   position: relative;
@@ -420,23 +413,13 @@
   color: #fff;
 }
 
-/* Story hover preview — right side panel */
+/* Story hover refs */
 .library-ref-story {
   cursor: pointer;
 }
 
-.library-ref-story:hover a {
+.library-ref-story:hover span:last-child {
   color: var(--primary-red, #c02023);
-}
-
-.library-story-preview {
-  width: 460px;
-  flex-shrink: 0;
-}
-
-.library-story-preview .news-page-card {
-  width: 100%;
-  overflow: visible;
 }
 
 /* Loading & empty states */
@@ -450,21 +433,6 @@
 }
 
 /* Mobile */
-@media (max-width: 1000px) {
-  .library-detail-layout {
-    flex-direction: column;
-    align-items: center;
-  }
-  .library-detail-card {
-    width: 100%;
-    max-width: 560px;
-  }
-  .library-story-preview {
-    width: 100%;
-    max-width: 560px;
-  }
-}
-
 @media (max-width: 600px) {
   .library-content {
     padding: 12px 12px 40px;

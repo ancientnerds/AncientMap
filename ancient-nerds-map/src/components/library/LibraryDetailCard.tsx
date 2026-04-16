@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { config } from '../../config'
-import NewsCard, { newsItemToCardProps } from '../news/NewsCard'
+import { newsItemToCardProps } from '../news/NewsCard'
+import CitationPopover from '../news/CitationPopover'
 import type { LibrarySource, ParentRef } from '../../types/library'
 import type { NewsItemData } from '../../types/news'
 
@@ -11,7 +12,6 @@ const TIER_LABELS: Record<number, { label: string; className: string }> = {
 }
 
 const PARENT_LINKS: Record<string, { label: string; href: (id: string) => string }> = {
-  story: { label: 'Story', href: (id) => `/news.html?highlight=${id}` },
   journal: { label: 'Journal', href: () => '/articles.html' },
   research: { label: 'Research', href: (id) => `/research.html?id=${id}` },
   site: { label: 'Site', href: (id) => `/site.html?id=${id}` },
@@ -24,8 +24,7 @@ interface LibraryDetailCardProps {
 
 export default function LibraryDetailCard({ source, onClose }: LibraryDetailCardProps) {
   const tier = TIER_LABELS[source.reliability_tier]
-  const [hoveredStory, setHoveredStory] = useState<NewsItemData | null>(null)
-  const [hoverLoading, setHoverLoading] = useState(false)
+  const [hoverStory, setHoverStory] = useState<{ data: NewsItemData; rect: DOMRect } | null>(null)
   const hoverTimer = useRef<ReturnType<typeof setTimeout>>()
   const hoverCache = useRef<Map<string, NewsItemData>>(new Map())
 
@@ -36,114 +35,104 @@ export default function LibraryDetailCard({ source, onClose }: LibraryDetailCard
     return () => window.removeEventListener('keydown', handler)
   }, [onClose])
 
-  const handleStoryHover = useCallback((ref: ParentRef) => {
+  const handleStoryHover = useCallback((ref: ParentRef, li: HTMLElement) => {
     if (hoverTimer.current) clearTimeout(hoverTimer.current)
     hoverTimer.current = setTimeout(async () => {
-      // Check cache first
+      const rect = li.getBoundingClientRect()
       const cached = hoverCache.current.get(ref.id)
       if (cached) {
-        setHoveredStory(cached)
+        setHoverStory({ data: cached, rect })
         return
       }
-      setHoverLoading(true)
       try {
         const resp = await fetch(`${config.api.baseUrl}/news/item/${ref.id}`)
         if (!resp.ok) return
         const data: NewsItemData = await resp.json()
         hoverCache.current.set(ref.id, data)
-        setHoveredStory(data)
-      } catch { /* ignore */ } finally {
-        setHoverLoading(false)
-      }
+        setHoverStory({ data, rect })
+      } catch { /* ignore */ }
     }, 200)
   }, [])
 
   const handleStoryLeave = useCallback(() => {
     if (hoverTimer.current) clearTimeout(hoverTimer.current)
-    setHoveredStory(null)
-    setHoverLoading(false)
+    setHoverStory(null)
   }, [])
 
   return (
     <div className="library-detail-backdrop" onClick={onClose}>
-      <div className="library-detail-layout" onClick={e => e.stopPropagation()}>
-        <div className="library-detail-card">
-          <button className="library-detail-close" onClick={onClose}>&times;</button>
+      <div className="library-detail-card" onClick={e => e.stopPropagation()}>
+        <button className="library-detail-close" onClick={onClose}>&times;</button>
 
-          <div className="library-detail-header">
-            {source.domain && (
-              <img
-                className="library-detail-favicon"
-                src={`https://www.google.com/s2/favicons?domain=${source.domain}&sz=64`}
-                alt=""
-                width={24}
-                height={24}
-              />
-            )}
-            <div>
-              <h3 className="library-detail-title">{source.title}</h3>
-              <span className="library-detail-domain">{source.domain}</span>
-              {tier && <span className={`library-card-tier ${tier.className}`}>{tier.label}</span>}
-            </div>
+        <div className="library-detail-header">
+          {source.domain && (
+            <img
+              className="library-detail-favicon"
+              src={`https://www.google.com/s2/favicons?domain=${source.domain}&sz=64`}
+              alt=""
+              width={24}
+              height={24}
+            />
+          )}
+          <div>
+            <h3 className="library-detail-title">{source.title}</h3>
+            <span className="library-detail-domain">{source.domain}</span>
+            {tier && <span className={`library-card-tier ${tier.className}`}>{tier.label}</span>}
           </div>
-
-          {source.snippet && (
-            <p className="library-detail-snippet">{source.snippet}</p>
-          )}
-
-          <a
-            className="library-detail-visit"
-            href={source.url}
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Visit source &rarr;
-          </a>
-
-          {source.parent_refs.length > 0 && (
-            <div className="library-detail-cited-in">
-              <h4>Cited in</h4>
-              <ul className="library-detail-refs">
-                {source.parent_refs.map((ref: ParentRef, i: number) => {
-                  const link = PARENT_LINKS[ref.type]
-                  const isStory = ref.type === 'story'
-                  return (
-                    <li
-                      key={`${ref.type}-${ref.id}-${i}`}
-                      className={isStory ? 'library-ref-story' : undefined}
-                      onMouseEnter={isStory ? () => handleStoryHover(ref) : undefined}
-                      onMouseLeave={isStory ? handleStoryLeave : undefined}
-                    >
-                      <span className="library-card-type-pill">{link?.label || ref.type}</span>
-                      {link ? (
-                        <a href={link.href(ref.id)} target="_blank" rel="noopener noreferrer">{ref.title}</a>
-                      ) : (
-                        <span>{ref.title}</span>
-                      )}
-                    </li>
-                  )
-                })}
-              </ul>
-            </div>
-          )}
         </div>
 
-        {/* Story hover preview — right side */}
-        {(hoveredStory || hoverLoading) && (
-          <div className="library-story-preview">
-            {hoverLoading && !hoveredStory && (
-              <div className="library-loading">Loading story...</div>
-            )}
-            {hoveredStory && (
-              <div className="news-page-card">
-                <div className="news-page-card-body">
-                  <NewsCard size="lg" {...newsItemToCardProps(hoveredStory)} />
-                </div>
-              </div>
-            )}
+        {source.snippet && (
+          <p className="library-detail-snippet">{source.snippet}</p>
+        )}
+
+        <a
+          className="library-detail-visit"
+          href={source.url}
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          Visit source &rarr;
+        </a>
+
+        {source.parent_refs.length > 0 && (
+          <div className="library-detail-cited-in">
+            <h4>Cited in</h4>
+            <ul className="library-detail-refs">
+              {source.parent_refs.map((ref: ParentRef, i: number) => {
+                const isStory = ref.type === 'story'
+                const link = PARENT_LINKS[ref.type]
+                return (
+                  <li
+                    key={`${ref.type}-${ref.id}-${i}`}
+                    className={isStory ? 'library-ref-story' : undefined}
+                    onMouseEnter={isStory ? (e) => handleStoryHover(ref, e.currentTarget) : undefined}
+                    onMouseLeave={isStory ? handleStoryLeave : undefined}
+                  >
+                    <span className="library-card-type-pill">{isStory ? 'Story' : link?.label || ref.type}</span>
+                    {isStory ? (
+                      <span>{ref.title}</span>
+                    ) : link ? (
+                      <a href={link.href(ref.id)} target="_blank" rel="noopener noreferrer">{ref.title}</a>
+                    ) : (
+                      <span>{ref.title}</span>
+                    )}
+                  </li>
+                )
+              })}
+            </ul>
           </div>
         )}
       </div>
+
+      {/* Story hover popover — same CitationPopover used by Articles page */}
+      {hoverStory && (
+        <CitationPopover
+          cardProps={newsItemToCardProps(hoverStory.data)}
+          anchorRect={hoverStory.rect}
+          onMouseEnter={() => {}}
+          onMouseLeave={handleStoryLeave}
+        />
+      )}
     </div>
   )
 }

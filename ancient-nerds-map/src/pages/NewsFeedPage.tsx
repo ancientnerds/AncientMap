@@ -199,39 +199,6 @@ export default function NewsFeedPage() {
       .catch(() => {})
   }, [])
 
-  // Deep-link highlight: ?highlight=ID loads pages until the story appears, then scrolls to it
-  const highlightTarget = useRef<string | null>(null)
-  useEffect(() => {
-    if (highlightTarget.current) return
-    const params = new URLSearchParams(window.location.search)
-    const id = params.get('highlight')
-    if (!id) return
-    highlightTarget.current = id
-    const url = new URL(window.location.href)
-    url.searchParams.delete('highlight')
-    window.history.replaceState({}, '', url.toString())
-  }, [])
-
-  // After items change, check if the target story is now in the DOM
-  useEffect(() => {
-    const id = highlightTarget.current
-    if (!id) return
-
-    const el = document.querySelector(`[data-story-id="${id}"]`) as HTMLElement | null
-    if (el) {
-      // Found it — scroll and highlight
-      highlightTarget.current = null
-      setTimeout(() => {
-        el.scrollIntoView({ behavior: 'smooth', block: 'center' })
-        el.classList.add('news-page-card-highlight')
-        setTimeout(() => el.classList.remove('news-page-card-highlight'), 3000)
-      }, 50)
-    } else if (!loading && hasMore) {
-      // Not found yet — load next page
-      fetchPage(page + 1, true)
-    }
-  }, [items, loading, hasMore, page, fetchPage])
-
   // Infinite scroll — fetch next page from server when sentinel enters viewport
   useEffect(() => {
     if (!sentinelRef.current || !hasMore || loading) return
