@@ -306,9 +306,11 @@
 }
 
 .library-detail-card .gallery-stories-list {
+  display: flex;
+  flex-direction: column;
   max-height: none;
   padding: 0;
-  gap: 12px;
+  gap: 8px;
 }
 
 .library-detail-close {
