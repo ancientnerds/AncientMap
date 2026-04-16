@@ -281,6 +281,13 @@ jobs:
               echo "    WARNING: Sitemap generation failed (non-fatal)"
             fi
 
+            echo "==> Refreshing library data..."
+            if curl -sf --max-time 120 -X POST http://localhost:8000/api/library/refresh > /dev/null; then
+              echo "    Library refreshed"
+            else
+              echo "    WARNING: Library refresh failed (non-fatal)"
+            fi
+
             echo "==> Restarting log streaming..."
             [ -f scripts/follow_logs.sh ] && chmod +x scripts/follow_logs.sh
             mkdir -p logs
