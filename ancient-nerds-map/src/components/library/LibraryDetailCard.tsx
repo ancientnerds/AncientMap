@@ -132,7 +132,7 @@ export default function LibraryDetailCard({ source, onClose }: LibraryDetailCard
       {/* Story preview — fixed top-right, uses citation-popover class for identical look */}
       {storyData && createPortal(
         <div
-          className="library-story-fixed"
+          className="citation-popover library-story-fixed"
           onMouseEnter={keepOpen}
           onMouseLeave={dismiss}
         >

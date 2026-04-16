@@ -415,29 +415,16 @@
   color: #fff;
 }
 
-/* Story preview — fixed top-right, above the backdrop */
-.library-story-fixed {
-  position: fixed;
-  top: 60px;
-  right: 20px;
-  z-index: 1100;
-  width: 380px;
-  overflow: hidden;
-  background: #08121a;
-  border: 1px solid var(--nerv-panel-border, rgba(0, 204, 102, 0.2));
-  border-radius: 8px;
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6);
-  pointer-events: auto;
+/* Story preview — reuse citation-popover look, pin to top-right above backdrop */
+.citation-popover.library-story-fixed {
+  top: 60px !important;
+  right: 20px !important;
+  left: auto !important;
+  z-index: 1100 !important;
 }
 
-.library-story-fixed * {
-  max-width: 100%;
-}
-
-.library-story-fixed img,
-.library-story-fixed video {
-  max-width: 100%;
-  height: auto;
+.citation-popover.library-story-fixed::before {
+  display: none;
 }
 
 /* Story hover refs */
