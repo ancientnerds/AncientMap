@@ -199,41 +199,38 @@ export default function NewsFeedPage() {
       .catch(() => {})
   }, [])
 
-  // Deep-link highlight: ?highlight=ID fetches that story, prepends it, scrolls + glows
-  const highlightHandled = useRef(false)
+  // Deep-link highlight: ?highlight=ID loads pages until the story appears, then scrolls to it
+  const highlightTarget = useRef<string | null>(null)
   useEffect(() => {
-    if (highlightHandled.current) return
+    if (highlightTarget.current) return
     const params = new URLSearchParams(window.location.search)
-    const highlightId = params.get('highlight')
-    if (!highlightId) return
-
-    highlightHandled.current = true
-    // Clear param immediately so it doesn't re-trigger
+    const id = params.get('highlight')
+    if (!id) return
+    highlightTarget.current = id
     const url = new URL(window.location.href)
     url.searchParams.delete('highlight')
     window.history.replaceState({}, '', url.toString())
-
-    // Fetch the specific story and prepend it
-    fetch(`${config.api.baseUrl}/news/item/${highlightId}`)
-      .then(r => r.ok ? r.json() : null)
-      .then((item: NewsItemData | null) => {
-        if (!item) return
-        // Prepend if not already in the list
-        setItems(prev => prev.some(i => i.id === item.id) ? prev : [item, ...prev])
-        // Wait for render, then scroll
-        requestAnimationFrame(() => {
-          setTimeout(() => {
-            const el = document.querySelector(`[data-story-id="${highlightId}"]`) as HTMLElement | null
-            if (el) {
-              el.scrollIntoView({ behavior: 'smooth', block: 'center' })
-              el.classList.add('news-page-card-highlight')
-              setTimeout(() => el.classList.remove('news-page-card-highlight'), 3000)
-            }
-          }, 100)
-        })
-      })
-      .catch(() => {})
   }, [])
+
+  // After items change, check if the target story is now in the DOM
+  useEffect(() => {
+    const id = highlightTarget.current
+    if (!id) return
+
+    const el = document.querySelector(`[data-story-id="${id}"]`) as HTMLElement | null
+    if (el) {
+      // Found it — scroll and highlight
+      highlightTarget.current = null
+      setTimeout(() => {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        el.classList.add('news-page-card-highlight')
+        setTimeout(() => el.classList.remove('news-page-card-highlight'), 3000)
+      }, 50)
+    } else if (!loading && hasMore) {
+      // Not found yet — load next page
+      fetchPage(page + 1, true)
+    }
+  }, [items, loading, hasMore, page, fetchPage])
 
   // Infinite scroll — fetch next page from server when sentinel enters viewport
   useEffect(() => {
