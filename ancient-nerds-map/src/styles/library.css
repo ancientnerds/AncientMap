@@ -298,11 +298,17 @@
   /* NERV panel styling from panel.css */
   position: relative;
   padding: 24px;
-  width: 560px;
-  max-width: 560px;
+  width: 800px;
+  max-width: calc(100vw - 40px);
   flex-shrink: 0;
   max-height: 80vh;
   overflow-y: auto;
+}
+
+.library-detail-card .gallery-stories-list {
+  max-height: none;
+  padding: 0;
+  gap: 8px;
 }
 
 .library-detail-close {
