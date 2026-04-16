@@ -415,9 +415,22 @@
   color: #fff;
 }
 
-/* Story popover must render above the library backdrop (z-index: 1000) */
-.library-popover-portal .citation-popover {
+/* Story hover popover — portaled to body, above backdrop */
+.library-story-popover {
+  position: fixed;
   z-index: 1100;
+  width: 380px;
+  max-width: calc(100vw - 16px);
+  background: #08121a;
+  border: 1px solid var(--nerv-panel-border, rgba(0, 204, 102, 0.2));
+  border-radius: 8px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+  pointer-events: auto;
+}
+
+/* Remove inner card border since popover already has one */
+.library-story-popover .news-feed-item {
+  border-bottom: none;
 }
 
 /* Story hover refs */

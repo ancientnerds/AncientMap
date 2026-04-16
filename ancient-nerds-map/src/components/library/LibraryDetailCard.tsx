@@ -1,8 +1,7 @@
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { config } from '../../config'
-import { newsItemToCardProps } from '../news/NewsCard'
-import CitationPopover from '../news/CitationPopover'
+import NewsCard, { newsItemToCardProps } from '../news/NewsCard'
 import type { LibrarySource, ParentRef } from '../../types/library'
 import type { NewsItemData } from '../../types/news'
 
@@ -25,30 +24,52 @@ interface LibraryDetailCardProps {
 
 export default function LibraryDetailCard({ source, onClose }: LibraryDetailCardProps) {
   const tier = TIER_LABELS[source.reliability_tier]
-  const [hoverStory, setHoverStory] = useState<{ data: NewsItemData; rect: DOMRect } | null>(null)
+  const [hoverStory, setHoverStory] = useState<{ data: NewsItemData; x: number; y: number } | null>(null)
   const hoverTimer = useRef<ReturnType<typeof setTimeout>>()
+  const leaveTimer = useRef<ReturnType<typeof setTimeout>>()
   const hoverCache = useRef<Map<string, NewsItemData>>(new Map())
+  const popoverRef = useRef<HTMLDivElement>(null)
 
-  // Close on Escape
   useEffect(() => {
     const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
   }, [onClose])
 
-  const mousePos = useRef<{ x: number; y: number }>({ x: 0, y: 0 })
+  // Clamp popover position to stay within viewport
+  useEffect(() => {
+    if (!hoverStory || !popoverRef.current) return
+    const el = popoverRef.current
+    const rect = el.getBoundingClientRect()
+    let { x, y } = hoverStory
+
+    // Position above cursor by default
+    let top = y - rect.height - 12
+    let left = x - rect.width / 2
+
+    // If no room above, go below
+    if (top < 8) top = y + 20
+
+    // Clamp horizontal
+    if (left < 8) left = 8
+    if (left + rect.width > window.innerWidth - 8) left = window.innerWidth - rect.width - 8
+
+    // Clamp bottom
+    if (top + rect.height > window.innerHeight - 8) top = window.innerHeight - rect.height - 8
+
+    el.style.left = `${left}px`
+    el.style.top = `${top}px`
+    el.style.visibility = 'visible'
+  }, [hoverStory])
 
   const handleStoryHover = useCallback((ref: ParentRef, e: React.MouseEvent) => {
-    mousePos.current = { x: e.clientX, y: e.clientY }
+    const mx = e.clientX, my = e.clientY
     if (hoverTimer.current) clearTimeout(hoverTimer.current)
     if (leaveTimer.current) clearTimeout(leaveTimer.current)
     hoverTimer.current = setTimeout(async () => {
-      // Build a small rect at the cursor position
-      const { x, y } = mousePos.current
-      const rect = new DOMRect(x - 1, y - 1, 2, 2)
       const cached = hoverCache.current.get(ref.id)
       if (cached) {
-        setHoverStory({ data: cached, rect })
+        setHoverStory({ data: cached, x: mx, y: my })
         return
       }
       try {
@@ -56,21 +77,17 @@ export default function LibraryDetailCard({ source, onClose }: LibraryDetailCard
         if (!resp.ok) return
         const data: NewsItemData = await resp.json()
         hoverCache.current.set(ref.id, data)
-        setHoverStory({ data, rect })
+        setHoverStory({ data, x: mx, y: my })
       } catch { /* ignore */ }
     }, 200)
   }, [])
 
-  const leaveTimer = useRef<ReturnType<typeof setTimeout>>()
-
   const handleStoryLeave = useCallback(() => {
     if (hoverTimer.current) clearTimeout(hoverTimer.current)
-    // Delay dismiss so mouse can travel from <li> to popover
     leaveTimer.current = setTimeout(() => setHoverStory(null), 150)
   }, [])
 
   const handlePopoverEnter = useCallback(() => {
-    // Mouse reached the popover — cancel the dismiss
     if (leaveTimer.current) clearTimeout(leaveTimer.current)
   }, [])
 
@@ -143,15 +160,16 @@ export default function LibraryDetailCard({ source, onClose }: LibraryDetailCard
         )}
       </div>
 
-      {/* Story hover popover — portaled to body to escape backdrop stacking context */}
+      {/* Story hover card — portaled to body, positioned at cursor */}
       {hoverStory && createPortal(
-        <div className="library-popover-portal">
-          <CitationPopover
-            cardProps={newsItemToCardProps(hoverStory.data)}
-            anchorRect={hoverStory.rect}
-            onMouseEnter={handlePopoverEnter}
-            onMouseLeave={handlePopoverLeave}
-          />
+        <div
+          ref={popoverRef}
+          className="library-story-popover"
+          style={{ visibility: 'hidden' }}
+          onMouseEnter={handlePopoverEnter}
+          onMouseLeave={handlePopoverLeave}
+        >
+          <NewsCard size="sm" {...newsItemToCardProps(hoverStory.data)} />
         </div>,
         document.body
       )}
