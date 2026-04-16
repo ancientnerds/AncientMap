@@ -180,10 +180,6 @@ function NewsCard({
         </div>
       )}
 
-      {newsCategory === 'unverified' && (
-        <div className="news-card-unverified-badge">Unverified</div>
-      )}
-
       <div className="news-card-headline">{headline}</div>
       {(!headlinesOnly || expanded) && postText && <div className="news-card-post-text">{postText}</div>}
 
@@ -278,7 +274,7 @@ function NewsCard({
 
           {webSources && webSources.length > 0 ? (
             <div className="news-card-web-sources">
-              <div className="news-card-web-sources-label">{verified ? '\u2713 Verified' : 'Sources'}</div>
+              <div className="news-card-web-sources-label">{verified && newsCategory !== 'unverified' ? '\u2713 Verified' : 'Sources'}</div>
               {webSources.map((src, i) => (
                 <a
                   key={i}

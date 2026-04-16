@@ -124,6 +124,8 @@ const TOPIC_COLORS: Record<string, string> = {
   giants: '#cc5566',
   supernatural: '#9060b8',
   conspiracy: '#886098',
+  // Accuracy warning (brand red)
+  unverified: '#c02023',
 }
 
 /** Canonical order: scientific → fieldwork → artifacts → cultural → general → speculative */

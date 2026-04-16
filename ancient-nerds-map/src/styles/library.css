@@ -330,6 +330,13 @@
   margin-bottom: 12px;
 }
 
+/* When a card is clicked open, break out of the columns and span the full
+   width of the popup — matches the full-row expansion in the SitePopup Stories tab. */
+.library-detail-card .gallery-stories-list .news-feed-item.expanded {
+  column-span: all;
+  -webkit-column-span: all;
+}
+
 .library-detail-close {
   position: absolute;
   top: 12px;
