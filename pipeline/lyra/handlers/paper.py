@@ -504,6 +504,57 @@ class PaperHandler(BaseHandler):
         self.state.llm_call_count += 1
         return result
 
+    async def _audit_and_retry_section(
+        self,
+        section_title: str,
+        prose: str,
+        prompt: str,
+        user_msg: str,
+        max_tokens: int,
+        settings,
+    ) -> str:
+        """Check citation density in prose. If sparse, retry once with stronger instructions."""
+        if not prose:
+            return prose
+
+        words = len(prose.split())
+        citations = len(re.findall(r"\[\d+\]", prose))
+
+        if words < 100 or citations >= words / 200:
+            # Adequate: at least 1 citation per 200 words
+            return prose
+
+        logger.warning(
+            "[paper] Section '%s' has %d citations in %d words (%.0f words/citation) — retrying",
+            section_title,
+            citations,
+            words,
+            words / max(citations, 1),
+        )
+
+        retry_prefix = (
+            "IMPORTANT: Your previous draft had too few inline citations. "
+            "Every factual claim MUST include its [N] marker from the input claims. "
+            "Cite generously — at least one citation per 1-2 sentences that state facts. "
+            "Do NOT omit citation markers.\n\n"
+        )
+        retry_msg = retry_prefix + user_msg
+
+        raw = await self._llm_call(prompt, retry_msg, max_tokens, settings)
+        retried = raw.strip()
+
+        retry_citations = len(re.findall(r"\[\d+\]", retried))
+        if retry_citations > citations:
+            logger.info(
+                "[paper] Section '%s' retry improved citations: %d -> %d",
+                section_title,
+                citations,
+                retry_citations,
+            )
+            return retried
+
+        return prose  # retry didn't help, keep original
+
     async def _generate_outline(self, sid_to_num: dict[str, int], settings) -> dict:
         """Generate the paper outline from synthesis, debate, and angle data."""
         outline_prompt = (PROMPTS_DIR / "v2_paper_outline.txt").read_text(encoding="utf-8")
@@ -645,7 +696,15 @@ class PaperHandler(BaseHandler):
             self.state.config.max_tokens_per_call,
             settings,
         )
-        return sec_title, raw.strip()
+        prose = await self._audit_and_retry_section(
+            sec_title,
+            raw.strip(),
+            section_prompt,
+            user_msg,
+            self.state.config.max_tokens_per_call,
+            settings,
+        )
+        return sec_title, prose
 
     async def _write_connecting_section(
         self,
@@ -721,7 +780,15 @@ class PaperHandler(BaseHandler):
             self.state.config.max_tokens_per_call,
             settings,
         )
-        return raw.strip()
+        prose = await self._audit_and_retry_section(
+            "Connecting the Dots",
+            raw.strip(),
+            section_prompt,
+            user_msg,
+            self.state.config.max_tokens_per_call,
+            settings,
+        )
+        return prose
 
     async def _write_other_side_section(
         self,
@@ -785,7 +852,15 @@ class PaperHandler(BaseHandler):
             self.state.config.max_tokens_per_call,
             settings,
         )
-        return raw.strip()
+        prose = await self._audit_and_retry_section(
+            "The Other Side",
+            raw.strip(),
+            section_prompt,
+            user_msg,
+            self.state.config.max_tokens_per_call,
+            settings,
+        )
+        return prose
 
     async def _write_assessment(self, all_claims: list[dict], settings) -> str:
         """Write the What We Actually Know assessment section."""
@@ -821,7 +896,15 @@ class PaperHandler(BaseHandler):
             self.state.config.max_tokens_per_call,
             settings,
         )
-        return raw.strip()
+        prose = await self._audit_and_retry_section(
+            "What We Actually Know",
+            raw.strip(),
+            assessment_prompt,
+            user_msg,
+            self.state.config.max_tokens_per_call,
+            settings,
+        )
+        return prose
 
     # ===================================================================
     # Helpers
