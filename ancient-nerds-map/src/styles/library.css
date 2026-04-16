@@ -416,6 +416,15 @@
 }
 
 
+/* Story hover refs */
+.library-ref-story {
+  cursor: pointer;
+}
+
+.library-ref-story:hover span:last-child {
+  color: var(--primary-red, #c02023);
+}
+
 /* Loading & empty states */
 .library-loading,
 .library-empty {
