@@ -9872,6 +9872,23 @@ body.hud-hidden .empire-borders-window {
   padding: 10px 12px;
 }
 
+/* Narrow gallery cards: reserve a top strip for the category badge, then stack
+   channel name (full width, may wrap) above a right-aligned date on its own line.
+   Keeps the badge clear of the meta row instead of squeezing the date next to it. */
+.gallery-stories-list .news-feed-item:has(.news-category-badge) {
+  padding-top: 22px;
+}
+
+.gallery-stories-list .news-card-meta {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 2px;
+}
+
+.gallery-stories-list .news-feed-date {
+  align-self: flex-end;
+}
+
 .gallery-stories-list::-webkit-scrollbar {
   width: 6px;
 }
