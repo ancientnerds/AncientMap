@@ -10,6 +10,14 @@ import { dedupePhotos, selectCurrentItems } from './galleryUtils'
 import type { GalleryHookReturn, SketchfabModelCompat } from './galleryTypes'
 import type { NewsItemData } from '../../../types/news'
 
+interface ReferenceSource {
+  url: string
+  title: string
+  domain: string
+  snippet?: string
+  kind?: string
+}
+
 interface UseGalleryDataOptions {
   siteId: string
   title: string
@@ -19,6 +27,7 @@ interface UseGalleryDataOptions {
   sourceUrl?: string
   thumbnailUrl?: string
   isOffline: boolean
+  referenceLinks?: { url: string; title: string; domain: string; kind: string }[]
 }
 
 export function useGalleryData({
@@ -30,6 +39,7 @@ export function useGalleryData({
   sourceUrl,
   thumbnailUrl,
   isOffline,
+  referenceLinks,
 }: UseGalleryDataOptions): GalleryHookReturn {
   const [activeGalleryTab, setActiveGalleryTab] = useState<GalleryTab>('photos')
   const [isGalleryExpanded, setIsGalleryExpanded] = useState(false)
@@ -127,7 +137,31 @@ export function useGalleryData({
   const artworkItems = tiered.grouped.artworks
   const bookItems = tiered.grouped.books
   const paperItems = tiered.grouped.papers
-  const mythItems = tiered.grouped.myths
+  // Build reference items: site referenceLinks + unique web_sources from stories
+  const referenceItems: ReferenceSource[] = useMemo(() => {
+    const seen = new Set<string>()
+    const refs: ReferenceSource[] = []
+    const add = (url: string, title: string, domain: string, snippet?: string, kind?: string) => {
+      const key = url.toLowerCase()
+      if (seen.has(key)) return
+      seen.add(key)
+      refs.push({ url, title, domain, snippet, kind })
+    }
+    // Site's own reference links first
+    if (referenceLinks) {
+      for (const r of referenceLinks) add(r.url, r.title, r.domain, undefined, r.kind)
+    }
+    // Web sources from stories about this site
+    for (const item of storiesItems) {
+      if (!item.web_sources) continue
+      for (const src of item.web_sources) {
+        let domain = ''
+        try { domain = new URL(src.url).hostname } catch {}
+        add(src.url, src.title, domain, src.snippet)
+      }
+    }
+    return refs
+  }, [referenceLinks, storiesItems])
 
   const allItems = { ...tiered.grouped, photos: photoItems, webcams: webcamItems }
   const currentItems = selectCurrentItems(activeGalleryTab, allItems)
@@ -164,7 +198,7 @@ export function useGalleryData({
     activeGalleryTab, setActiveGalleryTab,
     isGalleryExpanded, setIsGalleryExpanded,
     sketchfabCategoryFilter, setSketchfabCategoryFilter,
-    photoItems, videoItems, mapItems, sketchfabItems, artifactItems, artworkItems, bookItems, paperItems, mythItems, webcamItems, storiesItems,
+    photoItems, videoItems, mapItems, sketchfabItems, artifactItems, artworkItems, bookItems, paperItems, referenceItems, webcamItems, storiesItems,
     currentItems,
     isLoadingImages: isLoadingWikiImages || tiered.tier1Loading,
     isLoadingVideos: tiered.tier2Loading,
@@ -174,6 +208,7 @@ export function useGalleryData({
     isLoadingBooks: tiered.tier4Loading,
     isLoadingPapers: tiered.tier4Loading,
     isLoadingWebcams,
+    isLoadingReferences: isLoadingStories, // references depend on stories loading
     isLoadingStories,
     isLoading: tiered.isLoading,
     heroImage,

@@ -35,7 +35,7 @@ export interface GalleryHookReturn {
   artworkItems: UnifiedGalleryItem[]
   bookItems: UnifiedGalleryItem[]
   paperItems: UnifiedGalleryItem[]
-  mythItems: UnifiedGalleryItem[]
+  referenceItems: { url: string; title: string; domain: string; snippet?: string; kind?: string }[]
   webcamItems: UnifiedGalleryItem[]
   currentItems: UnifiedGalleryItem[]
 
@@ -52,6 +52,7 @@ export interface GalleryHookReturn {
   isLoadingBooks: boolean
   isLoadingPapers: boolean
   isLoadingWebcams: boolean
+  isLoadingReferences: boolean
   isLoading: boolean
 
   // Hero

@@ -121,7 +121,7 @@ export interface GroupedGalleryItems {
   artworks: UnifiedGalleryItem[]
   books: UnifiedGalleryItem[]
   papers: UnifiedGalleryItem[]
-  myths: UnifiedGalleryItem[]
+  references: UnifiedGalleryItem[]
   webcams: UnifiedGalleryItem[]
   stories: UnifiedGalleryItem[]  // Placeholder — stories use NewsItemData, not gallery items
 }
@@ -139,7 +139,7 @@ export function groupByTab(items: ContentItem[]): GroupedGalleryItems {
     artworks: [],
     books: [],
     papers: [],
-    myths: [], // Custom content, not from connectors
+    references: [], // Custom content, not from connectors
     webcams: [], // Webcam data, not from connectors
     stories: [], // Stories use separate NewsItemData, not gallery items
   }

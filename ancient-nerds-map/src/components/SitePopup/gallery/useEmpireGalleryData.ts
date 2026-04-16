@@ -93,12 +93,10 @@ export function useEmpireGalleryData({
   const artworkItems = tiered.grouped.artworks
   const bookItems = tiered.grouped.books
   const paperItems = tiered.grouped.papers
-  const mythItems = tiered.grouped.myths
-
   const allItems = { ...tiered.grouped, photos: photoItems }
   const currentItems = useMemo(
     () => selectCurrentItems(activeGalleryTab, allItems),
-    [activeGalleryTab, photoItems, videoItems, mapItems, sketchfabItems, artifactItems, artworkItems, bookItems, paperItems, mythItems]
+    [activeGalleryTab, photoItems, videoItems, mapItems, sketchfabItems, artifactItems, artworkItems, bookItems, paperItems]
   )
 
   const isLoading = wikiLoading || tiered.isLoading
@@ -148,7 +146,7 @@ export function useEmpireGalleryData({
     isGalleryExpanded, setIsGalleryExpanded,
     sketchfabCategoryFilter: false,
     setSketchfabCategoryFilter: () => {},
-    photoItems, videoItems, mapItems, sketchfabItems, artifactItems, artworkItems, bookItems, paperItems, mythItems,
+    photoItems, videoItems, mapItems, sketchfabItems, artifactItems, artworkItems, bookItems, paperItems, referenceItems: [],
     webcamItems: [],
     storiesItems: [],
 
@@ -161,6 +159,7 @@ export function useEmpireGalleryData({
     isLoadingBooks: tiered.tier4Loading,
     isLoadingPapers: tiered.tier4Loading,
     isLoadingWebcams: false,
+    isLoadingReferences: false,
     isLoadingStories: false,
     isLoading,
     heroImage, heroImageSrc,

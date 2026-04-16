@@ -45,7 +45,7 @@ export function selectCurrentItems(
     case 'artworks': return items.artworks
     case 'books': return items.books
     case 'papers': return items.papers
-    case 'myths': return items.myths
+    case 'references': return items.references
     case 'webcams': return items.webcams
     default: return []
   }

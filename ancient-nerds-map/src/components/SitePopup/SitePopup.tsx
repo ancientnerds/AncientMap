@@ -259,6 +259,9 @@ export default function SitePopup({
     onMinimizedChange
   })
 
+  // Reference links fetched from API (live from DB) — declared before gallery hook which depends on it
+  const [apiReferenceLinks, setApiReferenceLinks] = useState<{ url: string; title: string; domain: string; kind: string }[] | undefined>(undefined)
+
   // Gallery data hook - use different hooks for site vs empire mode
   const [lng, lat] = displaySite.coordinates
 
@@ -272,6 +275,7 @@ export default function SitePopup({
     sourceUrl: displaySite.sourceUrl,
     thumbnailUrl: displaySite.image,
     isOffline,
+    referenceLinks: apiReferenceLinks || displaySite.referenceLinks,
   })
 
   // Empire gallery hook - fetch images from Wikipedia and AWMC maps
@@ -309,8 +313,6 @@ export default function SitePopup({
   // Raw metadata for source-specific fields
   const [rawData, setRawData] = useState<Record<string, unknown> | null>(null)
   const [rawDataLoading, setRawDataLoading] = useState(false)
-  // Reference links fetched from API (live from DB)
-  const [apiReferenceLinks, setApiReferenceLinks] = useState<{ url: string; title: string; domain: string; kind: string }[] | undefined>(undefined)
 
   // Track if tooltip was pinned by clicking minimized bar
   const tooltipPinnedRef = useRef(false)
@@ -865,7 +867,8 @@ export default function SitePopup({
             artworkCount={galleryHook.artworkItems.length}
             bookCount={galleryHook.bookItems.length}
             paperCount={galleryHook.paperItems.length}
-            mythCount={galleryHook.mythItems.length}
+            referenceCount={galleryHook.referenceItems.length}
+            isLoadingReferences={galleryHook.isLoadingReferences}
             webcamCount={galleryHook.webcamItems.length}
             storyCount={galleryHook.storiesItems.length}
             isLoadingStories={galleryHook.isLoadingStories}
@@ -913,6 +916,8 @@ export default function SitePopup({
           onSketchfabCategoryFilterChange={galleryHook.setSketchfabCategoryFilter}
           storiesItems={galleryHook.storiesItems}
           isLoadingStories={galleryHook.isLoadingStories}
+          referenceItems={galleryHook.referenceItems}
+          isLoadingReferences={galleryHook.isLoadingReferences}
         />
 
         {/* Gallery Footer: Connector Status + Dev Warning */}

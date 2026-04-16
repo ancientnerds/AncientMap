@@ -13,7 +13,7 @@ export interface Artifact {
 }
 
 // Gallery tab options
-export type GalleryTab = 'photos' | 'videos' | 'maps' | '3dmodels' | 'artifacts' | 'artworks' | 'books' | 'papers' | 'myths' | 'webcams' | 'stories'
+export type GalleryTab = 'photos' | 'videos' | 'maps' | '3dmodels' | 'artifacts' | 'artworks' | 'books' | 'papers' | 'references' | 'webcams' | 'stories'
 
 // Unified gallery item type for all tabs
 export interface UnifiedGalleryItem {
@@ -270,7 +270,8 @@ export interface GalleryTabsProps {
   artworkCount: number
   bookCount: number
   paperCount: number
-  mythCount: number
+  referenceCount: number
+  isLoadingReferences?: boolean
   webcamCount: number
   isLoadingWebcams?: boolean
   isLoadingImages?: boolean
@@ -302,6 +303,8 @@ export interface GalleryContentProps {
   onSketchfabCategoryFilterChange?: (value: boolean) => void
   storiesItems?: import('../../types/news').NewsItemData[]
   isLoadingStories?: boolean
+  referenceItems?: { url: string; title: string; domain: string; snippet?: string; kind?: string }[]
+  isLoadingReferences?: boolean
 }
 
 export interface AdminEditPanelProps {
