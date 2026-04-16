@@ -17,7 +17,6 @@ export function GalleryTabs({
   mapCount,
   modelCount,
   artifactCount,
-  artworkCount,
   bookCount,
   paperCount,
   referenceCount,
@@ -156,6 +155,18 @@ export function GalleryTabs({
       isLoading: isLoadingStories
     },
     {
+      id: 'references',
+      label: 'References',
+      icon: (
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+          <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+        </svg>
+      ),
+      count: referenceCount,
+      isLoading: isLoadingReferences
+    },
+    {
       id: 'artifacts',
       label: 'Artifacts',
       icon: (
@@ -167,18 +178,6 @@ export function GalleryTabs({
       ),
       count: artifactCount,
       isLoading: isLoadingArtifacts
-    },
-    {
-      id: 'artworks',
-      label: 'Artworks',
-      icon: (
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <rect x="3" y="3" width="18" height="18" rx="2"></rect>
-          <path d="M3 9h18"></path>
-          <path d="M9 21V9"></path>
-        </svg>
-      ),
-      count: artworkCount
     },
     {
       id: 'books',
@@ -206,18 +205,6 @@ export function GalleryTabs({
       count: paperCount,
       isLoading: isLoadingPapers
     },
-    {
-      id: 'references',
-      label: 'References',
-      icon: (
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
-          <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
-        </svg>
-      ),
-      count: referenceCount,
-      isLoading: isLoadingReferences
-    }
   ]
 
   return (

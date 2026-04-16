@@ -42,7 +42,6 @@ export function selectCurrentItems(
     case 'maps': return items.maps
     case '3dmodels': return items['3dmodels']
     case 'artifacts': return items.artifacts
-    case 'artworks': return items.artworks
     case 'books': return items.books
     case 'papers': return items.papers
     case 'references': return items.references

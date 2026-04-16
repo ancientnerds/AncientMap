@@ -14,7 +14,7 @@ import type { LightboxImage } from '../../components/ImageLightbox'
  */
 const CONTENT_TYPE_TO_TAB: Record<ContentType, GalleryTab> = {
   photo: 'photos',
-  artwork: 'artworks',
+  artwork: 'photos', // no dedicated tab — artwork content goes to photos
   map: 'maps',
   model_3d: '3dmodels',
   artifact: 'artifacts',
@@ -118,7 +118,6 @@ export interface GroupedGalleryItems {
   maps: UnifiedGalleryItem[]
   '3dmodels': UnifiedGalleryItem[]
   artifacts: UnifiedGalleryItem[]
-  artworks: UnifiedGalleryItem[]
   books: UnifiedGalleryItem[]
   papers: UnifiedGalleryItem[]
   references: UnifiedGalleryItem[]
@@ -136,7 +135,6 @@ export function groupByTab(items: ContentItem[]): GroupedGalleryItems {
     maps: [],
     '3dmodels': [],
     artifacts: [],
-    artworks: [],
     books: [],
     papers: [],
     references: [], // Custom content, not from connectors
@@ -196,11 +194,10 @@ export function getModelEmbedUrl(item: UnifiedGalleryItem): string | undefined {
 
 /**
  * Extract hero image from grouped items
- * Prefers photos, falls back to artworks, then maps
+ * Prefers photos, falls back to maps
  */
 export function getHeroImage(grouped: GroupedGalleryItems): UnifiedGalleryItem | null {
   if (grouped.photos.length > 0) return grouped.photos[0]
-  if (grouped.artworks.length > 0) return grouped.artworks[0]
   if (grouped.maps.length > 0) return grouped.maps[0]
   return null
 }

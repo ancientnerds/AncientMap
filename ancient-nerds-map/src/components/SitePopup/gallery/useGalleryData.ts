@@ -134,7 +134,6 @@ export function useGalleryData({
   const mapItems = tiered.grouped.maps
   const sketchfabItems = tiered.grouped['3dmodels']
   const artifactItems = tiered.grouped.artifacts
-  const artworkItems = tiered.grouped.artworks
   const bookItems = tiered.grouped.books
   const paperItems = tiered.grouped.papers
   // References: fetch from library API (covers stories, journals, research, site citations)
@@ -215,7 +214,7 @@ export function useGalleryData({
     activeGalleryTab, setActiveGalleryTab,
     isGalleryExpanded, setIsGalleryExpanded,
     sketchfabCategoryFilter, setSketchfabCategoryFilter,
-    photoItems, videoItems, mapItems, sketchfabItems, artifactItems, artworkItems, bookItems, paperItems, referenceItems, webcamItems, storiesItems,
+    photoItems, videoItems, mapItems, sketchfabItems, artifactItems, bookItems, paperItems, referenceItems, webcamItems, storiesItems,
     currentItems,
     isLoadingImages: isLoadingWikiImages || tiered.tier1Loading,
     isLoadingVideos: tiered.tier2Loading,

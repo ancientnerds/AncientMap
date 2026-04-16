@@ -32,7 +32,6 @@ export interface GalleryHookReturn {
   mapItems: UnifiedGalleryItem[]
   sketchfabItems: UnifiedGalleryItem[]
   artifactItems: UnifiedGalleryItem[]
-  artworkItems: UnifiedGalleryItem[]
   bookItems: UnifiedGalleryItem[]
   paperItems: UnifiedGalleryItem[]
   referenceItems: { url: string; title: string; domain: string; snippet?: string; kind?: string }[]

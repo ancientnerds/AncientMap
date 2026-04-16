@@ -90,13 +90,12 @@ export function useEmpireGalleryData({
   const mapItems = tiered.grouped.maps
   const sketchfabItems = tiered.grouped['3dmodels']
   const artifactItems = tiered.grouped.artifacts
-  const artworkItems = tiered.grouped.artworks
   const bookItems = tiered.grouped.books
   const paperItems = tiered.grouped.papers
   const allItems = { ...tiered.grouped, photos: photoItems }
   const currentItems = useMemo(
     () => selectCurrentItems(activeGalleryTab, allItems),
-    [activeGalleryTab, photoItems, videoItems, mapItems, sketchfabItems, artifactItems, artworkItems, bookItems, paperItems]
+    [activeGalleryTab, photoItems, videoItems, mapItems, sketchfabItems, artifactItems, bookItems, paperItems]
   )
 
   const isLoading = wikiLoading || tiered.isLoading
@@ -146,7 +145,7 @@ export function useEmpireGalleryData({
     isGalleryExpanded, setIsGalleryExpanded,
     sketchfabCategoryFilter: false,
     setSketchfabCategoryFilter: () => {},
-    photoItems, videoItems, mapItems, sketchfabItems, artifactItems, artworkItems, bookItems, paperItems, referenceItems: [],
+    photoItems, videoItems, mapItems, sketchfabItems, artifactItems, bookItems, paperItems, referenceItems: [],
     webcamItems: [],
     storiesItems: [],
 

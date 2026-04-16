@@ -45,7 +45,7 @@ export const CONTENT_TIERS = {
     label: '3D Models'
   },
   tier4: {
-    types: ['map', 'artifact', 'artwork', 'coin', 'book', 'manuscript', 'document', 'paper', 'inscription', 'primary_text'] as ContentType[],
+    types: ['map', 'artifact', 'coin', 'book', 'manuscript', 'document', 'paper', 'inscription', 'primary_text'] as ContentType[],
     timeout: 30,
     label: 'Maps & More'
   },

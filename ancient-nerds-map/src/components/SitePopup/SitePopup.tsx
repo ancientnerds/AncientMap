@@ -864,7 +864,6 @@ export default function SitePopup({
             mapCount={galleryHook.mapItems.length}
             modelCount={galleryHook.sketchfabItems.length}
             artifactCount={galleryHook.artifactItems.length}
-            artworkCount={galleryHook.artworkItems.length}
             bookCount={galleryHook.bookItems.length}
             paperCount={galleryHook.paperItems.length}
             referenceCount={galleryHook.referenceItems.length}

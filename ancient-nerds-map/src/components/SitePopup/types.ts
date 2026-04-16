@@ -13,7 +13,7 @@ export interface Artifact {
 }
 
 // Gallery tab options
-export type GalleryTab = 'photos' | 'videos' | 'maps' | '3dmodels' | 'artifacts' | 'artworks' | 'books' | 'papers' | 'references' | 'webcams' | 'stories'
+export type GalleryTab = 'photos' | 'videos' | 'maps' | '3dmodels' | 'artifacts' | 'books' | 'papers' | 'references' | 'webcams' | 'stories'
 
 // Unified gallery item type for all tabs
 export interface UnifiedGalleryItem {
@@ -267,7 +267,6 @@ export interface GalleryTabsProps {
   mapCount: number
   modelCount: number
   artifactCount: number
-  artworkCount: number
   bookCount: number
   paperCount: number
   referenceCount: number
