@@ -7,9 +7,10 @@ from pathlib import Path
 
 from pipeline.lyra.config import _get_settings
 from pipeline.lyra.handlers import BaseHandler
-from pipeline.lyra.minimax_shared import minimax_chat_anthropic
+from pipeline.lyra.minimax_shared import structured_llm_call
 from pipeline.lyra.research_events import AllAnglesSaturated, SynthesisReady
 from pipeline.lyra.research_state import ResearchPhase
+from pipeline.lyra.schemas import CROSS_ANGLE_SCHEMA, SYNTHESIS_SCHEMA
 
 logger = logging.getLogger(__name__)
 PROMPTS_DIR = Path(__file__).resolve().parent.parent / "prompts"
@@ -71,15 +72,16 @@ class SynthesisHandler(BaseHandler):
         user_msg = f"## Research question\n\n{self.state.question}\n\n## Specialist analyses (by angle)\n\n{all_findings_text}"
 
         async with self.semaphore:
-            raw = await asyncio.to_thread(
-                minimax_chat_anthropic,
+            parsed = await asyncio.to_thread(
+                structured_llm_call,
                 synthesis_prompt,
                 user_msg,
+                SYNTHESIS_SCHEMA,
                 self.state.config.max_tokens_synthesis,
                 _get_settings(),
             )
         self.state.llm_call_count += 1
-        self.state.synthesis = self._parse_json(raw)
+        self.state.synthesis = parsed
 
         # Step 2: Cross-angle connection detection
         self.emit_sse(
@@ -95,15 +97,15 @@ class SynthesisHandler(BaseHandler):
         if cross_prompt_path.exists():
             cross_prompt = cross_prompt_path.read_text(encoding="utf-8")
             async with self.semaphore:
-                raw_cross = await asyncio.to_thread(
-                    minimax_chat_anthropic,
+                cross_result = await asyncio.to_thread(
+                    structured_llm_call,
                     cross_prompt,
                     user_msg,
+                    CROSS_ANGLE_SCHEMA,
                     self.state.config.max_tokens_synthesis,
                     _get_settings(),
                 )
             self.state.llm_call_count += 1
-            cross_result = self._parse_json(raw_cross)
             self.state.cross_angle_connections = cross_result.get("connections", [])
             # Store convergent findings and contradictions for the paper's Connecting the Dots section
             self.state.synthesis["convergent_findings"] = cross_result.get(
@@ -145,15 +147,3 @@ class SynthesisHandler(BaseHandler):
         )
 
         await self.bus.emit(SynthesisReady())
-
-    @staticmethod
-    def _parse_json(text: str) -> dict:
-        cleaned = text.strip()
-        if cleaned.startswith("```"):
-            cleaned = cleaned.split("\n", 1)[1] if "\n" in cleaned else cleaned[3:]
-            cleaned = cleaned.rsplit("```", 1)[0].strip()
-        try:
-            return json.loads(cleaned)
-        except (json.JSONDecodeError, ValueError):
-            logger.warning("Failed to parse synthesis JSON: %s", cleaned[:200])
-            return {}

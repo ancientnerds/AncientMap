@@ -9,9 +9,10 @@ from pathlib import Path
 
 from pipeline.lyra.config import _get_settings
 from pipeline.lyra.handlers import BaseHandler
+from pipeline.lyra.minimax_shared import minimax_chat_anthropic, structured_llm_call
+from pipeline.lyra.schemas import SPECIALIST_FINDINGS_SCHEMA
 
 PROMPTS_DIR = Path(__file__).resolve().parent.parent / "prompts"
-from pipeline.lyra.minimax_shared import minimax_chat_anthropic
 from pipeline.lyra.research_events import (
     AngleSaturated,
     ContentFetched,
@@ -380,24 +381,17 @@ class SpecialistHandler(BaseHandler):
                 sources_context,
             )
 
-            for attempt in range(3):
-                raw = minimax_chat_anthropic(
-                    system_prompt,
-                    user_prompt,
-                    max_tokens,
-                    settings=settings,
-                )
-                self.state.llm_call_count += 1
-                parsed = _parse_json(raw)
-                if isinstance(parsed, dict) and parsed:
-                    return panel_spec.specialist_id, parsed
-                if attempt < 2:
-                    logger.info(
-                        "Specialist %s returned unparseable output, retrying (%d/3)",
-                        panel_spec.specialist_id,
-                        attempt + 1,
-                    )
-            logger.warning("Specialist %s failed after 3 attempts", panel_spec.specialist_id)
+            parsed = structured_llm_call(
+                system_prompt,
+                user_prompt,
+                SPECIALIST_FINDINGS_SCHEMA,
+                max_tokens,
+                settings=settings,
+            )
+            self.state.llm_call_count += 1
+            if isinstance(parsed, dict) and parsed:
+                return panel_spec.specialist_id, parsed
+            logger.warning("Specialist %s returned empty result", panel_spec.specialist_id)
             return panel_spec.specialist_id, {}
 
         loop = asyncio.get_running_loop()

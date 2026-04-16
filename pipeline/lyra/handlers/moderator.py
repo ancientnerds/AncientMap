@@ -9,8 +9,9 @@ from pathlib import Path
 
 from pipeline.lyra.config import _get_settings
 from pipeline.lyra.handlers import BaseHandler
-from pipeline.lyra.minimax_shared import minimax_chat_anthropic
+from pipeline.lyra.minimax_shared import structured_llm_call
 from pipeline.lyra.research_events import DebateComplete, ModeratorComplete
+from pipeline.lyra.schemas import MODERATOR_SCHEMA
 
 logger = logging.getLogger(__name__)
 PROMPTS_DIR = Path(__file__).resolve().parent.parent / "prompts"
@@ -58,16 +59,15 @@ class ModeratorHandler(BaseHandler):
 
         settings = _get_settings()
         async with self.semaphore:
-            raw = await asyncio.to_thread(
-                minimax_chat_anthropic,
+            parsed = await asyncio.to_thread(
+                structured_llm_call,
                 system_prompt,
                 user_msg,
+                MODERATOR_SCHEMA,
                 self.state.config.max_tokens_per_call,
                 settings,
             )
         self.state.llm_call_count += 1
-
-        parsed = self._parse_json(raw)
 
         final_claims = parsed.get("final_claims", [])
         revised_claims = parsed.get("revised_claims", [])
@@ -103,15 +103,3 @@ class ModeratorHandler(BaseHandler):
         )
 
         await self.bus.emit(ModeratorComplete())
-
-    @staticmethod
-    def _parse_json(text: str) -> dict:
-        cleaned = text.strip()
-        if cleaned.startswith("```"):
-            cleaned = cleaned.split("\n", 1)[1] if "\n" in cleaned else cleaned[3:]
-            cleaned = cleaned.rsplit("```", 1)[0].strip()
-        try:
-            return json.loads(cleaned)
-        except (json.JSONDecodeError, ValueError):
-            logger.warning("[moderator] Failed to parse JSON: %s", cleaned[:200])
-            return {}

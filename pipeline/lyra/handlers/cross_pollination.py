@@ -12,18 +12,18 @@ with deeper connections discovered during the verification phase.
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 from pathlib import Path
 
 from pipeline.lyra.config import _get_settings
 from pipeline.lyra.handlers import BaseHandler
-from pipeline.lyra.minimax_shared import minimax_chat_anthropic
+from pipeline.lyra.minimax_shared import structured_llm_call
 from pipeline.lyra.research_events import (
     AllAnglesRound1Complete,
     AllAnglesRound2Complete,
     CrossPollinationComplete,
 )
+from pipeline.lyra.schemas import CROSS_POLLINATION_SCHEMA
 
 logger = logging.getLogger(__name__)
 PROMPTS_DIR = Path(__file__).resolve().parent.parent / "prompts"
@@ -83,16 +83,15 @@ class CrossPollinationHandler(BaseHandler):
         )
 
         async with self.semaphore:
-            raw = await asyncio.to_thread(
-                minimax_chat_anthropic,
+            result = await asyncio.to_thread(
+                structured_llm_call,
                 prompt,
                 user_msg,
+                CROSS_POLLINATION_SCHEMA,
                 self.state.config.max_tokens_per_call,
                 _get_settings(),
             )
         self.state.llm_call_count += 1
-
-        result = self._parse_json(raw)
 
         # Apply cross-pollinated queries to each angle
         enriched_count = 0
@@ -146,15 +145,3 @@ class CrossPollinationHandler(BaseHandler):
 
         # Now trigger next round search for all angles
         await self.bus.emit(CrossPollinationComplete())
-
-    @staticmethod
-    def _parse_json(text: str) -> dict:
-        cleaned = text.strip()
-        if cleaned.startswith("```"):
-            cleaned = cleaned.split("\n", 1)[1] if "\n" in cleaned else cleaned[3:]
-            cleaned = cleaned.rsplit("```", 1)[0].strip()
-        try:
-            return json.loads(cleaned)
-        except (json.JSONDecodeError, ValueError):
-            logger.warning("Failed to parse cross-pollination JSON: %s", cleaned[:200])
-            return {}

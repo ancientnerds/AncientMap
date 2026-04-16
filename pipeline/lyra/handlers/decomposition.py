@@ -1,16 +1,16 @@
 """Topic decomposition --- break question into independent research angles."""
 
 import asyncio
-import json
 import logging
 import uuid
 from pathlib import Path
 
 from pipeline.lyra.config import _get_settings
 from pipeline.lyra.handlers import BaseHandler
-from pipeline.lyra.minimax_shared import minimax_chat_anthropic
+from pipeline.lyra.minimax_shared import structured_llm_call
 from pipeline.lyra.research_events import AngleCreated
 from pipeline.lyra.research_state import ResearchAngle, ResearchPhase
+from pipeline.lyra.schemas import DECOMPOSITION_SCHEMA
 
 logger = logging.getLogger(__name__)
 PROMPTS_DIR = Path(__file__).resolve().parent.parent / "prompts"
@@ -43,16 +43,16 @@ class DecompositionHandler(BaseHandler):
 
         # Phase A: LLM proposes angles
         prompt = (PROMPTS_DIR / "v2_decomposition.txt").read_text(encoding="utf-8")
-        raw = await asyncio.to_thread(
-            minimax_chat_anthropic,
+        proposed = await asyncio.to_thread(
+            structured_llm_call,
             prompt,
             self.state.question,
+            DECOMPOSITION_SCHEMA,
             self.state.config.max_tokens_per_call,
             _get_settings(),
         )
         self.state.llm_call_count += 1
 
-        proposed = self._parse_json(raw)
         angles_data = proposed.get("angles", [])
         if not angles_data:
             self.state.error = "Decomposition produced no research angles"
@@ -136,15 +136,3 @@ class DecompositionHandler(BaseHandler):
         # Emit AngleCreated for each validated angle
         for angle in validated:
             await self.bus.emit(AngleCreated(angle_id=angle.id))
-
-    @staticmethod
-    def _parse_json(text: str) -> dict:
-        cleaned = text.strip()
-        if cleaned.startswith("```"):
-            cleaned = cleaned.split("\n", 1)[1] if "\n" in cleaned else cleaned[3:]
-            cleaned = cleaned.rsplit("```", 1)[0].strip()
-        try:
-            return json.loads(cleaned)
-        except (json.JSONDecodeError, ValueError):
-            logger.warning("Failed to parse decomposition JSON: %s", cleaned[:200])
-            return {}

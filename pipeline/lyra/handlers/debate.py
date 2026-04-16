@@ -7,9 +7,10 @@ from pathlib import Path
 
 from pipeline.lyra.config import _get_settings
 from pipeline.lyra.handlers import BaseHandler
-from pipeline.lyra.minimax_shared import minimax_chat_anthropic
+from pipeline.lyra.minimax_shared import structured_llm_call
 from pipeline.lyra.research_events import DebateComplete, SynthesisReady
 from pipeline.lyra.research_state import ResearchPhase
+from pipeline.lyra.schemas import DEBATE_CHALLENGE_SCHEMA, DEBATE_DEFENSE_SCHEMA
 from pipeline.lyra.theo_specialists import _SPECIALIST_BY_ID
 
 logger = logging.getLogger(__name__)
@@ -81,15 +82,15 @@ class DebateHandler(BaseHandler):
                 )
 
                 async with self.semaphore:
-                    raw = await asyncio.to_thread(
-                        minimax_chat_anthropic,
+                    parsed = await asyncio.to_thread(
+                        structured_llm_call,
                         system_msg,
                         user_msg,
+                        DEBATE_CHALLENGE_SCHEMA,
                         self.state.config.max_tokens_per_call,
                         _get_settings(),
                     )
                 self.state.llm_call_count += 1
-                parsed = self._parse_json(raw)
                 challenges = parsed.get("strengthening_suggestions", parsed.get("challenges", []))
                 for c in challenges:
                     c["challenger_id"] = spec.id
@@ -121,15 +122,15 @@ class DebateHandler(BaseHandler):
                 )
 
                 async with self.semaphore:
-                    raw = await asyncio.to_thread(
-                        minimax_chat_anthropic,
+                    parsed = await asyncio.to_thread(
+                        structured_llm_call,
                         system_msg,
                         user_msg,
+                        DEBATE_DEFENSE_SCHEMA,
                         self.state.config.max_tokens_per_call,
                         _get_settings(),
                     )
                 self.state.llm_call_count += 1
-                parsed = self._parse_json(raw)
                 defenses = parsed.get("incorporations", parsed.get("defenses", []))
                 for d in defenses:
                     d["defender_id"] = spec.id
@@ -159,14 +160,3 @@ class DebateHandler(BaseHandler):
         )
 
         await self.bus.emit(DebateComplete())
-
-    @staticmethod
-    def _parse_json(text: str) -> dict:
-        cleaned = text.strip()
-        if cleaned.startswith("```"):
-            cleaned = cleaned.split("\n", 1)[1] if "\n" in cleaned else cleaned[3:]
-            cleaned = cleaned.rsplit("```", 1)[0].strip()
-        try:
-            return json.loads(cleaned)
-        except (json.JSONDecodeError, ValueError):
-            return {}
