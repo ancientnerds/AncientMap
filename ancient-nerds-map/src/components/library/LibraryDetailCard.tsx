@@ -65,7 +65,7 @@ export default function LibraryDetailCard({ source, onClose }: LibraryDetailCard
                   <li key={`${ref.type}-${ref.id}-${i}`}>
                     <span className="library-card-type-pill">{link?.label || ref.type}</span>
                     {link ? (
-                      <a href={link.href(ref.id)}>{ref.title}</a>
+                      <a href={link.href(ref.id)} target="_blank" rel="noopener noreferrer">{ref.title}</a>
                     ) : (
                       <span>{ref.title}</span>
                     )}
