@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, useCallback } from 'react'
+import { useEffect, useState } from 'react'
 import { config } from '../../config'
 import NewsCard, { newsItemToCardProps } from '../news/NewsCard'
 import type { LibrarySource, ParentRef } from '../../types/library'
@@ -24,9 +24,11 @@ interface LibraryDetailCardProps {
 
 export default function LibraryDetailCard({ source, onClose }: LibraryDetailCardProps) {
   const tier = TIER_LABELS[source.reliability_tier]
-  const [storyPreview, setStoryPreview] = useState<NewsItemData | null>(null)
-  const hoverTimer = useRef<ReturnType<typeof setTimeout>>()
-  const cache = useRef<Map<string, NewsItemData>>(new Map())
+
+  // Fetch all story items on mount so we can render inline cards
+  const storyRefs = source.parent_refs.filter(r => r.type === 'story')
+  const nonStoryRefs = source.parent_refs.filter(r => r.type !== 'story')
+  const [storyItems, setStoryItems] = useState<Map<string, NewsItemData>>(new Map())
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
@@ -34,25 +36,23 @@ export default function LibraryDetailCard({ source, onClose }: LibraryDetailCard
     return () => window.removeEventListener('keydown', handler)
   }, [onClose])
 
-  const handleStoryEnter = useCallback((ref: ParentRef) => {
-    if (hoverTimer.current) clearTimeout(hoverTimer.current)
-    hoverTimer.current = setTimeout(async () => {
-      const cached = cache.current.get(ref.id)
-      if (cached) { setStoryPreview(cached); return }
-      try {
-        const resp = await fetch(`${config.api.baseUrl}/news/item/${ref.id}`)
-        if (!resp.ok) return
-        const data: NewsItemData = await resp.json()
-        cache.current.set(ref.id, data)
-        setStoryPreview(data)
-      } catch { /* ignore */ }
-    }, 200)
-  }, [])
-
-  const handleStoryLeave = useCallback(() => {
-    if (hoverTimer.current) clearTimeout(hoverTimer.current)
-    setStoryPreview(null)
-  }, [])
+  useEffect(() => {
+    if (storyRefs.length === 0) return
+    const controller = new AbortController()
+    Promise.all(
+      storyRefs.map(ref =>
+        fetch(`${config.api.baseUrl}/news/item/${ref.id}`, { signal: controller.signal })
+          .then(r => r.ok ? r.json() : null)
+          .catch(() => null)
+          .then(data => data ? [ref.id, data] as const : null)
+      )
+    ).then(results => {
+      const map = new Map<string, NewsItemData>()
+      for (const r of results) if (r) map.set(r[0], r[1])
+      setStoryItems(map)
+    })
+    return () => controller.abort()
+  }, [source.id])
 
   return (
     <div className="library-detail-backdrop" onClick={onClose}>
@@ -92,34 +92,40 @@ export default function LibraryDetailCard({ source, onClose }: LibraryDetailCard
         {source.parent_refs.length > 0 && (
           <div className="library-detail-cited-in">
             <h4>Cited in</h4>
-            <ul className="library-detail-refs">
-              {source.parent_refs.map((ref: ParentRef, i: number) => {
-                const isStory = ref.type === 'story'
-                const link = PARENT_LINKS[ref.type]
-                return (
-                  <li
-                    key={`${ref.type}-${ref.id}-${i}`}
-                    className={isStory ? 'library-ref-story' : undefined}
-                    onMouseEnter={isStory ? () => handleStoryEnter(ref) : undefined}
-                    onMouseLeave={isStory ? handleStoryLeave : undefined}
-                  >
-                    <span className="library-card-type-pill">{isStory ? 'Story' : link?.label || ref.type}</span>
-                    {link ? (
-                      <a href={link.href(ref.id)} target="_blank" rel="noopener noreferrer">{ref.title}</a>
-                    ) : (
-                      <span>{ref.title}</span>
-                    )}
-                  </li>
-                )
-              })}
-            </ul>
-          </div>
-        )}
 
-        {/* Inline story preview — same as site popup gallery-stories-list */}
-        {storyPreview && (
-          <div className="gallery-stories-list">
-            <NewsCard size="sm" headlinesOnly {...newsItemToCardProps(storyPreview)} />
+            {/* Non-story refs as text links */}
+            {nonStoryRefs.length > 0 && (
+              <ul className="library-detail-refs">
+                {nonStoryRefs.map((ref: ParentRef, i: number) => {
+                  const link = PARENT_LINKS[ref.type]
+                  return (
+                    <li key={`${ref.type}-${ref.id}-${i}`}>
+                      <span className="library-card-type-pill">{link?.label || ref.type}</span>
+                      {link ? (
+                        <a href={link.href(ref.id)} target="_blank" rel="noopener noreferrer">{ref.title}</a>
+                      ) : (
+                        <span>{ref.title}</span>
+                      )}
+                    </li>
+                  )
+                })}
+              </ul>
+            )}
+
+            {/* Story refs as headline-only NewsCards */}
+            {storyRefs.length > 0 && (
+              <div className="gallery-stories-list">
+                {storyRefs.map((ref, i) => {
+                  const item = storyItems.get(ref.id)
+                  if (!item) return (
+                    <div key={`${ref.id}-${i}`} className="news-feed-item" style={{ opacity: 0.5 }}>
+                      <div className="news-card-headline">{ref.title}</div>
+                    </div>
+                  )
+                  return <NewsCard key={`${ref.id}-${i}`} size="sm" headlinesOnly {...newsItemToCardProps(item)} />
+                })}
+              </div>
+            )}
           </div>
         )}
       </div>
