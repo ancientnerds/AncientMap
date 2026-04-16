@@ -68,7 +68,7 @@ def generate_posts_for_video(
             .filter(
                 NewsItem.video_id == video.id,
                 NewsItem.post_text.is_(None),
-                NewsItem.news_category != "duplicate",
+                NewsItem.news_category.is_distinct_from("duplicate"),
             )
             .count()
         )
@@ -247,7 +247,7 @@ def generate_posts_for_video(
             .filter(
                 NewsItem.video_id == video.id,
                 NewsItem.post_text.is_(None),
-                NewsItem.news_category != "duplicate",
+                NewsItem.news_category.is_distinct_from("duplicate"),
             )
             .count()
         )
