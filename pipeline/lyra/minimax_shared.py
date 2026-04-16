@@ -6,6 +6,7 @@ Theo's research pipeline (theo_pipeline.py).
 
 from __future__ import annotations
 
+import json
 import logging
 import re
 import time
@@ -190,3 +191,62 @@ def minimax_chat_anthropic(
         f"MiniMax M2.7 Anthropic SDK call failed after {attempt + 1} attempts: {last_error}"
     )
     return ""
+
+
+def structured_llm_call(
+    system: str,
+    user_message: str,
+    schema: dict,
+    max_tokens: int,
+    settings=None,
+) -> dict:
+    """Call MiniMax/Anthropic with structured output enforcement.
+
+    Uses call_api() which handles:
+    - MiniMax: tool-use trick (_build_structured_output_tool)
+    - Anthropic: native output_config json_schema
+    - Retry logic + rate limiter
+
+    Returns parsed dict. Falls back to text parsing on failure.
+    """
+    from pipeline.lyra.config import _get_settings, call_api
+
+    if settings is None:
+        settings = _get_settings()
+
+    response_format = {
+        "type": "json_schema",
+        "json_schema": {"schema": schema},
+    }
+
+    try:
+        resp = call_api(
+            system=system,
+            messages=[{"role": "user", "content": user_message}],
+            max_tokens=max_tokens,
+            response_format=response_format,
+            temperature=0.1,
+            settings=settings,
+        )
+        text = resp.content[0].text if resp.content else ""
+        cleaned = text.strip()
+        if cleaned.startswith("```"):
+            cleaned = cleaned.split("\n", 1)[1] if "\n" in cleaned else cleaned[3:]
+            cleaned = cleaned.rsplit("```", 1)[0].strip()
+        return json.loads(cleaned)
+    except (json.JSONDecodeError, ValueError) as exc:
+        logger.warning("Structured output parse failed, retrying: %s", exc)
+    except Exception as exc:
+        logger.warning("Structured LLM call failed, retrying: %s", exc)
+
+    # Retry once with text fallback
+    try:
+        raw = minimax_chat_anthropic(system, user_message, max_tokens, settings)
+        cleaned = raw.strip()
+        if cleaned.startswith("```"):
+            cleaned = cleaned.split("\n", 1)[1] if "\n" in cleaned else cleaned[3:]
+            cleaned = cleaned.rsplit("```", 1)[0].strip()
+        return json.loads(cleaned)
+    except Exception as exc:
+        logger.error("Structured LLM call failed after retry: %s", exc)
+        return {}
