@@ -119,7 +119,7 @@ export default function LibraryDetailCard({ source, onClose }: LibraryDetailCard
         {/* Inline story preview — same as site popup gallery-stories-list */}
         {storyPreview && (
           <div className="gallery-stories-list">
-            <NewsCard size="sm" {...newsItemToCardProps(storyPreview)} />
+            <NewsCard size="sm" headlinesOnly {...newsItemToCardProps(storyPreview)} />
           </div>
         )}
       </div>
