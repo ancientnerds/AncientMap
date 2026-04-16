@@ -308,7 +308,7 @@
 .library-detail-card .gallery-stories-list {
   max-height: none;
   padding: 0;
-  gap: 8px;
+  gap: 12px;
 }
 
 .library-detail-close {

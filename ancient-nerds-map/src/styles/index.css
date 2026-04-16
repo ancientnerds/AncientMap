@@ -9866,8 +9866,9 @@ body.hud-hidden .empire-borders-window {
 
 .gallery-stories-list .news-feed-item {
   border-bottom: none;
-  border: 1px solid var(--border-accent, rgba(0, 204, 102, 0.15));
-  background: var(--panel-bg, rgba(0, 15, 20, 0.85));
+  background: var(--nerv-panel-bg);
+  border: 1px solid var(--nerv-panel-border);
+  box-shadow: var(--nerv-panel-shadow);
   padding: 10px 12px;
 }
 

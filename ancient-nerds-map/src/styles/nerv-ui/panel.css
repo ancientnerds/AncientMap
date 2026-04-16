@@ -141,6 +141,7 @@ body.satellite-mode {
 .articles-grid-card::before,
 .articles-attribution-channel::before,
 .library-card::before,
+.gallery-stories-list .news-feed-item::before,
 .theo-overlay-inner::before {
   content: '';
   position: absolute;
