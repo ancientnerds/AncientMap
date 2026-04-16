@@ -36,26 +36,28 @@ export default function LibraryDetailCard({ source, onClose }: LibraryDetailCard
     return () => window.removeEventListener('keydown', handler)
   }, [onClose])
 
-  // Clamp popover position to stay within viewport
+  // Position popover to the right of cursor (or left if no room), clamped to viewport
   useEffect(() => {
     if (!hoverStory || !popoverRef.current) return
     const el = popoverRef.current
-    const rect = el.getBoundingClientRect()
-    let { x, y } = hoverStory
+    const pw = el.offsetWidth
+    const ph = el.offsetHeight
+    const { x, y } = hoverStory
+    const gap = 16
+    const margin = 8
 
-    // Position above cursor by default
-    let top = y - rect.height - 12
-    let left = x - rect.width / 2
+    // Prefer right of cursor
+    let left = x + gap
+    // If no room on right, go left
+    if (left + pw > window.innerWidth - margin) {
+      left = x - pw - gap
+    }
+    // Final clamp
+    left = Math.max(margin, Math.min(left, window.innerWidth - pw - margin))
 
-    // If no room above, go below
-    if (top < 8) top = y + 20
-
-    // Clamp horizontal
-    if (left < 8) left = 8
-    if (left + rect.width > window.innerWidth - 8) left = window.innerWidth - rect.width - 8
-
-    // Clamp bottom
-    if (top + rect.height > window.innerHeight - 8) top = window.innerHeight - rect.height - 8
+    // Vertically center on cursor
+    let top = y - ph / 2
+    top = Math.max(margin, Math.min(top, window.innerHeight - ph - margin))
 
     el.style.left = `${left}px`
     el.style.top = `${top}px`
