@@ -38,6 +38,7 @@ export default function LibraryDetailCard({ source, onClose }: LibraryDetailCard
 
   const handleStoryHover = useCallback((ref: ParentRef, li: HTMLElement) => {
     if (hoverTimer.current) clearTimeout(hoverTimer.current)
+    if (leaveTimer.current) clearTimeout(leaveTimer.current)
     hoverTimer.current = setTimeout(async () => {
       const rect = li.getBoundingClientRect()
       const cached = hoverCache.current.get(ref.id)
@@ -55,8 +56,20 @@ export default function LibraryDetailCard({ source, onClose }: LibraryDetailCard
     }, 200)
   }, [])
 
+  const leaveTimer = useRef<ReturnType<typeof setTimeout>>()
+
   const handleStoryLeave = useCallback(() => {
     if (hoverTimer.current) clearTimeout(hoverTimer.current)
+    // Delay dismiss so mouse can travel from <li> to popover
+    leaveTimer.current = setTimeout(() => setHoverStory(null), 150)
+  }, [])
+
+  const handlePopoverEnter = useCallback(() => {
+    // Mouse reached the popover — cancel the dismiss
+    if (leaveTimer.current) clearTimeout(leaveTimer.current)
+  }, [])
+
+  const handlePopoverLeave = useCallback(() => {
     setHoverStory(null)
   }, [])
 
@@ -131,8 +144,8 @@ export default function LibraryDetailCard({ source, onClose }: LibraryDetailCard
           <CitationPopover
             cardProps={newsItemToCardProps(hoverStory.data)}
             anchorRect={hoverStory.rect}
-            onMouseEnter={() => {}}
-            onMouseLeave={handleStoryLeave}
+            onMouseEnter={handlePopoverEnter}
+            onMouseLeave={handlePopoverLeave}
           />
         </div>,
         document.body
