@@ -199,6 +199,25 @@ export default function NewsFeedPage() {
       .catch(() => {})
   }, [])
 
+  // Deep-link highlight: ?highlight=ID scrolls to and highlights a story card
+  useEffect(() => {
+    if (!items.length || loading) return
+    const params = new URLSearchParams(window.location.search)
+    const highlightId = params.get('highlight')
+    if (!highlightId) return
+
+    const el = document.querySelector(`[data-story-id="${highlightId}"]`) as HTMLElement | null
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      el.classList.add('news-page-card-highlight')
+      setTimeout(() => el.classList.remove('news-page-card-highlight'), 3000)
+      // Clear the param so it doesn't re-trigger
+      const url = new URL(window.location.href)
+      url.searchParams.delete('highlight')
+      window.history.replaceState({}, '', url.toString())
+    }
+  }, [items, loading])
+
   // Infinite scroll — fetch next page from server when sentinel enters viewport
   useEffect(() => {
     if (!sentinelRef.current || !hasMore || loading) return
@@ -640,7 +659,7 @@ export default function NewsFeedPage() {
               const deepLink = item.youtube_deep_url || item.youtube_url || '#'
 
               return (
-                <div key={item.id} className="news-page-card" style={item.significance != null ? getSignificanceNervStyle(item.significance) : undefined}>
+                <div key={item.id} data-story-id={item.id} className="news-page-card" style={item.significance != null ? getSignificanceNervStyle(item.significance) : undefined}>
                   <div className="news-page-card-body">
                     <NewsCard
                       size="lg"

@@ -66,69 +66,71 @@ export default function LibraryDetailCard({ source, onClose }: LibraryDetailCard
 
   return (
     <div className="library-detail-backdrop" onClick={onClose}>
-      <div className="library-detail-card" onClick={e => e.stopPropagation()}>
-        <button className="library-detail-close" onClick={onClose}>&times;</button>
+      <div className="library-detail-layout" onClick={e => e.stopPropagation()}>
+        <div className="library-detail-card">
+          <button className="library-detail-close" onClick={onClose}>&times;</button>
 
-        <div className="library-detail-header">
-          {source.domain && (
-            <img
-              className="library-detail-favicon"
-              src={`https://www.google.com/s2/favicons?domain=${source.domain}&sz=64`}
-              alt=""
-              width={24}
-              height={24}
-            />
-          )}
-          <div>
-            <h3 className="library-detail-title">{source.title}</h3>
-            <span className="library-detail-domain">{source.domain}</span>
-            {tier && <span className={`library-card-tier ${tier.className}`}>{tier.label}</span>}
+          <div className="library-detail-header">
+            {source.domain && (
+              <img
+                className="library-detail-favicon"
+                src={`https://www.google.com/s2/favicons?domain=${source.domain}&sz=64`}
+                alt=""
+                width={24}
+                height={24}
+              />
+            )}
+            <div>
+              <h3 className="library-detail-title">{source.title}</h3>
+              <span className="library-detail-domain">{source.domain}</span>
+              {tier && <span className={`library-card-tier ${tier.className}`}>{tier.label}</span>}
+            </div>
           </div>
+
+          {source.snippet && (
+            <p className="library-detail-snippet">{source.snippet}</p>
+          )}
+
+          <a
+            className="library-detail-visit"
+            href={source.url}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Visit source &rarr;
+          </a>
+
+          {source.parent_refs.length > 0 && (
+            <div className="library-detail-cited-in">
+              <h4>Cited in</h4>
+              <ul className="library-detail-refs">
+                {source.parent_refs.map((ref: ParentRef, i: number) => {
+                  const link = PARENT_LINKS[ref.type]
+                  const isStory = ref.type === 'story'
+                  return (
+                    <li
+                      key={`${ref.type}-${ref.id}-${i}`}
+                      className={isStory ? 'library-ref-story' : undefined}
+                      onMouseEnter={isStory ? () => handleStoryHover(ref) : undefined}
+                      onMouseLeave={isStory ? handleStoryLeave : undefined}
+                    >
+                      <span className="library-card-type-pill">{link?.label || ref.type}</span>
+                      {link ? (
+                        <a href={link.href(ref.id)} target="_blank" rel="noopener noreferrer">{ref.title}</a>
+                      ) : (
+                        <span>{ref.title}</span>
+                      )}
+                    </li>
+                  )
+                })}
+              </ul>
+            </div>
+          )}
         </div>
 
-        {source.snippet && (
-          <p className="library-detail-snippet">{source.snippet}</p>
-        )}
-
-        <a
-          className="library-detail-visit"
-          href={source.url}
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Visit source &rarr;
-        </a>
-
-        {source.parent_refs.length > 0 && (
-          <div className="library-detail-cited-in">
-            <h4>Cited in</h4>
-            <ul className="library-detail-refs">
-              {source.parent_refs.map((ref: ParentRef, i: number) => {
-                const link = PARENT_LINKS[ref.type]
-                const isStory = ref.type === 'story'
-                return (
-                  <li
-                    key={`${ref.type}-${ref.id}-${i}`}
-                    className={isStory ? 'library-ref-story' : undefined}
-                    onMouseEnter={isStory ? () => handleStoryHover(ref) : undefined}
-                    onMouseLeave={isStory ? handleStoryLeave : undefined}
-                  >
-                    <span className="library-card-type-pill">{link?.label || ref.type}</span>
-                    {link ? (
-                      <a href={link.href(ref.id)} target="_blank" rel="noopener noreferrer">{ref.title}</a>
-                    ) : (
-                      <span>{ref.title}</span>
-                    )}
-                  </li>
-                )
-              })}
-            </ul>
-          </div>
-        )}
-
-        {/* Story hover preview */}
+        {/* Story hover preview — right side */}
         {(hoveredStory || hoverLoading) && (
-          <div className="library-story-preview" onMouseEnter={handleStoryLeave}>
+          <div className="library-story-preview">
             {hoverLoading && !hoveredStory && (
               <div className="library-loading">Loading story...</div>
             )}

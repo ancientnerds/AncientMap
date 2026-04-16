@@ -333,6 +333,22 @@
   box-shadow: 0 0 16px var(--sig-hover-glow, rgba(0, 204, 102, 0.12)), 0 4px 24px rgba(0, 0, 0, 0.5);
 }
 
+/* Deep-link highlight animation */
+.news-page-card-highlight {
+  animation: story-highlight 3s ease-out;
+}
+
+@keyframes story-highlight {
+  0%, 20% {
+    border-color: rgba(0, 204, 102, 0.7);
+    box-shadow: 0 0 24px rgba(0, 204, 102, 0.3), 0 4px 24px rgba(0, 0, 0, 0.5);
+  }
+  100% {
+    border-color: var(--sig-hover-border, rgba(0, 204, 102, 0.2));
+    box-shadow: none;
+  }
+}
+
 .news-page-card-body {
   display: flex;
   flex-direction: column;
