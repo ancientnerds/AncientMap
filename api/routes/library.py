@@ -6,7 +6,9 @@ from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from pipeline.database import LibrarySource, get_db
+from sqlalchemy import text
+
+from pipeline.database import LibrarySource, NewsItem, get_db
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -94,6 +96,60 @@ def search_library(
     ]
 
     return LibrarySearchResponse(items=items, total=total, page=page, page_size=page_size)
+
+
+@router.get("/by-site/{site_id}", response_model=list[LibrarySourceResponse])
+def library_by_site(site_id: str, db: Session = Depends(get_db)):
+    """Get all library sources linked to a specific site.
+
+    Finds sources via two paths:
+    1. Direct site citations (parent_refs with type='site' and id=site_id)
+    2. Story citations (parent_refs with type='story' and id matching news items for this site)
+    """
+    # 1. Get news item IDs for this site
+    news_ids = [
+        str(row[0])
+        for row in db.query(NewsItem.id).filter(NewsItem.site_id == site_id).all()
+    ]
+
+    # 2. Build JSONB containment queries
+    #    @> checks if the JSONB array contains an element matching the pattern
+    conditions = [
+        LibrarySource.parent_refs.op("@>")(f'[{{"type": "site", "id": "{site_id}"}}]'),
+    ]
+    # Add story ref conditions in batches (avoid huge OR chains)
+    for nid in news_ids:
+        conditions.append(
+            LibrarySource.parent_refs.op("@>")(f'[{{"type": "story", "id": "{nid}"}}]')
+        )
+
+    from sqlalchemy import or_
+
+    if not conditions:
+        return []
+
+    sources = (
+        db.query(LibrarySource)
+        .filter(or_(*conditions))
+        .order_by(LibrarySource.citation_count.desc())
+        .limit(100)
+        .all()
+    )
+
+    return [
+        LibrarySourceResponse(
+            id=s.id,
+            url=s.url,
+            title=s.title,
+            domain=s.domain,
+            snippet=s.snippet,
+            reliability_tier=s.reliability_tier,
+            citation_count=s.citation_count,
+            source_types=s.source_types or [],
+            parent_refs=s.parent_refs or [],
+        )
+        for s in sources
+    ]
 
 
 @router.post("/refresh")

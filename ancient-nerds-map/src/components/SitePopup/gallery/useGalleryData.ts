@@ -137,31 +137,48 @@ export function useGalleryData({
   const artworkItems = tiered.grouped.artworks
   const bookItems = tiered.grouped.books
   const paperItems = tiered.grouped.papers
-  // Build reference items: site referenceLinks + unique web_sources from stories
+  // References: fetch from library API (covers stories, journals, research, site citations)
+  const [libraryRefs, setLibraryRefs] = useState<ReferenceSource[]>([])
+  const [isLoadingLibraryRefs, setIsLoadingLibraryRefs] = useState(false)
+
+  useEffect(() => {
+    if (!siteId || isOffline) return
+    setIsLoadingLibraryRefs(true)
+    const controller = new AbortController()
+    fetch(`${config.api.baseUrl}/library/by-site/${encodeURIComponent(siteId)}`, { signal: controller.signal })
+      .then(r => r.ok ? r.json() : [])
+      .then((items: { url: string; title: string; domain: string | null; snippet: string | null; source_types: string[] }[]) => {
+        setLibraryRefs(items.map(s => ({
+          url: s.url,
+          title: s.title,
+          domain: s.domain || '',
+          snippet: s.snippet || undefined,
+          kind: s.source_types?.join(', ') || undefined,
+        })))
+      })
+      .catch(() => {})
+      .finally(() => setIsLoadingLibraryRefs(false))
+    return () => controller.abort()
+  }, [siteId, isOffline])
+
+  // Merge library results with site's own referenceLinks, deduped by URL
   const referenceItems: ReferenceSource[] = useMemo(() => {
     const seen = new Set<string>()
     const refs: ReferenceSource[] = []
-    const add = (url: string, title: string, domain: string, snippet?: string, kind?: string) => {
-      const key = url.toLowerCase()
+    const add = (r: ReferenceSource) => {
+      const key = r.url.toLowerCase()
       if (seen.has(key)) return
       seen.add(key)
-      refs.push({ url, title, domain, snippet, kind })
+      refs.push(r)
     }
-    // Site's own reference links first
+    // Site's own reference links first (web-searched, high relevance)
     if (referenceLinks) {
-      for (const r of referenceLinks) add(r.url, r.title, r.domain, undefined, r.kind)
+      for (const r of referenceLinks) add({ url: r.url, title: r.title, domain: r.domain, kind: r.kind })
     }
-    // Web sources from stories about this site
-    for (const item of storiesItems) {
-      if (!item.web_sources) continue
-      for (const src of item.web_sources) {
-        let domain = ''
-        try { domain = new URL(src.url).hostname } catch {}
-        add(src.url, src.title, domain, src.snippet)
-      }
-    }
+    // Library sources (stories + journals + research + site citations)
+    for (const r of libraryRefs) add(r)
     return refs
-  }, [referenceLinks, storiesItems])
+  }, [referenceLinks, libraryRefs])
 
   const allItems = { ...tiered.grouped, photos: photoItems, webcams: webcamItems }
   const currentItems = selectCurrentItems(activeGalleryTab, allItems)
@@ -208,7 +225,7 @@ export function useGalleryData({
     isLoadingBooks: tiered.tier4Loading,
     isLoadingPapers: tiered.tier4Loading,
     isLoadingWebcams,
-    isLoadingReferences: isLoadingStories, // references depend on stories loading
+    isLoadingReferences: isLoadingLibraryRefs,
     isLoadingStories,
     isLoading: tiered.isLoading,
     heroImage,
