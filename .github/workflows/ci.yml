@@ -142,10 +142,7 @@ jobs:
 
       - name: Deploy via SSH
         run: |
-          ssh -o StrictHostKeyChecking=accept-new \
-              -o ServerAliveInterval=30 \
-              -o ServerAliveCountMax=20 \
-              -p ${{ secrets.VPS_PORT }} ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} 'set -e
+          ssh -o StrictHostKeyChecking=accept-new -p ${{ secrets.VPS_PORT }} ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} 'set -e
             cd /var/www/ancientnerds
             BEFORE=$(git rev-parse HEAD)
             echo "==> Preserving snapshots..."
@@ -262,20 +259,24 @@ jobs:
               echo "==> No Docker changes, ensuring services are running..."
               docker compose up -d --remove-orphans
             fi
-            echo "==> Waiting for API health..."
-            for i in $(seq 1 24); do
-              sleep 5
-              if curl -sf --connect-timeout 5 --max-time 5 http://localhost:8000/; then
-                echo " API healthy after $((i * 5))s"
-                break
-              fi
-              if [ "$i" = "24" ]; then
-                echo "ERROR: Health check failed after 120s!"
-                docker compose logs api --tail=30
-                exit 1
-              fi
-              echo " Attempt $i failed, retrying..."
-            done
+            if [ -n "$REBUILD" ]; then
+              echo "==> Waiting for API health..."
+              for i in $(seq 1 24); do
+                sleep 5
+                if curl -sf http://localhost:8000/; then
+                  echo " API healthy after $((i * 5))s"
+                  break
+                fi
+                if [ "$i" = "24" ]; then
+                  echo "ERROR: Health check failed after 120s!"
+                  docker compose logs api --tail=30
+                  exit 1
+                fi
+                echo " Attempt $i failed, retrying..."
+              done
+            else
+              echo "==> API unchanged, skipping health check"
+            fi
 
             echo "==> Generating static sitemap..."
             if curl -sf --max-time 30 http://localhost:8000/api/sitemap/sitemap.xml > ancient-nerds-map/dist/sitemap.xml; then
