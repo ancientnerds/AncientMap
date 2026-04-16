@@ -9866,7 +9866,6 @@ body.hud-hidden .empire-borders-window {
 
 .gallery-stories-list .news-feed-item {
   border-bottom: none;
-  zoom: 0.65;
 }
 
 .gallery-stories-list::-webkit-scrollbar {
@@ -9881,9 +9880,9 @@ body.hud-hidden .empire-borders-window {
   background: rgba(192, 32, 35, 0.3);
 }
 
-/* Clicked card: expand to full size */
+/* Clicked card: span full width */
 .gallery-stories-list .news-feed-item.expanded {
-  zoom: 1;
+  grid-column: 1 / -1;
 }
 
 /* Gallery expanded: more space, keep thumbnail zoom */

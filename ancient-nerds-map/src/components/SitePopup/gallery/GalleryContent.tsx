@@ -89,6 +89,7 @@ export function GalleryContent({
             <NewsCard
               key={item.id}
               size="sm"
+              headlinesOnly
               headline={item.headline}
               postText={item.post_text}
               channelName={item.video.channel_name}
