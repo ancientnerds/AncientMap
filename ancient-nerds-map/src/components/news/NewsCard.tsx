@@ -184,7 +184,7 @@ function NewsCard({
       )}
 
       <div className="news-card-headline">{headline}</div>
-      {!headlinesOnly && postText && <div className="news-card-post-text">{postText}</div>}
+      {(!headlinesOnly || expanded) && postText && <div className="news-card-post-text">{postText}</div>}
 
       {hasMatchedSite && (
         <div className="news-feed-site-block">
@@ -226,7 +226,7 @@ function NewsCard({
         </div>
       )}
 
-      {!headlinesOnly && screenshotUrl && (
+      {(!headlinesOnly || expanded) && screenshotUrl && (
         playing && videoId ? (
           <div className="news-card-embed" onClick={e => e.stopPropagation()}>
             <iframe
