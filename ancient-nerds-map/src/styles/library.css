@@ -396,9 +396,9 @@
 .library-detail-visit {
   display: inline-block;
   padding: 8px 16px;
-  border: 1px solid rgba(0, 204, 102, 0.4);
-  background: var(--nerv-panel-bg, rgba(0, 20, 25, 0.35));
-  color: rgba(0, 204, 102, 0.8);
+  border: 1px solid var(--primary-red, #c02023);
+  background: transparent;
+  color: var(--primary-red, #c02023);
   border-radius: 0;
   text-decoration: none;
   font-family: 'JetBrains Mono', monospace;
@@ -406,14 +406,18 @@
   font-weight: 500;
   text-transform: uppercase;
   letter-spacing: 1px;
-  transition: border-color 0.2s, color 0.2s, background 0.2s;
+  transition: background 0.2s, color 0.2s;
   margin-bottom: 16px;
 }
 
 .library-detail-visit:hover {
-  border-color: rgba(0, 204, 102, 0.7);
-  color: rgba(0, 204, 102, 1);
-  background: rgba(0, 204, 102, 0.08);
+  background: var(--primary-red, #c02023);
+  color: #fff;
+}
+
+/* Story popover must render above the library backdrop (z-index: 1000) */
+.library-popover-portal .citation-popover {
+  z-index: 1100;
 }
 
 /* Story hover refs */

@@ -127,12 +127,14 @@ export default function LibraryDetailCard({ source, onClose }: LibraryDetailCard
 
       {/* Story hover popover — portaled to body to escape backdrop stacking context */}
       {hoverStory && createPortal(
-        <CitationPopover
-          cardProps={newsItemToCardProps(hoverStory.data)}
-          anchorRect={hoverStory.rect}
-          onMouseEnter={() => {}}
-          onMouseLeave={handleStoryLeave}
-        />,
+        <div className="library-popover-portal">
+          <CitationPopover
+            cardProps={newsItemToCardProps(hoverStory.data)}
+            anchorRect={hoverStory.rect}
+            onMouseEnter={() => {}}
+            onMouseLeave={handleStoryLeave}
+          />
+        </div>,
         document.body
       )}
     </div>
