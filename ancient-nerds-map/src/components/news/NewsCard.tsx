@@ -27,6 +27,7 @@ import {
 } from './significance'
 import type { SiteData } from '../../data/sites'
 import type { NewsHighlight } from '../../types/ai'
+import type { NewsItemData } from '../../types/news'
 
 export interface NewsCardProps {
   // Core data
@@ -329,6 +330,41 @@ function NewsCard({
 }
 
 export default memo(NewsCard)
+
+/**
+ * Adapter: convert NewsItemData (from API) → NewsCardProps.
+ */
+export function newsItemToCardProps(item: NewsItemData): NewsCardProps {
+  const screenshotUrl = item.screenshot_url
+    ? `${config.api.baseUrl}${item.screenshot_url.replace('/api', '')}`
+    : item.video.thumbnail_url
+  const deepLink = item.youtube_deep_url || item.youtube_url || '#'
+  return {
+    headline: item.headline,
+    postText: item.post_text,
+    channelName: item.video.channel_name,
+    publishedAt: item.video.published_at,
+    significance: item.significance,
+    newsCategory: item.news_category,
+    speculativeTag: item.speculative_tag,
+    screenshotUrl,
+    deepLink,
+    videoId: item.video.id,
+    videoTitle: item.video.title,
+    durationMinutes: item.video.duration_minutes,
+    timestampSeconds: item.timestamp_seconds,
+    siteName: item.site_name || item.site_name_extracted,
+    siteNameExtracted: item.site_name_extracted,
+    siteId: item.site_id,
+    siteCountry: item.site_country,
+    siteType: item.site_type,
+    sitePeriodName: item.site_period_name,
+    sitePeriodStart: item.site_period_start,
+    facts: item.facts,
+    webSources: item.web_sources,
+    verified: item.verified,
+  }
+}
 
 /**
  * Adapter: convert NewsHighlight (from Lyra chat SSE) → NewsCardProps.

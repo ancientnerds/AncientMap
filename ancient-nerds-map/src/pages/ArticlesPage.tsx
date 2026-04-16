@@ -18,7 +18,7 @@ import AiNoticeBanner from '../components/layout/AiNoticeBanner'
 
 const LyraProfileModal = lazy(() => import('../components/LyraProfileModal'))
 import type { NewsItemData } from '../types/news'
-import type { NewsCardProps } from '../components/news/NewsCard'
+import { newsItemToCardProps } from '../components/news/NewsCard'
 import '../components/news/news-cards.css'
 
 interface QualityReport {
@@ -180,35 +180,7 @@ function formatTimestamp(seconds: number): string {
 }
 
 /** Convert an API NewsItemData into NewsCardProps for CitationPopover. */
-function itemToCardProps(item: NewsItemData): NewsCardProps {
-  const screenshotUrl = item.screenshot_url
-    ? `${config.api.baseUrl}${item.screenshot_url.replace('/api', '')}`
-    : item.video.thumbnail_url
-  const deepLink = item.youtube_deep_url || item.youtube_url || '#'
-  return {
-    headline: item.headline,
-    postText: item.post_text,
-    channelName: item.video.channel_name,
-    publishedAt: item.video.published_at,
-    significance: item.significance,
-    newsCategory: item.news_category,
-    speculativeTag: item.speculative_tag,
-    screenshotUrl,
-    deepLink,
-    videoId: item.video.id,
-    videoTitle: item.video.title,
-    durationMinutes: item.video.duration_minutes,
-    timestampSeconds: item.timestamp_seconds,
-    siteName: item.site_name || item.site_name_extracted,
-    siteNameExtracted: item.site_name_extracted,
-    siteId: item.site_id,
-    siteCountry: item.site_country,
-    siteType: item.site_type,
-    sitePeriodName: item.site_period_name,
-    sitePeriodStart: item.site_period_start,
-    facts: item.facts,
-  }
-}
+const itemToCardProps = newsItemToCardProps
 
 /** Playable screenshot component — shows play overlay, click to embed YouTube. */
 function ArticleScreenshot({ src, alt, citationItems }: {

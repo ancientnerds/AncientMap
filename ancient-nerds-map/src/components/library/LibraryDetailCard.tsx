@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { config } from '../../config'
-import NewsCard from '../news/NewsCard'
+import NewsCard, { newsItemToCardProps } from '../news/NewsCard'
 import type { LibrarySource, ParentRef } from '../../types/library'
 import type { NewsItemData } from '../../types/news'
 
@@ -132,45 +132,13 @@ export default function LibraryDetailCard({ source, onClose }: LibraryDetailCard
             {hoverLoading && !hoveredStory && (
               <div className="library-loading">Loading story...</div>
             )}
-            {hoveredStory && (() => {
-              const item = hoveredStory
-              const screenshotSrc = item.screenshot_url
-                ? `${config.api.baseUrl}${item.screenshot_url.replace('/api', '')}`
-                : item.video.thumbnail_url
-              const deepLink = item.youtube_deep_url || item.youtube_url || '#'
-              return (
-                <div className="news-page-card">
-                  <div className="news-page-card-body">
-                    <NewsCard
-                      size="lg"
-                      headline={item.headline}
-                      postText={item.post_text}
-                      channelName={item.video.channel_name}
-                      publishedAt={item.video.published_at}
-                      significance={item.significance}
-                      newsCategory={item.news_category}
-                      speculativeTag={item.speculative_tag}
-                      screenshotUrl={screenshotSrc}
-                      deepLink={deepLink}
-                      videoId={item.video.id}
-                      videoTitle={item.video.title}
-                      durationMinutes={item.video.duration_minutes}
-                      timestampSeconds={item.timestamp_seconds}
-                      siteName={item.site_name || item.site_name_extracted}
-                      siteNameExtracted={item.site_name_extracted}
-                      siteId={item.site_id}
-                      siteCountry={item.site_country}
-                      siteType={item.site_type}
-                      sitePeriodName={item.site_period_name}
-                      sitePeriodStart={item.site_period_start}
-                      facts={item.facts}
-                      webSources={item.web_sources}
-                      verified={item.verified}
-                    />
-                  </div>
+            {hoveredStory && (
+              <div className="news-page-card">
+                <div className="news-page-card-body">
+                  <NewsCard size="lg" {...newsItemToCardProps(hoveredStory)} />
                 </div>
-              )
-            })()}
+              </div>
+            )}
           </div>
         )}
       </div>
