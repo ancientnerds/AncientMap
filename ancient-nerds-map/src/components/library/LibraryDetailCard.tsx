@@ -24,11 +24,10 @@ interface LibraryDetailCardProps {
 
 export default function LibraryDetailCard({ source, onClose }: LibraryDetailCardProps) {
   const tier = TIER_LABELS[source.reliability_tier]
-  const [hoverStory, setHoverStory] = useState<{ data: NewsItemData; x: number; y: number } | null>(null)
+  const [storyData, setStoryData] = useState<NewsItemData | null>(null)
   const hoverTimer = useRef<ReturnType<typeof setTimeout>>()
   const leaveTimer = useRef<ReturnType<typeof setTimeout>>()
-  const hoverCache = useRef<Map<string, NewsItemData>>(new Map())
-  const popoverRef = useRef<HTMLDivElement>(null)
+  const cache = useRef<Map<string, NewsItemData>>(new Map())
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
@@ -36,65 +35,33 @@ export default function LibraryDetailCard({ source, onClose }: LibraryDetailCard
     return () => window.removeEventListener('keydown', handler)
   }, [onClose])
 
-  // Position popover to the right of cursor (or left if no room), clamped to viewport
-  useEffect(() => {
-    if (!hoverStory || !popoverRef.current) return
-    const el = popoverRef.current
-    const pw = el.offsetWidth
-    const ph = el.offsetHeight
-    const { x, y } = hoverStory
-    const gap = 16
-    const margin = 8
-
-    // Prefer right of cursor
-    let left = x + gap
-    // If no room on right, go left
-    if (left + pw > window.innerWidth - margin) {
-      left = x - pw - gap
-    }
-    // Final clamp
-    left = Math.max(margin, Math.min(left, window.innerWidth - pw - margin))
-
-    // Vertically center on cursor
-    let top = y - ph / 2
-    top = Math.max(margin, Math.min(top, window.innerHeight - ph - margin))
-
-    el.style.left = `${left}px`
-    el.style.top = `${top}px`
-    el.style.visibility = 'visible'
-  }, [hoverStory])
-
-  const handleStoryHover = useCallback((ref: ParentRef, e: React.MouseEvent) => {
-    const mx = e.clientX, my = e.clientY
+  const handleStoryEnter = useCallback((ref: ParentRef) => {
     if (hoverTimer.current) clearTimeout(hoverTimer.current)
     if (leaveTimer.current) clearTimeout(leaveTimer.current)
     hoverTimer.current = setTimeout(async () => {
-      const cached = hoverCache.current.get(ref.id)
-      if (cached) {
-        setHoverStory({ data: cached, x: mx, y: my })
-        return
-      }
+      const cached = cache.current.get(ref.id)
+      if (cached) { setStoryData(cached); return }
       try {
         const resp = await fetch(`${config.api.baseUrl}/news/item/${ref.id}`)
         if (!resp.ok) return
         const data: NewsItemData = await resp.json()
-        hoverCache.current.set(ref.id, data)
-        setHoverStory({ data, x: mx, y: my })
+        cache.current.set(ref.id, data)
+        setStoryData(data)
       } catch { /* ignore */ }
     }, 200)
   }, [])
 
   const handleStoryLeave = useCallback(() => {
     if (hoverTimer.current) clearTimeout(hoverTimer.current)
-    leaveTimer.current = setTimeout(() => setHoverStory(null), 150)
+    leaveTimer.current = setTimeout(() => setStoryData(null), 200)
   }, [])
 
-  const handlePopoverEnter = useCallback(() => {
+  const keepOpen = useCallback(() => {
     if (leaveTimer.current) clearTimeout(leaveTimer.current)
   }, [])
 
-  const handlePopoverLeave = useCallback(() => {
-    setHoverStory(null)
+  const dismiss = useCallback(() => {
+    setStoryData(null)
   }, [])
 
   return (
@@ -143,7 +110,7 @@ export default function LibraryDetailCard({ source, onClose }: LibraryDetailCard
                   <li
                     key={`${ref.type}-${ref.id}-${i}`}
                     className={isStory ? 'library-ref-story' : undefined}
-                    onMouseEnter={isStory ? (e) => handleStoryHover(ref, e) : undefined}
+                    onMouseEnter={isStory ? () => handleStoryEnter(ref) : undefined}
                     onMouseLeave={isStory ? handleStoryLeave : undefined}
                   >
                     <span className="library-card-type-pill">{isStory ? 'Story' : link?.label || ref.type}</span>
@@ -162,16 +129,14 @@ export default function LibraryDetailCard({ source, onClose }: LibraryDetailCard
         )}
       </div>
 
-      {/* Story hover card — portaled to body, positioned at cursor */}
-      {hoverStory && createPortal(
+      {/* Story preview — fixed top-right, uses citation-popover class for identical look */}
+      {storyData && createPortal(
         <div
-          ref={popoverRef}
-          className="library-story-popover"
-          style={{ visibility: 'hidden' }}
-          onMouseEnter={handlePopoverEnter}
-          onMouseLeave={handlePopoverLeave}
+          className="citation-popover library-story-fixed"
+          onMouseEnter={keepOpen}
+          onMouseLeave={dismiss}
         >
-          <NewsCard size="sm" {...newsItemToCardProps(hoverStory.data)} />
+          <NewsCard size="sm" {...newsItemToCardProps(storyData)} />
         </div>,
         document.body
       )}
