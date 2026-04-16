@@ -58,6 +58,7 @@ export default function LibraryDetailCard({ source, onClose }: LibraryDetailCard
     <div className="library-detail-backdrop" onClick={onClose}>
       <div className="library-detail-card" onClick={e => e.stopPropagation()}>
         <button className="library-detail-close" onClick={onClose}>&times;</button>
+        <div className="library-detail-card-inner">
 
         <div className="library-detail-header">
           {source.domain && (
@@ -128,6 +129,7 @@ export default function LibraryDetailCard({ source, onClose }: LibraryDetailCard
             )}
           </div>
         )}
+        </div>
       </div>
     </div>
   )
