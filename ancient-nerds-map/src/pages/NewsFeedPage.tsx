@@ -199,24 +199,41 @@ export default function NewsFeedPage() {
       .catch(() => {})
   }, [])
 
-  // Deep-link highlight: ?highlight=ID scrolls to and highlights a story card
+  // Deep-link highlight: ?highlight=ID fetches that story, prepends it, scrolls + glows
+  const highlightHandled = useRef(false)
   useEffect(() => {
-    if (!items.length || loading) return
+    if (highlightHandled.current) return
     const params = new URLSearchParams(window.location.search)
     const highlightId = params.get('highlight')
     if (!highlightId) return
 
-    const el = document.querySelector(`[data-story-id="${highlightId}"]`) as HTMLElement | null
-    if (el) {
-      el.scrollIntoView({ behavior: 'smooth', block: 'center' })
-      el.classList.add('news-page-card-highlight')
-      setTimeout(() => el.classList.remove('news-page-card-highlight'), 3000)
-      // Clear the param so it doesn't re-trigger
-      const url = new URL(window.location.href)
-      url.searchParams.delete('highlight')
-      window.history.replaceState({}, '', url.toString())
-    }
-  }, [items, loading])
+    highlightHandled.current = true
+    // Clear param immediately so it doesn't re-trigger
+    const url = new URL(window.location.href)
+    url.searchParams.delete('highlight')
+    window.history.replaceState({}, '', url.toString())
+
+    // Fetch the specific story and prepend it
+    fetch(`${config.api.baseUrl}/news/item/${highlightId}`)
+      .then(r => r.ok ? r.json() : null)
+      .then((item: NewsItemData | null) => {
+        if (!item) return
+        // Prepend if not already in the list
+        setItems(prev => prev.some(i => i.id === item.id) ? prev : [item, ...prev])
+        // Wait for render, then scroll
+        requestAnimationFrame(() => {
+          setTimeout(() => {
+            const el = document.querySelector(`[data-story-id="${highlightId}"]`) as HTMLElement | null
+            if (el) {
+              el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+              el.classList.add('news-page-card-highlight')
+              setTimeout(() => el.classList.remove('news-page-card-highlight'), 3000)
+            }
+          }, 100)
+        })
+      })
+      .catch(() => {})
+  }, [])
 
   // Infinite scroll — fetch next page from server when sentinel enters viewport
   useEffect(() => {
