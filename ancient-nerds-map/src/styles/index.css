@@ -13265,6 +13265,7 @@ body.news-feed-open .empire-borders-window {
   height: 100vh;
   height: 100dvh;
   overflow-y: auto;
+  overflow-x: hidden;
   background: var(--surface-page);
   color: var(--text-primary);
   font-family: var(--font-body);
@@ -13599,7 +13600,14 @@ body.news-feed-open .empire-borders-window {
   }
 
   .news-page-filters-bar {
-    padding: 0 10px 0 0;
+    flex-wrap: wrap;
+    row-gap: 4px;
+    padding: 4px 10px 4px 0;
+  }
+
+  .news-page-filters-bar-actions {
+    flex-wrap: wrap;
+    row-gap: 4px;
   }
 
   .news-page-filters-toggle {
