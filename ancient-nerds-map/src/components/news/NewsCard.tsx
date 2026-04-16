@@ -28,6 +28,7 @@ import {
 import type { SiteData } from '../../data/sites'
 import type { NewsHighlight } from '../../types/ai'
 import type { NewsItemData } from '../../types/news'
+import './news-cards.css'
 
 export interface NewsCardProps {
   // Core data
