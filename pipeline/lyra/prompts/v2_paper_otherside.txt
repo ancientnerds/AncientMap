@@ -1,34 +1,41 @@
-You are presenting the mainstream academic perspective that challenges the hypothesis being investigated. The investigation sections built the case FOR the hypothesis -- this section gives the reader the strongest conventional explanation for the same evidence.
+Present the mainstream academic perspective that challenges the hypothesis under investigation. The investigation sections built the case FOR the hypothesis -- this section gives the reader the strongest conventional explanation for the same evidence.
+
+Write as an investigative documentary narrator -- third person, fair, direct. Give the conventional position its strongest possible form. Do not strawman, but do not treat it as the final word either.
+
+EXAMPLE OF GOOD COUNTER-EVIDENCE:
+"Zechariah Sitchin claimed to translate ancient Sumerian texts, but he had an economics degree and taught himself Sumerian while working for a shipping company in New York. His book came out in 1976 -- there was no internet, no searchable databases of ancient writing. His translations are more interpretations than actual translations. And he misidentified the word 'Anunnaki' itself. Skeptics have a point here."
 
 Focus on:
-- What is the mainstream scholarly explanation for the evidence discussed in the investigation?
-- Where does the conventional interpretation differ from the hypothesis under investigation?
-- What methodological concerns would mainstream scholars raise?
-- Present these as the strongest version of the conventional position -- not as straw men, but not as the final word either.
-
-This section builds reader trust by showing the investigation engages honestly with conventional scholarship. The reader should come away understanding BOTH sides.
+- What is the mainstream scholarly explanation for the same evidence?
+- Where does the conventional interpretation differ from the hypothesis?
+- What specific credential or methodology problems exist?
+- Present the counter at full strength, then move on
 
 CITATIONS:
-- The claims you receive contain [N] citation markers. Use the EXACT markers from the claims -- do not renumber or invent new ones.
-- Place each citation ONCE at the point where the claim is first introduced. Do NOT repeat the same citation on every sentence.
-- Group multiple citations at the end of a clause: "...dates to 3000 BC [2] [45]."
+- Use the EXACT [N] markers from the claims. Do not renumber or invent.
+- Cite at the point where the claim is first introduced.
 - Place citations BEFORE the period.
 
+BANNED PHRASES (never use these):
+- "it should be noted" / "it is worth considering"
+- "further research is needed" / "the answer remains elusive"
+- "some critics argue" without substance -- name the critic and the argument
+- Any sentence where "the evidence" or "the analysis" is the subject
+
 DO NOT:
-- Dismiss the hypothesis under investigation. Present the conventional alternative, not a verdict.
-- Use filler phrases: "it should be noted that," "interestingly," "it is important to emphasize."
-- Present weak objections. Every counter-point should be the strongest version of itself.
-- Fabricate counter-arguments not present in the provided data.
+- Dismiss the hypothesis under investigation -- present the conventional alternative
+- Present weak objections -- every counter-point should be the strongest version of itself
+- Fabricate counter-arguments not present in the provided data
+- Use vague phrases like "mainstream scholars disagree" without specifics
 
 ANTI-HALLUCINATION:
-- Write ONLY from the provided counter-evidence and challenges. Do NOT use your own knowledge.
-- Do NOT introduce facts, dates, names, or details not present in the provided input.
-- If counter-evidence is sparse, write fewer paragraphs. A short honest section beats a long fabricated one.
+- Write ONLY from the provided counter-evidence and challenges
+- If counter-evidence is sparse, write fewer paragraphs
 
 RULES:
-1. Write 2-4 paragraphs.
-2. Be fair but direct. Present the conventional view at its strongest.
-3. Do NOT include section headings -- the heading is provided separately.
-4. Do NOT fabricate any information.
+1. 2-4 paragraphs
+2. Be fair but direct -- give the conventional view its best shot
+3. No section headings
+4. Name specific sources, researchers, or methodological problems
 
-Output ONLY the section prose in plain text. No headings, no meta-commentary.
+Output ONLY the section prose. No headings, no meta-commentary.

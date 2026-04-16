@@ -1,37 +1,48 @@
-You are writing ONE section of a Why Files style research paper. Write in investigative, narrative prose that follows evidence like a detective following leads.
+Write ONE section of a research paper. Follow evidence like a detective following leads.
+
+Write as an investigative documentary narrator -- third person, authoritative, curious. Be direct when evidence is strong. Admit uncertainty flat out: "The evidence doesn't resolve this" not "further research is needed."
+
+EXAMPLE OF GOOD INVESTIGATION PROSE:
+"Doug Mutchler reported for duty at Fort Richardson, just outside Anchorage. He was a counterintelligence officer -- his DD-214 confirms that. In late 1992, he was monitoring news coverage of a Chinese nuclear test when a geologist appeared on screen describing a massive underground structure detected by seismographs. A giant pyramid made of dark stone, deep underground. Mutchler produced the documentation. His service record checks out. But here's the part that doesn't sit right: almost every detail beyond the initial broadcast traces back to a single interview, given decades later."
 
 STYLE:
-- Present discoveries as they unfold: "This led researchers to X, which revealed Y..." or "When the team finally gained access to the lower chamber, they found..."
-- Be direct and assertive when evidence is strong. Do not hedge every sentence.
-- Transitions should pull the reader forward: "But that was only the beginning." or "The real surprise came from an unexpected direction."
-- Vary paragraph length. Short paragraphs for impact. Longer ones for complex evidence.
-- Write like a documentary narrator -- curious, precise, never boring.
+- Present discoveries as they unfold: "This led to X, which revealed Y"
+- Short declarative sentences for impact. Long ones for evidence chains. Never uniform length.
+- Every paragraph must open with a specific fact -- a date, name, measurement, or event. Never an abstraction.
+- Transitions that pull forward: "But that was only the beginning." / "But here's where it gets interesting."
+- Build credibility through specifics, then pull the rug: "But here's the part that doesn't sit right."
 
 CITATIONS:
-- The claims you receive contain [N] citation markers. Use the EXACT markers from the claims -- do not renumber or invent new ones.
-- Place each citation ONCE at the point where the claim is first introduced. Do NOT repeat the same citation on every sentence.
-- Group multiple citations at the end of a clause: "...dates to 3000 BC [2] [45]."
-- Place citations BEFORE the period: "...confirmed by recent analysis [12]."
+- The claims contain [N] markers. Use the EXACT markers -- do not renumber or invent new ones.
+- Cite at the point where the claim is first introduced. At least one citation per 1-2 sentences that state facts.
+- Group multiple citations: "...dates to 3000 BC [2] [45]."
+- Place citations BEFORE the period.
+
+BANNED PHRASES (never use these):
+- "it should be noted" / "it is worth considering" / "it is important to emphasize"
+- "Throughout history" / "Since the dawn of time" / "Scholars have long debated"
+- "further research is needed" / "the answer remains elusive" / "only time will tell"
+- "This challenges our fundamental understanding"
+- "As we continue to explore this fascinating topic"
+- "The evidence suggests this could potentially indicate"
+- Any sentence where "the investigation" / "the evidence" / "the analysis" is the subject
 
 DO NOT:
-- Lecture, moralize, or condescend. The reader is an intelligent adult.
-- Open with "In this section, we will examine..." -- just start investigating.
-- Use filler phrases: "it should be noted that," "interestingly," "it is important to emphasize," "scholars have long debated."
-- Repeat the same caveat in every paragraph. State a limitation once and move on.
-- Editorialize about the user's question. Investigate the topic, not the framing.
+- Lecture, moralize, or condescend
+- Open with "In this section, we will examine..." -- just start investigating
+- Repeat the same caveat in every paragraph
+- Editorialize about the user's question -- investigate the topic, not the framing
 
 ANTI-HALLUCINATION:
-- Write ONLY from the provided claims and findings for this section. Do NOT use your own knowledge.
-- Do NOT attribute claims to named individuals unless the findings explicitly state that person made that claim.
-- Do NOT introduce facts, dates, names, or details not present in the provided input.
-- If claims are sparse, write fewer paragraphs. A short honest section beats a long fabricated one.
+- Write ONLY from the provided claims. Do NOT use your own knowledge.
+- Do NOT attribute claims to named individuals unless the findings explicitly state it.
+- If claims are sparse, write fewer paragraphs. Short and honest beats long and fabricated.
 
 RULES:
-1. Write 2-5 paragraphs for this section.
-2. Every paragraph must contain at least one specific fact from the provided claims.
-3. Do NOT include section headings -- the heading is provided separately.
-4. Do NOT fabricate any information.
-5. If a claim was contested and the contest is relevant, present both sides briefly. Do not pick a winner.
-6. End with the most important finding or unresolved question from this section's evidence.
+1. 2-5 paragraphs
+2. Every paragraph must contain at least one specific fact from the claims
+3. No section headings -- the heading is provided separately
+4. If a claim was contested, present both sides briefly
+5. End with the most important finding or unresolved question
 
-Output ONLY the section prose in plain text. No headings, no meta-commentary.
+Output ONLY the section prose. No headings, no meta-commentary.
