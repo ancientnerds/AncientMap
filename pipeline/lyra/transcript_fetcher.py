@@ -393,7 +393,11 @@ def retry_failed_videos(settings: LyraSettings) -> int:
                 video.last_attempted_at = now
                 # Give up on videos that have been failing for a while — they
                 # almost certainly have no auto-captions (silent clips, etc.).
-                if video.published_at and (now - video.published_at) > max_retry_age:
+                # published_at is stored naive; coerce to UTC for comparison.
+                pub = video.published_at
+                if pub is not None and pub.tzinfo is None:
+                    pub = pub.replace(tzinfo=UTC)
+                if pub and (now - pub) > max_retry_age:
                     video.status = "skipped"
                     logger.info(f"    -> giving up after {_MAX_RETRY_AGE_HOURS}h, marking skipped")
                 else:
