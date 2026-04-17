@@ -79,34 +79,36 @@ export function GalleryContent({
     }
 
     return (
-      <div className="gallery-stories-list">
-        {storiesItems!.map(item => {
-          const screenshotUrl = item.screenshot_url
-            ? `${config.api.baseUrl}${item.screenshot_url.replace('/api', '')}`
-            : item.video.thumbnail_url
-          const deepLink = item.youtube_deep_url || item.youtube_url || '#'
-          return (
-            <NewsCard
-              key={item.id}
-              size="sm"
-              headlinesOnly
-              headline={item.headline}
-              postText={item.post_text}
-              channelName={item.video.channel_name}
-              publishedAt={item.video.published_at}
-              significance={item.significance}
-              newsCategory={item.news_category}
-              speculativeTag={item.speculative_tag}
-              screenshotUrl={screenshotUrl}
-              deepLink={deepLink}
-              videoId={item.video.id}
-              videoTitle={item.video.title}
-              durationMinutes={item.video.duration_minutes}
-              timestampSeconds={item.timestamp_seconds}
-              facts={item.facts}
-            />
-          )
-        })}
+      <div className="gallery-grid-container">
+        <div className="gallery-stories-list">
+          {storiesItems!.map(item => {
+            const screenshotUrl = item.screenshot_url
+              ? `${config.api.baseUrl}${item.screenshot_url.replace('/api', '')}`
+              : item.video.thumbnail_url
+            const deepLink = item.youtube_deep_url || item.youtube_url || '#'
+            return (
+              <NewsCard
+                key={item.id}
+                size="sm"
+                headlinesOnly
+                headline={item.headline}
+                postText={item.post_text}
+                channelName={item.video.channel_name}
+                publishedAt={item.video.published_at}
+                significance={item.significance}
+                newsCategory={item.news_category}
+                speculativeTag={item.speculative_tag}
+                screenshotUrl={screenshotUrl}
+                deepLink={deepLink}
+                videoId={item.video.id}
+                videoTitle={item.video.title}
+                durationMinutes={item.video.duration_minutes}
+                timestampSeconds={item.timestamp_seconds}
+                facts={item.facts}
+              />
+            )
+          })}
+        </div>
       </div>
     )
   }

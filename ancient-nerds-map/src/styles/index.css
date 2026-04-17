@@ -9853,14 +9853,21 @@ body.hud-hidden .empire-borders-window {
 }
 
 /* Stories tab — masonry layout via CSS columns so cards pack with a
-   constant gap regardless of their individual heights. */
-.gallery-stories-list {
+   constant gap regardless of their individual heights. The enclosing
+   .gallery-grid-container handles scrolling (collapsed has bounded
+   height; expanded becomes a flex:1 child — see rules below). */
+.gallery-grid-container > .gallery-stories-list {
   column-width: 180px;
   column-gap: 12px;
+  padding: 0;
+}
+
+/* Collapsed state: bounded scroll area for stories, like References. */
+.popup-gallery-section:not(.expanded) .gallery-grid-container:has(> .gallery-stories-list) {
+  max-height: 300px;
   overflow-y: auto;
   overflow-x: hidden;
   padding: 12px;
-  max-height: 300px;
 }
 
 .gallery-stories-list .news-feed-item {
@@ -9917,10 +9924,19 @@ body.hud-hidden .empire-borders-window {
   -webkit-column-span: all;
 }
 
-/* Gallery expanded: more space, keep thumbnail zoom */
+/* Gallery expanded: wrapper fills remaining flex space and scrolls;
+   stories list itself stays unbounded so masonry columns grow naturally.
+   References already has a similar rule via .gallery-grid-container flex:1. */
+.popup-gallery-section.expanded .gallery-grid-container:has(> .gallery-stories-list) {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 16px;
+}
+
 .popup-gallery-section.expanded .gallery-stories-list {
   max-height: none;
-  overflow: auto;
 }
 
 .popup-gallery-section.expanded .gallery-stories-list .news-feed-item {
