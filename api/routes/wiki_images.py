@@ -146,11 +146,13 @@ async def set_hero(
                     "h": final_height,
                 },
             )
+            current_hero_id = existing[0]
         else:
-            db.execute(
+            result = db.execute(
                 text("""
                     INSERT INTO wiki_images (site_id, filename, original_url, commons_page_url, is_hero, is_lead, sort_order, source_type, width, height)
                     VALUES (:sid, 'hero.webp', :orig, :attr, true, false, 0, 'manual', :w, :h)
+                    RETURNING id
                 """),
                 {
                     "sid": site_id,
@@ -160,6 +162,31 @@ async def set_hero(
                     "h": final_height,
                 },
             )
+            current_hero_id = result.scalar()
+
+        # Clean up stale hero.webp rows from previous hero changes. These
+        # would otherwise duplicate the hero image in the gallery with
+        # wrong attribution (they all resolve to /<sid>/hero.webp on disk).
+        # - Local-path originals: restore filename to the real basename so the
+        #   row remains a valid gallery entry (the source file still exists).
+        # - External originals: no standalone local file exists, so hide them.
+        db.execute(
+            text("""
+                UPDATE wiki_images
+                SET filename = CASE
+                        WHEN original_url LIKE '/data/%' THEN regexp_replace(original_url, '^.*/', '')
+                        ELSE filename
+                    END,
+                    is_excluded = CASE
+                        WHEN original_url LIKE '/data/%' THEN is_excluded
+                        ELSE true
+                    END
+                WHERE site_id = :sid
+                  AND filename = 'hero.webp'
+                  AND id != :current_hero_id
+            """),
+            {"sid": site_id, "current_hero_id": current_hero_id},
+        )
 
         # Update thumbnail_url on unified_sites
         db.execute(
