@@ -9852,12 +9852,11 @@ body.hud-hidden .empire-borders-window {
   border-radius: 3px;
 }
 
-/* Stories tab — grid of news cards with equal spacing */
+/* Stories tab — masonry layout via CSS columns so cards pack with a
+   constant gap regardless of their individual heights. */
 .gallery-stories-list {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-  gap: 12px;
-  align-items: start;
+  column-width: 180px;
+  column-gap: 12px;
   overflow-y: auto;
   overflow-x: hidden;
   padding: 12px;
@@ -9870,6 +9869,10 @@ body.hud-hidden .empire-borders-window {
   border: 1px solid var(--nerv-panel-border);
   box-shadow: var(--nerv-panel-shadow);
   padding: 10px 12px;
+  margin-bottom: 12px;
+  break-inside: avoid;
+  -webkit-column-break-inside: avoid;
+  page-break-inside: avoid;
 }
 
 /* Narrow gallery cards: reserve a top strip for the category badge, then keep
@@ -9910,7 +9913,8 @@ body.hud-hidden .empire-borders-window {
 
 /* Clicked card: span full width */
 .gallery-stories-list .news-feed-item.expanded {
-  grid-column: 1 / -1;
+  column-span: all;
+  -webkit-column-span: all;
 }
 
 /* Gallery expanded: more space, keep thumbnail zoom */
