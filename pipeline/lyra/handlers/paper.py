@@ -286,13 +286,18 @@ class PaperHandler(BaseHandler):
             f"## Title\n\n{self.state.paper_title}\n\n"
             f"## First 500 words\n\n{self.state.paper_text[:2000]}"
         )
+        settings = _get_settings()
         async with self.semaphore:
+            # 1024 total budget: ~100 tokens of output prose plus headroom for
+            # M2.7's interleaved thinking. The previous 256 was routinely eaten
+            # by the reasoning chain, leaving card descriptions empty/truncated.
             self.state.card_description = await asyncio.to_thread(
                 minimax_chat_anthropic,
                 card_system,
                 card_input,
-                256,
-                _get_settings(),
+                1024,
+                settings,
+                temperature=settings.temperature_narrative,
             )
         self.state.llm_call_count += 1
 
@@ -492,7 +497,12 @@ class PaperHandler(BaseHandler):
     # ===================================================================
 
     async def _llm_call(self, system: str, user_msg: str, max_tokens: int, settings) -> str:
-        """Async LLM call with semaphore gating and call count tracking."""
+        """Async LLM call with semaphore gating and call count tracking.
+
+        All paper narrative prose (hook, outline, investigation sections, audit retries)
+        flows through this wrapper at the narrative temperature — warmer than the rest
+        of the pipeline so the Why Files prose has voice.
+        """
         async with self.semaphore:
             result = await asyncio.to_thread(
                 minimax_chat_anthropic,
@@ -500,6 +510,7 @@ class PaperHandler(BaseHandler):
                 user_msg,
                 max_tokens,
                 settings,
+                temperature=settings.temperature_narrative,
             )
         self.state.llm_call_count += 1
         return result
@@ -655,7 +666,9 @@ class PaperHandler(BaseHandler):
             f"## Key findings\n\n{findings_text}\n"
         )
 
-        raw = await self._llm_call(hook_prompt, user_msg, 2048, settings)
+        # 4096 budget: hook is usually 300-500 output tokens, but M2.7 thinking
+        # can consume 2K+ before the prose starts. 2048 was too tight.
+        raw = await self._llm_call(hook_prompt, user_msg, 4096, settings)
         return raw.strip()
 
     async def _write_investigation_section(

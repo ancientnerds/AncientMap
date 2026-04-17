@@ -127,11 +127,17 @@ def minimax_chat_anthropic(
     user_message: str,
     max_tokens: int,
     settings=None,
+    *,
+    temperature: float | None = None,
 ) -> str:
     """Call MiniMax M2.7 via the Anthropic SDK (unified path).
 
     This replaces the old httpx-based minimax_chat() for the Theo pipeline.
     Uses the same Anthropic SDK client as the Lyra pipeline.
+
+    `temperature` is keyword-only. When None, MiniMax picks its own default
+    (≈1.0 for M2.7). Theo V2 handlers should always pass an explicit stage
+    temperature from LyraSettings (temperature_research/synthesis/verification/narrative).
     """
     from pipeline.lyra.config import _get_minimax_anthropic_client, _get_settings
 
@@ -140,18 +146,23 @@ def minimax_chat_anthropic(
 
     client = _get_minimax_anthropic_client(settings)
 
+    # MiniMax requires temperature in (0, 1] — clamp any <=0 up to 0.01.
+    create_kwargs: dict = {
+        "model": "MiniMax-M2.7",
+        "max_tokens": max_tokens,
+        "system": system,
+        "messages": [{"role": "user", "content": user_message}],
+    }
+    if temperature is not None:
+        create_kwargs["temperature"] = 0.01 if temperature <= 0.0 else temperature
+
     from pipeline.lyra.minimax_limiter import limiter
 
     last_error = None
     for attempt in range(3):
         with limiter.request() as slot:
             try:
-                response = client.messages.create(
-                    model="MiniMax-M2.7",
-                    max_tokens=max_tokens,
-                    system=system,
-                    messages=[{"role": "user", "content": user_message}],
-                )
+                response = client.messages.create(**create_kwargs)
                 slot.report_success()
                 # Extract text from response, skipping ThinkingBlock objects
                 parts = []
@@ -161,6 +172,17 @@ def minimax_chat_anthropic(
                 content = "\n".join(parts)
                 # M2.7 may still wrap reasoning in <think>...</think> tags -- strip them
                 clean = re.sub(r"<think>.*?</think>", "", content, flags=re.DOTALL).strip()
+                # Surface silent truncation: M2.7's interleaved thinking can
+                # consume the entire max_tokens budget, leaving zero/partial
+                # output. Log it so the caller can raise max_tokens if needed.
+                stop_reason = getattr(response, "stop_reason", None)
+                if stop_reason == "max_tokens":
+                    logger.warning(
+                        "MiniMax M2.7 hit max_tokens=%d before finishing output "
+                        "(output len=%d chars). Consider raising the budget.",
+                        max_tokens,
+                        len(clean),
+                    )
                 return clean
             except Exception as e:
                 last_error = e
@@ -199,6 +221,8 @@ def structured_llm_call(
     schema: dict,
     max_tokens: int,
     settings=None,
+    *,
+    temperature: float,
 ) -> dict:
     """Call MiniMax/Anthropic with structured output enforcement.
 
@@ -206,6 +230,10 @@ def structured_llm_call(
     - MiniMax: tool-use trick (_build_structured_output_tool)
     - Anthropic: native output_config json_schema
     - Retry logic + rate limiter
+
+    `temperature` is a required keyword argument so every call site picks a
+    stage explicitly (no accidental defaults). Use the per-stage values on
+    LyraSettings: temperature_research/synthesis/verification/narrative.
 
     Returns parsed dict. Falls back to text parsing on failure.
     """
@@ -225,9 +253,15 @@ def structured_llm_call(
             messages=[{"role": "user", "content": user_message}],
             max_tokens=max_tokens,
             response_format=response_format,
-            temperature=0.1,
+            temperature=temperature,
             settings=settings,
         )
+        if resp.stop_reason == "max_tokens":
+            logger.warning(
+                "Structured LLM call hit max_tokens=%d before finishing "
+                "(truncated JSON likely). Consider raising the budget.",
+                max_tokens,
+            )
         text = resp.content[0].text if resp.content else ""
         cleaned = text.strip()
         if cleaned.startswith("```"):
@@ -239,9 +273,11 @@ def structured_llm_call(
     except Exception as exc:
         logger.warning("Structured LLM call failed, retrying: %s", exc)
 
-    # Retry once with text fallback
+    # Retry once with text fallback — inherit the caller's stage temperature.
     try:
-        raw = minimax_chat_anthropic(system, user_message, max_tokens, settings)
+        raw = minimax_chat_anthropic(
+            system, user_message, max_tokens, settings, temperature=temperature
+        )
         cleaned = raw.strip()
         if cleaned.startswith("```"):
             cleaned = cleaned.split("\n", 1)[1] if "\n" in cleaned else cleaned[3:]

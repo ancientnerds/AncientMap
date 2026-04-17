@@ -121,13 +121,15 @@ class SearchHandler(BaseHandler):
                 f"## Gaps identified by specialists\n\n"
                 + "\n".join(f"- {g}" for g in specialist_gaps)
             )
+            settings = _get_settings()
             async with self.semaphore:
                 raw = await asyncio.to_thread(
                     minimax_chat_anthropic,
                     prompt,
                     user_msg,
                     4096,
-                    _get_settings(),
+                    settings,
+                    temperature=settings.temperature_research,
                 )
             self.state.llm_call_count += 1
             parsed = self._parse_json(raw)

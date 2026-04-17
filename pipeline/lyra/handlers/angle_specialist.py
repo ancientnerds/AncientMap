@@ -387,6 +387,7 @@ class SpecialistHandler(BaseHandler):
                 SPECIALIST_FINDINGS_SCHEMA,
                 max_tokens,
                 settings=settings,
+                temperature=settings.temperature_research,
             )
             self.state.llm_call_count += 1
             if isinstance(parsed, dict) and parsed:
@@ -437,13 +438,15 @@ class SpecialistHandler(BaseHandler):
             f"## New findings from this round ({len(new)})\n\n{new_text}"
         )
 
+        settings = _get_settings()
         async with self.semaphore:
             raw = await asyncio.to_thread(
                 minimax_chat_anthropic,
                 prompt,
                 user_msg,
                 4096,
-                _get_settings(),
+                settings,
+                temperature=settings.temperature_research,
             )
         self.state.llm_call_count += 1
 

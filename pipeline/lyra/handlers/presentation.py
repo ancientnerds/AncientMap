@@ -76,6 +76,7 @@ class PresentationHandler(BaseHandler):
                 user_msg,
                 self.state.config.max_tokens_per_call,
                 settings,
+                temperature=settings.temperature_narrative,
             )
         self.state.llm_call_count += 1
 

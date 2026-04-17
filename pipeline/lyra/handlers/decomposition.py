@@ -43,13 +43,15 @@ class DecompositionHandler(BaseHandler):
 
         # Phase A: LLM proposes angles
         prompt = (PROMPTS_DIR / "v2_decomposition.txt").read_text(encoding="utf-8")
+        settings = _get_settings()
         proposed = await asyncio.to_thread(
             structured_llm_call,
             prompt,
             self.state.question,
             DECOMPOSITION_SCHEMA,
             self.state.config.max_tokens_per_call,
-            _get_settings(),
+            settings,
+            temperature=settings.temperature_research,
         )
         self.state.llm_call_count += 1
 

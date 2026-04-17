@@ -81,6 +81,7 @@ class DebateHandler(BaseHandler):
                     f"## Your original findings\n\n{json.dumps(spec_findings.get(spec.id, []), indent=2)}"
                 )
 
+                settings = _get_settings()
                 async with self.semaphore:
                     parsed = await asyncio.to_thread(
                         structured_llm_call,
@@ -88,7 +89,8 @@ class DebateHandler(BaseHandler):
                         user_msg,
                         DEBATE_CHALLENGE_SCHEMA,
                         self.state.config.max_tokens_per_call,
-                        _get_settings(),
+                        settings,
+                        temperature=settings.temperature_verification,
                     )
                 self.state.llm_call_count += 1
                 challenges = parsed.get("strengthening_suggestions", parsed.get("challenges", []))
@@ -121,6 +123,7 @@ class DebateHandler(BaseHandler):
                     f"## Your original findings\n\n{json.dumps(spec_findings.get(spec.id, []), indent=2)}"
                 )
 
+                settings = _get_settings()
                 async with self.semaphore:
                     parsed = await asyncio.to_thread(
                         structured_llm_call,
@@ -128,7 +131,8 @@ class DebateHandler(BaseHandler):
                         user_msg,
                         DEBATE_DEFENSE_SCHEMA,
                         self.state.config.max_tokens_per_call,
-                        _get_settings(),
+                        settings,
+                        temperature=settings.temperature_verification,
                     )
                 self.state.llm_call_count += 1
                 defenses = parsed.get("incorporations", parsed.get("defenses", []))

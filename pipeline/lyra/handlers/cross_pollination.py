@@ -82,6 +82,7 @@ class CrossPollinationHandler(BaseHandler):
             f"## Angle findings from {round_label}\n\n{all_summaries}"
         )
 
+        settings = _get_settings()
         async with self.semaphore:
             result = await asyncio.to_thread(
                 structured_llm_call,
@@ -89,7 +90,8 @@ class CrossPollinationHandler(BaseHandler):
                 user_msg,
                 CROSS_POLLINATION_SCHEMA,
                 self.state.config.max_tokens_per_call,
-                _get_settings(),
+                settings,
+                temperature=settings.temperature_synthesis,
             )
         self.state.llm_call_count += 1
 

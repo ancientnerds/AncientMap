@@ -106,6 +106,15 @@ class LyraSettings(BaseSettings):
     # LLM API (Anthropic)
     anthropic_api_key: str = ""
     temperature_min: float = 0.0
+
+    # Per-stage MiniMax temperatures for the Theo V2 research pipeline.
+    # Research/extraction/verification stay cold to preserve faithfulness to sources;
+    # synthesis gets a modest bump to help cross-source connections;
+    # narrative writing warms up so the Why Files prose has voice.
+    temperature_research: float = 0.2
+    temperature_synthesis: float = 0.3
+    temperature_verification: float = 0.1
+    temperature_narrative: float = 0.8
     model_summarize: str = "claude-haiku-4-5-20251001"
     model_post: str = "claude-sonnet-4-6"
     model_verify: str = "claude-opus-4-6"

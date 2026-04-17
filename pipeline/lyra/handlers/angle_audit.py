@@ -77,13 +77,15 @@ class AuditHandler(BaseHandler):
                 f"URL: {source.url}\n"
                 f"Snippet: {source.snippet}\n"
             )
+            settings = _get_settings()
             async with self.semaphore:
                 raw = await asyncio.to_thread(
                     minimax_chat_anthropic,
                     system,
                     user_msg,
                     self.state.config.max_tokens_per_call,
-                    _get_settings(),
+                    settings,
+                    temperature=settings.temperature_research,
                 )
             self.state.llm_call_count += 1
             parsed = self._parse_json(raw)

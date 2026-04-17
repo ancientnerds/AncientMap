@@ -71,6 +71,7 @@ class SynthesisHandler(BaseHandler):
         synthesis_prompt = (PROMPTS_DIR / "theo_synthesis.txt").read_text(encoding="utf-8")
         user_msg = f"## Research question\n\n{self.state.question}\n\n## Specialist analyses (by angle)\n\n{all_findings_text}"
 
+        settings = _get_settings()
         async with self.semaphore:
             parsed = await asyncio.to_thread(
                 structured_llm_call,
@@ -78,7 +79,8 @@ class SynthesisHandler(BaseHandler):
                 user_msg,
                 SYNTHESIS_SCHEMA,
                 self.state.config.max_tokens_synthesis,
-                _get_settings(),
+                settings,
+                temperature=settings.temperature_synthesis,
             )
         self.state.llm_call_count += 1
         self.state.synthesis = parsed
@@ -103,7 +105,8 @@ class SynthesisHandler(BaseHandler):
                     user_msg,
                     CROSS_ANGLE_SCHEMA,
                     self.state.config.max_tokens_synthesis,
-                    _get_settings(),
+                    settings,
+                    temperature=settings.temperature_synthesis,
                 )
             self.state.llm_call_count += 1
             self.state.cross_angle_connections = cross_result.get("connections", [])

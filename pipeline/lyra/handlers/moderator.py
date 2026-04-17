@@ -66,6 +66,7 @@ class ModeratorHandler(BaseHandler):
                 MODERATOR_SCHEMA,
                 self.state.config.max_tokens_per_call,
                 settings,
+                temperature=settings.temperature_verification,
             )
         self.state.llm_call_count += 1
 
