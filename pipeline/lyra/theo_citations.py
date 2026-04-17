@@ -408,9 +408,7 @@ def audit_citations(paper_text: str, registry: CitationRegistry) -> dict:
     prose_only = paper_text[:refs_start] if refs_start is not None else paper_text
     placeholder_markers = detect_placeholder_markers(prose_only)
     if placeholder_markers:
-        issues.append(
-            f"{len(placeholder_markers)} unresolved [N - topic] placeholder(s) in prose"
-        )
+        issues.append(f"{len(placeholder_markers)} unresolved [N - topic] placeholder(s) in prose")
 
     # 5. Language bleed — non-Latin script in prose
     language_bleed = detect_language_bleed(prose_only)
