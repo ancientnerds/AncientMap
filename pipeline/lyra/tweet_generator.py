@@ -242,6 +242,9 @@ def generate_posts_for_video(
         # stays "summarized" and the post generator retries next cycle.
         # Safety: if this round produced zero new matches, mark as "posted"
         # anyway to avoid infinite retry loops.
+        # Flush pending post_text writes so the count below sees them
+        # (SessionLocal is autoflush=False).
+        session.flush()
         remaining = (
             session.query(NewsItem)
             .filter(

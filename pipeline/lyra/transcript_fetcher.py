@@ -17,9 +17,22 @@ logger = logging.getLogger(__name__)
 # Error messages that mean the video will never have a transcript
 _PERMANENT_PATTERNS = ["members-only content", "channel's members on level", "video is private"]
 
+# Error messages that mean the video isn't available YET (scheduled premiere).
+# Don't create a DB row — re-fetch next cycle when it goes live.
+_PREMIERE_PATTERNS = ["premieres in", "live event will begin"]
+
+# Max age (hours since publication) to keep retrying failed transcripts.
+# After this, mark 'skipped' to stop wasting proxy API quota on videos
+# that never get auto-captions (e.g., silent drone clips).
+_MAX_RETRY_AGE_HOURS = 24
+
 
 class PermanentVideoError(Exception):
     """Video is permanently unavailable (members-only, private, etc.)."""
+
+
+class PremiereNotReadyError(Exception):
+    """Video is a scheduled premiere that hasn't aired yet."""
 
 
 def _build_ytt_api(settings: LyraSettings) -> YouTubeTranscriptApi:
@@ -128,6 +141,9 @@ def fetch_transcript(video_id: str, settings: LyraSettings) -> tuple[str | None,
     except Exception as e:
         executor.shutdown(wait=False)
         msg = str(e)
+        msg_lower = msg.lower()
+        if any(p in msg_lower for p in _PREMIERE_PATTERNS):
+            raise PremiereNotReadyError(msg) from e
         if any(p in msg for p in _PERMANENT_PATTERNS):
             raise PermanentVideoError(msg) from e
         logger.warning(f"No transcript for {video_id}: {e}")
@@ -239,6 +255,11 @@ def fetch_new_videos(settings: LyraSettings) -> int:
                 logger.info(f"Fetching transcript for: {video_info['title']}")
                 try:
                     transcript_text, duration = fetch_transcript(video_info["id"], settings)
+                except PremiereNotReadyError as e:
+                    # Scheduled premiere — don't create a DB row. It'll be
+                    # re-fetched next cycle, and once it airs we'll process it.
+                    logger.info(f"  -> deferring (premiere not aired: {e!s:.60s})")
+                    continue
                 except PermanentVideoError as e:
                     logger.info(f"  -> skipped (permanently unavailable: {e!s:.80s})")
                     session.add(
@@ -333,10 +354,19 @@ def retry_failed_videos(settings: LyraSettings) -> int:
 
         logger.info(f"Retrying transcript fetch for {len(failed_videos)} failed videos")
 
+        now = datetime.now(UTC)
+        max_retry_age = timedelta(hours=_MAX_RETRY_AGE_HOURS)
+
         for video in failed_videos:
             logger.info(f"  Retrying: {video.title} ({video.id})")
             try:
                 transcript_text, duration = fetch_transcript(video.id, settings)
+            except PremiereNotReadyError as e:
+                # Still a scheduled premiere — bump last_attempted_at and
+                # keep 'failed' status so the next cycle retries.
+                video.last_attempted_at = now
+                logger.info(f"    -> premiere not aired yet: {e!s:.60s}")
+                continue
             except PermanentVideoError as e:
                 video.status = "skipped"
                 logger.info(f"    -> permanently unavailable, skipping: {e!s:.80s}")
@@ -344,7 +374,7 @@ def retry_failed_videos(settings: LyraSettings) -> int:
 
             if transcript_text:
                 video.duration_minutes = duration
-                video.last_attempted_at = datetime.now(UTC)
+                video.last_attempted_at = now
 
                 if duration is not None and duration < settings.min_video_minutes:
                     video.status = "skipped"
@@ -360,8 +390,16 @@ def retry_failed_videos(settings: LyraSettings) -> int:
                     f"    -> transcribed ({duration:.1f} min)" if duration else "    -> transcribed"
                 )
             else:
-                video.last_attempted_at = datetime.now(UTC)
-                logger.info("    -> still no transcript, will retry later")
+                video.last_attempted_at = now
+                # Give up on videos that have been failing for a while — they
+                # almost certainly have no auto-captions (silent clips, etc.).
+                if video.published_at and (now - video.published_at) > max_retry_age:
+                    video.status = "skipped"
+                    logger.info(
+                        f"    -> giving up after {_MAX_RETRY_AGE_HOURS}h, marking skipped"
+                    )
+                else:
+                    logger.info("    -> still no transcript, will retry later")
 
     logger.info(f"Retried {retried} videos successfully")
     return retried
