@@ -25,6 +25,36 @@ function getVideoMimeType(src: string): string | undefined {
   }
 }
 
+function hostFromUrl(url: string): string {
+  try { return new URL(url).hostname.replace(/^www\./, '') } catch { return '' }
+}
+
+function isWikimediaHost(url: string): boolean {
+  const h = hostFromUrl(url)
+  return /(^|\.)(wikipedia|wikimedia)\.org$/.test(h)
+}
+
+// Domain patterns for known branded sources — used to detect when an item's
+// declared sourceType doesn't match the sourceUrl's actual host (e.g. a manual
+// hero saved from butterfield.com into a wiki_images row still tagged 'wikimedia').
+const KNOWN_SOURCE_HOSTS: Record<string, RegExp> = {
+  wikimedia: /(^|\.)(wikipedia|wikimedia)\.org$/,
+  'david-rumsey': /(^|\.)davidrumsey\.com$/,
+  'met-museum': /(^|\.)metmuseum\.org$/,
+  smithsonian: /(^|\.)si\.edu$/,
+  europeana: /(^|\.)europeana\.eu$/,
+  loc: /(^|\.)loc\.gov$/,
+  'british-museum': /(^|\.)britishmuseum\.org$/,
+  sketchfab: /(^|\.)sketchfab\.com$/,
+}
+
+function matchesKnownSource(sourceType: string | undefined, url: string): boolean {
+  if (!sourceType) return false
+  const pattern = KNOWN_SOURCE_HOSTS[sourceType]
+  if (!pattern) return false
+  return pattern.test(hostFromUrl(url))
+}
+
 interface ImageLightboxProps {
   images: LightboxImage[]
   currentIndex: number
@@ -418,12 +448,22 @@ export default function ImageLightbox({
               </span>
             )}
             {current.license && <span className="lightbox-license">{current.license}</span>}
-            {current.sourceUrl && current.sourceType === 'wikimedia' && (
+            {current.sourceUrl && current.sourceType === 'wikimedia' && isWikimediaHost(current.sourceUrl) && (
               <a href={current.sourceUrl} target="_blank" rel="noopener noreferrer" className="lightbox-source-link">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>
                 </svg>
                 Wikimedia
+              </a>
+            )}
+            {current.sourceUrl && !matchesKnownSource(current.sourceType, current.sourceUrl) && (
+              <a href={current.sourceUrl} target="_blank" rel="noopener noreferrer" className="lightbox-source-link">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="12" cy="12" r="10" />
+                  <line x1="2" y1="12" x2="22" y2="12" />
+                  <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+                </svg>
+                {hostFromUrl(current.sourceUrl)}
               </a>
             )}
             {current.sourceUrl && current.sourceType === 'david-rumsey' && (
