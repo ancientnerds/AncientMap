@@ -4,9 +4,8 @@ import logging
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
-from sqlalchemy.orm import Session
-
 from sqlalchemy import text
+from sqlalchemy.orm import Session
 
 from pipeline.database import LibrarySource, NewsItem, get_db
 
@@ -108,8 +107,7 @@ def library_by_site(site_id: str, db: Session = Depends(get_db)):
     """
     # 1. Get news item IDs for this site
     news_ids = [
-        str(row[0])
-        for row in db.query(NewsItem.id).filter(NewsItem.site_id == site_id).all()
+        str(row[0]) for row in db.query(NewsItem.id).filter(NewsItem.site_id == site_id).all()
     ]
 
     # 2. Build JSONB containment queries
