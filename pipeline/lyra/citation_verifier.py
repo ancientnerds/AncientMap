@@ -191,6 +191,19 @@ def verify_all_citations(
     if settings is None:
         settings = _get_settings()
 
+    # Strip unresolved [N - topic] placeholders before the verification loop.
+    # These appear when a synthesis step couldn't assign a real number; leaving
+    # them in the paper would leak placeholders into the published text and the
+    # [N]-only audit regex would pass them through silently.
+    placeholder_pattern = re.compile(r"\s*\[N\s*[-–][^\]]+\]")
+    placeholder_hits = placeholder_pattern.findall(text)
+    if placeholder_hits:
+        logger.warning(
+            "[verifier] Stripping %d unresolved [N - topic] placeholder(s) from paper",
+            len(placeholder_hits),
+        )
+        text = placeholder_pattern.sub("", text)
+
     # Build source lookup
     source_map: dict[int, dict] = {}
     for s in sources:

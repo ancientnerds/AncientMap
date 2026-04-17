@@ -251,10 +251,22 @@ class PaperHandler(BaseHandler):
         )
 
         # ---------------------------------------------------------------
-        # Step 8: Citation audit
+        # Step 7.5: Finalize references — renumber [N] markers to contiguous
+        # [1..M] by first-occurrence order, and populate the registry with
+        # only the sources that actually survived verification. This is what
+        # prevents ghost references in the published bibliography.
         # ---------------------------------------------------------------
-        from pipeline.lyra.theo_citations import audit_citations
+        from pipeline.lyra.theo_citations import audit_citations, finalize_references
 
+        self.state.paper_text, sid_to_num = finalize_references(
+            self.state.paper_text,
+            sid_to_num,
+            self.state.registry,
+        )
+
+        # ---------------------------------------------------------------
+        # Step 8: Citation audit (runs on finalized [1..M] numbering)
+        # ---------------------------------------------------------------
         self.state.audit_result = audit_citations(
             self.state.paper_text,
             self.state.registry,
@@ -338,9 +350,16 @@ class PaperHandler(BaseHandler):
     # ===================================================================
 
     def _build_reference_map(self) -> tuple[dict[str, int], str, dict[str, list[dict]]]:
-        """Build sid_to_num mapping, ref_map_text, and per-angle claims.
+        """Build a WORKING sid_to_num mapping used only for prompt construction.
 
-        Returns (sid_to_num, ref_map_text, claims_by_angle).
+        Does NOT call registry.assign_reference_number() — that now happens in
+        finalize_references() after verification, so the published references
+        list contains only sources actually cited in prose (no ghosts).
+
+        Numbering here is stable within a single pipeline run (sorted by sid)
+        so prompts see consistent [N] markers across sections.
+
+        Returns (working_sid_to_num, ref_map_text, claims_by_angle).
         """
         # Collect all source_ids from registry claims
         all_source_ids: set[str] = set()
@@ -372,16 +391,19 @@ class PaperHandler(BaseHandler):
             for finding in angle.findings:
                 all_source_ids.update(finding.get("source_ids", []))
 
-        # Assign reference numbers
+        # Assign WORKING reference numbers (stable within this run, not registered
+        # on the CitationRegistry). finalize_references() will re-number these to
+        # contiguous [1..M] based on actual first-citation order after verification.
         ref_map_lines: list[str] = []
         sid_to_num: dict[str, int] = {}
+        working_num = 1
         for sid in sorted(all_source_ids):
             source = self.state.registry.get_reference(sid)
             if source is None:
                 continue
-            num = self.state.registry.assign_reference_number(sid)
-            sid_to_num[sid] = num
-            ref_map_lines.append(f"[{num}] {source.title} -- {source.url}")
+            sid_to_num[sid] = working_num
+            ref_map_lines.append(f"[{working_num}] {source.title} -- {source.url}")
+            working_num += 1
 
         ref_map_text = "\n".join(ref_map_lines) if ref_map_lines else "(no references)"
 
@@ -879,15 +901,19 @@ class PaperHandler(BaseHandler):
         """Write the What We Actually Know assessment section."""
         assessment_prompt = (PROMPTS_DIR / "v2_paper_assessment.txt").read_text(encoding="utf-8")
 
-        # Categorize findings by confidence
-        high_confidence = [c["claim"] for c in all_claims if c.get("confidence") == "high"]
-        medium_confidence = [c["claim"] for c in all_claims if c.get("confidence") == "medium"]
-        low_confidence = [c["claim"] for c in all_claims if c.get("confidence") == "low"]
+        # Categorize full claim dicts (NOT bare strings) by confidence so the
+        # [N] citation markers travel into the prompt via _format_claims_for_prompt.
+        # Dropping to bare strings was the bug that caused [N - topic] placeholders.
+        high_confidence = [c for c in all_claims if c.get("confidence") == "high"]
+        medium_confidence = [c for c in all_claims if c.get("confidence") == "medium"]
+        low_confidence = [c for c in all_claims if c.get("confidence") == "low"]
 
-        def _format_tier(items: list[str]) -> str:
+        def _format_tier(items: list[dict]) -> str:
             if not items:
                 return "None"
-            return "\n".join(f"- {item}" for item in items[:15])
+            # Cap at 15 per tier so the prompt stays bounded, and reuse the
+            # same formatter the other sections use (paper.py:_format_claims_for_prompt)
+            return self._format_claims_for_prompt(items[:15])
 
         user_msg = (
             f"## Research question\n\n{self.state.question}\n\n"

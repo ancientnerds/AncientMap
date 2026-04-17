@@ -34,6 +34,107 @@ interface PaperData {
   duration_ms: number | null
 }
 
+type RefGroup = 'Academic' | 'Reputable' | 'PDF' | 'Video' | 'Other'
+
+interface Reference {
+  num: number
+  title: string
+  url: string
+  accessed?: string
+  group: RefGroup
+}
+
+const GROUP_ORDER: RefGroup[] = ['Academic', 'Reputable', 'PDF', 'Video', 'Other']
+
+const GROUP_LABEL: Record<RefGroup, string> = {
+  Academic: 'Academic sources',
+  Reputable: 'Reputable sources',
+  PDF: 'PDFs & archives',
+  Video: 'Video sources',
+  Other: 'Other sources',
+}
+
+/** Split paper markdown at the first `## References` heading. */
+function splitBodyAndRefs(report: string): { body: string; refsText: string } {
+  const match = report.match(/\n#{2,3}\s+References\s*\n/)
+  if (!match || match.index === undefined) {
+    return { body: report, refsText: '' }
+  }
+  const body = report.slice(0, match.index)
+  const refsText = report.slice(match.index + match[0].length)
+  return { body, refsText }
+}
+
+/**
+ * Parse the references section into structured records and group them.
+ * Line format (from CitationRegistry.format_references_list):
+ *   `[N] Title — URL (accessed YYYY-MM-DD) [Tier]`
+ * Tier is optional; mdash may be rendered as `—` or ` - `.
+ */
+function parseReferences(refsText: string): Reference[] {
+  if (!refsText.trim()) return []
+
+  const refs: Reference[] = []
+  // Each line is one entry; ignore blank lines.
+  for (const rawLine of refsText.split('\n')) {
+    const line = rawLine.trim()
+    if (!line) continue
+
+    // Match `[N] ...`
+    const numMatch = line.match(/^\[(\d+)\]\s+(.+)$/)
+    if (!numMatch) continue
+    const num = parseInt(numMatch[1], 10)
+    const rest = numMatch[2]
+
+    // Split title/URL on `—` (em-dash) or ` - ` — we emit em-dash in Python but
+    // be lenient for manually edited entries.
+    const dashMatch = rest.match(/^(.+?)\s+[—–-]\s+(https?:\/\/\S+)(.*)$/)
+    if (!dashMatch) continue
+    const title = dashMatch[1].trim()
+    const url = dashMatch[2].trim()
+    const tail = dashMatch[3] || ''
+
+    // Optional: `(accessed YYYY-MM-DD)`
+    const accessedMatch = tail.match(/\(accessed\s+(\d{4}-\d{2}-\d{2})\)/)
+    const accessed = accessedMatch ? accessedMatch[1] : undefined
+
+    // Optional: `[Tier]` — Academic / Reputable
+    const tierMatch = tail.match(/\[(Academic|Reputable)\]/)
+    const tierLabel = tierMatch ? tierMatch[1] : null
+
+    // Classify into visual group
+    let group: RefGroup
+    if (tierLabel === 'Academic') group = 'Academic'
+    else if (tierLabel === 'Reputable') group = 'Reputable'
+    else if (/youtu\.?be/.test(url)) group = 'Video'
+    else if (/^\[PDF\]/.test(title) || /\.pdf(?:$|\?)/.test(url)) group = 'PDF'
+    else group = 'Other'
+
+    // Strip the `[PDF]` prefix Google adds to some titles — cosmetic
+    const cleanTitle = title.replace(/^\[PDF\]\s*/, '')
+
+    refs.push({ num, title: cleanTitle, url, accessed, group })
+  }
+
+  return refs
+}
+
+/**
+ * Pre-process body markdown so each inline `[N]` becomes a link to `#ref-N`.
+ * We use `[\[N\]](#ref-N)` — the backslash-escapes make the brackets literal
+ * text inside the link, so the rendered DOM is `<a href="#ref-N">[N]</a>`.
+ *
+ * Skipped: `[N]` where N maps to no known reference (left as plain text so
+ * any residual hallucinations are visible rather than silently linked).
+ */
+function wireCitationAnchors(body: string, knownNums: Set<number>): string {
+  return body.replace(/\[(\d+)\]/g, (orig, numStr) => {
+    const n = parseInt(numStr, 10)
+    if (!knownNums.has(n)) return orig
+    return `[\\[${numStr}\\]](#ref-${numStr})`
+  })
+}
+
 export default function ResearchPaperPage() {
   const [paper, setPaper] = useState<PaperData | null>(null)
   const [loading, setLoading] = useState(true)
@@ -98,9 +199,53 @@ export default function ResearchPaperPage() {
         const siteId = href.slice(5)
         return <a {...props} href={`/site.html?id=${siteId}`} target="_blank" rel="noopener noreferrer">{children}</a>
       }
+      // Same-page anchors (citation jumps) — no target swap, smooth scroll.
+      if (href?.startsWith('#')) {
+        return (
+          <a
+            {...props}
+            href={href}
+            className="theo-cite-link"
+            onClick={(e) => {
+              e.preventDefault()
+              const id = href.slice(1)
+              const target = document.getElementById(id)
+              if (target) {
+                // Expand the ancestor <details> if collapsed, then scroll.
+                let node: HTMLElement | null = target
+                while (node) {
+                  if (node.tagName === 'DETAILS') {
+                    (node as HTMLDetailsElement).open = true
+                  }
+                  node = node.parentElement
+                }
+                target.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                target.classList.add('theo-ref-highlight')
+                setTimeout(() => target.classList.remove('theo-ref-highlight'), 1600)
+              }
+            }}
+          >{children}</a>
+        )
+      }
       return <a {...props} href={href} target="_blank" rel="noopener noreferrer">{children}</a>
     },
   }), [])
+
+  // Derived values from the loaded paper
+  const { bodyWithAnchors, groupedRefs, totalRefs } = useMemo(() => {
+    if (!paper?.result) return { bodyWithAnchors: '', groupedRefs: {} as Record<RefGroup, Reference[]>, totalRefs: 0 }
+    const { body, refsText } = splitBodyAndRefs(paper.result.report)
+    const refs = parseReferences(refsText)
+    const knownNums = new Set(refs.map(r => r.num))
+    const wired = wireCitationAnchors(body, knownNums)
+    const grouped: Record<RefGroup, Reference[]> = {
+      Academic: [], Reputable: [], PDF: [], Video: [], Other: [],
+    }
+    for (const r of refs) grouped[r.group].push(r)
+    // Keep numeric order within each group
+    for (const g of GROUP_ORDER) grouped[g].sort((a, b) => a.num - b.num)
+    return { bodyWithAnchors: wired, groupedRefs: grouped, totalRefs: refs.length }
+  }, [paper])
 
   if (loading) {
     return (
@@ -162,9 +307,43 @@ export default function ResearchPaperPage() {
         {/* Paper body */}
         <div className="theo-paper-body theo-md-body">
           <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>
-            {paper.result.report}
+            {bodyWithAnchors}
           </ReactMarkdown>
         </div>
+
+        {/* References — clustered, collapsible */}
+        {totalRefs > 0 && (
+          <div className="theo-refs-section">
+            <h2 className="theo-refs-title">References <span className="theo-refs-count">({totalRefs})</span></h2>
+            {GROUP_ORDER.map(group => {
+              const items = groupedRefs[group]
+              if (!items || items.length === 0) return null
+              // Academic open by default; the rest collapsed.
+              const defaultOpen = group === 'Academic'
+              return (
+                <details key={group} className="theo-ref-group" {...(defaultOpen ? { open: true } : {})}>
+                  <summary className="theo-ref-summary">
+                    <span className="theo-ref-group-name">{GROUP_LABEL[group]}</span>
+                    <span className="theo-ref-group-count">{items.length}</span>
+                  </summary>
+                  <ol className="theo-ref-list">
+                    {items.map(r => (
+                      <li key={r.num} id={`ref-${r.num}`} className="theo-ref-item">
+                        <span className="theo-ref-num">[{r.num}]</span>
+                        <a href={r.url} target="_blank" rel="noopener noreferrer" className="theo-ref-link">
+                          {r.title}
+                        </a>
+                        {r.accessed && (
+                          <span className="theo-ref-accessed"> · accessed {r.accessed}</span>
+                        )}
+                      </li>
+                    ))}
+                  </ol>
+                </details>
+              )
+            })}
+          </div>
+        )}
 
         {/* Back to library */}
         <div style={{ textAlign: 'center', padding: '32px 0' }}>

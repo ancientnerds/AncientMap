@@ -2733,3 +2733,128 @@
   opacity: 0.3;
   cursor: not-allowed;
 }
+
+/* --- Research paper references: clustered, collapsible --- */
+.theo-refs-section {
+  margin-top: 40px;
+  padding-top: 24px;
+  border-top: 1px solid var(--border-default);
+}
+.theo-refs-title {
+  font-family: var(--font-heading);
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 16px;
+}
+.theo-refs-count {
+  color: var(--text-muted);
+  font-weight: 400;
+  font-size: 13px;
+}
+.theo-ref-group {
+  border: 1px solid var(--border-default);
+  border-radius: 6px;
+  margin-bottom: 8px;
+  background: var(--bg-surface, rgba(255, 255, 255, 0.02));
+}
+.theo-ref-group[open] {
+  background: rgba(255, 255, 255, 0.03);
+}
+.theo-ref-summary {
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+  user-select: none;
+  list-style: none;
+}
+.theo-ref-summary::-webkit-details-marker { display: none; }
+.theo-ref-summary::before {
+  content: '▸';
+  display: inline-block;
+  margin-right: 8px;
+  color: var(--text-muted);
+  transition: transform 0.15s;
+  font-size: 10px;
+}
+.theo-ref-group[open] .theo-ref-summary::before {
+  transform: rotate(90deg);
+}
+.theo-ref-summary:hover {
+  color: var(--brand-primary);
+}
+.theo-ref-group-name {
+  flex: 1;
+}
+.theo-ref-group-count {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.05);
+}
+.theo-ref-list {
+  list-style: none;
+  margin: 0;
+  padding: 4px 14px 14px;
+  counter-reset: none;
+}
+.theo-ref-item {
+  padding: 6px 0 6px 48px;
+  position: relative;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text-muted);
+  border-top: 1px solid rgba(255, 255, 255, 0.04);
+  scroll-margin-top: 80px;
+}
+.theo-ref-item:first-child {
+  border-top: none;
+}
+.theo-ref-num {
+  position: absolute;
+  left: 0;
+  top: 6px;
+  width: 40px;
+  text-align: right;
+  color: var(--text-dimmed);
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+}
+.theo-ref-link {
+  color: var(--text-primary);
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+.theo-ref-link:hover {
+  color: var(--brand-primary);
+  text-decoration: underline;
+}
+.theo-ref-accessed {
+  color: var(--text-dimmed);
+  font-size: 11.5px;
+}
+
+/* --- Inline citation anchors (body [N] links) --- */
+.theo-cite-link {
+  color: var(--brand-primary);
+  text-decoration: none;
+  font-variant-numeric: tabular-nums;
+  padding: 0 1px;
+}
+.theo-cite-link:hover {
+  text-decoration: underline;
+}
+
+/* Highlight the targeted reference briefly when clicked from prose. */
+.theo-ref-highlight {
+  background: rgba(255, 200, 80, 0.14);
+  border-radius: 3px;
+  transition: background 0.4s;
+}

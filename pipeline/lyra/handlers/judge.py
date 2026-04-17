@@ -164,10 +164,26 @@ class JudgeHandler(BaseHandler):
                 badge = badge_name
                 break
 
+        # Real passed gate — evidence-based, not hardcoded. The paper ships in
+        # either case (the caller decides), but `passed` now truthfully signals
+        # citation integrity so downstream consumers (UI, auto-publish flows)
+        # can distinguish clean from bug-riddled output.
+        #
+        # Gate requires: audit passed AND citation coverage ≥ 9/15 (≤ 2 uncited
+        # paragraphs) AND zero reference-integrity issues AND zero placeholder
+        # markers AND zero language-bleed segments.
+        passed = bool(
+            audit_result.get("passed", False)
+            and scores["citation_coverage"] >= 9
+            and scores["reference_integrity"] == 10
+            and not audit_result.get("placeholder_markers")
+            and not audit_result.get("language_bleed")
+        )
+
         result = {
             "score": total,
             "badge": badge,
-            "passed": True,  # always ships
+            "passed": passed,
             "metrics": scores,
             "mechanical": {
                 "citation_coverage": scores["citation_coverage"],
@@ -182,6 +198,8 @@ class JudgeHandler(BaseHandler):
                 "debate_rounds": debate_rounds,
                 "word_count": word_count,
                 "uncited_paragraphs": uncited,
+                "placeholder_markers": len(audit_result.get("placeholder_markers", [])),
+                "language_bleed": len(audit_result.get("language_bleed", [])),
             },
         }
 
@@ -201,7 +219,7 @@ class JudgeHandler(BaseHandler):
                 "meta": {
                     "score": total,
                     "badge": badge,
-                    "passed": True,
+                    "passed": passed,
                     "metrics": scores,
                 },
             }

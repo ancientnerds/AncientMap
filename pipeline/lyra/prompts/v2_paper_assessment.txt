@@ -20,7 +20,9 @@ STANCE:
 - End with what is genuinely still open -- questions the research surfaced but could not answer.
 
 CITATIONS:
-- Use the EXACT [N] markers from the claims. Do not renumber or invent.
+- Use the EXACT [N] markers (where N is a digit) that appear after each claim in the input. Do not renumber, do not invent.
+- If a claim in the input has NO [N] marker attached, write the sentence without any citation. Do not fabricate one.
+- NEVER write a placeholder like [N - topic], [N – topic], [N-acoustic resonance], or any variant with a word after "N". These are bugs, not citations.
 - Cite at the point where the claim is first introduced.
 - Place citations BEFORE the period.
 
