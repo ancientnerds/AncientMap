@@ -26,14 +26,20 @@ def _tokens(s: str) -> set[str]:
 def metadata_gate_passes(cand: ImageCandidate, what_image_must_show: str) -> bool:
     """Cheap text-similarity check. Rejects clearly-irrelevant candidates.
 
-    Requires at least two shared content tokens (length > 3) between the
+    Requires at least one shared content token (length > 3) between the
     image's title+description and the specialist's must_show description.
+
+    Calibration note: threshold was 2 in the initial version but that rejected
+    legitimate museum-catalog matches whose titles use different vocabulary
+    than the specialist's must_show description (e.g. a Neo-Assyrian cuneiform
+    cylinder vs a must_show naming 'Anunnaki'). The vision gate catches
+    false positives downstream, so we err permissive here.
     """
     haystack = f"{cand.title} {cand.description}".strip()
     if not haystack or not what_image_must_show:
         return False
     shared = _tokens(haystack) & _tokens(what_image_must_show)
-    return len(shared) >= 2
+    return len(shared) >= 1
 
 
 VLM_SYSTEM_PROMPT = (
