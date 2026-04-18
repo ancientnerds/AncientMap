@@ -718,11 +718,17 @@ class PaperHandler(BaseHandler):
         # Format claims for the prompt
         claims_text = self._format_claims_for_prompt(matched_claims)
 
+        # Build optional image catalog for this section (paper-writer awareness)
+        image_catalog_text = ""
+        if getattr(settings, "paper_writer_sees_images", False):
+            image_catalog_text = self._build_image_catalog_text(angle_ids)
+
         user_msg = (
             f"## Section: {sec_title}\n"
             f"Narrative goal: {narrative_goal}\n\n"
             f"## Claims for this section\n\n{claims_text}\n\n"
-            f"## Reference map\n\n{ref_map_text}\n"
+            + (f"## Available images\n\n{image_catalog_text}\n\n" if image_catalog_text else "")
+            + f"## Reference map\n\n{ref_map_text}\n"
         )
 
         raw = await self._llm_call(
@@ -948,6 +954,44 @@ class PaperHandler(BaseHandler):
     # ===================================================================
     # Helpers
     # ===================================================================
+
+    def _build_image_catalog_text(self, angle_ids: list[str]) -> str:
+        """Build a compact text catalog of available images for these angles.
+
+        Format per line: `[[IMG:candidate_id]] Title — source (license)`
+        The writer can embed `[[IMG:candidate_id]]` anywhere in prose to pin an
+        image at that location. If the writer doesn't use any, PIH falls back
+        to auto-selection for the section.
+        """
+        import hashlib
+
+        pool = getattr(self.state, "image_candidate_pool", {}) or {}
+        if not pool:
+            return ""
+        lines: list[str] = []
+        angle_set = {str(a) for a in angle_ids}
+        for angle_id, candidates in pool.items():
+            if angle_set and angle_id not in angle_set:
+                continue
+            for c in candidates[:5]:  # cap so prompt stays bounded
+                cid = c.get("url", "")
+                title = (c.get("title") or "")[:80]
+                source = c.get("source") or ""
+                lic = c.get("license") or ""
+                if not cid or not title:
+                    continue
+                # Use a stable short id — hash of URL. Must be reversible via pool lookup.
+                short = hashlib.sha1(cid.encode()).hexdigest()[:10]
+                lines.append(f"[[IMG:{short}]] {title} — {source} ({lic})")
+        if not lines:
+            return ""
+        return (
+            "You MAY insert a marker `[[IMG:xxx]]` from the list below at the point "
+            "in prose where the image would strengthen the argument. Only pick an image "
+            "that directly illustrates the sentence it follows. Leave the marker "
+            "alone (don't paraphrase). You may also ignore the list entirely.\n\n"
+            + "\n".join(lines[:15])  # max 15 candidates surfaced
+        )
 
     def _collect_claims_for_angles(
         self,

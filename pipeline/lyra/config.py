@@ -183,6 +183,10 @@ class LyraSettings(BaseSettings):
     probative_images_max_per_paper: int = 8
     # Candidates to fetch per opportunity before gating
     probative_images_candidates_per_opportunity: int = 5
+    # When True, pass the image candidate pool for this section's angles into the
+    # paper-writer prompt and allow the writer to emit [[IMG:candidate_id]] markers
+    # that PIH resolves. Default off — new feature, keep safe.
+    paper_writer_sees_images: bool = False
 
     @classmethod
     def _resolve_env_fallbacks(cls) -> None:

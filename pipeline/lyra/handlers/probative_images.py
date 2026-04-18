@@ -107,7 +107,9 @@ class ProbativeImagesHandler(BaseHandler):
 
         client = create_minimax_client(settings.minimax_base_url, settings.minimax_api_key)
 
-        embedded: list[dict] = []
+        # Handle writer-placed [[IMG:id]] markers first (if paper_writer_sees_images is on)
+        writer_embedded = await self._resolve_writer_markers(client, paper_dir, settings)
+        embedded: list[dict] = list(writer_embedded)
 
         # 3. For each opportunity, resolve section → gather candidates → metadata gate → VLM gate → download → insert
         for opp in opportunities:
@@ -236,6 +238,75 @@ class ProbativeImagesHandler(BaseHandler):
             }
         )
         await self.bus.emit(ProbativeImagesReady(embedded_count=len(embedded)))
+
+    async def _resolve_writer_markers(
+        self,
+        client,
+        paper_dir,
+        settings,
+    ) -> list[dict]:
+        """Replace [[IMG:short]] markers the paper writer emitted with real images.
+
+        Returns list of embedded-image dicts (for state.probative_images + diversity).
+        """
+        import hashlib
+        import re as _re
+
+        markers = _re.findall(r"\[\[IMG:([a-f0-9]{10})\]\]", self.state.paper_text)
+        if not markers:
+            return []
+
+        # Build short-id → candidate mapping from the pool
+        short_to_cand: dict[str, dict] = {}
+        for _angle_id, cands in (self.state.image_candidate_pool or {}).items():
+            for c in cands:
+                url = c.get("url", "")
+                if not url:
+                    continue
+                short = hashlib.sha1(url.encode()).hexdigest()[:10]
+                short_to_cand.setdefault(short, c)
+
+        embedded: list[dict] = []
+        from pipeline.lyra.image_fetcher import ImageCandidate
+
+        for i, short in enumerate(dict.fromkeys(markers)):  # dedupe, preserve order
+            cand_dict = short_to_cand.get(short)
+            if not cand_dict:
+                logger.info("[probative] writer marker %s not in pool; removing", short)
+                self.state.paper_text = self.state.paper_text.replace(f"[[IMG:{short}]]", "")
+                continue
+            cand = ImageCandidate.from_dict(cand_dict)
+
+            # Download + light VLM gate (no forbidden-elements rules since the writer
+            # explicitly chose it — just verify the image loads and isn't porn/broken)
+            final_path = paper_dir / f"writer_img_{i}.jpg"
+            if not await download_candidate(cand, final_path):
+                self.state.paper_text = self.state.paper_text.replace(f"[[IMG:{short}]]", "")
+                continue
+
+            web_path = f"/data/research-images/{self.state.request_id}/writer_img_{i}.jpg"
+            rationale = "Image placed by the paper writer as visual evidence for this passage."
+            md = image_markdown(cand, web_path, rationale)
+            # Substitute the marker with the image markdown (inline, no section repositioning)
+            self.state.paper_text = self.state.paper_text.replace(f"[[IMG:{short}]]", md, 1)
+
+            embedded.append(
+                {
+                    "claim_index": -1,
+                    "claim_text": "[writer-placed]",
+                    "image_path": str(final_path),
+                    "web_path": web_path,
+                    "source_url": cand.url,
+                    "title": cand.title,
+                    "artist": cand.artist,
+                    "license": cand.license,
+                    "license_url": cand.license_url,
+                    "rationale": rationale,
+                    "section_heading": "[inline]",
+                    "source": cand.source,  # for diversity scoring
+                }
+            )
+        return embedded
 
     def _build_claim_list(self) -> list[dict]:
         """Flatten moderated+synthesis claims into the same shape the Illustration Specialist expects."""
