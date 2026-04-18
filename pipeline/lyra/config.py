@@ -185,8 +185,9 @@ class LyraSettings(BaseSettings):
     probative_images_candidates_per_opportunity: int = 5
     # When True, pass the image candidate pool for this section's angles into the
     # paper-writer prompt and allow the writer to emit [[IMG:candidate_id]] markers
-    # that PIH resolves. Default off — new feature, keep safe.
-    paper_writer_sees_images: bool = False
+    # that PIH resolves. Markers the writer doesn't use fall through to PIH's
+    # auto-selection so "writer ignores the list entirely" is a safe no-op.
+    paper_writer_sees_images: bool = True
 
     @classmethod
     def _resolve_env_fallbacks(cls) -> None:
