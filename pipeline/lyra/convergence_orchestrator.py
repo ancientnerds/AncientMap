@@ -87,6 +87,7 @@ class ConvergenceOrchestrator:
 
         # Lazy imports to avoid circular dependencies
         from pipeline.lyra.handlers.angle_audit import AuditHandler
+        from pipeline.lyra.handlers.angle_image_research import AngleImageResearchHandler
         from pipeline.lyra.handlers.angle_search import SearchHandler
         from pipeline.lyra.handlers.angle_specialist import SpecialistHandler
         from pipeline.lyra.handlers.content_fetch import ContentFetchHandler
@@ -107,6 +108,7 @@ class ConvergenceOrchestrator:
         # Instantiate handlers
         decomposition = DecompositionHandler(state, bus, semaphore)
         search = SearchHandler(state, bus, semaphore)
+        angle_image_research = AngleImageResearchHandler(state, bus, semaphore)
         audit = AuditHandler(state, bus, semaphore)
         content_fetch = ContentFetchHandler(state, bus, semaphore)
         specialist = SpecialistHandler(state, bus, semaphore)
@@ -126,6 +128,7 @@ class ConvergenceOrchestrator:
         # Register all handlers on the bus
         # Event flow:
         # AngleCreated -> search -> SourcesFound -> audit -> SourcesAudited
+        #             \\-> angle_image_research -> (pool populated, no blocking event)
         # -> content_fetch -> ContentFetched -> specialist -> FindingsProduced
         # -> convergence check -> (loop or saturate)
         # AllAnglesSaturated -> synthesis -> SynthesisReady -> debate
@@ -136,6 +139,7 @@ class ConvergenceOrchestrator:
         all_handlers = [
             decomposition,
             search,
+            angle_image_research,
             audit,
             content_fetch,
             specialist,
