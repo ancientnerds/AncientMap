@@ -38,6 +38,28 @@ class ImageCandidate:
     thumbnail_url: str = ""
     metadata: dict = field(default_factory=dict)
 
+    def to_dict(self) -> dict:
+        """Serialize for storage in ResearchState.image_candidate_pool."""
+        from dataclasses import asdict
+
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, d: dict) -> "ImageCandidate":
+        """Reconstruct from serialized form. Unknown keys ignored."""
+        fields = {
+            "url",
+            "source",
+            "title",
+            "description",
+            "artist",
+            "license",
+            "license_url",
+            "thumbnail_url",
+            "metadata",
+        }
+        return cls(**{k: v for k, v in d.items() if k in fields})
+
 
 def deduplicate_candidates(cands: list[ImageCandidate]) -> list[ImageCandidate]:
     """Keep first occurrence per URL."""

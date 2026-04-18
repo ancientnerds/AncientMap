@@ -138,6 +138,18 @@ class ResearchState:
     #  license, license_url, rationale, section_heading}
     probative_images: list[dict] = field(default_factory=list)
 
+    # Image research pool — populated by AngleImageResearchHandler in parallel
+    # with angle_search. Keyed by angle.id, values are serialized ImageCandidate
+    # dicts (dataclass round-trip via asdict). ProbativeImagesHandler selects
+    # from this pool at embed time; if empty (feature disabled or race), PIH
+    # falls back to on-demand fetch.
+    image_candidate_pool: dict[str, list[dict]] = field(default_factory=dict)
+
+    # Diversity scores computed after probative-image selection completes.
+    # Keys: source_diversity (float 0-1), artifact_type_diversity (float 0-1),
+    # source_count (int), license_count (int).
+    probative_images_diversity: dict = field(default_factory=dict)
+
     # Metadata
     total_tokens: int = 0
     llm_call_count: int = 0
