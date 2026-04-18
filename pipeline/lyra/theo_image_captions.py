@@ -93,6 +93,57 @@ def find_section_for_claim(paper_text: str, claim_text: str) -> str | None:
     return heading_iter[-1].group(1).strip()
 
 
+def find_section_for_citation(paper_text: str, citation_number: int) -> str | None:
+    """Return the ## section containing `[N]`, or None if absent.
+
+    More robust than find_section_for_claim — citation markers survive LLM
+    prose rewriting intact, while the original claim text often gets
+    paraphrased. Use this when the paper has been through finalize_references.
+
+    Example: if source_id X maps to reference number 7 in the registry, and
+    the paper cites [7] inside the "Sky Beings" section, this returns
+    "Sky Beings".
+    """
+    if citation_number < 1:
+        return None
+    needle = f"[{citation_number}]"
+    # Find the FIRST occurrence in prose, not the References section
+    refs_idx = paper_text.find("## References")
+    prose = paper_text[:refs_idx] if refs_idx > 0 else paper_text
+    idx = prose.find(needle)
+    if idx == -1:
+        return None
+    heading_iter = list(re.finditer(r"^##\s+(.+)$", prose[:idx], re.MULTILINE))
+    if not heading_iter:
+        return None
+    return heading_iter[-1].group(1).strip()
+
+
+def find_section_for_claim_with_registry(
+    paper_text: str,
+    source_ids: list[str],
+    registry,
+) -> str | None:
+    """Preferred section resolver: uses the paper's citation markers as anchors.
+
+    For each of the claim's source_ids, look up its reference number via the
+    registry, then find the first `[N]` occurrence in prose and walk back to
+    the nearest `##` heading. If any source_id resolves to a section, use it.
+
+    Falls back to None if no source_id has a citation in the prose (e.g. the
+    claim never survived verification into the final paper — in which case no
+    image should be inserted anyway).
+    """
+    for sid in source_ids or []:
+        num = registry.reference_numbers.get(sid) if registry else None
+        if not num:
+            continue
+        section = find_section_for_citation(paper_text, int(num))
+        if section:
+            return section
+    return None
+
+
 def insert_image_after_section(
     paper_text: str,
     section_heading: str,

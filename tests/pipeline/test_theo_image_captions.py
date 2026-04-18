@@ -83,3 +83,61 @@ def test_find_section_for_claim_matches_by_distinctive_phrase():
 def test_find_section_for_claim_returns_none_when_not_found():
     paper = "# T\n\n## Only\n\nPlaceholder."
     assert find_section_for_claim(paper, "unrelated claim text") is None
+
+
+# ---------------------------------------------------------------------------
+# find_section_for_citation + find_section_for_claim_with_registry
+# ---------------------------------------------------------------------------
+
+from unittest.mock import MagicMock  # noqa: E402
+
+from pipeline.lyra.theo_image_captions import (  # noqa: E402
+    find_section_for_citation,
+    find_section_for_claim_with_registry,
+)
+
+
+def test_find_section_for_citation_hits_first_occurrence():
+    paper = (
+        "# Title\n\n"
+        "## Sky Beings\n\nThe Pyramid Texts describe divine beings [3].\n\n"
+        "## Stonework\n\nPuma Punku precision [7].\n\n"
+        "## References\n\n[3] Source three — https://a\n[7] Source seven — https://b"
+    )
+    assert find_section_for_citation(paper, 3) == "Sky Beings"
+    assert find_section_for_citation(paper, 7) == "Stonework"
+
+
+def test_find_section_for_citation_ignores_references_section():
+    paper = (
+        "# Title\n\n## Intro\n\nPlain prose no citations.\n\n"
+        "## References\n\n[3] Only in refs — https://x"
+    )
+    assert find_section_for_citation(paper, 3) is None
+
+
+def test_find_section_for_citation_rejects_invalid_number():
+    assert find_section_for_citation("anything", 0) is None
+    assert find_section_for_citation("anything", -1) is None
+
+
+def test_find_section_for_claim_with_registry_uses_first_matching_source():
+    registry = MagicMock()
+    registry.reference_numbers = {"sid_a": 3, "sid_b": 99}
+    paper = "# Title\n\n## Sky Beings\n\nClaim [3].\n\n## Stonework\n\nDifferent claim [8]."
+    assert find_section_for_claim_with_registry(paper, ["sid_a", "sid_b"], registry) == "Sky Beings"
+
+
+def test_find_section_for_claim_with_registry_returns_none_when_no_citation_in_prose():
+    registry = MagicMock()
+    registry.reference_numbers = {"sid_a": 3}
+    paper = "# T\n\n## Intro\n\nNo citations at all."
+    assert find_section_for_claim_with_registry(paper, ["sid_a"], registry) is None
+
+
+def test_find_section_for_claim_with_registry_handles_missing_source_ids():
+    registry = MagicMock()
+    registry.reference_numbers = {}
+    paper = "# T\n\n## Intro\n\n[1]"
+    assert find_section_for_claim_with_registry(paper, [], registry) is None
+    assert find_section_for_claim_with_registry(paper, ["unknown_sid"], registry) is None

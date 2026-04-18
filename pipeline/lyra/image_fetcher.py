@@ -45,7 +45,7 @@ class ImageCandidate:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, d: dict) -> "ImageCandidate":
+    def from_dict(cls, d: dict) -> ImageCandidate:
         """Reconstruct from serialized form. Unknown keys ignored."""
         fields = {
             "url",
