@@ -215,13 +215,24 @@ class ProbativeImagesHandler(BaseHandler):
         client.close()
         self.state.probative_images = embedded
 
-        logger.info("[probative] embedded %d images", len(embedded))
+        from pipeline.lyra.image_diversity import compute_diversity
+
+        diversity = compute_diversity(embedded)
+        self.state.probative_images_diversity = diversity
+
+        logger.info(
+            "[probative] embedded %d images, source_diversity=%.2f (%d sources: %s)",
+            len(embedded),
+            diversity["source_diversity"],
+            diversity["source_count"],
+            ", ".join(diversity["sources"]),
+        )
         self.emit_sse(
             {
                 "type": "pipeline",
                 "stage": "probative_images",
                 "status": "done",
-                "meta": {"embedded": len(embedded)},
+                "meta": {"embedded": len(embedded), **diversity},
             }
         )
         await self.bus.emit(ProbativeImagesReady(embedded_count=len(embedded)))
