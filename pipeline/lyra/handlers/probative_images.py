@@ -75,7 +75,7 @@ def _build_image_pool_text(pool: dict[str, list[dict]]) -> str:
     from pipeline.lyra.image_fetcher import ImageCandidate
 
     lines = []
-    for angle_id, cands in pool.items():
+    for _angle_id, cands in pool.items():
         for d in cands or []:
             cand = ImageCandidate.from_dict(d) if isinstance(d, dict) else d
             title = getattr(cand, 'title', '') or 'Untitled'
@@ -106,7 +106,7 @@ class ProbativeImagesHandler(BaseHandler):
     def register(self):
         self.bus.on(PaperReady, self._on_paper_ready)
 
-    async def _on_paper_ready(self: "ProbativeImagesHandler", event: PaperReady):
+    async def _on_paper_ready(self: ProbativeImagesHandler, event: PaperReady):
         self.state.phase = ResearchPhase.IMAGE_CURATION
         settings = _get_settings()
 
