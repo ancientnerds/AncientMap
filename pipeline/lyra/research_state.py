@@ -24,6 +24,7 @@ class ResearchPhase(enum.Enum):
     SYNTHESIZING = "synthesizing"
     DEBATING = "debating"
     WRITING = "writing"
+    IMAGE_CURATION = "image_curation"
     JUDGING = "judging"
     DONE = "done"
 

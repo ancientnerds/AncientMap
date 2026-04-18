@@ -97,6 +97,7 @@ class ConvergenceOrchestrator:
         from pipeline.lyra.handlers.decomposition import DecompositionHandler
         from pipeline.lyra.handlers.fact_check import FactCheckHandler
         from pipeline.lyra.handlers.image_generation import ImageGenerationHandler
+        from pipeline.lyra.handlers.probative_images import ProbativeImagesHandler
         from pipeline.lyra.handlers.judge import JudgeHandler
         from pipeline.lyra.handlers.moderator import ModeratorHandler
         from pipeline.lyra.handlers.paper import PaperHandler
@@ -115,6 +116,7 @@ class ConvergenceOrchestrator:
         debate = DebateHandler(state, bus, semaphore)
         moderator = ModeratorHandler(state, bus, semaphore)
         paper = PaperHandler(state, bus, semaphore)
+        probative_images = ProbativeImagesHandler(state, bus, semaphore)
         fact_check = FactCheckHandler(state, bus, semaphore)
         presentation = PresentationHandler(state, bus, semaphore)
         image_gen = ImageGenerationHandler(state, bus, semaphore)
@@ -128,9 +130,9 @@ class ConvergenceOrchestrator:
         # -> convergence check -> (loop or saturate)
         # AllAnglesSaturated -> synthesis -> SynthesisReady -> debate
         # -> DebateComplete -> moderator -> ModeratorComplete -> paper
-        # -> PaperReady -> fact_check -> FactCheckComplete -> presentation
-        # -> PresentationChecked -> image_gen -> ImageGenComplete -> judge
-        # -> QualityPassed
+        # -> PaperReady -> probative_images -> ProbativeImagesReady -> fact_check
+        # -> FactCheckComplete -> presentation -> PresentationChecked
+        # -> image_gen -> ImageGenComplete -> judge -> QualityPassed
         all_handlers = [
             decomposition,
             search,
@@ -143,6 +145,7 @@ class ConvergenceOrchestrator:
             debate,
             moderator,
             paper,
+            probative_images,
             fact_check,
             presentation,
             image_gen,
@@ -212,9 +215,9 @@ class ConvergenceOrchestrator:
             # -> FindingsProduced -> convergence check -> (loop or saturate)
             # AllAnglesSaturated -> synthesis -> SynthesisReady -> debate
             # -> DebateComplete -> moderator -> ModeratorComplete -> paper
-            # -> PaperReady -> fact_check -> FactCheckComplete -> presentation
-            # -> PresentationChecked -> image_gen -> ImageGenComplete -> judge
-            # -> QualityPassed
+            # -> PaperReady -> probative_images -> ProbativeImagesReady -> fact_check
+            # -> FactCheckComplete -> presentation -> PresentationChecked
+            # -> image_gen -> ImageGenComplete -> judge -> QualityPassed
 
             # Wait for completion with deadline checks
             while not done_event.is_set():

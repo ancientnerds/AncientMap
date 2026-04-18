@@ -3,16 +3,16 @@
 import logging
 
 from pipeline.lyra.handlers import BaseHandler
-from pipeline.lyra.research_events import FactCheckComplete, PaperReady
+from pipeline.lyra.research_events import FactCheckComplete, ProbativeImagesReady
 
 logger = logging.getLogger(__name__)
 
 
 class FactCheckHandler(BaseHandler):
     def register(self):
-        self.bus.on(PaperReady, self._on_paper_ready)
+        self.bus.on(ProbativeImagesReady, self._on_paper_ready)
 
-    async def _on_paper_ready(self, event: PaperReady):
+    async def _on_paper_ready(self, event: ProbativeImagesReady):
         self.emit_sse({"type": "pipeline", "stage": "fact_check", "status": "start"})
 
         from pipeline.lyra.citation_verifier import verify_all_citations
