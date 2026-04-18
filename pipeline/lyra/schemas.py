@@ -260,3 +260,32 @@ CROSS_POLLINATION_SCHEMA = {
     },
     "required": ["cross_pollination"],
 }
+
+ILLUSTRATION_OPPORTUNITIES_SCHEMA: dict = {
+    "type": "object",
+    "required": ["opportunities"],
+    "properties": {
+        "opportunities": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "required": [
+                    "claim_index",
+                    "needs_image",
+                    "search_query",
+                    "what_image_must_show",
+                    "forbidden_elements",
+                    "rationale",
+                ],
+                "properties": {
+                    "claim_index": {"type": "integer", "minimum": 0},
+                    "needs_image": {"type": "boolean"},
+                    "search_query": {"type": "string"},
+                    "what_image_must_show": {"type": "string"},
+                    "forbidden_elements": {"type": "array", "items": {"type": "string"}},
+                    "rationale": {"type": "string"},
+                },
+            },
+        }
+    },
+}
