@@ -2858,3 +2858,27 @@
   border-radius: 3px;
   transition: background 0.4s;
 }
+
+/* --- Inline probative images within research-paper body --- */
+.theo-md-body img {
+  /* Centered, full-width within body, capped height so large portraits don't dominate */
+  display: block;
+  margin: 24px auto;
+  max-width: 100%;
+  max-height: 540px;
+  object-fit: contain;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.25);
+}
+.theo-md-body img + em,
+.theo-md-body p > em:only-child {
+  /* Caption line that immediately follows an image */
+  display: block;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 12.5px;
+  line-height: 1.5;
+  margin: -8px auto 24px;
+  max-width: 640px;
+  padding: 0 16px;
+}
