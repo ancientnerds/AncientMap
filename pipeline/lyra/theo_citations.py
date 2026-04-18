@@ -87,6 +87,9 @@ class CitationRegistry:
             snippet=snippet,
             date=date,
             domain=domain,
+            # Domain-based default. Search adapters / angle-audit LLM override
+            # this later via direct attribute assignment when they have better info.
+            reliability_tier=score_tier_by_domain(url),
             access_timestamp=datetime.now(UTC).isoformat(),
             search_query=search_query,
         )
@@ -180,6 +183,109 @@ class CitationRegistry:
 # ---------------------------------------------------------------------------
 # Citation audit
 # ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# Domain-based reliability tier scorer
+# ---------------------------------------------------------------------------
+
+# Mirror of the classification spirit in pipeline/lyra/research_stages.py:95-123
+# (_classify_source_type). Kept as a separate list here so CitationRegistry has a
+# default tier at registration time without the import risk.
+_TIER_1_DOMAINS: tuple[str, ...] = (
+    # Academic + institutional
+    ".edu",
+    ".ac.uk",
+    ".ac.jp",
+    ".ac.at",
+    ".ac.nz",
+    ".gov",
+    "doi.org",
+    "arxiv.org",
+    "jstor.org",
+    "academia.edu",
+    "semanticscholar.org",
+    "pubmed.ncbi.nlm.nih.gov",
+    "ncbi.nlm.nih.gov",
+    "pnas.org",
+    "plos.org",
+    "springer.com",
+    "link.springer.com",
+    "sciencedirect.com",
+    "cambridge.org",
+    "oup.com",
+    "nature.com",
+    "science.org",
+    "sciencemag.org",
+    "wiley.com",
+    "onlinelibrary.wiley.com",
+    "tandfonline.com",
+    "royalsocietypublishing.org",
+    "cell.com",
+    "biorxiv.org",
+    "medrxiv.org",
+    "frontiersin.org",
+    "dainst.org",
+)
+
+_TIER_2_DOMAINS: tuple[str, ...] = (
+    # Reference works
+    "wikipedia.org",
+    "britannica.com",
+    # Major museums / cultural institutions
+    "smithsonianmag.com",
+    "si.edu",
+    "penn.museum",
+    "britishmuseum.org",
+    "louvre.fr",
+    "metmuseum.org",
+    "archive.org",
+    # Quality science journalism
+    "nationalgeographic.com",
+    "scientificamerican.com",
+    "newscientist.com",
+    "ars-technica.com",
+    "arstechnica.com",
+    # Major English-language press
+    "bbc.co.uk",
+    "bbc.com",
+    "nytimes.com",
+    "theguardian.com",
+    "guardian.co.uk",
+    "reuters.com",
+    "apnews.com",
+    "washingtonpost.com",
+)
+
+
+def score_tier_by_domain(url: str) -> int:
+    """Return a reliability tier (1=academic, 2=reputable, 3=general) from a URL.
+
+    Used as the default `reliability_tier` at source-registration time. Pipeline
+    steps that have better information (search adapter `default_tier`, LLM
+    angle-audit) override this later.
+
+    Tier 1: peer-reviewed, .edu/.gov, DOI hosts, major publishers, preprint servers.
+    Tier 2: Wikipedia, Britannica, major museums, science journalism, wire services.
+    Tier 3: everything else (fallback).
+
+    Empty/invalid URLs return 3.
+    """
+    if not url:
+        return 3
+    lowered = url.lower()
+    # Strip scheme + optional www. to make substring checks robust
+    if "://" in lowered:
+        lowered = lowered.split("://", 1)[1]
+    lowered = lowered.removeprefix("www.")
+    # Tier 1 takes priority — check first
+    for domain in _TIER_1_DOMAINS:
+        if domain in lowered:
+            return 1
+    for domain in _TIER_2_DOMAINS:
+        if domain in lowered:
+            return 2
+    return 3
 
 
 # ---------------------------------------------------------------------------
@@ -322,8 +428,18 @@ def audit_citations(paper_text: str, registry: CitationRegistry) -> dict:
     """
     issues: list[str] = []
 
-    # All [N] markers found in the paper text
-    marker_values: list[int] = [int(m) for m in re.findall(r"\[(\d+)\]", paper_text)]
+    # Scan only the prose portion (everything before the ## References heading).
+    # The references list legitimately contains [N] prefixes for every declared
+    # reference; if we scanned the whole paper, every reference would count as
+    # "cited" and the audit would be idempotent to the prose but not to the
+    # References section. Making prose_only the single source of truth for ALL
+    # checks keeps the audit idempotent across "refs appended / not yet appended"
+    # states — so paper.py, judge.py, and the edit endpoint all agree.
+    refs_start = _find_references_heading(paper_text)
+    prose_only = paper_text[:refs_start] if refs_start is not None else paper_text
+
+    # All [N] markers found in the prose
+    marker_values: list[int] = [int(m) for m in re.findall(r"\[(\d+)\]", prose_only)]
     total_citations = len(marker_values)
     unique_cited_nums: set[int] = set(marker_values)
 
@@ -331,12 +447,12 @@ def audit_citations(paper_text: str, registry: CitationRegistry) -> dict:
     assigned_nums: set[int] = set(registry.reference_numbers.values())
     total_references = len(assigned_nums)
 
-    # 1. Invalid markers — [N] in text with no assigned reference
+    # 1. Invalid markers — [N] in prose with no assigned reference
     invalid_markers = sorted(unique_cited_nums - assigned_nums)
     for n in invalid_markers:
         issues.append(f"[{n}] cited in text but no matching reference assigned")
 
-    # 2. Orphaned references — assigned but never cited in text
+    # 2. Orphaned references — assigned but never cited in prose
     orphaned_refs = sorted(assigned_nums - unique_cited_nums)
     for n in orphaned_refs:
         issues.append(f"[{n}] assigned as reference but never cited in text")
@@ -375,10 +491,10 @@ def audit_citations(paper_text: str, registry: CitationRegistry) -> dict:
         "- ",
     )
 
-    # Split into sections by ## headings and track section for each paragraph
+    # Split prose into sections by ## headings and track section for each paragraph
     current_section = ""
     paragraphs_with_section: list[tuple[str, str]] = []
-    for block in paper_text.split("\n\n"):
+    for block in prose_only.split("\n\n"):
         block = block.strip()
         if not block:
             continue
@@ -402,10 +518,7 @@ def audit_citations(paper_text: str, registry: CitationRegistry) -> dict:
         )
 
     # 4. Unresolved [N - topic] placeholders — the LLM's cry-for-help when no
-    #    citation number was provided. Scan the prose only, not the References
-    #    section (which may legitimately contain brackets in titles).
-    refs_start = _find_references_heading(paper_text)
-    prose_only = paper_text[:refs_start] if refs_start is not None else paper_text
+    #    citation number was provided.
     placeholder_markers = detect_placeholder_markers(prose_only)
     if placeholder_markers:
         issues.append(f"{len(placeholder_markers)} unresolved [N - topic] placeholder(s) in prose")
@@ -446,3 +559,47 @@ def _find_references_heading(text: str) -> int | None:
         if idx != -1:
             return idx
     return None
+
+
+# ---------------------------------------------------------------------------
+# References-section parser (mirrors ancient-nerds-map/src/pages/
+# ResearchPaperPage.tsx:parseReferences — keep field names aligned)
+# ---------------------------------------------------------------------------
+
+# Match a single references-list line: "[N] Title — URL (accessed YYYY-MM-DD) [Tier]"
+# Dash variants accepted: em-dash (— U+2014), en-dash (– U+2013), ascii " - ".
+_REF_LINE_RE = re.compile(
+    r"^\[(?P<num>\d+)\]\s+(?P<title>.+?)\s+[—–-]\s+"
+    r"(?P<url>https?://\S+)"
+    r"(?:\s+\(accessed\s+(?P<accessed>\d{4}-\d{2}-\d{2})\))?"
+    r"(?:\s+\[(?P<tier>Academic|Reputable)\])?"
+    r"\s*$"
+)
+
+
+def parse_references_section(refs_text: str) -> list[dict]:
+    """Parse a `## References` body into structured dicts.
+
+    Input: the text AFTER the `## References` heading (the markdown list of refs).
+    Output: list of {num, title, url, accessed, tier_label} dicts, in input order.
+    Unparseable lines are skipped silently — they're preserved by the PATCH
+    handler via the raw `## References` split rather than by this parser.
+    """
+    out: list[dict] = []
+    for line in refs_text.splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        m = _REF_LINE_RE.match(stripped)
+        if not m:
+            continue
+        out.append(
+            {
+                "num": int(m.group("num")),
+                "title": m.group("title"),
+                "url": m.group("url"),
+                "accessed": m.group("accessed"),  # may be None
+                "tier_label": m.group("tier"),  # "Academic", "Reputable", or None
+            }
+        )
+    return out

@@ -50,10 +50,18 @@ class JudgeHandler(BaseHandler):
         self.emit_sse({"type": "status", "content": "Computing quality badge..."})
 
         # --- Citation audit (mechanical) ---
-        from pipeline.lyra.theo_citations import audit_citations
+        # Reuse the audit paper.py already computed during assembly. Re-running
+        # here let subtle state differences (e.g., References appended vs not)
+        # produce divergent audit results from the stored one, causing the
+        # observed "reference_integrity=0 despite audit.orphaned_refs=[]"
+        # inconsistency. Single source of truth now.
+        audit_result = self.state.audit_result
+        if not audit_result:
+            # Defensive fallback: paper assembly should always set this.
+            from pipeline.lyra.theo_citations import audit_citations
 
-        audit_result = audit_citations(self.state.paper_text, self.state.registry)
-        self.state.audit_result = audit_result
+            audit_result = audit_citations(self.state.paper_text, self.state.registry)
+            self.state.audit_result = audit_result
 
         # --- Compute metrics ---
         scores = {}

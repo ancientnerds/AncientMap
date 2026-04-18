@@ -972,29 +972,91 @@ async def edit_research(
         except (json.JSONDecodeError, TypeError):
             result = {}
 
-        result["report"] = body.report
-        result["edited_at"] = datetime.now(UTC).isoformat()
-
-        # Re-audit citations on the new text (mechanical check only)
+        # Renumber citations contiguously and re-audit. Pipeline-identical flow:
+        # (1) parse the References list the editor kept intact, (2) rebuild a
+        # real CitationRegistry from it, (3) run finalize_references on the
+        # body to renumber in first-occurrence order, (4) rewrite body + refs,
+        # (5) re-audit with the real registry. Any citation gap (e.g. ref [7]
+        # deleted inline but kept in refs list) is closed by construction, and
+        # refs no longer cited in prose are dropped from the bibliography.
+        #
+        # Falls back to verbatim storage + dummy-registry audit on any parse
+        # issue so unusual markdown can't break the editor.
         try:
-            from pipeline.lyra.theo_citations import CitationRegistry, audit_citations
+            from pipeline.lyra.theo_citations import (
+                CitationRegistry,
+                _find_references_heading,
+                audit_citations,
+                finalize_references,
+                parse_references_section,
+            )
+
+            refs_start = _find_references_heading(body.report)
+            if refs_start is None:
+                raise ValueError("no ## References heading — skip rebuild")
+
+            body_text = body.report[:refs_start].rstrip()
+            # Skip past the heading line itself
+            refs_tail = body.report[refs_start:]
+            refs_text = refs_tail.split("\n", 1)[1] if "\n" in refs_tail else ""
+
+            parsed = parse_references_section(refs_text)
+            if not parsed:
+                raise ValueError("references section had no parseable entries")
 
             registry = CitationRegistry()
-            # Register all [N] references found in the text
-            import re as _re
-
-            for num in {int(m) for m in _re.findall(r"\[(\d+)\]", body.report)}:
-                sid = f"ref_{num}"
-                registry.register_source(
-                    url=f"#ref-{num}",
-                    title=f"Reference {num}",
+            working_sid_to_num: dict[str, int] = {}
+            for entry in parsed:
+                sid = registry.register_source(
+                    url=entry["url"],
+                    title=entry["title"],
                     snippet="",
                 )
-                registry.reference_numbers[sid] = num
-            audit = audit_citations(body.report, registry)
-            result["audit"] = audit
+                # The editor-preserved numbering becomes the working number.
+                # finalize_references() will then renumber to contiguous [1..M].
+                working_sid_to_num[sid] = entry["num"]
+                # Preserve explicit tier labels the user or pipeline set; the
+                # domain scorer already populated a default during register_source.
+                if entry.get("tier_label") == "Academic":
+                    registry.sources[sid].reliability_tier = 1
+                elif entry.get("tier_label") == "Reputable":
+                    registry.sources[sid].reliability_tier = 2
+
+            renumbered_body, _final_map = finalize_references(
+                body_text, working_sid_to_num, registry
+            )
+            refs_md = registry.format_references_list()
+            rebuilt = (
+                f"{renumbered_body}\n\n## References\n\n{refs_md}" if refs_md else renumbered_body
+            )
+
+            result["report"] = rebuilt
+            result["audit"] = audit_citations(rebuilt, registry)
         except Exception as exc:
-            logger.warning("Citation re-audit failed for %s: %s", request_id, exc)
+            logger.warning(
+                "Citation renumber-on-save failed for %s (%s); storing verbatim",
+                request_id,
+                exc,
+            )
+            result["report"] = body.report
+            # Best-effort audit so the caller still gets a field.
+            try:
+                from pipeline.lyra.theo_citations import CitationRegistry, audit_citations
+
+                registry = CitationRegistry()
+                for num in {int(m) for m in re.findall(r"\[(\d+)\]", body.report)}:
+                    sid = f"ref_{num}"
+                    registry.register_source(
+                        url=f"#ref-{num}",
+                        title=f"Reference {num}",
+                        snippet="",
+                    )
+                    registry.reference_numbers[sid] = num
+                result["audit"] = audit_citations(body.report, registry)
+            except Exception as inner_exc:
+                logger.warning("Fallback audit also failed for %s: %s", request_id, inner_exc)
+
+        result["edited_at"] = datetime.now(UTC).isoformat()
 
         session.execute(
             text("UPDATE research_requests SET result_json = :result WHERE id = :id"),
