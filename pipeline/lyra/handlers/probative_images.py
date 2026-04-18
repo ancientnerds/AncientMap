@@ -25,6 +25,7 @@ from pipeline.lyra.research_events import PaperReady, ProbativeImagesReady
 from pipeline.lyra.research_state import ResearchPhase
 from pipeline.lyra.theo_image_captions import (
     find_section_for_claim,
+    find_section_for_claim_with_registry,
     image_markdown,
     insert_image_after_section,
 )
@@ -32,6 +33,40 @@ from pipeline.lyra.theo_image_captions import (
 logger = logging.getLogger(__name__)
 
 IMAGES_DIR = Path(__file__).resolve().parents[3] / "public" / "data" / "research-images"
+
+
+def _pool_candidates_for_source_ids(
+    pool: dict[str, list[dict]],
+    source_ids: list[str],
+    angles: list,
+) -> list:
+    """Collect ImageCandidate objects from pool entries for angles whose
+    source_ids intersect the claim's source_ids.
+
+    `angles` is state.angles; each angle has `.id` and `.source_ids`.
+    """
+    from pipeline.lyra.image_fetcher import ImageCandidate
+
+    relevant_angle_ids: set[str] = set()
+    claim_sid_set = set(source_ids or [])
+    if claim_sid_set:
+        for a in angles:
+            angle_sids = set(getattr(a, "source_ids", []) or [])
+            if angle_sids & claim_sid_set:
+                relevant_angle_ids.add(a.id)
+    else:
+        # No source_ids on the claim — grab candidates from every angle
+        relevant_angle_ids = {a.id for a in angles}
+
+    out: list[ImageCandidate] = []
+    seen_urls: set[str] = set()
+    for angle_id in relevant_angle_ids:
+        for d in pool.get(angle_id, []):
+            if d.get("url") in seen_urls:
+                continue
+            seen_urls.add(d.get("url") or "")
+            out.append(ImageCandidate.from_dict(d))
+    return out
 
 
 class ProbativeImagesHandler(BaseHandler):
@@ -74,26 +109,40 @@ class ProbativeImagesHandler(BaseHandler):
 
         embedded: list[dict] = []
 
-        # 3. For each opportunity, fetch → metadata gate → VLM gate → download → insert
+        # 3. For each opportunity, resolve section → gather candidates → metadata gate → VLM gate → download → insert
         for opp in opportunities:
-            claim = (
-                claims[opp["claim_index"]].get("claim", "")
-                if opp["claim_index"] < len(claims)
-                else ""
-            )
+            if opp["claim_index"] >= len(claims):
+                continue
+            claim_entry = claims[opp["claim_index"]]
+            claim = claim_entry.get("claim", "")
+            source_ids = claim_entry.get("source_ids", []) or []
             if not claim:
                 continue
-            section_name = find_section_for_claim(self.state.paper_text, claim)
+
+            # Preferred: resolve section via citation markers (survives paraphrasing)
+            section_name = find_section_for_claim_with_registry(
+                self.state.paper_text, source_ids, self.state.registry
+            )
+            # Legacy fallback: try substring match (handles claims with no registered sources)
+            if section_name is None:
+                section_name = find_section_for_claim(self.state.paper_text, claim)
             if section_name is None:
                 logger.info("[probative] no section matched for claim %s", opp["claim_index"])
                 continue
 
-            cands = await fetch_candidates(
-                opp["search_query"],
-                limit_per_source=settings.probative_images_candidates_per_opportunity,
+            # Primary: pull from the image candidate pool populated during angle image research
+            cands = _pool_candidates_for_source_ids(
+                self.state.image_candidate_pool, source_ids, self.state.angles
             )
-            # Metadata gate
+            # Apply metadata gate against must_show
             cands = [c for c in cands if metadata_gate_passes(c, opp["what_image_must_show"])]
+            # Fallback: if pool yielded nothing relevant, fetch on-demand (old behavior)
+            if not cands:
+                cands = await fetch_candidates(
+                    opp["search_query"],
+                    limit_per_source=settings.probative_images_candidates_per_opportunity,
+                )
+                cands = [c for c in cands if metadata_gate_passes(c, opp["what_image_must_show"])]
             if not cands:
                 continue
 
@@ -185,6 +234,7 @@ class ProbativeImagesHandler(BaseHandler):
                 {
                     "claim": c.get("claim", ""),
                     "confidence": c.get("confidence", "medium"),
+                    "source_ids": c.get("source_ids", []) or [],
                 }
             )
         for c in self.state.synthesis.get("consensus_claims", []):
@@ -192,6 +242,7 @@ class ProbativeImagesHandler(BaseHandler):
                 {
                     "claim": c.get("claim", ""),
                     "confidence": c.get("confidence", "medium"),
+                    "source_ids": c.get("source_ids", []) or [],
                 }
             )
         return out
