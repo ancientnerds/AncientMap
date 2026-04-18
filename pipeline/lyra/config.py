@@ -179,10 +179,10 @@ class LyraSettings(BaseSettings):
 
     # Probative-images feature — when False, skip the whole new stage
     probative_images_enabled: bool = True
-    # Max images per paper (hard cap regardless of specialist output)
-    probative_images_max_per_paper: int = 8
-    # Candidates to fetch per opportunity before gating
-    probative_images_candidates_per_opportunity: int = 5
+    # Candidates to fetch per opportunity before gating (raised for density)
+    probative_images_candidates_per_opportunity: int = 20
+    # Target minimum images per substantial paragraph (soft target, not hard cap)
+    images_per_paragraph_target: int = 3
     # When True, pass the image candidate pool for this section's angles into the
     # paper-writer prompt and allow the writer to emit [[IMG:candidate_id]] markers
     # that PIH resolves. Markers the writer doesn't use fall through to PIH's

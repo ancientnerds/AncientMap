@@ -1,6 +1,7 @@
 """Runs the Illustration Specialist LLM pass that picks probative images.
 
-Given a paper's moderated claims, returns a list of image opportunities.
+Given a paper's paragraphs, returns a list of image opportunities with
+multiple opportunities per paragraph — targeting 3+ per substantial paragraph.
 """
 
 from __future__ import annotations
@@ -16,8 +17,8 @@ logger = logging.getLogger(__name__)
 _PROMPT_PATH = Path(__file__).parent / "prompts" / "illustration_specialist.txt"
 
 _REQUIRED_FIELDS = (
-    "claim_index",
-    "needs_image",
+    "paragraph_index",
+    "keyword",
     "search_query",
     "what_image_must_show",
     "forbidden_elements",
@@ -30,7 +31,6 @@ def parse_opportunities(raw: str) -> list[dict]:
 
     - Strips markdown fences if present.
     - Drops entries missing required fields.
-    - Drops entries where needs_image is false (they add nothing downstream).
     - Returns [] on any parse failure.
     """
     if not raw or not raw.strip():
@@ -42,7 +42,6 @@ def parse_opportunities(raw: str) -> list[dict]:
     try:
         data = json.loads(cleaned)
     except (json.JSONDecodeError, ValueError):
-        # Try to extract the first {...} block
         m = re.search(r"\{[\s\S]*\}", cleaned)
         if not m:
             return []
@@ -55,80 +54,147 @@ def parse_opportunities(raw: str) -> list[dict]:
     for o in opps:
         if not all(k in o for k in _REQUIRED_FIELDS):
             continue
-        if not o.get("needs_image"):
-            continue
         out.append(o)
     return out
 
 
-_BATCH_SIZE = 1
+def split_paper_into_paragraphs(paper_text: str) -> list[dict]:
+    """Split paper text into paragraphs with section context.
+
+    Skips abstract, introduction, references, and sources sections.
+    Returns list of {text, paragraph_index, section}.
+    """
+    _SKIP_SECTIONS = frozenset({"abstract", "introduction", "references", "sources"})
+
+    lines = paper_text.split("\n")
+    paragraphs: list[dict] = []
+    current_section = ""
+    paragraph_index = 0
+
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        heading_match = re.match(r"^##\s+(.+)$", line)
+        if heading_match:
+            current_section = heading_match.group(1).strip().lower()
+            i += 1
+            continue
+
+        if line.strip() and current_section not in _SKIP_SECTIONS:
+            para_lines = []
+            while i < len(lines) and lines[i].strip():
+                para_lines.append(lines[i])
+                i += 1
+            para_text = "\n".join(para_lines)
+            if len(para_text) > 80 and not para_text.startswith("!["):
+                paragraphs.append({
+                    "text": para_text,
+                    "paragraph_index": paragraph_index,
+                    "section": current_section,
+                })
+                paragraph_index += 1
+        else:
+            i += 1
+
+    return paragraphs
 
 
-async def _select_for_batch(
-    batch_claims: list[dict],
-    offset: int,
+_MAX_KEYWORD_CALLS_IN_FLIGHT = 20
+
+
+async def _select_for_paragraph(
+    paragraph: dict,
+    question: str,
+    other_paragraphs_text: str,
+    image_pool_text: str,
+    writer_markers_text: str,
     settings,
+    semaphore: asyncio.Semaphore,
 ) -> list[dict]:
-    """Run the specialist on one batch of claims. Returns opportunities with
-    claim_index remapped to the ABSOLUTE index in the original full claim list.
+    """Run the specialist on one paragraph to extract keyword opportunities.
 
-    Returns empty list on any LLM/parse failure — caller concatenates.
+    Returns list of opportunities with paragraph_index, keyword, search_query,
+    what_image_must_show, forbidden_elements, rationale.
     """
     from pipeline.lyra.minimax_shared import minimax_chat_anthropic
 
     system = _PROMPT_PATH.read_text(encoding="utf-8")
-    numbered = "\n".join(
-        f"{i}. [{c.get('confidence', 'medium')}] {c.get('claim', '')}"
-        for i, c in enumerate(batch_claims)
+    section = paragraph["section"]
+    para_text = paragraph["text"]
+
+    user_msg = (
+        f"## Research Question / Thesis\n{question}\n\n"
+        f"## Current Section: {section}\n\n"
+        f"## Paragraph to Analyze\n{para_text}\n\n"
+        f"## Other Paragraphs in This Paper (for deduplication)\n{other_paragraphs_text}\n\n"
+        f"## Image Candidate Pool Available (already retrieved during research)\n{image_pool_text}\n\n"
+        f"## Writer-Placed Images (do not duplicate these)\n{writer_markers_text}\n\n"
+        f"Analyze the paragraph above and identify every concept that would genuinely "
+        f"benefit from a visual. Return ALL visualizable concepts — minimum 3."
     )
-    user_msg = f"## Claims\n\n{numbered}\n"
-    raw = await asyncio.to_thread(
-        minimax_chat_anthropic,
-        system,
-        user_msg,
-        4096,  # trivial for 1-claim batches
-        settings,
-        temperature=0.1,
-    )
+
+    async with semaphore:
+        raw = await asyncio.to_thread(
+            minimax_chat_anthropic,
+            system,
+            user_msg,
+            8192,  # more room for multiple opportunities per paragraph
+            settings,
+            temperature=0.1,
+        )
+
     opps = parse_opportunities(raw)
-    # Remap relative → absolute claim_index
-    remapped: list[dict] = []
     for o in opps:
-        if not (0 <= o["claim_index"] < len(batch_claims)):
-            continue
-        o2 = dict(o)
-        o2["claim_index"] = o["claim_index"] + offset
-        remapped.append(o2)
-    return remapped
+        o["paragraph_index"] = paragraph["paragraph_index"]
+        o["paragraph_text"] = para_text[:200]
+        o["section"] = section
+
+    return opps
 
 
 async def select_opportunities(
-    claims: list[dict],
+    paper_text: str,
+    question: str,
+    other_paragraphs_text: str,
+    image_pool_text: str,
+    writer_markers_text: str,
     settings,
 ) -> list[dict]:
-    """Pick which claims merit probative images, running all calls in parallel.
+    """Pick which paragraph concepts merit probative images, running all calls in parallel.
 
-    `claims` is the flat list produced by `_collect_all_claims()` in paper.py.
+    `paper_text` is the full paper markdown.
+    `question` is the research question/thesis for disambiguation.
+    `other_paragraphs_text` is a summary of other paragraphs for deduplication.
+    `image_pool_text` is the available image candidate catalog.
+    `writer_markers_text` is the list of writer-placed [[IMG:short]] markers.
 
-    Each claim runs as an independent LLM call in parallel — 1 claim per call
-    for maximum quality and no token budget pressure.
+    Each paragraph runs as an independent LLM call in parallel for maximum throughput.
     """
-    if not claims:
+    paragraphs = split_paper_into_paragraphs(paper_text)
+    if not paragraphs:
         return []
 
-    batches: list[tuple[int, list[dict]]] = []
-    for start in range(0, len(claims), _BATCH_SIZE):
-        batches.append((start, claims[start : start + _BATCH_SIZE]))
+    semaphore = asyncio.Semaphore(_MAX_KEYWORD_CALLS_IN_FLIGHT)
 
     results = await asyncio.gather(
-        *[_select_for_batch(batch, offset, settings) for offset, batch in batches],
+        *[
+            _select_for_paragraph(
+                p, question, other_paragraphs_text,
+                image_pool_text, writer_markers_text,
+                settings, semaphore,
+            )
+            for p in paragraphs
+        ],
         return_exceptions=True,
     )
 
     out: list[dict] = []
     for r in results:
         if isinstance(r, Exception):
-            logger.warning("select_opportunities: one batch failed: %s", r)
+            logger.warning("select_opportunities: one paragraph failed: %s", r)
             continue
         out.extend(r)
+
+    logger.info("select_opportunities: %d opportunities from %d paragraphs",
+                len(out), len(paragraphs))
     return out

@@ -199,7 +199,6 @@ export default function ResearchPaperPage() {
         const siteId = href.slice(5)
         return <a {...props} href={`/site.html?id=${siteId}`} target="_blank" rel="noopener noreferrer">{children}</a>
       }
-      // Same-page anchors (citation jumps) — no target swap, smooth scroll.
       if (href?.startsWith('#')) {
         return (
           <a
@@ -211,7 +210,6 @@ export default function ResearchPaperPage() {
               const id = href.slice(1)
               const target = document.getElementById(id)
               if (target) {
-                // Expand the ancestor <details> if collapsed, then scroll.
                 let node: HTMLElement | null = target
                 while (node) {
                   if (node.tagName === 'DETAILS') {
@@ -229,6 +227,11 @@ export default function ResearchPaperPage() {
       }
       return <a {...props} href={href} target="_blank" rel="noopener noreferrer">{children}</a>
     },
+    img: ({ src, alt }: React.ImgHTMLAttributes<HTMLImageElement>) => (
+      <span data-gallery={alt?.startsWith('gallery:') ? alt.slice(8).split('|')[0] : ''}>
+        <img src={src || ''} alt={alt || ''} style={{ maxHeight: 400, borderRadius: 4 }} />
+      </span>
+    ),
   }), [])
 
   // Derived values from the loaded paper

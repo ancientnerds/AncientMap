@@ -59,10 +59,33 @@ def image_markdown(
     image_path_web: str,
     rationale: str,
 ) -> str:
-    """Build the full markdown block: alt-texted image + caption line."""
+    """Build the full markdown block: alt-texted image + caption line + source link."""
     alt = (cand.title or "Research image").replace("]", "")
     caption = build_caption(cand, rationale)
-    return f"![{alt}]({image_path_web})\n\n{caption}\n"
+    source_url = getattr(cand, 'license_url', '') or getattr(cand, 'url', '')
+    url_part = f"\n[Source]({source_url})" if source_url else ""
+    return f"![{alt}]({image_path_web})\n\n{caption}{url_part}\n"
+
+
+def image_markdown_with_group(
+    cand: ImageCandidate,
+    image_path_web: str,
+    rationale: str,
+    group_id: str,
+    is_first: bool,
+    is_last: bool,
+) -> str:
+    """image_markdown + gallery ID embedded in alt text for frontend grouping.
+
+    The alt field gets 'gallery:GROUP_ID' prefix so the frontend GalleryImage
+    component can group consecutive images into a horizontal-scroll carousel.
+    """
+    alt_text = getattr(cand, 'title', '') or 'Research image'
+    alt_with_gallery = f"gallery:{group_id}|{alt_text}"
+    caption = build_caption(cand, rationale)
+    source_url = getattr(cand, 'license_url', '') or getattr(cand, 'url', '')
+    url_part = f"\n[Source]({source_url})" if source_url else ""
+    return f"![{alt_with_gallery}]({image_path_web})\n\n{caption}{url_part}\n"
 
 
 def find_section_for_claim(paper_text: str, claim_text: str) -> str | None:
