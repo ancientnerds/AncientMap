@@ -61,30 +61,74 @@ def parse_opportunities(raw: str) -> list[dict]:
     return out
 
 
-async def select_opportunities(
-    claims: list[dict],
+_BATCH_SIZE = 1
+
+
+async def _select_for_batch(
+    batch_claims: list[dict],
+    offset: int,
     settings,
 ) -> list[dict]:
-    """Call MiniMax M2.7 to pick which claims merit probative images.
+    """Run the specialist on one batch of claims. Returns opportunities with
+    claim_index remapped to the ABSOLUTE index in the original full claim list.
 
-    `claims` is the flat list produced by `_collect_all_claims()` in paper.py
-    (each with keys claim, citations, confidence, source_ids, type).
+    Returns empty list on any LLM/parse failure — caller concatenates.
     """
     from pipeline.lyra.minimax_shared import minimax_chat_anthropic
 
     system = _PROMPT_PATH.read_text(encoding="utf-8")
-
     numbered = "\n".join(
-        f"{i}. [{c.get('confidence', 'medium')}] {c.get('claim', '')}" for i, c in enumerate(claims)
+        f"{i}. [{c.get('confidence', 'medium')}] {c.get('claim', '')}"
+        for i, c in enumerate(batch_claims)
     )
     user_msg = f"## Claims\n\n{numbered}\n"
-
     raw = await asyncio.to_thread(
         minimax_chat_anthropic,
         system,
         user_msg,
-        4096,
+        4096,  # trivial for 1-claim batches
         settings,
         temperature=0.1,
     )
-    return parse_opportunities(raw)
+    opps = parse_opportunities(raw)
+    # Remap relative → absolute claim_index
+    remapped: list[dict] = []
+    for o in opps:
+        if not (0 <= o["claim_index"] < len(batch_claims)):
+            continue
+        o2 = dict(o)
+        o2["claim_index"] = o["claim_index"] + offset
+        remapped.append(o2)
+    return remapped
+
+
+async def select_opportunities(
+    claims: list[dict],
+    settings,
+) -> list[dict]:
+    """Pick which claims merit probative images, running all calls in parallel.
+
+    `claims` is the flat list produced by `_collect_all_claims()` in paper.py.
+
+    Each claim runs as an independent LLM call in parallel — 1 claim per call
+    for maximum quality and no token budget pressure.
+    """
+    if not claims:
+        return []
+
+    batches: list[tuple[int, list[dict]]] = []
+    for start in range(0, len(claims), _BATCH_SIZE):
+        batches.append((start, claims[start : start + _BATCH_SIZE]))
+
+    results = await asyncio.gather(
+        *[_select_for_batch(batch, offset, settings) for offset, batch in batches],
+        return_exceptions=True,
+    )
+
+    out: list[dict] = []
+    for r in results:
+        if isinstance(r, Exception):
+            logger.warning("select_opportunities: one batch failed: %s", r)
+            continue
+        out.extend(r)
+    return out
