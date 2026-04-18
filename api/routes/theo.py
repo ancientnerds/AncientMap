@@ -1305,7 +1305,7 @@ async def get_tts_status_public(slug: str):
     with get_session() as session:
         paper = session.query(ResearchRequest).filter(
             ResearchRequest.slug == slug,
-            ResearchRequest.is_public == True,
+            ResearchRequest.is_public,
         ).first()
         if not paper:
             raise HTTPException(status_code=404, detail="Paper not found")
