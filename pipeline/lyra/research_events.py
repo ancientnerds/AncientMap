@@ -90,6 +90,17 @@ class PaperReady(ResearchEvent):
 
 
 @dataclass
+class ProbativeImagesReady(ResearchEvent):
+    """Emitted after probative images are fetched, gated, and inserted.
+
+    Payload: count of images successfully embedded. The paper text on
+    state.paper_text has already been mutated by the handler.
+    """
+
+    embedded_count: int = 0
+
+
+@dataclass
 class FactCheckComplete(ResearchEvent):
     """Fact-checking stage has verified citations in the paper."""
 

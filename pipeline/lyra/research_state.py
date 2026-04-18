@@ -132,6 +132,11 @@ class ResearchState:
     audit_result: dict = field(default_factory=dict)
     quality_score: dict = field(default_factory=dict)
 
+    # Probative-image stage output — list of dicts, each with keys:
+    # {claim_index, claim_text, image_path, source_url, title, artist,
+    #  license, license_url, rationale, section_heading}
+    probative_images: list[dict] = field(default_factory=list)
+
     # Metadata
     total_tokens: int = 0
     llm_call_count: int = 0
