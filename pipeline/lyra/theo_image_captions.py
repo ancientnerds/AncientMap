@@ -65,6 +65,34 @@ def image_markdown(
     return f"![{alt}]({image_path_web})\n\n{caption}\n"
 
 
+def find_section_for_claim(paper_text: str, claim_text: str) -> str | None:
+    """Return the heading name of the ## section containing the claim, or None.
+
+    Matching strategy:
+    1. Look for the claim's first substantive 40-char phrase verbatim in prose.
+    2. Walk back to find the nearest preceding ## heading.
+
+    Uses literal substring match (no fuzzy matching) — claims are emitted into
+    prose by the paper handler with minor edits at most; if the match fails,
+    the handler just skips that opportunity rather than guessing.
+    """
+    if not claim_text:
+        return None
+    # Use the first distinctive chunk; skip short framing words
+    words = claim_text.strip().split()
+    if len(words) < 3:
+        return None
+    needle = " ".join(words[:6])[:60]
+    idx = paper_text.find(needle)
+    if idx == -1:
+        return None
+    # Walk backward to find the most recent ## heading
+    heading_iter = list(re.finditer(r"^##\s+(.+)$", paper_text[:idx], re.MULTILINE))
+    if not heading_iter:
+        return None
+    return heading_iter[-1].group(1).strip()
+
+
 def insert_image_after_section(
     paper_text: str,
     section_heading: str,

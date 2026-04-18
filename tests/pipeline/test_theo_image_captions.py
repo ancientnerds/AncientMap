@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+from pipeline.lyra.image_fetcher import ImageCandidate
 from pipeline.lyra.theo_image_captions import (
     build_caption,
+    find_section_for_claim,
     insert_image_after_section,
 )
-from pipeline.lyra.image_fetcher import ImageCandidate
 
 
 def _cand(**kw):
@@ -67,3 +68,18 @@ def test_insert_image_no_op_when_section_missing():
     paper = "# Title\n\n## Intro\n\nOnly section."
     out = insert_image_after_section(paper, "Findings", "![x](/x.jpg)")
     assert out == paper
+
+
+def test_find_section_for_claim_matches_by_distinctive_phrase():
+    paper = (
+        "# Title\n\n"
+        "## Sky Beings\n\nThe Pyramid Texts at Saqqara describe divine beings [1].\n\n"
+        "## Stonework\n\nPuma Punku's H-blocks show precision [2]."
+    )
+    claim = "The Pyramid Texts at Saqqara describe divine beings"
+    assert find_section_for_claim(paper, claim) == "Sky Beings"
+
+
+def test_find_section_for_claim_returns_none_when_not_found():
+    paper = "# T\n\n## Only\n\nPlaceholder."
+    assert find_section_for_claim(paper, "unrelated claim text") is None

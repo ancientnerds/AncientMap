@@ -177,6 +177,13 @@ class LyraSettings(BaseSettings):
     # per-section structured corrections) or "anthropic" (Opus + web_search tool)
     article_web_backend: str = "minimax"
 
+    # Probative-images feature — when False, skip the whole new stage
+    probative_images_enabled: bool = True
+    # Max images per paper (hard cap regardless of specialist output)
+    probative_images_max_per_paper: int = 8
+    # Candidates to fetch per opportunity before gating
+    probative_images_candidates_per_opportunity: int = 5
+
     @classmethod
     def _resolve_env_fallbacks(cls) -> None:
         """Normalize legacy env var names before settings load."""
