@@ -78,8 +78,8 @@ def _build_image_pool_text(pool: dict[str, list[dict]]) -> str:
     for _angle_id, cands in pool.items():
         for d in cands or []:
             cand = ImageCandidate.from_dict(d) if isinstance(d, dict) else d
-            title = getattr(cand, 'title', '') or 'Untitled'
-            source = getattr(cand, 'source', '') or ''
+            title = getattr(cand, "title", "") or "Untitled"
+            source = getattr(cand, "source", "") or ""
             lines.append(f"- {title} ({source})")
     if not lines:
         return "(no images retrieved yet)"
@@ -118,11 +118,11 @@ class ProbativeImagesHandler(BaseHandler):
         self.emit_sse({"type": "pipeline", "stage": "probative_images", "status": "start"})
 
         # Build context strings for the illustration specialist
-        question = getattr(self.state, 'question', '') or ''
-        paper_text = self.state.paper_text or ''
+        question = getattr(self.state, "question", "") or ""
+        paper_text = self.state.paper_text or ""
         other_paras = _summarize_other_paragraphs(paper_text)
         image_pool_text = _build_image_pool_text(
-            getattr(self.state, 'image_candidate_pool', {}) or {}
+            getattr(self.state, "image_candidate_pool", {}) or {}
         )
         writer_markers_text = _build_writer_markers_text(paper_text)
 
@@ -204,7 +204,7 @@ class ProbativeImagesHandler(BaseHandler):
         short_to_cand: dict[str, dict] = {}
         for _angle_id, cands in (self.state.image_candidate_pool or {}).items():
             for c in cands or []:
-                url = c.get("url", "") if isinstance(c, dict) else getattr(c, 'url', '')
+                url = c.get("url", "") if isinstance(c, dict) else getattr(c, "url", "")
                 if not url:
                     continue
                 short = hashlib.sha1(url.encode()).hexdigest()[:10]
@@ -238,12 +238,12 @@ class ProbativeImagesHandler(BaseHandler):
                     "keyword": "writer-image",
                     "image_path": str(final_path),
                     "web_path": web_path,
-                    "source_url": getattr(cand, 'url', ''),
-                    "source_name": getattr(cand, 'source', ''),
-                    "title": getattr(cand, 'title', ''),
-                    "artist": getattr(cand, 'artist', ''),
-                    "license": getattr(cand, 'license', ''),
-                    "license_url": getattr(cand, 'license_url', ''),
+                    "source_url": getattr(cand, "url", ""),
+                    "source_name": getattr(cand, "source", ""),
+                    "title": getattr(cand, "title", ""),
+                    "artist": getattr(cand, "artist", ""),
+                    "license": getattr(cand, "license", ""),
+                    "license_url": getattr(cand, "license_url", ""),
                     "rationale": rationale,
                     "section_heading": "[inline]",
                     "search_query": "",
@@ -332,7 +332,7 @@ async def _process_one_opportunity(
     if not cands:
         fetched = await fetch_candidates(
             search_query,
-            limit_per_source=getattr(settings, 'probative_images_candidates_per_opportunity', 20),
+            limit_per_source=getattr(settings, "probative_images_candidates_per_opportunity", 20),
         )
         cands = [c for c in fetched if metadata_gate_passes(c, must_show)]
 
@@ -343,7 +343,7 @@ async def _process_one_opportunity(
     # Vision gate: try ALL candidates, stop at first accept
     accepted_cand = None
     for cand in cands:
-        url_hash = hashlib.md5(getattr(cand, 'url', str(id(cand))).encode()).hexdigest()[:16]
+        url_hash = hashlib.md5(getattr(cand, "url", str(id(cand))).encode()).hexdigest()[:16]
         probe_path = paper_dir / f"_probe_p{para_idx}_{url_hash}.bin"
         ok = await download_candidate(cand, probe_path)
         if not ok:
@@ -359,7 +359,9 @@ async def _process_one_opportunity(
             probe_path.unlink(missing_ok=True)
 
     if not accepted_cand:
-        logger.info("[probative] no candidate survived VLM for para %s keyword '%s'", para_idx, keyword)
+        logger.info(
+            "[probative] no candidate survived VLM for para %s keyword '%s'", para_idx, keyword
+        )
         return None
 
     # Final download
@@ -387,12 +389,12 @@ async def _process_one_opportunity(
         "keyword": keyword,
         "image_path": str(final_path),
         "web_path": web_path,
-        "source_url": getattr(accepted_cand, 'url', ''),
-        "source_name": getattr(accepted_cand, 'source', ''),
-        "title": getattr(accepted_cand, 'title', ''),
-        "artist": getattr(accepted_cand, 'artist', ''),
-        "license": getattr(accepted_cand, 'license', ''),
-        "license_url": getattr(accepted_cand, 'license_url', ''),
+        "source_url": getattr(accepted_cand, "url", ""),
+        "source_name": getattr(accepted_cand, "source", ""),
+        "title": getattr(accepted_cand, "title", ""),
+        "artist": getattr(accepted_cand, "artist", ""),
+        "license": getattr(accepted_cand, "license", ""),
+        "license_url": getattr(accepted_cand, "license_url", ""),
         "rationale": rationale,
         "section_heading": section_name,
         "search_query": search_query,

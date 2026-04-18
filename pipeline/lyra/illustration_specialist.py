@@ -87,11 +87,13 @@ def split_paper_into_paragraphs(paper_text: str) -> list[dict]:
                 i += 1
             para_text = "\n".join(para_lines)
             if len(para_text) > 80 and not para_text.startswith("!["):
-                paragraphs.append({
-                    "text": para_text,
-                    "paragraph_index": paragraph_index,
-                    "section": current_section,
-                })
+                paragraphs.append(
+                    {
+                        "text": para_text,
+                        "paragraph_index": paragraph_index,
+                        "section": current_section,
+                    }
+                )
                 paragraph_index += 1
         else:
             i += 1
@@ -179,9 +181,13 @@ async def select_opportunities(
     results = await asyncio.gather(
         *[
             _select_for_paragraph(
-                p, question, other_paragraphs_text,
-                image_pool_text, writer_markers_text,
-                settings, semaphore,
+                p,
+                question,
+                other_paragraphs_text,
+                image_pool_text,
+                writer_markers_text,
+                settings,
+                semaphore,
             )
             for p in paragraphs
         ],
@@ -195,6 +201,7 @@ async def select_opportunities(
             continue
         out.extend(r)
 
-    logger.info("select_opportunities: %d opportunities from %d paragraphs",
-                len(out), len(paragraphs))
+    logger.info(
+        "select_opportunities: %d opportunities from %d paragraphs", len(out), len(paragraphs)
+    )
     return out

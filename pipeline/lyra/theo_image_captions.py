@@ -62,7 +62,7 @@ def image_markdown(
     """Build the full markdown block: alt-texted image + caption line + source link."""
     alt = (cand.title or "Research image").replace("]", "")
     caption = build_caption(cand, rationale)
-    source_url = getattr(cand, 'license_url', '') or getattr(cand, 'url', '')
+    source_url = getattr(cand, "license_url", "") or getattr(cand, "url", "")
     url_part = f"\n[Source]({source_url})" if source_url else ""
     return f"![{alt}]({image_path_web})\n\n{caption}{url_part}\n"
 
@@ -80,10 +80,10 @@ def image_markdown_with_group(
     The alt field gets 'gallery:GROUP_ID' prefix so the frontend GalleryImage
     component can group consecutive images into a horizontal-scroll carousel.
     """
-    alt_text = getattr(cand, 'title', '') or 'Research image'
+    alt_text = getattr(cand, "title", "") or "Research image"
     alt_with_gallery = f"gallery:{group_id}|{alt_text}"
     caption = build_caption(cand, rationale)
-    source_url = getattr(cand, 'license_url', '') or getattr(cand, 'url', '')
+    source_url = getattr(cand, "license_url", "") or getattr(cand, "url", "")
     url_part = f"\n[Source]({source_url})" if source_url else ""
     return f"![{alt_with_gallery}]({image_path_web})\n\n{caption}{url_part}\n"
 
