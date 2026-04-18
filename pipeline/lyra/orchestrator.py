@@ -114,6 +114,12 @@ STEPS = {
         False,
         "Aggregated {n} library sources",
     ),
+    "tts": (
+        "pipeline.lyra.tts_generator",
+        "process_pending_tts",
+        True,
+        "Generated audio for {n} papers",
+    ),
 }
 
 # Ordered step list matching the full pipeline sequence
@@ -130,6 +136,7 @@ STEP_ORDER = [
     "backfill",
     "identify",
     "library",
+    "tts",
 ]
 
 # Steps that run less often than every cycle. Value = run every N cycles.
@@ -1710,6 +1717,32 @@ def _run_migrations(engine) -> None:
         conn.execute(
             text(
                 "CREATE INDEX IF NOT EXISTS idx_library_sources_source_types ON library_sources USING gin (source_types)"
+            )
+        )
+
+        # TTS audio queue: tts_requests table
+        conn.execute(
+            text(
+                "CREATE TABLE IF NOT EXISTS tts_requests ("
+                "  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),"
+                "  paper_id UUID NOT NULL,"
+                "  user_id VARCHAR(255) NOT NULL,"
+                "  requested_at TIMESTAMP DEFAULT NOW(),"
+                "  status VARCHAR(20) NOT NULL DEFAULT 'pending',"
+                "  audio_url TEXT,"
+                "  chars_generated INTEGER,"
+                "  error_message TEXT"
+                ")"
+            )
+        )
+        conn.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS idx_tts_requests_status_requested ON tts_requests (status, requested_at)"
+            )
+        )
+        conn.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS idx_tts_requests_paper_user ON tts_requests (paper_id, user_id)"
             )
         )
 

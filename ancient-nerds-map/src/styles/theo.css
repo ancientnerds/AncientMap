@@ -2925,3 +2925,25 @@
   max-width: 640px;
   padding: 0 16px;
 }
+
+/* ─── TTS Audio Player ─────────────────────────────────────────── */
+
+.tts-audio-player {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tts-progress-bar {
+  width: 60px;
+  height: 3px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.tts-progress-fill {
+  height: 100%;
+  background: var(--brand-primary);
+  transition: width 0.5s linear;
+}

@@ -67,9 +67,11 @@ async def check_image_quota() -> int:
                 logger.warning("MiniMax quota check failed: %s", resp.status_code)
                 return -1
             data = resp.json()
-            for item in data.get("data", {}).get("detail", []):
-                if item.get("model") == "image-01":
-                    return item.get("remains", 0)
+            for item in data.get("model_remains", []):
+                if item.get("model_name") == "image-01":
+                    used = item.get("current_interval_usage_count", 0)
+                    total = item.get("current_interval_total_count", 0)
+                    return max(0, total - used)
             return -1
         except Exception as exc:
             logger.warning("MiniMax quota check error: %s", exc)

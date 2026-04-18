@@ -4,7 +4,7 @@
  * SEO-friendly, shareable, renders full paper with attribution.
  */
 
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import AiNoticeBanner from '../components/layout/AiNoticeBanner'
@@ -32,6 +32,13 @@ interface PaperData {
   sites_found: number
   tools_used: number
   duration_ms: number | null
+}
+
+interface TtsStatus {
+  has_audio: boolean
+  audio_url: string | null
+  chars_generated: number | null
+  status: string | null
 }
 
 type RefGroup = 'Academic' | 'Reputable' | 'PDF' | 'Video' | 'Other'
@@ -139,6 +146,11 @@ export default function ResearchPaperPage() {
   const [paper, setPaper] = useState<PaperData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [ttsStatus, setTtsStatus] = useState<TtsStatus | null>(null)
+  const [isPlaying, setIsPlaying] = useState(false)
+  const [audioProgress, setAudioProgress] = useState(0)
+  const audioRef = useRef<HTMLAudioElement | null>(null)
+  const progressRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const slug = useMemo(() => {
     const params = new URLSearchParams(window.location.search)
@@ -182,6 +194,37 @@ export default function ResearchPaperPage() {
       .finally(() => setLoading(false))
   }, [slug])
 
+  // Fetch TTS audio status when slug is available
+  useEffect(() => {
+    if (!slug) return
+    fetch(`/api/theo/public/${slug}/tts-status`)
+      .then(r => r.ok ? r.json() : null)
+      .then((data: TtsStatus | null) => {
+        setTtsStatus(data)
+      })
+      .catch(() => setTtsStatus(null))
+  }, [slug])
+
+  // Set up Media Session when audio is ready
+  useEffect(() => {
+    if (!ttsStatus?.has_audio || !ttsStatus.audio_url || !paper) return
+
+    if (!('mediaSession' in navigator)) return
+    const title = paper.result?.title || paper.question
+    navigator.mediaSession!.metadata = new MediaMetadata({
+      title,
+      artist: 'Ancient Nerds / English Expressive Narrator',
+    })
+    navigator.mediaSession!.playbackState = isPlaying ? 'playing' : 'none'
+
+    navigator.mediaSession!.setActionHandler('play', () => {
+      audioRef.current?.play()
+    })
+    navigator.mediaSession!.setActionHandler('pause', () => {
+      audioRef.current?.pause()
+    })
+  }, [ttsStatus, paper, isPlaying])
+
   const handleShare = useCallback(() => {
     if (navigator.share) {
       navigator.share({
@@ -192,6 +235,45 @@ export default function ResearchPaperPage() {
       navigator.clipboard.writeText(window.location.href)
     }
   }, [paper])
+
+  const handlePlayPause = useCallback(() => {
+    if (!ttsStatus?.has_audio || !ttsStatus.audio_url) return
+
+    const audioUrl = ttsStatus.audio_url.startsWith('http')
+      ? ttsStatus.audio_url
+      : `${window.location.origin}${ttsStatus.audio_url}`
+
+    if (!audioRef.current) {
+      // Create audio element on first play (required for browser autoplay policy)
+      audioRef.current = new Audio(audioUrl)
+      audioRef.current.addEventListener('ended', () => {
+        setIsPlaying(false)
+        setAudioProgress(0)
+        if (progressRef.current) clearInterval(progressRef.current)
+        if ('mediaSession' in navigator) navigator.mediaSession!.playbackState = 'none'
+      })
+      audioRef.current.addEventListener('timeupdate', () => {
+        if (audioRef.current) {
+          setAudioProgress((audioRef.current.currentTime / audioRef.current.duration) * 100)
+        }
+      })
+    }
+
+    if (isPlaying) {
+      audioRef.current.pause()
+      setIsPlaying(false)
+      if (progressRef.current) clearInterval(progressRef.current)
+    } else {
+      audioRef.current.play()
+      setIsPlaying(true)
+      // Poll progress every 500ms
+      progressRef.current = setInterval(() => {
+        if (audioRef.current) {
+          setAudioProgress((audioRef.current.currentTime / audioRef.current.duration) * 100)
+        }
+      }, 500)
+    }
+  }, [ttsStatus, isPlaying])
 
   const mdComponents = useMemo(() => ({
     a: ({ href, children, ...props }: React.AnchorHTMLAttributes<HTMLAnchorElement>) => {
@@ -304,6 +386,28 @@ export default function ResearchPaperPage() {
             <button className="theo-report-share" onClick={handleShare} title="Share paper" aria-label="Share paper">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
             </button>
+            {ttsStatus?.has_audio && (
+              <div className="tts-audio-player">
+                <button
+                  className="theo-report-share"
+                  onClick={handlePlayPause}
+                  title={isPlaying ? 'Pause narration' : 'Play narration'}
+                  aria-label={isPlaying ? 'Pause narration' : 'Play narration'}
+                  style={{ color: isPlaying ? 'var(--brand-primary)' : undefined }}
+                >
+                  {isPlaying ? (
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+                  ) : (
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg>
+                  )}
+                </button>
+                {isPlaying && audioProgress > 0 && (
+                  <div className="tts-progress-bar">
+                    <div className="tts-progress-fill" style={{ width: `${audioProgress}%` }} />
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
 

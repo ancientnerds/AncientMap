@@ -9,7 +9,9 @@ Endpoints:
   DELETE /theo/research/{id}        — Delete a request (queued/completed/failed)
   POST   /theo/research/{id}/publish   — Publish to public library
   POST   /theo/research/{id}/unpublish — Remove from public library
-  GET    /theo/public               — Browse public research papers
+  POST   /theo/research/{id}/generate-audio — Queue TTS audio generation
+  GET    /theo/research/{id}/tts-status    — Check TTS status (authed)
+  GET    /theo/public/{slug}/tts-status   — Check TTS status (public, for frontend)
   GET    /theo/public/{slug}        — Read a single public paper
   POST   /theo/check-duplicates     — Find similar public papers
   GET    /theo/me                   — User profile with fresh Discord roles
@@ -29,7 +31,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 
-from api.services.jwt_auth import get_current_user, get_optional_user
+from api.services.jwt_auth import get_current_user, get_optional_user, require_researcher
 from api.services.rate_limiter import RateLimiter, get_client_ip
 from api.services.theo_config import (
     EFFORT_CONFIG,
@@ -38,7 +40,7 @@ from api.services.theo_config import (
     THEO_RESEARCHER_ROLE_ID,
 )
 from api.services.theo_worker import get_live_events
-from pipeline.database import DiscordUser, get_session
+from pipeline.database import DiscordUser, ResearchRequest, TtsRequest, get_session
 
 DISCORD_GUILD_ID = os.getenv("DISCORD_GUILD_ID", "932330696956063765")
 DISCORD_BOT_TOKEN = os.getenv("DISCORD_BOT_TOKEN", "")
@@ -1193,3 +1195,130 @@ async def check_duplicates(body: DuplicateCheckRequest, req: Request):
         matches = []
 
     return {"matches": matches}
+
+
+# ---------------------------------------------------------------------------
+# TTS Audio Endpoints
+# ---------------------------------------------------------------------------
+
+
+@router.post("/research/{request_id}/generate-audio")
+async def request_audio(
+    request_id: str,
+    user: DiscordUser = Depends(require_researcher),
+):
+    """Request TTS audio generation for a published research paper.
+
+    Queues the request in the TtsRequest FIFO table. The orchestrator picks
+    it up on the next cycle, generates audio paragraph by paragraph (stripping
+    citations), and saves the MP3. Users can poll GET /research/{id}/tts-status
+    for progress.
+    """
+    _validate_uuid(request_id)
+
+    with get_session() as session:
+        # Check paper exists, is public, and is completed
+        paper = session.query(ResearchRequest).filter(
+            ResearchRequest.id == request_id
+        ).first()
+        if not paper:
+            raise HTTPException(status_code=404, detail="Paper not found")
+        if not paper.is_public:
+            raise HTTPException(status_code=400, detail="Paper is not published")
+        if paper.status != "completed":
+            raise HTTPException(status_code=400, detail="Paper is not yet completed")
+
+        # Check for duplicate pending request from same user
+        existing = session.query(TtsRequest).filter(
+            TtsRequest.paper_id == request_id,
+            TtsRequest.user_id == str(user.id),
+            TtsRequest.status.in_(["pending", "generating", "no_quota"]),
+        ).first()
+        if existing:
+            raise HTTPException(status_code=409, detail="You already have a pending audio request for this paper")
+
+        # Create queue entry
+        tts_req = TtsRequest(
+            paper_id=request_id,
+            user_id=str(user.id),
+            status="pending",
+        )
+        session.add(tts_req)
+        session.commit()
+
+        # Queue position
+        queue_position = session.query(TtsRequest).filter(
+            TtsRequest.status.in_(["pending", "no_quota"]),
+            TtsRequest.requested_at <= tts_req.requested_at,
+        ).count()
+
+        return {
+            "tts_request_id": str(tts_req.id),
+            "status": "queued",
+            "queue_position": queue_position,
+            "message": "Audio generation queued. Check back at GET /theo/research/{id}/tts-status",
+        }
+
+
+@router.get("/research/{request_id}/tts-status")
+async def get_tts_status_authed(
+    request_id: str,
+    user: DiscordUser = Depends(get_current_user),
+):
+    """Authenticated: check TTS status for a paper the current user requested."""
+    _validate_uuid(request_id)
+
+    with get_session() as session:
+        tts_req = session.query(TtsRequest).filter(
+            TtsRequest.paper_id == request_id,
+            TtsRequest.user_id == str(user.id),
+        ).order_by(TtsRequest.requested_at.desc()).first()
+
+        if not tts_req:
+            raise HTTPException(status_code=404, detail="No audio request found for this paper")
+
+        queue_position = None
+        if tts_req.status in ("pending", "no_quota"):
+            queue_position = session.query(TtsRequest).filter(
+                TtsRequest.status.in_(["pending", "no_quota"]),
+                TtsRequest.requested_at <= tts_req.requested_at,
+            ).count()
+
+        return {
+            "tts_request_id": str(tts_req.id),
+            "status": tts_req.status,
+            "audio_url": tts_req.audio_url,
+            "chars_generated": tts_req.chars_generated,
+            "queue_position": queue_position,
+            "error_message": tts_req.error_message,
+            "requested_at": tts_req.requested_at.isoformat() if tts_req.requested_at else None,
+        }
+
+
+@router.get("/public/{slug}/tts-status")
+async def get_tts_status_public(slug: str):
+    """Public: check TTS status for a paper by slug (no auth required).
+
+    Used by the frontend to show the play button when audio is ready.
+    Returns the most recent completed TtsRequest for the paper, if any.
+    """
+    with get_session() as session:
+        paper = session.query(ResearchRequest).filter(
+            ResearchRequest.slug == slug,
+            ResearchRequest.is_public == True,
+        ).first()
+        if not paper:
+            raise HTTPException(status_code=404, detail="Paper not found")
+
+        tts_req = session.query(TtsRequest).filter(
+            TtsRequest.paper_id == str(paper.id),
+            TtsRequest.status == "done",
+        ).order_by(TtsRequest.requested_at.desc()).first()
+
+        return {
+            "has_audio": tts_req is not None,
+            "audio_url": tts_req.audio_url if tts_req else None,
+            "chars_generated": tts_req.chars_generated if tts_req else None,
+            "status": tts_req.status if tts_req else None,
+        }
+

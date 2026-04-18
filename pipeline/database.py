@@ -1356,6 +1356,36 @@ class ResearchRequest(Base):
         return f"<ResearchRequest {self.id} ({self.status})>"
 
 
+class TtsRequest(Base):
+    """FIFO queue for TTS audio generation requests on research papers."""
+
+    __tablename__ = "tts_requests"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    paper_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=False,
+    )
+    user_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    requested_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    status: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="pending"
+    )
+    audio_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    chars_generated: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    __table_args__ = (
+        Index("idx_tts_requests_status_requested", "status", "requested_at"),
+        Index("idx_tts_requests_paper_user", "paper_id", "user_id"),
+    )
+
+    def __repr__(self) -> str:
+        return f"<TtsRequest {self.id} ({self.status})>"
+
+
 # =============================================================================
 # Helper Functions
 # =============================================================================
