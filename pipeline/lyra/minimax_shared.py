@@ -215,6 +215,36 @@ def minimax_chat_anthropic(
     return ""
 
 
+MINIMAX_VLM_PATH = "/v1/coding_plan/vlm"
+MINIMAX_VLM_TIMEOUT = 90.0
+
+
+def minimax_vlm(client: httpx.Client, image_bytes: bytes, prompt: str) -> str:
+    """Call MiniMax's Coding-Plan VLM endpoint for image understanding.
+
+    Returns the model's `content` string (caller is responsible for parsing
+    JSON out of it). Returns empty string on any HTTP error so callers can
+    treat absence as a reject verdict.
+    """
+    import base64
+
+    data_uri = f"data:image/jpeg;base64,{base64.b64encode(image_bytes).decode('ascii')}"
+    try:
+        resp = client.post(
+            MINIMAX_VLM_PATH,
+            json={"prompt": prompt, "image_url": data_uri},
+            timeout=MINIMAX_VLM_TIMEOUT,
+        )
+        if resp.status_code != 200:
+            logger.warning("MiniMax VLM HTTP %s: %s", resp.status_code, resp.text[:200])
+            return ""
+        data = resp.json()
+        return data.get("content", "") or ""
+    except Exception as exc:
+        logger.warning("MiniMax VLM failed: %s", exc)
+        return ""
+
+
 def structured_llm_call(
     system: str,
     user_message: str,
