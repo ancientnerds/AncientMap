@@ -13,7 +13,7 @@ from pathlib import Path
 from pipeline.lyra.config import _get_settings
 from pipeline.lyra.handlers import BaseHandler
 from pipeline.lyra.illustration_specialist import select_opportunities
-from pipeline.lyra.image_fetcher import fetch_candidates, download_candidate
+from pipeline.lyra.image_fetcher import download_candidate, fetch_candidates
 from pipeline.lyra.image_gates import (
     build_vlm_prompt,
     metadata_gate_passes,
