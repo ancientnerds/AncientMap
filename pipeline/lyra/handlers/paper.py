@@ -178,8 +178,12 @@ class PaperHandler(BaseHandler):
         connecting_prose, other_side_prose, assessment = await asyncio.gather(
             connecting_task, other_side_task, assessment_task
         )
-        logger.info("[paper] Connecting: %d chars, Other Side: %d chars, Assessment: %d chars",
-                    len(connecting_prose), len(other_side_prose), len(assessment))
+        logger.info(
+            "[paper] Connecting: %d chars, Other Side: %d chars, Assessment: %d chars",
+            len(connecting_prose),
+            len(other_side_prose),
+            len(assessment),
+        )
 
         # ---------------------------------------------------------------
         # Step 6: Assemble paper

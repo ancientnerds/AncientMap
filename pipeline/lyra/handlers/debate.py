@@ -96,7 +96,9 @@ class DebateHandler(BaseHandler):
                     c["challenger_id"] = spec.id
                 return challenges
 
-            challenge_results = await asyncio.gather(*[_challenge_one(spec) for spec in active_specs])
+            challenge_results = await asyncio.gather(
+                *[_challenge_one(spec) for spec in active_specs]
+            )
             round_challenges: list[dict] = []
             for challenges in challenge_results:
                 round_challenges.extend(challenges)

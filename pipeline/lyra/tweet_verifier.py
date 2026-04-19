@@ -446,7 +446,9 @@ def _web_verify_items(items: list[NewsItem], settings: LyraSettings) -> int:
         from pipeline.lyra.blocked_domains import BLOCKED_DOMAINS
 
         all_results = [
-            r for r in all_results if urlparse(r.url).netloc.replace("www.", "") not in BLOCKED_DOMAINS
+            r
+            for r in all_results
+            if urlparse(r.url).netloc.replace("www.", "") not in BLOCKED_DOMAINS
         ]
         if not all_results:
             continue
