@@ -412,11 +412,32 @@ def _web_verify_items(items: list[NewsItem], settings: LyraSettings) -> int:
     checked = 0
 
     for item in eligible:
-        # Use post_text (truncated to 150 chars) — has specific names, dates, details
-        # Full post_text is too long for search; headline alone is too vague
-        query = (item.post_text or item.headline or "")[:150]
-        results = minimax_search(client, query)
-        if not results:
+        # Generate specific search queries from facts using LLM
+        # (pattern mirrors angle_image_queries.py for consistency)
+        queries: list[str] = []
+        try:
+            from pipeline.lyra.story_web_queries import generate_queries_for_item
+
+            queries = generate_queries_for_item(item.post_text or "", item.facts or [], settings)
+        except Exception:
+            pass
+
+        # Fall back to raw post_text if query generation failed
+        if not queries:
+            queries = [(item.post_text or item.headline or "")[:150]]
+
+        # Run each query through minimax_search and collect results
+        all_results: list = []
+        seen_urls: set[str] = set()
+
+        for query in queries:
+            results = minimax_search(client, query)
+            for r in results:
+                if r.url not in seen_urls:
+                    all_results.append(r)
+                    seen_urls.add(r.url)
+
+        if not all_results:
             continue
 
         # Filter blocked domains
@@ -424,22 +445,22 @@ def _web_verify_items(items: list[NewsItem], settings: LyraSettings) -> int:
 
         from pipeline.lyra.blocked_domains import BLOCKED_DOMAINS
 
-        results = [
-            r for r in results if urlparse(r.url).netloc.replace("www.", "") not in BLOCKED_DOMAINS
+        all_results = [
+            r for r in all_results if urlparse(r.url).netloc.replace("www.", "") not in BLOCKED_DOMAINS
         ]
-        if not results:
+        if not all_results:
             continue
 
         # Save web search sources IMMEDIATELY — don't wait for LLM verdict
         existing = item.web_sources or []
         seen = {s["url"] for s in existing if isinstance(s, dict)}
-        for r in results[:5]:
+        for r in all_results[:5]:
             if r.url not in seen:
                 existing.append({"title": r.title, "url": r.url, "snippet": r.snippet})
                 seen.add(r.url)
         item.web_sources = existing
 
-        search_text = "\n".join(f"- [{r.title}]({r.url}): {r.snippet}" for r in results[:5])
+        search_text = "\n".join(f"- [{r.title}]({r.url}): {r.snippet}" for r in all_results[:5])
         facts_text = "\n".join(f"- {f}" for f in (item.facts or [])[:5])
 
         user_msg = (
