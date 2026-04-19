@@ -6595,7 +6595,6 @@ a.popup-window-btn {
   overflow: hidden;
   text-overflow: ellipsis;
   min-width: 0;
-  max-width: 110px;
   transition: color 0.2s ease;
 }
 
