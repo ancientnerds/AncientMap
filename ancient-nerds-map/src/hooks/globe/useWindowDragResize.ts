@@ -77,8 +77,9 @@ export function useWindowDragResize({
           newY = startPosRef.current.y - heightChange
         }
 
+        // Skip clamping on axes being resized — clamping fights the resize direction
         const clampX = !direction.includes('e') && !direction.includes('w')
-        const clampY = !direction.includes('s') && !direction.includes('n')
+        const clampY = !direction.includes('n') && !direction.includes('s')
         if (clampX) newX = Math.max(0, Math.min(newX, window.innerWidth - newWidth))
         if (clampY) newY = Math.max(0, Math.min(newY, window.innerHeight - newHeight))
 
