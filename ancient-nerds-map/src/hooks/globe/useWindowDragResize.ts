@@ -77,8 +77,10 @@ export function useWindowDragResize({
           newY = startPosRef.current.y - heightChange
         }
 
-        newX = Math.max(0, Math.min(newX, window.innerWidth - newWidth))
-        newY = Math.max(0, Math.min(newY, window.innerHeight - newHeight))
+        const clampX = !direction.includes('e') && !direction.includes('w')
+        const clampY = !direction.includes('s') && !direction.includes('n')
+        if (clampX) newX = Math.max(0, Math.min(newX, window.innerWidth - newWidth))
+        if (clampY) newY = Math.max(0, Math.min(newY, window.innerHeight - newHeight))
 
         onWidthChange(newWidth)
         onHeightChange(newHeight)
