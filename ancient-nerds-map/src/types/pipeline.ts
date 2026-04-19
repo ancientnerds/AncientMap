@@ -55,6 +55,11 @@ export const PIPELINE_STAGES: PipelineNodeDef[] = [
   { id: 'paper_assembly', label: 'Paper Assembly', sublabel: 'Academic formatting + citation audit' },
   { id: 'quality_judge', label: 'Quality Judge', sublabel: 'Verification + backward routing' },
   { id: 'image_generation', label: 'Illustrations', sublabel: 'Generating cover image' },
+  // V2 Convergence Pipeline stages
+  { id: 'decomposition', label: 'Decomposition', sublabel: 'Angle planning' },
+  { id: 'cross_pollination', label: 'Cross-Pollination', sublabel: 'Interdisciplinary sharing' },
+  { id: 'presentation', label: 'Presentation', sublabel: 'Format check' },
+  { id: 'fact_check', label: 'Fact Check', sublabel: 'Citation verification' },
 ]
 
 export interface ToolDef {

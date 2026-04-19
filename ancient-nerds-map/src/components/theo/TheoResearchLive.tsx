@@ -149,57 +149,73 @@ export default function TheoResearchLive({ requestId, question, startedAt, onClo
     return () => document.removeEventListener('keydown', handler)
   }, [onClose])
 
-  // SSE connection
+  // SSE connection with reconnection on unexpected close
   useEffect(() => {
     const controller = new AbortController()
     const token = localStorage.getItem('an_auth_token')
+    const MAX_RETRIES = 5
+    const BASE_DELAY = 2000
 
-    async function connectSSE() {
-      try {
-        const headers: Record<string, string> = { Accept: 'text/event-stream' }
-        if (token) headers.Authorization = `Bearer ${token}`
+    async function connectWithRetry() {
+      let retries = 0
 
-        const resp = await fetch(
-          `${config.api.baseUrl}/theo/research/${requestId}/stream`,
-          { headers, signal: controller.signal }
-        )
+      while (true) {
+        try {
+          const headers: Record<string, string> = { Accept: 'text/event-stream' }
+          if (token) headers.Authorization = `Bearer ${token}`
 
-        if (!resp.ok || !resp.body) return
+          const resp = await fetch(
+            `${config.api.baseUrl}/theo/research/${requestId}/stream`,
+            { headers, signal: controller.signal }
+          )
 
-        const reader = resp.body.getReader()
-        const decoder = new TextDecoder()
-        let buffer = ''
+          if (!resp.ok || !resp.body) break
 
-        while (true) {
-          const { done: readerDone, value } = await reader.read()
-          if (readerDone) break
+          const reader = resp.body.getReader()
+          const decoder = new TextDecoder()
+          let buffer = ''
 
-          buffer += decoder.decode(value, { stream: true })
-          const lines = buffer.split('\n')
-          buffer = lines.pop() || ''
+          while (true) {
+            const { done: readerDone, value } = await reader.read()
+            if (readerDone) break
 
-          let currentEventType = ''
-          for (const line of lines) {
-            if (line === '') {
-              currentEventType = ''
-            } else if (line.startsWith('event: ')) {
-              currentEventType = line.slice(7).trim()
-            } else if (line.startsWith('data: ')) {
-              try {
-                const data = JSON.parse(line.slice(6))
-                handleEvent(currentEventType || data.type, data)
-              } catch {
-                // ignore parse errors
+            buffer += decoder.decode(value, { stream: true })
+            const lines = buffer.split('\n')
+            buffer = lines.pop() || ''
+
+            let currentEventType = ''
+            for (const line of lines) {
+              if (line === '') {
+                currentEventType = ''
+              } else if (line.startsWith('event: ')) {
+                currentEventType = line.slice(7).trim()
+              } else if (line.startsWith('data: ')) {
+                try {
+                  const data = JSON.parse(line.slice(6))
+                  handleEvent(currentEventType || data.type, data)
+                } catch {
+                  // ignore parse errors
+                }
               }
             }
           }
+        } catch {
+          // abort or network error
         }
-      } catch {
-        // abort or network error — ignore
+
+        // Check if we should stop reconnecting
+        // eslint-disable-next-line react-hooks/exhaustive-props
+        if (controller.signal.aborted) break
+
+        retries++
+        if (retries > MAX_RETRIES) break
+
+        const delay = BASE_DELAY * Math.pow(2, retries - 1)
+        await new Promise(r => setTimeout(r, delay))
       }
     }
 
-    connectSSE()
+    connectWithRetry()
     return () => controller.abort()
   }, [requestId])
 

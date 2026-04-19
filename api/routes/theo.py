@@ -661,14 +661,15 @@ async def stream_research(request_id: str, req: Request):
         while idle_count < max_idle:
             events = get_live_events(request_id)
             if cursor < len(events):
-                for evt in events[cursor:]:
+                new_events = events[cursor:]
+                for evt in new_events:
                     event_type = evt.get("type", "progress")
                     yield f"event: {event_type}\ndata: {json.dumps(evt)}\n\n"
                 cursor = len(events)
                 idle_count = 0
 
-                # Check if we've reached a terminal event
-                if any(e.get("type") in ("done", "error") for e in events[cursor - 1 :]):
+                # Close immediately on terminal event
+                if new_events and new_events[-1].get("type") in ("done", "error"):
                     return
             else:
                 idle_count += 1
