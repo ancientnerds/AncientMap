@@ -61,20 +61,25 @@ export function useWindowDragResize({
           newWidth = Math.max(minWidth, startDimsRef.current.width + deltaX)
         }
         if (direction.includes('w')) {
+          // Dragging west (left) → left edge moves right → width shrinks, right edge fixed
           const widthChange = Math.min(deltaX, startDimsRef.current.width - minWidth)
           newWidth = startDimsRef.current.width - widthChange
           newX = startPosRef.current.x + widthChange
         }
+        if (direction.includes('e')) {
+          // Dragging east (right) → right edge moves right → width grows, left edge fixed
+          newWidth = Math.max(minWidth, startDimsRef.current.width + deltaX)
+        }
         if (direction.includes('s')) {
-          // Dragging south (down) → bottom edge moves down → height grows, top stays
+          // Dragging south (down) → bottom edge moves down → height grows, top stays fixed
           newHeight = Math.max(minHeight, startDimsRef.current.height + deltaY)
-          // newY unchanged (top edge is fixed)
         }
         if (direction.includes('n')) {
-          // Dragging north (up) → top edge moves up → height grows, top moves up
-          const heightChange = Math.min(deltaY, startDimsRef.current.height - minHeight)
-          newHeight = startDimsRef.current.height - heightChange
-          newY = startPosRef.current.y - heightChange
+          // Dragging north (up) → top edge moves up → height grows, bottom stays fixed
+          // deltaY negative when dragging up → -deltaY = positive height change
+          const heightChange = Math.max(-(startDimsRef.current.height - minHeight), deltaY)
+          newHeight = startDimsRef.current.height + heightChange
+          newY = startPosRef.current.y + heightChange
         }
 
         // Skip clamping on axes being resized — clamping fights the resize direction
