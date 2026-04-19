@@ -39,6 +39,7 @@ import { config } from './config'
 import { apiDetailToSiteData } from './utils/siteApi'
 import { BRAND_NAME, BRAND_SUBTITLE, BRAND_ASSETS } from './constants/brand'
 import { OfflineProvider, useOffline } from './contexts/OfflineContext'
+import { AuthProvider } from './contexts/AuthContext'
 import { offlineFetch } from './services/OfflineFetch'
 import { isDemoMode, registerAppDemoApi } from './utils/demoApi'
 import { normalizeForSearch, periodToYear, extractCountry } from './utils/searchUtils'
@@ -2134,10 +2135,12 @@ function AppContent() {
  */
 function App() {
   return (
-    <OfflineProvider>
-      <AppContent />
-      <AchievementToast />
-    </OfflineProvider>
+    <AuthProvider>
+      <OfflineProvider>
+        <AppContent />
+        <AchievementToast />
+      </OfflineProvider>
+    </AuthProvider>
   )
 }
 
