@@ -1079,9 +1079,7 @@ def register_commands(bot: discord.Client) -> None:
     # -------------------------------------------------------------------
     # /lyra [tier] — Challenge Lyra to a duel
     # -------------------------------------------------------------------
-    @bot.tree.command(
-        name="lyra", description="Challenge Lyra to a card duel"
-    )
+    @bot.tree.command(name="lyra", description="Challenge Lyra to a card duel")
     @app_commands.describe(tier="Difficulty tier (1-4, defaults to list if omitted)")
     @app_commands.checks.cooldown(1, 5.0)
     async def lyra_command(interaction: discord.Interaction, tier: int | None = None):
@@ -1095,9 +1093,7 @@ def register_commands(bot: discord.Client) -> None:
 
             with get_session() as session:
                 user = (
-                    session.query(DiscordUser)
-                    .filter(DiscordUser.discord_id == discord_id)
-                    .first()
+                    session.query(DiscordUser).filter(DiscordUser.discord_id == discord_id).first()
                 )
                 if not user:
                     await interaction.followup.send(
@@ -1177,9 +1173,8 @@ def register_commands(bot: discord.Client) -> None:
                 elif status_text == "loss":
                     line = f"~~{cfg['description']}~~ ❌ Lost today"
                 else:
-                    reward_preview = (
-                        f"Win: {cfg['win_credits']}cr/{cfg['win_xp']}XP"
-                        + (f" + {cfg['win_pack'].title()} Pack" if cfg["win_pack"] else "")
+                    reward_preview = f"Win: {cfg['win_credits']}cr/{cfg['win_xp']}XP" + (
+                        f" + {cfg['win_pack'].title()} Pack" if cfg["win_pack"] else ""
                     )
                     line = f"{cfg['description']}\n*{reward_preview}*"
 
@@ -1247,9 +1242,7 @@ class LyraView(discord.ui.View):
     def _make_callback(self, tier: int):
         async def callback(interaction: discord.Interaction):
             if str(interaction.user.id) != self.discord_id:
-                await interaction.response.send_message(
-                    "Not your Lyra duel.", ephemeral=True
-                )
+                await interaction.response.send_message("Not your Lyra duel.", ephemeral=True)
                 return
 
             await interaction.response.defer(ephemeral=True)

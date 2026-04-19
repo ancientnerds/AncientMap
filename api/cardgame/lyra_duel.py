@@ -49,7 +49,9 @@ def _build_lyra_deck(session: Session, tier: int) -> list[CardStats]:
     return list(cards)
 
 
-def _get_player_deck(session: Session, user: DiscordUser) -> tuple[list[CardStats], CardDeck | None]:
+def _get_player_deck(
+    session: Session, user: DiscordUser
+) -> tuple[list[CardStats], CardDeck | None]:
     """Fetch the player's active deck, or their best available deck."""
     deck_row = (
         session.query(CardDeck)
@@ -148,7 +150,9 @@ def resolve_lyra_duel(
     # Build Lyra's deck
     lyra_deck = _build_lyra_deck(session, tier)
     if len(lyra_deck) < 5:
-        raise ValueError(f"Lyra's deck is not ready yet (only {len(lyra_deck)} cards available). Try again later.")
+        raise ValueError(
+            f"Lyra's deck is not ready yet (only {len(lyra_deck)} cards available). Try again later."
+        )
 
     # Resolve battle using the existing engine
     battle_seed = f"lyra_{tier}_{user.id}_{datetime.now(UTC).isoformat()}"
