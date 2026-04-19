@@ -729,16 +729,16 @@ async def search_sites(
             us.period_start, us.period_name, us.description, us.country, us.source_url,
             cs.card_description,
             CASE
-                WHEN us.name_normalized = :norm THEN 1
-                WHEN replace(us.name_normalized, ' ', '') = :spaceless THEN 2
+                WHEN unaccent(us.name_normalized) = :norm THEN 1
+                WHEN replace(unaccent(us.name_normalized), ' ', '') = :spaceless THEN 2
                 ELSE 3
             END AS rank
         FROM unified_sites us
         LEFT JOIN card_stats cs ON cs.site_id = us.id
-        WHERE us.name_normalized = :norm
-           OR replace(us.name_normalized, ' ', '') = :spaceless
-           OR us.name_normalized ILIKE :pattern ESCAPE '\\'
-           OR replace(us.name_normalized, ' ', '') ILIKE :spaceless_pattern ESCAPE '\\'
+        WHERE unaccent(us.name_normalized) = :norm
+           OR replace(unaccent(us.name_normalized), ' ', '') = :spaceless
+           OR unaccent(us.name_normalized) ILIKE :pattern ESCAPE '\\'
+           OR replace(unaccent(us.name_normalized), ' ', '') ILIKE :spaceless_pattern ESCAPE '\\'
         ORDER BY (cs.card_description IS NULL), rank, us.name
         LIMIT :limit
     """)
@@ -1088,10 +1088,10 @@ async def get_site_detail(
                    cs.best_wiki_url, cs.source_language
             FROM unified_sites us
             LEFT JOIN card_stats cs ON cs.site_id = us.id
-            WHERE us.name ILIKE :name
-               OR us.name_normalized = LOWER(:name)
-               OR REPLACE(us.name_normalized, ' ', '') = LOWER(REPLACE(:name, ' ', ''))
-               OR us.id IN (SELECT site_id FROM unified_site_names WHERE name ILIKE :name)
+            WHERE unaccent(us.name) ILIKE unaccent(:name)
+               OR unaccent(us.name_normalized) = LOWER(unaccent(:name))
+               OR REPLACE(unaccent(us.name_normalized), ' ', '') = LOWER(REPLACE(unaccent(:name), ' ', ''))
+               OR us.id IN (SELECT site_id FROM unified_site_names WHERE unaccent(name) ILIKE unaccent(:name))
             LIMIT 1
         """)
         result = db.execute(query, {"name": site_id})

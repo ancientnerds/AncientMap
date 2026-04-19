@@ -224,7 +224,7 @@ def search_sites(
 
     if query:
         conditions.append(
-            "(s.name ILIKE :q OR s.description ILIKE :q OR s.name_normalized ILIKE :q_norm)"
+            "(unaccent(s.name) ILIKE unaccent(:q) OR s.description ILIKE :q OR unaccent(s.name_normalized) ILIKE unaccent(:q_norm))"
         )
         q_safe = _escape_ilike(query)
         params["q"] = f"%{q_safe}%"
@@ -250,7 +250,7 @@ def search_sites(
         LEFT JOIN source_meta sm ON s.source_id = sm.id
         WHERE {where}
         ORDER BY
-            CASE WHEN s.name ILIKE :q THEN 0 ELSE 1 END,
+            CASE WHEN unaccent(s.name) ILIKE unaccent(:q) THEN 0 ELSE 1 END,
             sm.priority ASC NULLS LAST,
             s.period_start ASC NULLS LAST
         LIMIT :limit

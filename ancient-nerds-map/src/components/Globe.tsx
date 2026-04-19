@@ -309,6 +309,10 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
     setFrozenSite,
   })
 
+  // News feed open state ref for animation loop (avoids stale closure)
+  const newsFeedOpenRef = useRef(isNewsFeedOpen)
+  useEffect(() => { newsFeedOpenRef.current = isNewsFeedOpen }, [isNewsFeedOpen])
+
   // Highlighted Sites: list highlighted sites state and rendering
   const highlightedSitesHook = useHighlightedSites({
     refs,
@@ -681,6 +685,7 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
       listHighlightedPositionsRef, highlightFrozenRef, frozenSiteRef,
       frozenTooltipPosRef, highlightGlowsRef, measurementLabelsRef,
       measurementMarkersRef, proximityCenterRef, lastMousePosRef,
+      isNewsFeedOpenRef: newsFeedOpenRef,
       sitePositions3DRef, validSitesRef, lastHoverCheckRef, currentHoveredSiteRef,
       lastMoveTimeRef, lastSeenSiteRef, isFrozenRef, frozenAtRef,
       firstFreezeCompleteRef, sitesPassedDuringFreezeRef, lastSiteIdRef,

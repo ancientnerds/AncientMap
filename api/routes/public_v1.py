@@ -371,9 +371,9 @@ def create_public_api() -> FastAPI:
             SELECT id::text, name, lat, lon, source_id, site_type,
                    period_start, period_name, country, source_url
             FROM unified_sites
-            WHERE name ILIKE :pattern
+            WHERE unaccent(name) ILIKE unaccent(:pattern)
             ORDER BY
-                CASE WHEN LOWER(name) = LOWER(:exact) THEN 0 ELSE 1 END,
+                CASE WHEN LOWER(unaccent(name)) = LOWER(unaccent(:exact)) THEN 0 ELSE 1 END,
                 LENGTH(name),
                 name
             LIMIT :limit

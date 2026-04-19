@@ -995,6 +995,12 @@ function AppContent() {
 
   // Handle search result selection (wraps hook helper with globe-specific fly-to)
   const handleSearchResultSelect = useCallback(async (siteId: string, openPopup: boolean) => {
+    // Find site before opening popup — if it came from API search, add it to sites so globe shows the dot
+    const apiSite = apiSearchResults.find(s => s.id === siteId)
+    if (apiSite) {
+      setSites(prev => prev.some(s => s.id === siteId) ? prev : [...prev, apiSite])
+    }
+
     await siteSearch.handleSearchResultSelect(siteId, openPopup, (site) => {
       handleSiteClick(site)
     })
@@ -1407,8 +1413,17 @@ function AppContent() {
   const proximityResults = useMemo(() => {
     if (!proximityCenter) return []
 
+    const [centerLng, centerLat] = proximityCenter
+
     return sitesWithProximity
       .filter(site => site.isInsideProximity)
+      .sort((a, b) => {
+        const [aLng, aLat] = a.coordinates
+        const [bLng, bLat] = b.coordinates
+        const distA = haversineDistance(centerLat, centerLng, aLat, aLng)
+        const distB = haversineDistance(centerLat, centerLng, bLat, bLng)
+        return distA - distB
+      })
       .slice(0, 100)
       .map(site => {
         // Ensure category and period have values (fallback to 'Unknown' for display)

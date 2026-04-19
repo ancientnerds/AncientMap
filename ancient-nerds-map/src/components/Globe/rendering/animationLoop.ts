@@ -161,6 +161,7 @@ export interface AnimationLoopContext {
 
   // Hover / freeze state
   lastMousePosRef: { current: { x: number; y: number } }
+  isNewsFeedOpenRef: { current: boolean }
   sitePositions3DRef: { current: Float32Array | null }
   validSitesRef: { current: SiteData[] }
   lastHoverCheckRef: { current: number }
@@ -735,6 +736,11 @@ export function runAnimationLoop(ctx: AnimationLoopContext): void {
     // Skip in Mapbox mode - Mapbox hover callback handles this via currentHoveredSiteRef
     const mouseX = ctx.lastMousePosRef.current.x
     const mouseY = ctx.lastMousePosRef.current.y
+    // Compensate for CSS globe shift when news feed is open
+    // The globe container is shifted left via translateX(-170px), so the visual
+    // dot position is 170px to the left of the projected position. We need to
+    // add the offset so the mouse position matches the projected position.
+    const globeOffsetX = ctx.isNewsFeedOpenRef.current ? 170 : 0
     const positions3D = ctx.sitePositions3DRef.current
     if (ctx.showTooltipsRef.current && mouseX >= 0 && positions3D && !ctx.showMapboxRef.current) { // Only if tooltips enabled and not in Mapbox mode
       // Throttle expensive hover detection to every 150ms (performance with 750k sites)
@@ -781,7 +787,7 @@ export function runAnimationLoop(ctx: AnimationLoopContext): void {
           const screenX = (projVec.x + 1) / 2 * windowWidth
           const screenY = (-projVec.y + 1) / 2 * windowHeight
 
-          const dx = mouseX - screenX
+          const dx = (mouseX + globeOffsetX) - screenX
           const dy = mouseY - screenY
           const screenDistSq = dx * dx + dy * dy
           const maxHoverDistSq = maxHoverDist * maxHoverDist
