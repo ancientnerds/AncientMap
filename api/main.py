@@ -503,6 +503,19 @@ async def lifespan(app: FastAPI):
     # Pre-warm cache in background so the health endpoint responds immediately
     import asyncio
 
+    # Warm up connector status cache (non-blocking)
+    async def _warm_connector_cache():
+        await asyncio.sleep(2)  # Let server finish binding
+        try:
+            from pipeline.connectors.registry import ConnectorRegistry
+
+            await ConnectorRegistry.check_all_status(timeout=10.0, include_tests=False)
+            logger.info("[STARTUP] Connector cache warmed")
+        except Exception as e:
+            logger.warning(f"[STARTUP] Connector cache warm-up failed (non-fatal): {e}")
+
+    asyncio.create_task(_warm_connector_cache())
+
     async def _warm_cache():
         await asyncio.sleep(2)  # Let the server finish binding
         try:
