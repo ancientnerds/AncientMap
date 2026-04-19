@@ -218,6 +218,7 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
   const { geologicalLayers, isLoadingGeological } = geo
   const [geologicalPanelOpen, setGeologicalPanelOpen] = useState(false)
   const [geologicalPanelHeight, setGeologicalPanelHeight] = useState(350)
+  const [geologicalPanelWidth, setGeologicalPanelWidth] = useState(280)
   const [geologicalPanelPosition, setGeologicalPanelPosition] = useState({ x: 0, y: 20 })
 
   const empires = useEmpireBorders({ onAgeRangeSync, onVisibleEmpiresChange, onEmpireYearsChange, onEmpirePolygonsLoaded })
@@ -232,6 +233,7 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
     showEmpireLabels, setShowEmpireLabels: _setShowEmpireLabels, showEmpireLabelsRef,
     showAncientCities, setShowAncientCities: _setShowAncientCities, showAncientCitiesRef,
     empireBordersWindowOpen, setEmpireBordersWindowOpen, empireBordersHeight, setEmpireBordersHeight,
+    empireBordersWidth, setEmpireBordersWidth,
     empireBordersPosition, setEmpireBordersPosition,
     empireBorderLinesRef, empireLabelsRef, regionLabelsRef, ancientCitiesRef,
     empireFillMeshesRef, hoveredEmpireRef,
@@ -244,6 +246,7 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
   const {
     routesPanelOpen, setRoutesPanelOpen,
     routesPanelHeight, setRoutesPanelHeight,
+    routesPanelWidth, setRoutesPanelWidth,
     routesPanelPosition, setRoutesPanelPosition,
     visibleRoutes, setVisibleRoutes, visibleRoutesRef,
     loadingRoutes, setLoadingRoutes,
@@ -2493,6 +2496,8 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
         onClose={() => setGeologicalPanelOpen(false)}
         height={geologicalPanelHeight}
         onHeightChange={setGeologicalPanelHeight}
+        width={geologicalPanelWidth}
+        onWidthChange={setGeologicalPanelWidth}
         position={geologicalPanelPosition}
         onPositionChange={setGeologicalPanelPosition}
         paleoshorelineVisible={paleoshorelineVisible}
@@ -2516,6 +2521,8 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
         onClose={() => setRoutesPanelOpen(false)}
         height={routesPanelHeight}
         onHeightChange={setRoutesPanelHeight}
+        width={routesPanelWidth}
+        onWidthChange={setRoutesPanelWidth}
         position={routesPanelPosition}
         onPositionChange={setRoutesPanelPosition}
         visibleRoutes={visibleRoutes}
@@ -2536,6 +2543,8 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
         onClose={() => setEmpireBordersWindowOpen(false)}
         height={empireBordersHeight}
         onHeightChange={setEmpireBordersHeight}
+        width={empireBordersWidth}
+        onWidthChange={setEmpireBordersWidth}
         position={empireBordersPosition}
         onPositionChange={setEmpireBordersPosition}
         visibleEmpires={visibleEmpires}

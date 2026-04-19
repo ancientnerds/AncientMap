@@ -11,6 +11,8 @@ interface HistoricalRoutesPanelProps {
   onClose: () => void
   height: number
   onHeightChange: (height: number) => void
+  width: number
+  onWidthChange: (width: number) => void
 
   // Position (for drag repositioning)
   position: { x: number; y: number }
@@ -31,6 +33,8 @@ export function HistoricalRoutesPanel({
   onClose,
   height,
   onHeightChange,
+  width,
+  onWidthChange,
   position,
   onPositionChange,
   visibleRoutes,
@@ -41,33 +45,47 @@ export function HistoricalRoutesPanel({
 }: HistoricalRoutesPanelProps) {
   if (!isOpen) return null
 
-  const handleResizeStart = (e: React.MouseEvent) => {
+  const MIN_WIDTH = 200
+  const MIN_HEIGHT = 150
+
+  const startResize = (e: React.MouseEvent, direction: string) => {
     e.preventDefault()
     e.stopPropagation()
+    const startX = e.clientX
     const startY = e.clientY
+    const startWidth = width
     const startHeight = height
+    const startPos = { x: position.x, y: position.y }
 
     const onMove = (e: MouseEvent) => {
-      const deltaY = startY - e.clientY
-      onHeightChange(Math.max(150, Math.min(600, startHeight - deltaY)))
-    }
-    const onUp = () => {
-      document.removeEventListener('mousemove', onMove)
-      document.removeEventListener('mouseup', onUp)
-    }
-    document.addEventListener('mousemove', onMove)
-    document.addEventListener('mouseup', onUp)
-  }
+      const deltaX = e.clientX - startX
+      const deltaY = e.clientY - startY
 
-  const handleTopResizeStart = (e: React.MouseEvent) => {
-    e.preventDefault()
-    e.stopPropagation()
-    const startY = e.clientY
-    const startHeight = height
+      let newWidth = startWidth
+      let newHeight = startHeight
+      let newX = startPos.x
+      let newY = startPos.y
 
-    const onMove = (e: MouseEvent) => {
-      const deltaY = startY - e.clientY
-      onHeightChange(Math.max(150, Math.min(600, startHeight + deltaY)))
+      if (direction.includes('e')) {
+        newWidth = Math.max(MIN_WIDTH, startWidth + deltaX)
+      }
+      if (direction.includes('w')) {
+        const widthChange = Math.min(deltaX, startWidth - MIN_WIDTH)
+        newWidth = startWidth - widthChange
+        newX = startPos.x + widthChange
+      }
+      if (direction.includes('s')) {
+        newHeight = Math.max(MIN_HEIGHT, startHeight + deltaY)
+      }
+      if (direction.includes('n')) {
+        const heightChange = Math.min(deltaY, startHeight - MIN_HEIGHT)
+        newHeight = startHeight - heightChange
+        newY = startPos.y - heightChange
+      }
+
+      onWidthChange(newWidth)
+      onHeightChange(newHeight)
+      onPositionChange({ x: newX, y: newY })
     }
     const onUp = () => {
       document.removeEventListener('mousemove', onMove)
@@ -122,10 +140,17 @@ export function HistoricalRoutesPanel({
   return (
     <div
       className="historical-routes-window"
-      style={{ height, '--routes-left': `${position.x}px`, '--routes-bottom': `${position.y}px` } as React.CSSProperties}
+      style={{ width, height, '--routes-left': `${position.x}px`, '--routes-bottom': `${position.y}px` } as React.CSSProperties}
     >
-      {/* Top resize handle - outside window edge */}
-      <div className="resize-n" onMouseDown={handleTopResizeStart} />
+      {/* 8-direction resize handles */}
+      <div className="resize-n" onMouseDown={(e) => startResize(e, 'n')} />
+      <div className="resize-s" onMouseDown={(e) => startResize(e, 's')} />
+      <div className="resize-e" onMouseDown={(e) => startResize(e, 'e')} />
+      <div className="resize-w" onMouseDown={(e) => startResize(e, 'w')} />
+      <div className="resize-ne" onMouseDown={(e) => startResize(e, 'ne')} />
+      <div className="resize-nw" onMouseDown={(e) => startResize(e, 'nw')} />
+      <div className="resize-se" onMouseDown={(e) => startResize(e, 'se')} />
+      <div className="resize-sw" onMouseDown={(e) => startResize(e, 'sw')} />
 
       <div className="empire-borders-header" onMouseDown={handlePositionDragStart}>
         <div className="panel-label">Historical Routes</div>
@@ -148,12 +173,6 @@ export function HistoricalRoutesPanel({
           <button className="filter-btn" onClick={handleSelectInvert}>Invert</button>
         </div>
       </div>
-
-      {/* Resize handle */}
-      <div
-        className="empire-borders-resize-handle"
-        onMouseDown={handleResizeStart}
-      />
 
       {/* Route list - scrollable */}
       <div className="empire-borders-list">
@@ -210,9 +229,6 @@ export function HistoricalRoutesPanel({
           </div>
         ))}
       </div>
-
-      {/* Bottom resize handle - outside window edge */}
-      <div className="resize-s" onMouseDown={handleResizeStart} />
     </div>
   )
 }

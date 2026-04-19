@@ -5940,7 +5940,7 @@ a.popup-window-btn {
   flex-direction: column;
 }
 
-/* Resize handles for geological and historical routes windows */
+/* Resize handles for geological and historical routes windows — all 8 directions */
 .geological-layers-window .resize-n,
 .geological-layers-window .resize-s,
 .historical-routes-window .resize-n,
@@ -5953,11 +5953,50 @@ a.popup-window-btn {
   z-index: 10;
 }
 
+.geological-layers-window .resize-e,
+.geological-layers-window .resize-w,
+.historical-routes-window .resize-e,
+.historical-routes-window .resize-w {
+  position: absolute;
+  top: 16px;
+  bottom: 16px;
+  width: 10px;
+  cursor: ew-resize;
+  z-index: 10;
+}
+
+.geological-layers-window .resize-ne,
+.geological-layers-window .resize-nw,
+.geological-layers-window .resize-se,
+.geological-layers-window .resize-sw,
+.historical-routes-window .resize-ne,
+.historical-routes-window .resize-nw,
+.historical-routes-window .resize-se,
+.historical-routes-window .resize-sw {
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  z-index: 10;
+}
+
 .geological-layers-window .resize-n,
 .historical-routes-window .resize-n { top: -5px; }
 .geological-layers-window .resize-s,
 .historical-routes-window .resize-s { bottom: -5px; }
+.geological-layers-window .resize-e,
+.historical-routes-window .resize-e { right: -5px; }
+.geological-layers-window .resize-w,
+.historical-routes-window .resize-w { left: -5px; }
+.geological-layers-window .resize-ne,
+.historical-routes-window .resize-ne { top: -5px; right: -5px; cursor: nesw-resize; }
+.geological-layers-window .resize-nw,
+.historical-routes-window .resize-nw { top: -5px; left: -5px; cursor: nwse-resize; }
+.geological-layers-window .resize-se,
+.historical-routes-window .resize-se { bottom: -5px; right: -5px; cursor: nwse-resize; }
+.geological-layers-window .resize-sw,
+.historical-routes-window .resize-sw { bottom: -5px; left: -5px; cursor: nesw-resize; }
 
+/* Visual line/bar for N/S/E/W handles */
 .geological-layers-window .resize-n::before,
 .geological-layers-window .resize-s::before,
 .historical-routes-window .resize-n::before,
@@ -5974,17 +6013,85 @@ a.popup-window-btn {
   transition: opacity 0.2s;
 }
 
+.geological-layers-window .resize-e::before,
+.geological-layers-window .resize-w::before,
+.historical-routes-window .resize-e::before,
+.historical-routes-window .resize-w::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 2px;
+  height: 40px;
+  background: var(--accent-glow-40);
+  border-radius: 1px;
+  opacity: 0.5;
+  transition: opacity 0.2s;
+}
+
+/* Corner dot indicators */
+.geological-layers-window .resize-ne::before,
+.geological-layers-window .resize-nw::before,
+.geological-layers-window .resize-se::before,
+.geological-layers-window .resize-sw::before,
+.historical-routes-window .resize-ne::before,
+.historical-routes-window .resize-nw::before,
+.historical-routes-window .resize-se::before,
+.historical-routes-window .resize-sw::before {
+  content: '';
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  background: var(--accent-glow-40);
+  border-radius: 50%;
+  opacity: 0.5;
+  transition: opacity 0.2s;
+}
+
+.geological-layers-window .resize-ne::before,
+.historical-routes-window .resize-ne::before { top: 6px; right: 6px; }
+.geological-layers-window .resize-nw::before,
+.historical-routes-window .resize-nw::before { top: 6px; left: 6px; }
+.geological-layers-window .resize-se::before,
+.historical-routes-window .resize-se::before { bottom: 6px; right: 6px; }
+.geological-layers-window .resize-sw::before,
+.historical-routes-window .resize-sw::before { bottom: 6px; left: 6px; }
+
 .geological-layers-window .resize-n:hover::before,
 .geological-layers-window .resize-s:hover::before,
+.geological-layers-window .resize-e:hover::before,
+.geological-layers-window .resize-w:hover::before,
+.geological-layers-window .resize-ne:hover::before,
+.geological-layers-window .resize-nw:hover::before,
+.geological-layers-window .resize-se:hover::before,
+.geological-layers-window .resize-sw:hover::before,
 .historical-routes-window .resize-n:hover::before,
-.historical-routes-window .resize-s:hover::before {
+.historical-routes-window .resize-s:hover::before,
+.historical-routes-window .resize-e:hover::before,
+.historical-routes-window .resize-w:hover::before,
+.historical-routes-window .resize-ne:hover::before,
+.historical-routes-window .resize-nw:hover::before,
+.historical-routes-window .resize-se:hover::before,
+.historical-routes-window .resize-sw:hover::before {
   opacity: 1;
 }
 
 .geological-layers-window .resize-n:hover,
 .geological-layers-window .resize-s:hover,
+.geological-layers-window .resize-e:hover,
+.geological-layers-window .resize-w:hover,
+.geological-layers-window .resize-ne:hover,
+.geological-layers-window .resize-nw:hover,
+.geological-layers-window .resize-se:hover,
+.geological-layers-window .resize-sw:hover,
 .historical-routes-window .resize-n:hover,
-.historical-routes-window .resize-s:hover {
+.historical-routes-window .resize-s:hover,
+.historical-routes-window .resize-e:hover,
+.historical-routes-window .resize-w:hover,
+.historical-routes-window .resize-ne:hover,
+.historical-routes-window .resize-nw:hover,
+.historical-routes-window .resize-se:hover,
+.historical-routes-window .resize-sw:hover {
   background: transparent;
 }
 
@@ -6416,9 +6523,36 @@ a.popup-window-btn {
   z-index: 10;
 }
 
+.empire-borders-window .resize-e,
+.empire-borders-window .resize-w {
+  position: absolute;
+  top: 16px;
+  bottom: 16px;
+  width: 10px;
+  cursor: ew-resize;
+  z-index: 10;
+}
+
+.empire-borders-window .resize-ne,
+.empire-borders-window .resize-nw,
+.empire-borders-window .resize-se,
+.empire-borders-window .resize-sw {
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  z-index: 10;
+}
+
 .empire-borders-window .resize-n { top: -5px; }
 .empire-borders-window .resize-s { bottom: -5px; }
+.empire-borders-window .resize-e { right: -5px; }
+.empire-borders-window .resize-w { left: -5px; }
+.empire-borders-window .resize-ne { top: -5px; right: -5px; cursor: nesw-resize; }
+.empire-borders-window .resize-nw { top: -5px; left: -5px; cursor: nwse-resize; }
+.empire-borders-window .resize-se { bottom: -5px; right: -5px; cursor: nwse-resize; }
+.empire-borders-window .resize-sw { bottom: -5px; left: -5px; cursor: nesw-resize; }
 
+/* Visual line/bar for n/s/e/w handles */
 .empire-borders-window .resize-n::before,
 .empire-borders-window .resize-s::before {
   content: '';
@@ -6433,13 +6567,59 @@ a.popup-window-btn {
   transition: opacity 0.2s;
 }
 
+.empire-borders-window .resize-e::before,
+.empire-borders-window .resize-w::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 2px;
+  height: 40px;
+  background: var(--accent-glow-40);
+  border-radius: 1px;
+  opacity: 0.5;
+  transition: opacity 0.2s;
+}
+
+/* Corner dot indicators */
+.empire-borders-window .resize-ne::before,
+.empire-borders-window .resize-nw::before,
+.empire-borders-window .resize-se::before,
+.empire-borders-window .resize-sw::before {
+  content: '';
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  background: var(--accent-glow-40);
+  border-radius: 50%;
+  opacity: 0.5;
+  transition: opacity 0.2s;
+}
+
+.empire-borders-window .resize-ne::before { top: 6px; right: 6px; }
+.empire-borders-window .resize-nw::before { top: 6px; left: 6px; }
+.empire-borders-window .resize-se::before { bottom: 6px; right: 6px; }
+.empire-borders-window .resize-sw::before { bottom: 6px; left: 6px; }
+
 .empire-borders-window .resize-n:hover::before,
-.empire-borders-window .resize-s:hover::before {
+.empire-borders-window .resize-s:hover::before,
+.empire-borders-window .resize-e:hover::before,
+.empire-borders-window .resize-w:hover::before,
+.empire-borders-window .resize-ne:hover::before,
+.empire-borders-window .resize-nw:hover::before,
+.empire-borders-window .resize-se:hover::before,
+.empire-borders-window .resize-sw:hover::before {
   opacity: 1;
 }
 
 .empire-borders-window .resize-n:hover,
-.empire-borders-window .resize-s:hover {
+.empire-borders-window .resize-s:hover,
+.empire-borders-window .resize-e:hover,
+.empire-borders-window .resize-w:hover,
+.empire-borders-window .resize-ne:hover,
+.empire-borders-window .resize-nw:hover,
+.empire-borders-window .resize-se:hover,
+.empire-borders-window .resize-sw:hover {
   background: transparent;
 }
 
