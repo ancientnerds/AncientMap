@@ -6421,6 +6421,10 @@ a.popup-window-btn {
   background: linear-gradient(180deg, transparent, var(--accent-glow-30));
 }
 
+.empire-borders-resize-handle-top:hover {
+  background: linear-gradient(0deg, transparent, var(--accent-glow-30));
+}
+
 .global-timeline-slider {
   flex: 1;
   height: 4px;

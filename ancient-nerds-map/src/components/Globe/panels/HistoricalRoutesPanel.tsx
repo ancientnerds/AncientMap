@@ -48,6 +48,24 @@ export function HistoricalRoutesPanel({
     const startHeight = height
 
     const onMove = (e: MouseEvent) => {
+      const deltaY = e.clientY - startY
+      onHeightChange(Math.max(150, Math.min(600, startHeight + deltaY)))
+    }
+    const onUp = () => {
+      document.removeEventListener('mousemove', onMove)
+      document.removeEventListener('mouseup', onUp)
+    }
+    document.addEventListener('mousemove', onMove)
+    document.addEventListener('mouseup', onUp)
+  }
+
+  const handleTopResizeStart = (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    const startY = e.clientY
+    const startHeight = height
+
+    const onMove = (e: MouseEvent) => {
       const deltaY = startY - e.clientY
       onHeightChange(Math.max(150, Math.min(600, startHeight + deltaY)))
     }
@@ -119,6 +137,12 @@ export function HistoricalRoutesPanel({
         </button>
       </div>
 
+      {/* Resize handle - top */}
+      <div
+        className="empire-borders-resize-handle empire-borders-resize-handle-top"
+        onMouseDown={handleTopResizeStart}
+      />
+
       {/* Quick actions row */}
       <div className="empire-options-row">
         <div className="empire-quick-btns">
@@ -189,6 +213,12 @@ export function HistoricalRoutesPanel({
           </div>
         ))}
       </div>
+
+      {/* Resize handle - bottom */}
+      <div
+        className="empire-borders-resize-handle"
+        onMouseDown={handleResizeStart}
+      />
     </div>
   )
 }
