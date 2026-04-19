@@ -139,7 +139,7 @@ export function GeologicalLayersSection({
   return (
     <div
       className="empire-borders-window geological-layers-window"
-      style={{ height, right: position.x, bottom: position.y }}
+      style={{ height, '--geological-right-offset': `${position.x}px`, '--geological-bottom-offset': `${position.y}px` } as React.CSSProperties}
     >
       <div className="empire-borders-header" onMouseDown={handlePositionDragStart}>
         <div className="panel-label">Geological Layers</div>

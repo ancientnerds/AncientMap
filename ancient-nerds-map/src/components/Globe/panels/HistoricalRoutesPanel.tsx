@@ -122,7 +122,7 @@ export function HistoricalRoutesPanel({
   return (
     <div
       className="empire-borders-window historical-routes-window"
-      style={{ height, right: position.x, bottom: position.y }}
+      style={{ height, '--empire-right-offset': `${position.x}px`, '--empire-bottom-offset': `${position.y}px` } as React.CSSProperties}
     >
       <div className="empire-borders-header" onMouseDown={handlePositionDragStart}>
         <div className="panel-label">Historical Routes</div>
