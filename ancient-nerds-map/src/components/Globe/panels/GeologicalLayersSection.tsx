@@ -84,8 +84,8 @@ export function GeologicalLayersSection({
     const startHeight = height
 
     const onMove = (e: MouseEvent) => {
-      const deltaY = e.clientY - startY
-      onHeightChange(Math.max(150, Math.min(600, startHeight + deltaY)))
+      const deltaY = startY - e.clientY
+      onHeightChange(Math.max(150, Math.min(600, startHeight - deltaY)))
     }
     const onUp = () => {
       document.removeEventListener('mousemove', onMove)
