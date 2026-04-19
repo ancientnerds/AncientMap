@@ -219,7 +219,7 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
   const [geologicalPanelOpen, setGeologicalPanelOpen] = useState(false)
   const [geologicalPanelHeight, setGeologicalPanelHeight] = useState(350)
   const [geologicalPanelWidth, setGeologicalPanelWidth] = useState(280)
-  const [geologicalPanelPosition, setGeologicalPanelPosition] = useState({ x: 0, y: 20 })
+  const [geologicalPanelPosition, setGeologicalPanelPosition] = useState({ x: window.innerWidth - 600, y: 20 })
 
   const empires = useEmpireBorders({ onAgeRangeSync, onVisibleEmpiresChange, onEmpireYearsChange, onEmpirePolygonsLoaded })
   const {
