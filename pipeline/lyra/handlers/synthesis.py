@@ -75,34 +75,32 @@ class SynthesisHandler(BaseHandler):
         user_msg = f"## Research question\n\n{self.state.question}\n\n## Specialist analyses (by angle)\n\n{all_findings_text}"
 
         settings = _get_settings()
-        async with self.semaphore:
-            parsed = await asyncio.to_thread(
-                structured_llm_call,
-                synthesis_prompt,
-                user_msg,
-                SYNTHESIS_SCHEMA,
-                self.state.config.max_tokens_synthesis,
-                settings,
-                temperature=settings.temperature_synthesis,
-            )
-        self.state.llm_call_count += 1
-        self.state.synthesis = parsed
 
-        # Step 2: Cross-angle connection detection
-        self.emit_sse(
-            {
-                "type": "status",
-                "content": "Detecting cross-angle connections...",
-                "subtask_done": 1,
-                "subtask_total": 2,
-            }
-        )
+        # Step 1: Standard synthesis (always needed)
+        async def _synthesize():
+            async with self.semaphore:
+                parsed = await asyncio.to_thread(
+                    structured_llm_call,
+                    synthesis_prompt,
+                    user_msg,
+                    SYNTHESIS_SCHEMA,
+                    self.state.config.max_tokens_synthesis,
+                    settings,
+                    temperature=settings.temperature_synthesis,
+                )
+            self.state.llm_call_count += 1
+            return parsed
 
+        # Step 2: Cross-angle connection detection (parallel with step 1 when prompt exists)
         cross_prompt_path = PROMPTS_DIR / "v2_cross_angle.txt"
-        if cross_prompt_path.exists():
+        cross_prompt_exists = cross_prompt_path.exists()
+
+        async def _cross_angle():
+            if not cross_prompt_exists:
+                return None
             cross_prompt = cross_prompt_path.read_text(encoding="utf-8")
             async with self.semaphore:
-                cross_result = await asyncio.to_thread(
+                result = await asyncio.to_thread(
                     structured_llm_call,
                     cross_prompt,
                     user_msg,
@@ -112,8 +110,22 @@ class SynthesisHandler(BaseHandler):
                     temperature=settings.temperature_synthesis,
                 )
             self.state.llm_call_count += 1
+            return result
+
+        self.emit_sse(
+            {
+                "type": "status",
+                "content": "Detecting cross-angle connections...",
+                "subtask_done": 1,
+                "subtask_total": 2,
+            }
+        )
+
+        parsed, cross_result = await asyncio.gather(_synthesize(), _cross_angle())
+        self.state.synthesis = parsed
+
+        if cross_result:
             self.state.cross_angle_connections = cross_result.get("connections", [])
-            # Store convergent findings and contradictions for the paper's Connecting the Dots section
             self.state.synthesis["convergent_findings"] = cross_result.get(
                 "convergent_findings", []
             )

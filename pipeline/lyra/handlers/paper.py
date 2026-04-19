@@ -148,7 +148,8 @@ class PaperHandler(BaseHandler):
             logger.info("[paper] Section '%s': %d chars", sec_title, len(content))
 
         # ---------------------------------------------------------------
-        # Step 4: Write Connecting the Dots + The Other Side
+        # Step 4: Write Connecting the Dots + The Other Side + Assessment
+        # (all independent — run in parallel)
         # ---------------------------------------------------------------
         self.emit_sse(
             {
@@ -159,34 +160,26 @@ class PaperHandler(BaseHandler):
             }
         )
 
-        connecting_prose = await self._write_connecting_section(
+        connecting_task = self._write_connecting_section(
             connecting_section,
             all_claims,
             ref_map_text,
             sid_to_num,
             settings,
         )
-        other_side_prose = await self._write_other_side_section(
+        other_side_task = self._write_other_side_section(
             other_side_section,
             all_claims,
             ref_map_text,
             settings,
         )
+        assessment_task = self._write_assessment(all_claims, settings)
 
-        # ---------------------------------------------------------------
-        # Step 5: Write assessment
-        # ---------------------------------------------------------------
-        self.emit_sse(
-            {
-                "type": "status",
-                "content": "Writing honest assessment...",
-                "subtask_done": 4,
-                "subtask_total": 6,
-            }
+        connecting_prose, other_side_prose, assessment = await asyncio.gather(
+            connecting_task, other_side_task, assessment_task
         )
-
-        assessment = await self._write_assessment(all_claims, settings)
-        logger.info("[paper] Assessment: %d chars", len(assessment))
+        logger.info("[paper] Connecting: %d chars, Other Side: %d chars, Assessment: %d chars",
+                    len(connecting_prose), len(other_side_prose), len(assessment))
 
         # ---------------------------------------------------------------
         # Step 6: Assemble paper
