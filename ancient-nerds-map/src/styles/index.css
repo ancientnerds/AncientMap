@@ -317,6 +317,7 @@ body.mapbox-primary-mode .mapbox-globe-container canvas {
   background: var(--surface-crt);
   border: 1px solid var(--border-accent-medium);
   color: var(--crt-600);
+  font-family: var(--font-body);
   font-size: 11px;
   cursor: pointer;
   transition: all 0.2s ease;
