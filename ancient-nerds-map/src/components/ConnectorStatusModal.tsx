@@ -12,6 +12,7 @@ import {
   formatResponseTime,
   getConnectorsLedClass,
 } from '../hooks/useConnectorStatus'
+import { useAuth } from '../contexts/AuthContext'
 
 interface ConnectorStatusModalProps {
   isOpen: boolean
@@ -55,14 +56,14 @@ const CATEGORY_LABELS: Record<string, string> = {
 }
 
 function ConnectorStatusModal({ isOpen, onClose }: ConnectorStatusModalProps) {
+  const { user } = useAuth()
+  const isFounder = user?.is_founder ?? false
   const { data, summary, loading, error, refresh, runAllTests, runSingleTest, testingConnectorId } = useConnectorStatus()
   const [sortKey, setSortKey] = useState<SortKey>('name')
   const [sortDir, setSortDir] = useState<SortDir>('asc')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [tabFilter, setTabFilter] = useState<TabFilter>('all')
   const [refreshing, setRefreshing] = useState(false)
-  // Test mode state
-  const [showTests, setShowTests] = useState(false)
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
   const [runningTests, setRunningTests] = useState(false)
 
@@ -101,9 +102,6 @@ function ConnectorStatusModal({ isOpen, onClose }: ConnectorStatusModalProps) {
     await runSingleTest(connectorId)
   }, [runSingleTest])
 
-  const handleShowTestsToggle = useCallback((checked: boolean) => {
-    setShowTests(checked)
-  }, [])
 
   // Toggle row expansion
   const toggleRowExpansion = useCallback((connectorId: string) => {
@@ -250,58 +248,52 @@ function ConnectorStatusModal({ isOpen, onClose }: ConnectorStatusModalProps) {
                 ))}
               </select>
             </div>
-            <label className="test-toggle">
-              <input
-                type="checkbox"
-                checked={showTests}
-                onChange={e => handleShowTestsToggle(e.target.checked)}
-              />
-              Show Tests
-            </label>
-            {showTests && (
+            <div className="connector-status-actions">
+              {isFounder && (
+                <button
+                  className="run-tests-btn"
+                  onClick={handleRunAllTests}
+                  disabled={runningTests || loading}
+                  title="Run test queries against all connectors"
+                >
+                  {runningTests ? (
+                    <>
+                      <span className="spinner" />
+                      Testing...
+                    </>
+                  ) : (
+                    <>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                      </svg>
+                      Run All Tests
+                    </>
+                  )}
+                </button>
+              )}
               <button
-                className="run-tests-btn"
-                onClick={handleRunAllTests}
-                disabled={runningTests || loading}
-                title="Run test queries against all connectors"
+                className="refresh-btn"
+                onClick={handleRefreshClick}
+                disabled={refreshing || loading}
+                title="Refresh connector statuses"
               >
-                {runningTests ? (
+                {refreshing || loading ? (
                   <>
                     <span className="spinner" />
-                    Testing...
+                    Checking...
                   </>
                 ) : (
                   <>
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                      <path d="M23 4v6h-6" />
+                      <path d="M1 20v-6h6" />
+                      <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
                     </svg>
-                    Run All Tests
+                    Refresh
                   </>
                 )}
               </button>
-            )}
-            <button
-              className="refresh-btn"
-              onClick={handleRefreshClick}
-              disabled={refreshing || loading}
-              title="Refresh all connectors (requires admin PIN)"
-            >
-              {refreshing || loading ? (
-                <>
-                  <span className="spinner" />
-                  Checking...
-                </>
-              ) : (
-                <>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M23 4v6h-6" />
-                    <path d="M1 20v-6h6" />
-                    <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
-                  </svg>
-                  Refresh
-                </>
-              )}
-            </button>
+            </div>
           </div>
 
           {error && (
@@ -311,7 +303,7 @@ function ConnectorStatusModal({ isOpen, onClose }: ConnectorStatusModalProps) {
           )}
 
           <div className="connector-status-table-wrapper">
-            <table className={`connector-status-table ${showTests ? 'show-tests' : ''}`}>
+            <table className={`connector-status-table ${isFounder ? 'show-tests' : ''}`}>
               <thead>
                 <tr>
                   <SortHeader label="Connector" sortKeyValue="name" />
@@ -320,7 +312,7 @@ function ConnectorStatusModal({ isOpen, onClose }: ConnectorStatusModalProps) {
                   <SortHeader label="Status" sortKeyValue="status" />
                   <SortHeader label="Last Ping" sortKeyValue="last_ping" />
                   <SortHeader label="Response" sortKeyValue="response_time" />
-                  {showTests && (
+                  {isFounder && (
                     <>
                       <th className="test-header" title="API Documentation">Docs</th>
                       {TEST_QUERY_ORDER.map(qid => (
@@ -335,13 +327,13 @@ function ConnectorStatusModal({ isOpen, onClose }: ConnectorStatusModalProps) {
                       <th className="test-header">Actions</th>
                     </>
                   )}
-                  {!showTests && <th>Error</th>}
+                  {!isFounder && <th>Error</th>}
                 </tr>
               </thead>
               <tbody>
                 {sortedConnectors.length === 0 ? (
                   <tr>
-                    <td colSpan={showTests ? 14 : 7} className="no-results">
+                    <td colSpan={isFounder ? 14 : 7} className="no-results">
                       {loading ? 'Loading...' : 'No connectors found'}
                     </td>
                   </tr>
@@ -350,7 +342,7 @@ function ConnectorStatusModal({ isOpen, onClose }: ConnectorStatusModalProps) {
                     <ConnectorRow
                       key={connector.connector_id}
                       connector={connector}
-                      showTests={showTests}
+                      showTests={isFounder}
                       isExpanded={expandedRows.has(connector.connector_id)}
                       onToggleExpand={() => toggleRowExpansion(connector.connector_id)}
                       onRunTest={() => handleRunSingleTest(connector.connector_id)}

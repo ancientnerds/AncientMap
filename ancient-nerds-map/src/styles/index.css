@@ -721,6 +721,12 @@ body.mapbox-primary-mode .mapbox-globe-container canvas {
   to { transform: rotate(360deg); }
 }
 
+.connector-status-controls .connector-status-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .connector-status-error {
   padding: 12px;
   background: rgba(239, 68, 68, 0.1);
@@ -5897,8 +5903,10 @@ a.popup-window-btn {
 /* Geological layers window — positioned via CSS variables for drag */
 .geological-layers-window {
   position: fixed;
-  right: calc(20px + 548px * var(--hud-scale, 1) + var(--geological-right-offset, 0px));
-  bottom: calc(20px + var(--geological-bottom-offset, 0px));
+  left: var(--geological-left, calc(100vw - 300px));
+  top: var(--geological-top, auto);
+  bottom: var(--geological-bottom, 20px);
+  right: auto;
   z-index: 100;
   width: 280px;
   min-height: 150px;
@@ -5910,8 +5918,26 @@ a.popup-window-btn {
   border-radius: 4px;
   display: flex;
   flex-direction: column;
-  transform: scale(var(--hud-scale, 1));
-  transform-origin: bottom right;
+}
+
+/* Historical routes window — same positioning pattern */
+.historical-routes-window {
+  position: fixed;
+  left: var(--routes-left, calc(100vw - 300px));
+  top: var(--routes-top, auto);
+  bottom: var(--routes-bottom, 20px);
+  right: auto;
+  z-index: 100;
+  width: 280px;
+  min-height: 150px;
+  max-height: calc(100vh - 100px);
+  background: var(--surface-raised);
+  backdrop-filter: blur(var(--blur-amount));
+  -webkit-backdrop-filter: blur(var(--blur-amount));
+  border: 1px solid var(--border-accent);
+  border-radius: 4px;
+  display: flex;
+  flex-direction: column;
 }
 
 .sea-level-controls {
@@ -6312,8 +6338,10 @@ a.popup-window-btn {
    ============================================ */
 .empire-borders-window {
   position: fixed;
-  right: calc(20px + 264px * var(--hud-scale, 1) + var(--empire-right-offset, 0px));
-  bottom: calc(20px + var(--empire-bottom-offset, 0px));
+  left: var(--empire-left, calc(100vw - 300px));
+  top: var(--empire-top, auto);
+  bottom: var(--empire-bottom, 20px);
+  right: auto;
   z-index: 100;
   width: 280px;
   min-height: 150px;
@@ -6327,9 +6355,6 @@ a.popup-window-btn {
 
   display: flex;
   flex-direction: column;
-
-  transform: scale(var(--hud-scale, 1));
-  transform-origin: bottom right;
 }
 
 .empire-borders-header {
