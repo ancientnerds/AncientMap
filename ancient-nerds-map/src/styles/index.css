@@ -5895,7 +5895,7 @@ a.popup-window-btn {
 
 /* Geological layers window — positioned via CSS variables for drag */
 .geological-layers-window {
-  left: var(--geological-left, calc(100vw - 590px));
+  right: var(--geological-right, calc(20px + 548px * var(--hud-scale, 1)));
   bottom: var(--geological-bottom, 20px);
 }
 
@@ -6297,7 +6297,7 @@ a.popup-window-btn {
    ============================================ */
 .empire-borders-window {
   position: fixed;
-  left: var(--empire-left, calc(100vw - 320px));
+  right: var(--empire-right, calc(20px + 264px * var(--hud-scale, 1)));
   bottom: var(--empire-bottom, 20px);
   z-index: 100;
   width: 280px;
@@ -6392,11 +6392,29 @@ a.popup-window-btn {
 
 /* Resize handle - horizontal bar for vertical resizing */
 .empire-borders-resize-handle {
-  height: 6px;
+  height: 10px;
   cursor: ns-resize;
-  background: linear-gradient(180deg, transparent, var(--accent-glow-10));
+  background: linear-gradient(180deg, transparent, var(--accent-glow-20));
   flex-shrink: 0;
   border-bottom: 1px solid var(--border-accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.empire-borders-resize-handle::before {
+  content: '';
+  width: 40px;
+  height: 2px;
+  background: var(--accent-glow-40);
+  border-radius: 1px;
+  opacity: 0.5;
+  transition: opacity 0.2s;
+}
+
+.empire-borders-resize-handle:hover::before {
+  opacity: 1;
 }
 
 .empire-borders-resize-handle:hover {

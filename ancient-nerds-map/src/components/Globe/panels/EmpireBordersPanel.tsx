@@ -123,7 +123,7 @@ export function EmpireBordersPanel({
   return (
     <div
       className="empire-borders-window"
-      style={{ height, left: position.x, bottom: position.y }}
+      style={{ height, right: position.x, bottom: position.y }}
     >
       <div className="empire-borders-header" onMouseDown={handlePositionDragStart}>
         <div className="panel-label">Empire Borders</div>
