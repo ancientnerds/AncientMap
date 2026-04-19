@@ -125,7 +125,7 @@ export function GeologicalLayersSection({
       const deltaY = e.clientY - startY
       onPositionChange({
         x: startPos.x - deltaX,
-        y: startPos.y + deltaY,
+        y: startPos.y - deltaY,
       })
     }
     const onUp = () => {
