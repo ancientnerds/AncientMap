@@ -360,5 +360,33 @@ class UserAchievement(Base):
     )
 
 
+class LyraBattle(Base):
+    """Tracks a player's duel against Lyra at a specific difficulty tier."""
+
+    __tablename__ = "lyra_battles"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("discord_users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    lyra_tier: Mapped[int] = mapped_column(Integer, nullable=False)  # 1-4
+    result: Mapped[str | None] = mapped_column(String, nullable=True)  # "win", "loss"
+    player_score: Mapped[int] = mapped_column(Integer, default=0)
+    lyra_score: Mapped[int] = mapped_column(Integer, default=0)
+    credits_earned: Mapped[int] = mapped_column(Integer, default=0)
+    xp_earned: Mapped[int] = mapped_column(Integer, default=0)
+    pack_reward: Mapped[str | None] = mapped_column(String, nullable=True)  # "rare", "epic"
+    played_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    __table_args__ = (
+        Index("idx_lyra_battles_user_tier", "user_id", "lyra_tier"),
+        Index("idx_lyra_battles_played_at", "played_at"),
+    )
+
+
 # Late import to avoid circular — only used for type hints in relationship()
 from pipeline.database import UnifiedSite  # noqa: E402, F811

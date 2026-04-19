@@ -92,6 +92,8 @@ async def lifespan(app: FastAPI):
             END $$""",
             "ALTER TABLE expedition_progress ADD COLUMN IF NOT EXISTS last_stage_played_at TIMESTAMP",
             "ALTER TABLE card_player_stats ADD COLUMN IF NOT EXISTS feature_flags JSONB DEFAULT '{}'",
+            "ALTER TABLE card_player_stats ADD COLUMN IF NOT EXISTS daily_streak INTEGER NOT NULL DEFAULT 0",
+            "ALTER TABLE card_player_stats ADD COLUMN IF NOT EXISTS last_daily TIMESTAMP",
             # Ensure unified_sites columns exist (normally added by orchestrator, but API needs them for /sites/all)
             "ALTER TABLE unified_sites ADD COLUMN IF NOT EXISTS edited_by VARCHAR(20) NOT NULL DEFAULT 'initial'",
             "ALTER TABLE unified_sites ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP",

@@ -1076,6 +1076,243 @@ def register_commands(bot: discord.Client) -> None:
                 ephemeral=True,
             )
 
+    # -------------------------------------------------------------------
+    # /lyra [tier] — Challenge Lyra to a duel
+    # -------------------------------------------------------------------
+    @bot.tree.command(
+        name="lyra", description="Challenge Lyra to a card duel"
+    )
+    @app_commands.describe(tier="Difficulty tier (1-4, defaults to list if omitted)")
+    @app_commands.checks.cooldown(1, 5.0)
+    async def lyra_command(interaction: discord.Interaction, tier: int | None = None):
+        discord_id = str(interaction.user.id)
+        await interaction.response.defer(ephemeral=True)
+
+        try:
+            from api.cardgame.constants import LYRA_TIERS
+            from api.cardgame.lyra_duel import can_challenge_lyra, get_lyra_status
+            from pipeline.database import DiscordUser, get_session
+
+            with get_session() as session:
+                user = (
+                    session.query(DiscordUser)
+                    .filter(DiscordUser.discord_id == discord_id)
+                    .first()
+                )
+                if not user:
+                    await interaction.followup.send(
+                        "Sign in at ancientnerds.com first.", ephemeral=True
+                    )
+                    return
+
+                status = get_lyra_status(session, user.id)
+
+            # If tier specified, try to play directly
+            if tier is not None:
+                if tier not in LYRA_TIERS:
+                    await interaction.followup.send(
+                        "Tier must be 1-4. Use `/lyra` without a tier to see all options.",
+                        ephemeral=True,
+                    )
+                    return
+                can_play, last_result = can_challenge_lyra(session, user.id, tier)
+                if not can_play:
+                    result_text = "won" if last_result == "win" else "lost"
+                    await interaction.followup.send(
+                        f"You've already challenged {LYRA_TIERS[tier]['name']} today. "
+                        f"Result: {result_text}. Come back tomorrow!",
+                        ephemeral=True,
+                    )
+                    return
+
+                from api.cardgame.lyra_duel import resolve_lyra_duel
+
+                try:
+                    result = resolve_lyra_duel(session, user, tier)
+                except ValueError as e:
+                    await interaction.followup.send(str(e), ephemeral=True)
+                    return
+
+                color = 0x4CAF50 if result["player_won"] else 0xF44336
+                title = (
+                    f"Victory! You beat {result['lyra_name']}!"
+                    if result["player_won"]
+                    else f"Defeat... {result['lyra_name']} wins."
+                )
+                embed = discord.Embed(title=title, color=color)
+                embed.add_field(
+                    name="Score",
+                    value=f"You: {result['player_score']} | Lyra: {result['lyra_score']}",
+                    inline=False,
+                )
+
+                reward_lines = [
+                    f"+{result['credits_earned']} credits",
+                    f"+{result['xp_earned']} XP",
+                ]
+                if result["pack_reward"]:
+                    reward_lines.append(f"+{result['pack_reward'].title()} Pack!")
+                embed.add_field(name="Rewards", value="\n".join(reward_lines), inline=False)
+
+                embed.set_footer(text="ancientnerds.com")
+                await interaction.followup.send(embed=embed, ephemeral=True)
+                return
+
+            # No tier specified — show the tier selection embed
+            embed = discord.Embed(
+                title="Challenge Lyra",
+                description="Lyra awaits your challenge! Choose your difficulty below.",
+                color=0x9C27B0,
+            )
+
+            tier_emojis = {1: "\u2605", 2: "\u2605\u2605", 3: "\u2605\u2605\u2605", 4: "\u2b50"}
+
+            for t, cfg in LYRA_TIERS.items():
+                status_info = status.get(t, {})
+                status_text = status_info.get("status", "available")
+                can_play = status_info.get("can_challenge", True)
+
+                if status_text == "win":
+                    line = f"~~{cfg['description']}~~ ✅ Won today!"
+                elif status_text == "loss":
+                    line = f"~~{cfg['description']}~~ ❌ Lost today"
+                else:
+                    reward_preview = (
+                        f"Win: {cfg['win_credits']}cr/{cfg['win_xp']}XP"
+                        + (f" + {cfg['win_pack'].title()} Pack" if cfg["win_pack"] else "")
+                    )
+                    line = f"{cfg['description']}\n*{reward_preview}*"
+
+                emoji = tier_emojis.get(t, "\u2605")
+                name = f"{emoji} {cfg['name']}"
+                embed.add_field(name=name, value=line, inline=False)
+
+            embed.set_footer(text="ancientnerds.com")
+
+            view = LyraView(discord_id)
+            await interaction.followup.send(embed=embed, view=view, ephemeral=True)
+
+        except Exception as e:
+            logger.exception(f"/lyra error: {e}")
+            await interaction.followup.send("Something went wrong.", ephemeral=True)
+
+    @lyra_command.error
+    async def lyra_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
+        if isinstance(error, app_commands.CommandOnCooldown):
+            await interaction.response.send_message(
+                f"Please wait {error.retry_after:.0f}s.",
+                ephemeral=True,
+            )
+
+
+# ---------------------------------------------------------------------------
+# Lyra duel view
+# ---------------------------------------------------------------------------
+
+
+class LyraView(discord.ui.View):
+    """Lyra tier selection with challenge buttons."""
+
+    def __init__(self, discord_id: str):
+        super().__init__(timeout=120)
+        self.discord_id = discord_id
+
+        from api.cardgame.constants import LYRA_TIERS
+
+        tier_emojis = {1: "\u2605", 2: "\u2605\u2605", 3: "\u2605\u2605\u2605", 4: "\u2b50"}
+        tier_labels = {
+            1: "Casual",
+            2: "Scholar",
+            3: "Sage",
+            4: "Ancient",
+        }
+        tier_colors = {
+            1: discord.ButtonStyle.green,
+            2: discord.ButtonStyle.green,
+            3: discord.ButtonStyle.red,
+            4: discord.ButtonStyle.red,
+        }
+
+        for tier in [1, 2, 3, 4]:
+            label = f"{tier_emojis[tier]} {tier_labels[tier]}"
+            btn = discord.ui.Button(
+                label=label,
+                style=tier_colors[tier],
+                custom_id=f"lyra_tier_{tier}",
+                row=(tier - 1) // 2,
+            )
+            btn.callback = self._make_callback(tier)
+            self.add_item(btn)
+
+    def _make_callback(self, tier: int):
+        async def callback(interaction: discord.Interaction):
+            if str(interaction.user.id) != self.discord_id:
+                await interaction.response.send_message(
+                    "Not your Lyra duel.", ephemeral=True
+                )
+                return
+
+            await interaction.response.defer(ephemeral=True)
+
+            from api.cardgame.constants import LYRA_TIERS
+            from api.cardgame.lyra_duel import can_challenge_lyra, resolve_lyra_duel
+            from pipeline.database import DiscordUser, get_session
+
+            with get_session() as session:
+                user = (
+                    session.query(DiscordUser)
+                    .filter(DiscordUser.discord_id == self.discord_id)
+                    .first()
+                )
+                if not user:
+                    await interaction.followup.send(
+                        "Sign in at ancientnerds.com first.", ephemeral=True
+                    )
+                    return
+
+                can_play, last_result = can_challenge_lyra(session, user.id, tier)
+                if not can_play:
+                    result_text = "won" if last_result == "win" else "lost"
+                    await interaction.followup.send(
+                        f"You've already challenged {LYRA_TIERS[tier]['name']} today. "
+                        f"Result: {result_text}. Come back tomorrow!",
+                        ephemeral=True,
+                    )
+                    return
+
+                try:
+                    result = resolve_lyra_duel(session, user, tier)
+                except ValueError as e:
+                    await interaction.followup.send(str(e), ephemeral=True)
+                    return
+
+            color = 0x4CAF50 if result["player_won"] else 0xF44336
+            title = (
+                f"Victory! You beat {result['lyra_name']}!"
+                if result["player_won"]
+                else f"Defeat... {result['lyra_name']} wins."
+            )
+            embed = discord.Embed(title=title, color=color)
+            embed.add_field(
+                name="Score",
+                value=f"You: {result['player_score']} | Lyra: {result['lyra_score']}",
+                inline=False,
+            )
+
+            reward_lines = [
+                f"+{result['credits_earned']} credits",
+                f"+{result['xp_earned']} XP",
+            ]
+            if result["pack_reward"]:
+                reward_lines.append(f"+{result['pack_reward'].title()} Pack!")
+            embed.add_field(name="Rewards", value="\n".join(reward_lines), inline=False)
+            embed.set_footer(text="ancientnerds.com")
+
+            await interaction.followup.send(embed=embed, ephemeral=True)
+            self.stop()
+
+        return callback
+
 
 # ---------------------------------------------------------------------------
 # Duel Accept/Decline UI with Snap mechanic (Phase B)

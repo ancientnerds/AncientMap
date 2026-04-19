@@ -445,6 +445,14 @@ async def submit_research(
         )
         session.commit()
 
+        # Award research submission achievements
+        try:
+            from api.cardgame.achievements import check_achievements
+
+            check_achievements(session, user.id, "research_submit")
+        except Exception:
+            pass  # Non-critical — don't fail the submission
+
         # Get queue position
         position = session.execute(
             text("""
@@ -865,6 +873,14 @@ async def publish_research(
         )
         session.commit()
 
+        # Award publication achievements
+        try:
+            from api.cardgame.achievements import check_achievements
+
+            check_achievements(session, user.id, "research_publish")
+        except Exception:
+            pass  # Non-critical
+
     # Index in Qdrant
     paper_text = result.get("report", "")
     if paper_text:
@@ -1066,6 +1082,15 @@ async def edit_research(
         )
         session.commit()
 
+        # Award citation achievements if citations were added/edited
+        if result.get("audit", {}).get("total_citations", 0) > 0:
+            try:
+                from api.cardgame.achievements import check_achievements
+
+                check_achievements(session, user.id, "research_citation")
+            except Exception:
+                pass  # Non-critical
+
     return {"status": "updated", "result": result}
 
 
@@ -1218,9 +1243,7 @@ async def request_audio(
 
     with get_session() as session:
         # Check paper exists, is public, and is completed
-        paper = session.query(ResearchRequest).filter(
-            ResearchRequest.id == request_id
-        ).first()
+        paper = session.query(ResearchRequest).filter(ResearchRequest.id == request_id).first()
         if not paper:
             raise HTTPException(status_code=404, detail="Paper not found")
         if not paper.is_public:
@@ -1229,13 +1252,19 @@ async def request_audio(
             raise HTTPException(status_code=400, detail="Paper is not yet completed")
 
         # Check for duplicate pending request from same user
-        existing = session.query(TtsRequest).filter(
-            TtsRequest.paper_id == request_id,
-            TtsRequest.user_id == str(user.id),
-            TtsRequest.status.in_(["pending", "generating", "no_quota"]),
-        ).first()
+        existing = (
+            session.query(TtsRequest)
+            .filter(
+                TtsRequest.paper_id == request_id,
+                TtsRequest.user_id == str(user.id),
+                TtsRequest.status.in_(["pending", "generating", "no_quota"]),
+            )
+            .first()
+        )
         if existing:
-            raise HTTPException(status_code=409, detail="You already have a pending audio request for this paper")
+            raise HTTPException(
+                status_code=409, detail="You already have a pending audio request for this paper"
+            )
 
         # Create queue entry
         tts_req = TtsRequest(
@@ -1247,10 +1276,14 @@ async def request_audio(
         session.commit()
 
         # Queue position
-        queue_position = session.query(TtsRequest).filter(
-            TtsRequest.status.in_(["pending", "no_quota"]),
-            TtsRequest.requested_at <= tts_req.requested_at,
-        ).count()
+        queue_position = (
+            session.query(TtsRequest)
+            .filter(
+                TtsRequest.status.in_(["pending", "no_quota"]),
+                TtsRequest.requested_at <= tts_req.requested_at,
+            )
+            .count()
+        )
 
         return {
             "tts_request_id": str(tts_req.id),
@@ -1269,20 +1302,29 @@ async def get_tts_status_authed(
     _validate_uuid(request_id)
 
     with get_session() as session:
-        tts_req = session.query(TtsRequest).filter(
-            TtsRequest.paper_id == request_id,
-            TtsRequest.user_id == str(user.id),
-        ).order_by(TtsRequest.requested_at.desc()).first()
+        tts_req = (
+            session.query(TtsRequest)
+            .filter(
+                TtsRequest.paper_id == request_id,
+                TtsRequest.user_id == str(user.id),
+            )
+            .order_by(TtsRequest.requested_at.desc())
+            .first()
+        )
 
         if not tts_req:
             raise HTTPException(status_code=404, detail="No audio request found for this paper")
 
         queue_position = None
         if tts_req.status in ("pending", "no_quota"):
-            queue_position = session.query(TtsRequest).filter(
-                TtsRequest.status.in_(["pending", "no_quota"]),
-                TtsRequest.requested_at <= tts_req.requested_at,
-            ).count()
+            queue_position = (
+                session.query(TtsRequest)
+                .filter(
+                    TtsRequest.status.in_(["pending", "no_quota"]),
+                    TtsRequest.requested_at <= tts_req.requested_at,
+                )
+                .count()
+            )
 
         return {
             "tts_request_id": str(tts_req.id),
@@ -1303,17 +1345,26 @@ async def get_tts_status_public(slug: str):
     Returns the most recent completed TtsRequest for the paper, if any.
     """
     with get_session() as session:
-        paper = session.query(ResearchRequest).filter(
-            ResearchRequest.slug == slug,
-            ResearchRequest.is_public,
-        ).first()
+        paper = (
+            session.query(ResearchRequest)
+            .filter(
+                ResearchRequest.slug == slug,
+                ResearchRequest.is_public,
+            )
+            .first()
+        )
         if not paper:
             raise HTTPException(status_code=404, detail="Paper not found")
 
-        tts_req = session.query(TtsRequest).filter(
-            TtsRequest.paper_id == str(paper.id),
-            TtsRequest.status == "done",
-        ).order_by(TtsRequest.requested_at.desc()).first()
+        tts_req = (
+            session.query(TtsRequest)
+            .filter(
+                TtsRequest.paper_id == str(paper.id),
+                TtsRequest.status == "done",
+            )
+            .order_by(TtsRequest.requested_at.desc())
+            .first()
+        )
 
         return {
             "has_audio": tts_req is not None,
@@ -1321,4 +1372,3 @@ async def get_tts_status_public(slug: str):
             "chars_generated": tts_req.chars_generated if tts_req else None,
             "status": tts_req.status if tts_req else None,
         }
-

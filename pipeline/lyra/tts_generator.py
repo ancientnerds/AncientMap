@@ -70,7 +70,9 @@ def check_speech_quota() -> int:
                 remaining = max(0, total - used)
                 logger.info(
                     "[TTS] Speech quota: %d / %d used, %d remaining",
-                    used, total, remaining,
+                    used,
+                    total,
+                    remaining,
                 )
                 return remaining
         logger.warning("[TTS] speech-hd not found in quota response")
@@ -146,9 +148,7 @@ def call_minimax_tts(text: str, speed: float = 1.0) -> bytes:
         data = resp.json()
         base = data.get("base_resp", {})
         if base.get("status_code", -1) != 0:
-            raise RuntimeError(
-                f"TTS error {base.get('status_code')}: {base.get('status_msg')}"
-            )
+            raise RuntimeError(f"TTS error {base.get('status_code')}: {base.get('status_msg')}")
         hex_audio = data.get("data", {}).get("audio", "")
         return bytes.fromhex(hex_audio)
     finally:
@@ -182,7 +182,12 @@ def concatenate_mp3s(chunks: list[bytes]) -> bytes:
             if chunk[:3] == b"ID3":
                 # Find the size bytes in the ID3 header (bytes 4-6, syncsafe)
                 size_bytes = chunk[6:10]
-                id3_size = (size_bytes[0] << 21) | (size_bytes[1] << 14) | (size_bytes[2] << 7) | size_bytes[3]
+                id3_size = (
+                    (size_bytes[0] << 21)
+                    | (size_bytes[1] << 14)
+                    | (size_bytes[2] << 7)
+                    | size_bytes[3]
+                )
                 start = 10 + id3_size
             # Also skip any leading MP3 frames that are just silence (< 500 bytes of near-zero)
             # to avoid a "click" at concatenation boundaries
@@ -213,7 +218,10 @@ def generate_paper_audio(tts_request_id: str, settings) -> tuple[str, int]:
             raise ValueError(f"TtsRequest {tts_request_id} not found")
 
         from pipeline.database import ResearchRequest
-        paper = session.query(ResearchRequest).filter(ResearchRequest.id == tts_req.paper_id).first()
+
+        paper = (
+            session.query(ResearchRequest).filter(ResearchRequest.id == tts_req.paper_id).first()
+        )
         if not paper:
             raise ValueError(f"Paper {tts_req.paper_id} not found")
 
@@ -221,6 +229,7 @@ def generate_paper_audio(tts_request_id: str, settings) -> tuple[str, int]:
             raise ValueError(f"Paper {tts_req.paper_id} has no result_json")
 
         import json
+
         result = json.loads(paper.result_json)
         report = result.get("report", "")
         if not report:
@@ -234,12 +243,21 @@ def generate_paper_audio(tts_request_id: str, settings) -> tuple[str, int]:
     clean_text = strip_citations(report)
 
     # Split into paragraphs (split on double newlines, keep non-empty)
-    paragraphs = [p.strip() for p in clean_text.split("\n\n") if p.strip() and len(p.strip()) >= MIN_CHARS_FOR_PARAGRAPH]
+    paragraphs = [
+        p.strip()
+        for p in clean_text.split("\n\n")
+        if p.strip() and len(p.strip()) >= MIN_CHARS_FOR_PARAGRAPH
+    ]
 
     if not paragraphs:
         raise ValueError(f"Paper {tts_req.paper_id} has no usable paragraphs after cleaning")
 
-    logger.info("[TTS] Generating audio for paper %s (%s): %d paragraphs", tts_req.paper_id, paper.slug or paper.id, len(paragraphs))
+    logger.info(
+        "[TTS] Generating audio for paper %s (%s): %d paragraphs",
+        tts_req.paper_id,
+        paper.slug or paper.id,
+        len(paragraphs),
+    )
 
     audio_chunks: list[bytes] = []
     total_chars = 0
@@ -256,7 +274,10 @@ def generate_paper_audio(tts_request_id: str, settings) -> tuple[str, int]:
         if quota > 0 and total_chars + len(para) > quota - BUDGET_SAFETY_BUFFER:
             logger.info(
                 "[TTS] Would exceed budget (%d + %d > %d - %d), stopping",
-                total_chars, len(para), quota, BUDGET_SAFETY_BUFFER,
+                total_chars,
+                len(para),
+                quota,
+                BUDGET_SAFETY_BUFFER,
             )
             break
 
@@ -265,8 +286,13 @@ def generate_paper_audio(tts_request_id: str, settings) -> tuple[str, int]:
             chunk_bytes = call_minimax_tts(para_with_pause)
             audio_chunks.append(chunk_bytes)
             total_chars += len(para)
-            logger.info("[TTS] Paragraph %d/%d done: %d chars, %d bytes",
-                        i + 1, len(paragraphs), len(para), len(chunk_bytes))
+            logger.info(
+                "[TTS] Paragraph %d/%d done: %d chars, %d bytes",
+                i + 1,
+                len(paragraphs),
+                len(para),
+                len(chunk_bytes),
+            )
         except Exception as exc:
             logger.warning("[TTS] Paragraph %d failed: %s — stopping generation", i + 1, exc)
             break
@@ -289,7 +315,10 @@ def generate_paper_audio(tts_request_id: str, settings) -> tuple[str, int]:
 
     logger.info(
         "[TTS] Saved audio for paper %s: %d total chars, %d bytes → %s",
-        tts_req.paper_id, total_chars, len(full_audio), relative_url,
+        tts_req.paper_id,
+        total_chars,
+        len(full_audio),
+        relative_url,
     )
 
     # Update DB
@@ -331,7 +360,11 @@ def process_pending_tts(settings) -> int:
 
     logger.info(
         "[TTS] Processing TtsRequest %s (paper=%s, user=%s, status=%s, queued_at=%s)",
-        tts_req.id, tts_req.paper_id, tts_req.user_id, tts_req.status, tts_req.requested_at,
+        tts_req.id,
+        tts_req.paper_id,
+        tts_req.user_id,
+        tts_req.status,
+        tts_req.requested_at,
     )
 
     try:
@@ -346,7 +379,9 @@ def process_pending_tts(settings) -> int:
                     session.commit()
             logger.info("[TTS] Quota exhausted for %s, set to no_quota", tts_req.id)
         else:
-            logger.info("[TTS] Successfully generated audio for %s: %s (%d chars)", tts_req.id, url, chars)
+            logger.info(
+                "[TTS] Successfully generated audio for %s: %s (%d chars)", tts_req.id, url, chars
+            )
         return 1
 
     except Exception as exc:

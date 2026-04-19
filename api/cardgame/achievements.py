@@ -27,6 +27,7 @@ from api.cardgame.models import (
 from pipeline.database import (
     CreditGrant,
     DiscordUser,
+    ResearchRequest,
     SiteBookmark,
     SiteLike,
     TokenUsageLog,
@@ -357,6 +358,64 @@ _a(
     1000,
     30,
     "\U0001f5fa",
+)
+
+# ---- SCHOLAR RESEARCH (5) ----
+_a(
+    "scholar_first_research",
+    "scholar",
+    "First Inquiry",
+    "Submit your first research question",
+    "bronze",
+    100,
+    20,
+    "\U0001f4a1",
+)
+_a(
+    "scholar_ten_researches",
+    "scholar",
+    "Prolific Researcher",
+    "Submit 10 research questions",
+    "silver",
+    500,
+    40,
+    "\U0001f4da",
+    2,
+    1,
+)
+_a(
+    "scholar_first_publication",
+    "scholar",
+    "First Publication",
+    "Publish your first research paper to the library",
+    "silver",
+    750,
+    50,
+    "\U0001f4c0",
+    2,
+    1,
+)
+_a(
+    "scholar_five_publications",
+    "scholar",
+    "Published Author",
+    "Publish 5 research papers",
+    "gold",
+    2000,
+    75,
+    "\U0001f3db\ufe0f",
+    3,
+    1,
+)
+_a(
+    "scholar_citation_starter",
+    "scholar",
+    "Bibliographer",
+    "Add citations to a research paper",
+    "bronze",
+    100,
+    20,
+    "\U0001f4dc",
 )
 
 # ---- COLLECTOR (14) ----
@@ -1431,6 +1490,17 @@ _EVENT_ACHIEVEMENTS: dict[str, list[str]] = {
         "scholar_deep_diver",
         "scholar_cartographer",
     ],
+    "research_submit": [
+        "scholar_first_research",
+        "scholar_ten_researches",
+    ],
+    "research_publish": [
+        "scholar_first_publication",
+        "scholar_five_publications",
+    ],
+    "research_citation": [
+        "scholar_citation_starter",
+    ],
     "frontend_event": [
         "explorer_screenshot",
         "explorer_street_view",
@@ -2158,6 +2228,49 @@ def _check_single(
 
             flag_modified(ps, "feature_flags")
         return len(seen) >= 50
+
+    # --- SCHOLAR RESEARCH ---
+    if aid in ("scholar_first_research", "scholar_ten_researches"):
+        count = session.execute(
+            text("""
+                SELECT COUNT(*) FROM research_requests WHERE user_id = :uid
+            """),
+            {"uid": str(user_id)},
+        ).scalar()
+        thresholds = {"scholar_first_research": 1, "scholar_ten_researches": 10}
+        return (count or 0) >= thresholds[aid]
+
+    if aid in ("scholar_first_publication", "scholar_five_publications"):
+        count = session.execute(
+            text("""
+                SELECT COUNT(*) FROM research_requests
+                WHERE user_id = :uid AND is_public = TRUE
+            """),
+            {"uid": str(user_id)},
+        ).scalar()
+        thresholds = {"scholar_first_publication": 1, "scholar_five_publications": 5}
+        return (count or 0) >= thresholds[aid]
+
+    if aid == "scholar_citation_starter":
+        # Check if any completed research request has citations in its result
+        row = session.execute(
+            text("""
+                SELECT result_json FROM research_requests
+                WHERE user_id = :uid AND result_json IS NOT NULL
+                ORDER BY created_at DESC LIMIT 1
+            """),
+            {"uid": str(user_id)},
+        ).scalar()
+        if not row:
+            return False
+        try:
+            import json as _json
+
+            result = _json.loads(row) if isinstance(row, str) else row
+            citations = result.get("citations", [])
+            return len(citations) > 0
+        except Exception:
+            return False
 
     # --- HISTORIAN ---
     if aid in (

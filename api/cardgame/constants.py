@@ -547,3 +547,58 @@ EMPIRE_DESCRIPTIONS: dict[str, str] = {
 }
 
 EMPIRE_PERIODS: dict[str, str] = {eid: get_empire_period(eid) for eid in EMPIRE_METADATA}
+
+# --------------------------------------------------------------------
+# Lyra NPC Duel Tiers
+# --------------------------------------------------------------------
+
+LYRA_TIERS: dict[int, dict] = {
+    1: {
+        "name": "Casual Lyra",
+        "description": "Lyra in a relaxed mood. She's still learning your name.",
+        "min_tier": 1,
+        "max_tier": 2,
+        "synergy_level": 0,
+        "win_credits": 5,
+        "loss_credits": 2,
+        "win_xp": 10,
+        "loss_xp": 3,
+        "win_pack": None,
+    },
+    2: {
+        "name": "Scholar Lyra",
+        "description": "Lyra with her research notes. She means business.",
+        "min_tier": 2,
+        "max_tier": 3,
+        "synergy_level": 1,
+        "win_credits": 15,
+        "loss_credits": 5,
+        "win_xp": 25,
+        "loss_xp": 8,
+        "win_pack": None,
+    },
+    3: {
+        "name": "Sage Lyra",
+        "description": "Lyra at full knowledge. The Library of Alexandria has nothing on her.",
+        "min_tier": 3,
+        "max_tier": 4,
+        "synergy_level": 2,
+        "win_credits": 30,
+        "loss_credits": 10,
+        "win_xp": 50,
+        "loss_xp": 15,
+        "win_pack": "rare",
+    },
+    4: {
+        "name": "Ancient Lyra",
+        "description": "Lyra channeling the wisdom of ten thousand scholars. Good luck.",
+        "min_tier": 4,
+        "max_tier": 5,
+        "synergy_level": 3,
+        "win_credits": 75,
+        "loss_credits": 20,
+        "win_xp": 100,
+        "loss_xp": 30,
+        "win_pack": "epic",
+    },
+}
