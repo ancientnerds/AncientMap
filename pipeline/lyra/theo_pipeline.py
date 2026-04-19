@@ -2033,7 +2033,7 @@ class TheoPipeline:
                 "subtask_total": paper_subtasks,
             }
         )
-        ctx.paper_text = verify_all_citations(
+        ctx.paper_text = await verify_all_citations(
             ctx.paper_text, verify_sources, settings=self._settings
         )
 

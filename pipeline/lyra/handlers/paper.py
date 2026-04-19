@@ -244,11 +244,12 @@ class PaperHandler(BaseHandler):
                     }
                 )
 
-        self.state.paper_text = verify_all_citations(
-            self.state.paper_text,
-            verify_sources,
-            settings=settings,
-        )
+        async with self.semaphore:
+            self.state.paper_text = await verify_all_citations(
+                self.state.paper_text,
+                verify_sources,
+                settings=settings,
+            )
 
         # ---------------------------------------------------------------
         # Step 7.5: Finalize references — renumber [N] markers to contiguous

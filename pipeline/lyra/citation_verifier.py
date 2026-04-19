@@ -9,17 +9,20 @@ This is the FINAL gate before publishing. Nothing passes without verified citati
 Usage:
     from pipeline.lyra.citation_verifier import verify_all_citations
 
-    verified_text = verify_all_citations(text, sources, settings)
+    verified_text = await verify_all_citations(text, sources, settings)
 """
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
 
 from pipeline.lyra.config import LyraAPIError, LyraSettings, _get_settings, call_api
 
 logger = logging.getLogger(__name__)
+
+_MAX_CONCURRENT = 10  # semaphore cap for concurrent citation checks
 
 _VERIFY_SCHEMA = {
     "type": "object",
@@ -38,17 +41,17 @@ def _get_sentence_with_citation(text: str, cite_num: int) -> list[str]:
     return [s for s in sentences if pattern.search(s)]
 
 
-def _verify_one_citation(
+async def _verify_one_citation(
     sentence: str,
     cite_num: int,
     source_title: str,
     source_snippet: str,
     source_url: str,
     settings: LyraSettings,
-) -> bool:
+) -> tuple[bool, str]:
     """Ask the LLM: does this source support this specific claim?
 
-    Returns True if supported, False if not.
+    Returns (supported, reason) tuple.
     """
     # Clean the sentence — remove all [N] markers for clarity
     clean_sentence = re.sub(r"\[\d+\]", "", sentence).strip()
@@ -91,7 +94,8 @@ def _verify_one_citation(
         try:
             if attempt < 2:
                 # Structured output via tool-use trick
-                response = call_api(
+                response = await asyncio.to_thread(
+                    call_api,
                     system=system,
                     messages=[{"role": "user", "content": user}],
                     max_tokens=512,
@@ -108,7 +112,8 @@ def _verify_one_citation(
                 )
             else:
                 # Fallback: plain text — ask for yes/no
-                response = call_api(
+                response = await asyncio.to_thread(
+                    call_api,
                     system=system + "\n\nRespond with ONLY the word 'true' or 'false'.",
                     messages=[{"role": "user", "content": user}],
                     max_tokens=64,
@@ -147,7 +152,7 @@ def _verify_one_citation(
                     clean_sentence[:60],
                     reason[:80],
                 )
-            return supported
+            return supported, reason
 
         except (LyraAPIError, Exception) as e:
             if attempt < 2:
@@ -156,13 +161,13 @@ def _verify_one_citation(
             logger.warning(
                 "[verifier] Citation check failed for [%d] after 3 attempts: %s", cite_num, e
             )
-            return False
+            return False, str(e)
 
     logger.warning("[verifier] Citation check exhausted retries for [%d]", cite_num)
-    return False
+    return False, "retries exhausted"
 
 
-def verify_all_citations(
+async def verify_all_citations(
     text: str,
     sources: list[dict],
     settings: LyraSettings | None = None,
@@ -232,17 +237,17 @@ def verify_all_citations(
 
         rejected_cites: set[int] = set()
 
-        for cite_num in sorted(body_cites):
+        # Build tasks for all citations, run concurrently with semaphore cap
+        async def _check_cite(cite_num: int) -> tuple[int, bool]:
             if cite_num not in source_map:
                 logger.info("[verifier] [%d] not in source list — removing", cite_num)
-                rejected_cites.add(cite_num)
-                continue
+                return cite_num, False
 
             source = source_map[cite_num]
             sentences = _get_sentence_with_citation(check_text, cite_num)
 
             for sentence in sentences:
-                supported = _verify_one_citation(
+                supported, _ = await _verify_one_citation(
                     sentence=sentence,
                     cite_num=cite_num,
                     source_title=source.get("label", ""),
@@ -251,8 +256,27 @@ def verify_all_citations(
                     settings=settings,
                 )
                 if not supported:
-                    rejected_cites.add(cite_num)
-                    break  # One failed sentence is enough to reject the citation
+                    return cite_num, False  # One failed sentence is enough to reject
+            return cite_num, True
+
+        semaphore = asyncio.Semaphore(_MAX_CONCURRENT)
+
+        async def _capped_check(cite_num: int) -> tuple[int, bool]:
+            async with semaphore:
+                return await _check_cite(cite_num)
+
+        results = await asyncio.gather(
+            *[_capped_check(cn) for cn in sorted(body_cites)],
+            return_exceptions=True,
+        )
+
+        for result in results:
+            if isinstance(result, Exception):
+                logger.warning("[verifier] Citation check raised: %s", result)
+                continue
+            cite_num, supported = result
+            if not supported:
+                rejected_cites.add(cite_num)
 
         if not rejected_cites:
             logger.info("[verifier] All %d citations verified — CLEAN", len(body_cites))

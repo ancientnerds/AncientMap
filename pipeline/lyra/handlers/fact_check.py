@@ -39,11 +39,12 @@ class FactCheckHandler(BaseHandler):
                     "content": f"Fact-checking {len(verify_sources)} citations...",
                 }
             )
-            self.state.paper_text = verify_all_citations(
-                self.state.paper_text,
-                verify_sources,
-                settings=_get_settings(),
-            )
+            async with self.semaphore:
+                self.state.paper_text = await verify_all_citations(
+                    self.state.paper_text,
+                    verify_sources,
+                    settings=_get_settings(),
+                )
             self.state.log(
                 "fact_check",
                 f"Verified {len(verify_sources)} citations in paper",
