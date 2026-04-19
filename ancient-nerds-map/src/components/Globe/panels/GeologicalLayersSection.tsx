@@ -141,6 +141,9 @@ export function GeologicalLayersSection({
       className="geological-layers-window"
       style={{ height, '--geological-left': `${position.x}px`, '--geological-bottom': `${position.y}px` } as React.CSSProperties}
     >
+      {/* Top resize handle - outside window edge */}
+      <div className="resize-n" onMouseDown={handleTopResizeStart} />
+
       <div className="empire-borders-header" onMouseDown={handlePositionDragStart}>
         <div className="panel-label">Geological Layers</div>
         <button
@@ -154,14 +157,8 @@ export function GeologicalLayersSection({
         </button>
       </div>
 
-      {/* Resize handle - top */}
-      <div
-        className="empire-borders-resize-handle empire-borders-resize-handle-top"
-        onMouseDown={handleTopResizeStart}
-      />
-
+      {/* Paleoshoreline toggle — disabled in Mapbox (3D contour lines don't render on Mapbox) */}
       <div className="empire-borders-list">
-        {/* Paleoshoreline toggle — disabled in Mapbox (3D contour lines don't render on Mapbox) */}
         <label className={`layer-toggle ${showMapbox ? 'mapbox-unavailable' : ''}`}>
           <input
             type="checkbox"
@@ -318,8 +315,8 @@ export function GeologicalLayersSection({
         })}
       </div>
 
-      {/* Resize handle - bottom */}
-      <div className="empire-borders-resize-handle" onMouseDown={handleResizeStart} />
+      {/* Bottom resize handle - outside window edge */}
+      <div className="resize-s" onMouseDown={handleResizeStart} />
     </div>
   )
 }

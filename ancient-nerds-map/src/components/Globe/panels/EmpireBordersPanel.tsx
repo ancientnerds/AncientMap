@@ -143,6 +143,9 @@ export function EmpireBordersPanel({
       className="empire-borders-window"
       style={{ height, '--empire-left': `${position.x}px`, '--empire-bottom': `${position.y}px` } as React.CSSProperties}
     >
+      {/* Top resize handle - outside window edge */}
+      <div className="resize-n" onMouseDown={handleTopResizeStart} />
+
       <div className="empire-borders-header" onMouseDown={handlePositionDragStart}>
         <div className="panel-label">Empire Borders</div>
         <button
@@ -205,12 +208,6 @@ export function EmpireBordersPanel({
           </span>
         </div>
       )}
-
-      {/* Resize handle - top */}
-      <div
-        className="empire-borders-resize-handle empire-borders-resize-handle-top"
-        onMouseDown={handleTopResizeStart}
-      />
 
       {/* Empire list - scrollable */}
       <div className="empire-borders-list">
@@ -292,11 +289,8 @@ export function EmpireBordersPanel({
         ))}
       </div>
 
-      {/* Resize handle - bottom */}
-      <div
-        className="empire-borders-resize-handle"
-        onMouseDown={handleResizeStart}
-      />
+      {/* Bottom resize handle - outside window edge */}
+      <div className="resize-s" onMouseDown={handleResizeStart} />
     </div>
   )
 }

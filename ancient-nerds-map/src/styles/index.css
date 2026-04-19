@@ -5940,6 +5940,54 @@ a.popup-window-btn {
   flex-direction: column;
 }
 
+/* Resize handles for geological and historical routes windows */
+.geological-layers-window .resize-n,
+.geological-layers-window .resize-s,
+.historical-routes-window .resize-n,
+.historical-routes-window .resize-s {
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  height: 10px;
+  cursor: ns-resize;
+  z-index: 10;
+}
+
+.geological-layers-window .resize-n,
+.historical-routes-window .resize-n { top: -5px; }
+.geological-layers-window .resize-s,
+.historical-routes-window .resize-s { bottom: -5px; }
+
+.geological-layers-window .resize-n::before,
+.geological-layers-window .resize-s::before,
+.historical-routes-window .resize-n::before,
+.historical-routes-window .resize-s::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 40px;
+  height: 2px;
+  background: var(--accent-glow-40);
+  border-radius: 1px;
+  opacity: 0.5;
+  transition: opacity 0.2s;
+}
+
+.geological-layers-window .resize-n:hover::before,
+.geological-layers-window .resize-s:hover::before,
+.historical-routes-window .resize-n:hover::before,
+.historical-routes-window .resize-s:hover::before {
+  opacity: 1;
+}
+
+.geological-layers-window .resize-n:hover,
+.geological-layers-window .resize-s:hover,
+.historical-routes-window .resize-n:hover,
+.historical-routes-window .resize-s:hover {
+  background: transparent;
+}
+
 .sea-level-controls {
   margin-top: 8px;
   padding: 8px;
@@ -6357,6 +6405,44 @@ a.popup-window-btn {
   flex-direction: column;
 }
 
+/* Resize handles positioned OUTSIDE the window edge (like SitePopup) */
+.empire-borders-window .resize-n,
+.empire-borders-window .resize-s {
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  height: 10px;
+  cursor: ns-resize;
+  z-index: 10;
+}
+
+.empire-borders-window .resize-n { top: -5px; }
+.empire-borders-window .resize-s { bottom: -5px; }
+
+.empire-borders-window .resize-n::before,
+.empire-borders-window .resize-s::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 40px;
+  height: 2px;
+  background: var(--accent-glow-40);
+  border-radius: 1px;
+  opacity: 0.5;
+  transition: opacity 0.2s;
+}
+
+.empire-borders-window .resize-n:hover::before,
+.empire-borders-window .resize-s:hover::before {
+  opacity: 1;
+}
+
+.empire-borders-window .resize-n:hover,
+.empire-borders-window .resize-s:hover {
+  background: transparent;
+}
+
 .empire-borders-header {
   display: flex;
   justify-content: space-between;
@@ -6431,41 +6517,6 @@ a.popup-window-btn {
   padding: 6px 12px;
   border-bottom: 1px solid var(--border-accent);
   flex-shrink: 0;
-}
-
-/* Resize handle - horizontal bar for vertical resizing */
-.empire-borders-resize-handle {
-  height: 10px;
-  cursor: ns-resize;
-  background: linear-gradient(180deg, transparent, var(--accent-glow-20));
-  flex-shrink: 0;
-  border-bottom: 1px solid var(--border-accent);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  position: relative;
-}
-
-.empire-borders-resize-handle::before {
-  content: '';
-  width: 40px;
-  height: 2px;
-  background: var(--accent-glow-40);
-  border-radius: 1px;
-  opacity: 0.5;
-  transition: opacity 0.2s;
-}
-
-.empire-borders-resize-handle:hover::before {
-  opacity: 1;
-}
-
-.empire-borders-resize-handle:hover {
-  background: linear-gradient(180deg, transparent, var(--accent-glow-30));
-}
-
-.empire-borders-resize-handle-top:hover {
-  background: linear-gradient(0deg, transparent, var(--accent-glow-30));
 }
 
 .global-timeline-slider {

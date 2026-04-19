@@ -124,6 +124,9 @@ export function HistoricalRoutesPanel({
       className="historical-routes-window"
       style={{ height, '--routes-left': `${position.x}px`, '--routes-bottom': `${position.y}px` } as React.CSSProperties}
     >
+      {/* Top resize handle - outside window edge */}
+      <div className="resize-n" onMouseDown={handleTopResizeStart} />
+
       <div className="empire-borders-header" onMouseDown={handlePositionDragStart}>
         <div className="panel-label">Historical Routes</div>
         <button
@@ -136,12 +139,6 @@ export function HistoricalRoutesPanel({
           </svg>
         </button>
       </div>
-
-      {/* Resize handle - top */}
-      <div
-        className="empire-borders-resize-handle empire-borders-resize-handle-top"
-        onMouseDown={handleTopResizeStart}
-      />
 
       {/* Quick actions row */}
       <div className="empire-options-row">
@@ -214,11 +211,8 @@ export function HistoricalRoutesPanel({
         ))}
       </div>
 
-      {/* Resize handle - bottom */}
-      <div
-        className="empire-borders-resize-handle"
-        onMouseDown={handleResizeStart}
-      />
+      {/* Bottom resize handle - outside window edge */}
+      <div className="resize-s" onMouseDown={handleResizeStart} />
     </div>
   )
 }
