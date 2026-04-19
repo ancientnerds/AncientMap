@@ -5,51 +5,38 @@
 
 import { EMPIRES, EMPIRE_REGIONS } from '../../../config/empireData'
 import { formatYear } from '../../../utils/geoUtils'
+import { WindowFrame } from './WindowFrame'
+import { useWindowDragResize } from '../../../hooks/globe/useWindowDragResize'
 
 interface EmpireBordersPanelProps {
-  // Window state
   isOpen: boolean
   onClose: () => void
   height: number
   onHeightChange: (height: number) => void
   width: number
   onWidthChange: (width: number) => void
-
-  // Position (for drag repositioning)
   position: { x: number; y: number }
   onPositionChange: (pos: { x: number; y: number }) => void
-
-  // Empire visibility
   visibleEmpires: Set<string>
   onToggleEmpire: (empireId: string) => void
   loadingEmpires: Set<string>
-
-  // Empire year controls
   empireYears: Record<string, number>
   empireYearOptions: Record<string, number[]>
   empireDefaultYears: Record<string, number>
   onChangeEmpireYear: (empireId: string, year: number) => void
   onUpdateEmpireYearDisplay: (empireId: string, year: number) => void
   onEmpireYearSliderInput: (empireId: string, year: number) => void
-
-  // Region expansion
   expandedRegions: Set<string>
   onToggleRegion: (region: string) => void
-
-  // Global timeline
   globalTimelineEnabled: boolean
   onToggleGlobalTimeline: (enabled: boolean) => void
   globalTimelineYear: number
   globalTimelineRange: { min: number; max: number }
   onGlobalTimelineYearChange: (year: number) => void
   onGlobalTimelineYearInput: (year: number) => void
-
-  // Quick actions
   onSelectAll: () => void
   onSelectNone: () => void
   onSelectInvert: () => void
-
-  // Empire metadata from pipeline (date ranges)
   empireMetadata: Map<string, { startYear: number; endYear: number; defaultYear: number }>
 }
 
@@ -81,110 +68,28 @@ export function EmpireBordersPanel({
   onGlobalTimelineYearInput,
   empireMetadata
 }: EmpireBordersPanelProps) {
+  const { startResize, handlePositionDragStart } = useWindowDragResize({
+    position,
+    width,
+    height,
+    onPositionChange,
+    onWidthChange,
+    onHeightChange,
+  })
+
   if (!isOpen) return null
 
-  const MIN_WIDTH = 200
-  const MIN_HEIGHT = 150
-
-  const startResize = (e: React.MouseEvent, direction: string) => {
-    e.preventDefault()
-    e.stopPropagation()
-    const startX = e.clientX
-    const startY = e.clientY
-    const startWidth = width
-    const startHeight = height
-    const startPos = { x: position.x, y: position.y }
-
-    const onMove = (e: MouseEvent) => {
-      const deltaX = e.clientX - startX
-      const deltaY = e.clientY - startY
-
-      let newWidth = startWidth
-      let newHeight = startHeight
-      let newX = startPos.x
-      let newY = startPos.y
-
-      if (direction.includes('e')) {
-        newWidth = Math.max(MIN_WIDTH, startWidth + deltaX)
-      }
-      if (direction.includes('w')) {
-        const widthChange = Math.min(deltaX, startWidth - MIN_WIDTH)
-        newWidth = startWidth - widthChange
-        newX = startPos.x + widthChange
-      }
-      if (direction.includes('s')) {
-        newHeight = Math.max(MIN_HEIGHT, startHeight + deltaY)
-      }
-      if (direction.includes('n')) {
-        const heightChange = Math.min(deltaY, startHeight - MIN_HEIGHT)
-        newHeight = startHeight - heightChange
-        newY = startPos.y - heightChange
-      }
-
-      onWidthChange(newWidth)
-      onHeightChange(newHeight)
-      onPositionChange({ x: newX, y: newY })
-    }
-    const onUp = () => {
-      document.removeEventListener('mousemove', onMove)
-      document.removeEventListener('mouseup', onUp)
-    }
-    document.addEventListener('mousemove', onMove)
-    document.addEventListener('mouseup', onUp)
-  }
-
-  const handlePositionDragStart = (e: React.MouseEvent) => {
-    if ((e.target as HTMLElement).closest('.panel-close-btn')) return
-    e.preventDefault()
-    const startX = e.clientX
-    const startY = e.clientY
-    const startPos = { x: position.x, y: position.y }
-
-    const onMove = (e: MouseEvent) => {
-      const deltaX = e.clientX - startX
-      const deltaY = e.clientY - startY
-      onPositionChange({
-        x: startPos.x + deltaX,
-        y: startPos.y - deltaY,
-      })
-    }
-    const onUp = () => {
-      document.removeEventListener('mousemove', onMove)
-      document.removeEventListener('mouseup', onUp)
-    }
-    document.addEventListener('mousemove', onMove)
-    document.addEventListener('mouseup', onUp)
-  }
-
   return (
-    <div
+    <WindowFrame
       className="empire-borders-window"
-      style={{ width, height, '--empire-left': `${position.x}px`, '--empire-bottom': `${position.y}px` } as React.CSSProperties}
+      position={position}
+      width={width}
+      height={height}
+      title="Empire Borders"
+      onClose={onClose}
+      dragResizeHandlers={{ startResize, handlePositionDragStart }}
+      headerClassName="empire-borders-header"
     >
-      {/* 8-direction resize handles */}
-      <div className="resize-n" onMouseDown={(e) => startResize(e, 'n')} />
-      <div className="resize-s" onMouseDown={(e) => startResize(e, 's')} />
-      <div className="resize-e" onMouseDown={(e) => startResize(e, 'e')} />
-      <div className="resize-w" onMouseDown={(e) => startResize(e, 'w')} />
-      <div className="resize-ne" onMouseDown={(e) => startResize(e, 'ne')} />
-      <div className="resize-nw" onMouseDown={(e) => startResize(e, 'nw')} />
-      <div className="resize-se" onMouseDown={(e) => startResize(e, 'se')} />
-      <div className="resize-sw" onMouseDown={(e) => startResize(e, 'sw')} />
-
-      <div className="empire-borders-header" onMouseDown={handlePositionDragStart}>
-        <div className="panel-label">Empire Borders</div>
-        <button
-          className="panel-close-btn"
-          onClick={onClose}
-          title="Close"
-        >
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M18 6L6 18M6 6l12 12"/>
-          </svg>
-        </button>
-      </div>
-
-      {/* Options row: By Period toggle + quick buttons */}
       <div className="empire-options-row">
         <label className="layer-toggle">
           <input
@@ -211,7 +116,6 @@ export function EmpireBordersPanel({
         </div>
       </div>
 
-      {/* Global timeline slider (shown when By Period is enabled) */}
       {globalTimelineEnabled && (
         <div className="global-timeline-row">
           <input
@@ -234,7 +138,6 @@ export function EmpireBordersPanel({
         </div>
       )}
 
-      {/* Empire list - scrollable */}
       <div className="empire-borders-list">
         {EMPIRE_REGIONS.map(region => (
           <div key={region} className="empire-region-compact">
@@ -254,7 +157,6 @@ export function EmpireBordersPanel({
                   const currentYear = empireYears[empire.id] || meta?.startYear || yearOptions[0] || 0
                   const yearIndex = yearOptions.indexOf(currentYear)
 
-                  // In global timeline mode, hide empires that don't exist at the current year
                   if (globalTimelineEnabled && isVisible && meta) {
                     if (globalTimelineYear < meta.startYear || globalTimelineYear > meta.endYear) {
                       return null
@@ -275,7 +177,6 @@ export function EmpireBordersPanel({
                       <span className="empire-name-truncated" title={empire.name}>
                         {empire.name}
                       </span>
-                      {/* Individual slider with year display - hidden when global timeline is enabled */}
                       {isVisible && yearOptions.length > 1 && !globalTimelineEnabled && (
                         <>
                           <span className="empire-year-display">{formatYear(currentYear)}</span>
@@ -313,6 +214,6 @@ export function EmpireBordersPanel({
           </div>
         ))}
       </div>
-    </div>
+    </WindowFrame>
   )
 }

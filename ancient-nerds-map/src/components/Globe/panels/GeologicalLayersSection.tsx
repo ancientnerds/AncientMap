@@ -11,21 +11,18 @@ import {
   type GeologicalLayerKey,
   type GeologicalLayerVisibility,
 } from '../../../config/geologicalLayers'
+import { WindowFrame } from './WindowFrame'
+import { useWindowDragResize } from '../../../hooks/globe/useWindowDragResize'
 
 interface GeologicalLayersPanelProps {
-  // Window state
   isOpen: boolean
   onClose: () => void
   height: number
   onHeightChange: (height: number) => void
   width: number
   onWidthChange: (width: number) => void
-
-  // Position (for drag repositioning)
   position: { x: number; y: number }
   onPositionChange: (pos: { x: number; y: number }) => void
-
-  // Paleoshoreline
   paleoshorelineVisible: boolean
   onPaleoshorelineToggle: () => void
   isLoadingPaleoshoreline: boolean
@@ -35,13 +32,9 @@ interface GeologicalLayersPanelProps {
   onSliderSeaLevelChange: (level: number) => void
   replaceCoastlines: boolean
   onReplaceCoastlinesChange: (replace: boolean) => void
-
-  // Geological overlays
   geologicalLayers: GeologicalLayerVisibility
   onGeologicalLayerToggle: (key: GeologicalLayerKey) => void
   isLoadingGeological: Partial<Record<GeologicalLayerKey, boolean>>
-
-  // Mapbox mode
   showMapbox: boolean
 }
 
@@ -70,7 +63,14 @@ export function GeologicalLayersSection({
 }: GeologicalLayersPanelProps) {
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set())
 
-  if (!isOpen) return null
+  const { startResize, handlePositionDragStart } = useWindowDragResize({
+    position,
+    width,
+    height,
+    onPositionChange,
+    onWidthChange,
+    onHeightChange,
+  })
 
   const toggleGroup = (group: string) => {
     setExpandedGroups(prev => {
@@ -81,108 +81,19 @@ export function GeologicalLayersSection({
     })
   }
 
-  const MIN_WIDTH = 200
-  const MIN_HEIGHT = 150
-
-  const startResize = (e: React.MouseEvent, direction: string) => {
-    e.preventDefault()
-    e.stopPropagation()
-    const startX = e.clientX
-    const startY = e.clientY
-    const startWidth = width
-    const startHeight = height
-    const startPos = { x: position.x, y: position.y }
-
-    const onMove = (e: MouseEvent) => {
-      const deltaX = e.clientX - startX
-      const deltaY = e.clientY - startY
-
-      let newWidth = startWidth
-      let newHeight = startHeight
-      let newX = startPos.x
-      let newY = startPos.y
-
-      if (direction.includes('e')) {
-        newWidth = Math.max(MIN_WIDTH, startWidth + deltaX)
-      }
-      if (direction.includes('w')) {
-        const widthChange = Math.min(deltaX, startWidth - MIN_WIDTH)
-        newWidth = startWidth - widthChange
-        newX = startPos.x + widthChange
-      }
-      if (direction.includes('s')) {
-        newHeight = Math.max(MIN_HEIGHT, startHeight + deltaY)
-      }
-      if (direction.includes('n')) {
-        const heightChange = Math.min(deltaY, startHeight - MIN_HEIGHT)
-        newHeight = startHeight - heightChange
-        newY = startPos.y - heightChange
-      }
-
-      onWidthChange(newWidth)
-      onHeightChange(newHeight)
-      onPositionChange({ x: newX, y: newY })
-    }
-    const onUp = () => {
-      document.removeEventListener('mousemove', onMove)
-      document.removeEventListener('mouseup', onUp)
-    }
-    document.addEventListener('mousemove', onMove)
-    document.addEventListener('mouseup', onUp)
-  }
-
-  const handlePositionDragStart = (e: React.MouseEvent) => {
-    if ((e.target as HTMLElement).closest('.panel-close-btn')) return
-    e.preventDefault()
-    const startX = e.clientX
-    const startY = e.clientY
-    const startPos = { x: position.x, y: position.y }
-
-    const onMove = (e: MouseEvent) => {
-      const deltaX = e.clientX - startX
-      const deltaY = e.clientY - startY
-      onPositionChange({
-        x: startPos.x + deltaX,
-        y: startPos.y - deltaY,
-      })
-    }
-    const onUp = () => {
-      document.removeEventListener('mousemove', onMove)
-      document.removeEventListener('mouseup', onUp)
-    }
-    document.addEventListener('mousemove', onMove)
-    document.addEventListener('mouseup', onUp)
-  }
+  if (!isOpen) return null
 
   return (
-    <div
+    <WindowFrame
       className="geological-layers-window"
-      style={{ width, height, '--geological-left': `${position.x}px`, '--geological-bottom': `${position.y}px` } as React.CSSProperties}
+      position={position}
+      width={width}
+      height={height}
+      title="Geological Layers"
+      onClose={onClose}
+      dragResizeHandlers={{ startResize, handlePositionDragStart }}
+      headerClassName="empire-borders-header"
     >
-      {/* 8-direction resize handles */}
-      <div className="resize-n" onMouseDown={(e) => startResize(e, 'n')} />
-      <div className="resize-s" onMouseDown={(e) => startResize(e, 's')} />
-      <div className="resize-e" onMouseDown={(e) => startResize(e, 'e')} />
-      <div className="resize-w" onMouseDown={(e) => startResize(e, 'w')} />
-      <div className="resize-ne" onMouseDown={(e) => startResize(e, 'ne')} />
-      <div className="resize-nw" onMouseDown={(e) => startResize(e, 'nw')} />
-      <div className="resize-se" onMouseDown={(e) => startResize(e, 'se')} />
-      <div className="resize-sw" onMouseDown={(e) => startResize(e, 'sw')} />
-
-      <div className="empire-borders-header" onMouseDown={handlePositionDragStart}>
-        <div className="panel-label">Geological Layers</div>
-        <button
-          className="panel-close-btn"
-          onClick={onClose}
-          title="Close"
-        >
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M18 6L6 18M6 6l12 12"/>
-          </svg>
-        </button>
-      </div>
-
-      {/* Paleoshoreline toggle — disabled in Mapbox (3D contour lines don't render on Mapbox) */}
       <div className="empire-borders-list">
         <label className={`layer-toggle ${showMapbox ? 'mapbox-unavailable' : ''}`}>
           <input
@@ -199,7 +110,6 @@ export function GeologicalLayersSection({
           {isLoadingPaleoshoreline && <span className="loading-indicator">...</span>}
         </label>
 
-        {/* Sea level controls */}
         {paleoshorelineVisible && (
           <div className="sea-level-controls">
             <div className="sea-level-value">
@@ -295,7 +205,6 @@ export function GeologicalLayersSection({
           </div>
         )}
 
-        {/* North Sea Overlays */}
         <div className="subsection-label" style={{ marginTop: 8 }}>North Sea Overlays</div>
 
         {GEOLOGICAL_GROUPS.map(({ group, label, layers }) => {
@@ -339,6 +248,6 @@ export function GeologicalLayersSection({
           )
         })}
       </div>
-    </div>
+    </WindowFrame>
   )
 }
