@@ -19,6 +19,10 @@ interface GeologicalLayersPanelProps {
   height: number
   onHeightChange: (height: number) => void
 
+  // Position (for drag repositioning)
+  position: { x: number; y: number }
+  onPositionChange: (pos: { x: number; y: number }) => void
+
   // Paleoshoreline
   paleoshorelineVisible: boolean
   onPaleoshorelineToggle: () => void
@@ -44,6 +48,8 @@ export function GeologicalLayersSection({
   onClose,
   height,
   onHeightChange,
+  position,
+  onPositionChange,
   paleoshorelineVisible,
   onPaleoshorelineToggle,
   isLoadingPaleoshoreline,
@@ -73,6 +79,7 @@ export function GeologicalLayersSection({
 
   const handleResizeStart = (e: React.MouseEvent) => {
     e.preventDefault()
+    e.stopPropagation()
     const startY = e.clientY
     const startHeight = height
 
@@ -88,12 +95,35 @@ export function GeologicalLayersSection({
     document.addEventListener('mouseup', onUp)
   }
 
+  const handlePositionDragStart = (e: React.MouseEvent) => {
+    if ((e.target as HTMLElement).closest('.panel-close-btn')) return
+    e.preventDefault()
+    const startX = e.clientX
+    const startY = e.clientY
+    const startPos = { x: position.x, y: position.y }
+
+    const onMove = (e: MouseEvent) => {
+      const deltaX = e.clientX - startX
+      const deltaY = startY - e.clientY
+      onPositionChange({
+        x: startPos.x + deltaX,
+        y: startPos.y + deltaY,
+      })
+    }
+    const onUp = () => {
+      document.removeEventListener('mousemove', onMove)
+      document.removeEventListener('mouseup', onUp)
+    }
+    document.addEventListener('mousemove', onMove)
+    document.addEventListener('mouseup', onUp)
+  }
+
   return (
     <div
       className="empire-borders-window geological-layers-window"
-      style={{ height }}
+      style={{ height, left: position.x, bottom: position.y }}
     >
-      <div className="empire-borders-header">
+      <div className="empire-borders-header" onMouseDown={handlePositionDragStart}>
         <div className="panel-label">Geological Layers</div>
         <button
           className="panel-close-btn"

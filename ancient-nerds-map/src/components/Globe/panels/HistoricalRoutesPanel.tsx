@@ -12,6 +12,10 @@ interface HistoricalRoutesPanelProps {
   height: number
   onHeightChange: (height: number) => void
 
+  // Position (for drag repositioning)
+  position: { x: number; y: number }
+  onPositionChange: (pos: { x: number; y: number }) => void
+
   // Route visibility
   visibleRoutes: Set<string>
   onToggleRoute: (routeId: string) => void
@@ -27,6 +31,8 @@ export function HistoricalRoutesPanel({
   onClose,
   height,
   onHeightChange,
+  position,
+  onPositionChange,
   visibleRoutes,
   onToggleRoute,
   loadingRoutes,
@@ -37,12 +43,36 @@ export function HistoricalRoutesPanel({
 
   const handleResizeStart = (e: React.MouseEvent) => {
     e.preventDefault()
+    e.stopPropagation()
     const startY = e.clientY
     const startHeight = height
 
     const onMove = (e: MouseEvent) => {
       const deltaY = startY - e.clientY
       onHeightChange(Math.max(150, Math.min(600, startHeight + deltaY)))
+    }
+    const onUp = () => {
+      document.removeEventListener('mousemove', onMove)
+      document.removeEventListener('mouseup', onUp)
+    }
+    document.addEventListener('mousemove', onMove)
+    document.addEventListener('mouseup', onUp)
+  }
+
+  const handlePositionDragStart = (e: React.MouseEvent) => {
+    if ((e.target as HTMLElement).closest('.panel-close-btn')) return
+    e.preventDefault()
+    const startX = e.clientX
+    const startY = e.clientY
+    const startPos = { x: position.x, y: position.y }
+
+    const onMove = (e: MouseEvent) => {
+      const deltaX = e.clientX - startX
+      const deltaY = startY - e.clientY
+      onPositionChange({
+        x: startPos.x + deltaX,
+        y: startPos.y + deltaY,
+      })
     }
     const onUp = () => {
       document.removeEventListener('mousemove', onMove)
@@ -73,10 +103,10 @@ export function HistoricalRoutesPanel({
 
   return (
     <div
-      className="empire-borders-window"
-      style={{ height }}
+      className="empire-borders-window historical-routes-window"
+      style={{ height, left: position.x, bottom: position.y }}
     >
-      <div className="empire-borders-header">
+      <div className="empire-borders-header" onMouseDown={handlePositionDragStart}>
         <div className="panel-label">Historical Routes</div>
         <button
           className="panel-close-btn"

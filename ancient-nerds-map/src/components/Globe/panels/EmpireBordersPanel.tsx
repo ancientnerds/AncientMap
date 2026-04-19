@@ -13,6 +13,10 @@ interface EmpireBordersPanelProps {
   height: number
   onHeightChange: (height: number) => void
 
+  // Position (for drag repositioning)
+  position: { x: number; y: number }
+  onPositionChange: (pos: { x: number; y: number }) => void
+
   // Empire visibility
   visibleEmpires: Set<string>
   onToggleEmpire: (empireId: string) => void
@@ -52,6 +56,8 @@ export function EmpireBordersPanel({
   onClose,
   height,
   onHeightChange,
+  position,
+  onPositionChange,
   visibleEmpires,
   onToggleEmpire,
   loadingEmpires,
@@ -75,6 +81,7 @@ export function EmpireBordersPanel({
 
   const handleResizeStart = (e: React.MouseEvent) => {
     e.preventDefault()
+    e.stopPropagation()
     const startY = e.clientY
     const startHeight = height
 
@@ -90,12 +97,35 @@ export function EmpireBordersPanel({
     document.addEventListener('mouseup', onUp)
   }
 
+  const handlePositionDragStart = (e: React.MouseEvent) => {
+    if ((e.target as HTMLElement).closest('.panel-close-btn')) return
+    e.preventDefault()
+    const startX = e.clientX
+    const startY = e.clientY
+    const startPos = { x: position.x, y: position.y }
+
+    const onMove = (e: MouseEvent) => {
+      const deltaX = e.clientX - startX
+      const deltaY = startY - e.clientY
+      onPositionChange({
+        x: startPos.x + deltaX,
+        y: startPos.y + deltaY,
+      })
+    }
+    const onUp = () => {
+      document.removeEventListener('mousemove', onMove)
+      document.removeEventListener('mouseup', onUp)
+    }
+    document.addEventListener('mousemove', onMove)
+    document.addEventListener('mouseup', onUp)
+  }
+
   return (
     <div
       className="empire-borders-window"
-      style={{ height }}
+      style={{ height, left: position.x, bottom: position.y }}
     >
-      <div className="empire-borders-header">
+      <div className="empire-borders-header" onMouseDown={handlePositionDragStart}>
         <div className="panel-label">Empire Borders</div>
         <button
           className="panel-close-btn"

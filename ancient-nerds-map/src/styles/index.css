@@ -5893,9 +5893,10 @@ a.popup-window-btn {
   padding-left: 4px;
 }
 
-/* Geological layers window — offset left of empire borders window */
+/* Geological layers window — positioned via CSS variables for drag */
 .geological-layers-window {
-  right: calc(20px + 548px * var(--hud-scale, 1));
+  left: var(--geological-left, calc(100vw - 590px));
+  bottom: var(--geological-bottom, 20px);
 }
 
 .sea-level-controls {
@@ -6296,9 +6297,8 @@ a.popup-window-btn {
    ============================================ */
 .empire-borders-window {
   position: fixed;
-  /* Scale gap: 20px base + (60px zoom + 12px gap + 180px layers + 12px gap) * scale = 20px + 264px * scale */
-  right: calc(20px + 264px * var(--hud-scale, 1));
-  bottom: 20px;
+  left: var(--empire-left, calc(100vw - 320px));
+  bottom: var(--empire-bottom, 20px);
   z-index: 100;
   width: 280px;
   min-height: 150px;
@@ -6312,10 +6312,6 @@ a.popup-window-btn {
 
   display: flex;
   flex-direction: column;
-
-  transform: scale(var(--hud-scale, 1));
-  transform-origin: bottom right;
-  transition: opacity 0.2s ease, transform 0.15s ease;
 }
 
 .empire-borders-header {
@@ -6325,6 +6321,11 @@ a.popup-window-btn {
   padding: 10px 12px;
   border-bottom: 1px solid var(--border-accent);
   flex-shrink: 0;
+  cursor: grab;
+}
+
+.empire-borders-header:active {
+  cursor: grabbing;
 }
 
 .empire-borders-header .panel-label {
@@ -13045,11 +13046,7 @@ body.news-feed-open .historical-borders-panel {
   right: calc(360px + 72px * var(--hud-scale, 1) + 192px);
 }
 
-body.news-feed-open .empire-borders-window {
-  right: calc(360px + 264px * var(--hud-scale, 1));
-}
-
-/* Tooltip offset is applied via globeOffsetX prop in JS to avoid jump during transition */
+/* Hide empire borders window on mobile */
 
 .news-feed-header {
   display: flex;
