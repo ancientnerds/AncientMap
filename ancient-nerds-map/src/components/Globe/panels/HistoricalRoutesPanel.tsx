@@ -88,7 +88,7 @@ export function HistoricalRoutesPanel({
       const deltaX = e.clientX - startX
       const deltaY = startY - e.clientY
       onPositionChange({
-        x: startPos.x + deltaX,
+        x: startPos.x - deltaX,
         y: startPos.y + deltaY,
       })
     }
