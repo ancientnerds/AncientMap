@@ -51,7 +51,7 @@ class ResearchConfig:
     queries_per_angle: int = 5
     # LLM
     max_tokens_per_call: int = 16384
-    max_tokens_synthesis: int = 16384
+    max_tokens_synthesis: int = 32768
 
 
 @dataclass

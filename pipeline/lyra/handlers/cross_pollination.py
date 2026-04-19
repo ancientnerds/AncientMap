@@ -66,7 +66,7 @@ class CrossPollinationHandler(BaseHandler):
                 key=lambda f: {"high": 0, "medium": 1, "low": 2}.get(
                     f.get("confidence", "medium"), 1
                 ),
-            )[:10]
+            )[:15]
             findings_text = "\n".join(f"- {f.get('claim', '')}" for f in top_findings)
             angle_summaries.append(
                 f"### Angle: {angle.topic} (ID: {angle.id})\n"

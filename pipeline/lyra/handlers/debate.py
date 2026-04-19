@@ -78,7 +78,7 @@ class DebateHandler(BaseHandler):
                 system_msg = f"You are {spec.name}, {spec.title}.\n\n{spec.perspective}\n\n{challenge_prompt}"
                 user_msg = (
                     f"## Synthesis to challenge\n\n{synthesis_json}\n\n"
-                    f"## Your original findings\n\n{json.dumps(spec_findings.get(spec.id, []), indent=2)}"
+                    f"## Your original findings\n\n{json.dumps((spec_findings.get(spec.id, []) or [])[:20], indent=2)}"
                 )
 
                 settings = _get_settings()
@@ -120,7 +120,7 @@ class DebateHandler(BaseHandler):
                 )
                 user_msg = (
                     f"## Challenges directed at you\n\n{json.dumps(my_challenges, indent=2)}\n\n"
-                    f"## Your original findings\n\n{json.dumps(spec_findings.get(spec.id, []), indent=2)}"
+                    f"## Your original findings\n\n{json.dumps((spec_findings.get(spec.id, []) or [])[:20], indent=2)}"
                 )
 
                 settings = _get_settings()

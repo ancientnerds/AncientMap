@@ -53,10 +53,13 @@ class SynthesisHandler(BaseHandler):
         )
 
         # Build input: all specialist findings grouped by angle
+        # Cap at 15 claims per angle to avoid context dilution
+        CLAIMS_PER_ANGLE = 15
         angle_summaries = []
         for angle in self.state.angles:
+            capped_findings = (angle.findings or [])[:CLAIMS_PER_ANGLE]
             findings_text = (
-                json.dumps(angle.findings, indent=2) if angle.findings else "No findings"
+                json.dumps(capped_findings, indent=2) if capped_findings else "No findings"
             )
             angle_summaries.append(
                 f"### Angle: {angle.topic}\n\n"
