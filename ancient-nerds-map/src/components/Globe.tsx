@@ -310,8 +310,8 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
   })
 
   // News feed open state ref for animation loop (avoids stale closure)
-  const newsFeedOpenRef = useRef(isNewsFeedOpen)
-  useEffect(() => { newsFeedOpenRef.current = isNewsFeedOpen }, [isNewsFeedOpen])
+  const newsFeedOpenRef = useRef<boolean>(false)
+  useEffect(() => { newsFeedOpenRef.current = isNewsFeedOpen ?? false }, [isNewsFeedOpen])
 
   // Highlighted Sites: list highlighted sites state and rendering
   const highlightedSitesHook = useHighlightedSites({
