@@ -7,7 +7,7 @@ import { useState, useRef } from 'react'
 export function useHistoricalRoutes() {
   const [routesPanelOpen, setRoutesPanelOpen] = useState(false)
   const [routesPanelHeight, setRoutesPanelHeight] = useState(350)
-  const [routesPanelPosition, setRoutesPanelPosition] = useState({ x: window.innerWidth - 320, y: 20 })
+  const [routesPanelPosition, setRoutesPanelPosition] = useState({ x: 0, y: 0 })
   const [visibleRoutes, setVisibleRoutes] = useState<Set<string>>(new Set())
   const visibleRoutesRef = useRef<Set<string>>(new Set())
   const [loadingRoutes, setLoadingRoutes] = useState<Set<string>>(new Set())

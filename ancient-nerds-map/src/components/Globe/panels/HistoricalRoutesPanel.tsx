@@ -86,9 +86,9 @@ export function HistoricalRoutesPanel({
 
     const onMove = (e: MouseEvent) => {
       const deltaX = e.clientX - startX
-      const deltaY = startY - e.clientY
+      const deltaY = e.clientY - startY
       onPositionChange({
-        x: startPos.x - deltaX,
+        x: startPos.x + deltaX,
         y: startPos.y + deltaY,
       })
     }

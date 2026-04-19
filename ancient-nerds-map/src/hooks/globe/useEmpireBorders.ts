@@ -99,7 +99,7 @@ export function useEmpireBorders(options: UseEmpireBordersOptions = {}) {
   // UI state
   const [empireBordersWindowOpen, setEmpireBordersWindowOpen] = useState(false)
   const [empireBordersHeight, setEmpireBordersHeight] = useState(220)
-  const [empireBordersPosition, setEmpireBordersPosition] = useState({ x: window.innerWidth - 320, y: 20 })
+  const [empireBordersPosition, setEmpireBordersPosition] = useState({ x: 0, y: 0 })
 
   // 3D object refs
   const empireBorderLinesRef = useRef<Record<string, THREE.Line[]>>({})
