@@ -124,8 +124,8 @@ export function GeologicalLayersSection({
       const deltaX = e.clientX - startX
       const deltaY = e.clientY - startY
       onPositionChange({
-        x: startPos.x - deltaX,
-        y: startPos.y + deltaY,
+        x: startPos.x + deltaX,
+        y: startPos.y - deltaY,
       })
     }
     const onUp = () => {
@@ -138,8 +138,8 @@ export function GeologicalLayersSection({
 
   return (
     <div
-      className="empire-borders-window geological-layers-window"
-      style={{ height, '--geological-right-offset': `${position.x}px`, '--geological-bottom-offset': `${position.y}px` } as React.CSSProperties}
+      className="geological-layers-window"
+      style={{ height, '--geological-left': `${position.x}px`, '--geological-bottom': `${position.y}px` } as React.CSSProperties}
     >
       <div className="empire-borders-header" onMouseDown={handlePositionDragStart}>
         <div className="panel-label">Geological Layers</div>

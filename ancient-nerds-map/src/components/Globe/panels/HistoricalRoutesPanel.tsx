@@ -88,8 +88,8 @@ export function HistoricalRoutesPanel({
       const deltaX = e.clientX - startX
       const deltaY = e.clientY - startY
       onPositionChange({
-        x: startPos.x - deltaX,
-        y: startPos.y + deltaY,
+        x: startPos.x + deltaX,
+        y: startPos.y - deltaY,
       })
     }
     const onUp = () => {
@@ -121,8 +121,8 @@ export function HistoricalRoutesPanel({
 
   return (
     <div
-      className="empire-borders-window historical-routes-window"
-      style={{ height, '--empire-right-offset': `${position.x}px`, '--empire-bottom-offset': `${position.y}px` } as React.CSSProperties}
+      className="historical-routes-window"
+      style={{ height, '--routes-left': `${position.x}px`, '--routes-bottom': `${position.y}px` } as React.CSSProperties}
     >
       <div className="empire-borders-header" onMouseDown={handlePositionDragStart}>
         <div className="panel-label">Historical Routes</div>

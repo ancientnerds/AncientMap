@@ -126,8 +126,8 @@ export function EmpireBordersPanel({
       const deltaX = e.clientX - startX
       const deltaY = e.clientY - startY
       onPositionChange({
-        x: startPos.x - deltaX,
-        y: startPos.y + deltaY,
+        x: startPos.x + deltaX,
+        y: startPos.y - deltaY,
       })
     }
     const onUp = () => {
@@ -141,7 +141,7 @@ export function EmpireBordersPanel({
   return (
     <div
       className="empire-borders-window"
-      style={{ height, '--empire-right-offset': `${position.x}px`, '--empire-bottom-offset': `${position.y}px` } as React.CSSProperties}
+      style={{ height, '--empire-left': `${position.x}px`, '--empire-bottom': `${position.y}px` } as React.CSSProperties}
     >
       <div className="empire-borders-header" onMouseDown={handlePositionDragStart}>
         <div className="panel-label">Empire Borders</div>
