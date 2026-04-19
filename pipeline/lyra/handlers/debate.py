@@ -72,15 +72,13 @@ class DebateHandler(BaseHandler):
                 }
             )
 
-            # Challenge phase
-            round_challenges: list[dict] = []
-            for spec in active_specs:
+            # Challenge phase — all specialists challenge simultaneously
+            async def _challenge_one(spec) -> list[dict]:
                 system_msg = f"You are {spec.name}, {spec.title}.\n\n{spec.perspective}\n\n{challenge_prompt}"
                 user_msg = (
                     f"## Synthesis to challenge\n\n{synthesis_json}\n\n"
                     f"## Your original findings\n\n{json.dumps((spec_findings.get(spec.id, []) or [])[:20], indent=2)}"
                 )
-
                 settings = _get_settings()
                 async with self.semaphore:
                     parsed = await asyncio.to_thread(
@@ -96,6 +94,11 @@ class DebateHandler(BaseHandler):
                 challenges = parsed.get("strengthening_suggestions", parsed.get("challenges", []))
                 for c in challenges:
                     c["challenger_id"] = spec.id
+                return challenges
+
+            challenge_results = await asyncio.gather(*[_challenge_one(spec) for spec in active_specs])
+            round_challenges: list[dict] = []
+            for challenges in challenge_results:
                 round_challenges.extend(challenges)
 
             all_challenges.extend(round_challenges)
@@ -107,14 +110,13 @@ class DebateHandler(BaseHandler):
                 self.state.log("debate", f"Debate converged at round {rnd} (no challenges)")
                 break
 
-            # Defense phase
-            for spec in active_specs:
+            # Defense phase — only specs with challenges defend, all run simultaneously
+            async def _defend_one(spec) -> list[dict]:
                 my_challenges = [
                     c for c in round_challenges if c.get("target_specialist") == spec.id
                 ]
                 if not my_challenges:
-                    continue
-
+                    return []
                 system_msg = (
                     f"You are {spec.name}, {spec.title}.\n\n{spec.perspective}\n\n{defense_prompt}"
                 )
@@ -122,7 +124,6 @@ class DebateHandler(BaseHandler):
                     f"## Challenges directed at you\n\n{json.dumps(my_challenges, indent=2)}\n\n"
                     f"## Your original findings\n\n{json.dumps((spec_findings.get(spec.id, []) or [])[:20], indent=2)}"
                 )
-
                 settings = _get_settings()
                 async with self.semaphore:
                     parsed = await asyncio.to_thread(
@@ -138,6 +139,10 @@ class DebateHandler(BaseHandler):
                 defenses = parsed.get("incorporations", parsed.get("defenses", []))
                 for d in defenses:
                     d["defender_id"] = spec.id
+                return defenses
+
+            defense_results = await asyncio.gather(*[_defend_one(spec) for spec in active_specs])
+            for defenses in defense_results:
                 all_defenses.extend(defenses)
 
             self.state.log(
