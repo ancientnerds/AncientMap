@@ -66,9 +66,12 @@ export function useWindowDragResize({
           newX = startPosRef.current.x + widthChange
         }
         if (direction.includes('s')) {
+          // Dragging south (down) → bottom edge moves down → height grows, top stays
           newHeight = Math.max(minHeight, startDimsRef.current.height + deltaY)
+          // newY unchanged (top edge is fixed)
         }
         if (direction.includes('n')) {
+          // Dragging north (up) → top edge moves up → height grows, top moves up
           const heightChange = Math.min(deltaY, startDimsRef.current.height - minHeight)
           newHeight = startDimsRef.current.height - heightChange
           newY = startPosRef.current.y - heightChange
@@ -110,7 +113,7 @@ export function useWindowDragResize({
         const deltaY = e.clientY - startY
 
         let newX = startPosRef.current.x + deltaX
-        let newY = startPosRef.current.y - deltaY
+        let newY = startPosRef.current.y + deltaY
 
         newX = Math.max(0, Math.min(newX, window.innerWidth - width))
         newY = Math.max(0, Math.min(newY, window.innerHeight - height))

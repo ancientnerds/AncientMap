@@ -33,7 +33,7 @@ export function WindowFrame({
         width,
         height,
         left: position.x,
-        bottom: position.y,
+        top: position.y,
       } as React.CSSProperties}
     >
       {RESIZE_DIRECTIONS.map(dir => (

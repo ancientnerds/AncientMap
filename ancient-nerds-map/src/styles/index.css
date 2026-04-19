@@ -5940,7 +5940,7 @@ a.popup-window-btn {
   flex-direction: column;
 }
 
-/* Resize handles for geological and historical routes windows — all 8 directions */
+/* Resize handles for geological and historical routes windows — all 8 directions, INSIDE the window edge */
 .geological-layers-window .resize-n,
 .geological-layers-window .resize-s,
 .historical-routes-window .resize-n,
@@ -5948,7 +5948,7 @@ a.popup-window-btn {
   position: absolute;
   left: 16px;
   right: 16px;
-  height: 10px;
+  height: 8px;
   cursor: ns-resize;
   z-index: 10;
 }
@@ -5960,7 +5960,7 @@ a.popup-window-btn {
   position: absolute;
   top: 16px;
   bottom: 16px;
-  width: 10px;
+  width: 8px;
   cursor: ew-resize;
   z-index: 10;
 }
@@ -5974,27 +5974,27 @@ a.popup-window-btn {
 .historical-routes-window .resize-se,
 .historical-routes-window .resize-sw {
   position: absolute;
-  width: 18px;
-  height: 18px;
+  width: 14px;
+  height: 14px;
   z-index: 10;
 }
 
 .geological-layers-window .resize-n,
-.historical-routes-window .resize-n { top: -5px; }
+.historical-routes-window .resize-n { top: 0; }
 .geological-layers-window .resize-s,
-.historical-routes-window .resize-s { bottom: -5px; }
+.historical-routes-window .resize-s { bottom: 0; }
 .geological-layers-window .resize-e,
-.historical-routes-window .resize-e { right: -5px; }
+.historical-routes-window .resize-e { right: 0; }
 .geological-layers-window .resize-w,
-.historical-routes-window .resize-w { left: -5px; }
+.historical-routes-window .resize-w { left: 0; }
 .geological-layers-window .resize-ne,
-.historical-routes-window .resize-ne { top: -5px; right: -5px; cursor: nesw-resize; }
+.historical-routes-window .resize-ne { top: 0; right: 0; cursor: nesw-resize; }
 .geological-layers-window .resize-nw,
-.historical-routes-window .resize-nw { top: -5px; left: -5px; cursor: nwse-resize; }
+.historical-routes-window .resize-nw { top: 0; left: 0; cursor: nwse-resize; }
 .geological-layers-window .resize-se,
-.historical-routes-window .resize-se { bottom: -5px; right: -5px; cursor: nwse-resize; }
+.historical-routes-window .resize-se { bottom: 0; right: 0; cursor: nwse-resize; }
 .geological-layers-window .resize-sw,
-.historical-routes-window .resize-sw { bottom: -5px; left: -5px; cursor: nesw-resize; }
+.historical-routes-window .resize-sw { bottom: 0; left: 0; cursor: nesw-resize; }
 
 /* Visual line/bar for N/S/E/W handles */
 .geological-layers-window .resize-n::before,
@@ -6494,9 +6494,9 @@ a.popup-window-btn {
 .empire-borders-window {
   position: fixed;
   left: var(--empire-left, calc(100vw - 300px));
-  top: var(--empire-top, auto);
-  bottom: var(--empire-bottom, 20px);
+  top: var(--empire-top, 100px);
   right: auto;
+  bottom: auto;
   z-index: 100;
   width: 280px;
   min-height: 150px;
@@ -6512,13 +6512,13 @@ a.popup-window-btn {
   flex-direction: column;
 }
 
-/* Resize handles positioned OUTSIDE the window edge (like SitePopup) */
+/* Resize handles positioned INSIDE the window edge */
 .empire-borders-window .resize-n,
 .empire-borders-window .resize-s {
   position: absolute;
   left: 16px;
   right: 16px;
-  height: 10px;
+  height: 8px;
   cursor: ns-resize;
   z-index: 10;
 }
@@ -6528,7 +6528,7 @@ a.popup-window-btn {
   position: absolute;
   top: 16px;
   bottom: 16px;
-  width: 10px;
+  width: 8px;
   cursor: ew-resize;
   z-index: 10;
 }
@@ -6538,19 +6538,19 @@ a.popup-window-btn {
 .empire-borders-window .resize-se,
 .empire-borders-window .resize-sw {
   position: absolute;
-  width: 18px;
-  height: 18px;
+  width: 14px;
+  height: 14px;
   z-index: 10;
 }
 
-.empire-borders-window .resize-n { top: -5px; }
-.empire-borders-window .resize-s { bottom: -5px; }
-.empire-borders-window .resize-e { right: -5px; }
-.empire-borders-window .resize-w { left: -5px; }
-.empire-borders-window .resize-ne { top: -5px; right: -5px; cursor: nesw-resize; }
-.empire-borders-window .resize-nw { top: -5px; left: -5px; cursor: nwse-resize; }
-.empire-borders-window .resize-se { bottom: -5px; right: -5px; cursor: nwse-resize; }
-.empire-borders-window .resize-sw { bottom: -5px; left: -5px; cursor: nesw-resize; }
+.empire-borders-window .resize-n { top: 0; }
+.empire-borders-window .resize-s { bottom: 0; }
+.empire-borders-window .resize-e { right: 0; }
+.empire-borders-window .resize-w { left: 0; }
+.empire-borders-window .resize-ne { top: 0; right: 0; cursor: nesw-resize; }
+.empire-borders-window .resize-nw { top: 0; left: 0; cursor: nwse-resize; }
+.empire-borders-window .resize-se { bottom: 0; right: 0; cursor: nwse-resize; }
+.empire-borders-window .resize-sw { bottom: 0; left: 0; cursor: nesw-resize; }
 
 /* Visual line/bar for n/s/e/w handles */
 .empire-borders-window .resize-n::before,
