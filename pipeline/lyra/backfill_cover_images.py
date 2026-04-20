@@ -156,7 +156,9 @@ async def backfill(slugs: list[str] | None, apply: bool, emit=None) -> None:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Backfill cover images for existing papers")
-    parser.add_argument("--apply", action="store_true", help="Write changes to DB (default is dry-run)")
+    parser.add_argument(
+        "--apply", action="store_true", help="Write changes to DB (default is dry-run)"
+    )
     parser.add_argument("--slug", type=str, default=None, help="Process only this slug")
     args = parser.parse_args()
 
