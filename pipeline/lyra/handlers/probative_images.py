@@ -178,8 +178,8 @@ class ProbativeImagesHandler(BaseHandler):
             if isinstance(r, Exception):
                 logger.warning("opportunity processing failed: %s", r)
                 continue
-            if r is not None:
-                embedded.append(r)
+            if isinstance(r, list):
+                embedded.extend(r)
 
         client.close()
         self.state.probative_images = embedded
@@ -310,10 +310,14 @@ async def _process_one_opportunity(
     paper_dir: Path,
     client,
     settings,
-) -> dict | None:
-    """Process a single opportunity: resolve section, pool lookup, VLM gate, download, insert."""
-    from pipeline.lyra.image_fetcher import ImageCandidate
+) -> list[dict]:
+    """Process a single opportunity: resolve section, pool lookup, VLM gate, download, insert.
 
+    Returns a list of embedded image dicts — up to
+    `settings.probative_images_max_per_opportunity` (default 3) accepted
+    candidates. Deduplicates by source_name so we don't embed three images from
+    the same museum for one paragraph.
+    """
     para_idx = opp.get("paragraph_index", -1)
     keyword = opp.get("keyword", "")
     para_text = opp.get("paragraph_text", "") or opp.get("what_image_must_show", "")
@@ -324,7 +328,7 @@ async def _process_one_opportunity(
     rationale = opp.get("rationale", "")
 
     if para_idx < 0 or not search_query:
-        return None
+        return []
 
     # Resolve section — prefer the opportunity's section field, fall back to registry
     section_name = section or None
@@ -336,7 +340,7 @@ async def _process_one_opportunity(
         section_name = find_section_for_claim(handler.state.paper_text, para_text[:60])
     if not section_name:
         logger.info("[probative] no section matched for paragraph %s", para_idx)
-        return None
+        return []
 
     # Primary: pull from the image candidate pool
     cands = _pool_candidates_for_source_ids(
@@ -358,12 +362,25 @@ async def _process_one_opportunity(
             flush=True,
         )
         logger.info("[probative] no candidates for para %s keyword '%s'", para_idx, keyword)
-        return None
+        return []
 
-    # Vision gate: try ALL candidates, stop at first accept
-    accepted_cand = None
+    # Vision gate: iterate until we have target count of accepted candidates
+    max_per_opp = getattr(settings, "probative_images_max_per_opportunity", 3)
+    accepted: list = []
+    seen_sources: set[str] = set()
+    seen_urls: set[str] = set()
+
     for cand in cands:
-        url_hash = hashlib.md5(getattr(cand, "url", str(id(cand))).encode()).hexdigest()[:16]
+        if len(accepted) >= max_per_opp:
+            break
+        cand_url = getattr(cand, "url", "") or ""
+        cand_source = getattr(cand, "source", "") or ""
+        if cand_url in seen_urls:
+            continue
+        # Diversify: skip if we already accepted from this source (only after first)
+        if cand_source and cand_source in seen_sources and len(accepted) > 0:
+            continue
+        url_hash = hashlib.md5((cand_url or str(id(cand))).encode()).hexdigest()[:16]
         probe_path = paper_dir / f"_probe_p{para_idx}_{url_hash}.bin"
         ok = await download_candidate(cand, probe_path)
         if not ok:
@@ -373,12 +390,14 @@ async def _process_one_opportunity(
         raw = await asyncio.to_thread(minimax_vlm, client, image_bytes, prompt)
         verdict = parse_vlm_verdict(raw)
         if verdict_is_accept(verdict):
-            accepted_cand = cand
-            break
+            accepted.append(cand)
+            seen_urls.add(cand_url)
+            if cand_source:
+                seen_sources.add(cand_source)
         if probe_path.exists():
             probe_path.unlink(missing_ok=True)
 
-    if not accepted_cand:
+    if not accepted:
         print(
             f"[probative] VLM gate: no candidate survived for para {para_idx} keyword '{keyword}' — image NOT embedded",
             flush=True,
@@ -386,40 +405,55 @@ async def _process_one_opportunity(
         logger.info(
             "[probative] no candidate survived VLM for para %s keyword '%s'", para_idx, keyword
         )
-        return None
+        return []
 
-    # Final download
     keyword_slug = re_module.sub(r"[^a-zA-Z0-9]", "_", keyword[:30])
-    final_path = paper_dir / f"p{para_idx}_{keyword_slug}.jpg"
-    if not await download_candidate(accepted_cand, final_path):
-        return None
-
-    web_path = f"/data/research-images/{handler.state.request_id}/p{para_idx}_{keyword_slug}.jpg"
-
-    # Group images by (section, paragraph_index) for the frontend carousel
     group_id = _group_id_for_section(section_name, para_idx)
+    embedded: list[dict] = []
 
-    md = image_markdown_with_group(accepted_cand, web_path, rationale, group_id, True, True)
+    for i, accepted_cand in enumerate(accepted):
+        suffix = "" if i == 0 else f"_{i}"
+        final_path = paper_dir / f"p{para_idx}_{keyword_slug}{suffix}.jpg"
+        if not await download_candidate(accepted_cand, final_path):
+            continue
 
-    new_text = insert_image_after_section(handler.state.paper_text, section_name, md)
-    if new_text == handler.state.paper_text:
-        logger.info("[probative] insert failed for section '%s'", section_name)
-        return None
-    handler.state.paper_text = new_text
+        web_path = (
+            f"/data/research-images/{handler.state.request_id}/"
+            f"p{para_idx}_{keyword_slug}{suffix}.jpg"
+        )
+        is_first = i == 0
+        is_last = i == len(accepted) - 1
+        md = image_markdown_with_group(
+            accepted_cand, web_path, rationale, group_id, is_first, is_last
+        )
 
-    return {
-        "paragraph_index": para_idx,
-        "paragraph_text": para_text[:200],
-        "keyword": keyword,
-        "image_path": str(final_path),
-        "web_path": web_path,
-        "source_url": getattr(accepted_cand, "url", ""),
-        "source_name": getattr(accepted_cand, "source", ""),
-        "title": getattr(accepted_cand, "title", ""),
-        "artist": getattr(accepted_cand, "artist", ""),
-        "license": getattr(accepted_cand, "license", ""),
-        "license_url": getattr(accepted_cand, "license_url", ""),
-        "rationale": rationale,
-        "section_heading": section_name,
-        "search_query": search_query,
-    }
+        new_text = insert_image_after_section(handler.state.paper_text, section_name, md)
+        if new_text == handler.state.paper_text:
+            logger.info("[probative] insert failed for section '%s'", section_name)
+            continue
+        handler.state.paper_text = new_text
+
+        embedded.append(
+            {
+                "paragraph_index": para_idx,
+                "paragraph_text": para_text[:200],
+                "keyword": keyword,
+                "image_path": str(final_path),
+                "web_path": web_path,
+                "source_url": getattr(accepted_cand, "url", ""),
+                "source_name": getattr(accepted_cand, "source", ""),
+                "title": getattr(accepted_cand, "title", ""),
+                "artist": getattr(accepted_cand, "artist", ""),
+                "license": getattr(accepted_cand, "license", ""),
+                "license_url": getattr(accepted_cand, "license_url", ""),
+                "rationale": rationale,
+                "section_heading": section_name,
+                "search_query": search_query,
+            }
+        )
+
+    print(
+        f"[probative] embedded {len(embedded)} images for para {para_idx} keyword '{keyword}'",
+        flush=True,
+    )
+    return embedded

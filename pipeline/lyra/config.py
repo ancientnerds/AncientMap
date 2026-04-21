@@ -183,6 +183,8 @@ class LyraSettings(BaseSettings):
     probative_images_candidates_per_opportunity: int = 20
     # Target minimum images per substantial paragraph (soft target, not hard cap)
     images_per_paragraph_target: int = 3
+    # Max images to embed per single opportunity (VLM-accepted candidates, dedup by source)
+    probative_images_max_per_opportunity: int = 3
     # When True, pass the image candidate pool for this section's angles into the
     # paper-writer prompt and allow the writer to emit [[IMG:candidate_id]] markers
     # that PIH resolves. Markers the writer doesn't use fall through to PIH's

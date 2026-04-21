@@ -43,15 +43,22 @@ def metadata_gate_passes(cand: ImageCandidate, what_image_must_show: str) -> boo
 
 
 VLM_SYSTEM_PROMPT = (
-    "You are an image relevance judge for a research-paper pipeline. "
-    "Given an image and strict criteria, decide if it genuinely illustrates the claim. "
+    "You are an image illustration judge for a research-paper pipeline. "
+    "Given an image and a section topic, decide whether the image is a reasonable "
+    "visual illustration for that section — thematically relevant, period-appropriate, "
+    "or subject-adjacent. You are NOT asked to verify the image proves the specific claim; "
+    "you are asked whether it belongs alongside this text as visual context. "
+    "Be generous: archaeological photos, museum artifacts, maps, and period art all count "
+    "even if they don't literally depict the exact named entity. "
+    "Reject only when the image is off-topic, shows forbidden elements, or is low quality. "
     "Respond with STRICTLY valid JSON: "
-    '{"shows_required_subject":"yes|no|partial",'
+    '{"shows_required_subject":"yes|partial|no",'
     '"specific_features_present":[strings],'
     '"forbidden_elements_present":[strings],'
     '"image_quality":"good|acceptable|poor",'
-    '"verdict":"accept|reject","reason":"one sentence"}. '
-    "Output only JSON."
+    '"verdict":"accept|soft_accept|reject","reason":"one sentence"}. '
+    "Use 'accept' for direct matches, 'soft_accept' for thematically relevant images, "
+    "'reject' only for clear mismatches or forbidden content. Output only JSON."
 )
 
 
@@ -63,12 +70,12 @@ def build_vlm_prompt(
     """Build the VLM user prompt for a single candidate."""
     return (
         f"{VLM_SYSTEM_PROMPT}\n\n"
-        f"CLAIM: {claim}\n"
-        f"IMAGE MUST SHOW: {what_image_must_show}\n"
+        f"SECTION TOPIC: {claim}\n"
+        f"IDEAL SUBJECT: {what_image_must_show}\n"
         f"FORBIDDEN ELEMENTS: {forbidden_elements}\n\n"
         "Examine the attached image and return the JSON verdict. "
-        "Accept only if the required subject is clearly shown, no forbidden elements, "
-        "and quality is good or acceptable."
+        "Accept or soft-accept any image that would reasonably illustrate this section. "
+        "Reject only for clear off-topic content, forbidden elements, or poor quality."
     )
 
 
@@ -92,14 +99,17 @@ def parse_vlm_verdict(raw: str) -> dict | None:
 def verdict_is_accept(v: dict | None) -> bool:
     """Decide the final accept/reject from a parsed VLM verdict.
 
-    Stricter than the model's own verdict field — overrides to reject if
-    forbidden_elements_present is non-empty or quality is 'poor'.
+    Permissive by design: the research pipeline wants plenty of illustrative
+    images per paragraph. We accept both strict matches ('accept' + 'yes') and
+    thematically-relevant matches ('soft_accept' and/or 'partial' subject
+    match). We still hard-reject on forbidden elements or poor quality, which
+    are the true correctness guards.
     """
     if not v:
         return False
-    if v.get("verdict") != "accept":
+    if v.get("verdict") not in ("accept", "soft_accept"):
         return False
-    if v.get("shows_required_subject") != "yes":
+    if v.get("shows_required_subject") == "no":
         return False
     if v.get("forbidden_elements_present"):
         return False
