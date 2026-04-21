@@ -35,7 +35,7 @@ try:
 except ImportError:
     print("Missing dependency: geopandas")
     print("  pip install geopandas")
-    raise SystemExit(1)
+    raise SystemExit(1) from None
 
 from loguru import logger
 
@@ -50,8 +50,28 @@ METADATA_PATH = OUTPUT_DIR / "metadata.json"
 SIMPLIFY_TOLERANCE = 0.001  # degrees; ~111 m at equator
 
 TIME_STEPS_BP = [
-    11000, 10500, 10000, 9500, 9000, 8500, 8000, 7500, 7000, 6500, 6000, 5500,
-    5000, 4500, 4000, 3500, 3000, 2500, 2000, 1500, 1000, 500,
+    11000,
+    10500,
+    10000,
+    9500,
+    9000,
+    8500,
+    8000,
+    7500,
+    7000,
+    6500,
+    6000,
+    5500,
+    5000,
+    4500,
+    4000,
+    3500,
+    3000,
+    2500,
+    2000,
+    1500,
+    1000,
+    500,
 ]
 
 SOURCE_META = {
@@ -299,12 +319,14 @@ def update_metadata(feature_counts: dict[int, int]) -> None:
         count = feature_counts.get(year, 0)
         total_features += count
         label = f"{year / 1000:g}ka" if year >= 1000 else f"{year} BP"
-        time_steps_entries.append({
-            "file": f"sturt_2013_{year}bp",
-            "year": year,
-            "label": label,
-            "featureCount": count,
-        })
+        time_steps_entries.append(
+            {
+                "file": f"sturt_2013_{year}bp",
+                "year": year,
+                "label": label,
+                "featureCount": count,
+            }
+        )
 
     metadata["layers"]["sturt2013"] = {
         **LAYER_META,
@@ -327,10 +349,14 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description="Convert Sturt 2013 palaeo-coastline shapefiles to per-slice GeoJSON"
     )
-    parser.add_argument("--inspect", action="store_true",
-                        help="Log schema of each shapefile in data/raw/geological/sturt_2013/ and exit")
-    parser.add_argument("--output", type=str,
-                        help="Override output directory (default: public/data/geological)")
+    parser.add_argument(
+        "--inspect",
+        action="store_true",
+        help="Log schema of each shapefile in data/raw/geological/sturt_2013/ and exit",
+    )
+    parser.add_argument(
+        "--output", type=str, help="Override output directory (default: public/data/geological)"
+    )
     args = parser.parse_args()
 
     global OUTPUT_DIR, METADATA_PATH
