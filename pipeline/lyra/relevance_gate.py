@@ -52,9 +52,7 @@ def _parse_json(raw: str) -> dict:
 
 async def check_relevance(question: str) -> str | None:
     """Return None if the question is on-topic, or a rejection message if not."""
-    raw = await asyncio.to_thread(
-        minimax_chat_anthropic, _SYSTEM_PROMPT, question, 256
-    )
+    raw = await asyncio.to_thread(minimax_chat_anthropic, _SYSTEM_PROMPT, question, 256)
     # Strip any residual <think> tags the SDK path may have missed
     raw = re.sub(r"<think>.*?</think>", "", raw, flags=re.DOTALL).strip()
     parsed = _parse_json(raw)
