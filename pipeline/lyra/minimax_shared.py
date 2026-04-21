@@ -1,7 +1,7 @@
 """Shared MiniMax utilities for search and M2.7 chat.
 
-Used by both the article verification pipeline (web_research.py) and
-Theo's research pipeline (theo_pipeline.py).
+Used by the article verification pipeline (web_research.py), Theo's
+convergence orchestrator, and the standalone relevancy gate.
 """
 
 from __future__ import annotations

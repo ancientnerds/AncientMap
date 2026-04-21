@@ -118,32 +118,25 @@ def _check_minimum_content(body: str, registry: CitationRegistry) -> CheckResult
     )
 
 
-def _check_section_structure(body: str, effort: str = "article") -> CheckResult:
-    """Paper has required structure based on effort tier.
-
-    - brief/note: only requires References/Sources section
-    - article/review/thesis: requires Abstract/Introduction + body + References
-    """
+def _check_section_structure(body: str) -> CheckResult:
+    """Paper has required structure: Abstract/Introduction + body + References."""
     issues: list[str] = []
 
     headings = [m.group(1).strip().lower() for m in re.finditer(r"^##\s+(.+)$", body, re.MULTILINE)]
 
-    # Must have References or Sources (all tiers)
     has_refs = any(h in ("references", "sources") for h in headings)
     if not has_refs:
         issues.append("Missing ## References or ## Sources")
 
-    # Full structure only required for article/review/thesis
-    if effort not in ("brief", "note"):
-        has_intro = any(h in ("abstract", "introduction") for h in headings)
-        if not has_intro:
-            issues.append("Missing ## Abstract or ## Introduction")
+    has_intro = any(h in ("abstract", "introduction") for h in headings)
+    if not has_intro:
+        issues.append("Missing ## Abstract or ## Introduction")
 
-        body_sections = [h for h in headings if h not in _EXEMPT_SECTIONS]
-        if not body_sections:
-            issues.append(
-                "No body sections (need at least one ## section beyond Abstract/Introduction/References)"
-            )
+    body_sections = [h for h in headings if h not in _EXEMPT_SECTIONS]
+    if not body_sections:
+        issues.append(
+            "No body sections (need at least one ## section beyond Abstract/Introduction/References)"
+        )
 
     if issues:
         return CheckResult(passed=False, message="; ".join(issues), details=issues)
@@ -196,16 +189,14 @@ def _check_no_uncited_sections(body: str) -> CheckResult:
 # ---------------------------------------------------------------------------
 
 
-def run_research_checklist(
-    body: str, registry: CitationRegistry, effort: str = "article"
-) -> ChecklistResult:
+def run_research_checklist(body: str, registry: CitationRegistry) -> ChecklistResult:
     """Run all programmatic quality checks. No LLM calls — purely mechanical."""
     checks: dict[str, CheckResult] = {}
 
     checks["citation_integrity"] = _check_citation_integrity(body, registry)
     checks["no_phantom_sources"] = _check_no_phantom_sources(body, registry)
     checks["minimum_content"] = _check_minimum_content(body, registry)
-    checks["section_structure"] = _check_section_structure(body, effort)
+    checks["section_structure"] = _check_section_structure(body)
     checks["no_uncited_sections"] = _check_no_uncited_sections(body)
 
     all_passed = all(c.passed for c in checks.values())

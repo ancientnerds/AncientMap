@@ -113,7 +113,6 @@ def index_paper(
     paper_slug: str,
     author_username: str,
     author_discord_id: str,
-    effort: str,
     published_at: str,
 ) -> int:
     """Split paper into sections, embed, and upsert to Qdrant.
@@ -163,7 +162,6 @@ def index_paper(
                     "text_preview": section["text"][:2000],
                     "author_username": author_username,
                     "author_discord_id": author_discord_id,
-                    "effort": effort,
                     "published_at": published_at,
                 },
             )
@@ -202,7 +200,7 @@ def search_similar(question: str, limit: int = 5) -> list[dict]:
     """Search for public papers similar to a question.
 
     Returns list of {paper_id, paper_title, paper_slug, author_username,
-    author_discord_id, effort, published_at, score, best_section_title}.
+    author_discord_id, published_at, score, best_section_title}.
     Results are grouped by paper_id (best section score per paper).
     """
     from api.services.lyra_embeddings import get_embeddings, get_qdrant_client
@@ -235,7 +233,6 @@ def search_similar(question: str, limit: int = 5) -> list[dict]:
                 "paper_slug": hit.payload["paper_slug"],
                 "author_username": hit.payload["author_username"],
                 "author_discord_id": hit.payload["author_discord_id"],
-                "effort": hit.payload["effort"],
                 "published_at": hit.payload["published_at"],
                 "score": round(hit.score, 3),
                 "best_section_title": hit.payload["section_title"],

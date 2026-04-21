@@ -1333,7 +1333,7 @@ class MultiSourceSearch:
     ) -> list[RawSource]:
         """Run searches across APIs appropriate for the source_group.
 
-        source_group values (from TierConfig.source_apis):
+        source_group values:
         - "minimal": AncientNerds DB + Semantic Scholar + MiniMax
         - "standard": + OpenAlex + Wikipedia + Crossref
         - "full": + CORE + Europeana + Smithsonian

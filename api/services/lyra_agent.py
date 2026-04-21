@@ -940,10 +940,9 @@ def _auto_retrieve(
             paper_title = r.get("paper_title", "")
             section_title = r.get("section_title", "")
             author = r.get("author_username", "")
-            effort = r.get("effort", "")
             slug = r.get("paper_slug", "")
             preview = r.get("text_preview", "")[:500]
-            line = f"- **{paper_title}** > {section_title} (by {author}, {effort}, slug: {slug})"
+            line = f"- **{paper_title}** > {section_title} (by {author}, slug: {slug})"
             if preview:
                 line += f"\n  > {preview}"
             lines.append(line)

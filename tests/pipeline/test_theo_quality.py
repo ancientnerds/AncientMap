@@ -3,8 +3,6 @@
 All tests are pure: no LLM, no DB, no network.
 """
 
-import pytest
-
 from pipeline.lyra.research_checklist import (
     _check_citation_integrity,
     _check_minimum_content,
@@ -182,34 +180,17 @@ class TestCheckSectionStructure:
         result = _check_section_structure(paper)
         assert result.passed
 
-    def test_missing_abstract_fails_for_article(self):
+    def test_missing_abstract_fails(self):
         paper = _make_paper(include_abstract=False)
-        result = _check_section_structure(paper, effort="article")
+        result = _check_section_structure(paper)
         assert not result.passed
         assert "abstract" in result.message.lower() or "introduction" in result.message.lower()
-
-    def test_missing_abstract_ok_for_brief(self):
-        """Brief/note tiers don't require Abstract/Introduction."""
-        paper = _make_paper(include_abstract=False)
-        result = _check_section_structure(paper, effort="brief")
-        assert result.passed
-
-    def test_missing_abstract_ok_for_note(self):
-        paper = _make_paper(include_abstract=False)
-        result = _check_section_structure(paper, effort="note")
-        assert result.passed
 
     def test_missing_references_fails(self):
         paper = _make_paper(include_refs=False)
         result = _check_section_structure(paper)
         assert not result.passed
         assert "references" in result.message.lower() or "sources" in result.message.lower()
-
-    def test_missing_references_fails_even_for_brief(self):
-        """All tiers require References/Sources."""
-        paper = _make_paper(include_refs=False)
-        result = _check_section_structure(paper, effort="brief")
-        assert not result.passed
 
     def test_introduction_accepted_instead_of_abstract(self):
         paper = "# Title\n\n## Introduction\n\nIntro text.\n\n## Analysis\n\nBody [1].\n\n## References\n\n[1] A"

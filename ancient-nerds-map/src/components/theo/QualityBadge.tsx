@@ -1,7 +1,6 @@
 /**
  * QualityBadge — shows a colored quality-score badge with a CSS tooltip.
  * Only rendered when quality_score has a numeric total.
- * Not shown for Brief/Note tiers (they skip quality scoring).
  */
 
 export interface QualityScore {
@@ -9,8 +8,6 @@ export interface QualityScore {
   badge: string
   dimensions: Record<string, number>
 }
-
-const SKIPPED_TIERS = new Set(['brief', 'note'])
 
 function badgeColor(total: number): string {
   if (total >= 90) return '#2e7d32'  // green  — Verified
@@ -35,11 +32,9 @@ function buildTooltip(qs: QualityScore): string {
 
 interface QualityBadgeProps {
   qualityScore: QualityScore | null | undefined
-  effort: string
 }
 
-export default function QualityBadge({ qualityScore, effort }: QualityBadgeProps) {
-  if (SKIPPED_TIERS.has(effort)) return null
+export default function QualityBadge({ qualityScore }: QualityBadgeProps) {
   if (!qualityScore || typeof qualityScore.total !== 'number') return null
 
   const color = badgeColor(qualityScore.total)

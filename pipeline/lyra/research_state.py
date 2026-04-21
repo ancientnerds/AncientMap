@@ -31,7 +31,7 @@ class ResearchPhase(enum.Enum):
 
 @dataclass
 class ResearchConfig:
-    """Global config for the convergence pipeline (replaces per-tier TierConfig)."""
+    """Global config for the convergence pipeline."""
 
     max_concurrent_llm_calls: int = 100
     deadline_hours: int = 24

@@ -17,25 +17,6 @@ import { NervLoadingBar } from '../components/NervLoadingBar'
 const TheoReportOverlay = lazy(() => import('../components/theo/TheoReportOverlay'))
 const TheoResearchLive = lazy(() => import('../components/theo/TheoResearchLive'))
 
-// V1 effort tiers (kept for backward compat with existing published papers)
-const _EFFORTS_V1 = [
-  { key: 'brief', label: 'Research Brief', time: '~10 min', desc: 'Quick literature overview', credits: 100 },
-  { key: 'note', label: 'Research Note', time: '~25 min', desc: '3 specialists, structured analysis', credits: 300 },
-  { key: 'article', label: 'Journal Article', time: '~45 min', desc: '5 specialists, quality verified', credits: 600 },
-  { key: 'review', label: 'Literature Review', time: '~60 min', desc: '6 specialists, debate + verification', credits: 1000 },
-  { key: 'thesis', label: 'Thesis Chapter', time: '~90 min', desc: '8 specialists, multi-round debate', credits: 1800 },
-  { key: 'dissertation', label: 'Dissertation', time: '~2 hours', desc: '14 specialists, exhaustive multi-round debate', credits: 3600 },
-] as const
-void _EFFORTS_V1  // suppress unused warning
-
-const EFFORT_LABELS: Record<string, string> = {
-  brief: 'Brief', note: 'Note', article: 'Article', review: 'Review', thesis: 'Thesis', dissertation: 'Dissertation',
-}
-
-const SPECIALIST_COUNTS: Record<string, number> = {
-  brief: 1, note: 3, article: 5, review: 6, thesis: 8, dissertation: 14,
-}
-
 // ---------------------------------------------------------------------------
 // Tutorial hints — shown until the user publishes their first paper
 // ---------------------------------------------------------------------------
@@ -147,7 +128,6 @@ type AdapterData = Record<string, AdapterInfo>
 interface ResearchItem {
   id: string
   question: string
-  effort: string
   status: string
   sites_found: number
   tools_used: number
@@ -161,7 +141,7 @@ interface ResearchItem {
 }
 
 interface FullResearch extends ResearchItem {
-  result: { report: string; sites_found: number; tools_used: number; total_tokens: number; effort: string; duration_ms: number; quality_score?: QualityScore | null } | null
+  result: { report: string; sites_found: number; tools_used: number; total_tokens: number; duration_ms: number; quality_score?: QualityScore | null } | null
   pipeline_trace: Array<{ stage?: string; status?: string; duration_ms?: number }> | null
   total_tokens: number
 }
@@ -172,7 +152,6 @@ interface DuplicateMatch {
   author_username: string
   score: number
   best_section_title: string
-  effort: string
 }
 
 interface PublicPaper {
@@ -182,7 +161,6 @@ interface PublicPaper {
   question: string
   published_by: string
   author_avatar: string | null
-  effort: string
   published_at: string
   sites_found: number
   duration_ms: number | null
@@ -194,10 +172,9 @@ interface PublicPaper {
 interface PublicPaperFull {
   slug: string
   question: string
-  effort: string
   published_by: string
   published_at: string
-  result: { report: string; title?: string; sites_found: number; tools_used: number; total_tokens: number; effort: string; duration_ms: number; quality_score?: QualityScore | null }
+  result: { report: string; title?: string; sites_found: number; tools_used: number; total_tokens: number; duration_ms: number; quality_score?: QualityScore | null }
   sites_found: number
   tools_used: number
   duration_ms: number | null
@@ -217,7 +194,6 @@ export default function TheoPage() {
   // Wizard state — 4 steps: Topic, Sources, Specialists, Launch
   const [wizardStep, setWizardStep] = useState<1 | 2 | 3 | 4>(1)
   const [question, setQuestion] = useState(() => sessionStorage.getItem('theo_question') || '')
-  const effort = 'research'  // v2: always convergence pipeline, no tier selection
 
   // Stage 2: YouTube video IDs
   const [videoIds, setVideoIds] = useState<string[]>(() => {
@@ -508,7 +484,6 @@ export default function TheoPage() {
       const finalPrompt = question.trim()
       const body: Record<string, unknown> = {
         question: finalPrompt,
-        effort,
         ...(videoIds.length > 0 ? { video_ids: videoIds } : {}),
         ...(webUrls.length > 0 ? { web_urls: webUrls } : {}),
         ...(disabledAdapters.size > 0 ? { disabled_adapters: Array.from(disabledAdapters) } : {}),
@@ -556,7 +531,7 @@ export default function TheoPage() {
     } finally {
       setSubmitting(false)
     }
-  }, [question, effort, videoIds, disabledAdapters, submitting, excludedSpecialists, fetchList])
+  }, [question, videoIds, disabledAdapters, submitting, excludedSpecialists, fetchList])
 
   // --- Result actions ---
   const handleCancel = useCallback(async (id: string) => {
@@ -611,7 +586,7 @@ export default function TheoPage() {
       await fetch(`${config.api.baseUrl}/theo/research`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
-        body: JSON.stringify({ question: item.question, effort: item.effort }),
+        body: JSON.stringify({ question: item.question }),
       })
       fetchList()
     } catch { /* ignore */ }
@@ -1202,8 +1177,7 @@ export default function TheoPage() {
                 Their analyses are debated and synthesized before the paper is written.
               </TutorialHint>
               <div className="theo-spec-notice">
-                Theo auto-selects the most relevant{' '}
-                <strong>{SPECIALIST_COUNTS[effort] ?? '?'}</strong> specialists based on your question.
+                Theo auto-selects the specialists most relevant to your question.
                 Deselect any you want to exclude.
               </div>
 
@@ -1321,7 +1295,6 @@ export default function TheoPage() {
                   <div className="theo-card-top">
                     <TruncatedQuestion text={item.question} max={80} />
                     <div className="theo-card-badges">
-                      <span className="theo-badge theo-badge-effort theo-badge-stacked">{EFFORT_LABELS[item.effort] || item.effort} · {SPECIALIST_COUNTS[item.effort] || '?'} spec</span>
                       {item.status === 'queued' && (
                         <span className="theo-badge theo-badge-status theo-badge-queued theo-badge-stacked">
                           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{flexShrink:0}}><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
@@ -1374,7 +1347,6 @@ export default function TheoPage() {
                 <div key={item.id} className="theo-card">
                   <div className="theo-card-top">
                     <TruncatedQuestion text={item.question} />
-                    <span className="theo-badge theo-badge-effort">{EFFORT_LABELS[item.effort] || item.effort}</span>
                     <span className={`theo-badge theo-badge-status theo-badge-${item.status}`}>
                       {item.status === 'completed' ? <><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{flexShrink:0}}><polyline points="20 6 9 17 4 12"/></svg>Done</> :
                        item.status === 'failed' ? <><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{flexShrink:0}}><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>Failed</> :
@@ -1383,11 +1355,10 @@ export default function TheoPage() {
                     {item.is_public && (
                       <span className="theo-badge theo-badge-published">Published</span>
                     )}
-                    <QualityBadge qualityScore={item.quality_score} effort={item.effort} />
+                    <QualityBadge qualityScore={item.quality_score} />
                   </div>
                   <div className="theo-card-meta">
                     {item.duration_ms != null && <span>{formatDurationMs(item.duration_ms)}</span>}
-                    <span>{SPECIALIST_COUNTS[item.effort] ?? '?'} specialists</span>
                     {item.created_at && <span>{timeAgo(item.created_at)}</span>}
                   </div>
                   <div className="theo-card-actions">
@@ -1460,8 +1431,7 @@ export default function TheoPage() {
                         )}
                         {paper.published_by}
                       </span>
-                      <span className="theo-badge theo-badge-effort">{EFFORT_LABELS[paper.effort] || paper.effort}</span>
-                      <QualityBadge qualityScore={paper.quality_score} effort={paper.effort} />
+                      <QualityBadge qualityScore={paper.quality_score} />
                       <span className="theo-public-card-date">{timeAgo(paper.published_at)}</span>
                       <button
                         className="theo-public-card-share"
@@ -1502,7 +1472,6 @@ export default function TheoPage() {
             question={viewingData.question}
             result={viewingData.result}
             pipelineTrace={viewingData.pipeline_trace}
-            effort={viewingData.effort}
             durationMs={viewingData.duration_ms}
             sitesFound={viewingData.sites_found}
             toolsUsed={viewingData.tools_used}
@@ -1531,7 +1500,6 @@ export default function TheoPage() {
             question={publicReportData.question}
             result={publicReportData.result}
             pipelineTrace={null}
-            effort={publicReportData.effort}
             durationMs={publicReportData.duration_ms}
             sitesFound={publicReportData.sites_found}
             toolsUsed={publicReportData.tools_used}

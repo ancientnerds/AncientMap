@@ -15,17 +15,14 @@ from typing import Any
 
 from sqlalchemy import text
 
-from api.services.theo_config import RESULT_TTL_HOURS, THEO_CREDIT_COSTS, THEO_PARALLEL_SLOTS
+from api.services.theo_config import RESULT_TTL_HOURS, THEO_PARALLEL_SLOTS, THEO_RESEARCH_COST
 from pipeline.database import get_session
 
 logger = logging.getLogger(__name__)
 
 
-def _release_reservation(request_id: str, effort: str) -> None:
+def _release_reservation(request_id: str) -> None:
     """Release reserved credits when a research request fails or is cancelled."""
-    cost = THEO_CREDIT_COSTS.get(effort, 0)
-    if cost <= 0:
-        return
     try:
         with get_session() as session:
             row = session.execute(
@@ -39,18 +36,15 @@ def _release_reservation(request_id: str, effort: str) -> None:
                     UPDATE discord_users SET reserved_credits = GREATEST(reserved_credits - :cost, 0)
                     WHERE discord_id = :uid AND is_unlimited = FALSE
                 """),
-                {"uid": row.user_id, "cost": cost},
+                {"uid": row.user_id, "cost": THEO_RESEARCH_COST},
             )
             session.commit()
     except Exception as exc:
         logger.warning(f"[THEO] Reservation release failed for {request_id}: {exc}")
 
 
-def _deduct_credits(request_id: str, effort: str) -> None:
+def _deduct_credits(request_id: str) -> None:
     """Deduct credits and release reservation on successful completion."""
-    cost = THEO_CREDIT_COSTS.get(effort, 0)
-    if cost <= 0:
-        return
     try:
         with get_session() as session:
             row = session.execute(
@@ -66,7 +60,7 @@ def _deduct_credits(request_id: str, effort: str) -> None:
                         reserved_credits = GREATEST(reserved_credits - :cost, 0)
                     WHERE discord_id = :uid AND is_unlimited = FALSE
                 """),
-                {"uid": row.user_id, "cost": cost},
+                {"uid": row.user_id, "cost": THEO_RESEARCH_COST},
             )
             session.commit()
     except Exception as exc:
@@ -101,11 +95,10 @@ def get_live_events(request_id: str) -> list[dict]:
 async def _process_request(
     request_id: str,
     question: str,
-    effort: str,
     specialist_options: dict | None = None,
 ) -> None:
-    """Process a single research request using the TheoPipeline."""
-    logger.info(f"[THEO] Starting request {request_id} (effort={effort})")
+    """Process a single research request using the V2 convergence pipeline."""
+    logger.info(f"[THEO] Starting request {request_id}")
 
     # Register live events buffer before pipeline starts so SSE streaming works immediately
     _live_events[request_id] = []
@@ -132,44 +125,25 @@ async def _process_request(
         web_urls = (specialist_options or {}).get("web_urls", [])
         disabled_adapters = (specialist_options or {}).get("disabled_adapters", [])
 
-        ctx: Any  # PipelineContext (v1) or ResearchState (v2) — duck-type compatible
-        if effort == "research":
-            # V2 convergence pipeline — event-driven, no fixed tiers
-            from pipeline.lyra.convergence_orchestrator import ConvergenceOrchestrator
+        from pipeline.lyra.convergence_orchestrator import ConvergenceOrchestrator
 
-            orchestrator = ConvergenceOrchestrator()
-            ctx = await orchestrator.run(
-                question,
-                emit,
-                request_id=request_id,
-                force_include=force_include,
-                force_exclude=force_exclude,
-                video_ids=video_ids,
-                web_urls=web_urls,
-                disabled_adapters=disabled_adapters,
-            )
-        else:
-            # V1 fixed-tier pipeline (backward compat for existing tiers)
-            from pipeline.lyra.theo_pipeline import TheoPipeline
-
-            pipeline = TheoPipeline()
-            ctx = await pipeline.run(
-                question,
-                effort,
-                emit,
-                force_include=force_include,
-                force_exclude=force_exclude,
-                request_id=request_id,
-                video_ids=video_ids,
-                web_urls=web_urls,
-                disabled_adapters=disabled_adapters,
-            )
+        orchestrator = ConvergenceOrchestrator()
+        ctx: Any = await orchestrator.run(
+            question,
+            emit,
+            request_id=request_id,
+            force_include=force_include,
+            force_exclude=force_exclude,
+            video_ids=video_ids,
+            web_urls=web_urls,
+            disabled_adapters=disabled_adapters,
+        )
 
         duration_ms = int((time.monotonic() - start) * 1000)
 
         if ctx.error:
             # Release reserved credits on failure/cancel
-            _release_reservation(request_id, effort)
+            _release_reservation(request_id)
 
             if "cancelled" in ctx.error.lower():
                 emit({"type": "done", "status": "cancelled"})
@@ -189,7 +163,7 @@ async def _process_request(
                 logger.warning(f"[THEO] Request {request_id} failed: {ctx.error}")
         else:
             # Deduct credits and release reservation on success
-            _deduct_credits(request_id, effort)
+            _deduct_credits(request_id)
 
             result = {
                 "report": ctx.paper_text,
@@ -241,7 +215,7 @@ async def _process_request(
     except Exception as exc:
         duration_ms = int((time.monotonic() - start) * 1000)
         logger.error(f"[THEO] Unexpected error for request {request_id}: {exc}", exc_info=True)
-        _release_reservation(request_id, effort)
+        _release_reservation(request_id)
         emit({"type": "done", "status": "failed"})
         with get_session() as session:
             session.execute(
@@ -273,7 +247,7 @@ async def _poll_loop() -> None:
             with get_session() as session:
                 row = session.execute(
                     text("""
-                        SELECT id::text, question, effort, specialist_options
+                        SELECT id::text, question, specialist_options
                         FROM research_requests
                         WHERE status = 'queued'
                         ORDER BY created_at ASC
@@ -283,7 +257,7 @@ async def _poll_loop() -> None:
 
             if row:
                 async with _semaphore:
-                    await _process_request(row.id, row.question, row.effort, row.specialist_options)
+                    await _process_request(row.id, row.question, row.specialist_options)
             else:
                 await asyncio.sleep(3)  # No work — wait before polling again
 

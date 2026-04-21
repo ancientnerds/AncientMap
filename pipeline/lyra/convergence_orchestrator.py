@@ -1,8 +1,8 @@
 """Convergence-based research orchestrator.
 
-Replaces the fixed-tier TheoPipeline with an event-driven state machine.
-Questions are decomposed into research angles that converge independently
-via specialist consensus, then synthesized into a Why Files narrative paper.
+Event-driven state machine driving Theo's research runs. Questions are
+decomposed into research angles that converge independently via specialist
+consensus, then synthesized into a Why Files narrative paper.
 
 Usage (from theo_worker.py):
     orchestrator = ConvergenceOrchestrator()

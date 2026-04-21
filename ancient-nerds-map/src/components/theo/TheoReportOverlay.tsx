@@ -18,7 +18,6 @@ interface ResearchResult {
   sites_found: number
   tools_used: number
   total_tokens: number
-  effort: string
   duration_ms: number
   quality_score?: QualityScore | null
   edited_at?: string | null
@@ -36,7 +35,6 @@ interface TheoReportOverlayProps {
   question: string
   result: ResearchResult
   pipelineTrace: PipelineEntry[] | null
-  effort: string
   durationMs: number | null
   sitesFound: number
   toolsUsed: number
@@ -47,11 +45,6 @@ interface TheoReportOverlayProps {
   initialEditing?: boolean
   onSaveEdit?: (report: string) => void
   onApprove?: (approvedBy: string, approvedAt: string) => void
-}
-
-const EFFORT_LABELS: Record<string, string> = {
-  brief: 'Brief', note: 'Note', article: 'Article',
-  review: 'Review', thesis: 'Thesis', dissertation: 'Dissertation',
 }
 
 // ---------------------------------------------------------------------------
@@ -182,7 +175,6 @@ export default function TheoReportOverlay({
   question,
   result,
   pipelineTrace,
-  effort,
   onClose,
   isOwner,
   isPublic,
@@ -343,8 +335,7 @@ export default function TheoReportOverlay({
               </button>
             </div>
             <div className="theo-report-meta-row">
-              <span className="theo-badge theo-badge-effort">{EFFORT_LABELS[effort] || effort}</span>
-              <QualityBadge qualityScore={result.quality_score} effort={effort} />
+              <QualityBadge qualityScore={result.quality_score} />
               <span className="theo-badge" style={{ border: '1px solid var(--border-default)', color: 'var(--text-dimmed)' }}>
                 {readingMinutes} min read
               </span>

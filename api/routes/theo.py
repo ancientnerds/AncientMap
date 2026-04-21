@@ -34,9 +34,8 @@ from sqlalchemy import text
 from api.services.jwt_auth import get_current_user, get_optional_user, require_researcher
 from api.services.rate_limiter import RateLimiter, get_client_ip
 from api.services.theo_config import (
-    EFFORT_CONFIG,
     MAX_REQUESTS_PER_USER,
-    THEO_CREDIT_COSTS,
+    THEO_RESEARCH_COST,
     THEO_RESEARCHER_ROLE_ID,
 )
 from api.services.theo_worker import get_live_events
@@ -61,7 +60,6 @@ class RelevanceCheckRequest(BaseModel):
 
 class ResearchSubmitRequest(BaseModel):
     question: str = Field(..., min_length=10, max_length=4000)
-    effort: str = Field(default="research")
     force_include: list[str] = Field(default_factory=list)
     force_exclude: list[str] = Field(default_factory=list)
     video_ids: list[str] = Field(default_factory=list, max_length=5)
@@ -101,18 +99,9 @@ class DuplicateCheckRequest(BaseModel):
     question: str = Field(..., min_length=10, max_length=4000)
 
 
-def _estimate_minutes(effort: str, queue_position: int) -> int:
-    """Rough estimate based on effort and queue position."""
-    base = {
-        "brief": 5,
-        "note": 15,
-        "article": 30,
-        "review": 50,
-        "thesis": 90,
-        "dissertation": 180,
-        "research": 120,  # v2 convergence — varies, estimate high
-    }.get(effort, 30)
-    return base * max(queue_position, 1)
+def _estimate_minutes(queue_position: int) -> int:
+    """Rough estimate based on queue position. V2 convergence runs vary widely."""
+    return 30 * max(queue_position, 1)
 
 
 def _make_slug(title: str) -> str:
@@ -186,13 +175,9 @@ async def check_relevance(body: RelevanceCheckRequest, req: Request):
     if not _theo_limiter.check(get_client_ip(req)):
         raise HTTPException(status_code=429, detail="Too many requests. Please wait.")
 
-    from pipeline.lyra.theo_pipeline import TheoPipeline
+    from pipeline.lyra.relevance_gate import check_relevance as gate_check
 
-    pipeline = TheoPipeline()
-    rejection = await pipeline._check_relevance(
-        body.question,
-        emit=lambda _: None,  # discard SSE events
-    )
+    rejection = await gate_check(body.question)
     if rejection:
         return {"relevant": False, "reason": rejection}
     return {"relevant": True, "reason": ""}
@@ -352,11 +337,7 @@ async def submit_research(
     if not _theo_limiter.check(get_client_ip(req)):
         raise HTTPException(status_code=429, detail="Too many requests. Please wait.")
 
-    valid_efforts = set(EFFORT_CONFIG.keys()) | {"research"}
-    if body.effort not in valid_efforts:
-        raise HTTPException(status_code=400, detail=f"Invalid effort: {body.effort}")
-
-    credit_cost = THEO_CREDIT_COSTS.get(body.effort, 300)
+    credit_cost = THEO_RESEARCH_COST
 
     # Check user's active request count + atomic credit reservation
     with get_session() as session:
@@ -405,7 +386,7 @@ async def submit_research(
                 )
                 raise HTTPException(
                     status_code=402,
-                    detail=f"Not enough credits. {body.effort.title()} costs {credit_cost} credits, you have {user_credits} available.",
+                    detail=f"Not enough credits. Research costs {credit_cost} credits, you have {user_credits} available.",
                 )
 
         # Build specialist options JSON (only if non-empty)
@@ -432,14 +413,13 @@ async def submit_research(
         session.execute(
             text("""
                 INSERT INTO research_requests
-                    (id, user_id, question, effort, status, specialist_options, created_at)
-                VALUES (:id, :uid, :q, :effort, 'queued', :spec_opts, NOW())
+                    (id, user_id, question, status, specialist_options, created_at)
+                VALUES (:id, :uid, :q, 'queued', :spec_opts, NOW())
             """),
             {
                 "id": request_id,
                 "uid": user.discord_id,
                 "q": body.question,
-                "effort": body.effort,
                 "spec_opts": spec_opts,
             },
         )
@@ -468,7 +448,7 @@ async def submit_research(
         id=request_id,
         status="queued",
         position=position or 1,
-        estimated_minutes=_estimate_minutes(body.effort, position or 1),
+        estimated_minutes=_estimate_minutes(position or 1),
     )
 
 
@@ -485,7 +465,7 @@ async def list_research(req: Request):
     with get_session() as session:
         rows = session.execute(
             text("""
-                SELECT id::text, question, effort, status, sites_found, tools_used,
+                SELECT id::text, question, status, sites_found, tools_used,
                        duration_ms, error_message, is_public, approved_by, created_at, completed_at
                 FROM research_requests
                 WHERE user_id = :uid
@@ -500,7 +480,6 @@ async def list_research(req: Request):
         {
             "id": r.id,
             "question": r.question,
-            "effort": r.effort,
             "status": r.status,
             "sites_found": r.sites_found,
             "tools_used": r.tools_used,
@@ -529,7 +508,7 @@ async def get_research(request_id: str, req: Request):
     with get_session() as session:
         row = session.execute(
             text("""
-                SELECT id::text, user_id, question, effort, status, result_json,
+                SELECT id::text, user_id, question, status, result_json,
                        pipeline_trace, debug_log, sites_found, tools_used, total_tokens,
                        llm_calls, duration_ms, error_message, created_at, completed_at, expires_at
                 FROM research_requests
@@ -553,7 +532,6 @@ async def get_research(request_id: str, req: Request):
     return {
         "id": row.id,
         "question": row.question,
-        "effort": row.effort,
         "status": row.status,
         "result": result,
         "pipeline_trace": row.pipeline_trace,
@@ -817,7 +795,7 @@ async def publish_research(
     with get_session() as session:
         row = session.execute(
             text("""
-                SELECT id::text, user_id, status, effort, is_public, result_json, question
+                SELECT id::text, user_id, status, is_public, result_json, question
                 FROM research_requests WHERE id = :id
             """),
             {"id": request_id},
@@ -895,7 +873,6 @@ async def publish_research(
                 paper_slug=slug,
                 author_username=user.username,
                 author_discord_id=user.discord_id,
-                effort=row.effort,
                 published_at=datetime.now(UTC).isoformat(),
             )
             logger.info("Published %s: %d sections indexed", request_id, indexed)
@@ -1109,7 +1086,7 @@ async def list_public_research(
     with get_session() as session:
         rows = session.execute(
             text("""
-                SELECT r.id::text, r.question, r.effort, r.slug, r.published_by, r.published_at,
+                SELECT r.id::text, r.question, r.slug, r.published_by, r.published_at,
                        r.sites_found, r.tools_used, r.duration_ms,
                        r.result_json::jsonb->>'title' AS paper_title,
                        r.result_json::jsonb->>'card_description' AS card_description,
@@ -1145,7 +1122,6 @@ async def list_public_research(
                 "id": r.id,
                 "title": r.paper_title or r.question,
                 "question": r.question,
-                "effort": r.effort,
                 "slug": r.slug,
                 "published_by": r.published_by,
                 "author_avatar": author_avatar,
@@ -1171,7 +1147,7 @@ async def get_public_research(slug: str):
     with get_session() as session:
         row = session.execute(
             text("""
-                SELECT id::text, question, effort, slug, published_by, published_at,
+                SELECT id::text, question, slug, published_by, published_at,
                        result_json, sites_found, tools_used, duration_ms
                 FROM research_requests
                 WHERE slug = :slug AND is_public = TRUE AND status = 'completed'
@@ -1190,7 +1166,6 @@ async def get_public_research(slug: str):
     return {
         "id": row.id,
         "question": row.question,
-        "effort": row.effort,
         "slug": row.slug,
         "published_by": row.published_by,
         "published_at": row.published_at.isoformat() if row.published_at else None,

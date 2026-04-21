@@ -12,15 +12,9 @@ import PageHeader from '../components/layout/PageHeader'
 import QualityBadge, { type QualityScore } from '../components/theo/QualityBadge'
 import '../styles/theo.css'
 
-const EFFORT_LABELS: Record<string, string> = {
-  brief: 'Research Brief', note: 'Research Note', article: 'Journal Article',
-  review: 'Literature Review', thesis: 'Thesis Chapter',
-}
-
 interface PaperData {
   id: string
   question: string
-  effort: string
   slug: string
   published_by: string
   published_at: string
@@ -184,7 +178,7 @@ export default function ResearchPaperPage() {
           el.content = content
         }
         setMeta('og:title', title)
-        setMeta('og:description', `${EFFORT_LABELS[data.effort] || data.effort} by ${data.published_by} on Ancient Nerds Research`)
+        setMeta('og:description', `Research paper by ${data.published_by} on Ancient Nerds Research`)
         setMeta('og:url', window.location.href)
         if (data.id) {
           setMeta('og:image', `${window.location.origin}/data/research-images/${data.id}/cover.png`)
@@ -372,8 +366,7 @@ export default function ResearchPaperPage() {
         <div className="theo-paper-header">
           <h1 className="theo-paper-title">{title}</h1>
           <div className="theo-paper-meta">
-            <span className="theo-badge theo-badge-effort">{EFFORT_LABELS[paper.effort] || paper.effort}</span>
-            <QualityBadge qualityScore={paper.result.quality_score} effort={paper.effort} />
+            <QualityBadge qualityScore={paper.result.quality_score} />
             <span style={{ color: 'var(--text-dimmed)', fontSize: 12 }}>{readingMinutes} min read</span>
             <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>
               by {paper.published_by}

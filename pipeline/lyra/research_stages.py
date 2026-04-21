@@ -39,7 +39,7 @@ logger = logging.getLogger(__name__)
 PROMPTS_DIR = Path(__file__).parent / "prompts"
 
 # ---------------------------------------------------------------------------
-# Journal-tier config (based on "note" tier, with reduced retries)
+# Journal-tier config (compact pipeline for weekly journal articles)
 # ---------------------------------------------------------------------------
 _SPECIALISTS_COUNT = 3
 _MAX_SEARCH_QUERIES = 8
