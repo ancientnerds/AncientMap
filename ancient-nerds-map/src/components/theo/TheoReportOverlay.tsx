@@ -9,7 +9,8 @@ import { useState, useMemo, useCallback, useEffect, useRef, lazy, Suspense } fro
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import QualityBadge, { type QualityScore } from './QualityBadge'
-import TheoGallery, { type TheoGalleryImage } from './TheoGallery'
+import TheoGallery from './TheoGallery'
+import { splitIntoGallerySegments } from './galleryParser'
 
 const TheoEditor = lazy(() => import('./TheoEditor'))
 
@@ -106,66 +107,8 @@ function replaceInBody(body: string, cites: Map<number, string>): string {
   })
 }
 
-// ---------------------------------------------------------------------------
-// Gallery segmentation — group consecutive `![gallery:ID|verified:..|...]()`
-// image blocks into TheoGallery slideshows, keep everything else as markdown.
-// ---------------------------------------------------------------------------
-
-type Segment =
-  | { kind: 'text'; content: string }
-  | { kind: 'gallery'; groupId: string; images: TheoGalleryImage[] }
-
-// Matches one inserted image block: image line + blank line + italic caption
-// + optional [Source](url) on the next line. Uses non-greedy matching on the
-// caption to avoid swallowing adjacent blocks.
-const IMG_BLOCK_RE = /!\[gallery:([^|\]]+)\|verified:(yes|no)\|([^\]]*)\]\(([^)]+)\)\s*\n\n\*([^*\n][^*]*?)\*(?:\s*\n\[Source\]\(([^)]+)\))?/g
-
-function splitIntoGallerySegments(md: string): Segment[] {
-  const matches: Array<{ start: number; end: number; groupId: string; image: TheoGalleryImage }> = []
-  const re = new RegExp(IMG_BLOCK_RE.source, IMG_BLOCK_RE.flags)
-  let m: RegExpExecArray | null
-  while ((m = re.exec(md)) !== null) {
-    matches.push({
-      start: m.index,
-      end: m.index + m[0].length,
-      groupId: m[1],
-      image: {
-        src: m[4],
-        title: m[3] || 'Research image',
-        caption: (m[5] || '').trim(),
-        sourceUrl: m[6] || '',
-        verified: m[2] === 'yes',
-      },
-    })
-  }
-  if (matches.length === 0) {
-    return [{ kind: 'text', content: md }]
-  }
-  const segments: Segment[] = []
-  let cursor = 0
-  let i = 0
-  while (i < matches.length) {
-    if (matches[i].start > cursor) {
-      segments.push({ kind: 'text', content: md.slice(cursor, matches[i].start) })
-    }
-    const groupId = matches[i].groupId
-    const images: TheoGalleryImage[] = [matches[i].image]
-    let j = i + 1
-    while (j < matches.length && matches[j].groupId === groupId) {
-      const between = md.slice(matches[j - 1].end, matches[j].start)
-      if (between.trim()) break
-      images.push(matches[j].image)
-      j++
-    }
-    segments.push({ kind: 'gallery', groupId, images })
-    cursor = matches[j - 1].end
-    i = j
-  }
-  if (cursor < md.length) {
-    segments.push({ kind: 'text', content: md.slice(cursor) })
-  }
-  return segments
-}
+// Gallery segmentation lives in ./galleryParser so the public page and the
+// live overlay stay in sync on how images cluster into slideshows.
 
 // ---------------------------------------------------------------------------
 // Component

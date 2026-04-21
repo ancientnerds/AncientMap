@@ -8,6 +8,7 @@ name: Backfill Images
 #   gh workflow run backfill-images.yml -f slug=SLUG -f mode=both
 #   gh workflow run backfill-images.yml -f slug=SLUG -f mode=cover
 #   gh workflow run backfill-images.yml -f slug=SLUG -f mode=probative
+#   gh workflow run backfill-images.yml -f slug=SLUG -f mode=captions  # rewrite captions only, no API calls
 #
 # The workflow invokes the Docker API container so it inherits prod DB + MiniMax
 # creds from the running environment — no secrets travel over the wire.
@@ -27,6 +28,7 @@ on:
         options:
           - cover
           - probative
+          - captions
           - both
 
 jobs:
@@ -60,6 +62,12 @@ jobs:
                 echo "==> Running probative backfill..."
                 docker exec ancient_nerds_api \
                   python -m pipeline.lyra.backfill_probative_images --slug "${SLUG}" --apply
+              fi
+
+              if [ "$MODE" = "captions" ]; then
+                echo "==> Rewriting captions on stored images (no API calls)..."
+                docker exec ancient_nerds_api \
+                  python -m pipeline.lyra.rewrite_image_captions --slug "${SLUG}" --apply
               fi
 
               echo "==> Done."

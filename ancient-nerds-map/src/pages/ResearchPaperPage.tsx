@@ -10,6 +10,8 @@ import remarkGfm from 'remark-gfm'
 import AiNoticeBanner from '../components/layout/AiNoticeBanner'
 import PageHeader from '../components/layout/PageHeader'
 import QualityBadge, { type QualityScore } from '../components/theo/QualityBadge'
+import TheoGallery from '../components/theo/TheoGallery'
+import { splitIntoGallerySegments } from '../components/theo/galleryParser'
 import '../styles/theo.css'
 
 interface PaperData {
@@ -303,27 +305,33 @@ export default function ResearchPaperPage() {
       }
       return <a {...props} href={href} target="_blank" rel="noopener noreferrer">{children}</a>
     },
-    img: ({ src, alt }: React.ImgHTMLAttributes<HTMLImageElement>) => (
-      <span data-gallery={alt?.startsWith('gallery:') ? alt.slice(8).split('|')[0] : ''}>
-        <img src={src || ''} alt={alt || ''} style={{ maxHeight: 400, borderRadius: 4 }} />
-      </span>
-    ),
+    img: ({ src, alt }: React.ImgHTMLAttributes<HTMLImageElement>) => {
+      // Strip gallery:ID|verified:..| prefix from alt if a stray image slipped
+      // past the gallery segmenter (legacy papers, malformed blocks).
+      let cleanAlt = alt || ''
+      const stripped = cleanAlt.match(/^gallery:[^|]+\|(?:verified:(?:yes|no)\|)?(.*)$/)
+      if (stripped) cleanAlt = stripped[1]
+      return (
+        <img src={src || ''} alt={cleanAlt} style={{ maxHeight: 400, borderRadius: 4 }} />
+      )
+    },
   }), [])
 
   // Derived values from the loaded paper
-  const { bodyWithAnchors, groupedRefs, totalRefs } = useMemo(() => {
-    if (!paper?.result) return { bodyWithAnchors: '', groupedRefs: {} as Record<RefGroup, Reference[]>, totalRefs: 0 }
+  const { bodySegments, groupedRefs, totalRefs } = useMemo(() => {
+    if (!paper?.result) return { bodySegments: [], groupedRefs: {} as Record<RefGroup, Reference[]>, totalRefs: 0 }
     const { body, refsText } = splitBodyAndRefs(paper.result.report)
     const refs = parseReferences(refsText)
     const knownNums = new Set(refs.map(r => r.num))
     const wired = wireCitationAnchors(body, knownNums)
+    const segments = splitIntoGallerySegments(wired)
     const grouped: Record<RefGroup, Reference[]> = {
       Academic: [], Reputable: [], PDF: [], Video: [], Other: [],
     }
     for (const r of refs) grouped[r.group].push(r)
     // Keep numeric order within each group
     for (const g of GROUP_ORDER) grouped[g].sort((a, b) => a.num - b.num)
-    return { bodyWithAnchors: wired, groupedRefs: grouped, totalRefs: refs.length }
+    return { bodySegments: segments, groupedRefs: grouped, totalRefs: refs.length }
   }, [paper])
 
   if (loading) {
@@ -416,9 +424,19 @@ export default function ResearchPaperPage() {
 
         {/* Paper body */}
         <div className="theo-paper-body theo-md-body">
-          <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>
-            {bodyWithAnchors}
-          </ReactMarkdown>
+          {bodySegments.map((seg, idx) =>
+            seg.kind === 'gallery' ? (
+              <TheoGallery key={`g-${idx}-${seg.groupId}`} images={seg.images} />
+            ) : (
+              <ReactMarkdown
+                key={`t-${idx}`}
+                remarkPlugins={[remarkGfm]}
+                components={mdComponents}
+              >
+                {seg.content}
+              </ReactMarkdown>
+            )
+          )}
         </div>
 
         {/* References — clustered, collapsible */}

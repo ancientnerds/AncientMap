@@ -1174,10 +1174,10 @@
   transform: scale(1.25);
 }
 .theo-gallery-caption {
-  margin-top: 8px;
-  font-size: 12px;
+  margin-top: 6px;
+  font-size: 11px;
   color: var(--text-muted);
-  line-height: 1.5;
+  line-height: 1.4;
 }
 .theo-gallery-caption a {
   color: var(--theo-amber, #d4912a);

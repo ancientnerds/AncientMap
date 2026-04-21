@@ -28,23 +28,19 @@ _SOURCE_LABEL = {
 def build_caption(cand: ImageCandidate, rationale: str) -> str:
     """Assemble the single-line caption placed below the image.
 
-    Format: *{Title} — {Institution}. Photo: {Artist} / {Source} / {License}. {Rationale}.*
-    Missing fields (e.g. Artist) are omitted rather than guessed.
+    Format: *{Title}. Photo: {Artist} / {Source}. {Rationale}.*
+
+    The license is tracked on the ImageCandidate (needed for compliance) but
+    intentionally NOT rendered — readers don't care about CC BY-SA 4.0, and
+    the [Source] link below the caption takes them to the original image page
+    where the license is shown in context.
     """
-    parts_lead: list[str] = []
-    if cand.title:
-        parts_lead.append(cand.title)
-    if parts_lead:
-        lead = "; ".join(parts_lead)
-    else:
-        lead = "Untitled image"
+    lead = cand.title if cand.title else "Untitled image"
 
     attribution: list[str] = []
     if cand.artist:
         attribution.append(cand.artist)
     attribution.append(_SOURCE_LABEL.get(cand.source, cand.source.title()))
-    if cand.license:
-        attribution.append(cand.license)
 
     photo_line = " / ".join(attribution)
     rationale_clean = (rationale or "").strip().rstrip(".")
@@ -59,10 +55,16 @@ def image_markdown(
     image_path_web: str,
     rationale: str,
 ) -> str:
-    """Build the full markdown block: alt-texted image + caption line + source link."""
+    """Build the full markdown block: alt-texted image + caption line + source link.
+
+    [Source] points to the image's origin page (cand.url) — the Wikimedia
+    Commons file page, Met object page, Europeana record etc. — NOT the
+    license template URL. Readers want to see where the image came from;
+    license_url is only a last-resort fallback.
+    """
     alt = (cand.title or "Research image").replace("]", "")
     caption = build_caption(cand, rationale)
-    source_url = getattr(cand, "license_url", "") or getattr(cand, "url", "")
+    source_url = getattr(cand, "url", "") or getattr(cand, "license_url", "")
     url_part = f"\n[Source]({source_url})" if source_url else ""
     return f"![{alt}]({image_path_web})\n\n{caption}{url_part}\n"
 
@@ -86,7 +88,10 @@ def image_markdown_with_group(
     verified_flag = "yes" if verified else "no"
     alt_with_gallery = f"gallery:{group_id}|verified:{verified_flag}|{alt_text}"
     caption = build_caption(cand, rationale)
-    source_url = getattr(cand, "license_url", "") or getattr(cand, "url", "")
+    # Prefer the image's origin page (file page, object page). license_url
+    # is only a last-resort fallback — it would just send readers to a
+    # creativecommons.org license template, which is useless for attribution.
+    source_url = getattr(cand, "url", "") or getattr(cand, "license_url", "")
     url_part = f"\n[Source]({source_url})" if source_url else ""
     return f"![{alt_with_gallery}]({image_path_web})\n\n{caption}{url_part}\n"
 
