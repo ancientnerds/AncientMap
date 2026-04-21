@@ -215,7 +215,7 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
   const { seaLevel, sliderSeaLevel, paleoshorelineVisible, replaceCoastlines, isLoadingPaleoshoreline } = paleo
 
   const geo = useGeologicalLayers()
-  const { geologicalLayers, isLoadingGeological } = geo
+  const { geologicalLayers, isLoadingGeological, currentTimeStep, setCurrentTimeStep } = geo
   const [geologicalPanelOpen, setGeologicalPanelOpen] = useState(false)
   const [geologicalPanelHeight, setGeologicalPanelHeight] = useState(350)
   const [geologicalPanelWidth, setGeologicalPanelWidth] = useState(280)
@@ -2081,23 +2081,34 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
     }
   }, [seaLevel, replaceCoastlines, paleoshorelineVisible, loadPaleoshoreline, vectorLayers.coastlines])
 
-  // Load/unload geological layers when visibility changes
+  // Load/unload geological layers when visibility or time-step changes
   const prevGeologicalLayers = useRef(geologicalLayers)
+  const prevCurrentTimeStep = useRef(currentTimeStep)
   useEffect(() => {
-    const prev = prevGeologicalLayers.current
+    const prevVis = prevGeologicalLayers.current
+    const prevTS = prevCurrentTimeStep.current
     prevGeologicalLayers.current = geologicalLayers
+    prevCurrentTimeStep.current = currentTimeStep
     const ctx = buildGeologicalCtx()
 
     for (const key of Object.keys(geologicalLayers) as Array<keyof typeof geologicalLayers>) {
-      const wasVisible = prev[key]
+      const wasVisible = prevVis[key]
       const isVisible = geologicalLayers[key]
+      const tsChanged = (prevTS[key] ?? 0) !== (currentTimeStep[key] ?? 0)
+      const index = currentTimeStep[key] ?? 0
+      const cfg = GEOLOGICAL_LAYER_CONFIG[key] as { timeSteps?: ReadonlyArray<unknown> }
+      const isTemporal = !!cfg.timeSteps?.length
+
       if (isVisible && !wasVisible) {
-        loadGeologicalLayerImpl(key, ctx)
+        loadGeologicalLayerImpl(key, ctx, isTemporal ? index : undefined)
       } else if (!isVisible && wasVisible) {
         disposeGeologicalLayerImpl(key, ctx)
+      } else if (isVisible && wasVisible && tsChanged && isTemporal) {
+        // Temporal slice change while visible → reload with new slice.
+        loadGeologicalLayerImpl(key, ctx, index)
       }
     }
-  }, [geologicalLayers, buildGeologicalCtx])
+  }, [geologicalLayers, currentTimeStep, buildGeologicalCtx])
 
   // Load layers when visibility changes (always high detail)
   // NOTE: This runs in parallel with texture and label loading
@@ -2315,7 +2326,7 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
     } else {
       mapboxService.clearGeologicalLayers()
     }
-  }, [showMapbox, geologicalLayers, isLoadingGeological])
+  }, [showMapbox, geologicalLayers, isLoadingGeological, currentTimeStep])
 
   // Cleanup FadeManager on unmount
   useEffect(() => {
@@ -2512,6 +2523,8 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
         geologicalLayers={geologicalLayers}
         onGeologicalLayerToggle={geo.toggleGeologicalLayer}
         isLoadingGeological={isLoadingGeological}
+        currentTimeStep={currentTimeStep}
+        onTimeStepChange={setCurrentTimeStep}
         showMapbox={showMapbox}
       />
 

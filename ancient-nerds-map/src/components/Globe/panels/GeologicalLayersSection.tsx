@@ -35,6 +35,8 @@ interface GeologicalLayersPanelProps {
   geologicalLayers: GeologicalLayerVisibility
   onGeologicalLayerToggle: (key: GeologicalLayerKey) => void
   isLoadingGeological: Partial<Record<GeologicalLayerKey, boolean>>
+  currentTimeStep: Record<GeologicalLayerKey, number>
+  onTimeStepChange: (key: GeologicalLayerKey, index: number) => void
   showMapbox: boolean
 }
 
@@ -59,6 +61,8 @@ export function GeologicalLayersSection({
   geologicalLayers,
   onGeologicalLayerToggle,
   isLoadingGeological,
+  currentTimeStep,
+  onTimeStepChange,
   showMapbox,
 }: GeologicalLayersPanelProps) {
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set())
@@ -225,21 +229,44 @@ export function GeologicalLayersSection({
                   {layers.map(layerKey => {
                     const cfg = GEOLOGICAL_LAYER_CONFIG[layerKey]
                     const isLoading = isLoadingGeological[layerKey]
+                    const timeSteps = ('timeSteps' in cfg ? cfg.timeSteps : undefined) as
+                      | ReadonlyArray<{ file: string; year: number; label: string }>
+                      | undefined
+                    const isVisible = geologicalLayers[layerKey]
+                    const activeStep = currentTimeStep[layerKey] ?? 0
                     return (
-                      <label key={layerKey} className="layer-toggle">
-                        <input
-                          type="checkbox"
-                          checked={geologicalLayers[layerKey]}
-                          onChange={() => onGeologicalLayerToggle(layerKey)}
-                          disabled={isLoading}
-                        />
-                        <span
-                          className="layer-color-indicator"
-                          style={{ backgroundColor: `#${cfg.color.toString(16).padStart(6, '0')}` }}
-                        />
-                        <span className="layer-label">{cfg.label}</span>
-                        {isLoading && <span className="loading-indicator">...</span>}
-                      </label>
+                      <div key={layerKey}>
+                        <label className="layer-toggle">
+                          <input
+                            type="checkbox"
+                            checked={isVisible}
+                            onChange={() => onGeologicalLayerToggle(layerKey)}
+                            disabled={isLoading}
+                          />
+                          <span
+                            className="layer-color-indicator"
+                            style={{ backgroundColor: `#${cfg.color.toString(16).padStart(6, '0')}` }}
+                          />
+                          <span className="layer-label">{cfg.label}</span>
+                          {isLoading && <span className="loading-indicator">...</span>}
+                        </label>
+                        {timeSteps && isVisible && (
+                          <div className="time-step-strip">
+                            {timeSteps.map((step, idx) => (
+                              <button
+                                key={step.file}
+                                type="button"
+                                className={`time-step-btn ${idx === activeStep ? 'active' : ''}`}
+                                onClick={() => onTimeStepChange(layerKey, idx)}
+                                disabled={isLoading}
+                                title={`${step.year.toLocaleString()} BP`}
+                              >
+                                {step.label}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                     )
                   })}
                 </div>

@@ -83,6 +83,7 @@ function pushPolygonCoords(positions: number[], rings: number[][][], r: number):
 export async function loadGeologicalLayer(
   key: GeologicalLayerKey,
   ctx: GeologicalLayerContext,
+  timeStepIndex?: number,
 ): Promise<void> {
   const {
     sceneRef,
@@ -96,6 +97,12 @@ export async function loadGeologicalLayer(
 
   const config = GEOLOGICAL_LAYER_CONFIG[key]
   const radius = config.radius
+
+  // Temporal layers bypass the in-memory positions cache — slice switches must
+  // refetch GeoJSON so the Mapbox ref (geologicalGeoJSONRef, keyed by plain `key`)
+  // stays in sync with whatever slice is currently active. Browser HTTP cache
+  // makes repeat fetches cheap.
+  const useCache = timeStepIndex === undefined
 
   // Track load ID for race condition prevention
   if (!geologicalLoadIdsRef.current[key]) geologicalLoadIdsRef.current[key] = 0
@@ -115,17 +122,19 @@ export async function loadGeologicalLayer(
       material.uniforms.uCameraPos.value.copy(sceneRef.current.camera.position)
     }
 
-    // Check cache
-    const cached = geologicalCacheRef.current.get(key)
-    if (cached) {
-      if (loadId !== geologicalLoadIdsRef.current[key]) { material.dispose(); return }
-      createAndAddLine(key, cached, material, radius, ctx)
-      setIsLoadingGeological(prev => ({ ...prev, [key]: false }))
-      return
+    // Check cache (static layers only)
+    if (useCache) {
+      const cached = geologicalCacheRef.current.get(key)
+      if (cached) {
+        if (loadId !== geologicalLoadIdsRef.current[key]) { material.dispose(); return }
+        createAndAddLine(key, cached, material, radius, ctx)
+        setIsLoadingGeological(prev => ({ ...prev, [key]: false }))
+        return
+      }
     }
 
     // Fetch GeoJSON
-    const url = getGeologicalLayerUrl(key)
+    const url = getGeologicalLayerUrl(key, timeStepIndex)
     let data: any
     try {
       const response = await offlineFetch(url)
@@ -198,7 +207,7 @@ export async function loadGeologicalLayer(
 
         if (allPositions.length > 0 && sceneRef.current) {
           const positionsArray = new Float32Array(allPositions)
-          geologicalCacheRef.current.set(key, positionsArray)
+          if (useCache) geologicalCacheRef.current.set(key, positionsArray)
           createAndAddLine(key, positionsArray, material, radius, ctx)
         }
         setIsLoadingGeological(prev => ({ ...prev, [key]: false }))
