@@ -361,7 +361,17 @@ export default function ResearchPaperPage() {
       </PageHeader>
       <AiNoticeBanner message="Research papers and illustrations are AI-generated. Always verify claims with original sources." />
 
-      <div className="theo-paper-page">
+        {paper.id && (
+          <div className="theo-paper-hero">
+            <img
+              src={`/data/research-images/${paper.id}/cover.png`}
+              alt=""
+              className="theo-paper-hero-img"
+            />
+          </div>
+        )}
+
+        <div className="theo-paper-page">
         {/* Paper header */}
         <div className="theo-paper-header">
           <h1 className="theo-paper-title">{title}</h1>
