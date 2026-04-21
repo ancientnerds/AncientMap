@@ -111,7 +111,7 @@ class ProbativeImagesHandler(BaseHandler):
         settings = _get_settings()
 
         if not getattr(settings, "probative_images_enabled", True):
-            print(flush=True) or logger.info("[probative] disabled by config, skipping")
+            print("[probative] disabled by config, skipping", flush=True)
             await self.bus.emit(ProbativeImagesReady(embedded_count=0))
             return
 
