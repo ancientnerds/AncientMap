@@ -85,19 +85,36 @@ class AngleImageResearchHandler(BaseHandler):
         # 3. Flatten + dedupe by URL (preserve order of first occurrence)
         seen_urls: set[str] = set()
         pool: list[dict] = []
-        for batch in results:
+        query_failures: list[tuple[str, Exception]] = []
+        per_query_counts: list[int] = []
+        for q, batch in zip(queries, results, strict=False):
             if isinstance(batch, Exception):
-                logger.info("image_research: one query failed: %s", batch)
+                query_failures.append((q, batch))
+                per_query_counts.append(0)
                 continue
+            added = 0
             for cand in batch or []:
                 if not cand.url or cand.url in seen_urls:
                     continue
                 seen_urls.add(cand.url)
                 pool.append(asdict(cand))
+                added += 1
                 if len(pool) >= _MAX_CANDIDATES_PER_ANGLE:
                     break
+            per_query_counts.append(added)
             if len(pool) >= _MAX_CANDIDATES_PER_ANGLE:
                 break
+
+        for q, exc in query_failures:
+            logger.warning("image_research: query '%s' failed: %s", q[:80], exc)
+
+        if not pool:
+            print(
+                f"[image_research] EMPTY pool for angle {angle.id} ({angle.topic}) — "
+                f"{len(queries)} queries, {len(query_failures)} failed, 0 candidates returned "
+                f"(per-query: {per_query_counts})",
+                flush=True,
+            )
 
         self.state.image_candidate_pool[angle.id] = pool
 

@@ -17,6 +17,7 @@ import asyncio
 import logging
 import os
 import re
+import traceback
 from pathlib import Path
 
 import httpx
@@ -139,6 +140,12 @@ async def generate_cover_image(
     try:
         image_url = await _generate_one(api_key, prompt)
         if not image_url:
+            print(
+                f"[THEO] cover image: MiniMax returned no URL for paper {paper_id} "
+                f"(title='{title[:60]}') — check MiniMax API status",
+                flush=True,
+            )
+            emit({"type": "status", "content": "Cover image generation returned empty."})
             return ""
 
         # Download and save
@@ -153,7 +160,13 @@ async def generate_cover_image(
         return relative_url
 
     except Exception as exc:
-        logger.warning("[THEO] Cover image generation failed: %s", exc)
+        tb = traceback.format_exc()
+        logger.error("[THEO] Cover image generation failed: %s\n%s", exc, tb)
+        print(
+            f"[THEO] cover image FAILED for paper {paper_id}: {exc}\n{tb}",
+            flush=True,
+        )
+        emit({"type": "status", "content": f"Cover image failed: {exc}"})
         return ""
 
 

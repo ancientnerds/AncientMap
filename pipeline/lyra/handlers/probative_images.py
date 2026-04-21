@@ -2,6 +2,9 @@
 
 Runs between PaperReady and FactCheckComplete. Produces a high-density image
 gallery per section with multiple images per paragraph for YouTube video use.
+
+The embed logic is exposed as the module-level `embed_probative_images()`
+coroutine so it can be reused from a backfill CLI without the event bus.
 """
 
 from __future__ import annotations
@@ -10,7 +13,10 @@ import asyncio
 import hashlib
 import logging
 import re as re_module
+from collections.abc import Callable
+from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 from pipeline.lyra.config import _get_settings
 from pipeline.lyra.handlers import BaseHandler
@@ -36,6 +42,26 @@ from pipeline.lyra.theo_image_captions import (
 logger = logging.getLogger(__name__)
 
 IMAGES_DIR = Path(__file__).resolve().parents[3] / "public" / "data" / "research-images"
+
+
+@dataclass
+class _EmbedContext:
+    """Shared mutable state for one embed run.
+
+    Passed to `_process_one_opportunity` tasks instead of a handler. Safe under
+    `asyncio.gather` because Python coroutines are single-threaded between
+    `await` points — each insert_image_after_section read-modify-write is
+    atomic.
+    """
+
+    paper_id: str
+    paper_text: str
+    image_candidate_pool: dict[str, list[dict]]
+    angles: list
+    registry: Any  # CitationRegistry
+    paper_dir: Path
+    client: Any  # MiniMax VLM client
+    embedded: list[dict] = field(default_factory=list)
 
 
 def _pool_candidates_for_source_ids(
@@ -101,174 +127,6 @@ def _group_id_for_section(section: str, paragraph_index: int) -> str:
     return f"{safe}_p{paragraph_index}"
 
 
-class ProbativeImagesHandler(BaseHandler):
-    """See module docstring."""
-
-    def register(self):
-        self.bus.on(PaperReady, self._on_paper_ready)
-
-    async def _on_paper_ready(self: ProbativeImagesHandler, event: PaperReady):
-        self.state.phase = ResearchPhase.IMAGE_CURATION
-        settings = _get_settings()
-
-        if not getattr(settings, "probative_images_enabled", True):
-            print("[probative] disabled by config, skipping", flush=True)
-            await self.bus.emit(ProbativeImagesReady(embedded_count=0))
-            return
-
-        pool = getattr(self.state, "image_candidate_pool", {}) or {}
-        if not pool:
-            print(
-                f"[probative] WARNING: image_candidate_pool is EMPTY for request {self.state.request_id} — no images fetched during research phase",
-                flush=True,
-            )
-            logger.warning(
-                "[probative] image_candidate_pool is EMPTY — inline images will likely be 0"
-            )
-        else:
-            total = sum(len(v) for v in pool.values())
-            print(
-                f"[probative] image_candidate_pool has {len(pool)} angles, {total} total candidates",
-                flush=True,
-            )
-
-        self.emit_sse({"type": "pipeline", "stage": "probative_images", "status": "start"})
-
-        # Build context strings for the illustration specialist
-        question = getattr(self.state, "question", "") or ""
-        paper_text = self.state.paper_text or ""
-        other_paras = _summarize_other_paragraphs(paper_text)
-        image_pool_text = _build_image_pool_text(
-            getattr(self.state, "image_candidate_pool", {}) or {}
-        )
-        writer_markers_text = _build_writer_markers_text(paper_text)
-
-        # 1. Pick opportunities — paragraph-level, full context
-        opportunities = await select_opportunities(
-            paper_text=paper_text,
-            question=question,
-            other_paragraphs_text=other_paras,
-            image_pool_text=image_pool_text,
-            writer_markers_text=writer_markers_text,
-            settings=settings,
-        )
-
-        # 2. Prepare per-paper VLM client + image dir
-        paper_dir = IMAGES_DIR / str(self.state.request_id)
-        paper_dir.mkdir(parents=True, exist_ok=True)
-        client = create_minimax_client(settings.minimax_base_url, settings.minimax_api_key)
-
-        # Handle writer-placed [[IMG:id]] markers first
-        writer_embedded = await self._resolve_writer_markers(client, paper_dir, settings)
-        embedded: list[dict] = list(writer_embedded)
-
-        # 3. Parallel opportunity processing — all at once via asyncio.gather
-        tasks = [
-            _process_one_opportunity(
-                self,
-                opp,
-                paper_dir,
-                client,
-                settings,
-            )
-            for opp in opportunities
-        ]
-        results = await asyncio.gather(*tasks, return_exceptions=True)
-
-        for r in results:
-            if isinstance(r, Exception):
-                logger.warning("opportunity processing failed: %s", r)
-                continue
-            if isinstance(r, list):
-                embedded.extend(r)
-
-        client.close()
-        self.state.probative_images = embedded
-
-        from pipeline.lyra.image_diversity import compute_diversity
-
-        diversity = compute_diversity(embedded)
-        self.state.probative_images_diversity = diversity
-
-        logger.info(
-            "[probative] embedded %d images, source_diversity=%.2f (%d sources: %s)",
-            len(embedded),
-            diversity["source_diversity"],
-            diversity["source_count"],
-            ", ".join(diversity["sources"]),
-        )
-        self.emit_sse(
-            {
-                "type": "pipeline",
-                "stage": "probative_images",
-                "status": "done",
-                "meta": {"embedded": len(embedded), **diversity},
-            }
-        )
-        await self.bus.emit(ProbativeImagesReady(embedded_count=len(embedded)))
-
-    async def _resolve_writer_markers(
-        self,
-        client,
-        paper_dir,
-        settings,
-    ) -> list[dict]:
-        """Replace [[IMG:short]] markers the paper writer emitted with real images."""
-        markers = re_module.findall(r"\[\[IMG:([a-f0-9]{10})\]\]", self.state.paper_text)
-        if not markers:
-            return []
-
-        short_to_cand: dict[str, dict] = {}
-        for _angle_id, cands in (self.state.image_candidate_pool or {}).items():
-            for c in cands or []:
-                url = c.get("url", "") if isinstance(c, dict) else getattr(c, "url", "")
-                if not url:
-                    continue
-                short = hashlib.sha1(url.encode()).hexdigest()[:10]
-                short_to_cand.setdefault(short, c)
-
-        embedded: list[dict] = []
-        from pipeline.lyra.image_fetcher import ImageCandidate
-
-        for i, short in enumerate(dict.fromkeys(markers)):
-            cand_dict = short_to_cand.get(short)
-            if not cand_dict:
-                logger.info("[probative] writer marker %s not in pool; removing", short)
-                self.state.paper_text = self.state.paper_text.replace(f"[[IMG:{short}]]", "")
-                continue
-            cand = ImageCandidate.from_dict(cand_dict) if isinstance(cand_dict, dict) else cand_dict
-
-            final_path = paper_dir / f"writer_img_{i}.jpg"
-            if not await download_candidate(cand, final_path):
-                self.state.paper_text = self.state.paper_text.replace(f"[[IMG:{short}]]", "")
-                continue
-
-            web_path = f"/data/research-images/{self.state.request_id}/writer_img_{i}.jpg"
-            rationale = "Image placed by the paper writer as visual evidence for this passage."
-            md = image_markdown_with_group(cand, web_path, rationale, f"writer_{i}", True, True)
-            self.state.paper_text = self.state.paper_text.replace(f"[[IMG:{short}]]", md, 1)
-
-            embedded.append(
-                {
-                    "paragraph_index": -1,
-                    "paragraph_text": "[writer-placed]",
-                    "keyword": "writer-image",
-                    "image_path": str(final_path),
-                    "web_path": web_path,
-                    "source_url": getattr(cand, "url", ""),
-                    "source_name": getattr(cand, "source", ""),
-                    "title": getattr(cand, "title", ""),
-                    "artist": getattr(cand, "artist", ""),
-                    "license": getattr(cand, "license", ""),
-                    "license_url": getattr(cand, "license_url", ""),
-                    "rationale": rationale,
-                    "section_heading": "[inline]",
-                    "search_query": "",
-                }
-            )
-        return embedded
-
-
 def _summarize_other_paragraphs(paper_text: str) -> str:
     """Build a deduplication summary of all paragraphs except the current one."""
     _SKIP = frozenset({"abstract", "introduction", "references", "sources"})
@@ -299,17 +157,231 @@ def _summarize_other_paragraphs(paper_text: str) -> str:
     if not paragraphs:
         return "(only one paragraph — no deduplication needed)"
 
-    # Summarize each paragraph by section + first 80 chars
     for sec, txt in paragraphs:
         parts.append(f"[{sec}] {txt[:80]}...")
     return "\n".join(parts)
 
 
+async def _resolve_writer_markers(ctx: _EmbedContext) -> list[dict]:
+    """Replace [[IMG:short]] markers the paper writer emitted with real images."""
+    markers = re_module.findall(r"\[\[IMG:([a-f0-9]{10})\]\]", ctx.paper_text)
+    if not markers:
+        return []
+
+    short_to_cand: dict[str, dict] = {}
+    for _angle_id, cands in (ctx.image_candidate_pool or {}).items():
+        for c in cands or []:
+            url = c.get("url", "") if isinstance(c, dict) else getattr(c, "url", "")
+            if not url:
+                continue
+            short = hashlib.sha1(url.encode()).hexdigest()[:10]
+            short_to_cand.setdefault(short, c)
+
+    embedded: list[dict] = []
+    from pipeline.lyra.image_fetcher import ImageCandidate
+
+    for i, short in enumerate(dict.fromkeys(markers)):
+        cand_dict = short_to_cand.get(short)
+        if not cand_dict:
+            logger.info("[probative] writer marker %s not in pool; removing", short)
+            ctx.paper_text = ctx.paper_text.replace(f"[[IMG:{short}]]", "")
+            continue
+        cand = ImageCandidate.from_dict(cand_dict) if isinstance(cand_dict, dict) else cand_dict
+
+        final_path = ctx.paper_dir / f"writer_img_{i}.jpg"
+        if not await download_candidate(cand, final_path):
+            ctx.paper_text = ctx.paper_text.replace(f"[[IMG:{short}]]", "")
+            continue
+
+        web_path = f"/data/research-images/{ctx.paper_id}/writer_img_{i}.jpg"
+        rationale = "Image placed by the paper writer as visual evidence for this passage."
+        md = image_markdown_with_group(cand, web_path, rationale, f"writer_{i}", True, True)
+        ctx.paper_text = ctx.paper_text.replace(f"[[IMG:{short}]]", md, 1)
+
+        embedded.append(
+            {
+                "paragraph_index": -1,
+                "paragraph_text": "[writer-placed]",
+                "keyword": "writer-image",
+                "image_path": str(final_path),
+                "web_path": web_path,
+                "source_url": getattr(cand, "url", ""),
+                "source_name": getattr(cand, "source", ""),
+                "title": getattr(cand, "title", ""),
+                "artist": getattr(cand, "artist", ""),
+                "license": getattr(cand, "license", ""),
+                "license_url": getattr(cand, "license_url", ""),
+                "rationale": rationale,
+                "section_heading": "[inline]",
+                "search_query": "",
+            }
+        )
+    return embedded
+
+
+async def embed_probative_images(
+    paper_id: str,
+    paper_text: str,
+    question: str,
+    angles: list,
+    registry: Any,
+    image_candidate_pool: dict[str, list[dict]] | None = None,
+    *,
+    settings=None,
+    emit: Callable[[dict], None] | None = None,
+) -> tuple[str, list[dict], dict]:
+    """Embed probative images into a research paper.
+
+    Reusable from both the live pipeline handler and the backfill CLI. Does
+    all the work that used to live inside `ProbativeImagesHandler._on_paper_ready`
+    except for event-bus emissions and state-machine transitions.
+
+    Parameters
+    ----------
+    paper_id: id of the research_requests row — used to namespace the image
+        directory (`/data/research-images/<paper_id>/`) and web paths.
+    paper_text: full paper markdown. Will have image markdown inserted after
+        relevant section headings.
+    question: the original user question, passed through to the illustration
+        specialist for relevance scoring.
+    angles: list of ResearchAngle (or equivalent) objects with `.id`. Used
+        when the pool is provided. Pass `[]` for pure on-demand fetching.
+    registry: CitationRegistry used by `find_section_for_claim_with_registry`.
+        Pass `None` for backfill where no registry was persisted.
+    image_candidate_pool: output of `AngleImageResearchHandler`. When `None` or
+        empty, `_process_one_opportunity` falls back to on-demand `fetch_candidates`.
+    settings: optional settings override (defaults to `_get_settings()`).
+    emit: optional SSE emit callback. Defaults to a no-op.
+
+    Returns
+    -------
+    tuple of (new_paper_text, embedded_list, diversity_dict).
+    """
+    settings = settings or _get_settings()
+    emit = emit or (lambda _e: None)
+
+    if not getattr(settings, "probative_images_enabled", True):
+        print("[probative] disabled by config, skipping", flush=True)
+        return (paper_text, [], {})
+
+    pool = image_candidate_pool or {}
+    if not pool:
+        print(
+            f"[probative] WARNING: image_candidate_pool is EMPTY for request {paper_id} — "
+            "on-demand fetch will run per opportunity",
+            flush=True,
+        )
+        logger.warning(
+            "[probative] image_candidate_pool is EMPTY — falling back to on-demand fetch"
+        )
+    else:
+        total = sum(len(v) for v in pool.values())
+        print(
+            f"[probative] image_candidate_pool has {len(pool)} angles, {total} total candidates",
+            flush=True,
+        )
+
+    emit({"type": "pipeline", "stage": "probative_images", "status": "start"})
+
+    # 1. Ask the illustration specialist for opportunities (LLM per paragraph)
+    other_paras = _summarize_other_paragraphs(paper_text)
+    image_pool_text = _build_image_pool_text(pool)
+    writer_markers_text = _build_writer_markers_text(paper_text)
+
+    opportunities = await select_opportunities(
+        paper_text=paper_text,
+        question=question,
+        other_paragraphs_text=other_paras,
+        image_pool_text=image_pool_text,
+        writer_markers_text=writer_markers_text,
+        settings=settings,
+    )
+
+    # 2. Prepare per-paper VLM client + image dir
+    paper_dir = IMAGES_DIR / str(paper_id)
+    paper_dir.mkdir(parents=True, exist_ok=True)
+    client = create_minimax_client(settings.minimax_base_url, settings.minimax_api_key)
+
+    ctx = _EmbedContext(
+        paper_id=str(paper_id),
+        paper_text=paper_text,
+        image_candidate_pool=pool,
+        angles=angles or [],
+        registry=registry,
+        paper_dir=paper_dir,
+        client=client,
+    )
+
+    try:
+        # 3. Resolve writer-placed markers first
+        writer_embedded = await _resolve_writer_markers(ctx)
+        ctx.embedded.extend(writer_embedded)
+
+        # 4. Parallel opportunity processing
+        tasks = [_process_one_opportunity(ctx, opp, settings) for opp in opportunities]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        for r in results:
+            if isinstance(r, Exception):
+                logger.warning("opportunity processing failed: %s", r)
+                continue
+            if isinstance(r, list):
+                ctx.embedded.extend(r)
+    finally:
+        client.close()
+
+    from pipeline.lyra.image_diversity import compute_diversity
+
+    diversity = compute_diversity(ctx.embedded)
+
+    logger.info(
+        "[probative] embedded %d images, source_diversity=%.2f (%d sources: %s)",
+        len(ctx.embedded),
+        diversity["source_diversity"],
+        diversity["source_count"],
+        ", ".join(diversity["sources"]),
+    )
+    emit(
+        {
+            "type": "pipeline",
+            "stage": "probative_images",
+            "status": "done",
+            "meta": {"embedded": len(ctx.embedded), **diversity},
+        }
+    )
+
+    return (ctx.paper_text, ctx.embedded, diversity)
+
+
+class ProbativeImagesHandler(BaseHandler):
+    """Thin event-bus wrapper around `embed_probative_images`."""
+
+    def register(self):
+        self.bus.on(PaperReady, self._on_paper_ready)
+
+    async def _on_paper_ready(self, event: PaperReady):
+        self.state.phase = ResearchPhase.IMAGE_CURATION
+
+        new_paper_text, embedded, diversity = await embed_probative_images(
+            paper_id=str(self.state.request_id),
+            paper_text=self.state.paper_text or "",
+            question=getattr(self.state, "question", "") or "",
+            angles=self.state.angles,
+            registry=self.state.registry,
+            image_candidate_pool=getattr(self.state, "image_candidate_pool", {}) or {},
+            emit=self.emit_sse,
+        )
+
+        self.state.paper_text = new_paper_text
+        self.state.probative_images = embedded
+        self.state.probative_images_diversity = diversity
+
+        await self.bus.emit(ProbativeImagesReady(embedded_count=len(embedded)))
+
+
 async def _process_one_opportunity(
-    handler: ProbativeImagesHandler,
+    ctx: _EmbedContext,
     opp: dict,
-    paper_dir: Path,
-    client,
     settings,
 ) -> list[dict]:
     """Process a single opportunity: resolve section, pool lookup, VLM gate, download, insert.
@@ -333,20 +405,16 @@ async def _process_one_opportunity(
 
     # Resolve section — prefer the opportunity's section field, fall back to registry
     section_name = section or None
+    if not section_name and ctx.registry is not None:
+        section_name = find_section_for_claim_with_registry(ctx.paper_text, [], ctx.registry)
     if not section_name:
-        section_name = find_section_for_claim_with_registry(
-            handler.state.paper_text, [], handler.state.registry
-        )
-    if not section_name:
-        section_name = find_section_for_claim(handler.state.paper_text, para_text[:60])
+        section_name = find_section_for_claim(ctx.paper_text, para_text[:60])
     if not section_name:
         logger.info("[probative] no section matched for paragraph %s", para_idx)
         return []
 
     # Primary: pull from the image candidate pool
-    cands = _pool_candidates_for_source_ids(
-        handler.state.image_candidate_pool or {}, [], handler.state.angles
-    )
+    cands = _pool_candidates_for_source_ids(ctx.image_candidate_pool or {}, [], ctx.angles)
     cands = [c for c in cands if metadata_gate_passes(c, must_show)]
 
     # Fallback: fetch on-demand
@@ -359,7 +427,8 @@ async def _process_one_opportunity(
 
     if not cands:
         print(
-            f"[probative] no candidates for para {para_idx} keyword '{keyword}' — will fallback to on-demand fetch",
+            f"[probative] no candidates for para {para_idx} keyword '{keyword}' — "
+            f"on-demand fetch also empty",
             flush=True,
         )
         logger.info("[probative] no candidates for para %s keyword '%s'", para_idx, keyword)
@@ -384,13 +453,13 @@ async def _process_one_opportunity(
         if cand_source and cand_source in seen_sources and len(tagged) > 0:
             continue
         url_hash = hashlib.md5((cand_url or str(id(cand))).encode()).hexdigest()[:16]
-        probe_path = paper_dir / f"_probe_p{para_idx}_{url_hash}.bin"
+        probe_path = ctx.paper_dir / f"_probe_p{para_idx}_{url_hash}.bin"
         ok = await download_candidate(cand, probe_path)
         if not ok:
             continue
         image_bytes = probe_path.read_bytes()
         prompt = build_vlm_prompt(para_text, must_show, forbidden)
-        raw = await asyncio.to_thread(minimax_vlm, client, image_bytes, prompt)
+        raw = await asyncio.to_thread(minimax_vlm, ctx.client, image_bytes, prompt)
         verdict = parse_vlm_verdict(raw)
         if not verdict_is_safe(verdict):
             if probe_path.exists():
@@ -417,14 +486,11 @@ async def _process_one_opportunity(
 
     for i, (accepted_cand, verified) in enumerate(tagged):
         suffix = "" if i == 0 else f"_{i}"
-        final_path = paper_dir / f"p{para_idx}_{keyword_slug}{suffix}.jpg"
+        final_path = ctx.paper_dir / f"p{para_idx}_{keyword_slug}{suffix}.jpg"
         if not await download_candidate(accepted_cand, final_path):
             continue
 
-        web_path = (
-            f"/data/research-images/{handler.state.request_id}/"
-            f"p{para_idx}_{keyword_slug}{suffix}.jpg"
-        )
+        web_path = f"/data/research-images/{ctx.paper_id}/p{para_idx}_{keyword_slug}{suffix}.jpg"
         is_first = i == 0
         is_last = i == len(tagged) - 1
         md = image_markdown_with_group(
@@ -437,11 +503,11 @@ async def _process_one_opportunity(
             verified=verified,
         )
 
-        new_text = insert_image_after_section(handler.state.paper_text, section_name, md)
-        if new_text == handler.state.paper_text:
+        new_text = insert_image_after_section(ctx.paper_text, section_name, md)
+        if new_text == ctx.paper_text:
             logger.info("[probative] insert failed for section '%s'", section_name)
             continue
-        handler.state.paper_text = new_text
+        ctx.paper_text = new_text
 
         embedded.append(
             {

@@ -1,0 +1,66 @@
+name: Backfill Images
+
+# Manual on-demand workflow that SSHes into the VPS and runs image backfills
+# against existing published Theo papers. The live pipeline generates images
+# during a run; this workflow is for papers that shipped without them.
+#
+# Trigger from the CLI:
+#   gh workflow run backfill-images.yml -f slug=SLUG -f mode=both
+#   gh workflow run backfill-images.yml -f slug=SLUG -f mode=cover
+#   gh workflow run backfill-images.yml -f slug=SLUG -f mode=probative
+#
+# The workflow invokes the Docker API container so it inherits prod DB + MiniMax
+# creds from the running environment — no secrets travel over the wire.
+
+on:
+  workflow_dispatch:
+    inputs:
+      slug:
+        description: 'Paper slug to backfill'
+        required: true
+        type: string
+      mode:
+        description: 'Which backfill to run'
+        required: true
+        type: choice
+        default: both
+        options:
+          - cover
+          - probative
+          - both
+
+jobs:
+  backfill:
+    name: Run backfill on VPS
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup SSH agent
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.VPS_SSH_KEY }}
+
+      - name: Run backfill via SSH
+        run: |
+          ssh -o StrictHostKeyChecking=accept-new \
+              -p ${{ secrets.VPS_PORT }} \
+              ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} \
+              'set -e
+              cd /var/www/ancientnerds
+              SLUG="${{ github.event.inputs.slug }}"
+              MODE="${{ github.event.inputs.mode }}"
+              echo "==> Backfill ${MODE} images for slug: ${SLUG}"
+
+              if [ "$MODE" = "cover" ] || [ "$MODE" = "both" ]; then
+                echo "==> Running cover backfill..."
+                docker exec ancient_nerds_api \
+                  python -m pipeline.lyra.backfill_cover_images --slug "${SLUG}" --apply
+              fi
+
+              if [ "$MODE" = "probative" ] || [ "$MODE" = "both" ]; then
+                echo "==> Running probative backfill..."
+                docker exec ancient_nerds_api \
+                  python -m pipeline.lyra.backfill_probative_images --slug "${SLUG}" --apply
+              fi
+
+              echo "==> Done."
+              '
