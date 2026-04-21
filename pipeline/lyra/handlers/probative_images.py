@@ -111,9 +111,17 @@ class ProbativeImagesHandler(BaseHandler):
         settings = _get_settings()
 
         if not getattr(settings, "probative_images_enabled", True):
-            logger.info("[probative] disabled by config, skipping")
+            print(flush=True) or logger.info("[probative] disabled by config, skipping")
             await self.bus.emit(ProbativeImagesReady(embedded_count=0))
             return
+
+        pool = getattr(self.state, "image_candidate_pool", {}) or {}
+        if not pool:
+            print(f"[probative] WARNING: image_candidate_pool is EMPTY for request {self.state.request_id} — no images fetched during research phase", flush=True)
+            logger.warning("[probative] image_candidate_pool is EMPTY — inline images will likely be 0")
+        else:
+            total = sum(len(v) for v in pool.values())
+            print(f"[probative] image_candidate_pool has {len(pool)} angles, {total} total candidates", flush=True)
 
         self.emit_sse({"type": "pipeline", "stage": "probative_images", "status": "start"})
 
@@ -337,6 +345,7 @@ async def _process_one_opportunity(
         cands = [c for c in fetched if metadata_gate_passes(c, must_show)]
 
     if not cands:
+        print(f"[probative] no candidates for para {para_idx} keyword '{keyword}' — will fallback to on-demand fetch", flush=True)
         logger.info("[probative] no candidates for para %s keyword '%s'", para_idx, keyword)
         return None
 
@@ -359,6 +368,7 @@ async def _process_one_opportunity(
             probe_path.unlink(missing_ok=True)
 
     if not accepted_cand:
+        print(f"[probative] VLM gate: no candidate survived for para {para_idx} keyword '{keyword}' — image NOT embedded", flush=True)
         logger.info(
             "[probative] no candidate survived VLM for para %s keyword '%s'", para_idx, keyword
         )

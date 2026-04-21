@@ -62,6 +62,7 @@ class AngleImageResearchHandler(BaseHandler):
 
         if not queries:
             self.state.image_candidate_pool[angle.id] = []
+            print(f"[image_research] no queries generated for angle {angle.id} ({angle.topic}) — pool empty", flush=True)
             self.emit_sse(
                 {
                     "type": "pipeline",
