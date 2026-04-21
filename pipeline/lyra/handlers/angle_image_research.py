@@ -23,8 +23,8 @@ from pipeline.lyra.research_events import AngleCreated
 
 logger = logging.getLogger(__name__)
 
-_MAX_CANDIDATES_PER_ANGLE = 60
-_QUERY_CANDIDATE_LIMIT = 8  # per connector per query
+_MAX_CANDIDATES_PER_ANGLE = 200
+_QUERY_CANDIDATE_LIMIT = 20  # per connector per query
 
 
 class AngleImageResearchHandler(BaseHandler):

@@ -170,6 +170,38 @@ def find_section_for_claim_with_registry(
     return None
 
 
+def resolve_section_heading(paper_text: str, guess: str) -> str | None:
+    """Return the actual ## heading text in `paper_text` that matches `guess`.
+
+    Tries exact match → case-insensitive match → substring match (either
+    direction). The LLM illustration specialist often returns slight variants
+    ("sky beings in ancient texts" vs "Sky Beings in Ancient Texts") and
+    `insert_image_after_section` requires an exact match, so resolve the
+    canonical heading first.
+    """
+    if not guess:
+        return None
+    headings = re.findall(r"^##\s+(.+?)\s*$", paper_text, re.MULTILINE)
+    if not headings:
+        return None
+    guess_s = guess.strip()
+    guess_lower = guess_s.lower()
+    for h in headings:
+        if h.strip() == guess_s:
+            return h.strip()
+    for h in headings:
+        if h.strip().lower() == guess_lower:
+            return h.strip()
+    # Substring: prefer the shortest plausible match to avoid accidental hits
+    candidates = [h.strip() for h in headings if guess_lower in h.strip().lower()]
+    if candidates:
+        return min(candidates, key=len)
+    candidates = [h.strip() for h in headings if h.strip().lower() in guess_lower]
+    if candidates:
+        return min(candidates, key=len)
+    return None
+
+
 def insert_image_after_section(
     paper_text: str,
     section_heading: str,

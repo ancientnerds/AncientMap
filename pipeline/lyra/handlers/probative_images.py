@@ -37,6 +37,7 @@ from pipeline.lyra.theo_image_captions import (
     find_section_for_claim_with_registry,
     image_markdown_with_group,
     insert_image_after_section,
+    resolve_section_heading,
 )
 
 logger = logging.getLogger(__name__)
@@ -413,6 +414,21 @@ async def _process_one_opportunity(
         logger.info("[probative] no section matched for paragraph %s", para_idx)
         return []
 
+    # Normalize section heading to the paper's actual canonical form — the
+    # LLM often returns a near-variant ("Sky Beings..." vs "sky beings...")
+    # that `insert_image_after_section` (exact match) would silently drop.
+    canonical = resolve_section_heading(ctx.paper_text, section_name)
+    if not canonical:
+        canonical = find_section_for_claim(ctx.paper_text, para_text[:60])
+    if not canonical:
+        print(
+            f"[probative] section '{section_name}' not found in paper for para {para_idx} "
+            f"keyword '{keyword}' — skipping",
+            flush=True,
+        )
+        return []
+    section_name = canonical
+
     # Primary: pull from the image candidate pool
     cands = _pool_candidates_for_source_ids(ctx.image_candidate_pool or {}, [], ctx.angles)
     cands = [c for c in cands if metadata_gate_passes(c, must_show)]
@@ -505,7 +521,11 @@ async def _process_one_opportunity(
 
         new_text = insert_image_after_section(ctx.paper_text, section_name, md)
         if new_text == ctx.paper_text:
-            logger.info("[probative] insert failed for section '%s'", section_name)
+            print(
+                f"[probative] INSERT FAILED: section '{section_name}' unchanged for "
+                f"para {para_idx} keyword '{keyword}' — image downloaded but not placed",
+                flush=True,
+            )
             continue
         ctx.paper_text = new_text
 
