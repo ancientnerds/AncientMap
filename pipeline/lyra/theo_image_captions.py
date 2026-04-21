@@ -74,14 +74,17 @@ def image_markdown_with_group(
     group_id: str,
     is_first: bool,
     is_last: bool,
+    verified: bool = True,
 ) -> str:
-    """image_markdown + gallery ID embedded in alt text for frontend grouping.
+    """image_markdown + gallery ID + verification flag embedded in alt text.
 
-    The alt field gets 'gallery:GROUP_ID' prefix so the frontend GalleryImage
-    component can group consecutive images into a horizontal-scroll carousel.
+    The alt field gets 'gallery:GROUP_ID|verified:yes|...' prefix so the frontend
+    TheoGallery component can group consecutive images into a slideshow and
+    render a verified/unverified chip per slide.
     """
     alt_text = getattr(cand, "title", "") or "Research image"
-    alt_with_gallery = f"gallery:{group_id}|{alt_text}"
+    verified_flag = "yes" if verified else "no"
+    alt_with_gallery = f"gallery:{group_id}|verified:{verified_flag}|{alt_text}"
     caption = build_caption(cand, rationale)
     source_url = getattr(cand, "license_url", "") or getattr(cand, "url", "")
     url_part = f"\n[Source]({source_url})" if source_url else ""

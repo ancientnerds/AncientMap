@@ -97,13 +97,12 @@ def parse_vlm_verdict(raw: str) -> dict | None:
 
 
 def verdict_is_accept(v: dict | None) -> bool:
-    """Decide the final accept/reject from a parsed VLM verdict.
+    """Strict acceptance: the image directly matches the topic per the VLM.
 
-    Permissive by design: the research pipeline wants plenty of illustrative
-    images per paragraph. We accept both strict matches ('accept' + 'yes') and
-    thematically-relevant matches ('soft_accept' and/or 'partial' subject
-    match). We still hard-reject on forbidden elements or poor quality, which
-    are the true correctness guards.
+    Used to label images 'verified' in the final paper — the reviewer sees a
+    green chip for these. Non-strict candidates still get embedded but as
+    'unverified', so the reviewer can approve them manually instead of the
+    pipeline silently dropping them.
     """
     if not v:
         return False
@@ -111,6 +110,23 @@ def verdict_is_accept(v: dict | None) -> bool:
         return False
     if v.get("shows_required_subject") == "no":
         return False
+    if v.get("forbidden_elements_present"):
+        return False
+    if v.get("image_quality") == "poor":
+        return False
+    return True
+
+
+def verdict_is_safe(v: dict | None) -> bool:
+    """Safety gate: no forbidden elements and not low quality.
+
+    Images that pass this gate are safe to embed in the paper even if they
+    don't fully match the topic. The reviewer judges topical fit in the UI.
+    If the VLM call failed entirely (v is None), default to safe so a VLM
+    outage doesn't strip every candidate.
+    """
+    if v is None:
+        return True
     if v.get("forbidden_elements_present"):
         return False
     if v.get("image_quality") == "poor":

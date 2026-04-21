@@ -21,6 +21,7 @@ from pipeline.lyra.image_gates import (
     metadata_gate_passes,
     parse_vlm_verdict,
     verdict_is_accept,
+    verdict_is_safe,
 )
 from pipeline.lyra.minimax_shared import create_minimax_client, minimax_vlm
 from pipeline.lyra.research_events import PaperReady, ProbativeImagesReady
@@ -364,21 +365,23 @@ async def _process_one_opportunity(
         logger.info("[probative] no candidates for para %s keyword '%s'", para_idx, keyword)
         return []
 
-    # Vision gate: iterate until we have target count of accepted candidates
+    # Embed up to N candidates per opportunity. VLM tags each as verified or
+    # unverified but does NOT gate embedding — the reviewer decides in the UI.
+    # Only forbidden-elements and poor-quality are safety rejects.
     max_per_opp = getattr(settings, "probative_images_max_per_opportunity", 3)
-    accepted: list = []
+    tagged: list[tuple] = []  # (cand, verified_bool)
     seen_sources: set[str] = set()
     seen_urls: set[str] = set()
 
     for cand in cands:
-        if len(accepted) >= max_per_opp:
+        if len(tagged) >= max_per_opp:
             break
         cand_url = getattr(cand, "url", "") or ""
         cand_source = getattr(cand, "source", "") or ""
         if cand_url in seen_urls:
             continue
-        # Diversify: skip if we already accepted from this source (only after first)
-        if cand_source and cand_source in seen_sources and len(accepted) > 0:
+        # Diversify: skip if we already embedded from this source (only after first)
+        if cand_source and cand_source in seen_sources and len(tagged) > 0:
             continue
         url_hash = hashlib.md5((cand_url or str(id(cand))).encode()).hexdigest()[:16]
         probe_path = paper_dir / f"_probe_p{para_idx}_{url_hash}.bin"
@@ -389,21 +392,22 @@ async def _process_one_opportunity(
         prompt = build_vlm_prompt(para_text, must_show, forbidden)
         raw = await asyncio.to_thread(minimax_vlm, client, image_bytes, prompt)
         verdict = parse_vlm_verdict(raw)
-        if verdict_is_accept(verdict):
-            accepted.append(cand)
-            seen_urls.add(cand_url)
-            if cand_source:
-                seen_sources.add(cand_source)
+        if not verdict_is_safe(verdict):
+            if probe_path.exists():
+                probe_path.unlink(missing_ok=True)
+            continue
+        verified = verdict_is_accept(verdict)
+        tagged.append((cand, verified))
+        seen_urls.add(cand_url)
+        if cand_source:
+            seen_sources.add(cand_source)
         if probe_path.exists():
             probe_path.unlink(missing_ok=True)
 
-    if not accepted:
+    if not tagged:
         print(
-            f"[probative] VLM gate: no candidate survived for para {para_idx} keyword '{keyword}' — image NOT embedded",
+            f"[probative] no safe candidates for para {para_idx} keyword '{keyword}' — image NOT embedded",
             flush=True,
-        )
-        logger.info(
-            "[probative] no candidate survived VLM for para %s keyword '%s'", para_idx, keyword
         )
         return []
 
@@ -411,7 +415,7 @@ async def _process_one_opportunity(
     group_id = _group_id_for_section(section_name, para_idx)
     embedded: list[dict] = []
 
-    for i, accepted_cand in enumerate(accepted):
+    for i, (accepted_cand, verified) in enumerate(tagged):
         suffix = "" if i == 0 else f"_{i}"
         final_path = paper_dir / f"p{para_idx}_{keyword_slug}{suffix}.jpg"
         if not await download_candidate(accepted_cand, final_path):
@@ -422,9 +426,15 @@ async def _process_one_opportunity(
             f"p{para_idx}_{keyword_slug}{suffix}.jpg"
         )
         is_first = i == 0
-        is_last = i == len(accepted) - 1
+        is_last = i == len(tagged) - 1
         md = image_markdown_with_group(
-            accepted_cand, web_path, rationale, group_id, is_first, is_last
+            accepted_cand,
+            web_path,
+            rationale,
+            group_id,
+            is_first,
+            is_last,
+            verified=verified,
         )
 
         new_text = insert_image_after_section(handler.state.paper_text, section_name, md)
@@ -449,11 +459,14 @@ async def _process_one_opportunity(
                 "rationale": rationale,
                 "section_heading": section_name,
                 "search_query": search_query,
+                "verified": verified,
             }
         )
 
+    verified_count = sum(1 for _, v in tagged if v)
     print(
-        f"[probative] embedded {len(embedded)} images for para {para_idx} keyword '{keyword}'",
+        f"[probative] embedded {len(embedded)} images for para {para_idx} keyword '{keyword}' "
+        f"(verified={verified_count}, unverified={len(tagged) - verified_count})",
         flush=True,
     )
     return embedded

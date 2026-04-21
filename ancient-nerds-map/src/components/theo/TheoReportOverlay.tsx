@@ -9,6 +9,7 @@ import { useState, useMemo, useCallback, useEffect, useRef, lazy, Suspense } fro
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import QualityBadge, { type QualityScore } from './QualityBadge'
+import TheoGallery, { type TheoGalleryImage } from './TheoGallery'
 
 const TheoEditor = lazy(() => import('./TheoEditor'))
 
@@ -113,6 +114,67 @@ function replaceInBody(body: string, cites: Map<number, string>): string {
 }
 
 // ---------------------------------------------------------------------------
+// Gallery segmentation — group consecutive `![gallery:ID|verified:..|...]()`
+// image blocks into TheoGallery slideshows, keep everything else as markdown.
+// ---------------------------------------------------------------------------
+
+type Segment =
+  | { kind: 'text'; content: string }
+  | { kind: 'gallery'; groupId: string; images: TheoGalleryImage[] }
+
+// Matches one inserted image block: image line + blank line + italic caption
+// + optional [Source](url) on the next line. Uses non-greedy matching on the
+// caption to avoid swallowing adjacent blocks.
+const IMG_BLOCK_RE = /!\[gallery:([^|\]]+)\|verified:(yes|no)\|([^\]]*)\]\(([^)]+)\)\s*\n\n\*([^*\n][^*]*?)\*(?:\s*\n\[Source\]\(([^)]+)\))?/g
+
+function splitIntoGallerySegments(md: string): Segment[] {
+  const matches: Array<{ start: number; end: number; groupId: string; image: TheoGalleryImage }> = []
+  const re = new RegExp(IMG_BLOCK_RE.source, IMG_BLOCK_RE.flags)
+  let m: RegExpExecArray | null
+  while ((m = re.exec(md)) !== null) {
+    matches.push({
+      start: m.index,
+      end: m.index + m[0].length,
+      groupId: m[1],
+      image: {
+        src: m[4],
+        title: m[3] || 'Research image',
+        caption: (m[5] || '').trim(),
+        sourceUrl: m[6] || '',
+        verified: m[2] === 'yes',
+      },
+    })
+  }
+  if (matches.length === 0) {
+    return [{ kind: 'text', content: md }]
+  }
+  const segments: Segment[] = []
+  let cursor = 0
+  let i = 0
+  while (i < matches.length) {
+    if (matches[i].start > cursor) {
+      segments.push({ kind: 'text', content: md.slice(cursor, matches[i].start) })
+    }
+    const groupId = matches[i].groupId
+    const images: TheoGalleryImage[] = [matches[i].image]
+    let j = i + 1
+    while (j < matches.length && matches[j].groupId === groupId) {
+      const between = md.slice(matches[j - 1].end, matches[j].start)
+      if (between.trim()) break
+      images.push(matches[j].image)
+      j++
+    }
+    segments.push({ kind: 'gallery', groupId, images })
+    cursor = matches[j - 1].end
+    i = j
+  }
+  if (cursor < md.length) {
+    segments.push({ kind: 'text', content: md.slice(cursor) })
+  }
+  return segments
+}
+
+// ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
@@ -170,6 +232,7 @@ export default function TheoReportOverlay({
   const fixedReport = useMemo(() => fixHeadings(result.report), [result.report])
   const refCites = useMemo(() => parseReferenceCitations(fixedReport), [fixedReport])
   const enrichedReport = useMemo(() => enrichCitations(fixedReport, refCites), [fixedReport, refCites])
+  const reportSegments = useMemo(() => splitIntoGallerySegments(enrichedReport), [enrichedReport])
 
   const mdComponents = useMemo(() => ({
     a: ({ href, children, ...props }: React.AnchorHTMLAttributes<HTMLAnchorElement>) => {
@@ -221,12 +284,20 @@ export default function TheoReportOverlay({
       }
       return <a {...props} href={href} target="_blank" rel="noopener noreferrer">{children}</a>
     },
-    img: ({ src, alt }: React.ImgHTMLAttributes<HTMLImageElement>) => (
-      <figure className="theo-source-image">
-        <img src={src} alt={alt || ''} loading="lazy" />
-        {alt && <figcaption>{alt}</figcaption>}
-      </figure>
-    ),
+    img: ({ src, alt }: React.ImgHTMLAttributes<HTMLImageElement>) => {
+      // Strip gallery:ID|verified:..| prefix from alt if it slipped through
+      // (e.g. legacy papers or isolated images that didn't match the grouping
+      // regex). Leave the real title.
+      let cleanAlt = alt || ''
+      const stripped = cleanAlt.match(/^gallery:[^|]+\|(?:verified:(?:yes|no)\|)?(.*)$/)
+      if (stripped) cleanAlt = stripped[1]
+      return (
+        <figure className="theo-source-image">
+          <img src={src} alt={cleanAlt} loading="lazy" />
+          {cleanAlt && <figcaption>{cleanAlt}</figcaption>}
+        </figure>
+      )
+    },
     h2: ({ children }: React.HTMLAttributes<HTMLHeadingElement>) => {
       const text = String(children)
       const id = text.toLowerCase().replace(/[^\w\s-]/g, '').replace(/[\s]+/g, '-')
@@ -341,9 +412,19 @@ export default function TheoReportOverlay({
           </Suspense>
         ) : (
           <div className="theo-report-body theo-md-body" ref={bodyRef}>
-            <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>
-              {enrichedReport}
-            </ReactMarkdown>
+            {reportSegments.map((seg, idx) =>
+              seg.kind === 'gallery' ? (
+                <TheoGallery key={`g-${idx}-${seg.groupId}`} images={seg.images} />
+              ) : (
+                <ReactMarkdown
+                  key={`t-${idx}`}
+                  remarkPlugins={[remarkGfm]}
+                  components={mdComponents}
+                >
+                  {seg.content}
+                </ReactMarkdown>
+              )
+            )}
           </div>
         )}
 
