@@ -20,8 +20,10 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import re
 import sys
 from pathlib import Path
+from urllib.parse import urlparse
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
@@ -32,6 +34,81 @@ from pipeline.lyra.hero_picker import pick_hero_image
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
+
+
+# Mirrors the frontend figure regex (galleryParser.ts). Captures each inline
+# image block plus its optional italic caption and optional [Source](url).
+_FIGURE_RE = re.compile(
+    r"!\[(?P<alt>[^\]]*)\]\((?P<src>/data/research-images/[^)]+)\)"
+    r"(?:\s*\n\n\*(?P<caption>[^*\n][^*]*?)\*"
+    r"(?:\s*\n\[Source\]\((?P<url>[^)]+)\))?)?",
+    re.MULTILINE,
+)
+
+# Map URL host fragments to the source_name keys that hero_picker's
+# `_SOURCE_RANK` understands. Anything unmatched keeps the empty source_name
+# and scores at the baseline (1) — still rankable by relevance + position.
+_HOST_TO_SOURCE = [
+    ("metmuseum.org", "met_museum"),
+    ("louvre.fr", "louvre"),
+    ("getty.edu", "getty_museum"),
+    ("loc.gov", "loc"),
+    ("europeana.eu", "europeana"),
+    ("finds.org.uk", "pas"),  # Portable Antiquities Scheme
+    ("wikimedia.org", "wikimedia"),
+    ("wikipedia.org", "wikimedia"),
+]
+
+
+def _infer_source_name(source_url: str) -> str:
+    if not source_url:
+        return ""
+    try:
+        host = urlparse(source_url).hostname or ""
+    except ValueError:
+        return ""
+    host = host.lower()
+    for fragment, name in _HOST_TO_SOURCE:
+        if fragment in host:
+            return name
+    return ""
+
+
+def _reconstruct_from_report(report: str) -> list[dict]:
+    """Parse inline image blocks into synthetic probative_images entries.
+
+    Used as a fallback for papers whose convergence run predates the worker's
+    `probative_images` persistence fix — the markdown still carries enough
+    metadata (alt, caption, [Source]) to feed hero_picker.
+    """
+    entries: list[dict] = []
+    for m in _FIGURE_RE.finditer(report):
+        alt = (m.group("alt") or "").strip()
+        src = m.group("src") or ""
+        caption = (m.group("caption") or "").strip()
+        url = (m.group("url") or "").strip()
+
+        # Caption format post-build_caption is: `Title. Photo: X / Y. Rationale.`
+        # Keep the last sentence as rationale since that's the relevance tail
+        # the writer cared about; fall back to caption verbatim.
+        rationale = caption
+        if caption:
+            parts = [s.strip() for s in re.split(r"(?<=[.!?])\s+", caption) if s.strip()]
+            if len(parts) >= 2:
+                rationale = parts[-1]
+
+        entries.append(
+            {
+                "web_path": src,
+                "source_url": url,
+                "source_name": _infer_source_name(url),
+                "title": alt,
+                "rationale": rationale,
+                "section_heading": "",
+                "paragraph_index": 0,
+            }
+        )
+    return entries
 
 
 def _fetch_papers(slug: str | None) -> list[dict]:
@@ -65,7 +142,11 @@ def _process(paper: dict, apply: bool) -> tuple[str, str]:
     probative = result.get("probative_images") or []
     title = result.get("title") or ""
     if not probative:
-        return (slug, "no probative_images to pick from")
+        report = result.get("report", "") or ""
+        probative = _reconstruct_from_report(report)
+        if not probative:
+            return (slug, "no inline images in report either")
+        logger.info("  reconstructed %d entries from report markdown", len(probative))
 
     hero = pick_hero_image(title, probative)
     if not hero:
