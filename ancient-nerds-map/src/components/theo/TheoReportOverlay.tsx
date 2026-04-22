@@ -2,7 +2,8 @@
  * TheoReportOverlay — Full-screen report viewer for completed research.
  * Renders the full paper with clickable citation links, formatted references,
  * inline source images with attribution, and quality audit results.
- * Supports inline WYSIWYG editing via TheoEditor when isOwner is true.
+ * Owners can enter the per-section approval editor to review, edit, and
+ * publish each block of the paper.
  */
 
 import { useState, useMemo, useCallback, useEffect, useRef, lazy, Suspense } from 'react'
@@ -13,7 +14,7 @@ import TheoPaperBody from './TheoPaperBody'
 import ImageLightbox, { type LightboxImage } from '../ImageLightbox'
 import { inferSourceType } from '../../utils/sourceType'
 
-const TheoEditor = lazy(() => import('./TheoEditor'))
+const TheoApprovalEditor = lazy(() => import('./TheoApprovalEditor'))
 
 interface ResearchResult {
   report: string
@@ -42,11 +43,8 @@ interface TheoReportOverlayProps {
   toolsUsed: number
   onClose: () => void
   isOwner?: boolean
-  isPublic?: boolean
   requestId?: string
   initialEditing?: boolean
-  onSaveEdit?: (report: string) => void
-  onApprove?: (approvedBy: string, approvedAt: string) => void
 }
 
 // ---------------------------------------------------------------------------
@@ -121,16 +119,12 @@ export default function TheoReportOverlay({
   pipelineTrace,
   onClose,
   isOwner,
-  isPublic,
   requestId,
   initialEditing,
-  onSaveEdit,
-  onApprove,
 }: TheoReportOverlayProps) {
   const [showTrace, setShowTrace] = useState(false)
   const [showAudit, setShowAudit] = useState(false)
   const [editing, setEditing] = useState(initialEditing ?? false)
-  const [approving, setApproving] = useState(false)
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
   const bodyRef = useRef<HTMLDivElement>(null)
 
@@ -150,16 +144,6 @@ export default function TheoReportOverlay({
     if (editing) return
     if (e.target === e.currentTarget) onClose()
   }, [onClose, editing])
-
-  const handleSaveEdit = useCallback((markdown: string) => {
-    if (isPublic) {
-      if (!window.confirm('This paper is published. Save and update the public version?')) {
-        return
-      }
-    }
-    onSaveEdit?.(markdown)
-    setEditing(false)
-  }, [onSaveEdit, isPublic])
 
   const handleDiscardEdit = useCallback(() => {
     setEditing(false)
@@ -346,30 +330,13 @@ export default function TheoReportOverlay({
           </button>
         </div>
 
-        {/* Report Body — editor or reader */}
-        {editing ? (
-          <Suspense fallback={<div className="theo-report-body" style={{ padding: 20, color: 'var(--text-dimmed)' }}>Loading editor...</div>}>
-            <TheoEditor
-              content={result.report}
-              onSave={handleSaveEdit}
+        {/* Report Body — approval editor (owner) or reader */}
+        {editing && requestId ? (
+          <Suspense fallback={<div className="theo-report-body" style={{ padding: 20, color: 'var(--text-dimmed)' }}>Loading approval editor...</div>}>
+            <TheoApprovalEditor
+              requestId={requestId}
+              mdComponents={mdComponents}
               onDiscard={handleDiscardEdit}
-              approving={approving}
-              approved={!!result.approved_by}
-              onApprove={isOwner && requestId ? async () => {
-                setApproving(true)
-                try {
-                  const token = localStorage.getItem('an_auth_token')
-                  const resp = await fetch(`/api/theo/research/${requestId}/approve`, {
-                    method: 'POST',
-                    headers: { Authorization: `Bearer ${token}` },
-                  })
-                  if (resp.ok) {
-                    const data = await resp.json()
-                    onApprove?.(data.approved_by, data.approved_at)
-                  }
-                } catch { /* network error */ }
-                setApproving(false)
-              } : undefined}
             />
           </Suspense>
         ) : (

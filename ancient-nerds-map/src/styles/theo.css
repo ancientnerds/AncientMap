@@ -3004,3 +3004,159 @@
   background: var(--brand-primary);
   transition: width 0.5s linear;
 }
+
+/* ─── Per-Section Approval Editor ──────────────────────────────── */
+
+.theo-approval-block {
+  position: relative;
+  padding: 8px 44px 8px 10px;
+  border-radius: 6px;
+  margin: 4px -10px;
+  border: 1px dashed transparent;
+  transition: background-color 160ms ease, border-color 160ms ease;
+}
+.theo-approval-block--pending  { border-color: rgba(160, 160, 168, 0.30); }
+.theo-approval-block--pending:hover { border-color: rgba(160, 160, 168, 0.55); }
+.theo-approval-block--approved { background: rgba(46, 125, 50, 0.10); border-color: rgba(46, 125, 50, 0.40); }
+.theo-approval-block--rejected { background: rgba(198, 40, 40, 0.12); border-color: rgba(198, 40, 40, 0.45); opacity: 0.55; }
+.theo-approval-block--rejected .theo-approval-content { text-decoration: line-through; text-decoration-color: rgba(198, 40, 40, 0.6); }
+.theo-approval-block--edited   { background: rgba(212, 145, 42, 0.12); border-color: rgba(212, 145, 42, 0.50); }
+
+.theo-approval-badge {
+  position: absolute;
+  bottom: 6px;
+  right: 6px;
+  width: 28px;
+  height: 28px;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  cursor: pointer;
+  background: rgba(20, 20, 24, 0.82);
+  border: 1px solid currentColor;
+  z-index: 2;
+  user-select: none;
+  transition: transform 120ms ease, background 120ms ease;
+}
+.theo-approval-badge:hover { transform: scale(1.1); }
+.theo-approval-badge--approved { color: #4caf50; }
+.theo-approval-badge--rejected { color: #f44336; }
+.theo-approval-badge--edited   { color: #d4912a; }
+.theo-approval-badge--pending  { color: rgba(200, 200, 210, 0.55); }
+
+.theo-approval-popover {
+  position: absolute;
+  bottom: 40px;
+  right: 4px;
+  background: rgba(15, 15, 18, 0.96);
+  border: 1px solid rgba(160, 160, 168, 0.30);
+  border-radius: 8px;
+  padding: 6px;
+  display: flex;
+  gap: 4px;
+  z-index: 10;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.5);
+}
+.theo-approval-popover button {
+  background: transparent;
+  border: 1px solid rgba(160, 160, 168, 0.30);
+  color: var(--text-default);
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.theo-approval-popover button:hover { background: rgba(160, 160, 168, 0.12); }
+.theo-approval-popover button.approve { border-color: rgba(46, 125, 50, 0.50); color: #4caf50; }
+.theo-approval-popover button.reject  { border-color: rgba(198, 40, 40, 0.50); color: #f44336; }
+.theo-approval-popover button.edit    { border-color: rgba(212, 145, 42, 0.50); color: #d4912a; }
+
+.theo-approval-edit-box {
+  margin-top: 8px;
+  padding: 10px;
+  background: rgba(15, 15, 18, 0.80);
+  border: 1px solid rgba(212, 145, 42, 0.45);
+  border-radius: 6px;
+}
+.theo-approval-edit-box textarea {
+  width: 100%;
+  min-height: 120px;
+  font-family: var(--font-mono, monospace);
+  font-size: 13px;
+  background: rgba(8, 8, 10, 0.9);
+  border: 1px solid rgba(160, 160, 168, 0.25);
+  color: var(--text-default);
+  padding: 8px;
+  border-radius: 4px;
+  resize: vertical;
+}
+.theo-approval-edit-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+  justify-content: flex-end;
+}
+.theo-approval-edit-actions button {
+  background: transparent;
+  border: 1px solid rgba(160, 160, 168, 0.30);
+  color: var(--text-default);
+  padding: 5px 14px;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.theo-approval-edit-actions button.save { border-color: rgba(212, 145, 42, 0.55); color: #d4912a; }
+.theo-approval-edit-actions button.save:hover { background: rgba(212, 145, 42, 0.12); }
+
+.theo-approval-progress {
+  position: sticky;
+  bottom: 0;
+  background: rgba(10, 10, 12, 0.94);
+  border-top: 1px solid var(--theo-border);
+  padding: 10px 16px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  backdrop-filter: blur(6px);
+  z-index: 5;
+  margin-top: 16px;
+}
+.theo-approval-progress-bar {
+  flex: 1;
+  height: 6px;
+  background: rgba(160, 160, 168, 0.18);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.theo-approval-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #4caf50, #d4912a);
+  transition: width 240ms ease;
+}
+.theo-approval-publish-btn {
+  background: rgba(46, 125, 50, 0.20);
+  border: 1px solid rgba(46, 125, 50, 0.55);
+  color: #4caf50;
+  padding: 6px 18px;
+  border-radius: 4px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.theo-approval-publish-btn:disabled {
+  background: rgba(80, 80, 88, 0.18);
+  border-color: rgba(160, 160, 168, 0.25);
+  color: rgba(200, 200, 210, 0.4);
+  cursor: not-allowed;
+}
+.theo-approval-publish-btn:not(:disabled):hover { background: rgba(46, 125, 50, 0.32); }
+
+.theo-approval-block .theo-inline-figure,
+.theo-approval-block .theo-figure-mosaic {
+  margin-top: 0;
+  margin-bottom: 0;
+}
