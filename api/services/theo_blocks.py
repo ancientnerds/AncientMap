@@ -306,6 +306,102 @@ def split_paper_into_blocks(report: str) -> list[Block]:
     return blocks
 
 
+def renumber_and_audit_report(report: str) -> tuple[str, dict[str, Any]]:
+    """Renumber citations contiguously and re-audit a paper.
+
+    Mirrors the logic previously inlined in `PATCH /theo/research/{id}`:
+      1. Locate the `## References` heading.
+      2. Rebuild a `CitationRegistry` from the References list.
+      3. `finalize_references` renumbers in-body citations in first-occurrence
+         order.
+      4. Rewrite the references list to match.
+      5. Audit the whole document against the rebuilt registry.
+
+    Falls back to the verbatim report + a best-effort dummy-registry audit on
+    any parse failure so unusual markdown can't block a save. Used by both
+    `PATCH /research/{id}` (full-doc edit) and `PATCH /research/{id}/section`
+    (single-block edit, which first splices the new content into the report).
+    """
+    import logging
+
+    logger = logging.getLogger(__name__)
+
+    try:
+        from pipeline.lyra.theo_citations import (
+            CitationRegistry,
+            _find_references_heading,
+            audit_citations,
+            finalize_references,
+            parse_references_section,
+        )
+
+        refs_start = _find_references_heading(report)
+        if refs_start is None:
+            raise ValueError("no ## References heading — skip rebuild")
+
+        body_text = report[:refs_start].rstrip()
+        refs_tail = report[refs_start:]
+        refs_text = refs_tail.split("\n", 1)[1] if "\n" in refs_tail else ""
+
+        parsed = parse_references_section(refs_text)
+        if not parsed:
+            raise ValueError("references section had no parseable entries")
+
+        registry = CitationRegistry()
+        working_sid_to_num: dict[str, int] = {}
+        for entry in parsed:
+            sid = registry.register_source(
+                url=entry["url"],
+                title=entry["title"],
+                snippet="",
+            )
+            working_sid_to_num[sid] = entry["num"]
+            if entry.get("tier_label") == "Academic":
+                registry.sources[sid].reliability_tier = 1
+            elif entry.get("tier_label") == "Reputable":
+                registry.sources[sid].reliability_tier = 2
+
+        renumbered_body, _final_map = finalize_references(body_text, working_sid_to_num, registry)
+        refs_md = registry.format_references_list()
+        rebuilt = f"{renumbered_body}\n\n## References\n\n{refs_md}" if refs_md else renumbered_body
+        return rebuilt, audit_citations(rebuilt, registry)
+    except Exception as exc:
+        logger.warning("Citation renumber failed (%s); storing verbatim", exc)
+        try:
+            from pipeline.lyra.theo_citations import CitationRegistry, audit_citations
+
+            registry = CitationRegistry()
+            for num in {int(m) for m in re.findall(r"\[(\d+)\]", report)}:
+                sid = f"ref_{num}"
+                registry.register_source(
+                    url=f"#ref-{num}",
+                    title=f"Reference {num}",
+                    snippet="",
+                )
+                registry.reference_numbers[sid] = num
+            return report, audit_citations(report, registry)
+        except Exception as inner_exc:
+            logger.warning("Fallback audit also failed: %s", inner_exc)
+            return report, {}
+
+
+def apply_block_edit(report: str, block_id: str, new_content: str) -> str | None:
+    """Splice a new content slice into `report` at the target block's position.
+
+    Returns the edited report, or None if the block_id isn't found. The edit
+    preserves block ordering and surrounding content byte-for-byte — only the
+    target block's slice is replaced.
+    """
+    blocks = split_paper_into_blocks(report)
+    target_idx = next((i for i, b in enumerate(blocks) if b.block_id == block_id), None)
+    if target_idx is None:
+        return None
+    parts: list[str] = []
+    for i, b in enumerate(blocks):
+        parts.append(new_content if i == target_idx else b.content)
+    return "".join(parts)
+
+
 def find_block_by_id(
     report: str,
     hero_image: dict[str, Any] | None,
