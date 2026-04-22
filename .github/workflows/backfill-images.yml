@@ -19,8 +19,12 @@ on:
   workflow_dispatch:
     inputs:
       slug:
-        description: 'Paper slug to backfill'
-        required: true
+        description: 'Paper slug to backfill (leave blank if using request_id)'
+        required: false
+        type: string
+      request_id:
+        description: 'Paper UUID to backfill (only clean_titles supports this; unpublished drafts)'
+        required: false
         type: string
       mode:
         description: 'Which backfill to run'
@@ -53,8 +57,14 @@ jobs:
               'set -e
               cd /var/www/ancientnerds
               SLUG="${{ github.event.inputs.slug }}"
+              REQ_ID="${{ github.event.inputs.request_id }}"
               MODE="${{ github.event.inputs.mode }}"
-              echo "==> Backfill ${MODE} images for slug: ${SLUG}"
+              if [ -n "$REQ_ID" ]; then
+                TARGET_LABEL="id=${REQ_ID}"
+              else
+                TARGET_LABEL="slug=${SLUG}"
+              fi
+              echo "==> Backfill ${MODE} images for ${TARGET_LABEL}"
 
               if [ "$MODE" = "cover" ] || [ "$MODE" = "both" ]; then
                 echo "==> Running cover backfill..."
@@ -82,8 +92,13 @@ jobs:
 
               if [ "$MODE" = "clean_titles" ]; then
                 echo "==> Cleaning raw filenames out of inline image titles (no API calls)..."
-                docker exec ancient_nerds_api \
-                  python -m pipeline.lyra.clean_image_titles --slug "${SLUG}" --apply
+                if [ -n "$REQ_ID" ]; then
+                  docker exec ancient_nerds_api \
+                    python -m pipeline.lyra.clean_image_titles --id "${REQ_ID}" --apply
+                else
+                  docker exec ancient_nerds_api \
+                    python -m pipeline.lyra.clean_image_titles --slug "${SLUG}" --apply
+                fi
               fi
 
               echo "==> Done."

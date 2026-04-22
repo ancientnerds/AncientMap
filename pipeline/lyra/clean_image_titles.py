@@ -102,9 +102,19 @@ def _clean_probative_entries(entries: list[dict]) -> tuple[list[dict], int]:
     return out, changed
 
 
-def _fetch_papers(slug: str | None) -> list[dict]:
+def _fetch_papers(slug: str | None, request_id: str | None) -> list[dict]:
     with engine.connect() as conn:
-        if slug:
+        if request_id:
+            # Accept raw UUID; don't require is_public so unpublished drafts
+            # can be cleaned up before publish.
+            rows = conn.execute(
+                text(
+                    "SELECT id::text, slug, result_json FROM research_requests "
+                    "WHERE id::text = :rid AND status = 'completed'"
+                ),
+                {"rid": request_id},
+            ).fetchall()
+        elif slug:
             rows = conn.execute(
                 text(
                     "SELECT id::text, slug, result_json FROM research_requests "
@@ -120,7 +130,7 @@ def _fetch_papers(slug: str | None) -> list[dict]:
                     "ORDER BY published_at DESC"
                 )
             ).fetchall()
-    return [{"id": r.id, "slug": r.slug, "result_json": r.result_json} for r in rows]
+    return [{"id": r.id, "slug": r.slug or r.id, "result_json": r.result_json} for r in rows]
 
 
 def _process(paper: dict, apply: bool) -> tuple[str, int, str]:
@@ -168,18 +178,19 @@ def _process(paper: dict, apply: bool) -> tuple[str, int, str]:
 def main() -> None:
     p = argparse.ArgumentParser(description="Clean raw filenames out of inline image titles")
     p.add_argument("--slug", type=str, default=None)
+    p.add_argument("--id", dest="request_id", type=str, default=None)
     p.add_argument("--all", action="store_true")
     p.add_argument("--apply", action="store_true")
     args = p.parse_args()
 
-    if not args.slug and not args.all:
-        logger.error("Refusing to run without --slug or --all")
+    if not args.slug and not args.all and not args.request_id:
+        logger.error("Refusing to run without --slug, --id, or --all")
         return
 
     if not args.apply:
         logger.info("DRY RUN — no changes written (use --apply to confirm)")
 
-    papers = _fetch_papers(args.slug)
+    papers = _fetch_papers(args.slug, args.request_id)
     if not papers:
         logger.info("No papers found.")
         return
