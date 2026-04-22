@@ -608,6 +608,113 @@ async def get_research_blocks(
 
 
 # ---------------------------------------------------------------------------
+# PATCH /theo/research/{id}/section — Approve / reject / edit one block
+# ---------------------------------------------------------------------------
+
+
+class SectionDecisionRequest(BaseModel):
+    block_id: str = Field(..., min_length=1, max_length=64)
+    state: str = Field(..., pattern="^(approved|rejected|edited)$")
+    expected_version: int = Field(..., ge=0)
+    content: str | None = Field(default=None, max_length=100000)
+
+
+@router.patch("/research/{request_id}/section")
+async def patch_research_section(
+    request_id: str,
+    body: SectionDecisionRequest,
+    user: DiscordUser = Depends(get_current_user),
+):
+    """Record one block-level approval decision.
+
+    Owner-only. Requires `status == completed` and `is_public == false`.
+    Uses `expected_version` for optimistic concurrency — if two tabs try to
+    decide on the same paper at the same time, the second one 409s and gets
+    the fresh block list back on retry.
+
+    `state == "edited"` is accepted syntactically but not yet implemented —
+    the citation re-audit path lands in Slice 3.
+    """
+    from api.services.theo_blocks import (
+        build_block_list_response,
+        find_block_by_id,
+        upsert_decision,
+    )
+
+    _validate_uuid(request_id)
+
+    if body.state == "edited":
+        raise HTTPException(
+            status_code=501,
+            detail="Per-section edit lands in a follow-up slice. Use approve or reject for now.",
+        )
+
+    with get_session() as session:
+        row = session.execute(
+            text(
+                "SELECT user_id, status, is_public, result_json "
+                "FROM research_requests WHERE id = :id"
+            ),
+            {"id": request_id},
+        ).fetchone()
+
+        if not row:
+            raise HTTPException(status_code=404, detail="Research request not found")
+        if row.user_id != user.discord_id:
+            raise HTTPException(status_code=403, detail="Not your research request")
+        if row.status != "completed":
+            raise HTTPException(status_code=409, detail="Research must be completed")
+        if row.is_public:
+            raise HTTPException(status_code=409, detail="Cannot edit a published paper")
+
+        try:
+            result = json.loads(row.result_json) if row.result_json else {}
+        except (json.JSONDecodeError, TypeError):
+            result = {}
+
+        report = result.get("report") or ""
+        if not report:
+            raise HTTPException(status_code=409, detail="Paper has no report body")
+
+        current_approvals = result.get("section_approvals") or {}
+        current_version = int(current_approvals.get("version") or 0)
+        if body.expected_version != current_version:
+            raise HTTPException(
+                status_code=409,
+                detail=f"Stale version {body.expected_version}; current is {current_version}",
+            )
+
+        block_meta = find_block_by_id(report, result.get("hero_image"), body.block_id)
+        if not block_meta:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Block '{body.block_id}' not found in current paper",
+            )
+
+        new_approvals = upsert_decision(
+            section_approvals=current_approvals,
+            block_meta=block_meta,
+            state=body.state,
+            decided_by=user.username,
+            decided_at=datetime.now(UTC).isoformat(),
+            edited_content=None,
+        )
+        result["section_approvals"] = new_approvals
+
+        session.execute(
+            text("UPDATE research_requests SET result_json = :result WHERE id = :id"),
+            {"id": request_id, "result": json.dumps(result)},
+        )
+        session.commit()
+
+    return build_block_list_response(
+        report=report,
+        section_approvals=new_approvals,
+        hero_image=result.get("hero_image"),
+    )
+
+
+# ---------------------------------------------------------------------------
 # GET /theo/research/{id}/log — Download debug log
 # ---------------------------------------------------------------------------
 

@@ -306,6 +306,78 @@ def split_paper_into_blocks(report: str) -> list[Block]:
     return blocks
 
 
+def find_block_by_id(
+    report: str,
+    hero_image: dict[str, Any] | None,
+    block_id: str,
+) -> dict[str, Any] | None:
+    """Look up a block's canonical metadata by block_id.
+
+    Returns a dict with `block_id`, `content_hash`, `position`, `kind` (and for
+    the hero, the hero image payload). The server uses this to validate PATCH
+    requests — a block_id the splitter doesn't currently produce is rejected
+    so stale or invented ids can't accumulate decisions.
+    """
+    if block_id == "hero":
+        if hero_image and hero_image.get("src"):
+            return {
+                "block_id": "hero",
+                "content_hash": "hero",
+                "position": {"segment_idx": -1, "block_idx": 0},
+                "kind": "hero",
+                "content": hero_image.get("caption") or "",
+            }
+        return None
+    for b in split_paper_into_blocks(report):
+        if b.block_id == block_id:
+            return b.to_dict()
+    return None
+
+
+def upsert_decision(
+    section_approvals: dict[str, Any] | None,
+    block_meta: dict[str, Any],
+    state: str,
+    decided_by: str,
+    decided_at: str,
+    edited_content: str | None = None,
+) -> dict[str, Any]:
+    """Insert or replace a decision for one block. Returns the new approvals dict.
+
+    Decisions are stored as an ordered list (not a dict) so orphaned entries
+    from past content stay visible for debugging. The version is incremented
+    on every write — the PATCH handler's `expected_version` check uses it for
+    optimistic concurrency.
+    """
+    current = dict(section_approvals or {})
+    version = int(current.get("version") or 0)
+    decisions = list(current.get("decisions") or [])
+
+    new_entry = {
+        "block_id": block_meta["block_id"],
+        "content_hash": block_meta["content_hash"],
+        "position": block_meta["position"],
+        "kind": block_meta["kind"],
+        "state": state,
+        "decided_by": decided_by,
+        "decided_at": decided_at,
+        "edited_content": edited_content,
+    }
+
+    replaced = False
+    for i, d in enumerate(decisions):
+        if d.get("block_id") == block_meta["block_id"]:
+            decisions[i] = new_entry
+            replaced = True
+            break
+    if not replaced:
+        decisions.append(new_entry)
+
+    current["version"] = version + 1
+    current["decisions"] = decisions
+    return current
+
+
 def build_block_list_response(
     report: str,
     section_approvals: dict[str, Any] | None,
