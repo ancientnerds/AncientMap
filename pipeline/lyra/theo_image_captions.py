@@ -121,6 +121,20 @@ def build_caption(cand: ImageCandidate, rationale: str) -> str:
     return "*" + ". ".join(pieces) + ".*"
 
 
+def _encode_parens(url: str) -> str:
+    """Percent-encode literal ``(`` and ``)`` so markdown ``[label](url)`` parsing
+    doesn't truncate at the first `)` inside the URL.
+
+    Wikimedia Commons filenames routinely contain parens, e.g.
+    ``File:Mexican_antiquities_(1904)_(14781541291).jpg``. Every markdown
+    parser (ours, ReactMarkdown, CommonMark) reads the first unescaped `)` as
+    the link terminator, leaving the remainder of the URL as raw text in the
+    prose. Encoding just these two chars fixes it without touching legitimate
+    `/`, `?`, or `#` in the URL. Browsers decode %28/%29 transparently.
+    """
+    return url.replace("(", "%28").replace(")", "%29") if url else url
+
+
 def image_markdown(
     cand: ImageCandidate,
     image_path_web: str,
@@ -135,9 +149,10 @@ def image_markdown(
     """
     alt = (_clean_title(cand.title) or "Research image").replace("]", "")
     caption = build_caption(cand, rationale)
-    source_url = getattr(cand, "url", "") or getattr(cand, "license_url", "")
+    source_url = _encode_parens(getattr(cand, "url", "") or getattr(cand, "license_url", ""))
+    src_path = _encode_parens(image_path_web)
     url_part = f"\n[Source]({source_url})" if source_url else ""
-    return f"![{alt}]({image_path_web})\n\n{caption}{url_part}\n"
+    return f"![{alt}]({src_path})\n\n{caption}{url_part}\n"
 
 
 def find_section_for_claim(paper_text: str, claim_text: str) -> str | None:

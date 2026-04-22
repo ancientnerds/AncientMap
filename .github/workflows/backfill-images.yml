@@ -10,6 +10,7 @@ name: Backfill Images
 #   gh workflow run backfill-images.yml -f slug=SLUG -f mode=reflow         # reflow images into paragraphs + dedup, no API calls
 #   gh workflow run backfill-images.yml -f slug=SLUG -f mode=clean_titles   # strip .jpg/.png/upload-ids from alt + caption leads
 #   gh workflow run backfill-images.yml -f slug=SLUG -f mode=hero           # pick best inline image as banner hero
+#   gh workflow run backfill-images.yml -f slug=SLUG -f mode=source_urls    # percent-encode parens in [Source](url) so markdown doesn't break
 #
 # The workflow invokes the Docker API container so it inherits prod DB creds
 # from the running environment — no secrets travel over the wire.
@@ -36,6 +37,7 @@ on:
           - reflow
           - clean_titles
           - hero
+          - source_urls
 
 jobs:
   backfill:
@@ -97,6 +99,12 @@ jobs:
                 echo "==> Picking best inline probative image as banner hero (no API calls)..."
                 docker exec ancient_nerds_api \
                   python -m pipeline.lyra.backfill_hero_image --slug "${SLUG}" --apply
+              fi
+
+              if [ "$MODE" = "source_urls" ]; then
+                echo "==> Encoding parens in [Source](url) markdown (no API calls)..."
+                docker exec ancient_nerds_api \
+                  python -m pipeline.lyra.fix_source_urls --slug "${SLUG}" --apply
               fi
 
               echo "==> Done."

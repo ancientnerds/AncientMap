@@ -5,12 +5,15 @@
  */
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import AiNoticeBanner from '../components/layout/AiNoticeBanner'
 import PageHeader from '../components/layout/PageHeader'
 import QualityBadge, { type QualityScore } from '../components/theo/QualityBadge'
 import { splitIntoImageSegments } from '../components/theo/galleryParser'
+import ImageLightbox, { type LightboxImage } from '../components/ImageLightbox'
+import { inferSourceType } from '../utils/sourceType'
 import '../styles/theo.css'
 
 interface HeroImage {
@@ -155,6 +158,7 @@ export default function ResearchPaperPage() {
   const [ttsStatus, setTtsStatus] = useState<TtsStatus | null>(null)
   const [isPlaying, setIsPlaying] = useState(false)
   const [audioProgress, setAudioProgress] = useState(0)
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const progressRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
@@ -329,21 +333,80 @@ export default function ResearchPaperPage() {
     },
   }), [])
 
-  // Derived values from the loaded paper
-  const { bodySegments, groupedRefs, totalRefs } = useMemo(() => {
-    if (!paper?.result) return { bodySegments: [], groupedRefs: {} as Record<RefGroup, Reference[]>, totalRefs: 0 }
+  // Derived values from the loaded paper. The lightbox flat array contains
+  // [hero?, ...body figures in document order]; figureStartIndex maps each
+  // segment key to its first image's offset in that array so figures and
+  // mosaic tiles can wire a direct onClick → setLightboxIndex.
+  const { bodySegments, groupedRefs, totalRefs, lightboxImages, figureStartIndex, heroLightboxIndex } = useMemo(() => {
+    const emptyRefs: Record<RefGroup, Reference[]> = {
+      Academic: [], Reputable: [], PDF: [], Video: [], Other: [],
+    }
+    if (!paper?.result) {
+      return {
+        bodySegments: [],
+        groupedRefs: emptyRefs,
+        totalRefs: 0,
+        lightboxImages: [] as LightboxImage[],
+        figureStartIndex: new Map<string, number>(),
+        heroLightboxIndex: null as number | null,
+      }
+    }
     const { body, refsText } = splitBodyAndRefs(paper.result.report)
     const refs = parseReferences(refsText)
     const knownNums = new Set(refs.map(r => r.num))
     const wired = wireCitationAnchors(body, knownNums)
     const segments = splitIntoImageSegments(wired)
+
+    const images: LightboxImage[] = []
+    const startIndex = new Map<string, number>()
+
+    const hero = paper.result.hero_image
+    let heroIdx: number | null = null
+    if (hero?.src) {
+      heroIdx = images.length
+      images.push({
+        src: hero.src,
+        title: hero.title || '',
+        sourceUrl: hero.sourceUrl || undefined,
+        sourceType: inferSourceType(hero.sourceUrl),
+      })
+    }
+
+    segments.forEach((seg, segIdx) => {
+      if (seg.kind === 'figure') {
+        startIndex.set(`f-${segIdx}`, images.length)
+        images.push({
+          src: seg.figure.src,
+          title: seg.figure.title,
+          sourceUrl: seg.figure.sourceUrl || undefined,
+          sourceType: inferSourceType(seg.figure.sourceUrl),
+        })
+      } else if (seg.kind === 'mosaic') {
+        startIndex.set(`m-${segIdx}`, images.length)
+        for (const fig of seg.figures) {
+          images.push({
+            src: fig.src,
+            title: fig.title,
+            sourceUrl: fig.sourceUrl || undefined,
+            sourceType: inferSourceType(fig.sourceUrl),
+          })
+        }
+      }
+    })
+
     const grouped: Record<RefGroup, Reference[]> = {
       Academic: [], Reputable: [], PDF: [], Video: [], Other: [],
     }
     for (const r of refs) grouped[r.group].push(r)
-    // Keep numeric order within each group
     for (const g of GROUP_ORDER) grouped[g].sort((a, b) => a.num - b.num)
-    return { bodySegments: segments, groupedRefs: grouped, totalRefs: refs.length }
+    return {
+      bodySegments: segments,
+      groupedRefs: grouped,
+      totalRefs: refs.length,
+      lightboxImages: images,
+      figureStartIndex: startIndex,
+      heroLightboxIndex: heroIdx,
+    }
   }, [paper])
 
   if (loading) {
@@ -387,17 +450,17 @@ export default function ResearchPaperPage() {
               src={paper.result.hero_image.src}
               alt={paper.result.hero_image.title || ''}
               className="theo-paper-hero-img"
+              onClick={heroLightboxIndex !== null ? () => setLightboxIndex(heroLightboxIndex) : undefined}
+              style={heroLightboxIndex !== null ? { cursor: 'zoom-in' } : undefined}
             />
-            {(paper.result.hero_image.caption || paper.result.hero_image.sourceUrl) && (
+            {paper.result.hero_image.caption && (
               <figcaption className="theo-paper-hero-caption">
-                {paper.result.hero_image.caption && <em>{paper.result.hero_image.caption}</em>}
-                {paper.result.hero_image.sourceUrl && (
-                  <>
-                    {paper.result.hero_image.caption ? ' · ' : ''}
-                    <a href={paper.result.hero_image.sourceUrl} target="_blank" rel="noopener noreferrer">
-                      Source
-                    </a>
-                  </>
+                {paper.result.hero_image.sourceUrl ? (
+                  <a href={paper.result.hero_image.sourceUrl} target="_blank" rel="noopener noreferrer">
+                    <em>{paper.result.hero_image.caption}</em>
+                  </a>
+                ) : (
+                  <em>{paper.result.hero_image.caption}</em>
                 )}
               </figcaption>
             )}
@@ -451,19 +514,23 @@ export default function ResearchPaperPage() {
         <div className="theo-paper-body theo-md-body">
           {bodySegments.map((seg, idx) => {
             if (seg.kind === 'figure') {
+              const lbIdx = figureStartIndex.get(`f-${idx}`) ?? 0
               return (
                 <figure key={`f-${idx}`} className="theo-inline-figure">
-                  <img src={seg.figure.src} alt={seg.figure.title} loading="lazy" />
+                  <img
+                    src={seg.figure.src}
+                    alt={seg.figure.title}
+                    loading="lazy"
+                    onClick={() => setLightboxIndex(lbIdx)}
+                  />
                   {seg.figure.caption && (
                     <figcaption>
-                      <em>{seg.figure.caption}</em>
-                      {seg.figure.sourceUrl && (
-                        <>
-                          {' · '}
-                          <a href={seg.figure.sourceUrl} target="_blank" rel="noopener noreferrer">
-                            Source
-                          </a>
-                        </>
+                      {seg.figure.sourceUrl ? (
+                        <a href={seg.figure.sourceUrl} target="_blank" rel="noopener noreferrer">
+                          <em>{seg.figure.caption}</em>
+                        </a>
+                      ) : (
+                        <em>{seg.figure.caption}</em>
                       )}
                     </figcaption>
                   )}
@@ -472,6 +539,7 @@ export default function ResearchPaperPage() {
             }
             if (seg.kind === 'mosaic') {
               const cols = Math.min(3, seg.figures.length)
+              const mosaicStart = figureStartIndex.get(`m-${idx}`) ?? 0
               return (
                 <div
                   key={`m-${idx}`}
@@ -479,17 +547,20 @@ export default function ResearchPaperPage() {
                 >
                   {seg.figures.map((fig, fIdx) => (
                     <figure key={`m-${idx}-${fIdx}`} className="theo-figure-mosaic-item">
-                      <img src={fig.src} alt={fig.title} loading="lazy" />
+                      <img
+                        src={fig.src}
+                        alt={fig.title}
+                        loading="lazy"
+                        onClick={() => setLightboxIndex(mosaicStart + fIdx)}
+                      />
                       {fig.caption && (
                         <figcaption>
-                          <em>{fig.caption}</em>
-                          {fig.sourceUrl && (
-                            <>
-                              {' · '}
-                              <a href={fig.sourceUrl} target="_blank" rel="noopener noreferrer">
-                                Source
-                              </a>
-                            </>
+                          {fig.sourceUrl ? (
+                            <a href={fig.sourceUrl} target="_blank" rel="noopener noreferrer">
+                              <em>{fig.caption}</em>
+                            </a>
+                          ) : (
+                            <em>{fig.caption}</em>
                           )}
                         </figcaption>
                       )}
@@ -551,6 +622,15 @@ export default function ResearchPaperPage() {
           </a>
         </div>
       </div>
+      {lightboxIndex !== null && lightboxImages.length > 0 && createPortal(
+        <ImageLightbox
+          images={lightboxImages}
+          currentIndex={Math.min(lightboxIndex, lightboxImages.length - 1)}
+          onClose={() => setLightboxIndex(null)}
+          onNavigate={setLightboxIndex}
+        />,
+        document.body,
+      )}
     </div>
   )
 }

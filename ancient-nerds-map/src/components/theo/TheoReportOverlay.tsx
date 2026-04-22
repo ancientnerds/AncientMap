@@ -6,10 +6,13 @@
  */
 
 import { useState, useMemo, useCallback, useEffect, useRef, lazy, Suspense } from 'react'
+import { createPortal } from 'react-dom'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import QualityBadge, { type QualityScore } from './QualityBadge'
 import { splitIntoImageSegments } from './galleryParser'
+import ImageLightbox, { type LightboxImage } from '../ImageLightbox'
+import { inferSourceType } from '../../utils/sourceType'
 
 const TheoEditor = lazy(() => import('./TheoEditor'))
 
@@ -129,6 +132,7 @@ export default function TheoReportOverlay({
   const [showAudit, setShowAudit] = useState(false)
   const [editing, setEditing] = useState(initialEditing ?? false)
   const [approving, setApproving] = useState(false)
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
   const bodyRef = useRef<HTMLDivElement>(null)
 
   // Escape key to close (not while editing)
@@ -166,7 +170,33 @@ export default function TheoReportOverlay({
   const fixedReport = useMemo(() => fixHeadings(result.report), [result.report])
   const refCites = useMemo(() => parseReferenceCitations(fixedReport), [fixedReport])
   const enrichedReport = useMemo(() => enrichCitations(fixedReport, refCites), [fixedReport, refCites])
-  const reportSegments = useMemo(() => splitIntoImageSegments(enrichedReport), [enrichedReport])
+  const { reportSegments, lightboxImages, figureStartIndex } = useMemo(() => {
+    const segments = splitIntoImageSegments(enrichedReport)
+    const images: LightboxImage[] = []
+    const startIndex = new Map<string, number>()
+    segments.forEach((seg, segIdx) => {
+      if (seg.kind === 'figure') {
+        startIndex.set(`f-${segIdx}`, images.length)
+        images.push({
+          src: seg.figure.src,
+          title: seg.figure.title,
+          sourceUrl: seg.figure.sourceUrl || undefined,
+          sourceType: inferSourceType(seg.figure.sourceUrl),
+        })
+      } else if (seg.kind === 'mosaic') {
+        startIndex.set(`m-${segIdx}`, images.length)
+        for (const fig of seg.figures) {
+          images.push({
+            src: fig.src,
+            title: fig.title,
+            sourceUrl: fig.sourceUrl || undefined,
+            sourceType: inferSourceType(fig.sourceUrl),
+          })
+        }
+      }
+    })
+    return { reportSegments: segments, lightboxImages: images, figureStartIndex: startIndex }
+  }, [enrichedReport])
 
   const mdComponents = useMemo(() => ({
     a: ({ href, children, ...props }: React.AnchorHTMLAttributes<HTMLAnchorElement>) => {
@@ -347,19 +377,23 @@ export default function TheoReportOverlay({
           <div className="theo-report-body theo-md-body" ref={bodyRef}>
             {reportSegments.map((seg, idx) => {
               if (seg.kind === 'figure') {
+                const lbIdx = figureStartIndex.get(`f-${idx}`) ?? 0
                 return (
                   <figure key={`f-${idx}`} className="theo-inline-figure">
-                    <img src={seg.figure.src} alt={seg.figure.title} loading="lazy" />
+                    <img
+                      src={seg.figure.src}
+                      alt={seg.figure.title}
+                      loading="lazy"
+                      onClick={() => setLightboxIndex(lbIdx)}
+                    />
                     {seg.figure.caption && (
                       <figcaption>
-                        <em>{seg.figure.caption}</em>
-                        {seg.figure.sourceUrl && (
-                          <>
-                            {' · '}
-                            <a href={seg.figure.sourceUrl} target="_blank" rel="noopener noreferrer">
-                              Source
-                            </a>
-                          </>
+                        {seg.figure.sourceUrl ? (
+                          <a href={seg.figure.sourceUrl} target="_blank" rel="noopener noreferrer">
+                            <em>{seg.figure.caption}</em>
+                          </a>
+                        ) : (
+                          <em>{seg.figure.caption}</em>
                         )}
                       </figcaption>
                     )}
@@ -368,6 +402,7 @@ export default function TheoReportOverlay({
               }
               if (seg.kind === 'mosaic') {
                 const cols = Math.min(3, seg.figures.length)
+                const mosaicStart = figureStartIndex.get(`m-${idx}`) ?? 0
                 return (
                   <div
                     key={`m-${idx}`}
@@ -375,17 +410,20 @@ export default function TheoReportOverlay({
                   >
                     {seg.figures.map((fig, fIdx) => (
                       <figure key={`m-${idx}-${fIdx}`} className="theo-figure-mosaic-item">
-                        <img src={fig.src} alt={fig.title} loading="lazy" />
+                        <img
+                          src={fig.src}
+                          alt={fig.title}
+                          loading="lazy"
+                          onClick={() => setLightboxIndex(mosaicStart + fIdx)}
+                        />
                         {fig.caption && (
                           <figcaption>
-                            <em>{fig.caption}</em>
-                            {fig.sourceUrl && (
-                              <>
-                                {' · '}
-                                <a href={fig.sourceUrl} target="_blank" rel="noopener noreferrer">
-                                  Source
-                                </a>
-                              </>
+                            {fig.sourceUrl ? (
+                              <a href={fig.sourceUrl} target="_blank" rel="noopener noreferrer">
+                                <em>{fig.caption}</em>
+                              </a>
+                            ) : (
+                              <em>{fig.caption}</em>
                             )}
                           </figcaption>
                         )}
@@ -496,6 +534,15 @@ export default function TheoReportOverlay({
           </button>
         )}
       </div>
+      {lightboxIndex !== null && lightboxImages.length > 0 && createPortal(
+        <ImageLightbox
+          images={lightboxImages}
+          currentIndex={Math.min(lightboxIndex, lightboxImages.length - 1)}
+          onClose={() => setLightboxIndex(null)}
+          onNavigate={setLightboxIndex}
+        />,
+        document.body,
+      )}
     </div>
   )
 }
