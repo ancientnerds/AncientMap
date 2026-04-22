@@ -7,10 +7,9 @@
 
 import { useState, useMemo, useCallback, useEffect, useRef, lazy, Suspense } from 'react'
 import { createPortal } from 'react-dom'
-import ReactMarkdown from 'react-markdown'
-import remarkGfm from 'remark-gfm'
 import QualityBadge, { type QualityScore } from './QualityBadge'
 import { splitIntoImageSegments } from './galleryParser'
+import TheoPaperBody from './TheoPaperBody'
 import ImageLightbox, { type LightboxImage } from '../ImageLightbox'
 import { inferSourceType } from '../../utils/sourceType'
 
@@ -374,75 +373,14 @@ export default function TheoReportOverlay({
             />
           </Suspense>
         ) : (
-          <div className="theo-report-body theo-md-body" ref={bodyRef}>
-            {reportSegments.map((seg, idx) => {
-              if (seg.kind === 'figure') {
-                const lbIdx = figureStartIndex.get(`f-${idx}`) ?? 0
-                return (
-                  <figure key={`f-${idx}`} className="theo-inline-figure">
-                    <img
-                      src={seg.figure.src}
-                      alt={seg.figure.title}
-                      loading="lazy"
-                      onClick={() => setLightboxIndex(lbIdx)}
-                    />
-                    {seg.figure.caption && (
-                      <figcaption>
-                        {seg.figure.sourceUrl ? (
-                          <a href={seg.figure.sourceUrl} target="_blank" rel="noopener noreferrer">
-                            <em>{seg.figure.caption}</em>
-                          </a>
-                        ) : (
-                          <em>{seg.figure.caption}</em>
-                        )}
-                      </figcaption>
-                    )}
-                  </figure>
-                )
-              }
-              if (seg.kind === 'mosaic') {
-                const cols = Math.min(3, seg.figures.length)
-                const mosaicStart = figureStartIndex.get(`m-${idx}`) ?? 0
-                return (
-                  <div
-                    key={`m-${idx}`}
-                    className={`theo-figure-mosaic theo-figure-mosaic--cols-${cols}`}
-                  >
-                    {seg.figures.map((fig, fIdx) => (
-                      <figure key={`m-${idx}-${fIdx}`} className="theo-figure-mosaic-item">
-                        <img
-                          src={fig.src}
-                          alt={fig.title}
-                          loading="lazy"
-                          onClick={() => setLightboxIndex(mosaicStart + fIdx)}
-                        />
-                        {fig.caption && (
-                          <figcaption>
-                            {fig.sourceUrl ? (
-                              <a href={fig.sourceUrl} target="_blank" rel="noopener noreferrer">
-                                <em>{fig.caption}</em>
-                              </a>
-                            ) : (
-                              <em>{fig.caption}</em>
-                            )}
-                          </figcaption>
-                        )}
-                      </figure>
-                    ))}
-                  </div>
-                )
-              }
-              return (
-                <ReactMarkdown
-                  key={`t-${idx}`}
-                  remarkPlugins={[remarkGfm]}
-                  components={mdComponents}
-                >
-                  {seg.content}
-                </ReactMarkdown>
-              )
-            })}
-          </div>
+          <TheoPaperBody
+            ref={bodyRef}
+            segments={reportSegments}
+            mdComponents={mdComponents}
+            figureStartIndex={figureStartIndex}
+            onImageClick={setLightboxIndex}
+            className="theo-report-body theo-md-body"
+          />
         )}
 
         {/* Quality Audit (collapsible) — shows dimension scores */}

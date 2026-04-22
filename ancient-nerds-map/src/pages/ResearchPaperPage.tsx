@@ -6,12 +6,11 @@
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { createPortal } from 'react-dom'
-import ReactMarkdown from 'react-markdown'
-import remarkGfm from 'remark-gfm'
 import AiNoticeBanner from '../components/layout/AiNoticeBanner'
 import PageHeader from '../components/layout/PageHeader'
 import QualityBadge, { type QualityScore } from '../components/theo/QualityBadge'
 import { splitIntoImageSegments } from '../components/theo/galleryParser'
+import TheoPaperBody from '../components/theo/TheoPaperBody'
 import ImageLightbox, { type LightboxImage } from '../components/ImageLightbox'
 import { inferSourceType } from '../utils/sourceType'
 import '../styles/theo.css'
@@ -511,75 +510,13 @@ export default function ResearchPaperPage() {
         </div>
 
         {/* Paper body */}
-        <div className="theo-paper-body theo-md-body">
-          {bodySegments.map((seg, idx) => {
-            if (seg.kind === 'figure') {
-              const lbIdx = figureStartIndex.get(`f-${idx}`) ?? 0
-              return (
-                <figure key={`f-${idx}`} className="theo-inline-figure">
-                  <img
-                    src={seg.figure.src}
-                    alt={seg.figure.title}
-                    loading="lazy"
-                    onClick={() => setLightboxIndex(lbIdx)}
-                  />
-                  {seg.figure.caption && (
-                    <figcaption>
-                      {seg.figure.sourceUrl ? (
-                        <a href={seg.figure.sourceUrl} target="_blank" rel="noopener noreferrer">
-                          <em>{seg.figure.caption}</em>
-                        </a>
-                      ) : (
-                        <em>{seg.figure.caption}</em>
-                      )}
-                    </figcaption>
-                  )}
-                </figure>
-              )
-            }
-            if (seg.kind === 'mosaic') {
-              const cols = Math.min(3, seg.figures.length)
-              const mosaicStart = figureStartIndex.get(`m-${idx}`) ?? 0
-              return (
-                <div
-                  key={`m-${idx}`}
-                  className={`theo-figure-mosaic theo-figure-mosaic--cols-${cols}`}
-                >
-                  {seg.figures.map((fig, fIdx) => (
-                    <figure key={`m-${idx}-${fIdx}`} className="theo-figure-mosaic-item">
-                      <img
-                        src={fig.src}
-                        alt={fig.title}
-                        loading="lazy"
-                        onClick={() => setLightboxIndex(mosaicStart + fIdx)}
-                      />
-                      {fig.caption && (
-                        <figcaption>
-                          {fig.sourceUrl ? (
-                            <a href={fig.sourceUrl} target="_blank" rel="noopener noreferrer">
-                              <em>{fig.caption}</em>
-                            </a>
-                          ) : (
-                            <em>{fig.caption}</em>
-                          )}
-                        </figcaption>
-                      )}
-                    </figure>
-                  ))}
-                </div>
-              )
-            }
-            return (
-              <ReactMarkdown
-                key={`t-${idx}`}
-                remarkPlugins={[remarkGfm]}
-                components={mdComponents}
-              >
-                {seg.content}
-              </ReactMarkdown>
-            )
-          })}
-        </div>
+        <TheoPaperBody
+          segments={bodySegments}
+          mdComponents={mdComponents}
+          figureStartIndex={figureStartIndex}
+          onImageClick={setLightboxIndex}
+          className="theo-paper-body theo-md-body"
+        />
 
         {/* References — clustered, collapsible */}
         {totalRefs > 0 && (
