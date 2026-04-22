@@ -997,8 +997,23 @@ async def approve_research(
 async def publish_research(
     request_id: str,
     user: DiscordUser = Depends(get_current_user),
+    dry_run: int = Query(default=0, ge=0, le=1),
 ):
-    """Publish a completed research paper to the public library."""
+    """Publish a completed research paper to the public library.
+
+    If `result_json.section_approvals` is present, every non-references block
+    (plus the hero image when present) must have a decision — otherwise 409.
+    The assembled paper skips rejected blocks, substitutes edited content for
+    edited blocks, and leaves the References section verbatim.
+
+    Legacy papers without section_approvals fall back to the single
+    `approved_by` gate.
+
+    `?dry_run=1` returns the would-be `published_report` / `published_hero_image`
+    without writing, so the reviewer can diff before first publish.
+    """
+    from api.services.theo_blocks import compute_published_paper
+
     _validate_uuid(request_id)
 
     # Refresh roles from Discord and verify Researcher role
@@ -1021,36 +1036,67 @@ async def publish_research(
             raise HTTPException(status_code=403, detail="Not your request")
         if row.status != "completed":
             raise HTTPException(status_code=409, detail="Only completed research can be published")
-        if row.is_public:
+        if row.is_public and not dry_run:
             raise HTTPException(status_code=409, detail="Already published")
 
-        # Require human approval before publishing
-        try:
-            result_check = json.loads(row.result_json) if row.result_json else {}
-        except (json.JSONDecodeError, TypeError):
-            result_check = {}
-        if not result_check.get("approved_by"):
-            raise HTTPException(
-                status_code=409,
-                detail="Paper must be reviewed and approved before publishing",
-            )
-
-        # Parse result to get paper title for slug
         try:
             result = json.loads(row.result_json) if row.result_json else {}
         except (json.JSONDecodeError, TypeError):
             result = {}
 
+        section_approvals = result.get("section_approvals")
+        report = result.get("report") or ""
+        hero_image = result.get("hero_image")
+
+        # Publish gate.
+        if section_approvals and section_approvals.get("decisions"):
+            # Block-level workflow: every non-references block + hero must have a decision.
+            assembled = compute_published_paper(report, hero_image, section_approvals)
+            if assembled["pending_block_ids"]:
+                raise HTTPException(
+                    status_code=409,
+                    detail=(
+                        f"{len(assembled['pending_block_ids'])} block(s) still pending "
+                        "review; decide on every block before publishing"
+                    ),
+                )
+        else:
+            # Legacy workflow: single `approved_by` flag.
+            if not result.get("approved_by"):
+                raise HTTPException(
+                    status_code=409,
+                    detail="Paper must be reviewed and approved before publishing",
+                )
+            assembled = {
+                "published_report": report,
+                "published_block_ids": [],
+                "published_hero_image": hero_image,
+                "pending_block_ids": [],
+            }
+
         paper_title = result.get("title", row.question)
         slug = _make_slug(paper_title)
-
-        # Ensure slug uniqueness by appending short ID if needed
         existing = session.execute(
             text("SELECT id FROM research_requests WHERE slug = :slug AND id != :id"),
             {"slug": slug, "id": request_id},
         ).fetchone()
         if existing:
             slug = f"{slug}-{request_id[:8]}"
+
+        if dry_run:
+            return {
+                "status": "dry_run",
+                "slug": slug,
+                "published_report": assembled["published_report"],
+                "published_block_ids": assembled["published_block_ids"],
+                "published_hero_image": assembled["published_hero_image"],
+            }
+
+        # Persist the assembled view alongside the original so legacy fallback
+        # keeps working and edits can resume unchanged.
+        result["published_report"] = assembled["published_report"]
+        result["published_block_ids"] = assembled["published_block_ids"]
+        result["published_hero_image"] = assembled["published_hero_image"]
 
         session.execute(
             text("""
@@ -1059,14 +1105,19 @@ async def publish_research(
                     published_at = NOW(),
                     published_by = :username,
                     slug = :slug,
+                    result_json = :result,
                     expires_at = NULL
                 WHERE id = :id
             """),
-            {"id": request_id, "username": user.username, "slug": slug},
+            {
+                "id": request_id,
+                "username": user.username,
+                "slug": slug,
+                "result": json.dumps(result),
+            },
         )
         session.commit()
 
-        # Award publication achievements
         try:
             from api.cardgame.achievements import check_achievements
 
@@ -1074,8 +1125,9 @@ async def publish_research(
         except Exception:
             pass  # Non-critical
 
-    # Index in Qdrant
-    paper_text = result.get("report", "")
+    # Index the assembled publication (not the raw report) so search results
+    # don't return rejected content.
+    paper_text = assembled["published_report"] or result.get("report", "")
     if paper_text:
         try:
             from pipeline.lyra.theo_research_index import index_paper
@@ -1301,6 +1353,17 @@ async def get_public_research(slug: str):
         result = json.loads(row.result_json) if row.result_json else None
     except (json.JSONDecodeError, TypeError):
         result = None
+
+    # Per-section approval workflow: swap in the assembled publication so the
+    # public view renders the reviewed version (rejected blocks hidden, edited
+    # content substituted) without the frontend having to know two fields.
+    # Legacy papers without `published_report` are unaffected.
+    if isinstance(result, dict):
+        if result.get("published_report"):
+            result = dict(result)
+            result["report"] = result["published_report"]
+            if "published_hero_image" in result:
+                result["hero_image"] = result["published_hero_image"]
 
     return {
         "id": row.id,

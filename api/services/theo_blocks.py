@@ -474,6 +474,104 @@ def upsert_decision(
     return current
 
 
+def compute_published_paper(
+    report: str,
+    hero_image: dict[str, Any] | None,
+    section_approvals: dict[str, Any] | None,
+) -> dict[str, Any]:
+    """Assemble the publishable view of a paper from block-level decisions.
+
+    Returns a dict:
+
+        {
+          "published_report":     str,            # body with rejected blocks removed
+          "published_block_ids":  list[str],      # block ids that landed in the report
+          "published_hero_image": dict | None,    # hero after decisions; None = rejected
+          "pending_block_ids":    list[str],      # blocks still awaiting a decision
+        }
+
+    The References section (the `## References` heading and everything after)
+    is auto-approved server-side — the reviewer cannot reject individual
+    reference entries and those blocks are always included verbatim.
+
+    `pending_block_ids` is the publish gate: the publish endpoint 409s when
+    this list is non-empty.
+    """
+    approvals = section_approvals or {}
+    decisions_by_id: dict[str, dict[str, Any]] = {}
+    for d in approvals.get("decisions") or []:
+        bid = d.get("block_id")
+        if bid:
+            decisions_by_id[bid] = d
+
+    blocks = split_paper_into_blocks(report)
+
+    # Find the index of the `## References` heading block. All blocks at or
+    # after this index are part of the References section → auto-approved.
+    refs_index: int | None = None
+    for i, b in enumerate(blocks):
+        if b.kind == "heading" and b.content.lstrip().lower().startswith("## references"):
+            refs_index = i
+            break
+
+    parts: list[str] = []
+    published_ids: list[str] = []
+    pending_ids: list[str] = []
+
+    for i, b in enumerate(blocks):
+        is_references = refs_index is not None and i >= refs_index
+        decision = decisions_by_id.get(b.block_id)
+
+        if is_references:
+            parts.append(b.content)
+            published_ids.append(b.block_id)
+            continue
+
+        if decision is None:
+            pending_ids.append(b.block_id)
+            # Fall through with original content so dry_run output is still
+            # readable; publish handler 409s on pending_ids being non-empty.
+            parts.append(b.content)
+            continue
+
+        state = decision.get("state")
+        if state == "rejected":
+            continue
+        if state == "edited" and decision.get("edited_content") is not None:
+            parts.append(decision["edited_content"])
+            published_ids.append(b.block_id)
+        else:
+            # approved, or edited-without-content (treat as approved).
+            parts.append(b.content)
+            published_ids.append(b.block_id)
+
+    # Hero image — its decision lives under block_id "hero".
+    published_hero: dict[str, Any] | None = None
+    if hero_image and hero_image.get("src"):
+        hero_decision = decisions_by_id.get("hero")
+        if hero_decision is None:
+            pending_ids.append("hero")
+            published_hero = hero_image
+        else:
+            hstate = hero_decision.get("state")
+            if hstate == "rejected":
+                published_hero = None
+            elif hstate == "edited":
+                updated = dict(hero_image)
+                if hero_decision.get("edited_content") is not None:
+                    updated["caption"] = hero_decision["edited_content"]
+                published_hero = updated
+            else:
+                published_hero = hero_image
+
+    return {
+        "published_report": "".join(parts),
+        "published_block_ids": published_ids,
+        "published_hero_image": published_hero,
+        "pending_block_ids": pending_ids,
+    }
+
+
 def build_block_list_response(
     report: str,
     section_approvals: dict[str, Any] | None,
