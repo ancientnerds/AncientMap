@@ -527,9 +527,7 @@ async def _process_one_opportunity(
         web_path = f"/data/research-images/{ctx.paper_id}/p{para_idx}_{keyword_slug}{suffix}.jpg"
         md = image_markdown(accepted_cand, web_path, rationale)
 
-        new_text = insert_image_after_paragraph(
-            ctx.paper_text, section_name, para_text[:60], md
-        )
+        new_text = insert_image_after_paragraph(ctx.paper_text, section_name, para_text[:60], md)
         if new_text == ctx.paper_text:
             print(
                 f"[probative] INSERT FAILED: anchor not matched in section "
