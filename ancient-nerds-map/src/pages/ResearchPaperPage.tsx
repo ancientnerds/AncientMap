@@ -10,8 +10,7 @@ import remarkGfm from 'remark-gfm'
 import AiNoticeBanner from '../components/layout/AiNoticeBanner'
 import PageHeader from '../components/layout/PageHeader'
 import QualityBadge, { type QualityScore } from '../components/theo/QualityBadge'
-import TheoGallery from '../components/theo/TheoGallery'
-import { splitIntoGallerySegments } from '../components/theo/galleryParser'
+import { splitIntoImageSegments } from '../components/theo/galleryParser'
 import '../styles/theo.css'
 
 interface PaperData {
@@ -324,7 +323,7 @@ export default function ResearchPaperPage() {
     const refs = parseReferences(refsText)
     const knownNums = new Set(refs.map(r => r.num))
     const wired = wireCitationAnchors(body, knownNums)
-    const segments = splitIntoGallerySegments(wired)
+    const segments = splitIntoImageSegments(wired)
     const grouped: Record<RefGroup, Reference[]> = {
       Academic: [], Reputable: [], PDF: [], Video: [], Other: [],
     }
@@ -425,8 +424,23 @@ export default function ResearchPaperPage() {
         {/* Paper body */}
         <div className="theo-paper-body theo-md-body">
           {bodySegments.map((seg, idx) =>
-            seg.kind === 'gallery' ? (
-              <TheoGallery key={`g-${idx}-${seg.groupId}`} images={seg.images} />
+            seg.kind === 'figure' ? (
+              <figure key={`f-${idx}`} className="theo-inline-figure">
+                <img src={seg.figure.src} alt={seg.figure.title} loading="lazy" />
+                {seg.figure.caption && (
+                  <figcaption>
+                    <em>{seg.figure.caption}</em>
+                    {seg.figure.sourceUrl && (
+                      <>
+                        {' · '}
+                        <a href={seg.figure.sourceUrl} target="_blank" rel="noopener noreferrer">
+                          Source
+                        </a>
+                      </>
+                    )}
+                  </figcaption>
+                )}
+              </figure>
             ) : (
               <ReactMarkdown
                 key={`t-${idx}`}

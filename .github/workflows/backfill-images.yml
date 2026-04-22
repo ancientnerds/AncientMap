@@ -9,6 +9,7 @@ name: Backfill Images
 #   gh workflow run backfill-images.yml -f slug=SLUG -f mode=cover
 #   gh workflow run backfill-images.yml -f slug=SLUG -f mode=probative
 #   gh workflow run backfill-images.yml -f slug=SLUG -f mode=captions  # rewrite captions only, no API calls
+#   gh workflow run backfill-images.yml -f slug=SLUG -f mode=reflow    # reflow images into paragraphs + dedup, no API calls
 #
 # The workflow invokes the Docker API container so it inherits prod DB + MiniMax
 # creds from the running environment — no secrets travel over the wire.
@@ -29,6 +30,7 @@ on:
           - cover
           - probative
           - captions
+          - reflow
           - both
 
 jobs:
@@ -68,6 +70,12 @@ jobs:
                 echo "==> Rewriting captions on stored images (no API calls)..."
                 docker exec ancient_nerds_api \
                   python -m pipeline.lyra.rewrite_image_captions --slug "${SLUG}" --apply
+              fi
+
+              if [ "$MODE" = "reflow" ]; then
+                echo "==> Reflowing images into paragraph anchors + deduping (no API calls)..."
+                docker exec ancient_nerds_api \
+                  python -m pipeline.lyra.reflow_images --slug "${SLUG}" --apply
               fi
 
               echo "==> Done."

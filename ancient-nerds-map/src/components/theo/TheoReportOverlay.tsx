@@ -9,8 +9,7 @@ import { useState, useMemo, useCallback, useEffect, useRef, lazy, Suspense } fro
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import QualityBadge, { type QualityScore } from './QualityBadge'
-import TheoGallery from './TheoGallery'
-import { splitIntoGallerySegments } from './galleryParser'
+import { splitIntoImageSegments } from './galleryParser'
 
 const TheoEditor = lazy(() => import('./TheoEditor'))
 
@@ -167,7 +166,7 @@ export default function TheoReportOverlay({
   const fixedReport = useMemo(() => fixHeadings(result.report), [result.report])
   const refCites = useMemo(() => parseReferenceCitations(fixedReport), [fixedReport])
   const enrichedReport = useMemo(() => enrichCitations(fixedReport, refCites), [fixedReport, refCites])
-  const reportSegments = useMemo(() => splitIntoGallerySegments(enrichedReport), [enrichedReport])
+  const reportSegments = useMemo(() => splitIntoImageSegments(enrichedReport), [enrichedReport])
 
   const mdComponents = useMemo(() => ({
     a: ({ href, children, ...props }: React.AnchorHTMLAttributes<HTMLAnchorElement>) => {
@@ -347,8 +346,23 @@ export default function TheoReportOverlay({
         ) : (
           <div className="theo-report-body theo-md-body" ref={bodyRef}>
             {reportSegments.map((seg, idx) =>
-              seg.kind === 'gallery' ? (
-                <TheoGallery key={`g-${idx}-${seg.groupId}`} images={seg.images} />
+              seg.kind === 'figure' ? (
+                <figure key={`f-${idx}`} className="theo-inline-figure">
+                  <img src={seg.figure.src} alt={seg.figure.title} loading="lazy" />
+                  {seg.figure.caption && (
+                    <figcaption>
+                      <em>{seg.figure.caption}</em>
+                      {seg.figure.sourceUrl && (
+                        <>
+                          {' · '}
+                          <a href={seg.figure.sourceUrl} target="_blank" rel="noopener noreferrer">
+                            Source
+                          </a>
+                        </>
+                      )}
+                    </figcaption>
+                  )}
+                </figure>
               ) : (
                 <ReactMarkdown
                   key={`t-${idx}`}

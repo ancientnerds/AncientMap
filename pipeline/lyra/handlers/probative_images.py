@@ -35,8 +35,8 @@ from pipeline.lyra.research_state import ResearchPhase
 from pipeline.lyra.theo_image_captions import (
     find_section_for_claim,
     find_section_for_claim_with_registry,
-    image_markdown_with_group,
-    insert_image_after_section,
+    image_markdown,
+    insert_image_after_paragraph,
     resolve_section_heading,
 )
 
@@ -51,8 +51,11 @@ class _EmbedContext:
 
     Passed to `_process_one_opportunity` tasks instead of a handler. Safe under
     `asyncio.gather` because Python coroutines are single-threaded between
-    `await` points — each insert_image_after_section read-modify-write is
-    atomic.
+    `await` points — each paper_text read-modify-write is atomic.
+
+    `placed_source_urls` prevents the same source image from landing twice in
+    one paper (fixes the Dendera-zodiac duplication bug). A URL is claimed at
+    selection time; released only if download/gate fail.
     """
 
     paper_id: str
@@ -63,6 +66,7 @@ class _EmbedContext:
     paper_dir: Path
     client: Any  # MiniMax VLM client
     embedded: list[dict] = field(default_factory=list)
+    placed_source_urls: set[str] = field(default_factory=set)
 
 
 def _pool_candidates_for_source_ids(
@@ -120,12 +124,6 @@ def _build_writer_markers_text(paper_text: str) -> str:
     if not markers:
         return "(none)"
     return ", ".join(markers)
-
-
-def _group_id_for_section(section: str, paragraph_index: int) -> str:
-    """Build a stable group ID for gallery grouping."""
-    safe = re_module.sub(r"[^a-zA-Z0-9]", "_", section)[:30]
-    return f"{safe}_p{paragraph_index}"
 
 
 def _summarize_other_paragraphs(paper_text: str) -> str:
@@ -189,6 +187,12 @@ async def _resolve_writer_markers(ctx: _EmbedContext) -> list[dict]:
             continue
         cand = ImageCandidate.from_dict(cand_dict) if isinstance(cand_dict, dict) else cand_dict
 
+        cand_url = getattr(cand, "url", "") or ""
+        if cand_url and cand_url in ctx.placed_source_urls:
+            logger.info("[probative] skip duplicate writer image %s", cand_url)
+            ctx.paper_text = ctx.paper_text.replace(f"[[IMG:{short}]]", "")
+            continue
+
         final_path = ctx.paper_dir / f"writer_img_{i}.jpg"
         if not await download_candidate(cand, final_path):
             ctx.paper_text = ctx.paper_text.replace(f"[[IMG:{short}]]", "")
@@ -196,8 +200,10 @@ async def _resolve_writer_markers(ctx: _EmbedContext) -> list[dict]:
 
         web_path = f"/data/research-images/{ctx.paper_id}/writer_img_{i}.jpg"
         rationale = "Image placed by the paper writer as visual evidence for this passage."
-        md = image_markdown_with_group(cand, web_path, rationale, f"writer_{i}", True, True)
+        md = image_markdown(cand, web_path, rationale)
         ctx.paper_text = ctx.paper_text.replace(f"[[IMG:{short}]]", md, 1)
+        if cand_url:
+            ctx.placed_source_urls.add(cand_url)
 
         embedded.append(
             {
@@ -206,9 +212,11 @@ async def _resolve_writer_markers(ctx: _EmbedContext) -> list[dict]:
                 "keyword": "writer-image",
                 "image_path": str(final_path),
                 "web_path": web_path,
-                "source_url": getattr(cand, "url", ""),
+                "source_url": cand_url,
                 "source_name": getattr(cand, "source", ""),
                 "title": getattr(cand, "title", ""),
+                "description": getattr(cand, "description", "")
+                or (getattr(cand, "metadata", {}) or {}).get("description", ""),
                 "artist": getattr(cand, "artist", ""),
                 "license": getattr(cand, "license", ""),
                 "license_url": getattr(cand, "license_url", ""),
@@ -465,19 +473,30 @@ async def _process_one_opportunity(
         cand_source = getattr(cand, "source", "") or ""
         if cand_url in seen_urls:
             continue
+        # Cross-opportunity dedup: same source image must not land twice in
+        # one paper (the Dendera-zodiac bug). Claim the URL now so parallel
+        # tasks racing on the same candidate don't both embed it.
+        if cand_url and cand_url in ctx.placed_source_urls:
+            continue
         # Diversify: skip if we already embedded from this source (only after first)
         if cand_source and cand_source in seen_sources and len(tagged) > 0:
             continue
+        if cand_url:
+            ctx.placed_source_urls.add(cand_url)
         url_hash = hashlib.md5((cand_url or str(id(cand))).encode()).hexdigest()[:16]
         probe_path = ctx.paper_dir / f"_probe_p{para_idx}_{url_hash}.bin"
         ok = await download_candidate(cand, probe_path)
         if not ok:
+            if cand_url:
+                ctx.placed_source_urls.discard(cand_url)
             continue
         image_bytes = probe_path.read_bytes()
         prompt = build_vlm_prompt(para_text, must_show, forbidden)
         raw = await asyncio.to_thread(minimax_vlm, ctx.client, image_bytes, prompt)
         verdict = parse_vlm_verdict(raw)
         if not verdict_is_safe(verdict):
+            if cand_url:
+                ctx.placed_source_urls.discard(cand_url)
             if probe_path.exists():
                 probe_path.unlink(missing_ok=True)
             continue
@@ -497,7 +516,6 @@ async def _process_one_opportunity(
         return []
 
     keyword_slug = re_module.sub(r"[^a-zA-Z0-9]", "_", keyword[:30])
-    group_id = _group_id_for_section(section_name, para_idx)
     embedded: list[dict] = []
 
     for i, (accepted_cand, verified) in enumerate(tagged):
@@ -507,23 +525,16 @@ async def _process_one_opportunity(
             continue
 
         web_path = f"/data/research-images/{ctx.paper_id}/p{para_idx}_{keyword_slug}{suffix}.jpg"
-        is_first = i == 0
-        is_last = i == len(tagged) - 1
-        md = image_markdown_with_group(
-            accepted_cand,
-            web_path,
-            rationale,
-            group_id,
-            is_first,
-            is_last,
-            verified=verified,
-        )
+        md = image_markdown(accepted_cand, web_path, rationale)
 
-        new_text = insert_image_after_section(ctx.paper_text, section_name, md)
+        new_text = insert_image_after_paragraph(
+            ctx.paper_text, section_name, para_text[:60], md
+        )
         if new_text == ctx.paper_text:
             print(
-                f"[probative] INSERT FAILED: section '{section_name}' unchanged for "
-                f"para {para_idx} keyword '{keyword}' — image downloaded but not placed",
+                f"[probative] INSERT FAILED: anchor not matched in section "
+                f"'{section_name}' for para {para_idx} keyword '{keyword}' — "
+                "image downloaded but not placed",
                 flush=True,
             )
             continue
@@ -539,6 +550,8 @@ async def _process_one_opportunity(
                 "source_url": getattr(accepted_cand, "url", ""),
                 "source_name": getattr(accepted_cand, "source", ""),
                 "title": getattr(accepted_cand, "title", ""),
+                "description": getattr(accepted_cand, "description", "")
+                or (getattr(accepted_cand, "metadata", {}) or {}).get("description", ""),
                 "artist": getattr(accepted_cand, "artist", ""),
                 "license": getattr(accepted_cand, "license", ""),
                 "license_url": getattr(accepted_cand, "license_url", ""),
