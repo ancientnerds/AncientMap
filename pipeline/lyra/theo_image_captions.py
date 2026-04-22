@@ -33,6 +33,37 @@ _ARGUE_OPENER_RE = re.compile(
     re.IGNORECASE,
 )
 
+# Raw Wikimedia Commons titles arrive as filenames like
+# `Himmelsscheibe.jpg` or `Mexican_antiquities_(14781541291).jpg`. Strip the
+# extension, any trailing 6+ digit upload-id paren group, and convert
+# underscores to spaces so captions read like titles, not filenames.
+_TITLE_EXT_RE = re.compile(r"\.(?:jpe?g|png|gif|webp|svg|tiff?|bmp)\s*$", re.IGNORECASE)
+_TITLE_ID_SUFFIX_RE = re.compile(r"\s*\(\d{6,}\)\s*$")
+_TITLE_UNDERSCORE_RE = re.compile(r"_+")
+
+
+def _clean_title(title: str) -> str:
+    """Turn a raw source title into a human-readable caption lead.
+
+    Wikimedia Commons returns page titles verbatim ("File:Some_Thing.jpg"),
+    which looks awful in a caption. We strip the image extension, drop any
+    trailing `(14781541291)` upload-id tag, collapse underscores to spaces,
+    and trim stray punctuation.
+    """
+    if not title:
+        return ""
+    cleaned = title.strip()
+    cleaned = _TITLE_EXT_RE.sub("", cleaned)
+    # Iterate in case there's more than one trailing id group
+    for _ in range(3):
+        new = _TITLE_ID_SUFFIX_RE.sub("", cleaned).rstrip()
+        if new == cleaned:
+            break
+        cleaned = new
+    cleaned = _TITLE_UNDERSCORE_RE.sub(" ", cleaned)
+    cleaned = re.sub(r"\s{2,}", " ", cleaned).strip(" ;,._-")
+    return cleaned
+
 
 def _trim_relevance(rationale: str) -> str:
     """Normalise the LLM rationale into a short, descriptive caption tail.
@@ -69,7 +100,7 @@ def build_caption(cand: ImageCandidate, rationale: str) -> str:
     and the [Source] link below the caption takes them to the original image
     page where the license is shown in context.
     """
-    lead = cand.title if cand.title else "Untitled image"
+    lead = _clean_title(cand.title) or "Untitled image"
 
     attribution: list[str] = []
     if cand.artist:
@@ -102,7 +133,7 @@ def image_markdown(
     license template URL. Readers want to see where the image came from;
     license_url is only a last-resort fallback.
     """
-    alt = (cand.title or "Research image").replace("]", "")
+    alt = (_clean_title(cand.title) or "Research image").replace("]", "")
     caption = build_caption(cand, rationale)
     source_url = getattr(cand, "url", "") or getattr(cand, "license_url", "")
     url_part = f"\n[Source]({source_url})" if source_url else ""

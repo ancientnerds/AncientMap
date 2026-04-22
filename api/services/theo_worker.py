@@ -171,6 +171,10 @@ async def _process_request(
                 "card_description": ctx.card_description,
                 "audit": ctx.audit_result,
                 "quality_score": ctx.quality_score,
+                # Persist probative image metadata so reflow/rewrite backfills
+                # can rebuild captions against the source list without
+                # re-fetching from connectors.
+                "probative_images": getattr(ctx, "probative_images", []) or [],
             }
             emit({"type": "done", "status": "completed"})
             try:
