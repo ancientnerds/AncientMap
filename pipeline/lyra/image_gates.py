@@ -3,9 +3,20 @@
 Stage 1 (metadata_gate_passes): deterministic text-similarity check. Rejects
 obvious mismatches cheaply before hitting the vision model.
 
-Stage 2 (parse_vlm_verdict + verdict_is_accept): parses MiniMax VLM structured
-output. Accept requires shows_required_subject=='yes', no forbidden elements,
-quality good or acceptable, and verdict=='accept' from the model.
+Stage 2 (parse_vlm_verdict + verdict_is_accept/is_safe): parses MiniMax VLM
+structured output. Uses the STRICT illustration-judge schema — only images
+that LITERALLY depict the paragraph's primary subject pass. Thematically-
+adjacent images (generic period artifacts, "looks like something from the
+right era") are rejected.
+
+Verdict schema:
+    {
+      "primary_entity_in_claim": "...",
+      "what_image_actually_shows": "...",
+      "match": "exact" | "related" | "off_topic",
+      "verdict": "meaningful" | "weak" | "misleading",
+      "reason": "one sentence"
+    }
 """
 
 from __future__ import annotations
@@ -15,6 +26,7 @@ import logging
 import re
 
 from pipeline.lyra.image_fetcher import ImageCandidate
+from pipeline.lyra.meaningful_images import STRICT_VLM_PROMPT
 
 logger = logging.getLogger(__name__)
 
@@ -28,12 +40,9 @@ def metadata_gate_passes(cand: ImageCandidate, what_image_must_show: str) -> boo
 
     Requires at least one shared content token (length > 3) between the
     image's title+description and the specialist's must_show description.
-
-    Calibration note: threshold was 2 in the initial version but that rejected
-    legitimate museum-catalog matches whose titles use different vocabulary
-    than the specialist's must_show description (e.g. a Neo-Assyrian cuneiform
-    cylinder vs a must_show naming 'Anunnaki'). The vision gate catches
-    false positives downstream, so we err permissive here.
+    The vision gate catches false positives downstream, so we err permissive
+    here — the cost of a VLM call is modest compared to over-filtering at
+    this stage.
     """
     haystack = f"{cand.title} {cand.description}".strip()
     if not haystack or not what_image_must_show:
@@ -42,40 +51,32 @@ def metadata_gate_passes(cand: ImageCandidate, what_image_must_show: str) -> boo
     return len(shared) >= 1
 
 
-VLM_SYSTEM_PROMPT = (
-    "You are an image illustration judge for a research-paper pipeline. "
-    "Given an image and a section topic, decide whether the image is a reasonable "
-    "visual illustration for that section — thematically relevant, period-appropriate, "
-    "or subject-adjacent. You are NOT asked to verify the image proves the specific claim; "
-    "you are asked whether it belongs alongside this text as visual context. "
-    "Be generous: archaeological photos, museum artifacts, maps, and period art all count "
-    "even if they don't literally depict the exact named entity. "
-    "Reject only when the image is off-topic, shows forbidden elements, or is low quality. "
-    "Respond with STRICTLY valid JSON: "
-    '{"shows_required_subject":"yes|partial|no",'
-    '"specific_features_present":[strings],'
-    '"forbidden_elements_present":[strings],'
-    '"image_quality":"good|acceptable|poor",'
-    '"verdict":"accept|soft_accept|reject","reason":"one sentence"}. '
-    "Use 'accept' for direct matches, 'soft_accept' for thematically relevant images, "
-    "'reject' only for clear mismatches or forbidden content. Output only JSON."
-)
+# Re-export for the handful of callers (handlers/probative_images.py and dev
+# e2e scripts) that imported the old name from this module.
+VLM_SYSTEM_PROMPT = STRICT_VLM_PROMPT
 
 
 def build_vlm_prompt(
     claim: str,
     what_image_must_show: str,
-    forbidden_elements: list[str],
+    forbidden_elements: list[str] | None = None,
 ) -> str:
-    """Build the VLM user prompt for a single candidate."""
+    """Build the VLM user prompt for a single candidate.
+
+    Signature preserved for backward compat with `handlers/probative_images.py`;
+    `forbidden_elements` is now advisory (the strict judge catches off-topic
+    images regardless). `claim` is the paragraph text the image illustrates;
+    `what_image_must_show` is the specialist's ideal-subject hint included as
+    extra grounding for the judge.
+    """
+    ideal = what_image_must_show or "(not specified)"
+    forbidden = ", ".join(forbidden_elements or []) or "(none specified)"
     return (
-        f"{VLM_SYSTEM_PROMPT}\n\n"
-        f"SECTION TOPIC: {claim}\n"
-        f"IDEAL SUBJECT: {what_image_must_show}\n"
-        f"FORBIDDEN ELEMENTS: {forbidden_elements}\n\n"
-        "Examine the attached image and return the JSON verdict. "
-        "Accept or soft-accept any image that would reasonably illustrate this section. "
-        "Reject only for clear off-topic content, forbidden elements, or poor quality."
+        f"{STRICT_VLM_PROMPT}\n\n"
+        f"PARAGRAPH CLAIM:\n{claim}\n\n"
+        f"IDEAL SUBJECT (hint):\n{ideal}\n\n"
+        f"AVOID:\n{forbidden}\n\n"
+        "Now examine the attached image and return the JSON verdict."
     )
 
 
@@ -96,39 +97,19 @@ def parse_vlm_verdict(raw: str) -> dict | None:
         return None
 
 
-def verdict_is_accept(v: dict | None) -> bool:
-    """Strict acceptance: the image directly matches the topic per the VLM.
-
-    Used to label images 'verified' in the final paper — the reviewer sees a
-    green chip for these. Non-strict candidates still get embedded but as
-    'unverified', so the reviewer can approve them manually instead of the
-    pipeline silently dropping them.
-    """
+def verdict_is_meaningful(v: dict | None) -> bool:
+    """True only when the strict judge ruled the image literally depicts the claim."""
     if not v:
         return False
-    if v.get("verdict") not in ("accept", "soft_accept"):
-        return False
-    if v.get("shows_required_subject") == "no":
-        return False
-    if v.get("forbidden_elements_present"):
-        return False
-    if v.get("image_quality") == "poor":
-        return False
-    return True
+    return v.get("verdict") == "meaningful"
+
+
+# Backward-compat aliases. Under the strict schema, a candidate is either
+# meaningful (keep, tag as verified) or not (drop entirely) — there's no
+# "safe but unverified" middle ground like the old lenient soft_accept.
+def verdict_is_accept(v: dict | None) -> bool:
+    return verdict_is_meaningful(v)
 
 
 def verdict_is_safe(v: dict | None) -> bool:
-    """Safety gate: no forbidden elements and not low quality.
-
-    Images that pass this gate are safe to embed in the paper even if they
-    don't fully match the topic. The reviewer judges topical fit in the UI.
-    If the VLM call failed entirely (v is None), default to safe so a VLM
-    outage doesn't strip every candidate.
-    """
-    if v is None:
-        return True
-    if v.get("forbidden_elements_present"):
-        return False
-    if v.get("image_quality") == "poor":
-        return False
-    return True
+    return verdict_is_meaningful(v)
