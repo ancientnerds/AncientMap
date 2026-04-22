@@ -550,6 +550,64 @@ async def get_research(request_id: str, req: Request):
 
 
 # ---------------------------------------------------------------------------
+# GET /theo/research/{id}/blocks — Per-section approval block list
+# ---------------------------------------------------------------------------
+
+
+@router.get("/research/{request_id}/blocks")
+async def get_research_blocks(
+    request_id: str,
+    user: DiscordUser = Depends(get_current_user),
+):
+    """Return the canonical per-section block list for the approval editor.
+
+    Owner-only. Splits `result_json.report` into individually-reviewable
+    blocks (paragraph, heading, list, blockquote, table, code, figure, mosaic,
+    plus the hero image as a `hero` block). Each block comes back with its
+    current approval state (pending / approved / rejected / edited) merged
+    from `result_json.section_approvals.decisions`.
+
+    The server is authoritative — the frontend renders the approval UI from
+    this list rather than re-parsing client-side, so there's no split-brain
+    risk between client and server on "what is a block."
+    """
+    from api.services.theo_blocks import build_block_list_response
+
+    _validate_uuid(request_id)
+
+    with get_session() as session:
+        row = session.execute(
+            text(
+                "SELECT user_id, status, is_public, result_json "
+                "FROM research_requests WHERE id = :id"
+            ),
+            {"id": request_id},
+        ).fetchone()
+
+    if not row:
+        raise HTTPException(status_code=404, detail="Research request not found")
+    if row.user_id != user.discord_id:
+        raise HTTPException(status_code=403, detail="Not your research request")
+    if row.status != "completed":
+        raise HTTPException(status_code=409, detail="Research must be completed")
+
+    try:
+        result = json.loads(row.result_json) if row.result_json else {}
+    except (json.JSONDecodeError, TypeError):
+        result = {}
+
+    report = result.get("report") or ""
+    if not report:
+        return {"version": 0, "blocks": []}
+
+    return build_block_list_response(
+        report=report,
+        section_approvals=result.get("section_approvals"),
+        hero_image=result.get("hero_image"),
+    )
+
+
+# ---------------------------------------------------------------------------
 # GET /theo/research/{id}/log — Download debug log
 # ---------------------------------------------------------------------------
 
