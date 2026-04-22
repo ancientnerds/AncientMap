@@ -408,13 +408,15 @@ async def submit_research(
                 }
             )
 
-        # Insert new request
+        # Insert new request. effort is a legacy V1 column still NOT NULL in
+        # prod — always write 'research' so submits don't 500. The column can
+        # be dropped once we migrate historical rows.
         request_id = str(uuid.uuid4())
         session.execute(
             text("""
                 INSERT INTO research_requests
-                    (id, user_id, question, status, specialist_options, created_at)
-                VALUES (:id, :uid, :q, 'queued', :spec_opts, NOW())
+                    (id, user_id, question, effort, status, specialist_options, created_at)
+                VALUES (:id, :uid, :q, 'research', 'queued', :spec_opts, NOW())
             """),
             {
                 "id": request_id,
