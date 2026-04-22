@@ -175,6 +175,10 @@ async def _process_request(
                 # can rebuild captions against the source list without
                 # re-fetching from connectors.
                 "probative_images": getattr(ctx, "probative_images", []) or [],
+                # Hero banner picked from the probative_images list — used as
+                # the page-top banner and og:image. None when no probative
+                # images were embedded.
+                "hero_image": getattr(ctx, "hero_image", None),
             }
             emit({"type": "done", "status": "completed"})
             try:

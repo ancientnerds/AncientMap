@@ -714,11 +714,16 @@ async def delete_research(request_id: str, req: Request):
         except Exception as exc:
             logger.warning("Qdrant cleanup failed for %s: %s", request_id, exc)
 
-    # Clean up generated images
+    # Clean up downloaded probative images for this paper
     try:
-        from pipeline.lyra.theo_images import delete_paper_images
+        import shutil
+        from pathlib import Path
 
-        delete_paper_images(request_id)
+        images_dir = (
+            Path(__file__).parent.parent.parent / "public" / "data" / "research-images" / request_id
+        )
+        if images_dir.exists() and images_dir.is_dir():
+            shutil.rmtree(images_dir)
     except Exception as exc:
         logger.warning("Image cleanup failed for %s: %s", request_id, exc)
 
@@ -1092,6 +1097,7 @@ async def list_public_research(
                        r.sites_found, r.tools_used, r.duration_ms,
                        r.result_json::jsonb->>'title' AS paper_title,
                        r.result_json::jsonb->>'card_description' AS card_description,
+                       r.result_json::jsonb->'hero_image'->>'src' AS hero_src,
                        u.discord_id AS author_discord_id,
                        u.avatar_hash AS author_avatar_hash
                 FROM research_requests r
@@ -1111,7 +1117,10 @@ async def list_public_research(
 
     papers = []
     for r in rows:
-        cover_url = f"/data/research-images/{r.id}/cover.png"
+        # Hero banner is picked from inline probative images at convergence time
+        # (see pipeline.lyra.hero_picker). Older papers without a hero_image
+        # entry surface as an empty cover_url — the card CSS handles that.
+        cover_url = r.hero_src or ""
         author_avatar = None
         if r.author_avatar_hash and r.author_discord_id:
             author_avatar = (

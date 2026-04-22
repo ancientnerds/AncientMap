@@ -138,6 +138,12 @@ class ResearchState:
     #  license, license_url, rationale, section_heading}
     probative_images: list[dict] = field(default_factory=list)
 
+    # Hero banner pick from probative_images. Shape:
+    # {src, title, caption, sourceUrl, web_path, source_name, rationale}.
+    # Populated by the hero picker after presentation. None if no probative
+    # images were embedded.
+    hero_image: dict | None = None
+
     # Image research pool — populated by AngleImageResearchHandler in parallel
     # with angle_search. Keyed by angle.id, values are serialized ImageCandidate
     # dicts (dataclass round-trip via asdict). ProbativeImagesHandler selects

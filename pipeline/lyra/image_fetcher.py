@@ -2,8 +2,8 @@
 
 Fans out a single search query across the existing ConnectorRegistry imagery
 and museums adapters, flattens the results into a uniform ImageCandidate type,
-deduplicates by URL, caps per-source, and exposes a save-to-disk helper that
-mirrors theo_images._download_image().
+deduplicates by URL, caps per-source, and exposes a save-to-disk helper used
+by the probative-images handler.
 
 Verified against the actual codebase (2026-04-18):
 - ConnectorRegistry.get_all() returns list[BaseConnector], not a dict.

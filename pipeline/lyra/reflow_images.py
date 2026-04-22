@@ -44,8 +44,9 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 
 
 # Matches every inline image block under /data/research-images/ and its
-# optional caption + [Source] trailer. Excludes the cover block (alt starting
-# with "Cover" or path ending in cover.png) so the hero image survives.
+# optional caption + [Source] trailer. Strips the legacy AI cover block too
+# (alt "Cover" or path ending /cover.png) — the hero banner is now picked
+# from probative_images at render time, not stored in the markdown.
 _STRIP_RE = re.compile(
     r"(?<!\S)"  # not preceded by non-whitespace (avoid matching inside prose)
     r"!\[(?P<alt>[^\]]*)\]\((?P<path>/data/research-images/[^)]+)\)"
@@ -70,15 +71,11 @@ def _cand_from_entry(entry: dict) -> ImageCandidate:
 
 
 def _strip_inline_images(report: str) -> tuple[str, int]:
-    """Remove every non-cover image block. Returns (new_text, removed_count)."""
+    """Remove every inline image block. Returns (new_text, removed_count)."""
     removed = 0
 
-    def _sub(m: re.Match) -> str:
+    def _sub(_: re.Match) -> str:
         nonlocal removed
-        alt = (m.group("alt") or "").strip()
-        path = m.group("path") or ""
-        if alt.lower().startswith("cover") or path.endswith("/cover.png"):
-            return m.group(0)  # keep cover block intact
         removed += 1
         return ""
 

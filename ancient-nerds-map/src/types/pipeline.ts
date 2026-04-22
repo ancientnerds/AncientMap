@@ -54,7 +54,7 @@ export const PIPELINE_STAGES: PipelineNodeDef[] = [
   { id: 'moderator', label: 'Moderator Review', sublabel: 'Final positions + devil\'s advocate' },
   { id: 'paper_assembly', label: 'Paper Assembly', sublabel: 'Academic formatting + citation audit' },
   { id: 'quality_judge', label: 'Quality Judge', sublabel: 'Verification + backward routing' },
-  { id: 'image_generation', label: 'Illustrations', sublabel: 'Generating cover image' },
+  { id: 'image_generation', label: 'Illustrations', sublabel: 'Picking banner hero from inline images' },
   // V2 Convergence Pipeline stages
   { id: 'decomposition', label: 'Decomposition', sublabel: 'Angle planning' },
   { id: 'cross_pollination', label: 'Cross-Pollination', sublabel: 'Interdisciplinary sharing' },

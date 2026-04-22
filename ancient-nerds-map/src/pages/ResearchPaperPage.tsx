@@ -13,6 +13,16 @@ import QualityBadge, { type QualityScore } from '../components/theo/QualityBadge
 import { splitIntoImageSegments } from '../components/theo/galleryParser'
 import '../styles/theo.css'
 
+interface HeroImage {
+  src: string
+  title: string
+  caption: string
+  sourceUrl: string
+  web_path?: string
+  source_name?: string
+  rationale?: string
+}
+
 interface PaperData {
   id: string
   question: string
@@ -23,6 +33,7 @@ interface PaperData {
     report: string
     title?: string
     quality_score?: QualityScore | null
+    hero_image?: HeroImage | null
   } | null
   sites_found: number
   tools_used: number
@@ -181,8 +192,10 @@ export default function ResearchPaperPage() {
         setMeta('og:title', title)
         setMeta('og:description', `Research paper by ${data.published_by} on Ancient Nerds Research`)
         setMeta('og:url', window.location.href)
-        if (data.id) {
-          setMeta('og:image', `${window.location.origin}/data/research-images/${data.id}/cover.png`)
+        const heroSrc = data.result?.hero_image?.src
+        if (heroSrc) {
+          const absolute = heroSrc.startsWith('http') ? heroSrc : `${window.location.origin}${heroSrc}`
+          setMeta('og:image', absolute)
         }
       })
       .catch(() => setError('Paper not found'))
@@ -366,16 +379,29 @@ export default function ResearchPaperPage() {
       <PageHeader currentPage="theo">
         <span className="page-header-title">Research</span>
       </PageHeader>
-      <AiNoticeBanner message="Research papers and illustrations are AI-generated. Always verify claims with original sources." />
+      <AiNoticeBanner message="Research papers are AI-generated. Always verify claims with original sources." />
 
-        {paper.id && (
-          <div className="theo-paper-hero">
+        {paper.result.hero_image?.src && (
+          <figure className="theo-paper-hero">
             <img
-              src={`/data/research-images/${paper.id}/cover.png`}
-              alt=""
+              src={paper.result.hero_image.src}
+              alt={paper.result.hero_image.title || ''}
               className="theo-paper-hero-img"
             />
-          </div>
+            {(paper.result.hero_image.caption || paper.result.hero_image.sourceUrl) && (
+              <figcaption className="theo-paper-hero-caption">
+                {paper.result.hero_image.caption && <em>{paper.result.hero_image.caption}</em>}
+                {paper.result.hero_image.sourceUrl && (
+                  <>
+                    {paper.result.hero_image.caption ? ' · ' : ''}
+                    <a href={paper.result.hero_image.sourceUrl} target="_blank" rel="noopener noreferrer">
+                      Source
+                    </a>
+                  </>
+                )}
+              </figcaption>
+            )}
+          </figure>
         )}
 
         <div className="theo-paper-page">

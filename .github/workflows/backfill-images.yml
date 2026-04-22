@@ -5,15 +5,14 @@ name: Backfill Images
 # during a run; this workflow is for papers that shipped without them.
 #
 # Trigger from the CLI:
-#   gh workflow run backfill-images.yml -f slug=SLUG -f mode=both
-#   gh workflow run backfill-images.yml -f slug=SLUG -f mode=cover
 #   gh workflow run backfill-images.yml -f slug=SLUG -f mode=probative
-#   gh workflow run backfill-images.yml -f slug=SLUG -f mode=captions  # rewrite captions only, no API calls
-#   gh workflow run backfill-images.yml -f slug=SLUG -f mode=reflow    # reflow images into paragraphs + dedup, no API calls
-#   gh workflow run backfill-images.yml -f slug=SLUG -f mode=clean_titles  # strip .jpg/.png/upload-ids from alt + caption leads
+#   gh workflow run backfill-images.yml -f slug=SLUG -f mode=captions       # rewrite captions only, no API calls
+#   gh workflow run backfill-images.yml -f slug=SLUG -f mode=reflow         # reflow images into paragraphs + dedup, no API calls
+#   gh workflow run backfill-images.yml -f slug=SLUG -f mode=clean_titles   # strip .jpg/.png/upload-ids from alt + caption leads
+#   gh workflow run backfill-images.yml -f slug=SLUG -f mode=hero           # pick best inline image as banner hero
 #
-# The workflow invokes the Docker API container so it inherits prod DB + MiniMax
-# creds from the running environment — no secrets travel over the wire.
+# The workflow invokes the Docker API container so it inherits prod DB creds
+# from the running environment — no secrets travel over the wire.
 
 on:
   workflow_dispatch:
@@ -30,14 +29,13 @@ on:
         description: 'Which backfill to run'
         required: true
         type: choice
-        default: both
+        default: probative
         options:
-          - cover
           - probative
           - captions
           - reflow
           - clean_titles
-          - both
+          - hero
 
 jobs:
   backfill:
@@ -66,13 +64,7 @@ jobs:
               fi
               echo "==> Backfill ${MODE} images for ${TARGET_LABEL}"
 
-              if [ "$MODE" = "cover" ] || [ "$MODE" = "both" ]; then
-                echo "==> Running cover backfill..."
-                docker exec ancient_nerds_api \
-                  python -m pipeline.lyra.backfill_cover_images --slug "${SLUG}" --apply
-              fi
-
-              if [ "$MODE" = "probative" ] || [ "$MODE" = "both" ]; then
+              if [ "$MODE" = "probative" ]; then
                 echo "==> Running probative backfill..."
                 docker exec ancient_nerds_api \
                   python -m pipeline.lyra.backfill_probative_images --slug "${SLUG}" --apply
@@ -99,6 +91,12 @@ jobs:
                   docker exec ancient_nerds_api \
                     python -m pipeline.lyra.clean_image_titles --slug "${SLUG}" --apply
                 fi
+              fi
+
+              if [ "$MODE" = "hero" ]; then
+                echo "==> Picking best inline probative image as banner hero (no API calls)..."
+                docker exec ancient_nerds_api \
+                  python -m pipeline.lyra.backfill_hero_image --slug "${SLUG}" --apply
               fi
 
               echo "==> Done."
