@@ -1,13 +1,17 @@
 /**
  * Shared figure segmentation for Theo papers.
  *
- * Walks the paper markdown and pulls every research-image block out into a
- * single `figure` segment carrying the src, alt title, italic caption and
- * [Source] URL. Surrounding prose is returned verbatim as `text` segments so
- * consumers can hand it to ReactMarkdown unchanged.
+ * Walks the paper markdown and pulls every research-image block out. A lone
+ * image becomes a `figure` segment (floats into the next paragraph); two or
+ * more images adjacent in the markdown — separated only by whitespace —
+ * collapse into a single `mosaic` segment so they render as a grid of up to
+ * three columns beneath the paragraph rather than floating side-by-side with
+ * prose squeezed between them.
  *
- * Used by both the live SSE overlay (TheoReportOverlay) and the public
- * research page (ResearchPaperPage) so the rendering is identical.
+ * Surrounding prose is returned verbatim as `text` segments so consumers can
+ * hand it to ReactMarkdown unchanged. Used by both the live SSE overlay
+ * (TheoReportOverlay) and the public research page (ResearchPaperPage) so the
+ * rendering is identical.
  */
 
 export interface ImageFigure {
@@ -20,6 +24,7 @@ export interface ImageFigure {
 export type PaperSegment =
   | { kind: 'text'; content: string }
   | { kind: 'figure'; figure: ImageFigure }
+  | { kind: 'mosaic'; figures: ImageFigure[] }
 
 // Matches any inline image under /data/research-images/, plus the optional
 // italic caption line and optional [Source](url) trailer. Non-greedy on the
@@ -56,14 +61,33 @@ export function splitIntoImageSegments(md: string): PaperSegment[] {
     return [{ kind: 'text', content: md }]
   }
 
+  // Group matches whose gap contains only whitespace (blank lines between
+  // image blocks). Anything with real prose in between breaks the group so
+  // that image stays attached to the paragraph before it.
+  type Group = { start: number; end: number; figures: ImageFigure[] }
+  const groups: Group[] = []
+  for (const match of matches) {
+    const last = groups[groups.length - 1]
+    if (last && md.slice(last.end, match.start).trim() === '') {
+      last.end = match.end
+      last.figures.push(match.figure)
+    } else {
+      groups.push({ start: match.start, end: match.end, figures: [match.figure] })
+    }
+  }
+
   const segments: PaperSegment[] = []
   let cursor = 0
-  for (const match of matches) {
-    if (match.start > cursor) {
-      segments.push({ kind: 'text', content: md.slice(cursor, match.start) })
+  for (const group of groups) {
+    if (group.start > cursor) {
+      segments.push({ kind: 'text', content: md.slice(cursor, group.start) })
     }
-    segments.push({ kind: 'figure', figure: match.figure })
-    cursor = match.end
+    if (group.figures.length === 1) {
+      segments.push({ kind: 'figure', figure: group.figures[0] })
+    } else {
+      segments.push({ kind: 'mosaic', figures: group.figures })
+    }
+    cursor = group.end
   }
   if (cursor < md.length) {
     segments.push({ kind: 'text', content: md.slice(cursor) })

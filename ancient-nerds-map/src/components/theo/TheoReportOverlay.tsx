@@ -345,25 +345,56 @@ export default function TheoReportOverlay({
           </Suspense>
         ) : (
           <div className="theo-report-body theo-md-body" ref={bodyRef}>
-            {reportSegments.map((seg, idx) =>
-              seg.kind === 'figure' ? (
-                <figure key={`f-${idx}`} className="theo-inline-figure">
-                  <img src={seg.figure.src} alt={seg.figure.title} loading="lazy" />
-                  {seg.figure.caption && (
-                    <figcaption>
-                      <em>{seg.figure.caption}</em>
-                      {seg.figure.sourceUrl && (
-                        <>
-                          {' · '}
-                          <a href={seg.figure.sourceUrl} target="_blank" rel="noopener noreferrer">
-                            Source
-                          </a>
-                        </>
-                      )}
-                    </figcaption>
-                  )}
-                </figure>
-              ) : (
+            {reportSegments.map((seg, idx) => {
+              if (seg.kind === 'figure') {
+                return (
+                  <figure key={`f-${idx}`} className="theo-inline-figure">
+                    <img src={seg.figure.src} alt={seg.figure.title} loading="lazy" />
+                    {seg.figure.caption && (
+                      <figcaption>
+                        <em>{seg.figure.caption}</em>
+                        {seg.figure.sourceUrl && (
+                          <>
+                            {' · '}
+                            <a href={seg.figure.sourceUrl} target="_blank" rel="noopener noreferrer">
+                              Source
+                            </a>
+                          </>
+                        )}
+                      </figcaption>
+                    )}
+                  </figure>
+                )
+              }
+              if (seg.kind === 'mosaic') {
+                const cols = Math.min(3, seg.figures.length)
+                return (
+                  <div
+                    key={`m-${idx}`}
+                    className={`theo-figure-mosaic theo-figure-mosaic--cols-${cols}`}
+                  >
+                    {seg.figures.map((fig, fIdx) => (
+                      <figure key={`m-${idx}-${fIdx}`} className="theo-figure-mosaic-item">
+                        <img src={fig.src} alt={fig.title} loading="lazy" />
+                        {fig.caption && (
+                          <figcaption>
+                            <em>{fig.caption}</em>
+                            {fig.sourceUrl && (
+                              <>
+                                {' · '}
+                                <a href={fig.sourceUrl} target="_blank" rel="noopener noreferrer">
+                                  Source
+                                </a>
+                              </>
+                            )}
+                          </figcaption>
+                        )}
+                      </figure>
+                    ))}
+                  </div>
+                )
+              }
+              return (
                 <ReactMarkdown
                   key={`t-${idx}`}
                   remarkPlugins={[remarkGfm]}
@@ -372,7 +403,7 @@ export default function TheoReportOverlay({
                   {seg.content}
                 </ReactMarkdown>
               )
-            )}
+            })}
           </div>
         )}
 
