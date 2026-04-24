@@ -322,7 +322,6 @@ def detect_language_bleed(text: str) -> list[str]:
 # so that v5, v6, v7, ... of the same preprint dedupe to a single source.
 # ---------------------------------------------------------------------------
 
-_PRESERVE_DOMAINS = {"doi.org"}
 _TRACKING_PARAMS = ("utm_", "fbclid", "gclid", "ref=", "mc_", "_hsenc=")
 
 
@@ -352,11 +351,11 @@ def _normalize_url(url: str) -> str:
 
     # arxiv — strip trailing vN on abs/pdf path
     elif host == "arxiv.org":
-        path = re.sub(r"(/abs/[^/]+?)v\d+$", r"\1", path)
+        path = re.sub(r"(/(?:abs|pdf)/[^/]+?)v\d+(\.pdf)?$", r"\1\2", path)
 
     # biorxiv / medrxiv — strip version segment on content path
     elif host in ("biorxiv.org", "medrxiv.org"):
-        path = re.sub(r"(/content/[^v]+?)v\d+(\.full\b|\b)", r"\1\2", path)
+        path = re.sub(r"(/content/.+?)v\d+(\.full)?(?=/|\?|$|\.pdf)", r"\1\2", path)
 
     # researchgate — collapse /profile/{user}/publication/{id}/... to
     # /publication/{id}
@@ -364,10 +363,6 @@ def _normalize_url(url: str) -> str:
         m = re.search(r"/publication/(\d+_[^/]+|\d+)", path)
         if m:
             path = "/publication/" + m.group(1)
-
-    # doi.org — preserve exactly (already canonical)
-    if host in _PRESERVE_DOMAINS:
-        return url
 
     # Strip tracking query params
     query_pairs = urllib.parse.parse_qsl(parsed.query, keep_blank_values=True)

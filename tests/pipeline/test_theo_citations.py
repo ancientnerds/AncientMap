@@ -5,6 +5,7 @@ import pytest
 
 from pipeline.lyra.theo_citations import (
     CitationRegistry,
+    _normalize_url,
     audit_citations,
     detect_language_bleed,
     detect_placeholder_markers,
@@ -696,8 +697,6 @@ def test_patch_flow_fills_gap_in_citation_numbering():
 # _normalize_url — collapses version-padded and tracking-polluted URLs
 # ---------------------------------------------------------------------------
 
-from pipeline.lyra.theo_citations import _normalize_url
-
 
 @pytest.mark.parametrize(
     "raw,canonical",
@@ -714,10 +713,25 @@ from pipeline.lyra.theo_citations import _normalize_url
         # arxiv version stripping
         ("https://arxiv.org/abs/2301.12345v3", "https://arxiv.org/abs/2301.12345"),
         ("https://arxiv.org/pdf/1206.0113", "https://arxiv.org/pdf/1206.0113"),
+        # arxiv pdf path with version
+        (
+            "https://arxiv.org/pdf/2301.12345v3.pdf",
+            "https://arxiv.org/pdf/2301.12345.pdf",
+        ),
+        # arxiv pdf path with version, no .pdf extension
+        (
+            "https://arxiv.org/pdf/2301.12345v3",
+            "https://arxiv.org/pdf/2301.12345",
+        ),
         # biorxiv version stripping
         (
             "https://www.biorxiv.org/content/10.1101/2023.01.01.000000v2.full.pdf",
             "https://biorxiv.org/content/10.1101/2023.01.01.000000.full.pdf",
+        ),
+        # biorxiv with 'v' characters earlier in the path (DOI or date slug)
+        (
+            "https://www.biorxiv.org/content/10.1101/2024.05.vat.123456v2.full.pdf",
+            "https://biorxiv.org/content/10.1101/2024.05.vat.123456.full.pdf",
         ),
         # researchgate profile-to-publication collapse
         (
@@ -739,6 +753,21 @@ from pipeline.lyra.theo_citations import _normalize_url
             "https://doi.org/10.1093/oxrevecpol/graaa035",
             "https://doi.org/10.1093/oxrevecpol/graaa035",
         ),
+        # doi.org with www prefix and utm tracking — must normalize to canonical
+        (
+            "https://www.doi.org/10.1093/oxrevecpol/graaa035?utm_source=twitter#ref",
+            "https://doi.org/10.1093/oxrevecpol/graaa035",
+        ),
+        # gclid (Google Ads)
+        ("https://example.com/page?gclid=abc123", "https://example.com/page"),
+        # fbclid (Facebook)
+        ("https://example.com/page?fbclid=abc123", "https://example.com/page"),
+        # mc_eid (Mailchimp)
+        ("https://example.com/page?mc_eid=abc123", "https://example.com/page"),
+        # _hsenc (HubSpot)
+        ("https://example.com/page?_hsenc=abc123", "https://example.com/page"),
+        # Mixed: real param + tracking — real param survives
+        ("https://example.com/search?q=hello&utm_source=x", "https://example.com/search?q=hello"),
         # empty + malformed tolerated
         ("", ""),
         ("not a url", "not a url"),
