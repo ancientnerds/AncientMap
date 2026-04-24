@@ -14,7 +14,7 @@ import TheoPaperBody from './TheoPaperBody'
 import ImageLightbox, { type LightboxImage } from '../ImageLightbox'
 import { inferSourceType } from '../../utils/sourceType'
 
-const TheoApprovalEditor = lazy(() => import('./TheoApprovalEditor'))
+const TheoWordpadEditor = lazy(() => import('./TheoWordpadEditor'))
 
 interface ResearchResult {
   report: string
@@ -332,8 +332,8 @@ export default function TheoReportOverlay({
 
         {/* Report Body — approval editor (owner) or reader */}
         {editing && requestId ? (
-          <Suspense fallback={<div className="theo-report-body" style={{ padding: 20, color: 'var(--text-dimmed)' }}>Loading approval editor...</div>}>
-            <TheoApprovalEditor
+          <Suspense fallback={<div className="theo-report-body" style={{ padding: 20, color: 'var(--text-dimmed)' }}>Loading WordPad editor...</div>}>
+            <TheoWordpadEditor
               requestId={requestId}
               mdComponents={mdComponents}
               onDiscard={handleDiscardEdit}

@@ -3160,3 +3160,136 @@
   margin-top: 0;
   margin-bottom: 0;
 }
+
+/* ─── WordPad Editor (per-paragraph overlay) ────────────────────── */
+
+.theo-wordpad-frame {
+  display: grid;
+  grid-template-columns: 1fr 72px;
+  gap: 0 8px;
+  padding: 0 16px 16px;
+  position: relative;
+}
+
+.theo-wordpad-toolbar {
+  grid-column: 1 / -1;
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  display: flex;
+  gap: 4px;
+  padding: 8px 12px;
+  background: rgba(10, 10, 12, 0.94);
+  backdrop-filter: blur(6px);
+  border-bottom: 1px solid var(--border-default);
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.theo-wordpad-block {
+  display: contents;
+}
+
+.theo-wordpad-block-main {
+  grid-column: 1;
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px dashed transparent;
+  transition: background-color 160ms ease, border-color 160ms ease;
+  margin: 2px 0;
+  min-width: 0;
+}
+.theo-wordpad-block--pending  { border-color: rgba(160, 160, 168, 0.20); }
+.theo-wordpad-block--pending:hover { border-color: rgba(160, 160, 168, 0.40); }
+.theo-wordpad-block--approved { background: rgba(46, 125, 50, 0.10); border-color: rgba(46, 125, 50, 0.40); }
+.theo-wordpad-block--rejected {
+  background: rgba(198, 40, 40, 0.12);
+  border-color: rgba(198, 40, 40, 0.45);
+  opacity: 0.55;
+}
+.theo-wordpad-block--rejected .theo-editor-content,
+.theo-wordpad-block--rejected .theo-md-body {
+  text-decoration: line-through;
+  text-decoration-color: rgba(198, 40, 40, 0.6);
+}
+.theo-wordpad-block--edited   { background: rgba(212, 145, 42, 0.12); border-color: rgba(212, 145, 42, 0.50); }
+
+.theo-wordpad-block-margin {
+  grid-column: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: flex-end;
+  padding-top: 10px;
+}
+
+.theo-wordpad-margin-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 14px;
+  background: rgba(20, 20, 24, 0.82);
+  border: 1px solid rgba(160, 160, 168, 0.40);
+  color: rgba(200, 200, 210, 0.85);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 120ms ease, background 120ms ease, border-color 120ms ease;
+  padding: 0;
+}
+.theo-wordpad-margin-btn:not(:disabled):hover { transform: scale(1.1); }
+.theo-wordpad-margin-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+.theo-wordpad-margin-btn.approve { color: #4caf50; border-color: rgba(46, 125, 50, 0.55); }
+.theo-wordpad-margin-btn.approve.active,
+.theo-wordpad-margin-btn.approve:not(:disabled):hover { background: rgba(46, 125, 50, 0.22); }
+
+.theo-wordpad-margin-btn.reject { color: #f44336; border-color: rgba(198, 40, 40, 0.55); }
+.theo-wordpad-margin-btn.reject.active,
+.theo-wordpad-margin-btn.reject:not(:disabled):hover { background: rgba(198, 40, 40, 0.22); }
+
+.theo-wordpad-edited-chip {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: rgba(212, 145, 42, 0.18);
+  border: 1px solid rgba(212, 145, 42, 0.50);
+  color: #d4912a;
+  white-space: nowrap;
+  user-select: none;
+}
+
+.theo-wordpad-block-error {
+  margin-top: 6px;
+  color: #f44336;
+  font-size: 12px;
+}
+
+.theo-wordpad-block-main .theo-inline-figure,
+.theo-wordpad-block-main .theo-figure-mosaic {
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
+.theo-wordpad-references {
+  grid-column: 1 / -1;
+  margin-top: 24px;
+  opacity: 0.95;
+}
+
+/* Make the per-block TipTap editor blend into the frame */
+.theo-wordpad-block-main .theo-editor-content {
+  padding: 0;
+  min-height: 0;
+  overflow: visible;
+  flex: none;
+}
+.theo-wordpad-block-main .theo-editor-content .ProseMirror {
+  min-height: 0;
+  outline: none;
+}
+.theo-wordpad-block-main .theo-editor-content .ProseMirror:focus-visible {
+  outline: none;
+}
