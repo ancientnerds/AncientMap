@@ -18,7 +18,6 @@ from pipeline.lyra.research_images import (
     search_wikimedia_images,
 )
 
-
 # ---------------------------------------------------------------------------
 # TestLicenseAllowlist
 # ---------------------------------------------------------------------------
@@ -273,7 +272,7 @@ class TestInjectSourceImages:
         return SourceImage(
             url=url,
             alt_text=f"Image of {topic}",
-            attribution=f"Author, Wikimedia Commons, CC BY-SA 4.0",
+            attribution="Author, Wikimedia Commons, CC BY-SA 4.0",
             source_url="https://commons.wikimedia.org/wiki/File:Test.jpg",
             license="CC BY-SA 4.0",
             keywords=_significant_keywords(topic),

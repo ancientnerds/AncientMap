@@ -271,6 +271,29 @@ class PaperHandler(BaseHandler):
         )
 
         # ---------------------------------------------------------------
+        # Step 8b: Coherence pass — detect cross-section contradictions +
+        # verify every title-term phrase appears in the body.
+        # ---------------------------------------------------------------
+        # Extract title early so coherence_pass can use it.
+        _title_match = re.search(r"^#\s+(.+)$", self.state.paper_text, re.MULTILINE)
+        _coherence_title = _title_match.group(1).strip() if _title_match else self.state.question
+
+        from pipeline.lyra import coherence_pass
+
+        async def _coh_llm(sys_prompt, usr, max_tok, s, temp):
+            return await asyncio.to_thread(
+                minimax_chat_anthropic, sys_prompt, usr, max_tok, s, temperature=temp
+            )
+
+        self.state.coherence_result = await coherence_pass.run_coherence_pass(
+            title=_coherence_title,
+            body=self.state.paper_text,
+            llm_call=_coh_llm,
+            settings=settings,
+        )
+        self.state.llm_call_count += 1
+
+        # ---------------------------------------------------------------
         # Step 9: Append references list
         # ---------------------------------------------------------------
         refs_md = self.state.registry.format_references_list()
@@ -288,14 +311,31 @@ class PaperHandler(BaseHandler):
         # ---------------------------------------------------------------
         # Step 11: Generate card description
         # ---------------------------------------------------------------
+        # Pass opener AND conclusion so the card describes what the paper
+        # concludes, not just the provocative question it opened with. The
+        # references section is stripped so the LLM doesn't waste budget on
+        # citation lists.
+        _paper_for_card = self.state.paper_text
+        _refs_idx = _paper_for_card.find("\n## References")
+        if _refs_idx > 0:
+            _paper_for_card = _paper_for_card[:_refs_idx]
+        _opener = _paper_for_card[:2500]
+        _conclusion = _paper_for_card[-4500:] if len(_paper_for_card) > 7000 else ""
         card_system = (
-            "Write a 1-3 sentence description of this research paper for a card preview. "
-            "Be specific. No citations, no markdown. Plain text only."
+            "Write a 1-3 sentence description of this research paper for a card "
+            "preview. Describe what the paper concludes — what it argues is true "
+            "— not what it opens by asking. If the paper argues against a "
+            "hypothesis the user proposed, say so plainly. Be specific. "
+            "No citations, no markdown. Plain text only."
         )
-        card_input = (
-            f"## Title\n\n{self.state.paper_title}\n\n"
-            f"## First 500 words\n\n{self.state.paper_text[:2000]}"
-        )
+        if _conclusion:
+            card_input = (
+                f"## Title\n\n{self.state.paper_title}\n\n"
+                f"## Opening (first ~500 words)\n\n{_opener}\n\n"
+                f"## Conclusion (last ~1500 words)\n\n{_conclusion}"
+            )
+        else:
+            card_input = f"## Title\n\n{self.state.paper_title}\n\n## Paper\n\n{_opener}"
         settings = _get_settings()
         async with self.semaphore:
             # 1024 total budget: ~100 tokens of output prose plus headroom for
@@ -689,7 +729,9 @@ class PaperHandler(BaseHandler):
         # 4096 budget: hook is usually 300-500 output tokens, but M2.7 thinking
         # can consume 2K+ before the prose starts. 2048 was too tight.
         raw = await self._llm_call(hook_prompt, user_msg, 4096, settings)
-        return raw.strip()
+        hook = raw.strip()
+        hook = await self._run_hallucination_gate(hook, findings_text, settings)
+        return hook
 
     async def _write_investigation_section(
         self,
@@ -743,7 +785,98 @@ class PaperHandler(BaseHandler):
             self.state.config.max_tokens_per_call,
             settings,
         )
+
+        uncited_ratio = self._uncited_ratio(prose)
+        if uncited_ratio > 0.20:
+            repair_user_msg = (
+                user_msg
+                + f"\n\nYour previous draft had {uncited_ratio:.0%} uncited factual paragraphs. "
+                "Rewrite so every factual paragraph carries an [N] marker from the claim pack. "
+                "Delete any sentence you cannot cite."
+            )
+            repair_raw = await self._llm_call(
+                section_prompt,
+                repair_user_msg,
+                self.state.config.max_tokens_per_call,
+                settings,
+            )
+            prose = repair_raw.strip()
+            logger.info(
+                "[paper] Repair pass for section '%s' -- uncited_ratio before: %.0f%%",
+                sec_title,
+                uncited_ratio * 100,
+            )
+
+        prose = await self._run_hallucination_gate(prose, claims_text, settings)
         return sec_title, prose
+
+    async def _run_hallucination_gate(
+        self,
+        prose: str,
+        pack: str,
+        settings,
+    ) -> str:
+        """Extract specifics from prose, verify against pack + sources + question.
+
+        Unsupported specifics trigger the hallucination_gate.repair_prose loop.
+        Metrics accumulate on self.state.hallucination_metrics. Returns the
+        (possibly-repaired) prose.
+        """
+        from pipeline.lyra import hallucination_gate
+
+        metrics = getattr(
+            self.state,
+            "hallucination_metrics",
+            {"initial": 0, "final": 0, "retries": 0},
+        )
+
+        specs = hallucination_gate.extract_specifics(prose)
+        unsupported = hallucination_gate.verify_against_pack(
+            specs,
+            pack=pack,
+            sources=self.state.registry.sources,
+            original_question=self.state.question,
+        )
+        metrics["initial"] += len(unsupported)
+
+        if unsupported:
+
+            async def _llm_call(system, user, max_tokens, s, temperature):
+                # _llm_call on the handler is (system, user, max_tokens, settings)
+                # without a temperature override. For repair we want deterministic
+                # output, so we pass the temperature through minimax_chat_anthropic
+                # directly via asyncio.to_thread (same shape as the handler's own
+                # _llm_call but with explicit temp).
+                return await asyncio.to_thread(
+                    minimax_chat_anthropic,
+                    system,
+                    user,
+                    max_tokens,
+                    s,
+                    temperature=temperature,
+                )
+
+            prose, remaining, retries = await hallucination_gate.repair_prose(
+                prose,
+                unsupported,
+                pack=pack,
+                sources=self.state.registry.sources,
+                original_question=self.state.question,
+                llm_call=_llm_call,
+                settings=settings,
+            )
+            metrics["retries"] += retries
+            metrics["final"] += len(remaining)
+            self.state.llm_call_count += retries
+            if remaining:
+                logger.info(
+                    "[paper] hallucination_gate left %d specifics after %d retries",
+                    len(remaining),
+                    retries,
+                )
+
+        self.state.hallucination_metrics = metrics
+        return prose
 
     async def _write_connecting_section(
         self,
@@ -827,6 +960,7 @@ class PaperHandler(BaseHandler):
             self.state.config.max_tokens_per_call,
             settings,
         )
+        prose = await self._run_hallucination_gate(prose, claims_text, settings)
         return prose
 
     async def _write_other_side_section(
@@ -899,6 +1033,7 @@ class PaperHandler(BaseHandler):
             self.state.config.max_tokens_per_call,
             settings,
         )
+        prose = await self._run_hallucination_gate(prose, claims_text, settings)
         return prose
 
     async def _write_assessment(self, all_claims: list[dict], settings) -> str:
@@ -947,6 +1082,16 @@ class PaperHandler(BaseHandler):
             self.state.config.max_tokens_per_call,
             settings,
         )
+        # Build a pack for the hallucination gate from all tiers of claims
+        # (the assessment cites across all three).
+        _assessment_pack = "\n".join(
+            [
+                _format_tier(high_confidence),
+                _format_tier(medium_confidence),
+                _format_tier(low_confidence),
+            ]
+        )
+        prose = await self._run_hallucination_gate(prose, _assessment_pack, settings)
         return prose
 
     # ===================================================================
@@ -1020,7 +1165,8 @@ class PaperHandler(BaseHandler):
             if key:
                 claim_lookup[key] = c
 
-        # Match angle findings to enriched claims
+        # Match angle findings to enriched claims. Claims without citation
+        # backing are dropped; bare-citation claims leak into uncited prose.
         matched: list[dict] = []
         for finding in angle_findings:
             claim_text = finding.get("claim", "").strip()
@@ -1029,18 +1175,46 @@ class PaperHandler(BaseHandler):
             key = claim_text.lower().strip()
             if key in claim_lookup:
                 matched.append(claim_lookup[key])
-            else:
-                # Use the finding directly as a bare claim
-                matched.append(
-                    {
-                        "claim": claim_text,
-                        "citations": "",
-                        "confidence": finding.get("confidence", "medium"),
-                        "source_ids": finding.get("source_ids", []),
-                    }
-                )
+                continue
+
+            source_ids = finding.get("source_ids") or []
+            if not source_ids:
+                continue  # no support for this finding — drop it
+
+            # Synthesize citations from source_ids via registry reference numbers
+            ref_nums: list[int] = []
+            for sid in source_ids:
+                num = self.state.registry.reference_numbers.get(sid)
+                if num is None:
+                    num = self.state.registry.assign_reference_number(sid)
+                ref_nums.append(num)
+            if not ref_nums:
+                continue  # none of the source_ids resolved — drop
+
+            citations = " ".join(f"[{n}]" for n in ref_nums)
+            matched.append(
+                {
+                    "claim": claim_text,
+                    "citations": citations,
+                    "confidence": finding.get("confidence", "medium"),
+                    "source_ids": source_ids,
+                }
+            )
 
         return matched
+
+    @staticmethod
+    def _uncited_ratio(prose: str) -> float:
+        """Fraction of factual paragraphs (>50 chars, non-heading) without an [N] marker."""
+        paragraphs = [
+            p.strip()
+            for p in prose.split("\n\n")
+            if p.strip() and len(p.strip()) > 50 and not p.strip().startswith("#")
+        ]
+        if not paragraphs:
+            return 0.0
+        uncited = sum(1 for p in paragraphs if not re.search(r"\[\d+\]", p))
+        return uncited / len(paragraphs)
 
     @staticmethod
     def _format_claims_for_prompt(claims: list[dict]) -> str:
@@ -1052,15 +1226,14 @@ class PaperHandler(BaseHandler):
         """
         lines: list[str] = []
         for i, c in enumerate(claims):
-            conf = c.get("confidence", "medium")
             cites = c.get("citations", "")
+            if not cites.strip():
+                continue  # refuse to format claims without backing (C2 guard)
+            conf = c.get("confidence", "medium")
             claim_text = c.get("claim", "")
             notes = c.get("notes", "")
             # Embed [N] markers at the end of the claim text
-            if cites:
-                line = f"{i}. [{conf}] {claim_text} {cites}"
-            else:
-                line = f"{i}. [{conf}] {claim_text}"
+            line = f"{i}. [{conf}] {claim_text} {cites}"
             if notes:
                 line += f"\n   Notes: {notes}"
             lines.append(line)

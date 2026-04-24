@@ -5,6 +5,7 @@ import pytest
 
 from pipeline.lyra.theo_citations import (
     CitationRegistry,
+    _normalize_url,
     audit_citations,
     detect_language_bleed,
     detect_placeholder_markers,
@@ -459,6 +460,78 @@ def test_audit_is_idempotent_to_references_section():
 
 
 # ---------------------------------------------------------------------------
+# audit_citations — non-numeric bracketed markers (pipeline debug leaks)
+# ---------------------------------------------------------------------------
+
+
+def _registry_with_one_ref() -> CitationRegistry:
+    registry = CitationRegistry()
+    sid = registry.register_source("https://a.example/page", "A", "snippet")
+    registry.assign_reference_number(sid)  # → [1]
+    return registry
+
+
+def test_audit_flags_hex_pipeline_token():
+    """A bracketed hex token like [5620e1fb87f7] must fail the audit."""
+    registry = _registry_with_one_ref()
+    prose = "The source [5620e1fb87f7] suggests X [1]."
+    result = audit_citations(prose, registry)
+    assert "5620e1fb87f7" in result["non_numeric_markers"]
+    assert result["passed"] is False
+    assert any("non-numeric" in i for i in result["issues"])
+
+
+def test_audit_does_not_flag_markdown_links():
+    """[text](url) is a markdown link, not a citation marker — must not flag."""
+    registry = _registry_with_one_ref()
+    prose = "See [Wikipedia](https://en.wikipedia.org/wiki/Foo) for background [1]."
+    result = audit_citations(prose, registry)
+    assert result["non_numeric_markers"] == []
+    assert result["passed"] is True
+
+
+def test_audit_does_not_flag_footnote_refs():
+    """[^n] is a markdown footnote reference — must not flag."""
+    registry = _registry_with_one_ref()
+    prose = "Noted [^1] elsewhere [1]."
+    result = audit_citations(prose, registry)
+    assert result["non_numeric_markers"] == []
+    assert result["passed"] is True
+
+
+def test_audit_placeholder_not_double_flagged():
+    """[N - topic] is detected as a placeholder, must not also be reported
+    as a non-numeric marker."""
+    registry = _registry_with_one_ref()
+    prose = "A claim [N - context] leaked into prose [1]."
+    result = audit_citations(prose, registry)
+    assert result["placeholder_markers"] == ["[N - context]"]
+    assert result["non_numeric_markers"] == []
+    # still fails because placeholder_markers is non-empty
+    assert result["passed"] is False
+
+
+def test_audit_flags_multiple_non_numeric_tokens_deduped():
+    """Multiple non-numeric tokens should all be reported, order-preserving and deduped."""
+    registry = _registry_with_one_ref()
+    prose = "Mixed [TODO] and [abc-123] plus another [TODO] with [1]."
+    result = audit_citations(prose, registry)
+    # Deduped: TODO appears once even though it shows up twice in prose
+    assert result["non_numeric_markers"] == ["TODO", "abc-123"]
+    assert result["passed"] is False
+
+
+def test_audit_clean_prose_still_passes():
+    """Baseline: no non-numeric tokens → non_numeric_markers is empty and does
+    not flip an otherwise-passing paper to failed."""
+    registry = _registry_with_one_ref()
+    prose = "Rome was founded in 753 BC [1]."
+    result = audit_citations(prose, registry)
+    assert result["non_numeric_markers"] == []
+    assert result["passed"] is True
+
+
+# ---------------------------------------------------------------------------
 # score_tier_by_domain
 # ---------------------------------------------------------------------------
 
@@ -618,3 +691,175 @@ def test_patch_flow_fills_gap_in_citation_numbering():
     # Registry has only the 9 survivors (G dropped)
     assert len(registry.reference_numbers) == 9
     assert all("g.example" not in s.url for s in registry.sources.values() if s.id in registry.reference_numbers)
+
+
+# ---------------------------------------------------------------------------
+# _normalize_url — collapses version-padded and tracking-polluted URLs
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "raw,canonical",
+    [
+        # preprints.org version stripping
+        (
+            "https://www.preprints.org/manuscript/202108.0087/v5/download",
+            "https://preprints.org/manuscript/202108.0087",
+        ),
+        (
+            "https://www.preprints.org/manuscript/202108.0087/v9",
+            "https://preprints.org/manuscript/202108.0087",
+        ),
+        # preprints.org /download without a version — still stripped to manuscript page
+        (
+            "https://preprints.org/manuscript/202108.0087/download",
+            "https://preprints.org/manuscript/202108.0087",
+        ),
+        # arxiv version stripping
+        ("https://arxiv.org/abs/2301.12345v3", "https://arxiv.org/abs/2301.12345"),
+        ("https://arxiv.org/pdf/1206.0113", "https://arxiv.org/pdf/1206.0113"),
+        # arxiv pdf path with version
+        (
+            "https://arxiv.org/pdf/2301.12345v3.pdf",
+            "https://arxiv.org/pdf/2301.12345.pdf",
+        ),
+        # arxiv pdf path with version, no .pdf extension
+        (
+            "https://arxiv.org/pdf/2301.12345v3",
+            "https://arxiv.org/pdf/2301.12345",
+        ),
+        # biorxiv version stripping
+        (
+            "https://www.biorxiv.org/content/10.1101/2023.01.01.000000v2.full.pdf",
+            "https://biorxiv.org/content/10.1101/2023.01.01.000000.full.pdf",
+        ),
+        # biorxiv with 'v' characters earlier in the path (DOI or date slug)
+        (
+            "https://www.biorxiv.org/content/10.1101/2024.05.vat.123456v2.full.pdf",
+            "https://biorxiv.org/content/10.1101/2024.05.vat.123456.full.pdf",
+        ),
+        # researchgate profile-to-publication collapse
+        (
+            "https://www.researchgate.net/profile/Jane-Doe/publication/328144532_Ancient_geopolymer",
+            "https://researchgate.net/publication/328144532_Ancient_geopolymer",
+        ),
+        # utm/fragment stripping + lowercase host
+        (
+            "https://EN.Wikipedia.org/wiki/Foo?utm_source=x&utm_medium=y#section",
+            "https://en.wikipedia.org/wiki/Foo",
+        ),
+        # www stripping and ref=
+        (
+            "https://www.jstor.org/stable/1234?ref=homepage",
+            "https://jstor.org/stable/1234",
+        ),
+        # doi preserved exactly (already canonical)
+        (
+            "https://doi.org/10.1093/oxrevecpol/graaa035",
+            "https://doi.org/10.1093/oxrevecpol/graaa035",
+        ),
+        # doi.org with www prefix and utm tracking — must normalize to canonical
+        (
+            "https://www.doi.org/10.1093/oxrevecpol/graaa035?utm_source=twitter#ref",
+            "https://doi.org/10.1093/oxrevecpol/graaa035",
+        ),
+        # gclid (Google Ads)
+        ("https://example.com/page?gclid=abc123", "https://example.com/page"),
+        # fbclid (Facebook)
+        ("https://example.com/page?fbclid=abc123", "https://example.com/page"),
+        # mc_eid (Mailchimp)
+        ("https://example.com/page?mc_eid=abc123", "https://example.com/page"),
+        # _hsenc (HubSpot)
+        ("https://example.com/page?_hsenc=abc123", "https://example.com/page"),
+        # Mixed: real param + tracking — real param survives
+        ("https://example.com/search?q=hello&utm_source=x", "https://example.com/search?q=hello"),
+        # empty + malformed tolerated
+        ("", ""),
+        ("not a url", "not a url"),
+    ],
+)
+def test_normalize_url(raw, canonical):
+    assert _normalize_url(raw) == canonical
+
+
+# ---------------------------------------------------------------------------
+# register_source — URL-normalized dedup
+# ---------------------------------------------------------------------------
+
+
+def test_register_source_dedupes_preprint_versions():
+    """Two URLs that differ only by preprint version stamp register as one source."""
+    registry = CitationRegistry()
+    id_v5 = registry.register_source(
+        "https://www.preprints.org/manuscript/202108.0087/v5/download",
+        "Polygonal Masonry",
+        "snippet",
+    )
+    id_v9 = registry.register_source(
+        "https://www.preprints.org/manuscript/202108.0087/v9",
+        "Polygonal Masonry (v9)",
+        "snippet",
+    )
+    assert id_v5 == id_v9
+    assert len(registry.sources) == 1
+    # First-seen URL is preserved for display
+    assert registry.sources[id_v5].url.endswith("/v5/download")
+
+
+def test_register_source_dedupes_tracking_params():
+    """Two URLs that differ only by tracking params register as one source."""
+    registry = CitationRegistry()
+    id_a = registry.register_source(
+        "https://example.com/page?utm_source=twitter", "A", "s"
+    )
+    id_b = registry.register_source(
+        "https://example.com/page?utm_source=reddit", "A", "s"
+    )
+    assert id_a == id_b
+
+
+def test_register_source_dedupes_www_prefix():
+    """www.example.com and example.com register as the same source."""
+    registry = CitationRegistry()
+    id_a = registry.register_source("https://www.example.com/x", "A", "s")
+    id_b = registry.register_source("https://example.com/x", "A", "s")
+    assert id_a == id_b
+
+
+def test_register_source_distinct_urls_remain_distinct():
+    """Genuinely different URLs still get different source_ids."""
+    registry = CitationRegistry()
+    id_a = registry.register_source("https://example.com/page-a", "A", "s")
+    id_b = registry.register_source("https://example.com/page-b", "B", "s")
+    assert id_a != id_b
+    assert len(registry.sources) == 2
+
+
+# ---------------------------------------------------------------------------
+# format_references_list — invariant: one source per entry
+# ---------------------------------------------------------------------------
+
+
+def test_format_references_list_one_source_per_entry():
+    """Every non-empty reference line starts with [N] and has at most one URL.
+
+    Guards against the multi-URL-crammed-into-one-entry bug we saw in
+    production papers (e.g. Shining Ones reference [13] had three URLs).
+    """
+    registry = CitationRegistry()
+    sid1 = registry.register_source("https://a.example/page", "A", "s")
+    sid2 = registry.register_source("https://b.example/page", "B", "s")
+    sid3 = registry.register_source("https://c.example/page", "C", "s")
+    registry.assign_reference_number(sid1)
+    registry.assign_reference_number(sid2)
+    registry.assign_reference_number(sid3)
+    refs = registry.format_references_list()
+    for line in refs.splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        # Each non-empty line begins with [N]
+        assert re.match(r"^\[\d+\]", stripped), f"Unexpected line start: {line!r}"
+        # At most one URL per line
+        url_count = line.count("http://") + line.count("https://")
+        assert url_count <= 1, f"Reference line packs multiple URLs: {line!r}"

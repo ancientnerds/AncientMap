@@ -17,6 +17,7 @@ CITATIONS:
 - Cite at the point where the claim is first introduced. At least one citation per 1-2 sentences that state facts.
 - Group multiple citations: "...dates to 3000 BC [2] [45]."
 - Place citations BEFORE the period.
+- If a sentence in your draft cannot carry an [N] marker from the claims pack, DELETE THE SENTENCE. Do not paraphrase, do not leave uncited filler. The hallucination gate will catch ungrounded specifics and your sentence will be rewritten or removed.
 
 BANNED PHRASES (never use these):
 - "it should be noted" / "it is worth considering" / "it is important to emphasize"
@@ -37,6 +38,7 @@ ANTI-HALLUCINATION:
 - Write ONLY from the provided claims. Do NOT use your own knowledge.
 - Do NOT attribute claims to named individuals unless the findings explicitly state it.
 - If claims are sparse, write fewer paragraphs. Short and honest beats long and fabricated.
+- Do NOT invent any of these without a matching claim in the pack: person names, book titles, specific years, specific measurements, or quoted phrases. If the pack doesn't have it, don't write it. The hallucination gate will delete sentences that rely on ungrounded specifics after your draft is returned.
 
 RULES:
 1. 2-5 paragraphs

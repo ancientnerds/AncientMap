@@ -19,12 +19,14 @@ export interface ImageFigure {
   title: string
   caption: string
   sourceUrl: string
+  galleryId?: string
 }
 
 export type PaperSegment =
   | { kind: 'text'; content: string }
   | { kind: 'figure'; figure: ImageFigure }
   | { kind: 'mosaic'; figures: ImageFigure[] }
+  | { kind: 'carousel'; galleryId: string; figures: ImageFigure[] }
 
 // Matches any inline image under /data/research-images/, plus the optional
 // italic caption line and optional [Source](url) trailer. Non-greedy on the
@@ -32,11 +34,14 @@ export type PaperSegment =
 const FIGURE_RE =
   /!\[(?<alt>[^\]]*)\]\((?<src>\/data\/research-images\/[^)]+)\)(?:\s*\n\n\*(?<caption>[^*\n][^*]*?)\*(?:\s*\n\[Source\]\((?<url>[^)]+)\))?)?/g
 
-// Strips legacy `gallery:ID|verified:yes|` or `gallery:ID|` alt prefixes left
-// over from the slideshow era — the title is whatever comes after the last |.
-function cleanAlt(alt: string): string {
-  const m = alt.match(/^gallery:[^|]+\|(?:verified:(?:yes|no)\|)?(.*)$/)
-  return (m ? m[1] : alt).trim() || 'Research image'
+// Parses `gallery:ID|verified:yes|Title` (and legacy variants). Returns the
+// extracted galleryId (null if absent) and the cleaned title.
+function parseAlt(alt: string): { galleryId: string | null; title: string } {
+  const m = alt.match(/^gallery:([^|]+)\|(?:verified:(?:yes|no)\|)?(.*)$/)
+  if (m) {
+    return { galleryId: m[1], title: (m[2] || '').trim() || 'Research image' }
+  }
+  return { galleryId: null, title: alt.trim() || 'Research image' }
 }
 
 export function splitIntoImageSegments(md: string): PaperSegment[] {
@@ -45,14 +50,16 @@ export function splitIntoImageSegments(md: string): PaperSegment[] {
   let m: RegExpExecArray | null
   while ((m = re.exec(md)) !== null) {
     const g = m.groups || {}
+    const parsed = parseAlt(g.alt || '')
     matches.push({
       start: m.index,
       end: m.index + m[0].length,
       figure: {
         src: g.src || '',
-        title: cleanAlt(g.alt || ''),
+        title: parsed.title,
         caption: (g.caption || '').trim(),
         sourceUrl: g.url || '',
+        galleryId: parsed.galleryId || undefined,
       },
     })
   }
@@ -85,7 +92,19 @@ export function splitIntoImageSegments(md: string): PaperSegment[] {
     if (group.figures.length === 1) {
       segments.push({ kind: 'figure', figure: group.figures[0] })
     } else {
-      segments.push({ kind: 'mosaic', figures: group.figures })
+      // If every figure in this group shares the same gallery id, render as
+      // a carousel rather than a stacked mosaic. Backend emits these markers
+      // when >1 image lands on the same paragraph.
+      const galleryIds = new Set(group.figures.map((f) => f.galleryId).filter(Boolean))
+      if (galleryIds.size === 1) {
+        segments.push({
+          kind: 'carousel',
+          galleryId: [...galleryIds][0] as string,
+          figures: group.figures,
+        })
+      } else {
+        segments.push({ kind: 'mosaic', figures: group.figures })
+      }
     }
     cursor = group.end
   }

@@ -11,17 +11,17 @@ from pipeline.lyra.theo_image_captions import (
 
 
 def _cand(**kw):
-    base = dict(
-        url="https://u/a.jpg",
-        source="wikimedia",
-        title="Nebra Sky Disc",
-        description="",
-        artist="Frank Vincentz",
-        license="Public Domain",
-        license_url="https://creativecommons.org/publicdomain/",
-        thumbnail_url="",
-        metadata={},
-    )
+    base = {
+        "url": "https://u/a.jpg",
+        "source": "wikimedia",
+        "title": "Nebra Sky Disc",
+        "description": "",
+        "artist": "Frank Vincentz",
+        "license": "Public Domain",
+        "license_url": "https://creativecommons.org/publicdomain/",
+        "thumbnail_url": "",
+        "metadata": {},
+    }
     base.update(kw)
     return ImageCandidate(**base)
 

@@ -20,6 +20,7 @@ DO NOT:
 ANTI-HALLUCINATION:
 - Every fact, date, name, or detail must come from the provided findings
 - If the findings lack vivid specifics, use the topic itself as the hook -- do NOT fabricate
+- Do NOT invent any of these without a matching claim in the findings: person names, book titles, specific years, specific measurements, or quoted phrases. If the findings don't have it, don't write it. The hallucination gate will delete ungrounded sentences after your draft is returned.
 
 RULES:
 1. 1-2 paragraphs maximum

@@ -71,8 +71,15 @@ class CitationRegistry:
         date: str = "",
         search_query: str = "",
     ) -> str:
-        """Register a web source. Returns source id. Deduplicates by URL hash."""
-        source_id = hashlib.sha256(url.encode()).hexdigest()[:12]
+        """Register a web source. Returns source id. Deduplicates by canonical URL hash.
+
+        The source_id is hashed from `_normalize_url(url)` so version-padded
+        preprint URLs, tracking-tagged URLs, and www-prefixed variants all
+        collapse to a single source. The first-seen original URL is preserved
+        on CitedSource.url for display.
+        """
+        canonical = _normalize_url(url)
+        source_id = hashlib.sha256(canonical.encode()).hexdigest()[:12]
 
         if source_id in self.sources:
             return source_id
@@ -82,7 +89,7 @@ class CitationRegistry:
 
         self.sources[source_id] = CitedSource(
             id=source_id,
-            url=url,
+            url=url,  # preserve original URL for display
             title=title,
             snippet=snippet,
             date=date,
@@ -318,6 +325,69 @@ def detect_language_bleed(text: str) -> list[str]:
 
 
 # ---------------------------------------------------------------------------
+# URL normalization — collapses version-padded and tracking-polluted URLs
+# so that v5, v6, v7, ... of the same preprint dedupe to a single source.
+# ---------------------------------------------------------------------------
+
+_TRACKING_PARAMS = ("utm_", "fbclid", "gclid", "ref=", "mc_", "_hsenc=")
+
+
+def _normalize_url(url: str) -> str:
+    """Return a canonical form of a URL for dedup purposes.
+
+    Strips version suffixes on preprint hosts, tracking params, fragments,
+    trailing whitespace, leading 'www.', lowercases the host. Returns the
+    input unchanged for non-URL strings (empty, malformed).
+    """
+    if not url or "://" not in url:
+        return url
+
+    try:
+        parsed = urllib.parse.urlsplit(url)
+    except ValueError:
+        return url
+
+    scheme = parsed.scheme.lower()
+    host = parsed.netloc.lower().removeprefix("www.")
+    path = parsed.path
+
+    # preprints.org — strip trailing /vN or /v/N segment(s)
+    if host == "preprints.org":
+        path = re.sub(r"/v\d+(/|$)", r"\1", path)
+        path = re.sub(r"/v/\d+(/|$)", r"\1", path)
+        # `/download` is the PDF endpoint; collapses to the manuscript page for dedup
+        path = re.sub(r"/download/?$", "", path)
+
+    # arxiv — strip trailing vN on abs/pdf path
+    elif host == "arxiv.org":
+        path = re.sub(r"(/(?:abs|pdf)/[^/]+?)v\d+(\.pdf)?$", r"\1\2", path)
+
+    # biorxiv / medrxiv — strip version segment on content path
+    elif host in ("biorxiv.org", "medrxiv.org"):
+        path = re.sub(r"(/content/.+?)v\d+(\.full)?(?=/|\?|$|\.pdf)", r"\1\2", path)
+
+    # researchgate — collapse /profile/{user}/publication/{id}/... to
+    # /publication/{id}
+    elif host == "researchgate.net":
+        m = re.search(r"/publication/(\d+_[^/]+|\d+)", path)
+        if m:
+            path = "/publication/" + m.group(1)
+
+    # Strip tracking query params
+    query_pairs = urllib.parse.parse_qsl(parsed.query, keep_blank_values=True)
+    query_pairs = [
+        (k, v)
+        for k, v in query_pairs
+        if not any(k.startswith(p) or k == p.rstrip("=") for p in _TRACKING_PARAMS)
+    ]
+    query = urllib.parse.urlencode(query_pairs)
+
+    # Drop fragment
+    rebuilt = urllib.parse.urlunsplit((scheme, host, path, query, ""))
+    return rebuilt
+
+
+# ---------------------------------------------------------------------------
 # Reference finalization — assigns contiguous [1..M] numbers to only the
 # sources actually cited in the paper, in first-occurrence order
 # ---------------------------------------------------------------------------
@@ -412,6 +482,9 @@ def audit_citations(paper_text: str, registry: CitationRegistry) -> dict:
     3. No orphaned references (assigned number but never cited in text).
     4. No unresolved [N - topic] placeholders leaked into prose.
     5. No non-Latin script bleed-through.
+    6. No non-numeric bracketed tokens in prose (catches pipeline debug IDs like
+       [5620e1fb87f7] that escaped marker resolution). Markdown links [x](y) and
+       footnotes [^n] are excluded.
 
     Returns:
         {
@@ -423,6 +496,7 @@ def audit_citations(paper_text: str, registry: CitationRegistry) -> dict:
             "uncited_paragraphs": int,      # paragraphs without any citation
             "placeholder_markers": list[str], # [N - topic] strings found in prose
             "language_bleed": list[str],    # non-Latin substrings in prose
+            "non_numeric_markers": list[str], # bracketed tokens that aren't [N]
             "issues": list[str],            # human-readable issue descriptions
         }
     """
@@ -531,12 +605,38 @@ def audit_citations(paper_text: str, registry: CitationRegistry) -> dict:
             + ", ".join(language_bleed[:3])
         )
 
+    # 6. Non-numeric bracketed markers — pipeline debug tokens like
+    #    [5620e1fb87f7] that escaped finalize_references(). Markdown links
+    #    [text](url) are excluded via negative lookahead on `(`. Footnotes
+    #    [^n] and already-caught [N - topic] placeholders are skipped.
+    non_numeric_markers: list[str] = []
+    _seen_nm: set[str] = set()
+    for m in re.finditer(r"\[([^\]\n]+)\](?!\()", prose_only):
+        token = m.group(1).strip()
+        if not token or token.isdigit():
+            continue
+        if token.startswith("^"):
+            continue
+        if _PLACEHOLDER_MARKER_RE.match(f"[{token}]"):
+            continue
+        if token in _seen_nm:
+            continue
+        _seen_nm.add(token)
+        non_numeric_markers.append(token)
+    if non_numeric_markers:
+        sample = ", ".join(f"[{t}]" for t in non_numeric_markers[:5])
+        issues.append(
+            f"{len(non_numeric_markers)} non-numeric bracketed marker(s) in prose "
+            f"(likely pipeline debug tokens): {sample}"
+        )
+
     passed = (
         not invalid_markers
         and not orphaned_refs
         and uncited_paragraphs == 0
         and not placeholder_markers
         and not language_bleed
+        and not non_numeric_markers
     )
 
     return {
@@ -548,6 +648,7 @@ def audit_citations(paper_text: str, registry: CitationRegistry) -> dict:
         "uncited_paragraphs": uncited_paragraphs,
         "placeholder_markers": placeholder_markers,
         "language_bleed": language_bleed,
+        "non_numeric_markers": non_numeric_markers,
         "issues": issues,
     }
 

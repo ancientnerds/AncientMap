@@ -111,6 +111,69 @@ class DecompositionHandler(BaseHandler):
             self.state.error = "No research angles had sufficient source coverage"
             return
 
+        # -------------------------------------------------------------
+        # Phase C: Inject user sub-questions as their own angles
+        # -------------------------------------------------------------
+        from pipeline.lyra import canonical_coverage
+        from pipeline.lyra.minimax_shared import minimax_chat_anthropic
+
+        async def _cov_llm(sys_prompt, usr, max_tok, s, temp):
+            return await asyncio.to_thread(
+                minimax_chat_anthropic, sys_prompt, usr, max_tok, s, temperature=temp
+            )
+
+        subquestions = canonical_coverage.extract_user_subquestions(self.state.question)
+        for sq in subquestions:
+            sq_key = sq.lower()[:60]
+            if any(sq_key in a.topic.lower() or sq_key in a.description.lower() for a in validated):
+                continue  # already covered
+            validated.append(
+                ResearchAngle(
+                    id=uuid.uuid4().hex[:8],
+                    topic=f"User sub-question: {sq[:80]}",
+                    description=sq,
+                    search_queries=[sq][: self.state.config.queries_per_angle],
+                    specialist_domains=[],
+                )
+            )
+            self.state.log(
+                "decomposition",
+                f"Injected user-subquestion angle: {sq[:60]}",
+            )
+
+        # -------------------------------------------------------------
+        # Phase D: LLM-driven canonical coverage gap check
+        # -------------------------------------------------------------
+        try:
+            gaps = await canonical_coverage.find_coverage_gaps(
+                question=self.state.question,
+                proposed_angle_topics=[a.topic for a in validated],
+                llm_call=_cov_llm,
+                settings=settings,
+            )
+            self.state.llm_call_count += 2  # enumerate + gap check
+        except Exception as exc:
+            logger.warning("canonical coverage check failed: %s", exc)
+            gaps = []
+
+        for subtopic in gaps:
+            validated.append(
+                ResearchAngle(
+                    id=uuid.uuid4().hex[:8],
+                    topic=f"Canonical: {subtopic}",
+                    description=(
+                        f"Required canonical coverage of '{subtopic}'. "
+                        "Investigate scholarly and alternative perspectives on this subtopic."
+                    ),
+                    search_queries=[subtopic][: self.state.config.queries_per_angle],
+                    specialist_domains=[],
+                )
+            )
+            self.state.log(
+                "decomposition",
+                f"Injected canonical-coverage angle: {subtopic}",
+            )
+
         self.state.angles = validated
         self.state.phase = ResearchPhase.EXPLORING
 

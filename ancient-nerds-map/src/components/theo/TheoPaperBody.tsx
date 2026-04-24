@@ -11,6 +11,7 @@ import { forwardRef } from 'react'
 import ReactMarkdown, { type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import type { PaperSegment } from './galleryParser'
+import { TheoCarousel } from './TheoCarousel'
 
 interface TheoPaperBodyProps {
   segments: PaperSegment[]
@@ -50,6 +51,15 @@ const TheoPaperBody = forwardRef<HTMLDivElement, TheoPaperBodyProps>(function Th
                 </figcaption>
               )}
             </figure>
+          )
+        }
+        if (seg.kind === 'carousel') {
+          return (
+            <TheoCarousel
+              key={`c-${idx}`}
+              galleryId={seg.galleryId}
+              figures={seg.figures}
+            />
           )
         }
         if (seg.kind === 'mosaic') {

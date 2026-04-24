@@ -13,7 +13,6 @@ from pipeline.lyra.research_checklist import (
 )
 from pipeline.lyra.theo_citations import CitationRegistry
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------

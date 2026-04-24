@@ -317,6 +317,14 @@ STRICT_VLM_PROMPT = (
     "portrait passed off as an illustration of a 20th-century psychologist). "
     "A generic period artifact is NOT an acceptable illustration for a claim about a "
     "specific named entity, theory, or event.\n\n"
+    "EXTRA REJECTION RULES:\n"
+    "- If the image is a generic diagram (Jungian archetypes, alchemical symbols, "
+    "architectural schematics), it must depict the EXACT subject named in the text. "
+    "Text about the 'wise old man' archetype + a 'wounded healer' archetype diagram = REJECT.\n"
+    "- Reject decorative modern reproductions when an original artifact would be "
+    "available for this subject. Pub signs, tourist replicas, fan art, and modern "
+    "illustrations: REJECT unless the text is specifically about modern depictions. "
+    "Period artifacts, museum-quality diagrams, and archaeological context photos: ACCEPT.\n\n"
     'Respond with STRICTLY valid JSON: {"primary_entity_in_claim": "...", '
     '"what_image_actually_shows": "...", "match": "exact|related|off_topic", '
     '"verdict": "meaningful|weak|misleading", "reason": "one sentence"}. '

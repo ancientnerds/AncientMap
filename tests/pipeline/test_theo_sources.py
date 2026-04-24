@@ -5,6 +5,7 @@ All tests exercise pure logic — no real HTTP calls are made.
 
 import pytest
 
+from pipeline.lyra.config import LyraSettings
 from pipeline.lyra.theo_sources import (
     BLOCKED_DOMAINS,
     SOURCE_GROUPS,
@@ -13,8 +14,6 @@ from pipeline.lyra.theo_sources import (
     _is_blocked,
     _reconstruct_abstract,
 )
-from pipeline.lyra.config import LyraSettings
-
 
 # ---------------------------------------------------------------------------
 # Blocked domain tests

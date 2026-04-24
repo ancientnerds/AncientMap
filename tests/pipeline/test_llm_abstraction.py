@@ -4,8 +4,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from pipeline.lyra.config import (
-    LyraSettings,
     LyraAPIError,
+    LyraSettings,
     NormalizedResponse,
     TextBlock,
     _call_anthropic_api,
@@ -36,7 +36,7 @@ class TestClientSelection:
 
         with patch("pipeline.lyra.config._get_anthropic_client") as mock:
             mock.return_value = MagicMock()
-            client = _get_client(anthropic_settings)
+            _get_client(anthropic_settings)
             mock.assert_called_once_with("sk-ant-test")
 
     def test_minimax_backend_uses_minimax_anthropic_client(self, minimax_settings):
@@ -44,7 +44,7 @@ class TestClientSelection:
 
         with patch("pipeline.lyra.config._get_minimax_anthropic_client") as mock:
             mock.return_value = MagicMock()
-            client = _get_client(minimax_settings)
+            _get_client(minimax_settings)
             mock.assert_called_once_with(minimax_settings)
 
 

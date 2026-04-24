@@ -56,6 +56,9 @@ class _EmbedContext:
     `placed_source_urls` prevents the same source image from landing twice in
     one paper (fixes the Dendera-zodiac duplication bug). A URL is claimed at
     selection time; released only if download/gate fail.
+
+    `placed_subjects` dedupes by subject fingerprint so three Gilgamesh Flood
+    Tablet photos from three different museums don't all stack on one paragraph.
     """
 
     paper_id: str
@@ -67,6 +70,21 @@ class _EmbedContext:
     client: Any  # MiniMax VLM client
     embedded: list[dict] = field(default_factory=list)
     placed_source_urls: set[str] = field(default_factory=set)
+    placed_subjects: set[str] = field(default_factory=set)
+
+
+def _subject_fingerprint(cand) -> str:
+    """Deterministic fingerprint for an image subject.
+
+    Normalized title prefix — case-insensitive, punctuation stripped, filler
+    words removed, first 40 chars. Two images of the same artifact from
+    different museum vendors fingerprint identically.
+    """
+    title = (getattr(cand, "title", "") or "").lower()
+    title = re_module.sub(r"[^a-z0-9 ]+", " ", title)
+    title = re_module.sub(r"\b(the|of|or|a|an|and)\b", " ", title)
+    title = re_module.sub(r"\s+", " ", title).strip()
+    return title[:40]
 
 
 def _pool_candidates_for_source_ids(
@@ -463,14 +481,14 @@ async def _process_one_opportunity(
     # Only forbidden-elements and poor-quality are safety rejects.
     max_per_opp = getattr(settings, "probative_images_max_per_opportunity", 3)
     tagged: list[tuple] = []  # (cand, verified_bool)
-    seen_sources: set[str] = set()
+    seen_subjects: set[str] = set()
     seen_urls: set[str] = set()
 
     for cand in cands:
         if len(tagged) >= max_per_opp:
             break
         cand_url = getattr(cand, "url", "") or ""
-        cand_source = getattr(cand, "source", "") or ""
+        cand_subject = _subject_fingerprint(cand)
         if cand_url in seen_urls:
             continue
         # Cross-opportunity dedup: same source image must not land twice in
@@ -478,8 +496,13 @@ async def _process_one_opportunity(
         # tasks racing on the same candidate don't both embed it.
         if cand_url and cand_url in ctx.placed_source_urls:
             continue
-        # Diversify: skip if we already embedded from this source (only after first)
-        if cand_source and cand_source in seen_sources and len(tagged) > 0:
+        # Cross-opportunity subject dedup: same artifact from a different
+        # museum must not appear in two different sections.
+        if cand_subject and cand_subject in ctx.placed_subjects:
+            continue
+        # Per-opportunity subject dedup: three Gilgamesh Flood Tablet photos
+        # from three museums collapse to one image for this paragraph.
+        if cand_subject and cand_subject in seen_subjects:
             continue
         if cand_url:
             ctx.placed_source_urls.add(cand_url)
@@ -503,8 +526,9 @@ async def _process_one_opportunity(
         verified = verdict_is_accept(verdict)
         tagged.append((cand, verified))
         seen_urls.add(cand_url)
-        if cand_source:
-            seen_sources.add(cand_source)
+        if cand_subject:
+            seen_subjects.add(cand_subject)
+            ctx.placed_subjects.add(cand_subject)
         if probe_path.exists():
             probe_path.unlink(missing_ok=True)
 
@@ -518,6 +542,16 @@ async def _process_one_opportunity(
     keyword_slug = re_module.sub(r"[^a-zA-Z0-9]", "_", keyword[:30])
     embedded: list[dict] = []
 
+    # Gallery marker: when 2+ images land on the same paragraph, prefix each
+    # alt text with `gallery:<hash>|verified:<y|n>|` so the frontend groups
+    # them into a carousel instead of a stacked mosaic.
+    is_gallery = len(tagged) > 1
+    para_hash = (
+        hashlib.sha1((para_text[:100] or str(para_idx)).encode("utf-8")).hexdigest()[:8]
+        if is_gallery
+        else ""
+    )
+
     for i, (accepted_cand, verified) in enumerate(tagged):
         suffix = "" if i == 0 else f"_{i}"
         final_path = ctx.paper_dir / f"p{para_idx}_{keyword_slug}{suffix}.jpg"
@@ -526,6 +560,14 @@ async def _process_one_opportunity(
 
         web_path = f"/data/research-images/{ctx.paper_id}/p{para_idx}_{keyword_slug}{suffix}.jpg"
         md = image_markdown(accepted_cand, web_path, rationale)
+        if is_gallery:
+            prefix = f"gallery:{para_hash}|verified:{'yes' if verified else 'no'}|"
+            md = re_module.sub(
+                r"!\[([^\]]*)\]",
+                lambda m: f"![{prefix}{m.group(1)}]",
+                md,
+                count=1,
+            )
 
         new_text = insert_image_after_paragraph(ctx.paper_text, section_name, para_text[:60], md)
         if new_text == ctx.paper_text:
