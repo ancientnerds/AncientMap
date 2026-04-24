@@ -172,6 +172,13 @@ class JudgeHandler(BaseHandler):
                 badge = badge_name
                 break
 
+        # Hallucination-gate metrics (populated by PaperHandler._run_hallucination_gate)
+        hall_metrics = getattr(
+            self.state,
+            "hallucination_metrics",
+            {"initial": 0, "final": 0, "retries": 0},
+        )
+
         # Real passed gate — evidence-based, not hardcoded. The paper ships in
         # either case (the caller decides), but `passed` now truthfully signals
         # citation integrity so downstream consumers (UI, auto-publish flows)
@@ -179,14 +186,21 @@ class JudgeHandler(BaseHandler):
         #
         # Gate requires: audit passed AND citation coverage ≥ 9/15 (≤ 2 uncited
         # paragraphs) AND zero reference-integrity issues AND zero placeholder
-        # markers AND zero language-bleed segments.
+        # markers AND zero language-bleed segments AND zero unrepaired
+        # hallucinated specifics.
         passed = bool(
             audit_result.get("passed", False)
             and scores["citation_coverage"] >= 9
             and scores["reference_integrity"] == 10
             and not audit_result.get("placeholder_markers")
             and not audit_result.get("language_bleed")
+            and hall_metrics.get("final", 0) == 0
         )
+
+        # Badge polish (H1): if the paper failed the gate, a Gold badge is
+        # user-confusing. Downgrade to Unverified regardless of raw score.
+        if not passed:
+            badge = "Unverified"
 
         result = {
             "score": total,
@@ -208,6 +222,9 @@ class JudgeHandler(BaseHandler):
                 "uncited_paragraphs": uncited,
                 "placeholder_markers": len(audit_result.get("placeholder_markers", [])),
                 "language_bleed": len(audit_result.get("language_bleed", [])),
+                "hallucination_initial": hall_metrics.get("initial", 0),
+                "hallucination_final": hall_metrics.get("final", 0),
+                "hallucination_retries": hall_metrics.get("retries", 0),
             },
         }
 
