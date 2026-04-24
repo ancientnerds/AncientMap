@@ -32,6 +32,7 @@ DO NOT:
 ANTI-HALLUCINATION:
 - Write ONLY from the provided cross-angle connections and angle summaries
 - If connections are sparse, write fewer paragraphs
+- Do NOT invent any of these without a matching claim in the pack: person names, book titles, specific years, specific measurements, institution names, or quoted phrases. If the pack doesn't have it, don't write it. The hallucination gate will delete sentences that rely on ungrounded specifics after your draft is returned.
 
 RULES:
 1. 2-4 paragraphs
