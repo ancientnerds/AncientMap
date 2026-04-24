@@ -23,7 +23,15 @@ from typing import Literal
 logger = logging.getLogger(__name__)
 
 _PROMPTS = Path(__file__).resolve().parent / "prompts"
-_FILLER = frozenset({"a", "an", "the", "and", "or", "of", "on", "in", "to", "for"})
+# Connector words inside a title fragment — splitting on these turns
+# "Luminous Beings in Ancient Mythology" into the matchable phrases
+# ["Luminous Beings", "Ancient Mythology"] rather than one fused string.
+_CONNECTORS = frozenset(
+    {"and", "or", "in", "of", "for", "with", "vs", "versus", "between", "from", "to"}
+)
+# Pure filler — words that have zero semantic weight when counting content
+# words in a phrase.
+_FILLER = frozenset({"a", "an", "the"})
 
 
 @dataclass
@@ -44,18 +52,51 @@ class CoherenceResult:
 
 
 def extract_title_terms(title: str) -> list[str]:
-    """Split title on `:` / `,` / `;`; keep phrases of >=2 non-filler words."""
+    """Extract every phrase from the title that the body must define.
+
+    Strategy:
+      1. Split the title on hard separators (`:`, `,`, `;`).
+      2. Within each fragment, split on connector words (`and`, `or`, `in`,
+         `of`, ...) so a compound like "Luminous Beings in Ancient Mythology"
+         contributes both "Luminous Beings" and "Ancient Mythology", not a
+         joined "Luminous Beings Ancient Mythology" that never appears
+         verbatim in prose.
+      3. Drop pure filler (`a`, `an`, `the`) from each phrase.
+      4. Keep phrases of >= 2 content words; deduplicate while preserving
+         first-occurrence order.
+    """
     if not title:
         return []
-    phrases = re.split(r"[:,;]", title)
+
+    fragments = re.split(r"[:,;]", title)
     out: list[str] = []
-    for p in phrases:
-        p = p.strip()
-        if not p:
+    seen: set[str] = set()
+    for frag in fragments:
+        frag = frag.strip()
+        if not frag:
             continue
-        words = [w for w in p.split() if w.lower() not in _FILLER]
-        if len(words) >= 2:
-            out.append(" ".join(words))
+
+        # Split on connectors (case-insensitive whole-word match)
+        connector_re = re.compile(
+            r"\s+(?:" + "|".join(re.escape(c) for c in _CONNECTORS) + r")\s+",
+            re.IGNORECASE,
+        )
+        sub_phrases = connector_re.split(frag)
+
+        for phrase in sub_phrases:
+            words = [w for w in phrase.split() if w.lower() not in _FILLER]
+            # Strip any leading/trailing connectors that survived (e.g.
+            # "and Human Genius" after a comma split → "Human Genius").
+            while words and words[0].lower() in _CONNECTORS:
+                words.pop(0)
+            while words and words[-1].lower() in _CONNECTORS:
+                words.pop()
+            if len(words) >= 2:
+                joined = " ".join(words)
+                lower = joined.lower()
+                if lower not in seen:
+                    seen.add(lower)
+                    out.append(joined)
     return out
 
 
