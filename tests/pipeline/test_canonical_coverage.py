@@ -6,7 +6,6 @@ from pipeline.lyra.canonical_coverage import (
     find_coverage_gaps,
 )
 
-
 # ---------------------------------------------------------------------------
 # extract_user_subquestions
 # ---------------------------------------------------------------------------

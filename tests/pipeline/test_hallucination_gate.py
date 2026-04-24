@@ -10,7 +10,6 @@ from pipeline.lyra.hallucination_gate import (
 )
 from pipeline.lyra.theo_citations import CitationRegistry
 
-
 # ---------------------------------------------------------------------------
 # Specific dataclass
 # ---------------------------------------------------------------------------

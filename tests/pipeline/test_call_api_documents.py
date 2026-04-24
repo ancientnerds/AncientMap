@@ -3,7 +3,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from pipeline.lyra.config import _call_anthropic_api, LyraSettings
+from pipeline.lyra.config import LyraSettings, _call_anthropic_api
 
 
 @pytest.fixture
