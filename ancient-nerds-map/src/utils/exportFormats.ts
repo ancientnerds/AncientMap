@@ -19,7 +19,10 @@ export interface ParsedSite {
   card_description?: string
   confidence_score?: number
   description_citations?: { n: number; url: string; title: string; domain: string }[]
-  reference_links?: { url: string; title: string; domain: string; link_type: string; quality: string }[]
+  reference_links?: { url: string; title?: string; domain?: string; link_type?: string; quality?: string }[]
+  hero_url?: string
+  hero_attribution_url?: string
+  existing_id?: string  // explicit site id from a re-uploaded export (updates the matching row)
   _status?: 'insert' | 'update' | 'error'
   _error?: string
   _matchedId?: string  // ID of existing site if this is an update
@@ -44,6 +47,9 @@ interface AuditSite {
   cf?: number      // confidence_score
   eb?: string      // edited_by
   ea?: string      // edited_at
+  hu?: string      // hero_url
+  ha?: string      // hero_attribution_url
+  rl?: { url: string; title?: string | null; domain?: string; link_type?: string; quality?: string }[]  // reference_links
 }
 
 function downloadBlob(content: string, filename: string, mime: string) {
@@ -71,12 +77,14 @@ function csvEscape(value: string | number | undefined | null): string {
 
 export function exportCSV(sites: AuditSite[]) {
   const headers = [
-    'Name', 'Latitude', 'Longitude', 'Source', 'Type',
-    'Period Start', 'Period Name', 'Country', 'Description',
-    'Source URL', 'Thumbnail URL', 'Card Description', 'Edited By', 'Last Edited',
+    'id', 'name', 'latitude', 'longitude', 'source_id', 'site_type',
+    'period_start', 'period_name', 'country', 'description',
+    'source_url', 'thumbnail_url', 'card_description', 'edited_by', 'edited_at',
+    'hero_url', 'hero_attribution_url', 'reference_links',
   ]
 
   const rows = sites.map(s => [
+    csvEscape(s.id),
     csvEscape(s.n),
     csvEscape(s.la),
     csvEscape(s.lo),
@@ -91,6 +99,9 @@ export function exportCSV(sites: AuditSite[]) {
     csvEscape(s.cd),
     csvEscape(s.eb),
     csvEscape(s.ea),
+    csvEscape(s.hu),
+    csvEscape(s.ha),
+    csvEscape(s.rl && s.rl.length ? JSON.stringify(s.rl) : ''),
   ].join(','))
 
   const csv = '\uFEFF' + headers.join(',') + '\n' + rows.join('\n')
@@ -114,6 +125,9 @@ export function exportJSON(sites: AuditSite[]) {
     card_description: s.cd ?? null,
     edited_by: s.eb ?? null,
     edited_at: s.ea ?? null,
+    hero_url: s.hu ?? null,
+    hero_attribution_url: s.ha ?? null,
+    reference_links: s.rl ?? [],
   }))
 
   const output = {
@@ -149,6 +163,9 @@ export function exportGeoJSON(sites: AuditSite[]) {
         card_description: s.cd ?? null,
         edited_by: s.eb ?? null,
         edited_at: s.ea ?? null,
+        hero_url: s.hu ?? null,
+        hero_attribution_url: s.ha ?? null,
+        reference_links: s.rl ?? [],
       },
     }))
 
@@ -172,6 +189,7 @@ export function exportGeoJSON(sites: AuditSite[]) {
 
 // Column name mapping: various header names → ParsedSite field
 const HEADER_MAP: Record<string, keyof ParsedSite> = {
+  id: 'existing_id', existing_id: 'existing_id',
   name: 'name', title: 'name', site_name: 'name', n: 'name',
   latitude: 'lat', lat: 'lat', la: 'lat',
   longitude: 'lon', lng: 'lon', lon: 'lon', lo: 'lon',
@@ -184,6 +202,9 @@ const HEADER_MAP: Record<string, keyof ParsedSite> = {
   thumbnail_url: 'thumbnail_url', image: 'thumbnail_url', i: 'thumbnail_url',
   card_description: 'card_description', cd: 'card_description',
   confidence_score: 'confidence_score', cf: 'confidence_score',
+  hero_url: 'hero_url', hero_image_url: 'hero_url', hu: 'hero_url',
+  hero_attribution_url: 'hero_attribution_url', attribution_url: 'hero_attribution_url', ha: 'hero_attribution_url',
+  reference_links: 'reference_links', rl: 'reference_links',
 }
 
 function mapRow(raw: Record<string, string | number | null | undefined>): ParsedSite | null {
@@ -201,6 +222,16 @@ function mapRow(raw: Record<string, string | number | null | undefined>): Parsed
     } else if (field === 'confidence_score') {
       const n = typeof value === 'number' ? value : parseFloat(String(value))
       if (!isNaN(n)) site.confidence_score = n
+    } else if (field === 'reference_links') {
+      // Accept arrays (from JSON/GeoJSON) or JSON-encoded strings (from CSV).
+      if (Array.isArray(value)) {
+        site.reference_links = value as ParsedSite['reference_links']
+      } else if (typeof value === 'string' && value.trim().startsWith('[')) {
+        try {
+          const parsed = JSON.parse(value)
+          if (Array.isArray(parsed)) site.reference_links = parsed
+        } catch { /* invalid JSON — drop */ }
+      }
     } else {
       (site as Record<string, unknown>)[field] = String(value).trim()
     }

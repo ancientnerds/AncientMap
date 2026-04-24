@@ -1482,6 +1482,8 @@ class ParsedSitePayload(BaseModel):
     confidence_score: float | None = Field(default=None, ge=0.0, le=1.0)
     description_citations: list[dict] | None = None
     reference_links: list[dict] | None = None
+    hero_url: str | None = Field(default=None, max_length=2000)
+    hero_attribution_url: str | None = Field(default=None, max_length=2000)
     existing_id: str | None = Field(default=None, max_length=100)  # If updating an existing site
 
 
@@ -1764,6 +1766,58 @@ async def batch_upload_sites(
         except Exception as e:
             logger.warning("Batch ref link insert failed: %s", e)
             reflinks_errors = len(reflink_params)
+
+    # Hero image: flip any prior hero off, upsert the uploaded one with is_hero=true.
+    # We just record the URL + attribution here — no download/resize; the existing
+    # POST /api/wiki-images/{id}/set-hero endpoint is the way to materialise the
+    # image locally if needed.
+    hero_params = []
+    hero_site_ids: set[str] = set()
+    for site in sites:
+        if not site.hero_url:
+            continue
+        sid = site.existing_id or next(
+            (p["id"] for p in insert_params if p["name"] == site.name), None
+        )
+        if not sid:
+            continue
+        hero_site_ids.add(sid)
+        url_hash = hashlib.md5(site.hero_url.encode(), usedforsecurity=False).hexdigest()[:16]
+        hero_params.append(
+            {
+                "sid": sid,
+                "filename": f"hero-{url_hash}",
+                "original_url": site.hero_url,
+                "commons_url": site.hero_attribution_url,
+            }
+        )
+    if hero_site_ids:
+        db.execute(
+            text("""
+                UPDATE wiki_images SET is_hero = false
+                WHERE site_id::text = ANY(:ids) AND is_hero = true
+            """),
+            {"ids": list(hero_site_ids)},
+        )
+    if hero_params:
+        try:
+            db.execute(
+                text("""
+                    INSERT INTO wiki_images
+                        (site_id, filename, original_url, commons_page_url,
+                         is_hero, source_type)
+                    VALUES
+                        (CAST(:sid AS uuid), :filename, :original_url, :commons_url,
+                         true, 'user_upload')
+                    ON CONFLICT (site_id, original_url) DO UPDATE SET
+                        is_hero = true,
+                        commons_page_url = EXCLUDED.commons_page_url,
+                        filename = EXCLUDED.filename
+                """),
+                hero_params,
+            )
+        except Exception as e:
+            logger.warning("Batch hero upsert failed: %s", e)
 
     inserted = len(insert_params)
     updated = len(update_params)
