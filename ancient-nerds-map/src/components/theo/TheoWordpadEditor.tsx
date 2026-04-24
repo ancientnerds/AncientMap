@@ -35,6 +35,18 @@ function isReferencesStart(block: Block): boolean {
   return block.kind === 'heading' && block.content.trim().toLowerCase().startsWith('## references')
 }
 
+/**
+ * Blocks that carry no meaningful content for a reviewer to decide on:
+ * horizontal rules and paragraphs/headings/lists whose text is just whitespace
+ * (or the literal `---` marker that sometimes slips through the splitter).
+ */
+function isEmptyBlock(block: Block): boolean {
+  if (block.kind === 'hr') return true
+  if (block.kind === 'figure' || block.kind === 'mosaic' || block.kind === 'hero') return false
+  const stripped = block.content.replace(/[-\s]/g, '')
+  return stripped.length === 0
+}
+
 function splitReferences(blocks: Block[]): { reviewable: Block[]; references: Block[] } {
   const refsStart = blocks.findIndex(isReferencesStart)
   if (refsStart === -1) return { reviewable: blocks, references: [] }
@@ -109,9 +121,15 @@ export default function TheoWordpadEditor({
     }
   }, [requestId])
 
-  const { reviewable, references } = useMemo(
+  const { reviewable: allReviewable, references } = useMemo(
     () => splitReferences(response?.blocks ?? []),
     [response],
+  )
+
+  // Hide empty/hr blocks from the UI — they don't need human review.
+  const reviewable = useMemo(
+    () => allReviewable.filter(b => !isEmptyBlock(b)),
+    [allReviewable],
   )
 
   const lightbox = useMemo(() => computeLightboxSources(response?.blocks ?? []), [response])
@@ -119,6 +137,46 @@ export default function TheoWordpadEditor({
   const reviewableCount = reviewable.length
   const decidedCount = reviewable.filter(b => b.state !== 'pending').length
   const allDecided = reviewableCount > 0 && decidedCount === reviewableCount
+
+  // Silently approve any empty/hr blocks the server still considers "pending"
+  // so the publish gate doesn't block on invisible content. Runs once per load,
+  // serialized to avoid version conflicts.
+  const autoApprovedRef = useRef(false)
+  useEffect(() => {
+    if (!response || autoApprovedRef.current) return
+    const pending = allReviewable.filter(b => isEmptyBlock(b) && b.state === 'pending')
+    if (pending.length === 0) {
+      autoApprovedRef.current = true
+      return
+    }
+    autoApprovedRef.current = true
+    ;(async () => {
+      const token = localStorage.getItem('an_auth_token')
+      let version = response.version
+      for (const block of pending) {
+        try {
+          const resp = await fetch(`/api/theo/research/${requestId}/section`, {
+            method: 'PATCH',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              block_id: block.block_id,
+              state: 'approved',
+              expected_version: version,
+            }),
+          })
+          if (!resp.ok) break
+          const data: BlockListResponse = await resp.json()
+          version = data.version
+          setResponse(data)
+        } catch {
+          break // network hiccup; reviewer can still manually approve if needed
+        }
+      }
+    })()
+  }, [response, allReviewable, requestId])
 
   // Sync once on load so the parent overlay can re-derive reading time etc.
   useEffect(() => {

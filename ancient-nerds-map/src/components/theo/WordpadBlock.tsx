@@ -20,6 +20,7 @@ import { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import { useEditor, EditorContent, type Editor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Link from '@tiptap/extension-link'
+import Image from '@tiptap/extension-image'
 import ReactMarkdown, { type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { markdownToHtml, htmlToMarkdown, isDirty } from './wordpadMarkdown'
@@ -181,6 +182,11 @@ function TextBlock({
           openOnClick: false,
           autolink: false,
           HTMLAttributes: { target: '_blank', rel: 'noopener noreferrer' },
+        }),
+        Image.configure({
+          inline: false,
+          allowBase64: false,
+          HTMLAttributes: { loading: 'lazy', class: 'theo-wordpad-inline-img' },
         }),
       ],
       content: initialHtml,

@@ -3310,3 +3310,18 @@
 .theo-wordpad-block-content .theo-editor-content .ProseMirror:focus-visible {
   outline: none;
 }
+
+/* Inline images inside an editable paragraph — show them at reasonable size
+   so the reviewer can decide on the paragraph with full visual context. */
+.theo-wordpad-inline-img,
+.theo-wordpad-block-content .theo-editor-content .ProseMirror img {
+  max-width: 70%;
+  height: auto;
+  display: block;
+  margin: 12px auto;
+  border-radius: 4px;
+  border: 1px solid var(--theo-border, rgba(212, 145, 42, 0.18));
+}
+.theo-wordpad-block-content .theo-editor-content .ProseMirror img.ProseMirror-selectednode {
+  outline: 2px solid var(--theo-amber, #d4912a);
+}
