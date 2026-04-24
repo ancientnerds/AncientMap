@@ -179,15 +179,25 @@ class JudgeHandler(BaseHandler):
             {"initial": 0, "final": 0, "retries": 0},
         )
 
+        # Coherence-pass result (populated by PaperHandler Step 8b)
+        coherence = getattr(self.state, "coherence_result", None)
+        if coherence is not None:
+            severe_contradictions = sum(
+                1 for c in coherence.contradictions if c.severity in ("high", "medium")
+            )
+            undefined_title_terms = [
+                t
+                for t, defined in coherence.title_terms_defined_in_body.items()
+                if not defined
+            ]
+        else:
+            severe_contradictions = 0
+            undefined_title_terms = []
+
         # Real passed gate — evidence-based, not hardcoded. The paper ships in
         # either case (the caller decides), but `passed` now truthfully signals
         # citation integrity so downstream consumers (UI, auto-publish flows)
         # can distinguish clean from bug-riddled output.
-        #
-        # Gate requires: audit passed AND citation coverage ≥ 9/15 (≤ 2 uncited
-        # paragraphs) AND zero reference-integrity issues AND zero placeholder
-        # markers AND zero language-bleed segments AND zero unrepaired
-        # hallucinated specifics.
         passed = bool(
             audit_result.get("passed", False)
             and scores["citation_coverage"] >= 9
@@ -195,6 +205,8 @@ class JudgeHandler(BaseHandler):
             and not audit_result.get("placeholder_markers")
             and not audit_result.get("language_bleed")
             and hall_metrics.get("final", 0) == 0
+            and severe_contradictions == 0
+            and not undefined_title_terms
         )
 
         # Badge polish (H1): if the paper failed the gate, a Gold badge is
@@ -225,6 +237,8 @@ class JudgeHandler(BaseHandler):
                 "hallucination_initial": hall_metrics.get("initial", 0),
                 "hallucination_final": hall_metrics.get("final", 0),
                 "hallucination_retries": hall_metrics.get("retries", 0),
+                "coherence_contradictions": severe_contradictions,
+                "coherence_undefined_title_terms": undefined_title_terms,
             },
         }
 

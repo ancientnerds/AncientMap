@@ -271,6 +271,31 @@ class PaperHandler(BaseHandler):
         )
 
         # ---------------------------------------------------------------
+        # Step 8b: Coherence pass — detect cross-section contradictions +
+        # verify every title-term phrase appears in the body.
+        # ---------------------------------------------------------------
+        # Extract title early so coherence_pass can use it.
+        _title_match = re.search(r"^#\s+(.+)$", self.state.paper_text, re.MULTILINE)
+        _coherence_title = (
+            _title_match.group(1).strip() if _title_match else self.state.question
+        )
+
+        from pipeline.lyra import coherence_pass
+
+        async def _coh_llm(sys_prompt, usr, max_tok, s, temp):
+            return await asyncio.to_thread(
+                minimax_chat_anthropic, sys_prompt, usr, max_tok, s, temperature=temp
+            )
+
+        self.state.coherence_result = await coherence_pass.run_coherence_pass(
+            title=_coherence_title,
+            body=self.state.paper_text,
+            llm_call=_coh_llm,
+            settings=settings,
+        )
+        self.state.llm_call_count += 1
+
+        # ---------------------------------------------------------------
         # Step 9: Append references list
         # ---------------------------------------------------------------
         refs_md = self.state.registry.format_references_list()
