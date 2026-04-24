@@ -786,13 +786,19 @@ class PaperHandler(BaseHandler):
             settings,
         )
 
+        # Repair if more than 5% of factual paragraphs are uncited. The hard
+        # gate in the judge requires <= 2 uncited paragraphs total — well
+        # under 5% on a typical 100-paragraph section — so a loose threshold
+        # leaves the paper to fail audit. Trigger early; the writer gets one
+        # chance to tighten before we accept whatever comes out.
         uncited_ratio = self._uncited_ratio(prose)
-        if uncited_ratio > 0.20:
+        if uncited_ratio > 0.05:
             repair_user_msg = (
                 user_msg
                 + f"\n\nYour previous draft had {uncited_ratio:.0%} uncited factual paragraphs. "
                 "Rewrite so every factual paragraph carries an [N] marker from the claim pack. "
-                "Delete any sentence you cannot cite."
+                "Delete any sentence you cannot cite. Connective prose without facts is allowed "
+                "only if it is shorter than one sentence — otherwise carry a marker."
             )
             repair_raw = await self._llm_call(
                 section_prompt,

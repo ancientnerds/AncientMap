@@ -179,17 +179,24 @@ class JudgeHandler(BaseHandler):
             {"initial": 0, "final": 0, "retries": 0},
         )
 
-        # Coherence-pass result (populated by PaperHandler Step 8b)
+        # Coherence-pass result (populated by PaperHandler Step 8b).
+        # The gate fails ONLY on `high` severity — outright opposite-binary
+        # contradictions (e.g. "exists" vs "does not exist" on the same
+        # subject). `medium` flags are surfaced for editorial review but
+        # don't block the paper, since the writer often presents nuance
+        # across sections that the LLM heuristically labels as conflict.
         coherence = getattr(self.state, "coherence_result", None)
         if coherence is not None:
-            severe_contradictions = sum(
-                1 for c in coherence.contradictions if c.severity in ("high", "medium")
+            high_contradictions = sum(1 for c in coherence.contradictions if c.severity == "high")
+            medium_contradictions = sum(
+                1 for c in coherence.contradictions if c.severity == "medium"
             )
             undefined_title_terms = [
                 t for t, defined in coherence.title_terms_defined_in_body.items() if not defined
             ]
         else:
-            severe_contradictions = 0
+            high_contradictions = 0
+            medium_contradictions = 0
             undefined_title_terms = []
 
         # Real passed gate — evidence-based, not hardcoded. The paper ships in
@@ -203,7 +210,7 @@ class JudgeHandler(BaseHandler):
             and not audit_result.get("placeholder_markers")
             and not audit_result.get("language_bleed")
             and hall_metrics.get("final", 0) == 0
-            and severe_contradictions == 0
+            and high_contradictions == 0
             and not undefined_title_terms
         )
 
@@ -235,7 +242,8 @@ class JudgeHandler(BaseHandler):
                 "hallucination_initial": hall_metrics.get("initial", 0),
                 "hallucination_final": hall_metrics.get("final", 0),
                 "hallucination_retries": hall_metrics.get("retries", 0),
-                "coherence_contradictions": severe_contradictions,
+                "coherence_contradictions": high_contradictions,
+                "coherence_medium_contradictions": medium_contradictions,
                 "coherence_undefined_title_terms": undefined_title_terms,
             },
         }
