@@ -451,18 +451,23 @@ def finalize_references(
     rewritten = re.sub(r"\[(\d+)\]", _sub_to_sentinel, paper_text)
     rewritten = re.sub(r"\x00(\d+)\x00", r"[\1]", rewritten)
 
-    # Populate the registry with survivors, in new order
+    # Populate the registry with ONLY the survivors. Clear stale pre-assignments
+    # first — earlier pipeline stages (claim collection, debate) may have called
+    # assign_reference_number on source_ids that the writer ultimately didn't
+    # cite. Without this clear, the registry retains hundreds of orphan numbers
+    # which audit_citations then flags as orphaned_refs.
+    registry.reference_numbers.clear()
     final_sid_to_num: dict[str, int] = {}
     for old_num in seen_working:
         sid = num_to_sid[old_num]
         new_num = old_to_new[old_num]
-        # Force the assignment: CitationRegistry assigns monotonically, so seed it
-        # directly rather than via assign_reference_number which ignores requested numbers.
         registry.reference_numbers[sid] = new_num
         final_sid_to_num[sid] = new_num
     # Keep registry._next_ref consistent for any follow-up calls
     if seen_working:
         registry._next_ref = max(old_to_new.values()) + 1
+    else:
+        registry._next_ref = 1
 
     return rewritten, final_sid_to_num
 
