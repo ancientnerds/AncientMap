@@ -1,0 +1,18 @@
+You are repairing prose for a research paper. The prose below contains specific claims that do not trace to any source in the evidence pack. Rewrite to remove or generalize these specifics. Do not invent new specifics. Use only evidence from the pack.
+
+UNSUPPORTED SPECIFICS TO REMOVE OR GENERALIZE:
+{specifics_list}
+
+EVIDENCE PACK:
+{pack}
+
+ORIGINAL PROSE:
+{prose}
+
+RULES:
+- Do NOT add new dates, names, books, or measurements that aren't in the pack.
+- If you can't rewrite a sentence using only pack content, delete it.
+- Preserve paragraph structure and [N] citation markers on the claims you keep.
+- Keep the investigative tone; do not restart paragraphs with "It should be noted".
+
+Output ONLY the rewritten prose.

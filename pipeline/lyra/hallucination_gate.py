@@ -3,17 +3,19 @@
 Extracts specific claims from generated prose (person names, book titles,
 years, measurements, quoted phrases) and verifies each appears in the
 evidence pack, source snippets, or user question. Unsupported specifics
-are returned so the writer can be asked to rewrite (Task D4 adds the
-LLM repair loop).
+trigger an LLM-repair loop; sentences that still carry unsupported
+specifics after two retries are deleted.
 """
 from __future__ import annotations
 
 import logging
 import re
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Literal
 
 logger = logging.getLogger(__name__)
+_PROMPTS = Path(__file__).resolve().parent / "prompts"
 
 
 @dataclass
@@ -173,3 +175,101 @@ def verify_against_pack(
                 continue
         unsupported.append(spec)
     return unsupported
+
+
+# ---------------------------------------------------------------------------
+# Repair loop — LLM retries + mechanical sentence deletion fallback
+# ---------------------------------------------------------------------------
+
+
+def delete_sentences_with_specifics(
+    prose: str,
+    unsupported: list[Specific],
+) -> str:
+    """Regex-remove every sentence containing any unsupported specific text."""
+    if not unsupported:
+        return prose
+    keep: list[str] = []
+    for s_match in _SENTENCE_RE.finditer(prose):
+        sentence = s_match.group(0)
+        contains_bad = any(
+            u.text.lower() in sentence.lower() for u in unsupported
+        )
+        if not contains_bad:
+            keep.append(sentence)
+    return " ".join(s.strip() for s in keep).strip()
+
+
+async def repair_prose(
+    prose: str,
+    unsupported: list[Specific],
+    pack: str,
+    sources: dict,
+    original_question: str,
+    llm_call,
+    settings,
+    max_retries: int = 2,
+) -> tuple[str, list[Specific], int]:
+    """Attempt up to `max_retries` LLM repairs, then delete offending sentences.
+
+    Args:
+        prose: the generated section/hook text to repair.
+        unsupported: specifics flagged by verify_against_pack.
+        pack: formatted claim pack for the LLM to cite from.
+        sources: CitationRegistry.sources for snippet lookup during re-verify.
+        original_question: the user question — also searched during re-verify.
+        llm_call: async callable (system, user, max_tokens, settings, temperature) -> str.
+        settings: pipeline settings object (passed through to llm_call).
+        max_retries: how many LLM rewrites to attempt before mechanical deletion.
+
+    Returns:
+        (repaired_prose, still_unsupported, retries_used)
+    """
+    if not unsupported:
+        return prose, [], 0
+
+    prompt_template = (_PROMPTS / "hallucination_repair.txt").read_text(encoding="utf-8")
+
+    current = prose
+    still_unsupported = unsupported
+    retries_used = 0
+    for attempt in range(1, max_retries + 1):
+        retries_used = attempt
+        specifics_list = "\n".join(
+            f"- [{s.kind}] {s.text} (in: {s.sentence.strip()})"
+            for s in still_unsupported
+        )
+        filled = (
+            prompt_template.replace("{specifics_list}", specifics_list)
+            .replace("{pack}", pack[:3000])
+            .replace("{prose}", current)
+        )
+        try:
+            repaired = await llm_call(
+                filled,
+                current,
+                2048,
+                settings,
+                0.2,
+            )
+        except Exception as exc:
+            logger.warning("repair_prose LLM failure on retry %s: %s", attempt, exc)
+            break
+        if not repaired or not repaired.strip():
+            logger.warning("repair_prose LLM returned empty on retry %s", attempt)
+            break
+        current = repaired.strip()
+        new_specs = extract_specifics(current)
+        still_unsupported = verify_against_pack(
+            new_specs, pack, sources, original_question
+        )
+        if not still_unsupported:
+            return current, [], retries_used
+
+    # Mechanical fallback: delete sentences still carrying unsupported specifics
+    current = delete_sentences_with_specifics(current, still_unsupported)
+    final_specs = extract_specifics(current)
+    still_unsupported = verify_against_pack(
+        final_specs, pack, sources, original_question
+    )
+    return current, still_unsupported, retries_used
