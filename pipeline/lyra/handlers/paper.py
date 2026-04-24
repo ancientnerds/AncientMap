@@ -763,6 +763,28 @@ class PaperHandler(BaseHandler):
             self.state.config.max_tokens_per_call,
             settings,
         )
+
+        uncited_ratio = self._uncited_ratio(prose)
+        if uncited_ratio > 0.20:
+            repair_user_msg = (
+                user_msg
+                + f"\n\nYour previous draft had {uncited_ratio:.0%} uncited factual paragraphs. "
+                "Rewrite so every factual paragraph carries an [N] marker from the claim pack. "
+                "Delete any sentence you cannot cite."
+            )
+            repair_raw = await self._llm_call(
+                section_prompt,
+                repair_user_msg,
+                self.state.config.max_tokens_per_call,
+                settings,
+            )
+            prose = repair_raw.strip()
+            logger.info(
+                "[paper] Repair pass for section '%s' -- uncited_ratio before: %.0f%%",
+                sec_title,
+                uncited_ratio * 100,
+            )
+
         return sec_title, prose
 
     async def _write_connecting_section(
@@ -1077,6 +1099,19 @@ class PaperHandler(BaseHandler):
             )
 
         return matched
+
+    @staticmethod
+    def _uncited_ratio(prose: str) -> float:
+        """Fraction of factual paragraphs (>50 chars, non-heading) without an [N] marker."""
+        paragraphs = [
+            p.strip()
+            for p in prose.split("\n\n")
+            if p.strip() and len(p.strip()) > 50 and not p.strip().startswith("#")
+        ]
+        if not paragraphs:
+            return 0.0
+        uncited = sum(1 for p in paragraphs if not re.search(r"\[\d+\]", p))
+        return uncited / len(paragraphs)
 
     @staticmethod
     def _format_claims_for_prompt(claims: list[dict]) -> str:
