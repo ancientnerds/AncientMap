@@ -1,18 +1,19 @@
 /**
- * WordpadBlock — one row of the unified WordPad frame.
+ * WordpadBlock — one block of the WordPad paper review surface.
  *
  * Text kinds (paragraph, heading, list, blockquote) get an inline TipTap
- * editor — click to edit, type, use the toolbar. On blur, if the round-tripped
- * markdown differs from the original, PATCH state='edited' and trust the
- * server response as the new source of truth.
+ * editor — click anywhere in the text to edit, type, use the toolbar. On
+ * blur, if the round-tripped markdown differs from the original, PATCH
+ * state='edited' and trust the server response as the new source of truth.
  *
  * Figures, mosaics, and hero render as static JSX (no editor — caption edits
  * deferred to V2). Tables, code, html, and hr render read-only via
  * ReactMarkdown.
  *
- * The right-margin column always holds the [✓] [✗] buttons; when a block has
- * unsaved edits OR state==='edited' it also gets the "✎ edited" chip and the
- * buttons are disabled with a tooltip.
+ * Every block has an action row at the END of the block: [Approve] [Edit]
+ * [Reject] for text kinds, [Approve] [Reject] for everything else. The Edit
+ * button just focuses the paragraph's editor — the actual typing happens
+ * inline, not in a modal.
  */
 
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react'
@@ -142,7 +143,7 @@ export default function WordpadBlock(props: WordpadBlockProps) {
 }
 
 // ---------------------------------------------------------------------------
-// Text blocks — inline TipTap editor
+// Text blocks — inline TipTap editor + footer with approve/edit/reject
 // ---------------------------------------------------------------------------
 
 function TextBlock({
@@ -212,29 +213,32 @@ function TextBlock({
   }, [effective, editor])
 
   const stateClass = dirty ? 'edited' : block.state
-  const mainClass = `theo-wordpad-block-main theo-wordpad-block--${stateClass}`
+  const blockClass = `theo-wordpad-block theo-wordpad-block--${stateClass}`
 
   const approveDisabled = saving || dirty || block.state === 'approved'
   const rejectDisabled = saving || dirty || block.state === 'rejected'
   const tooltip = dirty ? 'Click outside the paragraph to save edits first' : undefined
 
+  const focusEditor = () => editor?.chain().focus('end').run()
+
   return (
-    <div className="theo-wordpad-block">
-      <div className={mainClass}>
+    <div className={blockClass}>
+      <div className="theo-wordpad-block-content">
         <div className="theo-editor-content theo-md-body">
           {editor && <EditorContent editor={editor} />}
         </div>
         {error && <div className="theo-wordpad-block-error">{error}</div>}
       </div>
-      <MarginButtons
+      <BlockFooter
         dirty={dirty}
         state={block.state}
-        saving={saving}
         approveDisabled={approveDisabled}
         rejectDisabled={rejectDisabled}
+        saving={saving}
         tooltip={tooltip}
         onApprove={() => patch('approved')}
         onReject={() => patch('rejected')}
+        onEdit={focusEditor}
       />
     </div>
   )
@@ -258,13 +262,13 @@ function StaticBlock({
   const { patch, saving, error } = usePatch(block, version, requestId, onResponse)
   const isMedia = MEDIA_KINDS.includes(block.kind)
 
-  const mainClass = `theo-wordpad-block-main theo-wordpad-block--${block.state}`
+  const blockClass = `theo-wordpad-block theo-wordpad-block--${block.state}`
   const approveDisabled = saving || block.state === 'approved'
   const rejectDisabled = saving || block.state === 'rejected'
 
   return (
-    <div className="theo-wordpad-block">
-      <div className={mainClass}>
+    <div className={blockClass}>
+      <div className="theo-wordpad-block-content">
         {isMedia ? (
           <MediaView block={block} onImageClick={onImageClick} lightboxStart={lightboxStart} />
         ) : (
@@ -276,68 +280,88 @@ function StaticBlock({
         )}
         {error && <div className="theo-wordpad-block-error">{error}</div>}
       </div>
-      <MarginButtons
+      <BlockFooter
         dirty={false}
         state={block.state}
-        saving={saving}
         approveDisabled={approveDisabled}
         rejectDisabled={rejectDisabled}
+        saving={saving}
         onApprove={() => patch('approved')}
         onReject={() => patch('rejected')}
+        // No onEdit for static blocks — media/tables/code can't be inline-edited in V1
       />
     </div>
   )
 }
 
 // ---------------------------------------------------------------------------
-// Margin buttons — shared across text and static blocks
+// Footer row at the end of each block — approve / edit / reject
 // ---------------------------------------------------------------------------
 
-function MarginButtons({
+function BlockFooter({
   dirty,
   state,
   approveDisabled,
   rejectDisabled,
+  saving,
   tooltip,
   onApprove,
   onReject,
+  onEdit,
 }: {
   dirty: boolean
   state: Block['state']
-  saving: boolean
   approveDisabled: boolean
   rejectDisabled: boolean
+  saving: boolean
   tooltip?: string
   onApprove: () => void
   onReject: () => void
+  onEdit?: () => void
 }) {
   const showEditedChip = dirty || state === 'edited'
   return (
-    <div className="theo-wordpad-block-margin">
+    <div className="theo-wordpad-block-footer">
       {showEditedChip && (
         <span className="theo-wordpad-edited-chip" title="Edited">
           ✎ edited
         </span>
       )}
+      {state === 'approved' && !dirty && (
+        <span className="theo-wordpad-state-chip theo-wordpad-state-chip--approved">✓ approved</span>
+      )}
+      {state === 'rejected' && !dirty && (
+        <span className="theo-wordpad-state-chip theo-wordpad-state-chip--rejected">✗ rejected</span>
+      )}
+      <div className="theo-wordpad-footer-spacer" />
       <button
         type="button"
-        className={`theo-wordpad-margin-btn approve ${state === 'approved' ? 'active' : ''}`}
+        className={`theo-wordpad-footer-btn approve ${state === 'approved' ? 'active' : ''}`}
         onClick={onApprove}
         disabled={approveDisabled}
         title={tooltip ?? 'Approve'}
-        aria-label="Approve"
       >
-        ✓
+        ✓ Approve
       </button>
+      {onEdit && (
+        <button
+          type="button"
+          className="theo-wordpad-footer-btn edit"
+          onClick={onEdit}
+          disabled={saving}
+          title="Edit paragraph (focus cursor)"
+        >
+          ✎ Edit
+        </button>
+      )}
       <button
         type="button"
-        className={`theo-wordpad-margin-btn reject ${state === 'rejected' ? 'active' : ''}`}
+        className={`theo-wordpad-footer-btn reject ${state === 'rejected' ? 'active' : ''}`}
         onClick={onReject}
         disabled={rejectDisabled}
         title={tooltip ?? 'Reject'}
-        aria-label="Reject"
       >
-        ✗
+        ✗ Reject
       </button>
     </div>
   )
