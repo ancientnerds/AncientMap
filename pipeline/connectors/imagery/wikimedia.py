@@ -179,10 +179,14 @@ class WikimediaConnector(BaseConnector):
     ) -> list[ContentItem]:
         """Get photos and videos for a site.
 
-        Two-path strategy:
-        - Precise path: if WikimediaResolver finds a Commons category, search
-          within that category for accurate results.
-        - Fallback path: free-text search with country disambiguation.
+        Only returns results via the precise Commons-category path — the path
+        the resolver can build from a Wikidata/Wikipedia URL in the site's
+        ``source_url``. The previous free-text fallback searched Commons for
+        ``"{site_name} {country}"``, which pulled in unrelated photos for
+        name collisions (a site called "Dara" surfaced photos of people
+        named Dara). Per CLAUDE.md's no-silent-fallbacks rule, a site with
+        no confident identifier now returns an empty list instead of
+        guessing — the fix is to enrich the site's ``source_url``.
         """
         source_url = kwargs.get("source_url")
         entity = await _resolver.resolve(site_name, source_url)
@@ -192,36 +196,14 @@ class WikimediaConnector(BaseConnector):
                 entity.commons_category, site_name, content_type, limit
             )
 
-        # Fallback: free-text search with country disambiguation
-        query = site_name
-        if location:
-            country = self.extract_country(location)
-            if country:
-                query = f"{site_name} {country}"
-
-        if content_type == ContentType.VIDEO:
-            # Quoted search to prevent broad fuzzy matching
-            return await self.search(
-                query=f'"{query}"', content_type=ContentType.VIDEO, limit=limit
-            )
-
-        if content_type:
-            return await self.search(query=query, content_type=content_type, limit=limit)
-
-        photos = await self.search(
-            query=query,
-            content_type=ContentType.PHOTO,
-            limit=limit,
+        logger.info(
+            "Wikimedia: no confident resolution for %r (source_url=%r); "
+            "returning [] instead of free-text search to avoid "
+            "name-collision pollution",
+            site_name,
+            source_url,
         )
-
-        # Quoted search to prevent broad fuzzy matching
-        videos = await self.search(
-            query=f'"{query}"',
-            content_type=ContentType.VIDEO,
-            limit=max(limit // 4, 5),
-        )
-
-        return photos + videos
+        return []
 
     async def _search_in_category(
         self,
