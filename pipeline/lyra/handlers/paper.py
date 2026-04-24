@@ -1040,7 +1040,8 @@ class PaperHandler(BaseHandler):
             if key:
                 claim_lookup[key] = c
 
-        # Match angle findings to enriched claims
+        # Match angle findings to enriched claims. Claims without citation
+        # backing are dropped; bare-citation claims leak into uncited prose.
         matched: list[dict] = []
         for finding in angle_findings:
             claim_text = finding.get("claim", "").strip()
@@ -1049,16 +1050,31 @@ class PaperHandler(BaseHandler):
             key = claim_text.lower().strip()
             if key in claim_lookup:
                 matched.append(claim_lookup[key])
-            else:
-                # Use the finding directly as a bare claim
-                matched.append(
-                    {
-                        "claim": claim_text,
-                        "citations": "",
-                        "confidence": finding.get("confidence", "medium"),
-                        "source_ids": finding.get("source_ids", []),
-                    }
-                )
+                continue
+
+            source_ids = finding.get("source_ids") or []
+            if not source_ids:
+                continue  # no support for this finding — drop it
+
+            # Synthesize citations from source_ids via registry reference numbers
+            ref_nums: list[int] = []
+            for sid in source_ids:
+                num = self.state.registry.reference_numbers.get(sid)
+                if num is None:
+                    num = self.state.registry.assign_reference_number(sid)
+                ref_nums.append(num)
+            if not ref_nums:
+                continue  # none of the source_ids resolved — drop
+
+            citations = " ".join(f"[{n}]" for n in ref_nums)
+            matched.append(
+                {
+                    "claim": claim_text,
+                    "citations": citations,
+                    "confidence": finding.get("confidence", "medium"),
+                    "source_ids": source_ids,
+                }
+            )
 
         return matched
 
@@ -1072,15 +1088,14 @@ class PaperHandler(BaseHandler):
         """
         lines: list[str] = []
         for i, c in enumerate(claims):
-            conf = c.get("confidence", "medium")
             cites = c.get("citations", "")
+            if not cites.strip():
+                continue  # refuse to format claims without backing (C2 guard)
+            conf = c.get("confidence", "medium")
             claim_text = c.get("claim", "")
             notes = c.get("notes", "")
             # Embed [N] markers at the end of the claim text
-            if cites:
-                line = f"{i}. [{conf}] {claim_text} {cites}"
-            else:
-                line = f"{i}. [{conf}] {claim_text}"
+            line = f"{i}. [{conf}] {claim_text} {cites}"
             if notes:
                 line += f"\n   Notes: {notes}"
             lines.append(line)
