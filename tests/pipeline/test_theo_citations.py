@@ -833,3 +833,33 @@ def test_register_source_distinct_urls_remain_distinct():
     id_b = registry.register_source("https://example.com/page-b", "B", "s")
     assert id_a != id_b
     assert len(registry.sources) == 2
+
+
+# ---------------------------------------------------------------------------
+# format_references_list — invariant: one source per entry
+# ---------------------------------------------------------------------------
+
+
+def test_format_references_list_one_source_per_entry():
+    """Every non-empty reference line starts with [N] and has at most one URL.
+
+    Guards against the multi-URL-crammed-into-one-entry bug we saw in
+    production papers (e.g. Shining Ones reference [13] had three URLs).
+    """
+    registry = CitationRegistry()
+    sid1 = registry.register_source("https://a.example/page", "A", "s")
+    sid2 = registry.register_source("https://b.example/page", "B", "s")
+    sid3 = registry.register_source("https://c.example/page", "C", "s")
+    registry.assign_reference_number(sid1)
+    registry.assign_reference_number(sid2)
+    registry.assign_reference_number(sid3)
+    refs = registry.format_references_list()
+    for line in refs.splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        # Each non-empty line begins with [N]
+        assert re.match(r"^\[\d+\]", stripped), f"Unexpected line start: {line!r}"
+        # At most one URL per line
+        url_count = line.count("http://") + line.count("https://")
+        assert url_count <= 1, f"Reference line packs multiple URLs: {line!r}"
