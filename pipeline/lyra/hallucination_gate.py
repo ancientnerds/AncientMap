@@ -259,9 +259,17 @@ def extract_specifics(prose: str) -> list[Specific]:
 
 
 def _normalize_for_match(s: str) -> str:
-    """Lowercase, strip honorifics/titles, collapse whitespace."""
+    """Lowercase, strip honorifics/titles, collapse whitespace.
+
+    Extended list covers both abbreviated and spelled-out forms so
+    'Professor Smith' and 'Prof. Smith' both normalize to 'smith'.
+    """
     s = s.lower()
-    s = re.sub(r"\b(dr|prof|mr|mrs|ms|sir|dame|phd|md|frcp|glasg)\.?\b", "", s)
+    s = re.sub(
+        r"\b(dr|prof|professor|mr|mrs|ms|sir|dame|phd|md|frcp|glasg|rev|reverend)\.?\b",
+        "",
+        s,
+    )
     s = re.sub(r"\s+", " ", s).strip()
     return s
 
