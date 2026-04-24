@@ -704,10 +704,15 @@ def test_patch_flow_fills_gap_in_citation_numbering():
         # preprints.org version stripping
         (
             "https://www.preprints.org/manuscript/202108.0087/v5/download",
-            "https://preprints.org/manuscript/202108.0087/download",
+            "https://preprints.org/manuscript/202108.0087",
         ),
         (
             "https://www.preprints.org/manuscript/202108.0087/v9",
+            "https://preprints.org/manuscript/202108.0087",
+        ),
+        # preprints.org /download without a version — still stripped to manuscript page
+        (
+            "https://preprints.org/manuscript/202108.0087/download",
             "https://preprints.org/manuscript/202108.0087",
         ),
         # arxiv version stripping
@@ -775,3 +780,56 @@ def test_patch_flow_fills_gap_in_citation_numbering():
 )
 def test_normalize_url(raw, canonical):
     assert _normalize_url(raw) == canonical
+
+
+# ---------------------------------------------------------------------------
+# register_source — URL-normalized dedup
+# ---------------------------------------------------------------------------
+
+
+def test_register_source_dedupes_preprint_versions():
+    """Two URLs that differ only by preprint version stamp register as one source."""
+    registry = CitationRegistry()
+    id_v5 = registry.register_source(
+        "https://www.preprints.org/manuscript/202108.0087/v5/download",
+        "Polygonal Masonry",
+        "snippet",
+    )
+    id_v9 = registry.register_source(
+        "https://www.preprints.org/manuscript/202108.0087/v9",
+        "Polygonal Masonry (v9)",
+        "snippet",
+    )
+    assert id_v5 == id_v9
+    assert len(registry.sources) == 1
+    # First-seen URL is preserved for display
+    assert registry.sources[id_v5].url.endswith("/v5/download")
+
+
+def test_register_source_dedupes_tracking_params():
+    """Two URLs that differ only by tracking params register as one source."""
+    registry = CitationRegistry()
+    id_a = registry.register_source(
+        "https://example.com/page?utm_source=twitter", "A", "s"
+    )
+    id_b = registry.register_source(
+        "https://example.com/page?utm_source=reddit", "A", "s"
+    )
+    assert id_a == id_b
+
+
+def test_register_source_dedupes_www_prefix():
+    """www.example.com and example.com register as the same source."""
+    registry = CitationRegistry()
+    id_a = registry.register_source("https://www.example.com/x", "A", "s")
+    id_b = registry.register_source("https://example.com/x", "A", "s")
+    assert id_a == id_b
+
+
+def test_register_source_distinct_urls_remain_distinct():
+    """Genuinely different URLs still get different source_ids."""
+    registry = CitationRegistry()
+    id_a = registry.register_source("https://example.com/page-a", "A", "s")
+    id_b = registry.register_source("https://example.com/page-b", "B", "s")
+    assert id_a != id_b
+    assert len(registry.sources) == 2

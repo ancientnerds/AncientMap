@@ -71,8 +71,15 @@ class CitationRegistry:
         date: str = "",
         search_query: str = "",
     ) -> str:
-        """Register a web source. Returns source id. Deduplicates by URL hash."""
-        source_id = hashlib.sha256(url.encode()).hexdigest()[:12]
+        """Register a web source. Returns source id. Deduplicates by canonical URL hash.
+
+        The source_id is hashed from `_normalize_url(url)` so version-padded
+        preprint URLs, tracking-tagged URLs, and www-prefixed variants all
+        collapse to a single source. The first-seen original URL is preserved
+        on CitedSource.url for display.
+        """
+        canonical = _normalize_url(url)
+        source_id = hashlib.sha256(canonical.encode()).hexdigest()[:12]
 
         if source_id in self.sources:
             return source_id
@@ -82,7 +89,7 @@ class CitationRegistry:
 
         self.sources[source_id] = CitedSource(
             id=source_id,
-            url=url,
+            url=url,  # preserve original URL for display
             title=title,
             snippet=snippet,
             date=date,
@@ -348,6 +355,8 @@ def _normalize_url(url: str) -> str:
     if host == "preprints.org":
         path = re.sub(r"/v\d+(/|$)", r"\1", path)
         path = re.sub(r"/v/\d+(/|$)", r"\1", path)
+        # `/download` is the PDF endpoint; collapses to the manuscript page for dedup
+        path = re.sub(r"/download/?$", "", path)
 
     # arxiv — strip trailing vN on abs/pdf path
     elif host == "arxiv.org":
