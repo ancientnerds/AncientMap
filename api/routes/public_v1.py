@@ -224,7 +224,7 @@ def create_public_api() -> FastAPI:
         ),
         country: str | None = Query(
             None,
-            description="Filter by country name, case-insensitive (e.g. Italy, Greece, Egypt, Turkey). Use /facets to list all countries.",
+            description="Filter by country name, case-insensitive (e.g. Italy, Greece, Egypt, Türkiye). Use /facets to list all countries.",
         ),
         period: int | None = Query(
             None,

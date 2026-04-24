@@ -222,11 +222,11 @@
   {
     "id": "cappadocia",
     "skylineId": "979",
-    "name": "Cappadocia, Turkey",
+    "name": "Cappadocia, Türkiye",
     "slug": "turkey/anatolia-region/nevsehir/cappadocia-uchisar",
     "lat": 38.6431,
     "lon": 34.8289,
-    "region": "Turkey",
+    "region": "Türkiye",
     "flag": "tr",
     "timezone": "Europe/Istanbul"
   },

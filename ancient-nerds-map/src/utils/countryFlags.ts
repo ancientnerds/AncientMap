@@ -58,7 +58,8 @@ export const COUNTRY_CODES: Record<string, string> = {
   'Jordan': 'JO',
   'Israel': 'IL',
   'Lebanon': 'LB',
-  'Turkey': 'TR',
+  'Türkiye': 'TR',
+  'Turkey': 'TR',  // alias for stale caches, external data, older scraper output
   'Saudi Arabia': 'SA',
   'Yemen': 'YE',
   'Oman': 'OM',

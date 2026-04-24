@@ -42,8 +42,8 @@ EXPEDITIONS: dict[str, dict] = {
     },
     "aegean": {
         "name": "The Aegean World",
-        "description": "Explore the birthplace of Western civilization across Greece and Turkey.",
-        "countries": ["Greece", "Turkey", "Türkiye"],
+        "description": "Explore the birthplace of Western civilization across Greece and Türkiye.",
+        "countries": ["Greece", "Türkiye"],
         "lore": [
             "Minoan Crete was home to Europe's first advanced civilization.",
             "The Mycenaeans built massive fortified palaces across the Peloponnese.",

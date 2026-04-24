@@ -302,7 +302,8 @@ NAME_TO_ISO: dict[str, str] = {
     "jordan": "JO",
     "israel": "IL",
     "lebanon": "LB",
-    "turkey": "TR",
+    "türkiye": "TR",
+    "turkey": "TR",  # legacy alias — canonical name is "Türkiye"
     "saudi arabia": "SA",
     "yemen": "YE",
     "oman": "OM",
@@ -557,6 +558,27 @@ def normalize_country(name: str) -> str:
     if len(lower) == 2 and lower.isalpha():
         return lower.upper()
     return lower
+
+
+# Country names whose canonical display form differs from what older code,
+# third-party APIs, or legacy data tend to emit. Add entries here whenever a
+# country is officially renamed — the UI and DB will use the canonical form.
+_DISPLAY_CANONICAL: dict[str, str] = {
+    "turkey": "Türkiye",
+    "türkiye": "Türkiye",
+}
+
+
+def canonicalize_country_display_name(name: str | None) -> str | None:
+    """Return the preferred display form of a country name.
+
+    Connectors should route `unified_sites.country` writes through this so new
+    data doesn't reintroduce legacy names (e.g. "Turkey" → "Türkiye"). Unknown
+    or None inputs are returned unchanged.
+    """
+    if not name:
+        return name
+    return _DISPLAY_CANONICAL.get(name.strip().lower(), name)
 
 
 def country_name_variants(name: str) -> list[str]:
