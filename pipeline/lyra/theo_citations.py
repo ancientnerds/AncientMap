@@ -318,6 +318,71 @@ def detect_language_bleed(text: str) -> list[str]:
 
 
 # ---------------------------------------------------------------------------
+# URL normalization — collapses version-padded and tracking-polluted URLs
+# so that v5, v6, v7, ... of the same preprint dedupe to a single source.
+# ---------------------------------------------------------------------------
+
+_PRESERVE_DOMAINS = {"doi.org"}
+_TRACKING_PARAMS = ("utm_", "fbclid", "gclid", "ref=", "mc_", "_hsenc=")
+
+
+def _normalize_url(url: str) -> str:
+    """Return a canonical form of a URL for dedup purposes.
+
+    Strips version suffixes on preprint hosts, tracking params, fragments,
+    trailing whitespace, leading 'www.', lowercases the host. Returns the
+    input unchanged for non-URL strings (empty, malformed).
+    """
+    if not url or "://" not in url:
+        return url
+
+    try:
+        parsed = urllib.parse.urlsplit(url)
+    except ValueError:
+        return url
+
+    scheme = parsed.scheme.lower()
+    host = parsed.netloc.lower().removeprefix("www.")
+    path = parsed.path
+
+    # preprints.org — strip trailing /vN or /v/N segment(s)
+    if host == "preprints.org":
+        path = re.sub(r"/v\d+(/|$)", r"\1", path)
+        path = re.sub(r"/v/\d+(/|$)", r"\1", path)
+
+    # arxiv — strip trailing vN on abs/pdf path
+    elif host == "arxiv.org":
+        path = re.sub(r"(/abs/[^/]+?)v\d+$", r"\1", path)
+
+    # biorxiv / medrxiv — strip version segment on content path
+    elif host in ("biorxiv.org", "medrxiv.org"):
+        path = re.sub(r"(/content/[^v]+?)v\d+(\.full\b|\b)", r"\1\2", path)
+
+    # researchgate — collapse /profile/{user}/publication/{id}/... to
+    # /publication/{id}
+    elif host == "researchgate.net":
+        m = re.search(r"/publication/(\d+_[^/]+|\d+)", path)
+        if m:
+            path = "/publication/" + m.group(1)
+
+    # doi.org — preserve exactly (already canonical)
+    if host in _PRESERVE_DOMAINS:
+        return url
+
+    # Strip tracking query params
+    query_pairs = urllib.parse.parse_qsl(parsed.query, keep_blank_values=True)
+    query_pairs = [
+        (k, v) for k, v in query_pairs
+        if not any(k.startswith(p) or k == p.rstrip("=") for p in _TRACKING_PARAMS)
+    ]
+    query = urllib.parse.urlencode(query_pairs)
+
+    # Drop fragment
+    rebuilt = urllib.parse.urlunsplit((scheme, host, path, query, ""))
+    return rebuilt
+
+
+# ---------------------------------------------------------------------------
 # Reference finalization — assigns contiguous [1..M] numbers to only the
 # sources actually cited in the paper, in first-occurrence order
 # ---------------------------------------------------------------------------

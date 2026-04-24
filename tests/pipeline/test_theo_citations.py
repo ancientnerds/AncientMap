@@ -690,3 +690,59 @@ def test_patch_flow_fills_gap_in_citation_numbering():
     # Registry has only the 9 survivors (G dropped)
     assert len(registry.reference_numbers) == 9
     assert all("g.example" not in s.url for s in registry.sources.values() if s.id in registry.reference_numbers)
+
+
+# ---------------------------------------------------------------------------
+# _normalize_url — collapses version-padded and tracking-polluted URLs
+# ---------------------------------------------------------------------------
+
+from pipeline.lyra.theo_citations import _normalize_url
+
+
+@pytest.mark.parametrize(
+    "raw,canonical",
+    [
+        # preprints.org version stripping
+        (
+            "https://www.preprints.org/manuscript/202108.0087/v5/download",
+            "https://preprints.org/manuscript/202108.0087/download",
+        ),
+        (
+            "https://www.preprints.org/manuscript/202108.0087/v9",
+            "https://preprints.org/manuscript/202108.0087",
+        ),
+        # arxiv version stripping
+        ("https://arxiv.org/abs/2301.12345v3", "https://arxiv.org/abs/2301.12345"),
+        ("https://arxiv.org/pdf/1206.0113", "https://arxiv.org/pdf/1206.0113"),
+        # biorxiv version stripping
+        (
+            "https://www.biorxiv.org/content/10.1101/2023.01.01.000000v2.full.pdf",
+            "https://biorxiv.org/content/10.1101/2023.01.01.000000.full.pdf",
+        ),
+        # researchgate profile-to-publication collapse
+        (
+            "https://www.researchgate.net/profile/Jane-Doe/publication/328144532_Ancient_geopolymer",
+            "https://researchgate.net/publication/328144532_Ancient_geopolymer",
+        ),
+        # utm/fragment stripping + lowercase host
+        (
+            "https://EN.Wikipedia.org/wiki/Foo?utm_source=x&utm_medium=y#section",
+            "https://en.wikipedia.org/wiki/Foo",
+        ),
+        # www stripping and ref=
+        (
+            "https://www.jstor.org/stable/1234?ref=homepage",
+            "https://jstor.org/stable/1234",
+        ),
+        # doi preserved exactly (already canonical)
+        (
+            "https://doi.org/10.1093/oxrevecpol/graaa035",
+            "https://doi.org/10.1093/oxrevecpol/graaa035",
+        ),
+        # empty + malformed tolerated
+        ("", ""),
+        ("not a url", "not a url"),
+    ],
+)
+def test_normalize_url(raw, canonical):
+    assert _normalize_url(raw) == canonical
