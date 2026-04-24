@@ -412,6 +412,9 @@ def audit_citations(paper_text: str, registry: CitationRegistry) -> dict:
     3. No orphaned references (assigned number but never cited in text).
     4. No unresolved [N - topic] placeholders leaked into prose.
     5. No non-Latin script bleed-through.
+    6. No non-numeric bracketed tokens in prose (catches pipeline debug IDs like
+       [5620e1fb87f7] that escaped marker resolution). Markdown links [x](y) and
+       footnotes [^n] are excluded.
 
     Returns:
         {
@@ -423,6 +426,7 @@ def audit_citations(paper_text: str, registry: CitationRegistry) -> dict:
             "uncited_paragraphs": int,      # paragraphs without any citation
             "placeholder_markers": list[str], # [N - topic] strings found in prose
             "language_bleed": list[str],    # non-Latin substrings in prose
+            "non_numeric_markers": list[str], # bracketed tokens that aren't [N]
             "issues": list[str],            # human-readable issue descriptions
         }
     """
@@ -531,12 +535,38 @@ def audit_citations(paper_text: str, registry: CitationRegistry) -> dict:
             + ", ".join(language_bleed[:3])
         )
 
+    # 6. Non-numeric bracketed markers — pipeline debug tokens like
+    #    [5620e1fb87f7] that escaped finalize_references(). Markdown links
+    #    [text](url) are excluded via negative lookahead on `(`. Footnotes
+    #    [^n] and already-caught [N - topic] placeholders are skipped.
+    non_numeric_markers: list[str] = []
+    _seen_nm: set[str] = set()
+    for m in re.finditer(r"\[([^\]\n]+)\](?!\()", prose_only):
+        token = m.group(1).strip()
+        if not token or token.isdigit():
+            continue
+        if token.startswith("^"):
+            continue
+        if _PLACEHOLDER_MARKER_RE.match(f"[{token}]"):
+            continue
+        if token in _seen_nm:
+            continue
+        _seen_nm.add(token)
+        non_numeric_markers.append(token)
+    if non_numeric_markers:
+        sample = ", ".join(f"[{t}]" for t in non_numeric_markers[:5])
+        issues.append(
+            f"{len(non_numeric_markers)} non-numeric bracketed marker(s) in prose "
+            f"(likely pipeline debug tokens): {sample}"
+        )
+
     passed = (
         not invalid_markers
         and not orphaned_refs
         and uncited_paragraphs == 0
         and not placeholder_markers
         and not language_bleed
+        and not non_numeric_markers
     )
 
     return {
@@ -548,6 +578,7 @@ def audit_citations(paper_text: str, registry: CitationRegistry) -> dict:
         "uncited_paragraphs": uncited_paragraphs,
         "placeholder_markers": placeholder_markers,
         "language_bleed": language_bleed,
+        "non_numeric_markers": non_numeric_markers,
         "issues": issues,
     }
 

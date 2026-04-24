@@ -288,14 +288,34 @@ class PaperHandler(BaseHandler):
         # ---------------------------------------------------------------
         # Step 11: Generate card description
         # ---------------------------------------------------------------
+        # Pass opener AND conclusion so the card describes what the paper
+        # concludes, not just the provocative question it opened with. The
+        # references section is stripped so the LLM doesn't waste budget on
+        # citation lists.
+        _paper_for_card = self.state.paper_text
+        _refs_idx = _paper_for_card.find("\n## References")
+        if _refs_idx > 0:
+            _paper_for_card = _paper_for_card[:_refs_idx]
+        _opener = _paper_for_card[:2500]
+        _conclusion = _paper_for_card[-4500:] if len(_paper_for_card) > 7000 else ""
         card_system = (
-            "Write a 1-3 sentence description of this research paper for a card preview. "
-            "Be specific. No citations, no markdown. Plain text only."
+            "Write a 1-3 sentence description of this research paper for a card "
+            "preview. Describe what the paper concludes — what it argues is true "
+            "— not what it opens by asking. If the paper argues against a "
+            "hypothesis the user proposed, say so plainly. Be specific. "
+            "No citations, no markdown. Plain text only."
         )
-        card_input = (
-            f"## Title\n\n{self.state.paper_title}\n\n"
-            f"## First 500 words\n\n{self.state.paper_text[:2000]}"
-        )
+        if _conclusion:
+            card_input = (
+                f"## Title\n\n{self.state.paper_title}\n\n"
+                f"## Opening (first ~500 words)\n\n{_opener}\n\n"
+                f"## Conclusion (last ~1500 words)\n\n{_conclusion}"
+            )
+        else:
+            card_input = (
+                f"## Title\n\n{self.state.paper_title}\n\n"
+                f"## Paper\n\n{_opener}"
+            )
         settings = _get_settings()
         async with self.semaphore:
             # 1024 total budget: ~100 tokens of output prose plus headroom for

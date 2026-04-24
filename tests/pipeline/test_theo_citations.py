@@ -459,6 +459,78 @@ def test_audit_is_idempotent_to_references_section():
 
 
 # ---------------------------------------------------------------------------
+# audit_citations — non-numeric bracketed markers (pipeline debug leaks)
+# ---------------------------------------------------------------------------
+
+
+def _registry_with_one_ref() -> CitationRegistry:
+    registry = CitationRegistry()
+    sid = registry.register_source("https://a.example/page", "A", "snippet")
+    registry.assign_reference_number(sid)  # → [1]
+    return registry
+
+
+def test_audit_flags_hex_pipeline_token():
+    """A bracketed hex token like [5620e1fb87f7] must fail the audit."""
+    registry = _registry_with_one_ref()
+    prose = "The source [5620e1fb87f7] suggests X [1]."
+    result = audit_citations(prose, registry)
+    assert "5620e1fb87f7" in result["non_numeric_markers"]
+    assert result["passed"] is False
+    assert any("non-numeric" in i for i in result["issues"])
+
+
+def test_audit_does_not_flag_markdown_links():
+    """[text](url) is a markdown link, not a citation marker — must not flag."""
+    registry = _registry_with_one_ref()
+    prose = "See [Wikipedia](https://en.wikipedia.org/wiki/Foo) for background [1]."
+    result = audit_citations(prose, registry)
+    assert result["non_numeric_markers"] == []
+    assert result["passed"] is True
+
+
+def test_audit_does_not_flag_footnote_refs():
+    """[^n] is a markdown footnote reference — must not flag."""
+    registry = _registry_with_one_ref()
+    prose = "Noted [^1] elsewhere [1]."
+    result = audit_citations(prose, registry)
+    assert result["non_numeric_markers"] == []
+    assert result["passed"] is True
+
+
+def test_audit_placeholder_not_double_flagged():
+    """[N - topic] is detected as a placeholder, must not also be reported
+    as a non-numeric marker."""
+    registry = _registry_with_one_ref()
+    prose = "A claim [N - context] leaked into prose [1]."
+    result = audit_citations(prose, registry)
+    assert result["placeholder_markers"] == ["[N - context]"]
+    assert result["non_numeric_markers"] == []
+    # still fails because placeholder_markers is non-empty
+    assert result["passed"] is False
+
+
+def test_audit_flags_multiple_non_numeric_tokens_deduped():
+    """Multiple non-numeric tokens should all be reported, order-preserving and deduped."""
+    registry = _registry_with_one_ref()
+    prose = "Mixed [TODO] and [abc-123] plus another [TODO] with [1]."
+    result = audit_citations(prose, registry)
+    # Deduped: TODO appears once even though it shows up twice in prose
+    assert result["non_numeric_markers"] == ["TODO", "abc-123"]
+    assert result["passed"] is False
+
+
+def test_audit_clean_prose_still_passes():
+    """Baseline: no non-numeric tokens → non_numeric_markers is empty and does
+    not flip an otherwise-passing paper to failed."""
+    registry = _registry_with_one_ref()
+    prose = "Rome was founded in 753 BC [1]."
+    result = audit_citations(prose, registry)
+    assert result["non_numeric_markers"] == []
+    assert result["passed"] is True
+
+
+# ---------------------------------------------------------------------------
 # score_tier_by_domain
 # ---------------------------------------------------------------------------
 
