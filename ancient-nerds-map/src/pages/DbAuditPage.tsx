@@ -1017,20 +1017,18 @@ export default function DbAuditPage() {
       let totalUpdated = 0
       const allErrors: { row: number; name: string; error: string }[] = []
 
-      // Create ONE snapshot of ALL affected sites before any uploads
+      // Create ONE snapshot of ALL affected sites before any uploads.
+      // Abort the upload if the snapshot fails — otherwise changes are
+      // unrollbackable (which is exactly the case that bit us on 2026-04-24).
       if (uploadCreateSnapshot) {
         setUploadProgress({ sent: 0, total, phase: 'Creating snapshot of current state...' })
-        try {
-          const snapRes = await fetch(`${config.api.baseUrl}/sites/snapshots/create?source_id=${uploadTarget}&description=${encodeURIComponent(`Before upload (${total} sites)`)}`, {
-            method: 'POST',
-            headers: { 'Authorization': `Bearer ${token}` },
-          })
-          if (!snapRes.ok) {
-            const data = await snapRes.json().catch(() => ({}))
-            allErrors.push({ row: 0, name: 'SNAPSHOT', error: `Snapshot failed: ${data.detail || snapRes.status}` })
-          }
-        } catch (e) {
-          allErrors.push({ row: 0, name: 'SNAPSHOT', error: `Snapshot failed: ${e}` })
+        const snapRes = await fetch(`${config.api.baseUrl}/sites/snapshots/create?source_id=${uploadTarget}&description=${encodeURIComponent(`Before upload (${total} sites)`)}`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}` },
+        })
+        if (!snapRes.ok) {
+          const data = await snapRes.json().catch(() => ({}))
+          throw new Error(`Snapshot failed — upload aborted: ${data.detail || snapRes.status}`)
         }
       }
 

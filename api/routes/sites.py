@@ -871,6 +871,7 @@ async def restore_snapshot_endpoint(
 
     return {
         "restored": result["restored"],
+        "deleted": result.get("deleted", 0),
         "snapshot_id": snapshot_id,
         "undo_snapshot_id": result["undo_snapshot_id"],
     }
