@@ -23,6 +23,11 @@ logger = logging.getLogger(__name__)
 
 SNAPSHOTS_DIR = Path("public/data/snapshots")
 
+# Source IDs that hold user-curated, editable site data. A "unified" snapshot
+# covers exactly these; everything else (wikidata, osm, etc.) is reproducible
+# from its scraper and not worth snapshotting per-row.
+CURATED_SOURCES = ("ancient_nerds", "lyra", "ancient_nerds_community")
+
 # Columns to capture in snapshots (everything except geom binary)
 _SNAPSHOT_COLUMNS = [
     "id",
@@ -162,6 +167,54 @@ def create_manual_snapshot(
     return {"snapshot_id": snapshot_id, "row_count": len(site_ids)}
 
 
+def create_unified_snapshot(
+    db: Session,
+    created_by: str,
+    description: str,
+) -> dict:
+    """Create a full snapshot covering every curated source at this moment.
+
+    This is the single entry point used by user-facing snapshot actions
+    (the "Create Snapshot" button, the pre-upload checkbox). It produces
+    both a DB snapshot (for restore) and a file snapshot (for the audit
+    page's date-pin feature), giving one logical "record of the sites
+    database at this time" with two representations.
+
+    Stored with snapshot_type='manual' and source_id=NULL so restore_snapshot
+    treats it as a multi-source full restore. Returns
+    {snapshot_id, row_count, file_snapshot_key}.
+    """
+    rows = db.execute(
+        text(
+            "SELECT id::text FROM unified_sites WHERE source_id = ANY(:sources)"
+        ),
+        {"sources": list(CURATED_SOURCES)},
+    ).fetchall()
+    if not rows:
+        return {"snapshot_id": None, "row_count": 0, "file_snapshot_key": None}
+
+    site_ids = [r.id for r in rows]
+    snapshot_id = create_snapshot(
+        db,
+        site_ids=site_ids,
+        created_by=created_by,
+        description=description,
+        snapshot_type="manual",
+        source_id=None,  # NULL = unified / multi-source
+    )
+
+    # Also write the file-based snapshot so the audit page's date-pin UI
+    # keeps working. Orphan files (DB commit fails but file is on disk) are
+    # harmless — the manifest indexes them independently.
+    file_key = export_file_snapshot(db)
+
+    return {
+        "snapshot_id": snapshot_id,
+        "row_count": len(site_ids),
+        "file_snapshot_key": file_key,
+    }
+
+
 def restore_snapshot(db: Session, snapshot_id: str, restored_by: str = "system") -> dict:
     """Restore a snapshot to become the current source state.
 
@@ -198,26 +251,35 @@ def restore_snapshot(db: Session, snapshot_id: str, restored_by: str = "system")
 
     orig_source = orig_snap.source_id
     orig_type = orig_snap.snapshot_type
-    # Full-source semantics: delete rows in source that aren't in the snapshot.
-    # Only safe for snapshots that captured the entire source. The chunked
-    # 'upload' and per-edit 'edit' snapshots only hold a partial row set —
-    # applying the delete to those would wipe every untouched site in the source.
-    full_source_restore = orig_type == "manual" and orig_source is not None
+    # Full-source semantics: delete rows in source(s) that aren't in the
+    # snapshot. Only safe for snapshots that captured the entire source
+    # ('manual' type). A NULL source_id on a manual snapshot means the
+    # snapshot is unified across every curated source. Partial 'upload' /
+    # 'edit' snapshots only hold a subset, so applying the delete to them
+    # would wipe every untouched site in the source.
+    full_source_restore = orig_type == "manual"
+    restore_sources: tuple[str, ...] | None
+    if full_source_restore:
+        restore_sources = (orig_source,) if orig_source else CURATED_SOURCES
+    else:
+        restore_sources = None
 
     # Capture current state BEFORE restoring so the restore itself is undoable.
     # Skip if restoring an undo — prevents undo-of-undo chains.
     undo_id = None
     if orig_type != "undo":
         undo_ids = list(snap_site_ids)
-        if full_source_restore:
-            # Also capture rows currently in source but not in snapshot (they
-            # will be deleted by this restore — undo needs to re-insert them).
+        if restore_sources:
+            # Also capture rows currently in source(s) but not in snapshot —
+            # they'll be deleted by this restore, so undo needs to re-insert
+            # them.
             extras = db.execute(
                 text("""
                     SELECT id::text AS id FROM unified_sites
-                    WHERE source_id = :sid AND NOT (id::text = ANY(:existing))
+                    WHERE source_id = ANY(:sources)
+                      AND NOT (id::text = ANY(:existing))
                 """),
-                {"sid": orig_source, "existing": snap_site_ids},
+                {"sources": list(restore_sources), "existing": snap_site_ids},
             ).fetchall()
             undo_ids.extend(r.id for r in extras)
         undo_id = create_snapshot(
@@ -290,14 +352,14 @@ def restore_snapshot(db: Session, snapshot_id: str, restored_by: str = "system")
     restored = upserted.rowcount
 
     deleted = 0
-    if full_source_restore:
+    if restore_sources:
         result = db.execute(
             text("""
                 DELETE FROM unified_sites
-                WHERE source_id = :sid
+                WHERE source_id = ANY(:sources)
                   AND NOT (id::text = ANY(:keep))
             """),
-            {"sid": orig_source, "keep": snap_site_ids},
+            {"sources": list(restore_sources), "keep": snap_site_ids},
         )
         deleted = result.rowcount
 

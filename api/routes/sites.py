@@ -797,20 +797,39 @@ async def get_snapshots(
 
 
 @router.post("/snapshots/create")
-async def create_manual_snapshot_endpoint(
-    source_id: str = Query(...),
+async def create_snapshot_endpoint(
+    source_id: str | None = Query(None),
     description: str = Query("Manual snapshot"),
     _user: DiscordUser = Depends(require_founder),
     db: Session = Depends(get_db),
 ):
-    """Create a manual snapshot of all sites in a source (founders only)."""
-    from api.services.snapshots import create_manual_snapshot
+    """Create a point-in-time snapshot (founders only).
 
-    valid_sources = {"ancient_nerds", "lyra", "ancient_nerds_community"}
-    if source_id not in valid_sources:
+    Without source_id: unified snapshot covering every curated source, plus
+    a file snapshot for the audit page's date-pin UI. This is the canonical
+    path used by the "Create Snapshot" button and the pre-upload checkbox.
+
+    With source_id: snapshot of just that source. Kept for scripted clients
+    that want single-source scope.
+    """
+    from api.services.snapshots import (
+        CURATED_SOURCES,
+        create_manual_snapshot,
+        create_unified_snapshot,
+    )
+
+    if source_id is None:
+        result = create_unified_snapshot(
+            db, created_by=_user.username, description=description
+        )
+        if not result["snapshot_id"]:
+            raise HTTPException(status_code=404, detail="No sites found to snapshot")
+        return result
+
+    if source_id not in CURATED_SOURCES:
         raise HTTPException(
             status_code=400,
-            detail=f"Invalid source_id. Must be one of: {', '.join(sorted(valid_sources))}",
+            detail=f"Invalid source_id. Must be one of: {', '.join(sorted(CURATED_SOURCES))}",
         )
 
     result = create_manual_snapshot(
@@ -823,19 +842,29 @@ async def create_manual_snapshot_endpoint(
 
 
 @router.post("/snapshots/export")
-async def export_file_snapshot_endpoint(
+async def create_unified_snapshot_endpoint(
+    description: str = Query("Manual snapshot"),
     _user: DiscordUser = Depends(require_founder),
     db: Session = Depends(get_db),
 ):
-    """Create a file snapshot of the current DB state (founders only)."""
-    from api.services.snapshots import export_file_snapshot
+    """Alias for POST /snapshots/create (no source_id) — kept so the existing
+    frontend "Create Snapshot" button keeps working without a URL change.
+    Creates a unified snapshot: DB rollback record + file for audit page.
+    """
+    from api.services.snapshots import create_unified_snapshot
 
     try:
-        snapshot_key = export_file_snapshot(db)
-        return {"snapshot_key": snapshot_key}
+        result = create_unified_snapshot(
+            db, created_by=_user.username, description=description
+        )
+        if not result["snapshot_id"]:
+            raise HTTPException(status_code=404, detail="No sites found to snapshot")
+        return result
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error("Snapshot export failed: %s", e, exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Snapshot export failed: {e}") from e
+        logger.error("Unified snapshot failed: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Snapshot failed: {e}") from e
 
 
 @router.get("/snapshots/{snapshot_id}/preview")

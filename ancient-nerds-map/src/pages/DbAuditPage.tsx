@@ -370,26 +370,48 @@ export default function DbAuditPage() {
     }
   }, [])
 
+  // Fetch DB snapshots (undo history). Declared before any action that
+  // creates a snapshot so those actions can refresh the listing.
+  const refreshDbSnapshots = useCallback(async () => {
+    try {
+      const url = sourceFilter !== 'all'
+        ? `${config.api.baseUrl}/sites/snapshots?source_id=${sourceFilter}&${CACHE_BUSTER}`
+        : `${config.api.baseUrl}/sites/snapshots?${CACHE_BUSTER}`
+      const res = await fetch(url)
+      if (res.ok) {
+        const data = await res.json()
+        setDbSnapshots(data.snapshots || [])
+      }
+    } catch { /* optional */ }
+  }, [sourceFilter])
+
+  // Creates one unified snapshot (DB record for rollback + file for audit
+  // page date-pin UI). Hits POST /sites/snapshots/create with no source_id.
   const createFileSnapshot = useCallback(async () => {
     if (!token || creatingSnapshot) return
     setCreatingSnapshot(true)
     try {
-      const res = await fetch(`${config.api.baseUrl}/sites/snapshots/export`, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}` },
-      })
+      const description = `Manual snapshot ${new Date().toISOString()}`
+      const res = await fetch(
+        `${config.api.baseUrl}/sites/snapshots/create?description=${encodeURIComponent(description)}`,
+        {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}` },
+        }
+      )
       if (!res.ok) {
         const data = await res.json().catch(() => ({}))
         throw new Error(data.detail || `HTTP ${res.status}`)
       }
-      showToast('Snapshot created')
-      await refreshFileSnapshots()
+      const data: { snapshot_id?: string; row_count?: number } = await res.json().catch(() => ({}))
+      showToast(`Snapshot created (${data.row_count ?? 0} sites)`)
+      await Promise.all([refreshFileSnapshots(), refreshDbSnapshots()])
     } catch (e: unknown) {
       alert(e instanceof Error ? e.message : 'Failed to create snapshot')
     } finally {
       setCreatingSnapshot(false)
     }
-  }, [token, creatingSnapshot, refreshFileSnapshots, showToast])
+  }, [token, creatingSnapshot, refreshFileSnapshots, refreshDbSnapshots, showToast])
 
   // Fetch snapshot manifest + active pins on mount
   useEffect(() => {
@@ -410,20 +432,6 @@ export default function DbAuditPage() {
       }
     })()
   }, [refreshFileSnapshots])
-
-  // Fetch DB snapshots (undo history)
-  const refreshDbSnapshots = useCallback(async () => {
-    try {
-      const url = sourceFilter !== 'all'
-        ? `${config.api.baseUrl}/sites/snapshots?source_id=${sourceFilter}&${CACHE_BUSTER}`
-        : `${config.api.baseUrl}/sites/snapshots?${CACHE_BUSTER}`
-      const res = await fetch(url)
-      if (res.ok) {
-        const data = await res.json()
-        setDbSnapshots(data.snapshots || [])
-      }
-    } catch { /* optional */ }
-  }, [sourceFilter])
 
   useEffect(() => { refreshDbSnapshots() }, [refreshDbSnapshots])
 
@@ -1017,15 +1025,19 @@ export default function DbAuditPage() {
       let totalUpdated = 0
       const allErrors: { row: number; name: string; error: string }[] = []
 
-      // Create ONE snapshot of ALL affected sites before any uploads.
-      // Abort the upload if the snapshot fails — otherwise changes are
-      // unrollbackable (which is exactly the case that bit us on 2026-04-24).
+      // Create ONE unified snapshot (DB + file) before any uploads. Abort
+      // the upload if the snapshot fails — otherwise changes are
+      // unrollbackable (the case that bit us on 2026-04-24).
       if (uploadCreateSnapshot) {
         setUploadProgress({ sent: 0, total, phase: 'Creating snapshot of current state...' })
-        const snapRes = await fetch(`${config.api.baseUrl}/sites/snapshots/create?source_id=${uploadTarget}&description=${encodeURIComponent(`Before upload (${total} sites)`)}`, {
-          method: 'POST',
-          headers: { 'Authorization': `Bearer ${token}` },
-        })
+        const description = `Before upload to ${uploadTarget} (${total} sites)`
+        const snapRes = await fetch(
+          `${config.api.baseUrl}/sites/snapshots/create?description=${encodeURIComponent(description)}`,
+          {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}` },
+          }
+        )
         if (!snapRes.ok) {
           const data = await snapRes.json().catch(() => ({}))
           throw new Error(`Snapshot failed — upload aborted: ${data.detail || snapRes.status}`)
