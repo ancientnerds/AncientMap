@@ -8868,7 +8868,10 @@ body.hud-hidden .empire-borders-window {
 .model-viewer-overlay {
   position: fixed;
   inset: 0;
-  z-index: 2000;
+  /* Must sit above .news-site-popup-overlay (100000) since the 3D model
+   * viewer is portaled to document.body and opens from within the site
+   * popup — otherwise the popup paints on top of the fullscreen model. */
+  z-index: 100001;
   background: rgba(0, 0, 0, 0.98);
   display: flex;
   align-items: center;
