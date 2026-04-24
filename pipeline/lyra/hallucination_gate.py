@@ -48,19 +48,19 @@ _HONORIFIC_PERSON_RE = re.compile(
 )
 
 # Named institutions — two shapes:
-#   A. <Token> of <Title Case>: "University of Cambridge", "Institute of Cosmic Studies"
-#   B. <Title Case>+ <Token>: "Stanford Research Institute", "National Geographic Society"
-# Both require the recognizable organization token; a bare "University" or "Museum"
+#   A. <Word> of <Title Case>: "University of Cambridge", "Institute of Cosmic Studies"
+#   B. <Title Case>+ <Word>: "Stanford Research Institute", "National Geographic Society"
+# Both require the recognizable organization word; a bare "University" or "Museum"
 # without a proper name attached (a common-noun usage) is not flagged.
-_ORG_TOKEN = (
+_ORG_WORDS = (
     r"University|Institute|Society|Foundation|Academy|Museum|Laboratory|"
     r"Observatory|Center|Centre|College|Consortium"
 )
 _INSTITUTION_RE = re.compile(
     rf"\b(?:"
-    rf"(?:{_ORG_TOKEN})\s+(?:of|for|de)\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+){{0,3}}"
+    rf"(?:{_ORG_WORDS})\s+(?:of|for|de)\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+){{0,3}}"
     rf"|"
-    rf"(?:[A-Z][a-z]+\s+){{1,4}}(?:{_ORG_TOKEN})"
+    rf"(?:[A-Z][a-z]+\s+){{1,4}}(?:{_ORG_WORDS})"
     rf")\b"
 )
 
