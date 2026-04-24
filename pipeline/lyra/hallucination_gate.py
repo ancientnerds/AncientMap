@@ -6,6 +6,7 @@ evidence pack, source snippets, or user question. Unsupported specifics
 trigger an LLM-repair loop; sentences that still carry unsupported
 specifics after two retries are deleted.
 """
+
 from __future__ import annotations
 
 import logging
@@ -192,9 +193,7 @@ def delete_sentences_with_specifics(
     keep: list[str] = []
     for s_match in _SENTENCE_RE.finditer(prose):
         sentence = s_match.group(0)
-        contains_bad = any(
-            u.text.lower() in sentence.lower() for u in unsupported
-        )
+        contains_bad = any(u.text.lower() in sentence.lower() for u in unsupported)
         if not contains_bad:
             keep.append(sentence)
     return " ".join(s.strip() for s in keep).strip()
@@ -236,8 +235,7 @@ async def repair_prose(
     for attempt in range(1, max_retries + 1):
         retries_used = attempt
         specifics_list = "\n".join(
-            f"- [{s.kind}] {s.text} (in: {s.sentence.strip()})"
-            for s in still_unsupported
+            f"- [{s.kind}] {s.text} (in: {s.sentence.strip()})" for s in still_unsupported
         )
         filled = (
             prompt_template.replace("{specifics_list}", specifics_list)
@@ -260,16 +258,12 @@ async def repair_prose(
             break
         current = repaired.strip()
         new_specs = extract_specifics(current)
-        still_unsupported = verify_against_pack(
-            new_specs, pack, sources, original_question
-        )
+        still_unsupported = verify_against_pack(new_specs, pack, sources, original_question)
         if not still_unsupported:
             return current, [], retries_used
 
     # Mechanical fallback: delete sentences still carrying unsupported specifics
     current = delete_sentences_with_specifics(current, still_unsupported)
     final_specs = extract_specifics(current)
-    still_unsupported = verify_against_pack(
-        final_specs, pack, sources, original_question
-    )
+    still_unsupported = verify_against_pack(final_specs, pack, sources, original_question)
     return current, still_unsupported, retries_used

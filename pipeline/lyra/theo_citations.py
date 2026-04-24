@@ -376,7 +376,8 @@ def _normalize_url(url: str) -> str:
     # Strip tracking query params
     query_pairs = urllib.parse.parse_qsl(parsed.query, keep_blank_values=True)
     query_pairs = [
-        (k, v) for k, v in query_pairs
+        (k, v)
+        for k, v in query_pairs
         if not any(k.startswith(p) or k == p.rstrip("=") for p in _TRACKING_PARAMS)
     ]
     query = urllib.parse.urlencode(query_pairs)

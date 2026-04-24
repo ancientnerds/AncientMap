@@ -6,6 +6,7 @@ return the gaps. Gaps become additional required angles so a paper on
 ancient-astronaut topics always covers Watchers / Giza / Dendera / Dogon
 even if the LLM's initial angle proposal missed them.
 """
+
 from __future__ import annotations
 
 import json

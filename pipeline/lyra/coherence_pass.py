@@ -10,6 +10,7 @@ If any contradictions or missing title terms surface, the caller can send
 the paper back to the writer for a repair pass. This module only produces
 the report; wiring and repair live in handlers/paper.py.
 """
+
 from __future__ import annotations
 
 import json
@@ -76,9 +77,7 @@ async def run_coherence_pass(
     local_defs = check_title_terms_in_body(title_terms, body)
 
     prompt_template = (_PROMPTS / "coherence_pass.txt").read_text(encoding="utf-8")
-    prompt_filled = prompt_template.replace("{title}", title).replace(
-        "{body}", body[:8000]
-    )
+    prompt_filled = prompt_template.replace("{title}", title).replace("{body}", body[:8000])
 
     try:
         raw = await llm_call(prompt_filled, "", 2048, settings, 0.2)

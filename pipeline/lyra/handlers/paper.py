@@ -276,9 +276,7 @@ class PaperHandler(BaseHandler):
         # ---------------------------------------------------------------
         # Extract title early so coherence_pass can use it.
         _title_match = re.search(r"^#\s+(.+)$", self.state.paper_text, re.MULTILINE)
-        _coherence_title = (
-            _title_match.group(1).strip() if _title_match else self.state.question
-        )
+        _coherence_title = _title_match.group(1).strip() if _title_match else self.state.question
 
         from pipeline.lyra import coherence_pass
 
@@ -337,10 +335,7 @@ class PaperHandler(BaseHandler):
                 f"## Conclusion (last ~1500 words)\n\n{_conclusion}"
             )
         else:
-            card_input = (
-                f"## Title\n\n{self.state.paper_title}\n\n"
-                f"## Paper\n\n{_opener}"
-            )
+            card_input = f"## Title\n\n{self.state.paper_title}\n\n## Paper\n\n{_opener}"
         settings = _get_settings()
         async with self.semaphore:
             # 1024 total budget: ~100 tokens of output prose plus headroom for

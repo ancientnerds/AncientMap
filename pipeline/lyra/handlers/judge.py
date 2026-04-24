@@ -186,9 +186,7 @@ class JudgeHandler(BaseHandler):
                 1 for c in coherence.contradictions if c.severity in ("high", "medium")
             )
             undefined_title_terms = [
-                t
-                for t, defined in coherence.title_terms_defined_in_body.items()
-                if not defined
+                t for t, defined in coherence.title_terms_defined_in_body.items() if not defined
             ]
         else:
             severe_contradictions = 0
