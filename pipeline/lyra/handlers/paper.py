@@ -960,6 +960,7 @@ class PaperHandler(BaseHandler):
             self.state.config.max_tokens_per_call,
             settings,
         )
+        prose = await self._run_hallucination_gate(prose, claims_text, settings)
         return prose
 
     async def _write_other_side_section(
@@ -1032,6 +1033,7 @@ class PaperHandler(BaseHandler):
             self.state.config.max_tokens_per_call,
             settings,
         )
+        prose = await self._run_hallucination_gate(prose, claims_text, settings)
         return prose
 
     async def _write_assessment(self, all_claims: list[dict], settings) -> str:
@@ -1080,6 +1082,16 @@ class PaperHandler(BaseHandler):
             self.state.config.max_tokens_per_call,
             settings,
         )
+        # Build a pack for the hallucination gate from all tiers of claims
+        # (the assessment cites across all three).
+        _assessment_pack = "\n".join(
+            [
+                _format_tier(high_confidence),
+                _format_tier(medium_confidence),
+                _format_tier(low_confidence),
+            ]
+        )
+        prose = await self._run_hallucination_gate(prose, _assessment_pack, settings)
         return prose
 
     # ===================================================================
