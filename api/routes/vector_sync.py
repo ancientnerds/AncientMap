@@ -93,7 +93,6 @@ class ReindexRequest(BaseModel):
         None  # "sites" | "news" | "transcripts" | "articles" | "empires" | "research" | None (all)
     )
     rebuild: bool = False
-    backend: str | None = None  # "voyage" | "local" | None (both)
 
 
 # ─── GET /status ─────────────────────────────────────────────────────────────
@@ -236,28 +235,22 @@ async def vector_reindex(
     if _reindex_state["running"]:
         raise HTTPException(status_code=409, detail="Reindex already running")
 
-    # Build CLI args — run one or both backends
-    backends = [body.backend] if body.backend else ["voyage"]
-    cmds = []
-    for be in backends:
-        cmd = [sys.executable, "scripts/build_lyra_index.py", "--backend", be]
-        if body.collection:
-            cmd += ["--collection", body.collection]
-        if body.rebuild:
-            cmd.append("--rebuild")
-        cmds.append(cmd)
+    cmd = [sys.executable, "scripts/build_lyra_index.py"]
+    if body.collection:
+        cmd += ["--collection", body.collection]
+    if body.rebuild:
+        cmd.append("--rebuild")
 
     _reindex_state["running"] = True
     _reindex_state["started_at"] = datetime.now(UTC).isoformat()
     _reindex_state["collection"] = body.collection or "all"
 
-    asyncio.create_task(_run_reindex_sequence(cmds))
+    asyncio.create_task(_run_reindex_sequence([cmd]))
 
     return {
         "status": "started",
         "collection": body.collection or "all",
         "rebuild": body.rebuild,
-        "backends": backends,
     }
 
 
@@ -324,9 +317,9 @@ async def schedule_nightly_reindex():
                 logger.info("[VECTOR-SYNC] Nightly reindex skipped — already running")
                 continue
 
-            logger.info("[VECTOR-SYNC] Starting nightly auto-reindex (voyage backend)")
+            logger.info("[VECTOR-SYNC] Starting nightly auto-reindex")
             cmds = [
-                [sys.executable, "scripts/build_lyra_index.py", "--backend", "voyage"],
+                [sys.executable, "scripts/build_lyra_index.py"],
             ]
             _reindex_state["running"] = True
             _reindex_state["started_at"] = datetime.now(UTC).isoformat()
