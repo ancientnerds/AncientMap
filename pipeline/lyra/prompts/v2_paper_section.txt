@@ -17,6 +17,7 @@ CITATIONS:
 - Cite at the point where the claim is first introduced. At least one citation per 1-2 sentences that state facts.
 - Group multiple citations: "...dates to 3000 BC [2] [45]."
 - Place citations BEFORE the period.
+- If a sentence in your draft cannot carry an [N] marker from the claims pack, DELETE THE SENTENCE. Do not paraphrase, do not leave uncited filler. The hallucination gate will catch ungrounded specifics and your sentence will be rewritten or removed.
 
 BANNED PHRASES (never use these):
 - "it should be noted" / "it is worth considering" / "it is important to emphasize"
