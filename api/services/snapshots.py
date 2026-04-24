@@ -185,9 +185,7 @@ def create_unified_snapshot(
     {snapshot_id, row_count, file_snapshot_key}.
     """
     rows = db.execute(
-        text(
-            "SELECT id::text FROM unified_sites WHERE source_id = ANY(:sources)"
-        ),
+        text("SELECT id::text FROM unified_sites WHERE source_id = ANY(:sources)"),
         {"sources": list(CURATED_SOURCES)},
     ).fetchall()
     if not rows:

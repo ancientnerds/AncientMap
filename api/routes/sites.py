@@ -819,9 +819,7 @@ async def create_snapshot_endpoint(
     )
 
     if source_id is None:
-        result = create_unified_snapshot(
-            db, created_by=_user.username, description=description
-        )
+        result = create_unified_snapshot(db, created_by=_user.username, description=description)
         if not result["snapshot_id"]:
             raise HTTPException(status_code=404, detail="No sites found to snapshot")
         return result
@@ -854,9 +852,7 @@ async def create_unified_snapshot_endpoint(
     from api.services.snapshots import create_unified_snapshot
 
     try:
-        result = create_unified_snapshot(
-            db, created_by=_user.username, description=description
-        )
+        result = create_unified_snapshot(db, created_by=_user.username, description=description)
         if not result["snapshot_id"]:
             raise HTTPException(status_code=404, detail="No sites found to snapshot")
         return result
