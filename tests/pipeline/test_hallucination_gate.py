@@ -49,6 +49,64 @@ def test_extract_persons_ignores_common_places():
     assert "Hal Saflieni" not in person_texts
 
 
+def test_extract_person_honorific_single_word():
+    """"Dr. Kisheton" is extracted even though "Dr." breaks the 2-word run.
+
+    The baseline PERSON_RE requires two capitalized words in a row, so a
+    period-terminated honorific followed by a single surname slips through.
+    The honorific extractor closes that gap.
+    """
+    prose = "Dr. Kisheton measured the chamber."
+    specs = extract_specifics(prose)
+    person_texts = {s.text for s in specs if s.kind == "person"}
+    assert "Kisheton" in person_texts
+
+
+def test_extract_person_multi_word_run_catches_honorific():
+    """"Professor Smith" matches PERSON_RE as a 2-word run; single-word
+    fallback should not also emit "Smith" separately."""
+    prose = "Professor Smith confirmed the reading."
+    specs = extract_specifics(prose)
+    person_texts = {s.text for s in specs if s.kind == "person"}
+    # The full run is extracted; not re-emitted as last-name-only
+    assert "Professor Smith" in person_texts
+    assert "Smith" not in person_texts
+
+
+def test_extract_person_honorific_without_period():
+    """"Dr Singh" (no period after honorific) matches the 2-word PERSON_RE."""
+    prose = "Dr Singh reported the finding."
+    specs = extract_specifics(prose)
+    person_texts = {s.text for s in specs if s.kind == "person"}
+    assert "Dr Singh" in person_texts
+
+
+def test_extract_institutions():
+    """Named institutions like 'Institute of Cosmic Studies' extracted."""
+    prose = (
+        "The Stanford Research Institute published the finding. "
+        "Later, the University of Cambridge confirmed it. "
+        "The Society for Archaeoastronomy disagreed."
+    )
+    specs = extract_specifics(prose)
+    inst_texts = {s.text for s in specs if s.kind == "institution"}
+    assert any("Stanford Research Institute" in t for t in inst_texts)
+    assert any("University of Cambridge" in t for t in inst_texts)
+    assert any("Society" in t for t in inst_texts)
+
+
+def test_extract_institution_does_not_double_count_persons():
+    """A Title-Case run that's a person shouldn't also emit as institution."""
+    prose = "Johns Hopkins published the study."
+    specs = extract_specifics(prose)
+    # "Johns Hopkins" is emitted as person (2 Cap words). The institution
+    # regex requires Institute/University/etc. after — not present here, so
+    # we expect ONLY a person extraction, not an institution one.
+    kinds = {s.kind for s in specs}
+    assert "person" in kinds
+    assert "institution" not in kinds
+
+
 def test_extract_dates():
     prose = "In 2007 researchers returned. The site dates to 3600 BCE."
     specs = extract_specifics(prose)

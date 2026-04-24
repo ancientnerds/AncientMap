@@ -23,7 +23,7 @@ _PROMPTS = Path(__file__).resolve().parent / "prompts"
 class Specific:
     """A specific claim extracted from prose that must trace to the evidence pack."""
 
-    kind: Literal["person", "title", "date", "measurement", "quote"]
+    kind: Literal["person", "title", "date", "measurement", "quote", "institution"]
     text: str
     sentence: str
 
@@ -34,7 +34,35 @@ class Specific:
 
 _SENTENCE_RE = re.compile(r"[^.!?]+[.!?]")
 
+# Two-to-four-word capitalized runs — most hallucinated specialists look like
+# "First Last" or "First M. Last". Caught by this baseline pattern.
 _PERSON_RE = re.compile(r"\b(?:[A-Z][a-z]+)(?:\s+[A-Z][a-z]+){1,3}\b")
+
+# Single-word capitalized name following an honorific. Catches "Dr. Kisheton",
+# "Professor Smith", "Dr Singh" (no period). The honorific is captured and
+# later stripped by _normalize_for_match so only "Kisheton" is verified
+# against the pack — matching the same case-insensitive substring logic
+# the multi-word path uses.
+_HONORIFIC_PERSON_RE = re.compile(
+    r"\b(?:Dr|Prof|Professor|Mr|Mrs|Ms|Sir|Dame)\.?\s+([A-Z][a-z]+)\b",
+)
+
+# Named institutions — two shapes:
+#   A. <Token> of <Title Case>: "University of Cambridge", "Institute of Cosmic Studies"
+#   B. <Title Case>+ <Token>: "Stanford Research Institute", "National Geographic Society"
+# Both require the recognizable organization token; a bare "University" or "Museum"
+# without a proper name attached (a common-noun usage) is not flagged.
+_ORG_TOKEN = (
+    r"University|Institute|Society|Foundation|Academy|Museum|Laboratory|"
+    r"Observatory|Center|Centre|College|Consortium"
+)
+_INSTITUTION_RE = re.compile(
+    rf"\b(?:"
+    rf"(?:{_ORG_TOKEN})\s+(?:of|for|de)\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+){{0,3}}"
+    rf"|"
+    rf"(?:[A-Z][a-z]+\s+){{1,4}}(?:{_ORG_TOKEN})"
+    rf")\b"
+)
 
 # Dates: 3-4 digit year optionally followed by BCE/CE/AD/BC, or 19xx/20xx.
 _DATE_RE = re.compile(
@@ -91,26 +119,119 @@ _PERSON_STOPWORDS = frozenset(
 # ---------------------------------------------------------------------------
 
 
+def _sentence_containing(prose: str, match_start: int) -> str:
+    """Return the nearest sentence containing position `match_start`.
+
+    Used so extractors that run on the whole prose (needed because the
+    sentence splitter naively treats 'Dr.' as a terminator) can still
+    attach a useful sentence context to each Specific.
+    """
+    # Backward: last sentence terminator before match_start
+    before = prose[:match_start]
+    start = 0
+    for i in range(len(before) - 1, -1, -1):
+        if before[i] in ".!?":
+            # Honor common abbreviations — keep walking back if the character
+            # ending the sentence is itself inside "Dr.", "Mr.", etc.
+            prefix_tail = before[max(0, i - 5) : i]
+            tail_stripped = re.sub(r"[^A-Za-z]", "", prefix_tail).lower()
+            if tail_stripped[-2:] in ("dr", "mr", "ms", "jr", "sr") or tail_stripped[-4:] in (
+                "prof",
+                "dame",
+                "sir",
+            ):
+                continue
+            start = i + 1
+            break
+
+    # Forward: next terminator after match_start
+    end = len(prose)
+    for j in range(match_start, len(prose)):
+        if prose[j] in ".!?":
+            prefix_tail = prose[max(0, j - 5) : j]
+            tail_stripped = re.sub(r"[^A-Za-z]", "", prefix_tail).lower()
+            if tail_stripped[-2:] in ("dr", "mr", "ms", "jr", "sr") or tail_stripped[-4:] in (
+                "prof",
+                "dame",
+                "sir",
+            ):
+                continue
+            end = j + 1
+            break
+
+    return prose[start:end].strip()
+
+
 def extract_specifics(prose: str) -> list[Specific]:
     """Return every specific worth verifying against the evidence pack.
 
-    Scans each sentence of the prose and extracts proper nouns, dates,
-    measurements, quoted phrases, and titled works.
+    Extracts proper nouns, dates, measurements, quoted phrases, titled
+    works, and named institutions from the full prose. The quick
+    sentence splitter (``_SENTENCE_RE``) is too naive for prose that
+    includes honorifics like "Dr.", so the honorific and institution
+    extractors run on the whole string and lazily compute the containing
+    sentence for each match via ``_sentence_containing``.
     """
     if not prose:
         return []
 
     out: list[Specific] = []
+    emitted_person_lower: set[str] = set()
+
+    # Pass 1: named institutions. Run first so PERSON_RE doesn't gobble
+    # a Title Case run that ends in "Institute"/"University"/etc.
+    institution_spans: list[tuple[int, int]] = []
+    for m in _INSTITUTION_RE.finditer(prose):
+        text = m.group(0).strip()
+        # Strip leading article "The ", "the " for cleaner display.
+        if text.lower().startswith("the "):
+            text = text[4:]
+        sentence = _sentence_containing(prose, m.start())
+        out.append(Specific(kind="institution", text=text, sentence=sentence))
+        institution_spans.append(m.span())
+
+    def _overlaps_institution(span: tuple[int, int]) -> bool:
+        s, e = span
+        return any(not (e <= a or s >= b) for a, b in institution_spans)
+
+    # Pass 2: multi-word person runs on the whole prose, excluding spans
+    # already claimed by an institution match.
+    person_spans_global: list[tuple[int, int]] = []
+    for m in _PERSON_RE.finditer(prose):
+        text = m.group(0)
+        if text.lower() in _PERSON_STOPWORDS:
+            continue
+        if _overlaps_institution(m.span()):
+            continue
+        # Strip leading article if regex happened to include one (rare).
+        if text.lower().startswith("the "):
+            text = text[4:]
+        sentence = _sentence_containing(prose, m.start())
+        out.append(Specific(kind="person", text=text, sentence=sentence))
+        emitted_person_lower.add(text.lower())
+        person_spans_global.append(m.span())
+
+    # Pass 3: honorific + single-word name, e.g. "Dr. Kisheton". Skip if the
+    # last-name already appears as part of a multi-word run.
+    for m in _HONORIFIC_PERSON_RE.finditer(prose):
+        last_name = m.group(1)
+        lower = last_name.lower()
+        if lower in _PERSON_STOPWORDS:
+            continue
+        if any(lower in t for t in emitted_person_lower):
+            continue
+        if _overlaps_institution(m.span()):
+            continue
+        sentence = _sentence_containing(prose, m.start())
+        out.append(Specific(kind="person", text=last_name, sentence=sentence))
+        emitted_person_lower.add(lower)
+
+    # Dates, measurements, quotes, titles — per-sentence is fine (terminator
+    # false positives inside these are rare and low-stakes).
     for s_match in _SENTENCE_RE.finditer(prose):
         sentence = s_match.group(0).strip()
         if not sentence:
             continue
-
-        for m in _PERSON_RE.finditer(sentence):
-            text = m.group(0)
-            if text.lower() in _PERSON_STOPWORDS:
-                continue
-            out.append(Specific(kind="person", text=text, sentence=sentence))
 
         for m in _DATE_RE.finditer(sentence):
             out.append(Specific(kind="date", text=m.group(0), sentence=sentence))
