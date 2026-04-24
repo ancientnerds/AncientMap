@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import argparse
 import difflib
+import hashlib
 import json
 import os
 import pathlib
@@ -54,9 +55,16 @@ def _encode_parens(url: str) -> str:
     return url.replace("(", "%28").replace(")", "%29") if url else url
 
 
-def render_block(pick: dict) -> str:
-    """Render one gallery pick as the standard image-caption-source markdown."""
+def render_block(pick: dict, gallery_id: str | None = None) -> str:
+    """Render one gallery pick as the standard image-caption-source markdown.
+
+    When `gallery_id` is provided, prefixes the alt text with
+    `gallery:<id>|` so the frontend TheoCarousel groups adjacent
+    gallery-tagged images into a carousel instead of a stacked mosaic.
+    """
     alt = (pick.get("alt") or "Research image").replace("]", "").strip()[:140]
+    if gallery_id:
+        alt = f"gallery:{gallery_id}|{alt}"
     src = _encode_parens(pick["image_url"])
     caption = pick["caption"]
     if not caption.startswith("*"):
@@ -133,7 +141,14 @@ def rebuild_report(report: str, gallery: list[dict]) -> str:
 
         picks = picks_by_para.get(pkey(paragraph), [])
         if picks:
-            new_md = "\n\n".join(render_block(p) for p in picks)
+            # When the paragraph gets 2+ picks, emit a gallery:<hash>| marker
+            # so the frontend renders them as a carousel rather than a stack.
+            gallery_id = (
+                hashlib.sha1(paragraph.encode("utf-8")).hexdigest()[:8]
+                if len(picks) > 1
+                else None
+            )
+            new_md = "\n\n".join(render_block(p, gallery_id) for p in picks)
         else:
             new_md = ""  # empty paragraph → drop images entirely
         replacements.append((first_start, last_end, new_md))
