@@ -402,11 +402,14 @@
   opacity: 0.5;
 }
 
-/* Site popup overlay (news page) */
+/* Site popup overlay — must sit above the page header (10000), hamburger
+ * dropdown (99999), audit-page overlays (10001), and tie with the lightbox
+ * layer (100000). The inner lightbox still wins when opened because it's
+ * rendered later in the DOM tree. */
 .news-site-popup-overlay {
   position: fixed;
   inset: 0;
-  z-index: 1000;
+  z-index: 100000;
   background: rgba(0, 0, 0, 0.6);
   display: flex;
   align-items: center;
