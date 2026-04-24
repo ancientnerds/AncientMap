@@ -709,7 +709,9 @@ class PaperHandler(BaseHandler):
         # 4096 budget: hook is usually 300-500 output tokens, but M2.7 thinking
         # can consume 2K+ before the prose starts. 2048 was too tight.
         raw = await self._llm_call(hook_prompt, user_msg, 4096, settings)
-        return raw.strip()
+        hook = raw.strip()
+        hook = await self._run_hallucination_gate(hook, findings_text, settings)
+        return hook
 
     async def _write_investigation_section(
         self,
@@ -785,7 +787,76 @@ class PaperHandler(BaseHandler):
                 uncited_ratio * 100,
             )
 
+        prose = await self._run_hallucination_gate(prose, claims_text, settings)
         return sec_title, prose
+
+    async def _run_hallucination_gate(
+        self,
+        prose: str,
+        pack: str,
+        settings,
+    ) -> str:
+        """Extract specifics from prose, verify against pack + sources + question.
+
+        Unsupported specifics trigger the hallucination_gate.repair_prose loop.
+        Metrics accumulate on self.state.hallucination_metrics. Returns the
+        (possibly-repaired) prose.
+        """
+        from pipeline.lyra import hallucination_gate
+
+        metrics = getattr(
+            self.state,
+            "hallucination_metrics",
+            {"initial": 0, "final": 0, "retries": 0},
+        )
+
+        specs = hallucination_gate.extract_specifics(prose)
+        unsupported = hallucination_gate.verify_against_pack(
+            specs,
+            pack=pack,
+            sources=self.state.registry.sources,
+            original_question=self.state.question,
+        )
+        metrics["initial"] += len(unsupported)
+
+        if unsupported:
+
+            async def _llm_call(system, user, max_tokens, s, temperature):
+                # _llm_call on the handler is (system, user, max_tokens, settings)
+                # without a temperature override. For repair we want deterministic
+                # output, so we pass the temperature through minimax_chat_anthropic
+                # directly via asyncio.to_thread (same shape as the handler's own
+                # _llm_call but with explicit temp).
+                return await asyncio.to_thread(
+                    minimax_chat_anthropic,
+                    system,
+                    user,
+                    max_tokens,
+                    s,
+                    temperature=temperature,
+                )
+
+            prose, remaining, retries = await hallucination_gate.repair_prose(
+                prose,
+                unsupported,
+                pack=pack,
+                sources=self.state.registry.sources,
+                original_question=self.state.question,
+                llm_call=_llm_call,
+                settings=settings,
+            )
+            metrics["retries"] += retries
+            metrics["final"] += len(remaining)
+            self.state.llm_call_count += retries
+            if remaining:
+                logger.info(
+                    "[paper] hallucination_gate left %d specifics after %d retries",
+                    len(remaining),
+                    retries,
+                )
+
+        self.state.hallucination_metrics = metrics
+        return prose
 
     async def _write_connecting_section(
         self,
