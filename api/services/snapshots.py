@@ -633,13 +633,31 @@ def export_file_snapshot(db: Session) -> str:
     result = db.execute(
         text("""
         SELECT
-            id, name, lat, lon, source_id, site_type,
-            period_start, period_end, period_name, country,
-            description, thumbnail_url, source_url, edited_by,
-            created_at
-        FROM unified_sites
-        WHERE source_id IN ('ancient_nerds', 'lyra', 'ancient_nerds_community')
-        ORDER BY source_id, name
+            us.id, us.name, us.lat, us.lon, us.source_id, us.site_type,
+            us.period_start, us.period_end, us.period_name, us.country,
+            us.description, us.thumbnail_url, us.source_url, us.edited_by,
+            us.created_at,
+            hero.original_url     AS hero_url,
+            hero.commons_page_url AS hero_attribution_url,
+            COALESCE(refs.links, '[]'::jsonb) AS reference_links
+        FROM unified_sites us
+        LEFT JOIN LATERAL (
+            SELECT original_url, commons_page_url
+            FROM wiki_images
+            WHERE site_id = us.id AND is_hero = true
+            ORDER BY id LIMIT 1
+        ) hero ON TRUE
+        LEFT JOIN LATERAL (
+            SELECT jsonb_agg(
+                jsonb_build_object('url', content_url, 'title', title)
+                ORDER BY id
+            ) AS links
+            FROM site_content_links
+            WHERE site_id = us.id AND content_type = 'reference'
+              AND content_url IS NOT NULL
+        ) refs ON TRUE
+        WHERE us.source_id IN ('ancient_nerds', 'lyra', 'ancient_nerds_community')
+        ORDER BY us.source_id, us.name
     """)
     )
 
@@ -672,6 +690,12 @@ def export_file_snapshot(db: Session) -> str:
             site["eb"] = row.edited_by
         if row.created_at:
             site["ea"] = row.created_at.isoformat()
+        if row.hero_url:
+            site["hu"] = row.hero_url
+        if row.hero_attribution_url:
+            site["ha"] = row.hero_attribution_url
+        if row.reference_links:
+            site["rl"] = row.reference_links
 
         sites.append(site)
         source_counts[row.source_id] += 1

@@ -1017,7 +1017,9 @@ export default function DbAuditPage() {
           confidence_score: p.confidence_score ?? null,
           description_citations: p.description_citations || null,
           reference_links: p.reference_links || null,
-          existing_id: p._matchedId || null,
+          hero_url: p.hero_url || null,
+          hero_attribution_url: p.hero_attribution_url || null,
+          existing_id: p.existing_id || p._matchedId || null,
         }))
 
       const total = allSites.length
