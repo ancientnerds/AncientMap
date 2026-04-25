@@ -722,31 +722,50 @@ class PaperHandler(BaseHandler):
         """Write the opening hook paragraph(s)."""
         hook_prompt = (PROMPTS_DIR / "v2_paper_hook.txt").read_text(encoding="utf-8")
 
-        # Select the most interesting findings for the hook
-        key_findings = []
+        # Select the most interesting fully-cited claims for the hook. The
+        # hook prompt now requires every paragraph to carry an [N] marker;
+        # passing claims that already have `citations` populated lets the
+        # writer attach a real reference rather than scaffolding a bare
+        # statement that the strip pass would have to inject from registry.
+        key_claims: list[dict] = []
         for c in claims:
+            if not c.get("citations", "").strip():
+                continue
             if c.get("confidence") == "high":
-                key_findings.append(c["claim"])
-        if len(key_findings) < 3:
+                key_claims.append(c)
+        if len(key_claims) < 3:
             for c in claims:
-                if c.get("confidence") == "medium" and c["claim"] not in key_findings:
-                    key_findings.append(c["claim"])
-                if len(key_findings) >= 8:
+                if not c.get("citations", "").strip():
+                    continue
+                if c in key_claims:
+                    continue
+                if c.get("confidence") == "medium":
+                    key_claims.append(c)
+                if len(key_claims) >= 8:
                     break
 
-        findings_text = "\n".join(f"- {f}" for f in key_findings[:10])
+        # Formatted with [N] markers — same shape investigation sections see.
+        findings_text = self._format_claims_for_prompt(key_claims[:10])
+        # Plain-text bullet form for the hallucination gate's pack-verification
+        # step (which looks for substring matches on claim text, not the
+        # numbered formatting). Without this, the gate flagged hook specifics
+        # that came straight from the same claims it was given.
+        findings_pack = "\n".join(f"- {c.get('claim', '')}" for c in key_claims[:10])
 
         user_msg = (
             f"## Topic\n\n{self.state.question}\n\n"
             f"## Paper title\n\n{title}\n\n"
-            f"## Key findings\n\n{findings_text}\n"
+            f"## Cited findings (carry these [N] markers into the prose)\n\n{findings_text}\n"
         )
 
         # 4096 budget: hook is usually 300-500 output tokens, but M2.7 thinking
         # can consume 2K+ before the prose starts. 2048 was too tight.
         raw = await self._llm_call(hook_prompt, user_msg, 4096, settings)
         hook = raw.strip()
-        hook = await self._run_hallucination_gate(hook, findings_text, settings)
+        # Pass the plain claim-bullets pack to the hallucination gate so its
+        # substring verification can see the source claim text directly,
+        # without [N] formatting noise.
+        hook = await self._run_hallucination_gate(hook, findings_pack, settings)
         return hook
 
     async def _write_investigation_section(

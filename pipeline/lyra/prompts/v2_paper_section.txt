@@ -12,12 +12,14 @@ STYLE:
 - Transitions that pull forward: "But that was only the beginning." / "But here's where it gets interesting."
 - Build credibility through specifics, then pull the rug: "But here's the part that doesn't sit right."
 
-CITATIONS:
+CITATIONS (HARD REQUIREMENT — every factual paragraph must end with at least one [N]):
 - The claims contain [N] markers. Use the EXACT markers -- do not renumber or invent new ones.
+- Every paragraph that states a fact, claim, finding, attribution, date, or measurement MUST contain at least one [N] marker. No exceptions.
 - Cite at the point where the claim is first introduced. At least one citation per 1-2 sentences that state facts.
 - Group multiple citations: "...dates to 3000 BC [2] [45]."
 - Place citations BEFORE the period.
 - If a sentence in your draft cannot carry an [N] marker from the claims pack, DELETE THE SENTENCE. Do not paraphrase, do not leave uncited filler. The hallucination gate will catch ungrounded specifics and your sentence will be rewritten or removed.
+- A factual paragraph with NO [N] marker will be deleted from the published paper by the audit pipeline. Better to write fewer, fully-cited paragraphs than more paragraphs that lose half their content.
 
 BANNED PHRASES (never use these):
 - "it should be noted" / "it is worth considering" / "it is important to emphasize"
