@@ -1066,6 +1066,9 @@ class PaperHandler(BaseHandler):
             self.state.config.max_tokens_per_call,
             settings,
         )
+        prose = await self._cite_or_delete_repair(
+            prose, section_prompt, user_msg, claims_text, settings, "Connecting the Dots"
+        )
         prose = await self._run_hallucination_gate(prose, claims_text, settings)
         return prose
 
@@ -1139,6 +1142,9 @@ class PaperHandler(BaseHandler):
             self.state.config.max_tokens_per_call,
             settings,
         )
+        prose = await self._cite_or_delete_repair(
+            prose, section_prompt, user_msg, claims_text, settings, "The Other Side"
+        )
         prose = await self._run_hallucination_gate(prose, claims_text, settings)
         return prose
 
@@ -1188,14 +1194,22 @@ class PaperHandler(BaseHandler):
             self.state.config.max_tokens_per_call,
             settings,
         )
-        # Build a pack for the hallucination gate from all tiers of claims
-        # (the assessment cites across all three).
+        # Build a pack for the hallucination gate + surgical repair from all
+        # three confidence tiers (the assessment cites across all of them).
         _assessment_pack = "\n".join(
             [
                 _format_tier(high_confidence),
                 _format_tier(medium_confidence),
                 _format_tier(low_confidence),
             ]
+        )
+        prose = await self._cite_or_delete_repair(
+            prose,
+            assessment_prompt,
+            user_msg,
+            _assessment_pack,
+            settings,
+            "What We Actually Know",
         )
         prose = await self._run_hallucination_gate(prose, _assessment_pack, settings)
         return prose
