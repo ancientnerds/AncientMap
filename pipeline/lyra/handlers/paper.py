@@ -786,16 +786,38 @@ class PaperHandler(BaseHandler):
             settings,
         )
 
-        # Repair if more than 5% of factual paragraphs are uncited. The hard
-        # gate in the judge requires <= 2 uncited paragraphs total — well
-        # under 5% on a typical 100-paragraph section — so a loose threshold
-        # leaves the paper to fail audit. Trigger early; the writer gets one
-        # chance to tighten before we accept whatever comes out.
-        uncited_ratio = self._uncited_ratio(prose)
-        if uncited_ratio > 0.05:
+        prose = await self._cite_or_delete_repair(
+            prose, section_prompt, user_msg, claims_text, settings, sec_title
+        )
+        prose = await self._run_hallucination_gate(prose, claims_text, settings)
+        return sec_title, prose
+
+    async def _cite_or_delete_repair(
+        self,
+        prose: str,
+        section_prompt: str,
+        user_msg: str,
+        claims_text: str,
+        settings,
+        sec_title: str,
+    ) -> str:
+        """Up to two-stage repair: whole-section, then per-paragraph surgical.
+
+        Stage 1 (whole-section): the writer rewrites the whole section if the
+        uncited ratio exceeds 5%. Repair prompt repeats the rules and the
+        original claim pack.
+
+        Stage 2 (per-paragraph): if uncited paragraphs survive the first pass,
+        list them with their indices and ask the writer to either inject an
+        [N] marker from the pack or delete the paragraph entirely. This
+        surgical loop is far cheaper than another whole-section regeneration
+        and converges quickly because each decision is local.
+        """
+        # Stage 1 — whole-section
+        ratio = self._uncited_ratio(prose)
+        if ratio > 0.05:
             repair_user_msg = (
-                user_msg
-                + f"\n\nYour previous draft had {uncited_ratio:.0%} uncited factual paragraphs. "
+                user_msg + f"\n\nYour previous draft had {ratio:.0%} uncited factual paragraphs. "
                 "Rewrite so every factual paragraph carries an [N] marker from the claim pack. "
                 "Delete any sentence you cannot cite. Connective prose without facts is allowed "
                 "only if it is shorter than one sentence — otherwise carry a marker."
@@ -808,13 +830,91 @@ class PaperHandler(BaseHandler):
             )
             prose = repair_raw.strip()
             logger.info(
-                "[paper] Repair pass for section '%s' -- uncited_ratio before: %.0f%%",
+                "[paper] Stage-1 repair for section '%s' — uncited %.0f%% -> rewriting",
                 sec_title,
-                uncited_ratio * 100,
+                ratio * 100,
             )
 
-        prose = await self._run_hallucination_gate(prose, claims_text, settings)
-        return sec_title, prose
+        # Stage 2 — per-paragraph surgical pass
+        paragraphs = [p.strip() for p in prose.split("\n\n") if p.strip()]
+        uncited_indices: list[int] = []
+        for i, p in enumerate(paragraphs):
+            if len(p) > 50 and not p.startswith("#") and not re.search(r"\[\d+\]", p):
+                uncited_indices.append(i)
+
+        if not uncited_indices:
+            return prose
+
+        listing = "\n".join(
+            f"PARAGRAPH {idx}: {paragraphs[idx][:300]}"
+            + ("..." if len(paragraphs[idx]) > 300 else "")
+            for idx in uncited_indices
+        )
+        surgical_system = (
+            "You are repairing a research paper section. Below are paragraphs that "
+            "currently have no [N] citation marker. For each, either:\n"
+            "  KEEP — add the right [N] marker(s) from the claims pack at the end of "
+            "the relevant sentence and return the rewritten paragraph.\n"
+            "  DELETE — return the literal string `<<DELETE>>` if no claim in the pack "
+            "can support the paragraph.\n\n"
+            "Output format (one block per paragraph, separated by blank lines):\n"
+            "PARAGRAPH <idx>:\n<rewritten paragraph or <<DELETE>>>\n\n"
+            "Do not invent citations. Use only [N] markers that appear verbatim in the claims pack."
+        )
+        surgical_user = (
+            f"## Claims pack\n\n{claims_text}\n\n## Uncited paragraphs to repair\n\n{listing}\n"
+        )
+        try:
+            decisions = await self._llm_call(
+                surgical_system,
+                surgical_user,
+                self.state.config.max_tokens_per_call,
+                settings,
+            )
+        except Exception as exc:
+            logger.warning("[paper] Stage-2 surgical repair LLM failed: %s", exc)
+            return prose
+
+        # Parse the decisions and apply them by paragraph index
+        block_re = re.compile(
+            r"PARAGRAPH\s+(\d+)\s*:\s*\n(.+?)(?=\nPARAGRAPH\s+\d+\s*:|\Z)", re.DOTALL
+        )
+        edits: dict[int, str] = {}
+        for m in block_re.finditer(decisions):
+            idx = int(m.group(1))
+            replacement = m.group(2).strip()
+            if idx in uncited_indices:
+                edits[idx] = replacement
+
+        new_paragraphs: list[str] = []
+        for i, p in enumerate(paragraphs):
+            if i in edits:
+                rep = edits[i]
+                if rep == "<<DELETE>>" or rep.lower() == "delete":
+                    continue  # drop the paragraph
+                # Sanity: only keep if the LLM added a marker or shortened the prose
+                if re.search(r"\[\d+\]", rep) or len(rep) <= 60:
+                    new_paragraphs.append(rep)
+                else:
+                    # LLM returned prose without a marker — drop instead of leak
+                    continue
+            else:
+                new_paragraphs.append(p)
+
+        repaired = "\n\n".join(new_paragraphs)
+        logger.info(
+            "[paper] Stage-2 surgical repair for section '%s' — %d uncited paragraphs -> %d after",
+            sec_title,
+            len(uncited_indices),
+            sum(
+                1
+                for p in repaired.split("\n\n")
+                if len(p.strip()) > 50
+                and not p.strip().startswith("#")
+                and not re.search(r"\[\d+\]", p)
+            ),
+        )
+        return repaired
 
     async def _run_hallucination_gate(
         self,
