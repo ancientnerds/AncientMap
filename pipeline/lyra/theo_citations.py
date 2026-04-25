@@ -563,6 +563,159 @@ def _is_factual_paragraph(block: str, section_title: str) -> bool:
     return True
 
 
+# Stopwords used by significant-token tokenization. Kept tight: only function
+# words and grammatical scaffolding. Content words like "study", "research",
+# "evidence" stay because they carry domain weight in claim text matching.
+_TOKENIZE_STOPWORDS = frozenset(
+    {
+        "about",
+        "after",
+        "also",
+        "been",
+        "being",
+        "between",
+        "both",
+        "could",
+        "during",
+        "each",
+        "from",
+        "have",
+        "having",
+        "however",
+        "into",
+        "more",
+        "much",
+        "must",
+        "other",
+        "over",
+        "should",
+        "some",
+        "such",
+        "than",
+        "that",
+        "their",
+        "them",
+        "then",
+        "there",
+        "these",
+        "this",
+        "those",
+        "through",
+        "thus",
+        "under",
+        "until",
+        "upon",
+        "very",
+        "were",
+        "what",
+        "when",
+        "where",
+        "which",
+        "while",
+        "with",
+        "within",
+        "without",
+        "would",
+        "your",
+    }
+)
+
+
+def _significant_tokens(text: str) -> set[str]:
+    """Lowercase tokens of length >= 4, alphanumerics only, minus stopwords.
+
+    Used to compute lexical overlap between a paragraph and a candidate claim
+    text. The length filter discards most articles/conjunctions/prepositions;
+    the stopword set removes a small list of high-frequency content-free
+    multi-letter words. What remains is mostly domain-bearing nouns, verbs,
+    and adjectives — the right signal for "are these texts about the same
+    underlying claim?"
+    """
+    if not text:
+        return set()
+    raw = re.findall(r"[a-z0-9]+", text.lower())
+    return {w for w in raw if len(w) >= 4 and w not in _TOKENIZE_STOPWORDS}
+
+
+def inject_citation_for_paragraph(
+    paragraph: str,
+    registry: CitationRegistry,
+    *,
+    min_overlap_ratio: float = 0.4,
+    min_overlap_words: int = 5,
+) -> str | None:
+    """Try to attach an [N] marker to an uncited paragraph by content match.
+
+    Walks `registry.claims` and computes lexical overlap between the
+    paragraph and each claim's text. If the best-scoring claim shares at
+    least `min_overlap_words` significant tokens AND a `min_overlap_ratio`
+    fraction of the smaller token set, we treat the paragraph as supported
+    by that claim and append the claim's reference markers to the paragraph
+    end.
+
+    Returns the modified paragraph (with appended ` [N] [M]` markers) on a
+    successful injection. Returns `None` when no claim scores high enough,
+    when the paragraph already cites every candidate marker, or when no
+    claim source resolves to a registered CitedSource.
+
+    Conservative by design: better to leave a paragraph uncited (and have
+    the strip drop it or the section-preserve safeguard restore it) than to
+    misattribute a citation. Tune `min_overlap_words` upward if false
+    matches appear; downward if real matches are missed.
+    """
+    if not registry.claims:
+        return None
+
+    para_tokens = _significant_tokens(paragraph)
+    if len(para_tokens) < min_overlap_words:
+        return None
+
+    best_score = 0.0
+    best_overlap_size = 0
+    best_claim: ClaimCitation | None = None
+    for claim in registry.claims:
+        if not claim.source_ids:
+            continue
+        c_tokens = _significant_tokens(claim.claim_text)
+        if len(c_tokens) < min_overlap_words:
+            continue
+        overlap = para_tokens & c_tokens
+        if len(overlap) < min_overlap_words:
+            continue
+        score = len(overlap) / min(len(para_tokens), len(c_tokens))
+        if score > best_score or (score == best_score and len(overlap) > best_overlap_size):
+            best_score = score
+            best_overlap_size = len(overlap)
+            best_claim = claim
+
+    if best_claim is None or best_score < min_overlap_ratio:
+        return None
+
+    # Resolve source_ids → reference numbers, assigning new ones for any
+    # source the writer didn't already cite. The new numbers will surface in
+    # format_references_list() since it iterates reference_numbers in order.
+    nums: list[int] = []
+    for sid in best_claim.source_ids:
+        if sid not in registry.sources:
+            continue
+        num = registry.reference_numbers.get(sid)
+        if num is None:
+            num = registry.assign_reference_number(sid)
+        if num not in nums:
+            nums.append(num)
+    if not nums:
+        return None
+
+    existing = {int(m) for m in re.findall(r"\[(\d+)\]", paragraph)}
+    new_nums = [n for n in nums if n not in existing]
+    if not new_nums:
+        # All candidate markers already present — paragraph is effectively cited
+        return paragraph
+
+    cite_str = " " + " ".join(f"[{n}]" for n in new_nums)
+    return paragraph.rstrip() + cite_str
+
+
 def strip_uncited_factual_paragraphs(
     paper_text: str,
     registry: CitationRegistry,
@@ -574,6 +727,14 @@ def strip_uncited_factual_paragraphs(
     Used as the final guarantee step after finalize_references: even if the
     per-section LLM repair passes failed silently, this mechanically prunes
     the prose so audit_citations sees zero uncited paragraphs.
+
+    Before stripping, attempts smart claim-injection via
+    `inject_citation_for_paragraph`: for each uncited factual paragraph,
+    look up the closest-matching claim in `registry.claims` by content
+    overlap and append its [N] marker. Only paragraphs with no plausible
+    claim support are stripped. This preserves writer-produced content
+    that simply forgot to attach a marker — the citation evidence is in
+    the registry, just not in the prose.
 
     Section-preservation safeguard: if stripping a section would leave it
     with less than `section_preserve_threshold` of its original prose word
@@ -630,6 +791,15 @@ def strip_uncited_factual_paragraphs(
                 stripped_blocks.append(b)
                 continue
             if _is_factual_paragraph(stripped, title_lower) and not re.search(r"\[\d+\]", stripped):
+                # Try smart injection before dropping. If a registry claim
+                # supports this paragraph, attach its [N] markers in place
+                # of removing the content.
+                injected = inject_citation_for_paragraph(stripped, registry)
+                if injected is not None and re.search(r"\[\d+\]", injected):
+                    # Preserve the original block's leading/trailing
+                    # whitespace by replacing the stripped slice in-place.
+                    new_block = b.replace(stripped, injected, 1)
+                    stripped_blocks.append(new_block)
                 continue
             stripped_blocks.append(b)
 
