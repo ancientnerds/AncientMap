@@ -566,19 +566,25 @@ def _is_factual_paragraph(block: str, section_title: str) -> bool:
 def strip_uncited_factual_paragraphs(
     paper_text: str,
     registry: CitationRegistry,
+    *,
+    section_preserve_threshold: float = 0.25,
 ) -> str:
-    """Remove any factual paragraph that lacks an [N] marker.
+    """Remove factual paragraphs lacking an [N] marker — section-aware.
 
     Used as the final guarantee step after finalize_references: even if the
     per-section LLM repair passes failed silently, this mechanically prunes
     the prose so audit_citations sees zero uncited paragraphs.
 
-    The hook (everything before the first `## ` heading), image blocks,
-    captions, source links, structural openers, exempt sections, and
-    duplicate-heading paragraphs are all preserved — only true factual
-    paragraphs without citations are dropped.
+    Section-preservation safeguard: if stripping a section would leave it
+    with less than `section_preserve_threshold` of its original prose word
+    count, the section's original (uncited) content is restored. This
+    prevents whole sections from being gutted to satisfy the audit at the
+    cost of empty headings — the audit will then flag the surviving
+    uncited paragraphs and the writer's earlier repair pass owns it.
 
-    The References section (if present) is preserved verbatim.
+    Image blocks, captions, source-link trailers, structural openers,
+    exempt sections, duplicate-heading paragraphs, and the References
+    section are always preserved.
     """
     refs_start = _find_references_heading(paper_text)
     if refs_start is not None:
@@ -588,23 +594,65 @@ def strip_uncited_factual_paragraphs(
         prose = paper_text
         refs_tail = ""
 
-    current_section = ""
-    kept_blocks: list[str] = []
+    # Pass 1: split into per-section block-lists so we can decide per-section
+    # whether the strip is safe to apply.
+    sections: list[dict] = [{"title_lower": "", "title_block": None, "blocks": []}]
     for block in prose.split("\n\n"):
         stripped = block.strip()
-        if not stripped:
-            kept_blocks.append(block)
-            continue
-        heading_match = re.match(r"^##\s+(.+)$", stripped, re.MULTILINE)
+        heading_match = re.match(r"^##\s+(.+)$", stripped, re.MULTILINE) if stripped else None
         if heading_match:
-            current_section = heading_match.group(1).strip().lower()
-            kept_blocks.append(block)
+            sections.append(
+                {
+                    "title_lower": heading_match.group(1).strip().lower(),
+                    "title_block": block,
+                    "blocks": [],
+                }
+            )
             continue
-        if _is_factual_paragraph(stripped, current_section) and not re.search(r"\[\d+\]", stripped):
-            continue
-        kept_blocks.append(block)
+        sections[-1]["blocks"].append(block)
 
-    new_prose = "\n\n".join(kept_blocks)
+    # Pass 2: per-section, compute stripped vs. original word-count and
+    # choose to keep stripped or fall back to original.
+    out_blocks: list[str] = []
+    for sec in sections:
+        title_lower = sec["title_lower"]
+        title_block = sec["title_block"]
+        blocks = sec["blocks"]
+
+        original_word_count = sum(
+            len(b.split()) for b in blocks if b.strip() and not b.strip().startswith("#")
+        )
+
+        stripped_blocks: list[str] = []
+        for b in blocks:
+            stripped = b.strip()
+            if not stripped:
+                stripped_blocks.append(b)
+                continue
+            if _is_factual_paragraph(stripped, title_lower) and not re.search(r"\[\d+\]", stripped):
+                continue
+            stripped_blocks.append(b)
+
+        stripped_word_count = sum(
+            len(b.split()) for b in stripped_blocks if b.strip() and not b.strip().startswith("#")
+        )
+
+        # If the strip would gut the section (below threshold), fall back to
+        # the original blocks so the section keeps its content. The audit
+        # gate then records the surviving uncited paragraphs honestly.
+        if (
+            original_word_count > 100
+            and stripped_word_count < original_word_count * section_preserve_threshold
+        ):
+            chosen = blocks
+        else:
+            chosen = stripped_blocks
+
+        if title_block is not None:
+            out_blocks.append(title_block)
+        out_blocks.extend(chosen)
+
+    new_prose = "\n\n".join(out_blocks)
     new_prose = re.sub(r"\n{3,}", "\n\n", new_prose).rstrip() + "\n"
     return new_prose + refs_tail
 
