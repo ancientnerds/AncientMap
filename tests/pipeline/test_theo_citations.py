@@ -1,4 +1,5 @@
 """Tests for CitationRegistry and audit_citations in theo_citations."""
+
 import re
 
 import pytest
@@ -10,8 +11,10 @@ from pipeline.lyra.theo_citations import (
     detect_language_bleed,
     detect_placeholder_markers,
     finalize_references,
+    inject_citation_for_paragraph,
     parse_references_section,
     score_tier_by_domain,
+    strip_uncited_factual_paragraphs,
 )
 
 # ---------------------------------------------------------------------------
@@ -33,9 +36,7 @@ def test_register_source_deduplicates():
 def test_register_source_extracts_domain():
     """Domain is extracted from URL, stripping leading 'www.'."""
     registry = CitationRegistry()
-    source_id = registry.register_source(
-        "https://www.example.com/page", "Example", "snippet"
-    )
+    source_id = registry.register_source("https://www.example.com/page", "Example", "snippet")
     assert registry.sources[source_id].domain == "example.com"
 
 
@@ -66,10 +67,7 @@ def test_assign_reference_number_idempotent():
 def test_assign_reference_number_sequential():
     """Three distinct sources get sequential reference numbers [1], [2], [3]."""
     registry = CitationRegistry()
-    ids = [
-        registry.register_source(f"https://source{i}.com", f"Source {i}", "s")
-        for i in range(3)
-    ]
+    ids = [registry.register_source(f"https://source{i}.com", f"Source {i}", "s") for i in range(3)]
     nums = [registry.assign_reference_number(sid) for sid in ids]
     assert nums == [1, 2, 3]
 
@@ -304,8 +302,7 @@ def test_audit_citations_ignores_placeholder_inside_references_section():
 def _make_registry_with_sources(n: int) -> tuple[CitationRegistry, list[str]]:
     registry = CitationRegistry()
     ids = [
-        registry.register_source(f"https://s{i}.com", f"Source {i}", "snippet")
-        for i in range(n)
+        registry.register_source(f"https://s{i}.com", f"Source {i}", "snippet") for i in range(n)
     ]
     return registry, ids
 
@@ -435,9 +432,7 @@ def test_audit_is_idempotent_to_references_section():
     registry.assign_reference_number(sid_a)  # → [1]
     registry.assign_reference_number(sid_b)  # → [2]
 
-    prose = (
-        "Rome was founded in 753 BC [1]. The senate was established soon after [2]."
-    )
+    prose = "Rome was founded in 753 BC [1]. The senate was established soon after [2]."
     with_refs = (
         prose
         + "\n\n## References\n\n"
@@ -622,9 +617,7 @@ def test_parse_references_section_round_trip():
     sid_a = registry.register_source(
         "https://www.cambridge.org/paper", "Cambridge Paper", "snippet"
     )
-    sid_b = registry.register_source(
-        "https://en.wikipedia.org/wiki/Rome", "Rome", "snippet"
-    )
+    sid_b = registry.register_source("https://en.wikipedia.org/wiki/Rome", "Rome", "snippet")
     registry.assign_reference_number(sid_a)
     registry.assign_reference_number(sid_b)
 
@@ -690,7 +683,11 @@ def test_patch_flow_fills_gap_in_citation_numbering():
     assert nums == list(range(1, 10)), f"expected [1..9], got {nums}"
     # Registry has only the 9 survivors (G dropped)
     assert len(registry.reference_numbers) == 9
-    assert all("g.example" not in s.url for s in registry.sources.values() if s.id in registry.reference_numbers)
+    assert all(
+        "g.example" not in s.url
+        for s in registry.sources.values()
+        if s.id in registry.reference_numbers
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -809,12 +806,8 @@ def test_register_source_dedupes_preprint_versions():
 def test_register_source_dedupes_tracking_params():
     """Two URLs that differ only by tracking params register as one source."""
     registry = CitationRegistry()
-    id_a = registry.register_source(
-        "https://example.com/page?utm_source=twitter", "A", "s"
-    )
-    id_b = registry.register_source(
-        "https://example.com/page?utm_source=reddit", "A", "s"
-    )
+    id_a = registry.register_source("https://example.com/page?utm_source=twitter", "A", "s")
+    id_b = registry.register_source("https://example.com/page?utm_source=reddit", "A", "s")
     assert id_a == id_b
 
 
@@ -838,6 +831,161 @@ def test_register_source_distinct_urls_remain_distinct():
 # ---------------------------------------------------------------------------
 # format_references_list — invariant: one source per entry
 # ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# inject_citation_for_paragraph — smart claim-injection
+# ---------------------------------------------------------------------------
+
+
+def _registry_with_claim(
+    claim_text: str, url: str = "https://example.org/source"
+) -> tuple[CitationRegistry, str]:
+    registry = CitationRegistry()
+    sid = registry.register_source(url, "Source", "snippet text")
+    registry.add_claim(claim_text, [sid])
+    return registry, sid
+
+
+def test_inject_returns_none_when_registry_empty():
+    """No claims → no injection possible."""
+    registry = CitationRegistry()
+    paragraph = "The Watchers in the Book of Enoch are described as fallen angels."
+    assert inject_citation_for_paragraph(paragraph, registry) is None
+
+
+def test_inject_returns_none_for_short_paragraph():
+    """A two-word paragraph has nothing to match against."""
+    registry, _ = _registry_with_claim(
+        "The Watchers in the Book of Enoch are fallen angels who taught humans."
+    )
+    assert inject_citation_for_paragraph("Yes indeed.", registry) is None
+
+
+def test_inject_returns_none_when_no_match():
+    """Unrelated paragraph and claim → no injection."""
+    registry, _ = _registry_with_claim(
+        "The Watchers in the Book of Enoch are fallen angels who taught forbidden knowledge."
+    )
+    para = "The Roman aqueducts of Segovia were constructed during the reign of Trajan."
+    assert inject_citation_for_paragraph(para, registry) is None
+
+
+def test_inject_appends_marker_for_high_overlap_paragraph():
+    """A paragraph that lexically overlaps a claim gets the claim's [N] appended."""
+    registry, sid = _registry_with_claim(
+        "The Watchers in the Book of Enoch are described as fallen angels who taught humans forbidden knowledge."
+    )
+    para = (
+        "The Book of Enoch's Watchers narrative describes fallen angels who came down to "
+        "earth and taught humans forbidden knowledge they should not have."
+    )
+    out = inject_citation_for_paragraph(para, registry)
+    assert out is not None
+    # A reference number was assigned and appended
+    assert re.search(r"\[\d+\]\s*$", out)
+    # The original prose is preserved (no rewrites)
+    assert "Book of Enoch" in out
+    assert "fallen angels" in out
+    # The source got a real reference number
+    assert sid in registry.reference_numbers
+
+
+def test_inject_returns_paragraph_unchanged_when_already_cited():
+    """If the paragraph already contains the claim's marker, leave it alone."""
+    registry, sid = _registry_with_claim(
+        "The Watchers in the Book of Enoch are described as fallen angels."
+    )
+    num = registry.assign_reference_number(sid)
+    para = f"The Book of Enoch describes the Watchers as fallen angels who came down. [{num}]"
+    out = inject_citation_for_paragraph(para, registry)
+    assert out == para  # idempotent — no double-citation
+
+
+def test_inject_picks_best_match_when_multiple_candidates():
+    """Among several claims, the one with strongest overlap wins."""
+    registry = CitationRegistry()
+    sid_low = registry.register_source("https://low.example/", "Low", "s")
+    sid_high = registry.register_source("https://high.example/", "High", "s")
+    registry.add_claim(
+        "Roman aqueducts in Segovia were built during the reign of Trajan around 100 CE.",
+        [sid_low],
+    )
+    registry.add_claim(
+        "The Watchers in the Book of Enoch are described as fallen angels who came down "
+        "from heaven and taught humans forbidden astronomical knowledge.",
+        [sid_high],
+    )
+    para = (
+        "The Book of Enoch's Watchers narrative describes fallen angels who came down "
+        "and taught humans forbidden astronomical knowledge from the heavens above."
+    )
+    out = inject_citation_for_paragraph(para, registry)
+    assert out is not None
+    # Only the high-overlap claim's source should have been cited
+    assert sid_high in registry.reference_numbers
+    assert sid_low not in registry.reference_numbers
+
+
+def test_inject_skips_claims_without_source_ids():
+    """Claims with empty source_ids cannot be cited and are ignored."""
+    registry = CitationRegistry()
+    registry.add_claim(
+        "The Book of Enoch's Watchers narrative describes fallen angels who taught humans.",
+        [],  # no sources
+    )
+    para = "The Watchers of Enoch were fallen angels who taught forbidden knowledge to humans."
+    assert inject_citation_for_paragraph(para, registry) is None
+
+
+def test_strip_uses_injection_to_preserve_supported_paragraph():
+    """End-to-end: strip helper reaches into the registry to cite an uncited paragraph."""
+    registry = CitationRegistry()
+    sid = registry.register_source("https://enoch.example/", "Enoch Source", "snippet")
+    registry.add_claim(
+        "The Watchers in the Book of Enoch are fallen angels who taught humans forbidden knowledge from heaven.",
+        [sid],
+    )
+    paper = (
+        "## Investigation\n\n"
+        "The Book of Enoch's Watchers narrative describes fallen angels who came down "
+        "and taught humans forbidden knowledge from heaven, a tradition older than most "
+        "biblical scholarship acknowledges in modern surveys of the apocryphal corpus.\n"
+    )
+    out = strip_uncited_factual_paragraphs(paper, registry)
+    # Paragraph survived the strip (was not gutted)
+    assert "Book of Enoch" in out
+    # And got a real [N] marker
+    assert re.search(r"\[\d+\]", out)
+    assert sid in registry.reference_numbers
+
+
+def test_strip_drops_unsupported_paragraph_when_no_claim_match():
+    """Strip still removes paragraphs the registry can't support."""
+    registry = CitationRegistry()
+    # A claim that doesn't match the paragraph at all
+    sid = registry.register_source("https://other.example/", "Unrelated", "snippet")
+    registry.add_claim(
+        "The Roman aqueducts of Segovia were constructed under the reign of Trajan.",
+        [sid],
+    )
+    # Five-section paper so the section-preserve safeguard doesn't trigger.
+    factual_unsupported = (
+        "Sumerian cuneiform tablets from the third millennium BCE describe the "
+        "Anunnaki as celestial visitors who descended from the heavens and shaped "
+        "human civilization in measurable archaeological ways."
+    )
+    paper = (
+        "## Investigation\n\n"
+        + factual_unsupported
+        + "\n\n"
+        + "Filler factual paragraph one with citations [1] to keep the section above the preservation threshold by word count.\n\n"
+        + "Filler factual paragraph two with citations [1] to keep the section above the preservation threshold by word count.\n\n"
+        + "Filler factual paragraph three with citations [1] to keep the section above the preservation threshold by word count.\n"
+    )
+    out = strip_uncited_factual_paragraphs(paper, registry)
+    # The unsupported paragraph is gone
+    assert "Sumerian cuneiform tablets" not in out
 
 
 def test_format_references_list_one_source_per_entry():
