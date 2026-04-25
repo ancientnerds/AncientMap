@@ -19,12 +19,14 @@ STANCE:
 - Do NOT debunk. Do NOT open with "The hypothesis falls into pseudoarchaeological territory" or any verdict.
 - End with what is genuinely still open -- questions the research surfaced but could not answer.
 
-CITATIONS:
+CITATIONS (HARD REQUIREMENT — every factual paragraph must end with at least one [N]):
 - Use the EXACT [N] markers (where N is a digit) that appear after each claim in the input. Do not renumber, do not invent.
-- If a claim in the input has NO [N] marker attached, write the sentence without any citation. Do not fabricate one.
+- Every paragraph that names a finding, attribution, date, measurement, or claim MUST contain at least one [N] marker.
+- If a claim in the input has NO [N] marker attached, do NOT include that sentence in your draft. Skip it.
 - NEVER write a placeholder like [N - topic], [N – topic], [N-acoustic resonance], or any variant with a word after "N". These are bugs, not citations.
 - Cite at the point where the claim is first introduced.
 - Place citations BEFORE the period.
+- Uncited factual paragraphs are deleted by the audit pipeline. Better fewer paragraphs that are fully cited than longer paragraphs that lose half their content.
 
 BANNED PHRASES (never use these):
 - "it is crucial to remember" / "we must be cautious" / "extraordinary claims require extraordinary evidence"

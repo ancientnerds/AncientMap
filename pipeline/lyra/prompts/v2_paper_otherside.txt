@@ -11,10 +11,13 @@ Focus on:
 - What specific credential or methodology problems exist?
 - Present the counter at full strength, then move on
 
-CITATIONS:
+CITATIONS (HARD REQUIREMENT — every factual paragraph must end with at least one [N]):
 - Use the EXACT [N] markers from the claims. Do not renumber or invent.
+- Every paragraph that names a critic, methodology problem, counter-claim, or attribution MUST contain at least one [N] marker.
+- If you cannot back a sentence with an [N] from the claims pack, delete the sentence.
 - Cite at the point where the claim is first introduced.
 - Place citations BEFORE the period.
+- Uncited factual paragraphs are deleted by the audit pipeline. Better fewer fully-cited paragraphs than longer ones that lose half their content.
 
 BANNED PHRASES (never use these):
 - "it should be noted" / "it is worth considering"
