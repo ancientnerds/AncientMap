@@ -254,11 +254,27 @@ class PaperHandler(BaseHandler):
         # only the sources that actually survived verification. This is what
         # prevents ghost references in the published bibliography.
         # ---------------------------------------------------------------
-        from pipeline.lyra.theo_citations import audit_citations, finalize_references
+        from pipeline.lyra.theo_citations import (
+            audit_citations,
+            finalize_references,
+            strip_uncited_factual_paragraphs,
+        )
 
         self.state.paper_text, sid_to_num = finalize_references(
             self.state.paper_text,
             sid_to_num,
+            self.state.registry,
+        )
+
+        # ---------------------------------------------------------------
+        # Step 7.7: Global mechanical strip of uncited factual paragraphs.
+        # Per-section Stage-3 catches most, but multi-section interactions
+        # (assembly, hook-without-citations) leave residue. Use the SAME
+        # definition the audit uses, so the audit count after this step is
+        # the source of truth.
+        # ---------------------------------------------------------------
+        self.state.paper_text = strip_uncited_factual_paragraphs(
+            self.state.paper_text,
             self.state.registry,
         )
 

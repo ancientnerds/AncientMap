@@ -473,6 +473,143 @@ def finalize_references(
 
 
 # ---------------------------------------------------------------------------
+# Citation audit — shared paragraph-classification helpers
+# ---------------------------------------------------------------------------
+
+# Sections that don't require per-paragraph citations.
+_EXEMPT_SECTIONS = frozenset(
+    {
+        "abstract",
+        "introduction",
+        "methodology",
+    }
+)
+
+# Sentence openings that mark a structural / methodological paragraph (not a
+# factual claim). Anything starting with one of these is exempt from the
+# uncited-paragraph audit.
+_STRUCTURAL_STARTS = (
+    "this paper",
+    "this research",
+    "this study",
+    "this review",
+    "this investigation",
+    "we used",
+    "we employed",
+    "our approach",
+    "our method",
+    "in summary",
+    "to summarize",
+    "future research",
+    # Bullet points
+    "- **",
+    "- ",
+)
+
+
+def _split_prose_into_paragraphs(prose_only: str) -> list[tuple[str, str]]:
+    """Walk the prose body in reading order; return (section_title, block) per non-empty block."""
+    current_section = ""
+    out: list[tuple[str, str]] = []
+    for block in prose_only.split("\n\n"):
+        block = block.strip()
+        if not block:
+            continue
+        heading_match = re.match(r"^##\s+(.+)$", block, re.MULTILINE)
+        if heading_match:
+            current_section = heading_match.group(1).strip().lower()
+        elif not block.startswith("#"):
+            out.append((current_section, block))
+    return out
+
+
+def _is_non_prose_block(block: str) -> bool:
+    """True for image markdown, italic captions, source-link trailers, lone markdown links."""
+    s = block.strip()
+    if s.startswith("!["):
+        return True
+    if s.startswith("*") and "[Source](" in s:
+        return True
+    if s.startswith("*") and s.endswith("*"):
+        return True
+    if s.startswith("[Source](") and s.endswith(")"):
+        return True
+    if re.fullmatch(r"\[[^\]]+\]\([^)]+\)", s):
+        return True
+    return False
+
+
+def _is_duplicate_heading_block(block: str, section_title: str) -> bool:
+    """True when the writer re-emitted the section title as its own paragraph."""
+    if not section_title:
+        return False
+    norm_block = re.sub(r"[^a-z0-9]+", " ", block.lower()).strip()
+    norm_sec = re.sub(r"[^a-z0-9]+", " ", section_title.lower()).strip()
+    return norm_block == norm_sec
+
+
+def _is_factual_paragraph(block: str, section_title: str) -> bool:
+    """Audit-equivalent check: does this block need an [N] marker to be considered cited?"""
+    if len(block) <= 50:
+        return False
+    if section_title in _EXEMPT_SECTIONS:
+        return False
+    if block.lower().startswith(_STRUCTURAL_STARTS):
+        return False
+    if _is_non_prose_block(block):
+        return False
+    if _is_duplicate_heading_block(block, section_title):
+        return False
+    return True
+
+
+def strip_uncited_factual_paragraphs(
+    paper_text: str,
+    registry: CitationRegistry,
+) -> str:
+    """Remove any factual paragraph that lacks an [N] marker.
+
+    Used as the final guarantee step after finalize_references: even if the
+    per-section LLM repair passes failed silently, this mechanically prunes
+    the prose so audit_citations sees zero uncited paragraphs.
+
+    The hook (everything before the first `## ` heading), image blocks,
+    captions, source links, structural openers, exempt sections, and
+    duplicate-heading paragraphs are all preserved — only true factual
+    paragraphs without citations are dropped.
+
+    The References section (if present) is preserved verbatim.
+    """
+    refs_start = _find_references_heading(paper_text)
+    if refs_start is not None:
+        prose = paper_text[:refs_start]
+        refs_tail = paper_text[refs_start:]
+    else:
+        prose = paper_text
+        refs_tail = ""
+
+    current_section = ""
+    kept_blocks: list[str] = []
+    for block in prose.split("\n\n"):
+        stripped = block.strip()
+        if not stripped:
+            kept_blocks.append(block)
+            continue
+        heading_match = re.match(r"^##\s+(.+)$", stripped, re.MULTILINE)
+        if heading_match:
+            current_section = heading_match.group(1).strip().lower()
+            kept_blocks.append(block)
+            continue
+        if _is_factual_paragraph(stripped, current_section) and not re.search(r"\[\d+\]", stripped):
+            continue
+        kept_blocks.append(block)
+
+    new_prose = "\n\n".join(kept_blocks)
+    new_prose = re.sub(r"\n{3,}", "\n\n", new_prose).rstrip() + "\n"
+    return new_prose + refs_tail
+
+
+# ---------------------------------------------------------------------------
 # Citation audit
 # ---------------------------------------------------------------------------
 
@@ -543,88 +680,9 @@ def audit_citations(paper_text: str, registry: CitationRegistry) -> dict:
     # For body/discussion/conclusion sections, apply structural-start heuristic
     # to skip transitions, ordinals, and non-factual framing text.
 
-    _EXEMPT_SECTIONS = frozenset(
-        {
-            "abstract",
-            "introduction",
-            "methodology",
-        }
-    )
-
-    _STRUCTURAL_STARTS = (
-        # Genuinely structural / methodological text only
-        "this paper",
-        "this research",
-        "this study",
-        "this review",
-        "this investigation",
-        "we used",
-        "we employed",
-        "our approach",
-        "our method",
-        "in summary",
-        "to summarize",
-        "future research",
-        # Bullet points
-        "- **",
-        "- ",
-    )
-
-    # Split prose into sections by ## headings and track section for each paragraph
-    current_section = ""
-    paragraphs_with_section: list[tuple[str, str]] = []
-    for block in prose_only.split("\n\n"):
-        block = block.strip()
-        if not block:
-            continue
-        heading_match = re.match(r"^##\s+(.+)$", block, re.MULTILINE)
-        if heading_match:
-            current_section = heading_match.group(1).strip().lower()
-        elif not block.startswith("#"):
-            paragraphs_with_section.append((current_section, block))
-
-    # Image-block detection: a markdown image (`![alt](url)`), the italic
-    # caption that often follows (`*...*`, possibly with a `[Source](url)`
-    # link below in the same block), and bare `[Source](url)` lines are
-    # all photo-block plumbing — not factual prose that needs a citation.
-    def _is_non_prose(block: str) -> bool:
-        s = block.strip()
-        if s.startswith("!["):
-            return True
-        # Caption-source block: starts with italic asterisk, contains a
-        # [Source](url) trailer. Common shape produced by the image embedder.
-        if s.startswith("*") and "[Source](" in s:
-            return True
-        # Italic-only caption (no Source link).
-        if s.startswith("*") and s.endswith("*"):
-            return True
-        # Bare [Source](url) line.
-        if s.startswith("[Source](") and s.endswith(")"):
-            return True
-        # Whole block is a single markdown link.
-        if re.fullmatch(r"\[[^\]]+\]\([^)]+\)", s):
-            return True
-        return False
-
-    # Title-like duplicates: when a writer re-emits the section heading inside
-    # the body (no leading `## `), it shows as a short Title-Case-Punctuation
-    # block. Heuristic: if the block matches the current_section title text
-    # (case-insensitive, ignoring punctuation), it's a duplicate heading.
-    def _is_duplicate_heading(block: str, section_title: str) -> bool:
-        if not section_title:
-            return False
-        norm_block = re.sub(r"[^a-z0-9]+", " ", block.lower()).strip()
-        norm_sec = re.sub(r"[^a-z0-9]+", " ", section_title.lower()).strip()
-        return norm_block == norm_sec
-
+    paragraphs_with_section = _split_prose_into_paragraphs(prose_only)
     factual_paragraphs = [
-        p
-        for section, p in paragraphs_with_section
-        if len(p) > 50
-        and section not in _EXEMPT_SECTIONS
-        and not p.lower().startswith(_STRUCTURAL_STARTS)
-        and not _is_non_prose(p)
-        and not _is_duplicate_heading(p, section)
+        p for section, p in paragraphs_with_section if _is_factual_paragraph(p, section)
     ]
     uncited_paragraphs = sum(1 for p in factual_paragraphs if not re.search(r"\[\d+\]", p))
     if uncited_paragraphs:
