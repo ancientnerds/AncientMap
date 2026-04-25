@@ -902,19 +902,47 @@ class PaperHandler(BaseHandler):
                 new_paragraphs.append(p)
 
         repaired = "\n\n".join(new_paragraphs)
+
+        # Stage 3 — final mechanical sweep. The Stage-2 LLM call sometimes
+        # silently fails (timeout, format mismatch the parser misses, etc.),
+        # leaving uncited paragraphs intact. This sweep guarantees the audit
+        # gate passes by mechanically dropping any factual paragraph that
+        # still lacks an [N] marker after Stage-2. We protect image blocks,
+        # captions, source links, headings, and short connective prose.
+        def _is_factual_uncited(p: str) -> bool:
+            s = p.strip()
+            if len(s) <= 50:
+                return False
+            if s.startswith("#"):
+                return False
+            if s.startswith("!["):
+                return False
+            if s.startswith("*") and ("[Source](" in s or s.endswith("*")):
+                return False
+            if s.startswith("[Source](") and s.endswith(")"):
+                return False
+            if re.search(r"\[\d+\]", s):
+                return False
+            return True
+
+        final_paragraphs: list[str] = []
+        dropped = 0
+        for p in repaired.split("\n\n"):
+            if _is_factual_uncited(p):
+                dropped += 1
+                continue
+            final_paragraphs.append(p)
+        final = "\n\n".join(final_paragraphs)
+
         logger.info(
-            "[paper] Stage-2 surgical repair for section '%s' — %d uncited paragraphs -> %d after",
+            "[paper] Surgical repair on '%s': stage-2 cleared %d/%d uncited; "
+            "stage-3 mechanical drop removed %d residual.",
             sec_title,
+            len(uncited_indices) - sum(1 for p in repaired.split("\n\n") if _is_factual_uncited(p)),
             len(uncited_indices),
-            sum(
-                1
-                for p in repaired.split("\n\n")
-                if len(p.strip()) > 50
-                and not p.strip().startswith("#")
-                and not re.search(r"\[\d+\]", p)
-            ),
+            dropped,
         )
-        return repaired
+        return final
 
     async def _run_hallucination_gate(
         self,
