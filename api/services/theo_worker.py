@@ -245,6 +245,13 @@ async def _process_request(
             _live_events.pop(request_id, None)
 
 
+# Hard ceiling on a single research run. Real runs typically complete in
+# 30-180 minutes; anything past 4 hours is a stuck LLM call or network hang.
+# Without this timeout, a single hung run holds the worker semaphore
+# forever and every subsequent submission queues indefinitely.
+_REQUEST_TIMEOUT_SECONDS = 14400  # 4 hours
+
+
 async def _poll_loop() -> None:
     """Main polling loop — picks up queued requests and processes them."""
     print("[THEO] Worker poll loop started", flush=True)
@@ -265,7 +272,40 @@ async def _poll_loop() -> None:
 
             if row:
                 async with _semaphore:
-                    await _process_request(row.id, row.question, row.specialist_options)
+                    try:
+                        await asyncio.wait_for(
+                            _process_request(row.id, row.question, row.specialist_options),
+                            timeout=_REQUEST_TIMEOUT_SECONDS,
+                        )
+                    except TimeoutError:
+                        logger.error(
+                            "[THEO] Request %s exceeded %ss timeout — marking failed and "
+                            "releasing the worker slot.",
+                            row.id,
+                            _REQUEST_TIMEOUT_SECONDS,
+                        )
+                        try:
+                            with get_session() as session:
+                                session.execute(
+                                    text(
+                                        "UPDATE research_requests SET status = 'failed', "
+                                        "error_message = :msg WHERE id = :id AND status = 'running'"
+                                    ),
+                                    {
+                                        "id": row.id,
+                                        "msg": (
+                                            f"Request exceeded {_REQUEST_TIMEOUT_SECONDS}s "
+                                            "timeout and was force-cancelled."
+                                        ),
+                                    },
+                                )
+                                session.commit()
+                        except Exception as cleanup_exc:
+                            logger.warning(
+                                "[THEO] Failed to mark timed-out request %s as failed: %s",
+                                row.id,
+                                cleanup_exc,
+                            )
             else:
                 await asyncio.sleep(3)  # No work — wait before polling again
 
