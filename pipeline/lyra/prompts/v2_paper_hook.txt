@@ -25,7 +25,7 @@ ANTI-HALLUCINATION:
 RULES:
 1. 1-2 paragraphs maximum
 2. Write ONLY from the provided topic and findings
-3. Do NOT include [N] citation markers in the hook
+3. Every factual paragraph MUST contain at least one [N] marker from the claims pack -- attach a citation to the sentence that introduces a date, name, measurement, or attribution. Place markers BEFORE the period.
 4. The first sentence must contain a concrete detail -- a date, a name, a place, a number
 5. Use present tense for ongoing mysteries, past tense for historical events
 
