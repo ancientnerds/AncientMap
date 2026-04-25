@@ -583,12 +583,48 @@ def audit_citations(paper_text: str, registry: CitationRegistry) -> dict:
         elif not block.startswith("#"):
             paragraphs_with_section.append((current_section, block))
 
+    # Image-block detection: a markdown image (`![alt](url)`), the italic
+    # caption that often follows (`*...*`, possibly with a `[Source](url)`
+    # link below in the same block), and bare `[Source](url)` lines are
+    # all photo-block plumbing — not factual prose that needs a citation.
+    def _is_non_prose(block: str) -> bool:
+        s = block.strip()
+        if s.startswith("!["):
+            return True
+        # Caption-source block: starts with italic asterisk, contains a
+        # [Source](url) trailer. Common shape produced by the image embedder.
+        if s.startswith("*") and "[Source](" in s:
+            return True
+        # Italic-only caption (no Source link).
+        if s.startswith("*") and s.endswith("*"):
+            return True
+        # Bare [Source](url) line.
+        if s.startswith("[Source](") and s.endswith(")"):
+            return True
+        # Whole block is a single markdown link.
+        if re.fullmatch(r"\[[^\]]+\]\([^)]+\)", s):
+            return True
+        return False
+
+    # Title-like duplicates: when a writer re-emits the section heading inside
+    # the body (no leading `## `), it shows as a short Title-Case-Punctuation
+    # block. Heuristic: if the block matches the current_section title text
+    # (case-insensitive, ignoring punctuation), it's a duplicate heading.
+    def _is_duplicate_heading(block: str, section_title: str) -> bool:
+        if not section_title:
+            return False
+        norm_block = re.sub(r"[^a-z0-9]+", " ", block.lower()).strip()
+        norm_sec = re.sub(r"[^a-z0-9]+", " ", section_title.lower()).strip()
+        return norm_block == norm_sec
+
     factual_paragraphs = [
         p
         for section, p in paragraphs_with_section
         if len(p) > 50
         and section not in _EXEMPT_SECTIONS
         and not p.lower().startswith(_STRUCTURAL_STARTS)
+        and not _is_non_prose(p)
+        and not _is_duplicate_heading(p, section)
     ]
     uncited_paragraphs = sum(1 for p in factual_paragraphs if not re.search(r"\[\d+\]", p))
     if uncited_paragraphs:
