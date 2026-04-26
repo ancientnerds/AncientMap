@@ -947,10 +947,14 @@ class PaperHandler(BaseHandler):
 
         # Stage 3 — final mechanical sweep. The Stage-2 LLM call sometimes
         # silently fails (timeout, format mismatch the parser misses, etc.),
-        # leaving uncited paragraphs intact. This sweep guarantees the audit
-        # gate passes by mechanically dropping any factual paragraph that
-        # still lacks an [N] marker after Stage-2. We protect image blocks,
-        # captions, source links, headings, and short connective prose.
+        # leaving uncited paragraphs intact. This sweep first attempts smart
+        # claim-injection from the registry — if a paragraph matches a
+        # registered claim by content overlap, it gets that claim's [N]
+        # appended instead of being dropped. Only paragraphs with no
+        # plausible claim support are deleted. Image blocks, captions, source
+        # links, headings, and short connective prose are always protected.
+        from pipeline.lyra.theo_citations import inject_citation_for_paragraph
+
         def _is_factual_uncited(p: str) -> bool:
             s = p.strip()
             if len(s) <= 50:
@@ -969,8 +973,16 @@ class PaperHandler(BaseHandler):
 
         final_paragraphs: list[str] = []
         dropped = 0
+        injected = 0
         for p in repaired.split("\n\n"):
             if _is_factual_uncited(p):
+                # Try smart claim-injection before dropping.
+                injected_p = inject_citation_for_paragraph(p.strip(), self.state.registry)
+                if injected_p is not None and re.search(r"\[\d+\]", injected_p):
+                    new_block = p.replace(p.strip(), injected_p, 1)
+                    final_paragraphs.append(new_block)
+                    injected += 1
+                    continue
                 dropped += 1
                 continue
             final_paragraphs.append(p)
@@ -978,10 +990,11 @@ class PaperHandler(BaseHandler):
 
         logger.info(
             "[paper] Surgical repair on '%s': stage-2 cleared %d/%d uncited; "
-            "stage-3 mechanical drop removed %d residual.",
+            "stage-3 injected %d, dropped %d residual.",
             sec_title,
             len(uncited_indices) - sum(1 for p in repaired.split("\n\n") if _is_factual_uncited(p)),
             len(uncited_indices),
+            injected,
             dropped,
         )
         return final
