@@ -26,14 +26,22 @@ def _cand(**kw):
     return ImageCandidate(**base)
 
 
-def test_caption_includes_title_source_license_and_rationale():
+def test_caption_includes_title_source_and_rationale():
+    """Caption renders title, attribution, source, and rationale.
+
+    License is intentionally NOT rendered (see build_caption docstring) —
+    readers don't care about CC BY-SA 4.0 and the [Source] link below the
+    caption takes them to the page where the license is shown in context.
+    """
     c = _cand()
     cap = build_caption(c, rationale="The disc is the direct evidence for the claim.")
     assert "Nebra Sky Disc" in cap
     assert "Frank Vincentz" in cap
-    assert "Public Domain" in cap
     assert "Wikimedia" in cap
     assert "direct evidence" in cap
+    # License is deliberately omitted from the caption body.
+    assert "Public Domain" not in cap
+    assert "CC BY" not in cap
 
 
 def test_caption_never_fabricates_missing_metadata():
