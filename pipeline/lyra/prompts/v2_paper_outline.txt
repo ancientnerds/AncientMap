@@ -21,10 +21,23 @@ SECTION DESIGN RULES:
 6. The Other Side section must contain specific counter-arguments, not generic skepticism.
 7. Order the investigation sections for narrative flow --- build toward the most interesting findings.
 
-TITLE:
-- MAX 60 characters.
+TITLE (HARD REQUIREMENTS — output is rejected and regenerated otherwise):
+- 4-12 words, MAXIMUM 80 characters total.
+- Must be a Wikipedia-style headline that names the topic, not the inquiry.
+- Must NOT echo, paraphrase, or quote the user's question.
+- Must NOT contain "What if", "Could they", "Are there", "Is it possible", or any other question stem.
+- Must NOT include subtitles, colons, em-dashes, or quoted phrases.
 - Specific to the topic. Not generic.
-- No subtitles, no colons.
+
+GOOD examples:
+- "The Shining Ones in Comparative Mythology"
+- "Megalithic Construction and the Limits of Mainstream Archaeology"
+- "Sumerian Anunnaki Traditions Across Three Millennia"
+
+BAD examples (DO NOT do this):
+- "I was always pondering about the Legends of the so called Shining Ones..."  (echoes the user question)
+- "What if these were beings from other planets?"  (question stem)
+- "An Investigation: The Shining Ones — A Cross-Cultural Analysis"  (subtitle + em-dash)
 
 Output a JSON object matching this schema:
 

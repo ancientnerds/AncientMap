@@ -151,7 +151,7 @@ def _reflow_report(report: str, probative_images: list[dict]) -> tuple[str, dict
         rationale = entry.get("rationale") or ""
         md = image_markdown(cand, web_path, rationale)
 
-        new_current = insert_image_after_paragraph(current, canonical, anchor, md)
+        new_current, _strategy = insert_image_after_paragraph(current, canonical, anchor, md)
         if new_current == current:
             no_anchor += 1
             continue

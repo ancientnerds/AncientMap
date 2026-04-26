@@ -190,6 +190,16 @@ class JudgeHandler(BaseHandler):
             {"uncited_seen": 0, "injected": 0, "dropped": 0, "restored_sections": 0},
         )
 
+        # Probative-image embed strategy counts (populated by
+        # ProbativeImagesHandler). Surfaces how often each anchor-matching
+        # path fires: exact / normalized / first_sentence / section_fallback,
+        # plus failed (section couldn't be located) and skipped_fallback_cap
+        # (≥3 unmatched anchors in one section). High `section_fallback`
+        # means the writer's prose drifted from the illustration specialist's
+        # snapshot — useful diagnostic for tuning the matcher.
+        embed_metrics = getattr(self.state, "embed_strategy_counts", {}) or {}
+        embedded_image_count = len(re.findall(r"!\[[^\]]*\]\([^)]+\)", self.state.paper_text))
+
         # Coherence-pass result (populated by PaperHandler Step 8b).
         # The gate fails ONLY on `high` severity — outright opposite-binary
         # contradictions (e.g. "exists" vs "does not exist" on the same
@@ -260,6 +270,13 @@ class JudgeHandler(BaseHandler):
                 "strip_injected": strip_metrics.get("injected", 0),
                 "strip_dropped": strip_metrics.get("dropped", 0),
                 "strip_restored_sections": strip_metrics.get("restored_sections", 0),
+                "embed_exact": embed_metrics.get("exact", 0),
+                "embed_normalized": embed_metrics.get("normalized", 0),
+                "embed_first_sentence": embed_metrics.get("first_sentence", 0),
+                "embed_section_fallback": embed_metrics.get("section_fallback", 0),
+                "embed_failed": embed_metrics.get("failed", 0),
+                "embed_skipped_fallback_cap": embed_metrics.get("skipped_fallback_cap", 0),
+                "embedded_image_count": embedded_image_count,
             },
         }
 

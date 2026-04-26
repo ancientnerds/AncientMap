@@ -71,6 +71,14 @@ class _EmbedContext:
     embedded: list[dict] = field(default_factory=list)
     placed_source_urls: set[str] = field(default_factory=set)
     placed_subjects: set[str] = field(default_factory=set)
+    # Per-strategy embed counts surfaced on quality_score.meta as embed_*
+    # so we can see in production how often each fallback path fired.
+    # Keys: exact, normalized, first_sentence, section_fallback, failed.
+    strategy_counts: dict[str, int] = field(default_factory=dict)
+    # Per-section count of how many images landed via the section_fallback
+    # strategy. Capped at 2 in _process_one_opportunity so a section with
+    # many unmatched anchors doesn't pile up images before its next heading.
+    section_fallback_counts: dict[str, int] = field(default_factory=dict)
 
 
 def _subject_fingerprint(cand) -> str:
@@ -256,7 +264,7 @@ async def embed_probative_images(
     *,
     settings=None,
     emit: Callable[[dict], None] | None = None,
-) -> tuple[str, list[dict], dict]:
+) -> tuple[str, list[dict], dict, dict[str, int]]:
     """Embed probative images into a research paper.
 
     Reusable from both the live pipeline handler and the backfill CLI. Does
@@ -282,7 +290,9 @@ async def embed_probative_images(
 
     Returns
     -------
-    tuple of (new_paper_text, embedded_list, diversity_dict).
+    tuple of (new_paper_text, embedded_list, diversity_dict, strategy_counts).
+    `strategy_counts` keys: exact, normalized, first_sentence, section_fallback,
+    failed, skipped_fallback_cap. Useful telemetry for tuning the matcher.
     """
     settings = settings or _get_settings()
     emit = emit or (lambda _e: None)
@@ -377,7 +387,7 @@ async def embed_probative_images(
         }
     )
 
-    return (ctx.paper_text, ctx.embedded, diversity)
+    return (ctx.paper_text, ctx.embedded, diversity, dict(ctx.strategy_counts))
 
 
 class ProbativeImagesHandler(BaseHandler):
@@ -389,7 +399,7 @@ class ProbativeImagesHandler(BaseHandler):
     async def _on_paper_ready(self, event: PaperReady):
         self.state.phase = ResearchPhase.IMAGE_CURATION
 
-        new_paper_text, embedded, diversity = await embed_probative_images(
+        new_paper_text, embedded, diversity, strategy_counts = await embed_probative_images(
             paper_id=str(self.state.request_id),
             paper_text=self.state.paper_text or "",
             question=getattr(self.state, "question", "") or "",
@@ -402,6 +412,11 @@ class ProbativeImagesHandler(BaseHandler):
         self.state.paper_text = new_paper_text
         self.state.probative_images = embedded
         self.state.probative_images_diversity = diversity
+        # Stash strategy counts so the judge handler can surface them on
+        # quality_score.meta as embed_*. Lets us see in production how often
+        # each anchor-matching path fires (or how often the section-end
+        # fallback is rescuing us).
+        self.state.embed_strategy_counts = strategy_counts
 
         await self.bus.emit(ProbativeImagesReady(embedded_count=len(embedded)))
 
@@ -569,15 +584,35 @@ async def _process_one_opportunity(
                 count=1,
             )
 
-        new_text = insert_image_after_paragraph(ctx.paper_text, section_name, para_text[:60], md)
-        if new_text == ctx.paper_text:
+        new_text, strategy = insert_image_after_paragraph(
+            ctx.paper_text, section_name, para_text[:60], md
+        )
+        # Cap section_fallback at ≤2 per section so unmatched anchors in a
+        # single section don't pile a stack of images before the next heading.
+        if strategy == "section_fallback":
+            already = ctx.section_fallback_counts.get(section_name, 0)
+            if already >= 2:
+                print(
+                    f"[probative] SKIP: section '{section_name}' already has "
+                    f"{already} fallback images; not stacking another for para "
+                    f"{para_idx} keyword '{keyword}'",
+                    flush=True,
+                )
+                ctx.strategy_counts["skipped_fallback_cap"] = (
+                    ctx.strategy_counts.get("skipped_fallback_cap", 0) + 1
+                )
+                continue
+            ctx.section_fallback_counts[section_name] = already + 1
+        if strategy == "failed":
             print(
-                f"[probative] INSERT FAILED: anchor not matched in section "
-                f"'{section_name}' for para {para_idx} keyword '{keyword}' — "
-                "image downloaded but not placed",
+                f"[probative] INSERT FAILED: section '{section_name}' itself not "
+                f"locatable for para {para_idx} keyword '{keyword}' — image "
+                "downloaded but not placed",
                 flush=True,
             )
+            ctx.strategy_counts["failed"] = ctx.strategy_counts.get("failed", 0) + 1
             continue
+        ctx.strategy_counts[strategy] = ctx.strategy_counts.get(strategy, 0) + 1
         ctx.paper_text = new_text
 
         embedded.append(
