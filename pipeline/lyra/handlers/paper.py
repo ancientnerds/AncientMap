@@ -1149,10 +1149,16 @@ class PaperHandler(BaseHandler):
             self.state.config.max_tokens_per_call,
             settings,
         )
+        # The bare connection_lines have no [N] markers, so the surgical
+        # Stage-2 repair would have nothing to attach. Build a richer pack
+        # that includes the angle findings (which DO carry [N] markers built
+        # from sid_to_num) so the repair LLM can pick a real citation for any
+        # uncited paragraph.
+        repair_pack = f"## Cross-angle connections\n{claims_text}\n\n## Angle findings (use these [N] markers)\n{angles_text}"
         prose = await self._cite_or_delete_repair(
-            prose, section_prompt, user_msg, claims_text, settings, "Connecting the Dots"
+            prose, section_prompt, user_msg, repair_pack, settings, "Connecting the Dots"
         )
-        prose = await self._run_hallucination_gate(prose, claims_text, settings)
+        prose = await self._run_hallucination_gate(prose, repair_pack, settings)
         return prose
 
     async def _write_other_side_section(
@@ -1225,10 +1231,17 @@ class PaperHandler(BaseHandler):
             self.state.config.max_tokens_per_call,
             settings,
         )
-        prose = await self._cite_or_delete_repair(
-            prose, section_prompt, user_msg, claims_text, settings, "The Other Side"
+        # The counter-claim text doesn't carry [N] markers, so the surgical
+        # Stage-2 repair would have nothing to attach. Include the reference
+        # map so the repair LLM at least knows which [N] numbers correspond
+        # to which sources and can cite from any of them when relevant.
+        repair_pack = (
+            f"## Counter-evidence\n{claims_text}\n\n## Available references\n{ref_map_text}"
         )
-        prose = await self._run_hallucination_gate(prose, claims_text, settings)
+        prose = await self._cite_or_delete_repair(
+            prose, section_prompt, user_msg, repair_pack, settings, "The Other Side"
+        )
+        prose = await self._run_hallucination_gate(prose, repair_pack, settings)
         return prose
 
     async def _write_assessment(self, all_claims: list[dict], settings) -> str:
