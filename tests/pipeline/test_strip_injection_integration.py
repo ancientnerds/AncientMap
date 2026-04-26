@@ -229,6 +229,67 @@ def test_injection_resolves_to_registered_sources():
         assert sid in sources.values(), f"Unexpected source cited: {sid}"
 
 
+def test_strip_metrics_count_injection_vs_drop():
+    """metrics_out reports counts split between recoveries and drops."""
+    registry, _sources = _build_shining_ones_registry()
+
+    # Three matched paragraphs (recoverable) + one unrelated paragraph (drop).
+    paper = (
+        "## Investigation\n\n"
+        "The Book of Enoch's Watchers narrative describes fallen angels who came down "
+        "from heaven and taught humans forbidden knowledge.\n\n"
+        "Sumerian cuneiform tablets describe the Anunnaki as celestial beings who descended "
+        "to earth and shaped early human civilization in measurable archaeological ways.\n\n"
+        "The Roman aqueducts of Segovia were constructed during the reign of Trajan, "
+        "delivering water with a precise gradient over twenty-five kilometers of countryside.\n\n"
+        "The Dogon people of Mali possessed detailed astronomical knowledge of the Sirius "
+        "binary system that anthropologists found difficult to explain through cultural transmission.\n"
+    )
+
+    metrics: dict = {}
+    out = strip_uncited_factual_paragraphs(paper, registry, metrics_out=metrics)
+
+    # Three uncited paragraphs matched a registry claim, one did not.
+    assert metrics["uncited_seen"] == 4
+    assert metrics["injected"] == 3
+    assert metrics["dropped"] == 1
+
+    # The recovered paragraphs should still be in the output, the dropped one gone.
+    assert "Watchers narrative" in out
+    assert "Sumerian cuneiform tablets" in out
+    assert "Dogon people of Mali" in out
+    assert "Roman aqueducts of Segovia" not in out
+
+
+def test_strip_metrics_count_restored_sections():
+    """When strip would gut a section below threshold, restored_sections increments."""
+    registry, _sources = _build_shining_ones_registry()
+
+    # Section with 4 long uncited paragraphs that DON'T match any claim — strip
+    # would empty it, so the safeguard restores the original content.
+    long_unrelated = (
+        "The Roman aqueducts of Segovia were constructed during the reign of Trajan "
+        "delivering water with a precise gradient over twenty-five kilometers of countryside "
+        "from the Sierra Madre across the meseta into the city center where it served the public baths."
+    )
+    paper = (
+        "## Roman Engineering\n\n"
+        + long_unrelated
+        + "\n\n"
+        + long_unrelated
+        + "\n\n"
+        + long_unrelated
+        + "\n\n"
+        + long_unrelated
+        + "\n"
+    )
+
+    metrics: dict = {}
+    strip_uncited_factual_paragraphs(paper, registry, metrics_out=metrics)
+
+    assert metrics["restored_sections"] >= 1
+
+
 def test_format_references_includes_injected_sources():
     """The published bibliography lists every source the injection cited."""
     registry, _sources = _build_shining_ones_registry()

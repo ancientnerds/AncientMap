@@ -273,10 +273,17 @@ class PaperHandler(BaseHandler):
         # definition the audit uses, so the audit count after this step is
         # the source of truth.
         # ---------------------------------------------------------------
+        # Capture strip + injection metrics so the judge can surface them on
+        # quality_score.meta — lets us see in production whether the writer
+        # actually improved or whether the safety net is silently masking
+        # bad output.
+        strip_metrics: dict = {}
         self.state.paper_text = strip_uncited_factual_paragraphs(
             self.state.paper_text,
             self.state.registry,
+            metrics_out=strip_metrics,
         )
+        self.state.strip_metrics = strip_metrics
 
         # ---------------------------------------------------------------
         # Step 8: Citation audit (runs on finalized [1..M] numbering)

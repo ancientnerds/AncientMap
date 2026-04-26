@@ -721,6 +721,7 @@ def strip_uncited_factual_paragraphs(
     registry: CitationRegistry,
     *,
     section_preserve_threshold: float = 0.25,
+    metrics_out: dict | None = None,
 ) -> str:
     """Remove factual paragraphs lacking an [N] marker — section-aware.
 
@@ -746,7 +747,17 @@ def strip_uncited_factual_paragraphs(
     Image blocks, captions, source-link trailers, structural openers,
     exempt sections, duplicate-heading paragraphs, and the References
     section are always preserved.
+
+    If `metrics_out` is provided, the dict is populated with:
+        - `uncited_seen`: factual paragraphs that lacked a marker
+        - `injected`: paragraphs rescued by registry claim-injection
+        - `dropped`: paragraphs deleted (no plausible claim match)
+        - `restored_sections`: sections that fell back to original content
+          via the section-preservation safeguard
+    Use these to track in production whether the writer is improving
+    over time vs the safety net silently masking bad output.
     """
+    counts = {"uncited_seen": 0, "injected": 0, "dropped": 0, "restored_sections": 0}
     refs_start = _find_references_heading(paper_text)
     if refs_start is not None:
         prose = paper_text[:refs_start]
@@ -791,6 +802,7 @@ def strip_uncited_factual_paragraphs(
                 stripped_blocks.append(b)
                 continue
             if _is_factual_paragraph(stripped, title_lower) and not re.search(r"\[\d+\]", stripped):
+                counts["uncited_seen"] += 1
                 # Try smart injection before dropping. If a registry claim
                 # supports this paragraph, attach its [N] markers in place
                 # of removing the content.
@@ -800,6 +812,9 @@ def strip_uncited_factual_paragraphs(
                     # whitespace by replacing the stripped slice in-place.
                     new_block = b.replace(stripped, injected, 1)
                     stripped_blocks.append(new_block)
+                    counts["injected"] += 1
+                else:
+                    counts["dropped"] += 1
                 continue
             stripped_blocks.append(b)
 
@@ -815,6 +830,7 @@ def strip_uncited_factual_paragraphs(
             and stripped_word_count < original_word_count * section_preserve_threshold
         ):
             chosen = blocks
+            counts["restored_sections"] += 1
         else:
             chosen = stripped_blocks
 
@@ -824,6 +840,10 @@ def strip_uncited_factual_paragraphs(
 
     new_prose = "\n\n".join(out_blocks)
     new_prose = re.sub(r"\n{3,}", "\n\n", new_prose).rstrip() + "\n"
+
+    if metrics_out is not None:
+        metrics_out.update(counts)
+
     return new_prose + refs_tail
 
 
