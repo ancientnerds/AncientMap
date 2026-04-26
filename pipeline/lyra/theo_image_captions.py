@@ -289,27 +289,57 @@ def insert_image_after_section(
     return paper_text[:start] + replacement + paper_text[end:]
 
 
+def _normalize_for_match(text: str) -> str:
+    """Normalize prose for fuzzy anchor matching.
+
+    Strips citation markers `[N]`, italic `*x*`, bold `**x**`, collapses
+    whitespace, lowercases. Leaves alphanumerics + spaces. Used by the
+    multi-strategy `insert_image_after_paragraph` to recover from minor
+    rewrites between opportunity selection and embed time (most often
+    `[N]` markers injected by the audit/strip pass).
+    """
+    if not text:
+        return ""
+    # Strip citation markers and emphasis runs first so they don't bleed into
+    # the alphanumeric pass below.
+    t = re.sub(r"\[\d+\]", " ", text)
+    t = re.sub(r"\*+([^*]+)\*+", r"\1", t)
+    # Lowercase + collapse non-alphanumerics to single spaces.
+    t = re.sub(r"[^a-z0-9]+", " ", t.lower())
+    return t.strip()
+
+
 def insert_image_after_paragraph(
     paper_text: str,
     section_heading: str,
     anchor_text: str,
     image_md: str,
-) -> str:
+) -> tuple[str, str]:
     """Place image_md immediately after the paragraph anchored by anchor_text.
 
-    Strategy:
-    1. Locate the named `## section_heading` block (from its heading line up to
-       the next `## ` or end-of-text).
-    2. Inside that block, find `anchor_text` verbatim.
-    3. Walk forward from the match to the end of that paragraph (first blank
-       line after the match).
-    4. Insert `\\n\\n{image_md}\\n\\n` there.
+    Returns `(new_paper_text, chosen_strategy)` where `chosen_strategy` is one
+    of: `exact`, `normalized`, `first_sentence`, `section_fallback`, `failed`.
 
-    Returns `paper_text` unchanged on any mismatch (no section, no anchor).
-    Prints a diagnostic so the handler log shows which anchor dropped.
+    Strategy ladder (try in order, stop at first match):
+
+      1. **exact** — verbatim `section_body.find(anchor_text.strip())`. Works
+         when prose hasn't been rewritten since opportunity selection.
+      2. **normalized** — strip `[N]` markers / `*emphasis*` / `**bold**`,
+         collapse whitespace, lowercase both sides. Catches the common
+         mutation: an `[N]` was injected mid-paragraph after selection.
+      3. **first_sentence** — take the first sentence of `anchor_text`
+         (split on `.?!`) and search normalized. Catches mid-paragraph
+         repairs that left the opening sentence intact.
+      4. **section_fallback** — insert immediately before the next `##`
+         heading (or end of prose). Image still lands in the right
+         section even if no paragraph match worked.
+
+    Returns `(paper_text, "failed")` ONLY if `section_heading` itself can't
+    be located. With Strategy 4 always available, anchor mismatch within a
+    located section never reaches `failed`.
     """
     if not section_heading or not anchor_text:
-        return paper_text
+        return paper_text, "failed"
 
     sec_pattern = re.compile(
         r"(^##\s+" + re.escape(section_heading) + r"\s*$)([\s\S]*?)(?=^##\s|\Z)",
@@ -321,26 +351,96 @@ def insert_image_after_paragraph(
             f"[probative] insert_image_after_paragraph: section '{section_heading}' not found",
             flush=True,
         )
-        return paper_text
+        return paper_text, "failed"
 
     sec_start, sec_end = sec_m.span()
     section_body = paper_text[sec_start:sec_end]
+    needle_raw = anchor_text.strip()
 
-    needle = anchor_text.strip()
-    if not needle:
-        return paper_text
-    rel_idx = section_body.find(needle)
-    if rel_idx == -1:
-        print(
-            f"[probative] insert_image_after_paragraph: anchor '{needle[:40]}…' not "
-            f"found in section '{section_heading}'",
-            flush=True,
-        )
-        return paper_text
+    # ----- Strategy 1: exact match -----
+    if needle_raw:
+        rel_idx = section_body.find(needle_raw)
+        if rel_idx != -1:
+            return _insert_after_anchor(
+                paper_text, sec_start, section_body, rel_idx, len(needle_raw), image_md
+            ), "exact"
 
-    # End of paragraph = next blank line after the anchor. Fall back to end of
-    # section if the paragraph runs to the section boundary.
-    search_from = rel_idx + len(needle)
+    # ----- Strategy 2: normalized match -----
+    needle_norm = _normalize_for_match(needle_raw[:60])
+    if needle_norm and len(needle_norm) >= 12:
+        norm_body = _normalize_for_match(section_body)
+        if needle_norm in norm_body:
+            # Find the anchor in the ORIGINAL section_body by walking forward
+            # token-by-token until normalized prefix matches.
+            rel_idx = _find_normalized(section_body, needle_norm)
+            if rel_idx is not None:
+                return _insert_after_anchor(
+                    paper_text, sec_start, section_body, rel_idx, len(needle_raw), image_md
+                ), "normalized"
+
+    # ----- Strategy 3: first-sentence match -----
+    first_sentence = re.split(r"[.?!]", needle_raw, maxsplit=1)[0].strip()
+    fs_norm = _normalize_for_match(first_sentence)
+    if fs_norm and len(fs_norm) >= 12:
+        norm_body = _normalize_for_match(section_body)
+        if fs_norm in norm_body:
+            rel_idx = _find_normalized(section_body, fs_norm)
+            if rel_idx is not None:
+                return _insert_after_anchor(
+                    paper_text, sec_start, section_body, rel_idx, len(first_sentence), image_md
+                ), "first_sentence"
+
+    # ----- Strategy 4: section-end fallback -----
+    print(
+        f"[probative] insert_image_after_paragraph: anchor '{needle_raw[:40]}…' not "
+        f"found in section '{section_heading}', falling back to section end",
+        flush=True,
+    )
+    body = paper_text[sec_start:sec_end].rstrip()
+    replacement = f"{body}\n\n{image_md.rstrip()}\n\n"
+    return paper_text[:sec_start] + replacement + paper_text[sec_end:], "section_fallback"
+
+
+def _find_normalized(haystack: str, needle_norm: str) -> int | None:
+    """Locate `needle_norm` (already normalized) in `haystack` (raw prose) and
+    return the raw character index where the match starts. Walks character by
+    character building a normalized prefix until it contains `needle_norm`.
+
+    Returns None if no match.
+    """
+    # Cheap pre-check: if needle_norm doesn't even appear in the normalized
+    # haystack, no point walking.
+    if needle_norm not in _normalize_for_match(haystack):
+        return None
+
+    # Walk haystack, maintaining a rolling normalized window. We can't use
+    # straight indexing because normalization changes lengths.
+    # Strategy: for each candidate start position, test whether the
+    # normalized prefix from that position contains needle_norm at its head.
+    nlen = len(needle_norm)
+    # Try every position; cap at reasonable length to avoid quadratic blowup
+    # on huge sections.
+    for start in range(len(haystack)):
+        # Take a chunk roughly 3x needle length (normalization can't expand
+        # text) and normalize it. If it starts with needle_norm, we found it.
+        chunk = haystack[start : start + nlen * 3 + 32]
+        norm_chunk = _normalize_for_match(chunk)
+        if norm_chunk.startswith(needle_norm):
+            return start
+    return None
+
+
+def _insert_after_anchor(
+    paper_text: str,
+    sec_start: int,
+    section_body: str,
+    rel_idx: int,
+    anchor_len: int,
+    image_md: str,
+) -> str:
+    """Insert image_md after the paragraph that begins at `rel_idx` in
+    `section_body`. Paragraph end = next blank line, or end of section."""
+    search_from = rel_idx + anchor_len
     blank_m = re.search(r"\n\s*\n", section_body[search_from:])
     if blank_m:
         para_end_rel = search_from + blank_m.start()

@@ -65,6 +65,9 @@ class PaperHandler(BaseHandler):
 
         outline = await self._generate_outline(sid_to_num, settings)
         title = outline.get("title", self.state.question[:60])
+        # Outline LLM occasionally returns the user question verbatim as the
+        # title, producing a 600-word H1. Validate + rescue before assembly.
+        title = await self._validate_title(title, settings)
         sections = outline.get("sections", [])
 
         if not sections:
@@ -724,6 +727,77 @@ class PaperHandler(BaseHandler):
 
         raw = await self._llm_call(outline_prompt, user_msg, 4096, settings)
         return self._parse_json(raw)
+
+    async def _validate_title(self, title: str, settings) -> str:
+        """Reject oversized or question-echoing titles, rescue with one LLM call.
+
+        The outline LLM occasionally returns the user question verbatim as the
+        proposed title (Run 9 produced a 600-word H1 this way). That breaks the
+        coherence-pass title-term gate, the card description LLM, and obviously
+        the published paper's headline.
+
+        Validation rules:
+          - title shorter than 100 chars
+          - title is NOT a substring of the question (normalized) and vice versa
+
+        On invalid: fire one rescue LLM call with a strict short-headline prompt.
+        If rescue still fails validation, fall back to question[:60] and log.
+        """
+        question_norm = re.sub(r"\s+", " ", self.state.question.strip()).lower()
+        title_norm = re.sub(r"\s+", " ", (title or "").strip()).lower()
+
+        def _is_valid(t_norm: str) -> bool:
+            if not t_norm or len(t_norm) > 100:
+                return False
+            # Substring either way means the title is echoing the question
+            if t_norm in question_norm or question_norm[:80] in t_norm:
+                return False
+            return True
+
+        if _is_valid(title_norm):
+            return title.strip()
+
+        logger.warning(
+            "[paper] outline title invalid (len=%d, echoes_question=%s); rescuing",
+            len(title or ""),
+            title_norm in question_norm or question_norm[:80] in title_norm,
+        )
+        rescue_system = (
+            "Generate a Wikipedia-style headline (4-12 words, max 80 chars) that names the "
+            "topic of the user's research question. Output ONLY the headline text, no quotes, "
+            "no markdown, no commentary. Do NOT echo the question. Do NOT use question words "
+            "like 'What if', 'Could they', 'Are there'. Do NOT use subtitles or em-dashes.\n\n"
+            "GOOD: 'The Shining Ones in Comparative Mythology'\n"
+            "GOOD: 'Megalithic Construction and Mainstream Archaeology'\n"
+            "BAD: 'What if these were beings from other planets?'"
+        )
+        try:
+            rescued = await self._llm_call(
+                rescue_system, f"Research question:\n\n{self.state.question}", 256, settings
+            )
+            # First line first, THEN strip surrounding quotes — otherwise a
+            # trailing newline prevents the quote-strip from reaching the
+            # closing quote.
+            first_line = rescued.strip().splitlines()[0].strip() if rescued.strip() else ""
+            rescued_clean = first_line.strip('"').strip("'").strip()
+        except Exception as exc:
+            logger.warning("[paper] title rescue LLM call failed: %s", exc)
+            rescued_clean = ""
+
+        rescued_norm = re.sub(r"\s+", " ", rescued_clean).lower()
+        if _is_valid(rescued_norm):
+            self.state.log("paper", f"Title rescued: {rescued_clean!r}")
+            return rescued_clean
+
+        # Last resort — first 60 chars of the question, as the original
+        # `outline.get("title", ...)` fallback would have done.
+        fallback = self.state.question[:60].strip().rstrip(".,;:")
+        self.state.log(
+            "paper",
+            f"Title rescue also failed (rescued={rescued_clean[:80]!r}); "
+            f"using question prefix: {fallback!r}",
+        )
+        return fallback
 
     async def _write_hook(self, title: str, claims: list[dict], settings) -> str:
         """Write the opening hook paragraph(s)."""
