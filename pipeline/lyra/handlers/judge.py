@@ -179,6 +179,17 @@ class JudgeHandler(BaseHandler):
             {"initial": 0, "final": 0, "retries": 0},
         )
 
+        # Strip + smart-injection metrics (populated by PaperHandler Step 7.7).
+        # `injected` and `dropped` reveal whether the writer is actually
+        # improving over time vs the safety net silently masking bad output.
+        # `restored_sections` shows how often the section-preservation
+        # safeguard had to intervene.
+        strip_metrics = getattr(
+            self.state,
+            "strip_metrics",
+            {"uncited_seen": 0, "injected": 0, "dropped": 0, "restored_sections": 0},
+        )
+
         # Coherence-pass result (populated by PaperHandler Step 8b).
         # The gate fails ONLY on `high` severity — outright opposite-binary
         # contradictions (e.g. "exists" vs "does not exist" on the same
@@ -245,6 +256,10 @@ class JudgeHandler(BaseHandler):
                 "coherence_contradictions": high_contradictions,
                 "coherence_medium_contradictions": medium_contradictions,
                 "coherence_undefined_title_terms": undefined_title_terms,
+                "strip_uncited_seen": strip_metrics.get("uncited_seen", 0),
+                "strip_injected": strip_metrics.get("injected", 0),
+                "strip_dropped": strip_metrics.get("dropped", 0),
+                "strip_restored_sections": strip_metrics.get("restored_sections", 0),
             },
         }
 
