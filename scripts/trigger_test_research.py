@@ -11,6 +11,7 @@ On completion, writes the full result payload to
 C:/tmp/theo_regen/<request_id>.json so the audit step can reuse it
 without re-hitting the API.
 """
+
 from __future__ import annotations
 
 import json
@@ -22,10 +23,10 @@ import time
 import httpx
 
 API_BASE = os.environ.get("THEO_API_BASE", "http://127.0.0.1:18000")
-AUTH_TOKEN = os.environ.get(
-    "AUTH_TOKEN",
-    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI0NDIwMDAxMTI3NTYwNjQyNjAiLCJ1c2VyX2lkIjoiMjZlMDYzMWItNjY0Yy00NTg4LTk0M2EtMDk1NjE2YWFjODhiIiwiZXhwIjoxNzc3MjM1NDk3LCJpYXQiOjE3NzY2MzA2OTd9.VvY82-5MQyZ89FlabzhRL7l0zGmKCKIkhfYD0Hz4hw4",
-)
+# The hard-coded fallback token was signed with an old API_SECRET_KEY and is
+# rejected by the live prod API. Always set AUTH_TOKEN from a fresh
+# `localStorage.getItem('an_auth_token')` value before running this script.
+AUTH_TOKEN = os.environ.get("AUTH_TOKEN", "")
 
 SHINING_ONES_QUESTION = (
     "I was always pondering about the Legends of the so called Shining Ones. "
@@ -44,6 +45,12 @@ OUT_DIR = pathlib.Path(r"C:/tmp/theo_regen")
 
 
 def submit(question: str) -> str:
+    if not AUTH_TOKEN:
+        raise SystemExit(
+            "AUTH_TOKEN env var not set. Get a fresh token from your browser "
+            "(localStorage.getItem('an_auth_token')) and re-run with "
+            "AUTH_TOKEN=... python scripts/trigger_test_research.py"
+        )
     headers = {"Authorization": f"Bearer {AUTH_TOKEN}"}
     resp = httpx.post(
         f"{API_BASE}/api/theo/research",
