@@ -427,6 +427,27 @@ def prune_orphaned_references(paper_text: str, registry: CitationRegistry) -> in
     return pruned
 
 
+def prune_unrenderable_references(registry: CitationRegistry) -> int:
+    """Drop reference_numbers entries whose source is no longer in registry.sources.
+
+    Mirrors the predicate format_references_list uses (lines 166-168) to skip
+    entries on render. Two rejection paths can leave the registry incoherent:
+    angle_audit removes from angle.source_ids but keeps registry.sources;
+    research_stages.py:300 pops registry.sources entirely. Either way, this
+    helper restores coherence at publish time so any downstream consumer (and
+    the audit) sees the same set of "actually-renderable" references.
+
+    Returns the number pruned. Safe to call multiple times.
+    """
+    to_drop = [
+        sid for sid in registry.reference_numbers
+        if registry.sources.get(sid) is None
+    ]
+    for sid in to_drop:
+        registry.reference_numbers.pop(sid, None)
+    return len(to_drop)
+
+
 def finalize_references(
     paper_text: str,
     working_sid_to_num: dict[str, int],
@@ -681,8 +702,8 @@ def inject_citation_for_paragraph(
     paragraph: str,
     registry: CitationRegistry,
     *,
-    min_overlap_ratio: float = 0.4,
-    min_overlap_words: int = 5,
+    min_overlap_ratio: float = 0.6,
+    min_overlap_words: int = 7,
 ) -> str | None:
     """Try to attach an [N] marker to an uncited paragraph by content match.
 
@@ -937,8 +958,17 @@ def audit_citations(paper_text: str, registry: CitationRegistry) -> dict:
     total_citations = len(marker_values)
     unique_cited_nums: set[int] = set(marker_values)
 
-    # All assigned reference numbers
-    assigned_nums: set[int] = set(registry.reference_numbers.values())
+    # All assigned reference numbers — only count entries whose source is still
+    # resolvable. Mirrors the predicate used by format_references_list (lines
+    # 166-168): if sources[sid] is None, the entry won't render in the output,
+    # so the assigned number must surface as invalid in the audit. Run 15 had
+    # [53]-[59] in prose with no References entries because the journal
+    # rejection path popped sources but kept reference_numbers — the old set
+    # comprehension thought those numbers were valid.
+    assigned_nums: set[int] = {
+        num for sid, num in registry.reference_numbers.items()
+        if registry.sources.get(sid) is not None
+    }
     total_references = len(assigned_nums)
 
     # 1. Invalid markers — [N] in prose with no assigned reference

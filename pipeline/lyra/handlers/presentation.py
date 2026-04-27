@@ -119,6 +119,7 @@ class PresentationHandler(BaseHandler):
         from pipeline.lyra.theo_citations import (
             audit_citations,
             prune_orphaned_references,
+            prune_unrenderable_references,
             strip_uncited_factual_paragraphs,
         )
 
@@ -137,6 +138,12 @@ class PresentationHandler(BaseHandler):
             # 3 orphans → audit.passed=false despite everything else clean.
             pruned = prune_orphaned_references(self.state.paper_text, self.state.registry)
             self.state.post_presentation_orphans_pruned = pruned
+            # Coherence at publish: drop reference_numbers entries whose
+            # source was popped by the journal rejection path. Audit (Fix 1)
+            # is honest with or without this; the helper just keeps the data
+            # structure consistent for any other consumer.
+            unrenderable = prune_unrenderable_references(self.state.registry)
+            self.state.post_presentation_unrenderable_pruned = unrenderable
             new_audit = audit_citations(self.state.paper_text, self.state.registry)
             self.state.audit_result = new_audit
             self.state.log(
@@ -145,7 +152,8 @@ class PresentationHandler(BaseHandler):
                 f"injected={post_strip_metrics.get('injected', 0)}, "
                 f"dropped={post_strip_metrics.get('dropped', 0)}, "
                 f"restored_sections={post_strip_metrics.get('restored_sections', 0)}, "
-                f"pruned_orphans={pruned}",
+                f"pruned_orphans={pruned}, "
+                f"pruned_unrenderable={unrenderable}",
             )
             self.state.log(
                 "presentation",

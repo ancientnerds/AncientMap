@@ -56,29 +56,22 @@ async def _verify_one_citation(
     # Clean the sentence — remove all [N] markers for clarity
     clean_sentence = re.sub(r"\[\d+\]", "", sentence).strip()
 
-    # When snippets are thin (< 200 chars), we only have title + URL to go on.
-    # Use a softer check: reject only when the source is clearly about a
-    # different topic, not when there's just insufficient evidence.
-    thin_snippet = len(source_snippet.strip()) < 200
-    if thin_snippet:
-        system = (
-            "You are a fact-checker. You receive a sentence from a journal and a source. "
-            "The source snippet is very short — you may not have full context. "
-            "Based on the source TITLE and URL, is this source plausibly about "
-            "the same topic as the sentence? "
-            "Answer true if the source is topically relevant (same site, same discovery, "
-            "same time period, same subject). "
-            "Answer false ONLY if the source is clearly about a different topic."
-        )
-    else:
-        system = (
-            "You are a fact-checker. You receive a sentence from a journal and a source. "
-            "Does this source ACTUALLY support the claim in this sentence? "
-            "The source title and snippet are provided. "
-            "Answer ONLY whether the source supports the specific claim. "
-            "If the source is about a different topic, a different site, a different time period, "
-            "or a different person — answer false."
-        )
+    # Strict-only check. Run 15 audit found that the soft "topical relevance"
+    # fallback (used when snippet < 200 chars) was the entry point for
+    # citation laundering — title vaguely about ancient civilizations + sentence
+    # vaguely about ancient civilizations → "topically relevant" → kept, even
+    # though the source never mentioned the actual claim. The verifier is the
+    # FINAL gate before publishing; it errs toward removal, not toward
+    # "insufficient evidence so let it through."
+    system = (
+        "You are a fact-checker. You receive a sentence from a journal and a source. "
+        "Does this source ACTUALLY support the claim in this sentence? "
+        "The source title and snippet are provided. "
+        "Answer ONLY whether the source supports the specific claim. "
+        "If the source is about a different topic, a different site, a different time period, "
+        "or a different person — answer false. "
+        "If the snippet is too short to confirm the specific claim, answer false."
+    )
     user = (
         f"## Sentence from journal\n{clean_sentence}\n\n"
         f"## Source [{cite_num}]\n"

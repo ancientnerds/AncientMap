@@ -38,17 +38,23 @@ def _tokens(s: str) -> set[str]:
 def metadata_gate_passes(cand: ImageCandidate, what_image_must_show: str) -> bool:
     """Cheap text-similarity check. Rejects clearly-irrelevant candidates.
 
-    Requires at least one shared content token (length > 3) between the
-    image's title+description and the specialist's must_show description.
-    The vision gate catches false positives downstream, so we err permissive
-    here — the cost of a VLM call is modest compared to over-filtering at
-    this stage.
+    Requires at least 2 shared content tokens (length > 3) between the
+    image's title+description and the specialist's must_show description,
+    AND at least 20% coverage of the must-show tokens. The 2-token rule
+    catches generic single-word coincidences (Run 15: a Nazca-lines image
+    matched an O'Brien-book paragraph because both contained "lines"); the
+    20% rule scales the bar with prompt specificity. VLM still runs as the
+    strict downstream gate.
     """
     haystack = f"{cand.title} {cand.description}".strip()
     if not haystack or not what_image_must_show:
         return False
-    shared = _tokens(haystack) & _tokens(what_image_must_show)
-    return len(shared) >= 1
+    h_tokens = _tokens(haystack)
+    m_tokens = _tokens(what_image_must_show)
+    if not m_tokens:
+        return False
+    shared = h_tokens & m_tokens
+    return len(shared) >= 2 and (len(shared) / len(m_tokens)) >= 0.20
 
 
 # Re-export for the handful of callers (handlers/probative_images.py and dev

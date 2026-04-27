@@ -13,13 +13,13 @@ If unsure whether a source is on-topic, REJECT it. It is better to have fewer, r
 
 TIER CRITERIA:
 
-Tier 1 — Academic: DOI from peer-reviewed journal, academic database (semanticscholar, openalex, core.ac.uk), .edu/.ac.uk, journal publishers (JSTOR, Cambridge UP, Oxford UP, Springer, Elsevier), academic repos (ResearchGate, Academia.edu, arXiv), museum/heritage (Smithsonian, British Museum, UNESCO, Europeana).
+Tier 1 — Academic: DOI from peer-reviewed journal, academic database (semanticscholar, openalex, core.ac.uk), .edu/.ac.uk, journal publishers (JSTOR, Cambridge UP, Oxford UP, Springer, Elsevier), academic repos (ResearchGate, Academia.edu, arXiv), museum/heritage (Smithsonian, British Museum, UNESCO, Europeana). **Preprint servers (arXiv, biorxiv, eartharxiv) qualify as Tier 1 only when authors are independent of the claim being made; reject if the preprint is the proponents' self-publication of their own contested claim.**
 
 Tier 2 — Reputable: Major news with editorial standards, popular science (NatGeo, Archaeology Magazine), credentialed author blogs, educational platforms, Wikipedia (ONLY if the article is specifically about the research topic). Known archaeology YouTube channels with significant followings and credentialed presenters (youtu.be links).
 
 Tier 3 — General: Personal blogs, commercial/travel sites, forums, self-published, news aggregators. General YouTube content without verified archaeological credentials.
 
-REJECT: Social media (Reddit, Facebook, X/Twitter, TikTok), content farms, no-author sites, conspiracy sites, AI-generated aggregators. Also REJECT any source that is off-topic for the research question regardless of its tier.
+REJECT immediately: grokipedia.com (AI-generated encyclopedia), grahamhancock.com, brienfoerster.com, gaia.com, ancient-origins.net, invisibletemple.com, irishpagan.school, celticlifeintl.com, any site self-publishing pyramid/Atlantis/lost-civilization claims, any AI-generated aggregator. Also REJECT social media (Reddit, Facebook, X/Twitter, TikTok), content farms, no-author sites, and any source that is off-topic for the research question regardless of its tier.
 
 RULES:
 1. Assign exactly one tier (1, 2, or 3) or reject each source. Provide a brief reason.

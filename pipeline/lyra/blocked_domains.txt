@@ -30,6 +30,12 @@ gaia.com
 ancient-origins.net
 ancient-code.com
 readmultiplex.com
+grahamhancock.com
+brienfoerster.com
+grokipedia.com
+invisibletemple.com
+irishpagan.school
+celticlifeintl.com
 
 # Homework / AI slop
 quizlet.com
