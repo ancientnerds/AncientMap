@@ -393,6 +393,40 @@ def _normalize_url(url: str) -> str:
 # ---------------------------------------------------------------------------
 
 
+def prune_orphaned_references(paper_text: str, registry: CitationRegistry) -> int:
+    """Remove ref numbers that no longer have a corresponding `[N]` in prose.
+
+    `inject_citation_for_paragraph` calls `registry.assign_reference_number(sid)`
+    for every claim it tries to attach to an uncited paragraph. If the paragraph
+    is later restored to its un-injected original (e.g. section-preserve
+    safeguard in `strip_uncited_factual_paragraphs` triggers), the registry
+    keeps the assigned number but the `[N]` marker never reaches prose →
+    audit_citations flags it as `orphaned_refs` → audit.passed=false even
+    though every actually-cited reference is fine.
+
+    Run this AFTER all injection passes (writer + strip + post-presentation
+    strip) and BEFORE the final audit. It walks paper_text once, finds every
+    `[N]` actually used, and drops every other entry from
+    `registry.reference_numbers`. Returns the number pruned.
+
+    Note: this does NOT renumber survivors. The references list will simply
+    skip the dropped numbers, which is fine — the audit only complains about
+    `assigned but not cited`, not about gaps.
+    """
+    cited: set[int] = set()
+    refs_start = _find_references_heading(paper_text)
+    prose_only = paper_text[:refs_start] if refs_start is not None else paper_text
+    for m in re.finditer(r"\[(\d+)\]", prose_only):
+        cited.add(int(m.group(1)))
+
+    pruned = 0
+    for sid in list(registry.reference_numbers.keys()):
+        if registry.reference_numbers[sid] not in cited:
+            del registry.reference_numbers[sid]
+            pruned += 1
+    return pruned
+
+
 def finalize_references(
     paper_text: str,
     working_sid_to_num: dict[str, int],

@@ -116,7 +116,11 @@ class PresentationHandler(BaseHandler):
         # again so paragraphs the LLM stripped citations from get them back
         # from the registry; truly unsupported ones get deleted; then audit
         # the final state.
-        from pipeline.lyra.theo_citations import audit_citations, strip_uncited_factual_paragraphs
+        from pipeline.lyra.theo_citations import (
+            audit_citations,
+            prune_orphaned_references,
+            strip_uncited_factual_paragraphs,
+        )
 
         try:
             post_strip_metrics: dict = {}
@@ -126,6 +130,13 @@ class PresentationHandler(BaseHandler):
                 metrics_out=post_strip_metrics,
             )
             self.state.post_presentation_strip_metrics = post_strip_metrics
+            # Drop registry entries that no longer have a [N] in prose.
+            # inject_citation_for_paragraph assigns numbers eagerly even when
+            # the paragraph it was attached to ends up restored to its
+            # un-injected original by the section-preserve safeguard. Run 14:
+            # 3 orphans → audit.passed=false despite everything else clean.
+            pruned = prune_orphaned_references(self.state.paper_text, self.state.registry)
+            self.state.post_presentation_orphans_pruned = pruned
             new_audit = audit_citations(self.state.paper_text, self.state.registry)
             self.state.audit_result = new_audit
             self.state.log(
@@ -133,13 +144,15 @@ class PresentationHandler(BaseHandler):
                 f"Post-presentation strip: seen={post_strip_metrics.get('uncited_seen', 0)}, "
                 f"injected={post_strip_metrics.get('injected', 0)}, "
                 f"dropped={post_strip_metrics.get('dropped', 0)}, "
-                f"restored_sections={post_strip_metrics.get('restored_sections', 0)}",
+                f"restored_sections={post_strip_metrics.get('restored_sections', 0)}, "
+                f"pruned_orphans={pruned}",
             )
             self.state.log(
                 "presentation",
                 f"Re-audit after presentation: passed={new_audit.get('passed')}, "
                 f"non_numeric={len(new_audit.get('non_numeric_markers') or [])}, "
-                f"uncited={new_audit.get('uncited_paragraphs', 0)}",
+                f"uncited={new_audit.get('uncited_paragraphs', 0)}, "
+                f"orphaned={len(new_audit.get('orphaned_refs') or [])}",
             )
         except Exception as e:
             logger.warning("post-presentation re-audit failed: %s", e)

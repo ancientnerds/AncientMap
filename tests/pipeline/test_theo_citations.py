@@ -988,6 +988,38 @@ def test_strip_drops_unsupported_paragraph_when_no_claim_match():
     assert "Sumerian cuneiform tablets" not in out
 
 
+def test_prune_orphaned_references_drops_unused_assignments():
+    """Run 14 regression: assigned ref numbers without [N] in prose are pruned."""
+    from pipeline.lyra.theo_citations import prune_orphaned_references
+
+    registry = CitationRegistry()
+    cited_sid = registry.register_source("https://cited.example/", "Cited", "snip")
+    uncited_sid = registry.register_source("https://orphan.example/", "Orphan", "snip")
+    third_sid = registry.register_source("https://third.example/", "Third", "snip")
+    registry.assign_reference_number(cited_sid)  # → 1
+    registry.assign_reference_number(uncited_sid)  # → 2 (orphan)
+    registry.assign_reference_number(third_sid)  # → 3
+    paper = "## Investigation\n\nFact one [1]. Fact three [3].\n\n## References\n\n[1] x\n[2] y\n[3] z\n"
+    pruned = prune_orphaned_references(paper, registry)
+    assert pruned == 1
+    assert cited_sid in registry.reference_numbers
+    assert uncited_sid not in registry.reference_numbers
+    assert third_sid in registry.reference_numbers
+
+
+def test_prune_orphaned_references_only_scans_prose_not_refs_section():
+    """Numbers only present in the References list shouldn't count as cited."""
+    from pipeline.lyra.theo_citations import prune_orphaned_references
+
+    registry = CitationRegistry()
+    sid = registry.register_source("https://x.example/", "X", "snip")
+    registry.assign_reference_number(sid)
+    paper = "## Investigation\n\nNo citations here at all.\n\n## References\n\n[1] X — https://x.example/\n"
+    pruned = prune_orphaned_references(paper, registry)
+    assert pruned == 1
+    assert sid not in registry.reference_numbers
+
+
 def test_strip_preserves_h1_title_block():
     """The `# Paper Title` block must survive the strip pass.
 
