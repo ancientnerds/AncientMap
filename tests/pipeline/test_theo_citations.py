@@ -988,6 +988,40 @@ def test_strip_drops_unsupported_paragraph_when_no_claim_match():
     assert "Sumerian cuneiform tablets" not in out
 
 
+def test_strip_preserves_h1_title_block():
+    """The `# Paper Title` block must survive the strip pass.
+
+    Run 10 regression: the H1 title was treated as uncited factual prose
+    (>50 chars, no [N] marker) and stripped. Downstream title-extraction then
+    fell back to the raw user question, producing a 600-char H1.
+    """
+    registry = CitationRegistry()
+    sid = registry.register_source("https://x.example/", "X", "snippet")
+    registry.add_claim("Filler claim about megaliths and stone working.", [sid])
+    paper = (
+        "# Celestial Beings in Ancient Texts and Megalithic Monuments\n\n"
+        "## Investigation\n\n"
+        "Megaliths at Puma Punku show machined precision visible to the naked eye [1].\n"
+    )
+    out = strip_uncited_factual_paragraphs(paper, registry)
+    assert "# Celestial Beings in Ancient Texts and Megalithic Monuments" in out
+
+
+def test_strip_preserves_h2_h3_headings():
+    """Section and subsection headings must also survive (defensive)."""
+    registry = CitationRegistry()
+    sid = registry.register_source("https://x.example/", "X", "snippet")
+    registry.add_claim("Filler claim about the Mediterranean basin.", [sid])
+    paper = (
+        "## A Long Section Heading That Definitely Exceeds Fifty Characters In Total\n\n"
+        "### A Long Subsection Heading That Definitely Exceeds Fifty Characters In Total\n\n"
+        "Some prose with a citation [1] so the section preservation safeguard does not trigger.\n"
+    )
+    out = strip_uncited_factual_paragraphs(paper, registry)
+    assert "## A Long Section Heading" in out
+    assert "### A Long Subsection Heading" in out
+
+
 def test_format_references_list_one_source_per_entry():
     """Every non-empty reference line starts with [N] and has at most one URL.
 

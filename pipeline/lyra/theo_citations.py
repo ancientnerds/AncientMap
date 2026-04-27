@@ -524,8 +524,14 @@ def _split_prose_into_paragraphs(prose_only: str) -> list[tuple[str, str]]:
 
 
 def _is_non_prose_block(block: str) -> bool:
-    """True for image markdown, italic captions, source-link trailers, lone markdown links."""
+    """True for headings, image markdown, italic captions, source-link trailers, lone markdown links."""
     s = block.strip()
+    # Headings of any level (`# H1`, `## H2`, ...) are structural, not prose.
+    # Without this, the H1 paper title is treated as uncited factual prose
+    # (>50 chars, no [N]) and stripped — then the title-extraction fallback
+    # downstream lands on the raw user question.
+    if re.match(r"^#{1,6}\s+\S", s):
+        return True
     if s.startswith("!["):
         return True
     if s.startswith("*") and "[Source](" in s:

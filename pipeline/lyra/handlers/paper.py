@@ -289,6 +289,27 @@ class PaperHandler(BaseHandler):
         self.state.strip_metrics = strip_metrics
 
         # ---------------------------------------------------------------
+        # Step 7.8: Scrub bracketed hex tokens before audit
+        # ---------------------------------------------------------------
+        # The writer occasionally parrots `[<12-hex-sid>]` tokens it saw in
+        # the source list (Run 10 leaked 7 of them). Presentation cleans them
+        # later via LLM, but audit runs first, so without this scrub the
+        # result.audit always reports `passed=false` for a problem that the
+        # final published paper doesn't actually have.
+        # Pattern: strict 6-16 hex inside single brackets, surrounded by word
+        # boundaries so we don't touch markdown links or [N] citations.
+        _hex_token_re = re.compile(r"(?<!\!)\[[a-f0-9]{6,16}\]")
+        scrubbed_count = len(_hex_token_re.findall(self.state.paper_text))
+        if scrubbed_count:
+            self.state.paper_text = _hex_token_re.sub("", self.state.paper_text)
+            # Collapse the orphan whitespace the strip leaves behind. Note: do
+            # NOT strip whitespace before `!` — that's the start of markdown
+            # image syntax `![alt](url)` and a leading space is significant.
+            self.state.paper_text = re.sub(r" {2,}", " ", self.state.paper_text)
+            self.state.paper_text = re.sub(r" +([.,;:?])", r"\1", self.state.paper_text)
+            self.state.log("paper", f"Scrubbed {scrubbed_count} hex source-id token(s) from prose")
+
+        # ---------------------------------------------------------------
         # Step 8: Citation audit (runs on finalized [1..M] numbering)
         # ---------------------------------------------------------------
         self.state.audit_result = audit_citations(
@@ -329,10 +350,12 @@ class PaperHandler(BaseHandler):
         # ---------------------------------------------------------------
         # Step 10: Extract title
         # ---------------------------------------------------------------
+        # Prefer the H1 in the assembled paper, but fall back to the validated
+        # `title` from Step 1 — NOT self.state.question. If a downstream pass
+        # ever strips the H1 again, the question is 600+ chars and produces a
+        # broken card description / page heading.
         title_match = re.search(r"^#\s+(.+)$", self.state.paper_text, re.MULTILINE)
-        self.state.paper_title = (
-            title_match.group(1).strip() if title_match else self.state.question
-        )
+        self.state.paper_title = title_match.group(1).strip() if title_match else title
 
         # ---------------------------------------------------------------
         # Step 11: Generate card description

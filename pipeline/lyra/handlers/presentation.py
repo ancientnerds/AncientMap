@@ -98,6 +98,25 @@ class PresentationHandler(BaseHandler):
                 f"Corrected paper too short ({corrected_len} vs {original_len}), keeping original",
             )
 
+        # Re-audit after presentation so result.audit reflects the actual
+        # published prose. Without this, audit.passed stays False because the
+        # paper-assembly audit ran before LLM-rewrite cleaned up debug tokens
+        # like [<hex-sid>] (Run 10: passed=false despite the final report
+        # being clean).
+        from pipeline.lyra.theo_citations import audit_citations
+
+        try:
+            new_audit = audit_citations(self.state.paper_text, self.state.registry)
+            self.state.audit_result = new_audit
+            self.state.log(
+                "presentation",
+                f"Re-audit after presentation: passed={new_audit.get('passed')}, "
+                f"non_numeric={len(new_audit.get('non_numeric_markers') or [])}, "
+                f"uncited={new_audit.get('uncited_paragraphs', 0)}",
+            )
+        except Exception as e:
+            logger.warning("post-presentation re-audit failed: %s", e)
+
         self.emit_sse(
             {
                 "type": "pipeline",

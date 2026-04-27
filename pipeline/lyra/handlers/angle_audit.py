@@ -73,7 +73,8 @@ class AuditHandler(BaseHandler):
                 f"## Research question\n\n{self.state.question}\n\n"
                 f"## Research angle\n\n{angle.topic}: {angle.description}\n\n"
                 f"## Source to evaluate\n\n"
-                f"Source [{sid}]: {source.title}{tier_str}\n"
+                # `Source #sid` not `Source [sid]` — see angle_specialist.py.
+                f"Source #{sid}: {source.title}{tier_str}\n"
                 f"URL: {source.url}\n"
                 f"Snippet: {source.snippet}\n"
             )

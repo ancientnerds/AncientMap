@@ -133,7 +133,7 @@ def _build_sources_context(registry: CitationRegistry) -> str:
         elif source.reliability_tier == 2:
             tier_str = " [Reputable]"
         lines.append(
-            f"Source [{sid}]: {source.title}{tier_str}\n"
+            f"Source #{sid}: {source.title}{tier_str}\n"
             f"URL: {source.url}\n"
             f"Snippet: {source.snippet}\n"
         )
@@ -252,7 +252,7 @@ def _stage_audit(
         user_msg = (
             f"## Research question\n\n{question}\n\n"
             f"## Source to evaluate\n\n"
-            f"Source [{sid}]: {source.title}{tier_str}\n"
+            f"Source #{sid}: {source.title}{tier_str}\n"
             f"URL: {source.url}\n"
             f"Snippet: {source.snippet}\n"
         )

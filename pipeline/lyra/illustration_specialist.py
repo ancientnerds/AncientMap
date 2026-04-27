@@ -16,22 +16,26 @@ logger = logging.getLogger(__name__)
 
 _PROMPT_PATH = Path(__file__).parent / "prompts" / "illustration_specialist.txt"
 
-_REQUIRED_FIELDS = (
-    "paragraph_index",
-    "keyword",
-    "search_query",
-    "what_image_must_show",
-    "forbidden_elements",
-    "rationale",
-)
+# Hard requirements — without these, an opportunity is unusable downstream
+# (no anchor to embed at, no query to fetch with). Everything else gets a
+# safe default so the LLM occasionally omitting `forbidden_elements` or
+# `rationale` doesn't drop the entire opportunity silently.
+_REQUIRED_FIELDS = ("paragraph_index", "search_query")
+_OPTIONAL_DEFAULTS: dict = {
+    "keyword": "",
+    "what_image_must_show": "",
+    "forbidden_elements": [],
+    "rationale": "",
+}
 
 
 def parse_opportunities(raw: str) -> list[dict]:
     """Parse the specialist LLM output into a list of opportunities.
 
-    - Strips markdown fences if present.
-    - Drops entries missing required fields.
-    - Returns [] on any parse failure.
+    Only `paragraph_index` and `search_query` are hard-required. Other fields
+    are filled with safe defaults if missing — the prior strict check silently
+    dropped every opportunity in Run 10 because MiniMax was omitting one of
+    the optional fields, producing 0 embedded images with no surfaced reason.
     """
     if not raw or not raw.strip():
         return []
@@ -51,10 +55,26 @@ def parse_opportunities(raw: str) -> list[dict]:
             return []
     opps = data.get("opportunities", [])
     out: list[dict] = []
+    dropped = 0
     for o in opps:
-        if not all(k in o for k in _REQUIRED_FIELDS):
+        if not isinstance(o, dict):
+            dropped += 1
             continue
+        missing = [k for k in _REQUIRED_FIELDS if k not in o or o.get(k) in (None, "")]
+        if missing:
+            dropped += 1
+            logger.warning(
+                "parse_opportunities: dropped opp missing required field(s) %s; got keys=%s",
+                missing,
+                sorted(o.keys()),
+            )
+            continue
+        for k, default in _OPTIONAL_DEFAULTS.items():
+            if k not in o or o.get(k) is None:
+                o[k] = default if not isinstance(default, list) else list(default)
         out.append(o)
+    if dropped:
+        logger.warning("parse_opportunities: dropped %d opps from %d returned", dropped, len(opps))
     return out
 
 
@@ -195,13 +215,70 @@ async def select_opportunities(
     )
 
     out: list[dict] = []
+    failed = 0
     for r in results:
         if isinstance(r, Exception):
+            failed += 1
             logger.warning("select_opportunities: one paragraph failed: %s", r)
             continue
         out.extend(r)
 
     logger.info(
-        "select_opportunities: %d opportunities from %d paragraphs", len(out), len(paragraphs)
+        "select_opportunities: %d opportunities from %d paragraphs (%d failed)",
+        len(out),
+        len(paragraphs),
+        failed,
     )
     return out
+
+
+async def select_opportunities_with_metrics(
+    paper_text: str,
+    question: str,
+    other_paragraphs_text: str,
+    image_pool_text: str,
+    writer_markers_text: str,
+    settings,
+) -> tuple[list[dict], dict]:
+    """Same as `select_opportunities` but also returns counts for telemetry.
+
+    Use from `embed_probative_images` so a 0-opp run surfaces a clear reason on
+    `state.debug_log` (Run 10 lost 9 minutes silently because the metrics never
+    escaped this function).
+    """
+    paragraphs = split_paper_into_paragraphs(paper_text)
+    if not paragraphs:
+        return [], {"opportunities": 0, "paragraphs": 0, "failed": 0}
+
+    semaphore = asyncio.Semaphore(_MAX_KEYWORD_CALLS_IN_FLIGHT)
+    results = await asyncio.gather(
+        *[
+            _select_for_paragraph(
+                p,
+                question,
+                other_paragraphs_text,
+                image_pool_text,
+                writer_markers_text,
+                settings,
+                semaphore,
+            )
+            for p in paragraphs
+        ],
+        return_exceptions=True,
+    )
+    out: list[dict] = []
+    failed = 0
+    for r in results:
+        if isinstance(r, Exception):
+            failed += 1
+            logger.warning("select_opportunities: one paragraph failed: %s", r)
+            continue
+        out.extend(r)
+    metrics = {"opportunities": len(out), "paragraphs": len(paragraphs), "failed": failed}
+    logger.info(
+        "select_opportunities: %d opportunities from %d paragraphs (%d failed)",
+        len(out),
+        len(paragraphs),
+        failed,
+    )
+    return out, metrics
