@@ -241,16 +241,12 @@ class SpecialistHandler(BaseHandler):
                     "specialist",
                     f"Rabbit holes in '{angle.topic}': {rabbit_holes_found}",
                 )
-                # Grant bonus rounds for each rabbit hole, but cap aggressively.
-                # Run 12 hit the orchestrator's 4h hard cap because the
-                # quantum-mechanics user-sub-question kept finding 1-2 rabbit
-                # holes every round and used the prior `min(found, angle_max)`
-                # rule to extend up to 2× base — meaning a single deep-rabbit
-                # angle could run 8 saturation rounds and burn 90+ min on its
-                # own. Cap bonus at 2 absolute so worst-case per-angle stays
-                # under 6 rounds (4 base + 2 bonus).
+                # Grant bonus rounds for each rabbit hole (up to double the base max).
+                # Quality > speed: the user explicitly does NOT want research depth
+                # capped to fit the wall-clock budget. The orchestrator timeout
+                # has been raised instead (api/services/theo_worker.py).
                 angle_max = self.state.config.max_search_rounds_per_angle
-                bonus = min(len(rabbit_holes_found), 2)
+                bonus = min(len(rabbit_holes_found), angle_max)
                 # Store effective max on the angle so saturation checks use it
                 effective_max = angle_max + bonus
                 angle.effective_max_rounds = effective_max
