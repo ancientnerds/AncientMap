@@ -20,7 +20,7 @@ from typing import Any
 
 from pipeline.lyra.config import _get_settings
 from pipeline.lyra.handlers import BaseHandler
-from pipeline.lyra.illustration_specialist import select_opportunities
+from pipeline.lyra.illustration_specialist import select_opportunities_with_metrics
 from pipeline.lyra.image_fetcher import download_candidate, fetch_candidates
 from pipeline.lyra.image_gates import (
     build_vlm_prompt,
@@ -325,13 +325,28 @@ async def embed_probative_images(
     image_pool_text = _build_image_pool_text(pool)
     writer_markers_text = _build_writer_markers_text(paper_text)
 
-    opportunities = await select_opportunities(
+    opportunities, opp_metrics = await select_opportunities_with_metrics(
         paper_text=paper_text,
         question=question,
         other_paragraphs_text=other_paras,
         image_pool_text=image_pool_text,
         writer_markers_text=writer_markers_text,
         settings=settings,
+    )
+    # Echo the count to the SSE stream so result_json captures it (the prior
+    # logger.info was Python-stdout only, invisible in published artifacts).
+    emit(
+        {
+            "type": "pipeline",
+            "stage": "probative_images",
+            "status": "progress",
+            "meta": {
+                "opportunities_selected": opp_metrics["opportunities"],
+                "paragraphs_scanned": opp_metrics["paragraphs"],
+                "paragraph_calls_failed": opp_metrics["failed"],
+                "candidate_pool_size": sum(len(v or []) for v in (pool or {}).values()),
+            },
+        }
     )
 
     # 2. Prepare per-paper VLM client + image dir

@@ -345,8 +345,12 @@ class SpecialistHandler(BaseHandler):
                 tier_str = " [Academic]"
             elif source.reliability_tier == 2:
                 tier_str = " [Reputable]"
+            # NOTE: source id MUST NOT be wrapped in [brackets]. The LLM has
+            # been observed to copy [<12-hex-sid>] tokens into claim text,
+            # which then fails the citation audit (non_numeric_markers). Use
+            # `Source #<sid>:` so the id is visually a label, not a marker.
             lines.append(
-                f"Source [{sid}]: {source.title}{tier_str}\n"
+                f"Source #{sid}: {source.title}{tier_str}\n"
                 f"URL: {source.url}\n"
                 f"Snippet: {source.snippet}\n"
             )
