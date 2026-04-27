@@ -106,7 +106,7 @@ async def _process_paper(paper: dict, apply: bool) -> tuple[str, bool, str]:
         # Dry-run: we don't want to burn LLM + MiniMax calls just to report.
         return (slug, False, "WOULD BACKFILL (dry-run)")
 
-    new_report, embedded, diversity, _strategy_counts = await embed_probative_images(
+    new_report, embedded, diversity, _strategy_counts, _skip_reasons = await embed_probative_images(
         paper_id=paper_id,
         paper_text=report,
         question=question,

@@ -44,6 +44,15 @@ logger = logging.getLogger(__name__)
 
 IMAGES_DIR = Path(__file__).resolve().parents[3] / "public" / "data" / "research-images"
 
+# Concurrency cap for `_process_one_opportunity`. Each opportunity does:
+#   1. 0-1 on-demand fetch (HTTP fan-out) when the pool is empty for it
+#   2. up to 3 download probes (HTTP)
+#   3. up to 3 VLM gate calls (LLM)
+# At 124 opportunities running in parallel (Run 11), the upstream services
+# saturate and most opps see empty fetches and VLM errors. 6 keeps the queue
+# warm while still finishing in reasonable wall time.
+_EMBED_MAX_PARALLEL = 6
+
 
 @dataclass
 class _EmbedContext:
@@ -79,6 +88,13 @@ class _EmbedContext:
     # strategy. Capped at 2 in _process_one_opportunity so a section with
     # many unmatched anchors doesn't pile up images before its next heading.
     section_fallback_counts: dict[str, int] = field(default_factory=dict)
+    # Reason an opportunity didn't produce an embed. Keys:
+    #   no_section, no_canonical_section, no_pool_candidates,
+    #   no_fetched_candidates, all_unsafe_vlm, dedup_blocked,
+    #   anchor_match_failed, download_failed.
+    # Surfaced on state.embed_skip_reasons so we can post-mortem failures
+    # without container-log access (Run 11 silently lost 123/124 opps).
+    skip_reasons: dict[str, int] = field(default_factory=dict)
 
 
 def _subject_fingerprint(cand) -> str:
@@ -369,16 +385,32 @@ async def embed_probative_images(
         writer_embedded = await _resolve_writer_markers(ctx)
         ctx.embedded.extend(writer_embedded)
 
-        # 4. Parallel opportunity processing
-        tasks = [_process_one_opportunity(ctx, opp, settings) for opp in opportunities]
+        # 4. Bounded-parallel opportunity processing.
+        # Run 11: 124 opportunities fired concurrently → only 1 embed survived.
+        # Each opportunity does an on-demand fetch (HTTP) + 1-3 VLM calls (LLM).
+        # 124 simultaneous fetch+VLM cascades saturate the upstream services
+        # (Wikimedia rate limits; MiniMax queue) and most return errors. A
+        # semaphore of 6 keeps the candidate pool warm while still finishing
+        # in reasonable wall time (124 / 6 ≈ 21 batches × ~10s = ~3 min).
+        embed_sem = asyncio.Semaphore(_EMBED_MAX_PARALLEL)
+
+        async def _bounded(opp):
+            async with embed_sem:
+                return await _process_one_opportunity(ctx, opp, settings)
+
+        tasks = [_bounded(opp) for opp in opportunities]
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
+        excepted = 0
         for r in results:
             if isinstance(r, Exception):
+                excepted += 1
                 logger.warning("opportunity processing failed: %s", r)
                 continue
             if isinstance(r, list):
                 ctx.embedded.extend(r)
+        if excepted:
+            logger.warning("[probative] %d/%d opps raised exceptions", excepted, len(opportunities))
     finally:
         client.close()
 
@@ -393,16 +425,29 @@ async def embed_probative_images(
         diversity["source_count"],
         ", ".join(diversity["sources"]),
     )
+    skip_reasons = dict(ctx.skip_reasons)
+    if skip_reasons:
+        logger.info("[probative] skip_reasons=%s", skip_reasons)
     emit(
         {
             "type": "pipeline",
             "stage": "probative_images",
             "status": "done",
-            "meta": {"embedded": len(ctx.embedded), **diversity},
+            "meta": {
+                "embedded": len(ctx.embedded),
+                "skip_reasons": skip_reasons,
+                **diversity,
+            },
         }
     )
 
-    return (ctx.paper_text, ctx.embedded, diversity, dict(ctx.strategy_counts))
+    return (
+        ctx.paper_text,
+        ctx.embedded,
+        diversity,
+        dict(ctx.strategy_counts),
+        skip_reasons,
+    )
 
 
 class ProbativeImagesHandler(BaseHandler):
@@ -414,7 +459,13 @@ class ProbativeImagesHandler(BaseHandler):
     async def _on_paper_ready(self, event: PaperReady):
         self.state.phase = ResearchPhase.IMAGE_CURATION
 
-        new_paper_text, embedded, diversity, strategy_counts = await embed_probative_images(
+        (
+            new_paper_text,
+            embedded,
+            diversity,
+            strategy_counts,
+            skip_reasons,
+        ) = await embed_probative_images(
             paper_id=str(self.state.request_id),
             paper_text=self.state.paper_text or "",
             question=getattr(self.state, "question", "") or "",
@@ -432,6 +483,10 @@ class ProbativeImagesHandler(BaseHandler):
         # each anchor-matching path fires (or how often the section-end
         # fallback is rescuing us).
         self.state.embed_strategy_counts = strategy_counts
+        # Per-reason skip counts. Lets us see why opportunities die at scale
+        # without scraping container logs (Run 11: 124 opps, 1 embed, no
+        # surfaced reason).
+        self.state.embed_skip_reasons = skip_reasons
 
         await self.bus.emit(ProbativeImagesReady(embedded_count=len(embedded)))
 
@@ -458,6 +513,7 @@ async def _process_one_opportunity(
     rationale = opp.get("rationale", "")
 
     if para_idx < 0 or not search_query:
+        ctx.skip_reasons["bad_input"] = ctx.skip_reasons.get("bad_input", 0) + 1
         return []
 
     # Resolve section — prefer the opportunity's section field, fall back to registry
@@ -468,6 +524,7 @@ async def _process_one_opportunity(
         section_name = find_section_for_claim(ctx.paper_text, para_text[:60])
     if not section_name:
         logger.info("[probative] no section matched for paragraph %s", para_idx)
+        ctx.skip_reasons["no_section"] = ctx.skip_reasons.get("no_section", 0) + 1
         return []
 
     # Normalize section heading to the paper's actual canonical form — the
@@ -481,6 +538,9 @@ async def _process_one_opportunity(
             f"[probative] section '{section_name}' not found in paper for para {para_idx} "
             f"keyword '{keyword}' — skipping",
             flush=True,
+        )
+        ctx.skip_reasons["no_canonical_section"] = (
+            ctx.skip_reasons.get("no_canonical_section", 0) + 1
         )
         return []
     section_name = canonical
@@ -504,6 +564,7 @@ async def _process_one_opportunity(
             flush=True,
         )
         logger.info("[probative] no candidates for para %s keyword '%s'", para_idx, keyword)
+        ctx.skip_reasons["no_candidates"] = ctx.skip_reasons.get("no_candidates", 0) + 1
         return []
 
     # Embed up to N candidates per opportunity. VLM tags each as verified or
@@ -567,6 +628,7 @@ async def _process_one_opportunity(
             f"[probative] no safe candidates for para {para_idx} keyword '{keyword}' — image NOT embedded",
             flush=True,
         )
+        ctx.skip_reasons["no_safe_candidates"] = ctx.skip_reasons.get("no_safe_candidates", 0) + 1
         return []
 
     keyword_slug = re_module.sub(r"[^a-zA-Z0-9]", "_", keyword[:30])
