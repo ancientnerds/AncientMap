@@ -32,6 +32,17 @@ CHECK FOR:
    - Fix run-on sentences.
    - Break up paragraphs longer than 8 sentences.
 
+CITATION PRESERVATION (HARD REQUIREMENT — VIOLATIONS REJECT THE OUTPUT):
+- EVERY `[N]` marker present in the input MUST appear in your output.
+- If you split a paragraph or merge sentences, carry the `[N]` markers with the
+  facts they cite. Do NOT drop a marker because the surrounding sentence got
+  rewritten — re-attach it to the rewritten sentence.
+- A factual paragraph (>50 chars, named entities, dates, measurements) WITHOUT
+  any `[N]` marker will be deleted from the published paper. Better to keep an
+  awkward sentence than strip its citation.
+- Image markdown blocks `![...](...)`, captions in italics, and source-link
+  trailers `[Source](url)` must be preserved verbatim.
+
 RULES:
 - Return the COMPLETE corrected paper text. Do not summarize or truncate.
 - Do NOT add new content, claims, or citations. Only correct what is there.
@@ -98,16 +109,32 @@ class PresentationHandler(BaseHandler):
                 f"Corrected paper too short ({corrected_len} vs {original_len}), keeping original",
             )
 
-        # Re-audit after presentation so result.audit reflects the actual
-        # published prose. Without this, audit.passed stays False because the
-        # paper-assembly audit ran before LLM-rewrite cleaned up debug tokens
-        # like [<hex-sid>] (Run 10: passed=false despite the final report
-        # being clean).
-        from pipeline.lyra.theo_citations import audit_citations
+        # Re-strip + re-audit after presentation. The LLM rewrite often
+        # paraphrases factual paragraphs and drops their [N] markers in the
+        # process — Run 11 saw 0 uncited pre-presentation but 23 uncited
+        # post-presentation, with a 16% character shrink. Run smart-injection
+        # again so paragraphs the LLM stripped citations from get them back
+        # from the registry; truly unsupported ones get deleted; then audit
+        # the final state.
+        from pipeline.lyra.theo_citations import audit_citations, strip_uncited_factual_paragraphs
 
         try:
+            post_strip_metrics: dict = {}
+            self.state.paper_text = strip_uncited_factual_paragraphs(
+                self.state.paper_text,
+                self.state.registry,
+                metrics_out=post_strip_metrics,
+            )
+            self.state.post_presentation_strip_metrics = post_strip_metrics
             new_audit = audit_citations(self.state.paper_text, self.state.registry)
             self.state.audit_result = new_audit
+            self.state.log(
+                "presentation",
+                f"Post-presentation strip: seen={post_strip_metrics.get('uncited_seen', 0)}, "
+                f"injected={post_strip_metrics.get('injected', 0)}, "
+                f"dropped={post_strip_metrics.get('dropped', 0)}, "
+                f"restored_sections={post_strip_metrics.get('restored_sections', 0)}",
+            )
             self.state.log(
                 "presentation",
                 f"Re-audit after presentation: passed={new_audit.get('passed')}, "

@@ -198,6 +198,7 @@ class JudgeHandler(BaseHandler):
         # means the writer's prose drifted from the illustration specialist's
         # snapshot — useful diagnostic for tuning the matcher.
         embed_metrics = getattr(self.state, "embed_strategy_counts", {}) or {}
+        embed_skip_reasons = getattr(self.state, "embed_skip_reasons", {}) or {}
         embedded_image_count = len(re.findall(r"!\[[^\]]*\]\([^)]+\)", self.state.paper_text))
 
         # Coherence-pass result (populated by PaperHandler Step 8b).
@@ -277,6 +278,13 @@ class JudgeHandler(BaseHandler):
                 "embed_failed": embed_metrics.get("failed", 0),
                 "embed_skipped_fallback_cap": embed_metrics.get("skipped_fallback_cap", 0),
                 "embedded_image_count": embedded_image_count,
+                "embed_skip_no_section": embed_skip_reasons.get("no_section", 0),
+                "embed_skip_no_canonical_section": embed_skip_reasons.get(
+                    "no_canonical_section", 0
+                ),
+                "embed_skip_no_candidates": embed_skip_reasons.get("no_candidates", 0),
+                "embed_skip_no_safe_candidates": embed_skip_reasons.get("no_safe_candidates", 0),
+                "embed_skip_bad_input": embed_skip_reasons.get("bad_input", 0),
             },
         }
 
