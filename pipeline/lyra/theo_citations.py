@@ -439,10 +439,7 @@ def prune_unrenderable_references(registry: CitationRegistry) -> int:
 
     Returns the number pruned. Safe to call multiple times.
     """
-    to_drop = [
-        sid for sid in registry.reference_numbers
-        if registry.sources.get(sid) is None
-    ]
+    to_drop = [sid for sid in registry.reference_numbers if registry.sources.get(sid) is None]
     for sid in to_drop:
         registry.reference_numbers.pop(sid, None)
     return len(to_drop)
@@ -966,7 +963,8 @@ def audit_citations(paper_text: str, registry: CitationRegistry) -> dict:
     # rejection path popped sources but kept reference_numbers — the old set
     # comprehension thought those numbers were valid.
     assigned_nums: set[int] = {
-        num for sid, num in registry.reference_numbers.items()
+        num
+        for sid, num in registry.reference_numbers.items()
         if registry.sources.get(sid) is not None
     }
     total_references = len(assigned_nums)

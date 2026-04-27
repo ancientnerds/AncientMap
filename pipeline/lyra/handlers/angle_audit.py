@@ -143,9 +143,9 @@ class AuditHandler(BaseHandler):
         # plenty of tier-1/2 supply available — pure noise floor.
         MIN_TIER12 = 3
         tier12_count = sum(
-            1 for sid in angle.source_ids
-            if (s := self.state.registry.sources.get(sid))
-            and s.reliability_tier in (1, 2)
+            1
+            for sid in angle.source_ids
+            if (s := self.state.registry.sources.get(sid)) and s.reliability_tier in (1, 2)
         )
         if tier12_count >= MIN_TIER12:
             for sid in list(angle.source_ids):
