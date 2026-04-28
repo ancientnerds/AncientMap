@@ -154,7 +154,7 @@ class LyraSettings(BaseSettings):
     post_threshold_long: int = 60
 
     # Deduplication
-    dedup_similarity_threshold: float = 0.25
+    dedup_similarity_threshold: float = 0.40
 
     # Web verification for stories (0 = disabled)
     story_web_verify_min_significance: int = 2
