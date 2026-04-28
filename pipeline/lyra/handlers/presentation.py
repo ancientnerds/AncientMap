@@ -41,6 +41,7 @@ def _h2_headings_lower(text: str) -> set[str]:
     """Return the set of `## Heading` titles in `text`, lowercased and stripped."""
     return {m.group(1).strip().lower() for m in re.finditer(r"^##\s+(.+?)\s*$", text, re.MULTILINE)}
 
+
 _SYSTEM_PROMPT = """\
 You are a presentation assessor for a research paper. Review the paper and return a corrected version.
 
