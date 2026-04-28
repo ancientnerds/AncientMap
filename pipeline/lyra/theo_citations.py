@@ -883,8 +883,19 @@ def strip_uncited_factual_paragraphs(
         # If the strip would gut the section (below threshold), fall back to
         # the original blocks so the section keeps its content. The audit
         # gate then records the surviving uncited paragraphs honestly.
+        #
+        # BUT: if EVERYTHING in the section was uncited (stripped_word_count
+        # == 0), there is nothing meaningful to preserve. Restoring would
+        # just keep uncited factual claims, which the audit then flags. The
+        # honest behavior is to drop the section. Run 16 had the H1 opening
+        # hook (Cortés/Quetzalcoatl) preserved this way: 147 words, all
+        # uncited because the verifier rejected the disputed Moctezuma
+        # claim's citations. The hook survived only via this safeguard,
+        # then failed the audit. Better to drop than to preserve uncited.
+        all_uncited = stripped_word_count == 0 and original_word_count > 0
         if (
-            original_word_count > 100
+            not all_uncited
+            and original_word_count > 100
             and stripped_word_count < original_word_count * section_preserve_threshold
         ):
             chosen = blocks

@@ -17,16 +17,20 @@ DO NOT:
 - Write abstracts or summaries disguised as hooks
 - Use any of these phrases: "it should be noted," "it is worth considering," "it is important to emphasize," "further research is needed," "the answer remains elusive"
 
-ANTI-HALLUCINATION:
-- Every fact, date, name, or detail must come from the provided findings
-- If the findings lack vivid specifics, use the topic itself as the hook -- do NOT fabricate
-- Do NOT invent any of these without a matching claim in the findings: person names, book titles, specific years, specific measurements, or quoted phrases. If the findings don't have it, don't write it. The hallucination gate will delete ungrounded sentences after your draft is returned.
+ANTI-HALLUCINATION (HARD REQUIREMENTS — violations get the hook stripped from the published paper):
+- Every fact, date, name, or detail must come from the provided findings.
+- If the findings lack vivid specifics, use the topic itself as the hook -- do NOT fabricate.
+- Do NOT invent any of these without a matching claim in the findings: person names, book titles, specific years, specific measurements, or quoted phrases.
+- Do NOT include CONTESTED historical interpretations (e.g. "X greeted Y as a returning god", "ancient civilizations had contact with Z", "scholars confirm/deny W") unless a specific finding states this exact claim. Folk-history narratives are often modern reconstructions debunked by current scholarship.
+- Do NOT include "common knowledge" claims that are not in the findings. The verifier will check each citation against its source snippet; if the cited source does not actually support the specific claim in your sentence, the citation gets stripped, and the strip-stage will then drop the whole hook.
+- If the findings do not contain a vivid enough hook, write a 1-paragraph mystery framing using only the topic and the question itself. A short, honest hook beats a long, ungrounded one.
 
 RULES:
-1. 1-2 paragraphs maximum
-2. Write ONLY from the provided topic and findings
-3. Every factual paragraph MUST contain at least one [N] marker from the claims pack -- attach a citation to the sentence that introduces a date, name, measurement, or attribution. Place markers BEFORE the period.
-4. The first sentence must contain a concrete detail -- a date, a name, a place, a number
-5. Use present tense for ongoing mysteries, past tense for historical events
+1. 1-2 paragraphs maximum.
+2. Write ONLY from the provided topic and findings.
+3. Every factual sentence MUST contain at least one [N] marker from the claims pack -- attach the citation to the sentence that carries the specific date, name, measurement, or attribution. Place markers BEFORE the period.
+4. Each [N] you cite must point to a finding that ACTUALLY supports the specific sentence — not just a topically-related finding. The citation verifier will reject mismatches.
+5. The first sentence must contain a concrete detail -- a date, a name, a place, a number — and that detail must come from a specific finding.
+6. Use present tense for ongoing mysteries, past tense for historical events.
 
 Output ONLY the hook paragraph(s). No headings, no meta-commentary.

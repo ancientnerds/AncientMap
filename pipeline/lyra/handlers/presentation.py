@@ -3,6 +3,7 @@ spelling, formatting, and section balance before the quality judge runs."""
 
 import asyncio
 import logging
+import re
 
 from pipeline.lyra.config import _get_settings
 from pipeline.lyra.handlers import BaseHandler
@@ -10,6 +11,35 @@ from pipeline.lyra.minimax_shared import minimax_chat_anthropic
 from pipeline.lyra.research_events import FactCheckComplete, PresentationChecked
 
 logger = logging.getLogger(__name__)
+
+
+def _split_paper_for_presentation(paper_text: str) -> tuple[str, str]:
+    """Split paper into (prose, references_block).
+
+    Run 16 audit found the presentation LLM mangling the references list:
+    only [1]-[5] retained their [N] markers; entries 6+ were glued onto a
+    single line and 9 of 46 references vanished entirely. The fix is to
+    not let the LLM see references at all — split them off, run the LLM on
+    prose only, then re-append the references block verbatim.
+
+    Returns (prose_text, references_block). Either may be empty.
+    """
+    refs_match = re.search(r"\n##\s*References\s*\n", paper_text)
+    if not refs_match:
+        return paper_text, ""
+    return paper_text[: refs_match.start()], paper_text[refs_match.start() :]
+
+
+_REQUIRED_HEADINGS_LOWER = {
+    "connecting the dots",
+    "the other side",
+    "what we actually know",
+}
+
+
+def _h2_headings_lower(text: str) -> set[str]:
+    """Return the set of `## Heading` titles in `text`, lowercased and stripped."""
+    return {m.group(1).strip().lower() for m in re.finditer(r"^##\s+(.+?)\s*$", text, re.MULTILINE)}
 
 _SYSTEM_PROMPT = """\
 You are a presentation assessor for a research paper. Review the paper and return a corrected version.
@@ -78,10 +108,18 @@ class PresentationHandler(BaseHandler):
 
         settings = _get_settings()
 
-        user_msg = f"## Paper to review\n\n{paper_text}"
+        # Split refs off so the LLM never sees them. Run 16 had the LLM
+        # mangle the References list (entries 6+ lost their [N] markers,
+        # 9 of 46 entries vanished). The references are pipeline-rendered
+        # text; the LLM has no business rewriting them.
+        prose_for_llm, references_block = _split_paper_for_presentation(paper_text)
+        prose_headings_before = _h2_headings_lower(prose_for_llm)
+        required_present_before = _REQUIRED_HEADINGS_LOWER & prose_headings_before
+
+        user_msg = f"## Paper to review\n\n{prose_for_llm}"
 
         async with self.semaphore:
-            corrected = await asyncio.to_thread(
+            corrected_prose = await asyncio.to_thread(
                 minimax_chat_anthropic,
                 _SYSTEM_PROMPT,
                 user_msg,
@@ -91,23 +129,47 @@ class PresentationHandler(BaseHandler):
             )
         self.state.llm_call_count += 1
 
-        # Only accept the corrected version if it's reasonably close in length
-        # to the original (LLM didn't truncate or hallucinate a tiny response)
-        corrected = corrected.strip()
-        original_len = len(paper_text)
-        corrected_len = len(corrected)
+        corrected_prose = corrected_prose.strip()
+        prose_original_len = len(prose_for_llm)
+        prose_corrected_len = len(corrected_prose)
 
-        if corrected_len >= original_len * 0.7:
-            self.state.paper_text = corrected
-            self.state.log(
-                "presentation",
-                f"Paper corrected: {original_len} -> {corrected_len} chars",
+        # Validation: the corrected prose must (a) not be drastically shorter,
+        # and (b) preserve every required structural heading that was present
+        # in the input. If either check fails, reject the LLM's output and
+        # keep the writer's original prose — the audit gate's better-fix is
+        # an honest rewrite next iteration than a silent structural regression.
+        accepted = True
+        rejection_reason = ""
+        if prose_corrected_len < prose_original_len * 0.7:
+            accepted = False
+            rejection_reason = (
+                f"corrected prose too short ({prose_corrected_len} vs {prose_original_len})"
             )
         else:
+            corrected_headings = _h2_headings_lower(corrected_prose)
+            dropped_required = required_present_before - corrected_headings
+            if dropped_required:
+                accepted = False
+                rejection_reason = (
+                    f"corrected prose dropped required heading(s): {sorted(dropped_required)}"
+                )
+
+        if accepted:
+            new_paper = corrected_prose
+            if references_block:
+                new_paper = corrected_prose.rstrip() + "\n" + references_block
+            self.state.paper_text = new_paper
             self.state.log(
                 "presentation",
-                f"Corrected paper too short ({corrected_len} vs {original_len}), keeping original",
+                f"Paper corrected: prose {prose_original_len} -> {prose_corrected_len} chars; "
+                f"references re-appended verbatim ({len(references_block)} chars)",
             )
+        else:
+            self.state.log("presentation", f"Rejected LLM correction: {rejection_reason}")
+
+        # Keep these defined for the SSE meta block at the end.
+        original_len = len(paper_text)
+        corrected_len = len(self.state.paper_text)
 
         # Re-strip + re-audit after presentation. The LLM rewrite often
         # paraphrases factual paragraphs and drops their [N] markers in the
