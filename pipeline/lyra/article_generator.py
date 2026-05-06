@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import re
@@ -1118,7 +1119,7 @@ def generate_weekly_article(
     # ── 5. VERIFY CITATIONS ──────────────────────────────────────
     with _step(step_data, "verify_citations", t0_total) as s:
         logger.info("Verifying every citation against its source")
-        body = verify_all_citations(body, unified_sources, settings=settings)
+        body = asyncio.run(verify_all_citations(body, unified_sources, settings=settings))
         s["count"] = len(re.findall(r"\[\d+\]", body))
         logger.info("Citation verification: %d verified citations remain", s["count"])
 

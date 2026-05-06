@@ -12,6 +12,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import asyncio
 import json
 import os
 import re
@@ -117,7 +118,7 @@ def verify_article(article_id: int, fix: bool = False) -> dict:
             {"citation": num, "label": s["label"], "url": s["url"], "snippet": s["label"]}
             for num, s in sources.items()
         ]
-        fixed = verify_all_citations(content, sources_list, settings=settings)
+        fixed = asyncio.run(verify_all_citations(content, sources_list, settings=settings))
         if fixed != content:
             cur.execute("UPDATE news_articles SET content = %s WHERE id = %s", (fixed, article_id))
             conn.commit()
