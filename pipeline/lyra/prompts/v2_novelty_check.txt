@@ -36,4 +36,4 @@ Output a JSON object:
 }
 ```
 
-ONLY output valid JSON. No text outside the JSON object.
+ONLY output valid JSON. No text outside the JSON object. Output compact JSON without indentation or trailing whitespace — every saved token lets you finish the response without truncation.

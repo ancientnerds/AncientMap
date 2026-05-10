@@ -451,7 +451,11 @@ class SpecialistHandler(BaseHandler):
                 minimax_chat_anthropic,
                 prompt,
                 user_msg,
-                4096,
+                # M2.7's interleaved thinking shares this budget with output;
+                # 4096 was getting truncated mid-array on novelty assessments
+                # with 10+ new findings. Match the main specialist call so
+                # thinking has room without starving the JSON output.
+                self.state.config.max_tokens_per_call,
                 settings,
                 temperature=settings.temperature_research,
             )
