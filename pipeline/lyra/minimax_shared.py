@@ -278,13 +278,16 @@ def structured_llm_call(
     }
 
     try:
+        # call_api() pulls settings via _get_settings() internally and forwards
+        # **kwargs to _call_anthropic_api(settings, ...). Passing settings=
+        # here would duplicate the positional arg and raise TypeError, which
+        # is exactly what broke every structured Theo call after commit 964a66b.
         resp = call_api(
             system=system,
             messages=[{"role": "user", "content": user_message}],
             max_tokens=max_tokens,
             response_format=response_format,
             temperature=temperature,
-            settings=settings,
         )
         if resp.stop_reason == "max_tokens":
             logger.warning(

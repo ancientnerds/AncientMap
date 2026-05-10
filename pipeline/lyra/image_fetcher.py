@@ -18,12 +18,38 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
 import httpx
 
 logger = logging.getLogger(__name__)
+
+
+# Wikimedia (upload.wikimedia.org and friends) rate-limits aggressive bot
+# traffic with a 429 + 'Your bot is making too many requests' response.
+# Theo's image-research stage runs many angles in parallel and previously
+# fired dozens of concurrent downloads at Wikimedia, getting most rejected.
+# We throttle to roughly 2 requests/second across the whole pipeline.
+_WIKIMEDIA_RATE_LOCK = asyncio.Lock()
+_WIKIMEDIA_MIN_INTERVAL_S = 0.5
+_wikimedia_last_request_ts: float = 0.0
+
+
+async def _throttle_wikimedia() -> None:
+    """Enforce ~2 RPS across the whole process for upload.wikimedia.org."""
+    global _wikimedia_last_request_ts
+    async with _WIKIMEDIA_RATE_LOCK:
+        now = time.monotonic()
+        wait = _WIKIMEDIA_MIN_INTERVAL_S - (now - _wikimedia_last_request_ts)
+        if wait > 0:
+            await asyncio.sleep(wait)
+        _wikimedia_last_request_ts = time.monotonic()
+
+
+def _is_wikimedia_host(url: str) -> bool:
+    return "wikimedia.org" in url or "wikipedia.org" in url
 
 
 @dataclass
@@ -165,11 +191,15 @@ async def fetch_candidates(query: str, limit_per_source: int = 5) -> list[ImageC
 async def download_candidate(cand: ImageCandidate, out_path: Path) -> bool:
     """Download the candidate's thumbnail (or full image) to disk.
 
-    Returns True on success, False otherwise.
+    Returns True on success, False otherwise. Wikimedia hosts are throttled
+    to stay within their bot policy and avoid 429s.
     """
     src = cand.thumbnail_url or cand.url
     if not src:
         return False
+
+    if _is_wikimedia_host(src):
+        await _throttle_wikimedia()
 
     def _dl() -> None:
         resp = httpx.get(
