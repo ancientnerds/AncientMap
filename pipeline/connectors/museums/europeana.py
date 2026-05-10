@@ -45,7 +45,13 @@ class EuropeanaConnector(BaseConnector):
     attribution = "Europeana"
 
     def __init__(self, api_key: str | None = None, **kwargs):
-        super().__init__(api_key=api_key, **kwargs)
+        # Fall back to THEO_EUROPEANA_KEY env var when registry doesn't inject
+        # one. Same key works for the museums search endpoint and the Theo
+        # text-source adapter — Europeana uses a single wskey for everything.
+        import os
+
+        resolved_key = api_key or os.getenv("THEO_EUROPEANA_KEY") or None
+        super().__init__(api_key=resolved_key, **kwargs)
         self.rest = RestProtocol(base_url=self.base_url, rate_limit=self.rate_limit)
 
     async def search(

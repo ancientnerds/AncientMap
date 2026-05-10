@@ -35,6 +35,12 @@ class PASConnector(BaseConnector):
     requires_auth = False
     auth_type = AuthType.NONE
 
+    available = False
+    unavailable_reason = (
+        "API blocked by Cloudflare bot protection (Cf-Mitigated: challenge) — "
+        "all non-browser requests return 403"
+    )
+
     license = "CC-BY 2.0"  # Corrected: PAS uses CC-BY 2.0, not NC-SA
     attribution = "The Portable Antiquities Scheme"
 

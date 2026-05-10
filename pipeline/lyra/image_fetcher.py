@@ -90,9 +90,13 @@ def select_top_per_connector(
 
 
 # Verified connector IDs from pipeline/connectors/imagery/ and museums/.
-# Only IDs that exist in the registry are listed here.
+# Only IDs that exist in the registry are listed here. Connectors flagged
+# `available=False` (getty_museum, louvre, pas) are kept in the list so the
+# registry's status check short-circuits them with a clear unavailable
+# reason rather than silently hiding capabilities behind a missing ID.
 _IMAGERY_CONNECTORS: tuple[str, ...] = (
     "wikimedia",
+    "wikidata",
     "met_museum",
     "loc",
     "europeana",
@@ -136,6 +140,11 @@ async def fetch_candidates(query: str, limit_per_source: int = 5) -> list[ImageC
     async def _run_one(connector_id: str) -> list[ImageCandidate]:
         conn = ConnectorRegistry.get(connector_id)
         if conn is None:
+            return []
+        # Skip connectors flagged unavailable (e.g. Cloudflare-blocked or
+        # API-deprecated) — calling .search() would still hit the dead/blocked
+        # endpoint and log noise. The flag is the canonical source of truth.
+        if not getattr(conn, "available", True):
             return []
         try:
             # search() is async — call it directly, no to_thread needed

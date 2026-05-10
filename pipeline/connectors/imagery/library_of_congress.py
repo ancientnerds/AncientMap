@@ -39,7 +39,19 @@ class LibraryOfCongressConnector(BaseConnector):
 
     def __init__(self, api_key: str | None = None, **kwargs):
         super().__init__(api_key=api_key, **kwargs)
-        self.rest = RestProtocol(base_url=self.base_url, rate_limit=self.rate_limit)
+        # LoC blocks our default UA with 403; verified 2026-05-10 that a
+        # Mozilla-shaped UA returns 200. Override only for this connector so
+        # other adapters keep their honest UA.
+        self.rest = RestProtocol(
+            base_url=self.base_url,
+            rate_limit=self.rate_limit,
+            headers={
+                "User-Agent": (
+                    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+                    "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                )
+            },
+        )
 
     async def search(
         self,

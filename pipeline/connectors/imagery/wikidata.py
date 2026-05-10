@@ -34,18 +34,19 @@ _PAPER_EXT = re.compile(r"\.(pdf|djvu)$", re.IGNORECASE)
 @ConnectorRegistry.register
 class WikidataConnector(BaseConnector):
     """
-    Wikidata connector for videos and papers.
+    Wikidata connector for images, videos and papers.
 
     Resolves archaeological site names to Wikidata entities and extracts:
+    - P18 (image) -> Commons-hosted still image (canonical entity portrait)
     - P10 (video) -> Commons-hosted .ogv/.webm clips
     - P373 (Commons category) -> PDF/DjVu academic papers
     """
 
     connector_id = "wikidata"
     connector_name = "Wikidata"
-    description = "Videos and papers from Wikidata entities via Wikimedia Commons"
+    description = "Images, videos, and papers from Wikidata entities via Wikimedia Commons"
 
-    content_types = [ContentType.VIDEO, ContentType.PAPER]
+    content_types = [ContentType.PHOTO, ContentType.VIDEO, ContentType.PAPER]
 
     base_url = "https://www.wikidata.org/w/api.php"
     website_url = "https://www.wikidata.org"
@@ -96,6 +97,13 @@ class WikidataConnector(BaseConnector):
             return []
 
         items: list[ContentItem] = []
+
+        # Extract P18 main image (canonical still image for the entity)
+        if content_type is None or content_type == ContentType.PHOTO:
+            if entity.main_image:
+                image_item = await self._resolve_commons_image(entity.main_image, entity.qid)
+                if image_item:
+                    items.append(image_item)
 
         # Extract P10 videos
         if content_type is None or content_type == ContentType.VIDEO:
@@ -180,6 +188,73 @@ class WikidataConnector(BaseConnector):
             )
         except Exception as e:
             logger.debug(f"Commons video resolve failed for '{filename}': {e}")
+            return None
+
+    # =========================================================================
+    # Image extraction (P18)
+    # =========================================================================
+
+    async def _resolve_commons_image(self, filename: str, qid: str) -> ContentItem | None:
+        """Resolve a Commons filename to a still-image ContentItem."""
+        await self._rate_limit()
+        encoded_name = filename.replace(" ", "_")
+        params = {
+            "action": "query",
+            "titles": f"File:{encoded_name}",
+            "prop": "imageinfo",
+            "iiprop": "url|size|mime|extmetadata",
+            "iiurlwidth": "800",
+            "iiextmetadatafilter": "Artist|LicenseShortName|LicenseUrl|ImageDescription",
+            "format": "json",
+        }
+        try:
+            resp = await self.http_client.get(_COMMONS_API, params=params, headers=_HEADERS)
+            if resp.status_code != 200:
+                return None
+            pages = resp.json().get("query", {}).get("pages", {})
+            page: dict = next(iter(pages.values()), {})
+            info_list = page.get("imageinfo", [])
+            if not info_list:
+                return None
+            info = info_list[0]
+
+            original_url = info.get("url")
+            thumb_url = info.get("thumburl") or original_url
+            if not original_url:
+                return None
+
+            ext = info.get("extmetadata", {})
+            artist_raw = ext.get("Artist", {}).get("value", "")
+            artist = re.sub(r"<[^>]*>", "", artist_raw).strip() if artist_raw else None
+            license_name = ext.get("LicenseShortName", {}).get("value")
+            license_url = ext.get("LicenseUrl", {}).get("value")
+            description_raw = ext.get("ImageDescription", {}).get("value", "")
+            description = (
+                re.sub(r"<[^>]*>", "", description_raw).strip() if description_raw else None
+            )
+
+            display_title = filename.rsplit(".", 1)[0]
+            page_url = (
+                f"https://commons.wikimedia.org/wiki/File:"
+                f"{urllib.parse.quote(encoded_name, safe='')}"
+            )
+
+            return ContentItem(
+                id=f"wikidata-image-{qid}-{encoded_name}",
+                source=self.connector_id,
+                content_type=ContentType.PHOTO,
+                title=display_title,
+                description=description,
+                url=page_url,
+                thumbnail_url=thumb_url,
+                media_url=original_url,
+                creator=artist,
+                license=license_name,
+                license_url=license_url,
+                attribution=f"{artist or 'Unknown'} via Wikimedia Commons (Wikidata {qid})",
+            )
+        except Exception as e:
+            logger.debug(f"Commons image resolve failed for '{filename}': {e}")
             return None
 
     @staticmethod

@@ -38,6 +38,12 @@ class PASCoinsConnector(BaseConnector):
     requires_auth = False
     auth_type = AuthType.NONE
 
+    available = False
+    unavailable_reason = (
+        "API blocked by Cloudflare bot protection (Cf-Mitigated: challenge) — "
+        "all non-browser requests return 403"
+    )
+
     license = "CC-BY-NC-SA"
     attribution = "Portable Antiquities Scheme"
 
