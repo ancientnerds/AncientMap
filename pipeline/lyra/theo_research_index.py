@@ -215,12 +215,13 @@ def search_similar(question: str, limit: int = 5) -> list[dict]:
     embedder = get_embeddings("query")
     query_vector = embedder.embed_query(question)
 
-    results = client.search(
+    results = client.query_points(
         collection_name=COLLECTION_NAME,
-        query_vector=("dense", query_vector),
+        query=query_vector,
+        using="dense",
         limit=limit * 3,  # oversample then deduplicate by paper
         score_threshold=0.3,
-    )
+    ).points
 
     # Group by paper_id, keep best score per paper
     best_per_paper: dict[str, dict] = {}
@@ -262,12 +263,13 @@ def search_sections(query: str, limit: int = 3) -> list[dict]:
     embedder = get_embeddings("query")
     query_vector = embedder.embed_query(query)
 
-    results = client.search(
+    results = client.query_points(
         collection_name=COLLECTION_NAME,
-        query_vector=("dense", query_vector),
+        query=query_vector,
+        using="dense",
         limit=limit * 3,
         score_threshold=0.35,
-    )
+    ).points
 
     # Deduplicate by paper_id
     best_per_paper: dict[str, dict] = {}
