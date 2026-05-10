@@ -98,6 +98,16 @@ class CrossPollinationHandler(BaseHandler):
         # Apply cross-pollinated queries to each angle
         enriched_count = 0
         for cp in result.get("cross_pollination", []):
+            # Even with a json_schema response, MiniMax has been observed to
+            # occasionally emit bare strings instead of the expected object
+            # shape — skip those rather than crashing the round-1-complete
+            # handler (which would deprive every other angle of the event).
+            if not isinstance(cp, dict):
+                logger.warning(
+                    "cross_pollination: skipping non-dict item: %s",
+                    repr(cp)[:120],
+                )
+                continue
             angle_id = cp.get("angle_id", "")
             enriched_queries = cp.get("enriched_queries", [])
             cross_insights = cp.get("cross_insights", [])
