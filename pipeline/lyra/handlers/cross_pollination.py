@@ -146,9 +146,7 @@ class CrossPollinationHandler(BaseHandler):
                     self.state.question_embedding = embedder.embed_query(self.state.question)
                 # Deduplicate before embedding to avoid paying for repeats.
                 unique_queries = list(dict.fromkeys(candidate_pool))
-                query_vectors = await asyncio.to_thread(
-                    embedder.embed_documents, unique_queries
-                )
+                query_vectors = await asyncio.to_thread(embedder.embed_documents, unique_queries)
                 for q, vec in zip(unique_queries, query_vectors, strict=True):
                     query_to_score[q] = _cosine(self.state.question_embedding, vec)
             except Exception as exc:

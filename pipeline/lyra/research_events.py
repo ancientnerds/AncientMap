@@ -223,9 +223,7 @@ class EventBus:
                 # which only checks state.error — otherwise done_event.wait()
                 # blocks until the 12h hard timeout.
                 if self._state is not None and not getattr(self._state, "error", None):
-                    self._state.error = (
-                        f"Handler failed on {event_type.__name__}: {exc!r}"
-                    )
+                    self._state.error = f"Handler failed on {event_type.__name__}: {exc!r}"
 
     @property
     def history(self) -> list[ResearchEvent]:
