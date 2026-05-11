@@ -7,10 +7,17 @@ events to all registered handlers, keeping a full history for debugging.
 from __future__ import annotations
 
 import logging
+import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
+
+# Minimum wall-time between DB progress flushes triggered from inside
+# EventBus.emit. Cheap enough to call on every event, but the time gate
+# keeps the actual UPDATE rate sane (~2/min) during high-frequency event
+# bursts like the parallel image-research / search waves.
+_FLUSH_INTERVAL_S = 30.0
 
 
 # ---------------------------------------------------------------------------
@@ -194,6 +201,11 @@ class EventBus:
         # this, a crashed handler is logged but downstream events never fire,
         # leaving done_event.wait() blocked until the 12h hard timeout.
         self._state = state
+        # Wall-time of last DB progress flush. Decomposition's initial event
+        # cascade can keep the orchestrator's deadline loop from starting for
+        # 10+ minutes, so we also flush from inside emit() to keep the DB
+        # counters / debug_log visible to psql during that whole window.
+        self._last_flush_ts: float = 0.0
 
     def register_instance(self, instance: object):
         """Register a handler instance for lookup by class."""
@@ -224,6 +236,30 @@ class EventBus:
                 # blocks until the 12h hard timeout.
                 if self._state is not None and not getattr(self._state, "error", None):
                     self._state.error = f"Handler failed on {event_type.__name__}: {exc!r}"
+
+        # Piggyback a DB progress flush on event emissions. The
+        # orchestrator's own deadline-loop flush sits dormant during
+        # the synchronous bus.emit cascade triggered by decomposition,
+        # which is exactly when the user most needs to see counters
+        # moving in psql. Time-gated so the actual UPDATE rate is
+        # bounded regardless of event frequency.
+        if self._state is not None:
+            request_id = getattr(self._state, "request_id", "") or ""
+            if request_id:
+                now = time.monotonic()
+                if now - self._last_flush_ts >= _FLUSH_INTERVAL_S:
+                    self._last_flush_ts = now
+                    try:
+                        # Lazy import to avoid a circular dep with
+                        # convergence_orchestrator (which imports EventBus).
+                        from pipeline.lyra.convergence_orchestrator import (
+                            _flush_progress_to_db,
+                        )
+
+                        _flush_progress_to_db(self._state, request_id)
+                    except Exception as flush_exc:
+                        # Never let an observability write break the pipeline.
+                        logger.debug("EventBus flush failed: %s", flush_exc)
 
     @property
     def history(self) -> list[ResearchEvent]:

@@ -200,11 +200,27 @@ class CrossPollinationHandler(BaseHandler):
                     f"Angle '{angle.topic}': {insight[:100]}",
                 )
 
-        # Log convergent patterns
+        # Log convergent patterns. CROSS_POLLINATION_SCHEMA declares this
+        # array as `items: {type: object}` with no required properties, so
+        # MiniMax returns dicts (e.g. {"pattern": "...", "evidence": [...]})
+        # — the old `pattern[:150]` slice raised TypeError on dicts and
+        # crashed the entire AllAnglesRound1Complete handler. Coerce to a
+        # display string instead.
         for pattern in result.get("convergent_patterns", []):
-            self.state.log("cross_pollination", f"Convergent pattern: {pattern[:150]}")
+            if isinstance(pattern, dict):
+                pattern_str = (
+                    pattern.get("pattern")
+                    or pattern.get("description")
+                    or pattern.get("summary")
+                    or str(pattern)
+                )
+            elif isinstance(pattern, str):
+                pattern_str = pattern
+            else:
+                continue
+            self.state.log("cross_pollination", f"Convergent pattern: {pattern_str[:150]}")
             self.emit_sse(
-                {"type": "status", "content": f"Convergent pattern found: {pattern[:100]}"}
+                {"type": "status", "content": f"Convergent pattern found: {pattern_str[:100]}"}
             )
 
         self.state.cross_pollinated = True
