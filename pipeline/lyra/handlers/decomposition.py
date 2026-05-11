@@ -77,6 +77,15 @@ class DecompositionHandler(BaseHandler):
 
         validated: list[ResearchAngle] = []
         for ad in angles_data[: self.state.config.max_angles]:
+            # Belt-and-braces: even with strict json_schema, treat the LLM
+            # output as boundary data — a single bare string in the angles
+            # array would otherwise abort the whole pipeline at phase 1.
+            if not isinstance(ad, dict):
+                self.state.log(
+                    "decomposition",
+                    f"Skipping non-dict angle entry: {repr(ad)[:80]}",
+                )
+                continue
             queries = ad.get("search_queries", [])[:3]  # 2-3 validation queries
             if not queries:
                 continue

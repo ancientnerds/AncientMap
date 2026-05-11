@@ -125,6 +125,8 @@ class AuditHandler(BaseHandler):
                 continue
             original_sid = result.get("_sid", "")
             for entry in result.get("scored_sources", []):
+                if not isinstance(entry, dict):
+                    continue
                 sid = entry.get("id", "") or original_sid
                 tier_val = entry.get("reliability_tier", 0)
                 source = self.state.registry.sources.get(sid)
@@ -132,6 +134,8 @@ class AuditHandler(BaseHandler):
                     source.reliability_tier = tier_val
                     total_scored += 1
             for entry in result.get("rejected_sources", []):
+                if not isinstance(entry, dict):
+                    continue
                 rid = entry.get("id", "") or original_sid
                 if rid:
                     rejected_ids.add(rid)

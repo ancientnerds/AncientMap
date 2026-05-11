@@ -272,9 +272,17 @@ def structured_llm_call(
     if settings is None:
         settings = _get_settings()
 
+    # Without strict, MiniMax has been observed to emit bare strings inside
+    # arrays of objects despite the schema saying items are objects (e.g. the
+    # cross_pollination + decomposition crashes). strict + a stable name make
+    # the tool-use trick honour every nested object shape.
     response_format = {
         "type": "json_schema",
-        "json_schema": {"schema": schema},
+        "json_schema": {
+            "name": "structured_output",
+            "strict": True,
+            "schema": schema,
+        },
     }
 
     try:
