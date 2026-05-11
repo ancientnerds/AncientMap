@@ -257,9 +257,20 @@ class EventBus:
                         )
 
                         _flush_progress_to_db(self._state, request_id)
+                        logger.info(
+                            "[THEO] %s emit-flush: llm=%d sites=%d",
+                            request_id,
+                            self._state.llm_call_count,
+                            len(self._state.registry.sources),
+                        )
                     except Exception as flush_exc:
-                        # Never let an observability write break the pipeline.
-                        logger.debug("EventBus flush failed: %s", flush_exc)
+                        # Surface flush failures so they don't hide behind
+                        # debug-level logging (observability is the whole point).
+                        logger.warning(
+                            "[THEO] %s emit-flush failed: %r",
+                            request_id,
+                            flush_exc,
+                        )
 
     @property
     def history(self) -> list[ResearchEvent]:
