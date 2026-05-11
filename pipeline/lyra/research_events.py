@@ -245,6 +245,17 @@ class EventBus:
         # bounded regardless of event frequency.
         if self._state is not None:
             request_id = getattr(self._state, "request_id", "") or ""
+            # One-shot diagnostic so we can tell whether the path is
+            # reached at all — printed only on the FIRST emit per bus
+            # instance, gated to avoid log spam afterwards.
+            if not getattr(self, "_diag_logged_first_emit", False):
+                self._diag_logged_first_emit = True
+                logger.info(
+                    "[THEO-diag] EventBus.emit reached state=%s req=%r evt=%s",
+                    "yes" if self._state else "no",
+                    request_id[:8] if request_id else "",
+                    event_type.__name__,
+                )
             if request_id:
                 now = time.monotonic()
                 if now - self._last_flush_ts >= _FLUSH_INTERVAL_S:
