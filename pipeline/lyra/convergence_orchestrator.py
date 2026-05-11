@@ -13,12 +13,11 @@ Usage (from theo_worker.py):
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import time
 from collections.abc import Callable
 from datetime import datetime, timedelta
-
-import json
 
 from pipeline.lyra.config import _get_settings
 from pipeline.lyra.research_events import (
