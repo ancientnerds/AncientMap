@@ -121,7 +121,13 @@ class AuditHandler(BaseHandler):
 
         for result in results:
             if isinstance(result, Exception):
-                logger.warning("Audit failed: %s", result)
+                # asyncio.gather(return_exceptions=True) returns exceptions
+                # as values; log them properly with traceback so we can see
+                # WHICH source's audit raised instead of guessing.
+                logger.error(
+                    "Audit task failed: %r", result, exc_info=result
+                )
+                self.state.log("audit", f"Audit task failed: {result!r}")
                 continue
             original_sid = result.get("_sid", "")
             for entry in result.get("scored_sources", []):

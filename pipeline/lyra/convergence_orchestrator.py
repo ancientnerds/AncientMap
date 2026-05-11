@@ -18,6 +18,8 @@ import time
 from collections.abc import Callable
 from datetime import datetime, timedelta
 
+import json
+
 from pipeline.lyra.config import _get_settings
 from pipeline.lyra.research_events import (
     AngleCreated,
@@ -81,8 +83,10 @@ class ConvergenceOrchestrator:
 
         global_limiter.reset()
 
-        # Set up event bus and handlers
-        bus = EventBus()
+        # Set up event bus and handlers. Pass state so the bus can surface
+        # handler exceptions into state.error (which the deadline loop below
+        # already watches at line ~238) — see research_events.py:EventBus.emit.
+        bus = EventBus(state=state)
         semaphore = asyncio.Semaphore(config.max_concurrent_llm_calls)
 
         # Lazy imports to avoid circular dependencies
@@ -241,10 +245,21 @@ class ConvergenceOrchestrator:
                     saturated = sum(1 for a in state.angles if a.saturated)
                     total = len(state.angles)
                     elapsed = int(time.monotonic() - t0)
-                    state.log(
-                        "orchestrator",
-                        f"Progress: {saturated}/{total} angles saturated, phase={state.phase.value}, elapsed={elapsed}s",
+                    progress_msg = (
+                        f"Progress: {saturated}/{total} angles saturated, "
+                        f"phase={state.phase.value}, elapsed={elapsed}s, "
+                        f"llm_calls={state.llm_call_count}, "
+                        f"sources={len(state.registry.sources)}"
                     )
+                    state.log("orchestrator", progress_msg)
+                    # Promote to logger so docker logs are no longer blind —
+                    # the rest of the pipeline emits via SSE only.
+                    logger.info("[THEO] %s %s", request_id, progress_msg)
+                    # Flush counters + recent debug_log to DB so the run is
+                    # diagnosable from psql alone (previously these stayed at
+                    # 0 / NULL until completion, making stalls indistinguishable
+                    # from healthy long-running stages).
+                    _flush_progress_to_db(state, request_id)
 
         except Exception as exc:
             state.error = f"Pipeline error: {exc}"
@@ -264,3 +279,56 @@ class ConvergenceOrchestrator:
                 state.specialist_analyses[spec_id].append(finding)
 
         return state
+
+
+def _flush_progress_to_db(state, request_id: str) -> None:
+    """Persist in-flight counters + recent debug_log to research_requests.
+
+    Called periodically (every 30s, on each orchestrator deadline-loop tick)
+    so a stalled vs healthy run can be distinguished from psql alone instead
+    of guessing from SSE / docker logs. The final completion write in
+    theo_worker.py overwrites everything anyway, so partial values here
+    are safe to keep loose.
+    """
+    if not request_id:
+        return
+    try:
+        from sqlalchemy import text
+
+        from pipeline.database import get_session
+
+        # Count unique specialists with at least one finding so far —
+        # matches the completion-time tools_used semantics.
+        spec_ids = {
+            finding.get("specialist_id", "unknown")
+            for angle in state.angles
+            for finding in angle.findings
+        }
+        with get_session() as session:
+            session.execute(
+                text(
+                    """
+                    UPDATE research_requests
+                    SET llm_calls    = :llm_calls,
+                        total_tokens = :tokens,
+                        sites_found  = :sites,
+                        tools_used   = :tools,
+                        debug_log    = :debug_log
+                    WHERE id = :id
+                    """
+                ),
+                {
+                    "id": request_id,
+                    "llm_calls": state.llm_call_count,
+                    "tokens": state.total_tokens,
+                    "sites": len(state.registry.sources),
+                    "tools": len(spec_ids),
+                    # Cap to keep the update cheap and avoid bloating the row
+                    # mid-run (the completion write later replaces the full log).
+                    "debug_log": json.dumps(state.debug_log[-200:]),
+                },
+            )
+            session.commit()
+    except Exception as exc:
+        # Never let a diagnostic write break the pipeline.
+        logger.warning("[THEO] DB progress flush failed: %s", exc)

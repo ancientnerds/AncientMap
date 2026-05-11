@@ -165,6 +165,11 @@ class ResearchState:
     # Backward compat -- worker uses len(ctx.specialist_analyses) for tools_used
     specialist_analyses: dict = field(default_factory=dict)
 
+    # Cached Voyage embedding of the research question. Filled lazily by the
+    # cross_pollination handler on its first round so we can drift-gate
+    # enriched search queries via cosine similarity against the question.
+    question_embedding: list[float] | None = None
+
     # SSE callback
     emit: Callable[[dict], None] | None = None
 

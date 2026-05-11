@@ -13,6 +13,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import math
+import os
 from pathlib import Path
 
 from pipeline.lyra.config import _get_settings
@@ -27,6 +29,23 @@ from pipeline.lyra.schemas import CROSS_POLLINATION_SCHEMA
 
 logger = logging.getLogger(__name__)
 PROMPTS_DIR = Path(__file__).resolve().parent.parent / "prompts"
+
+# Threshold for the Voyage-embedding cosine gate that keeps enriched
+# cross-pollination queries on-topic. Voyage-4 query/document relevance
+# pairs typically land in 0.45-0.7 for genuinely related text; 0.4 is a
+# conservative floor that drops obvious drift (e.g. Sphinx queries on a
+# Sea Peoples question) without rejecting legitimate cross-angle leads.
+_DRIFT_COSINE_FLOOR = float(os.getenv("THEO_DRIFT_COSINE_FLOOR", "0.4"))
+
+
+def _cosine(a: list[float], b: list[float]) -> float:
+    """Cosine similarity for two equal-length dense vectors."""
+    dot = sum(x * y for x, y in zip(a, b, strict=True))
+    norm_a = math.sqrt(sum(x * x for x in a))
+    norm_b = math.sqrt(sum(y * y for y in b))
+    if norm_a == 0.0 or norm_b == 0.0:
+        return 0.0
+    return dot / (norm_a * norm_b)
 
 
 class CrossPollinationHandler(BaseHandler):
@@ -95,19 +114,56 @@ class CrossPollinationHandler(BaseHandler):
             )
         self.state.llm_call_count += 1
 
-        # Apply cross-pollinated queries to each angle
-        enriched_count = 0
+        # ---- Drift gate prep -----------------------------------------------
+        # Collect all candidate enriched_queries across angles, batch-embed
+        # them via Voyage, and drop any whose cosine to the original
+        # question vector falls below _DRIFT_COSINE_FLOOR. This stops
+        # specialist or LLM hallucinations (e.g. "Great Sphinx of Giza" on a
+        # Sea Peoples question) from being adopted as next-round queries.
+        valid_cps = [cp for cp in result.get("cross_pollination", []) if isinstance(cp, dict)]
         for cp in result.get("cross_pollination", []):
-            # Even with a json_schema response, MiniMax has been observed to
-            # occasionally emit bare strings instead of the expected object
-            # shape — skip those rather than crashing the round-1-complete
-            # handler (which would deprive every other angle of the event).
             if not isinstance(cp, dict):
                 logger.warning(
                     "cross_pollination: skipping non-dict item: %s",
                     repr(cp)[:120],
                 )
-                continue
+
+        candidate_pool: list[str] = []
+        for cp in valid_cps:
+            for q in cp.get("enriched_queries", []):
+                if isinstance(q, str) and q.strip():
+                    candidate_pool.append(q.strip())
+
+        # Compute embeddings only if we have something to gate. Reuses the
+        # same Voyage client + voyage-4 query model the rest of Lyra uses.
+        query_to_score: dict[str, float] = {}
+        if candidate_pool:
+            try:
+                from api.services.lyra_embeddings import get_embeddings
+
+                embedder = get_embeddings("query")
+                if self.state.question_embedding is None:
+                    self.state.question_embedding = embedder.embed_query(self.state.question)
+                # Deduplicate before embedding to avoid paying for repeats.
+                unique_queries = list(dict.fromkeys(candidate_pool))
+                query_vectors = await asyncio.to_thread(
+                    embedder.embed_documents, unique_queries
+                )
+                for q, vec in zip(unique_queries, query_vectors, strict=True):
+                    query_to_score[q] = _cosine(self.state.question_embedding, vec)
+            except Exception as exc:
+                # Drift gate is defence-in-depth; if Voyage fails we let
+                # queries through (failing closed would break the pipeline
+                # over an embedding-API hiccup).
+                logger.warning(
+                    "cross_pollination: drift-gate embedding failed (%s) — letting queries through",
+                    exc,
+                )
+
+        # Apply cross-pollinated queries to each angle
+        enriched_count = 0
+        dropped_count = 0
+        for cp in valid_cps:
             angle_id = cp.get("angle_id", "")
             enriched_queries = cp.get("enriched_queries", [])
             cross_insights = cp.get("cross_insights", [])
@@ -116,9 +172,27 @@ class CrossPollinationHandler(BaseHandler):
             if not angle:
                 continue
 
-            # Add enriched queries for the next round
-            if enriched_queries:
-                angle.search_queries = enriched_queries[: self.state.config.queries_per_angle]
+            # Filter enriched queries via the drift gate (only when scores
+            # were computed; otherwise keep the LLM list as-is).
+            filtered: list[str] = []
+            for q in enriched_queries:
+                if not isinstance(q, str) or not q.strip():
+                    continue
+                q = q.strip()
+                score = query_to_score.get(q)
+                if score is not None and score < _DRIFT_COSINE_FLOOR:
+                    dropped_count += 1
+                    self.state.log(
+                        "cross_pollination",
+                        f"dropped off-topic query (cos={score:.2f}): {q[:80]}",
+                    )
+                    continue
+                filtered.append(q)
+
+            # Add enriched queries for the next round. If everything got
+            # dropped, leave the angle's pre-enrichment queries in place.
+            if filtered:
+                angle.search_queries = filtered[: self.state.config.queries_per_angle]
                 enriched_count += 1
 
             # Log cross-insights

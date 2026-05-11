@@ -185,10 +185,15 @@ EventHandler = Callable[[ResearchEvent], Awaitable[None]]
 class EventBus:
     """Simple async event bus for research pipeline coordination."""
 
-    def __init__(self):
+    def __init__(self, state=None):
         self._handlers: dict[type, list[EventHandler]] = {}
         self._history: list[ResearchEvent] = []
         self._handler_instances: dict[type, object] = {}  # class -> instance registry
+        # Optional ResearchState ref so handler exceptions can be surfaced to
+        # the orchestrator's deadline loop (it watches state.error). Without
+        # this, a crashed handler is logged but downstream events never fire,
+        # leaving done_event.wait() blocked until the 12h hard timeout.
+        self._state = state
 
     def register_instance(self, instance: object):
         """Register a handler instance for lookup by class."""
@@ -212,8 +217,15 @@ class EventBus:
         for handler in handlers:
             try:
                 await handler(event)
-            except Exception:
+            except Exception as exc:
                 logger.exception("Handler failed for %s", event_type.__name__)
+                # Make the failure visible to the orchestrator's deadline loop,
+                # which only checks state.error — otherwise done_event.wait()
+                # blocks until the 12h hard timeout.
+                if self._state is not None and not getattr(self._state, "error", None):
+                    self._state.error = (
+                        f"Handler failed on {event_type.__name__}: {exc!r}"
+                    )
 
     @property
     def history(self) -> list[ResearchEvent]:

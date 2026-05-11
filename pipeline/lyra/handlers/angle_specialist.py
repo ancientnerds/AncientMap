@@ -566,39 +566,15 @@ class SpecialistHandler(BaseHandler):
                         }
                     )
 
-        # Look for genuinely NEW sub-topics: terms that appear in findings
-        # but don't match any existing angle topic
-        existing_topics_lower = {a.topic.lower() for a in self.state.angles}
-        for finding in new_findings:
-            # If a finding mentions a specific sub-topic not covered by any angle,
-            # flag it. We rely on the claim text containing a nameable sub-topic.
-            # This is a lightweight heuristic --- the convergence checker handles
-            # whether to actually spawn a new angle.
-            caveats = finding.get("caveats", []) if isinstance(finding.get("caveats"), list) else []
-            for caveat in caveats:
-                caveat_lower = caveat.lower()
-                # If a caveat mentions an unexplored area that doesn't match any angle
-                if any(
-                    phrase in caveat_lower
-                    for phrase in (
-                        "unexplored",
-                        "further research",
-                        "not yet investigated",
-                        "requires investigation",
-                    )
-                ):
-                    # Extract a potential topic from the caveat
-                    # Only flag if it's genuinely different from all existing angles
-                    is_new = not any(
-                        topic_word in caveat_lower
-                        for existing in existing_topics_lower
-                        for topic_word in existing.split()
-                        if len(topic_word) > 4
-                    )
-                    if is_new and len(caveat) > 20:
-                        discovered.append((caveat[:120], current_angle.id))
-                        break  # One new angle per finding max
-
+        # Caveat-text → new-angle extraction has been disabled (2026-05-11).
+        # The heuristic was producing unbounded topic drift: a single
+        # specialist caveat like "the Great Sphinx of Giza may require
+        # further investigation" was being lifted as the topic of a spawned
+        # angle, which cross_pollination then enriched with off-topic
+        # search queries. A Sea Peoples run spent hours querying Sphinx
+        # imagery before stalling. Cross-angle connections (above) still
+        # populate state.cross_angle_connections — the only thing removed
+        # is the unstructured caveat-to-topic pathway.
         return discovered
 
     # ------------------------------------------------------------------
