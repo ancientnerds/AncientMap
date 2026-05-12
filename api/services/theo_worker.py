@@ -151,13 +151,32 @@ async def _process_request(
             else:
                 emit({"type": "done", "status": "failed"})
                 with get_session() as session:
+                    # Persist the in-memory diagnostic state on failure so
+                    # we can post-mortem from psql alone — previously the
+                    # failure path threw away debug_log + counters, which
+                    # is exactly when we most want them.
                     session.execute(
                         text("""
                             UPDATE research_requests
-                            SET status = 'failed', error_message = :msg, completed_at = NOW()
+                            SET status = 'failed',
+                                error_message = :msg,
+                                debug_log = :debug_log,
+                                total_tokens = :tokens,
+                                llm_calls = :llm_calls,
+                                sites_found = :sites,
+                                duration_ms = :duration,
+                                completed_at = NOW()
                             WHERE id = :id
                         """),
-                        {"id": request_id, "msg": ctx.error},
+                        {
+                            "id": request_id,
+                            "msg": ctx.error,
+                            "debug_log": json.dumps(ctx.debug_log),
+                            "tokens": ctx.total_tokens,
+                            "llm_calls": ctx.llm_call_count,
+                            "sites": len(ctx.registry.sources) if hasattr(ctx, "registry") else 0,
+                            "duration": duration_ms,
+                        },
                     )
                     session.commit()
                 logger.warning(f"[THEO] Request {request_id} failed: {ctx.error}")
@@ -226,13 +245,37 @@ async def _process_request(
         _release_reservation(request_id)
         emit({"type": "done", "status": "failed"})
         with get_session() as session:
+            # Even on an unexpected crash, try to persist whatever
+            # diagnostic state the orchestrator already built up. `ctx`
+            # may not exist if the exception fired before orchestrator.run
+            # returned, so guard everything with getattr.
+            ctx_local = locals().get("ctx", None)
             session.execute(
                 text("""
                     UPDATE research_requests
-                    SET status = 'failed', error_message = :msg, completed_at = NOW()
+                    SET status = 'failed',
+                        error_message = :msg,
+                        debug_log = :debug_log,
+                        total_tokens = :tokens,
+                        llm_calls = :llm_calls,
+                        sites_found = :sites,
+                        duration_ms = :duration,
+                        completed_at = NOW()
                     WHERE id = :id
                 """),
-                {"id": request_id, "msg": str(exc)},
+                {
+                    "id": request_id,
+                    "msg": str(exc),
+                    "debug_log": json.dumps(
+                        getattr(ctx_local, "debug_log", []) if ctx_local else []
+                    ),
+                    "tokens": getattr(ctx_local, "total_tokens", 0) if ctx_local else 0,
+                    "llm_calls": getattr(ctx_local, "llm_call_count", 0) if ctx_local else 0,
+                    "sites": len(ctx_local.registry.sources)
+                    if ctx_local and hasattr(ctx_local, "registry")
+                    else 0,
+                    "duration": duration_ms,
+                },
             )
             session.commit()
 
