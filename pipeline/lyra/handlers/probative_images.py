@@ -609,6 +609,21 @@ async def _process_one_opportunity(
         raw = await asyncio.to_thread(minimax_vlm, ctx.client, image_bytes, prompt)
         verdict = parse_vlm_verdict(raw)
         if not verdict_is_safe(verdict):
+            # Diagnostic: distinguish (a) malformed VLM JSON from
+            # (b) strict-judge rejection. Run #10 dropped 128 of 138
+            # candidates here with no breadcrumb to tell which mode
+            # dominated. Without this log we can't tune the prompt or
+            # the parser.
+            reason = (
+                "malformed-json" if verdict is None else f"verdict={verdict.get('verdict', '?')!r}"
+            )
+            logger.info(
+                "[probative] rejected candidate (%s) for para %d keyword '%s': %s",
+                reason,
+                para_idx,
+                keyword[:40],
+                (cand.title or cand.url or "")[:80],
+            )
             if cand_url:
                 ctx.placed_source_urls.discard(cand_url)
             if probe_path.exists():
