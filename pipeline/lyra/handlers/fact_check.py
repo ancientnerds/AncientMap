@@ -44,6 +44,7 @@ class FactCheckHandler(BaseHandler):
                     self.state.paper_text,
                     verify_sources,
                     settings=_get_settings(),
+                    state=self.state,
                 )
             self.state.log(
                 "fact_check",

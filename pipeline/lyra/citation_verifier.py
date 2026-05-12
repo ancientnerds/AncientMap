@@ -48,10 +48,14 @@ async def _verify_one_citation(
     source_snippet: str,
     source_url: str,
     settings: LyraSettings,
+    state=None,
 ) -> tuple[bool, str]:
     """Ask the LLM: does this source support this specific claim?
 
-    Returns (supported, reason) tuple.
+    Returns (supported, reason) tuple. When `state` is passed, every
+    rejection is also appended to state.debug_log so the rejection
+    pattern can be inspected from psql after the run completes — the
+    raw logger.info trail rolls out of Docker logs within hours.
     """
     # Clean the sentence — remove all [N] markers for clarity
     clean_sentence = re.sub(r"\[\d+\]", "", sentence).strip()
@@ -145,6 +149,23 @@ async def _verify_one_citation(
                     clean_sentence[:60],
                     reason[:80],
                 )
+                # Persist a structured rejection record into debug_log so a
+                # post-run audit can classify failure modes (snippet-too-short
+                # vs topic-mismatch vs hallucinated-claim) without grepping
+                # Docker logs that roll off within hours.
+                if state is not None:
+                    try:
+                        state.log(
+                            "verifier_rejection",
+                            f"[{cite_num}] {clean_sentence[:120]}",
+                            cite_num=cite_num,
+                            reason=reason[:240],
+                            snippet_len=len(source_snippet or ""),
+                            source_title=source_title[:120],
+                            source_url=source_url[:240],
+                        )
+                    except Exception:
+                        pass
             return supported, reason
 
         except (LyraAPIError, Exception) as e:
@@ -165,6 +186,7 @@ async def verify_all_citations(
     sources: list[dict],
     settings: LyraSettings | None = None,
     max_iterations: int = 3,
+    state=None,
 ) -> str:
     """Verify every [N] citation in the text against its source.
 
@@ -247,6 +269,7 @@ async def verify_all_citations(
                     source_snippet=source.get("snippet", source.get("label", "")),
                     source_url=source.get("url", ""),
                     settings=settings,
+                    state=state,
                 )
                 if not supported:
                     return cite_num, False  # One failed sentence is enough to reject

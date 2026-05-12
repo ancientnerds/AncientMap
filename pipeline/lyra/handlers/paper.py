@@ -249,6 +249,7 @@ class PaperHandler(BaseHandler):
                 self.state.paper_text,
                 verify_sources,
                 settings=settings,
+                state=self.state,
             )
 
         # ---------------------------------------------------------------
