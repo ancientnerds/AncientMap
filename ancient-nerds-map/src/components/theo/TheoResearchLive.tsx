@@ -239,15 +239,6 @@ export default function TheoResearchLive({ requestId, question, startedAt, onClo
           if (data.stage === 'web_search' && data.status === 'done' && typeof meta.sources_found === 'number') {
             setSourcesFound(meta.sources_found)
           }
-          // The orchestrator emits a periodic 'progress' event every ~30s
-          // with the full counter snapshot — keeps the live panel in sync
-          // even during long synthesis/debate stages that don't otherwise
-          // surface llm/source/token numbers.
-          if (data.type === 'progress') {
-            if (typeof meta.sources_found === 'number') setSourcesFound(meta.sources_found)
-            if (typeof meta.total_tokens === 'number') setTotalTokens(meta.total_tokens)
-            if (typeof meta.tools_used === 'number') setToolsUsed(meta.tools_used)
-          }
           if (data.stage === 'quality_judge' && data.status === 'done' && typeof meta.score === 'number') {
             setQualityFlash({ score: meta.score as number, badge: (meta.badge as string) || '' })
             setTimeout(() => setQualityFlash(null), 8000)
@@ -376,6 +367,20 @@ export default function TheoResearchLive({ requestId, question, startedAt, onClo
       case 'thinking':
         thinkingRef.current += (data.content as string || '')
         break
+      case 'progress': {
+        // Periodic counter snapshot from convergence_orchestrator's
+        // deadline-loop — fires every ~30s once the orchestrator returns
+        // from decomposition's event cascade. Carries llm_calls,
+        // sources_found, tools_used, total_tokens in meta.
+        const meta = data.meta as Record<string, unknown> | undefined
+        if (meta) {
+          if (typeof meta.llm_calls === 'number') setLlmCalls(meta.llm_calls)
+          if (typeof meta.sources_found === 'number') setSourcesFound(meta.sources_found)
+          if (typeof meta.tools_used === 'number') setToolsUsed(meta.tools_used)
+          if (typeof meta.total_tokens === 'number') setTotalTokens(meta.total_tokens)
+        }
+        break
+      }
       case 'status': {
         setStatusMsg(data.content as string || '')
         // Specialist progress
@@ -620,7 +625,7 @@ export default function TheoResearchLive({ requestId, question, startedAt, onClo
                   </span>
                 )}
                 <span className="theo-angle-convergence">
-                  {angle.saturated ? <span className="theo-angle-check">&#10003;</span> : angle.claims > 0 ? <span>{angle.consecutiveZeros}/2 rounds</span> : null}
+                  {angle.saturated && <span className="theo-angle-check">&#10003;</span>}
                 </span>
               </div>
             ))}
