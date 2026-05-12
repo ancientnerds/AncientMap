@@ -63,7 +63,14 @@ async def find_coverage_gaps(
     enum_prompt = (_PROMPTS / "canonical_coverage.txt").read_text(encoding="utf-8")
     try:
         raw = await llm_call(enum_prompt, question, 1024, settings, 0.2)
-        canonical = json.loads(raw).get("canonical_subtopics", [])
+        # MiniMax M2.7 occasionally returns an empty string when interleaved
+        # thinking consumes the entire output budget. That's a known failure
+        # mode, not a parse bug — short-circuit it as a clean "no result"
+        # instead of logging json.JSONDecodeError noise on every run.
+        raw_stripped = (raw or "").strip()
+        if not raw_stripped:
+            return []
+        canonical = json.loads(raw_stripped).get("canonical_subtopics", [])
     except Exception as exc:
         logger.warning("canonical_coverage enumeration failed: %s", exc)
         return []
@@ -82,7 +89,10 @@ async def find_coverage_gaps(
     )
     try:
         raw = await llm_call(gap_prompt, question, 512, settings, 0.2)
-        missing = json.loads(raw).get("missing_subtopics", [])
+        raw_stripped = (raw or "").strip()
+        if not raw_stripped:
+            return []
+        missing = json.loads(raw_stripped).get("missing_subtopics", [])
     except Exception as exc:
         logger.warning("canonical_coverage gap check failed: %s", exc)
         return []
