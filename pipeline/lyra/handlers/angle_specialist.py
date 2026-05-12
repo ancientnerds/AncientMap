@@ -168,10 +168,25 @@ class SpecialistHandler(BaseHandler):
             findings = analysis.get("findings", [])
             uncertainties = analysis.get("uncertainties", [])
 
-            # Count NEW claims not already in angle.findings
-            existing_claims = {f.get("claim", "").lower().strip() for f in angle.findings}
+            # Count NEW claims not already in angle.findings. Boundary
+            # guard: even with json_schema enforcement, MiniMax has been
+            # observed to emit bare strings inside arrays-of-objects under
+            # load (same failure mode that crashed cross_pollination in
+            # c7a8948 and decomposition in 10f55ae). Run #13 died here at
+            # ContentFetched with the same AttributeError after 2h44m. Skip
+            # non-dict entries rather than abort the whole specialist run.
+            existing_claims = {
+                f.get("claim", "").lower().strip() for f in angle.findings if isinstance(f, dict)
+            }
             new_findings = []
             for finding in findings:
+                if not isinstance(finding, dict):
+                    logger.warning(
+                        "specialist %s returned non-dict finding: %s",
+                        panel_spec.specialist_id,
+                        repr(finding)[:120],
+                    )
+                    continue
                 claim_text = finding.get("claim", "").strip()
                 if not claim_text:
                     continue
