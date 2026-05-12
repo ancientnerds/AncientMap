@@ -16,6 +16,14 @@ export function formatDurationMs(ms: number): string {
   return `${m}:${String(s).padStart(2, '0')}`
 }
 
+/** Compact token count: 1_234 -> "1.2k", 1_234_567 -> "1.2M". */
+export function formatTokenCount(n: number): string {
+  if (!Number.isFinite(n) || n <= 0) return '0'
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`
+  return String(n)
+}
+
 export function formatCoord(coord: number, isLat: boolean): string {
   const abs = Math.abs(coord)
   const dir = isLat ? (coord >= 0 ? 'N' : 'S') : (coord >= 0 ? 'E' : 'W')

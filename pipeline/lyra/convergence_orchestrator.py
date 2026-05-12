@@ -267,6 +267,32 @@ class ConvergenceOrchestrator:
                     # 0 / NULL until completion, making stalls indistinguishable
                     # from healthy long-running stages).
                     _flush_progress_to_db(state, request_id)
+                    # Also emit a progress SSE so the live frontend panel
+                    # sees fresh counters every ~30s without waiting for
+                    # paper_assembly (which only fires ~3h in).
+                    spec_count = len(
+                        {
+                            f.get("specialist_id", "unknown")
+                            for a in state.angles
+                            for f in a.findings
+                        }
+                    )
+                    emit(
+                        {
+                            "type": "progress",
+                            "stage": "orchestrator",
+                            "meta": {
+                                "phase": state.phase.value,
+                                "elapsed_s": elapsed,
+                                "angles_saturated": saturated,
+                                "angles_total": total,
+                                "llm_calls": state.llm_call_count,
+                                "sources_found": len(state.registry.sources),
+                                "tools_used": spec_count,
+                                "total_tokens": state.total_tokens,
+                            },
+                        }
+                    )
 
         except Exception as exc:
             state.error = f"Pipeline error: {exc}"

@@ -10,7 +10,7 @@ import remarkGfm from 'remark-gfm'
 import { config } from '../../config'
 import type { PipelineEvent, PipelineNodeInstance } from '../../types/pipeline'
 import { applyPipelineEvent, PIPELINE_STAGES } from '../../types/pipeline'
-import { formatDurationMs } from '../../utils/formatters'
+import { formatDurationMs, formatTokenCount } from '../../utils/formatters'
 import { NervLoadingBar } from '../NervLoadingBar'
 
 // ---------------------------------------------------------------------------
@@ -94,6 +94,8 @@ export default function TheoResearchLive({ requestId, question, startedAt, onClo
   const [hasError, setHasError] = useState(false)
   const [llmCalls, setLlmCalls] = useState(0)
   const [sourcesFound, setSourcesFound] = useState(0)
+  const [totalTokens, setTotalTokens] = useState(0)
+  const [toolsUsed, setToolsUsed] = useState(0)
   const [specialistInfo, setSpecialistInfo] = useState('')
   const [debateRound, setDebateRound] = useState('')
   const [qualityFlash, setQualityFlash] = useState<{ score: number; badge: string } | null>(null)
@@ -236,6 +238,15 @@ export default function TheoResearchLive({ requestId, question, startedAt, onClo
           if (typeof meta.llm_calls === 'number') setLlmCalls(meta.llm_calls)
           if (data.stage === 'web_search' && data.status === 'done' && typeof meta.sources_found === 'number') {
             setSourcesFound(meta.sources_found)
+          }
+          // The orchestrator emits a periodic 'progress' event every ~30s
+          // with the full counter snapshot — keeps the live panel in sync
+          // even during long synthesis/debate stages that don't otherwise
+          // surface llm/source/token numbers.
+          if (data.type === 'progress') {
+            if (typeof meta.sources_found === 'number') setSourcesFound(meta.sources_found)
+            if (typeof meta.total_tokens === 'number') setTotalTokens(meta.total_tokens)
+            if (typeof meta.tools_used === 'number') setToolsUsed(meta.tools_used)
           }
           if (data.stage === 'quality_judge' && data.status === 'done' && typeof meta.score === 'number') {
             setQualityFlash({ score: meta.score as number, badge: (meta.badge as string) || '' })
@@ -480,11 +491,32 @@ export default function TheoResearchLive({ requestId, question, startedAt, onClo
               {llmCalls > 0 && (
                 <span className="theo-live-counter theo-live-counter--nerv">{llmCalls} LLM calls</span>
               )}
-              {totalRabbitHoles > 0 && (
-                <span className="theo-live-counter theo-live-counter--nerv">&#128007; {totalRabbitHoles}</span>
+              {toolsUsed > 0 && (
+                <span
+                  className="theo-live-counter theo-live-counter--nerv"
+                  title="Specialists with at least one finding"
+                >
+                  {toolsUsed} specialists
+                </span>
               )}
               {sourcesFound > 0 && (
                 <span className="theo-live-counter theo-live-counter--nerv">{sourcesFound} sources</span>
+              )}
+              {totalTokens > 0 && (
+                <span
+                  className="theo-live-counter theo-live-counter--nerv"
+                  title="Cumulative input + output tokens across every LLM call this run"
+                >
+                  {formatTokenCount(totalTokens)} tokens
+                </span>
+              )}
+              {totalRabbitHoles > 0 && (
+                <span
+                  className="theo-live-counter theo-live-counter--nerv"
+                  title={`${totalRabbitHoles} new research direction${totalRabbitHoles === 1 ? '' : 's'} spawned during this run`}
+                >
+                  +{totalRabbitHoles} directions
+                </span>
               )}
               {activeNode && !done && (
                 <span className="theo-live-stage-readout">
@@ -530,10 +562,12 @@ export default function TheoResearchLive({ requestId, question, startedAt, onClo
           </div>
         )}
 
-        {/* Rabbit hole flash */}
+        {/* Rabbit hole flash — surfaced when a specialist finds an
+            unexpected research direction worth exploring. */}
         {rabbitHoleFlash && (
           <div className="theo-rabbit-flash">
-            &#128007; Rabbit hole: {rabbitHoleFlash}
+            <span aria-hidden="true" className="theo-rabbit-flash-icon">&#x25C6;</span>
+            <span> New direction: {rabbitHoleFlash}</span>
           </div>
         )}
 
@@ -577,7 +611,14 @@ export default function TheoResearchLive({ requestId, question, startedAt, onClo
                 <span className="theo-angle-stats">
                   {angle.claims > 0 && <span>{angle.claims} claims</span>}
                 </span>
-                {angle.rabbitHoles > 0 && <span className="theo-angle-rabbit">&#128007;{angle.rabbitHoles}</span>}
+                {angle.rabbitHoles > 0 && (
+                  <span
+                    className="theo-angle-rabbit"
+                    title={`${angle.rabbitHoles} new direction${angle.rabbitHoles === 1 ? '' : 's'} spawned from this angle`}
+                  >
+                    +{angle.rabbitHoles}
+                  </span>
+                )}
                 <span className="theo-angle-convergence">
                   {angle.saturated ? <span className="theo-angle-check">&#10003;</span> : angle.claims > 0 ? <span>{angle.consecutiveZeros}/2 rounds</span> : null}
                 </span>
