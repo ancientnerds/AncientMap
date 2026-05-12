@@ -304,13 +304,41 @@ async def verify_all_citations(
             sorted(rejected_cites),
         )
 
-        # Remove rejected citations from the text
-        for cite_num in rejected_cites:
-            text = re.sub(rf"\s*\[{cite_num}\]", "", text)
+        # Remove rejected citations from the PROSE only — never from the
+        # References list itself. The old blanket regex was stripping the
+        # leading `[N]` of every rejected reference-list entry too, which
+        # glued the rest of the entry's title/URL onto the previous entry's
+        # line. Run #12's references block ended up with only 5 of 47
+        # entries carrying `[N]` markers; the other 42 became orphan text
+        # appended to the survivors. Scope the strip to the body slice
+        # before `## References`, matching the way body_cites is collected
+        # above (line ~217). Note: the references list ALSO ends up
+        # over-counted afterwards (orphaned_refs that no longer have a
+        # prose citation), but `prune_orphaned_references` in
+        # presentation.py is built to clean those up correctly without
+        # corrupting the line structure.
+        refs_split_idx = text.find("### Sources")
+        if refs_split_idx == -1:
+            refs_split_idx = text.find("## Sources")
+        if refs_split_idx == -1:
+            refs_split_idx = text.find("## References")
 
-        # Clean up — preserve markdown structure (paragraphs, headings)
-        text = re.sub(r" +([.,;])", r"\1", text)  # " ." → "."
-        text = re.sub(r"  +", " ", text)
-        text = re.sub(r"\n{3,}", "\n\n", text)
+        if refs_split_idx == -1:
+            prose_part = text
+            refs_part = ""
+        else:
+            prose_part = text[:refs_split_idx]
+            refs_part = text[refs_split_idx:]
+
+        for cite_num in rejected_cites:
+            prose_part = re.sub(rf"\s*\[{cite_num}\]", "", prose_part)
+
+        # Clean up the prose — preserve markdown structure (paragraphs,
+        # headings, blank lines) and never touch the references tail.
+        prose_part = re.sub(r" +([.,;])", r"\1", prose_part)  # " ." → "."
+        prose_part = re.sub(r"  +", " ", prose_part)
+        prose_part = re.sub(r"\n{3,}", "\n\n", prose_part)
+
+        text = prose_part + refs_part
 
     return text
