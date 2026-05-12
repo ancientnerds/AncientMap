@@ -85,6 +85,44 @@ def _trim_relevance(rationale: str) -> str:
     return " ".join(words[:15]) + "…"
 
 
+def _sanitize_caption_field(text: str) -> str:
+    """Make a caption-component safe to embed inside the outer ``*...*`` italic
+    wrapper. Strips markdown delimiters that would otherwise close/reopen the
+    italic mid-caption, collapses newlines and runs of whitespace to single
+    spaces, and drops obvious duplication patterns coming out of Wikimedia
+    Commons' wikitext attribution strings.
+
+    Wikimedia files like ``File:Moyen_Orient_Amarna_1.png`` ship an Artist
+    field that looks like ``Moyen_Orient_Amarna_1.svg: *Middle_East_topographic
+    _map-blank.svg: Sémhur (talk)\\nderivative work: Zunkir (talk)\\nderivative
+    work: Zunkir (talk)``. Wrapping that in ``*...*`` produces literal embedded
+    ``*`` and newlines, which break the frontend's caption regex
+    (``galleryParser.ts: FIGURE_RE``) and spill the whole attribution chain
+    into the prose body below the image. This helper neutralises all three.
+    """
+    if not text:
+        return ""
+    # 1. Replace underscores (common in Wikimedia filenames) with spaces
+    #    BEFORE we drop markdown delimiters; underscores in markdown act as
+    #    italic delimiters too, so we want them gone, but `Moyen_Orient_Amarna_1`
+    #    looks better as `Moyen Orient Amarna 1` than `MoyenOrientAmarna1`.
+    cleaned = text.replace("_", " ")
+    # 2. Drop the remaining markdown delimiters that would close the outer
+    #    italic wrapper or reopen formatting mid-caption.
+    cleaned = re.sub(r"[*`~]+", "", cleaned)
+    # 3. Collapse all whitespace (newlines, tabs, runs of spaces) to one space.
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
+    # 4. Collapse trivially repeated phrases like
+    #    "derivative work: Zunkir (talk) derivative work: Zunkir (talk)" into
+    #    a single occurrence. Wikimedia's wikitext attribution chains often
+    #    double-up like this when a derivative is itself derived.
+    prev = None
+    while prev != cleaned:
+        prev = cleaned
+        cleaned = re.sub(r"(\S(?:.{4,80}?\S)?)\s+\1(?=\s|$|[.;])", r"\1", cleaned)
+    return cleaned
+
+
 def build_caption(cand: ImageCandidate, rationale: str) -> str:
     """Assemble the single-line caption placed below the image.
 
@@ -100,20 +138,21 @@ def build_caption(cand: ImageCandidate, rationale: str) -> str:
     and the [Source] link below the caption takes them to the original image
     page where the license is shown in context.
     """
-    lead = _clean_title(cand.title) or "Untitled image"
+    lead = _sanitize_caption_field(_clean_title(cand.title)) or "Untitled image"
 
     attribution: list[str] = []
-    if cand.artist:
-        attribution.append(cand.artist)
+    artist_clean = _sanitize_caption_field(cand.artist or "")
+    if artist_clean:
+        attribution.append(artist_clean)
     attribution.append(_SOURCE_LABEL.get(cand.source, cand.source.title()))
     photo_line = " / ".join(attribution)
 
     tail: str = ""
     source_desc = (getattr(cand, "description", "") or "").strip()
     if source_desc and len(source_desc) <= 120:
-        tail = source_desc.rstrip(".")
+        tail = _sanitize_caption_field(source_desc.rstrip("."))
     if not tail:
-        tail = _trim_relevance(rationale)
+        tail = _sanitize_caption_field(_trim_relevance(rationale))
 
     pieces = [lead, f"Photo: {photo_line}"]
     if tail:
