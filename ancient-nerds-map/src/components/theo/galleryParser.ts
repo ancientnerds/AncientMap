@@ -92,19 +92,13 @@ export function splitIntoImageSegments(md: string): PaperSegment[] {
     if (group.figures.length === 1) {
       segments.push({ kind: 'figure', figure: group.figures[0] })
     } else {
-      // If every figure in this group shares the same gallery id, render as
-      // a carousel rather than a stacked mosaic. Backend emits these markers
-      // when >1 image lands on the same paragraph.
-      const galleryIds = new Set(group.figures.map((f) => f.galleryId).filter(Boolean))
-      if (galleryIds.size === 1) {
-        segments.push({
-          kind: 'carousel',
-          galleryId: [...galleryIds][0] as string,
-          figures: group.figures,
-        })
-      } else {
-        segments.push({ kind: 'mosaic', figures: group.figures })
-      }
+      // Always stack multi-image groups as a mosaic. We used to render
+      // backend-flagged same-paragraph groups (shared gallery id) as a
+      // carousel, but that hid most images behind ‹ N / M › chrome and
+      // people consistently missed the supporting evidence. The existing
+      // `.theo-figure-mosaic--cols-N` CSS caps at 3 columns, so a
+      // 6-image group becomes two rows of three — all visible at once.
+      segments.push({ kind: 'mosaic', figures: group.figures })
     }
     cursor = group.end
   }

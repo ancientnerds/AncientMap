@@ -1154,6 +1154,30 @@
   padding: 12px 20px;
   border-top: 1px solid var(--border-default);
 }
+.theo-references-body {
+  padding: 12px 20px;
+  border-top: 1px solid var(--border-default);
+  font-size: 13px;
+  line-height: 1.55;
+}
+.theo-references-body h2 {
+  /* The dedicated section already has its own toggle header — kill the
+     duplicate `## References` heading that the markdown still carries. */
+  display: none;
+}
+.theo-references-body p,
+.theo-references-body li {
+  margin: 0 0 6px;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+.theo-references-body a {
+  color: var(--accent-primary, #4ea1ff);
+  text-decoration: none;
+}
+.theo-references-body a:hover {
+  text-decoration: underline;
+}
 .theo-audit-grid {
   display: flex;
   flex-direction: column;

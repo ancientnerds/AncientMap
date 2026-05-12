@@ -8,6 +8,8 @@
 
 import { useState, useMemo, useCallback, useEffect, useRef, lazy, Suspense } from 'react'
 import { createPortal } from 'react-dom'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import QualityBadge, { type QualityScore } from './QualityBadge'
 import { splitIntoImageSegments } from './galleryParser'
 import TheoPaperBody from './TheoPaperBody'
@@ -124,6 +126,7 @@ export default function TheoReportOverlay({
 }: TheoReportOverlayProps) {
   const [showTrace, setShowTrace] = useState(false)
   const [showAudit, setShowAudit] = useState(false)
+  const [showReferences, setShowReferences] = useState(true)
   const [editing, setEditing] = useState(initialEditing ?? false)
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
   const bodyRef = useRef<HTMLDivElement>(null)
@@ -153,8 +156,19 @@ export default function TheoReportOverlay({
   const fixedReport = useMemo(() => fixHeadings(result.report), [result.report])
   const refCites = useMemo(() => parseReferenceCitations(fixedReport), [fixedReport])
   const enrichedReport = useMemo(() => enrichCitations(fixedReport, refCites), [fixedReport, refCites])
+  // Split the markdown at `## References` so the references block can render
+  // as its own dedicated section below the quality audit instead of being
+  // buried 80% of the way down the prose body.
+  const { bodyOnly, referencesBlock } = useMemo(() => {
+    const idx = enrichedReport.search(/^## References/m)
+    if (idx === -1) return { bodyOnly: enrichedReport, referencesBlock: '' }
+    return {
+      bodyOnly: enrichedReport.slice(0, idx).trimEnd(),
+      referencesBlock: enrichedReport.slice(idx),
+    }
+  }, [enrichedReport])
   const { reportSegments, lightboxImages, figureStartIndex } = useMemo(() => {
-    const segments = splitIntoImageSegments(enrichedReport)
+    const segments = splitIntoImageSegments(bodyOnly)
     const images: LightboxImage[] = []
     const startIndex = new Map<string, number>()
     segments.forEach((seg, segIdx) => {
@@ -179,7 +193,7 @@ export default function TheoReportOverlay({
       }
     })
     return { reportSegments: segments, lightboxImages: images, figureStartIndex: startIndex }
-  }, [enrichedReport])
+  }, [bodyOnly])
 
   const mdComponents = useMemo(() => ({
     a: ({ href, children, ...props }: React.AnchorHTMLAttributes<HTMLAnchorElement>) => {
@@ -419,6 +433,28 @@ export default function TheoReportOverlay({
                     </div>
                   </div>
                 )}
+              </div>
+            )}
+          </>
+        )}
+
+        {/* References (collapsible) — sits between Quality audit and Pipeline
+            trace so the citation list is right under the score the user just
+            read. Default-expanded because references are what most people
+            scroll down to verify. */}
+        {!editing && referencesBlock && (
+          <>
+            <button
+              className="theo-trace-toggle"
+              onClick={() => setShowReferences(!showReferences)}
+            >
+              {showReferences ? '▾' : '▸'} References ({refCites.size})
+            </button>
+            {showReferences && (
+              <div className="theo-references-body">
+                <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>
+                  {referencesBlock}
+                </ReactMarkdown>
               </div>
             )}
           </>
