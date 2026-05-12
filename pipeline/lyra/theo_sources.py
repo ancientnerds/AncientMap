@@ -919,13 +919,56 @@ class WikipediaAdapter(SourceAdapter):
             resp.raise_for_status()
             data = resp.json()
 
+            search_hits = data.get("query", {}).get("search", [])
+            if not search_hits:
+                return []
+
+            # Fetch lead-paragraph extracts in a single batched MediaWiki
+            # query so the verifier sees ~500-char context instead of the
+            # ~150-char search-result excerpt. Run #12 logged 10
+            # Wikipedia-domain citations rejected with snippet_len<200 —
+            # almost all of those were rejected as "snippet too short to
+            # confirm the specific claim", not as topic mismatches. The
+            # extract endpoint usually returns the article's intro, which
+            # contains the date/place/agent that the verifier actually
+            # needs to confirm a specific claim.
+            titles = [h.get("title") or "" for h in search_hits if h.get("title")]
+            extract_by_title: dict[str, str] = {}
+            try:
+                ex_resp = self._client.get(
+                    "/api.php",
+                    params={
+                        "action": "query",
+                        "prop": "extracts",
+                        "exintro": "1",
+                        "explaintext": "1",
+                        "exlimit": "max",
+                        "titles": "|".join(titles),
+                        "format": "json",
+                    },
+                )
+                ex_resp.raise_for_status()
+                pages = (ex_resp.json().get("query") or {}).get("pages") or {}
+                for page in pages.values():
+                    t = page.get("title") or ""
+                    text = (page.get("extract") or "").strip()
+                    if t and text:
+                        extract_by_title[t] = text
+            except Exception as exc:
+                # Don't fail the whole search if the extract batch hiccups —
+                # fall back to the search-result snippet for every hit.
+                logger.warning("Wikipedia extract batch failed: %s", exc)
+
             results: list[RawSource] = []
-            for item in data.get("query", {}).get("search", []):
+            for item in search_hits:
                 title = item.get("title") or ""
                 url = f"https://en.wikipedia.org/wiki/{title.replace(' ', '_')}"
-                snippet = _strip_html(item.get("snippet") or "")
+                raw_snippet = _strip_html(item.get("snippet") or "")
+                extract = extract_by_title.get(title) or ""
+                # Cap the extract at 2000 chars so we stay well under the
+                # verifier's 3000-char window without truncating mid-sentence.
+                snippet = (extract[:2000] or raw_snippet).strip()
 
-                # Extract timestamp (ISO 8601 format from Wikipedia)
                 date = item.get("timestamp") or ""
 
                 results.append(
