@@ -385,6 +385,40 @@ export default function TheoReportOverlay({
                     )
                   })}
                 </div>
+                {qs.audit_gate_failures && (
+                  <div className="theo-audit-gates" style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--border-muted, #2a2a2a)' }}>
+                    <div style={{ marginBottom: 8, fontSize: '0.85em', color: 'var(--text-dimmed)' }}>
+                      Audit gates — every gate must pass for a non-Unverified badge.
+                    </div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                      {(Object.entries(qs.audit_gate_failures) as [string, number | boolean | undefined][]).map(([gate, val]) => {
+                        if (gate === 'audit_passed') return null
+                        const count = typeof val === 'number' ? val : 0
+                        const failed = count > 0
+                        const label = gate.replace(/_/g, ' ')
+                        return (
+                          <span
+                            key={gate}
+                            title={failed
+                              ? `${count} ${label} blocked a higher badge`
+                              : `${label}: clean`}
+                            style={{
+                              padding: '2px 8px',
+                              borderRadius: 4,
+                              fontSize: '0.78em',
+                              border: '1px solid',
+                              borderColor: failed ? '#c62828' : 'var(--border-muted, #2a2a2a)',
+                              color: failed ? '#ff8a80' : 'var(--text-dimmed)',
+                              background: failed ? 'rgba(198, 40, 40, 0.08)' : 'transparent',
+                            }}
+                          >
+                            {label}: {count}
+                          </span>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </>

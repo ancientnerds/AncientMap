@@ -3,10 +3,27 @@
  * Only rendered when quality_score has a numeric total.
  */
 
+export interface AuditGateFailures {
+  audit_passed?: boolean
+  invalid_markers?: number
+  orphaned_refs?: number
+  uncited_paragraphs?: number
+  placeholder_markers?: number
+  language_bleed?: number
+  non_numeric_markers?: number
+  hallucination_final?: number
+  high_contradictions?: number
+  undefined_title_terms?: number
+}
+
 export interface QualityScore {
   total: number
   badge: string
   dimensions: Record<string, number>
+  /** Per-gate breakdown — populated by judge.py since 2026-05-12, optional
+   *  on older results. Use to explain why a badge got demoted to Unverified
+   *  even though the mechanical score is high. */
+  audit_gate_failures?: AuditGateFailures
 }
 
 function badgeColor(total: number): string {
