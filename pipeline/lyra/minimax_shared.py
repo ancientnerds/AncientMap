@@ -261,6 +261,102 @@ def minimax_vlm(client: httpx.Client, image_bytes: bytes, prompt: str) -> str:
         return ""
 
 
+def _coerce_to_schema(value, schema: dict, path: str = "") -> object:
+    """Drop schema-violating items from an LLM response in place.
+
+    MiniMax (and any other tool-use trick LLM under load) periodically
+    emits a *bare string* inside an array typed as `items: {type: object}`,
+    even with json_schema. Every downstream handler that iterates the
+    array and calls `.get()` on items then crashes with
+    `AttributeError("'str' object has no attribute 'get'")` — that's the
+    pattern that took down four separate Theo handlers in a single
+    debugging session (cross_pollination, decomposition, angle_audit,
+    angle_specialist) and forced four near-identical isinstance() guards.
+
+    Instead of guarding at every consumer, normalise at the boundary:
+    walk the response against the schema and drop anything whose runtime
+    type doesn't match the declared type. The handlers then receive a
+    well-shaped dict and don't need per-site guards (the existing ones
+    stay as belt-and-braces).
+
+    Supported schema types: object (with properties + additionalProperties),
+    array (with items), string, integer, number, boolean. Unknown types
+    pass through unchanged.
+    """
+    if not isinstance(schema, dict):
+        return value
+    expected = schema.get("type")
+
+    # Array — walk items, drop those whose type doesn't match `items.type`.
+    if expected == "array":
+        if not isinstance(value, list):
+            logger.warning(
+                "schema-coerce: expected array at %s, got %s — replacing with []",
+                path or "<root>",
+                type(value).__name__,
+            )
+            return []
+        item_schema = schema.get("items") or {}
+        out: list = []
+        for i, item in enumerate(value):
+            cleaned = _coerce_to_schema(item, item_schema, f"{path}[{i}]")
+            if cleaned is _SCHEMA_DROP:
+                continue
+            out.append(cleaned)
+        return out
+
+    # Object — walk properties, drop fields whose type doesn't match.
+    if expected == "object":
+        if not isinstance(value, dict):
+            logger.warning(
+                "schema-coerce: expected object at %s, got %s — dropping",
+                path or "<root>",
+                type(value).__name__,
+            )
+            return _SCHEMA_DROP
+        properties = schema.get("properties") or {}
+        out_obj: dict = {}
+        for k, v in value.items():
+            sub_schema = properties.get(k)
+            if sub_schema is None:
+                # No declared property — keep as-is. Schemas in this codebase
+                # don't use additionalProperties:false, so unknown keys are
+                # acceptable and may carry useful debug info.
+                out_obj[k] = v
+                continue
+            cleaned = _coerce_to_schema(v, sub_schema, f"{path}.{k}" if path else k)
+            if cleaned is _SCHEMA_DROP:
+                continue
+            out_obj[k] = cleaned
+        return out_obj
+
+    # Primitive type mismatch — drop.
+    type_check = {
+        "string": str,
+        "integer": int,
+        "number": (int, float),
+        "boolean": bool,
+    }.get(expected)
+    if type_check is not None and not isinstance(value, type_check):
+        # Allow ints to satisfy 'number'; bool/None are dropped strictly.
+        logger.warning(
+            "schema-coerce: expected %s at %s, got %s (%r) — dropping",
+            expected,
+            path or "<root>",
+            type(value).__name__,
+            value if not isinstance(value, str) else value[:60],
+        )
+        return _SCHEMA_DROP
+
+    return value
+
+
+# Sentinel used by _coerce_to_schema to indicate "drop this whole element"
+# without conflating with legitimate None / "" / 0 values that callers may
+# rely on.
+_SCHEMA_DROP = object()
+
+
 def structured_llm_call(
     system: str,
     user_message: str,
@@ -325,7 +421,13 @@ def structured_llm_call(
         if cleaned.startswith("```"):
             cleaned = cleaned.split("\n", 1)[1] if "\n" in cleaned else cleaned[3:]
             cleaned = cleaned.rsplit("```", 1)[0].strip()
-        return json.loads(cleaned)
+        parsed = json.loads(cleaned)
+        # Boundary normalisation — drop schema-violating items so handlers
+        # never see a string where they expect a dict (etc.). The same
+        # AttributeError took down 4 separate handlers in one debugging
+        # session before this hook was added.
+        coerced = _coerce_to_schema(parsed, schema)
+        return coerced if coerced is not _SCHEMA_DROP else {}
     except (json.JSONDecodeError, ValueError) as exc:
         logger.warning("Structured output parse failed, retrying: %s", exc)
     except Exception as exc:
@@ -340,7 +442,9 @@ def structured_llm_call(
         if cleaned.startswith("```"):
             cleaned = cleaned.split("\n", 1)[1] if "\n" in cleaned else cleaned[3:]
             cleaned = cleaned.rsplit("```", 1)[0].strip()
-        return json.loads(cleaned)
+        parsed = json.loads(cleaned)
+        coerced = _coerce_to_schema(parsed, schema)
+        return coerced if coerced is not _SCHEMA_DROP else {}
     except Exception as exc:
         logger.error("Structured LLM call failed after retry: %s", exc)
         return {}
