@@ -291,11 +291,23 @@ class SemanticScholarAdapter(SourceAdapter):
 
     async def search(self, query: str, max_results: int = 10) -> list[RawSource]:
         def _do() -> list[RawSource]:
+            import re
             import time
+
+            # Semantic Scholar's bulk-search endpoint rejects queries with
+            # trailing punctuation that survives URL-encoding — `"1200 BCE)?"`
+            # (from a question's trailing parenthetical) becomes `%29%3F`
+            # and the server returns 400 Bad Request. Strip everything that
+            # isn't a word char, hyphen, or whitespace; collapse runs of
+            # spaces; bail to empty results if the sanitiser eats it all.
+            clean_query = re.sub(r"[^\w\s\-]", " ", query).strip()
+            clean_query = re.sub(r"\s+", " ", clean_query)
+            if not clean_query:
+                return []
 
             # Bulk endpoint has no limit param — returns up to 1000, we slice
             _s2_params = {
-                "query": query,
+                "query": clean_query,
                 "fields": "title,abstract,publicationDate,publicationTypes,citationCount,influentialCitationCount,referenceCount,externalIds,openAccessPdf,venue,authors,fieldsOfStudy,tldr",
                 "sort": "citationCount:desc",
                 "publicationTypes": "JournalArticle,Review,Conference",
