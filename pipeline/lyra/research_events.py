@@ -245,17 +245,6 @@ class EventBus:
         # bounded regardless of event frequency.
         if self._state is not None:
             request_id = getattr(self._state, "request_id", "") or ""
-            # One-shot diagnostic so we can tell whether the path is
-            # reached at all — printed only on the FIRST emit per bus
-            # instance, gated to avoid log spam afterwards.
-            if not getattr(self, "_diag_logged_first_emit", False):
-                self._diag_logged_first_emit = True
-                logger.info(
-                    "[THEO-diag] EventBus.emit reached state=%s req=%r evt=%s",
-                    "yes" if self._state else "no",
-                    request_id[:8] if request_id else "",
-                    event_type.__name__,
-                )
             if request_id:
                 now = time.monotonic()
                 if now - self._last_flush_ts >= _FLUSH_INTERVAL_S:
@@ -268,15 +257,10 @@ class EventBus:
                         )
 
                         _flush_progress_to_db(self._state, request_id)
-                        logger.info(
-                            "[THEO] %s emit-flush: llm=%d sites=%d",
-                            request_id,
-                            self._state.llm_call_count,
-                            len(self._state.registry.sources),
-                        )
                     except Exception as flush_exc:
-                        # Surface flush failures so they don't hide behind
-                        # debug-level logging (observability is the whole point).
+                        # Never let an observability write break the pipeline,
+                        # but keep the warning visible — silent flush failures
+                        # would re-blind us to stalls.
                         logger.warning(
                             "[THEO] %s emit-flush failed: %r",
                             request_id,
