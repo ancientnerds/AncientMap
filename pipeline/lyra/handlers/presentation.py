@@ -183,8 +183,16 @@ class PresentationHandler(BaseHandler):
             audit_citations,
             prune_orphaned_references,
             prune_unrenderable_references,
+            strip_debug_tokens,
             strip_uncited_factual_paragraphs,
         )
+
+        # First, scrub bare `[N]` / `[...]` debug tokens — these survive
+        # finalize_references because they don't match the placeholder
+        # pattern, but the audit flags them as non_numeric_markers and
+        # silently demotes the badge. Run #10 finished at score=100 but
+        # badge=Unverified because of exactly these two artifacts.
+        self.state.paper_text = strip_debug_tokens(self.state.paper_text)
 
         try:
             post_strip_metrics: dict = {}

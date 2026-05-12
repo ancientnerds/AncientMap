@@ -241,10 +241,29 @@ class JudgeHandler(BaseHandler):
         if not passed:
             badge = "Unverified"
 
+        # Surface the audit gates so the UI + debug_log can show WHY a
+        # paper got demoted. Previously the badge silently flipped to
+        # Unverified with no visible reason — run #10 finished at score=100
+        # but badge=Unverified because of two stray non_numeric_markers,
+        # invisible without inspecting result_json.audit.
+        audit_gate_failures = {
+            "audit_passed": audit_result.get("passed", False),
+            "invalid_markers": len(audit_result.get("invalid_markers", [])),
+            "orphaned_refs": len(audit_result.get("orphaned_refs", [])),
+            "uncited_paragraphs": audit_result.get("uncited_paragraphs", 0),
+            "placeholder_markers": len(audit_result.get("placeholder_markers", [])),
+            "language_bleed": len(audit_result.get("language_bleed", [])),
+            "non_numeric_markers": len(audit_result.get("non_numeric_markers", [])),
+            "hallucination_final": hall_metrics.get("final", 0),
+            "high_contradictions": high_contradictions,
+            "undefined_title_terms": len(undefined_title_terms),
+        }
+
         result = {
             "score": total,
             "badge": badge,
             "passed": passed,
+            "audit_gate_failures": audit_gate_failures,
             "metrics": scores,
             "mechanical": {
                 "citation_coverage": scores["citation_coverage"],

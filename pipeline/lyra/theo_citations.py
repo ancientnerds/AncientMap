@@ -304,6 +304,14 @@ def score_tier_by_domain(url: str) -> int:
 # "[N – geopolymer chemistry]" (also en-dash). Both hyphen and en-dash accepted.
 _PLACEHOLDER_MARKER_RE = re.compile(r"\[N\s*[-–][^\]]+\]")
 
+# Matches bare debug-token leftovers — `[N]`, `[...]`, `[…]` — that the LLM
+# sometimes drops into prose when it can't decide which source to cite.
+# These survive finalize_references because they don't match the placeholder
+# pattern above, but they're unambiguous pipeline artifacts and should be
+# scrubbed before audit. Negative lookahead `(?!\()` avoids touching
+# markdown image links like ![alt](src) or footnote forms.
+_DEBUG_TOKEN_RE = re.compile(r"\[(?:N|\.\.\.|…)\](?!\()")
+
 # Non-Latin scripts that signal language bleed-through in English prose.
 # CJK (Chinese/Japanese/Korean), Cyrillic, Arabic. Greek omitted because legitimate
 # scholarship may quote Greek terms; same for Hebrew. Revisit if false positives appear.
@@ -313,6 +321,21 @@ _LANGUAGE_BLEED_RE = re.compile(r"[\u4e00-\u9fff\u0400-\u04ff\u0600-\u06ff]+")
 def detect_placeholder_markers(text: str) -> list[str]:
     """Return all [N - topic] style unresolved-citation placeholders in text."""
     return _PLACEHOLDER_MARKER_RE.findall(text)
+
+
+def strip_debug_tokens(text: str) -> str:
+    """Remove bare `[N]` / `[...]` / `[…]` debug artifacts from prose.
+
+    The LLM occasionally drops these when it wants a citation but failed
+    to resolve a source — they're not legitimate scholarship content and
+    they survive finalize_references because they don't match the
+    `[N - topic]` placeholder pattern. Audit then flags them as
+    non_numeric_markers and demotes the paper's badge to Unverified
+    (run #10 hit exactly this — score=100 but badge=Unverified because
+    two `[N]` / `[...]` slipped through). Stripping them at presentation
+    time is loss-less: nothing of value is in `[N]`.
+    """
+    return _DEBUG_TOKEN_RE.sub("", text)
 
 
 def detect_language_bleed(text: str) -> list[str]:
