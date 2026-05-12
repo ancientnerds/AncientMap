@@ -287,6 +287,34 @@ def _coerce_to_schema(value, schema: dict, path: str = "") -> object:
         return value
     expected = schema.get("type")
 
+    # JSON-schema union types — `"type": ["string", "null"]` etc. Coerce
+    # only when ALL alternatives are primitive scalars; if any is "object"
+    # or "array" we'd have to combine multiple structural walks, which
+    # nobody in this codebase needs yet. Pass the value through unchanged
+    # when it matches any of the listed types.
+    if isinstance(expected, list):
+        type_map = {
+            "string": (str,),
+            "integer": (int,),
+            "number": (int, float),
+            "boolean": (bool,),
+            "null": (type(None),),
+            "object": (dict,),
+            "array": (list,),
+        }
+        runtime_types: tuple = ()
+        for t in expected:
+            runtime_types += type_map.get(t, ())
+        if not runtime_types or isinstance(value, runtime_types):
+            return value
+        logger.warning(
+            "schema-coerce: expected one of %s at %s, got %s — dropping",
+            expected,
+            path or "<root>",
+            type(value).__name__,
+        )
+        return _SCHEMA_DROP
+
     # Array — walk items, drop those whose type doesn't match `items.type`.
     if expected == "array":
         if not isinstance(value, list):
