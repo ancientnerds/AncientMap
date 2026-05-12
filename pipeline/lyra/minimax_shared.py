@@ -358,19 +358,65 @@ def _coerce_to_schema(value, schema: dict, path: str = "") -> object:
             if cleaned is _SCHEMA_DROP:
                 continue
             out_obj[k] = cleaned
-        # If ANY required field ended up missing (dropped or never present),
-        # drop the whole object rather than letting downstream consumers
-        # build a half-formed entity. Run #14 produced 7 angles where the
-        # `topic` field was type-dropped and the pipeline then ran 5
-        # specialists on `''` for 14 minutes before the user noticed.
+        # Half-formed object recovery. MiniMax occasionally drops required
+        # fields entirely from an object (Run #16 returned 7 angles all
+        # missing `topic`). Two recovery modes:
+        #
+        # 1. Required STRING/INTEGER/NUMBER/BOOLEAN fields — fill with a
+        #    safe default ("" / 0 / 0.0 / False). Downstream handlers
+        #    already have `.get(field, default)` patterns for these and
+        #    log them as "Validated angle '?'" etc. — much better than
+        #    dropping the whole object.
+        # 2. Required OBJECT/ARRAY fields — there's no sensible default,
+        #    so drop the whole parent object as before.
         missing_required = required - out_obj.keys()
         if missing_required:
-            logger.warning(
-                "schema-coerce: object at %s missing required field(s) %s — dropping",
-                path or "<root>",
-                sorted(missing_required),
-            )
-            return _SCHEMA_DROP
+            # Factories so each filled field gets its own fresh container —
+            # avoid the mutable-default trap where every dropped-array field
+            # would alias the same underlying list across objects.
+            primitive_defaults: dict[str, callable] = {
+                "string": lambda: "",
+                "integer": lambda: 0,
+                "number": lambda: 0.0,
+                "boolean": lambda: False,
+                "array": lambda: [],
+            }
+            fatal_missing: list[str] = []
+            filled: list[str] = []
+            for field in sorted(missing_required):
+                sub = properties.get(field, {})
+                sub_type = sub.get("type") if isinstance(sub, dict) else None
+                # Union types: accept any of the listed scalars; prefer
+                # the first primitive default that exists.
+                if isinstance(sub_type, list):
+                    chosen = next(
+                        (t for t in sub_type if t in primitive_defaults),
+                        None,
+                    )
+                    if chosen is None:
+                        fatal_missing.append(field)
+                        continue
+                    out_obj[field] = primitive_defaults[chosen]()
+                    filled.append(field)
+                elif isinstance(sub_type, str) and sub_type in primitive_defaults:
+                    out_obj[field] = primitive_defaults[sub_type]()
+                    filled.append(field)
+                else:
+                    fatal_missing.append(field)
+            if filled:
+                logger.warning(
+                    "schema-coerce: object at %s filled missing required %s with defaults",
+                    path or "<root>",
+                    filled,
+                )
+            if fatal_missing:
+                logger.warning(
+                    "schema-coerce: object at %s missing required field(s) %s "
+                    "with no safe default — dropping",
+                    path or "<root>",
+                    fatal_missing,
+                )
+                return _SCHEMA_DROP
         return out_obj
 
     # Primitive type mismatch — drop.
