@@ -333,7 +333,8 @@ def _coerce_to_schema(value, schema: dict, path: str = "") -> object:
             out.append(cleaned)
         return out
 
-    # Object — walk properties, drop fields whose type doesn't match.
+    # Object — walk properties, drop fields whose type doesn't match,
+    # and drop the WHOLE object if any required field ends up missing.
     if expected == "object":
         if not isinstance(value, dict):
             logger.warning(
@@ -343,6 +344,7 @@ def _coerce_to_schema(value, schema: dict, path: str = "") -> object:
             )
             return _SCHEMA_DROP
         properties = schema.get("properties") or {}
+        required = set(schema.get("required") or ())
         out_obj: dict = {}
         for k, v in value.items():
             sub_schema = properties.get(k)
@@ -356,6 +358,19 @@ def _coerce_to_schema(value, schema: dict, path: str = "") -> object:
             if cleaned is _SCHEMA_DROP:
                 continue
             out_obj[k] = cleaned
+        # If ANY required field ended up missing (dropped or never present),
+        # drop the whole object rather than letting downstream consumers
+        # build a half-formed entity. Run #14 produced 7 angles where the
+        # `topic` field was type-dropped and the pipeline then ran 5
+        # specialists on `''` for 14 minutes before the user noticed.
+        missing_required = required - out_obj.keys()
+        if missing_required:
+            logger.warning(
+                "schema-coerce: object at %s missing required field(s) %s — dropping",
+                path or "<root>",
+                sorted(missing_required),
+            )
+            return _SCHEMA_DROP
         return out_obj
 
     # Primitive type mismatch — drop.
