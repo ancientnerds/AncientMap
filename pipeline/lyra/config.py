@@ -456,14 +456,23 @@ def _call_anthropic_api(
         tool_json = _extract_tool_use_json(response.content)
         if tool_json is not None:
             stop_reason = response.stop_reason or "end_turn"
+            usage_dict = {
+                "input_tokens": response.usage.input_tokens if response.usage else 0,
+                "output_tokens": response.usage.output_tokens if response.usage else 0,
+            }
+            # Credit tokens back to the active ResearchState if one is bound
+            # (Theo runs via convergence_orchestrator bind theirs at startup).
+            try:
+                from pipeline.lyra import token_accounting
+
+                token_accounting.add_usage(usage_dict)
+            except Exception:
+                pass
             return NormalizedResponse(
                 content=[TextBlock(text=tool_json)],
                 stop_reason=stop_reason,
                 model=response.model or "",
-                usage={
-                    "input_tokens": response.usage.input_tokens if response.usage else 0,
-                    "output_tokens": response.usage.output_tokens if response.usage else 0,
-                },
+                usage=usage_dict,
             )
         logger.warning("MiniMax did not return tool_use block — falling back to text response")
 
@@ -491,14 +500,23 @@ def _normalize_anthropic_response(response) -> NormalizedResponse:
             blocks.append(TextBlock(text=b.text, citations=cites))
 
     stop_reason = response.stop_reason or "end_turn"
+    usage_dict = {
+        "input_tokens": response.usage.input_tokens if response.usage else 0,
+        "output_tokens": response.usage.output_tokens if response.usage else 0,
+    }
+    # Credit tokens back to the active ResearchState if one is bound
+    # (Theo runs via convergence_orchestrator bind theirs at startup).
+    try:
+        from pipeline.lyra import token_accounting
+
+        token_accounting.add_usage(usage_dict)
+    except Exception:
+        pass
     return NormalizedResponse(
         content=blocks,
         stop_reason=stop_reason,
         model=response.model or "",
-        usage={
-            "input_tokens": response.usage.input_tokens if response.usage else 0,
-            "output_tokens": response.usage.output_tokens if response.usage else 0,
-        },
+        usage=usage_dict,
     )
 
 

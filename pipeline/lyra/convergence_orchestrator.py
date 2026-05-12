@@ -77,6 +77,14 @@ class ConvergenceOrchestrator:
 
         state.log("orchestrator", f"Starting convergence pipeline for: {question[:80]}...")
 
+        # Bind state for token accounting. LLM helpers (minimax_shared.py,
+        # config.call_api) read this contextvar to credit token usage back
+        # to state.total_tokens without needing the state object threaded
+        # through every signature.
+        from pipeline.lyra import token_accounting
+
+        token_accounting.bind(state)
+
         # Reset global rate limiter to max concurrency for this task
         from pipeline.lyra.minimax_limiter import limiter as global_limiter
 

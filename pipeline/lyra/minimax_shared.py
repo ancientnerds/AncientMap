@@ -183,6 +183,22 @@ def minimax_chat_anthropic(
                         max_tokens,
                         len(clean),
                     )
+                # Credit tokens back to the active ResearchState if any —
+                # otherwise minimax_chat_anthropic calls (which bypass
+                # call_api) would never advance state.total_tokens.
+                try:
+                    from pipeline.lyra import token_accounting
+
+                    usage = getattr(response, "usage", None)
+                    if usage is not None:
+                        token_accounting.add_usage(
+                            {
+                                "input_tokens": getattr(usage, "input_tokens", 0) or 0,
+                                "output_tokens": getattr(usage, "output_tokens", 0) or 0,
+                            }
+                        )
+                except Exception:
+                    pass
                 return clean
             except Exception as e:
                 last_error = e
