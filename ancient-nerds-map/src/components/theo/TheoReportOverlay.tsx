@@ -310,8 +310,10 @@ export default function TheoReportOverlay({
             </div>
           </div>
 
-          {/* Edit button — owner can always edit */}
-          {isOwner && (
+          {/* Edit button — owner only, and only when not already editing
+              (the rest of the body switches to the editor when `editing` is
+              true; offering "Edit" again would be confusing). */}
+          {isOwner && !editing && (
             <button
               className="theo-edit-btn"
               onClick={() => setEditing(true)}
