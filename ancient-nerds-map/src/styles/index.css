@@ -1151,6 +1151,38 @@ body.mapbox-primary-mode .mapbox-globe-container canvas {
   color: var(--text-secondary);
 }
 
+.legal-pages-links {
+  width: 100%;
+  margin-top: 4px;
+  padding: 4px 0 2px;
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  font-size: 9px;
+  color: var(--text-muted);
+  opacity: 0.6;
+  transition: opacity 0.2s ease;
+}
+
+.legal-pages-links:hover {
+  opacity: 1;
+}
+
+.legal-pages-links a {
+  color: var(--text-muted);
+  text-decoration: none;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.legal-pages-links a:hover {
+  color: var(--text-secondary);
+}
+
+.legal-pages-links .sep {
+  opacity: 0.4;
+}
+
 .logo-wrapper {
   position: relative;
   display: inline-block;

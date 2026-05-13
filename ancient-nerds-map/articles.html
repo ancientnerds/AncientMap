@@ -4,9 +4,9 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-    <title>Archaeology Articles - Weekly Deep Dives Into Ancient Discoveries | Ancient Nerds</title>
-    <meta name="description" content="Weekly archaeology articles covering the biggest discoveries in ancient history. AI-written deep dives into new excavations, lost civilizations, megalithic mysteries, and breakthroughs in archaeological research. Sourced and cited." />
-    <meta name="keywords" content="archaeology articles, ancient history articles, archaeological discoveries, weekly archaeology digest, ancient civilizations, lost cities, megalithic mysteries, excavation reports" />
+    <title>Archaeology Journals - Weekly Digests of Ancient Discoveries | Ancient Nerds</title>
+    <meta name="description" content="Weekly archaeology journals compiling the biggest discoveries of the past week in ancient history. AI-curated digests of new excavations, lost civilizations, megalithic mysteries, and breakthroughs in archaeological research. Sourced and cited." />
+    <meta name="keywords" content="archaeology journals, ancient history digest, archaeological discoveries, weekly archaeology digest, ancient civilizations, lost cities, megalithic mysteries, excavation reports" />
     <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
     <link rel="canonical" href="https://ancientnerds.com/articles.html" />
 
@@ -19,19 +19,19 @@
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://ancientnerds.com/articles.html" />
     <meta property="og:site_name" content="Ancient Nerds" />
-    <meta property="og:title" content="Archaeology Articles - Weekly Deep Dives | Ancient Nerds" />
-    <meta property="og:description" content="Weekly deep dives into the biggest archaeological discoveries. Lost civilizations, megalithic mysteries, and excavation breakthroughs." />
+    <meta property="og:title" content="Archaeology Journals - Weekly Digests | Ancient Nerds" />
+    <meta property="og:description" content="Weekly digests compiling the biggest archaeological discoveries of the past week. Lost civilizations, megalithic mysteries, and excavation breakthroughs." />
     <meta property="og:image" content="https://ancientnerds.com/landing/og-image.png" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
-    <meta property="og:image:alt" content="Ancient Nerds weekly archaeology articles" />
+    <meta property="og:image:alt" content="Ancient Nerds weekly archaeology journals" />
     <meta property="og:locale" content="en_US" />
 
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:url" content="https://ancientnerds.com/articles.html" />
-    <meta name="twitter:title" content="Archaeology Articles - Weekly Deep Dives | Ancient Nerds" />
-    <meta name="twitter:description" content="Weekly deep dives into the biggest archaeological discoveries. Lost civilizations, megalithic mysteries, and breakthroughs." />
+    <meta name="twitter:title" content="Archaeology Journals - Weekly Digests | Ancient Nerds" />
+    <meta name="twitter:description" content="Weekly digests compiling the biggest archaeological discoveries. Lost civilizations, megalithic mysteries, and breakthroughs." />
     <meta name="twitter:image" content="https://ancientnerds.com/landing/og-image.png" />
     <meta name="twitter:site" content="@AncientNerdsDAO" />
 
@@ -42,8 +42,8 @@
   <body>
     <noscript>
       <div style="padding: 40px 20px; max-width: 800px; margin: 0 auto; background: #0a1a1f; color: #e0e0e0; min-height: 100vh; font-family: sans-serif;">
-        <h1 style="color: white;">Archaeology Articles - Weekly Deep Dives</h1>
-        <p>In-depth archaeology articles covering the biggest discoveries in ancient history each week. AI-written, sourced, cited, and illustrated deep dives into new excavations, lost civilizations, and breakthroughs.</p>
+        <h1 style="color: white;">Archaeology Journals - Weekly Digests</h1>
+        <p>Weekly journals compiling the past week's biggest archaeology stories in one read. AI-curated, sourced, cited, and illustrated digests of new excavations, lost civilizations, and breakthroughs.</p>
         <h2 style="color: #c02023;">Topics We Cover</h2>
         <ul>
           <li>New archaeological excavations and what they reveal about ancient civilizations</li>
@@ -52,12 +52,25 @@
           <li>Ancient technology, engineering, and astronomical alignments</li>
           <li>Breakthroughs in dating methods, DNA analysis, and remote sensing</li>
         </ul>
-        <p><strong><a href="/articles/" style="color: #c02023;">Browse all articles (no JavaScript required) &rarr;</a></strong></p>
-        <p>Or <a href="https://ancientnerds.com/" style="color: #c02023;">visit the homepage</a> &middot; <a href="https://ancientnerds.com/globe.html" style="color: #c02023;">explore the globe</a> &middot; <a href="/news-archive/" style="color: #c02023;">news archive</a>.</p>
+        <p>Or <a href="https://ancientnerds.com/" style="color: #c02023;">visit the homepage</a> &middot; <a href="https://ancientnerds.com/globe.html" style="color: #c02023;">explore the globe</a> &middot; <a href="/news.html" style="color: #c02023;">archaeology stories</a>.</p>
       </div>
     </noscript>
     <div id="root"></div>
     <div class="crt-glow"></div>
     <script type="module" src="/src/articlesMain.tsx"></script>
+    <!-- Legal links overlay - Impressumspflicht § 5 DDG / § 18 MStV (findable from every page) -->
+    <div class="an-legal-overlay">
+      <a href="/imprint.html">Imprint</a>
+      <a href="/privacy.html">Privacy</a>
+      <a href="/terms.html">Terms</a>
+    </div>
+    <style>
+      .an-legal-overlay{position:fixed;bottom:8px;right:12px;z-index:99999;display:flex;gap:12px;font-family:"JetBrains Mono","Fira Code",monospace;font-size:0.65rem;opacity:0.35;transition:opacity 0.2s;pointer-events:auto}
+      .an-legal-overlay:hover{opacity:1}
+      .an-legal-overlay a{color:#999;text-decoration:none;letter-spacing:0.05em;text-transform:uppercase}
+      .an-legal-overlay a:hover{color:#c02023}
+      @media print{.an-legal-overlay{display:none}}
+      @media (max-width:600px){.an-legal-overlay{font-size:0.55rem;bottom:4px;right:6px;gap:8px}}
+    </style>
   </body>
 </html>

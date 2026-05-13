@@ -1,6 +1,12 @@
 # Privacy Policy
 
-**Last Updated:** 2026-02-09
+**Last Updated:** 2026-05-12
+
+> **Note:** This file is the GitHub-side technical companion to the legally binding privacy policy at <https://ancientnerds.com/privacy.html>. For users of the website, that page is the authoritative version. For developers reviewing the repo, this file documents the same data flows in markdown.
+
+## Operator (Data Controller)
+
+Martin Dominiak — Dominiak Consulting (sole proprietorship), c/o Autorenglück #43603, Albert-Einstein-Straße 47, 02977 Hoyerswerda, Germany. Contact: ancient.nerds@protonmail.com. Operating under the small business regulation pursuant to § 19 UStG (German VAT Act). Full operator details: <https://ancientnerds.com/imprint.html>.
 
 ## Overview
 
@@ -28,14 +34,14 @@ When enabled, we may collect:
 - Location data from your device
 - Browsing history outside our application
 
-### 3. AI Chat Feature (PIN-Protected)
+### 3. AI Chat Feature (Lyra Research Assistant)
 
 If you use the AI research assistant:
 - **Session data:** Temporary conversation history (deleted after session)
-- **PIN validation:** Used only for access control, not stored
-- **Queries:** Processed in real-time via the MiniMax M2.5 API (Anthropic-compatible endpoint at `api.minimax.io`), not permanently stored on our servers
-- **MiniMax retention:** MiniMax does not publish fixed retention periods. Their privacy policy states data is retained "for a period reasonably necessary to achieve the purposes stated." Zero-retention mode may be available on request.
-- **Training:** MiniMax's Terms of Service reserve the right to use API inputs and outputs to "provide, maintain, develop, and improve" their services, which may include model training. We have not been able to confirm an opt-out mechanism in their legal terms.
+- **Authentication:** Discord OAuth or PIN-based access control, depending on tier
+- **Queries:** Processed in real-time via the **Anthropic API** (anthropic.com). Conversations are not permanently stored on our servers beyond the active session.
+- **Anthropic retention:** Per Anthropic's commercial API terms, inputs and outputs are not used to train models by default; retention is limited to operational and abuse-detection purposes.
+- **Location:** Anthropic PBC is based in San Francisco, USA. Data is processed on US servers under Standard Contractual Clauses (Art. 46 GDPR) and the EU-US Data Privacy Framework where applicable.
 
 ### 4. Rate Limiting
 
@@ -45,20 +51,28 @@ If you use the AI research assistant:
 
 ## AI Pipeline & Third-Party Data Processing
 
-Our automated news pipeline and AI research assistant process **publicly available archaeological data** (YouTube video content, site names, descriptions). No user personal data is sent to these services.
+Our automated stories pipeline, weekly journals (compilations summarising the previous week's stories), research tasks, and AI research assistant process **publicly available archaeological data** (YouTube video content, site names, descriptions) plus, in the case of the Lyra chat, your own queries.
 
-### MiniMax M2.5 API
+### MiniMax (Stories, Journals, Research Tasks)
 
-- **Model used:** MiniMax-M2.5 (all pipeline steps and chat), accessed via Anthropic-compatible endpoint at `api.minimax.io`
-- **Data sent:** YouTube video content, archaeological site names, summary text, news posts for verification, chat queries
-- **Training:** MiniMax's ToS state they may use inputs and outputs to "provide, maintain, develop, and improve" their services. Their ToS further states that use of data "for the purpose of improving algorithms or enhancing services does not constitute a breach of confidentiality obligations." **We have not been able to confirm an opt-out mechanism in their published legal terms.** Third-party reviews suggest a zero-retention mode may be available on request.
-- **Retention:** MiniMax does not publish fixed retention periods. Data is retained "for a period reasonably necessary" per their privacy policy. Zero-retention mode may be available via api@minimax.io.
-- **Data location:** MiniMax states API data is processed on **servers located in the United States**. The API platform is operated by **Nanonoble Pte. Ltd.** (Singapore). The parent company, MiniMax, is headquartered in **Shanghai, China**. The privacy policy does not explicitly guarantee that data is not shared with Chinese affiliates.
-- **Certifications:** MiniMax reportedly holds SOC 2 Type II and ISO 27001 certifications, but these are only available to enterprise customers under NDA and have not been independently verified by us.
-- **GDPR:** The privacy policy references compliance with GDPR, CCPA, PDPA (Singapore/Malaysia), and Australian privacy law. No publicly available Data Processing Addendum.
+- **Used for:** stories pipeline, weekly journals, research-task content generation (summarisation, fact verification, content generation)
+- **Data sent:** YouTube video content, archaeological site names, summary text, news posts for verification
+- **Training:** MiniMax's ToS state they may use inputs and outputs to "provide, maintain, develop, and improve" their services. **We have not been able to confirm an opt-out mechanism in their published legal terms.** Third-party reviews suggest a zero-retention mode may be available on request.
+- **Retention:** MiniMax does not publish fixed retention periods. Data is retained "for a period reasonably necessary" per their privacy policy.
+- **Data location:** MiniMax states API data is processed on **servers located in the United States**. The API platform is operated by **Nanonoble Pte. Ltd.** (Singapore). The parent company, MiniMax, is headquartered in **Shanghai, China**.
+- **GDPR:** The privacy policy references compliance with GDPR. No publicly available Data Processing Addendum.
 - **Indemnification:** MiniMax does **not** offer copyright indemnification comparable to Anthropic's Copyright Shield. IP liability for content processed through the API rests with the customer.
-- **Entity List:** MiniMax was added to the U.S. Department of Commerce Entity List in 2025 as part of export controls targeting Chinese AI companies. This designation restricts certain technology exports to MiniMax.
+- **Entity List:** MiniMax was added to the U.S. Department of Commerce Entity List in 2025 as part of export controls targeting Chinese AI companies.
 - **More info:** [MiniMax Privacy Policy](https://platform.minimax.io/protocol/privacy-policy), [MiniMax Terms of Service](https://platform.minimax.io/protocol/terms-of-service)
+
+### Anthropic (Lyra Research Assistant)
+
+- **Used for:** the Lyra research assistant — real-time chat queries and responses
+- **Data sent:** user chat queries, conversation context for the current session, related archaeological context retrieved via Qdrant
+- **Training:** Per Anthropic's commercial API terms, inputs and outputs are **not** used to train models by default. Retention is limited to operational and abuse-detection purposes (typically up to 30 days).
+- **Data location:** Anthropic PBC, San Francisco, USA. Servers in the United States.
+- **GDPR:** Anthropic publishes a DPA and operates under Standard Contractual Clauses (Art. 46 GDPR). EU-US Data Privacy Framework certification applies where listed.
+- **More info:** [Anthropic Privacy Policy](https://www.anthropic.com/legal/privacy), [Anthropic Commercial Terms](https://www.anthropic.com/legal/commercial-terms)
 
 ### Voyage AI (Embeddings & Reranking)
 
@@ -80,7 +94,8 @@ Our automated news pipeline and AI research assistant process **publicly availab
 
 | Service | Data Sent | Used for Training? | Retention | Location |
 |---------|-----------|-------------------|-----------|----------|
-| MiniMax M2.5 API | Transcripts, site names, queries | **Possible** (ToS allows it) | Not disclosed | US servers (Chinese parent co.) |
+| MiniMax | Transcripts, site names, public source content | **Possible** (ToS allows it) | Not disclosed | US servers (operator Singapore, parent Shanghai) |
+| Anthropic | Lyra chat queries + context | **No** (commercial API default) | Operational/abuse only, ~30 days | US |
 | Voyage AI | Site/news text for embedding | **No** (opted out) | Immediate deletion | US |
 | Qdrant | Vector embeddings | N/A (self-hosted) | We control | Our VPS |
 
@@ -96,10 +111,12 @@ Our automated news pipeline and AI research assistant process **publicly availab
 
 We do **NOT** sell, trade, or share your data with third parties except:
 
-- **MiniMax:** AI processing of archaeological content and chat queries (see above)
+- **MiniMax:** AI generation of archaeological content for stories, journals, and research tasks (see above)
+- **Anthropic:** Lyra chat queries (see above)
 - **Voyage AI:** Embedding archaeological text for semantic search (see above)
 - **Mapbox:** Map tiles are loaded from Mapbox (see their [privacy policy](https://www.mapbox.com/legal/privacy))
 - **Cloudflare:** We use Cloudflare for security and CDN services
+- **Discord, MEE6, Stripe:** for users who purchase a paid membership — Discord (USA) hosts the community server; MEE6 (Paris, France) provides the subscription bot ("Monetize"); Stripe Payments Europe Limited (Dublin, Ireland) processes card payments via Stripe Connect into the operator's account. Discord and Stripe are independent data controllers for the data they collect.
 - **Legal requirements:** If required by law
 
 ## Your Rights (GDPR Compliance)

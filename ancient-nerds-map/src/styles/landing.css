@@ -945,11 +945,25 @@ body {
   font-family: var(--font-body);
   color: var(--text-muted);
   text-decoration: none;
-  margin-top: 12px;
 }
 
 .footer-legal:hover {
   color: var(--accent-primary);
+}
+
+.footer-legal-row {
+  margin-top: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+  align-items: center;
+}
+
+.footer-legal-sep {
+  color: var(--text-muted);
+  opacity: 0.4;
+  font-size: 0.7rem;
 }
 
 /* ─── Image Lightbox ─── */

@@ -336,16 +336,16 @@
       </div>
     </section>
 
-    <!-- ═══════════ ARTICLES ═══════════ -->
+    <!-- ═══════════ JOURNALS ═══════════ -->
     <section class="landing-section" id="articles-section">
       <div class="feature-row reverse">
         <div class="animate-in">
-          <h2 class="section-label">WEEKLY ARTICLES</h2>
-          <p class="section-desc">AI-generated deep dives into the week's biggest archaeological discoveries. Sourced, cited, and&nbsp;illustrated.</p>
-          <a href="/articles.html" class="cta-secondary">READ ARTICLES</a>
+          <h2 class="section-label">WEEKLY JOURNALS</h2>
+          <p class="section-desc">AI-curated weekly digests bringing together the past week's biggest archaeological stories. Sourced, cited, and&nbsp;illustrated.</p>
+          <a href="/articles.html" class="cta-secondary">READ JOURNALS</a>
         </div>
         <div class="animate-in delay-2">
-          <img src="/landing/articles.webp" alt="Weekly archaeology article" class="feature-image-main" data-lightbox loading="lazy" decoding="async" width="1113" height="1144" />
+          <img src="/landing/articles.webp" alt="Weekly archaeology journal" class="feature-image-main" data-lightbox loading="lazy" decoding="async" width="1113" height="1144" />
         </div>
       </div>
     </section>
@@ -483,7 +483,7 @@
           <a href="/news.html">Stories</a>
           <a href="/lyra.html">Lyra</a>
           <a href="/radar.html">Radar</a>
-          <a href="/articles.html">Articles</a>
+          <a href="/articles.html">Journals</a>
           <a href="/api.html">API</a>
         </nav>
         <p class="footer-tagline">Free. Open data. Community-driven.</p>
@@ -504,7 +504,15 @@
             <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.374 0 0 5.373 0 12c0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23A11.509 11.509 0 0112 5.803c1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576C20.566 21.797 24 17.3 24 12c0-6.627-5.373-12-12-12z"/></svg>
           </a>
         </div>
-        <a href="#" class="footer-legal" id="disclaimer-btn">Disclaimer & Legal</a>
+        <div class="footer-legal-row">
+          <a href="/imprint.html" class="footer-legal">Imprint</a>
+          <span class="footer-legal-sep">·</span>
+          <a href="/privacy.html" class="footer-legal">Privacy</a>
+          <span class="footer-legal-sep">·</span>
+          <a href="/terms.html" class="footer-legal">Terms</a>
+          <span class="footer-legal-sep">·</span>
+          <a href="#" class="footer-legal" id="disclaimer-btn">Disclaimer &amp; Legal</a>
+        </div>
       </div>
     </footer>
 
@@ -512,6 +520,34 @@
     <div class="lightbox" id="lightbox">
       <img src="" alt="Full-size screenshot" decoding="async" />
     </div>
+
+    <!-- ═══════════ COOKIE / EMBED NOTICE (one-time, landing only) ═══════════ -->
+    <div id="cookie-notice" class="cookie-notice" hidden>
+      <span>This site embeds external media (YouTube, Sketchfab, Google Maps, webcams) that may set cookies when you interact with them. See <a href="/privacy.html">Privacy</a>.</span>
+      <button id="cookie-notice-ok" type="button">Got it</button>
+    </div>
+    <style>
+      .cookie-notice{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);background:rgba(10,10,10,0.92);border:1px solid rgba(255,255,255,0.12);color:#ccc;font-family:'JetBrains Mono','Fira Code',monospace;font-size:0.72rem;line-height:1.4;padding:10px 14px;border-radius:4px;z-index:99999;display:flex;align-items:center;gap:12px;max-width:580px;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
+      .cookie-notice a{color:#c02023;text-decoration:none;border-bottom:1px solid rgba(192,32,35,0.4)}
+      .cookie-notice a:hover{color:#d42426}
+      .cookie-notice button{background:transparent;border:1px solid #c02023;color:#c02023;padding:4px 12px;cursor:pointer;font:inherit;letter-spacing:0.05em;text-transform:uppercase;border-radius:2px;flex-shrink:0}
+      .cookie-notice button:hover{background:#c02023;color:#000}
+      @media(max-width:600px){.cookie-notice{font-size:0.65rem;bottom:8px;padding:8px 10px;max-width:92%;gap:8px}}
+    </style>
+    <script>
+      (function(){
+        var KEY='an_cookie_ack_v1';
+        try{if(localStorage.getItem(KEY))return}catch(e){}
+        var n=document.getElementById('cookie-notice');
+        var b=document.getElementById('cookie-notice-ok');
+        if(!n||!b)return;
+        n.hidden=false;
+        b.addEventListener('click',function(){
+          try{localStorage.setItem(KEY,'1')}catch(e){}
+          n.remove();
+        });
+      })();
+    </script>
 
     <!-- ═══════════ SCRIPTS ═══════════ -->
     <script>

@@ -101,5 +101,19 @@
     <div id="root"></div>
     <div class="crt-glow"></div>
     <script type="module" src="/src/main.tsx"></script>
+    <!-- Legal links overlay - Impressumspflicht § 5 DDG / § 18 MStV (findable from every page) -->
+    <div class="an-legal-overlay">
+      <a href="/imprint.html">Imprint</a>
+      <a href="/privacy.html">Privacy</a>
+      <a href="/terms.html">Terms</a>
+    </div>
+    <style>
+      .an-legal-overlay{position:fixed;bottom:8px;right:12px;z-index:99999;display:flex;gap:12px;font-family:"JetBrains Mono","Fira Code",monospace;font-size:0.65rem;opacity:0.35;transition:opacity 0.2s;pointer-events:auto}
+      .an-legal-overlay:hover{opacity:1}
+      .an-legal-overlay a{color:#999;text-decoration:none;letter-spacing:0.05em;text-transform:uppercase}
+      .an-legal-overlay a:hover{color:#c02023}
+      @media print{.an-legal-overlay{display:none}}
+      @media (max-width:600px){.an-legal-overlay{font-size:0.55rem;bottom:4px;right:6px;gap:8px}}
+    </style>
   </body>
 </html>

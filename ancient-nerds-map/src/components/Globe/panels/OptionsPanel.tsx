@@ -279,6 +279,15 @@ export const OptionsPanel = forwardRef<HTMLDivElement, OptionsPanelProps>(({
             Disclaimer & Legal
           </button>
         )}
+
+        {/* Legal pages (§ 5 DDG / § 18 MStV / DSGVO) */}
+        <div className="legal-pages-links">
+          <a href="/imprint.html">Imprint</a>
+          <span className="sep">·</span>
+          <a href="/privacy.html">Privacy</a>
+          <span className="sep">·</span>
+          <a href="/terms.html">Terms</a>
+        </div>
       </div>
     </div>
   )
