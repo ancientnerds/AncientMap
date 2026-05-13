@@ -98,3 +98,28 @@
   cursor: pointer;
   transition: color 0.15s;
 }
+
+/* ── Brand: Discord login pill ──────────────
+   Visual styling for the "Continue with Discord" button.
+   Lives here (not account.css) so /theo.html and any other
+   page that drops the button in gets the full brand pill,
+   not just naked link-coloured uppercase text. */
+.account-discord-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 28px;
+  background: var(--brand-discord);
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  font-size: 15px;
+  text-decoration: none;
+}
+.account-discord-btn:hover {
+  background: var(--brand-discord-hover);
+  color: #fff;
+}
+.account-discord-btn svg {
+  flex-shrink: 0;
+}

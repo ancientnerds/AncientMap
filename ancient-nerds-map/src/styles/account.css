@@ -70,24 +70,8 @@
   max-width: 360px;
 }
 
-.account-discord-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  padding: 12px 28px;
-  background: var(--brand-discord);
-  color: white;
-  border: none;
-  font-family: var(--font-body);
-  font-size: 15px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.2s;
-}
-
-.account-discord-btn:hover {
-  background: var(--brand-discord-hover);
-}
+/* .account-discord-btn visual styling lives in nerv-ui/button.css so the
+   pill renders correctly on every page (Theo, etc.), not just account.html. */
 
 /* Tab navigation */
 .account-tabs {
