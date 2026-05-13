@@ -17,8 +17,12 @@ server {
         add_header Expires "0";
     }
 
-    # Force index.html to always revalidate (loads new JS/CSS hashes)
-    location = /index.html {
+    # Force every HTML entry point to revalidate. Without this, a stale
+    # cached /theo.html (or any other entry) can reference an old hashed JS
+    # bundle that's no longer deployed — users keep running the previous
+    # version of the page until they hard-refresh. The hashed assets
+    # themselves stay cache-safe; only the HTML shells must always be fresh.
+    location ~* \.html$ {
         add_header Cache-Control "no-cache, no-store, must-revalidate";
     }
 
