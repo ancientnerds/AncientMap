@@ -12,17 +12,18 @@ Endpoints:
 import calendar
 import logging
 import os
-import secrets
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import httpx
+import jwt
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, field_validator
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from api.services import jwt_auth
 from api.services.jwt_auth import FOUNDER_ROLE_ID, create_token, get_current_user, require_founder
 from api.services.rate_limiter import RateLimiter, get_client_ip
 from pipeline.database import CreditGrant, DiscordUser, TokenUsageLog, get_session
@@ -163,16 +164,67 @@ def get_user_tier(roles: list[str]) -> str:
     return "free"
 
 
-# Simple in-memory CSRF state store (short-lived, cleared on restart is fine)
-# Each value is (timestamp, return_to_path)
-_oauth_states: dict[str, tuple[float, str]] = {}
-_OAUTH_STATE_CAP = 1000
+# OAuth state is signed with API_SECRET_KEY (HMAC via PyJWT) so it survives
+# API restarts. Previously a process-local dict — every deploy wiped pending
+# logins and users mid-flow saw "invalid_state". JWT also gives us a built-in
+# expiry check via `exp`, so no cleanup task is needed.
+_OAUTH_STATE_TTL_SECONDS = 600
+_OAUTH_STATE_AUDIENCE = "oauth_state"
 
-# Rate limit on OAuth redirects: 5 per minute per IP
-_oauth_limiter = RateLimiter(max_requests=5, window_seconds=60, namespace="oauth_redirect")
+# Rate limit on OAuth redirects: 15 per minute per IP. Was 5/min, but legitimate
+# users retrying after a flaky first attempt routinely tripped it.
+_oauth_limiter = RateLimiter(max_requests=15, window_seconds=60, namespace="oauth_redirect")
 
-# Rate limit on OAuth callbacks: 10 per minute per IP (prevent token exchange abuse)
-_callback_limiter = RateLimiter(max_requests=10, window_seconds=60, namespace="oauth_callback")
+# Rate limit on OAuth callbacks: 15 per minute per IP (prevent token exchange abuse)
+_callback_limiter = RateLimiter(max_requests=15, window_seconds=60, namespace="oauth_callback")
+
+_ALLOWED_RETURN_PATHS = frozenset(
+    {
+        "/",
+        "/account.html",
+        "/news.html",
+        "/game.html",
+        "/index.html",
+        "/theo.html",
+        "/cards.html",
+    }
+)
+
+
+def _create_oauth_state(return_to: str) -> str:
+    """Create a signed CSRF state token. Stateless — survives API restarts."""
+    if not jwt_auth.SECRET_KEY:
+        raise RuntimeError("API_SECRET_KEY not set — cannot sign OAuth state")
+    payload = {
+        "aud": _OAUTH_STATE_AUDIENCE,
+        "rt": return_to,
+        "exp": datetime.now(UTC) + timedelta(seconds=_OAUTH_STATE_TTL_SECONDS),
+        "iat": datetime.now(UTC),
+    }
+    return jwt.encode(payload, jwt_auth.SECRET_KEY, algorithm=jwt_auth.ALGORITHM)
+
+
+def _consume_oauth_state(state: str) -> str | None:
+    """Verify a signed state token and return its return_to path, or None.
+
+    Returns None for any failure (expired, tampered, wrong audience, return_to
+    not in allowlist). Callers must redirect to /account.html?error=... on None.
+    """
+    if not state or not jwt_auth.SECRET_KEY:
+        return None
+    try:
+        payload = jwt.decode(
+            state,
+            jwt_auth.SECRET_KEY,
+            algorithms=[jwt_auth.ALGORITHM],
+            audience=_OAUTH_STATE_AUDIENCE,
+        )
+    except jwt.PyJWTError:
+        return None
+    return_to = payload.get("rt")
+    if not isinstance(return_to, str) or return_to not in _ALLOWED_RETURN_PATHS:
+        return None
+    return return_to
 
 
 def _clamp_day(year: int, month: int, day: int) -> int:
@@ -318,14 +370,6 @@ def process_credit_grants(session: Session, user: DiscordUser) -> None:
                 )
 
 
-def _cleanup_states():
-    """Remove expired CSRF states (older than 10 minutes)."""
-    now = datetime.now(UTC).timestamp()
-    expired = [k for k, v in _oauth_states.items() if now - v[0] > 600]
-    for k in expired:
-        del _oauth_states[k]
-
-
 @router.get("/discord")
 async def discord_oauth_redirect(req: Request, return_to: str | None = None):
     """Redirect user to Discord OAuth2 authorization page."""
@@ -336,26 +380,11 @@ async def discord_oauth_redirect(req: Request, return_to: str | None = None):
     if not _oauth_limiter.check(client_ip):
         raise HTTPException(status_code=429, detail="Too many login attempts. Try again later.")
 
-    _cleanup_states()
-
-    if len(_oauth_states) >= _OAUTH_STATE_CAP:
-        raise HTTPException(status_code=429, detail="Too many pending logins. Try again later.")
-
-    # Sanitize return_to: allowlist known routes to prevent open redirect
-    _ALLOWED_RETURN_PATHS = {
-        "/",
-        "/account.html",
-        "/news.html",
-        "/game.html",
-        "/index.html",
-        "/theo.html",
-        "/cards.html",
-    }
+    # Allowlist return_to to prevent open redirect
     if not return_to or return_to not in _ALLOWED_RETURN_PATHS:
         return_to = "/account.html"
 
-    state = secrets.token_urlsafe(32)
-    _oauth_states[state] = (datetime.now(UTC).timestamp(), return_to)
+    state = _create_oauth_state(return_to)
 
     from urllib.parse import urlencode
 
@@ -386,13 +415,13 @@ async def discord_oauth_callback(
     if not code or not state:
         return RedirectResponse(url="/account.html?error=missing_params")
 
-    # Validate CSRF state (must exist and be less than 10 minutes old)
-    state_entry = _oauth_states.pop(state, None)
-    if state_entry is None:
+    # Validate CSRF state. _consume_oauth_state returns None for tampered,
+    # expired, or unknown-return-to tokens. PyJWT raises ExpiredSignatureError
+    # internally which we surface as invalid_state — the user sees one error
+    # code regardless of whether the state was forged or merely stale.
+    return_to = _consume_oauth_state(state)
+    if return_to is None:
         return RedirectResponse(url="/account.html?error=invalid_state")
-    state_ts, return_to = state_entry
-    if datetime.now(UTC).timestamp() - state_ts > 600:
-        return RedirectResponse(url="/account.html?error=expired_state")
 
     if not DISCORD_CLIENT_ID or not DISCORD_CLIENT_SECRET or not DISCORD_REDIRECT_URI:
         return RedirectResponse(url="/account.html?error=not_configured")

@@ -44,18 +44,18 @@ function readCookie(name: string): string | null {
   return match ? decodeURIComponent(match[1]) : null
 }
 
-function clearCookie(name: string) {
-  document.cookie = `${name}=; Max-Age=0; Path=/; SameSite=Lax; Secure`
-}
-
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null)
   const [token, setToken] = useState<string | null>(() => {
-    // Check cookie first (set by OAuth callback), then localStorage
+    // The OAuth callback sets a short-lived (120s) cookie that the frontend
+    // promotes into localStorage. We used to clear the cookie immediately
+    // after reading it, but in multi-tab setups that races: whichever tab
+    // mounted first stole the token and the others saw nothing. Now we let
+    // the cookie expire on its own — every tab gets to read it during the
+    // ~2 minute window, and they all end up with the same JWT in localStorage.
     const cookieToken = readCookie(COOKIE_NAME)
     if (cookieToken) {
       localStorage.setItem(TOKEN_KEY, cookieToken)
-      clearCookie(COOKIE_NAME)
       return cookieToken
     }
     return localStorage.getItem(TOKEN_KEY)
