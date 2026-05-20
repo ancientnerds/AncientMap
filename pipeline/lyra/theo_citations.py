@@ -489,9 +489,7 @@ def strip_existing_references_section(text: str) -> tuple[str, int]:
     return text[: m.start()].rstrip() + "\n", removed
 
 
-def strip_orphan_citation_markers(
-    text: str, valid_nums: set[int]
-) -> tuple[str, int]:
+def strip_orphan_citation_markers(text: str, valid_nums: set[int]) -> tuple[str, int]:
     """Remove `[N]` markers in prose where N is not in `valid_nums`.
 
     Orphan markers arise when the writer LLM cites a higher number than the
