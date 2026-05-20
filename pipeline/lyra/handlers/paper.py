@@ -1529,9 +1529,16 @@ class PaperHandler(BaseHandler):
             if not source_ids:
                 continue  # no support for this finding — drop it
 
+            # Prefer tier-1 (peer-reviewed) sources when both academic and
+            # non-academic support exists for the same finding. Mirrors the
+            # citation-injection logic in theo_citations.py.
+            from pipeline.lyra.theo_citations import prefer_tier_1_source_ids
+
+            chosen_source_ids = prefer_tier_1_source_ids(source_ids, self.state.registry)
+
             # Synthesize citations from source_ids via registry reference numbers
             ref_nums: list[int] = []
-            for sid in source_ids:
+            for sid in chosen_source_ids:
                 num = self.state.registry.reference_numbers.get(sid)
                 if num is None:
                     num = self.state.registry.assign_reference_number(sid)

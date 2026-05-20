@@ -216,10 +216,14 @@ class JudgeHandler(BaseHandler):
             undefined_title_terms = [
                 t for t, defined in coherence.title_terms_defined_in_body.items() if not defined
             ]
+            numeric_conflicts = list(getattr(coherence, "numeric_conflicts", []))
+            high_numeric_conflicts = sum(1 for c in numeric_conflicts if c.severity == "high")
         else:
             high_contradictions = 0
             medium_contradictions = 0
             undefined_title_terms = []
+            numeric_conflicts = []
+            high_numeric_conflicts = 0
 
         # Real passed gate — evidence-based, not hardcoded. The paper ships in
         # either case (the caller decides), but `passed` now truthfully signals
@@ -257,6 +261,8 @@ class JudgeHandler(BaseHandler):
             "hallucination_final": hall_metrics.get("final", 0),
             "high_contradictions": high_contradictions,
             "undefined_title_terms": len(undefined_title_terms),
+            "numeric_conflicts": len(numeric_conflicts),
+            "high_numeric_conflicts": high_numeric_conflicts,
         }
 
         result = {

@@ -3,11 +3,19 @@ You are a consistency checker for a research paper. Read the paper below and ret
 Check for:
 1. Contradictions: the paper takes two opposite stances on the same entity in different sections without framing them as opposing viewpoints.
 2. Title-term definitions: every multi-word phrase in the title must appear in the body of the paper.
+3. Numeric conflicts: two sections give measurably different values for what is plainly the same quantity (depth of the same shaft, start of the same climatic period, etc.).
 
-RULES:
+RULES (contradictions):
 - If a section labelled "The Other Side", "Counter-Arguments", or similar presents opposing positions deliberately, DO NOT flag those as contradictions. Only flag true cross-section contradictions where the paper silently takes opposite positions on the same subject in different sections.
 - Title-term check is case-insensitive substring match.
-- Contradictions have severity: "high" (opposite binary claims like 'exists' vs 'does not exist'), "medium" (opposite evaluative claims like 'supports the hypothesis' vs 'rejects the hypothesis'), "low" (nuance differences).
+- Contradiction severity: "high" (opposite binary claims like 'exists' vs 'does not exist'), "medium" (opposite evaluative claims like 'supports the hypothesis' vs 'rejects the hypothesis'), "low" (nuance differences).
+
+RULES (numeric conflicts):
+- We pre-extracted every measurement we found, listed below as `NUMERIC CLAIMS`. Use the surrounding sentence to judge whether two values refer to the same quantity.
+- Only flag conflicts that the author would call wrong on a re-read. Same shaft, different depth ranges (e.g. "25-30 m" in §1 and "30-35 m" in §3) = conflict. Different sites with different depths = NOT a conflict.
+- Tolerance: for ordinary measurements (m, km, %, °C…) a 5 % spread between cited values is acceptable; flag only larger gaps. For year-style values (BCE/CE/BP/Ma/ka/cal yr BP) require exact match — "14600 yr BP" vs "12058 cal yr BP" is a conflict.
+- For each conflict, propose a `suggested_resolution` (one short sentence) — either pick the better-sourced value, or rewrite both sections to use an explicit range.
+- Severity: "high" (numbers contradict a load-bearing claim), "medium" (the number anchors evidence), "low" (incidental detail).
 
 Output JSON:
 {
@@ -22,11 +30,25 @@ Output JSON:
     }
   ],
   "title_terms": ["...", "..."],
-  "title_terms_defined_in_body": {"term": true}
+  "title_terms_defined_in_body": {"term": true},
+  "numeric_conflicts": [
+    {
+      "entity": "...",
+      "section_a": "...",
+      "value_a": "...",
+      "section_b": "...",
+      "value_b": "...",
+      "suggested_resolution": "...",
+      "severity": "medium"
+    }
+  ]
 }
 
 PAPER TITLE:
 {title}
+
+NUMERIC CLAIMS (pre-extracted, section-tagged):
+{numeric_claims}
 
 PAPER BODY:
 {body}

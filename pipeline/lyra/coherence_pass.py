@@ -45,10 +45,106 @@ class Contradiction:
 
 
 @dataclass
+class NumericClaim:
+    """A measurement extracted from prose: 'The shaft descends 25-30 m...'."""
+
+    section: str
+    value_text: str  # raw match, e.g. "25-30 m"
+    unit: str
+    surrounding_sentence: str
+
+
+@dataclass
+class NumericConflict:
+    """Two sections of the same paper assert measurably different values for
+    what the LLM judges to be the same entity."""
+
+    entity: str
+    section_a: str
+    value_a: str
+    section_b: str
+    value_b: str
+    suggested_resolution: str
+    severity: Literal["high", "medium", "low"]
+
+
+@dataclass
 class CoherenceResult:
     contradictions: list[Contradiction] = field(default_factory=list)
     title_terms: list[str] = field(default_factory=list)
     title_terms_defined_in_body: dict[str, bool] = field(default_factory=dict)
+    numeric_claims: list[NumericClaim] = field(default_factory=list)
+    numeric_conflicts: list[NumericConflict] = field(default_factory=list)
+
+
+# Reuses the spirit of hallucination_gate's measurement regex, but with broader
+# unit coverage including paleoclimate / archaeology contexts (cal BP, kyr, BCE).
+_MEASUREMENT_RE = re.compile(
+    r"\b(?P<value>\d{1,5}(?:[.,]\d+)?(?:\s*[-–—]\s*\d{1,5}(?:[.,]\d+)?)?)"
+    r"\s*"
+    r"(?P<unit>m\b|meters?|km|miles?|feet|ft\b|cm|mm|kg|tons?|years?|kyr|ka\b|Ma\b|"
+    r"cal\s*(?:yr\s*)?BP|BCE|BC\b|CE\b|AD\b|°C|°F|%|g/m²)",
+    re.IGNORECASE,
+)
+
+# A heading marks a section. We accept ## and ### (anything deeper is rare).
+_SECTION_HEADING_RE = re.compile(r"^#{2,3}\s+(.+?)\s*$", re.MULTILINE)
+
+
+def _split_sections(body: str) -> list[tuple[str, str]]:
+    """Return [(section_title, section_text), ...] in document order.
+
+    Prose before the first heading is grouped under "(intro)".
+    """
+    headings = list(_SECTION_HEADING_RE.finditer(body))
+    if not headings:
+        return [("(intro)", body)]
+
+    out: list[tuple[str, str]] = []
+    if headings[0].start() > 0:
+        intro = body[: headings[0].start()].strip()
+        if intro:
+            out.append(("(intro)", intro))
+    for i, h in enumerate(headings):
+        start = h.end()
+        end = headings[i + 1].start() if i + 1 < len(headings) else len(body)
+        out.append((h.group(1).strip(), body[start:end].strip()))
+    return out
+
+
+# Sentence split — simple but good enough for measurement extraction. Splits on
+# `. `, `? `, `! ` followed by a capital letter or end of string.
+_SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?])\s+(?=[A-Z(])")
+
+
+def extract_numeric_claims(body: str) -> list[NumericClaim]:
+    """Walk the body section-by-section and capture every numeric measurement.
+
+    Output is the raw signal the LLM uses to reason about conflicts — we don't
+    try to group or normalize here. Grouping ("is this the shaft depth or the
+    water table depth?") needs semantic context the LLM provides.
+    """
+    claims: list[NumericClaim] = []
+    for section_title, section_text in _split_sections(body):
+        if not section_text:
+            continue
+        sentences = _SENTENCE_SPLIT_RE.split(section_text)
+        for sentence in sentences:
+            sentence = sentence.strip()
+            if not sentence:
+                continue
+            for m in _MEASUREMENT_RE.finditer(sentence):
+                value = m.group("value").strip()
+                unit = m.group("unit").strip()
+                claims.append(
+                    NumericClaim(
+                        section=section_title,
+                        value_text=f"{value} {unit}",
+                        unit=unit,
+                        surrounding_sentence=sentence[:240],
+                    )
+                )
+    return claims
 
 
 def extract_title_terms(title: str) -> list[str]:
@@ -106,6 +202,18 @@ def check_title_terms_in_body(terms: list[str], body: str) -> dict[str, bool]:
     return {t: (t.lower() in body_lc) for t in terms}
 
 
+def _format_numeric_claims_for_prompt(claims: list[NumericClaim]) -> str:
+    """Render extracted claims as a compact bullet list the LLM can scan."""
+    if not claims:
+        return "(none extracted)"
+    lines = []
+    for c in claims[:80]:  # cap to keep prompt manageable
+        lines.append(f"- [{c.section}] {c.value_text} — “{c.surrounding_sentence}”")
+    if len(claims) > 80:
+        lines.append(f"... and {len(claims) - 80} more")
+    return "\n".join(lines)
+
+
 async def run_coherence_pass(
     title: str,
     body: str,
@@ -113,12 +221,18 @@ async def run_coherence_pass(
     settings,
 ) -> CoherenceResult:
     """Run LLM coherence check. Safe on LLM failure — returns local-only
-    title-term check with empty contradictions so the paper still ships."""
+    title-term check + extracted numeric claims with empty conflicts so the
+    paper still ships."""
     title_terms = extract_title_terms(title)
     local_defs = check_title_terms_in_body(title_terms, body)
+    numeric_claims = extract_numeric_claims(body)
 
     prompt_template = (_PROMPTS / "coherence_pass.txt").read_text(encoding="utf-8")
-    prompt_filled = prompt_template.replace("{title}", title).replace("{body}", body[:8000])
+    prompt_filled = (
+        prompt_template.replace("{title}", title)
+        .replace("{body}", body[:8000])
+        .replace("{numeric_claims}", _format_numeric_claims_for_prompt(numeric_claims))
+    )
 
     try:
         raw = await llm_call(prompt_filled, "", 2048, settings, 0.2)
@@ -129,6 +243,8 @@ async def run_coherence_pass(
             contradictions=[],
             title_terms=title_terms,
             title_terms_defined_in_body=local_defs,
+            numeric_claims=numeric_claims,
+            numeric_conflicts=[],
         )
 
     contradictions = [
@@ -143,6 +259,19 @@ async def run_coherence_pass(
         for c in data.get("contradictions", [])
         if c.get("entity")
     ]
+    numeric_conflicts = [
+        NumericConflict(
+            entity=c.get("entity", ""),
+            section_a=c.get("section_a", ""),
+            value_a=c.get("value_a", ""),
+            section_b=c.get("section_b", ""),
+            value_b=c.get("value_b", ""),
+            suggested_resolution=c.get("suggested_resolution", ""),
+            severity=c.get("severity", "low"),
+        )
+        for c in data.get("numeric_conflicts", [])
+        if c.get("entity") and c.get("value_a") and c.get("value_b")
+    ]
     # Local substring check is authoritative for title-term definitions.
     # The LLM may claim a term is defined based on paraphrase; we require the
     # exact phrase from the title to appear.
@@ -151,4 +280,6 @@ async def run_coherence_pass(
         contradictions=contradictions,
         title_terms=title_terms,
         title_terms_defined_in_body=defs,
+        numeric_claims=numeric_claims,
+        numeric_conflicts=numeric_conflicts,
     )

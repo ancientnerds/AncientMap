@@ -38,6 +38,14 @@ class CitedSource:
     reliability_tier: int = 0  # 1=academic/institutional, 2=reputable, 3=general, 0=unscored
     access_timestamp: str = ""  # ISO timestamp when searched
     search_query: str = ""  # which query found this source
+    # Academic metadata — present when the discovering adapter (Semantic
+    # Scholar / OpenAlex / CrossRef / CORE) returned them. format_references_list
+    # uses these to emit a rich citation when DOI is set; absence falls back to
+    # the legacy `[N] Title — URL` shape.
+    doi: str = ""
+    authors: list[str] = field(default_factory=list)
+    venue: str = ""  # journal / conference name
+    citation_count: int = 0
 
 
 @dataclass
@@ -70,6 +78,10 @@ class CitationRegistry:
         snippet: str,
         date: str = "",
         search_query: str = "",
+        doi: str = "",
+        authors: list[str] | None = None,
+        venue: str = "",
+        citation_count: int = 0,
     ) -> str:
         """Register a web source. Returns source id. Deduplicates by canonical URL hash.
 
@@ -77,11 +89,26 @@ class CitationRegistry:
         preprint URLs, tracking-tagged URLs, and www-prefixed variants all
         collapse to a single source. The first-seen original URL is preserved
         on CitedSource.url for display.
+
+        Academic metadata (doi/authors/venue/citation_count) is merged on
+        re-registration: if a later adapter discovers the same URL with richer
+        fields, those overwrite empty ones on the existing record. Non-empty
+        fields are preserved (first writer wins for conflicting values).
         """
         canonical = _normalize_url(url)
         source_id = hashlib.sha256(canonical.encode()).hexdigest()[:12]
+        authors = authors or []
 
         if source_id in self.sources:
+            existing = self.sources[source_id]
+            if doi and not existing.doi:
+                existing.doi = doi
+            if authors and not existing.authors:
+                existing.authors = authors
+            if venue and not existing.venue:
+                existing.venue = venue
+            if citation_count and not existing.citation_count:
+                existing.citation_count = citation_count
             return source_id
 
         parsed = urllib.parse.urlparse(url)
@@ -99,6 +126,10 @@ class CitationRegistry:
             reliability_tier=score_tier_by_domain(url),
             access_timestamp=datetime.now(UTC).isoformat(),
             search_query=search_query,
+            doi=doi,
+            authors=authors,
+            venue=venue,
+            citation_count=citation_count,
         )
         return source_id
 
@@ -153,7 +184,17 @@ class CitationRegistry:
 
         Only includes sources that were assigned reference numbers.
         Sorted by reference number.
-        Format: [N] Title — URL (accessed YYYY-MM-DD) [Tier label]
+
+        Two formats emitted, depending on metadata richness:
+
+        * **Rich (academic)** — used when the source has a DOI, at least one
+          author, a venue, and a parseable year. Shape:
+              [N] Authors (YYYY). Title. Venue. DOI: 10.xxx/yyy (accessed YYYY-MM-DD) [Academic]
+
+        * **Legacy** — fallback for sources missing any of those fields
+          (Wikipedia, YouTube, news, blogs). Shape:
+              [N] Title — URL (accessed YYYY-MM-DD) [Tier label]
+
         Tier labels: [Academic] for tier 1, [Reputable] for tier 2, omit for tier 3.
         """
         if not self.reference_numbers:
@@ -167,10 +208,7 @@ class CitationRegistry:
             if source is None:
                 continue
 
-            # Extract YYYY-MM-DD from ISO access_timestamp
-            accessed_date = ""
-            if source.access_timestamp:
-                accessed_date = source.access_timestamp[:10]
+            accessed_date = source.access_timestamp[:10] if source.access_timestamp else ""
 
             tier_label = ""
             if source.reliability_tier == 1:
@@ -178,13 +216,60 @@ class CitationRegistry:
             elif source.reliability_tier == 2:
                 tier_label = " [Reputable]"
 
-            line = f"[{num}] {source.title} — {source.url}"
+            year = _extract_year_from_date(source.date)
+            use_rich = bool(source.doi and source.authors and source.venue and year)
+
+            if use_rich:
+                authors_str = _format_authors_block(source.authors)
+                line = (
+                    f"[{num}] {authors_str} ({year}). "
+                    f"{source.title}. {source.venue}. DOI: {source.doi}"
+                )
+            else:
+                line = f"[{num}] {source.title} — {source.url}"
+
             if accessed_date:
                 line += f" (accessed {accessed_date})"
             line += tier_label
             lines.append(line)
 
         return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
+# Reference formatting helpers
+# ---------------------------------------------------------------------------
+
+
+def _format_authors_block(authors: list[str]) -> str:
+    """Join an author list using academic convention.
+
+    * 1 author: ``Smith, J.``
+    * 2 authors: ``Smith, J. and Jones, K.``
+    * 3+ authors: ``Smith, J., Jones, K., and Lee, M.``
+
+    No "et al." truncation — the writer/judge can decide whether to cap a
+    rendered list visually, but the raw bibliography keeps every name.
+    """
+    if not authors:
+        return ""
+    if len(authors) == 1:
+        return authors[0]
+    if len(authors) == 2:
+        return f"{authors[0]} and {authors[1]}"
+    return ", ".join(authors[:-1]) + f", and {authors[-1]}"
+
+
+def _extract_year_from_date(date_str: str) -> int | None:
+    """Pull a 4-digit year from a free-form date string.
+
+    Adapters return ``date`` in mixed shapes (``2024``, ``2024-03-15``,
+    ``March 2024``…). We just grab the first 1xxx/20xx year we see.
+    """
+    if not date_str:
+        return None
+    m = re.search(r"\b(1\d{3}|20\d{2})\b", date_str)
+    return int(m.group(1)) if m else None
 
 
 # ---------------------------------------------------------------------------
@@ -777,6 +862,33 @@ def _significant_tokens(text: str) -> set[str]:
     return {w for w in raw if len(w) >= 4 and w not in _TOKENIZE_STOPWORDS}
 
 
+def prefer_tier_1_source_ids(source_ids: list[str], registry: CitationRegistry) -> list[str]:
+    """Drop tier-2/3 source ids when at least one tier-1 source supports the same claim.
+
+    Theo's source pool intentionally spans peer-reviewed journals, museum
+    pages, Wikipedia, YouTube transcripts, and web search results. When a
+    single claim is supported by both a tier-1 (DOI / academic) source and
+    several tier-3 (YouTube / web) sources, we cite only the tier-1 — the
+    YouTube transcript is no longer load-bearing for that claim. Tier-2/3
+    sources remain available when they are the ONLY support for a claim.
+
+    Unknown source ids (not yet in registry.sources) pass through unchanged
+    in the "other" bucket — downstream code synthesises a reference number
+    for them and `prune_unrenderable_references` cleans up if they never
+    resolve. The point of this filter is to favour known academic sources,
+    not to drop unfamiliar ones.
+    """
+    tier_1: list[str] = []
+    other: list[str] = []
+    for sid in source_ids:
+        src = registry.sources.get(sid)
+        if src is not None and src.reliability_tier == 1:
+            tier_1.append(sid)
+        else:
+            other.append(sid)
+    return tier_1 if tier_1 else other
+
+
 def inject_citation_for_paragraph(
     paragraph: str,
     registry: CitationRegistry,
@@ -834,10 +946,15 @@ def inject_citation_for_paragraph(
     # Resolve source_ids → reference numbers, assigning new ones for any
     # source the writer didn't already cite. The new numbers will surface in
     # format_references_list() since it iterates reference_numbers in order.
+    #
+    # Apply tier preference BEFORE assigning numbers: if any source on this
+    # claim is tier-1 (peer-reviewed), drop tier-2/3 sources from this
+    # citation. This prevents YouTube transcripts from getting reference
+    # numbers when a DOI-bearing alternative exists. Tier-3 sources keep
+    # their slot in the registry and can still get numbered by other claims.
+    chosen_sids = prefer_tier_1_source_ids(best_claim.source_ids, registry)
     nums: list[int] = []
-    for sid in best_claim.source_ids:
-        if sid not in registry.sources:
-            continue
+    for sid in chosen_sids:
         num = registry.reference_numbers.get(sid)
         if num is None:
             num = registry.assign_reference_number(sid)
@@ -1165,11 +1282,25 @@ def _find_references_heading(text: str) -> int | None:
 # ResearchPaperPage.tsx:parseReferences — keep field names aligned)
 # ---------------------------------------------------------------------------
 
-# Match a single references-list line: "[N] Title — URL (accessed YYYY-MM-DD) [Tier]"
+# Legacy line: "[N] Title — URL (accessed YYYY-MM-DD) [Tier]"
 # Dash variants accepted: em-dash (— U+2014), en-dash (– U+2013), ascii " - ".
 _REF_LINE_RE = re.compile(
     r"^\[(?P<num>\d+)\]\s+(?P<title>.+?)\s+[—–-]\s+"
     r"(?P<url>https?://\S+)"
+    r"(?:\s+\(accessed\s+(?P<accessed>\d{4}-\d{2}-\d{2})\))?"
+    r"(?:\s+\[(?P<tier>Academic|Reputable)\])?"
+    r"\s*$"
+)
+
+# Rich (academic) line: "[N] Authors (YYYY). Title. Venue. DOI: 10.xxx/yyy
+# (accessed YYYY-MM-DD) [Academic]". The `(YYYY).` anchor disambiguates the
+# author block from title text; venue and DOI are required for this format.
+_RICH_REF_LINE_RE = re.compile(
+    r"^\[(?P<num>\d+)\]\s+"
+    r"(?P<authors>.+?)\s+\((?P<year>\d{4})\)\.\s+"
+    r"(?P<title>.+?)\.\s+"
+    r"(?P<venue>.+?)\.\s+"
+    r"DOI:\s+(?P<doi>\S+?)"
     r"(?:\s+\(accessed\s+(?P<accessed>\d{4}-\d{2}-\d{2})\))?"
     r"(?:\s+\[(?P<tier>Academic|Reputable)\])?"
     r"\s*$"
@@ -1180,7 +1311,8 @@ def parse_references_section(refs_text: str) -> list[dict]:
     """Parse a `## References` body into structured dicts.
 
     Input: the text AFTER the `## References` heading (the markdown list of refs).
-    Output: list of {num, title, url, accessed, tier_label} dicts, in input order.
+    Output: list of dicts with keys {num, title, url, accessed, tier_label,
+    authors, year, venue, doi} (rich-format-only keys may be None).
     Unparseable lines are skipped silently — they're preserved by the PATCH
     handler via the raw `## References` split rather than by this parser.
     """
@@ -1189,6 +1321,27 @@ def parse_references_section(refs_text: str) -> list[dict]:
         stripped = line.strip()
         if not stripped:
             continue
+
+        # Try rich format first — its anchor `(YYYY).` is specific enough that
+        # it won't accidentally match a legacy `Title — URL` line.
+        m = _RICH_REF_LINE_RE.match(stripped)
+        if m:
+            doi = m.group("doi")
+            out.append(
+                {
+                    "num": int(m.group("num")),
+                    "title": m.group("title"),
+                    "url": f"https://doi.org/{doi}",
+                    "accessed": m.group("accessed"),
+                    "tier_label": m.group("tier"),
+                    "authors": m.group("authors"),
+                    "year": int(m.group("year")),
+                    "venue": m.group("venue"),
+                    "doi": doi,
+                }
+            )
+            continue
+
         m = _REF_LINE_RE.match(stripped)
         if not m:
             continue
@@ -1197,8 +1350,12 @@ def parse_references_section(refs_text: str) -> list[dict]:
                 "num": int(m.group("num")),
                 "title": m.group("title"),
                 "url": m.group("url"),
-                "accessed": m.group("accessed"),  # may be None
-                "tier_label": m.group("tier"),  # "Academic", "Reputable", or None
+                "accessed": m.group("accessed"),
+                "tier_label": m.group("tier"),
+                "authors": None,
+                "year": None,
+                "venue": None,
+                "doi": None,
             }
         )
     return out

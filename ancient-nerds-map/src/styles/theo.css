@@ -2927,6 +2927,32 @@
   font-size: 11.5px;
 }
 
+/* --- Rich (academic) reference layout — Authors (Year). Title. Venue. DOI --- */
+.theo-ref-academic {
+  display: inline;
+  line-height: 1.55;
+}
+.theo-ref-authors {
+  color: var(--text-primary);
+}
+.theo-ref-year {
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.theo-ref-venue {
+  color: var(--text-muted);
+  font-style: italic;
+}
+.theo-ref-doi {
+  color: var(--brand-primary);
+  text-decoration: none;
+  font-family: var(--font-mono, "JetBrains Mono", "Fira Code", monospace);
+  font-size: 11.5px;
+}
+.theo-ref-doi:hover {
+  text-decoration: underline;
+}
+
 /* --- Inline citation anchors (body [N] links) --- */
 .theo-cite-link {
   color: var(--brand-primary);

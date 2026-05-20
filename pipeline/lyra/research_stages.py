@@ -210,6 +210,10 @@ def _stage_search(
             title=r.title,
             snippet=r.snippet,
             date=r.date,
+            doi=r.doi,
+            authors=r.authors,
+            venue=r.venue,
+            citation_count=r.citation_count,
         )
         source = registry.get_reference(sid)
         if source and source.reliability_tier == 0:

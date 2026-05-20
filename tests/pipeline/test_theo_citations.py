@@ -50,6 +50,85 @@ def test_register_source_sets_timestamp():
     assert re.match(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}", ts)
 
 
+def test_register_source_preserves_academic_metadata():
+    """When the discovering adapter has DOI/authors/venue, those flow into CitedSource."""
+    registry = CitationRegistry()
+    sid = registry.register_source(
+        url="https://doi.org/10.1002/gea.3340100203",
+        title="Geologic weathering and the age of the sphinx",
+        snippet="...",
+        date="1995-01-01",
+        doi="10.1002/gea.3340100203",
+        authors=["Lal Gauri, K.", "Sinai, J.J.", "Bandyopadhyay, J.K."],
+        venue="Geoarchaeology",
+        citation_count=87,
+    )
+    source = registry.sources[sid]
+    assert source.doi == "10.1002/gea.3340100203"
+    assert source.authors == ["Lal Gauri, K.", "Sinai, J.J.", "Bandyopadhyay, J.K."]
+    assert source.venue == "Geoarchaeology"
+    assert source.citation_count == 87
+
+
+def test_register_source_defaults_metadata_to_empty():
+    """Callers without academic metadata get empty defaults (no crash on missing kwargs)."""
+    registry = CitationRegistry()
+    sid = registry.register_source("https://youtu.be/abc123", "Some video", "snippet")
+    source = registry.sources[sid]
+    assert source.doi == ""
+    assert source.authors == []
+    assert source.venue == ""
+    assert source.citation_count == 0
+
+
+def test_register_source_merges_metadata_on_dedup():
+    """If the same URL is re-registered with richer fields, empty ones get filled in.
+
+    Pipeline scenario: Wikipedia adapter discovers a DOI link with no metadata,
+    then OpenAlex adapter discovers the same paper with full citation data. The
+    second registration should enrich the first record, not be discarded.
+    """
+    registry = CitationRegistry()
+    sid1 = registry.register_source(
+        url="https://doi.org/10.1002/gea.3340100203",
+        title="Sphinx weathering paper",
+        snippet="...",
+    )
+    sid2 = registry.register_source(
+        url="https://doi.org/10.1002/gea.3340100203",
+        title="Sphinx weathering paper (longer)",
+        snippet="...",
+        doi="10.1002/gea.3340100203",
+        authors=["Lal Gauri, K.", "Sinai, J.J."],
+        venue="Geoarchaeology",
+        citation_count=87,
+    )
+    assert sid1 == sid2  # same source, deduped
+    source = registry.sources[sid1]
+    assert source.doi == "10.1002/gea.3340100203"
+    assert source.authors == ["Lal Gauri, K.", "Sinai, J.J."]
+    assert source.venue == "Geoarchaeology"
+    assert source.citation_count == 87
+
+
+def test_register_source_preserves_first_writer_metadata():
+    """First non-empty metadata wins on conflict; doesn't get overwritten by a later registration."""
+    registry = CitationRegistry()
+    sid1 = registry.register_source(
+        url="https://doi.org/10.1234/foo",
+        title="First",
+        snippet="...",
+        venue="Nature",
+    )
+    registry.register_source(
+        url="https://doi.org/10.1234/foo",
+        title="Second",
+        snippet="...",
+        venue="Science",  # different — should NOT overwrite "Nature"
+    )
+    assert registry.sources[sid1].venue == "Nature"
+
+
 # ---------------------------------------------------------------------------
 # assign_reference_number
 # ---------------------------------------------------------------------------
@@ -1173,3 +1252,273 @@ def test_format_references_list_one_source_per_entry():
         # At most one URL per line
         url_count = line.count("http://") + line.count("https://")
         assert url_count <= 1, f"Reference line packs multiple URLs: {line!r}"
+
+
+# ---------------------------------------------------------------------------
+# Tier-preference filter
+# ---------------------------------------------------------------------------
+
+
+def test_prefer_tier_1_source_ids_drops_lower_tiers_when_academic_available():
+    """Mixed-tier claim: only the academic source survives the filter."""
+    from pipeline.lyra.theo_citations import prefer_tier_1_source_ids
+
+    registry = CitationRegistry()
+    academic = registry.register_source("https://doi.org/10.x/y", "Academic", "s")
+    registry.sources[academic].reliability_tier = 1
+    youtube = registry.register_source("https://youtu.be/abc", "YT", "s")
+    registry.sources[youtube].reliability_tier = 3
+    wiki = registry.register_source("https://en.wikipedia.org/wiki/X", "Wiki", "s")
+    registry.sources[wiki].reliability_tier = 2
+
+    chosen = prefer_tier_1_source_ids([youtube, academic, wiki], registry)
+    assert chosen == [academic]
+
+
+def test_prefer_tier_1_source_ids_keeps_all_when_no_academic():
+    """Without any tier-1, all sources (in original order) are preserved."""
+    from pipeline.lyra.theo_citations import prefer_tier_1_source_ids
+
+    registry = CitationRegistry()
+    youtube = registry.register_source("https://youtu.be/abc", "YT", "s")
+    registry.sources[youtube].reliability_tier = 3
+    wiki = registry.register_source("https://en.wikipedia.org/wiki/X", "Wiki", "s")
+    registry.sources[wiki].reliability_tier = 2
+
+    chosen = prefer_tier_1_source_ids([youtube, wiki], registry)
+    assert chosen == [youtube, wiki]
+
+
+def test_prefer_tier_1_source_ids_keeps_unknown_sids_in_other_bucket():
+    """Unregistered SIDs pass through in the 'other' bucket — downstream code
+    is responsible for resolving them. Dropping them here would break flows
+    that assign reference numbers before the source is fully registered."""
+    from pipeline.lyra.theo_citations import prefer_tier_1_source_ids
+
+    registry = CitationRegistry()
+    real = registry.register_source("https://real.example/", "Real", "s")
+    registry.sources[real].reliability_tier = 2
+    chosen = prefer_tier_1_source_ids(["does-not-exist", real], registry)
+    assert "does-not-exist" in chosen
+    assert real in chosen
+
+
+def test_prefer_tier_1_source_ids_still_drops_other_bucket_when_tier_1_wins():
+    """When a tier-1 source is present, unknown sids in the 'other' bucket
+    are dropped along with tier-2/3 — academic source is load-bearing."""
+    from pipeline.lyra.theo_citations import prefer_tier_1_source_ids
+
+    registry = CitationRegistry()
+    academic = registry.register_source("https://doi.org/10.x/y", "Academic", "s")
+    registry.sources[academic].reliability_tier = 1
+    chosen = prefer_tier_1_source_ids(["unknown-sid", academic], registry)
+    assert chosen == [academic]
+
+
+def test_inject_citation_for_paragraph_uses_tier_preference():
+    """Paragraph injection emits only tier-1 [N] markers when the claim has both."""
+    from pipeline.lyra.theo_citations import inject_citation_for_paragraph
+
+    registry = CitationRegistry()
+    academic = registry.register_source(
+        "https://doi.org/10.x/y", "Sphinx weathering paper", "Limestone weathering."
+    )
+    registry.sources[academic].reliability_tier = 1
+    youtube = registry.register_source(
+        "https://youtu.be/abc", "Random video", "Some video about pyramids."
+    )
+    registry.sources[youtube].reliability_tier = 3
+
+    claim_text = (
+        "Limestone weathering produces vertical grooves on the Sphinx enclosure walls "
+        "consistent with rainfall erosion documented across the Giza Plateau."
+    )
+    registry.add_claim(claim_text, [youtube, academic])
+
+    paragraph = (
+        "Vertical grooves on the Sphinx enclosure walls show limestone weathering "
+        "consistent with rainfall erosion patterns documented across the Giza Plateau."
+    )
+    out = inject_citation_for_paragraph(
+        paragraph, registry, min_overlap_ratio=0.4, min_overlap_words=4
+    )
+    assert out is not None
+    # Tier-1 source gets a [N]; tier-3 should not.
+    assert registry.reference_numbers.get(academic) is not None
+    assert registry.reference_numbers.get(youtube) is None
+    n_academic = registry.reference_numbers[academic]
+    assert f"[{n_academic}]" in out
+
+
+# ---------------------------------------------------------------------------
+# Rich (academic) reference format
+# ---------------------------------------------------------------------------
+
+
+def test_format_references_emits_rich_format_when_full_metadata_present():
+    """DOI + authors + venue + parseable year unlock the academic citation shape."""
+    registry = CitationRegistry()
+    sid = registry.register_source(
+        url="https://doi.org/10.1002/gea.3340100203",
+        title="Geologic weathering and its implications on the age of the sphinx",
+        snippet="...",
+        date="1995-01-15",
+        doi="10.1002/gea.3340100203",
+        authors=["Lal Gauri, K.", "Sinai, J.J.", "Bandyopadhyay, J.K."],
+        venue="Geoarchaeology",
+    )
+    registry.sources[sid].reliability_tier = 1
+    registry.assign_reference_number(sid)
+    refs = registry.format_references_list()
+    assert "Lal Gauri, K., Sinai, J.J., and Bandyopadhyay, J.K." in refs
+    assert "(1995)" in refs
+    assert "Geoarchaeology" in refs
+    assert "DOI: 10.1002/gea.3340100203" in refs
+    assert "[Academic]" in refs
+    # Rich format does NOT include the raw URL; the DOI is the canonical anchor.
+    assert "https://doi.org/10.1002/gea.3340100203" not in refs
+
+
+def test_format_references_falls_back_to_legacy_when_doi_missing():
+    """YouTube / Wikipedia / blog sources keep the existing [N] Title — URL shape."""
+    registry = CitationRegistry()
+    sid = registry.register_source(
+        url="https://youtu.be/abc123",
+        title="Some video",
+        snippet="snippet",
+    )
+    registry.sources[sid].reliability_tier = 3
+    registry.assign_reference_number(sid)
+    refs = registry.format_references_list()
+    assert "[1] Some video — https://youtu.be/abc123" in refs
+    assert "DOI:" not in refs
+
+
+def test_format_references_falls_back_when_authors_missing():
+    """A DOI alone (no authors / no venue) is not enough — drop to legacy."""
+    registry = CitationRegistry()
+    sid = registry.register_source(
+        url="https://doi.org/10.x/y",
+        title="Paper",
+        snippet="s",
+        doi="10.x/y",
+        venue="Some Journal",
+    )
+    registry.sources[sid].reliability_tier = 1
+    registry.assign_reference_number(sid)
+    refs = registry.format_references_list()
+    assert "[1] Paper — https://doi.org/10.x/y" in refs
+    assert "DOI:" not in refs
+
+
+def test_format_references_falls_back_when_year_unparseable():
+    """No year in `date` → not enough for academic shape; legacy emitted instead."""
+    registry = CitationRegistry()
+    sid = registry.register_source(
+        url="https://doi.org/10.x/y",
+        title="Untimed Paper",
+        snippet="s",
+        date="",
+        doi="10.x/y",
+        authors=["Smith, J."],
+        venue="Journal",
+    )
+    registry.sources[sid].reliability_tier = 1
+    registry.assign_reference_number(sid)
+    refs = registry.format_references_list()
+    assert "Untimed Paper — https://doi.org/10.x/y" in refs
+    assert "DOI:" not in refs
+
+
+def test_format_references_single_author_no_and():
+    """Single-author block doesn't synthesize an 'and'."""
+    registry = CitationRegistry()
+    sid = registry.register_source(
+        url="https://doi.org/10.x/y",
+        title="Solo work",
+        snippet="s",
+        date="2020",
+        doi="10.x/y",
+        authors=["Solo, A."],
+        venue="Journal X",
+    )
+    registry.sources[sid].reliability_tier = 1
+    registry.assign_reference_number(sid)
+    refs = registry.format_references_list()
+    assert "[1] Solo, A. (2020). Solo work. Journal X. DOI: 10.x/y" in refs
+
+
+def test_format_references_two_authors_uses_and_without_comma():
+    """Two-author block uses 'A and B', not 'A, and B'."""
+    registry = CitationRegistry()
+    sid = registry.register_source(
+        url="https://doi.org/10.x/y",
+        title="Duet",
+        snippet="s",
+        date="2021",
+        doi="10.x/y",
+        authors=["A, B.", "C, D."],
+        venue="JJ",
+    )
+    registry.sources[sid].reliability_tier = 1
+    registry.assign_reference_number(sid)
+    refs = registry.format_references_list()
+    assert "A, B. and C, D. (2021)" in refs
+
+
+def test_parse_references_section_handles_rich_format():
+    """parse_references_section reads back the rich academic shape."""
+    refs = (
+        "[1] Lal Gauri, K., Sinai, J.J., and Bandyopadhyay, J.K. (1995). "
+        "Geologic weathering and its implications on the age of the sphinx. "
+        "Geoarchaeology. DOI: 10.1002/gea.3340100203 (accessed 2026-05-13) [Academic]"
+    )
+    parsed = parse_references_section(refs)
+    assert len(parsed) == 1
+    entry = parsed[0]
+    assert entry["num"] == 1
+    assert entry["title"] == "Geologic weathering and its implications on the age of the sphinx"
+    assert entry["venue"] == "Geoarchaeology"
+    assert entry["year"] == 1995
+    assert entry["doi"] == "10.1002/gea.3340100203"
+    assert entry["authors"] == "Lal Gauri, K., Sinai, J.J., and Bandyopadhyay, J.K."
+    assert entry["accessed"] == "2026-05-13"
+    assert entry["tier_label"] == "Academic"
+    # URL synthesized from DOI so downstream link rendering still works.
+    assert entry["url"] == "https://doi.org/10.1002/gea.3340100203"
+
+
+def test_parse_references_section_mixed_formats():
+    """Rich and legacy lines coexist in the same References block."""
+    refs = (
+        "[1] Smith, J. (2020). A paper. Journal. DOI: 10.x/y (accessed 2026-01-01) [Academic]\n"
+        "[2] Blog post — https://blog.example.com/post"
+    )
+    parsed = parse_references_section(refs)
+    assert len(parsed) == 2
+    assert parsed[0]["doi"] == "10.x/y"
+    assert parsed[0]["authors"] == "Smith, J."
+    assert parsed[1]["doi"] is None
+    assert parsed[1]["url"] == "https://blog.example.com/post"
+
+
+def test_parse_references_round_trip_rich():
+    """format_references_list → parse_references_section preserves the structure."""
+    registry = CitationRegistry()
+    sid = registry.register_source(
+        url="https://doi.org/10.1234/abc",
+        title="Roundtrip paper",
+        snippet="...",
+        date="2024-06-01",
+        doi="10.1234/abc",
+        authors=["First, A.", "Second, B."],
+        venue="Nature",
+    )
+    registry.sources[sid].reliability_tier = 1
+    registry.assign_reference_number(sid)
+    refs_text = registry.format_references_list()
+    parsed = parse_references_section(refs_text)
+    assert len(parsed) == 1
+    assert parsed[0]["doi"] == "10.1234/abc"
+    assert parsed[0]["venue"] == "Nature"
+    assert parsed[0]["year"] == 2024

@@ -57,6 +57,14 @@ interface Reference {
   url: string
   accessed?: string
   group: RefGroup
+  // Academic metadata — populated only when the backend emits the rich format
+  // (`[N] Authors (YYYY). Title. Venue. DOI: 10.xxx/yyy`). Legacy entries
+  // (YouTube, Wikipedia, blog) leave these undefined and fall back to the
+  // existing one-line rendering.
+  authors?: string
+  year?: number
+  venue?: string
+  doi?: string
 }
 
 const GROUP_ORDER: RefGroup[] = ['Academic', 'Reputable', 'PDF', 'Video', 'Other']
@@ -93,44 +101,71 @@ function splitBodyAndRefs(report: string): { body: string; refsText: string } {
   return { body, refsText }
 }
 
+// Rich (academic) ref pattern. Mirrors theo_citations.py `_RICH_REF_LINE_RE`.
+// Shape: `[N] Authors (YYYY). Title. Venue. DOI: 10.xxx/yyy (accessed YYYY-MM-DD) [Academic]`
+const RICH_REF_RE =
+  /^\[(\d+)\]\s+(.+?)\s+\((\d{4})\)\.\s+(.+?)\.\s+(.+?)\.\s+DOI:\s+(\S+?)(?:\s+\(accessed\s+(\d{4}-\d{2}-\d{2})\))?(?:\s+\[(Academic|Reputable)\])?\s*$/
+
 /**
  * Parse the references section into structured records and group them.
- * Line format (from CitationRegistry.format_references_list):
- *   `[N] Title — URL (accessed YYYY-MM-DD) [Tier]`
- * Tier is optional; mdash may be rendered as `—` or ` - `.
+ *
+ * Two formats are accepted in the same list:
+ * - Rich (academic): `[N] Authors (YYYY). Title. Venue. DOI: 10.xxx/yyy (accessed YYYY-MM-DD) [Academic]`
+ * - Legacy: `[N] Title — URL (accessed YYYY-MM-DD) [Tier]`
+ *
+ * The rich shape's `(YYYY).` anchor is specific enough that we can try it
+ * first without confusing the legacy parser.
  */
 function parseReferences(refsText: string): Reference[] {
   if (!refsText.trim()) return []
 
   const refs: Reference[] = []
-  // Each line is one entry; ignore blank lines.
   for (const rawLine of refsText.split('\n')) {
     const line = rawLine.trim()
     if (!line) continue
 
-    // Match `[N] ...`
+    // Try rich format first
+    const richMatch = line.match(RICH_REF_RE)
+    if (richMatch) {
+      const [, numStr, authors, yearStr, rawTitle, venue, doi, accessed, tier] = richMatch
+      const num = parseInt(numStr, 10)
+      const cleanTitle = rawTitle.replace(/^\[PDF\]\s*/, '')
+      let group: RefGroup
+      if (tier === 'Academic') group = 'Academic'
+      else if (tier === 'Reputable') group = 'Reputable'
+      else group = 'Academic'  // DOI-bearing ref defaults to Academic group
+      refs.push({
+        num,
+        title: cleanTitle,
+        url: `https://doi.org/${doi}`,
+        accessed: accessed || undefined,
+        group,
+        authors,
+        year: parseInt(yearStr, 10),
+        venue,
+        doi,
+      })
+      continue
+    }
+
+    // Legacy `[N] Title — URL (accessed YYYY-MM-DD) [Tier]`
     const numMatch = line.match(/^\[(\d+)\]\s+(.+)$/)
     if (!numMatch) continue
     const num = parseInt(numMatch[1], 10)
     const rest = numMatch[2]
 
-    // Split title/URL on `—` (em-dash) or ` - ` — we emit em-dash in Python but
-    // be lenient for manually edited entries.
     const dashMatch = rest.match(/^(.+?)\s+[—–-]\s+(https?:\/\/\S+)(.*)$/)
     if (!dashMatch) continue
     const title = dashMatch[1].trim()
     const url = dashMatch[2].trim()
     const tail = dashMatch[3] || ''
 
-    // Optional: `(accessed YYYY-MM-DD)`
     const accessedMatch = tail.match(/\(accessed\s+(\d{4}-\d{2}-\d{2})\)/)
     const accessed = accessedMatch ? accessedMatch[1] : undefined
 
-    // Optional: `[Tier]` — Academic / Reputable
     const tierMatch = tail.match(/\[(Academic|Reputable)\]/)
     const tierLabel = tierMatch ? tierMatch[1] : null
 
-    // Classify into visual group
     let group: RefGroup
     if (tierLabel === 'Academic') group = 'Academic'
     else if (tierLabel === 'Reputable') group = 'Reputable'
@@ -138,9 +173,7 @@ function parseReferences(refsText: string): Reference[] {
     else if (/^\[PDF\]/.test(title) || /\.pdf(?:$|\?)/.test(url)) group = 'PDF'
     else group = 'Other'
 
-    // Strip the `[PDF]` prefix Google adds to some titles — cosmetic
     const cleanTitle = title.replace(/^\[PDF\]\s*/, '')
-
     refs.push({ num, title: cleanTitle, url, accessed, group })
   }
 
@@ -550,11 +583,38 @@ export default function ResearchPaperPage() {
                     {items.map(r => (
                       <li key={r.num} id={`ref-${r.num}`} className="theo-ref-item">
                         <span className="theo-ref-num">[{r.num}]</span>
-                        <a href={r.url} target="_blank" rel="noopener noreferrer" className="theo-ref-link">
-                          {r.title}
-                        </a>
-                        {r.accessed && (
-                          <span className="theo-ref-accessed"> · accessed {r.accessed}</span>
+                        {r.doi ? (
+                          // Rich (academic) layout: Authors (Year). Title. Venue. DOI
+                          <span className="theo-ref-academic">
+                            {r.authors && <span className="theo-ref-authors">{r.authors}</span>}
+                            {r.year != null && <span className="theo-ref-year"> ({r.year})</span>}
+                            {'. '}
+                            <a href={r.url} target="_blank" rel="noopener noreferrer" className="theo-ref-link">
+                              <em>{r.title}</em>
+                            </a>
+                            {r.venue && <span className="theo-ref-venue">. {r.venue}</span>}
+                            {'. '}
+                            <a
+                              href={`https://doi.org/${r.doi}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="theo-ref-doi"
+                            >
+                              DOI: {r.doi}
+                            </a>
+                            {r.accessed && (
+                              <span className="theo-ref-accessed"> · accessed {r.accessed}</span>
+                            )}
+                          </span>
+                        ) : (
+                          <>
+                            <a href={r.url} target="_blank" rel="noopener noreferrer" className="theo-ref-link">
+                              {r.title}
+                            </a>
+                            {r.accessed && (
+                              <span className="theo-ref-accessed"> · accessed {r.accessed}</span>
+                            )}
+                          </>
                         )}
                       </li>
                     ))}
