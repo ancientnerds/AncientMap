@@ -551,8 +551,11 @@ export default function TheoPage() {
         method: 'DELETE', headers: getAuthHeaders(),
       })
       fetchList()
+      // A deleted paper may have been public — refresh the library too so
+      // it disappears without the user having to F5.
+      fetchPublicPapers(0, false)
     } catch { /* ignore */ }
-  }, [fetchList])
+  }, [fetchList, fetchPublicPapers])
 
   const handlePublish = useCallback(async (id: string) => {
     if (!confirm('Publish this research to the public library?\n\nIt will be visible to everyone on the site with your name as author, and used as a citation source in future research.')) return
@@ -568,8 +571,9 @@ export default function TheoPage() {
         setToast({ msg: err.detail || 'Failed to publish', type: 'error' })
       }
       fetchList()
+      fetchPublicPapers(0, false)
     } catch { /* ignore */ }
-  }, [fetchList])
+  }, [fetchList, fetchPublicPapers])
 
   const handleUnpublish = useCallback(async (id: string) => {
     if (!confirm('Remove this paper from the public library? It will remain in your private results.')) return
@@ -578,8 +582,9 @@ export default function TheoPage() {
         method: 'POST', headers: getAuthHeaders(),
       })
       fetchList()
+      fetchPublicPapers(0, false)
     } catch { /* ignore */ }
-  }, [fetchList])
+  }, [fetchList, fetchPublicPapers])
 
   const handleRetry = useCallback(async (item: ResearchItem) => {
     try {
