@@ -113,14 +113,18 @@
   box-shadow: none;
 }
 
+/* Counter sits below the textarea, right-aligned. Previously it was
+   absolutely positioned inside the wrap, but at 3 rows of text the textarea
+   shows a scrollbar that overlapped the counter. */
+.theo-input-counter-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 4px;
+}
 .theo-input-counter {
-  position: absolute;
-  bottom: 6px;
-  right: 10px;
   font-size: 11px;
   color: var(--text-dimmed);
   font-variant-numeric: tabular-nums;
-  pointer-events: none;
 }
 .theo-input-counter.met {
   color: #2e7d32;

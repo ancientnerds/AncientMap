@@ -425,7 +425,7 @@ export default function ResearchPaperPage() {
     return (
       <div className="theo-page">
         <PageHeader currentPage="theo">
-          <span className="page-header-title">Research</span>
+          <a href="/theo.html#research-library" className="page-header-title">Research</a>
         </PageHeader>
         <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--text-dimmed)' }}>Loading...</div>
       </div>
@@ -436,7 +436,7 @@ export default function ResearchPaperPage() {
     return (
       <div className="theo-page">
         <PageHeader currentPage="theo">
-          <span className="page-header-title">Research</span>
+          <a href="/theo.html#research-library" className="page-header-title">Research</a>
         </PageHeader>
         <div style={{ textAlign: 'center', padding: '60px 20px' }}>
           <div style={{ color: 'var(--text-dimmed)', fontSize: 16, marginBottom: 12 }}>{error || 'Paper not found'}</div>
@@ -452,7 +452,7 @@ export default function ResearchPaperPage() {
   return (
     <div className="theo-page">
       <PageHeader currentPage="theo">
-        <span className="page-header-title">Research</span>
+        <a href="/theo.html#research-library" className="page-header-title">Research</a>
       </PageHeader>
       <AiNoticeBanner message="Research papers are AI-generated. Always verify claims with original sources." />
 

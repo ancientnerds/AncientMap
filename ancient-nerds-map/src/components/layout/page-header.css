@@ -49,7 +49,9 @@
   gap: 10px;
 }
 
-/* Page title (unified across all pages) */
+/* Page title (unified across all pages). Pages may render it as a span OR
+   an <a> linking to the section index — the link-state rules keep both
+   visually identical. */
 .page-header-title {
   font-size: 15px;
   font-weight: 600;
@@ -58,6 +60,14 @@
   font-family: var(--font-heading);
   white-space: nowrap;
   flex-shrink: 0;
+}
+a.page-header-title {
+  text-decoration: none;
+  transition: color 0.15s;
+}
+a.page-header-title:hover,
+a.page-header-title:focus-visible {
+  color: var(--brand-primary);
 }
 
 .page-header-flag {

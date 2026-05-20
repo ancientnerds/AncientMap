@@ -610,7 +610,7 @@ export default function TheoPage() {
     setViewingData(null)
     setViewingStartEditing(false)
     setPublicReportData(null)
-    document.title = 'Theodore Furcade — Ancient Nerds Research Lab'
+    document.title = 'Theodore Furcade — Ancient Nerds Research'
   }, [])
 
   // Duplicate card: read a public match
@@ -696,9 +696,7 @@ export default function TheoPage() {
     return (
       <div className="theo-page">
         <PageHeader currentPage="theo">
-          <span style={{ fontSize: 12, color: 'var(--theo-amber, #d4912a)', letterSpacing: 1 }}>
-            Research Lab
-          </span>
+          <a href="/theo.html#research-library" className="page-header-title">Research</a>
         </PageHeader>
         <div className="theo-auth-loading">
           <div className="theo-skeleton-bar" style={{ width: '60%', margin: '0 auto 10px' }} />
@@ -712,7 +710,7 @@ export default function TheoPage() {
   return (
     <div className="theo-page">
       <PageHeader currentPage="theo">
-        <span className="page-header-title">Research Lab</span>
+        <a href="/theo.html#research-library" className="page-header-title">Research</a>
       </PageHeader>
       <AiNoticeBanner message="Research papers and illustrations are AI-generated. Always verify claims with original sources." />
 
@@ -831,6 +829,8 @@ export default function TheoPage() {
                   disabled={activeItems.length > 0}
                   style={activeItems.length > 0 ? { opacity: 0.5 } : undefined}
                 />
+              </div>
+              <div className="theo-input-counter-row">
                 <span className={`theo-input-counter${question.length >= 200 ? ' met' : ''}`}>
                   {question.length >= 200
                     ? `${question.length} characters ✓`
