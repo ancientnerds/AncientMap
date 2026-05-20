@@ -261,6 +261,8 @@ class PaperHandler(BaseHandler):
         from pipeline.lyra.theo_citations import (
             audit_citations,
             finalize_references,
+            strip_existing_references_section,
+            strip_orphan_citation_markers,
             strip_uncited_factual_paragraphs,
         )
 
@@ -309,6 +311,38 @@ class PaperHandler(BaseHandler):
             self.state.paper_text = re.sub(r" {2,}", " ", self.state.paper_text)
             self.state.paper_text = re.sub(r" +([.,;:?])", r"\1", self.state.paper_text)
             self.state.log("paper", f"Scrubbed {scrubbed_count} hex source-id token(s) from prose")
+
+        # ---------------------------------------------------------------
+        # Step 7.9: Strip LLM-emitted References / Sources section
+        # ---------------------------------------------------------------
+        # The writer occasionally emits its own `## References` block at the
+        # end of the paper (often APA-style without URLs). Step 9 below blindly
+        # appends the canonical refs list, producing two `## References`
+        # headings in the report. The frontend splits on the first heading
+        # and shows the LLM's URL-less fake refs, hiding the real bibliography
+        # and leaving every `[N]` marker unlinked.
+        self.state.paper_text, _stripped_chars = strip_existing_references_section(
+            self.state.paper_text
+        )
+        if _stripped_chars:
+            self.state.log(
+                "paper",
+                f"Stripped LLM-emitted References/Sources section ({_stripped_chars} chars)",
+            )
+
+        # ---------------------------------------------------------------
+        # Step 7.10: Strip orphan `[N]` markers
+        # ---------------------------------------------------------------
+        # After finalize_references the registry holds the surviving refs as
+        # [1..M], but the writer may have emitted higher numbers (hallucination)
+        # or numbers whose refs were pruned later. The frontend renders such
+        # markers as plain `[N]` text — readers see broken-looking citations.
+        _valid_nums = set(self.state.registry.reference_numbers.values())
+        self.state.paper_text, _orphan_count = strip_orphan_citation_markers(
+            self.state.paper_text, _valid_nums
+        )
+        if _orphan_count:
+            self.state.log("paper", f"Stripped {_orphan_count} orphan [N] marker(s)")
 
         # ---------------------------------------------------------------
         # Step 8: Citation audit (runs on finalized [1..M] numbering)

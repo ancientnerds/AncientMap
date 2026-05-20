@@ -1054,6 +1054,102 @@ def test_strip_preserves_h2_h3_headings():
     assert "### A Long Subsection Heading" in out
 
 
+def test_strip_existing_references_section_no_op_when_absent():
+    from pipeline.lyra.theo_citations import strip_existing_references_section
+
+    text = "# Title\n\n## Intro\n\nProse with no refs section [1].\n"
+    out, removed = strip_existing_references_section(text)
+    assert out == text
+    assert removed == 0
+
+
+def test_strip_existing_references_section_drops_llm_emitted_block():
+    """Paper 1 regression: LLM emits its own ## References block before the
+    pipeline appends the canonical one. The frontend then splits on the first
+    heading and shows the LLM's URL-less fake refs."""
+    from pipeline.lyra.theo_citations import strip_existing_references_section
+
+    text = (
+        "# Title\n\n## Intro\n\nProse with citation [1].\n\n"
+        "## References\n\n"
+        "[1] Chen, Y., et al. (2021). Piezoelectric properties of granite.\n"
+        "[2] Dunn, C. (2011). *The Giza Power Plant*.\n"
+    )
+    out, removed = strip_existing_references_section(text)
+    assert "## References" not in out
+    assert "Chen, Y." not in out
+    assert "Prose with citation [1]." in out
+    assert removed > 0
+
+
+def test_strip_existing_references_section_also_matches_sources_heading():
+    from pipeline.lyra.theo_citations import strip_existing_references_section
+
+    text = "# Title\n\nProse [1].\n\n## Sources\n\n[1] Something\n"
+    out, _ = strip_existing_references_section(text)
+    assert "## Sources" not in out
+    assert "Prose [1]." in out
+
+
+def test_strip_existing_references_section_handles_h3_heading():
+    from pipeline.lyra.theo_citations import strip_existing_references_section
+
+    text = "# T\n\nProse.\n\n### References\n\n[1] x\n"
+    out, _ = strip_existing_references_section(text)
+    assert "References" not in out
+
+
+def test_strip_orphan_citation_markers_no_op_when_all_valid():
+    from pipeline.lyra.theo_citations import strip_orphan_citation_markers
+
+    text = "Fact one [1] and fact two [2].\n\n## References\n\n[1] x\n[2] y\n"
+    out, removed = strip_orphan_citation_markers(text, valid_nums={1, 2})
+    assert out == text
+    assert removed == 0
+
+
+def test_strip_orphan_citation_markers_drops_unknown_numbers():
+    """Paper 2 regression: body cites [30]-[34] but refs only go to [29]."""
+    from pipeline.lyra.theo_citations import strip_orphan_citation_markers
+
+    text = (
+        "Erosion patterns are well-documented. [30] [31] Different mechanism. [2]\n"
+        "\n## References\n\n[1] X — https://x.example/\n[2] Y — https://y.example/\n"
+    )
+    out, removed = strip_orphan_citation_markers(text, valid_nums={1, 2})
+    assert removed == 2
+    assert "[30]" not in out
+    assert "[31]" not in out
+    assert "[2]" in out  # valid marker preserved
+    # Refs section is untouched
+    assert "[1] X — https://x.example/" in out
+
+
+def test_strip_orphan_citation_markers_does_not_touch_refs_section():
+    """Numbers in the refs section (each line starts with [N]) must survive
+    even if their N isn't in valid_nums — refs are scanned separately."""
+    from pipeline.lyra.theo_citations import strip_orphan_citation_markers
+
+    text = "Prose without citations.\n\n## References\n\n[7] Old entry — https://x.example/\n"
+    out, removed = strip_orphan_citation_markers(text, valid_nums=set())
+    assert "[7] Old entry" in out
+    assert removed == 0
+
+
+def test_strip_orphan_citation_markers_cleans_punctuation_spacing():
+    """After stripping, sentences shouldn't have double spaces or stray space
+    before a full stop."""
+    from pipeline.lyra.theo_citations import strip_orphan_citation_markers
+
+    text = "Claim with two orphans [99] [98] then valid [1].\n"
+    out, removed = strip_orphan_citation_markers(text, valid_nums={1})
+    assert removed == 2
+    assert "  " not in out
+    assert "[99]" not in out
+    assert "[98]" not in out
+    assert "[1]" in out
+
+
 def test_format_references_list_one_source_per_entry():
     """Every non-empty reference line starts with [N] and has at most one URL.
 

@@ -468,6 +468,67 @@ def prune_unrenderable_references(registry: CitationRegistry) -> int:
     return len(to_drop)
 
 
+def strip_existing_references_section(text: str) -> tuple[str, int]:
+    """Remove any pre-existing `## References` / `## Sources` block from text.
+
+    Run BEFORE appending the canonical references list. The writer LLM
+    occasionally emits its own References section (often APA-style without
+    URLs) at the end of the paper. When the pipeline then appends the real
+    references list on top, the report contains two `## References` headings;
+    the frontend splits on the first one and shows the LLM's fake refs —
+    leaving every `[N]` marker unlinked and hiding the real bibliography.
+
+    Strips from the first matching heading to end of text. Returns
+    (cleaned_text, chars_removed).
+    """
+    pattern = re.compile(r"\n#{2,3}\s+(?:References|Sources)\b")
+    m = pattern.search(text)
+    if m is None:
+        return text, 0
+    removed = len(text) - m.start()
+    return text[: m.start()].rstrip() + "\n", removed
+
+
+def strip_orphan_citation_markers(
+    text: str, valid_nums: set[int]
+) -> tuple[str, int]:
+    """Remove `[N]` markers in prose where N is not in `valid_nums`.
+
+    Orphan markers arise when the writer LLM cites a higher number than the
+    reference registry knows about (hallucination) or when downstream pruning
+    removes a reference but leaves its marker in prose. The frontend renders
+    such markers as plain `[N]` text — readers see broken-looking citations.
+
+    Scans only prose (everything before the first References heading). The
+    refs section legitimately starts each line with `[N]` and must not be
+    touched. Collapses whitespace left by removed markers so sentences like
+    `"... patterns. [33] [34]"` end cleanly.
+
+    Returns (cleaned_text, markers_removed).
+    """
+    refs_idx = _find_references_heading(text)
+    if refs_idx is None:
+        prose, tail = text, ""
+    else:
+        prose, tail = text[:refs_idx], text[refs_idx:]
+
+    removed = 0
+
+    def _drop(m: re.Match[str]) -> str:
+        nonlocal removed
+        if int(m.group(1)) in valid_nums:
+            return m.group(0)
+        removed += 1
+        return ""
+
+    cleaned = re.sub(r"\[(\d+)\]", _drop, prose)
+    if removed:
+        cleaned = re.sub(r" {2,}", " ", cleaned)
+        cleaned = re.sub(r" +([.,;:?!])", r"\1", cleaned)
+
+    return cleaned + tail, removed
+
+
 def finalize_references(
     paper_text: str,
     working_sid_to_num: dict[str, int],

@@ -69,14 +69,27 @@ const GROUP_LABEL: Record<RefGroup, string> = {
   Other: 'Other sources',
 }
 
-/** Split paper markdown at the first `## References` heading. */
+/** Split paper markdown at the LAST `## References` / `## Sources` heading.
+ *
+ * The pipeline always appends the canonical references list at the very end,
+ * so the last matching heading is the right split point. Using the last (not
+ * first) match defends against a writer LLM that emits its own References
+ * section in the body — without this, the frontend would surface the LLM's
+ * URL-less fake refs and hide the real bibliography. The backend now strips
+ * such duplicate sections too, but this stays as a belt-and-braces safeguard
+ * for already-published reports that still carry the bug.
+ */
 function splitBodyAndRefs(report: string): { body: string; refsText: string } {
-  const match = report.match(/\n#{2,3}\s+References\s*\n/)
-  if (!match || match.index === undefined) {
+  const re = /\n#{2,3}\s+(?:References|Sources)\s*\n/g
+  let lastMatch: RegExpExecArray | null = null
+  for (let m = re.exec(report); m !== null; m = re.exec(report)) {
+    lastMatch = m
+  }
+  if (!lastMatch) {
     return { body: report, refsText: '' }
   }
-  const body = report.slice(0, match.index)
-  const refsText = report.slice(match.index + match[0].length)
+  const body = report.slice(0, lastMatch.index)
+  const refsText = report.slice(lastMatch.index + lastMatch[0].length)
   return { body, refsText }
 }
 
