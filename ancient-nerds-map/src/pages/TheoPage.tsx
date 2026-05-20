@@ -832,7 +832,9 @@ export default function TheoPage() {
                   style={activeItems.length > 0 ? { opacity: 0.5 } : undefined}
                 />
                 <span className={`theo-input-counter${question.length >= 200 ? ' met' : ''}`}>
-                  {question.length}/200
+                  {question.length >= 200
+                    ? `${question.length} characters ✓`
+                    : `${question.length} / 200 min.`}
                 </span>
               </div>
 
@@ -1370,7 +1372,7 @@ export default function TheoPage() {
       )}
 
       {/* ═══════ Public Research Library ═══════ */}
-      <div className="theo-list theo-public-library">
+      <div id="research-library" className="theo-list theo-public-library">
         <div className="theo-list-header">
           {publicTotal > 0 ? `Public Research Library (${publicTotal})` : 'Public Research Library'}
         </div>
