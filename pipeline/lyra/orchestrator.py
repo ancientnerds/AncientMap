@@ -1518,6 +1518,21 @@ def _run_migrations(engine) -> None:
         # Migrate one-time grants from NULL to "one_time" sentinel so the
         # regular unique constraint (user_id, reason, grant_period) can prevent
         # duplicates. Previously NULL was used, but NULL != NULL in PostgreSQL.
+        #
+        # First, delete any NULL rows that would conflict with an existing
+        # 'one_time' row for the same (user_id, reason). Without this, the
+        # UPDATE below raises UniqueViolation when a previous migration partially
+        # ran and converted some — but not all — of a user's NULLs.
+        conn.execute(
+            text("""
+            DELETE FROM credit_grants ng
+            USING credit_grants ot
+            WHERE ng.grant_period IS NULL
+              AND ot.grant_period = 'one_time'
+              AND ng.user_id = ot.user_id
+              AND ng.reason = ot.reason
+        """)
+        )
         conn.execute(
             text("""
             UPDATE credit_grants
@@ -1776,7 +1791,15 @@ def main() -> None:
     try:
         _run_migrations(engine)
     except Exception as mig_err:
-        logger.warning(f"[STARTUP] Migrations skipped (lock contention): {mig_err}")
+        # All migrations run in one transaction (committed at the end of
+        # _run_migrations). Any failure rolls back the whole batch, so a single
+        # broken statement silently strands every column added in this release.
+        # Log loudly enough that the next deploy notices.
+        logger.error(
+            f"[STARTUP] Migrations ROLLED BACK due to exception: {mig_err}. "
+            "All schema changes in this release are lost — fix the failing "
+            "statement and restart."
+        )
 
     # Seed channels
     from pipeline.lyra.channels import seed_channels
