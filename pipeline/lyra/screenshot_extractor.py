@@ -80,9 +80,7 @@ def _fetch_storyboard_meta(video_id: str, proxy_url: str | None) -> dict:
         return {}
 
     formats = {f.get("format_id"): f for f in data.get("formats", [])}
-    chosen = next(
-        (formats[fid] for fid in _STORYBOARD_FORMAT_PRIORITY if fid in formats), None
-    )
+    chosen = next((formats[fid] for fid in _STORYBOARD_FORMAT_PRIORITY if fid in formats), None)
     if not chosen or not chosen.get("fragments"):
         return {}
 
@@ -107,9 +105,7 @@ def _ensure_storyboard_meta(video: NewsVideo, proxy_url: str | None) -> dict | N
     return video.storyboard_meta or None
 
 
-def _download_sprite(
-    url: str, sprite_path: Path, proxy_url: str | None
-) -> bool:
+def _download_sprite(url: str, sprite_path: Path, proxy_url: str | None) -> bool:
     """Download sprite to a temp path then atomically rename, so parallel workers
     don't read a half-written file. Idempotent: returns True if already on disk.
     """
@@ -162,11 +158,16 @@ def _extract_frame(
     left, top = col * fw, row * fh
     cmd = [
         "ffmpeg",
-        "-i", str(sprite_path),
-        "-vf", f"crop={fw}:{fh}:{left}:{top},scale={TARGET_WIDTH}:-2:flags=lanczos",
-        "-c:v", "libwebp",
-        "-q:v", str(WEBP_QUALITY),
-        "-y", str(output_path),
+        "-i",
+        str(sprite_path),
+        "-vf",
+        f"crop={fw}:{fh}:{left}:{top},scale={TARGET_WIDTH}:-2:flags=lanczos",
+        "-c:v",
+        "libwebp",
+        "-q:v",
+        str(WEBP_QUALITY),
+        "-y",
+        str(output_path),
     ]
     try:
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=FFMPEG_TIMEOUT)
@@ -235,9 +236,7 @@ def extract_screenshots(settings: LyraSettings) -> int:
                 logger.info(f"  Reused existing screenshot: {filename}")
             else:
                 item_by_id[item.id] = item
-                to_extract.append(
-                    (item.id, item.video_id, timestamp, filename, output_path, meta)
-                )
+                to_extract.append((item.id, item.video_id, timestamp, filename, output_path, meta))
 
         # Parallel extraction. The on-disk sprite cache deduplicates downloads
         # when multiple items share a fragment (~89s window at L3).

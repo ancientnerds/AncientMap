@@ -1458,9 +1458,7 @@ def _run_migrations(engine) -> None:
         # Storyboard-based screenshot extraction: cache YouTube sprite metadata
         # per video so we only call yt-dlp once, then download tiny sprites instead
         # of full video clips.
-        conn.execute(
-            text("ALTER TABLE news_videos ADD COLUMN IF NOT EXISTS storyboard_meta JSONB")
-        )
+        conn.execute(text("ALTER TABLE news_videos ADD COLUMN IF NOT EXISTS storyboard_meta JSONB"))
 
         # is_unlimited flag: decoupled from credits balance
         conn.execute(
