@@ -903,6 +903,9 @@ class NewsVideo(Base):
     processed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     status: Mapped[str] = mapped_column(String(20), default="pending", index=True)
     last_attempted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    # Cached YouTube storyboard info for screenshot extraction.
+    # None = not fetched; {} = fetched, no storyboard available; populated dict = ready to use.
+    storyboard_meta: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
 
     channel: Mapped["NewsChannel"] = relationship("NewsChannel", back_populates="videos")
     items: Mapped[list["NewsItem"]] = relationship("NewsItem", back_populates="video")
