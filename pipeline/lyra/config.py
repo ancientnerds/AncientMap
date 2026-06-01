@@ -522,11 +522,14 @@ def _call_anthropic_api(
     # --- Make the API call (with retry + global rate limiter) ---
     from pipeline.lyra.minimax_limiter import limiter
 
-    # Total attempts: transient errors AND missing-tool_use both retry here.
-    # The forced structured-output tool call is stochastic on MiniMax (it
-    # occasionally answers in prose instead of calling the tool); retrying the
-    # call recovers it far more reliably than the lossy text/coerce fallback.
-    _max_attempts = 5 if use_tool_trick else 3
+    # Total attempts: transient errors AND unusable structured output both retry
+    # here. The forced tool call is stochastic on MiniMax (it sometimes answers
+    # in prose instead of calling the tool). We only retry when the response is
+    # genuinely unusable — i.e. NO tool_use block AND the text isn't parseable
+    # JSON. When M3 returns valid JSON as a text block we accept it immediately
+    # (the text fallback parses it), which avoids multiplying latency on the
+    # large structured calls that fail the tool call but still emit usable JSON.
+    _max_attempts = 3
     last_exc = None
     response = None
     for _attempt in range(_max_attempts):
@@ -559,14 +562,17 @@ def _call_anthropic_api(
                     _time.sleep(delay)
                     continue
                 raise
-        # Retry a forced tool call that came back with no tool_use block.
+        # Retry only when the structured response is unusable: no tool_use block
+        # AND no parseable JSON in the text. A valid JSON text block is accepted
+        # as-is (the downstream text fallback parses it) — no wasted retry.
         if (
             use_tool_trick
-            and _extract_tool_use_json(response.content) is None
             and _attempt < _max_attempts - 1
+            and _extract_tool_use_json(response.content) is None
+            and not _text_parses_as_json(response.content)
         ):
             logger.info(
-                "MiniMax returned no tool_use block, retrying forced tool call (%d/%d)",
+                "MiniMax returned no usable structured output, retrying (%d/%d)",
                 _attempt + 1,
                 _max_attempts,
             )
@@ -706,6 +712,26 @@ def _build_structured_output_tool(schema: dict) -> dict:
         ),
         "input_schema": schema,
     }
+
+
+def _text_parses_as_json(content: list) -> bool:
+    """True if any text block in the response parses as JSON (markdown fences
+    stripped). Used to decide whether a missing tool_use block is still usable —
+    M3 frequently emits valid JSON as text instead of calling the forced tool,
+    and that is perfectly fine, so it should NOT trigger a retry.
+    """
+    for block in content or []:
+        if getattr(block, "type", None) == "text":
+            cleaned = (getattr(block, "text", "") or "").strip()
+            if cleaned.startswith("```"):
+                cleaned = cleaned.split("\n", 1)[1] if "\n" in cleaned else cleaned[3:]
+                cleaned = cleaned.rsplit("```", 1)[0].strip()
+            try:
+                json.loads(cleaned)
+                return True
+            except (json.JSONDecodeError, ValueError):
+                continue
+    return False
 
 
 def _extract_tool_use_json(content: list) -> str | None:

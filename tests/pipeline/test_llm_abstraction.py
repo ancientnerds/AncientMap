@@ -326,6 +326,37 @@ class TestUnifiedDispatch:
         assert calls["n"] == 3  # retried twice, recovered on the 3rd attempt
         assert resp.text == '{"score": 42}'
 
+    def test_minimax_json_as_text_accepted_without_retry(self, minimax_settings):
+        """A missing tool_use block whose text IS valid JSON is accepted on the
+        first attempt — no wasted retry (latency guard)."""
+        calls = {"n": 0}
+
+        def fake_create(**kwargs):
+            calls["n"] += 1
+            return _make_mock_text_response('{"score": 77}')  # valid JSON, no tool_use
+
+        with patch("pipeline.lyra.config._get_client") as mock_get:
+            mock_get.return_value.messages.create = fake_create
+            resp = _call_anthropic_api(
+                minimax_settings,
+                model="claude-haiku-4-5-20251001",
+                max_tokens=1000,
+                messages=[{"role": "user", "content": "test"}],
+                response_format={
+                    "type": "json_schema",
+                    "json_schema": {
+                        "name": "Score",
+                        "schema": {
+                            "type": "object",
+                            "properties": {"score": {"type": "integer"}},
+                        },
+                    },
+                },
+            )
+
+        assert calls["n"] == 1  # no retry — the JSON text is usable as-is
+        assert resp.text == '{"score": 77}'
+
     def test_anthropic_thinking_passed_through(self, anthropic_settings):
         """Anthropic backend passes thinking config through."""
         captured = {}
