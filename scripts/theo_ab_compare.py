@@ -20,8 +20,35 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import sys
 import time
+
+
+def _maybe_shrink_config() -> None:
+    """AB_SMALL=1 → patch the internally-built ResearchConfig down to a fast
+    profile (fewer angles/specialists/rounds). The A/B stays valid because BOTH
+    runs use the identical shrunk config; only the source-content cap differs.
+    """
+    if os.getenv("AB_SMALL") != "1":
+        return
+    import pipeline.lyra.convergence_orchestrator as co
+
+    _orig = co.ResearchConfig
+
+    def _small():
+        c = _orig()
+        c.max_angles = 3
+        c.initial_specialist_count = 2
+        c.min_specialists = 1
+        c.max_specialists = 3
+        c.max_search_rounds_per_angle = 2
+        c.max_debate_rounds = 1
+        c.queries_per_angle = 3
+        c.source_apis = "minimal"
+        return c
+
+    co.ResearchConfig = _small
 
 
 def _truncation_warnings(debug_log: list) -> int:
@@ -36,6 +63,8 @@ def _truncation_warnings(debug_log: list) -> int:
 
 async def _run(question: str, label: str) -> dict:
     from pipeline.lyra.config import _get_settings
+
+    _maybe_shrink_config()
     from pipeline.lyra.convergence_orchestrator import ConvergenceOrchestrator
 
     settings = _get_settings()
