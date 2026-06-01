@@ -666,10 +666,12 @@ def _get_client(settings: LyraSettings):
 def _build_structured_output_tool(schema: dict) -> dict:
     """Build an Anthropic tool definition that forces JSON matching the schema.
 
-    MiniMax's Anthropic endpoint doesn't support output_config/json_schema,
-    so we force the model to "call" a tool whose input_schema IS the schema.
-    Combined with tool_choice={"type": "tool", "name": "structured_output"},
-    the model must produce valid JSON matching the schema.
+    MiniMax's Anthropic endpoint accepts output_config/json_schema but does NOT
+    enforce it on M3 — verified 2026-06-01 it returned fenced/invalid JSON
+    (e.g. `{relevant: true}`). So we force the model to "call" a tool whose
+    input_schema IS the schema. Combined with
+    tool_choice={"type": "tool", "name": "structured_output"}, the model must
+    produce valid JSON matching the schema.
     """
     return {
         "name": "structured_output",
