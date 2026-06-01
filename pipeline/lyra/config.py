@@ -608,7 +608,17 @@ def _call_anthropic_api(
                 model=response.model or "",
                 usage=usage_dict,
             )
-        logger.warning("MiniMax did not return tool_use block — falling back to text response")
+        # No tool_use block. When M3 emitted valid JSON as a text block this is a
+        # normal fast path (the downstream structured parser handles it) — only
+        # warn when the text isn't usable JSON after exhausting retries.
+        if _text_parses_as_json(response.content):
+            logger.debug("MiniMax returned JSON as a text block (no tool_use) — accepted")
+        else:
+            logger.warning(
+                "MiniMax returned no tool_use block and no parseable JSON after "
+                "%d attempts — using lossy text fallback",
+                _max_attempts,
+            )
 
     return _normalize_anthropic_response(response)
 
