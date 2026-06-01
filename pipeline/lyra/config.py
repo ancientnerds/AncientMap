@@ -522,13 +522,18 @@ def _call_anthropic_api(
     # --- Make the API call (with retry + global rate limiter) ---
     from pipeline.lyra.minimax_limiter import limiter
 
+    # Total attempts: transient errors AND missing-tool_use both retry here.
+    # The forced structured-output tool call is stochastic on MiniMax (it
+    # occasionally answers in prose instead of calling the tool); retrying the
+    # call recovers it far more reliably than the lossy text/coerce fallback.
+    _max_attempts = 5 if use_tool_trick else 3
     last_exc = None
-    for _attempt in range(3):
+    response = None
+    for _attempt in range(_max_attempts):
         with limiter.request() as slot:
             try:
                 response = client.messages.create(**create_kwargs)
                 slot.report_success()
-                break
             except Exception as exc:
                 last_exc = exc
                 error_str = str(exc)
@@ -539,22 +544,39 @@ def _call_anthropic_api(
                 )
                 if is_rate_limit:
                     slot.report_rate_limit()
-                if is_transient and _attempt < 2:
+                if is_transient and _attempt < _max_attempts - 1:
                     import time as _time
 
                     is_overload = "529" in error_str or "overloaded" in error_str
                     delay = (_attempt + 1) * (10 if is_overload else 3)
                     logger.warning(
-                        "LLM call transient error (attempt %d/3), retrying in %ds: %s",
+                        "LLM call transient error (attempt %d/%d), retrying in %ds: %s",
                         _attempt + 1,
+                        _max_attempts,
                         delay,
                         exc,
                     )
                     _time.sleep(delay)
                     continue
                 raise
+        # Retry a forced tool call that came back with no tool_use block.
+        if (
+            use_tool_trick
+            and _extract_tool_use_json(response.content) is None
+            and _attempt < _max_attempts - 1
+        ):
+            logger.info(
+                "MiniMax returned no tool_use block, retrying forced tool call (%d/%d)",
+                _attempt + 1,
+                _max_attempts,
+            )
+            continue
+        break
     else:
-        raise last_exc  # type: ignore[misc]
+        # Loop exhausted. If a response exists (missing-tool_use case) fall
+        # through to the text fallback below; only raise on a real error.
+        if response is None:
+            raise last_exc  # type: ignore[misc]
 
     # --- Normalize the response ---
     # [MINIMAX] Adaptation 5: Extract tool result if tool-use trick was used
@@ -676,8 +698,11 @@ def _build_structured_output_tool(schema: dict) -> dict:
     return {
         "name": "structured_output",
         "description": (
-            "Return the result as structured JSON. "
-            "All fields are required and must match the schema exactly."
+            "Return the result by calling THIS tool with structured JSON. "
+            "You MUST call structured_output — never answer in prose or explain. "
+            "If you have no data, call it with empty arrays/strings rather than "
+            "replying with text. All fields are required and must match the "
+            "schema exactly."
         ),
         "input_schema": schema,
     }

@@ -293,6 +293,39 @@ class TestUnifiedDispatch:
 
         assert resp.text == '{"score": 85}'
 
+    def test_minimax_tool_trick_retries_on_missing_tool_use(self, minimax_settings):
+        """A missing tool_use block is retried; a later successful tool call wins
+        over the lossy text fallback."""
+        calls = {"n": 0}
+
+        def fake_create(**kwargs):
+            calls["n"] += 1
+            if calls["n"] < 3:
+                return _make_mock_text_response("Sorry, I cannot do that.")  # no tool_use
+            return _make_mock_tool_response({"score": 42})
+
+        with patch("pipeline.lyra.config._get_client") as mock_get:
+            mock_get.return_value.messages.create = fake_create
+            resp = _call_anthropic_api(
+                minimax_settings,
+                model="claude-haiku-4-5-20251001",
+                max_tokens=1000,
+                messages=[{"role": "user", "content": "test"}],
+                response_format={
+                    "type": "json_schema",
+                    "json_schema": {
+                        "name": "Score",
+                        "schema": {
+                            "type": "object",
+                            "properties": {"score": {"type": "integer"}},
+                        },
+                    },
+                },
+            )
+
+        assert calls["n"] == 3  # retried twice, recovered on the 3rd attempt
+        assert resp.text == '{"score": 42}'
+
     def test_anthropic_thinking_passed_through(self, anthropic_settings):
         """Anthropic backend passes thinking config through."""
         captured = {}
