@@ -28,7 +28,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from pipeline.lyra.config import LyraSettings, _get_settings
-from pipeline.lyra.minimax_shared import minimax_chat_anthropic
+from pipeline.lyra.minimax_shared import MINIMAX_MODEL, minimax_chat_anthropic
 from pipeline.lyra.theo_citations import CitationRegistry, audit_citations
 from pipeline.lyra.theo_quality_judge import get_restart_stage, judge_paper
 from pipeline.lyra.theo_sources import MultiSourceSearch
@@ -623,7 +623,7 @@ def _stage_judge(
         audit_result=audit_result,
         source_snippets=source_snippets,
         chat_fn=_chat,
-        model="MiniMax-M2.7",
+        model=MINIMAX_MODEL,
     )
 
     ms = int((time.monotonic() - t0) * 1000)

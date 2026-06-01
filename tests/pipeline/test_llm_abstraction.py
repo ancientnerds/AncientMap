@@ -127,7 +127,7 @@ def _make_mock_tool_response(tool_input: dict):
     tool_block.input = tool_input
     mock_resp.content = [tool_block]
     mock_resp.stop_reason = "end_turn"
-    mock_resp.model = "MiniMax-M2.7"
+    mock_resp.model = "MiniMax-M3"
     mock_resp.usage = MagicMock(input_tokens=10, output_tokens=5)
     return mock_resp
 
@@ -196,7 +196,7 @@ class TestUnifiedDispatch:
         assert "tools" in captured
         assert captured["tools"][0]["name"] == "structured_output"
         assert captured["tool_choice"] == {"type": "tool", "name": "structured_output"}
-        assert captured["model"] == "MiniMax-M2.7"
+        assert captured["model"] == "MiniMax-M3"
         assert resp.text == '{"score": 85}'
 
     def test_minimax_temperature_clamped(self, minimax_settings):
@@ -220,7 +220,7 @@ class TestUnifiedDispatch:
         assert captured["temperature"] == 0.01
 
     def test_minimax_model_override(self, minimax_settings):
-        """MiniMax overrides all model names to MiniMax-M2.7."""
+        """MiniMax overrides all model names to MiniMax-M3."""
         captured = {}
 
         def fake_create(**kwargs):
@@ -236,7 +236,7 @@ class TestUnifiedDispatch:
                 messages=[{"role": "user", "content": "test"}],
             )
 
-        assert captured["model"] == "MiniMax-M2.7"
+        assert captured["model"] == "MiniMax-M3"
 
     def test_minimax_documents_inlined(self, minimax_settings):
         """MiniMax inlines documents into user message text."""
@@ -333,7 +333,7 @@ class TestUnifiedDispatch:
             )
 
         assert captured["thinking"] == {"type": "adaptive"}
-        assert captured["model"] == "MiniMax-M2.7"
+        assert captured["model"] == "MiniMax-M3"
 
 
 class TestCallApiDispatch:
@@ -356,7 +356,7 @@ class TestCallApiDispatch:
                 messages=[{"role": "user", "content": "test"}],
             )
 
-        assert captured["model"] == "MiniMax-M2.7"
+        assert captured["model"] == "MiniMax-M3"
         assert resp.text == "ok"
 
     def test_call_api_wraps_errors(self, minimax_settings):

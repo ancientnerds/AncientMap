@@ -396,6 +396,7 @@ def _web_verify_items(items: list[NewsItem], settings: LyraSettings) -> int:
 
     try:
         from pipeline.lyra.minimax_shared import (
+            MINIMAX_MODEL,
             create_minimax_client,
             minimax_chat,
             minimax_search,
@@ -472,7 +473,7 @@ def _web_verify_items(items: list[NewsItem], settings: LyraSettings) -> int:
         )
 
         try:
-            response_text = minimax_chat(client, "MiniMax-M2.7", web_prompt, user_msg, 4096)
+            response_text = minimax_chat(client, MINIMAX_MODEL, web_prompt, user_msg, 4096)
         except Exception as e:
             logger.warning(f"Web verify failed for item {item.id}: {e}")
             checked += 1

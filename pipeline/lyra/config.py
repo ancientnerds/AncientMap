@@ -301,9 +301,11 @@ def _call_anthropic_api(
     temperature = kwargs.pop("temperature", None)
     top_p = kwargs.pop("top_p", None)
 
-    # [MINIMAX] Adaptation 1: Model override — all calls use MiniMax-M2.7
+    # [MINIMAX] Adaptation 1: Model override — all calls use the MiniMax model
     if is_minimax:
-        model = "MiniMax-M2.7"
+        from pipeline.lyra.minimax_shared import MINIMAX_MODEL
+
+        model = MINIMAX_MODEL
 
     # [MINIMAX] Adaptation 2: Documents — inline into user message
     # (MiniMax doesn't support document content blocks or citations)

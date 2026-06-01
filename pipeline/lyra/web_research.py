@@ -21,6 +21,7 @@ from pathlib import Path
 
 from pipeline.lyra.config import LyraAPIError, LyraSettings, call_api
 from pipeline.lyra.minimax_shared import (
+    MINIMAX_MODEL,
     WebSearchResult,
     create_minimax_client,
     minimax_chat,
@@ -171,7 +172,7 @@ class MiniMaxWebResearch(WebResearchBackend):
 
     def _chat(self, system: str, user_message: str, max_tokens: int) -> str:
         """Call MiniMax M2.7 chat completion, strip thinking tags."""
-        return minimax_chat(self._client, "MiniMax-M2.7", system, user_message, max_tokens)
+        return minimax_chat(self._client, MINIMAX_MODEL, system, user_message, max_tokens)
 
     # -- Claim extraction --
 

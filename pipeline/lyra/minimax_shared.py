@@ -16,6 +16,12 @@ import httpx
 
 logger = logging.getLogger(__name__)
 
+# MiniMax model — single source of truth for every call site (config.py,
+# web_research.py, tweet_verifier.py, research_stages.py all import this).
+# Upgraded M2.7 → M3 on 2026-06-01; verified live via the Anthropic endpoint
+# (MiniMax-M3.0 aliases to MiniMax-M3; M2.7 still served as the prior model).
+MINIMAX_MODEL = "MiniMax-M3"
+
 # MiniMax search endpoint (Token Plan / Coding Plan)
 MINIMAX_SEARCH_PATH = "/v1/coding_plan/search"
 MINIMAX_SEARCH_TIMEOUT = 15.0
@@ -148,7 +154,7 @@ def minimax_chat_anthropic(
 
     # MiniMax requires temperature in (0, 1] — clamp any <=0 up to 0.01.
     create_kwargs: dict = {
-        "model": "MiniMax-M2.7",
+        "model": MINIMAX_MODEL,
         "max_tokens": max_tokens,
         "system": system,
         "messages": [{"role": "user", "content": user_message}],
