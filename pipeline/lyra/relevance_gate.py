@@ -12,6 +12,7 @@ import json
 import logging
 import re
 
+from pipeline.lyra.config import thinking_for_effort
 from pipeline.lyra.minimax_shared import minimax_chat_anthropic
 
 logger = logging.getLogger(__name__)
@@ -52,7 +53,15 @@ def _parse_json(raw: str) -> dict:
 
 async def check_relevance(question: str) -> str | None:
     """Return None if the question is on-topic, or a rejection message if not."""
-    raw = await asyncio.to_thread(minimax_chat_anthropic, _SYSTEM_PROMPT, question, 256)
+    # A binary relevance check needs almost no reasoning — cap M3 thinking to a
+    # small budget so it can't eat the tiny output budget (the old failure mode).
+    raw = await asyncio.to_thread(
+        minimax_chat_anthropic,
+        _SYSTEM_PROMPT,
+        question,
+        256,
+        thinking=thinking_for_effort("instant"),
+    )
     # Strip any residual <think> tags the SDK path may have missed
     raw = re.sub(r"<think>.*?</think>", "", raw, flags=re.DOTALL).strip()
     parsed = _parse_json(raw)

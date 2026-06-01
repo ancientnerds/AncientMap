@@ -336,6 +336,105 @@ class TestUnifiedDispatch:
         assert captured["model"] == "MiniMax-M3"
 
 
+class TestMiniMaxThinking:
+    """reasoning_effort -> native M3 thinking mapping + headroom guard."""
+
+    def test_thinking_for_effort_mapping(self):
+        from pipeline.lyra.config import thinking_for_effort
+
+        s = LyraSettings()
+        assert thinking_for_effort("instant", s) == {"type": "enabled", "budget_tokens": 256}
+        assert thinking_for_effort("high", s) == {"type": "enabled", "budget_tokens": 8192}
+        # Unknown effort falls back to the medium budget, never to disabled.
+        assert thinking_for_effort(None, s) == {"type": "enabled", "budget_tokens": 4096}
+        # Global kill-switch -> None (default thinking), not a broken disabled.
+        assert thinking_for_effort("high", LyraSettings(minimax_thinking_enabled=False)) is None
+        # A 0 budget means "default thinking" (None), never {"type": "disabled"}.
+        assert thinking_for_effort("instant", LyraSettings(minimax_thinking_budget_instant=0)) is None
+
+    def test_minimax_reasoning_effort_maps_to_thinking(self, minimax_settings):
+        captured = {}
+
+        def fake_create(**kwargs):
+            captured.update(kwargs)
+            return _make_mock_text_response("ok")
+
+        with patch("pipeline.lyra.config._get_client") as mock_get:
+            mock_get.return_value.messages.create = fake_create
+            _call_anthropic_api(
+                minimax_settings,
+                model="claude-haiku-4-5-20251001",
+                max_tokens=1000,
+                reasoning_effort="high",
+                messages=[{"role": "user", "content": "test"}],
+            )
+
+        assert captured["thinking"] == {"type": "enabled", "budget_tokens": 8192}
+        # Headroom guard raises max_tokens above the thinking budget.
+        assert captured["max_tokens"] >= 8192 + 4096
+
+    def test_anthropic_reasoning_effort_does_not_set_thinking(self, anthropic_settings):
+        captured = {}
+
+        def fake_create(**kwargs):
+            captured.update(kwargs)
+            return _make_mock_text_response("ok")
+
+        with patch("pipeline.lyra.config._get_client") as mock_get:
+            mock_get.return_value.messages.create = fake_create
+            _call_anthropic_api(
+                anthropic_settings,
+                model="claude-opus-4-6",
+                max_tokens=1000,
+                reasoning_effort="high",
+                messages=[{"role": "user", "content": "test"}],
+            )
+
+        assert "thinking" not in captured
+
+    def test_explicit_thinking_wins_over_reasoning_effort(self, minimax_settings):
+        captured = {}
+
+        def fake_create(**kwargs):
+            captured.update(kwargs)
+            return _make_mock_text_response("ok")
+
+        with patch("pipeline.lyra.config._get_client") as mock_get:
+            mock_get.return_value.messages.create = fake_create
+            _call_anthropic_api(
+                minimax_settings,
+                model="claude-haiku-4-5-20251001",
+                max_tokens=20000,
+                thinking={"type": "adaptive"},
+                reasoning_effort="high",
+                messages=[{"role": "user", "content": "test"}],
+            )
+
+        assert captured["thinking"] == {"type": "adaptive"}
+
+    def test_minimax_temperature_and_thinking_coexist(self, minimax_settings):
+        captured = {}
+
+        def fake_create(**kwargs):
+            captured.update(kwargs)
+            return _make_mock_text_response("ok")
+
+        with patch("pipeline.lyra.config._get_client") as mock_get:
+            mock_get.return_value.messages.create = fake_create
+            _call_anthropic_api(
+                minimax_settings,
+                model="claude-haiku-4-5-20251001",
+                max_tokens=20000,
+                temperature=0.3,
+                thinking={"type": "enabled", "budget_tokens": 2048},
+                messages=[{"role": "user", "content": "test"}],
+            )
+
+        # On MiniMax both coexist (unlike Claude, where they are exclusive).
+        assert captured["thinking"] == {"type": "enabled", "budget_tokens": 2048}
+        assert captured["temperature"] == 0.3
+
+
 class TestCallApiDispatch:
     def test_call_api_minimax_backend(self, minimax_settings):
         """call_api() dispatches through the unified path for MiniMax."""

@@ -135,22 +135,42 @@ def minimax_chat_anthropic(
     settings=None,
     *,
     temperature: float | None = None,
+    thinking: dict | None = None,
 ) -> str:
-    """Call MiniMax M2.7 via the Anthropic SDK (unified path).
+    """Call MiniMax-M3 via the Anthropic SDK (unified plain-text path).
 
     This replaces the old httpx-based minimax_chat() for the Theo pipeline.
     Uses the same Anthropic SDK client as the Lyra pipeline.
 
     `temperature` is keyword-only. When None, MiniMax picks its own default
-    (≈1.0 for M2.7). Theo V2 handlers should always pass an explicit stage
+    (≈1.0 for M3). Theo V2 handlers should always pass an explicit stage
     temperature from LyraSettings (temperature_research/synthesis/verification/narrative).
+
+    `thinking` is an optional MiniMax-M3 thinking block, e.g.
+    ``{"type": "enabled", "budget_tokens": 8192}`` (use config.thinking_for_effort()).
+    When None, M3 runs its default always-on thinking. Never pass
+    ``{"type": "disabled"}`` — M3 returns empty content for it (verified
+    2026-06-01); use a small budget instead. thinking and temperature coexist
+    on MiniMax. max_tokens is auto-raised to keep output headroom above the
+    thinking budget.
     """
-    from pipeline.lyra.config import _get_minimax_anthropic_client, _get_settings
+    from pipeline.lyra.config import (
+        _MINIMAX_THINKING_OUTPUT_HEADROOM,
+        _get_minimax_anthropic_client,
+        _get_settings,
+    )
 
     if settings is None:
         settings = _get_settings()
 
     client = _get_minimax_anthropic_client(settings)
+
+    # Reasoning shares the output budget; keep room so thinking can't starve the
+    # answer (tokens are free on the per-call plan, so raise rather than clip).
+    if isinstance(thinking, dict) and thinking.get("type") == "enabled":
+        needed = thinking.get("budget_tokens", 0) + _MINIMAX_THINKING_OUTPUT_HEADROOM
+        if max_tokens < needed:
+            max_tokens = needed
 
     # MiniMax requires temperature in (0, 1] — clamp any <=0 up to 0.01.
     create_kwargs: dict = {
@@ -159,6 +179,8 @@ def minimax_chat_anthropic(
         "system": system,
         "messages": [{"role": "user", "content": user_message}],
     }
+    if thinking is not None:
+        create_kwargs["thinking"] = thinking
     if temperature is not None:
         create_kwargs["temperature"] = 0.01 if temperature <= 0.0 else temperature
 
