@@ -22,9 +22,26 @@ logger = logging.getLogger(__name__)
 # Domains where fetching full content is pointless or blocked
 _SKIP_DOMAINS = {"doi.org", "youtube.com", "youtu.be", "wikipedia.org"}
 
+# Fallback cap when settings are unavailable. The effective cap is
+# resolved per-run from LyraSettings: source_max_content_chars (Anthropic) or
+# minimax_source_max_content_chars (MiniMax — M3's 1M context lets specialists
+# read full source text instead of 2K snippets).
 _MAX_CONTENT_CHARS = 2000
 _ALREADY_FETCHED_THRESHOLD = 500
 _HTTP_TIMEOUT = 10.0
+
+
+def _resolve_max_content_chars() -> int:
+    """Per-run source-text cap, backend-aware (MiniMax gets the 1M-context cap)."""
+    try:
+        from pipeline.lyra.config import _get_settings
+
+        settings = _get_settings()
+        if settings.llm_backend == "minimax":
+            return settings.minimax_source_max_content_chars
+        return settings.source_max_content_chars
+    except Exception:
+        return _MAX_CONTENT_CHARS
 
 
 def _is_safe_url(url: str) -> bool:
@@ -93,6 +110,8 @@ class ContentFetchHandler(BaseHandler):
             await self.bus.emit(ContentFetched(angle_id=event.angle_id))
             return
 
+        max_content_chars = _resolve_max_content_chars()
+
         self.emit_sse(
             {
                 "type": "status",
@@ -113,7 +132,7 @@ class ContentFetchHandler(BaseHandler):
                         content_type = resp.headers.get("content-type", "")
                         if "html" in content_type or not content_type:
                             text = _extract_text_from_html(resp.text)
-                            return sid, text[:_MAX_CONTENT_CHARS] if text else None
+                            return sid, text[:max_content_chars] if text else None
             except Exception as exc:
                 logger.debug("Content fetch failed for %s: %s", url, exc)
             return sid, None

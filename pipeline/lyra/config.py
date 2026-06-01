@@ -135,12 +135,18 @@ class LyraSettings(BaseSettings):
 
     # Long-context (M3 1M window). Per-call billing → context is free; the only
     # guard is the ~1M hard request limit (avoid HTTP 400), NOT cost.
+    # Default kept at 2000 (current behaviour) for a gated rollout; raise via
+    # LYRA_MINIMAX_SOURCE_MAX_CONTENT_CHARS=40000 for the A/B and flip the
+    # default once quality is confirmed ≥ baseline.
     source_max_content_chars: int = 2000
-    minimax_source_max_content_chars: int = 40000
+    minimax_source_max_content_chars: int = 2000
     long_context_hard_ceiling_tokens: int = 1_000_000
 
     # MiniMax recommended sampling + latency knobs (verified accepted on /anthropic).
-    minimax_top_p: float | None = 0.95
+    # Default None = no change to current behaviour; MiniMax recommends top_p=0.95
+    # — enable via env (LYRA_MINIMAX_TOP_P=0.95) once A/B-validated separately so
+    # it doesn't confound the 1M-context quality comparison.
+    minimax_top_p: float | None = None
     minimax_service_tier: str | None = None
 
     model_summarize: str = "claude-haiku-4-5-20251001"
