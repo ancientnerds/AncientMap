@@ -423,7 +423,7 @@ class PaperHandler(BaseHandler):
         settings = _get_settings()
         async with self.semaphore:
             # 1024 total budget: ~100 tokens of output prose plus headroom for
-            # M2.7's interleaved thinking. The previous 256 was routinely eaten
+            # M3's interleaved thinking. The previous 256 was routinely eaten
             # by the reasoning chain, leaving card descriptions empty/truncated.
             self.state.card_description = await asyncio.to_thread(
                 minimax_chat_anthropic,
@@ -897,7 +897,7 @@ class PaperHandler(BaseHandler):
             f"## Cited findings (carry these [N] markers into the prose)\n\n{findings_text}\n"
         )
 
-        # 4096 budget: hook is usually 300-500 output tokens, but M2.7 thinking
+        # 4096 budget: hook is usually 300-500 output tokens, but M3 thinking
         # can consume 2K+ before the prose starts. 2048 was too tight.
         raw = await self._llm_call(hook_prompt, user_msg, 4096, settings)
         hook = raw.strip()

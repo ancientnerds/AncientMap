@@ -1,6 +1,6 @@
 """Image query generator for the angle-level image research stage.
 
-Calls MiniMax M2.7 with an angle's topic + description and returns 3-5 short
+Calls MiniMax M3 with an angle's topic + description and returns 3-5 short
 concrete image search queries used downstream to fan out across connectors.
 """
 

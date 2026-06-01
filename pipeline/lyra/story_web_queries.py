@@ -1,6 +1,6 @@
 """Web query generator for news item web verification stage.
 
-Calls MiniMax M2.7 with a news item's post_text + facts and returns 3-5 short
+Calls MiniMax M3 with a news item's post_text + facts and returns 3-5 short
 concrete web search queries used downstream to find authoritative sources.
 """
 

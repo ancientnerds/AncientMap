@@ -80,7 +80,7 @@ def _load_prompt(name: str) -> str:
 
 
 def _parse_json(text: str) -> dict | list:
-    """Parse JSON from M2.7 response, handling markdown fencing."""
+    """Parse JSON from M3 response, handling markdown fencing."""
     cleaned = text.strip()
     if cleaned.startswith("```"):
         cleaned = cleaned.split("\n", 1)[1] if "\n" in cleaned else cleaned[3:]
@@ -88,7 +88,7 @@ def _parse_json(text: str) -> dict | list:
     try:
         return json.loads(cleaned)
     except (json.JSONDecodeError, ValueError):
-        logger.warning("Failed to parse JSON from M2.7 response: %s", cleaned[:200])
+        logger.warning("Failed to parse JSON from M3 response: %s", cleaned[:200])
         return {}
 
 

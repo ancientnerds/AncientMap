@@ -466,7 +466,7 @@ class SpecialistHandler(BaseHandler):
                 minimax_chat_anthropic,
                 prompt,
                 user_msg,
-                # M2.7's interleaved thinking shares this budget with output;
+                # M3's interleaved thinking shares this budget with output;
                 # 4096 was getting truncated mid-array on novelty assessments
                 # with 10+ new findings. Match the main specialist call so
                 # thinking has room without starving the JSON output.

@@ -1,4 +1,4 @@
-"""Shared MiniMax utilities for search and M2.7 chat.
+"""Shared MiniMax utilities for search and M3 chat.
 
 Used by the article verification pipeline (web_research.py), Theo's
 convergence orchestrator, and the standalone relevancy gate.
@@ -18,15 +18,15 @@ logger = logging.getLogger(__name__)
 
 # MiniMax model — single source of truth for every call site (config.py,
 # web_research.py, tweet_verifier.py, research_stages.py all import this).
-# Upgraded M2.7 → M3 on 2026-06-01; verified live via the Anthropic endpoint
-# (MiniMax-M3.0 aliases to MiniMax-M3; M2.7 still served as the prior model).
+# Upgraded M3 → M3 on 2026-06-01; verified live via the Anthropic endpoint
+# (MiniMax-M3.0 aliases to MiniMax-M3; M3 still served as the prior model).
 MINIMAX_MODEL = "MiniMax-M3"
 
 # MiniMax search endpoint (Token Plan / Coding Plan)
 MINIMAX_SEARCH_PATH = "/v1/coding_plan/search"
 MINIMAX_SEARCH_TIMEOUT = 15.0
 MINIMAX_CHAT_PATH = "/v1/chat/completions"
-MINIMAX_CHAT_TIMEOUT = 300.0  # 5 min — M2.7 reasoning + long paper generation needs time
+MINIMAX_CHAT_TIMEOUT = 300.0  # 5 min — M3 reasoning + long paper generation needs time
 
 
 @dataclass
@@ -89,7 +89,7 @@ def minimax_chat(
     user_message: str,
     max_tokens: int,
 ) -> str:
-    """Call MiniMax M2.7 chat completion, strip thinking tags.
+    """Call MiniMax M3 chat completion, strip thinking tags.
 
     Retries up to 3 times on 429 rate limit with exponential backoff.
     """
@@ -119,11 +119,11 @@ def minimax_chat(
                 logger.info(f"MiniMax error ({err_str[:50]}), retrying in {wait}s...")
                 time.sleep(wait)
                 continue
-            logger.warning(f"MiniMax M2.7 chat failed: {e}")
+            logger.warning(f"MiniMax M3 chat failed: {e}")
             return ""
 
     content = data.get("choices", [{}])[0].get("message", {}).get("content", "")
-    # M2.7 wraps reasoning in <think>...</think> tags -- strip them
+    # M3 wraps reasoning in <think>...</think> tags -- strip them
     clean = re.sub(r"<think>.*?</think>", "", content, flags=re.DOTALL).strip()
     return clean
 
@@ -183,6 +183,11 @@ def minimax_chat_anthropic(
         create_kwargs["thinking"] = thinking
     if temperature is not None:
         create_kwargs["temperature"] = 0.01 if temperature <= 0.0 else temperature
+    # MiniMax sampling/latency knobs (default None -> inert). Mirrors config.py.
+    if settings.minimax_top_p is not None:
+        create_kwargs["top_p"] = settings.minimax_top_p
+    if settings.minimax_service_tier:
+        create_kwargs["extra_body"] = {"service_tier": settings.minimax_service_tier}
 
     from pipeline.lyra.minimax_limiter import limiter
 
@@ -198,15 +203,15 @@ def minimax_chat_anthropic(
                     if hasattr(block, "text"):
                         parts.append(block.text)
                 content = "\n".join(parts)
-                # M2.7 may still wrap reasoning in <think>...</think> tags -- strip them
+                # M3 may still wrap reasoning in <think>...</think> tags -- strip them
                 clean = re.sub(r"<think>.*?</think>", "", content, flags=re.DOTALL).strip()
-                # Surface silent truncation: M2.7's interleaved thinking can
+                # Surface silent truncation: M3's interleaved thinking can
                 # consume the entire max_tokens budget, leaving zero/partial
                 # output. Log it so the caller can raise max_tokens if needed.
                 stop_reason = getattr(response, "stop_reason", None)
                 if stop_reason == "max_tokens":
                     logger.warning(
-                        "MiniMax M2.7 hit max_tokens=%d before finishing output "
+                        "MiniMax M3 hit max_tokens=%d before finishing output "
                         "(output len=%d chars). Consider raising the budget.",
                         max_tokens,
                         len(clean),
@@ -242,7 +247,7 @@ def minimax_chat_anthropic(
                     is_overload = "529" in error_str or "overloaded" in error_str
                     delay = (attempt + 1) * (10 if is_overload else 3)
                     logger.warning(
-                        "MiniMax M2.7 transient error (attempt %d/3), retrying in %ds: %s",
+                        "MiniMax M3 transient error (attempt %d/3), retrying in %ds: %s",
                         attempt + 1,
                         delay,
                         e,
@@ -254,7 +259,7 @@ def minimax_chat_anthropic(
                 break
 
     logger.warning(
-        f"MiniMax M2.7 Anthropic SDK call failed after {attempt + 1} attempts: {last_error}"
+        f"MiniMax M3 Anthropic SDK call failed after {attempt + 1} attempts: {last_error}"
     )
     return ""
 

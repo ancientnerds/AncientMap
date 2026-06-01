@@ -87,7 +87,7 @@ async def find_coverage_gaps(
     enum_prompt = (_PROMPTS / "canonical_coverage.txt").read_text(encoding="utf-8")
     try:
         raw = await llm_call(enum_prompt, question, 1024, settings, 0.2)
-        # MiniMax M2.7 occasionally returns an empty string when interleaved
+        # MiniMax M3 occasionally returns an empty string when interleaved
         # thinking consumes the entire output budget. That's a known failure
         # mode, not a parse bug — short-circuit it as a clean "no result"
         # instead of logging json.JSONDecodeError noise on every run.

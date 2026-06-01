@@ -207,7 +207,7 @@ class LyraSettings(BaseSettings):
     minimax_api_key: str = ""
     minimax_base_url: str = "https://api.minimax.io/anthropic"
 
-    # Article web verification backend: "minimax" (MiniMax search API + M2.7
+    # Article web verification backend: "minimax" (MiniMax search API + M3
     # per-section structured corrections) or "anthropic" (Opus + web_search tool)
     article_web_backend: str = "minimax"
 
@@ -501,8 +501,18 @@ def _call_anthropic_api(
             temperature = max(settings.temperature_min, temperature)
         create_kwargs["temperature"] = temperature
 
+    # [MINIMAX] top_p — apply the configured MiniMax default when the caller
+    # didn't pass one. Defaults to None (no change); set LYRA_MINIMAX_TOP_P=0.95
+    # (MiniMax's recommendation) once validated.
+    if is_minimax and top_p is None and settings.minimax_top_p is not None:
+        top_p = settings.minimax_top_p
     if top_p is not None:
         create_kwargs["top_p"] = top_p
+
+    # [MINIMAX] service_tier — optional latency tier (e.g. "priority"). Passed
+    # via extra_body since it's a MiniMax extension, not a native Anthropic param.
+    if is_minimax and settings.minimax_service_tier:
+        create_kwargs["extra_body"] = {"service_tier": settings.minimax_service_tier}
 
     if timeout is not None:
         import httpx

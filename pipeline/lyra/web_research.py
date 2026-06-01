@@ -2,7 +2,7 @@
 
 Provides an abstraction layer for web search + LLM verification so the
 article pipeline can switch between Anthropic (Opus + built-in web search)
-and MiniMax (search API + M2.7 per-section verification).
+and MiniMax (search API + M3 per-section verification).
 
 Usage:
     backend = get_web_research_backend(settings)
@@ -33,7 +33,7 @@ logger = logging.getLogger(__name__)
 PROMPTS_DIR = Path(__file__).parent / "prompts"
 ARTICLE_TIMEOUT = 600.0
 
-# M2.7 is a reasoning model — thinking consumes ~2-4K tokens from the budget
+# M3 is a reasoning model — thinking consumes ~2-4K tokens from the budget
 MINIMAX_CLAIM_MAX_TOKENS = 4096
 MINIMAX_VERIFY_MAX_TOKENS = 8192
 
@@ -145,17 +145,17 @@ class AnthropicWebResearch(WebResearchBackend):
 
 
 # ---------------------------------------------------------------------------
-# MiniMax backend — search API + M2.7 per-section verification
+# MiniMax backend — search API + M3 per-section verification
 # ---------------------------------------------------------------------------
 
 
 class MiniMaxWebResearch(WebResearchBackend):
-    """Uses MiniMax search API for web search + M2.7 for per-section verification.
+    """Uses MiniMax search API for web search + M3 for per-section verification.
 
     Flow per section:
-      1. M2.7 extracts 3-7 verifiable claims as search queries
+      1. M3 extracts 3-7 verifiable claims as search queries
       2. MiniMax search API runs each query → structured results
-      3. M2.7 verifies section text against search results → corrections + citations
+      3. M3 verifies section text against search results → corrections + citations
     """
 
     def __init__(self, settings: LyraSettings):
@@ -168,16 +168,16 @@ class MiniMaxWebResearch(WebResearchBackend):
         """Call MiniMax search endpoint."""
         return minimax_search(self._client, query)
 
-    # -- M2.7 chat --
+    # -- M3 chat --
 
     def _chat(self, system: str, user_message: str, max_tokens: int) -> str:
-        """Call MiniMax M2.7 chat completion, strip thinking tags."""
+        """Call MiniMax M3 chat completion, strip thinking tags."""
         return minimax_chat(self._client, MINIMAX_MODEL, system, user_message, max_tokens)
 
     # -- Claim extraction --
 
     def _extract_claims(self, section_text: str) -> list[str]:
-        """Use M2.7 to extract verifiable claims as search queries."""
+        """Use M3 to extract verifiable claims as search queries."""
         system = _load_prompt("article_web_claims.txt")
         text = self._chat(system, section_text, MINIMAX_CLAIM_MAX_TOKENS)
         if not text:
@@ -195,14 +195,14 @@ class MiniMaxWebResearch(WebResearchBackend):
             if isinstance(queries, list):
                 return [q for q in queries if isinstance(q, str)]
         except (json.JSONDecodeError, KeyError):
-            logger.warning(f"Failed to parse M2.7 claims JSON: {cleaned[:200]}")
+            logger.warning(f"Failed to parse M3 claims JSON: {cleaned[:200]}")
         return []
 
     # -- Section verification (structured corrections) --
 
     @staticmethod
     def _parse_json(text: str) -> list | dict:
-        """Parse JSON from M2.7 response, stripping markdown fences."""
+        """Parse JSON from M3 response, stripping markdown fences."""
         cleaned = text.strip()
         if cleaned.startswith("```"):
             cleaned = cleaned.split("\n", 1)[1] if "\n" in cleaned else cleaned[3:]
@@ -212,9 +212,9 @@ class MiniMaxWebResearch(WebResearchBackend):
     def _verify_section(
         self, section_text: str, search_results: list[WebSearchResult]
     ) -> SectionVerification:
-        """Use M2.7 to identify corrections as structured JSON, then apply them.
+        """Use M3 to identify corrections as structured JSON, then apply them.
 
-        M2.7 never rewrites text — it outputs find/replace pairs.  We apply
+        M3 never rewrites text — it outputs find/replace pairs.  We apply
         them programmatically so [N] citation markers are never touched.
         """
         if not search_results:
@@ -363,7 +363,7 @@ class MiniMaxWebResearch(WebResearchBackend):
     # -- Main entry point --
 
     def verify_article(self, body: str) -> tuple[str, list[WebSearchResult]]:
-        """Per-section web verification with MiniMax search + M2.7.
+        """Per-section web verification with MiniMax search + M3.
 
         Sections are verified in parallel using a thread pool — each section
         runs its own claim→search→verify pipeline independently.

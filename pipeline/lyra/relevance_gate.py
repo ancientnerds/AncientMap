@@ -1,6 +1,6 @@
 """Relevancy gate for Theo research requests.
 
-A fast M2.7 classification that rejects questions unrelated to the ancient
+A fast M3 classification that rejects questions unrelated to the ancient
 or historical world. Called standalone by the /theo/check-relevance route
 before a user spends credits on a full research run.
 """
