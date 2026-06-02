@@ -11,11 +11,39 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import sys
 import time
 
 
+def _maybe_shrink_config() -> None:
+    """THEO_FAST=1 → bound the convergence to a fast profile (fewer angles/
+    rounds) so a single run completes in ~15-20 min instead of 60+. Produces a
+    real multi-angle paper, just shallower than the full 12-angle config."""
+    if os.getenv("THEO_FAST") != "1":
+        return
+    import pipeline.lyra.convergence_orchestrator as co
+
+    _orig = co.ResearchConfig
+
+    def _small():
+        c = _orig()
+        # Fewer angles + a single debate round (debate is the slow part), but
+        # keep per-angle search depth near default so coverage gates still pass.
+        c.max_angles = 5
+        c.initial_specialist_count = 3
+        c.min_specialists = 2
+        c.max_specialists = 5
+        c.max_search_rounds_per_angle = 3
+        c.max_debate_rounds = 1
+        # saturation_threshold + queries_per_angle left at defaults (2, 5).
+        return c
+
+    co.ResearchConfig = _small
+
+
 async def _run(question: str) -> None:
+    _maybe_shrink_config()
     from pipeline.lyra.convergence_orchestrator import ConvergenceOrchestrator
 
     t0 = time.monotonic()
