@@ -147,30 +147,18 @@ export async function loadFrontLayer(
 
       coordSets.forEach((coords: number[][]) => {
         if (coords.length > 1) {
-          // Filter out artificial Antarctic boundaries while preserving line continuity
-          let segmentStarted = false
-          for (let i = 0; i < coords.length; i++) {
-            const coord = coords[i]
-            const nextCoord = coords[i + 1]
-
-            // Check if this segment should be skipped
-            if (nextCoord && isArtificialAntarcticBoundary(coord, nextCoord)) {
-              // End current segment if one was started
-              if (segmentStarted) {
-                allPositions.push(NaN, NaN, NaN)
-                segmentStarted = false
-              }
-              continue
-            }
-
-            // Add vertex
-            const point = latLngTo3DRef(coord[1], coord[0], config.radius)
-            allPositions.push(point.x, point.y, point.z)
-            segmentStarted = true
-          }
-          // Add NaN to create line break (visual separation between features)
-          if (segmentStarted) {
-            allPositions.push(NaN, NaN, NaN)
+          // Build explicit line segments (vertex pairs). We do NOT use NaN
+          // separators to break a LINE_STRIP: NaN vertices are undefined behavior
+          // in WebGL and corrupt geometry on some GPUs (ANGLE/Metal on macOS),
+          // rotating/displacing features. LineSegments needs no separator at all.
+          for (let i = 0; i < coords.length - 1; i++) {
+            const a = coords[i]
+            const b = coords[i + 1]
+            // Skip artificial Antarctic boundary segments (no line drawn)
+            if (isArtificialAntarcticBoundary(a, b)) continue
+            const pa = latLngTo3DRef(a[1], a[0], config.radius)
+            const pb = latLngTo3DRef(b[1], b[0], config.radius)
+            allPositions.push(pa.x, pa.y, pa.z, pb.x, pb.y, pb.z)
           }
         }
       })
@@ -178,19 +166,12 @@ export async function loadFrontLayer(
 
     // Function called when all chunks are processed
     const finishProcessing = () => {
-      // Remove trailing NaN values to avoid computeBoundingSphere errors
-      while (allPositions.length >= 3 && isNaN(allPositions[allPositions.length - 1])) {
-        allPositions.pop()
-        allPositions.pop()
-        allPositions.pop()
-      }
-
       // Create single merged geometry
       const geometry = new THREE.BufferGeometry()
       geometry.setAttribute('position', new THREE.Float32BufferAttribute(allPositions, 3))
-      // Set bounding sphere manually to avoid NaN issues from line breaks
+      // Set bounding sphere manually (positions all sit near the unit sphere)
       geometry.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0, 0), config.radius + 0.01)
-      const line = new THREE.Line(geometry, material)
+      const line = new THREE.LineSegments(geometry, material)
       line.visible = vectorLayers[layerKey]
       line.renderOrder = 10
       globe.add(line)
@@ -634,30 +615,18 @@ export async function loadBackLayer(
 
       coordSets.forEach((coords: number[][]) => {
         if (coords.length > 1) {
-          // Filter out artificial Antarctic boundaries while preserving line continuity
-          let segmentStarted = false
-          for (let i = 0; i < coords.length; i++) {
-            const coord = coords[i]
-            const nextCoord = coords[i + 1]
-
-            // Check if this segment should be skipped
-            if (nextCoord && isArtificialAntarcticBoundary(coord, nextCoord)) {
-              // End current segment if one was started
-              if (segmentStarted) {
-                allPositions.push(NaN, NaN, NaN)
-                segmentStarted = false
-              }
-              continue
-            }
-
-            // Add vertex
-            const point = latLngTo3DRef(coord[1], coord[0], backRadius)
-            allPositions.push(point.x, point.y, point.z)
-            segmentStarted = true
-          }
-          // Add NaN to create line break (visual separation between features)
-          if (segmentStarted) {
-            allPositions.push(NaN, NaN, NaN)
+          // Build explicit line segments (vertex pairs). We do NOT use NaN
+          // separators to break a LINE_STRIP: NaN vertices are undefined behavior
+          // in WebGL and corrupt geometry on some GPUs (ANGLE/Metal on macOS),
+          // rotating/displacing features. LineSegments needs no separator at all.
+          for (let i = 0; i < coords.length - 1; i++) {
+            const a = coords[i]
+            const b = coords[i + 1]
+            // Skip artificial Antarctic boundary segments (no line drawn)
+            if (isArtificialAntarcticBoundary(a, b)) continue
+            const pa = latLngTo3DRef(a[1], a[0], backRadius)
+            const pb = latLngTo3DRef(b[1], b[0], backRadius)
+            allPositions.push(pa.x, pa.y, pa.z, pb.x, pb.y, pb.z)
           }
         }
       })
@@ -665,19 +634,12 @@ export async function loadBackLayer(
 
     // Function called when all chunks are processed
     const finishProcessing = () => {
-      // Remove trailing NaN values to avoid computeBoundingSphere errors
-      while (allPositions.length >= 3 && isNaN(allPositions[allPositions.length - 1])) {
-        allPositions.pop()
-        allPositions.pop()
-        allPositions.pop()
-      }
-
       // Create single merged geometry
       const geometry = new THREE.BufferGeometry()
       geometry.setAttribute('position', new THREE.Float32BufferAttribute(allPositions, 3))
-      // Set bounding sphere manually to avoid NaN issues from line breaks
+      // Set bounding sphere manually (positions all sit near the unit sphere)
       geometry.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0, 0), backRadius + 0.01)
-      const line = new THREE.Line(geometry, material)
+      const line = new THREE.LineSegments(geometry, material)
       // Hide back lines in satellite mode (satellite is fully opaque)
       line.visible = vectorLayers[layerKey] && !tileLayers.satellite
       line.renderOrder = -10

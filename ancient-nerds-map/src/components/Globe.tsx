@@ -1794,21 +1794,16 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
 
         for (const coords of coordSets) {
           if (coords.length > 1) {
-            for (const coord of coords) {
-              const point = latLngTo3DRef(coord[1], coord[0], radius)
-              allPositions.push(point.x, point.y, point.z)
+            // Explicit segment pairs for THREE.LineSegments — no NaN separators.
+            // NaN vertices in a LINE_STRIP are WebGL undefined behavior and corrupt
+            // geometry on some GPUs (ANGLE/Metal on macOS).
+            for (let i = 0; i < coords.length - 1; i++) {
+              const pa = latLngTo3DRef(coords[i][1], coords[i][0], radius)
+              const pb = latLngTo3DRef(coords[i + 1][1], coords[i + 1][0], radius)
+              allPositions.push(pa.x, pa.y, pa.z, pb.x, pb.y, pb.z)
             }
-            // NaN line break between features
-            allPositions.push(NaN, NaN, NaN)
           }
         }
-      }
-
-      // Remove trailing NaN
-      while (allPositions.length >= 3 && isNaN(allPositions[allPositions.length - 1])) {
-        allPositions.pop()
-        allPositions.pop()
-        allPositions.pop()
       }
 
       if (allPositions.length === 0) {
@@ -1824,7 +1819,7 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
       geometry.setAttribute('position', new THREE.Float32BufferAttribute(allPositions, 3))
       geometry.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0, 0), radius + 0.01)
 
-      const line = new THREE.Line(geometry, material)
+      const line = new THREE.LineSegments(geometry, material)
       line.renderOrder = 10
       sceneRef.current.globe.add(line)
 

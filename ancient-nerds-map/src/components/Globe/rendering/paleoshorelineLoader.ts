@@ -115,7 +115,7 @@ export async function loadPaleoshoreline(
       const geometry = new THREE.BufferGeometry()
       geometry.setAttribute('position', new THREE.Float32BufferAttribute(cachedPositions, 3))
       geometry.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0, 0), 1.003)
-      const line = new THREE.Line(geometry, material)
+      const line = new THREE.LineSegments(geometry, material)
       line.renderOrder = 5
       sceneRef.current.globe.add(line)
       paleoshorelineLinesRef.current = [line]
@@ -155,13 +155,16 @@ export async function loadPaleoshoreline(
         const coords = feature.geometry?.coordinates
         if (!coords || coords.length < 2) continue
 
-        for (const coord of coords) {
-          const [lon, lat] = coord
-          const [x, y, z] = latLngTo3DArray(lat, lon, 1.002)
-          allPositions.push(x, y, z)
+        // Explicit segment pairs for THREE.LineSegments — no NaN separators.
+        // NaN vertices in a LINE_STRIP are WebGL undefined behavior and corrupt
+        // geometry on some GPUs (ANGLE/Metal on macOS).
+        for (let c = 0; c < coords.length - 1; c++) {
+          const [lon1, lat1] = coords[c]
+          const [lon2, lat2] = coords[c + 1]
+          const [x1, y1, z1] = latLngTo3DArray(lat1, lon1, 1.002)
+          const [x2, y2, z2] = latLngTo3DArray(lat2, lon2, 1.002)
+          allPositions.push(x1, y1, z1, x2, y2, z2)
         }
-        // NaN creates a line break
-        allPositions.push(NaN, NaN, NaN)
       }
 
       featureIndex = endIndex
@@ -171,13 +174,6 @@ export async function loadPaleoshoreline(
         requestAnimationFrame(processChunk)
       } else {
         // Done - create geometry
-        // Remove trailing NaN values to avoid computeBoundingSphere errors
-        while (allPositions.length >= 3 && isNaN(allPositions[allPositions.length - 1])) {
-          allPositions.pop()
-          allPositions.pop()
-          allPositions.pop()
-        }
-
         // Check if this load is still the current one (prevents multiple shorelines)
         if (loadId !== paleoshorelineLoadIdRef.current) {
           material.dispose()
@@ -192,7 +188,7 @@ export async function loadPaleoshoreline(
           const geometry = new THREE.BufferGeometry()
           geometry.setAttribute('position', new THREE.Float32BufferAttribute(positionsArray, 3))
           geometry.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0, 0), 1.003)
-          const line = new THREE.Line(geometry, material)
+          const line = new THREE.LineSegments(geometry, material)
           line.renderOrder = 5
           sceneRef.current.globe.add(line)
           paleoshorelineLinesRef.current = [line]

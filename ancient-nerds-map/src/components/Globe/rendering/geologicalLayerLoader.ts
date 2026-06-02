@@ -49,24 +49,28 @@ function latLngTo3DArray(lat: number, lng: number, r: number): [number, number, 
 /** Size of cross marker for point features, in degrees */
 const CROSS_SIZE = 0.05
 
+// Geometry is rendered with THREE.LineSegments (explicit vertex pairs), so each
+// drawn segment is independent and we never push NaN separators. NaN vertices in
+// a LINE_STRIP are WebGL undefined behavior and corrupt geometry on some GPUs.
 function pushCrossMarker(positions: number[], lat: number, lng: number, r: number): void {
-  // Horizontal stroke
+  // Horizontal stroke (one segment)
   const [x1, y1, z1] = latLngTo3DArray(lat, lng - CROSS_SIZE, r)
   const [x2, y2, z2] = latLngTo3DArray(lat, lng + CROSS_SIZE, r)
-  positions.push(x1, y1, z1, x2, y2, z2, NaN, NaN, NaN)
-  // Vertical stroke
+  positions.push(x1, y1, z1, x2, y2, z2)
+  // Vertical stroke (one segment)
   const [x3, y3, z3] = latLngTo3DArray(lat - CROSS_SIZE, lng, r)
   const [x4, y4, z4] = latLngTo3DArray(lat + CROSS_SIZE, lng, r)
-  positions.push(x3, y3, z3, x4, y4, z4, NaN, NaN, NaN)
+  positions.push(x3, y3, z3, x4, y4, z4)
 }
 
 function pushLineCoords(positions: number[], coords: number[][], r: number): void {
-  for (const coord of coords) {
-    const [lon, lat] = coord
-    const [x, y, z] = latLngTo3DArray(lat, lon, r)
-    positions.push(x, y, z)
+  for (let i = 0; i < coords.length - 1; i++) {
+    const [lon1, lat1] = coords[i]
+    const [lon2, lat2] = coords[i + 1]
+    const [x1, y1, z1] = latLngTo3DArray(lat1, lon1, r)
+    const [x2, y2, z2] = latLngTo3DArray(lat2, lon2, r)
+    positions.push(x1, y1, z1, x2, y2, z2)
   }
-  positions.push(NaN, NaN, NaN)
 }
 
 function pushPolygonCoords(positions: number[], rings: number[][][], r: number): void {
@@ -198,11 +202,6 @@ export async function loadGeologicalLayer(
       if (featureIndex < features.length) {
         requestAnimationFrame(processChunk)
       } else {
-        // Remove trailing NaN
-        while (allPositions.length >= 3 && isNaN(allPositions[allPositions.length - 1])) {
-          allPositions.pop(); allPositions.pop(); allPositions.pop()
-        }
-
         if (loadId !== geologicalLoadIdsRef.current[key]) { material.dispose(); return }
 
         if (allPositions.length > 0 && sceneRef.current) {
@@ -238,7 +237,7 @@ function createAndAddLine(
   const geometry = new THREE.BufferGeometry()
   geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
   geometry.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0, 0), 1.003)
-  const line = new THREE.Line(geometry, material)
+  const line = new THREE.LineSegments(geometry, material)
   line.renderOrder = 5
   sceneRef.current.globe.add(line)
 
