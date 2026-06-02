@@ -146,10 +146,11 @@ class LyraSettings(BaseSettings):
     long_context_hard_ceiling_tokens: int = 1_000_000
 
     # MiniMax recommended sampling + latency knobs (verified accepted on /anthropic).
-    # Default None = no change to current behaviour; MiniMax recommends top_p=0.95
-    # — enable via env (LYRA_MINIMAX_TOP_P=0.95) once A/B-validated separately so
-    # it doesn't confound the 1M-context quality comparison.
-    minimax_top_p: float | None = None
+    # top_p=0.95 is MiniMax's own recommendation for M3 (trims the improbable
+    # token tail without over-constraining). Applied for the MiniMax backend only;
+    # per-stage temperatures stay as-is. Override via LYRA_MINIMAX_TOP_P; set None
+    # to fall back to the model default. service_tier stays off by default.
+    minimax_top_p: float | None = 0.95
     minimax_service_tier: str | None = None
 
     model_summarize: str = "claude-haiku-4-5-20251001"
