@@ -135,11 +135,14 @@ class LyraSettings(BaseSettings):
 
     # Long-context (M3 1M window). Per-call billing → context is free; the only
     # guard is the ~1M hard request limit (avoid HTTP 400), NOT cost.
-    # Default kept at 2000 (current behaviour) for a gated rollout; raise via
-    # LYRA_MINIMAX_SOURCE_MAX_CONTENT_CHARS=40000 for the A/B and flip the
-    # default once quality is confirmed ≥ baseline.
+    # MiniMax default raised 2000 -> 12000 (2026-06-02). Validated at the
+    # specialist stage: feeding fuller source text (vs 2000-char snippets)
+    # roughly DOUBLED extracted findings (5-6 -> 10-14) with NO structured-output
+    # breakage (the retry fix handles the larger prompts). 12000 captures typical
+    # full articles; beyond that gave no gain (40000 = needless prompt bloat).
+    # Anthropic backend stays at 2000.
     source_max_content_chars: int = 2000
-    minimax_source_max_content_chars: int = 2000
+    minimax_source_max_content_chars: int = 12000
     long_context_hard_ceiling_tokens: int = 1_000_000
 
     # MiniMax recommended sampling + latency knobs (verified accepted on /anthropic).
