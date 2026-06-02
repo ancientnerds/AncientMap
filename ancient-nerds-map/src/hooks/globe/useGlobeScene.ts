@@ -213,7 +213,9 @@ export function useGlobeScene(options: UseGlobeSceneOptions) {
       premultipliedAlpha: false
     })
     renderer.setSize(window.innerWidth, window.innerHeight)
-    renderer.setPixelRatio(window.devicePixelRatio)
+    // Cap DPR at 2: high-DPR tablets otherwise inflate the framebuffer and
+    // exhaust GPU memory. Desktop/retina is already <=2, so no visible change.
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
     renderer.setClearColor(0x000000, 0)
     renderer.domElement.style.background = 'transparent'
     container.appendChild(renderer.domElement)

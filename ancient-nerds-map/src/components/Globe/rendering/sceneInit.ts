@@ -90,7 +90,9 @@ export function initializeScene(
     premultipliedAlpha: false  // Required for proper alpha compositing with Mapbox behind
   })
   renderer.setSize(window.innerWidth, window.innerHeight)
-  renderer.setPixelRatio(window.devicePixelRatio)
+  // Cap DPR at 2: high-DPR tablets (DPR 2.5-3) otherwise inflate the framebuffer
+  // and exhaust GPU memory. Desktop/retina is already <=2, so no visible change.
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
   // Make Three.js canvas transparent so Mapbox shows through
   renderer.setClearColor(0x000000, 0)
   renderer.domElement.style.background = 'transparent'

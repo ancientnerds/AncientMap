@@ -11,6 +11,7 @@
 import { useEffect, useState } from 'react'
 import * as THREE from 'three'
 import type { GlobeRefs } from './types'
+import { getBasemapTier, getBasemapAssets } from '../../utils/deviceTier'
 
 interface UseTextureLoadingOptions {
   refs: GlobeRefs
@@ -31,14 +32,17 @@ export function useTextureLoading({
   const [backgroundLoadingComplete, setBackgroundLoadingComplete] = useState(false)
   const [lowFpsReady, setLowFpsReady] = useState(false)
 
-  // Texel size for high resolution textures (16384x8192)
-  const texelSize = new THREE.Vector2(1.0 / 16384, 1.0 / 8192)
-
-  // Load HIGH quality textures DURING INITIAL LOADING SCREEN
+  // Load basemap textures DURING INITIAL LOADING SCREEN.
+  // Tier is chosen from the GPU's real max texture size + a touch/mobile
+  // heuristic so memory-constrained tablets get a smaller asset instead of
+  // crashing on the 16384px (~512 MB) upload. Desktop keeps the high tier.
   useEffect(() => {
     if (!sceneReady) return
 
-    console.log('[Loading] Starting texture loading...')
+    const maxTextureSize = refs.scene.current?.renderer.capabilities.maxTextureSize ?? 0
+    const tier = getBasemapTier(maxTextureSize)
+    const assets = getBasemapAssets(tier)
+    console.log(`[Loading] Starting texture loading (tier=${tier}, maxTextureSize=${maxTextureSize})...`)
     const loader = new THREE.TextureLoader()
     let loadedCount = 0
     const totalTextures = 2
@@ -55,8 +59,8 @@ export function useTextureLoading({
       }
     }
 
-    // Load HIGH quality grayscale basemap
-    loader.load('/data/basemaps/gray_dark_high.webp', (texture) => {
+    // Load grayscale basemap (tiered)
+    loader.load(assets.gray, (texture) => {
       console.log('[Loading] Gray basemap loaded')
       texture.colorSpace = THREE.SRGBColorSpace
       texture.generateMipmaps = true
@@ -70,8 +74,8 @@ export function useTextureLoading({
       checkAllLoaded() // Still count as loaded to not block forever
     })
 
-    // Load HIGH quality satellite
-    loader.load('/data/basemaps/satellite_high.webp', (texture) => {
+    // Load satellite basemap (tiered)
+    loader.load(assets.satellite, (texture) => {
       console.log('[Loading] Satellite loaded')
       texture.colorSpace = THREE.SRGBColorSpace
       texture.generateMipmaps = true
@@ -99,7 +103,11 @@ export function useTextureLoading({
     const material = basemapMesh.material as THREE.ShaderMaterial
     const allFrontMaterials = [material, ...refs.basemapSectionMeshes.current.map(m => m.material as THREE.ShaderMaterial)]
 
-    // Set texel size for back mesh blur effect (front materials don't use it)
+    // Set texel size for back mesh blur effect (front materials don't use it).
+    // Must match the resolution of the tier actually loaded.
+    const maxTextureSize = refs.scene.current?.renderer.capabilities.maxTextureSize ?? 0
+    const assets = getBasemapAssets(getBasemapTier(maxTextureSize))
+    const texelSize = new THREE.Vector2(1.0 / assets.width, 1.0 / assets.height)
     const backMesh = refs.basemapBackMesh.current
     if (backMesh) {
       const backMaterial = backMesh.material as THREE.ShaderMaterial
