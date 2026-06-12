@@ -15,6 +15,7 @@ from pipeline.lyra.config import (
     LyraSettings,
     call_api,
 )
+from pipeline.lyra.minimax_shared import _coerce_to_schema
 from pipeline.lyra.transcript_fetcher import extract_transcript_segment, parse_timestamp_to_seconds
 
 logger = logging.getLogger(__name__)
@@ -106,6 +107,11 @@ SUMMARY_SCHEMA = {
     "required": ["key_topics"],
     "additionalProperties": False,
 }
+
+# facts is stored verbatim into news_items.facts (JSONB) and re-validated by
+# the API as list[str] — coerce against this exact sub-schema at the parse
+# boundary (MiniMax does not enforce the declared json_schema).
+_FACTS_SCHEMA = SUMMARY_SCHEMA["properties"]["key_topics"]["items"]["properties"]["facts"]
 
 
 def _load_prompt() -> str:
@@ -308,6 +314,33 @@ def summarize_video(
         except json.JSONDecodeError:
             logger.warning(f"key_topics is a malformed string for {video.id}, skipping")
             return False
+    if not isinstance(key_topics, list):
+        logger.warning(f"key_topics is {type(key_topics).__name__} for {video.id}, skipping")
+        return False
+
+    # Boundary normalisation, same as structured_llm_call() does for Theo:
+    # MiniMax does not enforce the declared json_schema. On 2026-06-09 it
+    # returned facts as nested {"item": ..., "$text": ...} dicts (stray <item>
+    # XML converted by its backend), which were stored raw and crashed
+    # /api/news/feed validation. Coerce facts to the declared array-of-strings
+    # and drop topics left without any usable facts.
+    usable_topics = []
+    for topic in key_topics:
+        if not isinstance(topic, dict):
+            logger.warning(f"Malformed topic in {video.id}: {type(topic).__name__}, skipping")
+            continue
+        facts = _coerce_to_schema(topic.get("facts") or [], _FACTS_SCHEMA)
+        if not facts:
+            logger.warning(
+                f"Topic without usable facts in {video.id}: "
+                f"{str(topic.get('headline'))[:80]!r}, skipping"
+            )
+            continue
+        topic["facts"] = facts
+        usable_topics.append(topic)
+    key_topics = usable_topics
+    summary_data["key_topics"] = key_topics
+
     if not key_topics:
         logger.warning(f"No key topics found for {video.id}")
         return False
