@@ -6,7 +6,7 @@ import re
 from datetime import UTC, datetime, timedelta
 
 from youtube_transcript_api import YouTubeTranscriptApi
-from youtube_transcript_api.proxies import WebshareProxyConfig
+from youtube_transcript_api.proxies import GenericProxyConfig, WebshareProxyConfig
 
 from pipeline.database import NewsChannel, NewsVideo, get_session
 from pipeline.lyra.config import LyraSettings
@@ -36,7 +36,18 @@ class PremiereNotReadyError(Exception):
 
 
 def _build_ytt_api(settings: LyraSettings) -> YouTubeTranscriptApi:
-    """Build a YouTubeTranscriptApi instance, optionally with Webshare proxy."""
+    """Build a YouTubeTranscriptApi instance, optionally with a proxy.
+
+    LYRA_PROXY_URL (home-IP exit) takes precedence over Webshare. No
+    blocked-retries on the generic proxy: the home IP is static until the
+    daily Telekom reconnect, so retrying a block would not change the IP.
+    """
+    if settings.proxy_url:
+        proxy_config = GenericProxyConfig(
+            http_url=settings.proxy_url,
+            https_url=settings.proxy_url,
+        )
+        return YouTubeTranscriptApi(proxy_config=proxy_config)
     if settings.webshare_username and settings.webshare_password:
         proxy_config = WebshareProxyConfig(
             proxy_username=settings.webshare_username,

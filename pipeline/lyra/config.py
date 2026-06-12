@@ -197,6 +197,11 @@ class LyraSettings(BaseSettings):
     # Web verification for stories (0 = disabled)
     story_web_verify_min_significance: int = 2
 
+    # Generic HTTP proxy for all YouTube-facing requests (transcripts +
+    # storyboards). Takes precedence over Webshare when set. Used for the
+    # home-IP exit via Tailscale: http://<pi-tailnet-ip>:8888 (tinyproxy).
+    proxy_url: str = ""
+
     # Webshare proxy (for YouTube transcript fetching from VPS)
     webshare_username: str = ""
     webshare_password: str = ""

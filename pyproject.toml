@@ -122,7 +122,7 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/*" = ["S101"]  # Allow asserts in tests
+"tests/*" = ["S101", "S106"]  # Allow asserts + dummy credentials in tests
 "scripts/*" = ["S602", "S603", "S607"]  # Allow subprocess in scripts
 
 [tool.ruff.lint.isort]

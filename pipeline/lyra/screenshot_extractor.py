@@ -45,7 +45,13 @@ _VIDEO_ID_RE = re.compile(r"^[A-Za-z0-9_-]{11}$")
 
 
 def get_proxy_url(settings: LyraSettings) -> str | None:
-    """Build a proxy URL from Webshare rotating residential credentials."""
+    """Proxy URL for YouTube storyboard requests.
+
+    LYRA_PROXY_URL (home-IP exit via Tailscale) takes precedence; otherwise
+    Webshare rotating residential credentials.
+    """
+    if settings.proxy_url:
+        return settings.proxy_url
     if settings.webshare_username and settings.webshare_password:
         username = settings.webshare_username
         if not username.endswith("-rotate"):
