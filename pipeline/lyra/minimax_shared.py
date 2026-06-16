@@ -165,6 +165,18 @@ def minimax_chat_anthropic(
 
     client = _get_minimax_anthropic_client(settings)
 
+    # M3's default (thinking=None) runs UNBOUNDED interleaved reasoning that
+    # routinely exhausts the entire max_tokens budget and returns empty content
+    # — the root cause of empty Theo papers and the narrative prose stages
+    # (_write_hook/_write_investigation_section) coming back blank. Force a
+    # bounded default ("medium") so output always has room. thinking_for_effort()
+    # returns None when thinking is disabled in settings (M3 default preserved);
+    # explicit callers that pass their own thinking block are unaffected.
+    if thinking is None:
+        from pipeline.lyra.config import thinking_for_effort
+
+        thinking = thinking_for_effort("medium", settings)
+
     # Reasoning shares the output budget; keep room so thinking can't starve the
     # answer (tokens are free on the per-call plan, so raise rather than clip).
     if isinstance(thinking, dict) and thinking.get("type") == "enabled":

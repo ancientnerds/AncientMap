@@ -388,10 +388,13 @@ def _call_anthropic_api(
     # On Anthropic this kwarg is a no-op (Claude has no budget knob); on MiniMax
     # it was previously discarded entirely so every call ran M3's default
     # always-on thinking, which shares (and routinely exhausts) the max_tokens
-    # budget. An explicit thinking block bounds reasoning and preserves output.
-    # Only fills in when the caller didn't pass an explicit `thinking=` block.
-    if is_minimax and thinking_config is None and reasoning_effort is not None:
-        thinking_config = thinking_for_effort(reasoning_effort, settings)
+    # budget — the root cause of empty Theo papers ("paper_substance: 2") and
+    # "Decomposition produced no research angles". An explicit thinking block
+    # bounds reasoning and preserves output. Only fills in when the caller didn't
+    # pass an explicit `thinking=` block; defaults to "medium" when no effort is
+    # given, so NO call site can fall back to unbounded thinking.
+    if is_minimax and thinking_config is None:
+        thinking_config = thinking_for_effort(reasoning_effort or "medium", settings)
 
     # Guard the structured-output tool trick: with an explicit thinking budget
     # AND too small a max_tokens, M3 silently skips the forced tool call and
