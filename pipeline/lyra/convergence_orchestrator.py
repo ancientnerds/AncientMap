@@ -34,6 +34,32 @@ from pipeline.lyra.research_state import (
 
 logger = logging.getLogger(__name__)
 
+# Fail the run if the assembled paper is below this — no real Theo paper is this
+# short (healthy runs are 10k–40k chars). A near-empty paper means the writing
+# stages returned blank, almost always MiniMax Token-Plan exhaustion (429 ->
+# empty) or output truncation. We surface that as a failure rather than publish
+# an empty "completed" paper (CLAUDE.md: no silent-empty / graceful degradation).
+_MIN_PUBLISHABLE_PAPER_CHARS = 2000
+
+
+def _empty_paper_error(paper_text: str | None) -> str | None:
+    """Return a failure reason if `paper_text` is too short to publish, else None.
+
+    Guards against the 2026-06-16 incident where an 89-char paper was saved as
+    "completed" at quality 73 because the writing stages returned empty output
+    under MiniMax Token-Plan exhaustion (429) / max_tokens truncation.
+    """
+    paper_len = len((paper_text or "").strip())
+    if paper_len >= _MIN_PUBLISHABLE_PAPER_CHARS:
+        return None
+    return (
+        f"Paper assembly produced only {paper_len} chars "
+        f"(< {_MIN_PUBLISHABLE_PAPER_CHARS} minimum). The writing/synthesis stages "
+        "returned empty or truncated output — almost always MiniMax Token-Plan "
+        "quota exhaustion (429) or max_tokens truncation. Failing the run instead "
+        "of publishing an empty paper."
+    )
+
 
 class ConvergenceOrchestrator:
     """Event-driven research pipeline with convergence-based quality gates."""
@@ -310,6 +336,17 @@ class ConvergenceOrchestrator:
                 if spec_id not in state.specialist_analyses:
                     state.specialist_analyses[spec_id] = []
                 state.specialist_analyses[spec_id].append(finding)
+
+        # Empty-paper guard: never let the worker publish a near-empty paper as
+        # "completed" (the 2026-06-16 incident saved an 89-char paper at quality
+        # 73). If the run otherwise succeeded but produced no real paper, convert
+        # it to a failure with an actionable reason so credits are released and
+        # the user sees WHY rather than an empty page.
+        if not state.error:
+            empty_reason = _empty_paper_error(state.paper_text)
+            if empty_reason:
+                state.error = empty_reason
+                logger.error("[THEO] empty-paper guard tripped — failing run: %s", empty_reason)
 
         return state
 
