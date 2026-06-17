@@ -301,47 +301,6 @@ def minimax_vlm(client: httpx.Client, image_bytes: bytes, prompt: str) -> str:
         return ""
 
 
-def _strip_item_marker(text: str) -> str:
-    """Strip the stray ``<item>``/``</item>`` markup M3 leaves on the ``$text``
-    nodes it emits when it mis-encodes a string array as a nested chain."""
-    text = text.strip()
-    if text.startswith("<item>"):
-        text = text[len("<item>") :]
-    if text.endswith("</item>"):
-        text = text[: -len("</item>")]
-    return text.strip()
-
-
-def _recover_text_nodes(value: object) -> list[str] | None:
-    """Recover a list of strings from MiniMax M3's nested ``$text`` chain.
-
-    M3 sometimes encodes an array of strings as a single nested
-    ``{"$text": "a", "item": {"$text": "b", "item": "c"}}`` object (with stray
-    ``</item>`` markers) instead of a flat ``["a", "b", "c"]`` — verified in a
-    Theo synthesis run (2026-06-16) where six ``caveats`` collapsed into one
-    such node and the coercer dropped ALL of them. Walk the chain and return
-    the cleaned strings, or ``None`` when ``value`` isn't a ``$text`` node (so
-    callers fall back to normal coercion).
-    """
-    if not isinstance(value, dict) or "$text" not in value:
-        return None
-    out: list[str] = []
-    node: object = value
-    # Bound the walk so a malformed / self-referential structure can't spin.
-    for _ in range(10000):
-        if isinstance(node, dict) and "$text" in node:
-            text = node.get("$text")
-            if isinstance(text, str):
-                out.append(_strip_item_marker(text))
-            node = node.get("item")
-        elif isinstance(node, str):
-            out.append(_strip_item_marker(node))
-            break
-        else:
-            break
-    return out
-
-
 def _coerce_to_schema(value, schema: dict, path: str = "") -> object:
     """Drop schema-violating items from an LLM response in place.
 
@@ -398,14 +357,6 @@ def _coerce_to_schema(value, schema: dict, path: str = "") -> object:
 
     # Array — walk items, drop those whose type doesn't match `items.type`.
     if expected == "array":
-        item_schema = schema.get("items") or {}
-        items_are_strings = isinstance(item_schema, dict) and item_schema.get("type") == "string"
-        # MiniMax M3 sometimes returns a string-array as a single nested
-        # $text chain (a dict) instead of a list — recover rather than drop.
-        if items_are_strings and not isinstance(value, list):
-            recovered = _recover_text_nodes(value)
-            if recovered is not None:
-                return recovered
         if not isinstance(value, list):
             logger.warning(
                 "schema-coerce: expected array at %s, got %s — replacing with []",
@@ -413,15 +364,9 @@ def _coerce_to_schema(value, schema: dict, path: str = "") -> object:
                 type(value).__name__,
             )
             return []
+        item_schema = schema.get("items") or {}
         out: list = []
         for i, item in enumerate(value):
-            # Same M3 quirk, but with the chain wrapped in a 1-element array:
-            # the lone item is the nested $text dict. Expand it in place.
-            if items_are_strings and isinstance(item, dict):
-                recovered = _recover_text_nodes(item)
-                if recovered is not None:
-                    out.extend(recovered)
-                    continue
             cleaned = _coerce_to_schema(item, item_schema, f"{path}[{i}]")
             if cleaned is _SCHEMA_DROP:
                 continue
@@ -522,12 +467,6 @@ def _coerce_to_schema(value, schema: dict, path: str = "") -> object:
         "boolean": bool,
     }.get(expected)
     if type_check is not None and not isinstance(value, type_check):
-        # MiniMax M3 $text-node recovery for a scalar string field: join the
-        # recovered chain rather than dropping the field entirely.
-        if expected == "string":
-            recovered = _recover_text_nodes(value)
-            if recovered is not None:
-                return " ".join(recovered)
         # Allow ints to satisfy 'number'; bool/None are dropped strictly.
         logger.warning(
             "schema-coerce: expected %s at %s, got %s (%r) — dropping",
