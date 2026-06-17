@@ -49,9 +49,11 @@ class ResearchConfig:
     # Search
     source_apis: str = "standard"  # "minimal", "standard", "full", "exhaustive"
     queries_per_angle: int = 5
-    # LLM
-    max_tokens_per_call: int = 16384
-    max_tokens_synthesis: int = 32768
+    # LLM — quality-max (tokens free): provision generously so M3's adaptive
+    # thinking (which shares the output budget) can't truncate findings/prose.
+    # Raised from 16384/32768. M3 output ceiling is 512k.
+    max_tokens_per_call: int = 32768
+    max_tokens_synthesis: int = 49152
 
 
 @dataclass

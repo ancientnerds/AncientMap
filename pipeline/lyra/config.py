@@ -278,13 +278,14 @@ def thinking_for_effort(effort: str | None, settings: LyraSettings | None = None
     - ``disabled`` returns non-empty text (the old "disabled = empty" is FALSE
       for current M3) and does NOT break the forced tool-call trick (3/3 probe).
 
-    Thinking is ~89% of M3's output tokens, so OFF is the big quota saver. Map
-    mechanical effort → OFF, reasoning effort → ON. Adaptive stays quality-
-    critical for synthesis (2026-06-03 A/B: 100% vs 75% source-grounding when
-    thinking was bounded), so medium/high keep it.
-    - instant / low  → disabled (extract, score, query-gen, relevancy gates)
-    - medium / high  → adaptive (synthesis, narrative, debate, decomposition)
-    - unknown        → adaptive (safe default for reasoning prompts)
+    QUALITY-MAX premise (token cost is irrelevant): M3 reasoning improves output
+    quality (2026-06-03 A/B: adaptive = 100% source-grounding vs 75% bounded), so
+    EVERY call reasons — `effort` no longer gates thinking on/off. We always
+    return ``{"type":"adaptive"}``. ``disabled`` is kept only as an explicit
+    per-call override (callers pass ``thinking={"type":"disabled"}`` directly,
+    e.g. a genuinely trivial extraction where reasoning adds nothing); it is
+    never produced from an effort level. `effort` is retained for signature
+    compatibility with the call sites.
 
     Returns None only when thinking is globally disabled in settings.
     """
@@ -292,10 +293,7 @@ def thinking_for_effort(effort: str | None, settings: LyraSettings | None = None
         settings = _get_settings()
     if not settings.minimax_thinking_enabled:
         return None
-    reasoning = {"instant": False, "low": False, "medium": True, "high": True}.get(
-        effort or "", True
-    )
-    return {"type": "adaptive"} if reasoning else {"type": "disabled"}
+    return {"type": "adaptive"}
 
 
 # ---------------------------------------------------------------------------
@@ -341,7 +339,8 @@ def _get_anthropic_client(api_key: str):
 # (budget_tokens is ignored — verified 2026-06-16). When thinking is ON, give the
 # call a generous max_tokens floor so reasoning can't starve the answer or the
 # forced structured-output tool call (which degrades to plain text when starved).
-_MINIMAX_ADAPTIVE_MAX_TOKENS_FLOOR = 8192
+# Quality-max premise: tokens are free, so floor high (M3 output ceiling is 512k).
+_MINIMAX_ADAPTIVE_MAX_TOKENS_FLOOR = 16384
 
 
 def _call_anthropic_api(
@@ -391,15 +390,14 @@ def _call_anthropic_api(
 
         model = MINIMAX_MODEL
 
-    # [MINIMAX] Adaptation 6: Map reasoning_effort -> native M3 thinking.
-    # On Anthropic this kwarg is a no-op (Claude has no budget knob); on MiniMax
-    # it selects adaptive (ON) vs disabled (OFF) thinking. We only set it when the
-    # caller passed an explicit reasoning_effort — otherwise leave thinking
-    # OMITTED, which on current M3 means OFF (lean/cheap). Commit b6a350b forced
-    # "medium" on EVERY no-effort call, turning unbounded thinking ON everywhere
-    # and accelerating Token-Plan quota exhaustion (thinking ≈ 89% of M3 output
-    # tokens) — reverted here.
-    if is_minimax and thinking_config is None and reasoning_effort is not None:
+    # [MINIMAX] Adaptation 6: native M3 thinking. On Anthropic this is a no-op
+    # (Claude has no such knob); on MiniMax we default EVERY call to adaptive
+    # reasoning (quality-max premise — tokens are free, and M3 reasoning lifts
+    # output quality). thinking_for_effort() returns adaptive regardless of
+    # effort (or None if globally disabled in settings). Callers that genuinely
+    # want reasoning OFF pass an explicit thinking={"type":"disabled"} block,
+    # which is preserved here.
+    if is_minimax and thinking_config is None:
         thinking_config = thinking_for_effort(reasoning_effort, settings)
 
     # M3's adaptive thinking shares the output budget and is effectively unbounded
@@ -546,7 +544,10 @@ def _call_anthropic_api(
     # JSON. When M3 returns valid JSON as a text block we accept it immediately
     # (the text fallback parses it), which avoids multiplying latency on the
     # large structured calls that fail the tool call but still emit usable JSON.
-    _max_attempts = 3
+    # Quality-max premise (tokens free): retry the stochastic tool call up to 5x —
+    # the extra attempts only fire when the output is genuinely unusable, so the
+    # cost is latency on otherwise-failed calls, which is worth a reliable result.
+    _max_attempts = 5
     last_exc = None
     response = None
     for _attempt in range(_max_attempts):

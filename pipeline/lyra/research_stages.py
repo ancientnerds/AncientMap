@@ -43,8 +43,12 @@ PROMPTS_DIR = Path(__file__).parent / "prompts"
 # ---------------------------------------------------------------------------
 _SPECIALISTS_COUNT = 3
 _MAX_SEARCH_QUERIES = 8
-_MAX_TOKENS_PER_CALL = 16384
-_MAX_TOKENS_SYNTHESIS = 16384
+# Quality-max (tokens free): M3 adaptive thinking shares the output budget, so
+# provision generously above the desired prose length (M3 ceiling is 512k). Was
+# 16384/16384; synthesis raised highest since the narrative paper is the longest
+# output and reasoning consumes the majority of tokens before prose is emitted.
+_MAX_TOKENS_PER_CALL = 32768
+_MAX_TOKENS_SYNTHESIS = 49152
 _SOURCE_APIS = "standard"
 _MAX_PIPELINE_ITERATIONS = 2
 _MAX_PARALLEL_AUDIT = 10

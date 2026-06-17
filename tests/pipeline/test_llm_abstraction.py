@@ -408,16 +408,15 @@ class TestMiniMaxThinking:
         from pipeline.lyra.config import thinking_for_effort
 
         s = LyraSettings()
-        # M3 contract (re-verified 2026-06-16): only adaptive/disabled are honored
-        # and budget_tokens is ignored, so effort maps to a binary on/off.
-        # Mechanical effort -> disabled (the quota saver), reasoning -> adaptive.
-        assert thinking_for_effort("instant", s) == {"type": "disabled"}
-        assert thinking_for_effort("low", s) == {"type": "disabled"}
+        # Quality-max premise (tokens free): EVERY effort -> adaptive. M3 reasoning
+        # lifts output quality and budget_tokens is dead config, so we always
+        # reason. `disabled` only comes from an explicit per-call override.
+        assert thinking_for_effort("instant", s) == {"type": "adaptive"}
+        assert thinking_for_effort("low", s) == {"type": "adaptive"}
         assert thinking_for_effort("medium", s) == {"type": "adaptive"}
         assert thinking_for_effort("high", s) == {"type": "adaptive"}
-        # Unknown effort -> adaptive (safe default for reasoning prompts).
         assert thinking_for_effort(None, s) == {"type": "adaptive"}
-        # Global kill-switch -> None (omit thinking; M3 default is OFF anyway).
+        # Global kill-switch -> None (omit thinking entirely).
         assert thinking_for_effort("high", LyraSettings(minimax_thinking_enabled=False)) is None
 
     def test_minimax_reasoning_effort_maps_to_thinking(self, minimax_settings):
@@ -441,13 +440,11 @@ class TestMiniMaxThinking:
         assert captured["thinking"] == {"type": "adaptive"}
         # Adaptive thinking raises max_tokens to the generous floor so reasoning
         # can't starve the answer / forced tool call.
-        assert captured["max_tokens"] >= 8192
+        assert captured["max_tokens"] >= 16384
 
-    def test_minimax_no_reasoning_effort_omits_thinking(self, minimax_settings):
-        """Reverted b6a350b: a no-effort MiniMax call must NOT force thinking on.
-
-        On current M3, omitting thinking = OFF (lean). Forcing it on every call
-        was the quota regression."""
+    def test_minimax_no_reasoning_effort_defaults_to_adaptive(self, minimax_settings):
+        """Quality-max premise: EVERY MiniMax call reasons. A no-effort call must
+        default to adaptive thinking (tokens free; M3 reasoning lifts quality)."""
         captured = {}
 
         def fake_create(**kwargs):
@@ -463,7 +460,7 @@ class TestMiniMaxThinking:
                 messages=[{"role": "user", "content": "test"}],
             )
 
-        assert "thinking" not in captured
+        assert captured["thinking"] == {"type": "adaptive"}
 
     def test_anthropic_reasoning_effort_does_not_set_thinking(self, anthropic_settings):
         captured = {}
