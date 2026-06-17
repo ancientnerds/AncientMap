@@ -83,10 +83,58 @@ Conclusions:
 - Attach a **PAYG key + buy Credits** so 2056 auto-covers instead of returning
   empty (documented MiniMax overflow). And/or upgrade Plus→Max.
 
-## Status log
-- [x] Bug D (caveat `$text` recovery) — committed b6a350b… (schema-coerce), tests green.
-- [ ] A — thinking strategy rewrite.
-- [ ] B — fail-loud.
-- [ ] C — caching verification.
-- Deploy: HOLD for user (prod Lyra shares this path; user AFK). Revert-of-harm is
-  safe to deploy; new behavior wants a verification run when quota is free.
+## Status log (final, 2026-06-17 autonomous session)
+
+Commits on local `main` (NOT pushed — see Deploy):
+- `b6a350b` *(pushed/deployed earlier today)* — forced thinking budget. **This is
+  the regression**; superseded by 03cc26b below but still LIVE in prod.
+- `682ebd6` then `7dacb32` — Bug D ($text recovery) **added then REVERTED.**
+  Reversal reason: the news summarizer already handles this exact M3 bug
+  (`test_summarizer_facts.py`, 2026-06-09) by **drop+retry** to protect prod
+  content integrity. Recovering mangled output diverged from that reviewed
+  pattern, changed prod Lyra behavior as a side effect, and risked storing
+  unverified content (against "integrity > availability"). Aligned on drop.
+- `03cc26b` — **A: thinking strategy rewrite** (the core fix). Adaptive/disabled
+  per the verified contract; revert force-on-every-call; max_tokens floor.
+  24 unit tests green.
+- `<this commit>` — **B: empty-paper fail-loud guard** + unit tests.
+
+Verification (cheap, no heavy runs):
+- [x] Live M3 probes (thinking contract, budget ignored, disabled-works, forced
+  tool 3/3 across modes).
+- [x] **C: prompt caching VERIFIED WORKING** — 2nd identical call read 2950 cached
+  tokens (`cache_read=2950`, `input=14`). System-block `cache_control` fires; no
+  fix needed. (Source-content caching is an unimplemented follow-up.)
+- [x] Unit tests: 531 pass. The 7 failures are ALL pre-existing (verified at
+  baseline b08749e): canonical_coverage, strip_injection, theo_citations,
+  journal_assessor, + 4 `lyra_agent.py:1573 "expected 8, got 7"` (a separate
+  pre-existing prod bug worth its own fix).
+- [ ] Full Theo run — NOT done (needs quota + ~30min; would re-risk the limit).
+
+## Deploy — HELD for user (AFK, prod-Lyra risk, push rule)
+Prod is still running the regression `b6a350b` (forces thinking ON every call).
+Lyra is idle (0 new videos) and the Theo queue is empty, so live harm is low.
+To ship the fix when you're back:
+1. `git push origin main` (ships 03cc26b + the fail-loud guard + revert).
+2. CI rebuilds the API container.
+3. Kick a `THEO_FAST` smoke run (`docker exec -e THEO_FAST=1 ancient_nerds_api
+   python scripts/theo_test_run.py "..."`) and confirm: 0 MiniMax-429, a real
+   multi-thousand-char paper, far fewer total tokens than the 850k/231-call run.
+   Watch `cache_read` and that mechanical calls show no `thinking` block.
+
+## D. Account-level (your call, biggest single lever for "never empty again")
+MiniMax switched to per-TOKEN metering (2026-06-02) with a 5h-rolling **and**
+weekly cap; M3 thinking ≈ 89% of output tokens. Even with the code fix, a big run
+can hit the cap. Documented mitigations:
+- **Attach a PAYG key + buy Credits** → 2056 overflow is auto-covered instead of
+  returning empty (the documented fix for exactly our empty-paper failure).
+- Or **upgrade Plus→Max** (more 5h/weekly quota + concurrency).
+- Check real remaining quota: `GET /v1/token_plan/remains` (needs the secret key).
+
+## Follow-ups (not done; flagged)
+- Cache the large **source-content** blocks (not just system) for in-run reuse —
+  potentially big quota win; needs careful message-assembly restructuring + test.
+- Per-stage thinking tuning: confirm decomposition/specialist quality with
+  thinking OFF; bump specific reasoning-heavy structured stages to `medium` if an
+  A/B shows quality loss.
+- Fix the pre-existing `lyra_agent.py:1573` unpack bug (run_agent_stream).
