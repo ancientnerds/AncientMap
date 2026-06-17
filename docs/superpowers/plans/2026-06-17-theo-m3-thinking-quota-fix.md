@@ -111,7 +111,39 @@ Verification (cheap, no heavy runs):
   pre-existing prod bug worth its own fix).
 - [ ] Full Theo run — NOT done (needs quota + ~30min; would re-risk the limit).
 
-## Deploy — HELD for user (AFK, prod-Lyra risk, push rule)
+## VERIFIED END-TO-END (2026-06-18) — DEPLOYED
+
+Premise updated by user: **token cost is irrelevant, maximize quality.** Follow-up
+commit `6c722de` makes thinking **adaptive on every call**, raises max_tokens
+(per-call 32768, synthesis 49152, floor 16384), and bumps structured retries 3→5.
+All pushed + deployed (CI green, container healthy).
+
+Live verification run (THEO_FAST, Stonehenge) AFTER deploy:
+
+| metric | broken run (pre-fix) | verified run (post-fix) |
+|---|---|---|
+| paper_chars | 89 | **27,022** |
+| quality_score | 73 | **94** |
+| MiniMax-429 | flooded | **0** |
+| max_tokens truncation | yes | **0** |
+| citation sources | — | 2,207 |
+| specialists | 9 | 12 |
+| duration | 267 min | 238 min |
+
+Paper has full Why-Files structure (Findings / Connecting the Dots / The Other Side
+/ What We Actually Know / References), grounded citations, integrity verifier
+rejected 89 unverified citations. **Adaptive-everywhere is quality-optimal AND not
+slower** (238 vs 267 min) — the earlier latency worry was wrong; the run only
+"felt" slow because it does the research properly instead of failing on quota.
+
+Research-depth tuning (#9): NOT changed. Current ResearchConfig already yields
+quality 94; the missing piece was M3 usage, now fixed. Deeper config is available
+but bounded by the 12h worker timeout — not worth blind tuning without measurement.
+
+Minor follow-ups: test-script double-title (cosmetic); verify prod page doesn't
+render title twice; the pre-existing `lyra_agent.py:1573` unpack bug.
+
+## Deploy — DONE (superseded; kept for history)
 Prod is still running the regression `b6a350b` (forces thinking ON every call).
 Lyra is idle (0 new videos) and the Theo queue is empty, so live harm is low.
 To ship the fix when you're back:
