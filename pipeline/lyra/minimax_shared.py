@@ -146,16 +146,16 @@ def minimax_chat_anthropic(
     (≈1.0 for M3). Theo V2 handlers should always pass an explicit stage
     temperature from LyraSettings (temperature_research/synthesis/verification/narrative).
 
-    `thinking` is an optional MiniMax-M3 thinking block, e.g.
-    ``{"type": "enabled", "budget_tokens": 8192}`` (use config.thinking_for_effort()).
-    When None, M3 runs its default always-on thinking. Never pass
-    ``{"type": "disabled"}`` — M3 returns empty content for it (verified
-    2026-06-01); use a small budget instead. thinking and temperature coexist
-    on MiniMax. max_tokens is auto-raised to keep output headroom above the
-    thinking budget.
+    `thinking` is an optional MiniMax-M3 thinking block. The only modes M3
+    honors are ``{"type": "adaptive"}`` (reasoning ON) and
+    ``{"type": "disabled"}`` (reasoning OFF) — ``budget_tokens`` is ignored
+    (verified 2026-06-16). This is the narrative/synthesis path, which is
+    quality-critical for reasoning, so when the caller passes None we DEFAULT
+    TO ADAPTIVE. Mechanical callers that want the lean path should pass
+    ``{"type": "disabled"}`` explicitly. thinking and temperature coexist on M3.
     """
     from pipeline.lyra.config import (
-        _MINIMAX_THINKING_OUTPUT_HEADROOM,
+        _MINIMAX_ADAPTIVE_MAX_TOKENS_FLOOR,
         _get_minimax_anthropic_client,
         _get_settings,
     )
@@ -165,24 +165,19 @@ def minimax_chat_anthropic(
 
     client = _get_minimax_anthropic_client(settings)
 
-    # M3's default (thinking=None) runs UNBOUNDED interleaved reasoning that
-    # routinely exhausts the entire max_tokens budget and returns empty content
-    # — the root cause of empty Theo papers and the narrative prose stages
-    # (_write_hook/_write_investigation_section) coming back blank. Force a
-    # bounded default ("medium") so output always has room. thinking_for_effort()
-    # returns None when thinking is disabled in settings (M3 default preserved);
-    # explicit callers that pass their own thinking block are unaffected.
+    # Narrative/synthesis benefits from full reasoning (2026-06-03 A/B: adaptive
+    # thinking gave 100% source-grounding vs 75% bounded), so default to adaptive
+    # here. (This is the prose path; the structured/mechanical calls go through
+    # call_api with thinking OFF unless they pass reasoning_effort.)
     if thinking is None:
-        from pipeline.lyra.config import thinking_for_effort
+        thinking = {"type": "adaptive"}
 
-        thinking = thinking_for_effort("medium", settings)
-
-    # Reasoning shares the output budget; keep room so thinking can't starve the
-    # answer (tokens are free on the per-call plan, so raise rather than clip).
-    if isinstance(thinking, dict) and thinking.get("type") == "enabled":
-        needed = thinking.get("budget_tokens", 0) + _MINIMAX_THINKING_OUTPUT_HEADROOM
-        if max_tokens < needed:
-            max_tokens = needed
+    # M3's adaptive thinking shares the output budget and is effectively unbounded
+    # (budget_tokens ignored), so a small max_tokens lets reasoning starve the
+    # answer. When thinking is ON, raise max_tokens to a generous floor.
+    if isinstance(thinking, dict) and thinking.get("type") == "adaptive":
+        if max_tokens < _MINIMAX_ADAPTIVE_MAX_TOKENS_FLOOR:
+            max_tokens = _MINIMAX_ADAPTIVE_MAX_TOKENS_FLOOR
 
     # MiniMax requires temperature in (0, 1] — clamp any <=0 up to 0.01.
     create_kwargs: dict = {

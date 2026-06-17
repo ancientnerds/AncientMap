@@ -1,4 +1,5 @@
 """Tests for the unified LLM abstraction layer in config.py."""
+
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -407,14 +408,17 @@ class TestMiniMaxThinking:
         from pipeline.lyra.config import thinking_for_effort
 
         s = LyraSettings()
-        assert thinking_for_effort("instant", s) == {"type": "enabled", "budget_tokens": 256}
-        assert thinking_for_effort("high", s) == {"type": "enabled", "budget_tokens": 8192}
-        # Unknown effort falls back to the medium budget, never to disabled.
-        assert thinking_for_effort(None, s) == {"type": "enabled", "budget_tokens": 4096}
-        # Global kill-switch -> None (default thinking), not a broken disabled.
+        # M3 contract (re-verified 2026-06-16): only adaptive/disabled are honored
+        # and budget_tokens is ignored, so effort maps to a binary on/off.
+        # Mechanical effort -> disabled (the quota saver), reasoning -> adaptive.
+        assert thinking_for_effort("instant", s) == {"type": "disabled"}
+        assert thinking_for_effort("low", s) == {"type": "disabled"}
+        assert thinking_for_effort("medium", s) == {"type": "adaptive"}
+        assert thinking_for_effort("high", s) == {"type": "adaptive"}
+        # Unknown effort -> adaptive (safe default for reasoning prompts).
+        assert thinking_for_effort(None, s) == {"type": "adaptive"}
+        # Global kill-switch -> None (omit thinking; M3 default is OFF anyway).
         assert thinking_for_effort("high", LyraSettings(minimax_thinking_enabled=False)) is None
-        # A 0 budget means "default thinking" (None), never {"type": "disabled"}.
-        assert thinking_for_effort("instant", LyraSettings(minimax_thinking_budget_instant=0)) is None
 
     def test_minimax_reasoning_effort_maps_to_thinking(self, minimax_settings):
         captured = {}
@@ -433,9 +437,33 @@ class TestMiniMaxThinking:
                 messages=[{"role": "user", "content": "test"}],
             )
 
-        assert captured["thinking"] == {"type": "enabled", "budget_tokens": 8192}
-        # Headroom guard raises max_tokens above the thinking budget.
-        assert captured["max_tokens"] >= 8192 + 4096
+        # high -> adaptive on M3 (budget_tokens is dead config).
+        assert captured["thinking"] == {"type": "adaptive"}
+        # Adaptive thinking raises max_tokens to the generous floor so reasoning
+        # can't starve the answer / forced tool call.
+        assert captured["max_tokens"] >= 8192
+
+    def test_minimax_no_reasoning_effort_omits_thinking(self, minimax_settings):
+        """Reverted b6a350b: a no-effort MiniMax call must NOT force thinking on.
+
+        On current M3, omitting thinking = OFF (lean). Forcing it on every call
+        was the quota regression."""
+        captured = {}
+
+        def fake_create(**kwargs):
+            captured.update(kwargs)
+            return _make_mock_text_response("ok")
+
+        with patch("pipeline.lyra.config._get_client") as mock_get:
+            mock_get.return_value.messages.create = fake_create
+            _call_anthropic_api(
+                minimax_settings,
+                model="claude-haiku-4-5-20251001",
+                max_tokens=1000,
+                messages=[{"role": "user", "content": "test"}],
+            )
+
+        assert "thinking" not in captured
 
     def test_anthropic_reasoning_effort_does_not_set_thinking(self, anthropic_settings):
         captured = {}

@@ -116,22 +116,20 @@ class LyraSettings(BaseSettings):
     temperature_verification: float = 0.1
     temperature_narrative: float = 0.8
 
-    # MiniMax-M3 thinking control (verified live 2026-06-01 against /anthropic).
-    # M3 thinks by default and the reasoning shares the max_tokens budget, which
-    # is what truncated/emptied output on M2.7-era calls. We size an explicit
-    # `thinking: {type: enabled, budget_tokens: N}` per reasoning_effort level so
-    # reasoning gets bounded room and output is preserved.
-    # IMPORTANT findings encoded in thinking_for_effort():
-    #   - thinking:{type:disabled} returns EMPTY content on M3 — never used.
-    #     The lowest ("instant") level uses a small budget instead of disabling.
-    #   - budget_tokens coexists with temperature on MiniMax (unlike Claude).
-    #   - On flat per-call billing (Token Plan) budgets cost nothing — sized for
-    #     quality/latency, not tokens.
+    # MiniMax-M3 thinking control. RE-VERIFIED LIVE 2026-06-16 — the contract
+    # CHANGED since 2026-06-01: M3 now only honors thinking modes "adaptive" (ON)
+    # and "disabled" (OFF); `budget_tokens` is accepted but IGNORED (probe: budget
+    # 128 → 3448 chars of thinking). So the budget ladder below is DEAD CONFIG,
+    # kept only to avoid breaking any LYRA_MINIMAX_THINKING_BUDGET_* env overrides.
+    # The live mapping is binary and lives in thinking_for_effort():
+    # instant/low → disabled, medium/high → adaptive. Since per-TOKEN metering
+    # (2026-06-02) thinking (~89% of M3 output) is the dominant quota cost, so
+    # mechanical calls run thinking OFF.
     minimax_thinking_enabled: bool = True
-    minimax_thinking_budget_instant: int = 256
-    minimax_thinking_budget_low: int = 1024
-    minimax_thinking_budget_medium: int = 4096
-    minimax_thinking_budget_high: int = 8192
+    minimax_thinking_budget_instant: int = 256  # dead config — see note above
+    minimax_thinking_budget_low: int = 1024  # dead config
+    minimax_thinking_budget_medium: int = 4096  # dead config
+    minimax_thinking_budget_high: int = 8192  # dead config
 
     # Long-context (M3 1M window). Per-call billing → context is free; the only
     # guard is the ~1M hard request limit (avoid HTTP 400), NOT cost.
@@ -267,30 +265,37 @@ def get_max_tokens() -> int:
 def thinking_for_effort(effort: str | None, settings: LyraSettings | None = None) -> dict | None:
     """Map a reasoning_effort level to a MiniMax-M3 ``thinking`` config block.
 
-    Single source of truth for the effort→thinking mapping. Returns e.g.
-    ``{"type": "enabled", "budget_tokens": 256}`` or ``None`` to mean "let
-    MiniMax use its default (full) thinking".
+    Single source of truth for the effort→thinking mapping.
 
-    Verified live against api.minimax.io/anthropic (2026-06-01):
-    - ``thinking:{type:enabled,budget_tokens:N}`` is honored, returns native
-      thinking blocks, and coexists with ``temperature``.
-    - ``thinking:{type:disabled}`` returns EMPTY content — so we NEVER disable;
-      the lowest level ("instant") uses a small budget, and a 0/missing budget
-      falls back to ``None`` (default thinking), not to a broken disabled state.
+    M3 contract, RE-VERIFIED LIVE 2026-06-16 (api.minimax.io/anthropic) — it
+    CHANGED since the 2026-06-01 notes:
+    - The only honored modes are ``{"type":"adaptive"}`` (reasoning ON) and
+      ``{"type":"disabled"}`` (reasoning OFF). Omitting thinking also = OFF.
+    - ``{"type":"enabled","budget_tokens":N}`` is accepted but ``budget_tokens``
+      is IGNORED (probe: budget 128 → 3448 chars of thinking). The old
+      256/1024/4096/8192 budget ladder was therefore dead config and the source
+      of the ``max_tokens`` truncation/empty-output failures.
+    - ``disabled`` returns non-empty text (the old "disabled = empty" is FALSE
+      for current M3) and does NOT break the forced tool-call trick (3/3 probe).
+
+    Thinking is ~89% of M3's output tokens, so OFF is the big quota saver. Map
+    mechanical effort → OFF, reasoning effort → ON. Adaptive stays quality-
+    critical for synthesis (2026-06-03 A/B: 100% vs 75% source-grounding when
+    thinking was bounded), so medium/high keep it.
+    - instant / low  → disabled (extract, score, query-gen, relevancy gates)
+    - medium / high  → adaptive (synthesis, narrative, debate, decomposition)
+    - unknown        → adaptive (safe default for reasoning prompts)
+
+    Returns None only when thinking is globally disabled in settings.
     """
     if settings is None:
         settings = _get_settings()
     if not settings.minimax_thinking_enabled:
         return None
-    budget = {
-        "instant": settings.minimax_thinking_budget_instant,
-        "low": settings.minimax_thinking_budget_low,
-        "medium": settings.minimax_thinking_budget_medium,
-        "high": settings.minimax_thinking_budget_high,
-    }.get(effort or "", settings.minimax_thinking_budget_medium)
-    if budget <= 0:
-        return None
-    return {"type": "enabled", "budget_tokens": budget}
+    reasoning = {"instant": False, "low": False, "medium": True, "high": True}.get(
+        effort or "", True
+    )
+    return {"type": "adaptive"} if reasoning else {"type": "disabled"}
 
 
 # ---------------------------------------------------------------------------
@@ -332,9 +337,11 @@ def _get_anthropic_client(api_key: str):
     return _cached_anthropic_client
 
 
-# Minimum output room reserved on top of a MiniMax thinking budget. Below this
-# headroom the forced structured-output tool call degrades to plain text.
-_MINIMAX_THINKING_OUTPUT_HEADROOM = 4096
+# M3's adaptive thinking shares the output budget and is effectively unbounded
+# (budget_tokens is ignored — verified 2026-06-16). When thinking is ON, give the
+# call a generous max_tokens floor so reasoning can't starve the answer or the
+# forced structured-output tool call (which degrades to plain text when starved).
+_MINIMAX_ADAPTIVE_MAX_TOKENS_FLOOR = 8192
 
 
 def _call_anthropic_api(
@@ -386,28 +393,26 @@ def _call_anthropic_api(
 
     # [MINIMAX] Adaptation 6: Map reasoning_effort -> native M3 thinking.
     # On Anthropic this kwarg is a no-op (Claude has no budget knob); on MiniMax
-    # it was previously discarded entirely so every call ran M3's default
-    # always-on thinking, which shares (and routinely exhausts) the max_tokens
-    # budget — the root cause of empty Theo papers ("paper_substance: 2") and
-    # "Decomposition produced no research angles". An explicit thinking block
-    # bounds reasoning and preserves output. Only fills in when the caller didn't
-    # pass an explicit `thinking=` block; defaults to "medium" when no effort is
-    # given, so NO call site can fall back to unbounded thinking.
-    if is_minimax and thinking_config is None:
-        thinking_config = thinking_for_effort(reasoning_effort or "medium", settings)
+    # it selects adaptive (ON) vs disabled (OFF) thinking. We only set it when the
+    # caller passed an explicit reasoning_effort — otherwise leave thinking
+    # OMITTED, which on current M3 means OFF (lean/cheap). Commit b6a350b forced
+    # "medium" on EVERY no-effort call, turning unbounded thinking ON everywhere
+    # and accelerating Token-Plan quota exhaustion (thinking ≈ 89% of M3 output
+    # tokens) — reverted here.
+    if is_minimax and thinking_config is None and reasoning_effort is not None:
+        thinking_config = thinking_for_effort(reasoning_effort, settings)
 
-    # Guard the structured-output tool trick: with an explicit thinking budget
-    # AND too small a max_tokens, M3 silently skips the forced tool call and
-    # answers as plain text (verified 2026-06-01). Per-call billing makes tokens
-    # free, so raise max_tokens to keep output headroom rather than drop thinking.
+    # M3's adaptive thinking shares the output budget and is effectively unbounded
+    # (budget_tokens is ignored — verified 2026-06-16), so a small max_tokens lets
+    # reasoning starve the answer / the forced tool call. When thinking is ON,
+    # raise max_tokens to a generous floor.
     if (
         is_minimax
         and isinstance(thinking_config, dict)
-        and thinking_config.get("type") == "enabled"
+        and thinking_config.get("type") == "adaptive"
+        and max_tokens < _MINIMAX_ADAPTIVE_MAX_TOKENS_FLOOR
     ):
-        needed = thinking_config.get("budget_tokens", 0) + _MINIMAX_THINKING_OUTPUT_HEADROOM
-        if max_tokens < needed:
-            max_tokens = needed
+        max_tokens = _MINIMAX_ADAPTIVE_MAX_TOKENS_FLOOR
 
     # [MINIMAX] Adaptation 2: Documents — inline into user message
     # (MiniMax doesn't support document content blocks or citations)
