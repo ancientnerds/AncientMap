@@ -281,7 +281,14 @@ def search_sections(query: str, limit: int = 3) -> list[dict]:
                 "paper_title": hit.payload["paper_title"],
                 "paper_slug": hit.payload["paper_slug"],
                 "section_title": hit.payload["section_title"],
-                "section_text": hit.payload["section_text"],
+                # Read the always-present `text_preview` (<=2000 chars), not
+                # `section_text`. text_preview is written on every index call;
+                # full `section_text` was added to the payload schema later, so
+                # points indexed before that lack it — reading it raised
+                # KeyError('section_text') on every PublicResearch query. The
+                # only consumer (PublicResearchAdapter) slices [:500], so the
+                # 2000-char preview is more than enough.
+                "section_text": hit.payload["text_preview"],
                 "section_index": hit.payload["section_index"],
                 "author_username": hit.payload["author_username"],
                 "score": round(hit.score, 3),
