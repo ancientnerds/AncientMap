@@ -30,9 +30,7 @@ def _mock_clients(payload: dict):
     """Build (get_qdrant_client, get_embeddings) mocks returning one hit."""
     hit = SimpleNamespace(payload=payload, score=0.91)
     client = MagicMock()
-    client.get_collections.return_value.collections = [
-        SimpleNamespace(name=COLLECTION_NAME)
-    ]
+    client.get_collections.return_value.collections = [SimpleNamespace(name=COLLECTION_NAME)]
     client.query_points.return_value.points = [hit]
     embedder = MagicMock()
     embedder.embed_query.return_value = [0.0] * 8
@@ -43,12 +41,8 @@ def test_search_sections_handles_payload_without_section_text():
     """The prod schema lacks section_text — search_sections must not raise."""
     client, embedder = _mock_clients(_PROD_PAYLOAD)
     with (
-        patch(
-            "api.services.lyra_embeddings.get_qdrant_client", return_value=client
-        ),
-        patch(
-            "api.services.lyra_embeddings.get_embeddings", return_value=embedder
-        ),
+        patch("api.services.lyra_embeddings.get_qdrant_client", return_value=client),
+        patch("api.services.lyra_embeddings.get_embeddings", return_value=embedder),
     ):
         results = search_sections("baghdad battery", limit=3)
 
@@ -65,11 +59,7 @@ def test_search_sections_empty_when_collection_missing():
     client, embedder = _mock_clients(_PROD_PAYLOAD)
     client.get_collections.return_value.collections = []  # collection absent
     with (
-        patch(
-            "api.services.lyra_embeddings.get_qdrant_client", return_value=client
-        ),
-        patch(
-            "api.services.lyra_embeddings.get_embeddings", return_value=embedder
-        ),
+        patch("api.services.lyra_embeddings.get_qdrant_client", return_value=client),
+        patch("api.services.lyra_embeddings.get_embeddings", return_value=embedder),
     ):
         assert search_sections("anything") == []

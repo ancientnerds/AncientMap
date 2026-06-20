@@ -342,11 +342,7 @@ def _read_progress_sig(request_id: str) -> tuple | None:
                 ),
                 {"id": request_id},
             ).fetchone()
-        return (
-            (row.llm_calls, row.total_tokens, row.sites_found, row.tools_used)
-            if row
-            else None
-        )
+        return (row.llm_calls, row.total_tokens, row.sites_found, row.tools_used) if row else None
     except Exception as exc:
         logger.warning("[THEO] progress read failed for %s: %s", request_id, exc)
         return None
@@ -413,9 +409,7 @@ async def _poll_loop() -> None:
                 async with _semaphore:
                     try:
                         await asyncio.wait_for(
-                            _run_with_stall_guard(
-                                row.id, row.question, row.specialist_options
-                            ),
+                            _run_with_stall_guard(row.id, row.question, row.specialist_options),
                             timeout=_REQUEST_TIMEOUT_SECONDS,
                         )
                     except TimeoutError:
