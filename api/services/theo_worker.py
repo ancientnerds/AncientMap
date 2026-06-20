@@ -296,6 +296,100 @@ async def _process_request(
 # safety net, not a quality gate.
 _REQUEST_TIMEOUT_SECONDS = 43200  # 12 hours
 
+# --- Stall detection -------------------------------------------------------
+# A healthy run flushes climbing counters to the DB every ~30s
+# (convergence_orchestrator._flush_progress_to_db). A stalled run — e.g. M3
+# structured-output never letting an angle saturate — freezes those counters
+# while still heartbeating, so it would otherwise sit until the 12h hard
+# timeout above and hold the single worker slot the whole time. We cancel a run
+# whose counters show ZERO movement for _STALL_GRACE_SECONDS. Because the signal
+# is "no progress" (not wall-clock), a slow-but-healthy long run that keeps
+# advancing is never killed early.
+_STALL_GRACE_SECONDS = 2700  # 45 min of zero progress => stalled
+_STALL_POLL_SECONDS = 180  # re-check the DB counters every 3 min
+
+
+class _StallDetected(Exception):
+    """Raised when a running request stops making any progress."""
+
+
+def _mark_failed_running(request_id: str, msg: str) -> None:
+    """Mark a still-'running' request failed and release its credit reservation."""
+    _release_reservation(request_id)
+    try:
+        with get_session() as session:
+            session.execute(
+                text(
+                    "UPDATE research_requests SET status = 'failed', "
+                    "error_message = :msg, completed_at = NOW() "
+                    "WHERE id = :id AND status = 'running'"
+                ),
+                {"id": request_id, "msg": msg},
+            )
+            session.commit()
+    except Exception as exc:
+        logger.warning("[THEO] Failed to mark request %s as failed: %s", request_id, exc)
+
+
+def _read_progress_sig(request_id: str) -> tuple | None:
+    """(llm_calls, total_tokens, sites_found, tools_used) from the DB, or None."""
+    try:
+        with get_session() as session:
+            row = session.execute(
+                text(
+                    "SELECT llm_calls, total_tokens, sites_found, tools_used "
+                    "FROM research_requests WHERE id = :id"
+                ),
+                {"id": request_id},
+            ).fetchone()
+        return (
+            (row.llm_calls, row.total_tokens, row.sites_found, row.tools_used)
+            if row
+            else None
+        )
+    except Exception as exc:
+        logger.warning("[THEO] progress read failed for %s: %s", request_id, exc)
+        return None
+
+
+async def _run_with_stall_guard(
+    request_id: str, question: str, specialist_options: dict | None
+) -> None:
+    """Run a request, cancelling it if its progress counters freeze.
+
+    Raises ``_StallDetected`` when no counter has moved for
+    ``_STALL_GRACE_SECONDS``; a still-advancing run is left alone no matter how
+    long it takes.
+    """
+    task = asyncio.create_task(_process_request(request_id, question, specialist_options))
+    last_sig = _read_progress_sig(request_id)
+    last_change = time.monotonic()
+    try:
+        while True:
+            done, _ = await asyncio.wait({task}, timeout=_STALL_POLL_SECONDS)
+            if task in done:
+                return task.result()
+            sig = _read_progress_sig(request_id)
+            now = time.monotonic()
+            if sig is not None and sig != last_sig:
+                last_sig, last_change = sig, now
+            elif (now - last_change) >= _STALL_GRACE_SECONDS:
+                logger.error(
+                    "[THEO] Request %s no progress for %ss (sig=%s) — cancelling stalled run.",
+                    request_id,
+                    _STALL_GRACE_SECONDS,
+                    last_sig,
+                )
+                task.cancel()
+                try:
+                    await task
+                except BaseException:  # noqa: BLE001 — swallow CancelledError + cleanup errors
+                    pass
+                raise _StallDetected
+    finally:
+        if not task.done():
+            task.cancel()
+
 
 async def _poll_loop() -> None:
     """Main polling loop — picks up queued requests and processes them."""
@@ -319,38 +413,33 @@ async def _poll_loop() -> None:
                 async with _semaphore:
                     try:
                         await asyncio.wait_for(
-                            _process_request(row.id, row.question, row.specialist_options),
+                            _run_with_stall_guard(
+                                row.id, row.question, row.specialist_options
+                            ),
                             timeout=_REQUEST_TIMEOUT_SECONDS,
                         )
                     except TimeoutError:
                         logger.error(
-                            "[THEO] Request %s exceeded %ss timeout — marking failed and "
-                            "releasing the worker slot.",
+                            "[THEO] Request %s exceeded %ss hard timeout — marking failed.",
                             row.id,
                             _REQUEST_TIMEOUT_SECONDS,
                         )
-                        try:
-                            with get_session() as session:
-                                session.execute(
-                                    text(
-                                        "UPDATE research_requests SET status = 'failed', "
-                                        "error_message = :msg WHERE id = :id AND status = 'running'"
-                                    ),
-                                    {
-                                        "id": row.id,
-                                        "msg": (
-                                            f"Request exceeded {_REQUEST_TIMEOUT_SECONDS}s "
-                                            "timeout and was force-cancelled."
-                                        ),
-                                    },
-                                )
-                                session.commit()
-                        except Exception as cleanup_exc:
-                            logger.warning(
-                                "[THEO] Failed to mark timed-out request %s as failed: %s",
-                                row.id,
-                                cleanup_exc,
-                            )
+                        _mark_failed_running(
+                            row.id,
+                            f"Request exceeded {_REQUEST_TIMEOUT_SECONDS}s timeout "
+                            "and was force-cancelled.",
+                        )
+                    except _StallDetected:
+                        logger.error(
+                            "[THEO] Request %s stalled (no progress for %ss) — marking failed.",
+                            row.id,
+                            _STALL_GRACE_SECONDS,
+                        )
+                        _mark_failed_running(
+                            row.id,
+                            f"Request made no progress for {_STALL_GRACE_SECONDS}s "
+                            "(stalled) and was cancelled.",
+                        )
             else:
                 await asyncio.sleep(3)  # No work — wait before polling again
 
