@@ -250,9 +250,7 @@ async def _process_request(
         is_quota_error = isinstance(exc, (InsufficientQuotaError, QuotaExhaustedError))
         duration_ms = int((time.monotonic() - start) * 1000)
         if is_quota_error:
-            logger.warning(
-                f"[THEO] Quota hit on request {request_id} — deferring: {exc}"
-            )
+            logger.warning(f"[THEO] Quota hit on request {request_id} — deferring: {exc}")
         else:
             logger.error(
                 f"[THEO] Unexpected error for request {request_id}: {exc}",

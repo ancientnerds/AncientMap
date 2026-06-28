@@ -137,6 +137,7 @@ class ConvergenceOrchestrator:
             # Probe says quota is healthy — if the limiter was frozen from a
             # previous quota hit, lift the freeze so calls can resume.
             from pipeline.lyra.minimax_limiter import limiter as global_limiter
+
             if global_limiter.is_frozen():
                 state.log(
                     "orchestrator",
@@ -155,14 +156,12 @@ class ConvergenceOrchestrator:
 
         token_accounting.bind(state)
 
-        # Reset global rate limiter to max concurrency for this task
-        from pipeline.lyra.minimax_limiter import limiter as global_limiter
-
-        # 2026-06-28: reset() removed. The MiniMax Token Plan is a global
-        # 5h-rolling quota shared across all pipelines; resetting to
-        # max_concurrency=100 here wiped learned backoff state and was the
-        # direct cause of the 82%-rate-limited 52-prompt batch.
-        # The limiter now learns continuously; no per-task reset.
+        # NOTE (2026-06-28): The previous call `global_limiter.reset()` was
+        # removed. The MiniMax Token Plan is a global 5h-rolling quota shared
+        # across all pipelines; resetting to max_concurrency=100 at the start
+        # of every Theo run wiped learned backoff state and was the direct
+        # cause of the 82%-rate-limited 52-prompt batch. The limiter now
+        # learns continuously; no per-task reset.
 
         # Set up event bus and handlers. Pass state so the bus can surface
         # handler exceptions into state.error (which the deadline loop below

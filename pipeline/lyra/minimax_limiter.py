@@ -378,9 +378,7 @@ class MiniMaxLimiter:
                 "consecutive_429s": self._consecutive_429s,
                 "consecutive_successes": self._consecutive_successes,
                 "is_frozen": self._is_frozen_locked(),
-                "freeze_remaining_seconds": round(
-                    self._freeze_remaining_seconds_locked(), 1
-                ),
+                "freeze_remaining_seconds": round(self._freeze_remaining_seconds_locked(), 1),
             }
 
 

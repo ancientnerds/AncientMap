@@ -259,7 +259,8 @@ def minimax_chat_anthropic(
                     # sets status='deferred'.
                     slot.report_quota_exhausted()
                     logger.error(
-                        "MiniMax M3 quota exhausted (no retry): %s", e,
+                        "MiniMax M3 quota exhausted (no retry): %s",
+                        e,
                     )
                     raise QuotaExhaustedError(
                         f"MiniMax quota exhausted during M3 call: {error_str[:200]}"
