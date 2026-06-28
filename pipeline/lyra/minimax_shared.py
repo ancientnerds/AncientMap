@@ -9,12 +9,15 @@ from __future__ import annotations
 import json
 import logging
 import re
+import threading
 import time
 from dataclasses import dataclass
 
 import httpx
 
 logger = logging.getLogger(__name__)
+
+from pipeline.lyra.minimax_limiter import QuotaExhaustedError, is_quota_error
 
 # MiniMax model — single source of truth for every call site (config.py,
 # web_research.py, tweet_verifier.py, research_stages.py all import this).
@@ -244,10 +247,23 @@ def minimax_chat_anthropic(
                 last_error = e
                 error_str = str(e)
                 is_rate_limit = "429" in error_str or "rate_limit" in error_str
+                is_quota = is_rate_limit and is_quota_error(error_str)
                 is_transient = is_rate_limit or any(
                     code in error_str
                     for code in ("500", "520", "529", "503", "timeout", "timed out")
                 )
+                if is_quota:
+                    # Quota exhaustion — freeze the limiter and fail fast.
+                    # The 5h rolling window must reset; retrying only wastes
+                    # 3-6s of wall clock. The orchestrator catches this and
+                    # sets status='deferred'.
+                    slot.report_quota_exhausted()
+                    logger.error(
+                        "MiniMax M3 quota exhausted (no retry): %s", e,
+                    )
+                    raise QuotaExhaustedError(
+                        f"MiniMax quota exhausted during M3 call: {error_str[:200]}"
+                    ) from e
                 if is_rate_limit:
                     slot.report_rate_limit()
                 if is_transient and attempt < 2:
@@ -269,6 +285,99 @@ def minimax_chat_anthropic(
         f"MiniMax M3 Anthropic SDK call failed after {attempt + 1} attempts: {last_error}"
     )
     return ""
+
+
+# --- Quota probe --------------------------------------------------------
+# GET /v1/token_plan/remains is the documented MiniMax endpoint for the
+# 5h-rolling and weekly Token Plan usage. Used by the orchestrator to refuse
+# new runs when the 5h budget is too low to finish. See plan
+# docs/superpowers/plans/2026-06-28-theo-rate-limit-defense.md Layer 2.
+
+MINIMAX_TOKEN_PLAN_REMAINS_PATH = "/v1/token_plan/remains"
+MINIMAX_TOKEN_PLAN_REMAINS_TIMEOUT = 10.0
+_QUOTA_CACHE_TTL_SECONDS = 60.0
+
+_quota_cache: dict[str, tuple[float, dict]] = {}
+_quota_cache_lock = threading.Lock()
+
+
+def probe_minimax_quota(force: bool = False) -> dict:
+    """Probe the MiniMax Token Plan remaining quota.
+
+    Returns a dict — on success the keys match whatever the MiniMax
+    endpoint returns (typical: five_hour_remaining, five_hour_limit,
+    weekly_remaining, weekly_limit — but accept anything). On any HTTP
+    error (404 if the endpoint doesn't exist on this plan, 401, timeout)
+    returns {"ok": False, "error": "<reason>"} so the caller can treat
+    the quota as "unknown" and decide accordingly.
+
+    Cached for 60s to avoid hammering the endpoint on every run; pass
+    force=True to bypass.
+    """
+    cache_key = "quota"
+    now = time.monotonic()
+    if not force:
+        with _quota_cache_lock:
+            cached = _quota_cache.get(cache_key)
+            if cached and (now - cached[0]) < _QUOTA_CACHE_TTL_SECONDS:
+                return cached[1]
+
+    from pipeline.lyra.config import _get_settings  # avoid cycle
+
+    settings = _get_settings()
+    api_key = getattr(settings, "minimax_api_key", "") or ""
+    base_url = getattr(settings, "minimax_base_url", "") or ""
+    if not api_key or not base_url:
+        result = {"ok": False, "error": "no_api_key_or_base_url"}
+    else:
+        try:
+            # Raw httpx — /v1/token_plan/remains isn't an Anthropic-SDK path.
+            with create_minimax_client(base_url, api_key) as client:
+                resp = client.get(
+                    MINIMAX_TOKEN_PLAN_REMAINS_PATH,
+                    timeout=MINIMAX_TOKEN_PLAN_REMAINS_TIMEOUT,
+                )
+            if resp.status_code == 200:
+                data = resp.json() if resp.content else {}
+                data["ok"] = True
+                # Normalise the MiniMax-native field names into a stable
+                # shape callers can rely on. The endpoint returns a
+                # `model_remains` array (one entry per model family) —
+                # pick the "general" model which is what M3 falls under.
+                if isinstance(data.get("model_remains"), list):
+                    for entry in data["model_remains"]:
+                        if entry.get("model_name") in ("general", "MiniMax-M3"):
+                            data["five_hour_remaining_percent"] = entry.get(
+                                "current_interval_remaining_percent"
+                            )
+                            data["weekly_remaining_percent"] = entry.get(
+                                "current_weekly_remaining_percent"
+                            )
+                            data["five_hour_end_time"] = entry.get("end_time")
+                            data["weekly_end_time"] = entry.get("weekly_end_time")
+                            break
+                result = data
+            else:
+                result = {
+                    "ok": False,
+                    "error": f"http_{resp.status_code}",
+                    "body": (resp.text or "")[:300],
+                }
+        except Exception as exc:  # noqa: BLE001 — quota probe must never raise
+            result = {"ok": False, "error": f"{type(exc).__name__}: {exc}"[:200]}
+
+    with _quota_cache_lock:
+        _quota_cache[cache_key] = (now, result)
+    return result
+
+
+def clear_quota_cache() -> None:
+    """Drop the cached quota probe (used by tests + after a manual unfreeze)."""
+    with _quota_cache_lock:
+        _quota_cache.clear()
+
+
+# --- /Quota probe -------------------------------------------------------
 
 
 MINIMAX_VLM_PATH = "/v1/coding_plan/vlm"

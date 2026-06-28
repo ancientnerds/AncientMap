@@ -1,0 +1,26 @@
+============================================================
+SEMANTIC SCHOLAR — API Key Request
+https://www.semanticscholar.org/product/api
+============================================================
+
+Project Name: AncientNerds — AI Archaeological Research Agent
+
+Description:
+AncientNerds (ancientnerds.com) is an open archaeological data platform featuring an interactive 3D globe with 30,000+ archaeological sites. We are building "Theodore Furcade" (Theo), an AI-powered research agent that generates academic-quality papers on archaeological topics. Theo uses a multi-stage pipeline: question decomposition, multi-source literature search, source reliability auditing, parallel specialist analysis by domain-expert AI personas, cross-source synthesis, multi-agent debate, and paper assembly with mechanical citation verification. We use the Semantic Scholar API to find peer-reviewed papers as primary sources for Theo's research output. Expected usage: ~500-2,000 paper searches per day, scaling with user adoption. All citations link back to source papers. Non-commercial, educational project.
+
+Website: https://ancientnerds.com
+Contact: Ancient Nerds Team
+
+
+============================================================
+CORE — API Key Request
+https://core.ac.uk/services/api
+============================================================
+
+Project Name: AncientNerds — AI Archaeological Research Agent
+
+Description:
+AncientNerds (ancientnerds.com) is an archaeological data platform with an AI research agent that generates academic papers. We use the CORE API to access open-access archaeological literature, grey literature from institutional repositories, and archaeological reports that are often not indexed by mainstream academic databases. Sources found via CORE are cited with full attribution in the generated research papers. Non-commercial, educational project. Expected usage: ~200-500 searches per day.
+
+Website: https://ancientnerds.com
+Contact: Ancient Nerds Team

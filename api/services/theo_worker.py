@@ -240,20 +240,37 @@ async def _process_request(
             )
 
     except Exception as exc:
+        from pipeline.lyra.minimax_limiter import (
+            InsufficientQuotaError,
+            QuotaExhaustedError,
+        )
+
+        # 2026-06-28: quota errors are *deferred* not failed — the 5h window
+        # will reset. The worker re-queues deferred rows after 1h.
+        is_quota_error = isinstance(exc, (InsufficientQuotaError, QuotaExhaustedError))
         duration_ms = int((time.monotonic() - start) * 1000)
-        logger.error(f"[THEO] Unexpected error for request {request_id}: {exc}", exc_info=True)
+        if is_quota_error:
+            logger.warning(
+                f"[THEO] Quota hit on request {request_id} — deferring: {exc}"
+            )
+        else:
+            logger.error(
+                f"[THEO] Unexpected error for request {request_id}: {exc}",
+                exc_info=True,
+            )
         _release_reservation(request_id)
-        emit({"type": "done", "status": "failed"})
+        emit({"type": "done", "status": "deferred" if is_quota_error else "failed"})
         with get_session() as session:
             # Even on an unexpected crash, try to persist whatever
             # diagnostic state the orchestrator already built up. `ctx`
             # may not exist if the exception fired before orchestrator.run
             # returned, so guard everything with getattr.
             ctx_local = locals().get("ctx", None)
+            target_status = "deferred" if is_quota_error else "failed"
             session.execute(
                 text("""
                     UPDATE research_requests
-                    SET status = 'failed',
+                    SET status = :status,
                         error_message = :msg,
                         debug_log = :debug_log,
                         total_tokens = :tokens,
@@ -264,6 +281,7 @@ async def _process_request(
                     WHERE id = :id
                 """),
                 {
+                    "status": target_status,
                     "id": request_id,
                     "msg": str(exc),
                     "debug_log": json.dumps(
@@ -393,13 +411,19 @@ async def _poll_loop() -> None:
     logger.info("[THEO] Worker poll loop started")
     while not _shutdown:
         try:
-            # Find the oldest queued request
+            # Find the oldest runnable request. 'queued' = freshly submitted;
+            # 'deferred' = quota hit earlier, ready for a retry after the 5min
+            # back-off window. Without the timestamp check a deferred row would
+            # get re-claimed on the very next poll iteration and re-defer
+            # immediately, creating a tight loop.
             with get_session() as session:
                 row = session.execute(
                     text("""
                         SELECT id::text, question, specialist_options
                         FROM research_requests
                         WHERE status = 'queued'
+                           OR (status = 'deferred'
+                               AND completed_at < NOW() - INTERVAL '5 minutes')
                         ORDER BY created_at ASC
                         LIMIT 1
                     """)

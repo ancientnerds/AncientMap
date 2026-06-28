@@ -9,6 +9,8 @@ from dataclasses import dataclass, field
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from pipeline.lyra.minimax_limiter import QuotaExhaustedError, is_quota_error
+
 logger = logging.getLogger(__name__)
 
 
@@ -559,10 +561,26 @@ def _call_anthropic_api(
                 last_exc = exc
                 error_str = str(exc)
                 is_rate_limit = "429" in error_str or "rate_limit" in error_str
+                is_quota = is_rate_limit and is_quota_error(error_str)
                 is_transient = is_rate_limit or any(
                     code in error_str
                     for code in ("500", "520", "529", "503", "timeout", "timed out")
                 )
+                if is_quota:
+                    # Quota exhaustion — freeze the limiter and fail fast
+                    # (the 5h window must reset; retrying is pointless).
+                    # The orchestrator catches QuotaExhaustedError and
+                    # marks the request 'deferred'.
+                    slot.report_quota_exhausted()
+                    logger.error(
+                        "LLM call quota exhausted (no retry, attempt %d/%d): %s",
+                        _attempt + 1,
+                        _max_attempts,
+                        exc,
+                    )
+                    raise QuotaExhaustedError(
+                        f"MiniMax quota exhausted during LLM call: {error_str[:200]}"
+                    ) from exc
                 if is_rate_limit:
                     slot.report_rate_limit()
                 if is_transient and _attempt < _max_attempts - 1:

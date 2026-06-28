@@ -103,6 +103,50 @@ class ConvergenceOrchestrator:
 
         state.log("orchestrator", f"Starting convergence pipeline for: {question[:80]}...")
 
+        # Quota preflight (2026-06-28, Layer 2 of the rate-limit-defense plan).
+        # Probe the MiniMax Token Plan 5h-rolling remaining budget. If it's
+        # below a sane floor for a full research run, raise InsufficientQuotaError
+        # *before* making any LLM calls — the worker marks the request 'deferred'
+        # and re-queues it after the 5h window resets.
+        # The probe is fail-soft: if the endpoint doesn't exist (some plans) or
+        # any error happens, we proceed. The limiter's quota-freeze still catches
+        # mid-run exhaustion.
+        from pipeline.lyra.minimax_limiter import InsufficientQuotaError
+        from pipeline.lyra.minimax_shared import probe_minimax_quota
+
+        quota = probe_minimax_quota()
+        if quota.get("ok"):
+            # The normalised fields are set by probe_minimax_quota() from the
+            # MiniMax-native model_remains[0]. Floor at 5% — below this a
+            # Decomposition call (~5k tokens) plus the cheapest search rounds
+            # can't reliably finish, and the run will stall at 45min. The
+            # worker marks the request 'deferred' so it's re-claimed after
+            # the 5h window resets.
+            remaining_5h_pct = quota.get("five_hour_remaining_percent")
+            if remaining_5h_pct is not None and remaining_5h_pct < 5:
+                state.log(
+                    "orchestrator",
+                    f"Preflight: 5h remaining={remaining_5h_pct}% < 5% floor — "
+                    f"refusing to start, will be deferred by worker.",
+                )
+                raise InsufficientQuotaError(
+                    f"MiniMax 5h-rolling remaining={remaining_5h_pct}% is below "
+                    f"the 5% floor; deferring until window resets. Full probe: "
+                    f"{json.dumps(quota, default=str)[:300]}"
+                )
+            # Probe says quota is healthy — if the limiter was frozen from a
+            # previous quota hit, lift the freeze so calls can resume.
+            from pipeline.lyra.minimax_limiter import limiter as global_limiter
+            if global_limiter.is_frozen():
+                state.log(
+                    "orchestrator",
+                    f"Preflight: quota healthy ({remaining_5h_pct}%); "
+                    f"unfreezing global limiter (was frozen).",
+                )
+                global_limiter.unfreeze()
+        # else: probe failed (endpoint missing / network error) — proceed and
+        # rely on the limiter's quota-freeze for mid-run protection.
+
         # Bind state for token accounting. LLM helpers (minimax_shared.py,
         # config.call_api) read this contextvar to credit token usage back
         # to state.total_tokens without needing the state object threaded
@@ -114,7 +158,11 @@ class ConvergenceOrchestrator:
         # Reset global rate limiter to max concurrency for this task
         from pipeline.lyra.minimax_limiter import limiter as global_limiter
 
-        global_limiter.reset()
+        # 2026-06-28: reset() removed. The MiniMax Token Plan is a global
+        # 5h-rolling quota shared across all pipelines; resetting to
+        # max_concurrency=100 here wiped learned backoff state and was the
+        # direct cause of the 82%-rate-limited 52-prompt batch.
+        # The limiter now learns continuously; no per-task reset.
 
         # Set up event bus and handlers. Pass state so the bus can surface
         # handler exceptions into state.error (which the deadline loop below
