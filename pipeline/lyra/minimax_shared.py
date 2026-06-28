@@ -293,7 +293,7 @@ def minimax_chat_anthropic(
 # new runs when the 5h budget is too low to finish. See plan
 # docs/superpowers/plans/2026-06-28-theo-rate-limit-defense.md Layer 2.
 
-MINIMAX_TOKEN_PLAN_REMAINS_PATH = "/v1/token_plan/remains"
+MINIMAX_TOKEN_PLAN_REMAINS_PATH = "/v1/token_plan/remains"  # noqa: S105 (URL path, not password)
 MINIMAX_TOKEN_PLAN_REMAINS_TIMEOUT = 10.0
 _QUOTA_CACHE_TTL_SECONDS = 60.0
 

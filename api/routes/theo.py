@@ -507,8 +507,8 @@ async def get_quota():
     (no auth) so the theo.html UI header can show "Quota: 2.3M/9.7M tokens
     remaining" without forcing a login. The probe is cached 60s on the
     server side. See plan 2026-06-28-theo-rate-limit-defense.md Layer 2."""
-    from pipeline.lyra.minimax_shared import probe_minimax_quota
     from pipeline.lyra.minimax_limiter import limiter
+    from pipeline.lyra.minimax_shared import probe_minimax_quota
 
     quota = probe_minimax_quota()
     return {
