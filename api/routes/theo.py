@@ -518,6 +518,39 @@ async def get_quota():
 
 
 # ---------------------------------------------------------------------------
+# GET /theo/research/health — watchdog tier + combined system state
+# ---------------------------------------------------------------------------
+# NOTE: this route MUST be declared before GET /research/{request_id} below.
+# FastAPI matches in declaration order; if the parametric route came first
+# it would catch "health" as a request_id and 422. Same trap as
+# /research/quota above.
+
+
+@router.get("/research/health")
+async def get_health():
+    """Quota watchdog tier + quota + limiter state in one shot.
+
+    Public endpoint (no auth, no rate-limiter — same policy as
+    /research/quota) so operator dashboards and the theo.html UI can
+    surface "system is healthy / degraded / quota exhausted" without
+    needing a login. The watchdog runs in the background on a 60s probe
+    cycle; this endpoint just snapshots the latest state.
+
+    Returns the tier that drives the poll-loop gate in theo_worker:
+    - HEALTHY  (>30%): full speed ahead
+    - DEGRADED (5-30%): work proceeds, log warning
+    - EXHAUSTED (<=5%): limiter frozen, poll loop sleeping 60s
+    - UNKNOWN: probe failed, watchdog has no opinion yet
+
+    See plan 2026-06-28-theo-rate-limit-defense.md and the watchdog
+    implementation in api/services/theo_quota_monitor.py.
+    """
+    from api.services.theo_quota_monitor import get_watchdog_state
+
+    return get_watchdog_state()
+
+
+# ---------------------------------------------------------------------------
 # GET /theo/research/{id} — Get full request with report
 # ---------------------------------------------------------------------------
 

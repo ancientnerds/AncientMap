@@ -409,6 +409,21 @@ async def _poll_loop() -> None:
     logger.info("[THEO] Worker poll loop started")
     while not _shutdown:
         try:
+            # Quota watchdog gate (2026-06-28). When the tier is EXHAUSTED
+            # the limiter is already frozen, so any run we pick up will
+            # QuotaExhaustedError within the first LLM call and re-defer
+            # — burning the 5min re-claim back-off for nothing. Sleep and
+            # skip; the watchdog will lift the gate within ~60s once a
+            # healthy probe comes in. Health/degraded tiers are fine to
+            # proceed on; HEALTHY is the normal case.
+            try:
+                from api.services.theo_quota_monitor import get_watchdog_state
+
+                if get_watchdog_state().get("tier") == "EXHAUSTED":
+                    await asyncio.sleep(60)
+                    continue
+            except Exception:  # noqa: BLE001 — never let a watchdog read kill the poll loop
+                pass
             # Find the oldest runnable request. 'queued' = freshly submitted;
             # 'deferred' = quota hit earlier, ready for a retry after the 5min
             # back-off window. Without the timestamp check a deferred row would
@@ -481,6 +496,69 @@ async def cleanup_expired() -> None:
         await asyncio.sleep(3600)  # Every hour
 
 
+async def cleanup_stale_deferred() -> None:
+    """Fail out research requests stuck in 'deferred' too long.
+
+    Runs hourly. A 'deferred' request is one that hit a quota exhaustion
+    (2026-06-28 plan) and is waiting for the 5h-rolling window to reset.
+    If quota does not recover within DEFERRED_MAX_AGE_HOURS, the request
+    is marked 'failed' with a clear reason so the queue does not grow
+    forever. The user's reserved credits are released.
+
+    Companion to cleanup_expired — different status (deferred vs
+    expires_at past) but the same idea: keep the queue bounded.
+    """
+    from api.services.theo_config import DEFERRED_MAX_AGE_HOURS
+
+    while not _shutdown:
+        try:
+            with get_session() as session:
+                rows = session.execute(
+                    text(
+                        """
+                        SELECT id::text, user_id
+                        FROM research_requests
+                        WHERE status = 'deferred'
+                          AND completed_at < NOW() - (:hours * INTERVAL '1 hour')
+                        """
+                    ),
+                    {"hours": DEFERRED_MAX_AGE_HOURS},
+                ).fetchall()
+                stale_ids = [r.id for r in rows]
+                if not stale_ids:
+                    await asyncio.sleep(3600)
+                    continue
+                reason = (
+                    f"Quota did not recover within {DEFERRED_MAX_AGE_HOURS} hours "
+                    f"after the run was deferred. Marked failed to keep the queue bounded."
+                )
+                session.execute(
+                    text(
+                        """
+                        UPDATE research_requests
+                        SET status = 'failed',
+                            error_message = :msg,
+                            completed_at = NOW()
+                        WHERE id = ANY(:ids)
+                          AND status = 'deferred'
+                        """
+                    ),
+                    {"msg": reason, "ids": stale_ids},
+                )
+                session.commit()
+            # Release credit reservations outside the session above. The
+            # helper uses its own session, so the order doesn't matter.
+            for rid in stale_ids:
+                _release_reservation(rid)
+            logger.warning(
+                f"[THEO] Marked {len(stale_ids)} stale-deferred request(s) failed "
+                f"(>{DEFERRED_MAX_AGE_HOURS}h without quota recovery)."
+            )
+        except Exception as e:
+            logger.warning(f"[THEO] Stale-deferred cleanup error: {e}")
+        await asyncio.sleep(3600)  # Every hour
+
+
 async def start_worker() -> None:
     """Start the Theo worker background tasks."""
     global _shutdown
@@ -509,5 +587,16 @@ async def start_worker() -> None:
 
     asyncio.create_task(_safe_poll_loop())
     asyncio.create_task(cleanup_expired())
+    asyncio.create_task(cleanup_stale_deferred())
+    # Quota watchdog (2026-06-28 plan): a background daemon that probes
+    # the MiniMax Token Plan every 60s, classifies the 5h-rolling
+    # remaining budget into HEALTHY/DEGRADED/EXHAUSTED, freezes the
+    # limiter on EXHAUSTED, and sends a Discord webhook on transitions.
+    # The poll loop above also consults get_watchdog_state() and skips
+    # pickup while EXHAUSTED, so this is the *active* half of the
+    # self-throttling story.
+    from api.services.theo_quota_monitor import start_watchdog
+
+    start_watchdog()
     print("[THEO] Background worker tasks created", flush=True)
     logger.info("[THEO] Background worker tasks created")
