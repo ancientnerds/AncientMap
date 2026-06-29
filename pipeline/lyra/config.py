@@ -549,7 +549,14 @@ def _call_anthropic_api(
     # Quality-max premise (tokens free): retry the stochastic tool call up to 5x —
     # the extra attempts only fire when the output is genuinely unusable, so the
     # cost is latency on otherwise-failed calls, which is worth a reliable result.
-    _max_attempts = 5
+    #
+    # 2026-06-29: reduced 5 → 2. The "tokens free" assumption no longer holds —
+    # we're on a shared 9.7M-token 5h quota and the retry storm observed
+    # (148 retries in 24h × ~5k tokens each = ~740k tokens wasted on bad-JSON
+    # retries) was burning budget for marginal quality gain. 2 attempts covers
+    # the common case (transient stochastic miss) while preventing the
+    # 5x-storm when M3 is consistently returning bad output.
+    _max_attempts = 2
     last_exc = None
     response = None
     for _attempt in range(_max_attempts):

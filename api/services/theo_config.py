@@ -47,3 +47,11 @@ DEFERRED_MAX_AGE_HOURS = 6
 # Optional kill-switch: set THEO_WATCHDOG_DISABLED=1 to disable the watchdog
 # without code changes. Read in theo_quota_monitor.start_watchdog().
 THEO_WATCHDOG_DISABLED = os.getenv("THEO_WATCHDOG_DISABLED", "") == "1"
+
+# How long to wait between Theo task runs. The 5h rolling quota is shared
+# with Lyra; running tasks back-to-back drains the window to 1% (observed
+# 2026-06-29 — 6 failed tasks consumed 2.7M of the 9.7M budget, then a
+# single watchdog freeze killed the next 46 queued tasks for hours).
+# 30s is enough to let the probe catch up and surface a DEGRADED/EXHAUSTED
+# signal before the next task starts hammering the API.
+THEO_INTER_TASK_BACKOFF_S = 30

@@ -66,14 +66,24 @@ _QUOTA_FREEZE_SECONDS = 300
 # Anthropic-compatible endpoint returns these in the error message body
 # (e.g. `'message': 'Token Plan usage limit reached: Upgrade your Token Plan
 # or purchase Credits for more usage. (2056)'`). Case-insensitive match.
+#
+# 2026-06-29: added "token plan rate limit reached" and "(2062)" — MiniMax
+# distinguishes two flavors of Token Plan cap: (2056) hard-quota-exhausted,
+# (2062) rate-limit-on-plan. Both have the same remediation (upgrade or
+# buy credits), so the limiter must treat both as quota freezes, not as
+# transient throttles. Without these markers, 2062s were slipping through
+# as "transient" and only adaptive-backoff'ing — wasting the probe-based
+# freeze the watchdog sets up.
 _QUOTA_ERROR_MARKERS = (
     "token plan usage limit reached",
+    "token plan rate limit reached",
     "usage limit reached",
     "usage limit exceeded",
     "credit balance",
     "insufficient credit",
     "5-hour usage limit",
     "(2056)",
+    "(2062)",
 )
 
 

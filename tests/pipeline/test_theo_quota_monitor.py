@@ -148,3 +148,126 @@ def test_freeze_and_unfreeze_limiter_roundtrip():
     wm._unfreeze_limiter()
     assert wm._state["limiter_frozen_by_watchdog"] is False
     assert not limiter.is_frozen()
+
+
+# --- 2026-06-29 fixes ------------------------------------------------------
+
+
+def test_freeze_duration_is_30_minutes():
+    """The watchdog must not freeze the limiter for 6 hours — that left
+    tasks stuck through multiple rollovers of the 5h window. 30min is
+    a safety ceiling; the probe unfreezes earlier when quota recovers."""
+    assert wm._FREEZE_DURATION_S == 30 * 60
+
+
+def test_2062_is_treated_as_quota_error():
+    """MiniMax error 2062 ('Token Plan rate limit reached') has the same
+    remediation as 2056 (buy credits / upgrade). Both must trigger
+    report_quota_exhausted, not transient backoff."""
+    from pipeline.lyra.minimax_limiter import is_quota_error
+
+    assert is_quota_error("Error 429: Token Plan rate limit reached (2062)") is True
+    assert is_quota_error("Error 429: Token Plan usage limit reached (2056)") is True
+    # Plain transient rate limit must NOT be classified as quota.
+    assert is_quota_error("Error 429: rate_limit_error (transient)") is False
+
+
+def test_inter_task_backoff_constant_exists():
+    """The poll loop must sleep THEO_INTER_TASK_BACKOFF_S between tasks
+    so the watchdog probe has time to flag DEGRADED/EXHAUSTED before the
+    next task starts burning tokens."""
+    from api.services.theo_config import THEO_INTER_TASK_BACKOFF_S
+
+    assert THEO_INTER_TASK_BACKOFF_S == 30
+
+
+def test_retry_limit_reduced_to_two():
+    """config._call_anthropic_api's _max_attempts was 5 → 2 (2026-06-29)
+    to stop the retry storm that burned ~740k tokens in 24h on bad-JSON
+    retries."""
+    import inspect
+
+    from pipeline.lyra.config import _call_anthropic_api
+
+    src = inspect.getsource(_call_anthropic_api)
+    assert "_max_attempts = 2" in src
+    # And the OLD value must NOT be present (catches accidental fallback).
+    assert "_max_attempts = 5" not in src
+
+
+def test_external_cancellation_raises_on_non_running_status(monkeypatch):
+    """Ghost-task guard: when the DB row's status is no longer 'running'
+    (e.g. user cancelled via API), _check_external_cancellation raises
+    _CancelledByUser so the orchestrator can stop cleanly.
+
+    Mocks the DB session so no real DB is needed."""
+    from pipeline.lyra import convergence_orchestrator as co
+    from pipeline.lyra.convergence_orchestrator import _CancelledByUser
+
+    class FakeRow:
+        def __getitem__(self, i):
+            return "cancelled"
+
+    class FakeSession:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def execute(self, *_args, **_kwargs):
+            class FakeResult:
+                def fetchone(self_inner):
+                    return FakeRow()
+
+            return FakeResult()
+
+    # get_session is imported inside the function, so patch it at the
+    # source module: pipeline.database.
+    monkeypatch.setattr("pipeline.database.get_session", lambda: FakeSession())
+    with pytest.raises(_CancelledByUser, match="status changed to 'cancelled'"):
+        co._check_external_cancellation("test-rid")
+
+
+def test_external_cancellation_passes_silently_when_running(monkeypatch):
+    """The happy path: when status is 'running', no exception fires."""
+
+    class FakeRow:
+        def __getitem__(self, i):
+            return "running"
+
+    class FakeSession:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def execute(self, *_args, **_kwargs):
+            class FakeResult:
+                def fetchone(self_inner):
+                    return FakeRow()
+
+            return FakeResult()
+
+    from pipeline.lyra import convergence_orchestrator as co
+
+    monkeypatch.setattr("pipeline.database.get_session", lambda: FakeSession())
+    co._check_external_cancellation("test-rid")  # must not raise
+
+
+def test_external_cancellation_swallows_db_errors(monkeypatch):
+    """A transient DB error must NOT kill the pipeline. The check is
+    best-effort: only a confirmed non-'running' status triggers the cancel."""
+
+    class BrokenSession:
+        def __enter__(self):
+            raise RuntimeError("connection refused")
+
+        def __exit__(self, *args):
+            return False
+
+    from pipeline.lyra import convergence_orchestrator as co
+
+    monkeypatch.setattr("pipeline.database.get_session", lambda: BrokenSession())
+    co._check_external_cancellation("test-rid")  # must not raise

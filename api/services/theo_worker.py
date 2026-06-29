@@ -471,6 +471,16 @@ async def _poll_loop() -> None:
                             f"Request made no progress for {_STALL_GRACE_SECONDS}s "
                             "(stalled) and was cancelled.",
                         )
+                # Inter-task backoff (2026-06-29). Without this, the worker
+                # picks up the next task immediately after the previous one
+                # ends, hammering the API while the 5h quota is still
+                # draining. THEO_INTER_TASK_BACKOFF_S=30s gives the
+                # watchdog probe enough time to flag DEGRADED/EXHAUSTED
+                # before the next task starts. Firing whether the task
+                # succeeded or failed.
+                from api.services.theo_config import THEO_INTER_TASK_BACKOFF_S
+
+                await asyncio.sleep(THEO_INTER_TASK_BACKOFF_S)
             else:
                 await asyncio.sleep(3)  # No work — wait before polling again
 

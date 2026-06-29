@@ -169,10 +169,14 @@ def _notify_transition(prev_tier: str, new_tier: str, snapshot: dict) -> None:
 # --- Limiter control --------------------------------------------------------
 
 # How long to keep the limiter frozen when the tier flips to EXHAUSTED.
-# Set to 6h (well past the rolling 5h window) so the freeze does not
-# expire before the quota resets; the watchdog will explicitly unfreeze
-# once the next healthy probe comes in.
-_FREEZE_DURATION_S = 6 * 3600
+# 30min is a safety ceiling, NOT a guarantee: the watchdog re-probes every
+# 60s and unfreezes explicitly the moment the tier recovers. The 30min
+# ceiling matters only if the watchdog itself is broken.
+# Was 6h (2026-06-29: reduced from 6*3600 to 30*60 — the long freeze held
+# the limiter through 3+ rollovers of the 5h window, leaving the next task
+# stuck for hours after the quota had already recovered. Probe-based
+# unfreezing makes the long ceiling unnecessary.)
+_FREEZE_DURATION_S = 30 * 60
 
 
 def _freeze_limiter() -> None:

@@ -340,6 +340,15 @@ class ConvergenceOrchestrator:
                     # 0 / NULL until completion, making stalls indistinguishable
                     # from healthy long-running stages).
                     _flush_progress_to_db(state, request_id)
+                    # Ghost-task guard (2026-06-29). The DB row's status is the
+                    # source of truth: if the user cancelled via the API (or
+                    # the watchdog marked deferred), the DB says so within
+                    # milliseconds, but the in-flight asyncio task has no
+                    # direct signal. Without this check, a manually-cancelled
+                    # task kept burning tokens for up to the 45min stall
+                    # guard — observed when the stuck DMT task burned ~25min
+                    # of MiniMax calls after I cancelled it via DB update.
+                    _check_external_cancellation(request_id)
                     # Also emit a progress SSE so the live frontend panel
                     # sees fresh counters every ~30s without waiting for
                     # paper_assembly (which only fires ~3h in).
@@ -367,7 +376,27 @@ class ConvergenceOrchestrator:
                         }
                     )
 
+        except _CancelledByUser as exc:
+            # User-cancellation (DB status changed to 'cancelled' or 'deferred').
+            # Set a clean state.error so the worker's `"cancelled" in ctx.error`
+            # branch fires and the task is marked 'cancelled' with credits
+            # released. Don't re-raise — the worker should treat this as a
+            # graceful stop, not a crash.
+            state.error = f"Cancelled by user: {exc}"
+            logger.info("[THEO] %s cancelled by user: %s", request_id, exc)
         except Exception as exc:
+            # Quota errors must propagate so the worker can mark the request
+            # 'deferred' rather than 'failed'. Without the re-raise, the
+            # worker only sees state.error and treats it as a generic
+            # failure — defeating the 2026-06-28 quota-aware design where
+            # deferred rows are re-claimed after the 5h window resets.
+            from pipeline.lyra.minimax_limiter import (
+                InsufficientQuotaError,
+                QuotaExhaustedError,
+            )
+
+            if isinstance(exc, (QuotaExhaustedError, InsufficientQuotaError)):
+                raise
             state.error = f"Pipeline error: {exc}"
             logger.exception("Convergence pipeline failed")
 
@@ -449,3 +478,51 @@ def _flush_progress_to_db(state, request_id: str) -> None:
     except Exception as exc:
         # Never let a diagnostic write break the pipeline.
         logger.warning("[THEO] DB progress flush failed: %s", exc)
+
+
+class _CancelledByUser(Exception):
+    """Raised when the orchestrator detects the DB status is no longer 'running'.
+
+    The worker writes status='cancelled' to the DB when a user cancels via
+    DELETE /research/{id}, but the in-flight asyncio task has no direct
+    signal — it would otherwise keep burning tokens until the stall guard
+    fires (45min). The orchestrator polls the DB every 30s as part of its
+    progress flush; if status != 'running', raise this so the worker can
+    catch it cleanly and unwind credits.
+    """
+
+
+def _check_external_cancellation(request_id: str) -> None:
+    """Read research_requests.status for `request_id`. If it's no longer
+    'running' (e.g. user cancelled via API, watchdog marked deferred, etc.),
+    raise ``_CancelledByUser`` so the orchestrator loop unwinds.
+
+    Called from the orchestrator's deadline loop every ~30s. Best-effort:
+    a transient DB error must NOT kill the pipeline — only a confirmed
+    non-'running' status triggers the cancel.
+    """
+    if not request_id:
+        return
+    try:
+        from sqlalchemy import text
+
+        from pipeline.database import get_session
+
+        with get_session() as session:
+            row = session.execute(
+                text("SELECT status FROM research_requests WHERE id = :id"),
+                {"id": request_id},
+            ).fetchone()
+        if row is None:
+            # Row vanished (manual cleanup). Treat as cancellation.
+            raise _CancelledByUser(f"Research request {request_id} no longer exists")
+        if row[0] != "running":
+            raise _CancelledByUser(
+                f"Research request {request_id} status changed to '{row[0]}' "
+                f"while orchestrator was running"
+            )
+    except _CancelledByUser:
+        raise
+    except Exception as exc:
+        # Best-effort: never let a DB read error kill the pipeline.
+        logger.warning("[THEO] Cancellation check failed (continuing): %s", exc)
