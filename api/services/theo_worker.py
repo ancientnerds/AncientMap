@@ -15,7 +15,13 @@ from typing import Any
 
 from sqlalchemy import text
 
-from api.services.theo_config import RESULT_TTL_HOURS, THEO_PARALLEL_SLOTS, THEO_RESEARCH_COST
+from api.services.theo_config import (
+    BATCH_RESULT_TTL_HOURS,
+    RESULT_TTL_HOURS,
+    THEO_MIN_TASK_INTERVAL_S,
+    THEO_PARALLEL_SLOTS,
+    THEO_RESEARCH_COST,
+)
 from pipeline.database import get_session
 
 logger = logging.getLogger(__name__)
@@ -103,10 +109,13 @@ async def _process_request(
     # Register live events buffer before pipeline starts so SSE streaming works immediately
     _live_events[request_id] = []
 
-    # Mark request as running
+    # Mark request as running. started_at is the batch-pacing clock: the next
+    # batch task may only start THEO_MIN_TASK_INTERVAL_S after this moment.
     with get_session() as session:
         session.execute(
-            text("UPDATE research_requests SET status = 'running' WHERE id = :id"),
+            text(
+                "UPDATE research_requests SET status = 'running', started_at = NOW() WHERE id = :id"
+            ),
             {"id": request_id},
         )
         session.commit()
@@ -215,7 +224,9 @@ async def _process_request(
                                 sites_found = :sites,
                                 tools_used = :tools,
                                 completed_at = NOW(),
-                                expires_at = NOW() + (:ttl * INTERVAL '1 hour')
+                                expires_at = NOW() + (
+                                    CASE WHEN is_batch THEN :batch_ttl ELSE :ttl END
+                                ) * INTERVAL '1 hour'
                             WHERE id = :id
                         """),
                         {
@@ -229,6 +240,7 @@ async def _process_request(
                             "sites": len(ctx.registry.sources),
                             "tools": len(ctx.specialist_analyses),
                             "ttl": RESULT_TTL_HOURS,
+                            "batch_ttl": BATCH_RESULT_TTL_HOURS,
                         },
                     )
                     session.commit()
@@ -403,10 +415,39 @@ async def _run_with_stall_guard(
             task.cancel()
 
 
+# --- Batch pacing gate (2026-07-04) ----------------------------------------
+# Batch tasks (is_batch=TRUE) start at most once per THEO_MIN_TASK_INTERVAL_S,
+# start-to-start. The clock is MAX(started_at) over ALL tasks — a manual UI
+# run burns the same shared quota, so it pushes the next batch slot back. UI
+# rows themselves bypass the gate entirely (they are is_batch=FALSE in the
+# claim query). DB-based, so the pacing survives worker restarts and deploys.
+
+
+def _batch_gate_open(last_start_age_s: float | None, min_interval_s: float) -> bool:
+    """True when a batch task may start: nothing ever started, or the most
+    recent start is at least min_interval_s ago."""
+    return last_start_age_s is None or last_start_age_s >= min_interval_s
+
+
+def _read_last_start_age_s() -> float | None:
+    """Seconds since the most recent task start (any kind), or None if no
+    task has ever started."""
+    try:
+        with get_session() as session:
+            row = session.execute(
+                text("SELECT EXTRACT(EPOCH FROM (NOW() - MAX(started_at))) FROM research_requests")
+            ).fetchone()
+        return float(row[0]) if row and row[0] is not None else None
+    except Exception as exc:
+        logger.warning("[THEO] last-start read failed: %s", exc)
+        return None
+
+
 async def _poll_loop() -> None:
     """Main polling loop — picks up queued requests and processes them."""
     print("[THEO] Worker poll loop started", flush=True)
     logger.info("[THEO] Worker poll loop started")
+    gate_was_open: bool | None = None
     while not _shutdown:
         try:
             # Quota watchdog gate (2026-06-28). When the tier is EXHAUSTED
@@ -424,6 +465,18 @@ async def _poll_loop() -> None:
                     continue
             except Exception:  # noqa: BLE001 — never let a watchdog read kill the poll loop
                 pass
+            # Batch pacing: while the gate is closed, batch rows are invisible
+            # to the claim query below — a younger UI row still gets picked up
+            # immediately.
+            gate_open = _batch_gate_open(_read_last_start_age_s(), THEO_MIN_TASK_INTERVAL_S)
+            if gate_open != gate_was_open:
+                logger.info(
+                    "[THEO] Batch pacing gate %s (min start-to-start interval %ss)",
+                    "OPEN" if gate_open else "CLOSED",
+                    THEO_MIN_TASK_INTERVAL_S,
+                )
+                gate_was_open = gate_open
+
             # Find the oldest runnable request. 'queued' = freshly submitted;
             # 'deferred' = quota hit earlier, ready for a retry after the 5min
             # back-off window. Without the timestamp check a deferred row would
@@ -434,12 +487,14 @@ async def _poll_loop() -> None:
                     text("""
                         SELECT id::text, question, specialist_options
                         FROM research_requests
-                        WHERE status = 'queued'
-                           OR (status = 'deferred'
-                               AND completed_at < NOW() - INTERVAL '5 minutes')
+                        WHERE (status = 'queued'
+                               OR (status = 'deferred'
+                                   AND completed_at < NOW() - INTERVAL '5 minutes'))
+                          AND (is_batch = FALSE OR :gate_open)
                         ORDER BY created_at ASC
                         LIMIT 1
-                    """)
+                    """),
+                    {"gate_open": gate_open},
                 ).fetchone()
 
             if row:

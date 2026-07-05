@@ -122,6 +122,10 @@ async def lifespan(app: FastAPI):
             "ALTER TABLE research_requests ADD COLUMN IF NOT EXISTS approved_at TIMESTAMP",
             "ALTER TABLE research_requests ADD COLUMN IF NOT EXISTS debug_log JSONB",
             "ALTER TABLE research_requests ADD COLUMN IF NOT EXISTS llm_calls INTEGER DEFAULT 0",
+            # Theo batch pacing: batch flag + actual run-start timestamp (created_at
+            # is queue-insert time, useless for start-to-start pacing)
+            "ALTER TABLE research_requests ADD COLUMN IF NOT EXISTS is_batch BOOLEAN NOT NULL DEFAULT FALSE",
+            "ALTER TABLE research_requests ADD COLUMN IF NOT EXISTS started_at TIMESTAMP",
         ]
 
         # Populate description_citations for 10 enriched sites (one-time prod data fix).
