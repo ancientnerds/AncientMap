@@ -17,6 +17,7 @@ from api.services.theo_quota_monitor import (
     TIER_DEGRADED,
     TIER_EXHAUSTED,
     TIER_HEALTHY,
+    TIER_THROTTLED,
     TIER_UNKNOWN,
     _classify_tier,
 )
@@ -33,13 +34,15 @@ from api.services.theo_quota_monitor import (
         (30.0001, TIER_HEALTHY),  # just over the threshold
         (30.0, TIER_DEGRADED),  # boundary: at 30, no longer healthy
         (25.0, TIER_DEGRADED),
-        (20.0001, TIER_DEGRADED),  # just over the EXHAUSTED threshold
-        # 2026-07-06: user requirement — pause at 80% USED (= 20% remaining),
-        # not at 5%. A full run that keeps burning below 20% cannot finish
-        # anyway; freezing early preserves budget for the resume slice.
-        (20.0, TIER_EXHAUSTED),  # boundary: at 20, exhausted
-        (10.0, TIER_EXHAUSTED),
-        (5.0, TIER_EXHAUSTED),
+        (20.0001, TIER_DEGRADED),  # just over the THROTTLED threshold
+        # 2026-07-06 v2: at 80% used the run is THROTTLED (crawl: it can
+        # still finish its synthesis on the remaining 20%), and only the
+        # last 5% — the reserve that keeps Lyra alive — is a hard freeze.
+        (20.0, TIER_THROTTLED),  # boundary: at 20, crawl mode
+        (10.0, TIER_THROTTLED),
+        (5.0001, TIER_THROTTLED),
+        (5.0, TIER_EXHAUSTED),  # boundary: at 5, frozen
+        (3.0, TIER_EXHAUSTED),
         (0.0, TIER_EXHAUSTED),
         (-1.0, TIER_EXHAUSTED),  # negative (defensive) still exhausted
         (None, TIER_UNKNOWN),  # probe failed to extract the value
@@ -55,23 +58,45 @@ def test_classify_tier(five_hour_pct, expected):
 @pytest.mark.parametrize(
     "five_hour_pct,prev_tier,expected",
     [
-        # From EXHAUSTED, crossing the plain DEGRADED/HEALTHY boundaries is
-        # NOT enough — the window must recover to QUOTA_RESUME_PCT (50).
+        # From EXHAUSTED, crossing the THROTTLED/DEGRADED/HEALTHY boundaries
+        # is NOT enough — the window must recover to QUOTA_RESUME_PCT (50).
+        (10.0, TIER_EXHAUSTED, TIER_EXHAUSTED),  # NOT throttled: stay frozen
         (25.0, TIER_EXHAUSTED, TIER_EXHAUSTED),
         (35.0, TIER_EXHAUSTED, TIER_EXHAUSTED),
         (49.9, TIER_EXHAUSTED, TIER_EXHAUSTED),
         (50.0, TIER_EXHAUSTED, TIER_HEALTHY),  # at resume threshold: released
         (80.0, TIER_EXHAUSTED, TIER_HEALTHY),
-        # Hysteresis only applies coming FROM exhausted.
+        # Hysteresis only applies coming FROM exhausted — THROTTLED moves
+        # freely across its boundaries (crawl <-> warn equilibrium).
         (35.0, TIER_HEALTHY, TIER_HEALTHY),
         (35.0, TIER_DEGRADED, TIER_HEALTHY),
+        (25.0, TIER_THROTTLED, TIER_DEGRADED),
         (25.0, TIER_HEALTHY, TIER_DEGRADED),
+        (10.0, TIER_DEGRADED, TIER_THROTTLED),
         # Unknown probe value stays UNKNOWN regardless of history.
         (None, TIER_EXHAUSTED, TIER_UNKNOWN),
     ],
 )
 def test_classify_tier_hysteresis(five_hour_pct, prev_tier, expected):
     assert _classify_tier(five_hour_pct, prev_tier) == expected
+
+
+# --- THROTTLED tier: limiter crawl mode --------------------------------------
+
+
+def test_throttle_limiter_forces_crawl():
+    """While THROTTLED, the watchdog clamps the limiter to crawl mode:
+    concurrency floor + throttle delay. No freeze — calls keep flowing,
+    just slowly, so a run at 80% usage can still finish its synthesis."""
+    from pipeline.lyra.minimax_limiter import _THROTTLE_DELAY_S, MiniMaxLimiter
+
+    lim = MiniMaxLimiter()
+    assert lim.stats["current_concurrency"] == 8
+
+    lim.throttle()
+    assert lim.stats["current_concurrency"] == 1
+    assert lim.stats["current_delay"] == _THROTTLE_DELAY_S
+    assert not lim.is_frozen(), "throttle must NOT freeze — crawl, not pause"
 
 
 # --- get_watchdog_state: must not raise even with no daemon running ---------

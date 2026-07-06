@@ -44,10 +44,11 @@ from datetime import UTC, datetime, timezone
 from api.services.notify import send_discord_webhook
 from api.services.theo_config import (
     DEFERRED_RETRY_BACKOFF_S,
-    QUOTA_DEGRADED_PCT,
+    QUOTA_FREEZE_PCT,
     QUOTA_HEALTHY_PCT,
     QUOTA_PROBE_INTERVAL_S,
     QUOTA_RESUME_PCT,
+    QUOTA_THROTTLE_PCT,
     THEO_WATCHDOG_DISABLED,
 )
 
@@ -58,6 +59,7 @@ logger = logging.getLogger(__name__)
 
 TIER_HEALTHY = "HEALTHY"
 TIER_DEGRADED = "DEGRADED"
+TIER_THROTTLED = "THROTTLED"
 TIER_EXHAUSTED = "EXHAUSTED"
 TIER_UNKNOWN = "UNKNOWN"  # probe failed; no opinion yet
 
@@ -68,14 +70,15 @@ def _classify_tier(
 ) -> str:
     """Pure function: 5h-rolling % (+ previous tier) -> health tier.
 
-    Boundaries are inclusive at the lower edge (so 30% is still HEALTHY
-    but 20% is already EXHAUSTED — see theo_config for the rationale).
-    Returns TIER_UNKNOWN when the value is None.
+    Boundaries are inclusive at the lower edge (30% is still HEALTHY,
+    20% is already THROTTLED, 5% is already EXHAUSTED — see theo_config
+    for the rationale). Returns TIER_UNKNOWN when the value is None.
 
     Hysteresis (2026-07-06): coming FROM exhausted, the tier only recovers
-    once the window is back at >= QUOTA_RESUME_PCT. Crossing 20.0001%
-    would otherwise unfreeze a paused run for a few minutes of burn and
-    re-freeze immediately — flapping without forward progress.
+    once the window is back at >= QUOTA_RESUME_PCT — no freeze/thaw
+    flapping at the boundary. THROTTLED has no hysteresis: oscillating
+    around 20% just alternates crawl/warn, which is the intended
+    equilibrium.
     """
     if five_hour_remaining_percent is None:
         return TIER_UNKNOWN
@@ -83,8 +86,10 @@ def _classify_tier(
         return TIER_EXHAUSTED
     if five_hour_remaining_percent > QUOTA_HEALTHY_PCT:
         return TIER_HEALTHY
-    if five_hour_remaining_percent > QUOTA_DEGRADED_PCT:
+    if five_hour_remaining_percent > QUOTA_THROTTLE_PCT:
         return TIER_DEGRADED
+    if five_hour_remaining_percent > QUOTA_FREEZE_PCT:
+        return TIER_THROTTLED
     return TIER_EXHAUSTED
 
 
@@ -148,6 +153,7 @@ def _notify_transition(prev_tier: str, new_tier: str, snapshot: dict) -> None:
     colour = {
         TIER_HEALTHY: 0x2ECC71,  # green
         TIER_DEGRADED: 0xF1C40F,  # amber
+        TIER_THROTTLED: 0xE67E22,  # orange — crawl mode
         TIER_EXHAUSTED: 0xE74C3C,  # red
     }.get(new_tier, 0x95A5A6)  # grey for UNKNOWN
 
@@ -203,6 +209,17 @@ def _freeze_limiter() -> None:
         logger.warning("[THEO-WATCHDOG] Failed to freeze limiter: %s", exc)
 
 
+def _throttle_limiter() -> None:
+    """Clamp the global limiter to crawl mode (THROTTLED band). Re-asserted
+    on every throttled probe; recovery is adaptive once probes stop."""
+    try:
+        from pipeline.lyra.minimax_limiter import limiter
+
+        limiter.throttle()
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("[THEO-WATCHDOG] Failed to throttle limiter: %s", exc)
+
+
 def _unfreeze_limiter() -> None:
     """Lift the freeze. Idempotent — no-op if the limiter is not frozen."""
     try:
@@ -222,10 +239,13 @@ def _unfreeze_limiter() -> None:
 async def _loop() -> None:
     """Inner loop: probe the quota, classify, react. Runs forever."""
     logger.info(
-        "[THEO-WATCHDOG] Probe loop started (interval=%ds, healthy>%d%%, exhausted<=%d%%).",
+        "[THEO-WATCHDOG] Probe loop started (interval=%ds, healthy>%d%%, "
+        "throttled<=%d%%, frozen<=%d%%, resume>=%d%%).",
         QUOTA_PROBE_INTERVAL_S,
         QUOTA_HEALTHY_PCT,
-        QUOTA_DEGRADED_PCT,
+        QUOTA_THROTTLE_PCT,
+        QUOTA_FREEZE_PCT,
+        QUOTA_RESUME_PCT,
     )
     # Lazy import — minimax_shared is heavy and pulls in httpx; the daemon
     # start should not block on it.
@@ -263,14 +283,16 @@ async def _loop() -> None:
             new_tier = prev_tier if prev_tier != TIER_UNKNOWN else TIER_UNKNOWN
             logger.warning("[THEO-WATCHDOG] Probe raised: %s", exc)
 
-        # Re-assert the freeze on EVERY exhausted probe, not just on the
-        # transition. The freeze is a 30min ceiling — during a multi-hour
+        # Re-assert the limiter clamp on EVERY probe, not just on tier
+        # transitions. The freeze is a 30min ceiling — during a multi-hour
         # EXHAUSTED stretch it would otherwise self-expire and let calls
         # flow against a known-empty window until the next 2056 refroze it.
-        # Extending it each probe keeps in-place waiters asleep until the
-        # hysteresis (QUOTA_RESUME_PCT) releases the tier for real.
+        # Same for THROTTLED: the limiter's adaptive growth would crawl
+        # back up between probes without the re-assert.
         if new_tier == TIER_EXHAUSTED:
             _freeze_limiter()
+        elif new_tier == TIER_THROTTLED:
+            _throttle_limiter()
 
         now_iso = datetime.now(UTC).isoformat()
         if new_tier != prev_tier:
@@ -286,6 +308,12 @@ async def _loop() -> None:
                     _state["five_hour_remaining_percent"],
                     _state["weekly_remaining_percent"],
                     QUOTA_RESUME_PCT,
+                )
+            elif new_tier == TIER_THROTTLED:
+                logger.warning(
+                    "[THEO-WATCHDOG] Tier -> THROTTLED (5h=%s). Limiter crawling: "
+                    "the running task keeps finishing work on the remaining tail.",
+                    _state["five_hour_remaining_percent"],
                 )
             elif prev_tier == TIER_EXHAUSTED and new_tier in (TIER_HEALTHY, TIER_DEGRADED):
                 logger.warning(

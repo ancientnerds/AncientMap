@@ -64,6 +64,12 @@ class InsufficientQuotaError(RuntimeError):
 # to wait out if the rolling window already reset.
 _QUOTA_FREEZE_SECONDS = 300
 
+# Delay forced between calls while the watchdog reports the THROTTLED band
+# (5-20% of the 5h window remaining). Deliberately above _max_delay: crawl
+# is about letting the rolling window's refill outpace the burn, not about
+# RPS smoothing.
+_THROTTLE_DELAY_S = 60.0
+
 # Maximum cumulative time a single request() acquisition sleeps in place
 # waiting for a quota freeze to lift, before giving up and raising
 # QuotaExhaustedError. 6h covers a full rollover of the 5h window — if the
@@ -219,6 +225,29 @@ class MiniMaxLimiter:
             if self._frozen_until != 0.0:
                 self._frozen_until = 0.0
                 logger.info("[minimax-limiter] Manually unfrozen")
+
+    def throttle(self) -> None:
+        """Clamp to crawl mode: concurrency floor + throttle delay. Called
+        by the quota watchdog on every probe while the 5h window sits in
+        the THROTTLED band (5-20% remaining) — the run keeps finishing
+        work slowly instead of freezing. No unthrottle() needed: once the
+        watchdog stops re-asserting, sustained successes regrow
+        concurrency adaptively and the delay decays via _on_success."""
+        with self._lock:
+            if (
+                self._current_concurrency != self._min_concurrency
+                or self._current_delay != _THROTTLE_DELAY_S
+            ):
+                logger.warning(
+                    "[minimax-limiter] THROTTLED to crawl: concurrency %d -> %d, "
+                    "delay %.1fs -> %.1fs.",
+                    self._current_concurrency,
+                    self._min_concurrency,
+                    self._current_delay,
+                    _THROTTLE_DELAY_S,
+                )
+            self._current_concurrency = self._min_concurrency
+            self._current_delay = _THROTTLE_DELAY_S
 
     def _wait_while_frozen(self) -> None:
         """Sleep in place while the limiter is quota-frozen (2026-07-06).

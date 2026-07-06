@@ -19,16 +19,20 @@ THEO_RESEARCH_COST = 600
 
 # --- Quota watchdog (2026-06-28 plan, layer "active supervision") -----------
 # 5h-rolling % thresholds for the quota watchdog tier classification.
-# Above QUOTA_HEALTHY_PCT   => HEALTHY  (work proceeds, no warnings)
-# Above QUOTA_DEGRADED_PCT  => DEGRADED (work proceeds, warning logged)
+# Above QUOTA_HEALTHY_PCT   => HEALTHY   (full speed)
+# Above QUOTA_THROTTLE_PCT  => DEGRADED  (work proceeds, warning logged)
+# Above QUOTA_FREEZE_PCT    => THROTTLED (crawl: concurrency 1, 60s delay —
+#                              a run at 80% usage can still finish its
+#                              synthesis on the remaining tail)
 # Below or equal            => EXHAUSTED (limiter frozen, work paused)
 #
-# 2026-07-06: EXHAUSTED cut raised 5 -> 20 (user requirement: pause at 80%
-# USED). The E2E of 07-05 showed a run that keeps burning below 20%
-# remaining cannot finish anyway — it dies at 3% having wasted the tail.
-# Freezing at 20% preserves that budget for the resume slice.
+# 2026-07-06 v2 (user): at 80% used, don't freeze — throttle. The crawl
+# lets refill outpace burn, so runs drift back OUT of the band instead of
+# dying in it. Only the last 5% — the reserve that keeps everything else
+# on this key alive — is a hard freeze.
 QUOTA_HEALTHY_PCT = 30
-QUOTA_DEGRADED_PCT = 20
+QUOTA_THROTTLE_PCT = 20
+QUOTA_FREEZE_PCT = 5
 
 # Hysteresis: once EXHAUSTED, the tier only recovers when the 5h window is
 # back at or above this %. Without it the watchdog would unfreeze at 21%,
