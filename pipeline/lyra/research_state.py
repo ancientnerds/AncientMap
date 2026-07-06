@@ -163,6 +163,11 @@ class ResearchState:
     llm_call_count: int = 0
     debug_log: list[dict] = field(default_factory=list)
     error: str = ""
+    # Set by EventBus.emit when a handler dies on a quota error. The bus
+    # swallows the exception into `error` (to unblock the deadline loop),
+    # so this flag is the worker's only way to route the run to 'deferred'
+    # instead of 'failed'.
+    quota_exhausted: bool = False
 
     # Backward compat -- worker uses len(ctx.specialist_analyses) for tools_used
     specialist_analyses: dict = field(default_factory=dict)

@@ -32,11 +32,14 @@ from api.services.theo_quota_monitor import (
         (50.0, TIER_HEALTHY),  # above QUOTA_HEALTHY_PCT=30
         (30.0001, TIER_HEALTHY),  # just over the threshold
         (30.0, TIER_DEGRADED),  # boundary: at 30, no longer healthy
-        (20.0, TIER_DEGRADED),
-        (10.0, TIER_DEGRADED),
-        (5.0001, TIER_DEGRADED),  # just over the EXHAUSTED threshold
-        (5.0, TIER_EXHAUSTED),  # boundary: at 5, exhausted
-        (3.0, TIER_EXHAUSTED),
+        (25.0, TIER_DEGRADED),
+        (20.0001, TIER_DEGRADED),  # just over the EXHAUSTED threshold
+        # 2026-07-06: user requirement — pause at 80% USED (= 20% remaining),
+        # not at 5%. A full run that keeps burning below 20% cannot finish
+        # anyway; freezing early preserves budget for the resume slice.
+        (20.0, TIER_EXHAUSTED),  # boundary: at 20, exhausted
+        (10.0, TIER_EXHAUSTED),
+        (5.0, TIER_EXHAUSTED),
         (0.0, TIER_EXHAUSTED),
         (-1.0, TIER_EXHAUSTED),  # negative (defensive) still exhausted
         (None, TIER_UNKNOWN),  # probe failed to extract the value
@@ -44,6 +47,31 @@ from api.services.theo_quota_monitor import (
 )
 def test_classify_tier(five_hour_pct, expected):
     assert _classify_tier(five_hour_pct) == expected
+
+
+# --- Hysteresis: once EXHAUSTED, stay paused until real recovery ------------
+
+
+@pytest.mark.parametrize(
+    "five_hour_pct,prev_tier,expected",
+    [
+        # From EXHAUSTED, crossing the plain DEGRADED/HEALTHY boundaries is
+        # NOT enough — the window must recover to QUOTA_RESUME_PCT (50).
+        (25.0, TIER_EXHAUSTED, TIER_EXHAUSTED),
+        (35.0, TIER_EXHAUSTED, TIER_EXHAUSTED),
+        (49.9, TIER_EXHAUSTED, TIER_EXHAUSTED),
+        (50.0, TIER_EXHAUSTED, TIER_HEALTHY),  # at resume threshold: released
+        (80.0, TIER_EXHAUSTED, TIER_HEALTHY),
+        # Hysteresis only applies coming FROM exhausted.
+        (35.0, TIER_HEALTHY, TIER_HEALTHY),
+        (35.0, TIER_DEGRADED, TIER_HEALTHY),
+        (25.0, TIER_HEALTHY, TIER_DEGRADED),
+        # Unknown probe value stays UNKNOWN regardless of history.
+        (None, TIER_EXHAUSTED, TIER_UNKNOWN),
+    ],
+)
+def test_classify_tier_hysteresis(five_hour_pct, prev_tier, expected):
+    assert _classify_tier(five_hour_pct, prev_tier) == expected
 
 
 # --- get_watchdog_state: must not raise even with no daemon running ---------

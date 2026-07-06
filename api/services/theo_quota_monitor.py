@@ -5,13 +5,14 @@ and classifies the 5h-rolling remaining percentage into three health
 tiers. The classification drives two protective behaviours:
 
 1. The MiniMax rate limiter (`pipeline.lyra.minimax_limiter.limiter`) is
-   frozen for a 6h window when the tier is EXHAUSTED, so any code path
-   that tries to issue a new LLM call gets an immediate
-   `QuotaExhaustedError` instead of burning the few remaining tokens.
+   frozen while the tier is EXHAUSTED (the 30min freeze is re-asserted on
+   every exhausted probe), so in-flight LLM calls sleep in place instead
+   of burning the empty tail of the window. The tier only recovers once
+   the 5h window is back at >= QUOTA_RESUME_PCT (hysteresis) — "pause
+   until the quota actually resets", per user requirement 2026-07-06.
 2. The Theo worker poll loop consults `get_watchdog_state()` and refuses
-   to re-claim deferred rows while EXHAUSTED. Deferred rows wait until
-   the tier recovers to HEALTHY (or DEGRADED, in which case we let the
-   poll loop's 5min back-off govern).
+   to re-claim deferred rows while EXHAUSTED; batch rows additionally
+   require a fully HEALTHY tier to start at all.
 
 State transitions are notified once via Discord webhook (best-effort,
 no retry — see api/services/notify.py). The same tier does not
@@ -46,6 +47,7 @@ from api.services.theo_config import (
     QUOTA_DEGRADED_PCT,
     QUOTA_HEALTHY_PCT,
     QUOTA_PROBE_INTERVAL_S,
+    QUOTA_RESUME_PCT,
     THEO_WATCHDOG_DISABLED,
 )
 
@@ -60,15 +62,25 @@ TIER_EXHAUSTED = "EXHAUSTED"
 TIER_UNKNOWN = "UNKNOWN"  # probe failed; no opinion yet
 
 
-def _classify_tier(five_hour_remaining_percent: float | None) -> str:
-    """Pure function: 5h-rolling % -> health tier.
+def _classify_tier(
+    five_hour_remaining_percent: float | None,
+    prev_tier: str | None = None,
+) -> str:
+    """Pure function: 5h-rolling % (+ previous tier) -> health tier.
 
     Boundaries are inclusive at the lower edge (so 30% is still HEALTHY
-    but 5% is already EXHAUSTED — see theo_config for the rationale).
+    but 20% is already EXHAUSTED — see theo_config for the rationale).
     Returns TIER_UNKNOWN when the value is None.
+
+    Hysteresis (2026-07-06): coming FROM exhausted, the tier only recovers
+    once the window is back at >= QUOTA_RESUME_PCT. Crossing 20.0001%
+    would otherwise unfreeze a paused run for a few minutes of burn and
+    re-freeze immediately — flapping without forward progress.
     """
     if five_hour_remaining_percent is None:
         return TIER_UNKNOWN
+    if prev_tier == TIER_EXHAUSTED and five_hour_remaining_percent < QUOTA_RESUME_PCT:
+        return TIER_EXHAUSTED
     if five_hour_remaining_percent > QUOTA_HEALTHY_PCT:
         return TIER_HEALTHY
     if five_hour_remaining_percent > QUOTA_DEGRADED_PCT:
@@ -233,7 +245,7 @@ async def _loop() -> None:
                 weekly = quota.get("weekly_remaining_percent")
                 _state["five_hour_remaining_percent"] = five_h
                 _state["weekly_remaining_percent"] = weekly
-                new_tier = _classify_tier(five_h)
+                new_tier = _classify_tier(five_h, prev_tier)
             else:
                 _state["last_probe_ok"] = False
                 _state["consecutive_failures"] += 1
@@ -251,6 +263,15 @@ async def _loop() -> None:
             new_tier = prev_tier if prev_tier != TIER_UNKNOWN else TIER_UNKNOWN
             logger.warning("[THEO-WATCHDOG] Probe raised: %s", exc)
 
+        # Re-assert the freeze on EVERY exhausted probe, not just on the
+        # transition. The freeze is a 30min ceiling — during a multi-hour
+        # EXHAUSTED stretch it would otherwise self-expire and let calls
+        # flow against a known-empty window until the next 2056 refroze it.
+        # Extending it each probe keeps in-place waiters asleep until the
+        # hysteresis (QUOTA_RESUME_PCT) releases the tier for real.
+        if new_tier == TIER_EXHAUSTED:
+            _freeze_limiter()
+
         now_iso = datetime.now(UTC).isoformat()
         if new_tier != prev_tier:
             _state["last_transition"] = now_iso
@@ -258,12 +279,14 @@ async def _loop() -> None:
                 _state["since"] = now_iso
             # Log the transition at a level that matches severity.
             if new_tier == TIER_EXHAUSTED:
+                # Freeze already asserted above; this is just the loud log.
                 logger.error(
-                    "[THEO-WATCHDOG] Tier -> EXHAUSTED (5h=%s, weekly=%s). Freezing limiter.",
+                    "[THEO-WATCHDOG] Tier -> EXHAUSTED (5h=%s, weekly=%s). Limiter frozen "
+                    "until 5h >= %d%% (resume hysteresis).",
                     _state["five_hour_remaining_percent"],
                     _state["weekly_remaining_percent"],
+                    QUOTA_RESUME_PCT,
                 )
-                _freeze_limiter()
             elif prev_tier == TIER_EXHAUSTED and new_tier in (TIER_HEALTHY, TIER_DEGRADED):
                 logger.warning(
                     "[THEO-WATCHDOG] Tier EXHAUSTED -> %s. Unfreezing limiter.",

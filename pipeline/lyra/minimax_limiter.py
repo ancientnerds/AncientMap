@@ -43,10 +43,12 @@ logger = logging.getLogger(__name__)
 
 
 class QuotaExhaustedError(RuntimeError):
-    """Raised by limiter.request() when MiniMax reports a *quota* exhaustion 429
-    (not a transient RPS throttle). Retrying won't help — the 5h rolling
-    window must reset. The freeze self-clears after `_QUOTA_FREEZE_SECONDS`
-    (default 300s) or on the next successful call."""
+    """Raised by limiter.request() when the quota freeze outlives the
+    in-place wait cap (`quota_wait_max_s`, default 6h). Short freezes are
+    slept out inside request() since 2026-07-06 — a 2.5h research run must
+    survive a 30min quota trough instead of dying mid-flight. Only a
+    long trough (weekly cap, dead key) surfaces this error, and the worker
+    responds by deferring the run."""
 
 
 class InsufficientQuotaError(RuntimeError):
@@ -61,6 +63,13 @@ class InsufficientQuotaError(RuntimeError):
 # 5min is enough that probe_quota() (cache 60s) sees a fresh window; cheap
 # to wait out if the rolling window already reset.
 _QUOTA_FREEZE_SECONDS = 300
+
+# Maximum cumulative time a single request() acquisition sleeps in place
+# waiting for a quota freeze to lift, before giving up and raising
+# QuotaExhaustedError. 6h covers a full rollover of the 5h window — if the
+# quota hasn't recovered by then, this is a weekly-cap trough and the run
+# should defer instead of holding its worker slot.
+_QUOTA_WAIT_MAX_S = 6 * 3600
 
 # Substrings that identify a *quota* 429 vs a transient RPS 429. The MiniMax
 # Anthropic-compatible endpoint returns these in the error message body
@@ -84,6 +93,11 @@ _QUOTA_ERROR_MARKERS = (
     "5-hour usage limit",
     "(2056)",
     "(2062)",
+    # Our own QuotaExhaustedError text. Call sites wrap it into plain
+    # RuntimeErrors ("Minimax API error: MiniMax quota exhausted — ...");
+    # without this marker the event bus cannot recognize those copies and
+    # the worker marks quota deaths 'failed' instead of 'deferred'.
+    "quota exhausted",
 )
 
 
@@ -138,6 +152,7 @@ class MiniMaxLimiter:
         grow_after_successes: int = 20,
         grow_step: int = 1,
         quota_freeze_seconds: int = _QUOTA_FREEZE_SECONDS,
+        quota_wait_max_s: float = _QUOTA_WAIT_MAX_S,
     ):
         self._lock = threading.Lock()
         self._max_concurrency = max_concurrency
@@ -165,6 +180,7 @@ class MiniMaxLimiter:
 
         # Quota freeze
         self._quota_freeze_seconds = quota_freeze_seconds
+        self._quota_wait_max_s = quota_wait_max_s
         self._frozen_until: float = 0.0  # time.monotonic() — 0 means not frozen
 
     def is_frozen(self) -> bool:
@@ -204,18 +220,53 @@ class MiniMaxLimiter:
                 self._frozen_until = 0.0
                 logger.info("[minimax-limiter] Manually unfrozen")
 
+    def _wait_while_frozen(self) -> None:
+        """Sleep in place while the limiter is quota-frozen (2026-07-06).
+
+        Raising instantly killed multi-hour research runs over a 30min
+        quota trough (E2E 2026-07-05: 4 runs dead, 0 papers). The rolling
+        5h window refills as the run's own early burn ages out — so the
+        right response to a freeze is to wait, not to die. Only when the
+        cumulative wait exceeds `quota_wait_max_s` (weekly-cap trough) do
+        we raise QuotaExhaustedError for the worker's defer path.
+
+        Polls in short steps so a watchdog unfreeze (quota recovered) or
+        freeze extension (still exhausted) is noticed within ~15s.
+        """
+        if not self.is_frozen():
+            return
+        waited = 0.0
+        logger.warning(
+            "[minimax-limiter] Quota-frozen — sleeping in place "
+            "(freeze %.0fs remaining, wait cap %.0fs).",
+            self.freeze_remaining_seconds(),
+            self._quota_wait_max_s,
+        )
+        while self.is_frozen():
+            if waited >= self._quota_wait_max_s:
+                raise QuotaExhaustedError(
+                    f"MiniMax quota exhausted — waited {waited:.0f}s in place "
+                    f"(cap {self._quota_wait_max_s:.0f}s) and the limiter is still "
+                    f"frozen. The 5h window did not recover; deferring the run."
+                )
+            step = min(
+                15.0,
+                self._quota_wait_max_s - waited,
+                max(0.05, self.freeze_remaining_seconds()),
+            )
+            time.sleep(step)
+            waited += step
+        logger.info(
+            "[minimax-limiter] Freeze lifted after %.0fs of in-place waiting — resuming.",
+            waited,
+        )
+
     @contextmanager
     def request(self):
         """Acquire a rate-limited slot. Blocks if at concurrency limit.
-        Raises QuotaExhaustedError if the limiter is currently frozen
-        from a quota-exhaustion 429."""
-        if self.is_frozen():
-            remaining = self.freeze_remaining_seconds()
-            raise QuotaExhaustedError(
-                f"MiniMax quota exhausted — calls frozen for {remaining:.0f}s more. "
-                f"Wait for the 5h rolling window to reset, or call probe_quota() "
-                f"and unfreeze() if the window has cleared."
-            )
+        A quota freeze is slept out in place (see _wait_while_frozen);
+        QuotaExhaustedError only fires after the wait cap."""
+        self._wait_while_frozen()
 
         # Wait for an available slot
         with self._condition:

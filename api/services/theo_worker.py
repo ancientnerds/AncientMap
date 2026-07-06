@@ -98,6 +98,20 @@ def get_live_events(request_id: str) -> list[dict]:
     return _live_events.get(request_id, [])
 
 
+def _terminal_status_for_error(ctx) -> str:
+    """Route a run that ended with ctx.error to its terminal status.
+
+    'cancelled' wins (user intent), then 'deferred' for quota deaths
+    (ctx.quota_exhausted is set by EventBus.emit — the exception itself
+    never propagates), then 'failed' for everything real.
+    """
+    if "cancelled" in ctx.error.lower():
+        return "cancelled"
+    if getattr(ctx, "quota_exhausted", False):
+        return "deferred"
+    return "failed"
+
+
 async def _process_request(
     request_id: str,
     question: str,
@@ -151,14 +165,18 @@ async def _process_request(
         duration_ms = int((time.monotonic() - start) * 1000)
 
         if ctx.error:
-            # Release reserved credits on failure/cancel
+            # Release reserved credits on failure/cancel/defer
             _release_reservation(request_id)
 
-            if "cancelled" in ctx.error.lower():
+            status = _terminal_status_for_error(ctx)
+            if status == "cancelled":
                 emit({"type": "done", "status": "cancelled"})
                 logger.info(f"[THEO] Request {request_id} cancelled by user")
             else:
-                emit({"type": "done", "status": "failed"})
+                # 'deferred' = quota death swallowed into ctx.error by the
+                # event bus (ctx.quota_exhausted) — retry when the window
+                # recovers. 'failed' = a real failure.
+                emit({"type": "done", "status": status})
                 with get_session() as session:
                     # Persist the in-memory diagnostic state on failure so
                     # we can post-mortem from psql alone — previously the
@@ -167,7 +185,7 @@ async def _process_request(
                     session.execute(
                         text("""
                             UPDATE research_requests
-                            SET status = 'failed',
+                            SET status = :status,
                                 error_message = :msg,
                                 debug_log = :debug_log,
                                 total_tokens = :tokens,
@@ -178,6 +196,7 @@ async def _process_request(
                             WHERE id = :id
                         """),
                         {
+                            "status": status,
                             "id": request_id,
                             "msg": ctx.error,
                             "debug_log": json.dumps(ctx.debug_log),
@@ -188,7 +207,8 @@ async def _process_request(
                         },
                     )
                     session.commit()
-                logger.warning(f"[THEO] Request {request_id} failed: {ctx.error}")
+                log = logger.warning if status == "deferred" else logger.error
+                log(f"[THEO] Request {request_id} {status}: {ctx.error}")
         else:
             # Deduct credits and release reservation on success
             _deduct_credits(request_id)
@@ -341,6 +361,17 @@ class _StallDetected(Exception):
     """Raised when a running request stops making any progress."""
 
 
+def _limiter_frozen() -> bool:
+    """True while the MiniMax limiter is quota-frozen. Used by the stall
+    guard: frozen counters during a quota pause are expected, not a stall."""
+    try:
+        from pipeline.lyra.minimax_limiter import limiter
+
+        return limiter.is_frozen()
+    except Exception:  # noqa: BLE001 — a read failure must not kill the guard
+        return False
+
+
 def _mark_failed_running(request_id: str, msg: str) -> None:
     """Mark a still-'running' request failed and release its credit reservation."""
     _release_reservation(request_id)
@@ -397,6 +428,12 @@ async def _run_with_stall_guard(
             now = time.monotonic()
             if sig is not None and sig != last_sig:
                 last_sig, last_change = sig, now
+            elif _limiter_frozen():
+                # Quota pause: the run's LLM calls are sleeping inside the
+                # frozen limiter, so counters CANNOT move. Known cause, not
+                # a stall — reset the clock so the pause doesn't accumulate
+                # toward the grace window.
+                last_change = now
             elif (now - last_change) >= _STALL_GRACE_SECONDS:
                 logger.error(
                     "[THEO] Request %s no progress for %ss (sig=%s) — cancelling stalled run.",
@@ -429,6 +466,15 @@ def _batch_gate_open(last_start_age_s: float | None, min_interval_s: float) -> b
     return last_start_age_s is None or last_start_age_s >= min_interval_s
 
 
+def _batch_claim_allowed(gate_open: bool, tier: str) -> bool:
+    """Batch rows need BOTH an open pacing gate and a positively HEALTHY
+    watchdog. Starting a fresh multi-hour full-depth run into a
+    half-drained window (DEGRADED) just parks it in the freeze minutes
+    later — wait for the window instead. UNKNOWN (no probe yet / watchdog
+    down) is treated as not-healthy: batch runs never start blind."""
+    return gate_open and tier == "HEALTHY"
+
+
 def _read_last_start_age_s() -> float | None:
     """Seconds since the most recent task start (any kind), or None if no
     task has ever started."""
@@ -451,29 +497,32 @@ async def _poll_loop() -> None:
     while not _shutdown:
         try:
             # Quota watchdog gate (2026-06-28). When the tier is EXHAUSTED
-            # the limiter is already frozen, so any run we pick up will
-            # QuotaExhaustedError within the first LLM call and re-defer
-            # — burning the 5min re-claim back-off for nothing. Sleep and
-            # skip; the watchdog will lift the gate within ~60s once a
-            # healthy probe comes in. Health/degraded tiers are fine to
-            # proceed on; HEALTHY is the normal case.
+            # the limiter is already frozen, so any run we pick up would
+            # sleep inside the limiter from its very first LLM call. Sleep
+            # and skip; the watchdog lifts the gate once the window has
+            # recovered past QUOTA_RESUME_PCT.
+            tier = "UNKNOWN"
             try:
                 from api.services.theo_quota_monitor import get_watchdog_state
 
-                if get_watchdog_state().get("tier") == "EXHAUSTED":
+                tier = get_watchdog_state().get("tier", "UNKNOWN")
+                if tier == "EXHAUSTED":
                     await asyncio.sleep(60)
                     continue
             except Exception:  # noqa: BLE001 — never let a watchdog read kill the poll loop
                 pass
-            # Batch pacing: while the gate is closed, batch rows are invisible
-            # to the claim query below — a younger UI row still gets picked up
+            # Batch pacing: while the gate is closed (or the watchdog is not
+            # positively HEALTHY), batch rows are invisible to the claim
+            # query below — a younger UI row still gets picked up
             # immediately.
             gate_open = _batch_gate_open(_read_last_start_age_s(), THEO_MIN_TASK_INTERVAL_S)
+            batch_allowed = _batch_claim_allowed(gate_open, tier)
             if gate_open != gate_was_open:
                 logger.info(
-                    "[THEO] Batch pacing gate %s (min start-to-start interval %ss)",
+                    "[THEO] Batch pacing gate %s (min start-to-start interval %ss, tier=%s)",
                     "OPEN" if gate_open else "CLOSED",
                     THEO_MIN_TASK_INTERVAL_S,
+                    tier,
                 )
                 gate_was_open = gate_open
 
@@ -490,11 +539,11 @@ async def _poll_loop() -> None:
                         WHERE (status = 'queued'
                                OR (status = 'deferred'
                                    AND completed_at < NOW() - INTERVAL '5 minutes'))
-                          AND (is_batch = FALSE OR :gate_open)
+                          AND (is_batch = FALSE OR :batch_allowed)
                         ORDER BY created_at ASC
                         LIMIT 1
                     """),
-                    {"gate_open": gate_open},
+                    {"batch_allowed": batch_allowed},
                 ).fetchone()
 
             if row:

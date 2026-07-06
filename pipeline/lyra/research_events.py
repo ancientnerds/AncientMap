@@ -231,11 +231,27 @@ class EventBus:
                 await handler(event)
             except Exception as exc:
                 logger.exception("Handler failed for %s", event_type.__name__)
-                # Make the failure visible to the orchestrator's deadline loop,
-                # which only checks state.error — otherwise done_event.wait()
-                # blocks until the 12h hard timeout.
-                if self._state is not None and not getattr(self._state, "error", None):
-                    self._state.error = f"Handler failed on {event_type.__name__}: {exc!r}"
+                if self._state is not None:
+                    # Quota deaths must be distinguishable from real failures:
+                    # the worker routes quota_exhausted runs to 'deferred'
+                    # (retry when the window recovers) instead of 'failed'.
+                    # Re-raising here is NOT an option — the deadline loop
+                    # would block on done_event until the 12h hard timeout.
+                    from pipeline.lyra.minimax_limiter import (
+                        InsufficientQuotaError,
+                        QuotaExhaustedError,
+                        is_quota_error,
+                    )
+
+                    if isinstance(
+                        exc, (QuotaExhaustedError, InsufficientQuotaError)
+                    ) or is_quota_error(str(exc)):
+                        self._state.quota_exhausted = True
+                    # Make the failure visible to the orchestrator's deadline
+                    # loop, which only checks state.error — otherwise
+                    # done_event.wait() blocks until the 12h hard timeout.
+                    if not getattr(self._state, "error", None):
+                        self._state.error = f"Handler failed on {event_type.__name__}: {exc!r}"
 
         # Piggyback a DB progress flush on event emissions. The
         # orchestrator's own deadline-loop flush sits dormant during

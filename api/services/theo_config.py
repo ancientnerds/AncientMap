@@ -22,10 +22,20 @@ THEO_RESEARCH_COST = 600
 # Above QUOTA_HEALTHY_PCT   => HEALTHY  (work proceeds, no warnings)
 # Above QUOTA_DEGRADED_PCT  => DEGRADED (work proceeds, warning logged)
 # Below or equal            => EXHAUSTED (limiter frozen, work paused)
-# Set conservatively: a real Theo run burns ~3-5M tokens; below 5% the
-# run will not finish without hitting a quota 429.
+#
+# 2026-07-06: EXHAUSTED cut raised 5 -> 20 (user requirement: pause at 80%
+# USED). The E2E of 07-05 showed a run that keeps burning below 20%
+# remaining cannot finish anyway — it dies at 3% having wasted the tail.
+# Freezing at 20% preserves that budget for the resume slice.
 QUOTA_HEALTHY_PCT = 30
-QUOTA_DEGRADED_PCT = 5
+QUOTA_DEGRADED_PCT = 20
+
+# Hysteresis: once EXHAUSTED, the tier only recovers when the 5h window is
+# back at or above this %. Without it the watchdog would unfreeze at 21%,
+# the run would burn back down to 20% within minutes, and the freeze/thaw
+# flapping would make no forward progress ("pause until the quota actually
+# resets", not "pause until barely above the line").
+QUOTA_RESUME_PCT = 50
 
 # How often the watchdog probes /v1/token_plan/remains. The probe is cached
 # 60s server-side (minimax_shared.probe_minimax_quota), so 60s is a
