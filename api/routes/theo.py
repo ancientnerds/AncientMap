@@ -473,7 +473,10 @@ async def list_research(req: Request):
                 WHERE user_id = :uid
                   AND (expires_at IS NULL OR expires_at > NOW())
                 ORDER BY created_at DESC
-                LIMIT 50
+                -- 200, not 50: the ENTITÄT batch alone is 52 rows with
+                -- created_at seconds apart — LIMIT 50 silently dropped the
+                -- two OLDEST (= first-completed) papers from the UI.
+                LIMIT 200
             """),
             {"uid": user_id},
         ).fetchall()
