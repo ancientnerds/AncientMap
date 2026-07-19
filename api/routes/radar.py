@@ -766,9 +766,7 @@ async def promote_to_db(
             },
         )
 
-    display_name = (
-        override_dict.get("name") or effective.get("corrected_name") or effective["name"]
-    )
+    display_name = override_dict.get("name") or effective.get("corrected_name") or effective["name"]
 
     # Determine source_id for the new unified_sites row
     source_id = "lyra" if effective.get("source") == "lyra" else "ancient_nerds_community"
