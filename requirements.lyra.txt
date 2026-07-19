@@ -12,3 +12,6 @@ requests>=2.31.0
 httpx>=0.26.0
 tenacity>=8.2.0
 loguru>=0.7.0
+
+# Cache client for api.cache (shared Redis instead of in-memory fallback)
+redis>=5.0.0

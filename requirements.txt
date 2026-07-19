@@ -94,3 +94,6 @@ mypy>=1.8.0                 # Type checking
 ipython>=8.19.0             # Interactive shell
 openpyxl>=3.1.0
 pyreadr>=0.5.0              # Read R data files (.rds) for peru_amazon ingester
+
+# Cache client for api.cache
+redis>=5.0.0

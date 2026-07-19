@@ -6,6 +6,9 @@ psycopg2-binary>=2.9.9
 sqlalchemy>=2.0.0
 geoalchemy2>=0.14.0
 shapely>=2.0.0
+
+# --- Cache (api/cache.py falls back to per-process memory without this) ---
+redis>=5.0.0
 alembic>=1.13.0
 
 # --- API (FastAPI) ---
