@@ -25,6 +25,7 @@ import './LyraRadarPage.css'
 const LyraProfileModal = lazy(() => import('../components/LyraProfileModal'))
 const RadarMap = lazy(() => import('../components/RadarMap'))
 import type { RadarMapItem } from '../components/RadarMap'
+import { ApproveModal, MergeModal } from '../components/RadarReviewModals'
 
 interface VideoReference {
   video_id: string
@@ -62,6 +63,7 @@ interface RadarItem {
   site_type: string | null
   period_name: string | null
   period_start: number | null
+  period_end: number | null
   thumbnail_url: string | null
   screenshot_url: string | null
   wikipedia_url: string | null
@@ -81,7 +83,7 @@ interface RadarItem {
   confidence: string | null
   data_sources: string[]
   commons_url: string | null
-  nearby_an_site: { name: string; distance_km: number } | null
+  nearby_an_site: { site_id: string; name: string; distance_km: number } | null
   source: string | null
   avg_significance: number | null
   top_news_category: string | null
@@ -135,6 +137,16 @@ function StatusPill({ status }: { status: string }) {
       label = 'Rejected'
       cls = 'lyra-status-rejected'
       hint = 'Rejected — does not meet quality criteria'
+      break
+    case 'dismissed':
+      label = 'Dismissed'
+      cls = 'lyra-status-rejected'
+      hint = 'Dismissed by founder review'
+      break
+    case 'matched':
+      label = 'Matched'
+      cls = 'lyra-status-added'
+      hint = 'Merged into an existing database site'
       break
     default:
       label = 'Processing'
@@ -293,10 +305,19 @@ function DbSourceBadge({ source }: { source: string | null }) {
   )
 }
 
-function RadarCard({ item, onViewSite, onPromote }: { item: RadarItem; onViewSite?: (site: SiteData) => void; onPromote?: (id: string) => void }) {
+function RadarCard({ item, onViewSite, onApprove, onDismiss, onMerge }: {
+  item: RadarItem
+  onViewSite?: (site: SiteData) => void
+  onApprove?: (id: string, overrides: Record<string, unknown>) => Promise<string | null>
+  onDismiss?: (id: string) => void
+  onMerge?: (id: string, siteId: string) => Promise<string | null>
+}) {
   const [factsExpanded, setFactsExpanded] = useState(false)
   const [videosExpanded, setVideosExpanded] = useState(false)
   const [sourcesExpanded, setSourcesExpanded] = useState(false)
+  const [showApprove, setShowApprove] = useState(false)
+  const [showMerge, setShowMerge] = useState(false)
+  const [confirmDismiss, setConfirmDismiss] = useState(false)
 
   return (
     <div className="lyra-discovery-card">
@@ -445,14 +466,47 @@ function RadarCard({ item, onViewSite, onPromote }: { item: RadarItem; onViewSit
       {/* 8. Score breakdown */}
       <ScoreBreakdown item={item} />
 
-      {/* 8a. Promote button — only for 100% enriched, not yet promoted */}
-      {item.enrichment_score === 100 && item.enrichment_status !== 'promoted' && onPromote && (
-        <button className="lyra-promote-btn" onClick={() => onPromote(item.id)}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M12 5v14M5 12h14" />
-          </svg>
-          Add to DB
-        </button>
+      {/* 8a. Founder review actions — any enriched item */}
+      {item.enrichment_status === 'enriched' && onApprove && onDismiss && onMerge && (
+        <div className="radar-review-actions">
+          <button className="lyra-promote-btn" onClick={() => setShowApprove(true)}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 5v14M5 12h14" />
+            </svg>
+            Approve
+          </button>
+          <button className="radar-merge-btn" onClick={() => setShowMerge(true)}>
+            Merge
+          </button>
+          {confirmDismiss ? (
+            <button
+              className="radar-dismiss-btn radar-dismiss-confirm"
+              onClick={() => { setConfirmDismiss(false); onDismiss(item.id) }}
+              onBlur={() => setConfirmDismiss(false)}
+            >
+              Confirm reject?
+            </button>
+          ) : (
+            <button className="radar-dismiss-btn" onClick={() => setConfirmDismiss(true)}>
+              Reject
+            </button>
+          )}
+        </div>
+      )}
+      {showApprove && onApprove && (
+        <ApproveModal
+          item={item}
+          onSubmit={(overrides) => onApprove(item.id, overrides)}
+          onClose={() => setShowApprove(false)}
+        />
+      )}
+      {showMerge && onMerge && (
+        <MergeModal
+          itemName={item.display_name}
+          nearbyAnSite={item.nearby_an_site}
+          onMerge={(siteId) => onMerge(item.id, siteId)}
+          onClose={() => setShowMerge(false)}
+        />
       )}
 
       {/* 8.5. External sources — collapsed by default */}
@@ -665,33 +719,76 @@ export default function LyraRadarPage() {
   }, [mapPinnedId])
 
   const mapFilterFn = useCallback((item: RadarMapItem) => {
-    if (statusFilter !== 'all') {
-      const mapped = statusFilter === 'added' ? 'promoted' : statusFilter
-      if (item.enrichment_status !== mapped) return false
+    if (statusFilter === 'all') return true
+    if (statusFilter === 'rejected') {
+      return item.enrichment_status === 'rejected' || item.enrichment_status === 'dismissed'
     }
-    return true
+    const mapped = statusFilter === 'added' ? 'promoted' : statusFilter
+    return item.enrichment_status === mapped
   }, [statusFilter])
 
-  const handlePromote = useCallback(async (itemId: string) => {
-    if (!token) return
+  const authPost = useCallback(async (path: string, body?: unknown): Promise<Response> => {
+    return fetch(`${config.api.baseUrl}${path}`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
+      },
+      ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+    })
+  }, [token])
+
+  const handleApprove = useCallback(async (itemId: string, overrides: Record<string, unknown>): Promise<string | null> => {
+    if (!token) return 'Not authenticated'
     try {
-      const resp = await fetch(`${config.api.baseUrl}/radar/${itemId}/promote`, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}` },
-      })
+      const resp = await authPost(`/radar/${itemId}/promote`, Object.keys(overrides).length ? overrides : undefined)
       if (!resp.ok) {
         const data = await resp.json().catch(() => ({ detail: `HTTP ${resp.status}` }))
-        alert(`Promote failed: ${data.detail || resp.statusText}`)
-        return
+        const detail = data.detail
+        return typeof detail === 'object' && detail?.message ? detail.message : String(detail || resp.statusText)
       }
-      // Update local state to reflect promotion
       setItems(prev => prev.map(it =>
         it.id === itemId ? { ...it, enrichment_status: 'promoted' } : it
       ))
+      return null
     } catch (e) {
-      alert(`Promote failed: ${e instanceof Error ? e.message : 'Network error'}`)
+      return e instanceof Error ? e.message : 'Network error'
     }
-  }, [token])
+  }, [token, authPost])
+
+  const handleDismiss = useCallback(async (itemId: string) => {
+    if (!token) return
+    try {
+      const resp = await authPost(`/radar/${itemId}/dismiss`)
+      if (!resp.ok) {
+        const data = await resp.json().catch(() => ({ detail: `HTTP ${resp.status}` }))
+        alert(`Dismiss failed: ${data.detail || resp.statusText}`)
+        return
+      }
+      setItems(prev => prev.map(it =>
+        it.id === itemId ? { ...it, enrichment_status: 'dismissed' } : it
+      ))
+    } catch (e) {
+      alert(`Dismiss failed: ${e instanceof Error ? e.message : 'Network error'}`)
+    }
+  }, [token, authPost])
+
+  const handleMerge = useCallback(async (itemId: string, siteId: string): Promise<string | null> => {
+    if (!token) return 'Not authenticated'
+    try {
+      const resp = await authPost(`/radar/${itemId}/merge`, { site_id: siteId })
+      if (!resp.ok) {
+        const data = await resp.json().catch(() => ({ detail: `HTTP ${resp.status}` }))
+        return String(data.detail || resp.statusText)
+      }
+      setItems(prev => prev.map(it =>
+        it.id === itemId ? { ...it, enrichment_status: 'matched' } : it
+      ))
+      return null
+    } catch (e) {
+      return e instanceof Error ? e.message : 'Network error'
+    }
+  }, [token, authPost])
 
   useEffect(() => {
     const onScroll = () => setShowScrollTop(window.scrollY > 400)
@@ -756,6 +853,7 @@ export default function LyraRadarPage() {
           site_type: d.site_type ?? null,
           period_name: d.period_name ?? null,
           period_start: d.period_start ?? null,
+          period_end: d.period_end ?? null,
           lat: d.lat ?? null,
           lon: d.lon ?? null,
           mention_count: d.mention_count ?? 0,
@@ -1007,7 +1105,9 @@ export default function LyraRadarPage() {
                        onMouseEnter={() => setHighlightedCardId(item.id)}
                        onMouseLeave={() => setHighlightedCardId(null)}>
                     <RadarCard item={item} onViewSite={setSelectedSite}
-                               onPromote={isFounder ? handlePromote : undefined} />
+                               onApprove={isFounder ? handleApprove : undefined}
+                               onDismiss={isFounder ? handleDismiss : undefined}
+                               onMerge={isFounder ? handleMerge : undefined} />
                   </div>
                 ))}
               </div>

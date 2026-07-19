@@ -1132,3 +1132,203 @@
   justify-content: space-between;
   margin-top: 2px;
 }
+
+/* =============================================================================
+   Founder review actions + modals (2026-07 promotion upgrade)
+   ============================================================================= */
+
+.radar-review-actions {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.radar-review-actions .lyra-promote-btn {
+  margin-bottom: 0;
+  flex: 1;
+  justify-content: center;
+}
+
+.radar-merge-btn,
+.radar-dismiss-btn {
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: inherit;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.radar-merge-btn {
+  color: #7ab4ff;
+  background: rgba(122, 180, 255, 0.1);
+  border: 1px solid rgba(122, 180, 255, 0.3);
+}
+
+.radar-merge-btn:hover {
+  background: rgba(122, 180, 255, 0.2);
+  border-color: rgba(122, 180, 255, 0.5);
+}
+
+.radar-dismiss-btn {
+  color: #ff8a8a;
+  background: rgba(255, 100, 100, 0.08);
+  border: 1px solid rgba(255, 100, 100, 0.3);
+}
+
+.radar-dismiss-btn:hover {
+  background: rgba(255, 100, 100, 0.18);
+  border-color: rgba(255, 100, 100, 0.5);
+}
+
+.radar-dismiss-confirm {
+  background: rgba(255, 100, 100, 0.25);
+  border-color: rgba(255, 100, 100, 0.8);
+}
+
+.radar-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.65);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.radar-modal {
+  background: #16181d;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 10px;
+  padding: 20px;
+  width: min(480px, 92vw);
+  max-height: 88vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.radar-modal-title {
+  margin: 0;
+  font-size: 16px;
+  color: #fff;
+}
+
+.radar-modal-hint {
+  margin: 0;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.radar-modal-warning {
+  font-size: 12px;
+  color: #ffc76e;
+  background: rgba(255, 199, 110, 0.1);
+  border: 1px solid rgba(255, 199, 110, 0.3);
+  border-radius: 6px;
+  padding: 8px 10px;
+}
+
+.radar-modal-row {
+  display: flex;
+  gap: 10px;
+}
+
+.radar-modal-row .radar-modal-label {
+  flex: 1;
+}
+
+.radar-modal-label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.radar-modal-input,
+.radar-modal-textarea {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 6px;
+  color: #fff;
+  padding: 7px 10px;
+  font-size: 13px;
+  font-family: inherit;
+}
+
+.radar-field-missing .radar-modal-input,
+.radar-field-missing .radar-modal-textarea {
+  border-color: rgba(255, 100, 100, 0.7);
+}
+
+.radar-modal-error {
+  font-size: 12px;
+  color: #ff8a8a;
+}
+
+.radar-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.radar-modal-btn {
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.radar-modal-cancel {
+  background: transparent;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.radar-modal-confirm {
+  background: var(--primary-red, #c02023);
+  border-color: transparent;
+  color: #fff;
+}
+
+.radar-modal-confirm:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.radar-merge-result {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.04);
+  color: #fff;
+  cursor: pointer;
+  text-align: left;
+  font-size: 13px;
+  font-family: inherit;
+}
+
+.radar-merge-result:hover {
+  border-color: rgba(122, 180, 255, 0.6);
+  background: rgba(122, 180, 255, 0.1);
+}
+
+.radar-merge-nearby {
+  border-color: rgba(255, 199, 110, 0.5);
+}
+
+.radar-merge-meta {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.55);
+  white-space: nowrap;
+}
