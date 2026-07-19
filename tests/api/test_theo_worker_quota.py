@@ -82,18 +82,26 @@ def test_terminal_status_without_flag_attribute_fails():
     assert tw._terminal_status_for_error(ctx) == "failed"
 
 
-# --- 3. Batch claims require a HEALTHY watchdog ------------------------------
+# --- 3. Batch claims require HEALTHY watchdog + weekly headroom --------------
+# 2026-07-19: tier alone is not enough — a paper costs ~19% of the weekly
+# budget, so starting a batch run with less than THEO_BATCH_MIN_WEEKLY_PCT
+# remaining just parks it in the weekly wall mid-run. None = probe carried
+# no weekly value: batch runs never start blind.
 
 
 @pytest.mark.parametrize(
-    "gate_open,tier,expected",
+    "gate_open,tier,weekly,expected",
     [
-        (True, "HEALTHY", True),
-        (True, "DEGRADED", False),
-        (True, "EXHAUSTED", False),
-        (True, "UNKNOWN", False),
-        (False, "HEALTHY", False),
+        (True, "HEALTHY", 100, True),
+        (True, "HEALTHY", 25, True),  # boundary: exactly the floor
+        (True, "HEALTHY", 24.9, False),  # below the floor: paper won't fit
+        (True, "HEALTHY", 0, False),  # the 07-08..07-12 wall
+        (True, "HEALTHY", None, False),  # probe blind: never start blind
+        (True, "DEGRADED", 100, False),
+        (True, "EXHAUSTED", 100, False),
+        (True, "UNKNOWN", 100, False),
+        (False, "HEALTHY", 100, False),
     ],
 )
-def test_batch_claim_allowed(gate_open, tier, expected):
-    assert tw._batch_claim_allowed(gate_open, tier) is expected
+def test_batch_claim_allowed(gate_open, tier, weekly, expected):
+    assert tw._batch_claim_allowed(gate_open, tier, weekly) is expected

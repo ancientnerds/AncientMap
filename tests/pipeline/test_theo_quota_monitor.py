@@ -52,6 +52,33 @@ def test_classify_tier(five_hour_pct, expected):
     assert _classify_tier(five_hour_pct) == expected
 
 
+# --- Weekly wall (2026-07-19): the weekly budget dominates the 5h ladder ----
+# Born from the 07-08..07-12 standstill: the calendar-week budget was at 0%
+# (every call 429'd with error 2056) while the 5h window sat untouched at
+# 100% — precisely BECAUSE nothing could burn it. The classifier read only
+# the 5h value, reported HEALTHY, and the batch gate fed 17 tasks into the
+# wall. Weekly must therefore be able to force EXHAUSTED on its own.
+
+
+@pytest.mark.parametrize(
+    "five_hour_pct,weekly_pct,prev_tier,expected",
+    [
+        (100.0, 0.0, None, TIER_EXHAUSTED),  # the blind-spot scenario itself
+        (100.0, 5.0, None, TIER_EXHAUSTED),  # boundary: at 5, frozen
+        (100.0, 5.0001, None, TIER_HEALTHY),  # above the reserve: 5h ladder rules
+        (100.0, None, None, TIER_HEALTHY),  # no weekly data -> 5h-only behavior
+        (10.0, 100.0, None, TIER_THROTTLED),  # healthy weekly leaves 5h ladder alone
+        (100.0, 0.0, TIER_HEALTHY, TIER_EXHAUSTED),  # regardless of prev tier
+        # Monday reset: weekly refilled, 5h full -> recovery passes hysteresis.
+        (100.0, 100.0, TIER_EXHAUSTED, TIER_HEALTHY),
+        # Weekly refilled but 5h below QUOTA_RESUME_PCT: hysteresis still holds.
+        (30.0, 100.0, TIER_EXHAUSTED, TIER_EXHAUSTED),
+    ],
+)
+def test_classify_tier_weekly_wall(five_hour_pct, weekly_pct, prev_tier, expected):
+    assert _classify_tier(five_hour_pct, prev_tier, weekly_remaining_percent=weekly_pct) == expected
+
+
 # --- Hysteresis: once EXHAUSTED, stay paused until real recovery ------------
 
 

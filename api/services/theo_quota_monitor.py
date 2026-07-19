@@ -49,6 +49,7 @@ from api.services.theo_config import (
     QUOTA_PROBE_INTERVAL_S,
     QUOTA_RESUME_PCT,
     QUOTA_THROTTLE_PCT,
+    QUOTA_WEEKLY_FREEZE_PCT,
     THEO_WATCHDOG_DISABLED,
 )
 
@@ -67,12 +68,21 @@ TIER_UNKNOWN = "UNKNOWN"  # probe failed; no opinion yet
 def _classify_tier(
     five_hour_remaining_percent: float | None,
     prev_tier: str | None = None,
+    *,
+    weekly_remaining_percent: float | None = None,
 ) -> str:
-    """Pure function: 5h-rolling % (+ previous tier) -> health tier.
+    """Pure function: 5h-rolling % + weekly % (+ previous tier) -> health tier.
 
     Boundaries are inclusive at the lower edge (30% is still HEALTHY,
     20% is already THROTTLED, 5% is already EXHAUSTED — see theo_config
     for the rationale). Returns TIER_UNKNOWN when the value is None.
+
+    Weekly wall (2026-07-19): at or below QUOTA_WEEKLY_FREEZE_PCT the tier
+    is EXHAUSTED no matter what the 5h window says — an empty weekly budget
+    rejects every call (error 2056) while leaving the 5h window untouched,
+    which is exactly the state the 5h ladder misreads as HEALTHY. Checked
+    before the hysteresis so a weekly wall cannot be lifted by a full 5h
+    window. No weekly hysteresis: the % only refills at the Monday reset.
 
     Hysteresis (2026-07-06): coming FROM exhausted, the tier only recovers
     once the window is back at >= QUOTA_RESUME_PCT — no freeze/thaw
@@ -82,6 +92,8 @@ def _classify_tier(
     """
     if five_hour_remaining_percent is None:
         return TIER_UNKNOWN
+    if weekly_remaining_percent is not None and weekly_remaining_percent <= QUOTA_WEEKLY_FREEZE_PCT:
+        return TIER_EXHAUSTED
     if prev_tier == TIER_EXHAUSTED and five_hour_remaining_percent < QUOTA_RESUME_PCT:
         return TIER_EXHAUSTED
     if five_hour_remaining_percent > QUOTA_HEALTHY_PCT:
@@ -265,7 +277,7 @@ async def _loop() -> None:
                 weekly = quota.get("weekly_remaining_percent")
                 _state["five_hour_remaining_percent"] = five_h
                 _state["weekly_remaining_percent"] = weekly
-                new_tier = _classify_tier(five_h, prev_tier)
+                new_tier = _classify_tier(five_h, prev_tier, weekly_remaining_percent=weekly)
             else:
                 _state["last_probe_ok"] = False
                 _state["consecutive_failures"] += 1

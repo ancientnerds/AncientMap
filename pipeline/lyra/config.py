@@ -9,7 +9,11 @@ from dataclasses import dataclass, field
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from pipeline.lyra.minimax_limiter import QuotaExhaustedError, is_quota_error
+from pipeline.lyra.minimax_limiter import (
+    InsufficientQuotaError,
+    QuotaExhaustedError,
+    is_quota_error,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -843,7 +847,10 @@ def call_api(
         return _call_anthropic_api(
             settings, prefill=prefill, documents=documents, timeout=timeout, **kwargs
         )
-    except LyraAPIError:
+    except (LyraAPIError, QuotaExhaustedError, InsufficientQuotaError):
+        # Typed quota errors are the worker's routing signal for 'deferred' —
+        # wrapping them into LyraAPIError erased the type and turned quota
+        # troughs into permanent 'failed' rows (2026-07-19).
         raise
     except Exception as e:
         raise LyraAPIError(f"{settings.llm_backend.title()} API error: {e}") from e

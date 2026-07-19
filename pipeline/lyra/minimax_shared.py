@@ -17,7 +17,11 @@ import httpx
 
 logger = logging.getLogger(__name__)
 
-from pipeline.lyra.minimax_limiter import QuotaExhaustedError, is_quota_error
+from pipeline.lyra.minimax_limiter import (
+    InsufficientQuotaError,
+    QuotaExhaustedError,
+    is_quota_error,
+)
 
 # MiniMax model — single source of truth for every call site (config.py,
 # web_research.py, tweet_verifier.py, research_stages.py all import this).
@@ -667,6 +671,12 @@ def structured_llm_call(
         # session before this hook was added.
         coerced = _coerce_to_schema(parsed, schema)
         return coerced if coerced is not _SCHEMA_DROP else {}
+    except (QuotaExhaustedError, InsufficientQuotaError):
+        # Quota death is not retryable here — it must reach the worker's
+        # defer path. Swallowing it into {} made decomposition report
+        # "no research angles" and marked the run 'failed' permanently:
+        # 17 batch tasks died that way on 07-08..07-12 (2026-07-19).
+        raise
     except (json.JSONDecodeError, ValueError) as exc:
         logger.warning("Structured output parse failed, retrying: %s", exc)
     except Exception as exc:
@@ -684,6 +694,8 @@ def structured_llm_call(
         parsed = json.loads(cleaned)
         coerced = _coerce_to_schema(parsed, schema)
         return coerced if coerced is not _SCHEMA_DROP else {}
+    except (QuotaExhaustedError, InsufficientQuotaError):
+        raise
     except Exception as exc:
         logger.error("Structured LLM call failed after retry: %s", exc)
         return {}

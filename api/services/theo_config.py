@@ -41,6 +41,24 @@ QUOTA_FREEZE_PCT = 5
 # resets", not "pause until barely above the line").
 QUOTA_RESUME_PCT = 50
 
+# --- Weekly wall (2026-07-19) ------------------------------------------------
+# MiniMax enforces a second, calendar-week budget (resets Monday 00:00 UTC)
+# as error 2056 — independent of the 5h window the ladder above tracks.
+# When the weekly budget is empty, every call 429s while the 5h window sits
+# at 100% precisely BECAUSE nothing can burn it: on 07-08..07-12 the probe
+# read "HEALTHY 5h=100 weekly=0" for three days and the batch gate fed 17
+# tasks into guaranteed failures. At or below this % the tier is EXHAUSTED
+# regardless of the 5h value. No hysteresis — the weekly % only refills at
+# the Monday reset, so there is no boundary to flap around.
+QUOTA_WEEKLY_FREEZE_PCT = 5
+
+# A batch run (is_batch=TRUE) may only START when the weekly budget still
+# fits a whole paper: ~19%/paper observed on the ENTITÄT batch, plus margin.
+# Below this floor a fresh multi-hour run would just park in the weekly wall
+# mid-run. UI submissions bypass the batch gate entirely and are protected
+# by the tier ladder alone.
+THEO_BATCH_MIN_WEEKLY_PCT = 25
+
 # How often the watchdog probes /v1/token_plan/remains. The probe is cached
 # 60s server-side (minimax_shared.probe_minimax_quota), so 60s is a
 # reasonable cadence — faster just hammers the endpoint without new data.
