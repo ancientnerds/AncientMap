@@ -394,7 +394,7 @@ async def get_radar(
     elif status == "added":
         status_clause = "uc.enrichment_status = 'promoted'"
     elif status == "rejected":
-        status_clause = "uc.enrichment_status = 'rejected'"
+        status_clause = "uc.enrichment_status IN ('rejected', 'dismissed')"
 
     offset = (page - 1) * page_size
 
@@ -852,3 +852,123 @@ async def promote_to_db(
     cache_delete_pattern("sites:*")
 
     return {"success": True, "site_id": str(new_site_id)}
+
+
+@router.post("/{contribution_id}/dismiss")
+async def dismiss_contribution(
+    contribution_id: str,
+    user: DiscordUser = Depends(require_founder),
+    db: Session = Depends(get_db),
+):
+    """
+    Founder-reject a radar candidate (founders only).
+
+    Uses status 'dismissed' (NOT 'rejected') — the enrichment pipeline
+    re-processes 'rejected' rows each cycle, which would resurrect the card.
+    'dismissed' is excluded from the pipeline work query.
+    """
+    row = db.execute(
+        text("SELECT enrichment_status, enrichment_data FROM user_contributions WHERE id = :id"),
+        {"id": contribution_id},
+    ).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Contribution not found")
+
+    if row.enrichment_status != "enriched":
+        raise HTTPException(
+            status_code=409,
+            detail=f"Cannot dismiss: status is '{row.enrichment_status}', expected 'enriched'",
+        )
+
+    enrichment_data = dict(row.enrichment_data or {})
+    enrichment_data["review"] = _review_entry("dismiss", user.username)
+    db.execute(
+        text("""
+        UPDATE user_contributions
+        SET enrichment_status = 'dismissed', enrichment_data = CAST(:ed AS JSONB)
+        WHERE id = :id
+    """),
+        {"id": contribution_id, "ed": json.dumps(enrichment_data)},
+    )
+    db.commit()
+
+    cache_delete_pattern("radar:*")
+    return {"success": True}
+
+
+class MergeRequest(BaseModel):
+    site_id: str
+
+
+@router.post("/{contribution_id}/merge")
+async def merge_into_site(
+    contribution_id: str,
+    body: MergeRequest,
+    user: DiscordUser = Depends(require_founder),
+    db: Session = Depends(get_db),
+):
+    """
+    Merge a radar candidate into an existing unified_sites row (founders only).
+
+    Stores the candidate's name(s) as aliases so future news mentions match
+    the existing site directly and this card never regenerates.
+    """
+    row = db.execute(
+        text("""
+        SELECT name, corrected_name, enrichment_status, enrichment_data
+        FROM user_contributions WHERE id = :id
+    """),
+        {"id": contribution_id},
+    ).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Contribution not found")
+
+    if row.enrichment_status != "enriched":
+        raise HTTPException(
+            status_code=409,
+            detail=f"Cannot merge: status is '{row.enrichment_status}', expected 'enriched'",
+        )
+
+    site = db.execute(
+        text("SELECT id, name FROM unified_sites WHERE id = :sid"),
+        {"sid": body.site_id},
+    ).fetchone()
+    if not site:
+        raise HTTPException(status_code=404, detail="Target site not found")
+
+    # Store candidate name(s) as aliases (idempotent per normalized name)
+    aliases = {row.name}
+    if row.corrected_name:
+        aliases.add(row.corrected_name)
+    for alias in aliases:
+        alias_norm = normalize_name(alias)
+        if not alias_norm:
+            continue
+        db.execute(
+            text("""
+            INSERT INTO unified_site_names (site_id, name, name_normalized, name_type)
+            SELECT :site_id, :name, :name_normalized, 'alias'
+            WHERE NOT EXISTS (
+                SELECT 1 FROM unified_site_names
+                WHERE site_id = :site_id AND name_normalized = :name_normalized
+            )
+        """),
+            {"site_id": body.site_id, "name": alias, "name_normalized": alias_norm},
+        )
+
+    enrichment_data = dict(row.enrichment_data or {})
+    enrichment_data["review"] = _review_entry(
+        "merge", user.username, site_id=body.site_id, site_name=site.name
+    )
+    db.execute(
+        text("""
+        UPDATE user_contributions
+        SET enrichment_status = 'matched', enrichment_data = CAST(:ed AS JSONB)
+        WHERE id = :id
+    """),
+        {"id": contribution_id, "ed": json.dumps(enrichment_data)},
+    )
+    db.commit()
+
+    cache_delete_pattern("radar:*")
+    return {"success": True, "site_id": body.site_id, "site_name": site.name}
