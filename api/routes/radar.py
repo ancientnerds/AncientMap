@@ -5,10 +5,13 @@ Shows candidates for addition: enriched, pending, promoted ("added"), and
 rejected items. Matched items (already in DB) and not_a_site are excluded.
 """
 
+import json
 import logging
 import uuid
+from datetime import UTC, datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
@@ -152,6 +155,33 @@ def _apply_overrides(item: dict, overrides: dict) -> dict:
     return merged
 
 
+class PromoteOverrides(BaseModel):
+    """Founder-supplied field fixes applied at promotion time only.
+
+    Never persisted onto the un-promoted contribution — that would be
+    clobbered by the next enrichment pass when the facts hash changes.
+    """
+
+    name: str | None = Field(None, min_length=2, max_length=500)
+    lat: float | None = Field(None, ge=-90, le=90)
+    lon: float | None = Field(None, ge=-180, le=180)
+    country: str | None = Field(None, max_length=100)
+    site_type: str | None = Field(None, max_length=100)
+    period_name: str | None = Field(None, max_length=100)
+    period_start: int | None = None
+    period_end: int | None = None
+    description: str | None = None
+
+
+def _review_entry(action: str, username: str, **extra) -> dict:
+    return {
+        "action": action,
+        "user": username,
+        "at": datetime.now(UTC).isoformat(),
+        **extra,
+    }
+
+
 def _build_video_refs(videos_json: list[dict] | None) -> list[dict]:
     """Deduplicate and format video references from a JSON aggregate."""
     videos: list[dict[str, object]] = []
@@ -228,6 +258,7 @@ def _find_nearest_an_sites_batch(
         )
         SELECT DISTINCT ON (c.idx)
             c.idx,
+            us.id::text AS an_site_id,
             us.name,
             SQRT(POW((c.clat - us.lat) * 111.0, 2)
                + POW((c.clon - us.lon) * 111.0 * COS(RADIANS(c.clat)), 2)) AS dist_km
@@ -247,7 +278,11 @@ def _find_nearest_an_sites_batch(
     for row in rows:
         item_id = coords[row.idx][0]
         if item_id not in result:  # DISTINCT ON handles this, but be safe
-            result[item_id] = {"name": row.name, "distance_km": round(row.dist_km, 1)}
+            result[item_id] = {
+                "site_id": row.an_site_id,
+                "name": row.name,
+                "distance_km": round(row.dist_km, 1),
+            }
     return result
 
 
@@ -383,6 +418,7 @@ async def get_radar(
                 uc.site_type,
                 uc.period_name,
                 uc.period_start,
+                uc.period_end,
                 uc.thumbnail_url,
                 uc.wikipedia_url,
                 uc.enrichment_data,
@@ -445,6 +481,7 @@ async def get_radar(
             c.site_type,
             c.period_name,
             c.period_start,
+            c.period_end,
             c.thumbnail_url,
             c.wikipedia_url,
             c.lat,
@@ -553,6 +590,7 @@ async def get_radar(
             "site_type": row.site_type,
             "period_name": period_name,
             "period_start": row.period_start,
+            "period_end": row.period_end,
             "thumbnail_url": row.thumbnail_url,
             "screenshot_url": getattr(row, "latest_screenshot_url", None),
             "avg_significance": round(float(row.avg_significance), 1)
@@ -682,13 +720,16 @@ async def bust_radar_cache(_user: DiscordUser = Depends(require_founder)):
 @router.post("/{contribution_id}/promote")
 async def promote_to_db(
     contribution_id: str,
-    _user: DiscordUser = Depends(require_founder),
+    overrides: PromoteOverrides | None = None,
+    user: DiscordUser = Depends(require_founder),
     db: Session = Depends(get_db),
 ):
     """
-    Promote a 100%-enriched radar item into unified_sites (founders only).
+    Promote an enriched radar item into unified_sites (founders only).
 
-    Manual action only — no AI/automation should call this.
+    Requires core fields (coords, country, site_type, description >= 50 chars)
+    after applying optional founder overrides. Wikipedia/thumbnail/QID are
+    score bonuses, not blockers.
     """
 
     # Fetch the contribution
@@ -712,30 +753,30 @@ async def promote_to_db(
     if item.get("promoted_site_id") is not None:
         raise HTTPException(status_code=409, detail="Already promoted")
 
-    # Build a dict compatible with _compute_display_score
-    display_name = item.get("corrected_name") or item["name"]
-    score_item = {
-        "lat": item.get("lat"),
-        "lon": item.get("lon"),
-        "country": item.get("country"),
-        "site_type": item.get("site_type"),
-        "period_name": item.get("period_name"),
-        "description": item.get("description"),
-        "wikipedia_url": item.get("wikipedia_url"),
-        "thumbnail_url": item.get("thumbnail_url"),
-        "wikidata_id": item.get("wikidata_id"),
-    }
-    score = _compute_display_score(score_item)
-    if score < 100:
-        raise HTTPException(status_code=409, detail=f"Enrichment score is {score}%, must be 100%")
+    override_dict = overrides.model_dump(exclude_none=True) if overrides else {}
+    effective = _apply_overrides(item, override_dict)
+
+    missing = _missing_core_fields(effective)
+    if missing:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "message": f"Missing core fields: {', '.join(missing)}",
+                "missing": missing,
+            },
+        )
+
+    display_name = (
+        override_dict.get("name") or effective.get("corrected_name") or effective["name"]
+    )
 
     # Determine source_id for the new unified_sites row
-    source_id = "lyra" if item.get("source") == "lyra" else "ancient_nerds_community"
+    source_id = "lyra" if effective.get("source") == "lyra" else "ancient_nerds_community"
 
     # Compute period_name from period_start if available
-    period_name = item.get("period_name")
-    if item.get("period_start") is not None:
-        period_name = categorize_period(item["period_start"])
+    period_name = effective.get("period_name")
+    if effective.get("period_start") is not None:
+        period_name = categorize_period(effective["period_start"])
 
     new_site_id = uuid.uuid4()
     name_norm = normalize_name(display_name)
@@ -763,16 +804,16 @@ async def promote_to_db(
             "source_record_id": str(item["id"]),
             "name": display_name,
             "name_normalized": name_norm,
-            "lat": item["lat"],
-            "lon": item["lon"],
-            "site_type": item.get("site_type"),
-            "period_start": item.get("period_start"),
-            "period_end": item.get("period_end"),
+            "lat": effective["lat"],
+            "lon": effective["lon"],
+            "site_type": effective.get("site_type"),
+            "period_start": effective.get("period_start"),
+            "period_end": effective.get("period_end"),
             "period_name": period_name,
-            "country": item.get("country"),
-            "description": item.get("description"),
-            "thumbnail_url": item.get("thumbnail_url"),
-            "source_url": item.get("wikipedia_url"),
+            "country": effective.get("country"),
+            "description": effective.get("description"),
+            "thumbnail_url": effective.get("thumbnail_url"),
+            "source_url": effective.get("wikipedia_url"),
         },
     )
 
@@ -789,14 +830,19 @@ async def promote_to_db(
         },
     )
 
-    # UPDATE the contribution
+    # UPDATE the contribution: status + audit entry (overrides recorded, not applied)
+    enrichment_data = dict(item.get("enrichment_data") or {})
+    enrichment_data["review"] = _review_entry(
+        "promote", user.username, overrides=override_dict, site_id=str(new_site_id)
+    )
     db.execute(
         text("""
         UPDATE user_contributions
-        SET enrichment_status = 'promoted', promoted_site_id = :site_id
+        SET enrichment_status = 'promoted', promoted_site_id = :site_id,
+            enrichment_data = CAST(:ed AS JSONB)
         WHERE id = :id
     """),
-        {"site_id": new_site_id, "id": contribution_id},
+        {"site_id": new_site_id, "id": contribution_id, "ed": json.dumps(enrichment_data)},
     )
 
     db.commit()
