@@ -125,6 +125,33 @@ def _compute_display_score(item: dict) -> int:
     return score
 
 
+def _missing_core_fields(item: dict) -> list[str]:
+    """Fields required for manual promotion. Wikipedia/thumbnail/QID are score
+    bonuses, not blockers — newly discovered sites rarely have them."""
+    missing = []
+    if item.get("lat") is None or item.get("lon") is None:
+        missing.append("coordinates")
+    if not item.get("country"):
+        missing.append("country")
+    if not item.get("site_type"):
+        missing.append("site_type")
+    if len(item.get("description") or "") < 50:
+        missing.append("description")
+    return missing
+
+
+def _apply_overrides(item: dict, overrides: dict) -> dict:
+    """Merge founder-supplied field overrides onto a contribution dict.
+
+    Returns a new dict; None values in overrides are ignored (field not sent).
+    """
+    merged = dict(item)
+    for key, value in overrides.items():
+        if value is not None:
+            merged[key] = value
+    return merged
+
+
 def _build_video_refs(videos_json: list[dict] | None) -> list[dict]:
     """Deduplicate and format video references from a JSON aggregate."""
     videos: list[dict[str, object]] = []
