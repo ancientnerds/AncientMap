@@ -295,13 +295,18 @@ class TestUnifiedDispatch:
         assert resp.text == '{"score": 85}'
 
     def test_minimax_tool_trick_retries_on_missing_tool_use(self, minimax_settings):
-        """A missing tool_use block is retried; a later successful tool call wins
-        over the lossy text fallback."""
+        """A missing tool_use block is retried; a successful tool call on the
+        second attempt wins over the lossy text fallback.
+
+        2026-07-19: expectation updated from 3 attempts to the current
+        _max_attempts = 2 contract (reduced 5 -> 2 on 2026-06-29 to stop
+        the bad-JSON retry storm; see test_retry_limit_reduced_to_two).
+        This test had asserted the pre-reduction behavior ever since."""
         calls = {"n": 0}
 
         def fake_create(**kwargs):
             calls["n"] += 1
-            if calls["n"] < 3:
+            if calls["n"] < 2:
                 return _make_mock_text_response("Sorry, I cannot do that.")  # no tool_use
             return _make_mock_tool_response({"score": 42})
 
@@ -324,7 +329,7 @@ class TestUnifiedDispatch:
                 },
             )
 
-        assert calls["n"] == 3  # retried twice, recovered on the 3rd attempt
+        assert calls["n"] == 2  # retried once, recovered on the 2nd attempt
         assert resp.text == '{"score": 42}'
 
     def test_minimax_json_as_text_accepted_without_retry(self, minimax_settings):

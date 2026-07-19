@@ -372,6 +372,26 @@ def _limiter_frozen() -> bool:
         return False
 
 
+def _read_limiter_activity() -> int | None:
+    """The limiter's lifetime request count — a liveness signal for the
+    stall guard (2026-07-19). The DB progress counters only flush on event
+    emissions, and event gaps stretch past the stall grace when the
+    limiter crawls after a quota trough (observed live: 16min gap at
+    delay 42s / concurrency 2; ee3493e8 on 07-13 was killed at 45min with
+    349 calls / 1M tokens on the clock — almost certainly a healthy
+    crawling run, not a hang). A climbing count means LLM calls are
+    flowing, so the run is NOT stalled regardless of the DB sig. Caveat:
+    the limiter is shared by every MiniMax caller in this process, so a
+    true Theo stall is only detected once those go quiet — the 12h hard
+    timeout backstops that corner."""
+    try:
+        from pipeline.lyra.minimax_limiter import limiter
+
+        return limiter.stats["total_requests"]
+    except Exception:  # noqa: BLE001 — a read failure must not kill the guard
+        return None
+
+
 def _mark_failed_running(request_id: str, msg: str) -> None:
     """Mark a still-'running' request failed and release its credit reservation."""
     _release_reservation(request_id)
@@ -418,6 +438,7 @@ async def _run_with_stall_guard(
     """
     task = asyncio.create_task(_process_request(request_id, question, specialist_options))
     last_sig = _read_progress_sig(request_id)
+    last_activity = _read_limiter_activity()
     last_change = time.monotonic()
     try:
         while True:
@@ -425,6 +446,7 @@ async def _run_with_stall_guard(
             if task in done:
                 return task.result()
             sig = _read_progress_sig(request_id)
+            activity = _read_limiter_activity()
             now = time.monotonic()
             if sig is not None and sig != last_sig:
                 last_sig, last_change = sig, now
@@ -433,6 +455,11 @@ async def _run_with_stall_guard(
                 # frozen limiter, so counters CANNOT move. Known cause, not
                 # a stall — reset the clock so the pause doesn't accumulate
                 # toward the grace window.
+                last_change = now
+            elif activity is not None and activity != last_activity:
+                # LLM calls are flowing even though no event has flushed
+                # the DB counters yet — a slow phase (e.g. post-trough
+                # crawl), not a stall (2026-07-19).
                 last_change = now
             elif (now - last_change) >= _STALL_GRACE_SECONDS:
                 logger.error(
@@ -447,6 +474,8 @@ async def _run_with_stall_guard(
                 except BaseException:  # noqa: BLE001 — swallow CancelledError + cleanup errors
                     pass
                 raise _StallDetected
+            if activity is not None:
+                last_activity = activity
     finally:
         if not task.done():
             task.cancel()

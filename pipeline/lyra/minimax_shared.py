@@ -233,17 +233,14 @@ def minimax_chat_anthropic(
                 # Credit tokens back to the active ResearchState if any —
                 # otherwise minimax_chat_anthropic calls (which bypass
                 # call_api) would never advance state.total_tokens.
+                # usage_to_dict includes the cache_read/cache_creation fields
+                # (omitting them undercounted runs ~20x, 2026-07-19).
                 try:
                     from pipeline.lyra import token_accounting
 
-                    usage = getattr(response, "usage", None)
-                    if usage is not None:
-                        token_accounting.add_usage(
-                            {
-                                "input_tokens": getattr(usage, "input_tokens", 0) or 0,
-                                "output_tokens": getattr(usage, "output_tokens", 0) or 0,
-                            }
-                        )
+                    token_accounting.add_usage(
+                        token_accounting.usage_to_dict(getattr(response, "usage", None))
+                    )
                 except Exception:
                     pass
                 return clean

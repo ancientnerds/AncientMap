@@ -208,6 +208,50 @@ def test_notify_transition_is_silent_when_webhook_unset(monkeypatch):
     wm._notify_transition(TIER_HEALTHY, TIER_EXHAUSTED, {"five_hour_remaining_percent": 2.0})
 
 
+# --- Recovery restores full speed (2026-07-19) -------------------------------
+
+
+def test_restore_limiter_full_speed_clears_crawl_clamp():
+    """After the quota block resets (tier -> HEALTHY), the limiter must NOT
+    keep the THROTTLED-era clamp. Observed live 2026-07-19: 20+ min after
+    recovery to a 100% window the limiter still crawled at delay 42s /
+    concurrency 2 — the adaptive ramp (20 successes per step) needs 1h+ to
+    undo a clamp that no longer has a reason to exist."""
+    from pipeline.lyra.minimax_limiter import limiter
+
+    limiter.throttle()
+    assert limiter.stats["current_concurrency"] == 1
+
+    before_requests = limiter.stats["total_requests"]
+    wm._restore_limiter_full_speed()
+
+    stats = limiter.stats
+    assert stats["current_concurrency"] == 8
+    assert stats["current_delay"] == 0.5
+    # The liveness counter must never be touched — the stall guard reads it.
+    assert stats["total_requests"] == before_requests
+
+
+# --- Discord gating: only EXHAUSTED transitions notify (2026-07-19) ----------
+
+
+def test_notify_transition_gated_to_exhausted_transitions(monkeypatch):
+    """A routine quota-block cycle produces HEALTHY->DEGRADED->THROTTLED->
+    EXHAUSTED->HEALTHY — five webhooks per run is noise. Only transitions
+    entering or leaving EXHAUSTED carry operator-actionable signal."""
+    sent = []
+    monkeypatch.setattr(wm, "send_discord_webhook", lambda payload: sent.append(payload))
+    snapshot = {"five_hour_remaining_percent": 50.0, "weekly_remaining_percent": 50.0}
+
+    wm._notify_transition(TIER_HEALTHY, TIER_DEGRADED, snapshot)
+    wm._notify_transition(TIER_DEGRADED, TIER_THROTTLED, snapshot)
+    assert sent == []
+
+    wm._notify_transition(TIER_THROTTLED, TIER_EXHAUSTED, snapshot)
+    wm._notify_transition(TIER_EXHAUSTED, TIER_HEALTHY, snapshot)
+    assert len(sent) == 2
+
+
 # --- Limiter freeze / unfreeze: end-to-end with the real limiter ---------
 
 

@@ -28,6 +28,7 @@ async def test_stall_guard_spares_run_while_limiter_frozen(monkeypatch):
     monkeypatch.setattr(tw, "_STALL_POLL_SECONDS", 0.05)
     monkeypatch.setattr(tw, "_read_progress_sig", lambda rid: (0, 0, 0, 0))  # never moves
     monkeypatch.setattr(tw, "_limiter_frozen", lambda: True)  # quota pause
+    monkeypatch.setattr(tw, "_read_limiter_activity", lambda: 0)  # static
 
     async def fake_process(rid, q, opts):
         await asyncio.sleep(0.6)  # well past the grace window
@@ -40,11 +41,12 @@ async def test_stall_guard_spares_run_while_limiter_frozen(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_stall_guard_still_kills_frozen_run_when_limiter_healthy(monkeypatch):
-    """Control: with the limiter NOT frozen, frozen counters still stall-kill."""
+    """Control: limiter NOT frozen and NOT ticking, frozen counters stall-kill."""
     monkeypatch.setattr(tw, "_STALL_GRACE_SECONDS", 0.3)
     monkeypatch.setattr(tw, "_STALL_POLL_SECONDS", 0.05)
     monkeypatch.setattr(tw, "_read_progress_sig", lambda rid: (0, 0, 0, 0))
     monkeypatch.setattr(tw, "_limiter_frozen", lambda: False)
+    monkeypatch.setattr(tw, "_read_limiter_activity", lambda: 0)  # static
 
     async def fake_process(rid, q, opts):
         await asyncio.sleep(100)
@@ -53,6 +55,37 @@ async def test_stall_guard_still_kills_frozen_run_when_limiter_healthy(monkeypat
 
     with pytest.raises(tw._StallDetected):
         await tw._run_with_stall_guard("rid", "q", None)
+
+
+@pytest.mark.asyncio
+async def test_stall_guard_spares_run_while_limiter_ticking(monkeypatch):
+    """2026-07-19: DB counters only flush on event emissions, and event gaps
+    stretch past the grace window when the limiter crawls after a quota
+    trough (observed live: 16min gap vs 45min grace; ee3493e8 on 07-13 was
+    almost certainly killed this way with 349 calls / 1M tokens on the
+    clock). The limiter's total_requests counter is a direct liveness
+    signal: while it keeps climbing, LLM calls are flowing and the run is
+    NOT stalled — no matter what the DB sig says."""
+    monkeypatch.setattr(tw, "_STALL_GRACE_SECONDS", 0.3)
+    monkeypatch.setattr(tw, "_STALL_POLL_SECONDS", 0.05)
+    monkeypatch.setattr(tw, "_read_progress_sig", lambda rid: (0, 0, 0, 0))  # never moves
+    monkeypatch.setattr(tw, "_limiter_frozen", lambda: False)
+
+    ticks = {"n": 0}
+
+    def climbing_activity():
+        ticks["n"] += 1
+        return ticks["n"]
+
+    monkeypatch.setattr(tw, "_read_limiter_activity", climbing_activity)
+
+    async def fake_process(rid, q, opts):
+        await asyncio.sleep(0.6)  # well past the grace window
+        return None
+
+    monkeypatch.setattr(tw, "_process_request", fake_process)
+
+    await tw._run_with_stall_guard("rid", "q", None)  # must not raise
 
 
 # --- 2. Terminal status routing ---------------------------------------------

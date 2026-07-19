@@ -637,18 +637,7 @@ def _call_anthropic_api(
         tool_json = _extract_tool_use_json(response.content)
         if tool_json is not None:
             stop_reason = response.stop_reason or "end_turn"
-            usage_dict = {
-                "input_tokens": response.usage.input_tokens if response.usage else 0,
-                "output_tokens": response.usage.output_tokens if response.usage else 0,
-            }
-            # Credit tokens back to the active ResearchState if one is bound
-            # (Theo runs via convergence_orchestrator bind theirs at startup).
-            try:
-                from pipeline.lyra import token_accounting
-
-                token_accounting.add_usage(usage_dict)
-            except Exception:
-                pass
+            usage_dict = token_accounting_usage(response)
             return NormalizedResponse(
                 content=[TextBlock(text=tool_json)],
                 stop_reason=stop_reason,
@@ -668,6 +657,21 @@ def _call_anthropic_api(
             )
 
     return _normalize_anthropic_response(response)
+
+
+def token_accounting_usage(response) -> dict:
+    """Extract full usage (incl. cache tokens) via usage_to_dict and credit
+    it to the active ResearchState if one is bound (Theo runs bind theirs
+    in convergence_orchestrator at startup). One helper so the tool-trick
+    and plain-text response paths can never drift apart again."""
+    from pipeline.lyra import token_accounting
+
+    usage_dict = token_accounting.usage_to_dict(getattr(response, "usage", None))
+    try:
+        token_accounting.add_usage(usage_dict)
+    except Exception:
+        pass
+    return usage_dict
 
 
 def _normalize_anthropic_response(response) -> NormalizedResponse:
@@ -691,18 +695,9 @@ def _normalize_anthropic_response(response) -> NormalizedResponse:
             blocks.append(TextBlock(text=b.text, citations=cites))
 
     stop_reason = response.stop_reason or "end_turn"
-    usage_dict = {
-        "input_tokens": response.usage.input_tokens if response.usage else 0,
-        "output_tokens": response.usage.output_tokens if response.usage else 0,
-    }
-    # Credit tokens back to the active ResearchState if one is bound
-    # (Theo runs via convergence_orchestrator bind theirs at startup).
-    try:
-        from pipeline.lyra import token_accounting
-
-        token_accounting.add_usage(usage_dict)
-    except Exception:
-        pass
+    # usage_to_dict captures cache_read/cache_creation tokens too — omitting
+    # them undercounted Theo runs ~20x (2026-07-19).
+    usage_dict = token_accounting_usage(response)
     return NormalizedResponse(
         content=blocks,
         stop_reason=stop_reason,

@@ -1,8 +1,10 @@
 """Quota watchdog daemon for the MiniMax Token Plan.
 
 A background task that probes the token plan every QUOTA_PROBE_INTERVAL_S
-and classifies the 5h-rolling remaining percentage into three health
-tiers. The classification drives two protective behaviours:
+and classifies the remaining 5h-budget percentage into health tiers.
+(The "5h window" is a FIXED block — e.g. 10:00-15:00 UTC, resetting to
+100% at the boundary — not a rolling window; measured live 2026-07-19.)
+The classification drives two protective behaviours:
 
 1. The MiniMax rate limiter (`pipeline.lyra.minimax_limiter.limiter`) is
    frozen while the tier is EXHAUSTED (the 30min freeze is re-asserted on
@@ -160,6 +162,13 @@ def _notify_transition(prev_tier: str, new_tier: str, snapshot: dict) -> None:
     """
     if prev_tier == new_tier:
         return
+    # Only transitions entering or leaving EXHAUSTED carry operator-
+    # actionable signal. A routine block cycle walks HEALTHY -> DEGRADED
+    # -> THROTTLED -> EXHAUSTED -> HEALTHY — webhooking every step meant
+    # ~5 pings per normal research run (2026-07-19). The skipped steps
+    # are still visible in the logs via the transition log lines.
+    if TIER_EXHAUSTED not in (prev_tier, new_tier):
+        return
     pct = snapshot.get("five_hour_remaining_percent")
     weekly = snapshot.get("weekly_remaining_percent")
     colour = {
@@ -245,6 +254,21 @@ def _unfreeze_limiter() -> None:
         logger.warning("[THEO-WATCHDOG] Failed to unfreeze limiter: %s", exc)
 
 
+def _restore_limiter_full_speed() -> None:
+    """Clear any leftover crawl clamp after a real quota recovery.
+
+    Invariant (2026-07-19): tier HEALTHY == limiter at full speed. HEALTHY
+    means >30% of the block remains — pacing against it is pure waste, and
+    the adaptive ramp alone needs 1h+ to undo a THROTTLE clamp (observed
+    live: 20+ min at delay 42s / concurrency 2 against a 100% window)."""
+    try:
+        from pipeline.lyra.minimax_limiter import limiter
+
+        limiter.restore_full_speed()
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("[THEO-WATCHDOG] Failed to restore limiter speed: %s", exc)
+
+
 # --- The probe loop ---------------------------------------------------------
 
 
@@ -327,11 +351,22 @@ async def _loop() -> None:
                     "the running task keeps finishing work on the remaining tail.",
                     _state["five_hour_remaining_percent"],
                 )
-            elif prev_tier == TIER_EXHAUSTED and new_tier in (TIER_HEALTHY, TIER_DEGRADED):
+            elif new_tier == TIER_HEALTHY:
+                # Invariant: HEALTHY == full-speed limiter. Unfreeze (no-op
+                # unless coming from EXHAUSTED) and clear any crawl clamp
+                # left over from THROTTLED/EXHAUSTED — the block has reset,
+                # pacing against a fresh window is pure waste (2026-07-19).
                 logger.warning(
-                    "[THEO-WATCHDOG] Tier EXHAUSTED -> %s. Unfreezing limiter.",
-                    new_tier,
+                    "[THEO-WATCHDOG] Tier %s -> HEALTHY. Limiter unfrozen and "
+                    "restored to full speed.",
+                    prev_tier,
                 )
+                _unfreeze_limiter()
+                _restore_limiter_full_speed()
+            elif prev_tier == TIER_EXHAUSTED and new_tier == TIER_DEGRADED:
+                # Unfreeze only — at 20-30% remaining the leftover crawl
+                # pacing is protective, so it is left to recover adaptively.
+                logger.warning("[THEO-WATCHDOG] Tier EXHAUSTED -> DEGRADED. Unfreezing limiter.")
                 _unfreeze_limiter()
             else:
                 logger.info("[THEO-WATCHDOG] Tier %s -> %s.", prev_tier, new_tier)

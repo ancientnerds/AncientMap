@@ -430,6 +430,39 @@ class MiniMaxLimiter:
                 self._total_quota_freezes,
             )
 
+    def restore_full_speed(self) -> None:
+        """Reset pacing (concurrency + delay) to full speed after a real
+        quota recovery. Called by the quota watchdog when the tier
+        transitions to HEALTHY: the 5h budget is a fixed block, so a block
+        reset (5% -> 100%) makes any leftover crawl clamp pure waste —
+        observed live 2026-07-19: 20+ min at delay 42s / concurrency 2
+        against a fresh 100% window, because the adaptive ramp (+1
+        concurrency per 20 successes) needs over an hour to undo a
+        THROTTLE clamp.
+
+        Differs from the deprecated reset(): probe-driven (fires only on
+        an actual quota recovery, not per-task), and it leaves the freeze
+        state and lifetime stats untouched — the stall guard reads
+        total_requests as a liveness signal."""
+        with self._lock:
+            if (
+                self._current_concurrency == self._max_concurrency
+                and self._current_delay == self._base_delay
+            ):
+                return
+            logger.info(
+                "[minimax-limiter] Full speed restored: concurrency %d -> %d, "
+                "delay %.1fs -> %.1fs.",
+                self._current_concurrency,
+                self._max_concurrency,
+                self._current_delay,
+                self._base_delay,
+            )
+            self._current_concurrency = self._max_concurrency
+            self._current_delay = self._base_delay
+            self._consecutive_429s = 0
+            self._consecutive_successes = 0
+
     def reset(self) -> None:
         """DEPRECATED 2026-06-28. Resetting the limiter at the start of each
         Theo task (was the previous pattern in convergence_orchestrator.py)
