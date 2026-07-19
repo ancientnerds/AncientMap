@@ -104,6 +104,10 @@ services:
     environment:
       POSTGRES_HOST: db
       REDIS_HOST: redis
+      # api/cache.py connects via REDIS_URL, not REDIS_HOST — without this
+      # override the .env localhost URL is unreachable in-container and the
+      # cache silently falls back to per-process memory
+      REDIS_URL: redis://redis:6379/0
       QDRANT_HOST: qdrant
       TRUSTED_PROXY: "1"
     volumes:
@@ -142,6 +146,8 @@ services:
         required: false
     environment:
       POSTGRES_HOST: db
+      # pipeline/connectors/cache.py uses api.cache's Redis client (REDIS_URL)
+      REDIS_URL: redis://redis:6379/0
     volumes:
       - ./public/data/news:/app/public/data/news
       - ./logs:/app/logs
