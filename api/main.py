@@ -389,8 +389,24 @@ async def lifespan(app: FastAPI):
                 from sqlalchemy import text as _t
 
                 with get_session() as _s:
+                    # Descriptions may reference sites deleted since the JSON was
+                    # generated — one stale id would FK-abort the whole import
+                    stale_rows = _s.execute(
+                        _t(
+                            "SELECT unnest(CAST(:ids AS uuid[])) EXCEPT SELECT id FROM unified_sites"
+                        ),
+                        {"ids": list(descriptions.keys())},
+                    ).fetchall()
+                    stale_ids = {str(row[0]) for row in stale_rows}
+                    if stale_ids:
+                        logger.warning(
+                            f"[STARTUP] Skipping {len(stale_ids)} card descriptions for "
+                            f"deleted sites: {sorted(stale_ids)[:5]}"
+                        )
                     updated = 0
                     for _sid, _desc in descriptions.items():
+                        if _sid in stale_ids:
+                            continue
                         r = _s.execute(
                             _t("""
                                 INSERT INTO card_stats (site_id, card_description, antiquity, fortification,
