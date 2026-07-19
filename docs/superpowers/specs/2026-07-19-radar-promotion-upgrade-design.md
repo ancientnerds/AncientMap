@@ -29,7 +29,7 @@ enriched --merge----> matched
 ```
 
 - **Manual gate (approve)**: core fields must be present *after* overrides are applied — `lat`, `lon`, `country`, `site_type`, `description` >= 50 chars. Wikipedia URL, thumbnail, QID, and period remain score bonuses, not blockers.
-- **Auto-promote gate**: unchanged score == 100, **plus** new requirement `enrichment_data['identification']['confidence'] == 'high'`.
+- **Auto-promote gate**: CORRECTION vs. the brainstorm discussion — the existing pipeline gate is `score >= min_score_for_promotion` with a default of **55** (`pipeline/lyra/config.py:175`), not 100. The 314 enriched rows only escaped auto-promotion because the facts-hash skip never re-evaluates them (prod check 2026-07-19: 250 of them pass every `_maybe_promote` guard and would promote on their next re-mention). To implement the approved "high bar" hybrid: raise the `min_score_for_promotion` default to **100** and additionally require `enrichment_data['identification']['confidence'] == 'high'` in `_maybe_promote()`. Existing guards (date cutoff, AN spatial dedup) stay.
 - `dismissed` must NOT reuse the existing `rejected` value: `site_identifier.py`'s work query re-enriches `rejected` rows each cycle, so a founder-rejected card would resurrect. `dismissed` is simply not in that query's status set — no pipeline change needed for exclusion.
 - `site_matcher._upsert_lyra_suggestion()` only increments `mention_count`/backfills metadata on existing rows and never touches `enrichment_status`, so dismissed cards stay dismissed when re-mentioned.
 
@@ -55,9 +55,12 @@ enriched --merge----> matched
 **`GET /radar/list`**
 - The `rejected` status filter now returns both `rejected` and `dismissed` rows.
 
-### 3. Pipeline changes (`pipeline/lyra/site_identifier.py`)
+### 3. Pipeline changes
 
-- `_maybe_promote()`: additionally requires identification confidence `'high'` (read from `enrichment_data['identification']['confidence']`). Everything else untouched.
+- `pipeline/lyra/config.py`: `min_score_for_promotion` default raised 55 → 100.
+- `pipeline/lyra/site_identifier.py` `_maybe_promote()`: additionally requires identification confidence `'high'` (read from `enrichment_data['identification']['confidence']`). Everything else untouched.
+
+Consistency rule for the new status: everywhere the API treats `rejected`, it also treats `dismissed` (list filter, map exclusions, stats) — dismissed behaves exactly like rejected except the pipeline never re-enriches it.
 
 ### 4. Frontend (`ancient-nerds-map/src/pages/LyraRadarPage.tsx`, founders only)
 
