@@ -106,12 +106,14 @@ async def lifespan(app: FastAPI):
             "ALTER TABLE db_snapshots ADD COLUMN IF NOT EXISTS source_id VARCHAR(50)",
             # Widen grant_period from varchar(7) to varchar(10) — "one_time" sentinel is 8 chars
             "ALTER TABLE credit_grants ALTER COLUMN grant_period TYPE VARCHAR(10)",
-            # Ensure site_content_links unique constraint exists (needed for ON CONFLICT upsert)
+            # Ensure site_content_links unique constraint exists (needed for ON CONFLICT upsert).
+            # duplicate_table: ADD CONSTRAINT UNIQUE raises 42P07 for the backing
+            # index when the constraint already exists, not duplicate_object
             """DO $$ BEGIN
                 ALTER TABLE site_content_links
                     ADD CONSTRAINT uq_content_link
                     UNIQUE (site_id, content_source, content_id);
-            EXCEPTION WHEN duplicate_object THEN NULL;
+            EXCEPTION WHEN duplicate_object OR duplicate_table THEN NULL;
             END $$""",
             # Ensure token_usage_logs has web_search_requests column
             "ALTER TABLE token_usage_logs ADD COLUMN IF NOT EXISTS web_search_requests INTEGER NOT NULL DEFAULT 0",
