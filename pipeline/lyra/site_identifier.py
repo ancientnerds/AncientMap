@@ -2374,6 +2374,16 @@ def _maybe_promote(
     """Promote a contribution to unified_sites if it meets the threshold."""
     if contribution.score < settings.min_score_for_promotion:
         return
+
+    identification = (contribution.enrichment_data or {}).get("identification", {})
+    confidence = identification.get("confidence")
+    if confidence != "high":
+        logger.info(
+            f"  [{contribution.name}] Skipping auto-promotion — "
+            f"AI confidence is '{confidence}', founder review required"
+        )
+        return
+
     if contribution.lat is None or contribution.lon is None:
         return
 

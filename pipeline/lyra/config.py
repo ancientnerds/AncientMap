@@ -172,7 +172,9 @@ class LyraSettings(BaseSettings):
     max_tokens: int = 8192
 
     # Site identification settings
-    min_score_for_promotion: int = 55
+    # 100 = auto-promote only perfect candidates; everything else goes through
+    # the founder review queue on the Radar page (2026-07-19 promotion upgrade)
+    min_score_for_promotion: int = 100
     max_identifications_per_cycle: int = 20
     pg_trgm_threshold: float = 0.35
     max_research_names: int = 5
