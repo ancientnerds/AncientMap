@@ -738,6 +738,13 @@ export default function LyraRadarPage() {
     })
   }, [token])
 
+  const refreshStats = useCallback(() => {
+    fetch(`${config.api.baseUrl}/radar/stats`)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d) setStats(d) })
+      .catch(() => {})
+  }, [])
+
   const handleApprove = useCallback(async (itemId: string, overrides: Record<string, unknown>): Promise<string | null> => {
     if (!token) return 'Not authenticated'
     try {
@@ -750,11 +757,12 @@ export default function LyraRadarPage() {
       setItems(prev => prev.map(it =>
         it.id === itemId ? { ...it, enrichment_status: 'promoted' } : it
       ))
+      refreshStats()
       return null
     } catch (e) {
       return e instanceof Error ? e.message : 'Network error'
     }
-  }, [token, authPost])
+  }, [token, authPost, refreshStats])
 
   const handleDismiss = useCallback(async (itemId: string) => {
     if (!token) return
@@ -768,10 +776,11 @@ export default function LyraRadarPage() {
       setItems(prev => prev.map(it =>
         it.id === itemId ? { ...it, enrichment_status: 'dismissed' } : it
       ))
+      refreshStats()
     } catch (e) {
       alert(`Dismiss failed: ${e instanceof Error ? e.message : 'Network error'}`)
     }
-  }, [token, authPost])
+  }, [token, authPost, refreshStats])
 
   const handleMerge = useCallback(async (itemId: string, siteId: string): Promise<string | null> => {
     if (!token) return 'Not authenticated'
@@ -784,11 +793,12 @@ export default function LyraRadarPage() {
       setItems(prev => prev.map(it =>
         it.id === itemId ? { ...it, enrichment_status: 'matched' } : it
       ))
+      refreshStats()
       return null
     } catch (e) {
       return e instanceof Error ? e.message : 'Network error'
     }
-  }, [token, authPost])
+  }, [token, authPost, refreshStats])
 
   useEffect(() => {
     const onScroll = () => setShowScrollTop(window.scrollY > 400)
