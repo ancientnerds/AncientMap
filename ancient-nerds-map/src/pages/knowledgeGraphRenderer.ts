@@ -1,13 +1,11 @@
 /**
  * GPU-friendly 2D map renderer for the knowledge graph.
  *
- * Follows the globe's rendering recipe (sitesRenderer.ts): ALL nodes live in
- * ONE THREE.Points object (BufferGeometry + point shader) — one draw call
- * regardless of graph size. The view is a flat, pannable/zoomable map:
- * every node class clusters on its own labeled "island" (cluster forces pull
- * points toward per-kind centers; link forces act only as a weak kinship
- * pull). Edges are NOT rendered globally — only the focused node's own
- * connections appear, which keeps the picture readable and screenshottable.
+ * Globe recipe: ALL nodes in ONE THREE.Points draw call. The layout is
+ * simulated ONCE for the full dataset; layer toggles only flip a per-vertex
+ * visibility attribute (no re-simulation, no assembly animation). Edges are
+ * rendered only for the focused neighborhood (configurable depth), and the
+ * focused neighborhood gets DOM title labels at the bubbles.
  */
 
 import * as THREE from 'three'
@@ -50,10 +48,13 @@ interface Callbacks {
 
 const VERTEX_SHADER = `
 attribute float size;
+attribute float aVisible;
 uniform float uZoom;
 varying vec3 vColor;
+varying float vVisible;
 void main() {
   vColor = color;
+  vVisible = aVisible;
   gl_PointSize = size * uZoom;
   gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
 }
@@ -61,7 +62,9 @@ void main() {
 
 const FRAGMENT_SHADER = `
 varying vec3 vColor;
+varying float vVisible;
 void main() {
+  if (vVisible < 0.5) discard;
   vec2 c = gl_PointCoord - vec2(0.5);
   float d = length(c);
   if (d > 0.5) discard;
@@ -80,6 +83,7 @@ export class KnowledgeGraphRenderer {
 
   private nodes: RenderNode[] = []
   private links: RenderLink[] = []
+  private visibleFlags: Float32Array = new Float32Array(0)
   private points: THREE.Points | null = null
   private focusLines: THREE.LineSegments | null = null
   private pointMat: THREE.ShaderMaterial | null = null
@@ -89,6 +93,10 @@ export class KnowledgeGraphRenderer {
 
   private clusterDefs: ClusterDef[] = []
   private clusterLabels: HTMLDivElement[] = []
+  private visibleKinds: Set<string> | null = null
+
+  private labeledNodes: RenderNode[] = []
+  private nodeLabelEls: HTMLDivElement[] = []
 
   private rafId = 0
   private paused = false
@@ -119,8 +127,6 @@ export class KnowledgeGraphRenderer {
     this.controls.mouseButtons = { LEFT: THREE.MOUSE.PAN, MIDDLE: THREE.MOUSE.DOLLY }
     this.controls.touches = { ONE: THREE.TOUCH.PAN, TWO: THREE.TOUCH.DOLLY_PAN }
 
-    this.raycaster.params.Points = { threshold: 8 }
-
     this.handleResize()
     window.addEventListener('resize', this.handleResize)
     this.renderer.domElement.addEventListener('pointermove', this.handlePointerMove)
@@ -129,7 +135,11 @@ export class KnowledgeGraphRenderer {
     this.loop()
   }
 
-  setData(nodes: RenderNode[], links: RenderLink[], clusters: ClusterDef[]): void {
+  /**
+   * Load the FULL dataset once. The simulation runs over every node exactly
+   * one time; later layer toggles only flip visibility flags.
+   */
+  setFullData(nodes: RenderNode[], links: RenderLink[], clusters: ClusterDef[]): void {
     this.simulation?.stop()
     this.disposeGraphObjects()
     this.nodes = nodes
@@ -139,17 +149,24 @@ export class KnowledgeGraphRenderer {
     this.rebuildClusterLabels()
 
     const clusterByKind = new Map(clusters.map((c) => [c.kind, c]))
-    // Seed positions near the cluster centers so the islands form instantly.
     for (const nd of nodes) {
       const c = clusterByKind.get(nd.kind)
       nd.x = (c?.x ?? 0) + (Math.random() - 0.5) * 120
       nd.y = (c?.y ?? 0) + (Math.random() - 0.5) * 120
     }
 
+    // Resolve link endpoints to node objects (no forceLink does it for us).
+    const nodeById = new Map(nodes.map((nd) => [nd.id, nd]))
+    for (const l of links) {
+      if (typeof l.source === 'string') l.source = nodeById.get(l.source) ?? l.source
+      if (typeof l.target === 'string') l.target = nodeById.get(l.target) ?? l.target
+    }
+
     const n = nodes.length
     const positions = new Float32Array(n * 3)
     const colors = new Float32Array(n * 3)
     const sizes = new Float32Array(n)
+    this.visibleFlags = new Float32Array(n).fill(1)
     const anchorKinds = new Set(['period', 'empire', 'country', 'culture'])
     for (let i = 0; i < n; i++) {
       const size = 2.2 + Math.sqrt(Math.min(nodes[i].signal + nodes[i].degree, 60)) * 1.4
@@ -162,6 +179,7 @@ export class KnowledgeGraphRenderer {
     pointGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3))
     pointGeo.setAttribute('color', new THREE.BufferAttribute(colors, 3))
     pointGeo.setAttribute('size', new THREE.BufferAttribute(sizes, 1))
+    pointGeo.setAttribute('aVisible', new THREE.BufferAttribute(this.visibleFlags, 1))
     this.pointMat = new THREE.ShaderMaterial({
       vertexShader: VERTEX_SHADER,
       fragmentShader: FRAGMENT_SHADER,
@@ -173,18 +191,8 @@ export class KnowledgeGraphRenderer {
     this.points = new THREE.Points(pointGeo, this.pointMat)
     this.scene.add(this.points)
 
-    // Resolve link endpoints to node objects ourselves — there is no
-    // forceLink in the simulation anymore (see below), so nobody else does.
-    const nodeById = new Map(nodes.map((nd) => [nd.id, nd]))
-    for (const l of links) {
-      if (typeof l.source === 'string') l.source = nodeById.get(l.source) ?? l.source
-      if (typeof l.target === 'string') l.target = nodeById.get(l.target) ?? l.target
-    }
-
-    // 2D simulation: pull to the kind's island + collision. NO link force —
-    // even a weak one dragged high-degree nodes (journals with hundreds of
-    // covers-edges) out of their island and into the sites blob. Links only
-    // matter visually in focus mode.
+    // 2D layout: island pull + collision. NO link force — even a weak one
+    // dragged high-degree nodes (journals) out of their island.
     this.simulation = forceSimulation(nodes as object[], 2)
       .force(
         'x',
@@ -206,26 +214,39 @@ export class KnowledgeGraphRenderer {
     this.syncPositions()
   }
 
+  /** Flip per-vertex visibility — instant, no re-simulation, no animation. */
+  setVisibleKinds(kinds: Set<string> | null): void {
+    this.visibleKinds = kinds
+    if (!this.points) return
+    for (let i = 0; i < this.nodes.length; i++) {
+      this.visibleFlags[i] = !kinds || kinds.has(this.nodes[i].kind) ? 1 : 0
+    }
+    const attr = this.points.geometry.getAttribute('aVisible') as THREE.BufferAttribute
+    attr.needsUpdate = true
+  }
+
   setColorFn(nodeFn: (n: RenderNode) => Rgb): void {
     this.nodeColorFn = nodeFn
     this.applyColors()
   }
 
-  /** Render ONLY the focused node's own edges (or clear with null). */
-  showFocusEdges(nodeId: string | null): void {
+  /** Render every edge whose BOTH endpoints are inside the focus set. */
+  showFocusEdges(focusSet: Set<string> | null): void {
     if (this.focusLines) {
       this.scene.remove(this.focusLines)
       this.focusLines.geometry.dispose()
       ;(this.focusLines.material as THREE.Material).dispose()
       this.focusLines = null
     }
-    if (!nodeId) return
+    if (!focusSet || focusSet.size === 0) return
     const segments: number[] = []
     for (const l of this.links) {
       const s = l.source as RenderNode
       const t = l.target as RenderNode
       if (typeof s !== 'object' || typeof t !== 'object') continue
-      if (s.id !== nodeId && t.id !== nodeId) continue
+      if (!focusSet.has(s.id) || !focusSet.has(t.id)) continue
+      if (this.visibleKinds && (!this.visibleKinds.has(s.kind) || !this.visibleKinds.has(t.kind)))
+        continue
       segments.push(s.x ?? 0, s.y ?? 0, 0, t.x ?? 0, t.y ?? 0, 0)
     }
     if (!segments.length) return
@@ -234,18 +255,29 @@ export class KnowledgeGraphRenderer {
     const mat = new THREE.LineBasicMaterial({
       color: '#ffd700',
       transparent: true,
-      opacity: 0.55,
+      opacity: 0.45,
       depthWrite: false,
     })
     this.focusLines = new THREE.LineSegments(geo, mat)
     this.scene.add(this.focusLines)
   }
 
+  /** Title labels rendered AT the bubbles (focused node + its neighborhood). */
+  setNodeLabels(nodes: RenderNode[]): void {
+    for (const el of this.nodeLabelEls) el.remove()
+    this.labeledNodes = nodes
+    this.nodeLabelEls = nodes.map((nd) => {
+      const el = document.createElement('div')
+      el.className = 'kg-node-label'
+      el.textContent = nd.label.length > 42 ? `${nd.label.slice(0, 40)}…` : nd.label
+      this.container.appendChild(el)
+      return el
+    })
+  }
+
   /**
-   * High-resolution PNG export (default 7680px wide = 8K). Renders offscreen
-   * at target size with proportionally scaled point sizes, then composites
-   * the cluster titles INTO the bitmap — the live labels are DOM overlays
-   * and would otherwise be missing from the capture.
+   * High-resolution PNG export (default 7680px wide = 8K). Cluster titles and
+   * active node labels are composited INTO the bitmap.
    */
   screenshot(targetWidth = 7680): string {
     const prevW = this.container.clientWidth || window.innerWidth
@@ -258,7 +290,6 @@ export class KnowledgeGraphRenderer {
     this.renderer.setPixelRatio(1)
     this.renderer.setSize(w, h, false)
     if (this.pointMat) {
-      // gl_PointSize is in device pixels — scale it up with the resolution.
       this.pointMat.uniforms.uZoom.value = Math.sqrt(this.camera.zoom) * scale
     }
     this.renderer.render(this.scene, this.camera)
@@ -269,21 +300,31 @@ export class KnowledgeGraphRenderer {
     const ctx = out.getContext('2d')!
     ctx.drawImage(this.renderer.domElement, 0, 0, w, h)
 
-    // Cluster titles, drawn into the bitmap.
     const v = new THREE.Vector3()
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
-    ctx.font = `600 ${Math.round(w * 0.011)}px Orbitron, sans-serif`
     ctx.shadowColor = 'rgba(0, 0, 0, 0.9)'
     ctx.shadowBlur = Math.round(w * 0.004)
+    ctx.font = `600 ${Math.round(w * 0.011)}px Orbitron, sans-serif`
     for (const c of this.clusterDefs) {
+      if (this.visibleKinds && !this.visibleKinds.has(c.kind)) continue
       v.set(c.x, c.y, 0).project(this.camera)
       if (v.x < -1 || v.x > 1 || v.y < -1 || v.y > 1) continue
       ctx.fillStyle = c.color
       ctx.fillText(c.label.toUpperCase(), ((v.x + 1) / 2) * w, ((1 - v.y) / 2) * h)
     }
+    ctx.font = `500 ${Math.round(w * 0.005)}px "JetBrains Mono", monospace`
+    ctx.fillStyle = '#e0e0e0'
+    for (const nd of this.labeledNodes) {
+      v.set(nd.x ?? 0, nd.y ?? 0, 0).project(this.camera)
+      if (v.x < -1 || v.x > 1 || v.y < -1 || v.y > 1) continue
+      ctx.fillText(
+        nd.label.length > 42 ? `${nd.label.slice(0, 40)}…` : nd.label,
+        ((v.x + 1) / 2) * w,
+        ((1 - v.y) / 2) * h - Math.round(w * 0.006),
+      )
+    }
 
-    // Restore the live view.
     this.renderer.setPixelRatio(prevRatio)
     this.renderer.setSize(prevW, prevH, false)
     if (this.pointMat) this.pointMat.uniforms.uZoom.value = Math.sqrt(this.camera.zoom)
@@ -317,6 +358,8 @@ export class KnowledgeGraphRenderer {
     this.disposeGraphObjects()
     for (const el of this.clusterLabels) el.remove()
     this.clusterLabels = []
+    for (const el of this.nodeLabelEls) el.remove()
+    this.nodeLabelEls = []
     this.controls.dispose()
     this.renderer.dispose()
     this.renderer.domElement.remove()
@@ -324,6 +367,7 @@ export class KnowledgeGraphRenderer {
 
   private disposeGraphObjects(): void {
     this.showFocusEdges(null)
+    this.setNodeLabels([])
     if (this.points) {
       this.scene.remove(this.points)
       this.points.geometry.dispose()
@@ -345,16 +389,29 @@ export class KnowledgeGraphRenderer {
     })
   }
 
-  private updateClusterLabels(): void {
+  private projectToScreen(x: number, y: number, v: THREE.Vector3): [number, number] {
     const w = this.container.clientWidth
     const h = this.container.clientHeight
+    v.set(x, y, 0).project(this.camera)
+    return [((v.x + 1) / 2) * w, ((1 - v.y) / 2) * h]
+  }
+
+  private updateLabels(): void {
     const v = new THREE.Vector3()
     this.clusterDefs.forEach((c, i) => {
       const el = this.clusterLabels[i]
       if (!el) return
-      v.set(c.x, c.y, 0).project(this.camera)
-      el.style.transform = `translate(-50%, -50%) translate(${((v.x + 1) / 2) * w}px, ${((1 - v.y) / 2) * h}px)`
-      el.style.opacity = this.camera.zoom > 6 ? '0' : '1'
+      const [px, py] = this.projectToScreen(c.x, c.y, v)
+      el.style.transform = `translate(-50%, -50%) translate(${px}px, ${py}px)`
+      const hidden =
+        this.camera.zoom > 6 || (this.visibleKinds !== null && !this.visibleKinds.has(c.kind))
+      el.style.opacity = hidden ? '0' : '1'
+    })
+    this.labeledNodes.forEach((nd, i) => {
+      const el = this.nodeLabelEls[i]
+      if (!el) return
+      const [px, py] = this.projectToScreen(nd.x ?? 0, nd.y ?? 0, v)
+      el.style.transform = `translate(-50%, -130%) translate(${px}px, ${py}px)`
     })
   }
 
@@ -374,11 +431,15 @@ export class KnowledgeGraphRenderer {
     const rect = this.renderer.domElement.getBoundingClientRect()
     this.pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1
     this.pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1
-    // Screen-space pick radius must shrink as we zoom in.
     this.raycaster.params.Points = { threshold: Math.max(2, 10 / this.camera.zoom) }
     this.raycaster.setFromCamera(this.pointer, this.camera)
     const hits = this.raycaster.intersectObject(this.points)
-    return hits.length ? (hits[0].index ?? -1) : -1
+    // Skip vertices hidden by the current layer set.
+    for (const hit of hits) {
+      const idx = hit.index ?? -1
+      if (idx >= 0 && this.visibleFlags[idx] > 0.5) return idx
+    }
+    return -1
   }
 
   private handlePointerMove = (event: PointerEvent): void => {
@@ -438,7 +499,7 @@ export class KnowledgeGraphRenderer {
 
     if (this.pointMat) this.pointMat.uniforms.uZoom.value = Math.sqrt(this.camera.zoom)
     this.controls.update()
-    this.updateClusterLabels()
+    this.updateLabels()
     this.renderer.render(this.scene, this.camera)
   }
 }

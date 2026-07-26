@@ -322,3 +322,34 @@
   transition: opacity 0.3s;
   text-shadow: 0 0 12px rgba(0, 0, 0, 0.9);
 }
+
+.kg-depth {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.62rem;
+  color: #7ab4c8;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-left: 6px;
+}
+
+.kg-chip--depth {
+  padding: 7px 9px;
+}
+
+.kg-node-label {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 7;
+  pointer-events: none;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.62rem;
+  color: #e0e0e0;
+  white-space: nowrap;
+  text-shadow:
+    0 0 8px rgba(0, 0, 0, 0.95),
+    0 0 3px rgba(0, 0, 0, 1);
+}

@@ -79,13 +79,6 @@ const CLUSTERS: ClusterDef[] = [
   { kind: 'person', label: 'People', x: 0, y: -640, color: KIND_COLORS.person },
 ]
 
-function layerOf(kind: string): string | null {
-  for (const [layer, kinds] of Object.entries(LAYERS)) {
-    if (kinds.includes(kind)) return layer
-  }
-  return null
-}
-
 export default function KnowledgePage() {
   const containerRef = useRef<HTMLDivElement>(null)
   const rendererRef = useRef<KnowledgeGraphRenderer | null>(null)
@@ -95,11 +88,14 @@ export default function KnowledgePage() {
   const [activeLayers, setActiveLayers] = useState<Set<string>>(new Set(['research']))
   const [search, setSearch] = useState('')
   const [focused, setFocused] = useState<RenderNode | null>(null)
+  // How many hops of connections to reveal around the focused bubble.
+  const [depth, setDepth] = useState(1)
   const [hover, setHover] = useState<{ node: RenderNode; x: number; y: number } | null>(null)
   const current = useCurrentResearch()
 
-  const focusRef = useRef<{ id: string; neighbors: Set<string> } | null>(null)
+  const focusRef = useRef<{ id: string; set: Set<string> } | null>(null)
   const adjacencyRef = useRef<Map<string, Set<string>>>(new Map())
+  const nodeByIdRef = useRef<Map<string, RenderNode>>(new Map())
 
   useEffect(() => {
     fetch('/api/v1/graph')
@@ -124,41 +120,91 @@ export default function KnowledgePage() {
     adjacencyRef.current = adj
   }, [data])
 
+  const activeKinds = useMemo(
+    () =>
+      new Set(
+        Object.entries(LAYERS)
+          .filter(([layer]) => activeLayers.has(layer))
+          .flatMap(([, kinds]) => kinds),
+      ),
+    [activeLayers],
+  )
+
+  /** BFS over the adjacency up to `depth` hops, restricted to visible kinds. */
+  const computeFocusSet = useCallback(
+    (startId: string): Set<string> => {
+      const nodeById = nodeByIdRef.current
+      const set = new Set<string>([startId])
+      let ring = [startId]
+      for (let level = 0; level < depth; level++) {
+        const next: string[] = []
+        for (const id of ring) {
+          for (const nb of adjacencyRef.current.get(id) ?? []) {
+            if (set.has(nb)) continue
+            const node = nodeById.get(nb)
+            if (!node || !activeKinds.has(node.kind)) continue
+            set.add(nb)
+            next.push(nb)
+          }
+        }
+        ring = next
+      }
+      return set
+    },
+    [depth, activeKinds],
+  )
+
   const applyColors = useCallback(() => {
     const renderer = rendererRef.current
     if (!renderer) return
     const focus = focusRef.current
     renderer.setColorFn((n) => {
-      if (focus && n.id !== focus.id && !focus.neighbors.has(n.id)) return DIM_RGB
+      if (focus && !focus.set.has(n.id)) return DIM_RGB
       if (n.status === 'researching') return RESEARCHING_RGB
       const base = KIND_RGB[n.kind] ?? DEFAULT_RGB
       if (n.status === 'frontier') return [base[0] * 0.55, base[1] * 0.55, base[2] * 0.55]
       return base
     })
-    renderer.showFocusEdges(focus?.id ?? null)
+    renderer.showFocusEdges(focus ? focus.set : null)
+    if (focus) {
+      // Titles at the bubbles: the focused node + the most connected part
+      // of its neighborhood (capped so a 5000-site epoch stays readable).
+      const nodeById = nodeByIdRef.current
+      const members = [...focus.set]
+        .map((id) => nodeById.get(id))
+        .filter((n): n is RenderNode => !!n)
+        .sort((a, b) => b.signal + b.degree - (a.signal + a.degree))
+      const focusedNode = nodeById.get(focus.id)
+      const labeled = focusedNode
+        ? [focusedNode, ...members.filter((n) => n.id !== focus.id)]
+        : members
+      renderer.setNodeLabels(labeled.slice(0, 60))
+    } else {
+      renderer.setNodeLabels([])
+    }
   }, [])
 
-  const clearFocus = useCallback(() => {
-    focusRef.current = null
-    setFocused(null)
-  }, [])
+  const focusNode = useCallback(
+    (node: RenderNode | null) => {
+      if (!node) {
+        focusRef.current = null
+        setFocused(null)
+      } else {
+        focusRef.current = { id: node.id, set: computeFocusSet(node.id) }
+        setFocused(node)
+      }
+      applyColors()
+    },
+    [computeFocusSet, applyColors],
+  )
+  const focusNodeRef = useRef(focusNode)
+  focusNodeRef.current = focusNode
 
   // Renderer lifecycle — created once, torn down on unmount.
   useEffect(() => {
     if (!containerRef.current) return
     const renderer = new KnowledgeGraphRenderer(containerRef.current, {
-      onNodeClick: (node) => {
-        if (!node) {
-          clearFocus()
-        } else {
-          focusRef.current = {
-            id: node.id,
-            neighbors: adjacencyRef.current.get(node.id) ?? new Set(),
-          }
-          setFocused(node)
-        }
-        applyColors()
-      },
+      onNodeClick: (node) => focusNodeRef.current(node),
       onHover: (node, x, y) => {
         setHover(node ? { node, x, y } : null)
       },
@@ -174,34 +220,46 @@ export default function KnowledgePage() {
       renderer.dispose()
       rendererRef.current = null
     }
-  }, [applyColors, clearFocus])
+  }, [])
 
-  // Feed data into the renderer when the dataset or layer set changes.
+  // Load the full dataset into the renderer ONCE — layer toggles afterwards
+  // only flip vertex visibility (no re-simulation, no assembly animation).
   useEffect(() => {
     const renderer = rendererRef.current
     if (!renderer || !data || data.nodes.length === 0) return
-    const activeKinds = new Set(
-      Object.entries(LAYERS)
-        .filter(([layer]) => activeLayers.has(layer))
-        .flatMap(([, kinds]) => kinds),
-    )
-    const nodes = data.nodes.filter((n) => {
-      const layer = layerOf(n.kind)
-      return layer === null || activeKinds.has(n.kind)
-    })
-    const ids = new Set(nodes.map((n) => n.id))
-    const links: RenderLink[] = data.edges
-      .filter((e) => ids.has(e.src) && ids.has(e.dst))
-      .map((e) => ({ source: e.src, target: e.dst, kind: e.kind }))
-    // Fresh copies — the simulation mutates node objects (x/y).
-    renderer.setData(
-      nodes.map((n) => ({ ...n })),
-      links,
-      CLUSTERS.filter((c) => activeKinds.has(c.kind)),
-    )
-    clearFocus()
+    const nodes = data.nodes.map((n) => ({ ...n }))
+    nodeByIdRef.current = new Map(nodes.map((n) => [n.id, n]))
+    const links: RenderLink[] = data.edges.map((e) => ({
+      source: e.src,
+      target: e.dst,
+      kind: e.kind,
+    }))
+    renderer.setFullData(nodes, links, CLUSTERS)
     applyColors()
-  }, [data, activeLayers, applyColors, clearFocus])
+  }, [data, applyColors])
+
+  // Instant layer switching; drop the focus if its node just got hidden,
+  // otherwise recompute the neighborhood against the new visible set.
+  useEffect(() => {
+    const renderer = rendererRef.current
+    if (!renderer) return
+    renderer.setVisibleKinds(activeKinds)
+    const focus = focusRef.current
+    if (focus) {
+      const node = nodeByIdRef.current.get(focus.id)
+      if (!node || !activeKinds.has(node.kind)) focusNodeRef.current(null)
+      else focusNodeRef.current(node)
+    }
+  }, [activeKinds])
+
+  // Depth changes re-expand the current focus.
+  useEffect(() => {
+    const focus = focusRef.current
+    if (!focus) return
+    const node = nodeByIdRef.current.get(focus.id)
+    if (node) focusNodeRef.current(node)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [depth])
 
   const takeScreenshot = useCallback(() => {
     const url = rendererRef.current?.screenshot()
@@ -271,7 +329,20 @@ export default function KnowledgePage() {
               {layer}
             </button>
           ))}
-          <button className="kg-chip" onClick={takeScreenshot} title="Save as PNG">
+          <span className="kg-depth">
+            depth
+            {[1, 2, 3].map((d) => (
+              <button
+                key={d}
+                className={`kg-chip kg-chip--depth ${depth === d ? 'active' : ''}`}
+                onClick={() => setDepth(d)}
+                title={`Show ${d} level${d > 1 ? 's' : ''} of connections`}
+              >
+                {d}
+              </button>
+            ))}
+          </span>
+          <button className="kg-chip" onClick={takeScreenshot} title="Save as PNG (8K)">
             📷
           </button>
         </div>
@@ -307,14 +378,7 @@ export default function KnowledgePage() {
 
       {focused && (
         <div className="kg-infocard">
-          <button
-            className="kg-infocard-close"
-            onClick={() => {
-              clearFocus()
-              applyColors()
-            }}
-            aria-label="Close"
-          >
+          <button className="kg-infocard-close" onClick={() => focusNode(null)} aria-label="Close">
             ×
           </button>
           <span
