@@ -69,10 +69,9 @@ export default function KnowledgePage() {
   const graphRef = useRef<ForceGraph3DInstance | null>(null)
   const [data, setData] = useState<GraphData | null>(null)
   const [error, setError] = useState(false)
-  // Content (stories+videos, ~5K nodes) is opt-in — first paint stays light.
-  const [activeLayers, setActiveLayers] = useState<Set<string>>(
-    new Set(['structure', 'sites', 'research']),
-  )
+  // Only the research layer is on by default — the graph opens as Theo's
+  // brain (~300 nodes, instant), and the heavier layers are one chip away.
+  const [activeLayers, setActiveLayers] = useState<Set<string>>(new Set(['research']))
   const [search, setSearch] = useState('')
   const [focused, setFocused] = useState<KgNode | null>(null)
   const current = useCurrentResearch()
