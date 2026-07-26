@@ -20,6 +20,12 @@ MAX_REQUESTS_PER_USER = 1
 # Reserved up-front on submit, deducted on success, released on failure/cancel.
 THEO_RESEARCH_COST = 600
 
+# The permanent researcher (feeder) enqueues frontier topics under this
+# account. The row owner stays the operator so owner-gated endpoints keep
+# working; auto-published papers carry published_by='Theo' for attribution.
+THEO_FEEDER_USER_ID = os.getenv("THEO_FEEDER_USER_ID", "442000112756064260")
+THEO_AUTO_PUBLISH_AUTHOR = "Theo"
+
 # --- Quota watchdog (2026-06-28 plan, layer "active supervision") -----------
 # 5h-rolling % thresholds for the quota watchdog tier classification.
 # Above QUOTA_HEALTHY_PCT   => HEALTHY   (full speed)

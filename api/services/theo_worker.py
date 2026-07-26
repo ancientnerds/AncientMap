@@ -681,6 +681,89 @@ async def _supervise(
         _active_runs.pop(request_id, None)
 
 
+async def _feeder_loop() -> None:
+    """Keep the batch queue fed from the knowledge-graph frontier.
+
+    Every 10 min: when no batch row is queued/running/deferred and the batch
+    gate inputs allow a start, promote the best frontier node to a queued
+    research_request. Source injectors run hourly from the same loop (cheap
+    SQL only). Pre-existing batch rows always drain first — the feeder only
+    acts on an EMPTY batch queue.
+    """
+    import uuid as _uuid
+
+    injector_last = 0.0
+    while not _shutdown:
+        try:
+            now = time.monotonic()
+            if now - injector_last >= 3600:
+                from pipeline.lyra.graph_injectors import run_all_injectors
+
+                run_all_injectors()
+                injector_last = now
+
+            with get_session() as session:
+                pending = session.execute(
+                    text("""
+                        SELECT COUNT(*) FROM research_requests
+                        WHERE is_batch = TRUE
+                          AND status IN ('queued', 'running', 'deferred')
+                    """)
+                ).scalar()
+
+            if not pending:
+                # Mirror the claim-side gating so we never enqueue into a
+                # quota wall — the row would only sit and count against the
+                # pacing clock.
+                tier = "UNKNOWN"
+                weekly_pct = None
+                try:
+                    from api.services.theo_quota_monitor import get_watchdog_state
+
+                    watchdog = get_watchdog_state()
+                    tier = watchdog.get("tier", "UNKNOWN")
+                    weekly_pct = watchdog.get("weekly_remaining_percent")
+                except Exception:  # noqa: BLE001 — watchdog read is best-effort
+                    pass
+                gate_open = _batch_gate_open(_read_last_start_age_s(), THEO_MIN_TASK_INTERVAL_S)
+                if _batch_claim_allowed(gate_open, tier, weekly_pct):
+                    from api.services.theo_config import THEO_FEEDER_USER_ID
+                    from pipeline.lyra.research_graph import (
+                        link_node_to_request,
+                        pick_next_frontier_topic,
+                        question_for_node,
+                    )
+
+                    with get_session() as session:
+                        node = pick_next_frontier_topic(session)
+                        if node:
+                            request_id = str(_uuid.uuid4())
+                            session.execute(
+                                text("""
+                                    INSERT INTO research_requests
+                                        (id, user_id, question, effort, status, is_batch)
+                                    VALUES
+                                        (CAST(:id AS uuid), :uid, :question, 'high',
+                                         'queued', TRUE)
+                                """),
+                                {
+                                    "id": request_id,
+                                    "uid": THEO_FEEDER_USER_ID,
+                                    "question": question_for_node(node),
+                                },
+                            )
+                            session.commit()
+                            link_node_to_request(node["id"], request_id, session)
+                            logger.info(
+                                "[THEO] Feeder queued %s from frontier node %r",
+                                request_id,
+                                node["label"][:80],
+                            )
+        except Exception as exc:  # noqa: BLE001 — the feeder must keep running
+            logger.error("[THEO] Feeder loop error: %s", exc)
+        await asyncio.sleep(600)
+
+
 async def cleanup_stale_deferred() -> None:
     """Fail out research requests stuck in 'deferred' too long.
 
@@ -768,6 +851,7 @@ async def start_worker() -> None:
                 await asyncio.sleep(10)
 
     asyncio.create_task(_safe_poll_loop())
+    asyncio.create_task(_feeder_loop())
     asyncio.create_task(cleanup_stale_deferred())
     # Quota watchdog (2026-06-28 plan): a background daemon that probes
     # the MiniMax Token Plan every 60s, classifies the 5h-rolling
