@@ -424,8 +424,18 @@ class SpecialistHandler(BaseHandler):
         worker_count = min(len(panel), self.state.config.max_concurrent_llm_calls)
         analyses: dict[str, dict] = {}
 
+        # run_in_executor does NOT copy contextvars — without ctx.run the
+        # specialist calls lose both the limiter's low-priority lane binding
+        # (batch runs raced at full speed, observed live 2026-07-26) and the
+        # token_accounting state. Each worker gets a copy of the CURRENT
+        # context, same as asyncio.to_thread would do.
+        import contextvars
+
         with ThreadPoolExecutor(max_workers=worker_count) as pool:
-            futures = {loop.run_in_executor(pool, _run_one, ps): ps for ps in panel}
+            futures = {
+                loop.run_in_executor(pool, contextvars.copy_context().run, _run_one, ps): ps
+                for ps in panel
+            }
             results = await asyncio.gather(*futures.keys(), return_exceptions=True)
 
         for result in results:
