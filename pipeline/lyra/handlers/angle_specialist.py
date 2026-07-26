@@ -249,6 +249,9 @@ class SpecialistHandler(BaseHandler):
             novelty = await self._check_novelty(angle, new_claims_total)
             genuine_novelty = novelty.get("incremental", 0) + novelty.get("rabbit_holes", 0)
             rabbit_holes_found = novelty.get("rabbit_hole_topics", [])
+            # Keep every surfaced hole on the angle — unexplored ones become
+            # knowledge-graph frontier nodes at run end.
+            angle.rabbit_holes.extend(rabbit_holes_found)
 
             # Extend max rounds if rabbit holes found
             if rabbit_holes_found:

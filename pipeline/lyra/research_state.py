@@ -77,6 +77,10 @@ class ResearchAngle:
     saturated: bool = False
     spawned_from: str | None = None  # parent angle ID if rabbit hole
     effective_max_rounds: int = 0  # bonus rounds from rabbit holes (0 = use config default)
+    # Every rabbit-hole topic the novelty check surfaced for this angle.
+    # Holes that never spawn an angle become frontier nodes in the research
+    # knowledge graph at run end (research_graph.persist_state_graph).
+    rabbit_holes: list[str] = field(default_factory=list)
 
 
 @dataclass

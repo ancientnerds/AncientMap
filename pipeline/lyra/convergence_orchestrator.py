@@ -451,6 +451,13 @@ class ConvergenceOrchestrator:
                 state.error = empty_reason
                 logger.error("[THEO] empty-paper guard tripped — failing run: %s", empty_reason)
 
+        # Persist the run's knowledge-graph contribution (angle tree + open
+        # rabbit holes as frontier). Best-effort inside — never fails the run.
+        if request_id and not state.error:
+            from pipeline.lyra.research_graph import persist_state_graph
+
+            persist_state_graph(state, request_id)
+
         return state
 
 
