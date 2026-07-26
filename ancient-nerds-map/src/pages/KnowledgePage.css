@@ -228,6 +228,7 @@
   left: 0;
   z-index: 7;
   pointer-events: none;
+  transition: opacity 0.25s;
   font-family: 'JetBrains Mono', monospace;
   font-size: 0.62rem;
   color: #e0e0e0;

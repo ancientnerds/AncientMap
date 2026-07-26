@@ -97,6 +97,8 @@ export class KnowledgeGraphRenderer {
 
   private labeledNodes: RenderNode[] = []
   private nodeLabelEls: HTMLDivElement[] = []
+  // Per-label declutter verdict from the last frame (mirrored in screenshots).
+  private labelKeep: boolean[] = []
 
   private rafId = 0
   private paused = false
@@ -282,6 +284,7 @@ export class KnowledgeGraphRenderer {
   setNodeLabels(nodes: RenderNode[]): void {
     for (const el of this.nodeLabelEls) el.remove()
     this.labeledNodes = nodes
+    this.labelKeep = nodes.map(() => true)
     this.nodeLabelEls = nodes.map((nd) => {
       const el = document.createElement('div')
       el.className = 'kg-node-label'
@@ -331,15 +334,16 @@ export class KnowledgeGraphRenderer {
     }
     ctx.font = `500 ${Math.round(w * 0.005)}px "JetBrains Mono", monospace`
     ctx.fillStyle = '#e0e0e0'
-    for (const nd of this.labeledNodes) {
+    this.labeledNodes.forEach((nd, i) => {
+      if (!this.labelKeep[i]) return // same declutter verdict as the live view
       v.set(nd.x ?? 0, nd.y ?? 0, 0).project(this.camera)
-      if (v.x < -1 || v.x > 1 || v.y < -1 || v.y > 1) continue
+      if (v.x < -1 || v.x > 1 || v.y < -1 || v.y > 1) return
       ctx.fillText(
         nd.label.length > 42 ? `${nd.label.slice(0, 40)}…` : nd.label,
         ((v.x + 1) / 2) * w,
         ((1 - v.y) / 2) * h - Math.round(w * 0.006),
       )
-    }
+    })
 
     this.renderer.setPixelRatio(prevRatio)
     this.renderer.setSize(prevW, prevH, false)
@@ -424,11 +428,31 @@ export class KnowledgeGraphRenderer {
         this.camera.zoom > 6 || (this.visibleKinds !== null && !this.visibleKinds.has(c.kind))
       el.style.opacity = hidden ? '0' : '1'
     })
+    // Greedy screen-space decluttering, borrowed from the globe's label
+    // system: labeledNodes arrive priority-sorted (focused node first, then
+    // by bubble size), so the bigger bubble always wins a collision.
+    const keptRects: { x1: number; y1: number; x2: number; y2: number }[] = []
     this.labeledNodes.forEach((nd, i) => {
       const el = this.nodeLabelEls[i]
       if (!el) return
       const [px, py] = this.projectToScreen(nd.x ?? 0, nd.y ?? 0, v)
       el.style.transform = `translate(-50%, -130%) translate(${px}px, ${py}px)`
+      const textLen = (el.textContent ?? '').length
+      const w = textLen * 6.2 + 8
+      const h = 16
+      const cy = py - 18
+      const rect = { x1: px - w / 2, y1: cy - h / 2, x2: px + w / 2, y2: cy + h / 2 }
+      const collides = keptRects.some(
+        (r) => rect.x1 < r.x2 && rect.x2 > r.x1 && rect.y1 < r.y2 && rect.y2 > r.y1,
+      )
+      if (collides) {
+        el.style.opacity = '0'
+        this.labelKeep[i] = false
+      } else {
+        keptRects.push(rect)
+        el.style.opacity = '1'
+        this.labelKeep[i] = true
+      }
     })
   }
 
