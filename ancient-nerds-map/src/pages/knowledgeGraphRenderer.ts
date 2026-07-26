@@ -22,6 +22,8 @@ export interface RenderNode {
   site_id: string | null
   /** Sub-cluster key within the island (country, channel, source paper, …). */
   group?: string
+  /** Server-provided ordering hint (country nodes: mean site longitude). */
+  order_hint?: number | null
   x?: number
   y?: number
 }
@@ -142,21 +144,26 @@ export class KnowledgeGraphRenderer {
    * Load the FULL dataset once. The simulation runs over every node exactly
    * one time; later layer toggles only flip visibility flags.
    */
-  setFullData(nodes: RenderNode[], links: RenderLink[], clusters: ClusterDef[]): void {
+  setFullData(
+    nodes: RenderNode[],
+    links: RenderLink[],
+    clusters: ClusterDef[],
+    groupOrders: Record<string, string[]> = {},
+  ): void {
     this.disposeGraphObjects()
     this.nodes = nodes
     this.links = links
-    this.clusterDefs = clusters
+    // Copy — island separation below moves the centers.
+    this.clusterDefs = clusters.map((c) => ({ ...c }))
     this.hoverIndex = -1
-    this.rebuildClusterLabels()
 
     // Deterministic layout, computed analytically in one pass (no force
-    // simulation, no assembly animation, identical result on every load).
-    // Each island packs its nodes' sub-groups (country, channel, source
-    // paper — provided by the page via node.group) as an archipelago of
-    // blobs; within every blob a phyllotaxis spiral puts the biggest
-    // bubbles at the center. Groups with < 4 members merge into a rest blob.
-    const clusterByKind = new Map(clusters.map((c) => [c.kind, c]))
+    // simulation, identical result on every load). Each island packs its
+    // sub-groups (country, channel, source paper — node.group from the
+    // page) as an archipelago: blobs follow the page's similarity order in
+    // a contiguous coil, so thematic neighbors are spatial neighbors and
+    // nothing ever overlaps. Inside every blob a phyllotaxis spiral puts
+    // the biggest bubbles at the center.
     const byKind = new Map<string, RenderNode[]>()
     for (const nd of nodes) {
       const bucket = byKind.get(nd.kind)
@@ -174,11 +181,10 @@ export class KnowledgeGraphRenderer {
         nd.y = cy + r * Math.sin(a)
       })
     }
-    for (const [kind, members] of byKind) {
-      const c = clusterByKind.get(kind)
-      const cx = c?.x ?? 0
-      const cy = c?.y ?? 0
 
+    // Pass 1 — pack every island in LOCAL coordinates and measure extents.
+    const islandExtent = new Map<string, number>()
+    for (const [kind, members] of byKind) {
       const byGroup = new Map<string, RenderNode[]>()
       for (const nd of members) {
         const key = nd.group ?? ''
@@ -195,38 +201,90 @@ export class KnowledgeGraphRenderer {
         }
       }
       if (rest.length) byGroup.set('', rest)
+      else byGroup.delete('')
 
       if (byGroup.size <= 1) {
-        packSpiral(members, cx, cy)
+        packSpiral(members, 0, 0)
+        islandExtent.set(kind, SPACING * Math.sqrt(members.length) + 20)
         continue
       }
 
-      // Greedy circle packing of the sub-blobs: biggest at the island
-      // center, each next blob walks outward along its golden-angle ray
-      // until it clears everything already placed.
-      const groups = [...byGroup.values()].sort((a, b) => b.length - a.length)
+      // Similarity order from the page (countries by longitude, channels/
+      // papers by shared-neighbor Jaccard); unknown groups append by size.
+      const order = groupOrders[kind] ?? []
+      const orderIndex = new Map(order.map((k, i) => [k, i]))
+      const groups = [...byGroup.entries()].sort((a, b) => {
+        const ia = orderIndex.get(a[0]) ?? Number.MAX_SAFE_INTEGER
+        const ib = orderIndex.get(b[0]) ?? Number.MAX_SAFE_INTEGER
+        return ia !== ib ? ia - ib : b[1].length - a[1].length
+      })
+
+      // Contiguous coil: blob i+1 hugs blob i (similar = adjacent), the
+      // angle advances by each blob's angular footprint, and the radius
+      // walk guarantees zero overlap.
       const placed: { x: number; y: number; r: number }[] = []
-      groups.forEach((bucket, gi) => {
+      let theta = 0
+      let extent = 0
+      groups.forEach(([, bucket], gi) => {
         const radius = SPACING * Math.sqrt(bucket.length) + 14
-        let gx = cx
-        let gy = cy
+        let gx = 0
+        let gy = 0
         if (gi > 0) {
-          const angle = gi * GOLDEN_ANGLE
           let dist = placed[0].r + radius
           for (;;) {
-            gx = cx + dist * Math.cos(angle)
-            gy = cy + dist * Math.sin(angle)
+            gx = dist * Math.cos(theta)
+            gy = dist * Math.sin(theta)
             const collides = placed.some(
               (p) => Math.hypot(gx - p.x, gy - p.y) < p.r + radius + 6,
             )
             if (!collides) break
             dist += 8
           }
+          theta += 2 * Math.asin(Math.min(0.95, (radius + 6) / dist))
+          extent = Math.max(extent, Math.hypot(gx, gy) + radius)
+        } else {
+          extent = radius
         }
         placed.push({ x: gx, y: gy, r: radius })
         packSpiral(bucket, gx, gy)
       })
+      islandExtent.set(kind, extent + 20)
     }
+
+    // Pass 2 — spread the island centers until no two archipelagos touch,
+    // then translate the local layouts into world space.
+    let scale = 1
+    for (let iter = 0; iter < 60; iter++) {
+      let overlap = false
+      const defs = this.clusterDefs
+      for (let i = 0; i < defs.length && !overlap; i++) {
+        for (let j = i + 1; j < defs.length; j++) {
+          const ri = islandExtent.get(defs[i].kind) ?? 0
+          const rj = islandExtent.get(defs[j].kind) ?? 0
+          const dist = Math.hypot(
+            (defs[i].x - defs[j].x) * scale,
+            (defs[i].y - defs[j].y) * scale,
+          )
+          if (dist < ri + rj + 40) {
+            overlap = true
+            break
+          }
+        }
+      }
+      if (!overlap) break
+      scale *= 1.05
+    }
+    for (const c of this.clusterDefs) {
+      c.x *= scale
+      c.y *= scale
+    }
+    const centerByKind = new Map(this.clusterDefs.map((c) => [c.kind, c]))
+    for (const nd of nodes) {
+      const c = centerByKind.get(nd.kind)
+      nd.x = (nd.x ?? 0) + (c?.x ?? 0)
+      nd.y = (nd.y ?? 0) + (c?.y ?? 0)
+    }
+    this.rebuildClusterLabels()
 
     // Resolve link endpoints to node objects (no forceLink does it for us).
     const nodeById = new Map(nodes.map((nd) => [nd.id, nd]))

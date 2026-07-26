@@ -1693,6 +1693,10 @@ def create_public_api() -> FastAPI:
                 SELECT n.id::text AS id, n.label, n.kind, n.status,
                        n.source_signal AS signal,
                        COALESCE(deg.cnt, 0) AS degree,
+                       CASE WHEN n.kind = 'country' THEN (
+                           SELECT AVG(us.lon) FROM unified_sites us
+                           WHERE us.country = n.label AND us.source_id = 'ancient_nerds'
+                       ) END AS order_hint,
                        n.site_id::text AS site_id,
                        CASE WHEN n.kind = 'paper' AND rr.is_public THEN rr.slug END AS paper_slug
                 FROM research_nodes n
@@ -1721,6 +1725,7 @@ def create_public_api() -> FastAPI:
                 status=r.status,
                 signal=float(r.signal or 0.0),
                 degree=int(r.degree or 0),
+                order_hint=float(r.order_hint) if r.order_hint is not None else None,
                 paper_slug=r.paper_slug,
                 site_id=r.site_id,
             )

@@ -552,6 +552,10 @@ class GraphNode(BaseModel):
     status: str = Field(description="frontier | researching | explored")
     signal: float = Field(description="Accumulated interest signal from content sources")
     degree: int = Field(description="Number of edges touching this node")
+    order_hint: float | None = Field(
+        None,
+        description="Layout ordering hint (country nodes: mean longitude of their sites)",
+    )
     paper_slug: str | None = Field(
         None, description="Slug of the published paper (explored paper nodes only)"
     )

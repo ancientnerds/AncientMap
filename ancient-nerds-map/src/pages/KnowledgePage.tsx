@@ -303,12 +303,70 @@ export default function KnowledgePage() {
       }
     }
 
+    // Similarity orders so thematically close sub-blobs become spatial
+    // neighbors: countries west→east by their sites' mean longitude, other
+    // groups chained by shared-neighbor Jaccard similarity.
+    const groupOrders: Record<string, string[]> = {}
+    const countryHint = new Map<string, number>()
+    for (const n of nodes) {
+      if (n.kind === 'country' && n.order_hint != null) countryHint.set(n.label, n.order_hint)
+    }
+    groupOrders.site = [
+      ...new Set(nodes.filter((n) => n.kind === 'site' && n.group).map((n) => n.group!)),
+    ].sort((a, b) => (countryHint.get(a) ?? 999) - (countryHint.get(b) ?? 999))
+
+    const neighborsOf = (id: string): Set<string> => {
+      const out = adjOutRef.current.get(id)
+      const inc = adjInRef.current.get(id)
+      const all = new Set<string>(out ?? [])
+      for (const x of inc ?? []) all.add(x)
+      return all
+    }
+    const chainFor = (kind: string): string[] => {
+      const sigs = new Map<string, Set<string>>()
+      for (const n of nodes) {
+        if (n.kind !== kind || !n.group) continue
+        let s = sigs.get(n.group)
+        if (!s) {
+          s = new Set()
+          sigs.set(n.group, s)
+        }
+        for (const nb of neighborsOf(n.id)) s.add(nb)
+      }
+      const keys = [...sigs.keys()]
+      if (keys.length <= 2) return keys
+      const jaccard = (a: Set<string>, b: Set<string>) => {
+        let inter = 0
+        for (const x of a) if (b.has(x)) inter++
+        return inter / (a.size + b.size - inter || 1)
+      }
+      keys.sort((a, b) => sigs.get(b)!.size - sigs.get(a)!.size)
+      const chain = [keys.shift()!]
+      while (keys.length) {
+        const last = sigs.get(chain[chain.length - 1])!
+        let bestIdx = 0
+        let bestSim = -1
+        keys.forEach((k, i) => {
+          const sim = jaccard(last, sigs.get(k)!)
+          if (sim > bestSim) {
+            bestSim = sim
+            bestIdx = i
+          }
+        })
+        chain.push(keys.splice(bestIdx, 1)[0])
+      }
+      return chain
+    }
+    for (const kind of ['video', 'story', 'topic', 'entity', 'person']) {
+      groupOrders[kind] = chainFor(kind)
+    }
+
     const links: RenderLink[] = data.edges.map((e) => ({
       source: e.src,
       target: e.dst,
       kind: e.kind,
     }))
-    renderer.setFullData(nodes, links, CLUSTERS)
+    renderer.setFullData(nodes, links, CLUSTERS, groupOrders)
     applyColors()
   }, [data, applyColors])
 
