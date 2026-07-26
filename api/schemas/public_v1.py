@@ -493,6 +493,11 @@ class ResearchPaperSummary(BaseModel):
     )
     question: str = Field(description="The research question the paper answers")
     summary: str | None = Field(None, description="Short abstract / card description")
+    author: str | None = Field(
+        None,
+        description="Username of the researcher who authored and published this paper",
+        json_schema_extra={"example": "MrSchneebly"},
+    )
     published_at: str | None = Field(None, description="Publication timestamp (ISO 8601)")
     sources_analyzed: int = Field(
         description="Number of sources retrieved and scored during research",
@@ -511,8 +516,8 @@ class ResearchPaperSummary(BaseModel):
         json_schema_extra={"example": "CC BY 4.0"},
     )
     attribution: str = Field(
-        description="Required attribution when reusing this content",
-        json_schema_extra={"example": "Ancient Nerds — https://ancientnerds.com"},
+        description="Required attribution when reusing this content (author + site)",
+        json_schema_extra={"example": "MrSchneebly, Ancient Nerds — https://ancientnerds.com"},
     )
 
 

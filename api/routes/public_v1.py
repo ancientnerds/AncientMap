@@ -1426,12 +1426,18 @@ def create_public_api() -> FastAPI:
                 if row.hero_src.startswith("/")
                 else row.hero_src
             )
+        attribution = (
+            f"{row.published_by}, {RESEARCH_ATTRIBUTION}"
+            if row.published_by
+            else RESEARCH_ATTRIBUTION
+        )
         return {
             "id": row.id,
             "slug": row.slug,
             "title": row.title or row.question,
             "question": row.question,
             "summary": row.card_description or None,
+            "author": row.published_by,
             "published_at": row.published_at.isoformat() if row.published_at else None,
             "sources_analyzed": row.sites_found or 0,
             "word_count": int(row.word_count) if row.word_count else None,
@@ -1439,11 +1445,11 @@ def create_public_api() -> FastAPI:
             "quality_badge": row.badge,
             "hero_image_url": hero_url,
             "license": RESEARCH_LICENSE,
-            "attribution": RESEARCH_ATTRIBUTION,
+            "attribution": attribution,
         }
 
     _PAPER_SUMMARY_COLUMNS = """
-        r.id::text AS id, r.slug, r.question, r.published_at, r.sites_found,
+        r.id::text AS id, r.slug, r.question, r.published_by, r.published_at, r.sites_found,
         r.result_json::jsonb->>'title' AS title,
         r.result_json::jsonb->>'card_description' AS card_description,
         r.result_json::jsonb->'quality_score'->>'score' AS score,
