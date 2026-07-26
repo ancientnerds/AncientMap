@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import HamburgerNav from '../components/layout/HamburgerNav'
+import PageHeader from '../components/layout/PageHeader'
 import { useCurrentResearch } from '../hooks/useCurrentResearch'
 import { navigateGlobeToSite } from '../utils/globeNavigation'
 import {
@@ -52,6 +52,11 @@ const KIND_RGB: Record<string, Rgb> = Object.fromEntries(
 const DEFAULT_RGB: Rgb = [0.4, 0.47, 0.53]
 const RESEARCHING_RGB: Rgb = hexToRgb('#c02023')
 const DIM_RGB: Rgb = [0.16, 0.2, 0.22]
+
+// Terminal kinds ride along as companions of their node (a video always
+// brings its channel, a site its epoch/country) but are never expanded —
+// hubs cannot fan out.
+const TERMINAL_KINDS = new Set(['period', 'country', 'culture', 'channel', 'empire'])
 
 // Layer toggles — each chip switches a group of node classes.
 const LAYERS: Record<string, string[]> = {
@@ -135,42 +140,48 @@ export default function KnowledgePage() {
   )
 
   /**
-   * Direction-preserving BFS up to `depth` hops, restricted to visible kinds.
-   *
-   * From the focus both edge directions start a path, but every path KEEPS
-   * its direction: story -> video -> channel expands level by level, while a
-   * hub never turns around (a video does not fan back out to all its other
-   * stories, an epoch not to its 5000 sites) — "nur in eine Richtung".
+   * Focus expansion with two anti-flood rules:
+   * - TERMINAL kinds (channel, epoch, country, culture, empire) join as
+   *   companions of their node IMMEDIATELY (a video brings its creator on
+   *   the same level) but are never expanded — hubs cannot fan out
+   * - no sibling fan-out: a node never expands into neighbors of the same
+   *   kind it was reached from (a video does not flood back into all its
+   *   other stories, a story not into its other sites)
    */
   const computeFocusSet = useCallback(
     (startId: string): Set<string> => {
       const nodeById = nodeByIdRef.current
-      const visible = (id: string) => {
-        const node = nodeById.get(id)
-        return !!node && activeKinds.has(node.kind)
+      const neighborsOf = (id: string): string[] => [
+        ...(adjOutRef.current.get(id) ?? []),
+        ...(adjInRef.current.get(id) ?? []),
+      ]
+      const set = new Set<string>()
+      const addWithCompanions = (id: string) => {
+        set.add(id)
+        for (const nbId of neighborsOf(id)) {
+          if (set.has(nbId)) continue
+          const nb = nodeByIdRef.current.get(nbId)
+          if (nb && TERMINAL_KINDS.has(nb.kind) && activeKinds.has(nb.kind)) set.add(nbId)
+        }
       }
-      const set = new Set<string>([startId])
-      let ringFwd = [startId]
-      let ringRev = [startId]
+      addWithCompanions(startId)
+      let ring: { id: string; from: string | null }[] = [{ id: startId, from: null }]
       for (let level = 0; level < depth; level++) {
-        const nextFwd: string[] = []
-        const nextRev: string[] = []
-        for (const id of ringFwd) {
-          for (const nb of adjOutRef.current.get(id) ?? []) {
-            if (set.has(nb) || !visible(nb)) continue
-            set.add(nb)
-            nextFwd.push(nb)
+        const next: { id: string; from: string }[] = []
+        for (const { id, from } of ring) {
+          const self = nodeById.get(id)
+          if (!self) continue
+          for (const nbId of neighborsOf(id)) {
+            if (set.has(nbId)) continue
+            const nb = nodeById.get(nbId)
+            if (!nb || !activeKinds.has(nb.kind)) continue
+            if (TERMINAL_KINDS.has(nb.kind)) continue // only ever a companion
+            if (from && nb.kind === from) continue // anti-sibling
+            addWithCompanions(nbId)
+            next.push({ id: nbId, from: self.kind })
           }
         }
-        for (const id of ringRev) {
-          for (const nb of adjInRef.current.get(id) ?? []) {
-            if (set.has(nb) || !visible(nb)) continue
-            set.add(nb)
-            nextRev.push(nb)
-          }
-        }
-        ringFwd = nextFwd
-        ringRev = nextRev
+        ring = next
       }
       return set
     },
@@ -320,15 +331,16 @@ export default function KnowledgePage() {
 
   return (
     <div className="knowledge-page">
-      <HamburgerNav currentPage="knowledge" />
-      <header className="kg-header">
-        <div className="kg-title-block">
-          <h1>Knowledge Graph</h1>
-          <p className="kg-subtitle">
-            {data ? `${data.total_nodes.toLocaleString()} nodes` : '…'} · {counts.explored}{' '}
-            explored · {counts.frontier} frontier topics
-          </p>
-        </div>
+      <PageHeader currentPage="knowledge">
+        <a href="/knowledge.html" className="page-header-title">
+          Knowledge
+        </a>
+      </PageHeader>
+      <div className="kg-toolbar">
+        <p className="kg-subtitle">
+          {data ? `${data.total_nodes.toLocaleString()} nodes` : '…'} · {counts.explored} explored
+          · {counts.frontier} frontier topics
+        </p>
         {current?.running && (
           <div className="kg-live">
             <span className="kg-live-dot" />
@@ -369,15 +381,17 @@ export default function KnowledgePage() {
             📷
           </button>
         </div>
-      </header>
+      </div>
 
-      {error && (
-        <div className="kg-empty">
-          <h2>The graph is unreachable right now.</h2>
-          <p>Please try again in a moment.</p>
-        </div>
-      )}
-      <div ref={containerRef} className="kg-canvas" />
+      <div className="kg-stage">
+        {error && (
+          <div className="kg-empty">
+            <h2>The graph is unreachable right now.</h2>
+            <p>Please try again in a moment.</p>
+          </div>
+        )}
+        <div ref={containerRef} className="kg-canvas" />
+      </div>
 
       {hover && !focused && (
         <div className="kg-tooltip kg-tooltip--floating" style={{ left: hover.x + 14, top: hover.y + 10 }}>
