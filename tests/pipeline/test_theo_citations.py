@@ -978,7 +978,10 @@ def test_inject_returns_paragraph_unchanged_when_already_cited():
     num = registry.assign_reference_number(sid)
     para = f"The Book of Enoch describes the Watchers as fallen angels who came down. [{num}]"
     out = inject_citation_for_paragraph(para, registry)
-    assert out == para  # idempotent — no double-citation
+    # Documented contract: None when the paragraph already carries every
+    # candidate marker — the caller then keeps the paragraph unchanged, so
+    # no double-citation can occur (see paper.py stage-3 injection loop).
+    assert out is None
 
 
 def test_inject_picks_best_match_when_multiple_candidates():
