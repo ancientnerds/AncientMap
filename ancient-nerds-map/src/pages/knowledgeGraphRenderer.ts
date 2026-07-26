@@ -12,14 +12,7 @@
 
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
-import {
-  forceCollide,
-  forceLink,
-  forceManyBody,
-  forceSimulation,
-  forceX,
-  forceY,
-} from 'd3-force-3d'
+import { forceCollide, forceManyBody, forceSimulation, forceX, forceY } from 'd3-force-3d'
 
 export interface RenderNode {
   id: string
@@ -157,8 +150,12 @@ export class KnowledgeGraphRenderer {
     const positions = new Float32Array(n * 3)
     const colors = new Float32Array(n * 3)
     const sizes = new Float32Array(n)
+    const anchorKinds = new Set(['period', 'empire', 'country', 'culture'])
     for (let i = 0; i < n; i++) {
-      sizes[i] = 2.2 + Math.sqrt(Math.min(nodes[i].signal + nodes[i].degree, 60)) * 1.4
+      const size = 2.2 + Math.sqrt(Math.min(nodes[i].signal + nodes[i].degree, 60)) * 1.4
+      // Structural anchors (9 epochs, 46 empires, ...) are few but carry
+      // thousands of connections — a size floor keeps their islands legible.
+      sizes[i] = anchorKinds.has(nodes[i].kind) ? Math.max(size, 9) : size
     }
 
     const pointGeo = new THREE.BufferGeometry()
@@ -176,8 +173,18 @@ export class KnowledgeGraphRenderer {
     this.points = new THREE.Points(pointGeo, this.pointMat)
     this.scene.add(this.points)
 
-    // 2D simulation: strong pull to the kind's island, weak link kinship,
-    // mild repulsion + collision so islands spread into readable blobs.
+    // Resolve link endpoints to node objects ourselves — there is no
+    // forceLink in the simulation anymore (see below), so nobody else does.
+    const nodeById = new Map(nodes.map((nd) => [nd.id, nd]))
+    for (const l of links) {
+      if (typeof l.source === 'string') l.source = nodeById.get(l.source) ?? l.source
+      if (typeof l.target === 'string') l.target = nodeById.get(l.target) ?? l.target
+    }
+
+    // 2D simulation: pull to the kind's island + collision. NO link force —
+    // even a weak one dragged high-degree nodes (journals with hundreds of
+    // covers-edges) out of their island and into the sites blob. Links only
+    // matter visually in focus mode.
     this.simulation = forceSimulation(nodes as object[], 2)
       .force(
         'x',
@@ -186,13 +193,6 @@ export class KnowledgeGraphRenderer {
       .force(
         'y',
         forceY((d: RenderNode) => clusterByKind.get(d.kind)?.y ?? 0).strength(0.12),
-      )
-      .force(
-        'link',
-        forceLink(links as object[])
-          .id((d: RenderNode) => d.id)
-          .strength(0.02)
-          .distance(60),
       )
       .force('charge', forceManyBody().strength(-4).distanceMax(160))
       .force(
@@ -241,9 +241,55 @@ export class KnowledgeGraphRenderer {
     this.scene.add(this.focusLines)
   }
 
-  screenshot(): string {
+  /**
+   * High-resolution PNG export (default 7680px wide = 8K). Renders offscreen
+   * at target size with proportionally scaled point sizes, then composites
+   * the cluster titles INTO the bitmap — the live labels are DOM overlays
+   * and would otherwise be missing from the capture.
+   */
+  screenshot(targetWidth = 7680): string {
+    const prevW = this.container.clientWidth || window.innerWidth
+    const prevH = this.container.clientHeight || window.innerHeight
+    const prevRatio = this.renderer.getPixelRatio()
+    const scale = targetWidth / prevW
+    const w = targetWidth
+    const h = Math.round(prevH * scale)
+
+    this.renderer.setPixelRatio(1)
+    this.renderer.setSize(w, h, false)
+    if (this.pointMat) {
+      // gl_PointSize is in device pixels — scale it up with the resolution.
+      this.pointMat.uniforms.uZoom.value = Math.sqrt(this.camera.zoom) * scale
+    }
     this.renderer.render(this.scene, this.camera)
-    return this.renderer.domElement.toDataURL('image/png')
+
+    const out = document.createElement('canvas')
+    out.width = w
+    out.height = h
+    const ctx = out.getContext('2d')!
+    ctx.drawImage(this.renderer.domElement, 0, 0, w, h)
+
+    // Cluster titles, drawn into the bitmap.
+    const v = new THREE.Vector3()
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.font = `600 ${Math.round(w * 0.011)}px Orbitron, sans-serif`
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.9)'
+    ctx.shadowBlur = Math.round(w * 0.004)
+    for (const c of this.clusterDefs) {
+      v.set(c.x, c.y, 0).project(this.camera)
+      if (v.x < -1 || v.x > 1 || v.y < -1 || v.y > 1) continue
+      ctx.fillStyle = c.color
+      ctx.fillText(c.label.toUpperCase(), ((v.x + 1) / 2) * w, ((1 - v.y) / 2) * h)
+    }
+
+    // Restore the live view.
+    this.renderer.setPixelRatio(prevRatio)
+    this.renderer.setSize(prevW, prevH, false)
+    if (this.pointMat) this.pointMat.uniforms.uZoom.value = Math.sqrt(this.camera.zoom)
+    this.renderer.render(this.scene, this.camera)
+
+    return out.toDataURL('image/png')
   }
 
   flyTo(node: RenderNode): void {
