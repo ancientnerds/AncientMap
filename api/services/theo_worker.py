@@ -270,6 +270,14 @@ async def _process_request(
                 f"[THEO] Request {request_id} completed in {duration_ms}ms"
                 f" ({ctx.total_tokens} tokens)"
             )
+            if is_batch:
+                # Permanent-researcher flow (2026-07-26): the frontier node
+                # is explored either way; gate-passing papers go live
+                # immediately, gate failures ping Discord for manual review.
+                from pipeline.lyra.research_graph import mark_node_explored
+
+                mark_node_explored(request_id)
+                _auto_publish(request_id)
 
     except Exception as exc:
         from pipeline.lyra.minimax_limiter import (
@@ -431,6 +439,120 @@ def _read_progress_sig(request_id: str) -> tuple | None:
     except Exception as exc:
         logger.warning("[THEO] progress read failed for %s: %s", request_id, exc)
         return None
+
+
+def _auto_publish(request_id: str) -> None:
+    """DB-level publish for quality-gate-passing batch papers (2026-07-26).
+
+    Mirrors POST /theo/research/{id}/publish minus the HTTP layer: fresh
+    papers have no section approvals, so the legacy approved_by path applies
+    with the full report as the published view. No Discord role refresh —
+    the feeder's papers are system-authored ('Theo'). Gate failures leave
+    the paper unpublished and ping the Discord webhook for manual review.
+    """
+    from datetime import UTC, datetime
+
+    from api.routes.theo import _make_slug
+    from api.services.theo_config import THEO_AUTO_PUBLISH_AUTHOR
+
+    try:
+        with get_session() as session:
+            row = session.execute(
+                text("""
+                    SELECT question, result_json, is_public, user_id
+                    FROM research_requests WHERE id = :id
+                """),
+                {"id": request_id},
+            ).fetchone()
+            if not row or row.is_public:
+                return
+            result = json.loads(row.result_json) if row.result_json else {}
+            quality = result.get("quality_score") or {}
+            audit = result.get("audit") or {}
+            if not (quality.get("passed") and audit.get("passed")):
+                logger.warning(
+                    "[THEO] Auto-publish gate failed for %s (quality=%s audit=%s) — held.",
+                    request_id,
+                    quality.get("passed"),
+                    audit.get("passed"),
+                )
+                try:
+                    from api.services.notify import send_discord_webhook
+
+                    send_discord_webhook(
+                        {
+                            "embeds": [
+                                {
+                                    "title": "Theo paper held — quality gate failed",
+                                    "description": (
+                                        f"`{request_id}`\n"
+                                        f"**{(result.get('title') or row.question)[:200]}**\n"
+                                        f"quality_passed={quality.get('passed')} "
+                                        f"audit_passed={audit.get('passed')}\n"
+                                        f"issues: {(audit.get('issues') or [])[:3]}"
+                                    ),
+                                    "color": 0xE67E22,
+                                }
+                            ]
+                        }
+                    )
+                except Exception:  # noqa: BLE001 — notification is best-effort
+                    pass
+                return
+
+            title = result.get("title") or row.question
+            slug = _make_slug(title)
+            collision = session.execute(
+                text("SELECT 1 FROM research_requests WHERE slug = :slug AND id != :id"),
+                {"slug": slug, "id": request_id},
+            ).fetchone()
+            if collision:
+                slug = f"{slug}-{request_id[:8]}"
+
+            now_iso = datetime.now(UTC).isoformat()
+            result["approved_by"] = THEO_AUTO_PUBLISH_AUTHOR
+            result["approved_at"] = now_iso
+            result["published_report"] = result.get("report") or ""
+            result["published_block_ids"] = []
+            result["published_hero_image"] = result.get("hero_image")
+
+            session.execute(
+                text("""
+                    UPDATE research_requests
+                    SET is_public = TRUE,
+                        published_at = NOW(),
+                        published_by = :author,
+                        slug = :slug,
+                        result_json = :result
+                    WHERE id = :id
+                """),
+                {
+                    "id": request_id,
+                    "author": THEO_AUTO_PUBLISH_AUTHOR,
+                    "slug": slug,
+                    "result": json.dumps(result),
+                },
+            )
+            session.commit()
+            author_discord_id = row.user_id
+
+        logger.info("[THEO] Auto-published %s as %r", request_id, slug)
+        try:
+            from pipeline.lyra.theo_research_index import index_paper
+
+            index_paper(
+                paper_id=request_id,
+                paper_text=result["published_report"],
+                paper_title=title,
+                paper_slug=slug,
+                author_username=THEO_AUTO_PUBLISH_AUTHOR,
+                author_discord_id=author_discord_id,
+                published_at=now_iso,
+            )
+        except Exception as exc:  # noqa: BLE001 — same best-effort as the route
+            logger.error("[THEO] Qdrant indexing failed for %s: %s", request_id, exc)
+    except Exception as exc:  # noqa: BLE001 — publishing must never crash the worker
+        logger.error("[THEO] Auto-publish failed for %s: %s", request_id, exc)
 
 
 async def _run_with_stall_guard(
