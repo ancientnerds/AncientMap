@@ -130,7 +130,7 @@ class TestPipelineEvents:
             patch("api.services.lyra_agent.set_request_context"),
             patch(
                 "api.services.lyra_agent._auto_retrieve",
-                return_value=("context", [], [], 0.8, 100, [], []),
+                return_value=("context", [], [], 0.8, 100, [], [], []),
             ),
             patch(
                 "api.services.lyra_agent._extract_news_filters",
@@ -171,7 +171,7 @@ class TestPipelineEvents:
             patch("api.services.lyra_agent.set_request_context"),
             patch(
                 "api.services.lyra_agent._auto_retrieve",
-                return_value=("context", [], [], 0.8, 100, [], []),
+                return_value=("context", [], [], 0.8, 100, [], [], []),
             ),
             patch(
                 "api.services.lyra_agent._extract_news_filters",
@@ -291,7 +291,7 @@ class TestPipelineCompleteness:
             patch("api.services.lyra_agent.set_request_context"),
             patch(
                 "api.services.lyra_agent._auto_retrieve",
-                return_value=("ctx", [], [], None, 0, [], []),
+                return_value=("ctx", [], [], None, 0, [], [], []),
             ),
             patch(
                 "api.services.lyra_agent._extract_news_filters",
@@ -321,7 +321,7 @@ class TestPipelineCompleteness:
             patch("api.services.lyra_agent.set_request_context"),
             patch(
                 "api.services.lyra_agent._auto_retrieve",
-                return_value=("ctx", [], [], None, 0, [], []),
+                return_value=("ctx", [], [], None, 0, [], [], []),
             ),
             patch(
                 "api.services.lyra_agent._extract_news_filters",
