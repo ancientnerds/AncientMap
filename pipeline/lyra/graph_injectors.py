@@ -42,13 +42,16 @@ def _insert_frontier(
     label = (label or "").strip()
     if len(label) < 4:
         return False
+    # Raw SQL bypasses SQLAlchemy Python-side defaults — supply all NOT NULL
+    # columns explicitly.
     row = session.execute(
         text("""
             INSERT INTO research_nodes
-                (id, label, norm_label, kind, status, created_from, source_signal, site_id)
+                (id, label, norm_label, kind, status, created_from, source_signal,
+                 site_id, created_at, updated_at)
             VALUES
                 (gen_random_uuid(), :label, :norm_label, :kind, 'frontier', :created_from,
-                 :signal, CAST(NULLIF(:site_id, '') AS uuid))
+                 :signal, CAST(NULLIF(:site_id, '') AS uuid), NOW(), NOW())
             ON CONFLICT (kind, norm_label) DO UPDATE SET
                 source_signal = research_nodes.source_signal + excluded.source_signal,
                 updated_at = NOW()

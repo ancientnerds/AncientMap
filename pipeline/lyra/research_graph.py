@@ -93,13 +93,16 @@ def persist_graph(nodes: list[dict], edges: list[dict], session) -> None:
     """Upsert nodes and edges. Frontier never downgrades an explored node."""
     norm_to_id: dict[tuple[str, str], str] = {}
     for n in nodes:
+        # NOTE: raw SQL bypasses the SQLAlchemy Python-side column defaults —
+        # every NOT NULL column must be supplied explicitly here.
         row = session.execute(
             text("""
                 INSERT INTO research_nodes
-                    (id, label, norm_label, kind, status, created_from, paper_id)
+                    (id, label, norm_label, kind, status, created_from, source_signal,
+                     paper_id, created_at, updated_at)
                 VALUES
-                    (:id, :label, :norm_label, :kind, :status, :created_from,
-                     CAST(NULLIF(:request_id, '') AS uuid))
+                    (:id, :label, :norm_label, :kind, :status, :created_from, 0,
+                     CAST(NULLIF(:request_id, '') AS uuid), NOW(), NOW())
                 ON CONFLICT (kind, norm_label) DO UPDATE SET
                     status = CASE
                         WHEN research_nodes.status = 'explored' THEN 'explored'
@@ -131,8 +134,8 @@ def persist_graph(nodes: list[dict], edges: list[dict], session) -> None:
             continue
         session.execute(
             text("""
-                INSERT INTO research_edges (id, src, dst, kind)
-                VALUES (:id, CAST(:src AS uuid), CAST(:dst AS uuid), :kind)
+                INSERT INTO research_edges (id, src, dst, kind, weight, created_at)
+                VALUES (:id, CAST(:src AS uuid), CAST(:dst AS uuid), :kind, 1.0, NOW())
                 ON CONFLICT (src, dst, kind) DO NOTHING
             """),
             {"id": str(uuid.uuid4()), "src": src, "dst": dst, "kind": e["kind"]},
