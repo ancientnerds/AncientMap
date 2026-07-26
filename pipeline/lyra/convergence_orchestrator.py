@@ -149,31 +149,23 @@ class ConvergenceOrchestrator:
         # else: probe failed (endpoint missing / network error) — proceed and
         # rely on the limiter's quota-freeze for mid-run protection.
 
-        # Low-priority mode (2026-07-26): batch runs pin the limiter to crawl
-        # pacing for the whole run so background research can never outpace
-        # the shared 5h window. The pin outranks the watchdog's HEALTHY
-        # restore — see MiniMaxLimiter.pin_crawl(). Runtime stretches to
-        # ~12-18h; the 72h deadline accommodates that plus quota troughs.
-        # Interactive (UI) runs pass low_priority=False: a human is waiting,
-        # so they lift any batch pin and run at full speed — the watchdog
-        # tier ladder still protects the window. Runs are sequential
-        # (THEO_PARALLEL_SLOTS=1), so toggling the global pin is race-free.
-        from pipeline.lyra.minimax_limiter import limiter as _limiter
+        # Run-priority lane (2026-07-26): batch runs bind the crawl lane —
+        # their MiniMax calls pace at concurrency 1 with >= crawl-delay gaps
+        # so background research never outpaces the shared 5h window.
+        # Interactive (UI) runs stay on the full-speed adaptive lane and can
+        # execute CONCURRENTLY with a crawling batch run (two worker slots).
+        # The contextvar propagates through create_task/to_thread, so every
+        # LLM call in this run's handler tree lands on the right lane.
+        from pipeline.lyra.minimax_limiter import bind_low_priority
 
-        if low_priority and self._settings.theo_low_priority:
-            _limiter.pin_crawl()
-            state.log(
-                "orchestrator",
-                "Low-priority mode: limiter pinned to crawl "
-                "(concurrency 1, >=60s between calls) for this run.",
-            )
-        elif not low_priority:
-            _limiter.unpin_crawl()
-            _limiter.restore_full_speed()
-            state.log(
-                "orchestrator",
-                "Interactive run: crawl pin lifted, limiter at full speed.",
-            )
+        run_low = bool(low_priority and self._settings.theo_low_priority)
+        bind_low_priority(run_low)
+        state.log(
+            "orchestrator",
+            "Crawl lane bound: low-priority run, concurrency 1, >=crawl-delay gaps."
+            if run_low
+            else "Full-speed lane bound: interactive run.",
+        )
 
         # Bind state for token accounting. LLM helpers (minimax_shared.py,
         # config.call_api) read this contextvar to credit token usage back

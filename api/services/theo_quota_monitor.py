@@ -302,6 +302,19 @@ async def _loop() -> None:
                 _state["five_hour_remaining_percent"] = five_h
                 _state["weekly_remaining_percent"] = weekly
                 new_tier = _classify_tier(five_h, prev_tier, weekly_remaining_percent=weekly)
+                # Saturation controller (2026-07-26): tune the crawl-lane
+                # delay to the live headroom so batch research saturates a
+                # flat plan when the window is full and backs off as it
+                # drains. Percentage-based — survives plan upgrades.
+                try:
+                    from pipeline.lyra.minimax_limiter import (
+                        crawl_delay_for_window,
+                        set_crawl_delay_s,
+                    )
+
+                    set_crawl_delay_s(crawl_delay_for_window(five_h))
+                except Exception as exc:  # noqa: BLE001 — tuning is best-effort
+                    logger.warning("[THEO-WATCHDOG] Crawl-delay tuning failed: %s", exc)
             else:
                 _state["last_probe_ok"] = False
                 _state["consecutive_failures"] += 1

@@ -33,6 +33,7 @@ Usage:
 
 from __future__ import annotations
 
+import contextvars
 import logging
 import threading
 import time
@@ -40,6 +41,24 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
+
+# --- Run-priority lanes (2026-07-26 permanent-researcher design) -------------
+# Batch research runs are LOW priority: their calls pace on the crawl lane
+# (concurrency 1, >= crawl delay apart) so background research can never
+# outpace the shared 5h window. Interactive (UI) runs and everything else are
+# HIGH priority and use the adaptive lane at full speed — concurrently.
+# The flag travels with the run via contextvar; like token_accounting's, it
+# propagates through asyncio.create_task and asyncio.to_thread.
+_run_low_priority: contextvars.ContextVar[bool] = contextvars.ContextVar(
+    "minimax_low_priority", default=False
+)
+
+
+def bind_low_priority(flag: bool) -> None:
+    """Tag the current async context (and every task/thread it spawns) as a
+    low-priority (crawl lane) or high-priority (full speed) MiniMax consumer.
+    Called once at research-run start by the ConvergenceOrchestrator."""
+    _run_low_priority.set(flag)
 
 
 class QuotaExhaustedError(RuntimeError):
@@ -64,11 +83,41 @@ class InsufficientQuotaError(RuntimeError):
 # to wait out if the rolling window already reset.
 _QUOTA_FREEZE_SECONDS = 300
 
-# Delay forced between calls while the watchdog reports the THROTTLED band
-# (5-20% of the 5h window remaining). Deliberately above _max_delay: crawl
+# Delay forced between crawl-lane calls (and between all calls while the
+# watchdog reports the THROTTLED band). Deliberately above _max_delay: crawl
 # is about letting the rolling window's refill outpace the burn, not about
-# RPS smoothing.
+# RPS smoothing. The saturation controller adjusts the live value via
+# set_crawl_delay_s() based on the 5h window headroom.
 _THROTTLE_DELAY_S = 60.0
+_crawl_delay_s: float = _THROTTLE_DELAY_S
+
+
+def set_crawl_delay_s(seconds: float) -> None:
+    """Saturation controller hook: the quota watchdog sets the crawl-lane
+    delay from the live 5h headroom (see crawl_delay_for_window)."""
+    global _crawl_delay_s
+    if seconds != _crawl_delay_s:
+        logger.info("[minimax-limiter] Crawl delay %.0fs -> %.0fs", _crawl_delay_s, seconds)
+        _crawl_delay_s = seconds
+
+
+def crawl_delay_for_window(five_hour_remaining_pct: float | None) -> float:
+    """Percentage-based crawl-delay ladder — survives the Plus→Max plan
+    upgrade unchanged because it keys on remaining %, not absolute tokens.
+
+    >= 60% headroom → 30s (saturate the flat plan)
+    >= 40%          → 60s (steady state)
+    <  40%          → 90s (back off; watchdog THROTTLED/EXHAUSTED bands
+                      below 20%/5% stay in charge of hard clamping)
+    """
+    if five_hour_remaining_pct is None:
+        return _THROTTLE_DELAY_S
+    if five_hour_remaining_pct >= 60:
+        return 30.0
+    if five_hour_remaining_pct >= 40:
+        return 60.0
+    return 90.0
+
 
 # Maximum cumulative time a single request() acquisition sleeps in place
 # waiting for a quota freeze to lift, before giving up and raising
@@ -189,13 +238,12 @@ class MiniMaxLimiter:
         self._quota_wait_max_s = quota_wait_max_s
         self._frozen_until: float = 0.0  # time.monotonic() — 0 means not frozen
 
-        # Low-priority pin (2026-07-26): while set, request() clamps to crawl
-        # pacing (concurrency floor, >= _THROTTLE_DELAY_S between calls)
-        # regardless of adaptive state or watchdog tier. Research runs set it
-        # so they can never outpace the shared 5h window — Lyra and other
-        # consumers keep headroom even mid-run. Cleared only by process
-        # restart; every research run re-pins anyway.
-        self._pinned_crawl = False
+        # Crawl lane (2026-07-26): low-priority runs (batch research) pace
+        # here — at most 1 in flight, >= _crawl_delay_s between calls —
+        # while high-priority callers use the adaptive state concurrently.
+        self._low_active_count = 0
+        self._low_last_call_time = 0.0
+        self._low_lane_calls = 0
 
     def is_frozen(self) -> bool:
         # NOTE: caller must NOT hold self._lock — this is called from stats
@@ -233,34 +281,6 @@ class MiniMaxLimiter:
             if self._frozen_until != 0.0:
                 self._frozen_until = 0.0
                 logger.info("[minimax-limiter] Manually unfrozen")
-
-    def pin_crawl(self) -> None:
-        """Permanently clamp this process to crawl pacing (low priority).
-
-        Unlike throttle(), the pin is not undone by adaptive growth or by
-        the watchdog's restore_full_speed() on tier recovery — a pinned
-        limiter crawls even against a 100% window. The clamp is applied at
-        acquisition time in request(), so adaptive state keeps learning
-        underneath and backoff (rate-limit doubling, quota freeze) still
-        stacks on top."""
-        with self._lock:
-            if not self._pinned_crawl:
-                self._pinned_crawl = True
-                logger.info(
-                    "[minimax-limiter] Crawl PINNED (low priority): "
-                    "concurrency <= %d, delay >= %.0fs for all further calls.",
-                    self._min_concurrency,
-                    _THROTTLE_DELAY_S,
-                )
-
-    def unpin_crawl(self) -> None:
-        """Lift the low-priority pin — an interactive (UI) run takes over at
-        full speed. Safe because research runs are sequential
-        (THEO_PARALLEL_SLOTS=1); the next batch run re-pins."""
-        with self._lock:
-            if self._pinned_crawl:
-                self._pinned_crawl = False
-                logger.info("[minimax-limiter] Crawl pin LIFTED (interactive run).")
 
     def throttle(self) -> None:
         """Clamp to crawl mode: concurrency floor + throttle delay. Called
@@ -328,43 +348,55 @@ class MiniMaxLimiter:
 
     @contextmanager
     def request(self):
-        """Acquire a rate-limited slot. Blocks if at concurrency limit.
-        A quota freeze is slept out in place (see _wait_while_frozen);
-        QuotaExhaustedError only fires after the wait cap."""
+        """Acquire a rate-limited slot. Blocks while the caller's lane is at
+        its concurrency limit. A quota freeze is slept out in place (see
+        _wait_while_frozen); QuotaExhaustedError only fires after the wait
+        cap. Low-priority contexts (bind_low_priority) pace on the crawl
+        lane — 1 in flight, >= _crawl_delay_s between calls — while
+        high-priority callers use the adaptive lane concurrently."""
+        low = _run_low_priority.get()
         self._wait_while_frozen()
 
-        # Wait for an available slot. A crawl pin clamps both knobs at
-        # acquisition time — adaptive state keeps learning underneath.
         with self._condition:
-            if self._pinned_crawl:
-                concurrency_limit = self._min_concurrency
+            if low:
+                while self._low_active_count >= 1:
+                    self._condition.wait()
+                self._low_active_count += 1
+                self._low_lane_calls += 1
+                delay = max(self._current_delay, _crawl_delay_s)
+                last = self._low_last_call_time
             else:
-                concurrency_limit = self._current_concurrency
-            while self._active_count >= concurrency_limit:
-                self._condition.wait()
-            self._active_count += 1
+                while self._active_count >= self._current_concurrency:
+                    self._condition.wait()
+                self._active_count += 1
+                delay = self._current_delay
+                last = self._last_call_time
             self._total_requests += 1
-            delay = self._current_delay
-            if self._pinned_crawl:
-                delay = max(delay, _THROTTLE_DELAY_S)
-            last = self._last_call_time
 
-        # Enforce minimum delay between requests
+        # Enforce minimum delay between requests, per lane
         now = time.monotonic()
         wait = delay - (now - last)
         if wait > 0:
             time.sleep(wait)
 
         with self._lock:
-            self._last_call_time = time.monotonic()
+            if low:
+                self._low_last_call_time = time.monotonic()
+            else:
+                self._last_call_time = time.monotonic()
 
         slot = _Slot(_limiter=self)
         try:
             yield slot
         finally:
             with self._condition:
-                self._active_count -= 1
-                self._condition.notify()
+                if low:
+                    self._low_active_count -= 1
+                else:
+                    self._active_count -= 1
+                # Both lane populations wait on the same condition — wake
+                # everyone and let each waiter recheck its own predicate.
+                self._condition.notify_all()
 
     def _on_success(self) -> None:
         with self._lock:
@@ -488,10 +520,6 @@ class MiniMaxLimiter:
         state and lifetime stats untouched — the stall guard reads
         total_requests as a liveness signal."""
         with self._lock:
-            if self._pinned_crawl:
-                # Low-priority pin outranks tier recovery: a pinned research
-                # run must crawl even against a fresh 100% window.
-                return
             if (
                 self._current_concurrency == self._max_concurrency
                 and self._current_delay == self._base_delay
@@ -549,7 +577,9 @@ class MiniMaxLimiter:
                 "consecutive_successes": self._consecutive_successes,
                 "is_frozen": self._is_frozen_locked(),
                 "freeze_remaining_seconds": round(self._freeze_remaining_seconds_locked(), 1),
-                "pinned_crawl": self._pinned_crawl,
+                "low_lane_calls": self._low_lane_calls,
+                "low_lane_active": self._low_active_count,
+                "crawl_delay_s": _crawl_delay_s,
             }
 
 
