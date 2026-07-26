@@ -10,7 +10,6 @@ THEO_PARALLEL_SLOTS = 1
 # Set THEO_RESEARCHER_ROLE_ID in .env to the role ID.
 # If left empty, the researcher gate is disabled (403 for all users).
 THEO_RESEARCHER_ROLE_ID = os.getenv("THEO_RESEARCHER_ROLE_ID", "")
-RESULT_TTL_HOURS = 24
 MAX_REQUESTS_PER_USER = 1
 
 # Flat credit cost for a V2 convergence research run.
@@ -99,8 +98,3 @@ THEO_INTER_TASK_BACKOFF_S = 30
 # 6h start-to-start = max 4 batch tasks/day — a run takes 3-4h, so the shared
 # 5h window recovers between starts instead of draining mid-batch.
 THEO_MIN_TASK_INTERVAL_S = int(os.getenv("THEO_MIN_TASK_INTERVAL_S", str(6 * 3600)))
-
-# Completed BATCH papers keep their result for 30 days instead of the 24h UI
-# TTL — the ENTITÄT batch takes ~2 weeks at 4/day and papers are harvested at
-# the end; a 24h TTL would let cleanup_expired delete them before harvest.
-BATCH_RESULT_TTL_HOURS = 720

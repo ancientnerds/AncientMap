@@ -16,8 +16,6 @@ from typing import Any
 from sqlalchemy import text
 
 from api.services.theo_config import (
-    BATCH_RESULT_TTL_HOURS,
-    RESULT_TTL_HOURS,
     THEO_MIN_TASK_INTERVAL_S,
     THEO_PARALLEL_SLOTS,
     THEO_RESEARCH_COST,
@@ -243,10 +241,7 @@ async def _process_request(
                                 duration_ms = :duration,
                                 sites_found = :sites,
                                 tools_used = :tools,
-                                completed_at = NOW(),
-                                expires_at = NOW() + (
-                                    CASE WHEN is_batch THEN :batch_ttl ELSE :ttl END
-                                ) * INTERVAL '1 hour'
+                                completed_at = NOW()
                             WHERE id = :id
                         """),
                         {
@@ -259,8 +254,6 @@ async def _process_request(
                             "duration": duration_ms,
                             "sites": len(ctx.registry.sources),
                             "tools": len(ctx.specialist_analyses),
-                            "ttl": RESULT_TTL_HOURS,
-                            "batch_ttl": BATCH_RESULT_TTL_HOURS,
                         },
                     )
                     session.commit()
@@ -635,23 +628,6 @@ async def _poll_loop() -> None:
             await asyncio.sleep(5)
 
 
-async def cleanup_expired() -> None:
-    """Delete expired research requests (runs hourly)."""
-    while not _shutdown:
-        try:
-            with get_session() as session:
-                result = session.execute(
-                    text("DELETE FROM research_requests WHERE expires_at < NOW()")
-                )
-                session.commit()
-                deleted = result.rowcount
-                if deleted:
-                    logger.info(f"[THEO] Cleaned up {deleted} expired research requests")
-        except Exception as e:
-            logger.warning(f"[THEO] Cleanup error: {e}")
-        await asyncio.sleep(3600)  # Every hour
-
-
 async def cleanup_stale_deferred() -> None:
     """Fail out research requests stuck in 'deferred' too long.
 
@@ -660,9 +636,6 @@ async def cleanup_stale_deferred() -> None:
     If quota does not recover within DEFERRED_MAX_AGE_HOURS, the request
     is marked 'failed' with a clear reason so the queue does not grow
     forever. The user's reserved credits are released.
-
-    Companion to cleanup_expired — different status (deferred vs
-    expires_at past) but the same idea: keep the queue bounded.
     """
     from api.services.theo_config import DEFERRED_MAX_AGE_HOURS
 
@@ -742,7 +715,6 @@ async def start_worker() -> None:
                 await asyncio.sleep(10)
 
     asyncio.create_task(_safe_poll_loop())
-    asyncio.create_task(cleanup_expired())
     asyncio.create_task(cleanup_stale_deferred())
     # Quota watchdog (2026-06-28 plan): a background daemon that probes
     # the MiniMax Token Plan every 60s, classifies the 5h-rolling

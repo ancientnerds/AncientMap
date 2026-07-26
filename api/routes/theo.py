@@ -461,7 +461,7 @@ async def submit_research(
 
 @router.get("/research")
 async def list_research(req: Request):
-    """List the current user's research requests (last 24h, not expired)."""
+    """List the current user's research requests."""
     user_id = _get_user_id(req)
 
     with get_session() as session:
@@ -471,7 +471,6 @@ async def list_research(req: Request):
                        duration_ms, error_message, is_public, approved_by, created_at, completed_at
                 FROM research_requests
                 WHERE user_id = :uid
-                  AND (expires_at IS NULL OR expires_at > NOW())
                 ORDER BY created_at DESC
                 -- 200, not 50: the ENTITÄT batch alone is 52 rows with
                 -- created_at seconds apart — LIMIT 50 silently dropped the
@@ -569,7 +568,7 @@ async def get_research(request_id: str, req: Request):
             text("""
                 SELECT id::text, user_id, question, status, result_json,
                        pipeline_trace, debug_log, sites_found, tools_used, total_tokens,
-                       llm_calls, duration_ms, error_message, created_at, completed_at, expires_at
+                       llm_calls, duration_ms, error_message, created_at, completed_at
                 FROM research_requests
                 WHERE id = :id
             """),
@@ -580,8 +579,6 @@ async def get_research(request_id: str, req: Request):
         raise HTTPException(status_code=404, detail="Research request not found")
     if row.user_id != user_id:
         raise HTTPException(status_code=403, detail="Not your research request")
-    if row.expires_at and row.expires_at.replace(tzinfo=UTC) < datetime.now(UTC):
-        raise HTTPException(status_code=410, detail="Research report expired")
 
     try:
         result = json.loads(row.result_json) if row.result_json else None
@@ -1206,8 +1203,7 @@ async def publish_research(
                     published_at = NOW(),
                     published_by = :username,
                     slug = :slug,
-                    result_json = :result,
-                    expires_at = NULL
+                    result_json = :result
                 WHERE id = :id
             """),
             {
