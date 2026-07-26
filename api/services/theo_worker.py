@@ -815,6 +815,7 @@ async def _feeder_loop() -> None:
     import uuid as _uuid
 
     injector_last = 0.0
+    full_ingest_last: float | None = None
     while not _shutdown:
         try:
             now = time.monotonic()
@@ -823,6 +824,14 @@ async def _feeder_loop() -> None:
 
                 run_all_injectors()
                 injector_last = now
+            # Full structural ingest (sites, periods, empires, stories,
+            # videos, journals, entities): once at startup — so a deploy
+            # refreshes the graph without manual steps — then nightly.
+            if full_ingest_last is None or now - full_ingest_last >= 24 * 3600:
+                from pipeline.lyra.graph_full_ingest import run_full_ingest
+
+                await asyncio.to_thread(run_full_ingest)
+                full_ingest_last = now
 
             with get_session() as session:
                 pending = session.execute(

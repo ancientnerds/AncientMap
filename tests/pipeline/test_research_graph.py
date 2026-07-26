@@ -58,3 +58,31 @@ def test_leads_to_edges_from_paper_to_topics():
     # Duplicate rabbit hole across angles must not produce duplicate edges
     dsts = [e["dst_norm"] for e in leads]
     assert len(dsts) == len(set(dsts))
+
+
+def test_epoch_for_year_buckets():
+    from pipeline.lyra.graph_full_ingest import epoch_for_year
+
+    assert epoch_for_year(-9600) == "< 4500 BC"
+    assert epoch_for_year(-3000) == "3000 - 1500 BC"
+    assert epoch_for_year(0) == "500 BC - 1 AD"
+    assert epoch_for_year(800) == "500 - 1000 AD"
+    assert epoch_for_year(1900) == "1500+ AD"
+    assert epoch_for_year(None) is None
+
+
+def test_entity_mention_threshold():
+    from pipeline.lyra.graph_full_ingest import entity_mention_counts
+
+    counts = entity_mention_counts(
+        [
+            ["Randall Carlson", "One-Off Guy"],
+            ["Randall  Carlson!"],  # normalizes to the same key
+            ["Someone Else"],
+        ]
+    )
+    assert counts["randall carlson"] == 2
+    assert counts["one-off guy"] == 1
+    # duplicate within ONE story counts once
+    dup = entity_mention_counts([["Plato", "Plato"]])
+    assert dup["plato"] == 1

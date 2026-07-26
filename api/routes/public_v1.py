@@ -1663,24 +1663,33 @@ def create_public_api() -> FastAPI:
             "questions the researcher will pick up next.\n\n"
             f"**License: {RESEARCH_LICENSE}** — attribution to **Ancient Nerds** "
             "(https://ancientnerds.com) is the only requirement.\n\n"
-            "Capped at the 2000 highest-value nodes (by signal + connectivity); "
-            "`total_nodes` reports the uncapped count."
+            "Capped at the 15000 highest-value nodes (by signal + connectivity); "
+            "`total_nodes` reports the uncapped count. Filter node classes with "
+            "`kinds` (comma list, e.g. `kinds=site,paper,topic`)."
         ),
         response_model=GraphResponse,
         tags=["Knowledge Graph"],
         dependencies=[Depends(rate_limit_dependency)],
         responses={429: {"description": "Rate limit exceeded"}},
     )
-    async def get_graph(db: Session = Depends(get_db)):
-        cache_key = "pubv1:graph"
+    async def get_graph(
+        kinds: str | None = Query(
+            None,
+            description="Comma-separated node kinds to include (default: all)",
+        ),
+        db: Session = Depends(get_db),
+    ):
+        kind_list = sorted({k.strip() for k in kinds.split(",") if k.strip()}) if kinds else []
+        cache_key = f"pubv1:graph:{','.join(kind_list) or '_'}"
         cached = cache_get(cache_key)
         if cached:
             return cached
 
         total_nodes = db.execute(text("SELECT COUNT(*) FROM research_nodes")).scalar() or 0
 
+        kind_clause = "AND n.kind = ANY(:kinds)" if kind_list else ""
         node_rows = db.execute(
-            text("""
+            text(f"""
                 SELECT n.id::text AS id, n.label, n.kind, n.status,
                        n.source_signal AS signal,
                        COALESCE(deg.cnt, 0) AS degree,
@@ -1696,9 +1705,11 @@ def create_public_api() -> FastAPI:
                     GROUP BY node_id
                 ) deg ON deg.node_id = n.id
                 LEFT JOIN research_requests rr ON rr.id = n.paper_id
+                WHERE 1=1 {kind_clause}
                 ORDER BY (n.source_signal + COALESCE(deg.cnt, 0)) DESC
-                LIMIT 2000
-            """)
+                LIMIT 15000
+            """),
+            {"kinds": kind_list} if kind_list else {},
         ).fetchall()
 
         node_ids = {r.id for r in node_rows}
