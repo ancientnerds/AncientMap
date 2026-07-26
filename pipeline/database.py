@@ -1385,6 +1385,75 @@ class TtsRequest(Base):
         return f"<TtsRequest {self.id} ({self.status})>"
 
 
+class ResearchNode(Base):
+    """A node in the research knowledge graph (2026-07-26 design).
+
+    The graph doubles as the permanent researcher's topic queue: `frontier`
+    nodes are candidate research topics, the feeder promotes the best one to
+    `researching`, and a completed paper marks it `explored`. See
+    docs/superpowers/specs/2026-07-26-permanent-researcher-design.md.
+
+    kind:   topic | paper | site | entity
+    status: frontier | researching | explored
+    created_from: rabbit_hole | story | journal | site | manual | backfill | paper
+    """
+
+    __tablename__ = "research_nodes"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    label: Mapped[str] = mapped_column(String(500), nullable=False)
+    norm_label: Mapped[str] = mapped_column(String(500), nullable=False, index=True)
+    kind: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="frontier", index=True)
+    created_from: Mapped[str] = mapped_column(String(20), nullable=False)
+    # Accumulated interest signal from source injectors (story mentions etc.).
+    source_signal: Mapped[float] = mapped_column(Float, default=0.0)
+    paper_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("research_requests.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    site_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("unified_sites.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (UniqueConstraint("kind", "norm_label", name="uq_research_node_kind_label"),)
+
+    def __repr__(self) -> str:
+        return f"<ResearchNode {self.kind}:{self.label[:40]} ({self.status})>"
+
+
+class ResearchEdge(Base):
+    """A directed edge between research nodes.
+
+    kind: leads_to (paper -> open rabbit hole) | cites | contradicts |
+    about_site | related. CASCADE is allowed here (graph-owned data, not
+    site-owned) — deleting a node removes its edges.
+    """
+
+    __tablename__ = "research_edges"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    src: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("research_nodes.id", ondelete="CASCADE"), index=True
+    )
+    dst: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("research_nodes.id", ondelete="CASCADE"), index=True
+    )
+    kind: Mapped[str] = mapped_column(String(20), nullable=False)
+    weight: Mapped[float] = mapped_column(Float, default=1.0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (UniqueConstraint("src", "dst", "kind", name="uq_research_edge"),)
+
+    def __repr__(self) -> str:
+        return f"<ResearchEdge {self.kind} {self.src}->{self.dst}>"
+
+
 # =============================================================================
 # Helper Functions
 # =============================================================================
