@@ -114,6 +114,7 @@ async def _process_request(
     request_id: str,
     question: str,
     specialist_options: dict | None = None,
+    is_batch: bool = False,
 ) -> None:
     """Process a single research request using the V2 convergence pipeline."""
     logger.info(f"[THEO] Starting request {request_id}")
@@ -158,6 +159,9 @@ async def _process_request(
             video_ids=video_ids,
             web_urls=web_urls,
             disabled_adapters=disabled_adapters,
+            # UI submissions run at full speed (a human is waiting); only
+            # batch rows crawl at low priority.
+            low_priority=is_batch,
         )
 
         duration_ms = int((time.monotonic() - start) * 1000)
@@ -423,7 +427,7 @@ def _read_progress_sig(request_id: str) -> tuple | None:
 
 
 async def _run_with_stall_guard(
-    request_id: str, question: str, specialist_options: dict | None
+    request_id: str, question: str, specialist_options: dict | None, is_batch: bool
 ) -> None:
     """Run a request, cancelling it if its progress counters freeze.
 
@@ -431,7 +435,7 @@ async def _run_with_stall_guard(
     ``_STALL_GRACE_SECONDS``; a still-advancing run is left alone no matter how
     long it takes.
     """
-    task = asyncio.create_task(_process_request(request_id, question, specialist_options))
+    task = asyncio.create_task(_process_request(request_id, question, specialist_options, is_batch))
     last_sig = _read_progress_sig(request_id)
     last_activity = _read_limiter_activity()
     last_change = time.monotonic()
@@ -571,13 +575,16 @@ async def _poll_loop() -> None:
             with get_session() as session:
                 row = session.execute(
                     text("""
-                        SELECT id::text, question, specialist_options
+                        SELECT id::text, question, specialist_options, is_batch
                         FROM research_requests
                         WHERE (status = 'queued'
                                OR (status = 'deferred'
                                    AND completed_at < NOW() - INTERVAL '5 minutes'))
                           AND (is_batch = FALSE OR :batch_allowed)
-                        ORDER BY created_at ASC
+                        -- UI submissions (is_batch=FALSE) always outrank the
+                        -- batch backlog: without this, a fresh UI task sorted
+                        -- behind 47 July batch rows on created_at alone.
+                        ORDER BY is_batch ASC, created_at ASC
                         LIMIT 1
                     """),
                     {"batch_allowed": batch_allowed},
@@ -587,7 +594,9 @@ async def _poll_loop() -> None:
                 async with _semaphore:
                     try:
                         await asyncio.wait_for(
-                            _run_with_stall_guard(row.id, row.question, row.specialist_options),
+                            _run_with_stall_guard(
+                                row.id, row.question, row.specialist_options, row.is_batch
+                            ),
                             timeout=_REQUEST_TIMEOUT_SECONDS,
                         )
                     except TimeoutError:

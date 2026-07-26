@@ -78,6 +78,7 @@ class ConvergenceOrchestrator:
         video_ids: list[str] | None = None,
         web_urls: list[str] | None = None,
         disabled_adapters: list[str] | None = None,
+        low_priority: bool = True,
     ) -> ResearchState:
         """Run the full convergence research pipeline.
 
@@ -148,19 +149,30 @@ class ConvergenceOrchestrator:
         # else: probe failed (endpoint missing / network error) — proceed and
         # rely on the limiter's quota-freeze for mid-run protection.
 
-        # Low-priority mode (2026-07-26): pin the limiter to crawl pacing for
-        # the whole run so research can never outpace the shared 5h window.
-        # The pin outranks the watchdog's HEALTHY restore — see
-        # MiniMaxLimiter.pin_crawl(). Runtime stretches to ~12-18h; the 72h
-        # deadline accommodates that plus stacked quota troughs.
-        if self._settings.theo_low_priority:
-            from pipeline.lyra.minimax_limiter import limiter as _limiter
+        # Low-priority mode (2026-07-26): batch runs pin the limiter to crawl
+        # pacing for the whole run so background research can never outpace
+        # the shared 5h window. The pin outranks the watchdog's HEALTHY
+        # restore — see MiniMaxLimiter.pin_crawl(). Runtime stretches to
+        # ~12-18h; the 72h deadline accommodates that plus quota troughs.
+        # Interactive (UI) runs pass low_priority=False: a human is waiting,
+        # so they lift any batch pin and run at full speed — the watchdog
+        # tier ladder still protects the window. Runs are sequential
+        # (THEO_PARALLEL_SLOTS=1), so toggling the global pin is race-free.
+        from pipeline.lyra.minimax_limiter import limiter as _limiter
 
+        if low_priority and self._settings.theo_low_priority:
             _limiter.pin_crawl()
             state.log(
                 "orchestrator",
                 "Low-priority mode: limiter pinned to crawl "
                 "(concurrency 1, >=60s between calls) for this run.",
+            )
+        elif not low_priority:
+            _limiter.unpin_crawl()
+            _limiter.restore_full_speed()
+            state.log(
+                "orchestrator",
+                "Interactive run: crawl pin lifted, limiter at full speed.",
             )
 
         # Bind state for token accounting. LLM helpers (minimax_shared.py,

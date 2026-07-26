@@ -253,6 +253,15 @@ class MiniMaxLimiter:
                     _THROTTLE_DELAY_S,
                 )
 
+    def unpin_crawl(self) -> None:
+        """Lift the low-priority pin — an interactive (UI) run takes over at
+        full speed. Safe because research runs are sequential
+        (THEO_PARALLEL_SLOTS=1); the next batch run re-pins."""
+        with self._lock:
+            if self._pinned_crawl:
+                self._pinned_crawl = False
+                logger.info("[minimax-limiter] Crawl pin LIFTED (interactive run).")
+
     def throttle(self) -> None:
         """Clamp to crawl mode: concurrency floor + throttle delay. Called
         by the quota watchdog on every probe while the 5h window sits in
