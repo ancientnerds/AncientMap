@@ -262,7 +262,47 @@ export default function KnowledgePage() {
     const renderer = rendererRef.current
     if (!renderer || !data || data.nodes.length === 0) return
     const nodes = data.nodes.map((n) => ({ ...n }))
-    nodeByIdRef.current = new Map(nodes.map((n) => [n.id, n]))
+    const nodeById = new Map(nodes.map((n) => [n.id, n]))
+    nodeByIdRef.current = nodeById
+
+    // Derive each node's sub-cluster key from its edges: sites group by
+    // country, videos by channel, stories by their video's channel,
+    // topics/entities/people by the paper that surfaced them. The islands
+    // render these as archipelago blobs.
+    const outByKind = new Map<string, Map<string, string>>()
+    const paperOf = new Map<string, string>()
+    for (const e of data.edges) {
+      const src = nodeById.get(e.src)
+      const dst = nodeById.get(e.dst)
+      if (!src || !dst) continue
+      let m = outByKind.get(src.id)
+      if (!m) {
+        m = new Map()
+        outByKind.set(src.id, m)
+      }
+      if (!m.has(dst.kind)) m.set(dst.kind, dst.label)
+      if (src.kind === 'paper') {
+        if (!paperOf.has(dst.id)) paperOf.set(dst.id, src.label)
+      }
+    }
+    const videoChannel = new Map<string, string>()
+    for (const n of nodes) {
+      if (n.kind === 'video') {
+        const ch = outByKind.get(n.id)?.get('channel')
+        if (ch) videoChannel.set(n.label, ch)
+      }
+    }
+    for (const n of nodes) {
+      if (n.kind === 'site') n.group = outByKind.get(n.id)?.get('country')
+      else if (n.kind === 'video') n.group = outByKind.get(n.id)?.get('channel')
+      else if (n.kind === 'story') {
+        const video = outByKind.get(n.id)?.get('video')
+        n.group = video ? videoChannel.get(video) : undefined
+      } else if (n.kind === 'topic' || n.kind === 'entity' || n.kind === 'person') {
+        n.group = paperOf.get(n.id)
+      }
+    }
+
     const links: RenderLink[] = data.edges.map((e) => ({
       source: e.src,
       target: e.dst,

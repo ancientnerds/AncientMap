@@ -20,6 +20,8 @@ export interface RenderNode {
   degree: number
   paper_slug: string | null
   site_id: string | null
+  /** Sub-cluster key within the island (country, channel, source paper, …). */
+  group?: string
   x?: number
   y?: number
 }
@@ -148,10 +150,12 @@ export class KnowledgeGraphRenderer {
     this.hoverIndex = -1
     this.rebuildClusterLabels()
 
-    // Deterministic phyllotaxis packing per island — the full layout is
-    // computed analytically in one pass (no force simulation, no assembly
-    // animation, identical result on every load). Biggest bubbles sit at
-    // their island's center.
+    // Deterministic layout, computed analytically in one pass (no force
+    // simulation, no assembly animation, identical result on every load).
+    // Each island packs its nodes' sub-groups (country, channel, source
+    // paper — provided by the page via node.group) as an archipelago of
+    // blobs; within every blob a phyllotaxis spiral puts the biggest
+    // bubbles at the center. Groups with < 4 members merge into a rest blob.
     const clusterByKind = new Map(clusters.map((c) => [c.kind, c]))
     const byKind = new Map<string, RenderNode[]>()
     for (const nd of nodes) {
@@ -160,14 +164,67 @@ export class KnowledgeGraphRenderer {
       else byKind.set(nd.kind, [nd])
     }
     const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5))
-    for (const [kind, members] of byKind) {
-      const c = clusterByKind.get(kind)
+    const SPACING = 4.4
+    const packSpiral = (members: RenderNode[], cx: number, cy: number) => {
       members.sort((a, b) => b.signal + b.degree - (a.signal + a.degree))
       members.forEach((nd, i) => {
-        const r = 4.4 * Math.sqrt(i)
+        const r = SPACING * Math.sqrt(i)
         const a = i * GOLDEN_ANGLE
-        nd.x = (c?.x ?? 0) + r * Math.cos(a)
-        nd.y = (c?.y ?? 0) + r * Math.sin(a)
+        nd.x = cx + r * Math.cos(a)
+        nd.y = cy + r * Math.sin(a)
+      })
+    }
+    for (const [kind, members] of byKind) {
+      const c = clusterByKind.get(kind)
+      const cx = c?.x ?? 0
+      const cy = c?.y ?? 0
+
+      const byGroup = new Map<string, RenderNode[]>()
+      for (const nd of members) {
+        const key = nd.group ?? ''
+        const bucket = byGroup.get(key)
+        if (bucket) bucket.push(nd)
+        else byGroup.set(key, [nd])
+      }
+      // Merge dust groups into the rest blob.
+      const rest = byGroup.get('') ?? []
+      for (const [key, bucket] of [...byGroup]) {
+        if (key !== '' && bucket.length < 4) {
+          rest.push(...bucket)
+          byGroup.delete(key)
+        }
+      }
+      if (rest.length) byGroup.set('', rest)
+
+      if (byGroup.size <= 1) {
+        packSpiral(members, cx, cy)
+        continue
+      }
+
+      // Greedy circle packing of the sub-blobs: biggest at the island
+      // center, each next blob walks outward along its golden-angle ray
+      // until it clears everything already placed.
+      const groups = [...byGroup.values()].sort((a, b) => b.length - a.length)
+      const placed: { x: number; y: number; r: number }[] = []
+      groups.forEach((bucket, gi) => {
+        const radius = SPACING * Math.sqrt(bucket.length) + 14
+        let gx = cx
+        let gy = cy
+        if (gi > 0) {
+          const angle = gi * GOLDEN_ANGLE
+          let dist = placed[0].r + radius
+          for (;;) {
+            gx = cx + dist * Math.cos(angle)
+            gy = cy + dist * Math.sin(angle)
+            const collides = placed.some(
+              (p) => Math.hypot(gx - p.x, gy - p.y) < p.r + radius + 6,
+            )
+            if (!collides) break
+            dist += 8
+          }
+        }
+        placed.push({ x: gx, y: gy, r: radius })
+        packSpiral(bucket, gx, gy)
       })
     }
 
