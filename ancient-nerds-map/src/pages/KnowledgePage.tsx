@@ -69,15 +69,17 @@ export default function KnowledgePage() {
   const graphRef = useRef<ForceGraph3DInstance | null>(null)
   const [data, setData] = useState<GraphData | null>(null)
   const [error, setError] = useState(false)
-  const [activeLayers, setActiveLayers] = useState<Set<string>>(new Set(Object.keys(LAYERS)))
+  // Content (stories+videos, ~5K nodes) is opt-in — first paint stays light.
+  const [activeLayers, setActiveLayers] = useState<Set<string>>(
+    new Set(['structure', 'sites', 'research']),
+  )
   const [search, setSearch] = useState('')
   const [focused, setFocused] = useState<KgNode | null>(null)
   const current = useCurrentResearch()
 
-  // Focus state lives in refs so the color/link accessors (re-applied by the
-  // pulse timer) always read the latest values without re-creating the graph.
+  // Focus state lives in refs so the color/link accessors always read the
+  // latest values without re-creating the graph.
   const focusRef = useRef<{ id: string; neighbors: Set<string> } | null>(null)
-  const brightRef = useRef(true)
   const adjacencyRef = useRef<Map<string, Set<string>>>(new Map())
 
   useEffect(() => {
@@ -108,19 +110,21 @@ export default function KnowledgePage() {
     setFocused(null)
   }, [])
 
+  // Re-assigning color accessors makes the lib re-evaluate EVERY node
+  // material — at 11K nodes that must only happen on focus/layer changes,
+  // never on a timer (the original 900ms pulse melted GPUs).
   const applyColors = useCallback(() => {
     const graph = graphRef.current
     if (!graph) return
-    const bright = brightRef.current
     const focus = focusRef.current
     graph.nodeColor((n) => {
       const node = n as KgNode
       if (focus && node.id !== focus.id && !focus.neighbors.has(node.id)) {
         return 'rgba(80, 100, 110, 0.12)'
       }
-      if (node.status === 'researching') return bright ? '#c02023' : '#c0202366'
+      if (node.status === 'researching') return '#c02023'
       const base = KIND_COLORS[node.kind] ?? '#667788'
-      if (node.status === 'frontier') return bright ? base : `${base}55`
+      if (node.status === 'frontier') return `${base}99`
       return base
     })
     graph.linkColor((l) => {
@@ -158,10 +162,11 @@ export default function KnowledgePage() {
       const g = new ForceGraph3D(containerRef.current)
       g.backgroundColor('#0a1a1f')
       g.showNavInfo(false)
-      // ~10K nodes: lower sphere resolution + bounded simulation keep it fluid.
-      g.nodeResolution(6)
-      g.warmupTicks(40)
-      g.cooldownTicks(300)
+      // ~10K nodes: low-poly spheres + a fast-settling, bounded simulation.
+      g.nodeResolution(4)
+      g.warmupTicks(0)
+      g.cooldownTicks(120)
+      g.d3AlphaDecay(0.05)
       g.nodeVal((n) => {
         const node = n as KgNode
         return 1 + Math.min(node.signal + node.degree, 40)
@@ -177,7 +182,9 @@ export default function KnowledgePage() {
               : ''
         return `<div class="kg-tooltip"><b>${node.label}</b><br/><span>${node.kind}</span>${hint}</div>`
       })
-      g.linkWidth(0.4)
+      // linkWidth MUST stay 0: any positive width renders every edge as a
+      // cylinder mesh (~20K meshes) instead of a cheap GL line.
+      g.linkWidth(0)
       g.onNodeClick((n) => {
         // Focus mode: dim everything outside the 1-hop neighborhood and
         // show the info card. Navigation moved to the card's actions —
@@ -202,15 +209,17 @@ export default function KnowledgePage() {
     applyColors()
   }, [data, activeLayers, applyColors, clearFocus])
 
-  // Slow pulse for frontier + researching nodes.
+  // Stop the 60fps render loop while the tab is hidden.
   useEffect(() => {
-    if (!data) return
-    const timer = setInterval(() => {
-      brightRef.current = !brightRef.current
-      applyColors()
-    }, 900)
-    return () => clearInterval(timer)
-  }, [data, applyColors])
+    const onVisibility = () => {
+      const graph = graphRef.current
+      if (!graph) return
+      if (document.hidden) graph.pauseAnimation()
+      else graph.resumeAnimation()
+    }
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => document.removeEventListener('visibilitychange', onVisibility)
+  }, [])
 
   const flyToMatch = useCallback(() => {
     const graph = graphRef.current
