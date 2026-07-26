@@ -553,6 +553,82 @@ async def get_health():
 
 
 # ---------------------------------------------------------------------------
+# GET /theo/research/current — Public live view of the permanent researcher
+# ---------------------------------------------------------------------------
+
+
+@router.get("/research/current")
+async def get_current_research():
+    """What the permanent researcher is working on right now. Public — no
+    auth (same policy as /research/health): the Theo page and the Knowledge
+    section show live research to logged-out visitors. Never exposes report
+    content — only the question and progress counters, which the running
+    row flushes every ~30s.
+
+    Registered BEFORE /research/{request_id} so the literal path wins.
+    """
+    from api.cache import cache_get, cache_set
+
+    cache_key = "theo:current"
+    cached = cache_get(cache_key)
+    if cached:
+        return cached
+
+    with get_session() as session:
+        running_row = session.execute(
+            text("""
+                SELECT question, started_at, sites_found, llm_calls, total_tokens
+                FROM research_requests
+                WHERE status = 'running' AND is_batch = TRUE
+                ORDER BY started_at DESC
+                LIMIT 1
+            """)
+        ).fetchone()
+        queued_batch = (
+            session.execute(
+                text("""
+                    SELECT COUNT(*) FROM research_requests
+                    WHERE is_batch = TRUE AND status IN ('queued', 'deferred')
+                """)
+            ).scalar()
+            or 0
+        )
+        last_pub = session.execute(
+            text("""
+                SELECT result_json::jsonb->>'title' AS title, slug
+                FROM research_requests
+                WHERE is_public = TRUE AND status = 'completed'
+                ORDER BY published_at DESC
+                LIMIT 1
+            """)
+        ).fetchone()
+
+    running = None
+    if running_row:
+        elapsed_s = None
+        if running_row.started_at:
+            elapsed_s = int(
+                (datetime.now(UTC) - running_row.started_at.replace(tzinfo=UTC)).total_seconds()
+            )
+        running = {
+            "question": running_row.question,
+            "started_at": running_row.started_at.isoformat() if running_row.started_at else None,
+            "elapsed_s": elapsed_s,
+            "sites_found": running_row.sites_found or 0,
+            "llm_calls": running_row.llm_calls or 0,
+            "total_tokens": running_row.total_tokens or 0,
+        }
+
+    response = {
+        "running": running,
+        "queued_batch": queued_batch,
+        "last_published": {"title": last_pub.title, "slug": last_pub.slug} if last_pub else None,
+    }
+    cache_set(cache_key, response, ttl=30)
+    return response
+
+
+# ---------------------------------------------------------------------------
 # GET /theo/research/{id} — Get full request with report
 # ---------------------------------------------------------------------------
 
