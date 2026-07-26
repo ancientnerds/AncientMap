@@ -472,3 +472,62 @@ class SiteImageOut(BaseModel):
     is_hero: bool = Field(False, description="Whether this is the main/hero image")
     width: int | None = Field(None, description="Image width in pixels")
     height: int | None = Field(None, description="Image height in pixels")
+
+
+# =============================================================================
+# Research Papers (Theo deep-research publications)
+# =============================================================================
+
+
+class ResearchPaperSummary(BaseModel):
+    """A published research paper summary for list views (no full content)."""
+
+    id: str = Field(description="Paper UUID")
+    slug: str = Field(
+        description="URL slug, use with GET /research/{slug}",
+        json_schema_extra={"example": "cyclical-world-ages-in-comparative-mythology"},
+    )
+    title: str = Field(
+        description="Paper title",
+        json_schema_extra={"example": "Cyclical World Ages in Comparative Mythology"},
+    )
+    question: str = Field(description="The research question the paper answers")
+    summary: str | None = Field(None, description="Short abstract / card description")
+    published_at: str | None = Field(None, description="Publication timestamp (ISO 8601)")
+    sources_analyzed: int = Field(
+        description="Number of sources retrieved and scored during research",
+        json_schema_extra={"example": 3369},
+    )
+    word_count: int | None = Field(None, description="Paper word count")
+    quality_score: int | None = Field(
+        None, description="Mechanical quality score 0-100", json_schema_extra={"example": 98}
+    )
+    quality_badge: str | None = Field(
+        None, description="Quality tier badge", json_schema_extra={"example": "Platinum"}
+    )
+    hero_image_url: str | None = Field(None, description="Cover image URL (absolute)")
+    license: str = Field(
+        description="Content license",
+        json_schema_extra={"example": "CC BY 4.0"},
+    )
+    attribution: str = Field(
+        description="Required attribution when reusing this content",
+        json_schema_extra={"example": "Ancient Nerds — https://ancientnerds.com"},
+    )
+
+
+class ResearchPaperDetail(ResearchPaperSummary):
+    """Full research paper including the Markdown body with references."""
+
+    content: str = Field(
+        description="Full paper in Markdown, including numbered citations and references"
+    )
+
+
+class ResearchPaperListResponse(BaseModel):
+    """Paginated research paper list response."""
+
+    items: list[ResearchPaperSummary] = Field(description="Research papers")
+    total_count: int = Field(description="Total published papers matching filters")
+    page: int = Field(description="Current page number", json_schema_extra={"example": 1})
+    has_more: bool = Field(description="Whether more pages are available")

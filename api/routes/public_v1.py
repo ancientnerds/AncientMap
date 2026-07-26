@@ -37,6 +37,9 @@ from api.schemas.public_v1 import (
     NewsVideoPublic,
     RadarItemOut,
     RadarResponse,
+    ResearchPaperDetail,
+    ResearchPaperListResponse,
+    ResearchPaperSummary,
     SiteDetailResponse,
     SiteImageOut,
     SiteResult,
@@ -55,6 +58,11 @@ logger = logging.getLogger(__name__)
 _limiter = RateLimiter(max_requests=10, window_seconds=60, namespace="public_v1")
 
 RATE_LIMIT = 10
+
+# Research papers are open access: reuse freely, attribution is the only
+# requirement. Served as machine-readable fields on every paper response.
+RESEARCH_LICENSE = "CC BY 4.0"
+RESEARCH_ATTRIBUTION = "Ancient Nerds — https://ancientnerds.com"
 
 
 async def rate_limit_dependency(request: Request, response: Response):
@@ -141,9 +149,12 @@ def create_public_api() -> FastAPI:
             "Access archaeological site data from 750K+ sites worldwide.\n\n"
             "All endpoints are rate-limited to **10 requests per minute** per IP address.\n\n"
             "Data is sourced from Pleiades, DARE, UNESCO, OpenStreetMap, Wikidata, "
-            "and other open archaeological databases."
+            "and other open archaeological databases.\n\n"
+            "Deep-research papers (`/research`) are open access under "
+            f"**{RESEARCH_LICENSE}** — attribution to Ancient Nerds is the only "
+            "requirement."
         ),
-        version="1.1.0",
+        version="1.2.0",
         docs_url="/docs",
         redoc_url="/redoc",
     )
@@ -191,7 +202,7 @@ def create_public_api() -> FastAPI:
 
         response = StatusResponse(
             status="ok",
-            version="1.1.0",
+            version="1.2.0",
             commit=BUILD_HASH,
             total_sites=total,
             source_count=source_count,
@@ -1403,7 +1414,172 @@ def create_public_api() -> FastAPI:
         return response
 
     # =========================================================================
-    # 17. GET /sites/{site_id}/images — Wiki images for a site
+    # 17. GET /research — Published research papers
+    # =========================================================================
+
+    def _paper_summary_kwargs(row) -> dict:
+        """Shared row→schema mapping for research list and detail responses."""
+        hero_url = None
+        if row.hero_src:
+            hero_url = (
+                f"https://ancientnerds.com{row.hero_src}"
+                if row.hero_src.startswith("/")
+                else row.hero_src
+            )
+        return {
+            "id": row.id,
+            "slug": row.slug,
+            "title": row.title or row.question,
+            "question": row.question,
+            "summary": row.card_description or None,
+            "published_at": row.published_at.isoformat() if row.published_at else None,
+            "sources_analyzed": row.sites_found or 0,
+            "word_count": int(row.word_count) if row.word_count else None,
+            "quality_score": int(row.score) if row.score else None,
+            "quality_badge": row.badge,
+            "hero_image_url": hero_url,
+            "license": RESEARCH_LICENSE,
+            "attribution": RESEARCH_ATTRIBUTION,
+        }
+
+    _PAPER_SUMMARY_COLUMNS = """
+        r.id::text AS id, r.slug, r.question, r.published_at, r.sites_found,
+        r.result_json::jsonb->>'title' AS title,
+        r.result_json::jsonb->>'card_description' AS card_description,
+        r.result_json::jsonb->'quality_score'->>'score' AS score,
+        r.result_json::jsonb->'quality_score'->>'badge' AS badge,
+        r.result_json::jsonb->'quality_score'->'meta'->>'word_count' AS word_count,
+        r.result_json::jsonb->'hero_image'->>'src' AS hero_src
+    """
+
+    @public_app.get(
+        "/research",
+        summary="List published research papers",
+        description=(
+            "Paginated list of deep-research papers published in the Ancient Nerds "
+            "research library.\n\n"
+            "Each paper is a multi-thousand-word, fully cited literature synthesis "
+            "produced by the Theo convergence research pipeline and reviewed before "
+            "publication.\n\n"
+            f"**License: {RESEARCH_LICENSE}** — reuse freely; attribution to "
+            "**Ancient Nerds** (https://ancientnerds.com) is the only requirement.\n\n"
+            "Use the optional `q` parameter to search title and research question. "
+            "Fetch the full Markdown body via `GET /research/{slug}`."
+        ),
+        response_model=ResearchPaperListResponse,
+        tags=["Research"],
+        dependencies=[Depends(rate_limit_dependency)],
+        responses={429: {"description": "Rate limit exceeded"}},
+    )
+    async def list_research_papers(
+        page: int = Query(1, ge=1, description="Page number"),
+        page_size: int = Query(20, ge=1, le=50, description="Items per page"),
+        q: str | None = Query(
+            None,
+            min_length=2,
+            max_length=200,
+            description="Search keyword (filters title and research question)",
+        ),
+        db: Session = Depends(get_db),
+    ):
+        cache_key = f"pubv1:research:{page}:{page_size}:{q or '_'}"
+        cached = cache_get(cache_key)
+        if cached:
+            return cached
+
+        offset = (page - 1) * page_size
+        where_parts = ["r.is_public = TRUE AND r.status = 'completed'"]
+        params: dict = {"limit": page_size, "offset": offset}
+
+        if q:
+            q_escaped = q.strip().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            where_parts.append(
+                "(r.result_json::jsonb->>'title' ILIKE :q_pattern OR r.question ILIKE :q_pattern)"
+            )
+            params["q_pattern"] = f"%{q_escaped}%"
+
+        where_clause = " AND ".join(where_parts)
+
+        total_count = (
+            db.execute(
+                text(f"SELECT COUNT(*) FROM research_requests r WHERE {where_clause}"), params
+            ).scalar()
+            or 0
+        )
+
+        rows = db.execute(
+            text(f"""
+                SELECT {_PAPER_SUMMARY_COLUMNS}
+                FROM research_requests r
+                WHERE {where_clause}
+                ORDER BY r.published_at DESC NULLS LAST
+                LIMIT :limit OFFSET :offset
+            """),
+            params,
+        ).fetchall()
+
+        response = ResearchPaperListResponse(
+            items=[ResearchPaperSummary(**_paper_summary_kwargs(row)) for row in rows],
+            total_count=total_count,
+            page=page,
+            has_more=(offset + page_size) < total_count,
+        )
+        cache_set(cache_key, response.model_dump(), ttl=300)
+        return response
+
+    # =========================================================================
+    # 18. GET /research/{slug} — Full research paper
+    # =========================================================================
+
+    @public_app.get(
+        "/research/{slug}",
+        summary="Get research paper",
+        description=(
+            "Full research paper as Markdown, including numbered citations and the "
+            "complete reference list.\n\n"
+            f"**License: {RESEARCH_LICENSE}** — reuse freely; attribution to "
+            "**Ancient Nerds** (https://ancientnerds.com) is the only requirement."
+        ),
+        response_model=ResearchPaperDetail,
+        tags=["Research"],
+        dependencies=[Depends(rate_limit_dependency)],
+        responses={
+            404: {"description": "Paper not found"},
+            429: {"description": "Rate limit exceeded"},
+        },
+    )
+    async def get_research_paper(
+        slug: str,
+        db: Session = Depends(get_db),
+    ):
+        cache_key = f"pubv1:research:paper:{slug}"
+        cached = cache_get(cache_key)
+        if cached:
+            return cached
+
+        row = db.execute(
+            text(f"""
+                SELECT {_PAPER_SUMMARY_COLUMNS},
+                       r.result_json::jsonb->>'published_report' AS published_report,
+                       r.result_json::jsonb->>'report' AS report
+                FROM research_requests r
+                WHERE r.slug = :slug AND r.is_public = TRUE AND r.status = 'completed'
+            """),
+            {"slug": slug},
+        ).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Paper not found")
+
+        # The reviewed publication (rejected blocks hidden, edits substituted)
+        # is what external consumers should see — same rule as the website.
+        content = row.published_report or row.report or ""
+
+        response = ResearchPaperDetail(**_paper_summary_kwargs(row), content=content)
+        cache_set(cache_key, response.model_dump(), ttl=600)
+        return response
+
+    # =========================================================================
+    # 19. GET /sites/{site_id}/images — Wiki images for a site
     # =========================================================================
 
     @public_app.get(
