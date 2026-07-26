@@ -10,7 +10,6 @@
 
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
-import { forceCollide, forceManyBody, forceSimulation, forceX, forceY } from 'd3-force-3d'
 
 export interface RenderNode {
   id: string
@@ -87,7 +86,6 @@ export class KnowledgeGraphRenderer {
   private points: THREE.Points | null = null
   private focusLines: THREE.LineSegments | null = null
   private pointMat: THREE.ShaderMaterial | null = null
-  private simulation: ReturnType<typeof forceSimulation> | null = null
 
   private nodeColorFn: (n: RenderNode) => Rgb = () => [0.5, 0.7, 0.8]
 
@@ -143,7 +141,6 @@ export class KnowledgeGraphRenderer {
    * one time; later layer toggles only flip visibility flags.
    */
   setFullData(nodes: RenderNode[], links: RenderLink[], clusters: ClusterDef[]): void {
-    this.simulation?.stop()
     this.disposeGraphObjects()
     this.nodes = nodes
     this.links = links
@@ -151,11 +148,27 @@ export class KnowledgeGraphRenderer {
     this.hoverIndex = -1
     this.rebuildClusterLabels()
 
+    // Deterministic phyllotaxis packing per island — the full layout is
+    // computed analytically in one pass (no force simulation, no assembly
+    // animation, identical result on every load). Biggest bubbles sit at
+    // their island's center.
     const clusterByKind = new Map(clusters.map((c) => [c.kind, c]))
+    const byKind = new Map<string, RenderNode[]>()
     for (const nd of nodes) {
-      const c = clusterByKind.get(nd.kind)
-      nd.x = (c?.x ?? 0) + (Math.random() - 0.5) * 120
-      nd.y = (c?.y ?? 0) + (Math.random() - 0.5) * 120
+      const bucket = byKind.get(nd.kind)
+      if (bucket) bucket.push(nd)
+      else byKind.set(nd.kind, [nd])
+    }
+    const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5))
+    for (const [kind, members] of byKind) {
+      const c = clusterByKind.get(kind)
+      members.sort((a, b) => b.signal + b.degree - (a.signal + a.degree))
+      members.forEach((nd, i) => {
+        const r = 4.4 * Math.sqrt(i)
+        const a = i * GOLDEN_ANGLE
+        nd.x = (c?.x ?? 0) + r * Math.cos(a)
+        nd.y = (c?.y ?? 0) + r * Math.sin(a)
+      })
     }
 
     // Resolve link endpoints to node objects (no forceLink does it for us).
@@ -193,25 +206,6 @@ export class KnowledgeGraphRenderer {
     })
     this.points = new THREE.Points(pointGeo, this.pointMat)
     this.scene.add(this.points)
-
-    // 2D layout: island pull + collision. NO link force — even a weak one
-    // dragged high-degree nodes (journals) out of their island.
-    this.simulation = forceSimulation(nodes as object[], 2)
-      .force(
-        'x',
-        forceX((d: RenderNode) => clusterByKind.get(d.kind)?.x ?? 0).strength(0.12),
-      )
-      .force(
-        'y',
-        forceY((d: RenderNode) => clusterByKind.get(d.kind)?.y ?? 0).strength(0.12),
-      )
-      .force('charge', forceManyBody().strength(-4).distanceMax(160))
-      .force(
-        'collide',
-        forceCollide((d: RenderNode) => 2.5 + Math.sqrt(Math.min(d.signal + d.degree, 60))),
-      )
-      .alphaDecay(0.05)
-      .stop()
 
     this.applyColors()
     this.syncPositions()
@@ -371,7 +365,6 @@ export class KnowledgeGraphRenderer {
 
   dispose(): void {
     cancelAnimationFrame(this.rafId)
-    this.simulation?.stop()
     window.removeEventListener('resize', this.handleResize)
     this.renderer.domElement.removeEventListener('pointerdown', this.handlePointerDown)
     this.renderer.domElement.removeEventListener('pointermove', this.handlePointerMove)
@@ -533,13 +526,6 @@ export class KnowledgeGraphRenderer {
   private loop = (): void => {
     this.rafId = requestAnimationFrame(this.loop)
     if (this.paused) return
-
-    const sim = this.simulation
-    if (sim && sim.alpha() > 0.02) {
-      sim.tick()
-      if (sim.alpha() > 0.3) sim.tick()
-      this.syncPositions()
-    }
 
     if (this.flyTarget) {
       this.flyTarget.t = Math.min(1, this.flyTarget.t + 0.04)

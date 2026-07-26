@@ -19,7 +19,6 @@
     "@tiptap/pm": "^3.22.2",
     "@tiptap/react": "^3.22.2",
     "@tiptap/starter-kit": "^3.22.2",
-    "d3-force-3d": "^3.0.6",
     "earcut": "^3.0.2",
     "hls.js": "^1.6.15",
     "html2canvas": "^1.4.1",
