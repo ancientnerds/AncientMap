@@ -306,3 +306,19 @@
   z-index: 14;
   pointer-events: none;
 }
+
+.kg-cluster-label {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 6;
+  pointer-events: none;
+  font-family: 'Orbitron', sans-serif;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  opacity: 1;
+  transition: opacity 0.3s;
+  text-shadow: 0 0 12px rgba(0, 0, 0, 0.9);
+}

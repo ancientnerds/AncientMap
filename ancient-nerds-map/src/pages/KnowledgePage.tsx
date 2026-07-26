@@ -4,6 +4,7 @@ import { useCurrentResearch } from '../hooks/useCurrentResearch'
 import { navigateGlobeToSite } from '../utils/globeNavigation'
 import {
   KnowledgeGraphRenderer,
+  type ClusterDef,
   type RenderLink,
   type RenderNode,
 } from './knowledgeGraphRenderer'
@@ -51,9 +52,6 @@ const KIND_RGB: Record<string, Rgb> = Object.fromEntries(
 const DEFAULT_RGB: Rgb = [0.4, 0.47, 0.53]
 const RESEARCHING_RGB: Rgb = hexToRgb('#c02023')
 const DIM_RGB: Rgb = [0.16, 0.2, 0.22]
-const LINK_RGB: Rgb = [0.18, 0.32, 0.38]
-const LINK_FOCUS_RGB: Rgb = [1.0, 0.84, 0.0]
-const LINK_DIM_RGB: Rgb = [0.06, 0.08, 0.09]
 
 // Layer toggles — each chip switches a group of node classes.
 const LAYERS: Record<string, string[]> = {
@@ -62,6 +60,24 @@ const LAYERS: Record<string, string[]> = {
   content: ['story', 'video', 'channel', 'journal', 'person'],
   research: ['paper', 'topic', 'entity'],
 }
+
+// The map: research sits at the center (Theo's brain), everything else forms
+// labeled islands around it. World units; the view starts zoomed to fit.
+const CLUSTERS: ClusterDef[] = [
+  { kind: 'paper', label: 'Papers', x: 0, y: 40, color: KIND_COLORS.paper },
+  { kind: 'topic', label: 'Topics', x: 60, y: 340, color: KIND_COLORS.topic },
+  { kind: 'entity', label: 'Entities', x: -340, y: 200, color: KIND_COLORS.entity },
+  { kind: 'site', label: 'Sites', x: 950, y: 0, color: KIND_COLORS.site },
+  { kind: 'period', label: 'Epochs', x: -850, y: 380, color: KIND_COLORS.period },
+  { kind: 'empire', label: 'Empires', x: -1000, y: 0, color: KIND_COLORS.empire },
+  { kind: 'country', label: 'Countries', x: -850, y: -380, color: KIND_COLORS.country },
+  { kind: 'culture', label: 'Cultures', x: -450, y: -560, color: KIND_COLORS.culture },
+  { kind: 'story', label: 'Stories', x: 480, y: 580, color: KIND_COLORS.story },
+  { kind: 'video', label: 'Videos', x: 1000, y: 720, color: KIND_COLORS.video },
+  { kind: 'channel', label: 'Channels', x: 1400, y: 500, color: KIND_COLORS.channel },
+  { kind: 'journal', label: 'Journals', x: 480, y: -580, color: KIND_COLORS.journal },
+  { kind: 'person', label: 'People', x: 0, y: -640, color: KIND_COLORS.person },
+]
 
 function layerOf(kind: string): string | null {
   for (const [layer, kinds] of Object.entries(LAYERS)) {
@@ -112,21 +128,14 @@ export default function KnowledgePage() {
     const renderer = rendererRef.current
     if (!renderer) return
     const focus = focusRef.current
-    renderer.setColorFns(
-      (n) => {
-        if (focus && n.id !== focus.id && !focus.neighbors.has(n.id)) return DIM_RGB
-        if (n.status === 'researching') return RESEARCHING_RGB
-        const base = KIND_RGB[n.kind] ?? DEFAULT_RGB
-        if (n.status === 'frontier') return [base[0] * 0.55, base[1] * 0.55, base[2] * 0.55]
-        return base
-      },
-      (l) => {
-        if (!focus) return LINK_RGB
-        const src = typeof l.source === 'object' ? l.source.id : String(l.source)
-        const dst = typeof l.target === 'object' ? l.target.id : String(l.target)
-        return src === focus.id || dst === focus.id ? LINK_FOCUS_RGB : LINK_DIM_RGB
-      },
-    )
+    renderer.setColorFn((n) => {
+      if (focus && n.id !== focus.id && !focus.neighbors.has(n.id)) return DIM_RGB
+      if (n.status === 'researching') return RESEARCHING_RGB
+      const base = KIND_RGB[n.kind] ?? DEFAULT_RGB
+      if (n.status === 'frontier') return [base[0] * 0.55, base[1] * 0.55, base[2] * 0.55]
+      return base
+    })
+    renderer.showFocusEdges(focus?.id ?? null)
   }, [])
 
   const clearFocus = useCallback(() => {
@@ -184,14 +193,24 @@ export default function KnowledgePage() {
     const links: RenderLink[] = data.edges
       .filter((e) => ids.has(e.src) && ids.has(e.dst))
       .map((e) => ({ source: e.src, target: e.dst, kind: e.kind }))
-    // Fresh copies — the simulation mutates node objects (x/y/z).
+    // Fresh copies — the simulation mutates node objects (x/y).
     renderer.setData(
       nodes.map((n) => ({ ...n })),
       links,
+      CLUSTERS.filter((c) => activeKinds.has(c.kind)),
     )
     clearFocus()
     applyColors()
   }, [data, activeLayers, applyColors, clearFocus])
+
+  const takeScreenshot = useCallback(() => {
+    const url = rendererRef.current?.screenshot()
+    if (!url) return
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `ancient-nerds-knowledge-graph-${new Date().toISOString().slice(0, 10)}.png`
+    a.click()
+  }, [])
 
   const flyToMatch = useCallback(() => {
     const renderer = rendererRef.current
@@ -252,6 +271,9 @@ export default function KnowledgePage() {
               {layer}
             </button>
           ))}
+          <button className="kg-chip" onClick={takeScreenshot} title="Save as PNG">
+            📷
+          </button>
         </div>
       </header>
 
