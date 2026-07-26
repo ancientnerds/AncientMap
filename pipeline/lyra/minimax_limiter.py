@@ -189,6 +189,14 @@ class MiniMaxLimiter:
         self._quota_wait_max_s = quota_wait_max_s
         self._frozen_until: float = 0.0  # time.monotonic() — 0 means not frozen
 
+        # Low-priority pin (2026-07-26): while set, request() clamps to crawl
+        # pacing (concurrency floor, >= _THROTTLE_DELAY_S between calls)
+        # regardless of adaptive state or watchdog tier. Research runs set it
+        # so they can never outpace the shared 5h window — Lyra and other
+        # consumers keep headroom even mid-run. Cleared only by process
+        # restart; every research run re-pins anyway.
+        self._pinned_crawl = False
+
     def is_frozen(self) -> bool:
         # NOTE: caller must NOT hold self._lock — this is called from stats
         # which is itself under the lock, hence the `_locked` variant below.
@@ -225,6 +233,25 @@ class MiniMaxLimiter:
             if self._frozen_until != 0.0:
                 self._frozen_until = 0.0
                 logger.info("[minimax-limiter] Manually unfrozen")
+
+    def pin_crawl(self) -> None:
+        """Permanently clamp this process to crawl pacing (low priority).
+
+        Unlike throttle(), the pin is not undone by adaptive growth or by
+        the watchdog's restore_full_speed() on tier recovery — a pinned
+        limiter crawls even against a 100% window. The clamp is applied at
+        acquisition time in request(), so adaptive state keeps learning
+        underneath and backoff (rate-limit doubling, quota freeze) still
+        stacks on top."""
+        with self._lock:
+            if not self._pinned_crawl:
+                self._pinned_crawl = True
+                logger.info(
+                    "[minimax-limiter] Crawl PINNED (low priority): "
+                    "concurrency <= %d, delay >= %.0fs for all further calls.",
+                    self._min_concurrency,
+                    _THROTTLE_DELAY_S,
+                )
 
     def throttle(self) -> None:
         """Clamp to crawl mode: concurrency floor + throttle delay. Called
@@ -297,13 +324,20 @@ class MiniMaxLimiter:
         QuotaExhaustedError only fires after the wait cap."""
         self._wait_while_frozen()
 
-        # Wait for an available slot
+        # Wait for an available slot. A crawl pin clamps both knobs at
+        # acquisition time — adaptive state keeps learning underneath.
         with self._condition:
-            while self._active_count >= self._current_concurrency:
+            if self._pinned_crawl:
+                concurrency_limit = self._min_concurrency
+            else:
+                concurrency_limit = self._current_concurrency
+            while self._active_count >= concurrency_limit:
                 self._condition.wait()
             self._active_count += 1
             self._total_requests += 1
             delay = self._current_delay
+            if self._pinned_crawl:
+                delay = max(delay, _THROTTLE_DELAY_S)
             last = self._last_call_time
 
         # Enforce minimum delay between requests
@@ -445,6 +479,10 @@ class MiniMaxLimiter:
         state and lifetime stats untouched — the stall guard reads
         total_requests as a liveness signal."""
         with self._lock:
+            if self._pinned_crawl:
+                # Low-priority pin outranks tier recovery: a pinned research
+                # run must crawl even against a fresh 100% window.
+                return
             if (
                 self._current_concurrency == self._max_concurrency
                 and self._current_delay == self._base_delay
@@ -502,6 +540,7 @@ class MiniMaxLimiter:
                 "consecutive_successes": self._consecutive_successes,
                 "is_frozen": self._is_frozen_locked(),
                 "freeze_remaining_seconds": round(self._freeze_remaining_seconds_locked(), 1),
+                "pinned_crawl": self._pinned_crawl,
             }
 
 

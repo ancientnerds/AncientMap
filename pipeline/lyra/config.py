@@ -132,6 +132,15 @@ class LyraSettings(BaseSettings):
     # (2026-06-02) thinking (~89% of M3 output) is the dominant quota cost, so
     # mechanical calls run thinking OFF.
     minimax_thinking_enabled: bool = True
+
+    # Theo research runs as a low-priority MiniMax consumer (2026-07-26): the
+    # orchestrator pins the global limiter to crawl pacing (concurrency 1,
+    # >=60s between calls) for the whole run, capping research at roughly
+    # ~580K tokens/h — under a third of the shared 9.7M/5h Token Plan window,
+    # so Lyra and manual queries always keep headroom. A run stretches to
+    # ~12-18h, well inside the 24h deadline. LYRA_THEO_LOW_PRIORITY=0 restores
+    # full-speed research runs.
+    theo_low_priority: bool = True
     minimax_thinking_budget_instant: int = 256  # dead config — see note above
     minimax_thinking_budget_low: int = 1024  # dead config
     minimax_thinking_budget_medium: int = 4096  # dead config

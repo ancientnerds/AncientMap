@@ -148,6 +148,21 @@ class ConvergenceOrchestrator:
         # else: probe failed (endpoint missing / network error) — proceed and
         # rely on the limiter's quota-freeze for mid-run protection.
 
+        # Low-priority mode (2026-07-26): pin the limiter to crawl pacing for
+        # the whole run so research can never outpace the shared 5h window.
+        # The pin outranks the watchdog's HEALTHY restore — see
+        # MiniMaxLimiter.pin_crawl(). Runtime stretches to ~12-18h; the 24h
+        # deadline accommodates that.
+        if self._settings.theo_low_priority:
+            from pipeline.lyra.minimax_limiter import limiter as _limiter
+
+            _limiter.pin_crawl()
+            state.log(
+                "orchestrator",
+                "Low-priority mode: limiter pinned to crawl "
+                "(concurrency 1, >=60s between calls) for this run.",
+            )
+
         # Bind state for token accounting. LLM helpers (minimax_shared.py,
         # config.call_api) read this contextvar to credit token usage back
         # to state.total_tokens without needing the state object threaded
