@@ -125,8 +125,11 @@ def persist_graph(nodes: list[dict], edges: list[dict], session) -> None:
         norm_to_id[(n["kind"], n["norm_label"])] = str(row.id)
 
     def node_id(norm: str) -> str | None:
-        # Edges emitted by the builder reference paper/topic nodes only.
-        return norm_to_id.get(("topic", norm)) or norm_to_id.get(("paper", norm))
+        for kind in ("topic", "paper", "entity"):
+            found = norm_to_id.get((kind, norm))
+            if found:
+                return found
+        return None
 
     for e in edges:
         src, dst = node_id(e["src_norm"]), node_id(e["dst_norm"])

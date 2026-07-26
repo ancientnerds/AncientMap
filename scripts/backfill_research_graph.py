@@ -39,8 +39,17 @@ EXTRACTION_SCHEMA = {
             "items": {"type": "string"},
             "description": "Archaeological sites discussed in the paper",
         },
+        "entities": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": (
+                "5-12 notable people, deities, artifacts, texts, or phenomena "
+                "central to the paper (e.g. 'Marduk', 'Enuma Elish', "
+                "'geomagnetic excursion')"
+            ),
+        },
     },
-    "required": ["topics", "open_questions", "site_names"],
+    "required": ["topics", "open_questions", "site_names", "entities"],
 }
 
 SYSTEM = (
@@ -113,6 +122,19 @@ def backfill_paper(row) -> tuple[int, int]:
             }
         )
         edges.append({"src_norm": paper_norm, "dst_norm": norm, "kind": "about_site"})
+    for entity in extracted.get("entities", []):
+        norm = normalize_label(entity)
+        nodes.append(
+            {
+                "label": entity,
+                "norm_label": norm,
+                "kind": "entity",
+                "status": "explored",
+                "created_from": "backfill",
+                "request_id": "",
+            }
+        )
+        edges.append({"src_norm": paper_norm, "dst_norm": norm, "kind": "mentions"})
 
     with get_session() as session:
         persist_graph(nodes, edges, session)
