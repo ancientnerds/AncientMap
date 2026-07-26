@@ -231,7 +231,11 @@ export class KnowledgeGraphRenderer {
     this.applyColors()
   }
 
-  /** Render every edge whose BOTH endpoints are inside the focus set. */
+  /**
+   * Render every edge whose BOTH endpoints are inside the focus set.
+   * Each line carries its endpoints' CLUSTER colors — WebGL interpolates
+   * between the two vertices, so a site→story edge fades green→light blue.
+   */
   showFocusEdges(focusSet: Set<string> | null): void {
     if (this.focusLines) {
       this.scene.remove(this.focusLines)
@@ -240,7 +244,14 @@ export class KnowledgeGraphRenderer {
       this.focusLines = null
     }
     if (!focusSet || focusSet.size === 0) return
+
+    const kindColor = new Map<string, THREE.Color>(
+      this.clusterDefs.map((c) => [c.kind, new THREE.Color(c.color)]),
+    )
+    const fallback = new THREE.Color('#7ab4c8')
+
     const segments: number[] = []
+    const colors: number[] = []
     for (const l of this.links) {
       const s = l.source as RenderNode
       const t = l.target as RenderNode
@@ -249,14 +260,18 @@ export class KnowledgeGraphRenderer {
       if (this.visibleKinds && (!this.visibleKinds.has(s.kind) || !this.visibleKinds.has(t.kind)))
         continue
       segments.push(s.x ?? 0, s.y ?? 0, 0, t.x ?? 0, t.y ?? 0, 0)
+      const sc = kindColor.get(s.kind) ?? fallback
+      const tc = kindColor.get(t.kind) ?? fallback
+      colors.push(sc.r, sc.g, sc.b, tc.r, tc.g, tc.b)
     }
     if (!segments.length) return
     const geo = new THREE.BufferGeometry()
     geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(segments), 3))
+    geo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(colors), 3))
     const mat = new THREE.LineBasicMaterial({
-      color: '#ffd700',
+      vertexColors: true,
       transparent: true,
-      opacity: 0.45,
+      opacity: 0.6,
       depthWrite: false,
     })
     this.focusLines = new THREE.LineSegments(geo, mat)
