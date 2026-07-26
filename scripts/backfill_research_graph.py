@@ -39,17 +39,26 @@ EXTRACTION_SCHEMA = {
             "items": {"type": "string"},
             "description": "Archaeological sites discussed in the paper",
         },
+        "people": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": (
+                "Real historical or modern individuals central to the paper "
+                "(researchers, authors, rulers — e.g. 'Zecharia Sitchin', "
+                "'Leonard Woolley'). NO deities or mythological figures."
+            ),
+        },
         "entities": {
             "type": "array",
             "items": {"type": "string"},
             "description": (
-                "5-12 notable people, deities, artifacts, texts, or phenomena "
-                "central to the paper (e.g. 'Marduk', 'Enuma Elish', "
-                "'geomagnetic excursion')"
+                "5-12 notable non-person entities central to the paper: "
+                "deities, mythological figures, artifacts, texts, phenomena "
+                "(e.g. 'Marduk', 'Enuma Elish', 'geomagnetic excursion')"
             ),
         },
     },
-    "required": ["topics", "open_questions", "site_names", "entities"],
+    "required": ["topics", "open_questions", "site_names", "people", "entities"],
 }
 
 SYSTEM = (
@@ -122,19 +131,25 @@ def backfill_paper(row) -> tuple[int, int]:
             }
         )
         edges.append({"src_norm": paper_norm, "dst_norm": norm, "kind": "about_site"})
-    for entity in extracted.get("entities", []):
-        norm = normalize_label(entity)
-        nodes.append(
-            {
-                "label": entity,
-                "norm_label": norm,
-                "kind": "entity",
-                "status": "explored",
-                "created_from": "backfill",
-                "request_id": "",
-            }
-        )
-        edges.append({"src_norm": paper_norm, "dst_norm": norm, "kind": "mentions"})
+    # People merge into the same island as the news-extracted persons
+    # (dedupe on (person, norm_label)); entities stay strictly non-person.
+    for kind, names in (
+        ("person", extracted.get("people", [])),
+        ("entity", extracted.get("entities", [])),
+    ):
+        for name in names:
+            norm = normalize_label(name)
+            nodes.append(
+                {
+                    "label": name,
+                    "norm_label": norm,
+                    "kind": kind,
+                    "status": "explored",
+                    "created_from": "backfill",
+                    "request_id": "",
+                }
+            )
+            edges.append({"src_norm": paper_norm, "dst_norm": norm, "kind": "mentions"})
 
     with get_session() as session:
         persist_graph(nodes, edges, session)

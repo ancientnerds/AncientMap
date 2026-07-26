@@ -125,7 +125,7 @@ def persist_graph(nodes: list[dict], edges: list[dict], session) -> None:
         norm_to_id[(n["kind"], n["norm_label"])] = str(row.id)
 
     def node_id(norm: str) -> str | None:
-        for kind in ("topic", "paper", "entity"):
+        for kind in ("topic", "paper", "entity", "person"):
             found = norm_to_id.get((kind, norm))
             if found:
                 return found
