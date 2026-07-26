@@ -31,6 +31,9 @@ from api.schemas.public_v1 import (
     EmpireOut,
     FacetSource,
     FacetsResponse,
+    GraphEdge,
+    GraphNode,
+    GraphResponse,
     NewsFeedPublicResponse,
     NewsItemPublic,
     NewsSiteRef,
@@ -1646,5 +1649,84 @@ def create_public_api() -> FastAPI:
         ]
         cache_set(cache_key, [img.model_dump() for img in images], ttl=600)
         return images
+
+    # =========================================================================
+    # 20. GET /graph — Research knowledge graph
+    # =========================================================================
+
+    @public_app.get(
+        "/graph",
+        summary="Get the research knowledge graph",
+        description=(
+            "The knowledge graph behind the Ancient Nerds permanent researcher: "
+            "explored topics and papers, plus the frontier of open research "
+            "questions the researcher will pick up next.\n\n"
+            f"**License: {RESEARCH_LICENSE}** — attribution to **Ancient Nerds** "
+            "(https://ancientnerds.com) is the only requirement.\n\n"
+            "Capped at the 2000 highest-value nodes (by signal + connectivity); "
+            "`total_nodes` reports the uncapped count."
+        ),
+        response_model=GraphResponse,
+        tags=["Knowledge Graph"],
+        dependencies=[Depends(rate_limit_dependency)],
+        responses={429: {"description": "Rate limit exceeded"}},
+    )
+    async def get_graph(db: Session = Depends(get_db)):
+        cache_key = "pubv1:graph"
+        cached = cache_get(cache_key)
+        if cached:
+            return cached
+
+        total_nodes = db.execute(text("SELECT COUNT(*) FROM research_nodes")).scalar() or 0
+
+        node_rows = db.execute(
+            text("""
+                SELECT n.id::text AS id, n.label, n.kind, n.status,
+                       n.source_signal AS signal,
+                       COALESCE(deg.cnt, 0) AS degree,
+                       n.site_id::text AS site_id,
+                       CASE WHEN n.kind = 'paper' AND rr.is_public THEN rr.slug END AS paper_slug
+                FROM research_nodes n
+                LEFT JOIN (
+                    SELECT node_id, COUNT(*) AS cnt FROM (
+                        SELECT src AS node_id FROM research_edges
+                        UNION ALL
+                        SELECT dst AS node_id FROM research_edges
+                    ) both_ends
+                    GROUP BY node_id
+                ) deg ON deg.node_id = n.id
+                LEFT JOIN research_requests rr ON rr.id = n.paper_id
+                ORDER BY (n.source_signal + COALESCE(deg.cnt, 0)) DESC
+                LIMIT 2000
+            """)
+        ).fetchall()
+
+        node_ids = {r.id for r in node_rows}
+        nodes = [
+            GraphNode(
+                id=r.id,
+                label=r.label,
+                kind=r.kind,
+                status=r.status,
+                signal=float(r.signal or 0.0),
+                degree=int(r.degree or 0),
+                paper_slug=r.paper_slug,
+                site_id=r.site_id,
+            )
+            for r in node_rows
+        ]
+
+        edge_rows = db.execute(
+            text("SELECT src::text AS src, dst::text AS dst, kind FROM research_edges")
+        ).fetchall()
+        edges = [
+            GraphEdge(src=r.src, dst=r.dst, kind=r.kind)
+            for r in edge_rows
+            if r.src in node_ids and r.dst in node_ids
+        ]
+
+        response = GraphResponse(nodes=nodes, edges=edges, total_nodes=total_nodes)
+        cache_set(cache_key, response.model_dump(), ttl=300)
+        return response
 
     return public_app

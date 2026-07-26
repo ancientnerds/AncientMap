@@ -536,3 +536,39 @@ class ResearchPaperListResponse(BaseModel):
     total_count: int = Field(description="Total published papers matching filters")
     page: int = Field(description="Current page number", json_schema_extra={"example": 1})
     has_more: bool = Field(description="Whether more pages are available")
+
+
+# =============================================================================
+# Knowledge Graph (research mind map)
+# =============================================================================
+
+
+class GraphNode(BaseModel):
+    """A node in the research knowledge graph."""
+
+    id: str = Field(description="Node UUID")
+    label: str = Field(description="Human-readable node label")
+    kind: str = Field(description="topic | paper | site | entity")
+    status: str = Field(description="frontier | researching | explored")
+    signal: float = Field(description="Accumulated interest signal from content sources")
+    degree: int = Field(description="Number of edges touching this node")
+    paper_slug: str | None = Field(
+        None, description="Slug of the published paper (explored paper nodes only)"
+    )
+    site_id: str | None = Field(None, description="Linked archaeological site UUID")
+
+
+class GraphEdge(BaseModel):
+    """A directed edge between graph nodes."""
+
+    src: str = Field(description="Source node UUID")
+    dst: str = Field(description="Target node UUID")
+    kind: str = Field(description="leads_to | cites | contradicts | about_site | related")
+
+
+class GraphResponse(BaseModel):
+    """The research knowledge graph (capped at 2000 highest-value nodes)."""
+
+    nodes: list[GraphNode] = Field(description="Graph nodes")
+    edges: list[GraphEdge] = Field(description="Edges between returned nodes")
+    total_nodes: int = Field(description="Uncapped total node count in the graph")
