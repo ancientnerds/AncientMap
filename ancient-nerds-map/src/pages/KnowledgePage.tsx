@@ -31,22 +31,54 @@ interface GraphData {
 // Layout engine adds coordinates once the simulation runs.
 type KgNode = GraphNode & { x?: number; y?: number; z?: number }
 
-const STATUS_COLORS: Record<string, string> = {
-  explored: '#ffd700',
-  researching: '#c02023',
-  frontier: '#3aa8c2',
+// Color by node CLASS; status drives the pulse (frontier dim/bright,
+// researching red) on top.
+const KIND_COLORS: Record<string, string> = {
+  paper: '#ffd700',
+  topic: '#3aa8c2',
+  entity: '#a78bfa',
+  site: '#22c55e',
+  period: '#8b5cf6',
+  empire: '#e67e22',
+  country: '#64748b',
+  culture: '#14b8a6',
+  person: '#ec4899',
+  story: '#93c5fd',
+  video: '#ef4444',
+  channel: '#f97316',
+  journal: '#eab308',
 }
 
-const KIND_FILTERS = ['topic', 'paper', 'site'] as const
+// Layer toggles — each chip switches a group of node classes.
+const LAYERS: Record<string, string[]> = {
+  structure: ['period', 'empire', 'country', 'culture'],
+  sites: ['site'],
+  content: ['story', 'video', 'channel', 'journal', 'person'],
+  research: ['paper', 'topic', 'entity'],
+}
+
+function layerOf(kind: string): string | null {
+  for (const [layer, kinds] of Object.entries(LAYERS)) {
+    if (kinds.includes(kind)) return layer
+  }
+  return null
+}
 
 export default function KnowledgePage() {
   const containerRef = useRef<HTMLDivElement>(null)
   const graphRef = useRef<ForceGraph3DInstance | null>(null)
   const [data, setData] = useState<GraphData | null>(null)
   const [error, setError] = useState(false)
-  const [kindFilter, setKindFilter] = useState<string | null>(null)
+  const [activeLayers, setActiveLayers] = useState<Set<string>>(new Set(Object.keys(LAYERS)))
   const [search, setSearch] = useState('')
+  const [focused, setFocused] = useState<KgNode | null>(null)
   const current = useCurrentResearch()
+
+  // Focus state lives in refs so the color/link accessors (re-applied by the
+  // pulse timer) always read the latest values without re-creating the graph.
+  const focusRef = useRef<{ id: string; neighbors: Set<string> } | null>(null)
+  const brightRef = useRef(true)
+  const adjacencyRef = useRef<Map<string, Set<string>>>(new Map())
 
   useEffect(() => {
     fetch('/api/v1/graph')
@@ -58,10 +90,61 @@ export default function KnowledgePage() {
       .catch(() => setError(true))
   }, [])
 
-  // Initialize / update the 3D graph when data or the kind filter changes.
+  // Build the adjacency index once per dataset (for focus mode).
+  useEffect(() => {
+    if (!data) return
+    const adj = new Map<string, Set<string>>()
+    for (const e of data.edges) {
+      if (!adj.has(e.src)) adj.set(e.src, new Set())
+      if (!adj.has(e.dst)) adj.set(e.dst, new Set())
+      adj.get(e.src)!.add(e.dst)
+      adj.get(e.dst)!.add(e.src)
+    }
+    adjacencyRef.current = adj
+  }, [data])
+
+  const clearFocus = useCallback(() => {
+    focusRef.current = null
+    setFocused(null)
+  }, [])
+
+  const applyColors = useCallback(() => {
+    const graph = graphRef.current
+    if (!graph) return
+    const bright = brightRef.current
+    const focus = focusRef.current
+    graph.nodeColor((n) => {
+      const node = n as KgNode
+      if (focus && node.id !== focus.id && !focus.neighbors.has(node.id)) {
+        return 'rgba(80, 100, 110, 0.12)'
+      }
+      if (node.status === 'researching') return bright ? '#c02023' : '#c0202366'
+      const base = KIND_COLORS[node.kind] ?? '#667788'
+      if (node.status === 'frontier') return bright ? base : `${base}55`
+      return base
+    })
+    graph.linkColor((l) => {
+      if (!focus) return 'rgba(122, 180, 200, 0.22)'
+      const src = typeof l.source === 'object' ? (l.source as KgNode).id : String(l.source)
+      const dst = typeof l.target === 'object' ? (l.target as KgNode).id : String(l.target)
+      return src === focus.id || dst === focus.id
+        ? 'rgba(255, 215, 0, 0.6)'
+        : 'rgba(80, 100, 110, 0.04)'
+    })
+  }, [])
+
+  // Initialize / update the 3D graph when data or the layer set changes.
   useEffect(() => {
     if (!containerRef.current || !data || data.nodes.length === 0) return
-    const nodes = data.nodes.filter((n) => !kindFilter || n.kind === kindFilter)
+    const activeKinds = new Set(
+      Object.entries(LAYERS)
+        .filter(([layer]) => activeLayers.has(layer))
+        .flatMap(([, kinds]) => kinds),
+    )
+    const nodes = data.nodes.filter((n) => {
+      const layer = layerOf(n.kind)
+      return layer === null || activeKinds.has(n.kind)
+    })
     const ids = new Set(nodes.map((n) => n.id))
     const links = data.edges
       .filter((e) => ids.has(e.src) && ids.has(e.dst))
@@ -75,10 +158,13 @@ export default function KnowledgePage() {
       const g = new ForceGraph3D(containerRef.current)
       g.backgroundColor('#0a1a1f')
       g.showNavInfo(false)
-      g.nodeColor((n) => STATUS_COLORS[(n as KgNode).status] ?? '#667788')
+      // ~10K nodes: lower sphere resolution + bounded simulation keep it fluid.
+      g.nodeResolution(6)
+      g.warmupTicks(40)
+      g.cooldownTicks(300)
       g.nodeVal((n) => {
         const node = n as KgNode
-        return 1 + node.signal + node.degree
+        return 1 + Math.min(node.signal + node.degree, 40)
       })
       g.nodeOpacity(0.9)
       g.nodeLabel((n) => {
@@ -89,41 +175,42 @@ export default function KnowledgePage() {
             : node.status === 'researching'
               ? '<br/><i>Theo is researching this right now</i>'
               : ''
-        return `<div class="kg-tooltip"><b>${node.label}</b><br/><span>${node.kind} · ${node.status}</span>${hint}</div>`
+        return `<div class="kg-tooltip"><b>${node.label}</b><br/><span>${node.kind}</span>${hint}</div>`
       })
-      g.linkColor(() => 'rgba(122, 180, 200, 0.25)')
-      g.linkWidth(0.5)
+      g.linkWidth(0.4)
       g.onNodeClick((n) => {
+        // Focus mode: dim everything outside the 1-hop neighborhood and
+        // show the info card. Navigation moved to the card's actions —
+        // direct click-through is wrong at this node density.
         const node = n as KgNode
-        if (node.kind === 'paper' && node.paper_slug) {
-          window.location.href = `/research.html?slug=${node.paper_slug}`
-        } else if (node.site_id) {
-          navigateGlobeToSite(node.site_id)
+        focusRef.current = {
+          id: node.id,
+          neighbors: adjacencyRef.current.get(node.id) ?? new Set(),
         }
+        setFocused(node)
+        applyColors()
+      })
+      g.onBackgroundClick(() => {
+        clearFocus()
+        applyColors()
       })
       graphRef.current = g
       graph = g
     }
     // Fresh copies — the layout engine mutates node objects (x/y/z).
     graph.graphData({ nodes: nodes.map((n) => ({ ...n })), links })
-  }, [data, kindFilter])
+    applyColors()
+  }, [data, activeLayers, applyColors, clearFocus])
 
-  // Slow pulse for frontier + researching nodes: re-assigning the color
-  // accessor makes the lib re-evaluate node colors each tick.
+  // Slow pulse for frontier + researching nodes.
   useEffect(() => {
     if (!data) return
-    let bright = false
     const timer = setInterval(() => {
-      bright = !bright
-      graphRef.current?.nodeColor((n) => {
-        const node = n as KgNode
-        if (node.status === 'explored') return STATUS_COLORS.explored
-        const base = STATUS_COLORS[node.status] ?? '#667788'
-        return bright ? base : `${base}66`
-      })
+      brightRef.current = !brightRef.current
+      applyColors()
     }, 900)
     return () => clearInterval(timer)
-  }, [data])
+  }, [data, applyColors])
 
   const flyToMatch = useCallback(() => {
     const graph = graphRef.current
@@ -144,6 +231,15 @@ export default function KnowledgePage() {
     )
   }, [search])
 
+  const toggleLayer = useCallback((layer: string) => {
+    setActiveLayers((prev) => {
+      const next = new Set(prev)
+      if (next.has(layer)) next.delete(layer)
+      else next.add(layer)
+      return next
+    })
+  }, [])
+
   const counts = useMemo(() => {
     if (!data) return { explored: 0, frontier: 0 }
     return {
@@ -159,10 +255,8 @@ export default function KnowledgePage() {
         <div className="kg-title-block">
           <h1>Knowledge Graph</h1>
           <p className="kg-subtitle">
-            {counts.explored} explored · {counts.frontier} frontier topics
-            {data && data.total_nodes > data.nodes.length
-              ? ` · showing top ${data.nodes.length} of ${data.total_nodes}`
-              : ''}
+            {data ? `${data.nodes.length.toLocaleString()} nodes` : '…'} · {counts.explored}{' '}
+            explored · {counts.frontier} frontier topics
           </p>
         </div>
         {current?.running && (
@@ -174,18 +268,18 @@ export default function KnowledgePage() {
         <div className="kg-controls">
           <input
             className="kg-search"
-            placeholder="Find a topic…"
+            placeholder="Find anything…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && flyToMatch()}
           />
-          {KIND_FILTERS.map((kind) => (
+          {Object.keys(LAYERS).map((layer) => (
             <button
-              key={kind}
-              className={`kg-chip ${kindFilter === kind ? 'active' : ''}`}
-              onClick={() => setKindFilter(kindFilter === kind ? null : kind)}
+              key={layer}
+              className={`kg-chip ${activeLayers.has(layer) ? 'active' : ''}`}
+              onClick={() => toggleLayer(layer)}
             >
-              {kind}
+              {layer}
             </button>
           ))}
         </div>
@@ -208,16 +302,50 @@ export default function KnowledgePage() {
         </div>
       )}
       <div ref={containerRef} className="kg-canvas" />
+
+      {focused && (
+        <div className="kg-infocard">
+          <button
+            className="kg-infocard-close"
+            onClick={() => {
+              clearFocus()
+              applyColors()
+            }}
+            aria-label="Close"
+          >
+            ×
+          </button>
+          <span className="kg-infocard-kind" style={{ color: KIND_COLORS[focused.kind] ?? '#7ab4c8' }}>
+            {focused.kind}
+            {focused.status === 'frontier' ? ' · frontier' : ''}
+            {focused.status === 'researching' ? ' · researching now' : ''}
+          </span>
+          <h3>{focused.label}</h3>
+          <div className="kg-infocard-meta">{focused.degree} connections</div>
+          <div className="kg-infocard-actions">
+            {focused.kind === 'paper' && focused.paper_slug && (
+              <a href={`/research.html?slug=${focused.paper_slug}`}>Read the paper →</a>
+            )}
+            {focused.site_id && (
+              <button onClick={() => navigateGlobeToSite(focused.site_id!)}>
+                Show on globe →
+              </button>
+            )}
+            {focused.status === 'frontier' && (
+              <span className="kg-infocard-hint">Theo will research this topic</span>
+            )}
+          </div>
+        </div>
+      )}
+
       <div className="kg-legend">
-        <span>
-          <i style={{ background: STATUS_COLORS.explored }} /> explored
-        </span>
-        <span>
-          <i style={{ background: STATUS_COLORS.frontier }} /> frontier
-        </span>
-        <span>
-          <i style={{ background: STATUS_COLORS.researching }} /> researching now
-        </span>
+        {Object.entries(KIND_COLORS)
+          .filter(([kind]) => ['site', 'paper', 'topic', 'story', 'period', 'person'].includes(kind))
+          .map(([kind, color]) => (
+            <span key={kind}>
+              <i style={{ background: color }} /> {kind}
+            </span>
+          ))}
       </div>
     </div>
   )
