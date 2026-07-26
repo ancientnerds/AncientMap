@@ -84,8 +84,8 @@ export default function KnowledgePage() {
   const rendererRef = useRef<KnowledgeGraphRenderer | null>(null)
   const [data, setData] = useState<GraphData | null>(null)
   const [error, setError] = useState(false)
-  // The graph opens as Theo's brain — heavier layers are one chip away.
-  const [activeLayers, setActiveLayers] = useState<Set<string>>(new Set(['research']))
+  // All layers on by default — instant toggles make this cheap now.
+  const [activeLayers, setActiveLayers] = useState<Set<string>>(new Set(Object.keys(LAYERS)))
   const [search, setSearch] = useState('')
   const [focused, setFocused] = useState<RenderNode | null>(null)
   // How many hops of connections to reveal around the focused bubble.

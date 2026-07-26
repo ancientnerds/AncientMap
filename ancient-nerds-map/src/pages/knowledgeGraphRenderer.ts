@@ -129,6 +129,7 @@ export class KnowledgeGraphRenderer {
 
     this.handleResize()
     window.addEventListener('resize', this.handleResize)
+    this.renderer.domElement.addEventListener('pointerdown', this.handlePointerDown)
     this.renderer.domElement.addEventListener('pointermove', this.handlePointerMove)
     this.renderer.domElement.addEventListener('click', this.handleClick)
 
@@ -353,6 +354,7 @@ export class KnowledgeGraphRenderer {
     cancelAnimationFrame(this.rafId)
     this.simulation?.stop()
     window.removeEventListener('resize', this.handleResize)
+    this.renderer.domElement.removeEventListener('pointerdown', this.handlePointerDown)
     this.renderer.domElement.removeEventListener('pointermove', this.handlePointerMove)
     this.renderer.domElement.removeEventListener('click', this.handleClick)
     this.disposeGraphObjects()
@@ -442,6 +444,12 @@ export class KnowledgeGraphRenderer {
     return -1
   }
 
+  private downPos: { x: number; y: number } | null = null
+
+  private handlePointerDown = (event: PointerEvent): void => {
+    this.downPos = { x: event.clientX, y: event.clientY }
+  }
+
   private handlePointerMove = (event: PointerEvent): void => {
     const idx = this.pickNode(event)
     if (idx !== this.hoverIndex) {
@@ -452,6 +460,13 @@ export class KnowledgeGraphRenderer {
   }
 
   private handleClick = (event: MouseEvent): void => {
+    // A pan gesture ends with a click event too — only treat it as a click
+    // (and possibly a deselect) when the pointer barely moved.
+    if (this.downPos) {
+      const dx = event.clientX - this.downPos.x
+      const dy = event.clientY - this.downPos.y
+      if (dx * dx + dy * dy > 25) return
+    }
     const idx = this.pickNode(event)
     this.callbacks.onNodeClick(idx >= 0 ? this.nodes[idx] : null)
   }
