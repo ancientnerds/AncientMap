@@ -94,7 +94,9 @@ export default function KnowledgePage() {
   const current = useCurrentResearch()
 
   const focusRef = useRef<{ id: string; set: Set<string> } | null>(null)
-  const adjacencyRef = useRef<Map<string, Set<string>>>(new Map())
+  // Directed adjacency: out = src->dst, in = dst->src.
+  const adjOutRef = useRef<Map<string, Set<string>>>(new Map())
+  const adjInRef = useRef<Map<string, Set<string>>>(new Map())
   const nodeByIdRef = useRef<Map<string, RenderNode>>(new Map())
 
   useEffect(() => {
@@ -107,17 +109,19 @@ export default function KnowledgePage() {
       .catch(() => setError(true))
   }, [])
 
-  // Build the adjacency index once per dataset (for focus mode).
+  // Build the directed adjacency indexes once per dataset (for focus mode).
   useEffect(() => {
     if (!data) return
-    const adj = new Map<string, Set<string>>()
+    const out = new Map<string, Set<string>>()
+    const inc = new Map<string, Set<string>>()
     for (const e of data.edges) {
-      if (!adj.has(e.src)) adj.set(e.src, new Set())
-      if (!adj.has(e.dst)) adj.set(e.dst, new Set())
-      adj.get(e.src)!.add(e.dst)
-      adj.get(e.dst)!.add(e.src)
+      if (!out.has(e.src)) out.set(e.src, new Set())
+      if (!inc.has(e.dst)) inc.set(e.dst, new Set())
+      out.get(e.src)!.add(e.dst)
+      inc.get(e.dst)!.add(e.src)
     }
-    adjacencyRef.current = adj
+    adjOutRef.current = out
+    adjInRef.current = inc
   }, [data])
 
   const activeKinds = useMemo(
@@ -130,24 +134,43 @@ export default function KnowledgePage() {
     [activeLayers],
   )
 
-  /** BFS over the adjacency up to `depth` hops, restricted to visible kinds. */
+  /**
+   * Direction-preserving BFS up to `depth` hops, restricted to visible kinds.
+   *
+   * From the focus both edge directions start a path, but every path KEEPS
+   * its direction: story -> video -> channel expands level by level, while a
+   * hub never turns around (a video does not fan back out to all its other
+   * stories, an epoch not to its 5000 sites) — "nur in eine Richtung".
+   */
   const computeFocusSet = useCallback(
     (startId: string): Set<string> => {
       const nodeById = nodeByIdRef.current
+      const visible = (id: string) => {
+        const node = nodeById.get(id)
+        return !!node && activeKinds.has(node.kind)
+      }
       const set = new Set<string>([startId])
-      let ring = [startId]
+      let ringFwd = [startId]
+      let ringRev = [startId]
       for (let level = 0; level < depth; level++) {
-        const next: string[] = []
-        for (const id of ring) {
-          for (const nb of adjacencyRef.current.get(id) ?? []) {
-            if (set.has(nb)) continue
-            const node = nodeById.get(nb)
-            if (!node || !activeKinds.has(node.kind)) continue
+        const nextFwd: string[] = []
+        const nextRev: string[] = []
+        for (const id of ringFwd) {
+          for (const nb of adjOutRef.current.get(id) ?? []) {
+            if (set.has(nb) || !visible(nb)) continue
             set.add(nb)
-            next.push(nb)
+            nextFwd.push(nb)
           }
         }
-        ring = next
+        for (const id of ringRev) {
+          for (const nb of adjInRef.current.get(id) ?? []) {
+            if (set.has(nb) || !visible(nb)) continue
+            set.add(nb)
+            nextRev.push(nb)
+          }
+        }
+        ringFwd = nextFwd
+        ringRev = nextRev
       }
       return set
     },
