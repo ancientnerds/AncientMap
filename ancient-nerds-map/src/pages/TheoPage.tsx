@@ -12,6 +12,7 @@ import AiNoticeBanner from '../components/layout/AiNoticeBanner'
 import PageHeader from '../components/layout/PageHeader'
 import '../styles/theo.css'
 import QualityBadge, { type QualityScore } from '../components/theo/QualityBadge'
+import LiveResearchPanel from '../components/theo/LiveResearchPanel'
 import { NervLoadingBar } from '../components/NervLoadingBar'
 
 const TheoReportOverlay = lazy(() => import('../components/theo/TheoReportOverlay'))
@@ -718,6 +719,9 @@ export default function TheoPage() {
         <a href="/theo.html#research-library" className="page-header-title">Research</a>
       </PageHeader>
       <AiNoticeBanner message="Research papers and illustrations are AI-generated. Always verify claims with original sources." />
+
+      {/* Public live view of the permanent researcher — no login required */}
+      <LiveResearchPanel />
 
       {/* Investigating banner — shown when research is running and live overlay is closed */}
       {showInvestigatingBanner && (
