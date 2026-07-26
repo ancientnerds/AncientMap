@@ -92,6 +92,7 @@ export default defineConfig({
         game: resolve(__dirname, 'game.html'),
         theo: resolve(__dirname, 'theo.html'),
         research: resolve(__dirname, 'research.html'),
+        knowledge: resolve(__dirname, 'knowledge.html'),
         library: resolve(__dirname, 'library.html'),
         imprint: resolve(__dirname, 'imprint.html'),
         privacy: resolve(__dirname, 'privacy.html'),
