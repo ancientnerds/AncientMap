@@ -28,15 +28,15 @@ async def test_stall_guard_spares_run_while_limiter_frozen(monkeypatch):
     monkeypatch.setattr(tw, "_STALL_POLL_SECONDS", 0.05)
     monkeypatch.setattr(tw, "_read_progress_sig", lambda rid: (0, 0, 0, 0))  # never moves
     monkeypatch.setattr(tw, "_limiter_frozen", lambda: True)  # quota pause
-    monkeypatch.setattr(tw, "_read_limiter_activity", lambda: 0)  # static
+    monkeypatch.setattr(tw, "_read_limiter_activity", lambda is_batch: 0)  # static
 
-    async def fake_process(rid, q, opts):
+    async def fake_process(rid, q, opts, is_batch=False):
         await asyncio.sleep(0.6)  # well past the grace window
         return None
 
     monkeypatch.setattr(tw, "_process_request", fake_process)
 
-    await tw._run_with_stall_guard("rid", "q", None)  # must not raise
+    await tw._run_with_stall_guard("rid", "q", None, False)  # must not raise
 
 
 @pytest.mark.asyncio
@@ -46,15 +46,15 @@ async def test_stall_guard_still_kills_frozen_run_when_limiter_healthy(monkeypat
     monkeypatch.setattr(tw, "_STALL_POLL_SECONDS", 0.05)
     monkeypatch.setattr(tw, "_read_progress_sig", lambda rid: (0, 0, 0, 0))
     monkeypatch.setattr(tw, "_limiter_frozen", lambda: False)
-    monkeypatch.setattr(tw, "_read_limiter_activity", lambda: 0)  # static
+    monkeypatch.setattr(tw, "_read_limiter_activity", lambda is_batch: 0)  # static
 
-    async def fake_process(rid, q, opts):
+    async def fake_process(rid, q, opts, is_batch=False):
         await asyncio.sleep(100)
 
     monkeypatch.setattr(tw, "_process_request", fake_process)
 
     with pytest.raises(tw._StallDetected):
-        await tw._run_with_stall_guard("rid", "q", None)
+        await tw._run_with_stall_guard("rid", "q", None, False)
 
 
 @pytest.mark.asyncio
@@ -73,19 +73,19 @@ async def test_stall_guard_spares_run_while_limiter_ticking(monkeypatch):
 
     ticks = {"n": 0}
 
-    def climbing_activity():
+    def climbing_activity(is_batch):
         ticks["n"] += 1
         return ticks["n"]
 
     monkeypatch.setattr(tw, "_read_limiter_activity", climbing_activity)
 
-    async def fake_process(rid, q, opts):
+    async def fake_process(rid, q, opts, is_batch=False):
         await asyncio.sleep(0.6)  # well past the grace window
         return None
 
     monkeypatch.setattr(tw, "_process_request", fake_process)
 
-    await tw._run_with_stall_guard("rid", "q", None)  # must not raise
+    await tw._run_with_stall_guard("rid", "q", None, False)  # must not raise
 
 
 # --- 2. Terminal status routing ---------------------------------------------

@@ -4,7 +4,11 @@ from __future__ import annotations
 
 import os
 
-THEO_PARALLEL_SLOTS = 1
+# Two slots (2026-07-26 two-lane design): one for the low-priority batch
+# crawl, one reserved for interactive (UI) submissions so a website user
+# never waits behind a 12-18h background run. The worker enforces "at most
+# one batch run" separately — two batch runs never execute concurrently.
+THEO_PARALLEL_SLOTS = 2
 
 # Discord role ID that grants access to Theo Research Lab.
 # Set THEO_RESEARCHER_ROLE_ID in .env to the role ID.

@@ -20,7 +20,7 @@ async def test_stall_guard_cancels_frozen_run(monkeypatch):
 
     cancelled = {"v": False}
 
-    async def fake_process(rid, q, opts):
+    async def fake_process(rid, q, opts, is_batch=False):
         try:
             await asyncio.sleep(100)
         except asyncio.CancelledError:
@@ -30,7 +30,7 @@ async def test_stall_guard_cancels_frozen_run(monkeypatch):
     monkeypatch.setattr(tw, "_process_request", fake_process)
 
     with pytest.raises(tw._StallDetected):
-        await tw._run_with_stall_guard("rid", "q", None)
+        await tw._run_with_stall_guard("rid", "q", None, False)
     assert cancelled["v"] is True
 
 
@@ -41,13 +41,13 @@ async def test_stall_guard_passes_through_normal_completion(monkeypatch):
     monkeypatch.setattr(tw, "_STALL_POLL_SECONDS", 0.05)
     monkeypatch.setattr(tw, "_read_progress_sig", lambda rid: (0, 0, 0, 0))
 
-    async def fake_process(rid, q, opts):
+    async def fake_process(rid, q, opts, is_batch=False):
         await asyncio.sleep(0.1)
         return None
 
     monkeypatch.setattr(tw, "_process_request", fake_process)
 
-    await tw._run_with_stall_guard("rid", "q", None)  # must not raise
+    await tw._run_with_stall_guard("rid", "q", None, False)  # must not raise
 
 
 @pytest.mark.asyncio
@@ -64,10 +64,10 @@ async def test_stall_guard_allows_slow_but_progressing_run(monkeypatch):
 
     monkeypatch.setattr(tw, "_read_progress_sig", moving_sig)
 
-    async def fake_process(rid, q, opts):
+    async def fake_process(rid, q, opts, is_batch=False):
         await asyncio.sleep(0.6)  # well past the 0.3s grace, but progress keeps moving
         return None
 
     monkeypatch.setattr(tw, "_process_request", fake_process)
 
-    await tw._run_with_stall_guard("rid", "q", None)  # must not raise
+    await tw._run_with_stall_guard("rid", "q", None, False)  # must not raise

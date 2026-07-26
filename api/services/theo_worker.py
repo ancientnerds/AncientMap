@@ -71,8 +71,11 @@ def _deduct_credits(request_id: str) -> None:
         logger.warning(f"[THEO] Credit deduction failed for {request_id}: {exc}")
 
 
-# Single-slot semaphore — only 1 research request at a time
-_semaphore = asyncio.Semaphore(THEO_PARALLEL_SLOTS)
+# Active supervised runs: request_id -> (task, is_batch). Capacity is
+# THEO_PARALLEL_SLOTS with at most ONE batch run — the second slot exists so
+# a website submission executes concurrently (full-speed lane) instead of
+# waiting behind a 12-18h batch crawl (2026-07-26 two-lane design).
+_active_runs: dict[str, tuple[asyncio.Task, bool]] = {}
 
 # Per-request live events for SSE streaming (request_id -> list[dict])
 _live_events: dict[str, list[dict]] = {}
@@ -371,7 +374,7 @@ def _limiter_frozen() -> bool:
         return False
 
 
-def _read_limiter_activity() -> int | None:
+def _read_limiter_activity(is_batch: bool) -> int | None:
     """The limiter's lifetime request count — a liveness signal for the
     stall guard (2026-07-19). The DB progress counters only flush on event
     emissions, and event gaps stretch past the stall grace when the
@@ -380,13 +383,17 @@ def _read_limiter_activity() -> int | None:
     349 calls / 1M tokens on the clock — almost certainly a healthy
     crawling run, not a hang). A climbing count means LLM calls are
     flowing, so the run is NOT stalled regardless of the DB sig. Caveat:
-    the limiter is shared by every MiniMax caller in this process, so a
-    true Theo stall is only detected once those go quiet — the 12h hard
-    timeout backstops that corner."""
+    the counters are process-wide per lane, so a true stall is only
+    detected once that lane goes quiet — the 73h hard timeout backstops
+    that corner."""
     try:
         from pipeline.lyra.minimax_limiter import limiter
 
-        return limiter.stats["total_requests"]
+        stats = limiter.stats
+        # Lane-aware (2026-07-26): a batch run reads its own crawl-lane
+        # counter — otherwise a concurrent full-speed UI run would keep
+        # total_requests climbing and mask a genuinely stalled batch run.
+        return stats["low_lane_calls"] if is_batch else stats["total_requests"]
     except Exception:  # noqa: BLE001 — a read failure must not kill the guard
         return None
 
@@ -437,7 +444,7 @@ async def _run_with_stall_guard(
     """
     task = asyncio.create_task(_process_request(request_id, question, specialist_options, is_batch))
     last_sig = _read_progress_sig(request_id)
-    last_activity = _read_limiter_activity()
+    last_activity = _read_limiter_activity(is_batch)
     last_change = time.monotonic()
     try:
         while True:
@@ -445,7 +452,7 @@ async def _run_with_stall_guard(
             if task in done:
                 return task.result()
             sig = _read_progress_sig(request_id)
-            activity = _read_limiter_activity()
+            activity = _read_limiter_activity(is_batch)
             now = time.monotonic()
             if sig is not None and sig != last_sig:
                 last_sig, last_change = sig, now
@@ -567,11 +574,29 @@ async def _poll_loop() -> None:
                 )
                 gate_was_open = gate_open
 
+            # Prune finished supervisors (defensive — _supervise removes
+            # itself in its finally; this also catches cancelled tasks).
+            for rid in [r for r, (t, _b) in _active_runs.items() if t.done()]:
+                _active_runs.pop(rid, None)
+
+            if len(_active_runs) >= THEO_PARALLEL_SLOTS:
+                await asyncio.sleep(3)
+                continue
+
+            # Two-lane slot rule: at most ONE batch run at a time — the
+            # remaining slot is reserved for interactive (UI) submissions.
+            batch_running = any(b for (_t, b) in _active_runs.values())
+            batch_claimable = batch_allowed and not batch_running
+
             # Find the oldest runnable request. 'queued' = freshly submitted;
             # 'deferred' = quota hit earlier, ready for a retry after the 5min
             # back-off window. Without the timestamp check a deferred row would
             # get re-claimed on the very next poll iteration and re-defer
-            # immediately, creating a tight loop.
+            # immediately, creating a tight loop. Rows already being processed
+            # are excluded in-process — the run only flips the DB row to
+            # 'running' asynchronously, so the claim query alone would
+            # re-claim it on the next iteration.
+            active_ids = list(_active_runs.keys()) or [""]
             with get_session() as session:
                 row = session.execute(
                     text("""
@@ -580,54 +605,31 @@ async def _poll_loop() -> None:
                         WHERE (status = 'queued'
                                OR (status = 'deferred'
                                    AND completed_at < NOW() - INTERVAL '5 minutes'))
-                          AND (is_batch = FALSE OR :batch_allowed)
+                          AND (is_batch = FALSE OR :batch_claimable)
+                          AND NOT (id::text = ANY(:active_ids))
                         -- UI submissions (is_batch=FALSE) always outrank the
                         -- batch backlog: without this, a fresh UI task sorted
                         -- behind 47 July batch rows on created_at alone.
                         ORDER BY is_batch ASC, created_at ASC
                         LIMIT 1
                     """),
-                    {"batch_allowed": batch_allowed},
+                    {"batch_claimable": batch_claimable, "active_ids": active_ids},
                 ).fetchone()
 
             if row:
-                async with _semaphore:
-                    try:
-                        await asyncio.wait_for(
-                            _run_with_stall_guard(
-                                row.id, row.question, row.specialist_options, row.is_batch
-                            ),
-                            timeout=_REQUEST_TIMEOUT_SECONDS,
-                        )
-                    except TimeoutError:
-                        logger.error(
-                            "[THEO] Request %s exceeded %ss hard timeout — marking failed.",
-                            row.id,
-                            _REQUEST_TIMEOUT_SECONDS,
-                        )
-                        _mark_failed_running(
-                            row.id,
-                            f"Request exceeded {_REQUEST_TIMEOUT_SECONDS}s timeout "
-                            "and was force-cancelled.",
-                        )
-                    except _StallDetected:
-                        logger.error(
-                            "[THEO] Request %s stalled (no progress for %ss) — marking failed.",
-                            row.id,
-                            _STALL_GRACE_SECONDS,
-                        )
-                        _mark_failed_running(
-                            row.id,
-                            f"Request made no progress for {_STALL_GRACE_SECONDS}s "
-                            "(stalled) and was cancelled.",
-                        )
-                # Inter-task backoff (2026-06-29). Without this, the worker
-                # picks up the next task immediately after the previous one
-                # ends, hammering the API while the 5h quota is still
-                # draining. THEO_INTER_TASK_BACKOFF_S=30s gives the
-                # watchdog probe enough time to flag DEGRADED/EXHAUSTED
-                # before the next task starts. Firing whether the task
-                # succeeded or failed.
+                task = asyncio.create_task(
+                    _supervise(row.id, row.question, row.specialist_options, bool(row.is_batch))
+                )
+                _active_runs[row.id] = (task, bool(row.is_batch))
+                logger.info(
+                    "[THEO] Claimed %s (batch=%s) — %d/%d slots busy",
+                    row.id,
+                    bool(row.is_batch),
+                    len(_active_runs),
+                    THEO_PARALLEL_SLOTS,
+                )
+                # Inter-claim backoff (2026-06-29): give the watchdog probe
+                # time to flag DEGRADED/EXHAUSTED before the next claim.
                 from api.services.theo_config import THEO_INTER_TASK_BACKOFF_S
 
                 await asyncio.sleep(THEO_INTER_TASK_BACKOFF_S)
@@ -637,6 +639,46 @@ async def _poll_loop() -> None:
         except Exception as e:
             logger.error(f"[THEO] Poll loop error: {e}", exc_info=True)
             await asyncio.sleep(5)
+
+
+async def _supervise(
+    request_id: str, question: str, specialist_options: dict | None, is_batch: bool
+) -> None:
+    """Run one request to completion with timeout + stall handling.
+
+    Runs as its own task so the poll loop keeps claiming: a full-speed UI
+    run executes concurrently with a crawling batch run."""
+    try:
+        try:
+            await asyncio.wait_for(
+                _run_with_stall_guard(request_id, question, specialist_options, is_batch),
+                timeout=_REQUEST_TIMEOUT_SECONDS,
+            )
+        except TimeoutError:
+            logger.error(
+                "[THEO] Request %s exceeded %ss hard timeout — marking failed.",
+                request_id,
+                _REQUEST_TIMEOUT_SECONDS,
+            )
+            _mark_failed_running(
+                request_id,
+                f"Request exceeded {_REQUEST_TIMEOUT_SECONDS}s timeout and was force-cancelled.",
+            )
+        except _StallDetected:
+            logger.error(
+                "[THEO] Request %s stalled (no progress for %ss) — marking failed.",
+                request_id,
+                _STALL_GRACE_SECONDS,
+            )
+            _mark_failed_running(
+                request_id,
+                f"Request made no progress for {_STALL_GRACE_SECONDS}s "
+                "(stalled) and was cancelled.",
+            )
+        except Exception:
+            logger.exception("[THEO] Supervisor for %s crashed", request_id)
+    finally:
+        _active_runs.pop(request_id, None)
 
 
 async def cleanup_stale_deferred() -> None:
