@@ -1,20 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import ForceGraph3D, { type ForceGraph3DInstance } from '3d-force-graph'
 import HamburgerNav from '../components/layout/HamburgerNav'
 import { useCurrentResearch } from '../hooks/useCurrentResearch'
 import { navigateGlobeToSite } from '../utils/globeNavigation'
+import {
+  KnowledgeGraphRenderer,
+  type RenderLink,
+  type RenderNode,
+} from './knowledgeGraphRenderer'
 import './KnowledgePage.css'
-
-interface GraphNode {
-  id: string
-  label: string
-  kind: string
-  status: string
-  signal: number
-  degree: number
-  paper_slug: string | null
-  site_id: string | null
-}
 
 interface GraphEdge {
   src: string
@@ -23,16 +16,12 @@ interface GraphEdge {
 }
 
 interface GraphData {
-  nodes: GraphNode[]
+  nodes: RenderNode[]
   edges: GraphEdge[]
   total_nodes: number
 }
 
-// Layout engine adds coordinates once the simulation runs.
-type KgNode = GraphNode & { x?: number; y?: number; z?: number }
-
-// Color by node CLASS; status drives the pulse (frontier dim/bright,
-// researching red) on top.
+// Color by node CLASS; focus mode dims everything outside the neighborhood.
 const KIND_COLORS: Record<string, string> = {
   paper: '#ffd700',
   topic: '#3aa8c2',
@@ -48,6 +37,23 @@ const KIND_COLORS: Record<string, string> = {
   channel: '#f97316',
   journal: '#eab308',
 }
+
+type Rgb = [number, number, number]
+
+function hexToRgb(hex: string): Rgb {
+  const v = parseInt(hex.slice(1), 16)
+  return [((v >> 16) & 255) / 255, ((v >> 8) & 255) / 255, (v & 255) / 255]
+}
+
+const KIND_RGB: Record<string, Rgb> = Object.fromEntries(
+  Object.entries(KIND_COLORS).map(([k, c]) => [k, hexToRgb(c)]),
+) as Record<string, Rgb>
+const DEFAULT_RGB: Rgb = [0.4, 0.47, 0.53]
+const RESEARCHING_RGB: Rgb = hexToRgb('#c02023')
+const DIM_RGB: Rgb = [0.16, 0.2, 0.22]
+const LINK_RGB: Rgb = [0.18, 0.32, 0.38]
+const LINK_FOCUS_RGB: Rgb = [1.0, 0.84, 0.0]
+const LINK_DIM_RGB: Rgb = [0.06, 0.08, 0.09]
 
 // Layer toggles — each chip switches a group of node classes.
 const LAYERS: Record<string, string[]> = {
@@ -66,18 +72,16 @@ function layerOf(kind: string): string | null {
 
 export default function KnowledgePage() {
   const containerRef = useRef<HTMLDivElement>(null)
-  const graphRef = useRef<ForceGraph3DInstance | null>(null)
+  const rendererRef = useRef<KnowledgeGraphRenderer | null>(null)
   const [data, setData] = useState<GraphData | null>(null)
   const [error, setError] = useState(false)
-  // Only the research layer is on by default — the graph opens as Theo's
-  // brain (~300 nodes, instant), and the heavier layers are one chip away.
+  // The graph opens as Theo's brain — heavier layers are one chip away.
   const [activeLayers, setActiveLayers] = useState<Set<string>>(new Set(['research']))
   const [search, setSearch] = useState('')
-  const [focused, setFocused] = useState<KgNode | null>(null)
+  const [focused, setFocused] = useState<RenderNode | null>(null)
+  const [hover, setHover] = useState<{ node: RenderNode; x: number; y: number } | null>(null)
   const current = useCurrentResearch()
 
-  // Focus state lives in refs so the color/link accessors always read the
-  // latest values without re-creating the graph.
   const focusRef = useRef<{ id: string; neighbors: Set<string> } | null>(null)
   const adjacencyRef = useRef<Map<string, Set<string>>>(new Map())
 
@@ -104,41 +108,69 @@ export default function KnowledgePage() {
     adjacencyRef.current = adj
   }, [data])
 
+  const applyColors = useCallback(() => {
+    const renderer = rendererRef.current
+    if (!renderer) return
+    const focus = focusRef.current
+    renderer.setColorFns(
+      (n) => {
+        if (focus && n.id !== focus.id && !focus.neighbors.has(n.id)) return DIM_RGB
+        if (n.status === 'researching') return RESEARCHING_RGB
+        const base = KIND_RGB[n.kind] ?? DEFAULT_RGB
+        if (n.status === 'frontier') return [base[0] * 0.55, base[1] * 0.55, base[2] * 0.55]
+        return base
+      },
+      (l) => {
+        if (!focus) return LINK_RGB
+        const src = typeof l.source === 'object' ? l.source.id : String(l.source)
+        const dst = typeof l.target === 'object' ? l.target.id : String(l.target)
+        return src === focus.id || dst === focus.id ? LINK_FOCUS_RGB : LINK_DIM_RGB
+      },
+    )
+  }, [])
+
   const clearFocus = useCallback(() => {
     focusRef.current = null
     setFocused(null)
   }, [])
 
-  // Re-assigning color accessors makes the lib re-evaluate EVERY node
-  // material — at 11K nodes that must only happen on focus/layer changes,
-  // never on a timer (the original 900ms pulse melted GPUs).
-  const applyColors = useCallback(() => {
-    const graph = graphRef.current
-    if (!graph) return
-    const focus = focusRef.current
-    graph.nodeColor((n) => {
-      const node = n as KgNode
-      if (focus && node.id !== focus.id && !focus.neighbors.has(node.id)) {
-        return 'rgba(80, 100, 110, 0.12)'
-      }
-      if (node.status === 'researching') return '#c02023'
-      const base = KIND_COLORS[node.kind] ?? '#667788'
-      if (node.status === 'frontier') return `${base}99`
-      return base
-    })
-    graph.linkColor((l) => {
-      if (!focus) return 'rgba(122, 180, 200, 0.22)'
-      const src = typeof l.source === 'object' ? (l.source as KgNode).id : String(l.source)
-      const dst = typeof l.target === 'object' ? (l.target as KgNode).id : String(l.target)
-      return src === focus.id || dst === focus.id
-        ? 'rgba(255, 215, 0, 0.6)'
-        : 'rgba(80, 100, 110, 0.04)'
-    })
-  }, [])
-
-  // Initialize / update the 3D graph when data or the layer set changes.
+  // Renderer lifecycle — created once, torn down on unmount.
   useEffect(() => {
-    if (!containerRef.current || !data || data.nodes.length === 0) return
+    if (!containerRef.current) return
+    const renderer = new KnowledgeGraphRenderer(containerRef.current, {
+      onNodeClick: (node) => {
+        if (!node) {
+          clearFocus()
+        } else {
+          focusRef.current = {
+            id: node.id,
+            neighbors: adjacencyRef.current.get(node.id) ?? new Set(),
+          }
+          setFocused(node)
+        }
+        applyColors()
+      },
+      onHover: (node, x, y) => {
+        setHover(node ? { node, x, y } : null)
+      },
+    })
+    rendererRef.current = renderer
+    const onVisibility = () => {
+      if (document.hidden) renderer.pause()
+      else renderer.resume()
+    }
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibility)
+      renderer.dispose()
+      rendererRef.current = null
+    }
+  }, [applyColors, clearFocus])
+
+  // Feed data into the renderer when the dataset or layer set changes.
+  useEffect(() => {
+    const renderer = rendererRef.current
+    if (!renderer || !data || data.nodes.length === 0) return
     const activeKinds = new Set(
       Object.entries(LAYERS)
         .filter(([layer]) => activeLayers.has(layer))
@@ -149,95 +181,25 @@ export default function KnowledgePage() {
       return layer === null || activeKinds.has(n.kind)
     })
     const ids = new Set(nodes.map((n) => n.id))
-    const links = data.edges
+    const links: RenderLink[] = data.edges
       .filter((e) => ids.has(e.src) && ids.has(e.dst))
       .map((e) => ({ source: e.src, target: e.dst, kind: e.kind }))
-
-    let graph = graphRef.current
-    if (!graph) {
-      // Accessor callbacks are typed against the base NodeObject upstream —
-      // narrow to KgNode inside each callback instead of fighting the
-      // library's chain generics.
-      const g = new ForceGraph3D(containerRef.current)
-      g.backgroundColor('#0a1a1f')
-      g.showNavInfo(false)
-      // ~10K nodes: low-poly spheres + a fast-settling, bounded simulation.
-      g.nodeResolution(4)
-      g.warmupTicks(0)
-      g.cooldownTicks(120)
-      g.d3AlphaDecay(0.05)
-      g.nodeVal((n) => {
-        const node = n as KgNode
-        return 1 + Math.min(node.signal + node.degree, 40)
-      })
-      g.nodeOpacity(0.9)
-      g.nodeLabel((n) => {
-        const node = n as KgNode
-        const hint =
-          node.status === 'frontier'
-            ? '<br/><i>Theo will research this</i>'
-            : node.status === 'researching'
-              ? '<br/><i>Theo is researching this right now</i>'
-              : ''
-        return `<div class="kg-tooltip"><b>${node.label}</b><br/><span>${node.kind}</span>${hint}</div>`
-      })
-      // linkWidth MUST stay 0: any positive width renders every edge as a
-      // cylinder mesh (~20K meshes) instead of a cheap GL line.
-      g.linkWidth(0)
-      g.onNodeClick((n) => {
-        // Focus mode: dim everything outside the 1-hop neighborhood and
-        // show the info card. Navigation moved to the card's actions —
-        // direct click-through is wrong at this node density.
-        const node = n as KgNode
-        focusRef.current = {
-          id: node.id,
-          neighbors: adjacencyRef.current.get(node.id) ?? new Set(),
-        }
-        setFocused(node)
-        applyColors()
-      })
-      g.onBackgroundClick(() => {
-        clearFocus()
-        applyColors()
-      })
-      graphRef.current = g
-      graph = g
-    }
-    // Fresh copies — the layout engine mutates node objects (x/y/z).
-    graph.graphData({ nodes: nodes.map((n) => ({ ...n })), links })
+    // Fresh copies — the simulation mutates node objects (x/y/z).
+    renderer.setData(
+      nodes.map((n) => ({ ...n })),
+      links,
+    )
+    clearFocus()
     applyColors()
   }, [data, activeLayers, applyColors, clearFocus])
 
-  // Stop the 60fps render loop while the tab is hidden.
-  useEffect(() => {
-    const onVisibility = () => {
-      const graph = graphRef.current
-      if (!graph) return
-      if (document.hidden) graph.pauseAnimation()
-      else graph.resumeAnimation()
-    }
-    document.addEventListener('visibilitychange', onVisibility)
-    return () => document.removeEventListener('visibilitychange', onVisibility)
-  }, [])
-
   const flyToMatch = useCallback(() => {
-    const graph = graphRef.current
+    const renderer = rendererRef.current
     const term = search.trim().toLowerCase()
-    if (!graph || !term) return
-    const match = graph
-      .graphData()
-      .nodes.find((n) => ((n as KgNode).label || '').toLowerCase().includes(term)) as
-      | KgNode
-      | undefined
-    if (!match || match.x === undefined) return
-    const dist = 120
-    const ratio = 1 + dist / Math.hypot(match.x, match.y ?? 0, match.z ?? 0)
-    graph.cameraPosition(
-      { x: match.x * ratio, y: (match.y ?? 0) * ratio, z: (match.z ?? 0) * ratio },
-      { x: match.x, y: match.y ?? 0, z: match.z ?? 0 },
-      1200,
-    )
-  }, [search])
+    if (!renderer || !term || !data) return
+    const match = data.nodes.find((n) => (n.label || '').toLowerCase().includes(term))
+    if (match) renderer.flyTo(match)
+  }, [search, data])
 
   const toggleLayer = useCallback((layer: string) => {
     setActiveLayers((prev) => {
@@ -263,7 +225,7 @@ export default function KnowledgePage() {
         <div className="kg-title-block">
           <h1>Knowledge Graph</h1>
           <p className="kg-subtitle">
-            {data ? `${data.nodes.length.toLocaleString()} nodes` : '…'} · {counts.explored}{' '}
+            {data ? `${data.total_nodes.toLocaleString()} nodes` : '…'} · {counts.explored}{' '}
             explored · {counts.frontier} frontier topics
           </p>
         </div>
@@ -299,17 +261,27 @@ export default function KnowledgePage() {
           <p>Please try again in a moment.</p>
         </div>
       )}
-      {!error && data && data.nodes.length === 0 && (
-        <div className="kg-empty">
-          <h2>The knowledge graph is just being born.</h2>
-          <p>
-            Theo&apos;s permanent researcher is mapping the ancient world — the first nodes appear
-            with the next published paper. Watch the live research on the{' '}
-            <a href="/theo.html">Research page</a>.
-          </p>
+      <div ref={containerRef} className="kg-canvas" />
+
+      {hover && !focused && (
+        <div className="kg-tooltip kg-tooltip--floating" style={{ left: hover.x + 14, top: hover.y + 10 }}>
+          <b>{hover.node.label}</b>
+          <br />
+          <span>{hover.node.kind}</span>
+          {hover.node.status === 'frontier' && (
+            <>
+              <br />
+              <i>Theo will research this</i>
+            </>
+          )}
+          {hover.node.status === 'researching' && (
+            <>
+              <br />
+              <i>Theo is researching this right now</i>
+            </>
+          )}
         </div>
       )}
-      <div ref={containerRef} className="kg-canvas" />
 
       {focused && (
         <div className="kg-infocard">
@@ -323,7 +295,10 @@ export default function KnowledgePage() {
           >
             ×
           </button>
-          <span className="kg-infocard-kind" style={{ color: KIND_COLORS[focused.kind] ?? '#7ab4c8' }}>
+          <span
+            className="kg-infocard-kind"
+            style={{ color: KIND_COLORS[focused.kind] ?? '#7ab4c8' }}
+          >
             {focused.kind}
             {focused.status === 'frontier' ? ' · frontier' : ''}
             {focused.status === 'researching' ? ' · researching now' : ''}
@@ -335,9 +310,7 @@ export default function KnowledgePage() {
               <a href={`/research.html?slug=${focused.paper_slug}`}>Read the paper →</a>
             )}
             {focused.site_id && (
-              <button onClick={() => navigateGlobeToSite(focused.site_id!)}>
-                Show on globe →
-              </button>
+              <button onClick={() => navigateGlobeToSite(focused.site_id!)}>Show on globe →</button>
             )}
             {focused.status === 'frontier' && (
               <span className="kg-infocard-hint">Theo will research this topic</span>

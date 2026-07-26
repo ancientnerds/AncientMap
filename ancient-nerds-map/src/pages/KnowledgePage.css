@@ -300,3 +300,9 @@
     width: auto;
   }
 }
+
+.kg-tooltip--floating {
+  position: fixed;
+  z-index: 14;
+  pointer-events: none;
+}
