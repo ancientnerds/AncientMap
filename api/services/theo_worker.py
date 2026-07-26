@@ -332,10 +332,12 @@ async def _process_request(
 # Hard ceiling on a single research run. The user's explicit guidance is that
 # research QUALITY (sources, citations, image grounding) is paramount — the
 # pipeline must be free to do as many saturation rounds + cross-pollinations as
-# the angles need, even when that means a 4+ hour wall clock. Run 12 timed out
-# at 14400s mid-saturation. The 12h ceiling here is a stuck-process
-# safety net, not a quality gate.
-_REQUEST_TIMEOUT_SECONDS = 43200  # 12 hours
+# the angles need. Since 2026-07-26 runs crawl at low priority (~12-18h normal,
+# quota troughs stack on top) against a 72h orchestrator deadline
+# (ResearchConfig.deadline_hours) that force-finishes gracefully. This worker
+# ceiling sits just above it as the stuck-process safety net — it must only
+# fire when the orchestrator's own deadline handling is itself wedged.
+_REQUEST_TIMEOUT_SECONDS = 73 * 3600  # 73 hours (orchestrator deadline + 1h)
 
 # --- Stall detection -------------------------------------------------------
 # A healthy run flushes climbing counters to the DB every ~30s

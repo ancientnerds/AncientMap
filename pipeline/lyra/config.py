@@ -138,7 +138,7 @@ class LyraSettings(BaseSettings):
     # >=60s between calls) for the whole run, capping research at roughly
     # ~580K tokens/h — under a third of the shared 9.7M/5h Token Plan window,
     # so Lyra and manual queries always keep headroom. A run stretches to
-    # ~12-18h, well inside the 24h deadline. LYRA_THEO_LOW_PRIORITY=0 restores
+    # ~12-18h, well inside the 72h deadline. LYRA_THEO_LOW_PRIORITY=0 restores
     # full-speed research runs.
     theo_low_priority: bool = True
     minimax_thinking_budget_instant: int = 256  # dead config — see note above

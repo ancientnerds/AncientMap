@@ -151,8 +151,8 @@ class ConvergenceOrchestrator:
         # Low-priority mode (2026-07-26): pin the limiter to crawl pacing for
         # the whole run so research can never outpace the shared 5h window.
         # The pin outranks the watchdog's HEALTHY restore — see
-        # MiniMaxLimiter.pin_crawl(). Runtime stretches to ~12-18h; the 24h
-        # deadline accommodates that.
+        # MiniMaxLimiter.pin_crawl(). Runtime stretches to ~12-18h; the 72h
+        # deadline accommodates that plus stacked quota troughs.
         if self._settings.theo_low_priority:
             from pipeline.lyra.minimax_limiter import limiter as _limiter
 

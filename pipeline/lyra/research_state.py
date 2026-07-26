@@ -34,7 +34,11 @@ class ResearchConfig:
     """Global config for the convergence pipeline."""
 
     max_concurrent_llm_calls: int = 100
-    deadline_hours: int = 24
+    # 72h (was 24h, 2026-07-26): low-priority crawl pacing stretches a run to
+    # ~12-18h under normal conditions; quota troughs (EXHAUSTED freezes wait
+    # in place up to 6h each) can stack on top. 72h gives a crawled run room
+    # to survive multiple troughs instead of dying at the deadline.
+    deadline_hours: int = 72
     # Convergence
     saturation_threshold: int = 2  # consecutive zero-claim rounds to saturate an angle
     max_search_rounds_per_angle: int = 4  # round 1 + cross-pollinated round 2 + 2 verification
