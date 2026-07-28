@@ -500,7 +500,7 @@ def _auto_publish(request_id: str) -> None:
                                         f"`{request_id}`\n"
                                         f"**{(result.get('title') or row.question)[:200]}**\n"
                                         f"quality_passed={quality.get('passed')} "
-                                        f"audit_passed={artifact_report['passed']}\n"
+                                        f"recomputed_audit_passed={artifact_report['passed']}\n"
                                         f"issues: {(artifact_report.get('issues') or [])[:3]}"
                                     ),
                                     "color": 0xE67E22,
@@ -563,8 +563,24 @@ def _auto_publish(request_id: str) -> None:
             )
         except Exception as exc:  # noqa: BLE001 — same best-effort as the route
             logger.error("[THEO] Qdrant indexing failed for %s: %s", request_id, exc)
-    except Exception as exc:  # noqa: BLE001 — publishing must never crash the worker
-        logger.error("[THEO] Auto-publish failed for %s: %s", request_id, exc)
+    except Exception as exc:  # noqa: BLE001 — auto-publish must never kill the worker
+        logger.error("[THEO] Auto-publish crashed for %s: %s", request_id, exc, exc_info=True)
+        try:
+            from api.services.notify import send_discord_webhook
+
+            send_discord_webhook(
+                {
+                    "embeds": [
+                        {
+                            "title": "Theo auto-publish CRASHED — paper stuck unpublished",
+                            "description": f"`{request_id}`\n{type(exc).__name__}: {exc}",
+                            "color": 0xE74C3C,
+                        }
+                    ]
+                }
+            )
+        except Exception:  # noqa: BLE001 — notification is best-effort
+            pass
 
 
 async def _run_with_stall_guard(
