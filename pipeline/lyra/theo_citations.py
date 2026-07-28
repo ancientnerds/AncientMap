@@ -1496,6 +1496,116 @@ def validate_paper_artifact(markdown: str) -> dict:
     }
 
 
+def replace_references_section(text: str, refs_md: str) -> str:
+    """Replace (or append) the rendered References block with refs_md.
+
+    Presentation renders the canonical list from the registry AFTER all
+    injection/prune passes; this swaps out whatever stale block the text
+    carries. Empty refs_md just drops the block.
+    """
+    prose, _heading, _body = split_artifact(text)
+    if not refs_md:
+        return prose.rstrip() + "\n"
+    return prose.rstrip() + f"\n\n## References\n\n{refs_md}\n"
+
+
+def _tidy_marker_whitespace(prose: str) -> str:
+    """Collapse doubled spaces / space-before-punctuation left by marker strips."""
+    prose = re.sub(r" {2,}", " ", prose)
+    return re.sub(r" +([.,;:?!])", r"\1", prose)
+
+
+def repair_artifact(markdown: str) -> tuple[str, dict]:
+    """Deterministic citation repair. Never adds or remaps a citation.
+
+    Order matters:
+      1. split grouped markers so every digit is visible,
+      2. strip non-numeric bracket tokens ([N1], [N - topic], [...], hex ids),
+      3. strip numeric prose markers with no rendered list entry,
+      4. drop rendered entries never cited in prose,
+      5. renumber prose + list atomically to 1..M in first-citation order.
+
+    Bails (steps 3-5 skipped) when the rendered list itself is broken — no
+    refs section, a non-empty line that isn't `[N] ...`, or duplicate numbers.
+    Repairing against a broken list would be guessing, and guessing is the
+    failure mode this module exists to prevent. The caller must HOLD such
+    papers, not publish them.
+
+    Returns (repaired_markdown, validate_paper_artifact(repaired_markdown)).
+    """
+    text, _groups = normalize_grouped_markers(markdown)
+    prose, heading, refs_body = split_artifact(text)
+
+    # Step 2 — strip non-numeric bracket tokens from prose.
+    def _drop_non_numeric(m: re.Match[str]) -> str:
+        token = m.group(1).strip()
+        if token.isdigit() or token.startswith("^"):
+            return m.group(0)
+        return ""
+
+    prose = re.sub(r"\[([^\]\n]+)\](?!\()", _drop_non_numeric, prose)
+    prose = _tidy_marker_whitespace(prose)
+
+    # Parse the rendered list; bail on anything broken.
+    line_by_num: dict[int, str] = {}
+    broken = not heading
+    for line in refs_body.splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        m = re.match(r"^\[(\d+)\]\s+(.+)$", stripped)
+        if m is None or int(m.group(1)) in line_by_num:
+            broken = True
+            break
+        line_by_num[int(m.group(1))] = m.group(2)
+
+    if broken:
+        repaired = prose + heading + refs_body
+        return repaired, validate_paper_artifact(repaired)
+
+    # Step 3 — strip numeric markers with no rendered entry.
+    ref_nums = set(line_by_num)
+
+    def _drop_invalid(m: re.Match[str]) -> str:
+        return m.group(0) if int(m.group(1)) in ref_nums else ""
+
+    prose = re.sub(r"\[(\d+)\](?!\()", _drop_invalid, prose)
+    prose = _tidy_marker_whitespace(prose)
+
+    # Steps 4+5 — first-citation order, renumber prose and rebuild the list.
+    order: list[int] = []
+    seen: set[int] = set()
+    for m in re.finditer(r"\[(\d+)\](?!\()", prose):
+        n = int(m.group(1))
+        if n not in seen:
+            seen.add(n)
+            order.append(n)
+    old_to_new = {old: new for new, old in enumerate(order, start=1)}
+
+    prose = re.sub(r"\[(\d+)\](?!\()", lambda m: f"\x00{old_to_new[int(m.group(1))]}\x00", prose)
+    prose = re.sub(r"\x00(\d+)\x00", r"[\1]", prose)
+
+    new_lines = [f"[{old_to_new[old]}] {line_by_num[old]}" for old in order]
+    repaired = replace_references_section(prose, "\n".join(new_lines))
+    return repaired, validate_paper_artifact(repaired)
+
+
+def validate_or_repair(markdown: str) -> tuple[str, dict]:
+    """Validate; on failure attempt the deterministic repair once.
+
+    Returns (text, report). The text is only replaced when the repair reaches
+    a passing state — a still-failing repair returns the ORIGINAL text with
+    the original failing report, so callers hold the unmodified paper.
+    """
+    report = validate_paper_artifact(markdown)
+    if report["passed"]:
+        return markdown, report
+    repaired, repaired_report = repair_artifact(markdown)
+    if repaired_report["passed"]:
+        return repaired, repaired_report
+    return markdown, report
+
+
 # ---------------------------------------------------------------------------
 # References-section parser (mirrors ancient-nerds-map/src/pages/
 # ResearchPaperPage.tsx:parseReferences — keep field names aligned)

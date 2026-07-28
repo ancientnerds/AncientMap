@@ -234,3 +234,125 @@ for length testing purposes.
     crlf = md.replace("\n", "\r\n")
     report = validate_paper_artifact(crlf)
     assert report["uncited_paragraphs"] >= 1
+
+
+from pipeline.lyra.theo_citations import (
+    repair_artifact,
+    replace_references_section,
+    validate_or_repair,
+)
+
+# DMT-class defects: grouped marker + orphan high marker + rendered refs
+# never cited (repair must drop them and renumber prose + list atomically).
+DMT_CLASS = """# DMT Paper
+
+## Findings
+
+Strassman ran DEA-approved injections at UNM between 1990 and 1995 with
+sixty volunteers enrolled [2, 1]. Later EEG work replicated the surge under
+psilocybin in controlled settings [3]. A speculative claim cites nothing
+real [6].
+
+## References
+
+[1] Strassman UNM study — https://a.example/strassman (accessed 2026-07-01) [Academic]
+[2] DMT and the pineal — https://a.example/pineal (accessed 2026-07-01)
+[3] EEG replication — https://a.example/eeg (accessed 2026-07-01) [Academic]
+[4] Never cited A — https://a.example/na (accessed 2026-07-01)
+[5] Never cited B — https://a.example/nb (accessed 2026-07-01)
+"""
+
+
+def test_repair_fixes_dmt_class_defects():
+    repaired, report = repair_artifact(DMT_CLASS)
+    assert report["passed"] is True
+    # Grouped marker split, order preserved: [2, 1] -> [2] [1] -> renumbered [1] [2]
+    assert "enrolled [1] [2]." in repaired
+    # [3] keeps citing the EEG line, renumbered to [3] (first-use order 2,1,3)
+    assert "settings [3]." in repaired
+    # Orphan [6] stripped; never-cited refs [4] [5] dropped; list is 1..3
+    assert "[6]" not in repaired
+    assert "Never cited" not in repaired
+    assert report["total_references"] == 3
+    # Titles preserved verbatim on renumbered lines
+    assert "[1] DMT and the pineal — https://a.example/pineal" in repaired
+    assert "[2] Strassman UNM study — https://a.example/strassman" in repaired
+
+
+def test_repair_strips_tokens_but_holds_kybalion_class():
+    # [N1]/[N2] and [4][5][6] are stripped, ref [3] dropped — but stripping
+    # [6] leaves the Atkinson paragraph uncited, so the repair must NOT
+    # reach passed: the paper HOLDS for manual review instead of publishing
+    # with an uncited factual claim.
+    repaired, report = repair_artifact(KYBALION_CLASS)
+    assert "[N1]" not in repaired
+    assert "[N2]" not in repaired
+    prose_part = repaired.split("## References")[0]
+    assert "[4]" not in prose_part
+    assert "[6]" not in prose_part
+    assert report["passed"] is False
+    assert report["uncited_paragraphs"] >= 1
+
+
+def test_repair_is_idempotent():
+    once, _ = repair_artifact(DMT_CLASS)
+    twice, report = repair_artifact(once)
+    assert twice == once
+    assert report["passed"] is True
+
+
+def test_repair_bails_on_unparseable_ref_line():
+    md = DMT_CLASS.replace(
+        "[4] Never cited A — https://a.example/na (accessed 2026-07-01)",
+        "Some stray sentence in the references block.",
+    )
+    repaired, report = repair_artifact(md)
+    assert report["passed"] is False
+    # Original refs body untouched — no guessing against a broken list.
+    assert "Some stray sentence" in repaired
+
+
+def test_repair_holds_when_strip_creates_uncited_paragraph():
+    md = """# T
+
+## Findings
+
+This entire factual paragraph about ancient metallurgy rests on one marker
+that resolves to nothing at all [9].
+
+## References
+
+[1] Real ref — https://a.example/r (accessed 2026-07-01)
+"""
+    _repaired, report = repair_artifact(md)
+    # [9] is stripped, [1] becomes orphaned -> dropped, paragraph now uncited.
+    assert report["passed"] is False
+    assert report["uncited_paragraphs"] >= 1
+
+
+def test_validate_or_repair_returns_original_when_clean():
+    text, report = validate_or_repair(CLEAN_PAPER)
+    assert text == CLEAN_PAPER
+    assert report["passed"] is True
+
+
+def test_validate_or_repair_repairs_dirty_text():
+    text, report = validate_or_repair(DMT_CLASS)
+    assert report["passed"] is True
+    assert "enrolled [1] [2]." in text
+
+
+def test_replace_references_section_replaces_stale_block():
+    stale = CLEAN_PAPER
+    new_md = replace_references_section(
+        stale, "[1] Only ref — https://o.example (accessed 2026-07-02)"
+    )
+    assert "Only ref" in new_md
+    assert "Radiocarbon dating" not in new_md
+    assert new_md.count("## References") == 1
+
+
+def test_replace_references_section_appends_when_missing():
+    new_md = replace_references_section("# T\n\nProse [1].\n", "[1] R — https://r.example")
+    assert "## References" in new_md
+    assert "[1] R — https://r.example" in new_md
