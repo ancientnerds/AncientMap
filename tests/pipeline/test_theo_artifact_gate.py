@@ -81,8 +81,8 @@ def test_normalize_grouped_markers_noop_without_groups():
 
 
 def test_normalize_grouped_markers_leaves_refs_section_alone():
-    md = "Prose [1, 2].\n\n## References\n\n[1] A, B — https://a.example\n"
+    md = "Prose [1, 2].\n\n## References\n\n[1, 2] Combined ref — https://a.example\n"
     text, n = normalize_grouped_markers(md)
-    assert n == 1
-    assert "[1] [2]" in text
-    assert "[1] A, B — https://a.example" in text  # refs untouched
+    assert n == 1  # only the prose group counted
+    assert "[1] [2]" in text.split("## References")[0]
+    assert "[1, 2] Combined ref — https://a.example" in text  # refs body untouched

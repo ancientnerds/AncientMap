@@ -1345,7 +1345,10 @@ def normalize_grouped_markers(text: str) -> tuple[str, int]:
     the `\\[(\\d+)\\]` renumbering regex, so an unsplit group keeps its OLD
     working numbers after renumbering — silent misattribution, worse than an
     orphan. Only prose is touched; the References section may legitimately
-    contain commas inside titles. Returns (new_text, groups_split).
+    contain commas inside titles. Bracketed numeric lists that aren't
+    citations (e.g. a thousands-separated `[3,000]` or an inline array
+    literal) would also be split — accepted risk, since `[N]` brackets are
+    reserved for citations in Theo prose. Returns (new_text, groups_split).
     """
     prose, heading, body = split_artifact(text)
     count = 0
