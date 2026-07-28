@@ -1285,7 +1285,22 @@ def audit_citations(paper_text: str, registry: CitationRegistry) -> dict:
 # _find_references_heading (pre-final pipeline text), last-match used by
 # split_artifact (final artifact). See each function's docstring for why
 # the match direction differs.
-_REFS_HEADING_RE = re.compile(r"^#{2,3}\s+(?:References|Sources)\b.*$", re.MULTILINE)
+#
+# Exact-line-end contract: the heading word must be the last thing on the
+# line (only trailing whitespace allowed) — no trailing colon, no extra
+# words. This mirrors the frontend's `splitBodyAndRefs` (ancient-nerds-map/
+# src/pages/ResearchPaperPage.tsx), which requires end-of-line after
+# "References"/"Sources" to recognize the heading. Two consequences, both
+# verified against the renderer: "## References:" (trailing colon) is NOT a
+# refs heading to readers, so the backend must not treat it as one either —
+# accepting it would let the gate certify a paper that renders with broken
+# citations. Conversely "## Sources of Evidence" is NOT a refs heading (extra
+# words after "Sources"), so the loose `\b.*$` version previously false-
+# positived on it, both here and in `_find_references_heading` (which feeds
+# audit/strip/prune). Note: `strip_existing_references_section` uses its own,
+# deliberately looser regex — that's pre-append cleanup of LLM-emitted
+# variants (including the colon form) and is unaffected by this change.
+_REFS_HEADING_RE = re.compile(r"^#{2,3}\s+(?:References|Sources)\s*$", re.MULTILINE)
 
 
 def _find_references_heading(text: str) -> int | None:
@@ -1311,13 +1326,17 @@ def split_artifact(markdown: str) -> tuple[str, str, str]:
 
     Splits on the LAST References/Sources heading, mirroring the frontend's
     `splitBodyAndRefs` (ancient-nerds-map/src/pages/ResearchPaperPage.tsx) —
-    this defends against a writer/presentation LLM injecting a fake
-    "## References" heading mid-body: with last-match, everything up to and
-    including the true trailing heading stays in scope, so a fake mid-body
-    heading remains visible in prose rather than silently truncating real
-    content. Documents with multiple headings are separately rejected by the
-    artifact validator (a later task). Contrast with `_find_references_heading`,
-    which uses the FIRST heading on pre-final pipeline text.
+    both in match direction (last heading) and in requiring the heading word
+    to end the line (see `_REFS_HEADING_RE`'s exact-line-end contract: no
+    trailing colon, no extra words) so a heading here is only ever recognized
+    when the frontend renderer would also recognize it. This defends against
+    a writer/presentation LLM injecting a fake "## References" heading
+    mid-body: with last-match, everything up to and including the true
+    trailing heading stays in scope, so a fake mid-body heading remains
+    visible in prose rather than silently truncating real content. Documents
+    with multiple headings are rejected by `validate_paper_artifact`.
+    Contrast with `_find_references_heading`, which uses the FIRST heading on
+    pre-final pipeline text.
     heading_line includes the trailing newline when present. When no heading
     exists, everything is prose and heading/body are empty.
     """
@@ -1376,6 +1395,12 @@ def validate_paper_artifact(markdown: str) -> dict:
     plus references_sections, unparseable_ref_lines, duplicate_ref_nums,
     non_contiguous. `passed` is True iff `issues` is empty.
     """
+    # Normalize CRLF -> LF up front. A CRLF paper (possible via the PATCH edit
+    # path) otherwise disables the uncited-paragraph check downstream, since
+    # `_split_prose_into_paragraphs` splits on a bare "\n\n" and would never
+    # see a blank-line boundary written as "\r\n\r\n".
+    markdown = markdown.replace("\r\n", "\n")
+
     issues: list[str] = []
 
     references_sections = len(_REFS_HEADING_RE.findall(markdown))
@@ -1389,6 +1414,8 @@ def validate_paper_artifact(markdown: str) -> dict:
     # Every non-empty rendered line must parse as a reference entry.
     parsed = parse_references_section(refs_body)
     parsed_nums = [r["num"] for r in parsed]
+    if references_sections and not parsed:
+        issues.append("References section contains no parseable entries")
     unparseable_ref_lines: list[str] = []
     for line in refs_body.splitlines():
         stripped = line.strip()

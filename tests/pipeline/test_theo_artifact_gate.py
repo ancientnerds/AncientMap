@@ -192,3 +192,45 @@ architecture with plenty of detail attached [4].
     assert report["passed"] is False
     assert report["duplicate_ref_nums"] == [1]
     assert report["non_contiguous"] is True
+
+
+def test_validate_flags_empty_references_section():
+    report = validate_paper_artifact("# T\n\n## References\n")
+    assert report["passed"] is False
+    assert any("no parseable entries" in i for i in report["issues"])
+
+
+def test_validate_heading_requires_exact_line():
+    # `## References:` is not a refs heading to the frontend renderer.
+    report = validate_paper_artifact(
+        "# T\n\nProse [1].\n\n## References:\n\n[1] A — https://a.example (accessed 2026-07-01)\n"
+    )
+    assert report["references_sections"] == 0
+    assert report["passed"] is False
+
+
+def test_validate_sources_of_evidence_is_not_a_refs_heading():
+    md = CLEAN_PAPER.replace("## Findings", "## Sources of Evidence")
+    report = validate_paper_artifact(md)
+    assert report["references_sections"] == 1
+    assert report["passed"] is True
+
+
+def test_validate_crlf_input_still_checks_uncited_paragraphs():
+    md = """# T
+
+## Findings
+
+Alpha claim about dating with plenty of factual detail attached here for
+length testing purposes [1].
+
+Beta claim about architecture with plenty of factual detail attached here
+for length testing purposes.
+
+## References
+
+[1] A — https://a.example (accessed 2026-07-01)
+"""
+    crlf = md.replace("\n", "\r\n")
+    report = validate_paper_artifact(crlf)
+    assert report["uncited_paragraphs"] >= 1
