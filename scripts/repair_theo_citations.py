@@ -24,7 +24,11 @@ state. If `report` repairs clean but the row is public and its separate
 `published_report` field cannot be repaired clean, the row is still written
 and printed as FIXED (the `report` field genuinely is fixed) — but a
 `PUB-HOLD` line is also printed calling out that the public-facing text
-remains dirty, so this doesn't get silently missed.
+remains dirty, so this doesn't get silently missed. The persisted `audit`
+field is always recomputed from the final stored artifact-of-record
+(`published_report` when present, else `report`) — matching the publish
+route's semantics — so a PUB-HOLD row correctly persists `audit.passed=False`
+even though the `report` field itself is clean.
 """
 
 from __future__ import annotations
@@ -115,7 +119,12 @@ def main() -> int:
                     print(f"       - {issue}")
                 continue
 
-            result["audit"] = rep
+            # The audit must describe the artifact readers see: the published
+            # view when one exists, else the report (matches the publish
+            # route's semantics). Recompute from the FINAL stored text —
+            # _repair_field's verdict can refer to a non-adopted repair.
+            final_md = result.get("published_report") or result.get("report") or ""
+            result["audit"] = validate_paper_artifact(final_md)
             session.execute(
                 text("UPDATE research_requests SET result_json = :r WHERE id = :id"),
                 {"id": row.id, "r": json.dumps(result)},
