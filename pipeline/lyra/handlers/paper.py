@@ -261,10 +261,21 @@ class PaperHandler(BaseHandler):
         from pipeline.lyra.theo_citations import (
             audit_citations,
             finalize_references,
+            normalize_grouped_markers,
             strip_existing_references_section,
             strip_orphan_citation_markers,
             strip_uncited_factual_paragraphs,
         )
+
+        # ---------------------------------------------------------------
+        # Step 7.4: Split grouped markers `[9, 7, 1]` -> `[9] [7] [1]`.
+        # Grouped digits are invisible to the renumbering regex below — an
+        # unsplit group would keep its OLD working numbers after
+        # finalize_references and point at the wrong sources.
+        # ---------------------------------------------------------------
+        self.state.paper_text, _groups_split = normalize_grouped_markers(self.state.paper_text)
+        if _groups_split:
+            self.state.log("paper", f"Split {_groups_split} grouped citation marker(s)")
 
         self.state.paper_text, sid_to_num = finalize_references(
             self.state.paper_text,

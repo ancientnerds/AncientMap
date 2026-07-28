@@ -9,25 +9,21 @@ from pipeline.lyra.config import _get_settings
 from pipeline.lyra.handlers import BaseHandler
 from pipeline.lyra.minimax_shared import minimax_chat_anthropic
 from pipeline.lyra.research_events import FactCheckComplete, PresentationChecked
+from pipeline.lyra.theo_citations import split_artifact
 
 logger = logging.getLogger(__name__)
 
 
 def _split_paper_for_presentation(paper_text: str) -> tuple[str, str]:
-    """Split paper into (prose, references_block).
+    """Split into (prose, refs_block) on the References/Sources heading.
 
-    Run 16 audit found the presentation LLM mangling the references list:
-    only [1]-[5] retained their [N] markers; entries 6+ were glued onto a
-    single line and 9 of 46 references vanished entirely. The fix is to
-    not let the LLM see references at all — split them off, run the LLM on
-    prose only, then re-append the references block verbatim.
-
-    Returns (prose_text, references_block). Either may be empty.
+    Delegates to theo_citations.split_artifact so every consumer agrees on
+    the same anchor (the old local regex missed ### References / ## Sources).
     """
-    refs_match = re.search(r"\n##\s*References\s*\n", paper_text)
-    if not refs_match:
+    prose, heading, body = split_artifact(paper_text)
+    if not heading:
         return paper_text, ""
-    return paper_text[: refs_match.start()], paper_text[refs_match.start() :]
+    return prose, heading + body
 
 
 _REQUIRED_HEADINGS_LOWER = {
@@ -180,11 +176,12 @@ class PresentationHandler(BaseHandler):
         # from the registry; truly unsupported ones get deleted; then audit
         # the final state.
         from pipeline.lyra.theo_citations import (
-            audit_citations,
             prune_orphaned_references,
             prune_unrenderable_references,
+            replace_references_section,
             strip_debug_tokens,
             strip_uncited_factual_paragraphs,
+            validate_or_repair,
         )
 
         # First, scrub bare `[N]` / `[...]` debug tokens — these survive
@@ -215,8 +212,21 @@ class PresentationHandler(BaseHandler):
             # structure consistent for any other consumer.
             unrenderable = prune_unrenderable_references(self.state.registry)
             self.state.post_presentation_unrenderable_pruned = unrenderable
-            new_audit = audit_citations(self.state.paper_text, self.state.registry)
-            self.state.audit_result = new_audit
+
+            # Re-render the References list from the (now-pruned) registry and
+            # replace the stale block re-appended verbatim above. Without this,
+            # injection/prune mutate the registry AFTER the list was rendered
+            # and the published artifact drifts from the audit (Kybalion:
+            # prose cited [46]-[50], rendered list stopped at [45]).
+            refs_md = self.state.registry.format_references_list()
+            self.state.paper_text = replace_references_section(self.state.paper_text, refs_md)
+
+            # Final artifact gate — validates ONLY the rendered markdown, then
+            # applies the deterministic repair when needed. INVARIANT: no LLM
+            # pass may touch paper_text after this point; any new stage that
+            # mutates prose must run before this block.
+            self.state.paper_text, report = validate_or_repair(self.state.paper_text)
+            self.state.audit_result = report
             self.state.log(
                 "presentation",
                 f"Post-presentation strip: seen={post_strip_metrics.get('uncited_seen', 0)}, "
@@ -228,10 +238,12 @@ class PresentationHandler(BaseHandler):
             )
             self.state.log(
                 "presentation",
-                f"Re-audit after presentation: passed={new_audit.get('passed')}, "
-                f"non_numeric={len(new_audit.get('non_numeric_markers') or [])}, "
-                f"uncited={new_audit.get('uncited_paragraphs', 0)}, "
-                f"orphaned={len(new_audit.get('orphaned_refs') or [])}",
+                f"Artifact gate: passed={report.get('passed')}, "
+                f"refs={report.get('total_references')}, "
+                f"non_numeric={len(report.get('non_numeric_markers') or [])}, "
+                f"invalid={len(report.get('invalid_markers') or [])}, "
+                f"orphaned={len(report.get('orphaned_refs') or [])}, "
+                f"uncited={report.get('uncited_paragraphs', 0)}",
             )
         except Exception as e:
             logger.warning("post-presentation re-audit failed: %s", e)
