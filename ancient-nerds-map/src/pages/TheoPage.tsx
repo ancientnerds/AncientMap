@@ -501,7 +501,11 @@ export default function TheoPage() {
       })
       if (!resp.ok) {
         const err = await resp.json().catch(() => ({ detail: 'Failed to submit' }))
-        setToast({ msg: err.detail || 'Failed to submit', type: 'error' })
+        const detail = err?.detail
+        const msg = typeof detail === 'string'
+          ? detail
+          : detail?.hint ?? detail?.error ?? 'Failed to submit'
+        setToast({ msg, type: 'error' })
         return
       }
       const result = await resp.json().catch(() => null)
@@ -569,7 +573,11 @@ export default function TheoPage() {
         setToast({ msg: 'Published to the public library', type: 'ok' })
       } else {
         const err = await resp.json().catch(() => ({ detail: 'Failed to publish' }))
-        setToast({ msg: err.detail || 'Failed to publish', type: 'error' })
+        const detail = err?.detail
+        const msg = typeof detail === 'string'
+          ? detail
+          : detail?.hint ?? detail?.error ?? 'Failed to publish'
+        setToast({ msg, type: 'error' })
       }
       fetchList()
       fetchPublicPapers(0, false)
