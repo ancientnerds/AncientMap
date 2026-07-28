@@ -1356,28 +1356,70 @@ def split_artifact(markdown: str) -> tuple[str, str, str]:
 
 _GROUPED_MARKER_RE = re.compile(r"\[(\d+(?:\s*,\s*\d+)+)\]")
 
+# A thousands-formatted numeral like `[3,000]` or `[30,000,000]` — matches the
+# _GROUPED_MARKER_RE shape (digits, comma, digits) but is a number, not a
+# citation group. Guarded separately so it's left intact rather than split
+# into `[3] [000]`.
+_THOUSANDS_NUMERAL_RE = re.compile(r"^\d{1,3}(?:,\d{3})+$")
+
+# Short numeric dash range `[2-4]` / `[7–8]`. Digits-only, so this can never
+# collide with _PLACEHOLDER_MARKER_RE (`[N - topic]`, which requires a
+# literal letter "N") — the two patterns never compete for the same bracket
+# text.
+_RANGE_MARKER_RE = re.compile(r"\[(\d+)\s*[-–]\s*(\d+)\]")
+
 
 def normalize_grouped_markers(text: str) -> tuple[str, int]:
-    """Split grouped citation markers `[9, 7, 1]` into `[9] [7] [1]`.
+    """Split grouped citation markers `[9, 7, 1]` into `[9] [7] [1]`, and
+    expand short numeric dash ranges `[2-4]` into `[2] [3] [4]`.
 
     MUST run before finalize_references(): grouped digits are invisible to
     the `\\[(\\d+)\\]` renumbering regex, so an unsplit group keeps its OLD
     working numbers after renumbering — silent misattribution, worse than an
     orphan. Only prose is touched; the References section may legitimately
-    contain commas inside titles. Bracketed numeric lists that aren't
-    citations (e.g. a thousands-separated `[3,000]` or an inline array
-    literal) would also be split — accepted risk, since `[N]` brackets are
-    reserved for citations in Theo prose. Returns (new_text, groups_split).
+    contain commas inside titles.
+
+    Two guards against false positives:
+    * Thousands-formatted numerals like `[3,000]` are left intact — the
+      bracket content matches `\\d{1,3}(?:,\\d{3})+` exactly, so it's a
+      numeral rather than a citation group. The validator then flags the
+      surviving non-numeric marker and the paper HOLDS instead of being
+      silently shredded into `[3] [000]`.
+    * Dash ranges are only expanded when `start < end` and `end - start <=
+      10`; anything outside that (reversed, equal, or oversized) is left
+      intact — an inline array literal or unrelated dash usage would also be
+      split, an accepted risk since `[N]` brackets are reserved for
+      citations in Theo prose, but oversized/malformed ranges are more
+      likely a typo than a real 11+ source range, so they HOLD instead.
+
+    Returns (new_text, groups_split) — groups_split counts both comma-groups
+    and dash-ranges that were actually expanded.
     """
     prose, heading, body = split_artifact(text)
     count = 0
 
     def _split(m: re.Match[str]) -> str:
         nonlocal count
+        token = m.group(1)
+        compact = re.sub(r"\s+", "", token)
+        if _THOUSANDS_NUMERAL_RE.fullmatch(compact):
+            return m.group(0)  # a numeral like [3,000], not a citation group
         count += 1
-        return " ".join(f"[{n.strip()}]" for n in m.group(1).split(","))
+        return " ".join(f"[{n.strip()}]" for n in token.split(","))
 
-    return _GROUPED_MARKER_RE.sub(_split, prose) + heading + body, count
+    prose = _GROUPED_MARKER_RE.sub(_split, prose)
+
+    def _expand_range(m: re.Match[str]) -> str:
+        nonlocal count
+        start, end = int(m.group(1)), int(m.group(2))
+        if start < end and end - start <= 10:
+            count += 1
+            return " ".join(f"[{n}]" for n in range(start, end + 1))
+        return m.group(0)
+
+    prose = _RANGE_MARKER_RE.sub(_expand_range, prose)
+
+    return prose + heading + body, count
 
 
 def validate_paper_artifact(markdown: str) -> dict:
@@ -1509,46 +1551,88 @@ def replace_references_section(text: str, refs_md: str) -> str:
     return prose.rstrip() + f"\n\n## References\n\n{refs_md}\n"
 
 
-def _tidy_marker_whitespace(prose: str) -> str:
-    """Collapse doubled spaces / space-before-punctuation left by marker strips."""
-    prose = re.sub(r" {2,}", " ", prose)
-    return re.sub(r" +([.,;:?!])", r"\1", prose)
+def _is_strippable_artifact_token(token: str) -> bool:
+    """Bracket tokens that are unambiguous pipeline artifacts — safe to strip.
+
+    Everything else ([sic], quote interpolations like [the king], reference-style
+    link labels, nested-bracket alt text) is left in place; the validator then
+    flags it and the paper HOLDS for a human instead of being silently rewritten.
+    """
+    if re.fullmatch(r"N\d*", token):  # [N], [N1], [N7] writer artifacts
+        return True
+    if token in ("...", "…"):
+        return True
+    if re.fullmatch(r"[a-f0-9]{6,16}", token):  # source-id debug tokens
+        return True
+    if _PLACEHOLDER_MARKER_RE.fullmatch(f"[{token}]"):  # [N - topic]
+        return True
+    return False
 
 
 def repair_artifact(markdown: str) -> tuple[str, dict]:
     """Deterministic citation repair. Never adds or remaps a citation.
 
     Order matters:
-      1. split grouped markers so every digit is visible,
-      2. strip non-numeric bracket tokens ([N1], [N - topic], [...], hex ids),
+      1. split grouped markers so every digit is visible (also expands short
+         dash ranges like [2-4] and skips thousands-formatted numerals),
+      2. strip ONLY allowlisted pipeline-artifact bracket tokens ([N1],
+         [N - topic], [...], hex source-id tokens) — everything else (quote
+         interpolations, [sic], nested markdown alt text) is left untouched,
+         so the validator flags it and the paper HOLDS for a human instead of
+         being silently rewritten,
       3. strip numeric prose markers with no rendered list entry,
       4. drop rendered entries never cited in prose,
       5. renumber prose + list atomically to 1..M in first-citation order.
 
-    Bails (steps 3-5 skipped) when the rendered list itself is broken — no
-    refs section, a non-empty line that isn't `[N] ...`, or duplicate numbers.
+    Bails (steps 3-5 skipped) when: the rendered list itself is broken — no
+    refs section, a non-empty line that isn't `[N] ...`, or duplicate numbers
+    — OR a numeric marker is immediately followed by `(` or `]` (`[1](...)`
+    reads as a markdown link to a reader but as a citation to the naive
+    validator census; `[1]]` means the marker is nested inside a larger
+    bracket span, e.g. markdown image alt text; letting the lookahead skip
+    either shape would let a stale number survive renumbering, i.e. silent
+    misattribution) — OR the text already contains a `\x00` sentinel byte
+    (renumbering could not tell it apart from its own scratch markers).
     Repairing against a broken list would be guessing, and guessing is the
     failure mode this module exists to prevent. The caller must HOLD such
     papers, not publish them.
 
     Returns (repaired_markdown, validate_paper_artifact(repaired_markdown)).
     """
+    markdown = markdown.replace("\r\n", "\n")  # mixed-EOL repairs otherwise
+    if "\x00" in markdown:  # sentinel collision — cannot renumber safely
+        return markdown, validate_paper_artifact(markdown)
+
     text, _groups = normalize_grouped_markers(markdown)
     prose, heading, refs_body = split_artifact(text)
 
-    # Step 2 — strip non-numeric bracket tokens from prose.
+    # Step 2 — strip ONLY allowlisted pipeline-artifact bracket tokens. The
+    # regex consumes an optional single leading space so a stripped token
+    # never leaves a doubled space or a space-before-punctuation behind;
+    # kept tokens return their full match unchanged (no-op).
     def _drop_non_numeric(m: re.Match[str]) -> str:
         token = m.group(1).strip()
         if token.isdigit() or token.startswith("^"):
             return m.group(0)
-        return ""
+        if _is_strippable_artifact_token(token):
+            return ""
+        return m.group(0)
 
-    prose = re.sub(r"\[([^\]\n]+)\](?!\()", _drop_non_numeric, prose)
-    prose = _tidy_marker_whitespace(prose)
+    prose = re.sub(r" ?\[([^\]\n]+)\](?!\()", _drop_non_numeric, prose)
+
+    # Numeric markers glued to another bracket-ish character are ambiguous —
+    # bail rather than guess. `[1](url)` reads as a markdown link to a reader
+    # but as a citation to the naive (no-lookahead) validator census; `[1]]`
+    # means the marker sits inside a larger bracket span our regexes can't
+    # parse (e.g. markdown image alt text `![... [1]](url)` — the `]]` here
+    # is the inner marker's `]` immediately followed by the alt-text's own
+    # closing `]`). Either shape risks a stale digit surviving renumbering
+    # inside content it doesn't own — silent misattribution.
+    ambiguous_adjacency = bool(re.search(r"\[\d+\][(\]]", prose))
 
     # Parse the rendered list; bail on anything broken.
     line_by_num: dict[int, str] = {}
-    broken = not heading
+    broken = not heading or ambiguous_adjacency
     for line in refs_body.splitlines():
         stripped = line.strip()
         if not stripped:
@@ -1569,8 +1653,7 @@ def repair_artifact(markdown: str) -> tuple[str, dict]:
     def _drop_invalid(m: re.Match[str]) -> str:
         return m.group(0) if int(m.group(1)) in ref_nums else ""
 
-    prose = re.sub(r"\[(\d+)\](?!\()", _drop_invalid, prose)
-    prose = _tidy_marker_whitespace(prose)
+    prose = re.sub(r" ?\[(\d+)\](?!\()", _drop_invalid, prose)
 
     # Steps 4+5 — first-citation order, renumber prose and rebuild the list.
     order: list[int] = []

@@ -356,3 +356,78 @@ def test_replace_references_section_appends_when_missing():
     new_md = replace_references_section("# T\n\nProse [1].\n", "[1] R — https://r.example")
     assert "## References" in new_md
     assert "[1] R — https://r.example" in new_md
+
+
+def test_repair_leaves_legitimate_bracketed_prose_and_holds():
+    md = CLEAN_PAPER.replace("samples [1]", 'samples "as [the king] decreed" [sic] [1]')
+    repaired, report = repair_artifact(md)
+    assert "[the king]" in repaired
+    assert "[sic]" in repaired
+    assert report["passed"] is False
+
+
+def test_validate_or_repair_holds_original_on_legit_brackets():
+    md = CLEAN_PAPER.replace("samples [1]", "samples [sic] [1]")
+    text, report = validate_or_repair(md)
+    assert text == md
+    assert report["passed"] is False
+
+
+def test_normalize_expands_dash_ranges():
+    text, n = normalize_grouped_markers("Claim [2-4]. Another [7–8].")
+    assert text == "Claim [2] [3] [4]. Another [7] [8]."
+    assert n == 2
+
+
+def test_normalize_leaves_thousands_numerals_alone():
+    text, n = normalize_grouped_markers("Population reached [3,000] by then.")
+    assert text == "Population reached [3,000] by then."
+    assert n == 0
+
+
+def test_normalize_leaves_oversized_ranges_alone():
+    text, n = normalize_grouped_markers("See [1-45].")
+    assert text == "See [1-45]."
+    assert n == 0
+
+
+def test_repair_expands_range_and_keeps_cited_refs():
+    md = DMT_CLASS.replace("settings [3]", "settings [3-5]")
+    repaired, report = repair_artifact(md)
+    assert report["passed"] is True
+    assert report["total_references"] == 5
+    assert "Never cited A" in repaired
+    assert "Never cited B" in repaired
+
+
+def test_repair_bails_on_paren_adjacent_numeric_marker():
+    md = DMT_CLASS.replace("real [6].", "real [6]. Compare [1](see appendix).")
+    repaired, report = repair_artifact(md)
+    assert report["passed"] is False
+    assert "[1](see appendix)" in repaired
+
+
+def test_repair_preserves_image_with_bracketed_alt():
+    md = DMT_CLASS.replace(
+        "## References",
+        "![Temple ruins [1]](https://img.example/t.jpg)\n\n## References",
+    )
+    repaired, report = repair_artifact(md)
+    assert "![Temple ruins [1]](https://img.example/t.jpg)" in repaired
+    assert report["passed"] is False
+
+
+def test_repair_preserves_list_indentation():
+    md = DMT_CLASS.replace(
+        "A speculative claim cites nothing\nreal [6].",
+        "A speculative claim cites nothing real [6].\n\n- Top point [3]\n  - Nested point [1]",
+    )
+    repaired, _report = repair_artifact(md)
+    assert "  - Nested point" in repaired
+
+
+def test_repair_normalizes_crlf():
+    crlf = DMT_CLASS.replace("\n", "\r\n")
+    repaired, report = repair_artifact(crlf)
+    assert "\r\n" not in repaired
+    assert report["passed"] is True
