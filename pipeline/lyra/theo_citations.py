@@ -1361,6 +1361,114 @@ def normalize_grouped_markers(text: str) -> tuple[str, int]:
     return _GROUPED_MARKER_RE.sub(_split, prose) + heading + body, count
 
 
+def validate_paper_artifact(markdown: str) -> dict:
+    """Artifact-only citation integrity check — validates what readers see.
+
+    Unlike audit_citations() this takes NO registry: it parses the rendered
+    ## References list out of the markdown and checks the prose against it.
+    Registry and rendered artifact can drift (injection assigns numbers after
+    the list was rendered; presentation re-appended the stale block verbatim
+    while prune mutated the registry) — this function is immune to the drift
+    because it never sees the registry. Run it on the exact text being
+    persisted or published.
+
+    Returns the audit_result dict shape (superset): every audit_citations key
+    plus references_sections, unparseable_ref_lines, duplicate_ref_nums,
+    non_contiguous. `passed` is True iff `issues` is empty.
+    """
+    issues: list[str] = []
+
+    references_sections = len(_REFS_HEADING_RE.findall(markdown))
+    if references_sections == 0:
+        issues.append("no References section found")
+    elif references_sections > 1:
+        issues.append(f"{references_sections} References/Sources headings (expected 1)")
+
+    prose_only, _heading, refs_body = split_artifact(markdown)
+
+    # Every non-empty rendered line must parse as a reference entry.
+    parsed = parse_references_section(refs_body)
+    parsed_nums = [r["num"] for r in parsed]
+    unparseable_ref_lines: list[str] = []
+    for line in refs_body.splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        if not (_RICH_REF_LINE_RE.match(stripped) or _REF_LINE_RE.match(stripped)):
+            unparseable_ref_lines.append(stripped[:120])
+    if unparseable_ref_lines:
+        issues.append(
+            f"{len(unparseable_ref_lines)} unparseable line(s) in References: "
+            + "; ".join(unparseable_ref_lines[:3])
+        )
+
+    duplicate_ref_nums = sorted({n for n in parsed_nums if parsed_nums.count(n) > 1})
+    if duplicate_ref_nums:
+        issues.append(f"duplicate reference number(s): {duplicate_ref_nums}")
+
+    ref_nums = set(parsed_nums)
+    non_contiguous = bool(ref_nums) and sorted(ref_nums) != list(range(1, max(ref_nums) + 1))
+    if non_contiguous:
+        issues.append(f"reference numbers not contiguous 1..{max(ref_nums)}")
+
+    marker_values = [int(m) for m in re.findall(r"\[(\d+)\]", prose_only)]
+    total_citations = len(marker_values)
+    unique_cited = set(marker_values)
+
+    invalid_markers = sorted(unique_cited - ref_nums)
+    for n in invalid_markers:
+        issues.append(f"[{n}] cited in text but not in the rendered References list")
+
+    orphaned_refs = sorted(ref_nums - unique_cited)
+    for n in orphaned_refs:
+        issues.append(f"[{n}] in References list but never cited in text")
+
+    # Prose-quality checks — same helpers audit_citations uses, so the dict
+    # keeps its full shape for the judge/UI.
+    paragraphs_with_section = _split_prose_into_paragraphs(prose_only)
+    factual = [p for s, p in paragraphs_with_section if _is_factual_paragraph(p, s)]
+    uncited_paragraphs = sum(1 for p in factual if not re.search(r"\[\d+\]", p))
+    if uncited_paragraphs:
+        issues.append(
+            f"{uncited_paragraphs} paragraph(s) longer than 50 chars contain no citation marker"
+        )
+
+    placeholder_markers = detect_placeholder_markers(prose_only)
+    if placeholder_markers:
+        issues.append(f"{len(placeholder_markers)} unresolved [N - topic] placeholder(s) in prose")
+
+    language_bleed = detect_language_bleed(prose_only)
+    if language_bleed:
+        issues.append(
+            f"{len(language_bleed)} non-Latin script segment(s) in prose: "
+            + ", ".join(language_bleed[:3])
+        )
+
+    non_numeric_markers = _collect_non_numeric_markers(prose_only)
+    if non_numeric_markers:
+        sample = ", ".join(f"[{t}]" for t in non_numeric_markers[:5])
+        issues.append(
+            f"{len(non_numeric_markers)} non-numeric bracketed marker(s) in prose: {sample}"
+        )
+
+    return {
+        "passed": not issues,
+        "total_citations": total_citations,
+        "total_references": len(parsed),
+        "orphaned_refs": orphaned_refs,
+        "invalid_markers": invalid_markers,
+        "uncited_paragraphs": uncited_paragraphs,
+        "placeholder_markers": placeholder_markers,
+        "language_bleed": language_bleed,
+        "non_numeric_markers": non_numeric_markers,
+        "references_sections": references_sections,
+        "unparseable_ref_lines": unparseable_ref_lines,
+        "duplicate_ref_nums": duplicate_ref_nums,
+        "non_contiguous": non_contiguous,
+        "issues": issues,
+    }
+
+
 # ---------------------------------------------------------------------------
 # References-section parser (mirrors ancient-nerds-map/src/pages/
 # ResearchPaperPage.tsx:parseReferences — keep field names aligned)
