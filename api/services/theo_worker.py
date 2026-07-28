@@ -468,13 +468,25 @@ def _auto_publish(request_id: str) -> None:
                 return
             result = json.loads(row.result_json) if row.result_json else {}
             quality = result.get("quality_score") or {}
-            audit = result.get("audit") or {}
-            if not (quality.get("passed") and audit.get("passed")):
+
+            # Citation integrity is recomputed on the artifact — the stored
+            # audit can be stale. The deterministic repair never fabricates
+            # or remaps a citation, so auto-publish may apply it directly.
+            from pipeline.lyra.theo_citations import validate_or_repair
+
+            report_text = result.get("report") or ""
+            repaired_text, artifact_report = validate_or_repair(report_text)
+            if repaired_text != report_text:
+                logger.info("[THEO] Auto-repaired citations for %s before publish", request_id)
+                result["report"] = repaired_text
+            result["audit"] = artifact_report
+
+            if not (quality.get("passed") and artifact_report["passed"]):
                 logger.warning(
                     "[THEO] Auto-publish gate failed for %s (quality=%s audit=%s) — held.",
                     request_id,
                     quality.get("passed"),
-                    audit.get("passed"),
+                    artifact_report["passed"],
                 )
                 try:
                     from api.services.notify import send_discord_webhook
@@ -488,8 +500,8 @@ def _auto_publish(request_id: str) -> None:
                                         f"`{request_id}`\n"
                                         f"**{(result.get('title') or row.question)[:200]}**\n"
                                         f"quality_passed={quality.get('passed')} "
-                                        f"audit_passed={audit.get('passed')}\n"
-                                        f"issues: {(audit.get('issues') or [])[:3]}"
+                                        f"audit_passed={artifact_report['passed']}\n"
+                                        f"issues: {(artifact_report.get('issues') or [])[:3]}"
                                     ),
                                     "color": 0xE67E22,
                                 }
