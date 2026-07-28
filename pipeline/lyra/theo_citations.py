@@ -1120,6 +1120,32 @@ def strip_uncited_factual_paragraphs(
 # ---------------------------------------------------------------------------
 
 
+def _collect_non_numeric_markers(prose: str) -> list[str]:
+    """Bracketed tokens in prose that are not plain [N] citations.
+
+    Catches pipeline debug IDs ([5620e1fb87f7]), [N1]-style writer artifacts,
+    and grouped forms like [9, 7, 1] (grouped digits are NOT a valid marker —
+    they are invisible to renumbering). Markdown links [x](y) are excluded via
+    the negative lookahead; footnotes [^n] and [N - topic] placeholders (already
+    counted separately) are skipped. Deduplicated, first-seen order.
+    """
+    out: list[str] = []
+    seen: set[str] = set()
+    for m in re.finditer(r"\[([^\]\n]+)\](?!\()", prose):
+        token = m.group(1).strip()
+        if not token or token.isdigit():
+            continue
+        if token.startswith("^"):
+            continue
+        if _PLACEHOLDER_MARKER_RE.match(f"[{token}]"):
+            continue
+        if token in seen:
+            continue
+        seen.add(token)
+        out.append(token)
+    return out
+
+
 def audit_citations(paper_text: str, registry: CitationRegistry) -> dict:
     """Mechanical citation audit — no LLM, pure regex/text analysis.
 
@@ -1224,20 +1250,7 @@ def audit_citations(paper_text: str, registry: CitationRegistry) -> dict:
     #    [5620e1fb87f7] that escaped finalize_references(). Markdown links
     #    [text](url) are excluded via negative lookahead on `(`. Footnotes
     #    [^n] and already-caught [N - topic] placeholders are skipped.
-    non_numeric_markers: list[str] = []
-    _seen_nm: set[str] = set()
-    for m in re.finditer(r"\[([^\]\n]+)\](?!\()", prose_only):
-        token = m.group(1).strip()
-        if not token or token.isdigit():
-            continue
-        if token.startswith("^"):
-            continue
-        if _PLACEHOLDER_MARKER_RE.match(f"[{token}]"):
-            continue
-        if token in _seen_nm:
-            continue
-        _seen_nm.add(token)
-        non_numeric_markers.append(token)
+    non_numeric_markers = _collect_non_numeric_markers(prose_only)
     if non_numeric_markers:
         sample = ", ".join(f"[{t}]" for t in non_numeric_markers[:5])
         issues.append(
@@ -1275,6 +1288,34 @@ def _find_references_heading(text: str) -> int | None:
         if idx != -1:
             return idx
     return None
+
+
+# ---------------------------------------------------------------------------
+# Artifact splitting — shared by validate_paper_artifact / repair_artifact /
+# replace_references_section / presentation's prose-vs-refs split
+# ---------------------------------------------------------------------------
+
+_REFS_HEADING_RE = re.compile(r"^#{2,3}\s+(?:References|Sources)\b.*$", re.MULTILINE)
+
+
+def split_artifact(markdown: str) -> tuple[str, str, str]:
+    """Split final paper markdown into (prose, heading_line, refs_body).
+
+    Splits on the FIRST References/Sources heading (same anchor the frontend
+    uses). heading_line includes the trailing newline when present. When no
+    heading exists, everything is prose and heading/body are empty.
+    """
+    m = _REFS_HEADING_RE.search(markdown)
+    if not m:
+        return markdown, "", ""
+    heading_end = markdown.find("\n", m.start())
+    if heading_end == -1:
+        return markdown[: m.start()], markdown[m.start() :], ""
+    return (
+        markdown[: m.start()],
+        markdown[m.start() : heading_end + 1],
+        markdown[heading_end + 1 :],
+    )
 
 
 # ---------------------------------------------------------------------------
