@@ -8,11 +8,12 @@ list vs registry).
 
 from pipeline.lyra.theo_citations import (
     _collect_non_numeric_markers,
+    normalize_grouped_markers,
     split_artifact,
 )
 
 
-def test_split_artifact_splits_on_first_heading():
+def test_split_artifact_splits_single_heading():
     md = "# T\n\nProse [1].\n\n## References\n\n[1] A — https://a.example (accessed 2026-01-01)\n"
     prose, heading, body = split_artifact(md)
     assert "Prose [1]." in prose
@@ -65,3 +66,23 @@ def test_split_artifact_multiple_headings_splits_on_last():
     assert "fake block" in prose
     assert "more prose" in prose
     assert "[1] Real" in body
+
+
+def test_normalize_grouped_markers_splits_groups():
+    text, n = normalize_grouped_markers("Intro claim [9, 7, 1]. Next [2,3].")
+    assert text == "Intro claim [9] [7] [1]. Next [2] [3]."
+    assert n == 2
+
+
+def test_normalize_grouped_markers_noop_without_groups():
+    text, n = normalize_grouped_markers("Plain [1] and [2].")
+    assert text == "Plain [1] and [2]."
+    assert n == 0
+
+
+def test_normalize_grouped_markers_leaves_refs_section_alone():
+    md = "Prose [1, 2].\n\n## References\n\n[1] A, B — https://a.example\n"
+    text, n = normalize_grouped_markers(md)
+    assert n == 1
+    assert "[1] [2]" in text
+    assert "[1] A, B — https://a.example" in text  # refs untouched

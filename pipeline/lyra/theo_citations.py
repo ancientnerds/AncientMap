@@ -1335,6 +1335,29 @@ def split_artifact(markdown: str) -> tuple[str, str, str]:
     )
 
 
+_GROUPED_MARKER_RE = re.compile(r"\[(\d+(?:\s*,\s*\d+)+)\]")
+
+
+def normalize_grouped_markers(text: str) -> tuple[str, int]:
+    """Split grouped citation markers `[9, 7, 1]` into `[9] [7] [1]`.
+
+    MUST run before finalize_references(): grouped digits are invisible to
+    the `\\[(\\d+)\\]` renumbering regex, so an unsplit group keeps its OLD
+    working numbers after renumbering — silent misattribution, worse than an
+    orphan. Only prose is touched; the References section may legitimately
+    contain commas inside titles. Returns (new_text, groups_split).
+    """
+    prose, heading, body = split_artifact(text)
+    count = 0
+
+    def _split(m: re.Match[str]) -> str:
+        nonlocal count
+        count += 1
+        return " ".join(f"[{n.strip()}]" for n in m.group(1).split(","))
+
+    return _GROUPED_MARKER_RE.sub(_split, prose) + heading + body, count
+
+
 # ---------------------------------------------------------------------------
 # References-section parser (mirrors ancient-nerds-map/src/pages/
 # ResearchPaperPage.tsx:parseReferences — keep field names aligned)
