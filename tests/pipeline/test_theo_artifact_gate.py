@@ -431,3 +431,30 @@ def test_repair_normalizes_crlf():
     repaired, report = repair_artifact(crlf)
     assert "\r\n" not in repaired
     assert report["passed"] is True
+
+
+def test_repair_leaves_hex_like_english_words_and_holds():
+    md = CLEAN_PAPER.replace("samples [1]", "samples near the [facade] within a [decade] [1]")
+    repaired, report = repair_artifact(md)
+    assert "[facade]" in repaired
+    assert "[decade]" in repaired
+    assert report["passed"] is False
+
+
+def test_repair_strips_real_hex_debug_token():
+    md = CLEAN_PAPER.replace("samples [1]", "samples [5620e1fb87f7] [1]")
+    repaired, report = repair_artifact(md)
+    assert "5620e1fb87f7" not in repaired
+    assert report["passed"] is True
+
+
+def test_normalize_leaves_year_ranges_alone():
+    text, n = normalize_grouped_markers("Seasons [1990-1995] produced stratigraphy.")
+    assert text == "Seasons [1990-1995] produced stratigraphy."
+    assert n == 0
+
+
+def test_normalize_leaves_leading_zero_ranges_alone():
+    text, n = normalize_grouped_markers("The dig ran through [07-08].")
+    assert text == "The dig ran through [07-08]."
+    assert n == 0

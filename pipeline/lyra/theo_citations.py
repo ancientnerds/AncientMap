@@ -1365,8 +1365,10 @@ _THOUSANDS_NUMERAL_RE = re.compile(r"^\d{1,3}(?:,\d{3})+$")
 # Short numeric dash range `[2-4]` / `[7–8]`. Digits-only, so this can never
 # collide with _PLACEHOLDER_MARKER_RE (`[N - topic]`, which requires a
 # literal letter "N") — the two patterns never compete for the same bracket
-# text.
-_RANGE_MARKER_RE = re.compile(r"\[(\d+)\s*[-–]\s*(\d+)\]")
+# text. Each operand is guarded with `(?!0\d)` so leading-zero forms like
+# `07` (day-of-month / two-digit-year style, as in `[07-08]`) never match —
+# real reference ranges don't zero-pad.
+_RANGE_MARKER_RE = re.compile(r"\[(?!0\d)(\d+)\s*[-–]\s*(?!0\d)(\d+)\]")
 
 
 def normalize_grouped_markers(text: str) -> tuple[str, int]:
@@ -1385,12 +1387,14 @@ def normalize_grouped_markers(text: str) -> tuple[str, int]:
       numeral rather than a citation group. The validator then flags the
       surviving non-numeric marker and the paper HOLDS instead of being
       silently shredded into `[3] [000]`.
-    * Dash ranges are only expanded when `start < end` and `end - start <=
-      10`; anything outside that (reversed, equal, or oversized) is left
-      intact — an inline array literal or unrelated dash usage would also be
-      split, an accepted risk since `[N]` brackets are reserved for
-      citations in Theo prose, but oversized/malformed ranges are more
-      likely a typo than a real 11+ source range, so they HOLD instead.
+    * Dash ranges are only expanded when both operands have no leading zero,
+      `start < end`, `end < 100`, and `end - start <= 10`; anything outside
+      that (reversed, equal, oversized, zero-padded, or 100+) is left intact.
+      No paper has 100+ references, so a range like `[1990-1995]` is a year
+      span in prose, not a citation range, and `[07-08]` (leading zeros) is
+      the same shape — both are left intact rather than fabricating
+      citations, and the validator flags the surviving marker so the paper
+      HOLDS instead of publishing invented references.
 
     Returns (new_text, groups_split) — groups_split counts both comma-groups
     and dash-ranges that were actually expanded.
@@ -1412,7 +1416,7 @@ def normalize_grouped_markers(text: str) -> tuple[str, int]:
     def _expand_range(m: re.Match[str]) -> str:
         nonlocal count
         start, end = int(m.group(1)), int(m.group(2))
-        if start < end and end - start <= 10:
+        if start < end and end < 100 and end - start <= 10:
             count += 1
             return " ".join(f"[{n}]" for n in range(start, end + 1))
         return m.group(0)
@@ -1562,7 +1566,8 @@ def _is_strippable_artifact_token(token: str) -> bool:
         return True
     if token in ("...", "…"):
         return True
-    if re.fullmatch(r"[a-f0-9]{6,16}", token):  # source-id debug tokens
+    if re.fullmatch(r"(?=.*\d)[a-f0-9]{12}", token):  # source-id debug tokens (sha256[:12])
+        # Digit required: pure-letter hex words like "facade"/"decade" must NOT match.
         return True
     if _PLACEHOLDER_MARKER_RE.fullmatch(f"[{token}]"):  # [N - topic]
         return True
