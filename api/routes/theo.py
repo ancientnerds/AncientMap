@@ -1422,6 +1422,10 @@ async def edit_research(
             raise HTTPException(status_code=403, detail="Not your research request")
         if row.status != "completed":
             raise HTTPException(status_code=409, detail="Only completed research can be edited")
+        if row.is_public:
+            raise HTTPException(
+                status_code=409, detail="Cannot edit a published paper — unpublish first"
+            )
         # Load existing result, update report field
         try:
             result = json.loads(row.result_json) if row.result_json else {}
