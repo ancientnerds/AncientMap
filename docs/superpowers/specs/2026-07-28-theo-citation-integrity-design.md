@@ -1,7 +1,9 @@
 # Theo Citation Integrity — Artifact Validation & Deterministic Repair
 
 **Date:** 2026-07-28
-**Status:** Approved (design), pending implementation plan
+**Status:** Implemented 2026-07-29 (commits e40ad18..4f8a821 + follow-ups; plan:
+`docs/superpowers/plans/2026-07-28-theo-citation-integrity.md`). Two design points
+were changed during adversarial review — this doc reflects the AS-BUILT state.
 **Scope decision:** Referential integrity is guaranteed mechanically (hard gate). Semantic
 support (does the source actually back the claim) stays with the existing LLM
 verifier/judge as a soft gate — it is not part of this spec.
@@ -50,31 +52,48 @@ only the final paper markdown; no registry. Checks:
   grouped forms `[9, 7, 1]`, anything bracketed that is not a plain `[N]`
   (markdown links `[x](y)` and footnotes `[^n]` excluded, as today).
 
-Returns the existing `audit_result` dict shape (`passed`, `total_citations`,
-`total_references`, `orphaned_refs`, `invalid_markers`, `non_numeric_markers`, `issues`, …)
-so DB rows, frontend, and judge keep working — but `total_references` now counts the
-**rendered list**, making the 50-vs-45 class of bug structurally impossible.
-`uncited_paragraphs`, `placeholder_markers`, `language_bleed` keep their current
-prose-based computation so the dict stays complete.
+Returns a **superset** of the existing `audit_result` dict shape (`passed`,
+`total_citations`, `total_references`, `orphaned_refs`, `invalid_markers`,
+`non_numeric_markers`, `issues`, plus new keys `references_sections`,
+`unparseable_ref_lines`, `duplicate_ref_nums`, `non_contiguous`) so DB rows, frontend,
+and judge keep working — but `total_references` now counts the **rendered list**, making
+the 50-vs-45 class of bug structurally impossible. Additional as-built details: input is
+CRLF-normalized at entry; an empty/unparseable References section fails; the heading
+anchor is the LAST `## References`-style heading with exact-line-end matching, mirroring
+the frontend's `splitBodyAndRefs` (colon-suffixed or `## Sources of Evidence`-style
+lines are NOT refs headings). `uncited_paragraphs`, `placeholder_markers`,
+`language_bleed` keep their current prose-based computation so the dict stays complete.
 
 **`normalize_grouped_markers(text: str) -> tuple[str, int]`** — rewrites `[9, 7, 1]` →
-`[9] [7] [1]` (any count ≥ 2, optional spaces). Runs **before** `finalize_references()`
-so renumbering sees each digit — this closes the misattribution hole — and runs again
-inside repair for stored papers.
+`[9] [7] [1]` (any count ≥ 2, optional spaces) and expands dash ranges `[2-4]`/`[2–4]` →
+`[2] [3] [4]` (bounds: start < end < 100, span ≤ 10, no leading zeros — year ranges like
+`[1990-1995]` and thousands numerals like `[3,000]` are left intact and HOLD via the
+validator). Runs **before** `finalize_references()` so renumbering sees each digit —
+this closes the misattribution hole — and runs again inside repair for stored papers.
 
 **`repair_artifact(markdown: str) -> tuple[str, dict]`** — deterministic only; never adds
-a citation, never remaps a marker to a different source:
+a citation, never remaps a marker to a different source, never deletes prose:
 
-1. Split grouped markers (`normalize_grouped_markers`).
-2. Strip all non-numeric bracketed tokens ([N1], [N - topic], [...], hex IDs).
-3. Strip numeric prose markers with no rendered list entry.
-4. Drop rendered reference entries never cited in prose.
-5. Renumber prose + list atomically to contiguous `1..M` in first-citation order
+1. Normalize CRLF; bail immediately when the text contains NUL (sentinel collision).
+2. Split grouped/range markers (`normalize_grouped_markers`).
+3. Strip ONLY allowlisted artifact tokens — `[N]`/`[N1]`-style, `[...]`/`[…]`,
+   12-char hex source-ids containing a digit, `[N - topic]` placeholders. **All other
+   bracket tokens (`[sic]`, quote interpolations, nested alt text, hex-like English
+   words) are left in place** — the validator flags them and the paper HOLDs. (The
+   original blanket-strip design was replaced after adversarial review proved it
+   silently destroyed legitimate prose that then PASSED the gate.)
+4. Bail to HOLD when the rendered list is broken (missing heading, unparseable or
+   duplicate-numbered line) or when a numeric marker is glued to `(` or `]`
+   (ambiguous markdown-link/nesting adjacency — renumbering it would risk
+   misattribution).
+5. Strip numeric prose markers with no rendered list entry (consuming one leading
+   space at the strip site — no global whitespace tidy, which mangled markdown).
+6. Drop rendered reference entries never cited in prose.
+7. Renumber prose + list atomically to contiguous `1..M` in first-citation order
    (sentinel two-pass, same technique as `finalize_references`).
-6. Collapse leftover whitespace; re-run `validate_paper_artifact`.
 
-Idempotent: `repair(repair(x)) == repair(x)`. Returns the repaired markdown plus a repair
-report (what was stripped/split/dropped) for logging.
+Idempotent: `repair(repair(x)) == repair(x)`. Returns the repaired markdown plus the
+fresh `validate_paper_artifact` report of the result.
 
 ### 2. Pipeline integration
 
@@ -94,11 +113,20 @@ report (what was stripped/split/dropped) for logging.
 - Publish — manual endpoint **and** permanent-researcher auto-publish — recomputes
   `validate_paper_artifact` on the exact markdown it is about to publish. The stored
   audit becomes informational. Validation failure → 409 with the report in the body.
+- **Audit-of-record semantics (as built):** the persisted `result.audit` always describes
+  the artifact readers see — the route validates and stores the assembled
+  `published_report`; `_auto_publish` runs `validate_or_repair` unconditionally on
+  `report` (adopting the repaired text) and holds + Discord-pings when it cannot reach
+  clean; a crash in `_auto_publish` also Discord-pings (fail-loud). The repair CLI
+  persists the audit of the published view only for public rows, else of `report`.
 - `?override=1` (+ `X-Theo-Override-Reason`) continues to bypass judge/quality-score, but
   **no longer bypasses referential integrity** — there is no legitimate reason to
   force-publish a paper whose defects are deterministically repairable.
-- New optional `?repair=1`: applies `repair_artifact`, persists the repaired markdown and
-  refreshed audit, then publishes only if the re-validation is clean.
+- New optional `?repair=1`: applies `repair_artifact` to the assembled published view,
+  persists the repaired markdown and refreshed audit, then publishes only if the
+  re-validation is clean. (The private `report` field is not touched by the route.)
+- PATCH `edit_research` now refuses published papers (409, "unpublish first") so edits
+  can never silently invalidate the publish-time audit.
 
 ### 4. Repair CLI + backfill
 
@@ -114,10 +142,11 @@ report (what was stripped/split/dropped) for logging.
 
 ### 5. Tests + failure path
 
-- Extend `tests/pipeline/test_theo_citations.py` with golden fixtures distilled from the
-  real defects of both papers: each defect class must be caught by the validator, and
-  `repair_artifact` must produce validator-clean output. Add an idempotence test and a
-  test that presentation's re-rendered references match the registry after mutation.
+- As built: a NEW file `tests/pipeline/test_theo_artifact_gate.py` (48 tests) with golden
+  fixtures distilled from the real defects of both papers — each defect class caught by
+  the validator, `repair_artifact` produces validator-clean output or HOLDs, idempotence,
+  plus adversarially-derived cases (legit bracketed prose survives, image alt text
+  survives, year ranges/thousands numerals untouched, CRLF, hex-like English words).
 - If repair cannot reach clean (e.g. no parseable references section at all): the paper
   stays unpublished, `passed=false`, reason logged. No silent success, no LLM fallback.
 
