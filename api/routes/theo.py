@@ -1129,6 +1129,7 @@ async def publish_research(
     user: DiscordUser = Depends(get_current_user),
     dry_run: int = Query(default=0, ge=0, le=1),
     override: int = Query(default=0, ge=0, le=1),
+    repair: int = Query(default=0, ge=0, le=1),
     x_theo_override_reason: str | None = Header(default=None, alias="X-Theo-Override-Reason"),
 ):
     """Publish a completed research paper to the public library.
@@ -1141,10 +1142,11 @@ async def publish_research(
     Legacy papers without section_approvals fall back to the single
     `approved_by` gate.
 
-    Additionally gates on the judge's `quality_score.passed` and the citation
-    `audit.passed`: both must be True or the call returns 409. `?override=1`
-    with a non-empty `X-Theo-Override-Reason` header bypasses the gate and
-    logs the decision.
+    Additionally gates on the judge's `quality_score.passed` — `?override=1`
+    with a non-empty `X-Theo-Override-Reason` header bypasses this gate and
+    logs the decision. Citation integrity is recomputed on the assembled
+    artifact and is NOT override-able; `?repair=1` applies the deterministic
+    citation repair before re-checking.
 
     `?dry_run=1` returns the would-be `published_report` / `published_hero_image`
     without writing, so the reviewer can diff before first publish.
@@ -1181,27 +1183,20 @@ async def publish_research(
         except (json.JSONDecodeError, TypeError):
             result = {}
 
-        # Quality gate — require judge.passed AND audit.passed, unless explicit override.
+        # Quality gate — the judge score is override-able; citation integrity
+        # is NOT (it is recomputed on the artifact below, after assembly —
+        # the stored audit can be stale and is informational only).
         quality_score = result.get("quality_score") or {}
-        audit_result = result.get("audit") or {}
         quality_passed = bool(quality_score.get("passed"))
-        audit_passed = bool(audit_result.get("passed"))
-        if not (quality_passed and audit_passed):
+        if not quality_passed:
             override_reason = (x_theo_override_reason or "").strip()
             if not (override and override_reason):
-                failing = []
-                if not quality_passed:
-                    failing.append("quality_score.passed")
-                if not audit_passed:
-                    failing.append("audit.passed")
                 raise HTTPException(
                     status_code=409,
                     detail={
                         "error": "quality_gate_failed",
                         "quality_passed": quality_passed,
-                        "audit_passed": audit_passed,
-                        "failing_metrics": failing,
-                        "audit_issues": (audit_result.get("issues") or [])[:10],
+                        "failing_metrics": ["quality_score.passed"],
                         "hint": (
                             "Pass ?override=1 with a non-empty X-Theo-Override-Reason "
                             "header to publish anyway."
@@ -1209,12 +1204,10 @@ async def publish_research(
                     },
                 )
             logger.warning(
-                "Theo publish override: request_id=%s user=%s "
-                "quality_passed=%s audit_passed=%s reason=%r",
+                "Theo publish override: request_id=%s user=%s quality_passed=%s reason=%r",
                 request_id,
                 user.username,
                 quality_passed,
-                audit_passed,
                 override_reason,
             )
 
@@ -1247,6 +1240,34 @@ async def publish_research(
                 "published_hero_image": hero_image,
                 "pending_block_ids": [],
             }
+
+        # Citation-integrity gate — recomputed on the EXACT text being
+        # published. Block-level rejections can orphan refs, and the stored
+        # audit may predate later mutations. `?repair=1` applies the
+        # deterministic repair (never fabricates or remaps a citation).
+        from pipeline.lyra.theo_citations import repair_artifact, validate_paper_artifact
+
+        publish_text = assembled["published_report"]
+        artifact_report = validate_paper_artifact(publish_text)
+        if not artifact_report["passed"] and repair:
+            repaired_text, repaired_report = repair_artifact(publish_text)
+            if repaired_report["passed"]:
+                assembled["published_report"] = repaired_text
+                artifact_report = repaired_report
+        if not artifact_report["passed"]:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "error": "citation_integrity_failed",
+                    "issues": (artifact_report.get("issues") or [])[:10],
+                    "hint": (
+                        "Pass ?repair=1 to apply the deterministic citation repair, "
+                        "or run scripts/repair_theo_citations.py. Override cannot "
+                        "bypass this gate."
+                    ),
+                },
+            )
+        result["audit"] = artifact_report
 
         paper_title = result.get("title", row.question)
         slug = _make_slug(paper_title)
