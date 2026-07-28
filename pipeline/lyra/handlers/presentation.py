@@ -19,6 +19,10 @@ def _split_paper_for_presentation(paper_text: str) -> tuple[str, str]:
 
     Delegates to theo_citations.split_artifact so every consumer agrees on
     the same anchor (the old local regex missed ### References / ## Sources).
+    Safe only because paper.py Step 7.9 (strip_existing_references_section,
+    deliberately broader `\\b` matching) removed writer-emitted heading
+    variants before the canonical block was appended — do not narrow 7.9
+    without revisiting this.
     """
     prose, heading, body = split_artifact(paper_text)
     if not heading:
@@ -227,6 +231,9 @@ class PresentationHandler(BaseHandler):
             # mutates prose must run before this block.
             self.state.paper_text, report = validate_or_repair(self.state.paper_text)
             self.state.audit_result = report
+            # NOTE: when repair renumbered, registry.reference_numbers is now
+            # stale — the artifact is the source of truth from this point on.
+            # No current post-gate consumer maps by registry number; keep it that way.
             self.state.log(
                 "presentation",
                 f"Post-presentation strip: seen={post_strip_metrics.get('uncited_seen', 0)}, "
@@ -246,7 +253,16 @@ class PresentationHandler(BaseHandler):
                 f"uncited={report.get('uncited_paragraphs', 0)}",
             )
         except Exception as e:
-            logger.warning("post-presentation re-audit failed: %s", e)
+            # Fail CLOSED: a crashed artifact gate must not leave the stale
+            # Step-8 registry audit (possibly passed=True) standing as the
+            # publish-gate input. logger.warning may be invisible in the API
+            # container; state.log lands in the persisted debug log.
+            self.state.audit_result = {
+                "passed": False,
+                "issues": [f"artifact gate crashed: {e}"],
+            }
+            self.state.log("presentation", f"Artifact gate crashed — failing closed: {e}")
+            logger.warning("post-presentation artifact gate failed: %s", e)
 
         self.emit_sse(
             {
