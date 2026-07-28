@@ -46,3 +46,22 @@ def test_collect_non_numeric_markers_finds_debug_and_grouped_tokens():
     assert "3" not in tokens
     assert "link" not in tokens
     assert "^1" not in tokens
+
+
+def test_split_artifact_empty_string():
+    assert split_artifact("") == ("", "", "")
+
+
+def test_split_artifact_heading_at_eof_without_newline():
+    prose, heading, body = split_artifact("P\n\n## References")
+    assert prose == "P\n\n"
+    assert heading == "## References"
+    assert body == ""
+
+
+def test_split_artifact_multiple_headings_splits_on_last():
+    md = "P\n\n## References\n\nfake block\n\nmore prose\n\n## References\n\n[1] Real — https://r.example\n"
+    prose, heading, body = split_artifact(md)
+    assert "fake block" in prose
+    assert "more prose" in prose
+    assert "[1] Real" in body

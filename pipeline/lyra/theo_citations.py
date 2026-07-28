@@ -1281,13 +1281,23 @@ def audit_citations(paper_text: str, registry: CitationRegistry) -> dict:
     }
 
 
+# Shared references-heading regex — first-match used by
+# _find_references_heading (pre-final pipeline text), last-match used by
+# split_artifact (final artifact). See each function's docstring for why
+# the match direction differs.
+_REFS_HEADING_RE = re.compile(r"^#{2,3}\s+(?:References|Sources)\b.*$", re.MULTILINE)
+
+
 def _find_references_heading(text: str) -> int | None:
-    """Return the index of the ## References / ## Sources heading, or None."""
-    for marker in ("## References", "### References", "## Sources", "### Sources"):
-        idx = text.find(marker)
-        if idx != -1:
-            return idx
-    return None
+    """Return the index of the first References/Sources heading line, or None.
+
+    First match, deliberately: this is used on pre-final pipeline text
+    (audit/strip/prune), where the conservative choice is to treat the
+    earliest heading as the start of the refs region. Contrast with
+    `split_artifact`, which uses the LAST heading on final artifacts.
+    """
+    m = _REFS_HEADING_RE.search(text)
+    return m.start() if m else None
 
 
 # ---------------------------------------------------------------------------
@@ -1295,19 +1305,26 @@ def _find_references_heading(text: str) -> int | None:
 # replace_references_section / presentation's prose-vs-refs split
 # ---------------------------------------------------------------------------
 
-_REFS_HEADING_RE = re.compile(r"^#{2,3}\s+(?:References|Sources)\b.*$", re.MULTILINE)
-
 
 def split_artifact(markdown: str) -> tuple[str, str, str]:
     """Split final paper markdown into (prose, heading_line, refs_body).
 
-    Splits on the FIRST References/Sources heading (same anchor the frontend
-    uses). heading_line includes the trailing newline when present. When no
-    heading exists, everything is prose and heading/body are empty.
+    Splits on the LAST References/Sources heading, mirroring the frontend's
+    `splitBodyAndRefs` (ancient-nerds-map/src/pages/ResearchPaperPage.tsx) —
+    this defends against a writer/presentation LLM injecting a fake
+    "## References" heading mid-body: with last-match, everything up to and
+    including the true trailing heading stays in scope, so a fake mid-body
+    heading remains visible in prose rather than silently truncating real
+    content. Documents with multiple headings are separately rejected by the
+    artifact validator (a later task). Contrast with `_find_references_heading`,
+    which uses the FIRST heading on pre-final pipeline text.
+    heading_line includes the trailing newline when present. When no heading
+    exists, everything is prose and heading/body are empty.
     """
-    m = _REFS_HEADING_RE.search(markdown)
-    if not m:
+    matches = list(_REFS_HEADING_RE.finditer(markdown))
+    if not matches:
         return markdown, "", ""
+    m = matches[-1]
     heading_end = markdown.find("\n", m.start())
     if heading_end == -1:
         return markdown[: m.start()], markdown[m.start() :], ""
