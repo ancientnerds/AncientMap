@@ -20,6 +20,7 @@ logger = logging.getLogger(__name__)
 from pipeline.lyra.minimax_limiter import (
     InsufficientQuotaError,
     QuotaExhaustedError,
+    is_plan_rate_throttle,
     is_quota_error,
 )
 
@@ -249,14 +250,15 @@ def minimax_chat_anthropic(
                 error_str = str(e)
                 is_rate_limit = "429" in error_str or "rate_limit" in error_str
                 is_quota = is_rate_limit and is_quota_error(error_str)
+                is_throttle = is_rate_limit and is_plan_rate_throttle(error_str)
                 is_transient = is_rate_limit or any(
                     code in error_str
                     for code in ("500", "520", "529", "503", "timeout", "timed out")
                 )
                 if is_quota:
-                    # Quota exhaustion — freeze the limiter and fail fast.
-                    # The 5h rolling window must reset; retrying only wastes
-                    # 3-6s of wall clock. The orchestrator catches this and
+                    # Budget exhaustion (2056/credits) — freeze the limiter
+                    # and fail fast. The window must reset; retrying only
+                    # wastes wall clock. The orchestrator catches this and
                     # sets status='deferred'.
                     slot.report_quota_exhausted()
                     logger.error(
@@ -265,6 +267,31 @@ def minimax_chat_anthropic(
                     )
                     raise QuotaExhaustedError(
                         f"MiniMax quota exhausted during M3 call: {error_str[:200]}"
+                    ) from e
+                if is_throttle:
+                    # Plan rate cap (2062) — a short-window throttle, NOT the
+                    # budget (2026-07-29: fired at 5h=71% remaining and killed
+                    # a 15h run). Sub-minute retries land in the same window,
+                    # so back off long enough to roll it. A throttle that
+                    # persists through every backoff is a genuine trough:
+                    # freeze + typed raise so the worker defers, not fails.
+                    slot.report_rate_limit()
+                    if attempt < 2:
+                        delay = 60 * (attempt + 1)
+                        logger.warning(
+                            "MiniMax M3 plan rate limit (attempt %d/3), retrying in %ds: %s",
+                            attempt + 1,
+                            delay,
+                            e,
+                        )
+                        import time
+
+                        time.sleep(delay)
+                        continue
+                    slot.report_quota_exhausted()
+                    logger.error("MiniMax M3 plan rate limit persisted through backoff: %s", e)
+                    raise QuotaExhaustedError(
+                        f"MiniMax plan rate limit persisted through backoff: {error_str[:200]}"
                     ) from e
                 if is_rate_limit:
                     slot.report_rate_limit()

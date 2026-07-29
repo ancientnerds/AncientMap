@@ -126,28 +126,27 @@ def crawl_delay_for_window(five_hour_remaining_pct: float | None) -> float:
 # should defer instead of holding its worker slot.
 _QUOTA_WAIT_MAX_S = 6 * 3600
 
-# Substrings that identify a *quota* 429 vs a transient RPS 429. The MiniMax
-# Anthropic-compatible endpoint returns these in the error message body
-# (e.g. `'message': 'Token Plan usage limit reached: Upgrade your Token Plan
-# or purchase Credits for more usage. (2056)'`). Case-insensitive match.
+# Substrings that identify a *budget* 429 (the plan's token allowance is
+# spent). The MiniMax Anthropic-compatible endpoint returns these in the
+# error message body (e.g. `'message': 'Token Plan usage limit reached:
+# Upgrade your Token Plan or purchase Credits for more usage. (2056)'`).
+# Case-insensitive match.
 #
-# 2026-06-29: added "token plan rate limit reached" and "(2062)" — MiniMax
-# distinguishes two flavors of Token Plan cap: (2056) hard-quota-exhausted,
-# (2062) rate-limit-on-plan. Both have the same remediation (upgrade or
-# buy credits), so the limiter must treat both as quota freezes, not as
-# transient throttles. Without these markers, 2062s were slipping through
-# as "transient" and only adaptive-backoff'ing — wasting the probe-based
-# freeze the watchdog sets up.
+# History: 2026-06-29 added "(2062)" here on the assumption that both Token
+# Plan flavors mean the same thing. 2026-07-29 disproved that: a (2062)
+# "rate limit reached" fired at 5h=71% / weekly=27% REMAINING and killed a
+# 15h run at FactCheckComplete — 2062 is the plan's short-window rate cap
+# (per-minute), not the budget. It now lives in
+# _PLAN_RATE_THROTTLE_MARKERS below and call sites retry it with a
+# window-clearing backoff instead of failing fast.
 _QUOTA_ERROR_MARKERS = (
     "token plan usage limit reached",
-    "token plan rate limit reached",
     "usage limit reached",
     "usage limit exceeded",
     "credit balance",
     "insufficient credit",
     "5-hour usage limit",
     "(2056)",
-    "(2062)",
     # Our own QuotaExhaustedError text. Call sites wrap it into plain
     # RuntimeErrors ("Minimax API error: MiniMax quota exhausted — ...");
     # without this marker the event bus cannot recognize those copies and
@@ -155,13 +154,33 @@ _QUOTA_ERROR_MARKERS = (
     "quota exhausted",
 )
 
+# The plan's SHORT-WINDOW rate cap (requests/tokens per minute-ish). Distinct
+# from budget exhaustion: the right response is a backoff long enough to roll
+# the window, then retry — the SDK's own sub-second retries land in the same
+# window and always fail. Only a throttle that persists through the backoffs
+# is treated as a genuine trough (freeze + QuotaExhaustedError -> defer).
+_PLAN_RATE_THROTTLE_MARKERS = (
+    "token plan rate limit reached",
+    "(2062)",
+)
+
 
 def is_quota_error(error_str: str) -> bool:
-    """True when an error string indicates a *quota* exhaustion 429 (not a
-    transient RPS throttle). Public so call sites (minimax_shared.py,
+    """True when an error string indicates a *budget* exhaustion 429 (plan
+    allowance spent — 2056/credits), not a short-window rate throttle and not
+    a transient RPS throttle. Public so call sites (minimax_shared.py,
     config.py) can branch on it before calling report_quota_exhausted()."""
     lower = error_str.lower()
     return any(marker in lower for marker in _QUOTA_ERROR_MARKERS)
+
+
+def is_plan_rate_throttle(error_str: str) -> bool:
+    """True for the Token Plan's short-window rate cap (2062).
+
+    Call sites must check `is_quota_error` FIRST — a message carrying both
+    flavors' markers is treated as budget exhaustion (conservative)."""
+    lower = error_str.lower()
+    return any(marker in lower for marker in _PLAN_RATE_THROTTLE_MARKERS)
 
 
 @dataclass

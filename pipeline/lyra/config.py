@@ -12,6 +12,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from pipeline.lyra.minimax_limiter import (
     InsufficientQuotaError,
     QuotaExhaustedError,
+    is_plan_rate_throttle,
     is_quota_error,
 )
 
@@ -584,15 +585,16 @@ def _call_anthropic_api(
                 error_str = str(exc)
                 is_rate_limit = "429" in error_str or "rate_limit" in error_str
                 is_quota = is_rate_limit and is_quota_error(error_str)
+                is_throttle = is_rate_limit and is_plan_rate_throttle(error_str)
                 is_transient = is_rate_limit or any(
                     code in error_str
                     for code in ("500", "520", "529", "503", "timeout", "timed out")
                 )
                 if is_quota:
-                    # Quota exhaustion — freeze the limiter and fail fast
-                    # (the 5h window must reset; retrying is pointless).
-                    # The orchestrator catches QuotaExhaustedError and
-                    # marks the request 'deferred'.
+                    # Budget exhaustion (2056/credits) — freeze the limiter
+                    # and fail fast (the window must reset; retrying is
+                    # pointless). The orchestrator catches QuotaExhaustedError
+                    # and marks the request 'deferred'.
                     slot.report_quota_exhausted()
                     logger.error(
                         "LLM call quota exhausted (no retry, attempt %d/%d): %s",
@@ -602,6 +604,36 @@ def _call_anthropic_api(
                     )
                     raise QuotaExhaustedError(
                         f"MiniMax quota exhausted during LLM call: {error_str[:200]}"
+                    ) from exc
+                if is_throttle:
+                    # Plan rate cap (2062) — short-window throttle, NOT the
+                    # budget (2026-07-29: fired at 5h=71% remaining and killed
+                    # a 15h run). Back off long enough to roll the window;
+                    # only a throttle persisting through the backoff is a
+                    # genuine trough: freeze + typed raise -> defer.
+                    slot.report_rate_limit()
+                    if _attempt < _max_attempts - 1:
+                        import time as _time
+
+                        delay = 60 * (_attempt + 1)
+                        logger.warning(
+                            "LLM call plan rate limit (attempt %d/%d), retrying in %ds: %s",
+                            _attempt + 1,
+                            _max_attempts,
+                            delay,
+                            exc,
+                        )
+                        _time.sleep(delay)
+                        continue
+                    slot.report_quota_exhausted()
+                    logger.error(
+                        "LLM call plan rate limit persisted through backoff (attempt %d/%d): %s",
+                        _attempt + 1,
+                        _max_attempts,
+                        exc,
+                    )
+                    raise QuotaExhaustedError(
+                        f"MiniMax plan rate limit persisted through backoff: {error_str[:200]}"
                     ) from exc
                 if is_rate_limit:
                     slot.report_rate_limit()

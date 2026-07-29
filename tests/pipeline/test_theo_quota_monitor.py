@@ -284,16 +284,21 @@ def test_freeze_duration_is_30_minutes():
     assert wm._FREEZE_DURATION_S == 30 * 60
 
 
-def test_2062_is_treated_as_quota_error():
-    """MiniMax error 2062 ('Token Plan rate limit reached') has the same
-    remediation as 2056 (buy credits / upgrade). Both must trigger
-    report_quota_exhausted, not transient backoff."""
-    from pipeline.lyra.minimax_limiter import is_quota_error
+def test_2062_is_throttle_2056_is_quota():
+    """2026-07-29 revision of the 06-29 assumption: 2062 ('Token Plan rate
+    limit reached') is the plan's SHORT-WINDOW rate cap, not the budget — it
+    fired at 5h=71% / weekly=27% remaining and killed a 15h run. It now
+    classifies as a plan-rate throttle (window-clearing backoff at call
+    sites); only 2056/credit markers remain budget exhaustion."""
+    from pipeline.lyra.minimax_limiter import is_plan_rate_throttle, is_quota_error
 
-    assert is_quota_error("Error 429: Token Plan rate limit reached (2062)") is True
+    assert is_quota_error("Error 429: Token Plan rate limit reached (2062)") is False
+    assert is_plan_rate_throttle("Error 429: Token Plan rate limit reached (2062)") is True
     assert is_quota_error("Error 429: Token Plan usage limit reached (2056)") is True
-    # Plain transient rate limit must NOT be classified as quota.
+    assert is_plan_rate_throttle("Error 429: Token Plan usage limit reached (2056)") is False
+    # Plain transient rate limit is neither quota nor plan throttle.
     assert is_quota_error("Error 429: rate_limit_error (transient)") is False
+    assert is_plan_rate_throttle("Error 429: rate_limit_error (transient)") is False
 
 
 def test_inter_task_backoff_constant_exists():
