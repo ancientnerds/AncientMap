@@ -47,9 +47,11 @@ from api.routes import (
     news,
     og,
     radar,
+    research_html,
     seo,
     sitemap,
     sites,
+    sites_html,
     snapshots,
     sources,
     streetview,
@@ -640,6 +642,8 @@ app.add_middleware(GZipMiddleware, minimum_size=500)
 
 # SEO: HTML pages for crawlers (no /api/ prefix — served via nginx proxy)
 app.include_router(articles_html.router, tags=["articles-html"])
+app.include_router(research_html.router, tags=["research-html"])
+app.include_router(sites_html.router, tags=["sites-html"])
 app.include_router(seo.router, tags=["seo"])
 
 # Include routers

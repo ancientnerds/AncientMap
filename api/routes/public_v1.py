@@ -67,6 +67,48 @@ RATE_LIMIT = 10
 RESEARCH_LICENSE = "CC BY 4.0"
 RESEARCH_ATTRIBUTION = "Ancient Nerds — https://ancientnerds.com"
 
+# Shared row→dict mapping for research papers, used by the public JSON API
+# and the SEO HTML pages (api/routes/research_html.py).
+PAPER_SUMMARY_COLUMNS = """
+    r.id::text AS id, r.slug, r.question, r.published_by, r.published_at, r.sites_found,
+    r.result_json::jsonb->>'title' AS title,
+    r.result_json::jsonb->>'card_description' AS card_description,
+    r.result_json::jsonb->'quality_score'->>'score' AS score,
+    r.result_json::jsonb->'quality_score'->>'badge' AS badge,
+    r.result_json::jsonb->'quality_score'->'meta'->>'word_count' AS word_count,
+    r.result_json::jsonb->'hero_image'->>'src' AS hero_src
+"""
+
+
+def paper_summary_kwargs(row) -> dict:
+    """Shared row→schema mapping for research list and detail responses."""
+    hero_url = None
+    if row.hero_src:
+        hero_url = (
+            f"https://ancientnerds.com{row.hero_src}"
+            if row.hero_src.startswith("/")
+            else row.hero_src
+        )
+    attribution = (
+        f"{row.published_by}, {RESEARCH_ATTRIBUTION}" if row.published_by else RESEARCH_ATTRIBUTION
+    )
+    return {
+        "id": row.id,
+        "slug": row.slug,
+        "title": row.title or row.question,
+        "question": row.question,
+        "summary": row.card_description or None,
+        "author": row.published_by,
+        "published_at": row.published_at.isoformat() if row.published_at else None,
+        "sources_analyzed": row.sites_found or 0,
+        "word_count": int(row.word_count) if row.word_count else None,
+        "quality_score": int(row.score) if row.score else None,
+        "quality_badge": row.badge,
+        "hero_image_url": hero_url,
+        "license": RESEARCH_LICENSE,
+        "attribution": attribution,
+    }
+
 
 async def rate_limit_dependency(request: Request, response: Response):
     """FastAPI dependency that enforces rate limiting and sets response headers."""
@@ -1420,47 +1462,6 @@ def create_public_api() -> FastAPI:
     # 17. GET /research — Published research papers
     # =========================================================================
 
-    def _paper_summary_kwargs(row) -> dict:
-        """Shared row→schema mapping for research list and detail responses."""
-        hero_url = None
-        if row.hero_src:
-            hero_url = (
-                f"https://ancientnerds.com{row.hero_src}"
-                if row.hero_src.startswith("/")
-                else row.hero_src
-            )
-        attribution = (
-            f"{row.published_by}, {RESEARCH_ATTRIBUTION}"
-            if row.published_by
-            else RESEARCH_ATTRIBUTION
-        )
-        return {
-            "id": row.id,
-            "slug": row.slug,
-            "title": row.title or row.question,
-            "question": row.question,
-            "summary": row.card_description or None,
-            "author": row.published_by,
-            "published_at": row.published_at.isoformat() if row.published_at else None,
-            "sources_analyzed": row.sites_found or 0,
-            "word_count": int(row.word_count) if row.word_count else None,
-            "quality_score": int(row.score) if row.score else None,
-            "quality_badge": row.badge,
-            "hero_image_url": hero_url,
-            "license": RESEARCH_LICENSE,
-            "attribution": attribution,
-        }
-
-    _PAPER_SUMMARY_COLUMNS = """
-        r.id::text AS id, r.slug, r.question, r.published_by, r.published_at, r.sites_found,
-        r.result_json::jsonb->>'title' AS title,
-        r.result_json::jsonb->>'card_description' AS card_description,
-        r.result_json::jsonb->'quality_score'->>'score' AS score,
-        r.result_json::jsonb->'quality_score'->>'badge' AS badge,
-        r.result_json::jsonb->'quality_score'->'meta'->>'word_count' AS word_count,
-        r.result_json::jsonb->'hero_image'->>'src' AS hero_src
-    """
-
     @public_app.get(
         "/research",
         summary="List published research papers",
@@ -1518,7 +1519,7 @@ def create_public_api() -> FastAPI:
 
         rows = db.execute(
             text(f"""
-                SELECT {_PAPER_SUMMARY_COLUMNS}
+                SELECT {PAPER_SUMMARY_COLUMNS}
                 FROM research_requests r
                 WHERE {where_clause}
                 ORDER BY r.published_at DESC NULLS LAST
@@ -1528,7 +1529,7 @@ def create_public_api() -> FastAPI:
         ).fetchall()
 
         response = ResearchPaperListResponse(
-            items=[ResearchPaperSummary(**_paper_summary_kwargs(row)) for row in rows],
+            items=[ResearchPaperSummary(**paper_summary_kwargs(row)) for row in rows],
             total_count=total_count,
             page=page,
             has_more=(offset + page_size) < total_count,
@@ -1568,7 +1569,7 @@ def create_public_api() -> FastAPI:
 
         row = db.execute(
             text(f"""
-                SELECT {_PAPER_SUMMARY_COLUMNS},
+                SELECT {PAPER_SUMMARY_COLUMNS},
                        r.result_json::jsonb->>'published_report' AS published_report,
                        r.result_json::jsonb->>'report' AS report
                 FROM research_requests r
@@ -1583,7 +1584,7 @@ def create_public_api() -> FastAPI:
         # is what external consumers should see — same rule as the website.
         content = row.published_report or row.report or ""
 
-        response = ResearchPaperDetail(**_paper_summary_kwargs(row), content=content)
+        response = ResearchPaperDetail(**paper_summary_kwargs(row), content=content)
         cache_set(cache_key, response.model_dump(), ttl=600)
         return response
 

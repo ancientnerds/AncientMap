@@ -121,6 +121,13 @@ _SHARED_CSS = """
         text-align: center; color: #506870; font-size: 13px; margin-top: 40px;
     }
 
+    /* Pagination */
+    .pagination {
+        display: flex; justify-content: center; gap: 24px;
+        margin-top: 40px; font-size: 15px;
+    }
+    .pagination .page-info { color: #708890; }
+
     /* Responsive */
     @media (max-width: 600px) {
         h1 { font-size: 1.8em; }
@@ -145,6 +152,17 @@ def slugify(title: str) -> str:
     return slug[:120]
 
 
+def story_slug(headline: str, item_id: int) -> str:
+    """Stable, unique slug for a news story: headline slug + numeric ID suffix."""
+    return f"{slugify(headline)}-{item_id}"
+
+
+def story_id_from_slug(slug: str) -> int | None:
+    """Extract the numeric NewsItem ID from a story slug, or None if malformed."""
+    tail = slug.rsplit("-", 1)[-1]
+    return int(tail) if tail.isdigit() else None
+
+
 def _nav_html() -> str:
     """Shared navigation header."""
     return """
@@ -154,6 +172,8 @@ def _nav_html() -> str:
         <a href="/news.html">News</a>
         <a href="/articles/">Journal</a>
         <a href="/news-archive/">News Archive</a>
+        <a href="/research/">Research</a>
+        <a href="/sites/">Sites</a>
         <a href="/radar.html">Radar</a>
     </nav>"""
 
@@ -166,7 +186,10 @@ def _footer_html() -> str:
         <a href="/">Home</a> &middot;
         <a href="/globe.html">Interactive Globe</a> &middot;
         <a href="/articles/">Journal</a> &middot;
-        <a href="/news-archive/">News Archive</a></p>
+        <a href="/news-archive/">News Archive</a> &middot;
+        <a href="/research/">Research Papers</a> &middot;
+        <a href="/sites/">Browse Sites</a> &middot;
+        <a href="/api.html">API</a></p>
     </footer>"""
 
 
@@ -365,12 +388,15 @@ def render_article_listing_html(
 def render_news_archive_html(
     items_by_date: list[tuple[str, list[dict]]],
     total_count: int,
+    page: int = 1,
+    total_pages: int = 1,
 ) -> str:
     """
-    Render the news archive listing page.
+    Render one page of the news archive listing.
 
     items_by_date: list of (date_label, [item_dicts]) grouped by date.
-    Each item dict: {headline, summary, facts, site_name, video_title, youtube_url}
+    Each item dict: {id, headline, summary, facts, site_name, site_id,
+    video_title, youtube_url}
     """
     groups_html = []
     item_schemas = []
@@ -381,15 +407,22 @@ def render_news_archive_html(
             e_headline = escape(item["headline"])
             e_summary = escape(item.get("summary") or "")
             site_name = item.get("site_name") or ""
+            site_id = item.get("site_id") or ""
             youtube_url = item.get("youtube_url") or ""
             video_title = escape(item.get("video_title") or "")
+            slug = story_slug(item["headline"], item["id"])
 
             facts_html = ""
             if item.get("facts"):
                 facts_li = "".join(f"<li>{escape(f)}</li>" for f in item["facts"][:5])
                 facts_html = f'<ul class="facts">{facts_li}</ul>'
 
-            site_tag = f'<span class="site-tag">{escape(site_name)}</span>' if site_name else ""
+            # Internal site link first, external video source second
+            site_tag = ""
+            if site_name and site_id:
+                site_tag = f'<a href="/site.html?id={escape(str(site_id))}" class="site-tag">{escape(site_name)}</a>'
+            elif site_name:
+                site_tag = f'<span class="site-tag">{escape(site_name)}</span>'
             source = (
                 f'<a href="{escape(youtube_url)}" class="source-link" rel="noopener">From: {video_title}</a>'
                 if youtube_url
@@ -398,13 +431,17 @@ def render_news_archive_html(
 
             item_cards.append(f"""
             <div class="news-item">
-                <h3>{e_headline}</h3>
+                <h3><a href="/news-archive/{slug}">{e_headline}</a></h3>
                 <p class="summary">{e_summary}</p>
                 {facts_html}
-                <div>{site_tag}{source}</div>
+                <div>{site_tag}{source}
+                &middot; <a href="/news-archive/{slug}">Full story &rarr;</a></div>
             </div>""")
 
-            item_schemas.append(f'{{"@type": "ListItem", "name": {_json_str(item["headline"])}}}')
+            item_schemas.append(
+                f'{{"@type": "ListItem", "name": {_json_str(item["headline"])}, '
+                f'"url": "{BASE_URL}/news-archive/{slug}"}}'
+            )
 
         groups_html.append(f"""
         <div class="news-date-group">
@@ -416,7 +453,26 @@ def render_news_archive_html(
         "\n".join(groups_html) if groups_html else "<p>No news items yet. Check back soon!</p>"
     )
 
-    canonical = f"{BASE_URL}/news-archive/"
+    # Pagination nav: page 1 lives at /news-archive/, later pages at /news-archive/page/N
+    def _page_url(n: int) -> str:
+        return "/news-archive/" if n <= 1 else f"/news-archive/page/{n}"
+
+    pagination_html = ""
+    if total_pages > 1:
+        newer = f'<a href="{_page_url(page - 1)}">&larr; Newer</a>' if page > 1 else "<span></span>"
+        older = (
+            f'<a href="{_page_url(page + 1)}">Older &rarr;</a>'
+            if page < total_pages
+            else "<span></span>"
+        )
+        pagination_html = f"""
+        <nav class="pagination">
+            {newer}
+            <span class="page-info">Page {page} of {total_pages}</span>
+            {older}
+        </nav>"""
+
+    canonical = f"{BASE_URL}{_page_url(page)}"
     schema_items = ", ".join(item_schemas[:50])  # Limit schema size
     schema = f"""{{
         "@context": "https://schema.org",
@@ -428,12 +484,13 @@ def render_news_archive_html(
         "itemListElement": [{schema_items}]
     }}"""
 
+    page_suffix = f" - Page {page}" if page > 1 else ""
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Archaeology News Archive - Latest Discoveries | Ancient Nerds</title>
+    <title>Archaeology News Archive - Latest Discoveries{page_suffix} | Ancient Nerds</title>
     <meta name="description" content="Archive of {total_count}+ archaeology news items. Excavation updates, ancient civilization discoveries, and research breakthroughs curated from expert YouTube channels.">
     <meta name="robots" content="index, follow, max-image-preview:large">
     <link rel="canonical" href="{canonical}">
@@ -466,6 +523,132 @@ def render_news_archive_html(
         <p class="meta">{total_count} news items curated from expert archaeology YouTube channels.
         For the interactive experience, visit the <a href="/news.html">live news feed</a>.</p>
         {body_html}
+        {pagination_html}
+    </main>
+    {_footer_html()}
+</body>
+</html>"""
+
+
+def render_story_html(story: dict) -> str:
+    """
+    Render a single news story as a full SEO-optimized HTML page.
+
+    story: {id, headline, summary, facts, post_text, site_name, site_id,
+    screenshot_url, youtube_url, video_title, channel_name, published_at
+    (datetime|None), news_category}
+    """
+    slug = story_slug(story["headline"], story["id"])
+    canonical = f"{BASE_URL}/news-archive/{slug}"
+    e_headline = escape(story["headline"])
+    e_summary = escape(story.get("summary") or "")
+    meta_desc = escape((story.get("summary") or story["headline"])[:160])
+
+    published_at = story.get("published_at")
+    pub_date = published_at.strftime("%Y-%m-%d") if published_at else ""
+    pub_display = published_at.strftime("%B %d, %Y") if published_at else ""
+
+    screenshot = story.get("screenshot_url") or ""
+    if screenshot.startswith("/"):
+        screenshot = f"{BASE_URL}{screenshot}"
+    og_image = escape(screenshot or f"{BASE_URL}/landing/og-image.png")
+
+    # Body text: post_text is plain text — render as escaped paragraphs
+    post_text = story.get("post_text") or ""
+    paragraphs = "\n".join(
+        f"<p>{escape(p.strip())}</p>" for p in post_text.split("\n") if p.strip()
+    )
+
+    facts_html = ""
+    if story.get("facts"):
+        facts_li = "".join(f"<li>{escape(f)}</li>" for f in story["facts"])
+        facts_html = f'<h2>Key Facts</h2><ul class="facts">{facts_li}</ul>'
+
+    site_html = ""
+    if story.get("site_name") and story.get("site_id"):
+        site_url = f"/site.html?id={escape(str(story['site_id']))}"
+        site_html = (
+            f'<p>Related site: <a href="{site_url}" class="site-tag">'
+            f"{escape(story['site_name'])}</a> &mdash; view location, images, and "
+            f'history on the <a href="{site_url}">Ancient Nerds map</a>.</p>'
+        )
+
+    source_html = ""
+    if story.get("youtube_url"):
+        channel = escape(story.get("channel_name") or "")
+        video_title = escape(story.get("video_title") or "the source video")
+        by_channel = f" by {channel}" if channel else ""
+        source_html = (
+            f'<p class="source-link">Source: <a href="{escape(story["youtube_url"])}" '
+            f'rel="noopener">{video_title}</a>{by_channel}</p>'
+        )
+
+    category = story.get("news_category") or ""
+    category_html = f'<span class="site-tag">{escape(category)}</span> ' if category else ""
+
+    schema = f"""{{
+        "@context": "https://schema.org",
+        "@type": "NewsArticle",
+        "headline": {_json_str(story["headline"])},
+        "description": {_json_str((story.get("summary") or "")[:300])},
+        "datePublished": "{pub_date}",
+        "image": "{og_image}",
+        "author": {{"@type": "Organization", "name": "Ancient Nerds", "url": "{BASE_URL}"}},
+        "publisher": {{"@type": "Organization", "name": "Ancient Nerds", "url": "{BASE_URL}", "logo": {{"@type": "ImageObject", "url": "{BASE_URL}/landing/og-image.png"}}}},
+        "mainEntityOfPage": "{canonical}",
+        "url": "{canonical}"
+    }}"""
+
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{e_headline} | Ancient Nerds</title>
+    <meta name="description" content="{meta_desc}">
+    <meta name="robots" content="index, follow, max-image-preview:large">
+    <link rel="canonical" href="{canonical}">
+
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="{canonical}">
+    <meta property="og:site_name" content="Ancient Nerds">
+    <meta property="og:title" content="{e_headline}">
+    <meta property="og:description" content="{meta_desc}">
+    <meta property="og:image" content="{og_image}">
+    <meta property="article:published_time" content="{pub_date}">
+
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="{e_headline}">
+    <meta name="twitter:description" content="{meta_desc}">
+    <meta name="twitter:image" content="{og_image}">
+    <meta name="twitter:site" content="@AncientNerdsDAO">
+
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&family=Orbitron:wght@700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+
+    <script type="application/ld+json">{schema}</script>
+    <style>{_SHARED_CSS}</style>
+</head>
+<body>
+    {_nav_html()}
+    <main class="container">
+        <article>
+            <h1>{e_headline}</h1>
+            <div class="meta">
+                {category_html}{f'<time datetime="{pub_date}">{pub_display}</time>' if pub_date else ""}
+                &middot; <a href="/news-archive/">News Archive</a>
+                &middot; <a href="/news.html">Live Feed</a>
+            </div>
+            <div class="article-body">
+                <p><strong>{e_summary}</strong></p>
+                {paragraphs}
+                {facts_html}
+                {site_html}
+                {source_html}
+            </div>
+        </article>
     </main>
     {_footer_html()}
 </body>

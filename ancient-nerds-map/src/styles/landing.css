@@ -917,6 +917,16 @@ body {
   color: var(--accent-primary);
 }
 
+.footer-nav-secondary {
+  gap: 16px;
+  margin-top: -6px;
+}
+
+.footer-nav-secondary a {
+  font-size: 0.72rem;
+  opacity: 0.75;
+}
+
 .footer-tagline {
   font-size: 0.75rem;
   font-family: var(--font-body);

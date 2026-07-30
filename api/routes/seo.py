@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 
 from api.routes.og import get_site_data
 from pipeline.database import get_db
+from pipeline.sites_html_renderer import country_slug
 
 router = APIRouter()
 
@@ -129,6 +130,8 @@ async def seo_site_page(
     <p class="meta">{site_type_escaped}{" &mdash; " + country_escaped if site["country"] else ""}{" &mdash; " + coord_str if coord_str else ""}</p>
     <p class="description">{desc_escaped}</p>
     <p><a href="/site.html?id={html.escape(site_id)}">View on Ancient Nerds Map</a></p>
+    {f'<p><a href="/sites/{country_slug(site["country"])}">More archaeological sites in {country_escaped}</a></p>' if site["country"] else ""}
+    <p><a href="/sites/">Browse all sites by country</a> &middot; <a href="/news-archive/">Archaeology news</a> &middot; <a href="/research/">Research papers</a></p>
 </body>
 </html>"""
 

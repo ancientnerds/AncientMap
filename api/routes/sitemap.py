@@ -11,8 +11,9 @@ from fastapi import APIRouter, Depends, Response
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from pipeline.article_html_renderer import slugify
-from pipeline.database import NewsArticle, get_db
+from pipeline.article_html_renderer import slugify, story_slug
+from pipeline.database import NewsArticle, NewsItem, get_db
+from pipeline.sites_html_renderer import country_slug
 
 router = APIRouter()
 
@@ -99,6 +100,38 @@ async def get_sitemap(db: Session = Depends(get_db)):
         "    <priority>0.7</priority>",
         "  </url>",
         "",
+        "  <!-- Site Search -->",
+        "  <url>",
+        f"    <loc>{BASE_URL}/search.html</loc>",
+        f"    <lastmod>{today}</lastmod>",
+        "    <changefreq>monthly</changefreq>",
+        "    <priority>0.7</priority>",
+        "  </url>",
+        "",
+        "  <!-- Theo Research Lab -->",
+        "  <url>",
+        f"    <loc>{BASE_URL}/theo.html</loc>",
+        f"    <lastmod>{today}</lastmod>",
+        "    <changefreq>weekly</changefreq>",
+        "    <priority>0.7</priority>",
+        "  </url>",
+        "",
+        "  <!-- Citation Library -->",
+        "  <url>",
+        f"    <loc>{BASE_URL}/library.html</loc>",
+        f"    <lastmod>{today}</lastmod>",
+        "    <changefreq>monthly</changefreq>",
+        "    <priority>0.6</priority>",
+        "  </url>",
+        "",
+        "  <!-- API Documentation -->",
+        "  <url>",
+        f"    <loc>{BASE_URL}/api.html</loc>",
+        f"    <lastmod>{today}</lastmod>",
+        "    <changefreq>monthly</changefreq>",
+        "    <priority>0.6</priority>",
+        "  </url>",
+        "",
         "  <!-- SEO: Crawlable article listing -->",
         "  <url>",
         f"    <loc>{BASE_URL}/articles/</loc>",
@@ -115,7 +148,44 @@ async def get_sitemap(db: Session = Depends(get_db)):
         "    <priority>0.8</priority>",
         "  </url>",
         "",
+        "  <!-- SEO: Crawlable research library -->",
+        "  <url>",
+        f"    <loc>{BASE_URL}/research/</loc>",
+        f"    <lastmod>{today}</lastmod>",
+        "    <changefreq>weekly</changefreq>",
+        "    <priority>0.8</priority>",
+        "  </url>",
+        "",
+        "  <!-- SEO: Crawlable site browser -->",
+        "  <url>",
+        f"    <loc>{BASE_URL}/sites/</loc>",
+        f"    <lastmod>{today}</lastmod>",
+        "    <changefreq>weekly</changefreq>",
+        "    <priority>0.8</priority>",
+        "  </url>",
+        "",
     ]
+
+    # --- Country browse pages (/sites/{country}) ---
+    country_rows = db.execute(
+        text("""
+            SELECT DISTINCT country
+            FROM unified_sites
+            WHERE source_id = 'ancient_nerds' AND country IS NOT NULL AND country != ''
+            ORDER BY country
+        """)
+    ).fetchall()
+    for row in country_rows:
+        xml_parts.extend(
+            [
+                "  <url>",
+                f"    <loc>{escape(f'{BASE_URL}/sites/{country_slug(row.country)}')}</loc>",
+                f"    <lastmod>{today}</lastmod>",
+                "    <changefreq>weekly</changefreq>",
+                "    <priority>0.7</priority>",
+                "  </url>",
+            ]
+        )
 
     # Add each site
     for site in sites:
@@ -148,6 +218,50 @@ async def get_sitemap(db: Session = Depends(get_db)):
                 f"    <lastmod>{lastmod}</lastmod>",
                 "    <changefreq>monthly</changefreq>",
                 "    <priority>0.9</priority>",
+                "  </url>",
+            ]
+        )
+
+    # --- Research papers (open-access, multi-thousand-word unique content) ---
+    paper_rows = db.execute(
+        text("""
+            SELECT slug, published_at
+            FROM research_requests
+            WHERE is_public = TRUE AND status = 'completed' AND slug IS NOT NULL
+            ORDER BY published_at DESC NULLS LAST
+        """)
+    ).fetchall()
+    for paper in paper_rows:
+        lastmod = paper.published_at.strftime("%Y-%m-%d") if paper.published_at else today
+        xml_parts.extend(
+            [
+                "  <url>",
+                f"    <loc>{escape(f'{BASE_URL}/research/{paper.slug}')}</loc>",
+                f"    <lastmod>{lastmod}</lastmod>",
+                "    <changefreq>monthly</changefreq>",
+                "    <priority>0.9</priority>",
+                "  </url>",
+            ]
+        )
+
+    # --- News stories (crawlable /news-archive/{slug} pages) ---
+    stories = (
+        db.query(NewsItem.id, NewsItem.headline, NewsItem.created_at)
+        .filter(NewsItem.post_text.isnot(None))
+        .filter((NewsItem.news_category != "speculative") | (NewsItem.news_category.is_(None)))
+        .order_by(NewsItem.created_at.desc())
+        .all()
+    )
+    for story in stories:
+        slug = story_slug(story.headline, story.id)
+        lastmod = story.created_at.strftime("%Y-%m-%d") if story.created_at else today
+        xml_parts.extend(
+            [
+                "  <url>",
+                f"    <loc>{escape(f'{BASE_URL}/news-archive/{slug}')}</loc>",
+                f"    <lastmod>{lastmod}</lastmod>",
+                "    <changefreq>yearly</changefreq>",
+                "    <priority>0.6</priority>",
                 "  </url>",
             ]
         )

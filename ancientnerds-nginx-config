@@ -47,6 +47,22 @@ server {
         add_header Cache-Control "public, max-age=1800";
     }
 
+    # SEO: Research library papers served by API as HTML
+    location /research/ {
+        proxy_pass http://127.0.0.1:8000/research/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        add_header Cache-Control "public, max-age=1800";
+    }
+
+    # SEO: Crawlable site browse pages served by API as HTML
+    location /sites/ {
+        proxy_pass http://127.0.0.1:8000/sites/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        add_header Cache-Control "public, max-age=3600";
+    }
+
     # Bulk site operations need a long timeout (large imports)
     location /api/sites/batch-upload {
         proxy_pass http://127.0.0.1:8000/api/sites/batch-upload;

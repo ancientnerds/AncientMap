@@ -16,6 +16,7 @@ id_ed25519
 *_deploy
 credentials.json
 secrets.json
+secrets/
 
 # Note: config.json is committed but should not contain secrets
 # All sensitive values should be in .env
