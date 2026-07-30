@@ -19,6 +19,7 @@ from pipeline.article_html_renderer import (
     _json_str,
     _nav_html,
     _sanitize_html,
+    external_links_new_tab,
     founder_medium_script,
 )
 
@@ -160,7 +161,7 @@ def render_research_listing_html(papers: list[dict]) -> str:
         <h1>Research Library</h1>
         <p class="meta">Deep-research papers on archaeology and ancient history, produced by the
         Theo convergence research pipeline and reviewed before publication.
-        Open access under <a href="{CC_BY_URL}" rel="license">CC BY 4.0</a> —
+        Open access under <a href="{CC_BY_URL}" rel="license" target="_blank">CC BY 4.0</a> —
         reuse freely, attribution to Ancient Nerds is the only requirement.
         Also available via the <a href="/api.html">public API</a>.</p>
         {cards_html}
@@ -173,7 +174,7 @@ def render_research_listing_html(papers: list[dict]) -> str:
 def render_research_paper_html(paper: dict, content_md: str) -> str:
     """Render a single research paper as a full SEO-optimized HTML page."""
     md = markdown.Markdown(extensions=["extra", "smarty", "toc"])
-    body_html = _sanitize_html(md.convert(format_references_md(content_md)))
+    body_html = external_links_new_tab(_sanitize_html(md.convert(format_references_md(content_md))))
 
     title = paper["title"] or paper["question"]
     slug = paper["slug"]
@@ -263,7 +264,7 @@ def render_research_paper_html(paper: dict, content_md: str) -> str:
             </div>
             <div class="license-box">
                 <p>This paper is open access under
-                <a href="{CC_BY_URL}" rel="license">Creative Commons Attribution 4.0 (CC BY 4.0)</a>.
+                <a href="{CC_BY_URL}" rel="license" target="_blank">Creative Commons Attribution 4.0 (CC BY 4.0)</a>.
                 Reuse freely — attribution to <strong>{escape(paper.get("attribution") or "Ancient Nerds — https://ancientnerds.com")}</strong> is the only requirement.
                 Machine-readable version via the <a href="/api.html">public API</a>.</p>
             </div>

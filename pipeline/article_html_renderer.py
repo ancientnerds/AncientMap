@@ -28,6 +28,25 @@ def _sanitize_html(html: str) -> str:
     return html
 
 
+_A_TAG_RE = re.compile(r"<a\s+[^>]*>")
+_EXT_HREF_RE = re.compile(r'href="https?://(?!(?:www\.)?ancientnerds\.com)')
+
+
+def external_links_new_tab(html: str) -> str:
+    """Make external links open in a new tab; internal links stay in-tab."""
+
+    def fix(m: re.Match) -> str:
+        tag = m.group(0)
+        if not _EXT_HREF_RE.search(tag) or "target=" in tag:
+            return tag
+        attrs = (
+            ' target="_blank"' if "rel=" in tag else ' target="_blank" rel="noopener noreferrer"'
+        )
+        return tag[:-1] + attrs + ">"
+
+    return _A_TAG_RE.sub(fix, html)
+
+
 # Shared CSS for all rendered pages (dark theme matching main site)
 _SHARED_CSS = """
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -227,7 +246,7 @@ def render_article_html(
 ) -> str:
     """Render a single article as a full SEO-optimized HTML page."""
     md = markdown.Markdown(extensions=["extra", "smarty", "toc"])
-    body_html = _sanitize_html(md.convert(content_md))
+    body_html = external_links_new_tab(_sanitize_html(md.convert(content_md)))
 
     meta_desc = (summary or title)[:160]
     pub_date = published_at.strftime("%Y-%m-%d") if published_at else ""
@@ -447,7 +466,7 @@ def render_news_archive_html(
             elif site_name:
                 site_tag = f'<span class="site-tag">{escape(site_name)}</span>'
             source = (
-                f'<a href="{escape(youtube_url)}" class="source-link" rel="noopener">From: {video_title}</a>'
+                f'<a href="{escape(youtube_url)}" class="source-link" target="_blank" rel="noopener">From: {video_title}</a>'
                 if youtube_url
                 else ""
             )
@@ -603,7 +622,7 @@ def render_story_html(story: dict) -> str:
         by_channel = f" by {channel}" if channel else ""
         source_html = (
             f'<p class="source-link">Source: <a href="{escape(story["youtube_url"])}" '
-            f'rel="noopener">{video_title}</a>{by_channel}</p>'
+            f'target="_blank" rel="noopener">{video_title}</a>{by_channel}</p>'
         )
 
     category = story.get("news_category") or ""
@@ -686,7 +705,7 @@ def render_medium_copy_html(
 ) -> str:
     """Render a clean, light-themed page for copying into Medium's editor."""
     md = markdown.Markdown(extensions=["extra", "smarty"])
-    body_html = _sanitize_html(md.convert(content_md))
+    body_html = external_links_new_tab(_sanitize_html(md.convert(content_md)))
     canonical = canonical_url
     e_title = escape(title)
 
