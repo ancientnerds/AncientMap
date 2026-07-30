@@ -1,5 +1,15 @@
 # SEO-Schlachtplan: Von 6 indexierten Seiten zu echter Sichtbarkeit
 
+> **STATUS 2026-07-30 (Commit 4cf794d, deployed & live-verifiziert):**
+> Phasen 0–5 sind KOMPLETT umgesetzt und auf Produktion. Sitemap: 5.037 → **7.310 URLs**,
+> bei Google neu eingereicht. Live geprüft: `/research/` (Paper: 8.644 Wörter),
+> `/sites/` + Länderseiten, `/news-archive/` paginiert + Story-Seiten, `/articles/` (alle
+> Journals), statischer Inhalt auf api/search/theo/library.html, Footer-Links, Bot-Prerender
+> mit Browse-Backlinks. Phase-4-Entscheidung: Option B (bestehender `/seo/site/`-Prerender
+> behalten, `site.html?id=` bleibt kanonisch) + neue Browse-Struktur `/sites/{country}`.
+> **OFFEN: Phase 6 (Distribution — braucht Accounts/Operator)** und 5.4 (eigene OG-Images
+> pro Content-Typ; Papers/Stories nutzen vorerst Hero-Bild bzw. Screenshot).
+
 > **For agentic workers:** Dies ist der Master-Plan. Jede Phase mit Code-Arbeit bekommt bei Ausführungsstart einen eigenen detaillierten Implementation-Plan (superpowers:writing-plans), der dann mit superpowers:subagent-driven-development oder superpowers:executing-plans abgearbeitet wird.
 
 **Goal:** Die wertvollen Inhalte (Theo-Papers, Journals, Stories, 5.000 kuratierte Sites, API) für Google crawlbar und indexierbar machen und die organische Sichtbarkeit von ~0 Non-Brand-Klicks auf messbares Wachstum bringen.
