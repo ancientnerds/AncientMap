@@ -132,8 +132,19 @@ export default defineConfig({
         ]
       },
       workbox: {
-        // Don't serve index.html for /api/ routes (they're backend redirects, not SPA pages)
-        navigateFallbackDenylist: [/^\/api\//, /\.html(\?|$)/],
+        // Don't serve index.html for backend routes or server-rendered SEO pages
+        // (/articles/, /news-archive/, /research/, /sites/ are HTML from the API,
+        // not SPA pages — the SW must let them hit the network)
+        navigateFallbackDenylist: [
+          /^\/api\//,
+          /\.html(\?|$)/,
+          /^\/articles\//,
+          /^\/news-archive\//,
+          /^\/research\//,
+          /^\/sites\//,
+          /^\/seo\//,
+          /^\/sitemap/,
+        ],
         // Pre-cache app shell assets
         globPatterns: ['**/*.{js,css,html,svg,woff2}'],
         // Don't pre-cache large data files
