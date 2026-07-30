@@ -59,14 +59,14 @@ QUOTA_RESUME_PCT = 50
 # tasks into guaranteed failures. At or below this % the tier is EXHAUSTED
 # regardless of the 5h value. No hysteresis — the weekly % only refills at
 # the Monday reset, so there is no boundary to flap around.
-QUOTA_WEEKLY_FREEZE_PCT = 5
+QUOTA_WEEKLY_FREEZE_PCT = int(os.getenv("QUOTA_WEEKLY_FREEZE_PCT", "5"))
 
 # A batch run (is_batch=TRUE) may only START when the weekly budget still
 # fits a whole paper: ~19%/paper observed on the ENTITÄT batch, plus margin.
 # Below this floor a fresh multi-hour run would just park in the weekly wall
 # mid-run. UI submissions bypass the batch gate entirely and are protected
 # by the tier ladder alone.
-THEO_BATCH_MIN_WEEKLY_PCT = 25
+THEO_BATCH_MIN_WEEKLY_PCT = int(os.getenv("THEO_BATCH_MIN_WEEKLY_PCT", "25"))
 
 # How often the watchdog probes /v1/token_plan/remains. The probe is cached
 # 60s server-side (minimax_shared.probe_minimax_quota), so 60s is a
