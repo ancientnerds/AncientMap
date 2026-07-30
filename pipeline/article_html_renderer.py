@@ -682,6 +682,7 @@ def render_medium_copy_html(
     title: str,
     content_md: str,
     canonical_url: str,
+    extra_footer_html: str = "",
 ) -> str:
     """Render a clean, light-themed page for copying into Medium's editor."""
     md = markdown.Markdown(extensions=["extra", "smarty"])
@@ -753,6 +754,7 @@ def render_medium_copy_html(
         <p><em>Originally published on <a href="{canonical}">Ancient Nerds</a>
         &mdash; explore 750,000+ archaeological sites on our
         <a href="{BASE_URL}/globe.html">interactive 3D globe</a>.</em></p>
+        {extra_footer_html}
     </div>
     <script>
     function selectAndCopy() {{

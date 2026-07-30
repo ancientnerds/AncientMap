@@ -637,10 +637,10 @@ export default function ResearchPaperPage() {
           </div>
         )}
 
-        {/* Back to library */}
+        {/* Back to research library */}
         <div style={{ textAlign: 'center', padding: '32px 0' }}>
-          <a href="/theo.html" style={{ color: 'var(--brand-primary)', fontSize: 13, textDecoration: 'none' }}>
-            Browse more research in the library
+          <a href="/theo.html#research-library" style={{ color: 'var(--brand-primary)', fontSize: 13, textDecoration: 'none' }}>
+            Browse all papers in the Research Library
           </a>
         </div>
       </div>

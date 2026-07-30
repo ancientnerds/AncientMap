@@ -96,5 +96,10 @@ async def research_medium_copy(slug: str, db: Session = Depends(get_db)):
         title=paper["title"],
         content_md=content,
         canonical_url=f"{BASE_URL}/research/{slug}",
+        extra_footer_html=(
+            f"<p><em>Read more open-access research papers in the "
+            f'<a href="{BASE_URL}/research/">Ancient Nerds Research Library</a> '
+            f"(CC BY 4.0).</em></p>"
+        ),
     )
     return Response(content=html, media_type="text/html")
