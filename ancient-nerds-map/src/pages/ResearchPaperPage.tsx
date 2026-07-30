@@ -12,6 +12,7 @@ import QualityBadge, { type QualityScore } from '../components/theo/QualityBadge
 import { splitIntoImageSegments } from '../components/theo/galleryParser'
 import TheoPaperBody from '../components/theo/TheoPaperBody'
 import ImageLightbox, { type LightboxImage } from '../components/ImageLightbox'
+import { useIsFounder } from '../hooks/useIsFounder'
 import { inferSourceType } from '../utils/sourceType'
 import '../styles/theo.css'
 
@@ -197,6 +198,7 @@ function wireCitationAnchors(body: string, knownNums: Set<number>): string {
 }
 
 export default function ResearchPaperPage() {
+  const isFounder = useIsFounder()
   const [paper, setPaper] = useState<PaperData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -530,6 +532,16 @@ export default function ResearchPaperPage() {
             <button className="theo-report-share" onClick={handleShare} title="Share paper" aria-label="Share paper">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
             </button>
+            {isFounder && (
+              <button
+                className="theo-report-share"
+                onClick={() => window.open(`/research/${slug}/medium`, '_blank')}
+                title="Copy for Medium (founders only)"
+                aria-label="Copy for Medium"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M13.54 12a6.8 6.8 0 01-6.77 6.82A6.8 6.8 0 010 12a6.8 6.8 0 016.77-6.82A6.8 6.8 0 0113.54 12zM20.96 12c0 3.54-1.51 6.42-3.38 6.42-1.87 0-3.39-2.88-3.39-6.42s1.52-6.42 3.39-6.42 3.38 2.88 3.38 6.42M24 12c0 3.17-.53 5.75-1.19 5.75-.66 0-1.19-2.58-1.19-5.75s.53-5.75 1.19-5.75C23.47 6.25 24 8.83 24 12z"/></svg>
+              </button>
+            )}
             {ttsStatus?.has_audio && (
               <div className="tts-audio-player">
                 <button

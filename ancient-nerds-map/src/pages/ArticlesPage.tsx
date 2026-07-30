@@ -10,6 +10,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo, lazy, Suspense } from 'react'
 import ReactMarkdown, { type Components } from 'react-markdown'
 import { config } from '../config'
+import { useIsFounder } from '../hooks/useIsFounder'
 import CitationPopover from '../components/news/CitationPopover'
 import PageHeader from '../components/layout/PageHeader'
 import PageStatsBar from '../components/layout/PageStatsBar'
@@ -449,6 +450,23 @@ function ShareButton({ article }: { article: Article }) {
   )
 }
 
+function MediumButton({ article }: { article: Article }) {
+  // Founders-only editorial tool: opens the light-themed copy template
+  // with the canonical URL for Medium's canonical-link setting.
+  return (
+    <button
+      className="articles-share-btn"
+      onClick={() => window.open(`/articles/${slugify(article.title)}/medium`, '_blank')}
+      title="Copy for Medium (founders only)"
+    >
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M13.54 12a6.8 6.8 0 01-6.77 6.82A6.8 6.8 0 010 12a6.8 6.8 0 016.77-6.82A6.8 6.8 0 0113.54 12zM20.96 12c0 3.54-1.51 6.42-3.38 6.42-1.87 0-3.39-2.88-3.39-6.42s1.52-6.42 3.39-6.42 3.38 2.88 3.38 6.42M24 12c0 3.17-.53 5.75-1.19 5.75-.66 0-1.19-2.58-1.19-5.75s.53-5.75 1.19-5.75C23.47 6.25 24 8.83 24 12z" />
+      </svg>
+      Medium
+    </button>
+  )
+}
+
 function CopyLinkButton({ article }: { article: Article }) {
   const [copied, setCopied] = useState(false)
 
@@ -470,6 +488,7 @@ function CopyLinkButton({ article }: { article: Article }) {
 }
 
 export default function ArticlesPage() {
+  const isFounder = useIsFounder()
   const [articles, setArticles] = useState<Article[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -811,6 +830,7 @@ export default function ArticlesPage() {
                 <div className="articles-reader-meta-actions">
                   <ShareButton article={selectedArticle} />
                   <CopyLinkButton article={selectedArticle} />
+                  {isFounder && <MediumButton article={selectedArticle} />}
                 </div>
               </div>
               <div className="articles-reader-body">
