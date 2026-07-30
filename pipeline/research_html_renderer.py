@@ -6,6 +6,7 @@ schema markup, CC BY 4.0 license notice, and the site's dark theme.
 Shares CSS, nav, and footer with the article renderer.
 """
 
+import re
 from datetime import datetime
 from html import escape
 
@@ -39,6 +40,33 @@ _RESEARCH_CSS = """
     }
     .paper-card .question { font-style: italic; color: #90a8b0; font-size: 0.95em; margin-bottom: 10px; }
 """
+
+
+_REFERENCES_HEADING_RE = re.compile(
+    r"^#{1,3}\s*(References|Sources|Bibliography)\b.*$", re.M | re.I
+)
+_BARE_URL_RE = re.compile(r"(?<![(<\[])(https?://[^\s<>()\[\]]+)")
+_DOI_RE = re.compile(r"\bDOI:\s*(10\.\S+?)(?=[\s,;]|$)")
+
+
+def format_references_md(content_md: str) -> str:
+    """
+    Rework the References section of a paper for clean rendering.
+
+    Theo emits references as consecutive '[N] ...' lines with bare URLs —
+    markdown collapses those into one giant paragraph with dead links.
+    This gives each reference its own paragraph and turns bare URLs and
+    DOIs into clickable links. Only text after the References heading is
+    touched; the paper body stays untouched.
+    """
+    m = _REFERENCES_HEADING_RE.search(content_md)
+    if not m:
+        return content_md
+    body, refs = content_md[: m.end()], content_md[m.end() :]
+    refs = re.sub(r"\n(?=\[\d+\]\s)", "\n\n", refs)
+    refs = _DOI_RE.sub(r"DOI: [\1](https://doi.org/\1)", refs)
+    refs = _BARE_URL_RE.sub(r"<\1>", refs)
+    return body + refs
 
 
 def _pub_display(published_at: str | None) -> tuple[str, str]:
@@ -145,7 +173,7 @@ def render_research_listing_html(papers: list[dict]) -> str:
 def render_research_paper_html(paper: dict, content_md: str) -> str:
     """Render a single research paper as a full SEO-optimized HTML page."""
     md = markdown.Markdown(extensions=["extra", "smarty", "toc"])
-    body_html = _sanitize_html(md.convert(content_md))
+    body_html = _sanitize_html(md.convert(format_references_md(content_md)))
 
     title = paper["title"] or paper["question"]
     slug = paper["slug"]
