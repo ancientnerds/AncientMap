@@ -13,7 +13,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from api.routes.public_v1 import PAPER_SUMMARY_COLUMNS, paper_summary_kwargs
-from pipeline.article_html_renderer import render_404_html
+from pipeline.article_html_renderer import BASE_URL, render_404_html, render_medium_copy_html
 from pipeline.database import get_db
 from pipeline.research_html_renderer import (
     render_research_listing_html,
@@ -45,10 +45,9 @@ async def research_listing(db: Session = Depends(get_db)):
     return Response(content=html, media_type="text/html", headers=_HTML_HEADERS)
 
 
-@router.get("/research/{slug}")
-async def research_paper_page(slug: str, db: Session = Depends(get_db)):
-    """Full HTML research paper page by slug."""
-    row = db.execute(
+def _fetch_paper(slug: str, db: Session):
+    """Load one public paper row incl. report content, or None."""
+    return db.execute(
         text(f"""
             SELECT {PAPER_SUMMARY_COLUMNS},
                    r.result_json::jsonb->>'published_report' AS published_report,
@@ -59,13 +58,22 @@ async def research_paper_page(slug: str, db: Session = Depends(get_db)):
         {"slug": slug},
     ).fetchone()
 
+
+def _paper_404() -> Response:
+    return Response(
+        content=render_404_html("Paper"),
+        media_type="text/html",
+        status_code=404,
+        headers={"Cache-Control": "public, max-age=300"},
+    )
+
+
+@router.get("/research/{slug}")
+async def research_paper_page(slug: str, db: Session = Depends(get_db)):
+    """Full HTML research paper page by slug."""
+    row = _fetch_paper(slug, db)
     if not row:
-        return Response(
-            content=render_404_html("Paper"),
-            media_type="text/html",
-            status_code=404,
-            headers={"Cache-Control": "public, max-age=300"},
-        )
+        return _paper_404()
 
     # The reviewed publication (rejected blocks hidden, edits substituted)
     # is what external consumers should see — same rule as /api/v1/research.
@@ -73,3 +81,20 @@ async def research_paper_page(slug: str, db: Session = Depends(get_db)):
 
     html = render_research_paper_html(paper_summary_kwargs(row), content)
     return Response(content=html, media_type="text/html", headers=_HTML_HEADERS)
+
+
+@router.get("/research/{slug}/medium")
+async def research_medium_copy(slug: str, db: Session = Depends(get_db)):
+    """Clean, light-themed paper page for copying into Medium's editor."""
+    row = _fetch_paper(slug, db)
+    if not row:
+        return _paper_404()
+
+    paper = paper_summary_kwargs(row)
+    content = row.published_report or row.report or ""
+    html = render_medium_copy_html(
+        title=paper["title"],
+        content_md=content,
+        canonical_url=f"{BASE_URL}/research/{slug}",
+    )
+    return Response(content=html, media_type="text/html")

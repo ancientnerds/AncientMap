@@ -18,6 +18,7 @@ from pipeline.article_html_renderer import (
     _json_str,
     _nav_html,
     _sanitize_html,
+    founder_medium_script,
 )
 
 CC_BY_URL = "https://creativecommons.org/licenses/by/4.0/"
@@ -227,7 +228,7 @@ def render_research_paper_html(paper: dict, content_md: str) -> str:
                 {badge}<time datetime="{pub_date}">{pub_display}</time>
                 &middot; by {escape(author)}{word_count}{sources}
                 &middot; <a href="/research/">All papers</a>
-                &middot; <a href="/research.html?slug={slug}">Interactive view</a>
+                &middot; <a href="/research.html?slug={slug}">Interactive view</a><span id="mediumSlot"></span>
             </div>
             <div class="article-body">
                 {body_html}
@@ -241,5 +242,6 @@ def render_research_paper_html(paper: dict, content_md: str) -> str:
         </article>
     </main>
     {_footer_html()}
+    {founder_medium_script(f"/research/{slug}/medium")}
 </body>
 </html>"""

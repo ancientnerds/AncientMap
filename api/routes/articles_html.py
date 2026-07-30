@@ -12,6 +12,7 @@ from fastapi import APIRouter, Depends, Response
 from sqlalchemy.orm import Session, joinedload
 
 from pipeline.article_html_renderer import (
+    BASE_URL,
     render_404_html,
     render_article_html,
     render_article_listing_html,
@@ -114,8 +115,7 @@ async def article_medium_copy(slug: str, db: Session = Depends(get_db)):
     html = render_medium_copy_html(
         title=article.title,
         content_md=article.content,
-        summary=article.summary,
-        slug=slug,
+        canonical_url=f"{BASE_URL}/articles/{slug}",
     )
     return Response(content=html, media_type="text/html")
 

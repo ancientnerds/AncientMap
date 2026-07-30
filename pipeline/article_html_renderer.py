@@ -178,6 +178,29 @@ def _nav_html() -> str:
     </nav>"""
 
 
+def founder_medium_script(medium_path: str) -> str:
+    """
+    JS that injects the "Copy for Medium" link into #mediumSlot — a
+    founders-only editorial tool, shown only when /api/auth/me reports
+    is_founder for the logged-in user.
+    """
+    return f"""
+    <script>
+    (function() {{
+        var token = localStorage.getItem("an_auth_token");
+        if (!token) return;
+        fetch("/api/auth/me", {{ headers: {{ "Authorization": "Bearer " + token }} }})
+            .then(function(r) {{ return r.ok ? r.json() : null; }})
+            .then(function(user) {{
+                if (user && user.is_founder) {{
+                    document.getElementById("mediumSlot").innerHTML =
+                        ' &middot; <a href="{medium_path}" style="color:#c02023">Copy for Medium</a>';
+                }}
+            }});
+    }})();
+    </script>"""
+
+
 def _footer_html() -> str:
     """Shared footer."""
     return """
@@ -291,21 +314,8 @@ def render_article_html(
             setTimeout(function() {{ el.style.display = "none"; }}, 2000);
         }});
     }}
-    // "Copy for Medium" is a founders-only editorial tool: only shown to
-    // logged-in users whose /api/auth/me reports is_founder.
-    (function() {{
-        var token = localStorage.getItem("an_auth_token");
-        if (!token) return;
-        fetch("/api/auth/me", {{ headers: {{ "Authorization": "Bearer " + token }} }})
-            .then(function(r) {{ return r.ok ? r.json() : null; }})
-            .then(function(user) {{
-                if (user && user.is_founder) {{
-                    document.getElementById("mediumSlot").innerHTML =
-                        ' &middot; <a href="/articles/{slug}/medium" style="color:#c02023">Copy for Medium</a>';
-                }}
-            }});
-    }})();
     </script>
+    {founder_medium_script(f"/articles/{slug}/medium")}
 </body>
 </html>"""
 
@@ -671,13 +681,12 @@ def render_story_html(story: dict) -> str:
 def render_medium_copy_html(
     title: str,
     content_md: str,
-    summary: str | None,
-    slug: str,
+    canonical_url: str,
 ) -> str:
     """Render a clean, light-themed page for copying into Medium's editor."""
     md = markdown.Markdown(extensions=["extra", "smarty"])
     body_html = _sanitize_html(md.convert(content_md))
-    canonical = f"{BASE_URL}/articles/{slug}"
+    canonical = canonical_url
     e_title = escape(title)
 
     return f"""<!DOCTYPE html>
