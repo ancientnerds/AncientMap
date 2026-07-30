@@ -22,7 +22,7 @@ from collections import Counter
 
 from sqlalchemy import text
 
-from pipeline.lyra.research_graph import normalize_label
+from pipeline.lyra.research_graph import is_junk_label, normalize_label
 
 logger = logging.getLogger(__name__)
 
@@ -82,7 +82,7 @@ class _GraphWriter:
         signal: float = 0.0,
     ) -> str | None:
         label = (label or "").strip()
-        if len(label) < 2:
+        if len(label) < 2 or is_junk_label(label):
             return None
         norm = normalize_label(label)[:500]
         key = (kind, norm)

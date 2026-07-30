@@ -20,7 +20,7 @@ import logging
 
 from sqlalchemy import text
 
-from pipeline.lyra.research_graph import normalize_label
+from pipeline.lyra.research_graph import is_junk_label, normalize_label
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +40,7 @@ def _insert_frontier(
     without ever re-entering the frontier itself.
     """
     label = (label or "").strip()
-    if len(label) < 4:
+    if len(label) < 4 or is_junk_label(label):
         return False
     # Raw SQL bypasses SQLAlchemy Python-side defaults — supply all NOT NULL
     # columns explicitly.

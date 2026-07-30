@@ -30,6 +30,22 @@ def normalize_label(label: str) -> str:
     return _WS_RE.sub(" ", cleaned).strip()
 
 
+# Literal junk that LLM output / JSON serialization can leak into labels.
+# 2026-07-31: a rabbit hole labeled "null" (source_signal 2220 via injector
+# accumulation) topped the frontier and the feeder burned a research run on
+# "What does the evidence say about null?". Every node-insert path and the
+# frontier picker reject these.
+# Compared post-normalize_label — "N/A" normalizes to "n a".
+JUNK_LABELS = frozenset({"null", "none", "nan", "undefined", "unknown", "n/a", "n a", "na"})
+
+
+def is_junk_label(label: str | None) -> bool:
+    """True when a label must never become a graph node or research topic."""
+    if not label:
+        return True
+    return normalize_label(label) in JUNK_LABELS
+
+
 def build_graph_from_state(state: Any, request_id: str) -> tuple[list[dict], list[dict]]:
     """Extract graph nodes + edges from a finished ResearchState.
 
@@ -50,6 +66,8 @@ def build_graph_from_state(state: Any, request_id: str) -> tuple[list[dict], lis
     edges: dict[tuple[str, str, str], dict] = {}
 
     def add_node(label: str, kind: str, status: str, created_from: str) -> str:
+        if is_junk_label(label):
+            return ""
         norm = normalize_label(label)
         key = (kind, norm)
         existing = nodes.get(key)
@@ -68,6 +86,9 @@ def build_graph_from_state(state: Any, request_id: str) -> tuple[list[dict], lis
         return norm
 
     def add_edge(src_norm: str, dst_norm: str, kind: str) -> None:
+        # Empty norm = junk label rejected by add_node — no node, no edge.
+        if not src_norm or not dst_norm:
+            return
         key = (src_norm, dst_norm, kind)
         if key not in edges and src_norm != dst_norm:
             edges[key] = {"src_norm": src_norm, "dst_norm": dst_norm, "kind": kind}
@@ -207,6 +228,10 @@ def pick_next_frontier_topic(session) -> dict | None:
                 WHERE p.updated_at > NOW() - INTERVAL '3 days'
             ) recent ON recent.hit = n.id
             WHERE n.status = 'frontier' AND n.kind IN ('topic', 'site')
+              -- junk-label insurance: a garbage node must never cost a
+              -- multi-hour research run (see JUNK_LABELS, 2026-07-31)
+              AND LOWER(TRIM(n.label)) NOT IN
+                  ('null', 'none', 'nan', 'undefined', 'unknown', 'n/a', 'na', '')
             ORDER BY score DESC
             LIMIT 1
         """)
