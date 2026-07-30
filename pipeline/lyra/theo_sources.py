@@ -308,7 +308,11 @@ class SemanticScholarAdapter(SourceAdapter):
             # Bulk endpoint has no limit param — returns up to 1000, we slice
             _s2_params = {
                 "query": clean_query,
-                "fields": "title,abstract,publicationDate,publicationTypes,citationCount,influentialCitationCount,referenceCount,externalIds,openAccessPdf,venue,authors,fieldsOfStudy,tldr",
+                # NOTE: no "tldr" — the bulk endpoint rejects it with 400
+                # "Unrecognized or unsupported fields" (verified 2026-07-31;
+                # it silently killed EVERY S2 search). tldr was never parsed
+                # downstream anyway.
+                "fields": "title,abstract,publicationDate,publicationTypes,citationCount,influentialCitationCount,referenceCount,externalIds,openAccessPdf,venue,authors,fieldsOfStudy",
                 "sort": "citationCount:desc",
                 "publicationTypes": "JournalArticle,Review,Conference",
                 "minCitationCount": "1",
