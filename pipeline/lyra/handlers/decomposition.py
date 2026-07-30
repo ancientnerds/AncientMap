@@ -91,7 +91,9 @@ class DecompositionHandler(BaseHandler):
                 continue
 
             async with self.semaphore:
-                results = await searcher.search(queries, "standard", self.state.disabled_adapters)
+                results = await searcher.search(
+                    queries, self.state.config.source_apis, self.state.disabled_adapters
+                )
 
             if len(results) < 2:
                 self.state.log(
