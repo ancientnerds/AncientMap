@@ -10,6 +10,7 @@ error, total_tokens, llm_call_count, debug_log, etc.).
 from __future__ import annotations
 
 import enum
+import os
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -50,8 +51,9 @@ class ResearchConfig:
     prune_after_zero_rounds: int = 2  # consecutive zero-contribution rounds to prune
     # Debate
     max_debate_rounds: int = 4  # hard cap, converges earlier if no new challenges
-    # Search
-    source_apis: str = "standard"  # "minimal", "standard", "full", "exhaustive"
+    # Search — env-overridable so source breadth can be tuned on the VPS
+    # without a deploy: "minimal", "standard", "full", "exhaustive"
+    source_apis: str = field(default_factory=lambda: os.getenv("THEO_SOURCE_APIS", "standard"))
     queries_per_angle: int = 5
     # LLM — quality-max (tokens free): provision generously so M3's adaptive
     # thinking (which shares the output budget) can't truncate findings/prose.

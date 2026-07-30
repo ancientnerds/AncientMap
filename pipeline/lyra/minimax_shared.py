@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
 import threading
 import time
@@ -28,7 +29,9 @@ from pipeline.lyra.minimax_limiter import (
 # web_research.py, tweet_verifier.py, research_stages.py all import this).
 # Upgraded M3 → M3 on 2026-06-01; verified live via the Anthropic endpoint
 # (MiniMax-M3.0 aliases to MiniMax-M3; M3 still served as the prior model).
-MINIMAX_MODEL = "MiniMax-M3"
+# Env-overridable so a successor model (e.g. M3 Pro, expected Q3 2026) can be
+# switched on the VPS without a code deploy: set MINIMAX_MODEL in .env.
+MINIMAX_MODEL = os.getenv("MINIMAX_MODEL", "MiniMax-M3")
 
 # MiniMax search endpoint (Token Plan / Coding Plan)
 MINIMAX_SEARCH_PATH = "/v1/coding_plan/search"
@@ -375,7 +378,7 @@ def probe_minimax_quota(force: bool = False) -> dict:
                 # pick the "general" model which is what M3 falls under.
                 if isinstance(data.get("model_remains"), list):
                     for entry in data["model_remains"]:
-                        if entry.get("model_name") in ("general", "MiniMax-M3"):
+                        if entry.get("model_name") in ("general", MINIMAX_MODEL):
                             data["five_hour_remaining_percent"] = entry.get(
                                 "current_interval_remaining_percent"
                             )
