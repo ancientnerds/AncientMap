@@ -273,8 +273,7 @@ def render_article_html(
             <div class="meta">
                 {f'<time datetime="{pub_date}">{pub_display}</time>' if pub_date else ""}
                 {f" &middot; Week of {date_range}" if date_range else ""}
-                &middot; <a href="/articles/">All Journals</a>
-                &middot; <a href="/articles/{slug}/medium" style="color:#c02023">Copy for Medium</a>
+                &middot; <a href="/articles/">All Journals</a><span id="mediumSlot"></span>
                 &middot; <button onclick="copyLink()" class="copy-link-btn" title="Copy shareable link">Copy Link</button>
                 <span class="copy-ok" id="copyOk">Copied!</span>
             </div>
@@ -292,6 +291,20 @@ def render_article_html(
             setTimeout(function() {{ el.style.display = "none"; }}, 2000);
         }});
     }}
+    // "Copy for Medium" is a founders-only editorial tool: only shown to
+    // logged-in users whose /api/auth/me reports is_founder.
+    (function() {{
+        var token = localStorage.getItem("an_auth_token");
+        if (!token) return;
+        fetch("/api/auth/me", {{ headers: {{ "Authorization": "Bearer " + token }} }})
+            .then(function(r) {{ return r.ok ? r.json() : null; }})
+            .then(function(user) {{
+                if (user && user.is_founder) {{
+                    document.getElementById("mediumSlot").innerHTML =
+                        ' &middot; <a href="/articles/{slug}/medium" style="color:#c02023">Copy for Medium</a>';
+                }}
+            }});
+    }})();
     </script>
 </body>
 </html>"""
