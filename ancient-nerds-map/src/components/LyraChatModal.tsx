@@ -1024,7 +1024,7 @@ export default function LyraChatModal({
               I can search 1M+ sites, find news, and answer archaeology questions!
             </div>
           ) : (
-            <div className="lyra-chat-header-status">Archaeological Agent</div>
+            <div className="lyra-chat-header-status">AI Archaeological Agent</div>
           )}
         </div>
       </div>
@@ -1581,6 +1581,9 @@ export default function LyraChatModal({
                     <polygon points="22 2 15 22 11 13 2 9 22 2" />
                   </svg>
                 </button>
+              </div>
+              <div className="lyra-chat-ai-note">
+                Lyra is an AI assistant — responses are AI-generated and may contain errors.
               </div>
             </div>
           </>
