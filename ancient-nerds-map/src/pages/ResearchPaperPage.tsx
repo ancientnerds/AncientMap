@@ -241,7 +241,7 @@ export default function ResearchPaperPage() {
           el.content = content
         }
         setMeta('og:title', title)
-        setMeta('og:description', `Research paper by ${data.published_by} on Ancient Nerds Research`)
+        setMeta('og:description', `AI-generated research paper by ${data.published_by} on Ancient Nerds Research`)
         setMeta('og:url', window.location.href)
         const heroSrc = data.result?.hero_image?.src
         if (heroSrc) {
@@ -522,7 +522,7 @@ export default function ResearchPaperPage() {
             <QualityBadge qualityScore={paper.result.quality_score} />
             <span style={{ color: 'var(--text-dimmed)', fontSize: 12 }}>{readingMinutes} min read</span>
             <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>
-              by {paper.published_by}
+              by {paper.published_by}{paper.published_by === 'Theo' ? ' · AI research agent' : ''}
             </span>
             {paper.published_at && (
               <span style={{ color: 'var(--text-dimmed)', fontSize: 12 }}>
