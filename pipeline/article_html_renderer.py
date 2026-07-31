@@ -235,6 +235,17 @@ def _footer_html() -> str:
     </footer>"""
 
 
+# Art. 50(4) EU AI Act: visible disclosure on every AI-generated content page.
+# The data attribute doubles as a lightweight machine-readable marker.
+AI_NOTICE_HTML = (
+    '<p class="ai-notice" data-ai-generated="true" '
+    'style="border:1px solid rgba(176,141,87,.45);background:rgba(176,141,87,.1);'
+    'padding:8px 12px;border-radius:6px;font-size:.85em;">'
+    "AI-generated content: this page was produced automatically by an AI system. "
+    "Always verify with the original sources.</p>"
+)
+
+
 def render_article_html(
     title: str,
     content_md: str,
@@ -319,6 +330,7 @@ def render_article_html(
                 &middot; <button onclick="copyLink()" class="copy-link-btn" title="Copy shareable link">Copy Link</button>
                 <span class="copy-ok" id="copyOk">Copied!</span>
             </div>
+            {AI_NOTICE_HTML}
             <div class="article-body">
                 {body_html}
             </div>
@@ -562,6 +574,7 @@ def render_news_archive_html(
     {_nav_html()}
     <main class="wide-container">
         <h1>Archaeology News Archive</h1>
+        {AI_NOTICE_HTML}
         <p class="meta">{total_count} news items curated from expert archaeology YouTube channels.
         For the interactive experience, visit the <a href="/news.html">live news feed</a>.</p>
         {body_html}
@@ -683,6 +696,7 @@ def render_story_html(story: dict) -> str:
                 &middot; <a href="/news-archive/">News Archive</a>
                 &middot; <a href="/news.html">Live Feed</a>
             </div>
+            {AI_NOTICE_HTML}
             <div class="article-body">
                 <p><strong>{e_summary}</strong></p>
                 {paragraphs}
