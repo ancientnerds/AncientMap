@@ -1,6 +1,6 @@
 # Ancient Nerds Globe User Guide
 
-This guide explains the [Ancient Nerds interactive globe](https://ancientnerds.com/globe) for researchers and general users. It focuses on the map interface rather than the wider Ancient Nerds platform.
+This guide explains the [Ancient Nerds interactive globe](https://ancientnerds.com/globe.html) for researchers and general users. It focuses on the map interface rather than the wider Ancient Nerds platform.
 
 > The globe is under active development. Controls, counts, available sources, and connected research material may change.
 
@@ -16,7 +16,7 @@ This guide explains the [Ancient Nerds interactive globe](https://ancientnerds.c
 
 ## Quick start
 
-1. Open the [globe](https://ancientnerds.com/globe).
+1. Open the [globe](https://ancientnerds.com/globe.html).
 2. Drag the globe to rotate it and use the mouse wheel, trackpad, or right-side zoom control to change scale.
 3. Search for a site by name, or click a visible site marker.
 4. Use **Filter By** to restrict the display by age, country, category, or source.

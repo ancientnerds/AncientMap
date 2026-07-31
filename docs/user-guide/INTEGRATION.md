@@ -31,15 +31,17 @@ docs/user-guide/
 | `offline-and-troubleshooting.md` | `/guide/offline` |
 | `research-notes.md` | `/guide/research-notes` |
 
+> Note: any new extensionless route must be added to `navigateFallbackDenylist` in `ancient-nerds-map/vite.config.ts`, otherwise the installed PWA's service worker serves the cached landing page instead of the route.
+
 ## Maintenance
 
 Review the guide when any of these components change:
 
-- `src/components/FilterPanel.tsx`
-- `src/components/Globe.tsx`
-- `src/components/Globe/panels/`
-- `src/components/SitePopup/`
-- `src/components/DownloadManager.tsx`
+- `ancient-nerds-map/src/components/FilterPanel.tsx`
+- `ancient-nerds-map/src/components/Globe.tsx`
+- `ancient-nerds-map/src/components/Globe/panels/`
+- `ancient-nerds-map/src/components/SitePopup/`
+- `ancient-nerds-map/src/components/DownloadManager.tsx`
 - vector, empire, geological, or route configuration
 
 Keep interface labels identical to the application. Where counts or source totals can change, use descriptive language rather than hard-coded values.
