@@ -720,6 +720,10 @@ export default function ArticlesPage() {
         ]} />
       )}
 
+      {view === 'listing' && (
+        <AiNoticeBanner message="Journals are AI-generated from YouTube video content. Always verify with original sources." />
+      )}
+
       {view === 'reading' && (
         <>
           <div className="articles-progress-track">
