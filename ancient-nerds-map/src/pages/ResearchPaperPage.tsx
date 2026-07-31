@@ -398,9 +398,17 @@ export default function ResearchPaperPage() {
         heroLightboxIndex: null as number | null,
       }
     }
-    // The page renders its own <h1> title; the stored report starts with the
-    // same title as a markdown H1 — strip it or it appears twice.
-    const reportSansTitle = paper.result.report.replace(/^\s*#\s+[^\n]+\n+/, '')
+    // The page renders its own <h1> title; stored reports start with the
+    // same title as a markdown heading (7 of 10 papers use '## Title',
+    // 3 use '# Title') — strip it or the title appears twice. A genuine
+    // section heading like '## Introduction' is never touched.
+    const headingMatch = paper.result.report.match(/^\s*(#{1,3})\s+([^\n]+)\n+/)
+    const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '')
+    const paperTitle = paper.result.title || paper.question || ''
+    const reportSansTitle = headingMatch
+      && (headingMatch[1] === '#' || normalize(headingMatch[2]) === normalize(paperTitle))
+      ? paper.result.report.slice(headingMatch[0].length)
+      : paper.result.report
     const { body, refsText } = splitBodyAndRefs(reportSansTitle)
     const refs = parseReferences(refsText)
     const knownNums = new Set(refs.map(r => r.num))

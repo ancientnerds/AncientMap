@@ -117,14 +117,26 @@ _ATTRIBUTION_SPLIT_RE = re.compile(
 )
 
 
-_LEADING_H1_RE = re.compile(r"^\s*#\s+[^\n]+\n+")
+_LEADING_HEADING_RE = re.compile(r"^\s*(#{1,3})\s+([^\n]+)\n+")
 
 
-def strip_leading_h1(content_md: str) -> str:
-    """Papers begin with their own '# Title' line, but the paper page and the
-    Medium copy template render the title themselves — without this the title
-    appears twice."""
-    return _LEADING_H1_RE.sub("", content_md, count=1)
+def strip_leading_title_heading(content_md: str, title: str) -> str:
+    """Papers begin with their own title as a markdown heading — 7 of 10
+    stored papers use '## Title', 3 use '# Title' (checked 2026-07-31). The
+    paper page and the Medium copy template render the title themselves, so
+    the leading heading is stripped when it's an H1 (always the title in
+    these papers) or when its text matches the paper title. A genuine
+    section heading like '## Introduction' is never touched."""
+    m = _LEADING_HEADING_RE.match(content_md)
+    if not m:
+        return content_md
+
+    def norm(s: str) -> str:
+        return re.sub(r"[^a-z0-9]+", "", s.casefold())
+
+    if m.group(1) == "#" or norm(m.group(2)) == norm(title or ""):
+        return content_md[m.end() :]
+    return content_md
 
 
 def _scrub_caption(raw_cap: str) -> str:
@@ -331,14 +343,17 @@ def render_research_listing_html(papers: list[dict]) -> str:
 
 def render_research_paper_html(paper: dict, content_md: str) -> str:
     """Render a single research paper as a full SEO-optimized HTML page."""
+    title = paper["title"] or paper["question"]
     md = markdown.Markdown(extensions=["extra", "smarty", "toc"])
     body_html = external_links_new_tab(
         _sanitize_html(
-            md.convert(format_image_figures(format_references_md(strip_leading_h1(content_md))))
+            md.convert(
+                format_image_figures(
+                    format_references_md(strip_leading_title_heading(content_md, title))
+                )
+            )
         )
     )
-
-    title = paper["title"] or paper["question"]
     slug = paper["slug"]
     author = paper.get("author") or "Ancient Nerds"
     summary = paper.get("summary") or paper["question"]
