@@ -20,6 +20,7 @@ from pipeline.research_html_renderer import (
     format_references_md,
     render_research_listing_html,
     render_research_paper_html,
+    strip_leading_h1,
 )
 
 logger = logging.getLogger(__name__)
@@ -96,7 +97,7 @@ async def research_medium_copy(slug: str, db: Session = Depends(get_db)):
     # Medium paste drops figcaption content — use the markdown-native caption
     # variant here; the SSR paper page keeps real <figure>/<figcaption>.
     content = format_image_captions_medium(
-        format_references_md(row.published_report or row.report or "")
+        format_references_md(strip_leading_h1(row.published_report or row.report or ""))
     )
     html = render_medium_copy_html(
         title=paper["title"],

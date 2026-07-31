@@ -117,6 +117,16 @@ _ATTRIBUTION_SPLIT_RE = re.compile(
 )
 
 
+_LEADING_H1_RE = re.compile(r"^\s*#\s+[^\n]+\n+")
+
+
+def strip_leading_h1(content_md: str) -> str:
+    """Papers begin with their own '# Title' line, but the paper page and the
+    Medium copy template render the title themselves — without this the title
+    appears twice."""
+    return _LEADING_H1_RE.sub("", content_md, count=1)
+
+
 def _scrub_caption(raw_cap: str) -> str:
     """Scrub editorial meta-voice out of a stored caption.
 
@@ -323,7 +333,9 @@ def render_research_paper_html(paper: dict, content_md: str) -> str:
     """Render a single research paper as a full SEO-optimized HTML page."""
     md = markdown.Markdown(extensions=["extra", "smarty", "toc"])
     body_html = external_links_new_tab(
-        _sanitize_html(md.convert(format_image_figures(format_references_md(content_md))))
+        _sanitize_html(
+            md.convert(format_image_figures(format_references_md(strip_leading_h1(content_md))))
+        )
     )
 
     title = paper["title"] or paper["question"]
