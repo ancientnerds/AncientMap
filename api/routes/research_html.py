@@ -16,7 +16,7 @@ from api.routes.public_v1 import PAPER_SUMMARY_COLUMNS, paper_summary_kwargs
 from pipeline.article_html_renderer import BASE_URL, render_404_html, render_medium_copy_html
 from pipeline.database import get_db
 from pipeline.research_html_renderer import (
-    format_image_figures,
+    format_image_captions_medium,
     format_references_md,
     render_research_listing_html,
     render_research_paper_html,
@@ -93,7 +93,11 @@ async def research_medium_copy(slug: str, db: Session = Depends(get_db)):
         return _paper_404()
 
     paper = paper_summary_kwargs(row)
-    content = format_image_figures(format_references_md(row.published_report or row.report or ""))
+    # Medium paste drops figcaption content — use the markdown-native caption
+    # variant here; the SSR paper page keeps real <figure>/<figcaption>.
+    content = format_image_captions_medium(
+        format_references_md(row.published_report or row.report or "")
+    )
     html = render_medium_copy_html(
         title=paper["title"],
         content_md=content,

@@ -117,29 +117,41 @@ _ATTRIBUTION_SPLIT_RE = re.compile(
 )
 
 
+def _scrub_caption(raw_cap: str) -> str:
+    """Scrub editorial meta-voice out of a stored caption.
+
+    Generic scrub: drop any rationale tail after the attribution that talks
+    about the paper/reader/evidence apparatus instead of the artifact (28
+    leaked captions across 9 of 10 published papers, many phrasings —
+    pattern lists don't scale).
+    """
+    cap = _CAPTION_LEAK_RE.sub("", raw_cap).strip()
+    m = _ATTRIBUTION_SPLIT_RE.match(cap)
+    if m and _META_VOICE_RE.search(m.group("tail")):
+        cap = m.group("head")
+    cap = cap.replace("Unknown authorUnknown author", "Unknown author")
+    return cap.strip().rstrip(".")
+
+
+# The reflow step sometimes splits a caption block INTO a sentence — the
+# stored markdown then continues with "\n. The excitement was..." right
+# after [Source](...). Consumed together with the caption block so no
+# orphaned "." starts the following paragraph.
+_STRAY_PERIOD = r"(?P<stray>\s*\n\.\s*)?"
+
+
 def format_image_figures(content_md: str) -> str:
     """
     Turn Theo's image+caption+source markdown blocks into semantic
-    <figure>/<figcaption> HTML.
+    <figure>/<figcaption> HTML for the SSR paper pages.
 
     Markdown renders the caption as a plain italic paragraph — visually glued
-    to the body text, and Medium pastes it as ordinary prose. A real
-    figcaption separates it on our pages AND becomes a native image caption
-    when pasted into Medium's editor. Also strips the gallery metadata prefix
-    from alt text and scrubs leaked editorial meta-voice from captions.
+    to the body text. A real figcaption separates it. Also strips the gallery
+    metadata prefix from alt text and scrubs leaked editorial meta-voice.
     """
 
     def _caption_html(raw_cap: str, src: str) -> str:
-        cap = _CAPTION_LEAK_RE.sub("", raw_cap).strip()
-        # Generic meta-voice scrub for stored papers: drop any rationale tail
-        # after the attribution that talks about the paper/reader/evidence
-        # apparatus instead of the artifact (28 leaked captions across 9 of
-        # 10 published papers, many phrasings — pattern lists don't scale).
-        m = _ATTRIBUTION_SPLIT_RE.match(cap)
-        if m and _META_VOICE_RE.search(m.group("tail")):
-            cap = m.group("head")
-        cap = cap.replace("Unknown authorUnknown author", "Unknown author")
-        cap = cap.strip().rstrip(".")
+        cap = _scrub_caption(raw_cap)
         cap_html = f"{escape(cap)}. " if cap else ""
         return (
             f"<figcaption>{cap_html}"
@@ -149,24 +161,60 @@ def format_image_figures(content_md: str) -> str:
 
     def _fig(m: re.Match) -> str:
         alt = m.group("alt").split("|")[-1].strip()
+        tail = "\n\n" if m.group("stray") else ""
         return (
             f'<figure class="paper-figure">'
             f'<img src="{escape(m.group("img"))}" alt="{escape(alt)}" loading="lazy">'
-            f"{_caption_html(m.group('cap'), m.group('src'))}</figure>"
+            f"{_caption_html(m.group('cap'), m.group('src'))}</figure>{tail}"
         )
 
-    result = _FIGURE_BLOCK_RE.sub(_fig, content_md)
+    result = _figure_re_with_stray().sub(_fig, content_md)
 
     # Second pass: orphan captions. The reflow step sometimes detaches a
     # writer-placed image's caption from its (inline) image — the caption +
     # Source block then floats between paragraphs. Style and scrub those too;
     # requiring "Photo:" keeps ordinary italic emphasis untouched.
     def _orphan(m: re.Match) -> str:
+        tail = "\n\n" if m.group("stray") else ""
         return (
-            f'<figure class="paper-figure">{_caption_html(m.group("cap"), m.group("src"))}</figure>'
+            f'<figure class="paper-figure">'
+            f"{_caption_html(m.group('cap'), m.group('src'))}</figure>{tail}"
         )
 
-    return _ORPHAN_CAPTION_RE.sub(_orphan, result)
+    return _orphan_re_with_stray().sub(_orphan, result)
+
+
+def format_image_captions_medium(content_md: str) -> str:
+    """
+    Medium-paste-safe variant: Medium's editor DROPS figcaption content when
+    pasting (images lost their captions entirely — observed 2026-07-31), but
+    keeps italic text paragraphs. Rewrite caption blocks as scrubbed markdown:
+    image, then '*caption.* [Source](url)' as its own paragraph.
+    """
+
+    def _cap_md(raw_cap: str, src: str) -> str:
+        cap = _scrub_caption(raw_cap)
+        lead = f"*{cap}.* " if cap else ""
+        return f"{lead}[Source]({src})"
+
+    def _fig(m: re.Match) -> str:
+        alt = m.group("alt").split("|")[-1].strip()
+        return f"![{alt}]({m.group('img')})\n\n{_cap_md(m.group('cap'), m.group('src'))}\n\n"
+
+    result = _figure_re_with_stray().sub(_fig, content_md)
+
+    def _orphan(m: re.Match) -> str:
+        return f"{_cap_md(m.group('cap'), m.group('src'))}\n\n"
+
+    return _orphan_re_with_stray().sub(_orphan, result)
+
+
+def _figure_re_with_stray() -> re.Pattern:
+    return re.compile(_FIGURE_BLOCK_RE.pattern + _STRAY_PERIOD)
+
+
+def _orphan_re_with_stray() -> re.Pattern:
+    return re.compile(_ORPHAN_CAPTION_RE.pattern + _STRAY_PERIOD)
 
 
 def _pub_display(published_at: str | None) -> tuple[str, str]:
