@@ -23,6 +23,7 @@ from pipeline.article_html_renderer import (
     external_links_new_tab,
     founder_medium_script,
 )
+from pipeline.lyra.theo_image_captions import _META_VOICE_RE
 
 CC_BY_URL = "https://creativecommons.org/licenses/by/4.0/"
 
@@ -102,6 +103,19 @@ _ORPHAN_CAPTION_RE = re.compile(
     r"\*(?P<cap>[^*\n]*Photo:[^*\n]+)\*\s*\n\[Source\]\((?P<src>[^)]+)\)"
 )
 
+# Structural caption split: "{lead}. Photo: {artist} / {SOURCE_LABEL}. {tail}".
+# The attribution always ends with a known source label; the tail (LLM
+# rationale) never contains one — verified across all 10 published papers
+# (2026-07-31). Greedy head = split at the LAST label, so artists like
+# "Internet Archive Book Images" can't cut the attribution short.
+_ATTRIBUTION_SPLIT_RE = re.compile(
+    r"^(?P<head>.*Photo:.*"
+    r"(?:Wikimedia Commons|Europeana|Open Access|Internet Archive|Getty Museum|"
+    r"Musée du Louvre|Portable Antiquities Scheme|The Met|Smithsonian))"
+    r"\.\s*(?P<tail>.+)$",
+    re.S,
+)
+
 
 def format_image_figures(content_md: str) -> str:
     """
@@ -116,7 +130,16 @@ def format_image_figures(content_md: str) -> str:
     """
 
     def _caption_html(raw_cap: str, src: str) -> str:
-        cap = _CAPTION_LEAK_RE.sub("", raw_cap).strip().rstrip(".")
+        cap = _CAPTION_LEAK_RE.sub("", raw_cap).strip()
+        # Generic meta-voice scrub for stored papers: drop any rationale tail
+        # after the attribution that talks about the paper/reader/evidence
+        # apparatus instead of the artifact (28 leaked captions across 9 of
+        # 10 published papers, many phrasings — pattern lists don't scale).
+        m = _ATTRIBUTION_SPLIT_RE.match(cap)
+        if m and _META_VOICE_RE.search(m.group("tail")):
+            cap = m.group("head")
+        cap = cap.replace("Unknown authorUnknown author", "Unknown author")
+        cap = cap.strip().rstrip(".")
         cap_html = f"{escape(cap)}. " if cap else ""
         return (
             f"<figcaption>{cap_html}"
