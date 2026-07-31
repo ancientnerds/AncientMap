@@ -432,6 +432,7 @@ def render_article_listing_html(
     <main class="container">
         <h1>Weekly Archaeology Articles</h1>
         <p class="meta">In-depth deep dives into the biggest archaeological discoveries each week. AI-written, sourced, and cited.</p>
+        {AI_NOTICE_HTML}
         {cards_html}
     </main>
     {_footer_html()}

@@ -6,6 +6,7 @@ from datetime import datetime
 from pipeline.article_html_renderer import (
     AI_NOTICE_HTML,
     render_article_html,
+    render_article_listing_html,
     render_news_archive_html,
     render_story_html,
 )
@@ -55,5 +56,21 @@ def test_story_page_has_ai_notice():
 def test_news_archive_listing_has_ai_notice():
     html = render_news_archive_html(
         [("July 30, 2026", [_story()])], total_count=1, page=1, total_pages=1
+    )
+    assert AI_NOTICE_HTML in html
+
+
+def test_article_listing_has_ai_notice():
+    html = render_article_listing_html(
+        [
+            {
+                "title": "Test Journal",
+                "summary": "Sum",
+                "slug": "test-journal",
+                "published_at": "2026-07-01",
+                "week_start": datetime(2026, 6, 22),
+                "week_end": datetime(2026, 6, 28),
+            }
+        ]
     )
     assert AI_NOTICE_HTML in html
