@@ -241,7 +241,8 @@ AI_NOTICE_HTML = (
     '<p class="ai-notice" data-ai-generated="true" '
     'style="border:1px solid rgba(176,141,87,.45);background:rgba(176,141,87,.1);'
     'padding:8px 12px;border-radius:6px;font-size:.85em;">'
-    "AI-generated content: this page was produced automatically by an AI system. "
+    "AI-generated text: the text on this page was produced automatically by an AI "
+    "system. Images are from the original sources, not AI-generated. "
     "Always verify with the original sources.</p>"
 )
 

@@ -489,7 +489,7 @@ export default function ResearchPaperPage() {
       <PageHeader currentPage="theo">
         <a href="/theo.html#research-library" className="page-header-title">Research</a>
       </PageHeader>
-      <AiNoticeBanner message="Research papers are AI-generated. Always verify claims with original sources." />
+      <AiNoticeBanner message="Research paper text is AI-generated; images are from cited sources. Always verify claims with original sources." />
 
         {paper.result.hero_image?.src && (
           <figure className="theo-paper-hero">

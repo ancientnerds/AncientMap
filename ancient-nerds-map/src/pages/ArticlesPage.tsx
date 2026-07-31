@@ -721,7 +721,7 @@ export default function ArticlesPage() {
       )}
 
       {view === 'listing' && (
-        <AiNoticeBanner message="Journals are AI-generated from YouTube video content. Always verify with original sources." />
+        <AiNoticeBanner message="Journal text is AI-generated from YouTube video content; images are from the original sources. Always verify with original sources." />
       )}
 
       {view === 'reading' && (
@@ -729,7 +729,7 @@ export default function ArticlesPage() {
           <div className="articles-progress-track">
             <div className="articles-progress-bar" style={{ width: `${readProgress}%` }} />
           </div>
-          <AiNoticeBanner message="This journal is AI-generated from YouTube video content. Always verify with original sources." />
+          <AiNoticeBanner message="This journal's text is AI-generated from YouTube video content; images are from the original sources. Always verify with original sources." />
         </>
       )}
 

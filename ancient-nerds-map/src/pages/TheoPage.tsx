@@ -726,7 +726,7 @@ export default function TheoPage() {
       <PageHeader currentPage="theo">
         <a href="/theo.html#research-library" className="page-header-title">Research</a>
       </PageHeader>
-      <AiNoticeBanner message="Research papers and illustrations are AI-generated. Always verify claims with original sources." />
+      <AiNoticeBanner message="Research paper text is AI-generated; images are from cited sources. Always verify claims with original sources." />
 
       {/* Public live view of the permanent researcher — no login required */}
       <LiveResearchPanel />
