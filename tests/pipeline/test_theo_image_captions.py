@@ -27,21 +27,37 @@ def _cand(**kw):
 
 
 def test_caption_includes_title_source_and_rationale():
-    """Caption renders title, attribution, source, and rationale.
+    """Caption renders title, attribution, source, and a DESCRIPTIVE rationale.
 
     License is intentionally NOT rendered (see build_caption docstring) —
     readers don't care about CC BY-SA 4.0 and the [Source] link below the
     caption takes them to the page where the license is shown in context.
     """
     c = _cand()
-    cap = build_caption(c, rationale="The disc is the direct evidence for the claim.")
+    cap = build_caption(c, rationale="A Bronze Age disc from Saxony-Anhalt, ca. 1600 BCE.")
     assert "Nebra Sky Disc" in cap
     assert "Frank Vincentz" in cap
     assert "Wikimedia" in cap
-    assert "direct evidence" in cap
+    assert "Bronze Age disc" in cap
     # License is deliberately omitted from the caption body.
     assert "Public Domain" not in cap
     assert "CC BY" not in cap
+
+
+def test_caption_drops_meta_voice_rationale():
+    """Editorial meta-voice never reaches the public caption (2026-07-31):
+    rationales talking about the paper/reader/evidence apparatus are dropped
+    entirely — the caption then shows only title + attribution."""
+    c = _cand()
+    for rationale in [
+        "The disc is the direct evidence for the claim.",
+        "Lets the reader verify that the Eridu Genesis predates the Akkadian versions.",
+        "Image placed by the paper writer as visual evidence for this passage.",
+    ]:
+        cap = build_caption(c, rationale=rationale)
+        assert "Nebra Sky Disc" in cap and "Wikimedia" in cap
+        for leak in ("reader", "writer", "evidence", "claim", "passage"):
+            assert leak not in cap.lower()
 
 
 def test_caption_never_fabricates_missing_metadata():

@@ -33,6 +33,16 @@ _ARGUE_OPENER_RE = re.compile(
     re.IGNORECASE,
 )
 
+# Words that reveal editorial meta-voice: a caption tail talking about the
+# paper/reader/image apparatus instead of the depicted artifact ("Lets the
+# reader verify that...", "supports the passage's claim..."). Such tails are
+# dropped entirely — a caption without a tail beats one that editorializes.
+_META_VOICE_RE = re.compile(
+    r"\b(?:readers?|writers?|papers?|passages?|captions?|images?|figures?|viewers?|"
+    r"sections?|arguments?|claims?|verif\w*|evidence)\b",
+    re.IGNORECASE,
+)
+
 # Raw Wikimedia Commons titles arrive as filenames like
 # `Himmelsscheibe.jpg` or `Mexican_antiquities_(14781541291).jpg`. Strip the
 # extension, any trailing 6+ digit upload-id paren group, and convert
@@ -77,7 +87,7 @@ def _trim_relevance(rationale: str) -> str:
         return ""
     first_sentence = re.split(r"(?<=[.!?])\s+", rationale.strip(), maxsplit=1)[0]
     stripped = _ARGUE_OPENER_RE.sub("", first_sentence).strip().rstrip(".")
-    if not stripped:
+    if not stripped or _META_VOICE_RE.search(stripped):
         return ""
     words = stripped.split()
     if len(words) <= 15:

@@ -41,6 +41,12 @@ _RESEARCH_CSS = """
         font-size: 14px; color: #708890;
     }
     .paper-card .question { font-style: italic; color: #90a8b0; font-size: 0.95em; margin-bottom: 10px; }
+    .paper-figure { margin: 28px 0; }
+    .paper-figure img { max-width: 100%; height: auto; border-radius: 6px; }
+    .paper-figure figcaption {
+        color: #708890; font-size: 13px; line-height: 1.5;
+        margin-top: 8px; padding-left: 2px;
+    }
 """
 
 
@@ -69,6 +75,75 @@ def format_references_md(content_md: str) -> str:
     refs = _DOI_RE.sub(r"DOI: [\1](https://doi.org/\1)", refs)
     refs = _BARE_URL_RE.sub(r"<\1>", refs)
     return body + refs
+
+
+# Image block as Theo stores it: image line, blank line, italic caption
+# line, [Source](...) line.
+_FIGURE_BLOCK_RE = re.compile(
+    r"!\[(?P<alt>[^\]]*)\]\((?P<img>[^)\s]+)\)\s*\n\s*\n"
+    r"\*(?P<cap>[^*\n]+)\*\s*\n"
+    r"\[Source\]\((?P<src>[^)]+)\)"
+)
+
+# Editorial meta-voice that older papers baked into caption tails ("Lets the
+# reader verify that...", "Image placed by the paper writer..."). The caption
+# builder no longer emits these (theo_image_captions._META_VOICE_RE), but
+# published papers carry them in stored markdown — scrub at render time.
+_CAPTION_LEAK_RE = re.compile(
+    r"\s*(?:Lets?\s+the\s+reader\s+verify\b|Allows?\s+the\s+reader\b|"
+    r"Image\s+placed\s+by\s+the\s+paper\s+writer\b)[^*]*$",
+    re.IGNORECASE,
+)
+
+# Caption + Source block WITHOUT a preceding image (reflow sometimes detaches
+# writer-image captions). "Photo:" is required so normal italic emphasis in
+# prose is never touched.
+_ORPHAN_CAPTION_RE = re.compile(
+    r"\*(?P<cap>[^*\n]*Photo:[^*\n]+)\*\s*\n\[Source\]\((?P<src>[^)]+)\)"
+)
+
+
+def format_image_figures(content_md: str) -> str:
+    """
+    Turn Theo's image+caption+source markdown blocks into semantic
+    <figure>/<figcaption> HTML.
+
+    Markdown renders the caption as a plain italic paragraph — visually glued
+    to the body text, and Medium pastes it as ordinary prose. A real
+    figcaption separates it on our pages AND becomes a native image caption
+    when pasted into Medium's editor. Also strips the gallery metadata prefix
+    from alt text and scrubs leaked editorial meta-voice from captions.
+    """
+
+    def _caption_html(raw_cap: str, src: str) -> str:
+        cap = _CAPTION_LEAK_RE.sub("", raw_cap).strip().rstrip(".")
+        cap_html = f"{escape(cap)}. " if cap else ""
+        return (
+            f"<figcaption>{cap_html}"
+            f'<a href="{escape(src)}" target="_blank" rel="noopener">Source</a>'
+            f"</figcaption>"
+        )
+
+    def _fig(m: re.Match) -> str:
+        alt = m.group("alt").split("|")[-1].strip()
+        return (
+            f'<figure class="paper-figure">'
+            f'<img src="{escape(m.group("img"))}" alt="{escape(alt)}" loading="lazy">'
+            f"{_caption_html(m.group('cap'), m.group('src'))}</figure>"
+        )
+
+    result = _FIGURE_BLOCK_RE.sub(_fig, content_md)
+
+    # Second pass: orphan captions. The reflow step sometimes detaches a
+    # writer-placed image's caption from its (inline) image — the caption +
+    # Source block then floats between paragraphs. Style and scrub those too;
+    # requiring "Photo:" keeps ordinary italic emphasis untouched.
+    def _orphan(m: re.Match) -> str:
+        return (
+            f'<figure class="paper-figure">{_caption_html(m.group("cap"), m.group("src"))}</figure>'
+        )
+
+    return _ORPHAN_CAPTION_RE.sub(_orphan, result)
 
 
 def _pub_display(published_at: str | None) -> tuple[str, str]:
@@ -176,7 +251,9 @@ def render_research_listing_html(papers: list[dict]) -> str:
 def render_research_paper_html(paper: dict, content_md: str) -> str:
     """Render a single research paper as a full SEO-optimized HTML page."""
     md = markdown.Markdown(extensions=["extra", "smarty", "toc"])
-    body_html = external_links_new_tab(_sanitize_html(md.convert(format_references_md(content_md))))
+    body_html = external_links_new_tab(
+        _sanitize_html(md.convert(format_image_figures(format_references_md(content_md))))
+    )
 
     title = paper["title"] or paper["question"]
     slug = paper["slug"]

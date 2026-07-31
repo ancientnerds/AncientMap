@@ -241,8 +241,11 @@ async def _resolve_writer_markers(ctx: _EmbedContext) -> list[dict]:
             continue
 
         web_path = f"/data/research-images/{ctx.paper_id}/writer_img_{i}.jpg"
-        rationale = "Image placed by the paper writer as visual evidence for this passage."
-        md = image_markdown(cand, web_path, rationale)
+        # No rationale for writer-placed images: the old placeholder ("Image
+        # placed by the paper writer as visual evidence...") leaked editorial
+        # meta-voice into public captions. Empty tail = caption shows only
+        # title + attribution.
+        md = image_markdown(cand, web_path, "")
         ctx.paper_text = ctx.paper_text.replace(f"[[IMG:{short}]]", md, 1)
         if cand_url:
             ctx.placed_source_urls.add(cand_url)
