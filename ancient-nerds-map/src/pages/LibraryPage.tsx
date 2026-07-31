@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { config } from '../config'
 import { getPeriodColor } from '../data/sites'
 import PageHeader from '../components/layout/PageHeader'
+import AiNoticeBanner from '../components/layout/AiNoticeBanner'
 import LibraryCard from '../components/library/LibraryCard'
 import LibraryDetailCard from '../components/library/LibraryDetailCard'
 import type { LibrarySource, LibraryPeriod, LibraryPeriodData, LibraryStats, LibrarySearchResponse } from '../types/library'
@@ -142,6 +143,8 @@ export default function LibraryPage() {
       <PageHeader currentPage="library" speechBubble="Every source and citation from our Stories, Journals, and Research — organized by period">
         <span className="page-header-title">Library</span>
       </PageHeader>
+
+      <AiNoticeBanner message="Stories, journals, and research papers in this library are AI-generated. Always verify with original sources." />
 
       <div className="library-content">
         {/* Search bar */}
