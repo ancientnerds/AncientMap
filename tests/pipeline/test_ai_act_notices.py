@@ -1,6 +1,8 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 """Art. 50 EU AI Act: visible AI notices on server-rendered content pages."""
 
+import json
+import re
 from datetime import datetime
 
 from pipeline.article_html_renderer import (
@@ -107,3 +109,18 @@ def test_research_jsonld_human_author_stays_person():
     html = render_research_paper_html(_paper("MrSchneebly"), "# Body")
     assert '"@type": "Person"' in html
     assert "MrSchneebly" in html
+
+
+def _extract_jsonld(html: str) -> dict:
+    match = re.search(r'<script type="application/ld\+json">(.*?)</script>', html, re.DOTALL)
+    assert match, "no JSON-LD block found"
+    return json.loads(match.group(1))
+
+
+def test_research_jsonld_parses_for_both_author_branches():
+    theo = _extract_jsonld(render_research_paper_html(_paper("Theo"), "# Body"))
+    assert theo["author"]["@type"] == "Organization"
+
+    human = _extract_jsonld(render_research_paper_html(_paper('O"Brien'), "# Body"))
+    assert human["author"]["@type"] == "Person"
+    assert human["author"]["name"] == 'O"Brien'
