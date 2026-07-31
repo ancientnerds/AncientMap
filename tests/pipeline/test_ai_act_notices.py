@@ -10,6 +10,7 @@ from pipeline.article_html_renderer import (
     render_news_archive_html,
     render_story_html,
 )
+from pipeline.research_html_renderer import render_research_paper_html
 
 
 def _story() -> dict:
@@ -74,3 +75,35 @@ def test_article_listing_has_ai_notice():
         ]
     )
     assert AI_NOTICE_HTML in html
+
+
+def _paper(author: str = "Theo") -> dict:
+    return {
+        "title": "Test Paper",
+        "question": "What is tested?",
+        "slug": "test-paper",
+        "author": author,
+        "summary": "Abstract.",
+        "published_at": datetime(2026, 7, 1),
+        "hero_image_url": None,
+        "word_count": 1000,
+        "sources_analyzed": 10,
+        "quality_badge": "Gold",
+        "attribution": f"{author}, Ancient Nerds — https://ancientnerds.com",
+    }
+
+
+def test_research_page_has_ai_notice():
+    assert AI_NOTICE_HTML in render_research_paper_html(_paper(), "# Body")
+
+
+def test_research_jsonld_theo_is_not_a_person():
+    html = render_research_paper_html(_paper("Theo"), "# Body")
+    assert '"@type": "Person", "name": "Theo"' not in html
+    assert "AI research pipeline" in html
+
+
+def test_research_jsonld_human_author_stays_person():
+    html = render_research_paper_html(_paper("MrSchneebly"), "# Body")
+    assert '"@type": "Person"' in html
+    assert "MrSchneebly" in html
