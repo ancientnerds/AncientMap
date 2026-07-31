@@ -38,6 +38,16 @@ class ANSConnector(BaseConnector):
     license = "Open"
     attribution = "American Numismatic Society"
 
+    # Verified 2026-07-31: http://numismatics.org/sparql 301-redirects to
+    # /wordpress/sparql which returns 404 — the public SPARQL endpoint was
+    # retired. ANS still offers a Solr-based search API (numismatics.org/
+    # search/apis); porting to it would be a rewrite, not a URL swap.
+    available = False
+    unavailable_reason = (
+        "ANS retired its SPARQL endpoint (301 -> /wordpress/sparql -> 404, "
+        "verified 2026-07-31). Port to their Solr search API to re-enable."
+    )
+
     def __init__(self, api_key: str | None = None, **kwargs):
         super().__init__(api_key=api_key, **kwargs)
         self.sparql = SparqlProtocol(endpoint="http://numismatics.org/sparql")

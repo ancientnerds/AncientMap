@@ -38,6 +38,15 @@ class NationalArchivesConnector(BaseConnector):
     license = "Public Domain"
     attribution = "National Archives and Records Administration"
 
+    # Verified 2026-07-31: catalog.archives.gov/api/v1 now returns the SPA's
+    # HTML shell instead of JSON — NARA retired API v1. The replacement
+    # (catalog.archives.gov/api/v2) requires a free API key header.
+    available = False
+    unavailable_reason = (
+        "NARA Catalog API v1 retired (returns HTML shell, verified 2026-07-31). "
+        "Port to /api/v2 with an API key (free registration) to re-enable."
+    )
+
     def __init__(self, api_key: str | None = None, **kwargs):
         super().__init__(api_key=api_key, **kwargs)
         self.rest = RestProtocol(base_url=self.base_url, rate_limit=self.rate_limit)

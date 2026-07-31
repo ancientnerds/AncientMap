@@ -10,6 +10,7 @@ Provides SPARQL query execution for endpoints like:
 """
 
 import asyncio
+import textwrap
 from typing import Any
 
 import httpx
@@ -108,6 +109,12 @@ class SparqlProtocol:
             Query results as dictionary
         """
         await self._rate_limit()
+
+        # Getty's endpoint returns HTTP 200 with an EMPTY body when the query
+        # carries leading indentation (triple-quoted f-string artifacts) —
+        # bisected live 2026-07-31: identical query, 306 bytes without indent,
+        # 0 bytes with. Normalize here so every SPARQL connector is immune.
+        sparql_query = textwrap.dedent(sparql_query).strip()
 
         # Prepare request
         headers = {

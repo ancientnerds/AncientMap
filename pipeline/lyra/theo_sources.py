@@ -422,8 +422,15 @@ class OpenAlexAdapter(SourceAdapter):
 
     async def search(self, query: str, max_results: int = 10) -> list[RawSource]:
         def _do() -> list[RawSource]:
+            # OpenAlex treats * and ? as wildcards, which the default stemmed
+            # search rejects with 400 "Wildcards require exact search" —
+            # question-shaped queries (trailing "?") failed entirely.
+            # Verified live 2026-07-31: same query 400s with "?", 200 without.
+            clean_query = query.replace("*", " ").replace("?", " ").strip()
+            if not clean_query:
+                return []
             params: dict[str, str] = {
-                "search": query,
+                "search": clean_query,
                 "filter": "type:!paratext",
                 "select": "id,title,doi,publication_date,cited_by_count,authorships,primary_location,abstract_inverted_index,open_access",
                 "sort": "cited_by_count:desc",

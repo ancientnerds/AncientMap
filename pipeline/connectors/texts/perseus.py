@@ -211,33 +211,13 @@ class PerseusConnector(BaseConnector):
         Returns:
             List of ContentItem objects
         """
-        try:
-            # First, try to search using the API
-            passages = await self.cts.search(
-                query=query,
-                urn=kwargs.get("urn"),
-                limit=limit,
-            )
-
-            items = []
-            for passage in passages:
-                item = self._passage_to_content_item(passage)
-                if item:
-                    # Apply relevance scoring
-                    item.relevance_score = self._calculate_relevance(passage.text, query)
-                    items.append(item)
-
-            # If API search doesn't work, search known works by title/author
-            if not items:
-                items = self._search_known_works(query, limit)
-
-            logger.info(f"Perseus search for '{query}' returned {len(items)} results")
-            return items[:limit]
-
-        except Exception as e:
-            logger.error(f"Perseus search failed: {e}")
-            # Fall back to searching known works
-            return self._search_known_works(query, limit)
+        # Scaife removed its full-text search endpoint (/library/search/
+        # returns 404, verified 2026-07-31) — passage retrieval by URN still
+        # works (get_item). Search therefore matches the curated
+        # CLASSICAL_WORKS catalog by title/author/description.
+        items = self._search_known_works(query, limit)
+        logger.info(f"Perseus search for '{query}' returned {len(items)} results")
+        return items[:limit]
 
     async def get_item(self, item_id: str) -> ContentItem | None:
         """

@@ -28,7 +28,7 @@ class GettyULANConnector(BaseConnector):
 
     content_types = [ContentType.DOCUMENT]
 
-    base_url = "http://vocab.getty.edu"
+    base_url = "https://vocab.getty.edu"
     website_url = "https://www.getty.edu/research/tools/vocabularies/ulan/"
     protocol = ProtocolType.SPARQL
     rate_limit = 2.0
@@ -40,7 +40,7 @@ class GettyULANConnector(BaseConnector):
 
     def __init__(self, api_key: str | None = None, **kwargs):
         super().__init__(api_key=api_key, **kwargs)
-        self.sparql = SparqlProtocol(endpoint="http://vocab.getty.edu/sparql")
+        self.sparql = SparqlProtocol(endpoint="https://vocab.getty.edu/sparql")
 
     async def search(
         self,
@@ -52,17 +52,21 @@ class GettyULANConnector(BaseConnector):
     ) -> list[ContentItem]:
         """Search Getty ULAN artist names."""
         try:
+            # luc:term uses Getty's Lucene full-text index — a CONTAINS scan
+            # over all ULAN labels gets killed server-side (HTTP 499, same as
+            # TGN). Verified 2026-07-31: luc:term answers in <1s.
             sparql_query = f"""
             PREFIX gvp: <http://vocab.getty.edu/ontology#>
             PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
             PREFIX xl: <http://www.w3.org/2008/05/skos-xl#>
+            PREFIX luc: <http://www.ontotext.com/owlim/lucene#>
 
             SELECT ?subject ?label ?biography ?birthDate ?deathDate
             WHERE {{
+                ?subject luc:term "{query}" .
                 ?subject a gvp:Subject .
                 ?subject skos:inScheme <http://vocab.getty.edu/ulan/> .
                 ?subject gvp:prefLabelGVP/xl:literalForm ?label .
-                FILTER(CONTAINS(LCASE(?label), LCASE("{query}")))
                 OPTIONAL {{ ?subject gvp:biographyPreferred/gvp:biographyNote ?biography }}
                 OPTIONAL {{ ?subject gvp:estStart ?birthDate }}
                 OPTIONAL {{ ?subject gvp:estEnd ?deathDate }}
@@ -152,7 +156,7 @@ class GettyULANConnector(BaseConnector):
                 content_type=ContentType.DOCUMENT,
                 title=binding.get("label", {}).get("value", "ULAN Artist"),
                 description=binding.get("biography", {}).get("value"),
-                url=f"http://vocab.getty.edu/ulan/{item_id}",
+                url=f"https://vocab.getty.edu/ulan/{item_id}",
                 creator=binding.get("label", {}).get("value"),
                 date=date if date else None,
                 license=self.license,

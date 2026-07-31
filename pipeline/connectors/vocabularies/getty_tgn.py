@@ -28,7 +28,7 @@ class GettyTGNConnector(BaseConnector):
 
     content_types = [ContentType.DOCUMENT]
 
-    base_url = "http://vocab.getty.edu"
+    base_url = "https://vocab.getty.edu"
     website_url = "https://www.getty.edu/research/tools/vocabularies/tgn/"
     protocol = ProtocolType.SPARQL
     rate_limit = 2.0
@@ -40,7 +40,7 @@ class GettyTGNConnector(BaseConnector):
 
     def __init__(self, api_key: str | None = None, **kwargs):
         super().__init__(api_key=api_key, **kwargs)
-        self.sparql = SparqlProtocol(endpoint="http://vocab.getty.edu/sparql")
+        self.sparql = SparqlProtocol(endpoint="https://vocab.getty.edu/sparql")
 
     async def search(
         self,
@@ -52,19 +52,25 @@ class GettyTGNConnector(BaseConnector):
     ) -> list[ContentItem]:
         """Search Getty TGN place names."""
         try:
+            # luc:term uses Getty's Lucene full-text index — the CONTAINS scan
+            # over ~2.5M TGN labels got killed server-side with HTTP 499.
+            # Verified 2026-07-31: luc:term answers in <1s.
+            # No language filter on the label: TGN's preferred labels for
+            # non-Western places are transliterations (ar-latn etc.) — an
+            # English-only filter returned zero results for e.g. Giza.
             sparql_query = f"""
             PREFIX gvp: <http://vocab.getty.edu/ontology#>
             PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
             PREFIX xl: <http://www.w3.org/2008/05/skos-xl#>
             PREFIX wgs: <http://www.w3.org/2003/01/geo/wgs84_pos#>
+            PREFIX luc: <http://www.ontotext.com/owlim/lucene#>
 
             SELECT ?subject ?label ?scopeNote ?lat ?long
             WHERE {{
+                ?subject luc:term "{query}" .
                 ?subject a gvp:Subject .
                 ?subject skos:inScheme <http://vocab.getty.edu/tgn/> .
                 ?subject gvp:prefLabelGVP/xl:literalForm ?label .
-                FILTER(LANG(?label) = "en" || LANG(?label) = "")
-                FILTER(CONTAINS(LCASE(?label), LCASE("{query}")))
                 OPTIONAL {{ ?subject skos:scopeNote/rdf:value ?scopeNote }}
                 OPTIONAL {{ ?subject wgs:lat ?lat }}
                 OPTIONAL {{ ?subject wgs:long ?long }}
@@ -162,7 +168,7 @@ class GettyTGNConnector(BaseConnector):
                 content_type=ContentType.DOCUMENT,
                 title=binding.get("label", {}).get("value", "TGN Place"),
                 description=binding.get("scopeNote", {}).get("value"),
-                url=f"http://vocab.getty.edu/tgn/{item_id}",
+                url=f"https://vocab.getty.edu/tgn/{item_id}",
                 lat=lat,
                 lon=lon,
                 place_name=binding.get("label", {}).get("value"),
