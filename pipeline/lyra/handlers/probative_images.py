@@ -265,7 +265,7 @@ async def _resolve_writer_markers(ctx: _EmbedContext) -> list[dict]:
                 "artist": getattr(cand, "artist", ""),
                 "license": getattr(cand, "license", ""),
                 "license_url": getattr(cand, "license_url", ""),
-                "rationale": rationale,
+                "rationale": "",
                 "section_heading": "[inline]",
                 "search_query": "",
             }
