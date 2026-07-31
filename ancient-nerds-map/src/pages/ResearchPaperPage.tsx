@@ -398,7 +398,10 @@ export default function ResearchPaperPage() {
         heroLightboxIndex: null as number | null,
       }
     }
-    const { body, refsText } = splitBodyAndRefs(paper.result.report)
+    // The page renders its own <h1> title; the stored report starts with the
+    // same title as a markdown H1 — strip it or it appears twice.
+    const reportSansTitle = paper.result.report.replace(/^\s*#\s+[^\n]+\n+/, '')
+    const { body, refsText } = splitBodyAndRefs(reportSansTitle)
     const refs = parseReferences(refsText)
     const knownNums = new Set(refs.map(r => r.num))
     const wired = wireCitationAnchors(body, knownNums)
