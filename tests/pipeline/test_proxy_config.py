@@ -38,7 +38,11 @@ def test_ytt_api_proxy_url_wins_over_webshare() -> None:
 
 def test_ytt_api_webshare_still_works_without_proxy_url() -> None:
     api = _build_ytt_api(_settings(webshare_username="u", webshare_password="p"))
-    assert isinstance(api._fetcher._proxy_config, WebshareProxyConfig)
+    cfg = api._fetcher._proxy_config
+    assert isinstance(cfg, WebshareProxyConfig)
+    # Library default is 10 rotate-and-retry attempts per blocked IP — each
+    # costs residential traffic, so we cap explicitly.
+    assert cfg.retries_when_blocked == 3
 
 
 def test_screenshot_proxy_prefers_proxy_url() -> None:

@@ -52,6 +52,9 @@ def _build_ytt_api(settings: LyraSettings) -> YouTubeTranscriptApi:
         proxy_config = WebshareProxyConfig(
             proxy_username=settings.webshare_username,
             proxy_password=settings.webshare_password,
+            # Library default is 10 rotate-and-retry attempts per blocked IP —
+            # each one costs residential traffic. 3 is plenty for a rotating pool.
+            retries_when_blocked=3,
         )
         return YouTubeTranscriptApi(proxy_config=proxy_config)
     return YouTubeTranscriptApi()
@@ -198,6 +201,64 @@ def fetch_transcript(video_id: str, settings: LyraSettings) -> tuple[str | None,
     return transcript_text, duration_minutes
 
 
+_ISO8601_DURATION_RE = re.compile(r"PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?")
+
+
+def _parse_iso8601_duration_minutes(value: str | None) -> float | None:
+    """Parse an ISO 8601 duration ("PT1H2M3S") to minutes.
+
+    Livestreams/premieres report "P0D" or no duration at all — both return
+    None here, which callers must NOT treat as "too short".
+    """
+    if not value:
+        return None
+    m = _ISO8601_DURATION_RE.fullmatch(value)
+    if not m:
+        return None
+    h, mn, s = (int(g) if g else 0 for g in m.groups())
+    return (h * 3600 + mn * 60 + s) / 60.0
+
+
+def _fetch_videos_metadata_batch(video_ids: list[str], api_key: str) -> dict[str, dict] | None:
+    """Batch-fetch metadata via videos.list — 1 quota unit per 50 IDs, no proxy.
+
+    IDs missing from the result are private/members-only/deleted (the API
+    silently omits them). Returns None if the API call fails, so the caller
+    can fall back to unfiltered transcript fetching.
+    """
+    from pipeline.utils.http import fetch_with_retry
+
+    result: dict[str, dict] = {}
+    for i in range(0, len(video_ids), 50):
+        chunk = video_ids[i : i + 50]
+        try:
+            resp = fetch_with_retry(
+                "https://www.googleapis.com/youtube/v3/videos",
+                params={
+                    "id": ",".join(chunk),
+                    "part": "snippet,contentDetails",
+                    "key": api_key,
+                },
+            )
+            data = resp.json()
+        except Exception as e:
+            logger.warning(f"YouTube API batch metadata failed ({len(chunk)} ids): {e}")
+            return None
+        for item in data.get("items", []):
+            vid = item.get("id")
+            if not vid:
+                continue
+            snippet = item.get("snippet", {})
+            content = item.get("contentDetails", {})
+            result[vid] = {
+                "duration_minutes": _parse_iso8601_duration_minutes(content.get("duration")),
+                "live_broadcast_content": snippet.get("liveBroadcastContent", "none"),
+                "description": snippet.get("description", "").strip() or None,
+                "tags": snippet.get("tags") or None,
+            }
+    return result
+
+
 def _fetch_metadata_youtube_api(video_id: str, api_key: str) -> dict | None:
     """Fetch video metadata using the YouTube Data API v3.
 
@@ -259,9 +320,70 @@ def fetch_new_videos(settings: LyraSettings) -> int:
                 .all()
             }
 
-            for video_info in videos:
-                if video_info["id"] in existing_ids:
-                    continue
+            new_videos = [v for v in videos if v["id"] not in existing_ids]
+            if not new_videos:
+                continue
+
+            # Data-API prefilter BEFORE any watch-page goes through the proxy
+            # (~0.3 MB Webshare traffic per fetch_transcript call): shorts,
+            # private/members-only IDs and unaired premieres never reach the
+            # proxy. None = API failure -> unfiltered old behavior.
+            batch_meta = _fetch_videos_metadata_batch(
+                [v["id"] for v in new_videos], settings.youtube_api_key
+            )
+
+            for video_info in new_videos:
+                meta = batch_meta.get(video_info["id"]) if batch_meta is not None else None
+
+                if batch_meta is not None:
+                    if meta is None:
+                        # videos.list silently omits private/members-only/deleted IDs
+                        logger.info(
+                            f"  -> skipped (not in Data API response): {video_info['title']}"
+                        )
+                        session.add(
+                            NewsVideo(
+                                id=video_info["id"],
+                                channel_id=channel.id,
+                                title=video_info["title"],
+                                description=video_info.get("description"),
+                                published_at=video_info["published_at"],
+                                thumbnail_url=video_info.get("thumbnail_url"),
+                                status="skipped",
+                            )
+                        )
+                        continue
+
+                    if meta["live_broadcast_content"] in ("upcoming", "live"):
+                        # Premiere/livestream not aired — defer without a DB row
+                        # (re-checked next cycle), no watch-page burned.
+                        logger.info(
+                            f"  -> deferring ({meta['live_broadcast_content']}): "
+                            f"{video_info['title']}"
+                        )
+                        continue
+
+                    api_duration = meta["duration_minutes"]
+                    # 0/None = livestream/premiere artifact (PT0S/P0D) — must
+                    # NOT count as "too short", only 0 < duration < min skips.
+                    if api_duration is not None and 0 < api_duration < settings.min_video_minutes:
+                        logger.info(
+                            f"  -> skipped ({api_duration:.1f} min < "
+                            f"{settings.min_video_minutes} min minimum): {video_info['title']}"
+                        )
+                        session.add(
+                            NewsVideo(
+                                id=video_info["id"],
+                                channel_id=channel.id,
+                                title=video_info["title"],
+                                description=video_info.get("description"),
+                                published_at=video_info["published_at"],
+                                duration_minutes=api_duration,
+                                thumbnail_url=video_info.get("thumbnail_url"),
+                                status="skipped",
+                            )
+                        )
+                        continue
 
                 logger.info(f"Fetching transcript for: {video_info['title']}")
                 try:
@@ -286,6 +408,11 @@ def fetch_new_videos(settings: LyraSettings) -> int:
                     )
                     continue
 
+                # API duration (actual video length) beats the transcript-derived
+                # estimate (end of last caption, underestimates)
+                if meta is not None and meta["duration_minutes"]:
+                    duration = meta["duration_minutes"]
+
                 # Skip short videos BEFORE fetching metadata (saves an API call)
                 if duration is not None and duration < settings.min_video_minutes:
                     logger.info(
@@ -305,13 +432,21 @@ def fetch_new_videos(settings: LyraSettings) -> int:
                     )
                     continue
 
-                metadata = _fetch_metadata_youtube_api(video_info["id"], settings.youtube_api_key)
-                tags = metadata["tags"] if metadata else None
+                if meta is not None:
+                    # Enrichment from the prefilter call — no extra videos.list
+                    # request per video needed.
+                    tags = meta["tags"]
+                    description = meta["description"] or video_info.get("description")
+                else:
+                    metadata = _fetch_metadata_youtube_api(
+                        video_info["id"], settings.youtube_api_key
+                    )
+                    tags = metadata["tags"] if metadata else None
 
-                # Prefer full API description over playlist snippet
-                description = video_info.get("description")
-                if metadata and metadata["description"]:
-                    description = metadata["description"]
+                    # Prefer full API description over playlist snippet
+                    description = video_info.get("description")
+                    if metadata and metadata["description"]:
+                        description = metadata["description"]
 
                 status = "transcribed" if transcript_text else "failed"
 
