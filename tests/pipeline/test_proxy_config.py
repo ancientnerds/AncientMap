@@ -2,7 +2,7 @@
 """LYRA_PROXY_URL: generic proxy (home-IP via Tailscale) replacing Webshare.
 
 Both YouTube-facing fetch paths (transcripts via youtube-transcript-api,
-storyboards via yt-dlp/requests) must honour an explicit proxy URL and
+screenshot clips via yt-dlp) must honour an explicit proxy URL and
 prefer it over Webshare credentials when both are configured.
 """
 
