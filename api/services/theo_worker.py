@@ -711,40 +711,40 @@ def _batch_claim_allowed(
 
     The weekly MiniMax budget resets Monday 00:00 UTC; batch runs spend the
     week's SURPLUS instead of starving Lyra and interactive research right
-    after the reset. Three adaptive conditions, all env-tunable:
+    after the reset. Two adaptive conditions, env-tunable:
 
     1. Window: at most THEO_BATCH_MAX_DAYS_TO_RESET days before the reset
        (default 3 = Friday 00:00 UTC) — surplus is use-it-or-lose-it there.
-    2. Speed: the run must be expected to FINISH before the reset, judged
-       by the measured average of recent batch papers — a fast Theo may
-       still start early Sunday, a slow one stops Saturday afternoon.
-    3. Budget: weekly remaining must cover one paper
-       (THEO_PAPER_COST_PCT) plus the Lyra reserve for every remaining day
-       (THEO_LYRA_DAILY_RESERVE_PCT) — the closer the reset, the less
-       headroom a start needs.
+    2. Budget: the weekly remaining must cover the share of one paper that
+       burns BEFORE the reset (uniform burn at the measured pace of recent
+       batch papers) plus the Lyra reserve for every remaining day. The
+       weekend's LAST run may cross the reset — it finishes on Monday's
+       fresh budget, and the window condition keeps Monday itself free of
+       NEW starts. What must never happen is the weekly hitting 0%
+       mid-run: that aborts the run (error 2056) and freezes everything
+       else on the shared plan with it.
 
     UNKNOWN tier (no probe yet / watchdog down) and a missing weekly value
-    block: batch runs never start blind (2026-07-19). The static
-    THEO_BATCH_MIN_WEEKLY_PCT floor stays as a hard safety net below which
-    a run would hit the weekly wall (error 2056) mid-flight."""
+    block: batch runs never start blind (2026-07-19). The tier ladder is
+    the deeper backstop — weekly <= QUOTA_WEEKLY_FREEZE_PCT reads
+    EXHAUSTED and never claims."""
     from api.services.theo_config import (
         THEO_BATCH_MAX_DAYS_TO_RESET,
-        THEO_BATCH_MIN_WEEKLY_PCT,
         THEO_LYRA_DAILY_RESERVE_PCT,
         THEO_PAPER_COST_PCT,
     )
 
     if not gate_open or tier != "HEALTHY":
         return False
-    if weekly_pct is None or weekly_pct < THEO_BATCH_MIN_WEEKLY_PCT:
+    if weekly_pct is None:
         return False
     hours_left = _hours_until_weekly_reset(now_utc or datetime.now(UTC))
     days_left = hours_left / 24
     if days_left > THEO_BATCH_MAX_DAYS_TO_RESET:
         return False
-    if hours_left < (avg_run_hours if avg_run_hours is not None else _avg_batch_run_hours()):
-        return False
-    required = THEO_PAPER_COST_PCT + days_left * THEO_LYRA_DAILY_RESERVE_PCT
+    run_hours = max(avg_run_hours if avg_run_hours is not None else _avg_batch_run_hours(), 0.1)
+    pre_reset_share = min(1.0, hours_left / run_hours)
+    required = pre_reset_share * THEO_PAPER_COST_PCT + days_left * THEO_LYRA_DAILY_RESERVE_PCT
     return weekly_pct >= required
 
 

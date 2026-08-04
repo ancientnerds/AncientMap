@@ -61,24 +61,20 @@ QUOTA_RESUME_PCT = 50
 # the Monday reset, so there is no boundary to flap around.
 QUOTA_WEEKLY_FREEZE_PCT = int(os.getenv("QUOTA_WEEKLY_FREEZE_PCT", "5"))
 
-# A batch run (is_batch=TRUE) may only START when the weekly budget still
-# fits a whole paper: ~19%/paper observed on the ENTITÄT batch, plus margin.
-# Below this floor a fresh multi-hour run would just park in the weekly wall
-# mid-run. UI submissions bypass the batch gate entirely and are protected
-# by the tier ladder alone.
-THEO_BATCH_MIN_WEEKLY_PCT = int(os.getenv("THEO_BATCH_MIN_WEEKLY_PCT", "25"))
-
 # --- End-of-week batch window (2026-08-04) ----------------------------------
 # The weekly MiniMax budget resets Monday 00:00 UTC. Batch runs (Entität
 # queue + Dauerforscher feeder) may only START in the final days before the
 # reset: the surplus is use-it-or-lose-it there, while early-week burns eat
 # the budget Lyra, interactive research and manual tests need all week
 # (2026-08-04: the feeder had the week at 50% by Tuesday). Window opens at
-# most this many days before the reset — 3 = Friday 00:00 UTC. A start is
-# additionally allowed only if the run is expected to FINISH before the
-# reset (measured from the last 5 completed batch papers, fallback
-# THEO_PAPER_EST_HOURS) and the weekly budget still covers one paper PLUS
-# the Lyra reserve for every remaining day. Raise to 7 for always-on.
+# most this many days before the reset — 3 = Friday 00:00 UTC. A start
+# additionally needs the weekly budget to cover the pre-reset SHARE of one
+# paper (at the measured pace of the last 5 completed batch papers,
+# fallback THEO_PAPER_EST_HOURS) plus the Lyra reserve per remaining day.
+# The weekend's LAST run may cross the reset and finish on Monday's fresh
+# budget — what must never happen is the weekly hitting 0% mid-run, which
+# aborts the run (error 2056) and freezes everything else with it. UI
+# submissions bypass the batch gate entirely. Raise to 7 for always-on.
 THEO_BATCH_MAX_DAYS_TO_RESET = float(os.getenv("THEO_BATCH_MAX_DAYS_TO_RESET", "3"))
 
 # Estimated weekly-budget share of one full-depth batch paper. Observed
