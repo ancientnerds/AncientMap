@@ -1463,8 +1463,12 @@ git commit -m "feat(api): GET /api/v1/knowledge/activity — thinking-layer feed
    ganze Audit-Stage inkl. Tier-3-Noise-Floor ist toter Code.
 2. **Unbounded source_signal:** Injector-Akkumulation +120/Tag auf
    Top-Nodes; LEAST-Cap oder Decay, sobald Site-Promotion aktiv ist.
-3. **Live-LLM-Test:** `test_journal_assessor::test_fuzzy_mismatch_detected`
-   macht echte MiniMax-Calls pro Testlauf (quota-abhängig flaky) — mocken.
+3. **Live-LLM-Tests (breiter als gedacht):** MEHRERE Testdateien machen
+   echte MiniMax-Calls pro Lauf — `test_journal_assessor` (ganze
+   TestD1ProperNouns-Klasse) UND `test_llm_abstraction`
+   (TestUnifiedDispatch). Bei Quota-Druck (paralleler Research-Run)
+   kriechen sie minutenlang oder haengen die Suite. Mocken oder mit
+   pytest-Marker `live_llm` ausgrenzen; CI-tauglich machen.
 4. **Synthese-Pool-Aging:** created_at-Tiebreak, falls der Pool wächst.
 5. **Journal-Audit clobbert Tier 4:** `research_stages._stage_audit` schreibt
    `reliability_tier` unconditional (Prompt kennt nur 1-3) — ein self-source
