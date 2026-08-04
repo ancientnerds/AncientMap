@@ -5,6 +5,8 @@ These models use developer-friendly field names (not compact internal names)
 and include OpenAPI examples for auto-generated documentation.
 """
 
+from typing import Any
+
 from pydantic import BaseModel, Field
 
 # =============================================================================
@@ -576,3 +578,26 @@ class GraphResponse(BaseModel):
     nodes: list[GraphNode] = Field(description="Graph nodes")
     edges: list[GraphEdge] = Field(description="Edges between returned nodes")
     total_nodes: int = Field(description="Uncapped total node count in the graph")
+
+
+# =============================================================================
+# Thinking-layer activity feed
+# =============================================================================
+
+
+class ActivityItem(BaseModel):
+    """One event in the permanent researcher's thinking-layer activity feed."""
+
+    created_at: str = Field(description="ISO 8601 timestamp of the event")
+    kind: str = Field(description="curator | miner | run_event")
+    summary: str = Field(description="Human-readable one-line summary of the event")
+    details: dict[str, Any] | None = Field(
+        None, description="Structured event payload (varies by kind)"
+    )
+
+
+class ActivityResponse(BaseModel):
+    """Chronological thinking-layer activity feed (spec §7)."""
+
+    items: list[ActivityItem] = Field(description="Activity events, newest first")
+    license: str = Field(description="Reuse license for this data")
