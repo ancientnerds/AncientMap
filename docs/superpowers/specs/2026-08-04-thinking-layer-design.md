@@ -96,8 +96,13 @@ ein Fehlschlag killt nie den Feeder-Loop.
 
 - `research_nodes` + Spalte `question` (Text, nullable) und neue Kinds
   `connection`, `hypothesis`.
-- Picker: Kind-Gewichte (Hypothese > Verbindung > Roh-Thema, env-tunable)
-  zusätzlich zur bestehenden Score-Formel.
+- Picker: **dedizierter Synthese-Slot** (geändert 2026-08-04 nach
+  Live-Graph-Messung): Bei offener Quote wird zuerst NUR aus
+  `connection`/`hypothesis` gepickt (Kind-Gewichte ordnen innerhalb des
+  Pools: Hypothese > Verbindung); ist der Pool leer, greift zwingend der
+  bisherige topic/site-Pick. Additive Gewichte in der Gesamt-Formel können
+  strukturell nie gegen injector-akkumulierte Signale gewinnen (gemessen:
+  Frontier-Spitze 1180, +120/Tag vs. Synthese-Score ~5).
 - Feeder nutzt `node.question`, falls vorhanden, sonst das bisherige Template.
 - **Slot-Quote: max. 1 von 3 Wochenend-Runs** ist Synthese/Hypothese —
   frische externe Themen behalten die Mehrheit (Anti-Echo-Baustein).
