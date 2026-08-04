@@ -52,6 +52,11 @@ class KnowledgeClaim(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
+    # UNIQUE enforces the refuted-is-terminal invariant at the DB level:
+    # duplicate norm_text rows would let the curator's LIMIT-1 lookup pick
+    # the non-refuted twin and silently reopen a refuted claim.
+    __table_args__ = (UniqueConstraint("norm_text", name="uq_knowledge_claim_norm_text"),)
+
     def __repr__(self) -> str:
         return f"<KnowledgeClaim {self.status} {self.text[:40]!r}>"
 
@@ -70,6 +75,16 @@ class ThinkingLogEntry(Base):
     summary: Mapped[str] = mapped_column(String(500), nullable=False)
     details: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+
+    def __repr__(self) -> str:
+        return f"<ThinkingLogEntry {self.kind} {self.summary[:40]!r}>"
+```
+
+Zusaetzlich im bestehenden `ResearchNode`-Docstring (der die kind/status/created_from-Enums listet) zwei Zeilen ergaenzen — dort schauen spaetere Tasks nach:
+
+```
+    question: stored research question for curator-created frontier nodes (2026-08-04)
+    outcome:  confirmed | refuted | inconclusive — hypothesis nodes only
 ```
 
 - [ ] **Step 2: ALTERs im Orchestrator** — in `pipeline/lyra/orchestrator.py`, im bestehenden Migrations-Block von main() (eine Transaktion, ans Ende der bestehenden ALTERs):
@@ -79,7 +94,15 @@ conn.execute(text("ALTER TABLE research_nodes ADD COLUMN IF NOT EXISTS question 
 conn.execute(
     text("ALTER TABLE research_nodes ADD COLUMN IF NOT EXISTS outcome VARCHAR(20)")
 )
+conn.execute(
+    text(
+        "CREATE UNIQUE INDEX IF NOT EXISTS uq_knowledge_claim_norm_text "
+        "ON knowledge_claims (norm_text)"
+    )
+)
 ```
+
+(Der UNIQUE INDEX ist safe: die Tabelle ist neu und leer, wenn er erstmals laeuft. Im api-Pfad dieselbe Anweisung als `_api_migrations`-Eintrag.)
 
 - [ ] **Step 3: ALTERs im api-Startup** — `api/main.py`: den `create_all`-Aufruf im Startup finden (Grep `create_all`), direkt danach idempotent dieselben zwei ALTERs ausführen (der Feeder/Picker läuft im api-Container und braucht die Spalten auch, wenn der lyra-Container noch nicht neu gebaut wurde):
 
@@ -646,6 +669,7 @@ CURATOR_SCHEMA = {
                     },
                     "confidence": {"type": "number"},
                     "external_source_count": {"type": "integer"},
+                    "paper_ids": {"type": "array", "items": {"type": "string"}},
                 },
                 "required": ["text", "status"],
             },
@@ -770,18 +794,23 @@ def _apply_curator_output(session, out: dict) -> dict:
         ).fetchone()
         if existing and existing.status == "refuted":
             continue  # refuted is terminal (spec §1)
+        paper_ids = json.dumps(cu.get("paper_ids") or [])
         if existing:
             session.execute(
                 text("""
                     UPDATE knowledge_claims
                     SET status = :status, confidence = :conf,
-                        external_source_count = :ext, updated_at = NOW()
+                        external_source_count = :ext,
+                        paper_ids = COALESCE(paper_ids, '[]'::jsonb)
+                                    || CAST(:paper_ids AS jsonb),
+                        updated_at = NOW()
                     WHERE norm_text = :norm
                 """),
                 {
                     "status": cu["status"],
                     "conf": float(cu.get("confidence") or 0.5),
                     "ext": int(cu.get("external_source_count") or 0),
+                    "paper_ids": paper_ids,
                     "norm": norm,
                 },
             )
@@ -790,12 +819,12 @@ def _apply_curator_output(session, out: dict) -> dict:
                 text("""
                     INSERT INTO knowledge_claims
                         (id, text, norm_text, node_id, status, confidence,
-                         external_source_count, created_at, updated_at)
+                         external_source_count, paper_ids, created_at, updated_at)
                     VALUES
                         (:id, :text, :norm,
                          (SELECT id FROM research_nodes
                           WHERE norm_label = :node_norm LIMIT 1),
-                         :status, :conf, :ext, NOW(), NOW())
+                         :status, :conf, :ext, CAST(:paper_ids AS jsonb), NOW(), NOW())
                 """),
                 {
                     "id": str(uuid.uuid4()),
@@ -805,6 +834,7 @@ def _apply_curator_output(session, out: dict) -> dict:
                     "status": cu["status"],
                     "conf": float(cu.get("confidence") or 0.5),
                     "ext": int(cu.get("external_source_count") or 0),
+                    "paper_ids": paper_ids,
                 },
             )
         stats["claims"] += 1
@@ -862,7 +892,7 @@ def _gather_inputs(session) -> dict:
 
     papers = session.execute(
         text("""
-            SELECT question, result_json FROM research_requests
+            SELECT id::text AS request_id, question, result_json FROM research_requests
             WHERE status = 'completed' AND is_batch = TRUE AND completed_at > :since
             ORDER BY completed_at DESC LIMIT 5
         """),
@@ -873,7 +903,11 @@ def _gather_inputs(session) -> dict:
         report = (json.loads(p.result_json).get("report") or "") if p.result_json else ""
         # Head (framing) + tail (conclusions) of the report; middle is bulk.
         paper_excerpts.append(
-            {"question": p.question, "excerpt": report[:4000] + "\n...\n" + report[-3000:]}
+            {
+                "request_id": p.request_id,
+                "question": p.question,
+                "excerpt": report[:4000] + "\n...\n" + report[-3000:],
+            }
         )
 
     open_hypotheses = session.execute(
