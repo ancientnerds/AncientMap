@@ -685,15 +685,32 @@ def test_register_source_self_source_forces_tier_4_and_flag():
 
 def test_register_source_self_source_upgrades_existing_record_on_dedup():
     """Re-registering an already-known URL with self_source=True upgrades
-    the existing record's tier and flag instead of being ignored."""
+    the existing record's tier, flag, AND title — every enforcement surface
+    (prompt rule, References list, audit) reads the title string, not the
+    flag, so the [self] marker must land there too."""
     registry = CitationRegistry()
     url = "https://ancientnerds.com/theo/public/some-paper"
     sid1 = registry.register_source(url, "Some Paper — Intro", "snippet")
     assert registry.sources[sid1].self_source is False
+    assert registry.sources[sid1].title == "Some Paper — Intro"
+
     sid2 = registry.register_source(url, "[self] Some Paper — Intro", "snippet", self_source=True)
     assert sid1 == sid2
     assert registry.sources[sid1].self_source is True
     assert registry.sources[sid1].reliability_tier == 4
+    assert registry.sources[sid1].title == "[self] Some Paper — Intro"
+    assert registry.sources[sid1].title.count("[self]") == 1
+
+
+def test_register_source_self_source_upgrade_does_not_double_prefix_title():
+    """A second self_source=True re-registration is a no-op on the flag and
+    must not add a second [self] prefix to an already-marked title."""
+    registry = CitationRegistry()
+    url = "https://ancientnerds.com/theo/public/some-paper"
+    registry.register_source(url, "Some Paper — Intro", "snippet")
+    registry.register_source(url, "irrelevant", "snippet", self_source=True)
+    sid3 = registry.register_source(url, "irrelevant", "snippet", self_source=True)
+    assert registry.sources[sid3].title.count("[self]") == 1
 
 
 # ---------------------------------------------------------------------------

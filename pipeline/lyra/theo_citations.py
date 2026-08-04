@@ -123,6 +123,11 @@ class CitationRegistry:
             if self_source and not existing.self_source:
                 existing.self_source = True
                 existing.reliability_tier = 4
+                # Every enforcement surface (prompt rule, References list,
+                # audit) reads the title string, not the flag — the marker
+                # must land there too, exactly once.
+                if existing.title.count("[self]") == 0:
+                    existing.title = f"[self] {existing.title}"
             return source_id
 
         parsed = urllib.parse.urlparse(url)

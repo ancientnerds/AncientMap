@@ -67,7 +67,7 @@ class SearchHandler(BaseHandler):
                 authors=r.authors,
                 venue=r.venue,
                 citation_count=r.citation_count,
-                self_source=getattr(r, "self_source", False),
+                self_source=r.self_source,
             )
             if sid not in angle.source_ids:
                 angle.source_ids.append(sid)
