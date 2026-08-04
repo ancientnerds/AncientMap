@@ -266,6 +266,17 @@ git commit -m "feat(theo): thinking_log writer for the knowledge activity feed"
 > `existing_connection_norms` (beide Paar-Orderings); (5) `run_miner`
 > lädt die connection-Node-norm_labels mit, loggt Fehler mit
 > `exc_info=True`. 8 Tests inkl. run_miner-Wiring + Swallow.
+>
+> **NACHTRAG (2. Review-Runde):** Root-Cause-Fix in
+> `graph_injectors._insert_frontier` gehört zu diesem Task — das
+> `ON CONFLICT DO UPDATE` setzte nie `status`, wodurch injizierte Sites
+> ewig `reference` blieben (0 von 5.307 Site-Nodes recherchierbar, der
+> Sites-Injector war seit dem Full-Project-Graph tot). Neu: reference →
+> frontier-Promotion (nie Downgrades) + site_id-COALESCE. Dazu Miner-
+> Ehrlichkeitsfixes: Bridge-Population heute = 1 Node (wächst durch
+> Site-Forschung), ARRAY_AGG ORDER BY, Site-Twin-Arm im NOT EXISTS,
+> toter Guard entfernt. 2-Hop-Content-Nachbarn (site→story→culture) und
+> Alias-Bridging via unified_site_names sind BEWUSST vertagt (YAGNI).
 
 Kandidaten kommen aus STRUKTUR-Daten, nicht aus Theos Prosa (Echo-Schutz, Spec §2). SQL bleibt dünn; Merge/Format ist pure Function und wird getestet.
 
@@ -772,7 +783,11 @@ def _insert_topic_node(session, label: str, kind: str, question: str, rationale:
 
 def _link_connection_endpoints(session, conn_label: str) -> None:
     """A connection node 'A ↔ B' gets `connects` edges to A and B when those
-    nodes exist — the Knowledge page draws the new line (spec data model)."""
+    nodes exist — the Knowledge page draws the new line (spec data model).
+
+    A label can exist as BOTH a topic and a site node (the miner's label
+    bridge) — edges to both twins are deliberate: the connection anchors to
+    every representation of its endpoint."""
     if "↔" not in conn_label:
         return
     conn_norm = normalize_label(conn_label)[:500]
