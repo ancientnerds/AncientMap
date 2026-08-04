@@ -11,6 +11,7 @@ import asyncio
 import json
 import logging
 import time
+from datetime import UTC, datetime, timezone
 from typing import Any
 
 from sqlalchemy import text
@@ -651,21 +652,36 @@ def _batch_gate_open(last_start_age_s: float | None, min_interval_s: float) -> b
     return last_start_age_s is None or last_start_age_s >= min_interval_s
 
 
-def _batch_claim_allowed(gate_open: bool, tier: str, weekly_pct: float | None) -> bool:
+def _batch_claim_allowed(
+    gate_open: bool,
+    tier: str,
+    weekly_pct: float | None,
+    now_utc: datetime | None = None,
+) -> bool:
     """Batch rows need an open pacing gate, a positively HEALTHY watchdog,
-    AND enough weekly budget for a whole paper (2026-07-19). Starting a
-    fresh multi-hour full-depth run into a half-drained window (DEGRADED)
-    just parks it in the freeze minutes later — wait for the window
-    instead. UNKNOWN (no probe yet / watchdog down) is treated as
-    not-healthy, and a missing weekly value blocks the same way: batch
-    runs never start blind. The weekly floor exists because a paper costs
-    ~19% of the calendar-week budget — below THEO_BATCH_MIN_WEEKLY_PCT the
-    run would hit the weekly wall (error 2056) mid-flight."""
-    from api.services.theo_config import THEO_BATCH_MIN_WEEKLY_PCT
+    enough weekly budget for a whole paper (2026-07-19), AND an end-of-week
+    start day (2026-08-04). Starting a fresh multi-hour full-depth run into
+    a half-drained window (DEGRADED) just parks it in the freeze minutes
+    later — wait for the window instead. UNKNOWN (no probe yet / watchdog
+    down) is treated as not-healthy, and a missing weekly value blocks the
+    same way: batch runs never start blind. The weekly floor exists because
+    a paper costs ~19% of the calendar-week budget — below
+    THEO_BATCH_MIN_WEEKLY_PCT the run would hit the weekly wall (error
+    2056) mid-flight. The weekday window (default Fri+Sat UTC) spends the
+    week's surplus at the end of the week instead of starving Lyra and
+    interactive research right after the Monday reset."""
+    from api.services.theo_config import (
+        THEO_BATCH_FIRST_WEEKDAY,
+        THEO_BATCH_LAST_WEEKDAY,
+        THEO_BATCH_MIN_WEEKLY_PCT,
+    )
 
     if not gate_open or tier != "HEALTHY":
         return False
-    return weekly_pct is not None and weekly_pct >= THEO_BATCH_MIN_WEEKLY_PCT
+    if weekly_pct is None or weekly_pct < THEO_BATCH_MIN_WEEKLY_PCT:
+        return False
+    weekday = (now_utc or datetime.now(UTC)).weekday()
+    return THEO_BATCH_FIRST_WEEKDAY <= weekday <= THEO_BATCH_LAST_WEEKDAY
 
 
 def _read_last_start_age_s() -> float | None:
@@ -709,8 +725,9 @@ async def _poll_loop() -> None:
                 pass
             # Batch pacing: while the gate is closed (or the watchdog is not
             # positively HEALTHY, or the weekly budget won't fit a whole
-            # paper), batch rows are invisible to the claim query below — a
-            # younger UI row still gets picked up immediately.
+            # paper, or it is not an end-of-week start day), batch rows are
+            # invisible to the claim query below — a younger UI row still
+            # gets picked up immediately.
             gate_open = _batch_gate_open(_read_last_start_age_s(), THEO_MIN_TASK_INTERVAL_S)
             batch_allowed = _batch_claim_allowed(gate_open, tier, weekly_pct)
             if gate_open != gate_was_open:

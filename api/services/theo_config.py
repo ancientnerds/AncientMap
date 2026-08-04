@@ -68,6 +68,16 @@ QUOTA_WEEKLY_FREEZE_PCT = int(os.getenv("QUOTA_WEEKLY_FREEZE_PCT", "5"))
 # by the tier ladder alone.
 THEO_BATCH_MIN_WEEKLY_PCT = int(os.getenv("THEO_BATCH_MIN_WEEKLY_PCT", "25"))
 
+# Batch runs may only START inside this UTC weekday window (0=Monday ..
+# 6=Sunday). The weekly MiniMax budget resets Monday 00:00 UTC — batch runs
+# early in the week burn the budget Lyra and interactive research need for
+# days (2026-08-04: weekly was down to 50% by Tuesday). Friday+Saturday
+# spends the week's SURPLUS instead, and a run started late Saturday still
+# drains on Sunday without bleeding into the fresh Monday budget. Set 0/6
+# to restore always-on batch starts.
+THEO_BATCH_FIRST_WEEKDAY = int(os.getenv("THEO_BATCH_FIRST_WEEKDAY", "4"))
+THEO_BATCH_LAST_WEEKDAY = int(os.getenv("THEO_BATCH_LAST_WEEKDAY", "5"))
+
 # How often the watchdog probes /v1/token_plan/remains. The probe is cached
 # 60s server-side (minimax_shared.probe_minimax_quota), so 60s is a
 # reasonable cadence — faster just hammers the endpoint without new data.

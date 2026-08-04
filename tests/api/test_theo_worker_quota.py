@@ -12,6 +12,7 @@ Three behaviors born from the failed E2E of 2026-07-05:
 """
 
 import asyncio
+from datetime import UTC, datetime, timezone
 from types import SimpleNamespace
 
 import pytest
@@ -122,6 +123,11 @@ def test_terminal_status_without_flag_attribute_fails():
 # no weekly value: batch runs never start blind.
 
 
+# A Friday — inside the default Fri+Sat start window, so these cases test
+# the gate/tier/weekly logic in isolation from the weekday window below.
+_FRIDAY = datetime(2026, 8, 7, 12, 0, tzinfo=UTC)
+
+
 @pytest.mark.parametrize(
     "gate_open,tier,weekly,expected",
     [
@@ -137,4 +143,34 @@ def test_terminal_status_without_flag_attribute_fails():
     ],
 )
 def test_batch_claim_allowed(gate_open, tier, weekly, expected):
-    assert tw._batch_claim_allowed(gate_open, tier, weekly) is expected
+    assert tw._batch_claim_allowed(gate_open, tier, weekly, now_utc=_FRIDAY) is expected
+
+
+# --- 4. Batch starts only in the end-of-week window --------------------------
+# 2026-08-04: the weekly budget resets Monday 00:00 UTC and the feeder had
+# burned it to 50% by Tuesday. Batch runs (Entität queue + Dauerforscher)
+# may only START Fri+Sat (UTC) so they spend the week's surplus — a late
+# Saturday start drains on Sunday and never touches the fresh Monday budget.
+
+
+@pytest.mark.parametrize(
+    "now,expected",
+    [
+        (datetime(2026, 8, 3, 0, 1, tzinfo=UTC), False),  # Mon: fresh budget is Lyra's
+        (datetime(2026, 8, 4, 12, 0, tzinfo=UTC), False),  # Tue
+        (datetime(2026, 8, 6, 23, 59, tzinfo=UTC), False),  # Thu, right before window
+        (datetime(2026, 8, 7, 0, 0, tzinfo=UTC), True),  # Fri 00:00: window opens
+        (datetime(2026, 8, 8, 23, 59, tzinfo=UTC), True),  # Sat late: drains on Sunday
+        (datetime(2026, 8, 9, 0, 0, tzinfo=UTC), False),  # Sun: would bleed into Monday
+    ],
+)
+def test_batch_claim_weekday_window(now, expected):
+    assert tw._batch_claim_allowed(True, "HEALTHY", 100, now_utc=now) is expected
+
+
+def test_batch_claim_weekday_window_env_override(monkeypatch):
+    """FIRST=0/LAST=6 restores the pre-2026-08-04 always-on behavior."""
+    monkeypatch.setattr("api.services.theo_config.THEO_BATCH_FIRST_WEEKDAY", 0)
+    monkeypatch.setattr("api.services.theo_config.THEO_BATCH_LAST_WEEKDAY", 6)
+    monday = datetime(2026, 8, 3, 12, 0, tzinfo=UTC)
+    assert tw._batch_claim_allowed(True, "HEALTHY", 100, now_utc=monday) is True
