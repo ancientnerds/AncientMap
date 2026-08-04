@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import json
 import logging
-import re
 import uuid
 from datetime import datetime, timedelta
 
@@ -37,11 +36,6 @@ _MAX_CLAIM_TEXT_CHARS = 300
 
 _VALID_CLAIM_STATUSES = frozenset({"established", "contested", "refuted", "open"})
 _VALID_OUTCOMES = frozenset({"confirmed", "refuted", "inconclusive"})
-
-# Fallback for _paper_excerpt when theo_citations' heading finder can't be
-# imported — same pattern as theo_citations._REFS_HEADING_RE (kept in sync
-# manually; see _paper_excerpt docstring for why the import is guarded).
-_REFS_HEADING_FALLBACK_RE = re.compile(r"^#{2,3}\s+(?:References|Sources)\s*$", re.MULTILINE)
 
 CURATOR_SCHEMA = {
     "type": "object",
@@ -324,44 +318,41 @@ def _apply_curator_output(session, out: dict) -> dict:
     return stats
 
 
-def _paper_excerpt(report: str) -> str:
+def _paper_excerpt(
+    report: str, *, head: int = 3000, tail: int = 3000, refs_sample: int = 1500
+) -> str:
     """Curator-sized excerpt of one paper: prose (head+tail, or verbatim
     when short) plus a capped references sample.
 
     Every paper ends with a `## References` heading, so a naive
     `report[-N:]` tail is the bibliography, not the conclusions (C2,
-    2026-08-05 review). Split the references off first; the refs sample
-    still travels (short, capped) because its tier labels are exactly what
-    the curator needs to judge external_source_count.
+    2026-08-05 review). Split via `theo_citations.split_artifact` — the
+    PUBLIC splitter built for FINAL artifacts, matching on the LAST
+    heading. The private `_find_references_heading` used here originally
+    is documented for PRE-final pipeline text and matches the FIRST
+    heading; on a final artifact, a fake mid-body "## References" heading
+    (e.g. quoted inside prose) would be matched first and truncate real
+    trailing content — split_artifact's last-match avoids exactly that
+    (F2, 2026-08-05 review). The refs sample still travels (short, capped)
+    because its tier labels are exactly what the curator needs to judge
+    external_source_count.
 
-    Reuses theo_citations' heading finder so the split stays in lockstep
-    with the renderer's own References-detection rule (trailing colon /
-    extra words disqualify a heading — see that module's comment). The
-    import is guarded because `_find_references_heading` is a private
-    symbol of another module; if it's ever renamed or removed, this falls
-    back to the same regex inline rather than crashing every curator pass.
+    `head`/`tail`/`refs_sample` are overridable so a caller with a
+    tighter budget (open_hypotheses' verdict judging, F3) can ask for a
+    smaller excerpt than a full new-paper one — a verdict needs
+    conclusions + tier labels, not 6K of prose per hypothesis.
     """
-    try:
-        from pipeline.lyra.theo_citations import _find_references_heading
+    from pipeline.lyra.theo_citations import split_artifact
 
-        refs_idx = _find_references_heading(report)
-    except ImportError:
-        m = _REFS_HEADING_FALLBACK_RE.search(report)
-        refs_idx = m.start() if m else None
-
-    if refs_idx is not None:
-        prose, refs = report[:refs_idx], report[refs_idx:]
-    else:
-        prose, refs = report, ""
-
+    prose, _heading, refs = split_artifact(report)
     prose = prose.strip()
     # M10 fix: only split head/tail when there's an actual gap to skip —
-    # for prose <= 6000 chars, head[:3000] + tail[-3000:] duplicated the
-    # whole thing.
-    body = prose if len(prose) <= 6000 else prose[:3000] + "\n...\n" + prose[-3000:]
+    # for prose <= head+tail chars, prose[:head] + prose[-tail:] duplicated
+    # the whole thing.
+    body = prose if len(prose) <= head + tail else prose[:head] + "\n...\n" + prose[-tail:]
 
     if refs.strip():
-        body += "\n\n[refs sample]\n" + refs[:1500]
+        body += "\n\n[refs sample]\n" + refs[:refs_sample]
 
     return body
 
@@ -408,7 +399,20 @@ def _build_user_message(inputs: dict) -> str:
     if deferred:
         payload["papers_deferred"] = deferred
 
-    return json.dumps(payload, ensure_ascii=False, default=str)
+    message = json.dumps(payload, ensure_ascii=False, default=str)
+    if len(message) > _MAX_USER_MESSAGE_CHARS:
+        # papers is now empty (the loop above only stops early once the
+        # budget is met) — candidates/open_hypotheses/claims alone exceed
+        # it. Advisory only: this budget isn't enforced beyond dropping
+        # papers, so the world-model half of the message can still starve
+        # (F3, 2026-08-05 review) — surface it rather than fail silently.
+        logger.warning(
+            "[THINK] curator user message over budget with no papers left to drop "
+            "(%d chars, budget %d)",
+            len(message),
+            _MAX_USER_MESSAGE_CHARS,
+        )
+    return message
 
 
 def _gather_inputs(session) -> dict:
@@ -479,7 +483,16 @@ def _gather_inputs(session) -> dict:
             "question": h.question,
             # Same references-tail bug as papers (C2) — the outcome verdict
             # needs the refs' tier labels anyway, so reuse _paper_excerpt.
-            "paper_tail": _paper_excerpt(json.loads(h.result_json).get("report") or "")
+            # Tighter budget than a new-paper excerpt (F3): a verdict needs
+            # conclusions + tier labels, not 6K of prose per hypothesis —
+            # at the default budget, 5 open hypotheses alone could approach
+            # 40K chars and starve the rest of the message.
+            "paper_tail": _paper_excerpt(
+                json.loads(h.result_json).get("report") or "",
+                head=1000,
+                tail=1500,
+                refs_sample=800,
+            )
             if h.result_json
             else "",
         }
@@ -500,10 +513,14 @@ def _gather_inputs(session) -> dict:
 def run_curator_pass() -> None:
     """One nightly thinking pass. Best-effort — never raises.
 
-    On ANY failure (quota exhaustion, DB error, LLM error) this still
-    writes a thinking_log failure row so `thinking_pass_due`'s 20h gate
-    closes — otherwise a dead LLM key reopens the 02:00-05:00 window on
-    every feeder poll and the same failing pass retries all night (I5/M17).
+    On ANY failure — quota exhaustion, an unusable/empty LLM response (the
+    DOCUMENTED dominant `structured_llm_call` failure mode: `{}` is
+    returned only after BOTH the structured call and its text-fallback
+    retry failed — see minimax_shared.py), a DB error, or anything else —
+    this still writes a thinking_log failure row so `thinking_pass_due`'s
+    20h gate closes. Otherwise a dead LLM key (or a bad response) reopens
+    the 02:00-05:00 window on every feeder poll and the same failing pass
+    retries all night (I5/M17, F1).
     """
     try:
         from pathlib import Path
@@ -530,7 +547,14 @@ def run_curator_pass() -> None:
             temperature=settings.temperature_verification,
         )
         if not out:
+            # F1: {} is the DOCUMENTED dominant structured_llm_call failure
+            # mode (returned only after both the structured call and its
+            # text-fallback retry failed) — without a failure row here the
+            # 20h gate never closes and the feeder retries all night.
             logger.warning("[THINK] curator returned empty output — skipping apply")
+            log_thinking(
+                "curator", "Denkstunde failed: LLM returned no usable output", {"failed": True}
+            )
             return
 
         with get_session() as session:
@@ -545,12 +569,22 @@ def run_curator_pass() -> None:
         cursor = inputs.get("last_paper_completed_at")
         if included_papers:
             cursor = max(p["completed_at"] for p in included_papers)
+        papers_deferred = sent.get("papers_deferred", 0)
 
+        # F3: demoted/dropped/deferred surfaced in the headline, not just
+        # details — demoted is the citation-integrity signal (an
+        # "established" claim that didn't actually earn it) and must be
+        # visible in the Discord embed / activity feed at a glance.
         summary = (
-            f"Denkstunde: {stats['claims']} claims, {stats['connections']} connections, "
+            f"Denkstunde: {stats['claims']} claims ({stats['demoted']} demoted, "
+            f"{stats['dropped']} dropped), {stats['connections']} connections, "
             f"{stats['hypotheses']} hypotheses, {stats['outcomes']} verdicts"
         )
+        if papers_deferred:
+            summary += f", {papers_deferred} papers deferred"
         details = {**stats, "llm_summary": out.get("summary", "")}
+        if papers_deferred:
+            details["papers_deferred"] = papers_deferred
         if cursor is not None:
             details["last_paper_completed_at"] = cursor.isoformat()
         log_thinking("curator", summary, details)

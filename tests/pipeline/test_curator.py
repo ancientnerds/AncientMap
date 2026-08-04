@@ -7,6 +7,14 @@ hypothesis outcome), I6 (rowcount-driven insert/update counting), I7
 (paper backlog cursor tracks papers actually included, not pass time), I8
 (established demoted to open below 2 external sources), I9 (cap-before-
 filter is intentional — rewritten cap+junk test).
+
+2026-08-05 final-gate additions: F1 (empty LLM output must ALSO close the
+20h schedule gate — the test that pinned the opposite behavior is flipped),
+F2 (_paper_excerpt now uses the PUBLIC, last-heading theo_citations.
+split_artifact instead of the private first-match heading finder), F3
+(_paper_excerpt takes a size budget so hypothesis tails don't starve the
+rest of the message; _build_user_message warns when still over budget with
+no papers left to drop; the summary surfaces dropped/demoted/deferred).
 """
 
 import json
@@ -303,6 +311,37 @@ def test_paper_excerpt_splits_head_and_tail_for_long_prose():
     assert "B" * 100 in excerpt
 
 
+def test_paper_excerpt_uses_last_heading_not_first():
+    # F2: split_artifact matches the LAST "## References"-shaped line, built
+    # for FINAL artifacts. The private _find_references_heading this
+    # replaced matches the FIRST occurrence (documented for PRE-final
+    # pipeline text) — on a final artifact, an earlier heading-shaped line
+    # would truncate real trailing prose as if it were bibliography.
+    report = (
+        "Opening prose.\n\n"
+        "## References\n\n"
+        "Real conclusion that appears after an earlier heading-shaped line.\n\n"
+        "## References\n\n"
+        "[1] True Source\n"
+    )
+    excerpt = _paper_excerpt(report)
+    assert "Real conclusion that appears after an earlier heading-shaped line." in excerpt
+    assert "True Source" in excerpt
+
+
+def test_paper_excerpt_respects_custom_budget():
+    # F3: hypothesis-tail callers pass a tighter budget than a full
+    # new-paper excerpt.
+    prose = "A" * 2000 + "MIDDLE" + "B" * 2000
+    report = prose + "\n\n## References\n\n" + ("Source " * 500)
+    excerpt = _paper_excerpt(report, head=1000, tail=1500, refs_sample=800)
+    assert "MIDDLE" not in excerpt
+    assert "A" * 100 in excerpt
+    assert "B" * 100 in excerpt
+    refs_sample = excerpt.split("[refs sample]\n", 1)[1]
+    assert len(refs_sample) <= 800
+
+
 def test_paper_excerpt_caps_refs_sample_length():
     refs_body = "[1] " + ("Source " * 2000)
     report = "Prose.\n\n## References\n\n" + refs_body
@@ -375,6 +414,22 @@ def test_build_user_message_drops_oversized_papers_keeps_hypotheses():
     assert len(parsed["papers"]) < 5
 
 
+def test_build_user_message_warns_when_still_over_budget_with_no_papers(caplog):
+    # F3(b): dropping every paper is not a guarantee the remaining sections
+    # fit — the budget is advisory beyond that point, so surface it rather
+    # than silently ship an oversized message.
+    inputs = {
+        "candidates": [{"label": "x" * 70000}],
+        "open_hypotheses": [],
+        "claims": [],
+        "papers": [],
+    }
+    with caplog.at_level("WARNING"):
+        message = _build_user_message(inputs)
+    assert len(message) > 60000
+    assert any("over budget" in r.message for r in caplog.records)
+
+
 # ---------------------------------------------------------------------------
 # thinking_pass_due — scheduling window
 # ---------------------------------------------------------------------------
@@ -399,7 +454,12 @@ def test_schema_has_required_sections():
 # ---------------------------------------------------------------------------
 
 
-def test_run_curator_pass_empty_output_skips_apply(monkeypatch):
+def test_run_curator_pass_empty_output_logs_failure_and_skips_apply(monkeypatch):
+    # F1: `{}` is the DOCUMENTED dominant structured_llm_call failure mode
+    # (returned only after both the structured call and its text-fallback
+    # retry failed) — without a failure row here, thinking_pass_due's 20h
+    # gate never closes and the feeder retries the same failing pass all
+    # night. apply must still NOT run on unusable output.
     import pipeline.lyra.curator as curator
 
     monkeypatch.setattr(curator, "_gather_inputs", lambda session: {"papers": []})
@@ -412,16 +472,20 @@ def test_run_curator_pass_empty_output_skips_apply(monkeypatch):
         "_apply_curator_output",
         lambda session, out: applied.setdefault("called", True),
     )
-    logged = {}
+    logged = []
     monkeypatch.setattr(
         "pipeline.lyra.thinking_log.log_thinking",
-        lambda *a, **kw: logged.setdefault("called", True),
+        lambda kind, summary, details: logged.append((kind, summary, details)),
     )
 
     curator.run_curator_pass()
 
     assert "called" not in applied
-    assert "called" not in logged
+    assert logged, "expected a failure row — empty output must still close the 20h gate"
+    kind, summary, details = logged[0]
+    assert kind == "curator"
+    assert "no usable output" in summary
+    assert details == {"failed": True}
 
 
 def test_run_curator_pass_success_logs_with_stats(monkeypatch):
@@ -459,7 +523,68 @@ def test_run_curator_pass_success_logs_with_stats(monkeypatch):
 
     assert logged["kind"] == "curator"
     assert "1 claims" in logged["summary"]
+    assert "0 demoted" in logged["summary"]
+    assert "0 dropped" in logged["summary"]
     assert logged["details"]["llm_summary"] == "did stuff"
+
+
+def test_run_curator_pass_summary_surfaces_demoted_dropped_and_deferred(monkeypatch):
+    # F3(c): demoted is the citation-integrity signal (an "established"
+    # claim that didn't earn it) and must be visible in the human-readable
+    # summary / Discord embed, not just buried in details.
+    import pipeline.lyra.curator as curator
+
+    big_excerpt = "x" * 30000
+    papers = [
+        {
+            "request_id": f"p{i}",
+            "question": "q",
+            "excerpt": big_excerpt,
+            "completed_at": datetime(2026, 8, i + 1),
+        }
+        for i in range(5)
+    ]
+    monkeypatch.setattr(
+        curator,
+        "_gather_inputs",
+        lambda session: {
+            "papers": papers,
+            "candidates": [],
+            "open_hypotheses": [],
+            "claims": [],
+            "last_paper_completed_at": datetime(2020, 1, 1),
+        },
+    )
+    monkeypatch.setattr("pipeline.database.get_session", lambda: _FakeCtxSession())
+    monkeypatch.setattr(
+        "pipeline.lyra.minimax_shared.structured_llm_call",
+        lambda **kw: {"summary": "ok"},
+    )
+    monkeypatch.setattr(
+        curator,
+        "_apply_curator_output",
+        lambda session, out: {
+            "claims": 3,
+            "connections": 0,
+            "hypotheses": 0,
+            "outcomes": 0,
+            "dropped": 2,
+            "demoted": 1,
+        },
+    )
+    logged = {}
+    monkeypatch.setattr(
+        "pipeline.lyra.thinking_log.log_thinking",
+        lambda kind, summary, details: logged.update(summary=summary, details=details),
+    )
+    monkeypatch.setattr("api.services.notify.send_discord_webhook", lambda payload: True)
+
+    curator.run_curator_pass()  # real _build_user_message drops papers here
+
+    assert "1 demoted" in logged["summary"]
+    assert "2 dropped" in logged["summary"]
+    assert "papers deferred" in logged["summary"]
+    assert logged["details"]["papers_deferred"] > 0
 
 
 def test_run_curator_pass_advances_cursor_to_included_papers_only(monkeypatch):
