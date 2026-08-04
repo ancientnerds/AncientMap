@@ -43,7 +43,13 @@ def is_junk_label(label: str | None) -> bool:
     """True when a label must never become a graph node or research topic."""
     if not label:
         return True
-    return normalize_label(label) in JUNK_LABELS
+    normalized = normalize_label(label)
+    if not normalized:
+        # Whitespace/punctuation-only labels normalize to "" — not in
+        # JUNK_LABELS, so they slipped through before this check (M14,
+        # 2026-08-05 review).
+        return True
+    return normalized in JUNK_LABELS
 
 
 def build_graph_from_state(state: Any, request_id: str) -> tuple[list[dict], list[dict]]:

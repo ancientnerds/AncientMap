@@ -3,24 +3,45 @@
 One structured LLM call Mon–Thu night: update the world model from new
 papers, curate miner candidates into `connection` frontier nodes with
 targeted questions, formulate falsifiable hypotheses, judge completed
-hypothesis runs. Best-effort: any failure degrades to today's behavior.
+hypothesis runs. Best-effort: any failure degrades to today's behavior, but
+(2026-08-05 review) it must ALSO close the 20h schedule gate by writing a
+thinking_log row — otherwise a dead LLM key reopens the nightly window on
+every poll and the feeder retries the same failing pass for hours (I5/M17).
 """
 
 from __future__ import annotations
 
 import json
 import logging
+import re
 import uuid
 from datetime import datetime, timedelta
 
 from sqlalchemy import text
 
+from pipeline.lyra.minimax_limiter import InsufficientQuotaError, QuotaExhaustedError
 from pipeline.lyra.research_graph import is_junk_label, normalize_label
 
 logger = logging.getLogger(__name__)
 
 MAX_CONNECTIONS_PER_PASS = 5
 MAX_HYPOTHESES_PER_PASS = 3
+
+# Budget for the LLM-facing user message and the claims section within it
+# (spec §6 / I3 review). Claims are capped independently of the SQL LIMIT
+# 100 in _gather_inputs — that limit bounds the DB read, this one bounds
+# what actually ships in the prompt.
+_MAX_USER_MESSAGE_CHARS = 60000
+_MAX_CLAIMS_IN_MESSAGE = 60
+_MAX_CLAIM_TEXT_CHARS = 300
+
+_VALID_CLAIM_STATUSES = frozenset({"established", "contested", "refuted", "open"})
+_VALID_OUTCOMES = frozenset({"confirmed", "refuted", "inconclusive"})
+
+# Fallback for _paper_excerpt when theo_citations' heading finder can't be
+# imported — same pattern as theo_citations._REFS_HEADING_RE (kept in sync
+# manually; see _paper_excerpt docstring for why the import is guarded).
+_REFS_HEADING_FALLBACK_RE = re.compile(r"^#{2,3}\s+(?:References|Sources)\s*$", re.MULTILINE)
 
 CURATOR_SCHEMA = {
     "type": "object",
@@ -90,7 +111,11 @@ CURATOR_SCHEMA = {
 
 def thinking_pass_due(now_utc: datetime, last_pass_at: datetime | None) -> bool:
     """Nightly Mon–Thu 02:00–05:00 UTC, at most once per 20h. Fri–Sun are
-    research days (weekend batch gate) — the curator stays quiet."""
+    research days (weekend batch gate) — the curator stays quiet.
+
+    Both `now_utc` and `last_pass_at` must be timezone-aware UTC datetimes
+    (naive/aware comparison raises TypeError; callers own that contract).
+    """
     if now_utc.weekday() > 3:
         return False
     if not (2 <= now_utc.hour < 5):
@@ -99,9 +124,18 @@ def thinking_pass_due(now_utc: datetime, last_pass_at: datetime | None) -> bool:
 
 
 def _insert_topic_node(session, label: str, kind: str, question: str, rationale: str) -> bool:
+    """Insert a curator-proposed frontier node. Returns True only when a row
+    was actually written (I6 — trust rowcount, not "we tried to insert").
+
+    ON CONFLICT DO NOTHING means an already-existing node (any status) keeps
+    its current `question` untouched — a later curator pass re-proposing
+    the same label must not clobber a stored question with new phrasing
+    (M13, deliberate: the node may already be researching/explored with a
+    question that shaped the run in progress or the completed paper).
+    """
     if is_junk_label(label) or not question.strip():
         return False
-    session.execute(
+    result = session.execute(
         text("""
             INSERT INTO research_nodes
                 (id, label, norm_label, kind, status, created_from, source_signal,
@@ -119,7 +153,7 @@ def _insert_topic_node(session, label: str, kind: str, question: str, rationale:
             "question": question.strip(),
         },
     )
-    return True
+    return result.rowcount == 1
 
 
 def _link_connection_endpoints(session, conn_label: str) -> None:
@@ -128,7 +162,14 @@ def _link_connection_endpoints(session, conn_label: str) -> None:
 
     A label can exist as BOTH a topic and a site node (the miner's label
     bridge) — edges to both twins are deliberate: the connection anchors to
-    every representation of its endpoint."""
+    every representation of its endpoint. Because a single INSERT..SELECT
+    can therefore match MULTIPLE rows (both twins), the id must come from
+    `gen_random_uuid()` in the SELECT list, not a single Python-side UUID
+    bound once — a scalar `:id` bind reused across every matched row
+    produces duplicate primary keys and rolls back the whole pass on
+    exactly the multi-twin path this function exists for (C1, 2026-08-05
+    review; pattern mirrors graph_full_ingest.py's edge()).
+    """
     if "↔" not in conn_label:
         return
     conn_norm = normalize_label(conn_label)[:500]
@@ -136,7 +177,7 @@ def _link_connection_endpoints(session, conn_label: str) -> None:
         session.execute(
             text("""
                 INSERT INTO research_edges (id, src, dst, kind, weight, created_at)
-                SELECT CAST(:id AS uuid), c.id, t.id, 'connects', 1.0, NOW()
+                SELECT gen_random_uuid(), c.id, t.id, 'connects', 1.0, NOW()
                 FROM research_nodes c
                 JOIN research_nodes t
                   ON t.norm_label = :part_norm AND t.kind != 'connection'
@@ -144,7 +185,6 @@ def _link_connection_endpoints(session, conn_label: str) -> None:
                 ON CONFLICT (src, dst, kind) DO NOTHING
             """),
             {
-                "id": str(uuid.uuid4()),
                 "conn_norm": conn_norm,
                 "part_norm": normalize_label(part)[:500],
             },
@@ -153,12 +193,29 @@ def _link_connection_endpoints(session, conn_label: str) -> None:
 
 def _apply_curator_output(session, out: dict) -> dict:
     """Apply a validated curator output. Pure DB writes, no LLM. Returns
-    counters for the thinking log. Refuted claims never reopen."""
-    stats = {"claims": 0, "connections": 0, "hypotheses": 0, "outcomes": 0}
+    counters for the thinking log. Refuted claims never reopen.
+
+    LLM output is untrusted even after schema coercion: `_coerce_to_schema`
+    (minimax_shared.py) fills a missing required string with "" and does
+    NOT check `enum` constraints, so an out-of-enum `status`/`outcome`
+    reaches here unless this function enforces it itself (I4). Enforcing it
+    also prevents a DB-level DataError (VARCHAR(20) truncation/constraint)
+    from rolling back the whole pass on one bad item.
+    """
+    stats = {
+        "claims": 0,
+        "connections": 0,
+        "hypotheses": 0,
+        "outcomes": 0,
+        "dropped": 0,
+        "demoted": 0,
+    }
 
     for cu in out.get("claim_updates", []):
         claim_text = (cu.get("text") or "").strip()
-        if not claim_text:
+        status = cu.get("status")
+        if not claim_text or status not in _VALID_CLAIM_STATUSES:
+            stats["dropped"] += 1
             continue
         norm = normalize_label(claim_text)[:500]
         existing = session.execute(
@@ -167,6 +224,15 @@ def _apply_curator_output(session, out: dict) -> dict:
         ).fetchone()
         if existing and existing.status == "refuted":
             continue  # refuted is terminal (spec §1)
+
+        ext = int(cu.get("external_source_count") or 0)
+        # Hard rule, not prompt-only (spec §5 / I8): "established" requires
+        # >=2 independent external sources. The prompt asks the LLM to
+        # respect this but nothing enforces it upstream — enforce here.
+        if status == "established" and ext < 2:
+            status = "open"
+            stats["demoted"] += 1
+
         paper_ids = json.dumps(cu.get("paper_ids") or [])
         if existing:
             session.execute(
@@ -182,9 +248,9 @@ def _apply_curator_output(session, out: dict) -> dict:
                     WHERE norm_text = :norm
                 """),
                 {
-                    "status": cu["status"],
+                    "status": status,
                     "conf": float(cu.get("confidence") or 0.5),
-                    "ext": int(cu.get("external_source_count") or 0),
+                    "ext": ext,
                     "paper_ids": paper_ids,
                     "norm": norm,
                 },
@@ -206,9 +272,9 @@ def _apply_curator_output(session, out: dict) -> dict:
                     "text": claim_text,
                     "norm": norm,
                     "node_norm": normalize_label(cu.get("node_label") or "")[:500],
-                    "status": cu["status"],
+                    "status": status,
                     "conf": float(cu.get("confidence") or 0.5),
-                    "ext": int(cu.get("external_source_count") or 0),
+                    "ext": ext,
                     "paper_ids": paper_ids,
                 },
             )
@@ -237,29 +303,138 @@ def _apply_curator_output(session, out: dict) -> dict:
             stats["hypotheses"] += 1
 
     for ho in out.get("hypothesis_outcomes", []):
-        session.execute(
+        outcome = ho.get("outcome")
+        if outcome not in _VALID_OUTCOMES:
+            stats["dropped"] += 1
+            continue
+        result = session.execute(
             text("""
                 UPDATE research_nodes
                 SET outcome = :outcome, updated_at = NOW()
                 WHERE kind = 'hypothesis' AND norm_label = :norm
             """),
             {
-                "outcome": ho["outcome"],
+                "outcome": outcome,
                 "norm": normalize_label(ho.get("node_label") or "")[:500],
             },
         )
-        stats["outcomes"] += 1
+        stats["outcomes"] += result.rowcount
 
     session.commit()
     return stats
 
 
+def _paper_excerpt(report: str) -> str:
+    """Curator-sized excerpt of one paper: prose (head+tail, or verbatim
+    when short) plus a capped references sample.
+
+    Every paper ends with a `## References` heading, so a naive
+    `report[-N:]` tail is the bibliography, not the conclusions (C2,
+    2026-08-05 review). Split the references off first; the refs sample
+    still travels (short, capped) because its tier labels are exactly what
+    the curator needs to judge external_source_count.
+
+    Reuses theo_citations' heading finder so the split stays in lockstep
+    with the renderer's own References-detection rule (trailing colon /
+    extra words disqualify a heading — see that module's comment). The
+    import is guarded because `_find_references_heading` is a private
+    symbol of another module; if it's ever renamed or removed, this falls
+    back to the same regex inline rather than crashing every curator pass.
+    """
+    try:
+        from pipeline.lyra.theo_citations import _find_references_heading
+
+        refs_idx = _find_references_heading(report)
+    except ImportError:
+        m = _REFS_HEADING_FALLBACK_RE.search(report)
+        refs_idx = m.start() if m else None
+
+    if refs_idx is not None:
+        prose, refs = report[:refs_idx], report[refs_idx:]
+    else:
+        prose, refs = report, ""
+
+    prose = prose.strip()
+    # M10 fix: only split head/tail when there's an actual gap to skip —
+    # for prose <= 6000 chars, head[:3000] + tail[-3000:] duplicated the
+    # whole thing.
+    body = prose if len(prose) <= 6000 else prose[:3000] + "\n...\n" + prose[-3000:]
+
+    if refs.strip():
+        body += "\n\n[refs sample]\n" + refs[:1500]
+
+    return body
+
+
+def _build_user_message(inputs: dict) -> str:
+    """Serialize gathered inputs into the curator's user message (I3 fix).
+
+    Key order puts action-critical sections first (candidates,
+    open_hypotheses, claims) and the bulkiest section (papers) last, then
+    drops papers from the END one at a time while the JSON exceeds the
+    budget — recording how many were deferred so the curator knows the
+    backlog wasn't fully seen (the deferred papers stay eligible for the
+    next pass's since-cursor, see I7 in _gather_inputs/run_curator_pass).
+
+    The naive `json.dumps(inputs)[:60000]` this replaces silently sliced
+    mid-JSON and could drop `open_hypotheses`/`claims` entirely depending
+    on dict key order — the payload built here is ALWAYS complete, valid
+    JSON, never string-sliced.
+    """
+    claims = [
+        {**c, "text": (c.get("text") or "")[:_MAX_CLAIM_TEXT_CHARS]}
+        for c in (inputs.get("claims") or [])[:_MAX_CLAIMS_IN_MESSAGE]
+    ]
+    # Papers carry `completed_at` internally (for the since-cursor) but that
+    # is bookkeeping, not curator input — strip it from the LLM-facing copy.
+    papers = [
+        {"request_id": p["request_id"], "question": p["question"], "excerpt": p["excerpt"]}
+        for p in (inputs.get("papers") or [])
+    ]
+    payload = {
+        "candidates": inputs.get("candidates") or [],
+        "open_hypotheses": inputs.get("open_hypotheses") or [],
+        "claims": claims,
+        "papers": papers,
+    }
+
+    deferred = 0
+    while (
+        papers
+        and len(json.dumps(payload, ensure_ascii=False, default=str)) > _MAX_USER_MESSAGE_CHARS
+    ):
+        papers.pop()
+        deferred += 1
+    if deferred:
+        payload["papers_deferred"] = deferred
+
+    return json.dumps(payload, ensure_ascii=False, default=str)
+
+
 def _gather_inputs(session) -> dict:
-    """Collect world model, new papers, miner candidates, open hypotheses."""
-    last_pass = session.execute(
-        text("SELECT MAX(created_at) AS ts FROM thinking_log WHERE kind = 'curator'")
+    """Collect world model, new papers, miner candidates, open hypotheses.
+
+    `last_paper_completed_at` (I7 fix) tracks the newest paper actually
+    INCLUDED in a past curator message — not just completed, and not "the
+    time of the last pass". A paper deferred by the size budget
+    (_build_user_message) or gathered during a pass whose LLM call then
+    failed must stay in the backlog and re-enter on the next pass rather
+    than being silently skipped by a cursor that advanced on pass time
+    alone. ORDER BY completed_at ASC drains that backlog oldest-first.
+    """
+    last_paper_row = session.execute(
+        text("""
+            SELECT details->>'last_paper_completed_at' AS ts
+            FROM thinking_log
+            WHERE kind = 'curator' AND details ? 'last_paper_completed_at'
+            ORDER BY created_at DESC LIMIT 1
+        """)
     ).fetchone()
-    since = last_pass.ts if last_pass and last_pass.ts else datetime(2020, 1, 1)
+    since = (
+        datetime.fromisoformat(last_paper_row.ts)
+        if last_paper_row and last_paper_row.ts
+        else datetime(2020, 1, 1)
+    )
 
     claims = session.execute(
         text("""
@@ -270,21 +445,22 @@ def _gather_inputs(session) -> dict:
 
     papers = session.execute(
         text("""
-            SELECT id::text AS request_id, question, result_json FROM research_requests
+            SELECT id::text AS request_id, question, result_json, completed_at
+            FROM research_requests
             WHERE status = 'completed' AND is_batch = TRUE AND completed_at > :since
-            ORDER BY completed_at DESC LIMIT 5
+            ORDER BY completed_at ASC LIMIT 5
         """),
         {"since": since},
     ).fetchall()
     paper_excerpts = []
     for p in papers:
         report = (json.loads(p.result_json).get("report") or "") if p.result_json else ""
-        # Head (framing) + tail (conclusions) of the report; middle is bulk.
         paper_excerpts.append(
             {
                 "request_id": p.request_id,
                 "question": p.question,
-                "excerpt": report[:4000] + "\n...\n" + report[-3000:],
+                "excerpt": _paper_excerpt(report),
+                "completed_at": p.completed_at,
             }
         )
 
@@ -301,7 +477,9 @@ def _gather_inputs(session) -> dict:
         {
             "label": h.label,
             "question": h.question,
-            "paper_tail": ((json.loads(h.result_json).get("report") or "")[-3000:])
+            # Same references-tail bug as papers (C2) — the outcome verdict
+            # needs the refs' tier labels anyway, so reuse _paper_excerpt.
+            "paper_tail": _paper_excerpt(json.loads(h.result_json).get("report") or "")
             if h.result_json
             else "",
         }
@@ -315,11 +493,18 @@ def _gather_inputs(session) -> dict:
         "papers": paper_excerpts,
         "candidates": run_miner(),
         "open_hypotheses": hyp_inputs,
+        "last_paper_completed_at": since,
     }
 
 
 def run_curator_pass() -> None:
-    """One nightly thinking pass. Best-effort — never raises."""
+    """One nightly thinking pass. Best-effort — never raises.
+
+    On ANY failure (quota exhaustion, DB error, LLM error) this still
+    writes a thinking_log failure row so `thinking_pass_due`'s 20h gate
+    closes — otherwise a dead LLM key reopens the 02:00-05:00 window on
+    every feeder poll and the same failing pass retries all night (I5/M17).
+    """
     try:
         from pathlib import Path
 
@@ -335,9 +520,10 @@ def run_curator_pass() -> None:
         system = (Path(__file__).parent / "prompts" / "curator_pass.txt").read_text(
             encoding="utf-8"
         )
+        user_message = _build_user_message(inputs)
         out = structured_llm_call(
             system=system,
-            user_message=json.dumps(inputs, ensure_ascii=False, default=str)[:60000],
+            user_message=user_message,
             schema=CURATOR_SCHEMA,
             max_tokens=4096,
             settings=settings,
@@ -350,11 +536,24 @@ def run_curator_pass() -> None:
         with get_session() as session:
             stats = _apply_curator_output(session, out)
 
+        # Advance the paper backlog cursor only past papers that actually
+        # made it into THIS message (I7) — match by request_id against what
+        # was really sent, not against everything _gather_inputs fetched.
+        sent = json.loads(user_message)
+        included_ids = {p["request_id"] for p in sent.get("papers", [])}
+        included_papers = [p for p in inputs.get("papers") or [] if p["request_id"] in included_ids]
+        cursor = inputs.get("last_paper_completed_at")
+        if included_papers:
+            cursor = max(p["completed_at"] for p in included_papers)
+
         summary = (
             f"Denkstunde: {stats['claims']} claims, {stats['connections']} connections, "
             f"{stats['hypotheses']} hypotheses, {stats['outcomes']} verdicts"
         )
-        log_thinking("curator", summary, {**stats, "llm_summary": out.get("summary", "")})
+        details = {**stats, "llm_summary": out.get("summary", "")}
+        if cursor is not None:
+            details["last_paper_completed_at"] = cursor.isoformat()
+        log_thinking("curator", summary, details)
         try:
             from api.services.notify import send_discord_webhook
 
@@ -371,5 +570,15 @@ def run_curator_pass() -> None:
             )
         except Exception:  # noqa: BLE001 — notification is best-effort
             pass
+    except (QuotaExhaustedError, InsufficientQuotaError) as exc:
+        logger.error("[THINK] curator pass aborted — quota exhausted: %s", exc, exc_info=True)
+        from pipeline.lyra.thinking_log import log_thinking
+
+        log_thinking(
+            "curator", f"Denkstunde failed: quota exhausted ({exc})"[:500], {"failed": True}
+        )
     except Exception as exc:  # noqa: BLE001 — thinking must never kill the feeder
         logger.error("[THINK] curator pass failed: %s", exc, exc_info=True)
+        from pipeline.lyra.thinking_log import log_thinking
+
+        log_thinking("curator", f"Denkstunde failed: {exc}"[:500], {"failed": True})

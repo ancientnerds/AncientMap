@@ -1,6 +1,6 @@
 """Tests for the research knowledge-graph builder (pure functions, no DB)."""
 
-from pipeline.lyra.research_graph import build_graph_from_state, normalize_label
+from pipeline.lyra.research_graph import build_graph_from_state, is_junk_label, normalize_label
 
 
 class FakeAngle:
@@ -30,6 +30,16 @@ class FakeState:
 def test_normalize_label():
     assert normalize_label("  The  Kybalion! ") == "the kybalion"
     assert normalize_label("Ein-Sof (Kabbalah)") == "ein-sof kabbalah"
+
+
+def test_is_junk_label_rejects_whitespace_and_punctuation_only():
+    # "   " and "..." both normalize to "" — not in JUNK_LABELS, so they
+    # slipped through before the M14 fix (2026-08-05 review).
+    assert is_junk_label("   ") is True
+    assert is_junk_label("...") is True
+    assert is_junk_label("null") is True
+    assert is_junk_label(None) is True
+    assert is_junk_label("Ein Sof") is False
 
 
 def test_builder_emits_paper_node():
