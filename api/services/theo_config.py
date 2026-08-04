@@ -68,15 +68,33 @@ QUOTA_WEEKLY_FREEZE_PCT = int(os.getenv("QUOTA_WEEKLY_FREEZE_PCT", "5"))
 # by the tier ladder alone.
 THEO_BATCH_MIN_WEEKLY_PCT = int(os.getenv("THEO_BATCH_MIN_WEEKLY_PCT", "25"))
 
-# Batch runs may only START inside this UTC weekday window (0=Monday ..
-# 6=Sunday). The weekly MiniMax budget resets Monday 00:00 UTC — batch runs
-# early in the week burn the budget Lyra and interactive research need for
-# days (2026-08-04: weekly was down to 50% by Tuesday). Friday+Saturday
-# spends the week's SURPLUS instead, and a run started late Saturday still
-# drains on Sunday without bleeding into the fresh Monday budget. Set 0/6
-# to restore always-on batch starts.
-THEO_BATCH_FIRST_WEEKDAY = int(os.getenv("THEO_BATCH_FIRST_WEEKDAY", "4"))
-THEO_BATCH_LAST_WEEKDAY = int(os.getenv("THEO_BATCH_LAST_WEEKDAY", "5"))
+# --- End-of-week batch window (2026-08-04) ----------------------------------
+# The weekly MiniMax budget resets Monday 00:00 UTC. Batch runs (Entität
+# queue + Dauerforscher feeder) may only START in the final days before the
+# reset: the surplus is use-it-or-lose-it there, while early-week burns eat
+# the budget Lyra, interactive research and manual tests need all week
+# (2026-08-04: the feeder had the week at 50% by Tuesday). Window opens at
+# most this many days before the reset — 3 = Friday 00:00 UTC. A start is
+# additionally allowed only if the run is expected to FINISH before the
+# reset (measured from the last 5 completed batch papers, fallback
+# THEO_PAPER_EST_HOURS) and the weekly budget still covers one paper PLUS
+# the Lyra reserve for every remaining day. Raise to 7 for always-on.
+THEO_BATCH_MAX_DAYS_TO_RESET = float(os.getenv("THEO_BATCH_MAX_DAYS_TO_RESET", "3"))
+
+# Estimated weekly-budget share of one full-depth batch paper. Observed
+# ~19-25% on the ENTITÄT batch; 25 keeps a margin.
+THEO_PAPER_COST_PCT = float(os.getenv("THEO_PAPER_COST_PCT", "25"))
+
+# Weekly-% reserved PER REMAINING DAY for Lyra's hourly cycles and
+# interactive research. The dynamic claim requirement is
+# paper cost + days-to-reset * this — Friday needs more headroom than a
+# Saturday-night start.
+THEO_LYRA_DAILY_RESERVE_PCT = float(os.getenv("THEO_LYRA_DAILY_RESERVE_PCT", "5"))
+
+# Wall-clock fallback for one batch paper when no completed history exists
+# yet. The live gate prefers the average of the last 5 completed batch runs
+# (duration_ms), which includes crawl-lane pacing and quota sleeps.
+THEO_PAPER_EST_HOURS = float(os.getenv("THEO_PAPER_EST_HOURS", "18"))
 
 # How often the watchdog probes /v1/token_plan/remains. The probe is cached
 # 60s server-side (minimax_shared.probe_minimax_quota), so 60s is a

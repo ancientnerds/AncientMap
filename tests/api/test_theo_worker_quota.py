@@ -123,17 +123,17 @@ def test_terminal_status_without_flag_attribute_fails():
 # no weekly value: batch runs never start blind.
 
 
-# A Friday — inside the default Fri+Sat start window, so these cases test
-# the gate/tier/weekly logic in isolation from the weekday window below.
+# A Friday noon — 60h before the Monday 00:00 UTC reset, comfortably inside
+# the default end-of-week window, so these cases test the gate/tier logic in
+# isolation. avg_run_hours is injected so no DB read happens in tests.
 _FRIDAY = datetime(2026, 8, 7, 12, 0, tzinfo=UTC)
+_RUN_H = 18.0
 
 
 @pytest.mark.parametrize(
     "gate_open,tier,weekly,expected",
     [
         (True, "HEALTHY", 100, True),
-        (True, "HEALTHY", 25, True),  # boundary: exactly the floor
-        (True, "HEALTHY", 24.9, False),  # below the floor: paper won't fit
         (True, "HEALTHY", 0, False),  # the 07-08..07-12 wall
         (True, "HEALTHY", None, False),  # probe blind: never start blind
         (True, "DEGRADED", 100, False),
@@ -143,34 +143,92 @@ _FRIDAY = datetime(2026, 8, 7, 12, 0, tzinfo=UTC)
     ],
 )
 def test_batch_claim_allowed(gate_open, tier, weekly, expected):
-    assert tw._batch_claim_allowed(gate_open, tier, weekly, now_utc=_FRIDAY) is expected
+    assert (
+        tw._batch_claim_allowed(gate_open, tier, weekly, now_utc=_FRIDAY, avg_run_hours=_RUN_H)
+        is expected
+    )
 
 
-# --- 4. Batch starts only in the end-of-week window --------------------------
+# --- 4. End-of-week batch window: day x budget x measured speed --------------
 # 2026-08-04: the weekly budget resets Monday 00:00 UTC and the feeder had
-# burned it to 50% by Tuesday. Batch runs (Entität queue + Dauerforscher)
-# may only START Fri+Sat (UTC) so they spend the week's surplus — a late
-# Saturday start drains on Sunday and never touches the fresh Monday budget.
+# burned it to 50% by Tuesday. Batch starts (Entität queue + Dauerforscher)
+# are gated on three adaptive conditions: <=3 days to the reset, the run
+# fits before the reset at the MEASURED batch-run speed, and the weekly
+# budget covers one paper (25%) plus 5%/remaining-day Lyra reserve.
 
 
-@pytest.mark.parametrize(
-    "now,expected",
-    [
-        (datetime(2026, 8, 3, 0, 1, tzinfo=UTC), False),  # Mon: fresh budget is Lyra's
-        (datetime(2026, 8, 4, 12, 0, tzinfo=UTC), False),  # Tue
-        (datetime(2026, 8, 6, 23, 59, tzinfo=UTC), False),  # Thu, right before window
-        (datetime(2026, 8, 7, 0, 0, tzinfo=UTC), True),  # Fri 00:00: window opens
-        (datetime(2026, 8, 8, 23, 59, tzinfo=UTC), True),  # Sat late: drains on Sunday
-        (datetime(2026, 8, 9, 0, 0, tzinfo=UTC), False),  # Sun: would bleed into Monday
-    ],
-)
-def test_batch_claim_weekday_window(now, expected):
-    assert tw._batch_claim_allowed(True, "HEALTHY", 100, now_utc=now) is expected
+def _claim(now, weekly=100, run_h=_RUN_H):
+    return tw._batch_claim_allowed(True, "HEALTHY", weekly, now_utc=now, avg_run_hours=run_h)
 
 
-def test_batch_claim_weekday_window_env_override(monkeypatch):
-    """FIRST=0/LAST=6 restores the pre-2026-08-04 always-on behavior."""
-    monkeypatch.setattr("api.services.theo_config.THEO_BATCH_FIRST_WEEKDAY", 0)
-    monkeypatch.setattr("api.services.theo_config.THEO_BATCH_LAST_WEEKDAY", 6)
+def test_window_closed_early_week():
+    # Monday through Thursday: >3 days to the reset — the fresh budget
+    # belongs to Lyra and interactive research, regardless of how full it is.
+    assert _claim(datetime(2026, 8, 3, 0, 1, tzinfo=UTC)) is False  # Mon
+    assert _claim(datetime(2026, 8, 4, 12, 0, tzinfo=UTC)) is False  # Tue
+    assert _claim(datetime(2026, 8, 6, 23, 59, tzinfo=UTC)) is False  # Thu 23:59
+
+
+def test_window_opens_friday():
+    # Fri 00:00 = exactly 3.0 days to reset. Required budget:
+    # 25 (paper) + 3.0 * 5 (Lyra reserve) = 40.
+    fri = datetime(2026, 8, 7, 0, 0, tzinfo=UTC)
+    assert _claim(fri, weekly=100) is True
+    assert _claim(fri, weekly=41) is True
+    assert _claim(fri, weekly=39) is False  # surplus too small for Friday
+
+
+def test_required_budget_shrinks_toward_reset():
+    # The SAME 35% weekly is not enough on Friday (needs 40) but fine on
+    # Saturday noon (36h left -> 25 + 1.5*5 = 32.5): closer to the reset,
+    # less of the budget must stay reserved.
+    fri = datetime(2026, 8, 7, 0, 0, tzinfo=UTC)
+    sat_noon = datetime(2026, 8, 8, 12, 0, tzinfo=UTC)
+    assert _claim(fri, weekly=35) is False
+    assert _claim(sat_noon, weekly=35) is True
+
+
+def test_run_must_fit_before_reset():
+    # Sunday 05:00 = 19h left: an 18h paper still fits, so the start is
+    # allowed — but a slow Theo (30h average) is already cut off Saturday
+    # night, and Sunday 08:00 (16h left) blocks even the 18h pace.
+    sun_early = datetime(2026, 8, 9, 5, 0, tzinfo=UTC)
+    sun_morning = datetime(2026, 8, 9, 8, 0, tzinfo=UTC)
+    sat_night = datetime(2026, 8, 8, 22, 0, tzinfo=UTC)  # 26h left
+    assert _claim(sun_early, run_h=18.0) is True
+    assert _claim(sun_morning, run_h=18.0) is False
+    assert _claim(sat_night, run_h=30.0) is False
+    assert _claim(sat_night, run_h=18.0) is True
+
+
+def test_fast_theo_extends_the_window():
+    # A 6h pace keeps Sunday afternoon open (7h left >= 6h, required
+    # 25 + 0.29*5 ~= 26.5).
+    sun_afternoon = datetime(2026, 8, 9, 17, 0, tzinfo=UTC)
+    assert _claim(sun_afternoon, weekly=30, run_h=6.0) is True
+    assert _claim(sun_afternoon, weekly=30, run_h=8.0) is False
+
+
+def test_hard_floor_still_applies():
+    # THEO_BATCH_MIN_WEEKLY_PCT (25) is a safety net below the dynamic
+    # requirement — right before the reset the dynamic requirement tends
+    # toward the paper cost alone, never below the floor.
+    sun_late = datetime(2026, 8, 9, 20, 0, tzinfo=UTC)
+    assert _claim(sun_late, weekly=24, run_h=2.0) is False
+
+
+def test_window_env_override(monkeypatch):
+    """MAX_DAYS_TO_RESET=7 restores always-on starts (budget still applies)."""
+    monkeypatch.setattr("api.services.theo_config.THEO_BATCH_MAX_DAYS_TO_RESET", 7.0)
     monday = datetime(2026, 8, 3, 12, 0, tzinfo=UTC)
-    assert tw._batch_claim_allowed(True, "HEALTHY", 100, now_utc=monday) is True
+    # 6.5 days to reset -> required 25 + 6.5*5 = 57.5
+    assert _claim(monday, weekly=100) is True
+    assert _claim(monday, weekly=50) is False
+
+
+def test_hours_until_weekly_reset():
+    # Fri 00:00 -> exactly 72h; Monday just after the reset -> almost a
+    # full week (the reset that just passed must not count).
+    assert tw._hours_until_weekly_reset(datetime(2026, 8, 7, 0, 0, tzinfo=UTC)) == 72.0
+    almost_week = tw._hours_until_weekly_reset(datetime(2026, 8, 3, 0, 1, tzinfo=UTC))
+    assert 167.9 < almost_week < 168.0

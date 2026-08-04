@@ -11,7 +11,7 @@ import asyncio
 import json
 import logging
 import time
-from datetime import UTC, datetime, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from sqlalchemy import text
@@ -652,36 +652,100 @@ def _batch_gate_open(last_start_age_s: float | None, min_interval_s: float) -> b
     return last_start_age_s is None or last_start_age_s >= min_interval_s
 
 
+def _hours_until_weekly_reset(now_utc: datetime) -> float:
+    """Hours until the next MiniMax weekly reset (Monday 00:00 UTC)."""
+    days_ahead = (7 - now_utc.weekday()) % 7
+    reset = (now_utc + timedelta(days=days_ahead)).replace(
+        hour=0, minute=0, second=0, microsecond=0
+    )
+    if reset <= now_utc:
+        reset += timedelta(days=7)
+    return (reset - now_utc).total_seconds() / 3600
+
+
+# 10-min cache for the measured batch-run duration — the poll loop calls the
+# gate every ~3s and the average only moves when a paper completes.
+_avg_run_cache: tuple[float, float] | None = None
+
+
+def _avg_batch_run_hours() -> float:
+    """Measured wall-clock hours of one batch paper: average of the last 5
+    completed batch runs (duration_ms includes crawl-lane pacing and quota
+    sleeps). Falls back to THEO_PAPER_EST_HOURS without history."""
+    global _avg_run_cache
+    from api.services.theo_config import THEO_PAPER_EST_HOURS
+
+    now = time.monotonic()
+    if _avg_run_cache and now - _avg_run_cache[1] < 600:
+        return _avg_run_cache[0]
+    hours = THEO_PAPER_EST_HOURS
+    try:
+        with get_session() as session:
+            avg_ms = session.execute(
+                text("""
+                    SELECT AVG(duration_ms) FROM (
+                        SELECT duration_ms FROM research_requests
+                        WHERE is_batch = TRUE AND status = 'completed'
+                          AND duration_ms IS NOT NULL
+                        ORDER BY completed_at DESC LIMIT 5
+                    ) recent
+                """)
+            ).scalar()
+        if avg_ms:
+            hours = float(avg_ms) / 3_600_000
+    except Exception as exc:
+        logger.warning("[THEO] batch run duration read failed: %s", exc)
+    _avg_run_cache = (hours, now)
+    return hours
+
+
 def _batch_claim_allowed(
     gate_open: bool,
     tier: str,
     weekly_pct: float | None,
     now_utc: datetime | None = None,
+    avg_run_hours: float | None = None,
 ) -> bool:
     """Batch rows need an open pacing gate, a positively HEALTHY watchdog,
-    enough weekly budget for a whole paper (2026-07-19), AND an end-of-week
-    start day (2026-08-04). Starting a fresh multi-hour full-depth run into
-    a half-drained window (DEGRADED) just parks it in the freeze minutes
-    later — wait for the window instead. UNKNOWN (no probe yet / watchdog
-    down) is treated as not-healthy, and a missing weekly value blocks the
-    same way: batch runs never start blind. The weekly floor exists because
-    a paper costs ~19% of the calendar-week budget — below
-    THEO_BATCH_MIN_WEEKLY_PCT the run would hit the weekly wall (error
-    2056) mid-flight. The weekday window (default Fri+Sat UTC) spends the
-    week's surplus at the end of the week instead of starving Lyra and
-    interactive research right after the Monday reset."""
+    and an end-of-week start that the weekly budget can afford (2026-08-04).
+
+    The weekly MiniMax budget resets Monday 00:00 UTC; batch runs spend the
+    week's SURPLUS instead of starving Lyra and interactive research right
+    after the reset. Three adaptive conditions, all env-tunable:
+
+    1. Window: at most THEO_BATCH_MAX_DAYS_TO_RESET days before the reset
+       (default 3 = Friday 00:00 UTC) — surplus is use-it-or-lose-it there.
+    2. Speed: the run must be expected to FINISH before the reset, judged
+       by the measured average of recent batch papers — a fast Theo may
+       still start early Sunday, a slow one stops Saturday afternoon.
+    3. Budget: weekly remaining must cover one paper
+       (THEO_PAPER_COST_PCT) plus the Lyra reserve for every remaining day
+       (THEO_LYRA_DAILY_RESERVE_PCT) — the closer the reset, the less
+       headroom a start needs.
+
+    UNKNOWN tier (no probe yet / watchdog down) and a missing weekly value
+    block: batch runs never start blind (2026-07-19). The static
+    THEO_BATCH_MIN_WEEKLY_PCT floor stays as a hard safety net below which
+    a run would hit the weekly wall (error 2056) mid-flight."""
     from api.services.theo_config import (
-        THEO_BATCH_FIRST_WEEKDAY,
-        THEO_BATCH_LAST_WEEKDAY,
+        THEO_BATCH_MAX_DAYS_TO_RESET,
         THEO_BATCH_MIN_WEEKLY_PCT,
+        THEO_LYRA_DAILY_RESERVE_PCT,
+        THEO_PAPER_COST_PCT,
     )
 
     if not gate_open or tier != "HEALTHY":
         return False
     if weekly_pct is None or weekly_pct < THEO_BATCH_MIN_WEEKLY_PCT:
         return False
-    weekday = (now_utc or datetime.now(UTC)).weekday()
-    return THEO_BATCH_FIRST_WEEKDAY <= weekday <= THEO_BATCH_LAST_WEEKDAY
+    hours_left = _hours_until_weekly_reset(now_utc or datetime.now(UTC))
+    days_left = hours_left / 24
+    if days_left > THEO_BATCH_MAX_DAYS_TO_RESET:
+        return False
+    if hours_left < (avg_run_hours if avg_run_hours is not None else _avg_batch_run_hours()):
+        return False
+    required = THEO_PAPER_COST_PCT + days_left * THEO_LYRA_DAILY_RESERVE_PCT
+    return weekly_pct >= required
 
 
 def _read_last_start_age_s() -> float | None:
