@@ -250,6 +250,23 @@ git commit -m "feat(theo): thinking_log writer for the knowledge activity feed"
 - Create: `pipeline/lyra/graph_miner.py`
 - Test: `tests/pipeline/test_graph_miner.py`
 
+> **REDESIGNED 2026-08-04 (Commit 46e4c6b) nach Prod-Evidence-Review — die
+> Code-Blöcke unten sind das SUPERSEDED Original; maßgeblich ist der
+> committete Code.** Befund (Replay gegen den Live-Graphen, 13.148 Nodes):
+> explored Topics haben NUR Paper-Nachbarn, alle Site-Nodes sind
+> `reference`, kein explored Node trägt `site_id` → beide Struktur-Miner
+> lieferten dauerhaft 0 Zeilen; naives Aufweiten ergäbe 206.659 signallose
+> country+period-Paare. Neues Design: (1) **Label-Bridge** — explored
+> `topic` ↔ struktureller `site`-Node via gleichem `norm_label` (virtueller
+> Join, keine neuen Kanten); (2) Link-Miner zählt nur CONTENT-Nachbarn
+> (`story`/`culture`/`person`), GROUP BY Node-IDs (78 Duplikat-Labels);
+> (3) Spatial-Miner über die gebridgten researched sites mit
+> LEAST/GREATEST-Perioden-Normalisierung; (4) `merge_candidates` mit
+> Quoten 7/5/3 vor dem Cap, Cross-Miner-Dedup und Suppression via
+> `existing_connection_norms` (beide Paar-Orderings); (5) `run_miner`
+> lädt die connection-Node-norm_labels mit, loggt Fehler mit
+> `exc_info=True`. 8 Tests inkl. run_miner-Wiring + Swallow.
+
 Kandidaten kommen aus STRUKTUR-Daten, nicht aus Theos Prosa (Echo-Schutz, Spec §2). SQL bleibt dünn; Merge/Format ist pure Function und wird getestet.
 
 - [ ] **Step 1: Failing Tests für die pure Functions**
