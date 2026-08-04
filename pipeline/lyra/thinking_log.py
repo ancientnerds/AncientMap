@@ -2,7 +2,10 @@
 
 Every curator pass, miner batch and research-run lifecycle event lands here;
 GET /api/v1/knowledge/activity serves it to the Knowledge page. A write
-failure must never break the caller (injector pattern).
+failure must never break the caller (injector pattern). Nothing in the
+system ever reads thinking_log back for control flow — it is display-only
+for the Knowledge timeline, which is what makes the blanket except
+legitimate here.
 """
 
 from __future__ import annotations
@@ -16,6 +19,7 @@ from sqlalchemy import text
 logger = logging.getLogger(__name__)
 
 
+# Lazy + wrapped: keeps pipeline.database out of the import graph and gives tests a seam.
 def _session_factory():
     from pipeline.database import get_session
 
@@ -35,9 +39,9 @@ def log_thinking(kind: str, summary: str, details: dict | None = None) -> None:
                     "id": str(uuid.uuid4()),
                     "kind": kind,
                     "summary": summary[:500],
-                    "details": json.dumps(details) if details is not None else None,
+                    "details": json.dumps(details, default=str) if details is not None else None,
                 },
             )
             session.commit()
     except Exception as exc:  # noqa: BLE001 — feed is observability, never load-bearing
-        logger.warning("[THINK] log_thinking failed: %s", exc)
+        logger.error("[THINK] log_thinking failed: %s", exc)
