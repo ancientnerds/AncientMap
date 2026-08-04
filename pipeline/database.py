@@ -1420,6 +1420,11 @@ class ResearchNode(Base):
         ForeignKey("unified_sites.id", ondelete="SET NULL"),
         nullable=True,
     )
+    # Curator-written research question for connection/hypothesis frontier
+    # nodes (2026-08-04) — question_for_node() prefers this over templates.
+    question: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # confirmed | refuted | inconclusive — hypothesis nodes only (2026-08-04).
+    outcome: Mapped[str | None] = mapped_column(String(20), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
