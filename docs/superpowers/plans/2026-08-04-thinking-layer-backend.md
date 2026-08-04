@@ -801,8 +801,10 @@ def _apply_curator_output(session, out: dict) -> dict:
                     UPDATE knowledge_claims
                     SET status = :status, confidence = :conf,
                         external_source_count = :ext,
-                        paper_ids = COALESCE(paper_ids, '[]'::jsonb)
-                                    || CAST(:paper_ids AS jsonb),
+                        paper_ids = (SELECT COALESCE(jsonb_agg(DISTINCT e), '[]'::jsonb)
+                                     FROM jsonb_array_elements(
+                                          COALESCE(paper_ids, '[]'::jsonb)
+                                          || CAST(:paper_ids AS jsonb)) e),
                         updated_at = NOW()
                     WHERE norm_text = :norm
                 """),
