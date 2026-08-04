@@ -1473,6 +1473,33 @@ git commit -m "feat(api): GET /api/v1/knowledge/activity — thinking-layer feed
    Journal-Marker-Cleanup-Regex (`\[(V?\d+)\]`) lässt nicht-numerische
    Tokens passieren — ggf. auf validate_or_repair umstellen (separates
    Produkt, eigenes Ticket).
+6. **Failed-Synthese-Sackgasse (Final-Review, Important):** Scheitert ein
+   connection/hypothesis-Run terminal, bleibt der Node ewig `researching`
+   (mark_node_explored greift nur bei Erfolg), der Miner supprimiert das
+   Paar für immer, der Curator kann das Label nicht neu queuen (ON CONFLICT
+   DO NOTHING). Geerbt von 2026-07-26 (Topics gleiches Problem), durch
+   Hypothesen aber teurer. Fix: Node bei terminalem `failed` des Requests
+   auf `frontier` zurücksetzen.
+
+### Post-Deploy-Checkliste (erste Denk-Nacht — aus dem Final-Review)
+
+1. Nach api-Deploy: `\d research_nodes` — question/outcome-Spalten da?
+   `knowledge_claims` + `thinking_log` + `uq_knowledge_claim_norm_text`?
+   (Guard gegen den Migration-Swallow in `_api_migrations`.)
+2. **Manueller lyra-Rebuild** (`docker compose up -d --build lyra`) —
+   journal-seitige [self]-Guards + research_stages-self_source.
+3. Erste Mo–Do-Nacht 02–05 UTC: genau EINE `kind='curator'`-Row (+ eine
+   `miner`-Row), kein `details.failed`, Discord-Embed „Denkstunde".
+4. Inhalt: Claims aus den 5 ÄLTESTEN Batch-Papers (Cursor draint ASC,
+   ~4 Nächte Backlog); kein `established` mit ext<2 (demoted-Zähler);
+   Kandidaten ~0 ist ERWARTET (Bridge-Population = 1 Node).
+5. `GET /api/v1/knowledge/activity` liefert Items + Lizenz; run_events da.
+6. Bewusst: Curator läuft auch bei geschlossenem Pacing-Gate (das gated
+   Claims, nicht das Denken) — Hypothesen akkumulieren bis zum Wochenende.
+7. Injector-Promotion beobachten: erste Stunde kann reference-Sites zu
+   frontier promoten; mit unbounded signal (Ticket 2) drohen Monopol-Picks.
+8. Nächstes Paper: References mit `[self]`-Präfix ohne Tier-Badge, kein
+   `[self]` in der Prose.
 
 ### Task 10: Gesamt-Verifikation
 

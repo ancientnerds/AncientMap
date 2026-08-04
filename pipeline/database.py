@@ -1393,9 +1393,9 @@ class ResearchNode(Base):
     `researching`, and a completed paper marks it `explored`. See
     docs/superpowers/specs/2026-07-26-permanent-researcher-design.md.
 
-    kind:   topic | paper | site | entity
-    status: frontier | researching | explored
-    created_from: rabbit_hole | story | journal | site | manual | backfill | paper
+    kind:   topic | paper | site | entity | connection | hypothesis
+    status: reference | frontier | researching | explored
+    created_from: rabbit_hole | story | journal | site | manual | backfill | paper | curator
     question: stored research question for curator-created frontier nodes (2026-08-04)
     outcome:  confirmed | refuted | inconclusive — hypothesis nodes only
     """

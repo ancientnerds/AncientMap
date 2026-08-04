@@ -9,6 +9,7 @@ All endpoints are rate-limited to 10 requests per minute per IP.
 """
 
 import logging
+from datetime import UTC
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
@@ -193,7 +194,10 @@ def _activity_items(rows) -> list[dict]:
     a live Postgres connection."""
     return [
         {
-            "created_at": r.created_at.isoformat(),
+            # thinking_log.created_at is naive UTC (NOW() on a tz-less
+            # column, server runs Etc/UTC) — make the offset explicit for
+            # the Knowledge page.
+            "created_at": r.created_at.replace(tzinfo=UTC).isoformat(),
             "kind": r.kind,
             "summary": r.summary,
             "details": r.details,

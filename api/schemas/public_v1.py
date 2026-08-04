@@ -551,7 +551,7 @@ class GraphNode(BaseModel):
     id: str = Field(description="Node UUID")
     label: str = Field(description="Human-readable node label")
     kind: str = Field(description="topic | paper | site | entity")
-    status: str = Field(description="frontier | researching | explored")
+    status: str = Field(description="reference | frontier | researching | explored")
     signal: float = Field(description="Accumulated interest signal from content sources")
     degree: int = Field(description="Number of edges touching this node")
     order_hint: float | None = Field(

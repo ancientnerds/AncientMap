@@ -179,7 +179,7 @@ def _link_candidates(link_rows: list) -> list[dict]:
                 "label": f"{r.a_label} ↔ {r.b_label}",
                 "miner": "link",
                 "evidence": (
-                    f"{r.shared} shared reference neighbors "
+                    f"{r.shared} shared content neighbors (stories/cultures/people) "
                     f"({', '.join(list(r.via)[:4])}), no direct link researched"
                 ),
             }
