@@ -950,6 +950,24 @@ async def _feeder_loop() -> None:
                 await asyncio.to_thread(run_full_ingest)
                 full_ingest_last = now
 
+            # Nightly thinking pass (Mon-Thu 02-05 UTC): miner + curator.
+            # last_pass comes from thinking_log so restarts don't double-run.
+            from datetime import UTC as _UTC
+            from datetime import datetime as _dt
+
+            from pipeline.lyra.curator import run_curator_pass, thinking_pass_due
+
+            with get_session() as session:
+                last_curator = session.execute(
+                    text("SELECT MAX(created_at) AS ts FROM thinking_log WHERE kind = 'curator'")
+                ).fetchone()
+            last_ts = (
+                last_curator.ts.replace(tzinfo=_UTC) if last_curator and last_curator.ts else None
+            )
+            if thinking_pass_due(_dt.now(_UTC), last_ts):
+                logger.info("[THINK] Nightly thinking pass starting")
+                await asyncio.to_thread(run_curator_pass)
+
             with get_session() as session:
                 pending = session.execute(
                     text("""
