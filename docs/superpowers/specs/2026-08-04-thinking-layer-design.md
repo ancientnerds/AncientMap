@@ -136,7 +136,7 @@ Ein `refuted` ist ein Erfolg (Discord meldet es als solchen).
 | Objekt | Änderung |
 |---|---|
 | `knowledge_claims` | NEU: text, node_id FK, status, confidence, paper_ids[], external_source_count, timestamps |
-| `thinking_log` | NEU: pass-timestamp, kind (curator/miner/run-event), summary, details jsonb |
+| `thinking_log` | NEU: pass-timestamp, kind (curator/miner/run_event), summary, details jsonb |
 | `research_nodes` | + `question` text nullable; kinds erweitert um `connection`, `hypothesis`; + `outcome` für hypothesis-Nodes |
 | `research_edges` | neue Kind-Werte (z. B. `connects`, `contradicts`) — Schema unverändert |
 
