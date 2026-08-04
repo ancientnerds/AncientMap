@@ -1454,6 +1454,54 @@ class ResearchEdge(Base):
         return f"<ResearchEdge {self.kind} {self.src}->{self.dst}>"
 
 
+class KnowledgeClaim(Base):
+    """One claim in the permanent researcher's world model (2026-08-04 design).
+
+    status: established | contested | refuted | open
+    `refuted` is terminal — the curator never reopens a refuted claim; a
+    refuted thesis must not re-enter the frontier as an open question.
+    """
+
+    __tablename__ = "knowledge_claims"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    text: Mapped[str] = mapped_column(Text, nullable=False)
+    norm_text: Mapped[str] = mapped_column(String(500), nullable=False, index=True)
+    node_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("research_nodes.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="open", index=True)
+    confidence: Mapped[float] = mapped_column(Float, default=0.5)
+    # Provenance: which papers assert this, how many EXTERNAL tier-1/2
+    # sources back it (self-citations never count — spec §5).
+    paper_ids: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+    external_source_count: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    def __repr__(self) -> str:
+        return f"<KnowledgeClaim {self.status} {self.text[:40]!r}>"
+
+
+class ThinkingLogEntry(Base):
+    """One event in the thinking-layer activity feed (spec §7).
+
+    kind: curator | miner | run_event
+    Powers GET /api/v1/knowledge/activity — the Knowledge page timeline.
+    """
+
+    __tablename__ = "thinking_log"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    kind: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
+    summary: Mapped[str] = mapped_column(String(500), nullable=False)
+    details: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+
+
 # =============================================================================
 # Helper Functions
 # =============================================================================

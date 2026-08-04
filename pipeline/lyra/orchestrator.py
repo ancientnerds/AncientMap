@@ -1766,6 +1766,12 @@ def _run_migrations(engine) -> None:
             )
         )
 
+        # Thinking layer: curator-facing question + outcome on research_nodes (2026-08-04)
+        conn.execute(text("ALTER TABLE research_nodes ADD COLUMN IF NOT EXISTS question TEXT"))
+        conn.execute(
+            text("ALTER TABLE research_nodes ADD COLUMN IF NOT EXISTS outcome VARCHAR(20)")
+        )
+
         conn.commit()
 
 
