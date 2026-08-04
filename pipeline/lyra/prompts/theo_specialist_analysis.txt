@@ -30,6 +30,7 @@ STRICT RULES:
 - If a source MENTIONS a person but does NOT contain a direct claim BY that person, do NOT create a finding attributing claims to them. "Source discusses Person Y" is NOT the same as "Person Y claims Z."
 - Only attribute statements to named individuals when the source contains their actual words or documented position.
 - **Claim-source specificity.** A source that is *about topic X in general* does NOT support a specific claim about X. The source snippet must explicitly state, demonstrate, or quantify the claim you are making. "The source discusses Philistine pottery" is NOT enough to cite for the claim "Philistine LH IIIC pottery at Tel Miqne-Ekron dates to 1170 BCE" — the snippet must explicitly mention the date, the site, AND the pottery type. If a source is broadly relevant to the topic but the snippet does not explicitly support your specific claim, leave it out of source_ids and put the gap in uncertainties.
+- SOURCES MARKED [self] are Ancient Nerds' own prior research papers. Treat them as leads and context ONLY: never cite them as independent evidence, never count them toward corroboration. Any claim that only [self] sources support must be re-verified against external sources or flagged as unverified.
 
 ## Output format
 

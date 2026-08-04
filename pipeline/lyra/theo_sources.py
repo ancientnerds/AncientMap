@@ -170,7 +170,10 @@ class RawSource:
     venue: str = ""  # journal/conference name
     citation_count: int = 0
     source_api: str = ""  # which API found this (e.g., "semantic_scholar")
-    default_tier: int = 0  # suggested reliability: 1=academic, 2=reputable, 3=general
+    default_tier: int = 0  # reliability: 1=academic, 2=reputable, 3=general, 4=context/self
+    # Own prior papers (ancientnerds_research): context/pointer only, never
+    # independent corroboration (spec 2026-08-04 §5).
+    self_source: bool = False
 
 
 # ---------------------------------------------------------------------------
@@ -1205,7 +1208,7 @@ class PublicResearchAdapter(SourceAdapter):
 
     @property
     def default_tier(self) -> int:
-        return 2  # Reputable — curated with debate + audit, but not peer-reviewed
+        return 4  # Context tier — own papers are leads, not evidence (2026-08-04)
 
     async def search(self, query: str, max_results: int = 3) -> list[RawSource]:
         def _do() -> list[RawSource]:
@@ -1218,10 +1221,11 @@ class PublicResearchAdapter(SourceAdapter):
                 results.append(
                     RawSource(
                         url=url,
-                        title=f"{hit['paper_title']} — {hit['section_title']} (AncientNerds Research)",
+                        title=f"[self] {hit['paper_title']} — {hit['section_title']} (AncientNerds Research)",
                         snippet=hit["section_text"][:500],
                         source_api=self.name,
                         default_tier=self.default_tier,
+                        self_source=True,
                     )
                 )
             return results
