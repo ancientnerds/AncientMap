@@ -969,13 +969,31 @@ async def _feeder_loop() -> None:
                 if _batch_claim_allowed(gate_open, tier, weekly_pct):
                     from api.services.theo_config import THEO_FEEDER_USER_ID
                     from pipeline.lyra.research_graph import (
+                        _allow_synthesis,
                         link_node_to_request,
                         pick_next_frontier_topic,
                         question_for_node,
                     )
 
                     with get_session() as session:
-                        node = pick_next_frontier_topic(session)
+                        recent_kinds = [
+                            r.kind
+                            for r in session.execute(
+                                text("""
+                                    SELECT COALESCE(n.kind, 'topic') AS kind
+                                    FROM research_requests rr
+                                    LEFT JOIN research_nodes n
+                                      ON n.paper_id = rr.id
+                                     AND n.kind IN ('connection', 'hypothesis')
+                                    WHERE rr.is_batch = TRUE
+                                    ORDER BY rr.started_at DESC NULLS LAST
+                                    LIMIT 3
+                                """)
+                            ).fetchall()
+                        ]
+                        node = pick_next_frontier_topic(
+                            session, include_synthesis=_allow_synthesis(recent_kinds)
+                        )
                         if node:
                             request_id = str(_uuid.uuid4())
                             session.execute(

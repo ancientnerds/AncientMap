@@ -208,18 +208,37 @@ def mark_node_explored(paper_request_id: str) -> None:
         logger.error("[GRAPH] mark_node_explored failed for %s: %s", paper_request_id, exc)
 
 
-def pick_next_frontier_topic(session) -> dict | None:
+def _allow_synthesis(recent_seed_kinds: list[str]) -> bool:
+    """Max 1 of 3 recent batch runs may be synthesis (connection/hypothesis)
+    — fresh external topics keep the majority (anti-echo, spec §4)."""
+    return not any(k in ("connection", "hypothesis") for k in recent_seed_kinds)
+
+
+def pick_next_frontier_topic(session, include_synthesis: bool = True) -> dict | None:
     """Pick the highest-value frontier node and mark it researching.
 
-    Score = source_signal + 0.5 * in-degree
+    Score = source_signal
+            + kind weight (hypothesis 3.0, connection 2.0 — curator-seeded
+              synthesis nodes outrank plain topics/sites)
+            + 0.5 * in-degree
             - 2.0 diversity penalty (children of papers explored in the last
               3 days — avoids researching the same cluster repeatedly)
             + 0.5 * random()  (the owner's "zufällig" component)
+
+    include_synthesis gates connection/hypothesis nodes out of the pool
+    entirely when the anti-echo synthesis quota (spec §4) is exhausted.
     """
+    kinds = (
+        ("topic", "site", "connection", "hypothesis") if include_synthesis else ("topic", "site")
+    )
     row = session.execute(
         text("""
             SELECT n.id::text AS id, n.label, n.kind, n.site_id::text AS site_id,
+                   n.question,
                    n.source_signal
+                   + CASE n.kind WHEN 'hypothesis' THEN 3.0
+                                 WHEN 'connection' THEN 2.0
+                                 ELSE 0 END
                    + COALESCE(deg.cnt, 0) * 0.5
                    - CASE WHEN recent.hit IS NOT NULL THEN 2.0 ELSE 0 END
                    + random() * 0.5 AS score
@@ -233,14 +252,15 @@ def pick_next_frontier_topic(session) -> dict | None:
                 JOIN research_nodes p ON p.id = e.src AND p.kind = 'paper'
                 WHERE p.updated_at > NOW() - INTERVAL '3 days'
             ) recent ON recent.hit = n.id
-            WHERE n.status = 'frontier' AND n.kind IN ('topic', 'site')
+            WHERE n.status = 'frontier' AND n.kind = ANY(:kinds)
               -- junk-label insurance: a garbage node must never cost a
               -- multi-hour research run (see JUNK_LABELS, 2026-07-31)
               AND LOWER(TRIM(n.label)) NOT IN
                   ('null', 'none', 'nan', 'undefined', 'unknown', 'n/a', 'na', '')
             ORDER BY score DESC
             LIMIT 1
-        """)
+        """),
+        {"kinds": list(kinds)},
     ).fetchone()
     if not row:
         return None
@@ -253,11 +273,21 @@ def pick_next_frontier_topic(session) -> dict | None:
         {"id": row.id},
     )
     session.commit()
-    return {"id": row.id, "label": row.label, "kind": row.kind, "site_id": row.site_id}
+    return {
+        "id": row.id,
+        "label": row.label,
+        "kind": row.kind,
+        "site_id": row.site_id,
+        "question": row.question,
+    }
 
 
 def question_for_node(node: dict) -> str:
-    """Format a frontier node as a research question for the pipeline."""
+    """Format a frontier node as a research question for the pipeline.
+    A curator-written question stored on the node always wins (spec §4)."""
+    stored = (node.get("question") or "").strip()
+    if stored:
+        return stored
     label = node["label"].strip()
     if node["kind"] == "site":
         return (
