@@ -278,6 +278,14 @@ async def _process_request(
                 from pipeline.lyra.research_graph import mark_node_explored
 
                 mark_node_explored(request_id)
+
+                from pipeline.lyra.thinking_log import log_thinking
+
+                log_thinking(
+                    "run_event",
+                    f"Research completed: {question[:200]}",
+                    {"request_id": request_id},
+                )
                 _auto_publish(request_id)
 
     except Exception as exc:
@@ -999,6 +1007,14 @@ async def _feeder_loop() -> None:
                             )
                             session.commit()
                             link_node_to_request(node["id"], request_id, session)
+
+                            from pipeline.lyra.thinking_log import log_thinking
+
+                            log_thinking(
+                                "run_event",
+                                f"Queued from frontier: {node['label'][:200]}",
+                                {"request_id": request_id, "kind": node["kind"]},
+                            )
                             logger.info(
                                 "[THEO] Feeder queued %s from frontier node %r",
                                 request_id,
