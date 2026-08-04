@@ -292,6 +292,12 @@ git commit -m "feat(theo): thinking_log writer for the knowledge activity feed"
 > Promotion wird Monopolisierung erreichbar (vgl. null-Node-Incident bei
 > Signal 2220). Mitigation, wenn nötig: LEAST-Cap im Injector-Upsert
 > oder Signal-Decay im Picker-Score. In Task 10 prüfen.
+>
+> **ROADMAP-NOTIZ (Task-5-Review):** Innerhalb des Synthese-Pools ordnet
+> nur Kind-Gewicht + random() — kein Alters-Term. Wächst der Pool
+> schneller als der ~zweiwöchentliche Slot ihn leert, kann ein einzelner
+> Node beliebig lange liegen bleiben. Falls relevant: `created_at ASC`
+> als Tiebreak oder kleiner Age-Bonus. Kein Task-5-Defekt.
 
 Kandidaten kommen aus STRUKTUR-Daten, nicht aus Theos Prosa (Echo-Schutz, Spec §2). SQL bleibt dünn; Merge/Format ist pure Function und wird getestet.
 
@@ -1448,6 +1454,18 @@ git commit -m "feat(api): GET /api/v1/knowledge/activity — thinking-layer feed
 ```
 
 ---
+
+### Follow-up-Tickets (aus den Reviews, NICHT Teil dieses Plans)
+
+1. **Dead LLM-Source-Audit (pre-existing):** `AuditHandler.audit_angle`
+   returnt auf JEDEM Angle früh — `reliability_tier == 0` ist unerreichbar
+   (score_tier_by_domain liefert nie 0), `source_items` bleibt leer. Die
+   ganze Audit-Stage inkl. Tier-3-Noise-Floor ist toter Code.
+2. **Unbounded source_signal:** Injector-Akkumulation +120/Tag auf
+   Top-Nodes; LEAST-Cap oder Decay, sobald Site-Promotion aktiv ist.
+3. **Live-LLM-Test:** `test_journal_assessor::test_fuzzy_mismatch_detected`
+   macht echte MiniMax-Calls pro Testlauf (quota-abhängig flaky) — mocken.
+4. **Synthese-Pool-Aging:** created_at-Tiebreak, falls der Pool wächst.
 
 ### Task 10: Gesamt-Verifikation
 
