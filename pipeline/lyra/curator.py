@@ -103,6 +103,19 @@ CURATOR_SCHEMA = {
 }
 
 
+def thinking_window_open(now_utc: datetime) -> bool:
+    """True during the Mon-Thu 02:00-05:00 UTC thinking window (spec §3).
+    Fri-Sun are research days (weekend batch gate) — the curator stays
+    quiet. Shut ~93% of the week (12h / 168h), so callers should check this
+    BEFORE any DB read — the common case must not touch the database.
+
+    `now_utc` must be a timezone-aware UTC datetime.
+    """
+    if now_utc.weekday() > 3:
+        return False
+    return 2 <= now_utc.hour < 5
+
+
 def thinking_pass_due(now_utc: datetime, last_pass_at: datetime | None) -> bool:
     """Nightly Mon–Thu 02:00–05:00 UTC, at most once per 20h. Fri–Sun are
     research days (weekend batch gate) — the curator stays quiet.
@@ -110,9 +123,7 @@ def thinking_pass_due(now_utc: datetime, last_pass_at: datetime | None) -> bool:
     Both `now_utc` and `last_pass_at` must be timezone-aware UTC datetimes
     (naive/aware comparison raises TypeError; callers own that contract).
     """
-    if now_utc.weekday() > 3:
-        return False
-    if not (2 <= now_utc.hour < 5):
+    if not thinking_window_open(now_utc):
         return False
     return last_pass_at is None or (now_utc - last_pass_at) >= timedelta(hours=20)
 
@@ -523,6 +534,13 @@ def run_curator_pass() -> None:
     retries all night (I5/M17, F1).
     """
     try:
+        from pipeline.lyra.minimax_limiter import bind_low_priority
+
+        # Spec §3: Denkstunde runs on the crawl lane — a Monday-crossing
+        # weekend run or a UI run may share the 5h window; the to_thread
+        # context copy cannot leak this back into the feeder.
+        bind_low_priority(True)
+
         from pathlib import Path
 
         from pipeline.database import get_session
