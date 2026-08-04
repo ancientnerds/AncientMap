@@ -277,6 +277,21 @@ git commit -m "feat(theo): thinking_log writer for the knowledge activity feed"
 > Site-Forschung), ARRAY_AGG ORDER BY, Site-Twin-Arm im NOT EXISTS,
 > toter Guard entfernt. 2-Hop-Content-Nachbarn (site→story→culture) und
 > Alias-Bridging via unified_site_names sind BEWUSST vertagt (YAGNI).
+>
+> **WACHSTUMSPFAD (korrigiert, 3. Review-Runde):** NICHT der Sites-
+> Injector — der hat noch nie gefeuert (card_stats hat heute keine
+> rarity_tier≥4-Rows; alle 5.307 Site-Nodes stehen bei signal 0.0).
+> Die Bridge wächst über story-injizierte `topic`-Nodes mit Site-Namen:
+> 57 Frontier-Site-Twins tragen die höchsten Signale der gesamten
+> Frontier (bis 1175 vs. Median 0) und gewinnen im signal-dominierten
+> Picker fast jeden Slot → +1 Bridge-Row pro Batch-Run. Die gemessenen
+> Payoff-Paare (Karahan Tepe ↔ Göbekli Tepe: 21 geteilte Stories;
+> Stonehenge ↔ Avebury: 6) landen, sobald beide Partner explored sind.
+> **WATCH-ITEM:** `source_signal` akkumuliert stündlich unbegrenzt
+> (daher 1175). Solange Sites `reference` waren, folgenlos — mit der
+> Promotion wird Monopolisierung erreichbar (vgl. null-Node-Incident bei
+> Signal 2220). Mitigation, wenn nötig: LEAST-Cap im Injector-Upsert
+> oder Signal-Decay im Picker-Score. In Task 10 prüfen.
 
 Kandidaten kommen aus STRUKTUR-Daten, nicht aus Theos Prosa (Echo-Schutz, Spec §2). SQL bleibt dünn; Merge/Format ist pure Function und wird getestet.
 
