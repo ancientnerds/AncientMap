@@ -1466,6 +1466,13 @@ git commit -m "feat(api): GET /api/v1/knowledge/activity — thinking-layer feed
 3. **Live-LLM-Test:** `test_journal_assessor::test_fuzzy_mismatch_detected`
    macht echte MiniMax-Calls pro Testlauf (quota-abhängig flaky) — mocken.
 4. **Synthese-Pool-Aging:** created_at-Tiebreak, falls der Pool wächst.
+5. **Journal-Audit clobbert Tier 4:** `research_stages._stage_audit` schreibt
+   `reliability_tier` unconditional (Prompt kennt nur 1-3) — ein self-source
+   kann im Journal als `[Reputable]` gerendert werden. Langfristig das
+   References-Label aus `self_source` ableiten statt aus dem Tier. Dazu:
+   Journal-Marker-Cleanup-Regex (`\[(V?\d+)\]`) lässt nicht-numerische
+   Tokens passieren — ggf. auf validate_or_repair umstellen (separates
+   Produkt, eigenes Ticket).
 
 ### Task 10: Gesamt-Verifikation
 
