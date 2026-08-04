@@ -14,6 +14,7 @@ STYLE:
 
 CITATIONS (HARD REQUIREMENT — every factual paragraph must end with at least one [N]):
 - The claims contain [N] markers. Use the EXACT markers -- do not renumber or invent new ones.
+- `[self]` in the reference map is provenance metadata -- never write it into prose.
 - Every paragraph that states a fact, claim, finding, attribution, date, or measurement MUST contain at least one [N] marker. No exceptions.
 - Cite at the point where the claim is first introduced. At least one citation per 1-2 sentences that state facts.
 - Group multiple citations: "...dates to 3000 BC [2] [45]."

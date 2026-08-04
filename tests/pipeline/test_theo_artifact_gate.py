@@ -448,6 +448,23 @@ def test_repair_strips_real_hex_debug_token():
     assert report["passed"] is True
 
 
+def test_repair_strips_leaked_self_provenance_marker():
+    # [self] is reference-map metadata (theo_sources.py PublicResearchAdapter
+    # prefixes own-paper titles with it); a writer LLM copying it into prose
+    # must not HOLD the paper -- it's an allowlisted strippable artifact.
+    md = CLEAN_PAPER.replace("samples [1]", "samples [self] [1]")
+    repaired, report = repair_artifact(md)
+    assert "[self]" not in repaired
+    assert report["passed"] is True
+
+
+def test_validate_or_repair_repairs_leaked_self_marker():
+    md = CLEAN_PAPER.replace("samples [1]", "samples [self] [1]")
+    text, report = validate_or_repair(md)
+    assert report["passed"] is True
+    assert "[self]" not in text
+
+
 def test_normalize_leaves_year_ranges_alone():
     text, n = normalize_grouped_markers("Seasons [1990-1995] produced stratigraphy.")
     assert text == "Seasons [1990-1995] produced stratigraphy."

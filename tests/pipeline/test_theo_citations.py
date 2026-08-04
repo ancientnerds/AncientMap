@@ -664,6 +664,38 @@ def test_register_source_explicit_tier_overrides_domain():
     assert registry.sources[sid].reliability_tier == 2
 
 
+def test_register_source_self_source_forces_tier_4_and_flag():
+    """self_source=True overrides the domain scorer to tier 4 and sets the flag.
+
+    Uses a cambridge.org URL (tier 1 by domain) to prove the override wins
+    over even the strongest domain signal — an adapter's self-knowledge
+    beats URL heuristics (spec 2026-08-04 §5).
+    """
+    registry = CitationRegistry()
+    sid = registry.register_source(
+        "https://www.cambridge.org/core/some-self-paper",
+        "[self] Some Prior Paper",
+        "snippet",
+        self_source=True,
+    )
+    source = registry.sources[sid]
+    assert source.reliability_tier == 4
+    assert source.self_source is True
+
+
+def test_register_source_self_source_upgrades_existing_record_on_dedup():
+    """Re-registering an already-known URL with self_source=True upgrades
+    the existing record's tier and flag instead of being ignored."""
+    registry = CitationRegistry()
+    url = "https://ancientnerds.com/theo/public/some-paper"
+    sid1 = registry.register_source(url, "Some Paper — Intro", "snippet")
+    assert registry.sources[sid1].self_source is False
+    sid2 = registry.register_source(url, "[self] Some Paper — Intro", "snippet", self_source=True)
+    assert sid1 == sid2
+    assert registry.sources[sid1].self_source is True
+    assert registry.sources[sid1].reliability_tier == 4
+
+
 # ---------------------------------------------------------------------------
 # parse_references_section
 # ---------------------------------------------------------------------------

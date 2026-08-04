@@ -1475,7 +1475,7 @@ class MultiSourceSearch:
         if source_group == "exhaustive":
             await enrich_with_unpaywall(deduped)
 
-        # 8. Sort: tier 1 first, then tier 2, then tier 3.
+        # 8. Sort: tier 1 first, ..., tier 4 (own papers / context) last.
         #    Within each tier, sort by citation_count descending.
         deduped.sort(key=lambda r: (r.default_tier, -r.citation_count))
 

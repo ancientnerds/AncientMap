@@ -35,7 +35,8 @@ class CitedSource:
     snippet: str
     date: str = ""
     domain: str = ""  # extracted from URL (e.g. "en.wikipedia.org")
-    reliability_tier: int = 0  # 1=academic/institutional, 2=reputable, 3=general, 0=unscored
+    # 1=academic/institutional, 2=reputable, 3=general, 4=context/self, 0=unscored
+    reliability_tier: int = 0
     access_timestamp: str = ""  # ISO timestamp when searched
     search_query: str = ""  # which query found this source
     # Academic metadata — present when the discovering adapter (Semantic
@@ -46,6 +47,10 @@ class CitedSource:
     authors: list[str] = field(default_factory=list)
     venue: str = ""  # journal / conference name
     citation_count: int = 0
+    # Own prior papers (ancientnerds_research adapter): context/pointer only,
+    # never independent corroboration (spec 2026-08-04 §5). Forces
+    # reliability_tier=4 at registration, overriding the domain scorer.
+    self_source: bool = False
 
 
 @dataclass
@@ -82,6 +87,7 @@ class CitationRegistry:
         authors: list[str] | None = None,
         venue: str = "",
         citation_count: int = 0,
+        self_source: bool = False,
     ) -> str:
         """Register a web source. Returns source id. Deduplicates by canonical URL hash.
 
@@ -94,6 +100,11 @@ class CitationRegistry:
         re-registration: if a later adapter discovers the same URL with richer
         fields, those overwrite empty ones on the existing record. Non-empty
         fields are preserved (first writer wins for conflicting values).
+
+        `self_source=True` (Ancient Nerds' own prior papers, spec 2026-08-04
+        §5) forces `reliability_tier=4` — an adapter's self-knowledge beats
+        the URL-domain heuristic. This does NOT change the domain-scorer
+        relationship for any other adapter.
         """
         canonical = _normalize_url(url)
         source_id = hashlib.sha256(canonical.encode()).hexdigest()[:12]
@@ -109,6 +120,9 @@ class CitationRegistry:
                 existing.venue = venue
             if citation_count and not existing.citation_count:
                 existing.citation_count = citation_count
+            if self_source and not existing.self_source:
+                existing.self_source = True
+                existing.reliability_tier = 4
             return source_id
 
         parsed = urllib.parse.urlparse(url)
@@ -121,15 +135,18 @@ class CitationRegistry:
             snippet=snippet,
             date=date,
             domain=domain,
-            # Domain-based default. Search adapters / angle-audit LLM override
-            # this later via direct attribute assignment when they have better info.
-            reliability_tier=score_tier_by_domain(url),
+            # Domain-based default, UNLESS the adapter already knows this is
+            # our own prior research (self_source=True forces tier 4). Search
+            # adapters / angle-audit LLM can still override later via direct
+            # attribute assignment when they have better info.
+            reliability_tier=4 if self_source else score_tier_by_domain(url),
             access_timestamp=datetime.now(UTC).isoformat(),
             search_query=search_query,
             doi=doi,
             authors=authors,
             venue=venue,
             citation_count=citation_count,
+            self_source=self_source,
         )
         return source_id
 
@@ -1571,6 +1588,8 @@ def _is_strippable_artifact_token(token: str) -> bool:
         return True
     if _PLACEHOLDER_MARKER_RE.fullmatch(f"[{token}]"):  # [N - topic]
         return True
+    if token == "self":  # noqa: S105 - [self] provenance marker, not a password
+        return True
     return False
 
 
@@ -1581,10 +1600,10 @@ def repair_artifact(markdown: str) -> tuple[str, dict]:
       1. split grouped markers so every digit is visible (also expands short
          dash ranges like [2-4] and skips thousands-formatted numerals),
       2. strip ONLY allowlisted pipeline-artifact bracket tokens ([N1],
-         [N - topic], [...], hex source-id tokens) — everything else (quote
-         interpolations, [sic], nested markdown alt text) is left untouched,
-         so the validator flags it and the paper HOLDS for a human instead of
-         being silently rewritten,
+         [N - topic], [...], hex source-id tokens, [self] provenance markers)
+         — everything else (quote interpolations, [sic], nested markdown alt
+         text) is left untouched, so the validator flags it and the paper
+         HOLDS for a human instead of being silently rewritten,
       3. strip numeric prose markers with no rendered list entry,
       4. drop rendered entries never cited in prose,
       5. renumber prose + list atomically to 1..M in first-citation order.
