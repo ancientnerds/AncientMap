@@ -8,10 +8,14 @@ permanent researcher's topic engine can pick them up:
 - sites:    high-rarity map sites (card_stats Epic/Legendary) without a paper
 - radar:    Lyra auto-discovered sites by mention count
 
-All writes dedupe on ``(kind, norm_label)`` — re-running injectors only
-accumulates ``source_signal``, it never duplicates nodes or overwrites an
-explored node's status. `run_all_injectors()` is called hourly by the worker
-feeder loop and must never raise.
+All writes dedupe on ``(kind, norm_label)`` — re-running injectors never
+duplicates nodes. A collision accumulates ``source_signal`` and, since
+2026-08-04, promotes a colliding ``reference`` node to ``frontier`` (the
+2026-08 full-project ingest wrote 5,307 site nodes as ``reference``; without
+this promotion an injected site never became researchable). It never
+demotes or otherwise touches an already-frontier/researching/explored
+node's status. `run_all_injectors()` is called hourly by the worker feeder
+loop and must never raise.
 """
 
 from __future__ import annotations
@@ -35,9 +39,13 @@ def _insert_frontier(
 ) -> bool:
     """Upsert one frontier node; returns True when the node is new.
 
-    Existing nodes (any status) just accumulate signal — an explored topic
-    getting fresh story mentions raises its neighbors' scores via edges
-    without ever re-entering the frontier itself.
+    Existing frontier/researching/explored nodes just accumulate signal — an
+    explored topic getting fresh story mentions raises its neighbors' scores
+    via edges without ever re-entering the frontier itself. A colliding
+    ``reference`` node (the full-project ingest's default status, e.g. for
+    site records) is the one status this DOES promote to ``frontier``:
+    that promotion is the entire point of an injection signal landing on a
+    structural-only node — it turns a reference into a research candidate.
     """
     label = (label or "").strip()
     if len(label) < 4 or is_junk_label(label):
@@ -54,6 +62,11 @@ def _insert_frontier(
                  :signal, CAST(NULLIF(:site_id, '') AS uuid), NOW(), NOW())
             ON CONFLICT (kind, norm_label) DO UPDATE SET
                 source_signal = research_nodes.source_signal + excluded.source_signal,
+                status = CASE
+                    WHEN research_nodes.status = 'reference' THEN 'frontier'
+                    ELSE research_nodes.status
+                END,
+                site_id = COALESCE(research_nodes.site_id, excluded.site_id),
                 updated_at = NOW()
             RETURNING (xmax = 0) AS is_new
         """),

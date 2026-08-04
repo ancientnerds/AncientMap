@@ -15,13 +15,20 @@ structural miners returned 0 rows, permanently:
 - no explored node carries `site_id` (only `site` nodes do).
 
 Fix: bridge an explored `topic` node to its structural `site` twin via a
-shared `norm_label` (78 such cross-kind labels exist in prod). No new edges,
-no status changes — the bridge is a join, not a graph mutation.
+shared `norm_label`. No new edges, no status changes — the bridge is a join,
+not a graph mutation. Today the bridge anchors very few rows (1 explored
+topic/site twin as of 2026-08-04); the population grows as bridgeable topics
+accumulate and — after the injector reference->frontier promotion fix
+(graph_injectors.py) — site nodes themselves start getting explored. The
+"78 cross-kind labels" figure sometimes quoted for this bridge describes
+label collisions at ANY status, not the (currently much smaller) bridged
+population of explored topics with a matching site node.
 """
 
 from __future__ import annotations
 
 import logging
+from collections.abc import Collection
 
 from sqlalchemy import text
 
@@ -46,9 +53,15 @@ def mine_link_prediction(session, limit: int = 20) -> list:
     ties at shared=2 (206,659 pairs) — country/period carry no discriminating
     signal here, only noise that would swamp the real candidates.
 
-    GROUP BY topic ids (not labels): 78 duplicate labels exist across kinds
-    in prod (the very bridge this query relies on), so grouping by label
-    alone would collapse distinct topic pairs into one row.
+    GROUP BY topic ids (not labels): duplicate labels exist across kinds in
+    prod (the very bridge this query relies on), so grouping by label alone
+    would collapse distinct topic pairs into one row.
+
+    Of ('story', 'culture', 'person'), only 'story' is directly reachable
+    from a site node today (site -[mentions]-> story). culture/person sit
+    two hops away (site -> story -> culture/person); a 2-hop neighbor
+    variant is a deliberate future lever, not an oversight — it is left out
+    here to keep the first cut cheap and its signal legible.
     """
     return session.execute(
         text("""
@@ -66,14 +79,16 @@ def mine_link_prediction(session, limit: int = 20) -> list:
             )
             SELECT b1.label AS a_label, b2.label AS b_label,
                    COUNT(DISTINCT x.b) AS shared,
-                   ARRAY_AGG(DISTINCT rn.label) AS via
+                   ARRAY_AGG(DISTINCT rn.label ORDER BY rn.label) AS via
             FROM bridged b1
             JOIN neigh x ON x.a = b1.site_node
-            JOIN bridged b2 ON b2.topic_id > b1.topic_id AND b2.site_node <> b1.site_node
+            JOIN bridged b2 ON b2.topic_id > b1.topic_id
             JOIN neigh y ON y.a = b2.site_node AND y.b = x.b
             JOIN research_nodes rn ON rn.id = x.b AND rn.kind IN ('story', 'culture', 'person')
             WHERE NOT EXISTS (
-                SELECT 1 FROM neigh d WHERE d.a = b1.topic_id AND d.b = b2.topic_id
+                SELECT 1 FROM neigh d
+                WHERE (d.a = b1.topic_id AND d.b = b2.topic_id)
+                   OR (d.a = b1.site_node AND d.b = b2.site_node)
             )
             GROUP BY b1.topic_id, b2.topic_id, b1.label, b2.label
             HAVING COUNT(DISTINCT x.b) >= 2
@@ -208,10 +223,15 @@ def merge_candidates(
     spatial_rows: list,
     tension_rows: list | None = None,
     cap: int = 15,
-    existing_connection_norms: frozenset = frozenset(),
+    existing_connection_norms: Collection[str] = frozenset(),
 ) -> list[dict]:
     """Pure merge: format, drop self-pairs, quota per miner, cross-miner
     dedup, suppress already-promoted connections, strongest first, cap."""
+    # Quotas are applied per-miner BEFORE dedup/suppression, on purpose: a
+    # slot lost to suppression or a cross-miner duplicate is NOT backfilled
+    # from the rest of that miner's rows. This is a deliberate fail-safe —
+    # it keeps the nightly candidate set small and conservative rather than
+    # digging deeper into a weaker tail to hit the quota exactly.
     link_c = _link_candidates(link_rows)[:LINK_QUOTA]
     spatial_c = _spatial_candidates(spatial_rows)[:SPATIAL_QUOTA]
     tension_c = _tension_candidates(tension_rows or [])[:TENSION_QUOTA]
