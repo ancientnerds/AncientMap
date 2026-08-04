@@ -133,6 +133,7 @@ async def lifespan(app: FastAPI):
             # Thinking layer: curator-facing question + outcome on research_nodes (2026-08-04)
             "ALTER TABLE research_nodes ADD COLUMN IF NOT EXISTS question TEXT",
             "ALTER TABLE research_nodes ADD COLUMN IF NOT EXISTS outcome VARCHAR(20)",
+            "CREATE UNIQUE INDEX IF NOT EXISTS uq_knowledge_claim_norm_text ON knowledge_claims (norm_text)",
         ]
 
         # Populate description_citations for 10 enriched sites (one-time prod data fix).

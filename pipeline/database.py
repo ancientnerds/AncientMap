@@ -1396,6 +1396,8 @@ class ResearchNode(Base):
     kind:   topic | paper | site | entity
     status: frontier | researching | explored
     created_from: rabbit_hole | story | journal | site | manual | backfill | paper
+    question: stored research question for curator-created frontier nodes (2026-08-04)
+    outcome:  confirmed | refuted | inconclusive — hypothesis nodes only
     """
 
     __tablename__ = "research_nodes"
@@ -1482,6 +1484,11 @@ class KnowledgeClaim(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
+    # UNIQUE enforces the refuted-is-terminal invariant at the DB level:
+    # duplicate norm_text rows would let the curator's LIMIT-1 lookup pick
+    # the non-refuted twin and silently reopen a refuted claim.
+    __table_args__ = (UniqueConstraint("norm_text", name="uq_knowledge_claim_norm_text"),)
+
     def __repr__(self) -> str:
         return f"<KnowledgeClaim {self.status} {self.text[:40]!r}>"
 
@@ -1500,6 +1507,9 @@ class ThinkingLogEntry(Base):
     summary: Mapped[str] = mapped_column(String(500), nullable=False)
     details: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+
+    def __repr__(self) -> str:
+        return f"<ThinkingLogEntry {self.kind} {self.summary[:40]!r}>"
 
 
 # =============================================================================

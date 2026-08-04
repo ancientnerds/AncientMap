@@ -1771,6 +1771,12 @@ def _run_migrations(engine) -> None:
         conn.execute(
             text("ALTER TABLE research_nodes ADD COLUMN IF NOT EXISTS outcome VARCHAR(20)")
         )
+        conn.execute(
+            text(
+                "CREATE UNIQUE INDEX IF NOT EXISTS uq_knowledge_claim_norm_text "
+                "ON knowledge_claims (norm_text)"
+            )
+        )
 
         conn.commit()
 
