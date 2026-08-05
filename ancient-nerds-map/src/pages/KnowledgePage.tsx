@@ -37,6 +37,8 @@ const KIND_COLORS: Record<string, string> = {
   video: '#ef4444',
   channel: '#f97316',
   journal: '#eab308',
+  connection: '#5eead4', // thinking layer: curator-mined link candidates
+  hypothesis: '#fbbf24', // thinking layer: falsifiable hypotheses
 }
 
 type Rgb = [number, number, number]
@@ -52,6 +54,22 @@ const KIND_RGB: Record<string, Rgb> = Object.fromEntries(
 const DEFAULT_RGB: Rgb = [0.4, 0.47, 0.53]
 const RESEARCHING_RGB: Rgb = hexToRgb('#c02023')
 const DIM_RGB: Rgb = [0.16, 0.2, 0.22]
+// Outcome tints for hypothesis nodes (spec §7): green once confirmed, grey
+// once refuted (dead end). Open hypotheses keep the base amber.
+const OUTCOME_CONFIRMED_RGB: Rgb = hexToRgb('#4ade80')
+const OUTCOME_REFUTED_RGB: Rgb = hexToRgb('#94a3b8')
+
+/**
+ * A node's class color before status/focus effects — shared by the initial
+ * fill and focus recoloring so the two paths never drift apart.
+ */
+function nodeBaseRgb(node: RenderNode): Rgb {
+  if (node.kind === 'hypothesis') {
+    if (node.outcome === 'confirmed') return OUTCOME_CONFIRMED_RGB
+    if (node.outcome === 'refuted') return OUTCOME_REFUTED_RGB
+  }
+  return KIND_RGB[node.kind] ?? DEFAULT_RGB
+}
 
 // Terminal kinds ride along as companions of their node (a video always
 // brings its channel, a site its epoch/country) but are never expanded —
@@ -64,6 +82,7 @@ const LAYERS: Record<string, string[]> = {
   sites: ['site'],
   content: ['story', 'video', 'channel', 'journal', 'person'],
   research: ['paper', 'topic', 'entity'],
+  thinking: ['connection', 'hypothesis'],
 }
 
 // The map: research sits at the center (Theo's brain), everything else forms
@@ -195,7 +214,7 @@ export default function KnowledgePage() {
     renderer.setColorFn((n) => {
       if (focus && !focus.set.has(n.id)) return DIM_RGB
       if (n.status === 'researching') return RESEARCHING_RGB
-      const base = KIND_RGB[n.kind] ?? DEFAULT_RGB
+      const base = nodeBaseRgb(n)
       if (n.status === 'frontier') return [base[0] * 0.55, base[1] * 0.55, base[2] * 0.55]
       return base
     })

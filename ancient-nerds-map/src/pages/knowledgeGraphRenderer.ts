@@ -20,6 +20,10 @@ export interface RenderNode {
   degree: number
   paper_slug: string | null
   site_id: string | null
+  /** Curator-authored research question (thinking layer, spec §7). */
+  question?: string | null
+  /** Hypothesis verdict: confirmed | refuted | inconclusive (thinking layer). */
+  outcome?: string | null
   /** Sub-cluster key within the island (country, channel, source paper, …). */
   group?: string
   /** Server-provided ordering hint (country nodes: mean site longitude). */
