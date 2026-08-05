@@ -144,6 +144,13 @@ const CLUSTERS: ClusterDef[] = [
   { kind: 'paper', label: 'Papers', x: 0, y: 40, color: KIND_COLORS.paper },
   { kind: 'topic', label: 'Topics', x: 60, y: 340, color: KIND_COLORS.topic },
   { kind: 'entity', label: 'Entities', x: -340, y: 200, color: KIND_COLORS.entity },
+  // Thinking layer (spec §7): connection + hypothesis nodes are Theo's
+  // in-progress reasoning — offspring of the research region, so they sit
+  // adjacent to Papers. The layout is per-kind (ClusterDef has one `kind`),
+  // so this is two adjacent islands close enough to read as one; only the
+  // first carries the "Thinking" label so it doesn't render twice.
+  { kind: 'connection', label: 'Thinking', x: 350, y: 200, color: KIND_COLORS.connection },
+  { kind: 'hypothesis', label: '', x: 560, y: 160, color: KIND_COLORS.hypothesis },
   { kind: 'site', label: 'Sites', x: 950, y: 0, color: KIND_COLORS.site },
   { kind: 'period', label: 'Epochs', x: -850, y: 380, color: KIND_COLORS.period },
   { kind: 'empire', label: 'Empires', x: -1000, y: 0, color: KIND_COLORS.empire },
@@ -567,7 +574,6 @@ export default function KnowledgePage() {
           {data ? `${data.total_nodes.toLocaleString()} nodes` : '…'} · {counts.explored} explored
           · {counts.frontier} frontier topics
         </p>
-        <LiveResearchPanel showGraphLink={false} />
         <div className="kg-controls">
           <input
             className="kg-search"
@@ -608,6 +614,9 @@ export default function KnowledgePage() {
             📷
           </button>
         </div>
+      </div>
+      <div className="kg-live-slot">
+        <LiveResearchPanel showGraphLink={false} />
       </div>
 
       <div className="kg-stage">

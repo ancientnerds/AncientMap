@@ -22,6 +22,12 @@
   background: rgba(12, 28, 34, 0.85);
 }
 
+.kg-live-slot {
+  width: 100%;
+  margin-top: 8px;
+  padding: 0 18px;
+}
+
 .kg-subtitle {
   margin: 0;
   font-family: 'JetBrains Mono', monospace;
