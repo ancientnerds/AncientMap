@@ -33,6 +33,30 @@ interface ClaimItem {
 // Kinds whose Focus-Card is worth a claims lookup (spec §7 world model).
 const CLAIMS_KINDS = new Set(['connection', 'hypothesis', 'topic', 'site'])
 
+interface ActivityItem {
+  created_at: string
+  kind: 'curator' | 'miner' | 'run_event'
+  summary: string
+  details: Record<string, unknown> | null
+}
+
+const ACTIVITY_ICON: Record<ActivityItem['kind'], string> = {
+  curator: '🧠',
+  miner: '⛏️',
+  run_event: '🔬',
+}
+
+/** Coarse "X ago" relative time — no date library needed for a feed. */
+function relativeTime(iso: string): string {
+  const diffS = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 1000))
+  if (diffS < 60) return 'just now'
+  const diffMin = Math.floor(diffS / 60)
+  if (diffMin < 60) return `${diffMin}m ago`
+  const diffH = Math.floor(diffMin / 60)
+  if (diffH < 24) return `${diffH}h ago`
+  return `${Math.floor(diffH / 24)}d ago`
+}
+
 // Color by node CLASS; focus mode dims everything outside the neighborhood.
 const KIND_COLORS: Record<string, string> = {
   paper: '#ffd700',
@@ -146,6 +170,8 @@ export default function KnowledgePage() {
   const [hover, setHover] = useState<{ node: RenderNode; x: number; y: number } | null>(null)
   // null = loading or not applicable for this kind; [] = fetched, none found.
   const [claims, setClaims] = useState<ClaimItem[] | null>(null)
+  const [activity, setActivity] = useState<ActivityItem[]>([])
+  const [activityOpen, setActivityOpen] = useState(false)
   const current = useCurrentResearch()
 
   const focusRef = useRef<{ id: string; set: Set<string> } | null>(null)
@@ -162,6 +188,32 @@ export default function KnowledgePage() {
       })
       .then(setData)
       .catch(() => setError(true))
+  }, [])
+
+  // Thinking-layer activity feed (spec §7): initial load + 60s poll, same
+  // pattern as useCurrentResearch. Fails silently — the panel just keeps
+  // showing the last known feed instead of surfacing an error.
+  useEffect(() => {
+    let cancelled = false
+    const load = () => {
+      fetch('/api/v1/knowledge/activity?limit=50')
+        .then((r) => {
+          if (!r.ok) throw new Error(`${r.status}`)
+          return r.json()
+        })
+        .then((d: { items: ActivityItem[] }) => {
+          if (!cancelled) setActivity(d.items)
+        })
+        .catch(() => {
+          /* silent — feed keeps showing the last known items */
+        })
+    }
+    load()
+    const timer = setInterval(load, 60_000)
+    return () => {
+      cancelled = true
+      clearInterval(timer)
+    }
   }, [])
 
   // Build the directed adjacency indexes once per dataset (for focus mode).
@@ -539,6 +591,12 @@ export default function KnowledgePage() {
               {layer}
             </button>
           ))}
+          <button
+            className={`kg-chip kg-chip--activity ${activityOpen ? 'active' : ''}`}
+            onClick={() => setActivityOpen((v) => !v)}
+          >
+            Activity
+          </button>
           <span className="kg-depth">
             depth
             {[1, 2, 3].map((d) => (
@@ -637,6 +695,40 @@ export default function KnowledgePage() {
               <span className="kg-infocard-hint">Theo will research this topic</span>
             )}
           </div>
+        </div>
+      )}
+
+      {activityOpen && (
+        <div className="kg-activity">
+          <button
+            className="kg-activity-close"
+            onClick={() => setActivityOpen(false)}
+            aria-label="Close"
+          >
+            ×
+          </button>
+          <h3 className="kg-activity-title">Activity</h3>
+          {activity.length === 0 ? (
+            <p className="kg-activity-empty">
+              Theo hat noch nicht gedacht — erste Denkstunde Mo–Do 02:00–05:00 UTC
+            </p>
+          ) : (
+            <ul className="kg-activity-list">
+              {activity.map((item, i) => (
+                <li
+                  key={i}
+                  className={`kg-activity-item${
+                    item.details?.failed === true ? ' kg-activity-item--failed' : ''
+                  }`}
+                  title={item.summary}
+                >
+                  <span className="kg-activity-icon">{ACTIVITY_ICON[item.kind] ?? '•'}</span>
+                  <span className="kg-activity-summary">{item.summary}</span>
+                  <span className="kg-activity-time">{relativeTime(item.created_at)}</span>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       )}
 
