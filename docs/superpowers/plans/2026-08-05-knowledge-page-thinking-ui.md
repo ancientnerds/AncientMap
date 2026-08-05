@@ -222,3 +222,15 @@ Ein ungültiger/unbekannter node_id liefert schlicht `items: []` (CAST wirft bei
 - [ ] **Step 3:** Kombiniertes Quality-Review (ein Reviewer über den ganzen Branch; Fokus: Farb-/Focus-Pipeline ohne Duplikate, Fetch-Fehlerpfade still-aber-dokumentiert, CSS-Konventionstreue, Endpoint-Validierung).
 - [ ] **Step 4:** Merge → main, Push, `gh run watch <id> --exit-status` (ohne Pipe), Deploy verifizieren: Live-Checks auf `https://ancientnerds.com/knowledge.html` (HTTP 200 + neuer Build-Hash), `/api/v1/graph` enthält question/outcome-Keys, `/api/v1/knowledge/claims?node_id=<uuid>` antwortet.
 - [ ] **Step 5:** Worktree + Branch aufräumen, Memory aktualisieren, Bericht.
+
+### Bewusste Abweichungen / Deferrals (Review 2026-08-05)
+
+- **Verlinkte Papers in der Focus-Card (Spec §7) DEFERRED:** `paper_ids` an
+  Claims sind LLM-Strings aus dem Curator-Structured-Output, nicht
+  garantiert aufloesbare Slugs/UUIDs. Rendern braucht erst eine
+  Resolutions-Strategie (z.B. Curator liefert request_ids, Endpoint joint
+  auf research_requests.slug). Provenance-ZAHL (external_source_count)
+  wird gerendert. Follow-up-Ticket.
+- **Rate-Limits:** Knowledge-Read-Endpoints (graph/activity/claims) laufen
+  in eigenem 60/min-Namespace `public_v1_knowledge` — der geteilte
+  10/min-Default haette Explorations-Klicks ausgesperrt (Review-Fund #1).
