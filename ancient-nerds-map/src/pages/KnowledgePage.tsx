@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import PageHeader from '../components/layout/PageHeader'
-import { useCurrentResearch } from '../hooks/useCurrentResearch'
+import LiveResearchPanel from '../components/theo/LiveResearchPanel'
 import { navigateGlobeToSite } from '../utils/globeNavigation'
 import {
   KnowledgeGraphRenderer,
@@ -172,7 +172,6 @@ export default function KnowledgePage() {
   const [claims, setClaims] = useState<ClaimItem[] | null>(null)
   const [activity, setActivity] = useState<ActivityItem[]>([])
   const [activityOpen, setActivityOpen] = useState(false)
-  const current = useCurrentResearch()
 
   const focusRef = useRef<{ id: string; set: Set<string> } | null>(null)
   // Directed adjacency: out = src->dst, in = dst->src.
@@ -568,12 +567,7 @@ export default function KnowledgePage() {
           {data ? `${data.total_nodes.toLocaleString()} nodes` : '…'} · {counts.explored} explored
           · {counts.frontier} frontier topics
         </p>
-        {current?.running && (
-          <div className="kg-live">
-            <span className="kg-live-dot" />
-            Theo is researching: <em>{current.running.question.slice(0, 90)}…</em>
-          </div>
-        )}
+        <LiveResearchPanel showGraphLink={false} />
         <div className="kg-controls">
           <input
             className="kg-search"
