@@ -298,6 +298,13 @@ def _pick_frontier(session, kinds: tuple[str, ...]) -> dict | None:
             - 2.0 diversity penalty (children of papers explored in the last
               3 days — avoids researching the same cluster repeatedly)
             + 0.5 * random()  (the owner's "zufällig" component)
+
+    Tiebreak: n.created_at ASC (oldest first). The synthesis pool
+    (connection/hypothesis) is near-uniform on score — kind weight plus a
+    ceiling-~5.5 random term — so without a tiebreak a newer node can keep
+    winning random() forever while an older one starves (Follow-up-Ticket
+    4). Harmless for topic/site picks, where injector-accumulated
+    source_signal already differentiates nodes.
     """
     row = session.execute(
         text("""
@@ -325,7 +332,7 @@ def _pick_frontier(session, kinds: tuple[str, ...]) -> dict | None:
               -- multi-hour research run (see JUNK_LABELS, 2026-07-31)
               AND LOWER(TRIM(n.label)) NOT IN
                   ('null', 'none', 'nan', 'undefined', 'unknown', 'n/a', 'na', '')
-            ORDER BY score DESC
+            ORDER BY score DESC, n.created_at ASC
             LIMIT 1
         """),
         {"kinds": list(kinds)},

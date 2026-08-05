@@ -103,6 +103,16 @@ def test_pick_next_frontier_topic_skips_synthesis_query_when_disallowed():
     assert select_calls[0][1]["kinds"] == ["topic", "site"]
 
 
+def test_pick_next_frontier_topic_orders_by_score_then_created_at_asc():
+    # Follow-up-Ticket 4: the synthesis pool's score is near-uniform
+    # (kind weight + random()), so a created_at ASC tiebreak prevents an
+    # older node from starving behind newer arrivals forever.
+    s = _FakeSession(results=[_row(kind="connection")])
+    pick_next_frontier_topic(s, include_synthesis=True)
+    select_stmt = next(stmt for stmt, p in s.executed if p and "kinds" in p)
+    assert "ORDER BY score DESC, n.created_at ASC" in select_stmt
+
+
 def test_pick_next_frontier_topic_defaults_to_include_synthesis():
     s = _FakeSession(results=[_row(kind="connection")])
     pick_next_frontier_topic(s)  # signature stays backward-compatible
