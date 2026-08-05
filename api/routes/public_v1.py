@@ -1720,7 +1720,8 @@ def create_public_api() -> FastAPI:
                            WHERE us.country = n.label AND us.source_id = 'ancient_nerds'
                        ) END AS order_hint,
                        n.site_id::text AS site_id,
-                       CASE WHEN n.kind = 'paper' AND rr.is_public THEN rr.slug END AS paper_slug
+                       CASE WHEN n.kind = 'paper' AND rr.is_public THEN rr.slug END AS paper_slug,
+                       n.question, n.outcome
                 FROM research_nodes n
                 LEFT JOIN (
                     SELECT node_id, COUNT(*) AS cnt FROM (
@@ -1750,6 +1751,8 @@ def create_public_api() -> FastAPI:
                 order_hint=float(r.order_hint) if r.order_hint is not None else None,
                 paper_slug=r.paper_slug,
                 site_id=r.site_id,
+                question=r.question,
+                outcome=r.outcome,
             )
             for r in node_rows
         ]

@@ -550,7 +550,7 @@ class GraphNode(BaseModel):
 
     id: str = Field(description="Node UUID")
     label: str = Field(description="Human-readable node label")
-    kind: str = Field(description="topic | paper | site | entity")
+    kind: str = Field(description="topic | paper | site | entity | connection | hypothesis")
     status: str = Field(description="reference | frontier | researching | explored")
     signal: float = Field(description="Accumulated interest signal from content sources")
     degree: int = Field(description="Number of edges touching this node")
@@ -562,6 +562,10 @@ class GraphNode(BaseModel):
         None, description="Slug of the published paper (explored paper nodes only)"
     )
     site_id: str | None = Field(None, description="Linked archaeological site UUID")
+    # Thinking layer (spec §7): curator-authored nodes carry their stored
+    # research question; hypothesis nodes their verdict.
+    question: str | None = None
+    outcome: str | None = Field(None, description="confirmed | refuted | inconclusive")
 
 
 class GraphEdge(BaseModel):
