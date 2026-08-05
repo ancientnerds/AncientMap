@@ -209,7 +209,11 @@ def _stage_search(
         return ""
 
     for r in raw_sources:
-        sid = registry.register_source(
+        # No reliability_tier==0 backfill here (Follow-up-Ticket 1, removed
+        # 2026-08-05): register_source always assigns a real tier at
+        # registration (score_tier_by_domain never returns 0; self_source
+        # forces 4), so that guard was dead since inception.
+        registry.register_source(
             url=r.url,
             title=r.title,
             snippet=r.snippet,
@@ -220,9 +224,6 @@ def _stage_search(
             citation_count=r.citation_count,
             self_source=r.self_source,
         )
-        source = registry.get_reference(sid)
-        if source and source.reliability_tier == 0:
-            source.reliability_tier = r.default_tier
 
     ms = int((time.monotonic() - t0) * 1000)
     logger.info(
@@ -716,9 +717,9 @@ def research_cluster(
                 snippet=ws.get("snippet", ""),
             )
             story_source_sids.add(sid)
-            source = registry.get_reference(sid)
-            if source and source.reliability_tier == 0:
-                source.reliability_tier = 2
+            # No reliability_tier==0 backfill here (Follow-up-Ticket 1,
+            # removed 2026-08-05) — same dead pattern as _stage_search
+            # above; register_source never leaves a source at tier 0.
         logger.info(
             "[journal] Pre-registered %d web sources from story",
             len(story_source_sids),

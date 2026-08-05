@@ -7,6 +7,13 @@ bracketed token to be either a numeric `[N]` reference or a markdown link.
 
 Fix: format source ids as `Source #<sid>:` (label, not marker) in every
 LLM-facing source builder. This test pins the format so it doesn't drift.
+
+Note (2026-08-05, Follow-up-Ticket 1): angle_audit.py's LLM audit body —
+including its `Source #{sid}:` user-message builder — was removed as dead
+code (it never ran; register_source never leaves a source at
+reliability_tier == 0, the gate the old audit body required). The handler
+no longer builds an LLM-facing source list, so its regression pin here was
+removed along with the code it pinned.
 """
 
 from __future__ import annotations
@@ -53,16 +60,6 @@ def test_angle_specialist_source_format_uses_hash():
     src = inspect.getsource(angle_specialist)
     assert "Source #{sid}:" in src, "angle_specialist must use 'Source #{sid}:' (no brackets)"
     assert "Source [{sid}]" not in src, "angle_specialist still has bracketed sid (regression)"
-
-
-def test_angle_audit_source_format_uses_hash():
-    import inspect
-
-    from pipeline.lyra.handlers import angle_audit
-
-    src = inspect.getsource(angle_audit)
-    assert "Source #{sid}:" in src, "angle_audit must use 'Source #{sid}:' (no brackets)"
-    assert "Source [{sid}]" not in src, "angle_audit still has bracketed sid (regression)"
 
 
 def test_research_stages_source_format_uses_hash():

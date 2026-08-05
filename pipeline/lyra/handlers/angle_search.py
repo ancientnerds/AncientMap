@@ -72,9 +72,11 @@ class SearchHandler(BaseHandler):
             if sid not in angle.source_ids:
                 angle.source_ids.append(sid)
                 new_sources += 1
-            source = self.state.registry.get_reference(sid)
-            if source and source.reliability_tier == 0:
-                source.reliability_tier = r.default_tier
+            # No reliability_tier==0 backfill here (Follow-up-Ticket 1,
+            # removed 2026-08-05): register_source always assigns a real
+            # tier at registration (score_tier_by_domain never returns 0;
+            # self_source forces 4), so this adapter-default_tier backfill
+            # never applied — dead since inception.
 
         angle.search_rounds += 1
 
