@@ -68,6 +68,17 @@ _limiter = RateLimiter(max_requests=10, window_seconds=60, namespace="public_v1"
 
 RATE_LIMIT = 10
 
+# Knowledge-graph read endpoints (/graph, /knowledge/activity, /knowledge/claims)
+# are polled by the Knowledge page (60s activity poll, a claims fetch per focus
+# click) — the general 10/min public-API budget would throttle normal browsing.
+# Dedicated namespace so this budget can never borrow from (or starve) the rest
+# of the public API's 10/min limiter.
+_knowledge_limiter = RateLimiter(
+    max_requests=60, window_seconds=60, namespace="public_v1_knowledge"
+)
+
+KNOWLEDGE_RATE_LIMIT = 60
+
 # Research papers are open access: reuse freely, attribution is the only
 # requirement. Served as machine-readable fields on every paper response.
 RESEARCH_LICENSE = "CC BY 4.0"
@@ -131,6 +142,29 @@ async def rate_limit_dependency(request: Request, response: Response):
             detail="Rate limit exceeded. Max 10 requests per minute.",
             headers={
                 "X-RateLimit-Limit": str(RATE_LIMIT),
+                "X-RateLimit-Remaining": "0",
+                "X-RateLimit-Reset": str(reset_seconds),
+                "Retry-After": str(reset_seconds),
+            },
+        )
+
+
+async def knowledge_rate_limit_dependency(request: Request, response: Response):
+    """FastAPI dependency that enforces rate limiting for the knowledge-graph
+    read endpoints, on their own 60/min namespace (see _knowledge_limiter)."""
+    ip = get_client_ip(request)
+    allowed, remaining, reset_seconds = _knowledge_limiter.check_with_info(ip)
+
+    response.headers["X-RateLimit-Limit"] = str(KNOWLEDGE_RATE_LIMIT)
+    response.headers["X-RateLimit-Remaining"] = str(remaining)
+    response.headers["X-RateLimit-Reset"] = str(reset_seconds)
+
+    if not allowed:
+        raise HTTPException(
+            status_code=429,
+            detail="Rate limit exceeded. Max 60 requests per minute.",
+            headers={
+                "X-RateLimit-Limit": str(KNOWLEDGE_RATE_LIMIT),
                 "X-RateLimit-Remaining": "0",
                 "X-RateLimit-Reset": str(reset_seconds),
                 "Retry-After": str(reset_seconds),
@@ -1708,7 +1742,7 @@ def create_public_api() -> FastAPI:
         ),
         response_model=GraphResponse,
         tags=["Knowledge Graph"],
-        dependencies=[Depends(rate_limit_dependency)],
+        dependencies=[Depends(knowledge_rate_limit_dependency)],
         responses={429: {"description": "Rate limit exceeded"}},
     )
     async def get_graph(
@@ -1803,7 +1837,7 @@ def create_public_api() -> FastAPI:
         ),
         response_model=ActivityResponse,
         tags=["Knowledge Graph"],
-        dependencies=[Depends(rate_limit_dependency)],
+        dependencies=[Depends(knowledge_rate_limit_dependency)],
         responses={429: {"description": "Rate limit exceeded"}},
     )
     async def get_knowledge_activity(
@@ -1848,7 +1882,7 @@ def create_public_api() -> FastAPI:
         ),
         response_model=ClaimsResponse,
         tags=["Knowledge Graph"],
-        dependencies=[Depends(rate_limit_dependency)],
+        dependencies=[Depends(knowledge_rate_limit_dependency)],
         responses={429: {"description": "Rate limit exceeded"}},
     )
     async def get_knowledge_claims(
