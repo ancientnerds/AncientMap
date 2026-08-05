@@ -342,9 +342,17 @@ async def get_all_sites(
                     us.last_audited,
                     cs.card_description,
                     cs.confidence_score,
-                    us.raw_data
+                    us.raw_data,
+                    hero.original_url     AS hero_url,
+                    hero.commons_page_url AS hero_attribution_url
                 FROM unified_sites us
                 LEFT JOIN card_stats cs ON cs.site_id = us.id
+                LEFT JOIN LATERAL (
+                    SELECT original_url, commons_page_url
+                    FROM wiki_images
+                    WHERE site_id = us.id AND is_hero = true
+                    ORDER BY id LIMIT 1
+                ) hero ON TRUE
                 WHERE {where_clause}
                 OFFSET :skip
                 LIMIT :limit
@@ -383,6 +391,10 @@ async def get_all_sites(
                     site["ea"] = row.updated_at.isoformat()
                 if row.last_audited:
                     site["aud"] = row.last_audited.isoformat()
+                if row.hero_url:
+                    site["hu"] = row.hero_url
+                if row.hero_attribution_url:
+                    site["ha"] = row.hero_attribution_url
                 rd = row.raw_data
                 if isinstance(rd, str):
                     try:

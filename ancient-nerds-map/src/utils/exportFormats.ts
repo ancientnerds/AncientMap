@@ -49,7 +49,18 @@ interface AuditSite {
   ea?: string      // edited_at
   hu?: string      // hero_url
   ha?: string      // hero_attribution_url
-  rl?: { url: string; title?: string | null; domain?: string; link_type?: string; quality?: string }[]  // reference_links
+  rf?: { u: string; t?: string | null; d?: string; k?: string }[]  // reference_links (shortkey — matches /api/sites/all)
+}
+
+// Expand shortkey refs to the full-name shape used in downloads.
+function expandRefs(rf: AuditSite['rf']): { url: string; title?: string; domain?: string; link_type?: string }[] {
+  if (!rf || !rf.length) return []
+  return rf.map(r => ({
+    url: r.u,
+    title: r.t ?? undefined,
+    domain: r.d,
+    link_type: r.k,
+  }))
 }
 
 function downloadBlob(content: string, filename: string, mime: string) {
@@ -101,7 +112,7 @@ export function exportCSV(sites: AuditSite[]) {
     csvEscape(s.ea),
     csvEscape(s.hu),
     csvEscape(s.ha),
-    csvEscape(s.rl && s.rl.length ? JSON.stringify(s.rl) : ''),
+    csvEscape(s.rf && s.rf.length ? JSON.stringify(expandRefs(s.rf)) : ''),
   ].join(','))
 
   const csv = '\uFEFF' + headers.join(',') + '\n' + rows.join('\n')
@@ -127,7 +138,7 @@ export function exportJSON(sites: AuditSite[]) {
     edited_at: s.ea ?? null,
     hero_url: s.hu ?? null,
     hero_attribution_url: s.ha ?? null,
-    reference_links: s.rl ?? [],
+    reference_links: expandRefs(s.rf),
   }))
 
   const output = {
@@ -165,7 +176,7 @@ export function exportGeoJSON(sites: AuditSite[]) {
         edited_at: s.ea ?? null,
         hero_url: s.hu ?? null,
         hero_attribution_url: s.ha ?? null,
-        reference_links: s.rl ?? [],
+        reference_links: expandRefs(s.rf),
       },
     }))
 
@@ -204,7 +215,7 @@ const HEADER_MAP: Record<string, keyof ParsedSite> = {
   confidence_score: 'confidence_score', cf: 'confidence_score',
   hero_url: 'hero_url', hero_image_url: 'hero_url', hu: 'hero_url',
   hero_attribution_url: 'hero_attribution_url', attribution_url: 'hero_attribution_url', ha: 'hero_attribution_url',
-  reference_links: 'reference_links', rl: 'reference_links',
+  reference_links: 'reference_links', rl: 'reference_links', rf: 'reference_links',
 }
 
 function mapRow(raw: Record<string, string | number | null | undefined>): ParsedSite | null {
