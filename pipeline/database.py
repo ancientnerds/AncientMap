@@ -1393,9 +1393,11 @@ class ResearchNode(Base):
     `researching`, and a completed paper marks it `explored`. See
     docs/superpowers/specs/2026-07-26-permanent-researcher-design.md.
 
-    kind:   topic | paper | site | entity
-    status: frontier | researching | explored
-    created_from: rabbit_hole | story | journal | site | manual | backfill | paper
+    kind:   topic | paper | site | entity | connection | hypothesis
+    status: reference | frontier | researching | explored
+    created_from: rabbit_hole | story | journal | site | manual | backfill | paper | curator
+    question: stored research question for curator-created frontier nodes (2026-08-04)
+    outcome:  confirmed | refuted | inconclusive — hypothesis nodes only
     """
 
     __tablename__ = "research_nodes"
@@ -1418,6 +1420,11 @@ class ResearchNode(Base):
         ForeignKey("unified_sites.id", ondelete="SET NULL"),
         nullable=True,
     )
+    # Curator-written research question for connection/hypothesis frontier
+    # nodes (2026-08-04) — question_for_node() prefers this over templates.
+    question: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # confirmed | refuted | inconclusive — hypothesis nodes only (2026-08-04).
+    outcome: Mapped[str | None] = mapped_column(String(20), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
@@ -1452,6 +1459,62 @@ class ResearchEdge(Base):
 
     def __repr__(self) -> str:
         return f"<ResearchEdge {self.kind} {self.src}->{self.dst}>"
+
+
+class KnowledgeClaim(Base):
+    """One claim in the permanent researcher's world model (2026-08-04 design).
+
+    status: established | contested | refuted | open
+    `refuted` is terminal — the curator never reopens a refuted claim; a
+    refuted thesis must not re-enter the frontier as an open question.
+    """
+
+    __tablename__ = "knowledge_claims"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    text: Mapped[str] = mapped_column(Text, nullable=False)
+    norm_text: Mapped[str] = mapped_column(String(500), nullable=False, index=True)
+    node_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("research_nodes.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="open", index=True)
+    confidence: Mapped[float] = mapped_column(Float, default=0.5)
+    # Provenance: which papers assert this, how many EXTERNAL tier-1/2
+    # sources back it (self-citations never count — spec §5).
+    paper_ids: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+    external_source_count: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    # UNIQUE enforces the refuted-is-terminal invariant at the DB level:
+    # duplicate norm_text rows would let the curator's LIMIT-1 lookup pick
+    # the non-refuted twin and silently reopen a refuted claim.
+    __table_args__ = (UniqueConstraint("norm_text", name="uq_knowledge_claim_norm_text"),)
+
+    def __repr__(self) -> str:
+        return f"<KnowledgeClaim {self.status} {self.text[:40]!r}>"
+
+
+class ThinkingLogEntry(Base):
+    """One event in the thinking-layer activity feed (spec §7).
+
+    kind: curator | miner | run_event
+    Powers GET /api/v1/knowledge/activity — the Knowledge page timeline.
+    """
+
+    __tablename__ = "thinking_log"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    kind: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
+    summary: Mapped[str] = mapped_column(String(500), nullable=False)
+    details: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+
+    def __repr__(self) -> str:
+        return f"<ThinkingLogEntry {self.kind} {self.summary[:40]!r}>"
 
 
 # =============================================================================

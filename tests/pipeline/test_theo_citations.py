@@ -664,6 +664,55 @@ def test_register_source_explicit_tier_overrides_domain():
     assert registry.sources[sid].reliability_tier == 2
 
 
+def test_register_source_self_source_forces_tier_4_and_flag():
+    """self_source=True overrides the domain scorer to tier 4 and sets the flag.
+
+    Uses a cambridge.org URL (tier 1 by domain) to prove the override wins
+    over even the strongest domain signal — an adapter's self-knowledge
+    beats URL heuristics (spec 2026-08-04 §5).
+    """
+    registry = CitationRegistry()
+    sid = registry.register_source(
+        "https://www.cambridge.org/core/some-self-paper",
+        "[self] Some Prior Paper",
+        "snippet",
+        self_source=True,
+    )
+    source = registry.sources[sid]
+    assert source.reliability_tier == 4
+    assert source.self_source is True
+
+
+def test_register_source_self_source_upgrades_existing_record_on_dedup():
+    """Re-registering an already-known URL with self_source=True upgrades
+    the existing record's tier, flag, AND title — every enforcement surface
+    (prompt rule, References list, audit) reads the title string, not the
+    flag, so the [self] marker must land there too."""
+    registry = CitationRegistry()
+    url = "https://ancientnerds.com/theo/public/some-paper"
+    sid1 = registry.register_source(url, "Some Paper — Intro", "snippet")
+    assert registry.sources[sid1].self_source is False
+    assert registry.sources[sid1].title == "Some Paper — Intro"
+
+    sid2 = registry.register_source(url, "[self] Some Paper — Intro", "snippet", self_source=True)
+    assert sid1 == sid2
+    assert registry.sources[sid1].self_source is True
+    assert registry.sources[sid1].reliability_tier == 4
+    assert registry.sources[sid1].title == "[self] Some Paper — Intro"
+    assert registry.sources[sid1].title.count("[self]") == 1
+
+
+def test_register_source_self_source_upgrade_does_not_double_prefix_title():
+    """A second self_source=True re-registration is a no-op on the flag and
+    must not add a second [self] prefix to an already-marked title."""
+    registry = CitationRegistry()
+    url = "https://ancientnerds.com/theo/public/some-paper"
+    registry.register_source(url, "Some Paper — Intro", "snippet")
+    registry.register_source(url, "irrelevant", "snippet", self_source=True)
+    sid3 = registry.register_source(url, "irrelevant", "snippet", self_source=True)
+    assert registry.sources[sid3].title.count("[self]") == 1
+
+
 # ---------------------------------------------------------------------------
 # parse_references_section
 # ---------------------------------------------------------------------------

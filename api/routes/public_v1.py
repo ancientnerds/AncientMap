@@ -9,6 +9,7 @@ All endpoints are rate-limited to 10 requests per minute per IP.
 """
 
 import logging
+from datetime import UTC
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
@@ -20,6 +21,8 @@ from sqlalchemy.orm import Session
 from api.build_info import BUILD_HASH
 from api.cache import cache_get, cache_set
 from api.schemas.public_v1 import (
+    ActivityItem,
+    ActivityResponse,
     ArticleDetail,
     ArticleListResponse,
     ArticleSummary,
@@ -183,6 +186,24 @@ def _load_polities() -> dict[str, dict]:
 
 
 _POLITIES: dict[str, dict] = _load_polities()
+
+
+def _activity_items(rows) -> list[dict]:
+    """Shape thinking_log rows into activity-feed items (spec §7). Pure —
+    no DB access — kept as a standalone function so it's testable without
+    a live Postgres connection."""
+    return [
+        {
+            # thinking_log.created_at is naive UTC (NOW() on a tz-less
+            # column, server runs Etc/UTC) — make the offset explicit for
+            # the Knowledge page.
+            "created_at": r.created_at.replace(tzinfo=UTC).isoformat(),
+            "kind": r.kind,
+            "summary": r.summary,
+            "details": r.details,
+        }
+        for r in rows
+    ]
 
 
 def create_public_api() -> FastAPI:
@@ -1744,6 +1765,51 @@ def create_public_api() -> FastAPI:
 
         response = GraphResponse(nodes=nodes, edges=edges, total_nodes=total_nodes)
         cache_set(cache_key, response.model_dump(), ttl=300)
+        return response
+
+    # =========================================================================
+    # 21. GET /knowledge/activity — Thinking-layer activity feed
+    # =========================================================================
+
+    @public_app.get(
+        "/knowledge/activity",
+        summary="Thinking-layer activity feed",
+        description=(
+            "Chronological feed of the permanent researcher's thinking layer: "
+            "nightly curator passes, miner batches, and research-run lifecycle "
+            "events.\n\n"
+            f"**License: {RESEARCH_LICENSE}** — attribution to **Ancient Nerds** "
+            "(https://ancientnerds.com) is the only requirement."
+        ),
+        response_model=ActivityResponse,
+        tags=["Knowledge Graph"],
+        dependencies=[Depends(rate_limit_dependency)],
+        responses={429: {"description": "Rate limit exceeded"}},
+    )
+    async def get_knowledge_activity(
+        limit: int = Query(50, ge=1, le=200, description="Max activity events"),
+        db: Session = Depends(get_db),
+    ):
+        cache_key = f"pubv1:knowledge_activity:{limit}"
+        cached = cache_get(cache_key)
+        if cached:
+            return cached
+
+        rows = db.execute(
+            text("""
+                SELECT created_at, kind, summary, details
+                FROM thinking_log
+                ORDER BY created_at DESC
+                LIMIT :limit
+            """),
+            {"limit": limit},
+        ).fetchall()
+
+        response = ActivityResponse(
+            items=[ActivityItem(**item) for item in _activity_items(rows)],
+            license=RESEARCH_LICENSE,
+        )
+        cache_set(cache_key, response.model_dump(), ttl=60)
         return response
 
     return public_app

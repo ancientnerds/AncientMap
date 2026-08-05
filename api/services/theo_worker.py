@@ -175,6 +175,14 @@ async def _process_request(
             _release_reservation(request_id)
 
             status = _terminal_status_for_error(ctx)
+            if is_batch:
+                from pipeline.lyra.thinking_log import log_thinking
+
+                log_thinking(
+                    "run_event",
+                    f"Research {status}: {question[:200]}",
+                    {"request_id": request_id, "failed": True},
+                )
             if status == "cancelled":
                 emit({"type": "done", "status": "cancelled"})
                 logger.info(f"[THEO] Request {request_id} cancelled by user")
@@ -278,6 +286,19 @@ async def _process_request(
                 from pipeline.lyra.research_graph import mark_node_explored
 
                 mark_node_explored(request_id)
+
+                from pipeline.lyra.thinking_log import log_thinking
+
+                # This completion event fires BEFORE _auto_publish runs, so
+                # the activity feed reports "completed" a moment ahead of
+                # publish/gate-review outcome — a pre-existing visibility
+                # gap (the feed reflects pipeline completion, not
+                # publication status).
+                log_thinking(
+                    "run_event",
+                    f"Research completed: {question[:200]}",
+                    {"request_id": request_id},
+                )
                 _auto_publish(request_id)
 
     except Exception as exc:
@@ -298,14 +319,23 @@ async def _process_request(
                 exc_info=True,
             )
         _release_reservation(request_id)
-        emit({"type": "done", "status": "deferred" if is_quota_error else "failed"})
+        outer_status = "deferred" if is_quota_error else "failed"
+        emit({"type": "done", "status": outer_status})
+        if is_batch:
+            from pipeline.lyra.thinking_log import log_thinking
+
+            log_thinking(
+                "run_event",
+                f"Research {outer_status}: {question[:200]}",
+                {"request_id": request_id, "failed": True},
+            )
         with get_session() as session:
             # Even on an unexpected crash, try to persist whatever
             # diagnostic state the orchestrator already built up. `ctx`
             # may not exist if the exception fired before orchestrator.run
             # returned, so guard everything with getattr.
             ctx_local = locals().get("ctx", None)
-            target_status = "deferred" if is_quota_error else "failed"
+            target_status = outer_status
             session.execute(
                 text("""
                     UPDATE research_requests
@@ -912,6 +942,46 @@ async def _supervise(
         _active_runs.pop(request_id, None)
 
 
+async def _maybe_run_thinking_pass() -> None:
+    """Nightly thinking pass (Mon-Thu 02-05 UTC): miner + curator.
+
+    `thinking_window_open` is checked FIRST and needs no DB access — the
+    window is shut ~93% of the week, so most feeder polls return here
+    without ever touching the database. Only inside the window do we read
+    thinking_log for the last pass timestamp (coerced to tz-aware UTC: the
+    column is `timestamp without time zone`, and thinking_pass_due requires
+    aware datetimes on both sides — a naive value raises TypeError) and
+    apply the 20h cooldown via thinking_pass_due().
+    """
+    from datetime import UTC as _UTC
+    from datetime import datetime as _dt
+
+    from pipeline.lyra.curator import (
+        run_curator_pass,
+        thinking_pass_due,
+        thinking_window_open,
+    )
+
+    now = _dt.now(_UTC)
+    if not thinking_window_open(now):
+        return
+
+    with get_session() as session:
+        last_curator = session.execute(
+            text("SELECT MAX(created_at) AS ts FROM thinking_log WHERE kind = 'curator'")
+        ).fetchone()
+    last_ts = last_curator.ts.replace(tzinfo=_UTC) if last_curator and last_curator.ts else None
+    if thinking_pass_due(now, last_ts):
+        logger.info("[THINK] Nightly thinking pass starting")
+        # Pathological ceiling: a frozen limiter can hold this to_thread
+        # call up to _QUOTA_WAIT_MAX_S (6h, minimax_limiter.py) before
+        # QuotaExhaustedError unwinds it — accepted risk. The feeder's
+        # injector/enqueue work catches up next iteration, and
+        # run_curator_pass's failure row still closes the 20h gate either
+        # way (it never raises past this call).
+        await asyncio.to_thread(run_curator_pass)
+
+
 async def _feeder_loop() -> None:
     """Keep the batch queue fed from the knowledge-graph frontier.
 
@@ -942,6 +1012,10 @@ async def _feeder_loop() -> None:
                 await asyncio.to_thread(run_full_ingest)
                 full_ingest_last = now
 
+            # Nightly thinking pass (Mon-Thu 02-05 UTC): miner + curator.
+            # last_pass comes from thinking_log so restarts don't double-run.
+            await _maybe_run_thinking_pass()
+
             with get_session() as session:
                 pending = session.execute(
                     text("""
@@ -969,13 +1043,18 @@ async def _feeder_loop() -> None:
                 if _batch_claim_allowed(gate_open, tier, weekly_pct):
                     from api.services.theo_config import THEO_FEEDER_USER_ID
                     from pipeline.lyra.research_graph import (
+                        allow_synthesis,
                         link_node_to_request,
                         pick_next_frontier_topic,
                         question_for_node,
+                        recent_batch_seed_kinds,
                     )
 
                     with get_session() as session:
-                        node = pick_next_frontier_topic(session)
+                        recent_kinds = recent_batch_seed_kinds(session)
+                        node = pick_next_frontier_topic(
+                            session, include_synthesis=allow_synthesis(recent_kinds)
+                        )
                         if node:
                             request_id = str(_uuid.uuid4())
                             session.execute(
@@ -994,6 +1073,14 @@ async def _feeder_loop() -> None:
                             )
                             session.commit()
                             link_node_to_request(node["id"], request_id, session)
+
+                            from pipeline.lyra.thinking_log import log_thinking
+
+                            log_thinking(
+                                "run_event",
+                                f"Queued from frontier: {node['label'][:200]}",
+                                {"request_id": request_id, "kind": node["kind"]},
+                            )
                             logger.info(
                                 "[THEO] Feeder queued %s from frontier node %r",
                                 request_id,

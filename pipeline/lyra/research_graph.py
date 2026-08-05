@@ -43,7 +43,13 @@ def is_junk_label(label: str | None) -> bool:
     """True when a label must never become a graph node or research topic."""
     if not label:
         return True
-    return normalize_label(label) in JUNK_LABELS
+    normalized = normalize_label(label)
+    if not normalized:
+        # Whitespace/punctuation-only labels normalize to "" — not in
+        # JUNK_LABELS, so they slipped through before this check (M14,
+        # 2026-08-05 review).
+        return True
+    return normalized in JUNK_LABELS
 
 
 def build_graph_from_state(state: Any, request_id: str) -> tuple[list[dict], list[dict]]:
@@ -202,10 +208,61 @@ def mark_node_explored(paper_request_id: str) -> None:
         logger.error("[GRAPH] mark_node_explored failed for %s: %s", paper_request_id, exc)
 
 
-def pick_next_frontier_topic(session) -> dict | None:
-    """Pick the highest-value frontier node and mark it researching.
+def allow_synthesis(recent_seed_kinds: list[str]) -> bool:
+    """Max 1 of 3 recent batch runs may be synthesis (connection/hypothesis)
+    — fresh external topics keep the majority (anti-echo, spec §4).
 
-    Score = source_signal + 0.5 * in-degree
+    A missing seed node (recent_batch_seed_kinds COALESCEs to 'topic' when a
+    batch run has no matching connection/hypothesis research_nodes row —
+    e.g. a manually queued or pre-thinking-layer run) deliberately reads as
+    "not synthesis": it can never suppress a slot it didn't spend.
+
+    Effective cadence is therefore 1-in-4, not 1-in-3: a synthesis run stays
+    in the trailing window for the next three picks (itself plus the two
+    after it, until a fourth run pushes it out), so it blocks the following
+    three windows. Failed/claimed-but-not-completed runs still count here
+    (this reads whatever landed in research_requests, not just successes) —
+    both are accepted as conservative-by-design: undercounting synthesis
+    slots is safe, overcounting them would erode the anti-echo quota.
+    """
+    return not any(k in ("connection", "hypothesis") for k in recent_seed_kinds)
+
+
+def recent_batch_seed_kinds(session, limit: int = 3) -> list[str]:
+    """Seed kinds of the most recent batch research_requests, most recent
+    first — feeds allow_synthesis()'s anti-echo quota (spec §4). Graph-domain
+    logic: it reasons about research_nodes, so it lives here rather than in
+    the feeder."""
+    return [
+        r.kind
+        for r in session.execute(
+            text("""
+                SELECT COALESCE(n.kind, 'topic') AS kind
+                FROM research_requests rr
+                LEFT JOIN research_nodes n
+                  ON n.paper_id = rr.id
+                 AND n.kind IN ('connection', 'hypothesis')
+                WHERE rr.is_batch = TRUE
+                ORDER BY rr.started_at DESC NULLS LAST
+                LIMIT :limit
+            """),
+            {"limit": limit},
+        ).fetchall()
+    ]
+
+
+def _pick_frontier(session, kinds: tuple[str, ...]) -> dict | None:
+    """Pick the highest-value frontier node of the given kinds and mark it
+    researching.
+
+    Score = source_signal
+            + kind weight (hypothesis 3.0, connection 2.0 — orders
+              hypothesis above connection within the synthesis pool; it
+              cannot make either compete against injector-accumulated
+              source_signal on plain topic/site nodes, which is why
+              pick_next_frontier_topic uses a dedicated slot instead of a
+              shared ranking — see its docstring)
+            + 0.5 * in-degree
             - 2.0 diversity penalty (children of papers explored in the last
               3 days — avoids researching the same cluster repeatedly)
             + 0.5 * random()  (the owner's "zufällig" component)
@@ -213,7 +270,11 @@ def pick_next_frontier_topic(session) -> dict | None:
     row = session.execute(
         text("""
             SELECT n.id::text AS id, n.label, n.kind, n.site_id::text AS site_id,
+                   n.question,
                    n.source_signal
+                   + CASE n.kind WHEN 'hypothesis' THEN 3.0
+                                 WHEN 'connection' THEN 2.0
+                                 ELSE 0 END
                    + COALESCE(deg.cnt, 0) * 0.5
                    - CASE WHEN recent.hit IS NOT NULL THEN 2.0 ELSE 0 END
                    + random() * 0.5 AS score
@@ -227,14 +288,15 @@ def pick_next_frontier_topic(session) -> dict | None:
                 JOIN research_nodes p ON p.id = e.src AND p.kind = 'paper'
                 WHERE p.updated_at > NOW() - INTERVAL '3 days'
             ) recent ON recent.hit = n.id
-            WHERE n.status = 'frontier' AND n.kind IN ('topic', 'site')
+            WHERE n.status = 'frontier' AND n.kind = ANY(:kinds)
               -- junk-label insurance: a garbage node must never cost a
               -- multi-hour research run (see JUNK_LABELS, 2026-07-31)
               AND LOWER(TRIM(n.label)) NOT IN
                   ('null', 'none', 'nan', 'undefined', 'unknown', 'n/a', 'na', '')
             ORDER BY score DESC
             LIMIT 1
-        """)
+        """),
+        {"kinds": list(kinds)},
     ).fetchone()
     if not row:
         return None
@@ -247,11 +309,43 @@ def pick_next_frontier_topic(session) -> dict | None:
         {"id": row.id},
     )
     session.commit()
-    return {"id": row.id, "label": row.label, "kind": row.kind, "site_id": row.site_id}
+    return {
+        "id": row.id,
+        "label": row.label,
+        "kind": row.kind,
+        "site_id": row.site_id,
+        "question": row.question,
+    }
+
+
+def pick_next_frontier_topic(session, include_synthesis: bool = True) -> dict | None:
+    """Pick the next frontier node to research and mark it researching.
+
+    When include_synthesis, curator-authored nodes (connection/hypothesis)
+    get a dedicated slot: they are tried FIRST, ranked among themselves (the
+    kind weights in _pick_frontier order hypothesis > connection within the
+    pool); plain topic/site picking is untouched and serves as mandatory
+    fallback — an empty synthesis pool must never idle the feeder.
+
+    Rationale: additive weights can never beat injector-accumulated
+    signals (measured on the live graph: frontier head source_signal 1180,
+    growing ~+120/day via hourly injector accumulation, vs. a synthesis
+    score ceiling of ~5.5 — a shared ranking put hypothesis nodes at
+    rank #80 of 1132, never picked).
+    """
+    if include_synthesis:
+        node = _pick_frontier(session, ("connection", "hypothesis"))
+        if node:
+            return node
+    return _pick_frontier(session, ("topic", "site"))
 
 
 def question_for_node(node: dict) -> str:
-    """Format a frontier node as a research question for the pipeline."""
+    """Format a frontier node as a research question for the pipeline.
+    A curator-written question stored on the node always wins (spec §4)."""
+    stored = (node.get("question") or "").strip()
+    if stored:
+        return stored
     label = node["label"].strip()
     if node["kind"] == "site":
         return (

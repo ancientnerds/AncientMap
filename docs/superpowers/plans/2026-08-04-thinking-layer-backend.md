@@ -52,6 +52,11 @@ class KnowledgeClaim(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
+    # UNIQUE enforces the refuted-is-terminal invariant at the DB level:
+    # duplicate norm_text rows would let the curator's LIMIT-1 lookup pick
+    # the non-refuted twin and silently reopen a refuted claim.
+    __table_args__ = (UniqueConstraint("norm_text", name="uq_knowledge_claim_norm_text"),)
+
     def __repr__(self) -> str:
         return f"<KnowledgeClaim {self.status} {self.text[:40]!r}>"
 
@@ -70,6 +75,16 @@ class ThinkingLogEntry(Base):
     summary: Mapped[str] = mapped_column(String(500), nullable=False)
     details: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+
+    def __repr__(self) -> str:
+        return f"<ThinkingLogEntry {self.kind} {self.summary[:40]!r}>"
+```
+
+Zusaetzlich im bestehenden `ResearchNode`-Docstring (der die kind/status/created_from-Enums listet) zwei Zeilen ergaenzen — dort schauen spaetere Tasks nach:
+
+```
+    question: stored research question for curator-created frontier nodes (2026-08-04)
+    outcome:  confirmed | refuted | inconclusive — hypothesis nodes only
 ```
 
 - [ ] **Step 2: ALTERs im Orchestrator** — in `pipeline/lyra/orchestrator.py`, im bestehenden Migrations-Block von main() (eine Transaktion, ans Ende der bestehenden ALTERs):
@@ -79,7 +94,15 @@ conn.execute(text("ALTER TABLE research_nodes ADD COLUMN IF NOT EXISTS question 
 conn.execute(
     text("ALTER TABLE research_nodes ADD COLUMN IF NOT EXISTS outcome VARCHAR(20)")
 )
+conn.execute(
+    text(
+        "CREATE UNIQUE INDEX IF NOT EXISTS uq_knowledge_claim_norm_text "
+        "ON knowledge_claims (norm_text)"
+    )
+)
 ```
+
+(Der UNIQUE INDEX ist safe: die Tabelle ist neu und leer, wenn er erstmals laeuft. Im api-Pfad dieselbe Anweisung als `_api_migrations`-Eintrag.)
 
 - [ ] **Step 3: ALTERs im api-Startup** — `api/main.py`: den `create_all`-Aufruf im Startup finden (Grep `create_all`), direkt danach idempotent dieselben zwei ALTERs ausführen (der Feeder/Picker läuft im api-Container und braucht die Spalten auch, wenn der lyra-Container noch nicht neu gebaut wurde):
 
@@ -226,6 +249,55 @@ git commit -m "feat(theo): thinking_log writer for the knowledge activity feed"
 **Files:**
 - Create: `pipeline/lyra/graph_miner.py`
 - Test: `tests/pipeline/test_graph_miner.py`
+
+> **REDESIGNED 2026-08-04 (Commit 46e4c6b) nach Prod-Evidence-Review — die
+> Code-Blöcke unten sind das SUPERSEDED Original; maßgeblich ist der
+> committete Code.** Befund (Replay gegen den Live-Graphen, 13.148 Nodes):
+> explored Topics haben NUR Paper-Nachbarn, alle Site-Nodes sind
+> `reference`, kein explored Node trägt `site_id` → beide Struktur-Miner
+> lieferten dauerhaft 0 Zeilen; naives Aufweiten ergäbe 206.659 signallose
+> country+period-Paare. Neues Design: (1) **Label-Bridge** — explored
+> `topic` ↔ struktureller `site`-Node via gleichem `norm_label` (virtueller
+> Join, keine neuen Kanten); (2) Link-Miner zählt nur CONTENT-Nachbarn
+> (`story`/`culture`/`person`), GROUP BY Node-IDs (78 Duplikat-Labels);
+> (3) Spatial-Miner über die gebridgten researched sites mit
+> LEAST/GREATEST-Perioden-Normalisierung; (4) `merge_candidates` mit
+> Quoten 7/5/3 vor dem Cap, Cross-Miner-Dedup und Suppression via
+> `existing_connection_norms` (beide Paar-Orderings); (5) `run_miner`
+> lädt die connection-Node-norm_labels mit, loggt Fehler mit
+> `exc_info=True`. 8 Tests inkl. run_miner-Wiring + Swallow.
+>
+> **NACHTRAG (2. Review-Runde):** Root-Cause-Fix in
+> `graph_injectors._insert_frontier` gehört zu diesem Task — das
+> `ON CONFLICT DO UPDATE` setzte nie `status`, wodurch injizierte Sites
+> ewig `reference` blieben (0 von 5.307 Site-Nodes recherchierbar, der
+> Sites-Injector war seit dem Full-Project-Graph tot). Neu: reference →
+> frontier-Promotion (nie Downgrades) + site_id-COALESCE. Dazu Miner-
+> Ehrlichkeitsfixes: Bridge-Population heute = 1 Node (wächst durch
+> Site-Forschung), ARRAY_AGG ORDER BY, Site-Twin-Arm im NOT EXISTS,
+> toter Guard entfernt. 2-Hop-Content-Nachbarn (site→story→culture) und
+> Alias-Bridging via unified_site_names sind BEWUSST vertagt (YAGNI).
+>
+> **WACHSTUMSPFAD (korrigiert, 3. Review-Runde):** NICHT der Sites-
+> Injector — der hat noch nie gefeuert (card_stats hat heute keine
+> rarity_tier≥4-Rows; alle 5.307 Site-Nodes stehen bei signal 0.0).
+> Die Bridge wächst über story-injizierte `topic`-Nodes mit Site-Namen:
+> 57 Frontier-Site-Twins tragen die höchsten Signale der gesamten
+> Frontier (bis 1175 vs. Median 0) und gewinnen im signal-dominierten
+> Picker fast jeden Slot → +1 Bridge-Row pro Batch-Run. Die gemessenen
+> Payoff-Paare (Karahan Tepe ↔ Göbekli Tepe: 21 geteilte Stories;
+> Stonehenge ↔ Avebury: 6) landen, sobald beide Partner explored sind.
+> **WATCH-ITEM:** `source_signal` akkumuliert stündlich unbegrenzt
+> (daher 1175). Solange Sites `reference` waren, folgenlos — mit der
+> Promotion wird Monopolisierung erreichbar (vgl. null-Node-Incident bei
+> Signal 2220). Mitigation, wenn nötig: LEAST-Cap im Injector-Upsert
+> oder Signal-Decay im Picker-Score. In Task 10 prüfen.
+>
+> **ROADMAP-NOTIZ (Task-5-Review):** Innerhalb des Synthese-Pools ordnet
+> nur Kind-Gewicht + random() — kein Alters-Term. Wächst der Pool
+> schneller als der ~zweiwöchentliche Slot ihn leert, kann ein einzelner
+> Node beliebig lange liegen bleiben. Falls relevant: `created_at ASC`
+> als Tiebreak oder kleiner Age-Bonus. Kein Task-5-Defekt.
 
 Kandidaten kommen aus STRUKTUR-Daten, nicht aus Theos Prosa (Echo-Schutz, Spec §2). SQL bleibt dünn; Merge/Format ist pure Function und wird getestet.
 
@@ -646,6 +718,7 @@ CURATOR_SCHEMA = {
                     },
                     "confidence": {"type": "number"},
                     "external_source_count": {"type": "integer"},
+                    "paper_ids": {"type": "array", "items": {"type": "string"}},
                 },
                 "required": ["text", "status"],
             },
@@ -731,7 +804,11 @@ def _insert_topic_node(session, label: str, kind: str, question: str, rationale:
 
 def _link_connection_endpoints(session, conn_label: str) -> None:
     """A connection node 'A ↔ B' gets `connects` edges to A and B when those
-    nodes exist — the Knowledge page draws the new line (spec data model)."""
+    nodes exist — the Knowledge page draws the new line (spec data model).
+
+    A label can exist as BOTH a topic and a site node (the miner's label
+    bridge) — edges to both twins are deliberate: the connection anchors to
+    every representation of its endpoint."""
     if "↔" not in conn_label:
         return
     conn_norm = normalize_label(conn_label)[:500]
@@ -770,18 +847,25 @@ def _apply_curator_output(session, out: dict) -> dict:
         ).fetchone()
         if existing and existing.status == "refuted":
             continue  # refuted is terminal (spec §1)
+        paper_ids = json.dumps(cu.get("paper_ids") or [])
         if existing:
             session.execute(
                 text("""
                     UPDATE knowledge_claims
                     SET status = :status, confidence = :conf,
-                        external_source_count = :ext, updated_at = NOW()
+                        external_source_count = :ext,
+                        paper_ids = (SELECT COALESCE(jsonb_agg(DISTINCT e), '[]'::jsonb)
+                                     FROM jsonb_array_elements(
+                                          COALESCE(paper_ids, '[]'::jsonb)
+                                          || CAST(:paper_ids AS jsonb)) e),
+                        updated_at = NOW()
                     WHERE norm_text = :norm
                 """),
                 {
                     "status": cu["status"],
                     "conf": float(cu.get("confidence") or 0.5),
                     "ext": int(cu.get("external_source_count") or 0),
+                    "paper_ids": paper_ids,
                     "norm": norm,
                 },
             )
@@ -790,12 +874,12 @@ def _apply_curator_output(session, out: dict) -> dict:
                 text("""
                     INSERT INTO knowledge_claims
                         (id, text, norm_text, node_id, status, confidence,
-                         external_source_count, created_at, updated_at)
+                         external_source_count, paper_ids, created_at, updated_at)
                     VALUES
                         (:id, :text, :norm,
                          (SELECT id FROM research_nodes
                           WHERE norm_label = :node_norm LIMIT 1),
-                         :status, :conf, :ext, NOW(), NOW())
+                         :status, :conf, :ext, CAST(:paper_ids AS jsonb), NOW(), NOW())
                 """),
                 {
                     "id": str(uuid.uuid4()),
@@ -805,6 +889,7 @@ def _apply_curator_output(session, out: dict) -> dict:
                     "status": cu["status"],
                     "conf": float(cu.get("confidence") or 0.5),
                     "ext": int(cu.get("external_source_count") or 0),
+                    "paper_ids": paper_ids,
                 },
             )
         stats["claims"] += 1
@@ -862,7 +947,7 @@ def _gather_inputs(session) -> dict:
 
     papers = session.execute(
         text("""
-            SELECT question, result_json FROM research_requests
+            SELECT id::text AS request_id, question, result_json FROM research_requests
             WHERE status = 'completed' AND is_batch = TRUE AND completed_at > :since
             ORDER BY completed_at DESC LIMIT 5
         """),
@@ -873,7 +958,11 @@ def _gather_inputs(session) -> dict:
         report = (json.loads(p.result_json).get("report") or "") if p.result_json else ""
         # Head (framing) + tail (conclusions) of the report; middle is bulk.
         paper_excerpts.append(
-            {"question": p.question, "excerpt": report[:4000] + "\n...\n" + report[-3000:]}
+            {
+                "request_id": p.request_id,
+                "question": p.question,
+                "excerpt": report[:4000] + "\n...\n" + report[-3000:],
+            }
         )
 
     open_hypotheses = session.execute(
@@ -1365,6 +1454,56 @@ git commit -m "feat(api): GET /api/v1/knowledge/activity — thinking-layer feed
 ```
 
 ---
+
+### Follow-up-Tickets (aus den Reviews, NICHT Teil dieses Plans)
+
+1. **Dead LLM-Source-Audit (pre-existing):** `AuditHandler.audit_angle`
+   returnt auf JEDEM Angle früh — `reliability_tier == 0` ist unerreichbar
+   (score_tier_by_domain liefert nie 0), `source_items` bleibt leer. Die
+   ganze Audit-Stage inkl. Tier-3-Noise-Floor ist toter Code.
+2. **Unbounded source_signal:** Injector-Akkumulation +120/Tag auf
+   Top-Nodes; LEAST-Cap oder Decay, sobald Site-Promotion aktiv ist.
+3. **Live-LLM-Tests (breiter als gedacht):** MEHRERE Testdateien machen
+   echte MiniMax-Calls pro Lauf — `test_journal_assessor` (ganze
+   TestD1ProperNouns-Klasse) UND `test_llm_abstraction`
+   (TestUnifiedDispatch). Bei Quota-Druck (paralleler Research-Run)
+   kriechen sie minutenlang oder haengen die Suite. Mocken oder mit
+   pytest-Marker `live_llm` ausgrenzen; CI-tauglich machen.
+4. **Synthese-Pool-Aging:** created_at-Tiebreak, falls der Pool wächst.
+5. **Journal-Audit clobbert Tier 4:** `research_stages._stage_audit` schreibt
+   `reliability_tier` unconditional (Prompt kennt nur 1-3) — ein self-source
+   kann im Journal als `[Reputable]` gerendert werden. Langfristig das
+   References-Label aus `self_source` ableiten statt aus dem Tier. Dazu:
+   Journal-Marker-Cleanup-Regex (`\[(V?\d+)\]`) lässt nicht-numerische
+   Tokens passieren — ggf. auf validate_or_repair umstellen (separates
+   Produkt, eigenes Ticket).
+6. **Failed-Synthese-Sackgasse (Final-Review, Important):** Scheitert ein
+   connection/hypothesis-Run terminal, bleibt der Node ewig `researching`
+   (mark_node_explored greift nur bei Erfolg), der Miner supprimiert das
+   Paar für immer, der Curator kann das Label nicht neu queuen (ON CONFLICT
+   DO NOTHING). Geerbt von 2026-07-26 (Topics gleiches Problem), durch
+   Hypothesen aber teurer. Fix: Node bei terminalem `failed` des Requests
+   auf `frontier` zurücksetzen.
+
+### Post-Deploy-Checkliste (erste Denk-Nacht — aus dem Final-Review)
+
+1. Nach api-Deploy: `\d research_nodes` — question/outcome-Spalten da?
+   `knowledge_claims` + `thinking_log` + `uq_knowledge_claim_norm_text`?
+   (Guard gegen den Migration-Swallow in `_api_migrations`.)
+2. **Manueller lyra-Rebuild** (`docker compose up -d --build lyra`) —
+   journal-seitige [self]-Guards + research_stages-self_source.
+3. Erste Mo–Do-Nacht 02–05 UTC: genau EINE `kind='curator'`-Row (+ eine
+   `miner`-Row), kein `details.failed`, Discord-Embed „Denkstunde".
+4. Inhalt: Claims aus den 5 ÄLTESTEN Batch-Papers (Cursor draint ASC,
+   ~4 Nächte Backlog); kein `established` mit ext<2 (demoted-Zähler);
+   Kandidaten ~0 ist ERWARTET (Bridge-Population = 1 Node).
+5. `GET /api/v1/knowledge/activity` liefert Items + Lizenz; run_events da.
+6. Bewusst: Curator läuft auch bei geschlossenem Pacing-Gate (das gated
+   Claims, nicht das Denken) — Hypothesen akkumulieren bis zum Wochenende.
+7. Injector-Promotion beobachten: erste Stunde kann reference-Sites zu
+   frontier promoten; mit unbounded signal (Ticket 2) drohen Monopol-Picks.
+8. Nächstes Paper: References mit `[self]`-Präfix ohne Tier-Badge, kein
+   `[self]` in der Prose.
 
 ### Task 10: Gesamt-Verifikation
 
