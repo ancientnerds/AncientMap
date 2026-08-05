@@ -28,6 +28,12 @@
   padding: 0 18px;
 }
 
+.kg-live-slot:empty {
+  /* LiveResearchPanel renders null when idle with nothing queued — don't
+     reserve an 8px gap for a slot with no content. */
+  display: none;
+}
+
 .kg-subtitle {
   margin: 0;
   font-family: 'JetBrains Mono', monospace;
@@ -341,6 +347,10 @@
   white-space: nowrap;
 }
 
+.kg-claim-sources {
+  opacity: 0.75;
+}
+
 .kg-infocard-actions {
   display: flex;
   flex-direction: column;
@@ -375,8 +385,8 @@
 
 .kg-activity {
   position: absolute;
-  right: 20px;
-  bottom: 14px;
+  left: 18px;
+  bottom: 44px;
   z-index: 11;
   width: 300px;
   max-height: 320px;
@@ -471,6 +481,10 @@
   .kg-subtitle {
     width: 100%;
     white-space: normal;
+  }
+
+  .kg-live-slot {
+    display: none;
   }
 
   .kg-controls {

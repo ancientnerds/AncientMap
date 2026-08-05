@@ -83,6 +83,11 @@ function hexToRgb(hex: string): Rgb {
   return [((v >> 16) & 255) / 255, ((v >> 8) & 255) / 255, (v & 255) / 255]
 }
 
+function rgbToHex([r, g, b]: Rgb): string {
+  const channel = (x: number) => Math.round(x * 255).toString(16).padStart(2, '0')
+  return `#${channel(r)}${channel(g)}${channel(b)}`
+}
+
 const KIND_RGB: Record<string, Rgb> = Object.fromEntries(
   Object.entries(KIND_COLORS).map(([k, c]) => [k, hexToRgb(c)]),
 ) as Record<string, Rgb>
@@ -111,6 +116,7 @@ function nodeBaseRgb(node: RenderNode): Rgb {
 const OUTCOME_BADGE: Record<string, { text: string; color: string }> = {
   confirmed: { text: 'confirmed', color: '#4ade80' },
   refuted: { text: 'refuted', color: '#94a3b8' },
+  inconclusive: { text: 'inconclusive', color: '#7ab4c8' },
 }
 function outcomeBadge(outcome: string | null | undefined): { text: string; color: string } {
   return (outcome && OUTCOME_BADGE[outcome]) || { text: 'open', color: '#fbbf24' }
@@ -328,6 +334,9 @@ export default function KnowledgePage() {
 
   const focusNode = useCallback(
     (node: RenderNode | null) => {
+      // Clear eagerly, in the same batch as setFocused, so the previous
+      // node's claims never flash under the newly focused card for a frame.
+      setClaims(null)
       if (!node) {
         focusRef.current = null
         setFocused(null)
@@ -502,10 +511,9 @@ export default function KnowledgePage() {
   }, [depth])
 
   // Lazy world-model claims for the Focus-Card (spec §7): only the kinds a
-  // curator/miner would actually attach claims to. Reset on every focus
-  // change so a stale list never lingers under a newly focused node.
+  // curator/miner would actually attach claims to. focusNode() already
+  // cleared `claims` synchronously on focus change (no stale-flash frame).
   useEffect(() => {
-    setClaims(null)
     if (!focused || !CLAIMS_KINDS.has(focused.kind)) return
     let cancelled = false
     fetch(`/api/v1/knowledge/claims?node_id=${encodeURIComponent(focused.id)}`)
@@ -656,7 +664,7 @@ export default function KnowledgePage() {
           </button>
           <span
             className="kg-infocard-kind"
-            style={{ color: KIND_COLORS[focused.kind] ?? '#7ab4c8' }}
+            style={{ color: rgbToHex(nodeBaseRgb(focused)) }}
           >
             {focused.kind}
             {focused.status === 'frontier' ? ' · frontier' : ''}
@@ -682,7 +690,15 @@ export default function KnowledgePage() {
                     style={{ background: CLAIM_STATUS_COLOR[claim.status] ?? '#7ab4c8' }}
                   />
                   <span className="kg-claim-text">{claim.text}</span>
-                  <span className="kg-claim-confidence">{Math.round(claim.confidence * 100)}%</span>
+                  <span className="kg-claim-confidence">
+                    {Math.round(claim.confidence * 100)}%
+                    {claim.external_source_count > 0 && (
+                      <span className="kg-claim-sources">
+                        {' '}
+                        · ×{claim.external_source_count} ext.
+                      </span>
+                    )}
+                  </span>
                 </li>
               ))}
             </ul>
@@ -713,19 +729,19 @@ export default function KnowledgePage() {
           <h3 className="kg-activity-title">Activity</h3>
           {activity.length === 0 ? (
             <p className="kg-activity-empty">
-              Theo hat noch nicht gedacht — erste Denkstunde Mo–Do 02:00–05:00 UTC
+              Theo hasn&apos;t thought yet — the first thinking pass runs Mon–Thu 02:00–05:00 UTC.
             </p>
           ) : (
             <ul className="kg-activity-list">
-              {activity.map((item, i) => (
+              {activity.map((item) => (
                 <li
-                  key={i}
+                  key={item.created_at + item.kind}
                   className={`kg-activity-item${
                     item.details?.failed === true ? ' kg-activity-item--failed' : ''
                   }`}
                   title={item.summary}
                 >
-                  <span className="kg-activity-icon">{ACTIVITY_ICON[item.kind] ?? '•'}</span>
+                  <span className="kg-activity-icon">{ACTIVITY_ICON[item.kind]}</span>
                   <span className="kg-activity-summary">{item.summary}</span>
                   <span className="kg-activity-time">{relativeTime(item.created_at)}</span>
                 </li>
@@ -737,7 +753,11 @@ export default function KnowledgePage() {
 
       <div className="kg-legend">
         {Object.entries(KIND_COLORS)
-          .filter(([kind]) => ['site', 'paper', 'topic', 'story', 'period', 'person'].includes(kind))
+          .filter(([kind]) =>
+            ['site', 'paper', 'topic', 'story', 'period', 'person', 'connection', 'hypothesis'].includes(
+              kind,
+            ),
+          )
           .map(([kind, color]) => (
             <span key={kind}>
               <i style={{ background: color }} /> {kind}
