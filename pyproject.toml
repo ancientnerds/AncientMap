@@ -144,6 +144,9 @@ addopts = [
     # 2026-08-05) — excluded by default so a normal test run doesn't burn
     # quota or crawl/hang under quota pressure from a concurrent research
     # run. Run them explicitly with `-m live_llm`.
+    # (pytest takes the LAST `-m` value when it appears more than once, so a
+    # command-line `-m live_llm` overrides this addopts-injected default —
+    # no need to edit this file to opt in for one run.)
     "-m",
     "not live_llm",
 ]

@@ -120,7 +120,6 @@ SOURCE_GROUPS: dict[str, list[str]] = {
         "openalex",
         "crossref",
         "wikipedia",
-        "nara",
         "minimax",
     ],
     "full": [
@@ -1311,8 +1310,17 @@ class NaraAdapter(SourceAdapter):
 
     Declassified/archival primary-source government records. Only searches
     `availableOnline=true` records so every hit links to an actual scan, not
-    just finding-aid metadata. Quota: 10,000 calls/month — no throttling
-    needed beyond the shared retry/backoff in `_retry_request`.
+    just finding-aid metadata.
+
+    Quota: 10,000 calls/month. `_retry_request`'s exponential backoff only
+    retries transient 429/5xx errors — it is NOT a quota guard, and does
+    nothing to bound total call volume. The real budget comes from group
+    membership: nara is `full`/`exhaustive`-only (removed from `standard`,
+    2026-08-05 review), so it's only called when THEO_SOURCE_APIS is one of
+    those (prod sets `full`). Worst case per paper: max_angles(12) *
+    max_search_rounds_per_angle(4) * queries_per_angle(5) = 240 calls —
+    leaves ~41 papers/month of headroom before the 10k ceiling if run
+    back-to-back at full/exhaustive.
     """
 
     @property
@@ -1371,7 +1379,7 @@ class NaraAdapter(SourceAdapter):
                         title=record.get("title") or "",
                         snippet=snippet,
                         date=date,
-                        venue="U.S. National Archives (primary source document)",
+                        venue="U.S. National Archives",
                         source_api=self.name,
                         default_tier=self.default_tier,
                     )
@@ -1491,8 +1499,8 @@ class MultiSourceSearch:
 
         source_group values:
         - "minimal": AncientNerds DB + Semantic Scholar + MiniMax
-        - "standard": + OpenAlex + Wikipedia + Crossref + NARA
-        - "full": + CORE + Europeana + Smithsonian
+        - "standard": + OpenAlex + Wikipedia + Crossref
+        - "full": + CORE + Europeana + Smithsonian + NARA
         - "exhaustive": all sources + Internet Archive + Unpaywall enrichment
 
         Returns deduplicated list of RawSource, sorted by default_tier then citation_count.

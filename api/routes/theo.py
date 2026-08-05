@@ -247,6 +247,16 @@ async def list_adapters():
             "favicon": f"{_icons}/smithsonian.png",
             "group": "heritage",
         },
+        # National Archives — declassified/archival U.S. government primary
+        # sources (Catalog API v2, tier 1). Missing from this registry was a
+        # kill-switch gap: the adapter ran in full/exhaustive searches with
+        # no way to disable it from Stage 2's Source Adapter toggles.
+        "nara": {
+            "label": "National Archives",
+            "icon": "",
+            "favicon": f"{_icons}/nara.png",
+            "group": "heritage",
+        },
         "wikipedia": {
             "label": "Wikipedia",
             "icon": "",

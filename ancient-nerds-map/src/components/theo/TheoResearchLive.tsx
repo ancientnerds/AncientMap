@@ -17,10 +17,13 @@ import { NervLoadingBar } from '../NervLoadingBar'
 // Theo pipeline progress — weighted stages
 // ---------------------------------------------------------------------------
 
+// 'source_audit' removed 2026-08-05: no live SSE event ever carries that
+// stage id (see the matching removal in types/pipeline.ts), so it was
+// dead weight that also permanently capped doneCount one short of
+// totalCount in computeTheoProgress below.
 const THEO_STAGE_WEIGHTS: Record<string, number> = {
   question_analysis: 5,
-  web_search: 15,
-  source_audit: 5,
+  web_search: 20,
   specialist_analysis: 30,
   synthesis: 10,
   debate: 10,
@@ -282,14 +285,15 @@ export default function TheoResearchLive({ requestId, question, startedAt, onClo
               const next = { ...prev }
               const updated = { ...base }
 
+              // 'audit_' stages were removed (backend AuditHandler no longer
+              // emits pipeline SSE events — its LLM audit body never ran
+              // since inception; the handler is now a pure event pass-through,
+              // 2026-08-05) — angle status goes straight from 'searched' to
+              // 'analyzing', skipping the old 'auditing'/'audited' states.
               if (stage.startsWith('search_') && data.status === 'done') {
                 updated.status = 'searched'
                 updated.sources = (meta.total_sources as number) || base.sources
                 updated.round = (meta.round as number) || base.round
-              } else if (stage.startsWith('audit_') && data.status === 'start') {
-                updated.status = 'auditing'
-              } else if (stage.startsWith('audit_') && data.status === 'done') {
-                updated.status = 'audited'
               } else if (stage.startsWith('specialist_') && data.status === 'start') {
                 updated.status = 'analyzing'
               } else if (stage.startsWith('specialist_') && data.status === 'done') {
@@ -318,7 +322,7 @@ export default function TheoResearchLive({ requestId, question, startedAt, onClo
 
         // Track research phase from pipeline stage names
         if (stage === 'decomposition') setResearchPhase(data.status === 'done' ? 'exploring' : 'decomposing')
-        else if (stage.startsWith('search_') || stage.startsWith('audit_') || stage.startsWith('specialist_')) setResearchPhase('exploring')
+        else if (stage.startsWith('search_') || stage.startsWith('specialist_')) setResearchPhase('exploring')
         else if (stage === 'cross_pollination') setResearchPhase(data.status === 'done' ? 'exploring' : 'cross_pollinating')
         else if (stage === 'synthesis') setResearchPhase(data.status === 'done' ? 'debating' : 'synthesizing')
         else if (stage === 'debate') setResearchPhase(data.status === 'done' ? 'writing' : 'debating')
@@ -333,7 +337,7 @@ export default function TheoResearchLive({ requestId, question, startedAt, onClo
             : stage === 'synthesis' ? 'synthesizing'
             : stage === 'debate' ? 'debating'
             : stage === 'quality_judge' ? 'judging'
-            : stage.startsWith('search_') || stage.startsWith('audit_') || stage.startsWith('specialist_') ? 'exploring'
+            : stage.startsWith('search_') || stage.startsWith('specialist_') ? 'exploring'
             : null
           if (phaseKey) {
             let detail = ''
@@ -585,12 +589,12 @@ export default function TheoResearchLive({ requestId, question, startedAt, onClo
             const saturatedCount = angleList.filter(a => a.saturated).length
             const processedCount = angleList.filter(a => a.claims > 0 || a.saturated).length
             const angleTotal = angleList.length
-            // Show phase-level description, not individual angle name
-            const hasAuditing = angleList.some(a => a.status === 'auditing')
+            // Show phase-level description, not individual angle name.
+            // No 'auditing' state anymore — angle.status never reaches it
+            // (see the search_/specialist_ handler above).
             const hasAnalyzing = angleList.some(a => a.status === 'analyzing')
             const sublabel = saturatedCount === angleTotal ? 'SYNTHESIZING FINDINGS'
               : hasAnalyzing ? 'SPECIALIST ANALYSIS'
-              : hasAuditing ? 'AUDITING SOURCES'
               : processedCount > 0 ? 'EXPLORING ANGLES'
               : 'SEARCHING SOURCES'
             // Use indeterminate until first angle gets processed
@@ -611,7 +615,7 @@ export default function TheoResearchLive({ requestId, question, startedAt, onClo
           <div className="theo-angles-table">
             {Object.entries(angles).map(([id, angle]) => (
               <div key={id} className={`theo-angle-row theo-angle-row--${angle.saturated ? 'saturated' : angle.status}`}>
-                <span className={`theo-angle-led ${angle.saturated ? 'theo-angle-led--done' : angle.status === 'analyzing' || angle.status === 'auditing' ? 'theo-angle-led--active' : angle.claims > 0 ? 'theo-angle-led--has-claims' : ''}`} />
+                <span className={`theo-angle-led ${angle.saturated ? 'theo-angle-led--done' : angle.status === 'analyzing' ? 'theo-angle-led--active' : angle.claims > 0 ? 'theo-angle-led--has-claims' : ''}`} />
                 <span className="theo-angle-topic">{angle.topic}</span>
                 <span className="theo-angle-stats">
                   {angle.claims > 0 && <span>{angle.claims} claims</span>}

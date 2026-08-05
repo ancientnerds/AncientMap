@@ -2983,40 +2983,13 @@
   background: rgba(0, 0, 0, 0.25);
 }
 
-/* Gallery carousel — horizontal scroll with arrow navigation */
-.gallery-scroll-container {
-  display: flex;
-  gap: 8px;
-  overflow-x: auto;
-  scroll-snap-type: x mandatory;
-  padding: 12px 0;
-  align-items: center;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(255,255,255,0.2) transparent;
-}
-.gallery-scroll-container img {
-  flex-shrink: 0;
-  scroll-snap-align: start;
-  max-height: 400px;
-  margin: 0;
-  border-radius: 4px;
-}
-.gallery-nav-btn {
-  flex-shrink: 0;
-  background: rgba(255,255,255,0.08);
-  border: 1px solid rgba(255,255,255,0.15);
-  border-radius: 4px;
-  padding: 8px 6px;
-  cursor: pointer;
-  color: var(--text-secondary, #aaa);
-  font-size: 18px;
-  line-height: 1;
-  transition: background 0.15s;
-}
-.gallery-nav-btn:hover {
-  background: rgba(255,255,255,0.18);
-  color: var(--text-primary, #fff);
-}
+/* .gallery-scroll-container / .gallery-nav-btn removed 2026-08-05: zero
+   TSX references anywhere in the codebase (repo-wide grep confirmed) — the
+   horizontal-scroll gallery feature these belonged to (commit 6847718) was
+   never fully wired into JSX and was superseded five days later by
+   TheoCarousel.tsx (.theo-carousel* classes, wired via TheoPaperBody +
+   galleryParser). See the fix(theo-ui) commit that removed this rule
+   family's dangling orphan declarations for the full archaeology. */
 .theo-md-body img + em,
 .theo-md-body p > em:only-child {
   /* Caption line that immediately follows an image */

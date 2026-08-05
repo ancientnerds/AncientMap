@@ -561,9 +561,12 @@ def prune_unrenderable_references(registry: CitationRegistry) -> int:
     """Drop reference_numbers entries whose source is no longer in registry.sources.
 
     Mirrors the predicate format_references_list uses (lines 166-168) to skip
-    entries on render. Two rejection paths can leave the registry incoherent:
-    angle_audit removes from angle.source_ids but keeps registry.sources;
-    research_stages.py:300 pops registry.sources entirely. Either way, this
+    entries on render. Stale comment fixed 2026-08-05: the angle_audit
+    rejection path this used to also cite was removed as dead code
+    (Follow-up-Ticket 1 — its LLM audit body never ran since inception, so
+    it never actually popped anything). The live rejection path today is
+    research_stages.py's `_stage_audit` (journal pipeline), whose rejection
+    loop pops `registry.sources` entirely for rejected source ids — this
     helper restores coherence at publish time so any downstream consumer (and
     the audit) sees the same set of "actually-renderable" references.
 

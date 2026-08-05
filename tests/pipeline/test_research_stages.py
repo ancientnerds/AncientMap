@@ -74,3 +74,34 @@ class TestStageAuditSelfSourceGuard:
 
         assert registry.sources[self_sid].reliability_tier == 4  # untouched
         assert registry.sources[external_sid].reliability_tier == 2  # normal audit still applies
+
+    def test_audited_self_source_survives_rejection(self, monkeypatch):
+        """Follow-up-Ticket 10: a self-source record must also survive the
+        rejection loop, not just the tier-clobber — the audit prompt never
+        sees the [self] marker, so an LLM 'reject' verdict on our own paper
+        is a false positive from missing context, not a real quality call.
+        Same guard style as the pre-existing YouTube/story protection."""
+        registry = CitationRegistry()
+        self_sid = registry.register_source(
+            url="https://ancientnerds.com/theo/public/prior-paper",
+            title="[self] Prior Paper",
+            snippet="own prior research",
+            self_source=True,
+        )
+        external_sid = registry.register_source(
+            url="https://example.edu/paper",
+            title="External Paper",
+            snippet="external research",
+        )
+
+        def _fake_chat(system, user_msg, max_tokens, settings=None):
+            sid = self_sid if self_sid in user_msg else external_sid
+            return json.dumps({"scored_sources": [], "rejected_sources": [{"id": sid}]})
+
+        monkeypatch.setattr(research_stages, "minimax_chat_anthropic", _fake_chat)
+        monkeypatch.setattr(research_stages, "_load_prompt", lambda name: "system prompt")
+
+        _stage_audit("test question", registry, LyraSettings())
+
+        assert self_sid in registry.sources  # protected, not popped
+        assert external_sid not in registry.sources  # normal rejection still applies

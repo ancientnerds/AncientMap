@@ -197,7 +197,7 @@ async def test_nara_adapter_parses_hits(monkeypatch):
     assert first.title == "Memorandum on Project Stargate"
     assert first.snippet == "A" * 500
     assert first.date == "1983"
-    assert first.venue == "U.S. National Archives (primary source document)"
+    assert first.venue == "U.S. National Archives"
     assert first.source_api == "nara"
     assert first.default_tier == 1
 
@@ -206,13 +206,21 @@ async def test_nara_adapter_parses_hits(monkeypatch):
     assert second.title == "Photographs of remote viewing test site"
     assert second.snippet == "fileUnit, Photographs and other Graphic Materials"
     assert second.date == ""
-    assert second.venue == "U.S. National Archives (primary source document)"
+    assert second.venue == "U.S. National Archives"
     assert second.default_tier == 1
 
 
 async def test_nara_adapter_http_error_returns_empty(monkeypatch):
     """A failing HTTP call (e.g. bad key / 5xx) is swallowed — returns [], mirrors
-    the try/except-around-_do pattern used by CORE/Europeana/Smithsonian."""
+    the try/except-around-_do pattern used by CORE/Europeana/Smithsonian.
+
+    A persistent 500 makes _retry_request exhaust all 3 retries (real
+    backoff: 1+2+4=7s) before giving up — monkeypatch time.sleep so this
+    test doesn't actually burn 7 wall-clock seconds every run."""
+    import pipeline.lyra.theo_sources as theo_sources_module
+
+    monkeypatch.setattr(theo_sources_module.time, "sleep", lambda *_: None)
+
     adapter = NaraAdapter("fake-key")
     monkeypatch.setattr(
         adapter._client,
@@ -241,20 +249,23 @@ def test_nara_absent_without_key(monkeypatch):
     assert "nara" not in searcher._adapters
 
 
-def test_nara_in_standard_full_exhaustive_not_minimal():
-    """nara is a source-group member of standard/full/exhaustive, but not minimal."""
+def test_nara_in_full_exhaustive_not_minimal_not_standard():
+    """nara is a source-group member of full/exhaustive only (2026-08-05 review:
+    removed from 'standard' to keep the default group's ~240-calls/paper worst
+    case off NARA's 10k/month quota — prod opts in explicitly via
+    THEO_SOURCE_APIS=full)."""
     assert "nara" not in SOURCE_GROUPS["minimal"]
-    assert "nara" in SOURCE_GROUPS["standard"]
+    assert "nara" not in SOURCE_GROUPS["standard"]
     assert "nara" in SOURCE_GROUPS["full"]
     assert "nara" in SOURCE_GROUPS["exhaustive"]
 
 
 def test_nara_effective_selection_with_key(monkeypatch):
-    """With the key set, nara is among the adapters actually selected for 'standard'."""
+    """With the key set, nara is among the adapters actually selected for 'full'."""
     monkeypatch.setenv("NARA_API_KEY", "fake-key")
     settings = LyraSettings()
     searcher = MultiSourceSearch(settings)
-    active_names = [n for n in SOURCE_GROUPS["standard"] if n in searcher._adapters]
+    active_names = [n for n in SOURCE_GROUPS["full"] if n in searcher._adapters]
     assert "nara" in active_names
 
 
@@ -264,5 +275,5 @@ def test_nara_effective_selection_without_key(monkeypatch):
     monkeypatch.delenv("NARA_API_KEY", raising=False)
     settings = LyraSettings()
     searcher = MultiSourceSearch(settings)
-    active_names = [n for n in SOURCE_GROUPS["standard"] if n in searcher._adapters]
+    active_names = [n for n in SOURCE_GROUPS["full"] if n in searcher._adapters]
     assert "nara" not in active_names

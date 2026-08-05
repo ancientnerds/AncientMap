@@ -47,7 +47,11 @@ export const PIPELINE_STAGES: PipelineNodeDef[] = [
   // Theo research pipeline stages
   { id: 'question_analysis', label: 'Question Analysis', sublabel: 'Decomposition + specialist selection' },
   { id: 'web_search', label: 'Web Research', sublabel: 'MiniMax search API' },
-  { id: 'source_audit', label: 'Source Audit', sublabel: 'Reliability scoring' },
+  // 'source_audit' removed 2026-08-05: no live pipeline path ever emits a
+  // flat "source_audit" SSE stage — the V2 convergence pipeline uses
+  // per-angle "audit_<id>" naming, and that stage's own LLM audit body
+  // never ran since inception (see AuditHandler, angle_audit.py). This
+  // node was permanently inert.
   { id: 'specialist_analysis', label: 'Specialist Analysis', sublabel: 'Per-specialist M2.7 analysis', isRepeatable: true },
   { id: 'synthesis', label: 'Cross-Source Synthesis', sublabel: 'Argument mapping' },
   { id: 'debate', label: 'Specialist Debate', sublabel: 'Challenge & defense rounds' },

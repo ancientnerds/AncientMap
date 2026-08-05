@@ -103,14 +103,33 @@ def test_pick_next_frontier_topic_skips_synthesis_query_when_disallowed():
     assert select_calls[0][1]["kinds"] == ["topic", "site"]
 
 
-def test_pick_next_frontier_topic_orders_by_score_then_created_at_asc():
-    # Follow-up-Ticket 4: the synthesis pool's score is near-uniform
-    # (kind weight + random()), so a created_at ASC tiebreak prevents an
-    # older node from starving behind newer arrivals forever.
+def test_pick_next_frontier_topic_score_includes_real_age_term():
+    # Follow-up-Ticket 4 (corrected 2026-08-05 review): a bare
+    # `created_at ASC` ORDER BY tiebreak is inert here because `random() *
+    # 0.5` is part of the sorted `score` column itself -- two float draws
+    # essentially never tie, so ORDER BY never reaches the tiebreak. The
+    # real fix puts the age term INSIDE the score: 0.5/day, capped at 3.0.
     s = _FakeSession(results=[_row(kind="connection")])
     pick_next_frontier_topic(s, include_synthesis=True)
     select_stmt = next(stmt for stmt, p in s.executed if p and "kinds" in p)
+    assert "LEAST(EXTRACT(EPOCH FROM NOW() - n.created_at) / 86400.0 * 0.5, 3.0)" in select_stmt
+    # The ASC tiebreak is kept too (harmless second ORDER BY key).
     assert "ORDER BY score DESC, n.created_at ASC" in select_stmt
+
+
+def test_pick_next_frontier_topic_excludes_recently_failed_or_cancelled_nodes():
+    # Follow-up-Ticket 5 (final review): a node reset to frontier after its
+    # run terminally failed/was cancelled must cool down for 24h instead of
+    # being picked again immediately in a tight reset->re-pick loop. Fresh
+    # nodes (paper_id NULL, never attempted) are unaffected -- NOT EXISTS is
+    # vacuously true when there's no research_requests row to match.
+    s = _FakeSession(results=[_row(kind="connection")])
+    pick_next_frontier_topic(s, include_synthesis=True)
+    select_stmt = next(stmt for stmt, p in s.executed if p and "kinds" in p)
+    assert "NOT EXISTS (" in select_stmt
+    assert "rr.id = n.paper_id" in select_stmt
+    assert "rr.status IN ('failed', 'cancelled')" in select_stmt
+    assert "rr.completed_at > NOW() - INTERVAL '24 hours'" in select_stmt
 
 
 def test_pick_next_frontier_topic_defaults_to_include_synthesis():

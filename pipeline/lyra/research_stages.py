@@ -301,7 +301,13 @@ def _stage_audit(
                 if rid:
                     rejected_ids.add(rid)
 
-    # Remove rejected sources — protect YouTube and pre-verified story sources
+    # Remove rejected sources — protect YouTube, pre-verified story sources,
+    # and self-source (own prior papers) records. self_source is provenance
+    # metadata the audit prompt never sees (it only shows [Academic]/
+    # [Reputable] tier hints, never a self-source marker) — an LLM "reject"
+    # verdict on our own paper is a false positive from missing context, not
+    # a real quality signal (Follow-up-Ticket 10, same guard style as the
+    # YouTube/story protection above).
     yt_domains = ("youtu.be/", "youtube.com/")
     _protected_sids = protected_sids or set()
     protected = 0
@@ -309,12 +315,15 @@ def _stage_audit(
         source = registry.sources.get(rid)
         is_youtube = source and source.url and any(d in source.url for d in yt_domains)
         is_story_source = rid in _protected_sids
-        if is_youtube or is_story_source:
+        is_self_source = bool(source and source.self_source)
+        if is_youtube or is_story_source or is_self_source:
             protected += 1
             continue
         registry.sources.pop(rid, None)
     if protected:
-        logger.info("[journal] Protected %d source(s) from rejection (YouTube + story)", protected)
+        logger.info(
+            "[journal] Protected %d source(s) from rejection (YouTube + story + self)", protected
+        )
 
     ms = int((time.monotonic() - t0) * 1000)
     logger.info(

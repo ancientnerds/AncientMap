@@ -297,14 +297,23 @@ def _pick_frontier(session, kinds: tuple[str, ...]) -> dict | None:
             + 0.5 * in-degree
             - 2.0 diversity penalty (children of papers explored in the last
               3 days — avoids researching the same cluster repeatedly)
+            + age term: LEAST(days_old * 0.5, 3.0) — 0.5/day, capped at 3.0
+              (bridges the hypothesis-vs-connection gap within a week). This
+              is the REAL starvation fix (Follow-up-Ticket 4, corrected
+              2026-08-05 review): the `n.created_at ASC` tiebreak added in
+              the first pass was inert — `random() * 0.5` is part of the
+              `score` column being sorted, and a float draw ties with
+              another float draw ~never, so ORDER BY score DESC never
+              actually reaches the tiebreak. Putting age INSIDE the score
+              (rather than as an ORDER BY tiebreak on a column that's never
+              tied) is what actually stops a newer node from permanently
+              outscoring an older one via random() alone.
             + 0.5 * random()  (the owner's "zufällig" component)
 
-    Tiebreak: n.created_at ASC (oldest first). The synthesis pool
-    (connection/hypothesis) is near-uniform on score — kind weight plus a
-    ceiling-~5.5 random term — so without a tiebreak a newer node can keep
-    winning random() forever while an older one starves (Follow-up-Ticket
-    4). Harmless for topic/site picks, where injector-accumulated
-    source_signal already differentiates nodes.
+    Tiebreak: n.created_at ASC (oldest first) — kept as a harmless second
+    ORDER BY key in case two scores ever do land exactly equal (e.g. random()
+    itself producing a duplicate float, astronomically unlikely but free to
+    guard).
     """
     row = session.execute(
         text("""
@@ -316,6 +325,7 @@ def _pick_frontier(session, kinds: tuple[str, ...]) -> dict | None:
                                  ELSE 0 END
                    + COALESCE(deg.cnt, 0) * 0.5
                    - CASE WHEN recent.hit IS NOT NULL THEN 2.0 ELSE 0 END
+                   + LEAST(EXTRACT(EPOCH FROM NOW() - n.created_at) / 86400.0 * 0.5, 3.0)
                    + random() * 0.5 AS score
             FROM research_nodes n
             LEFT JOIN (
@@ -332,6 +342,21 @@ def _pick_frontier(session, kinds: tuple[str, ...]) -> dict | None:
               -- multi-hour research run (see JUNK_LABELS, 2026-07-31)
               AND LOWER(TRIM(n.label)) NOT IN
                   ('null', 'none', 'nan', 'undefined', 'unknown', 'n/a', 'na', '')
+              -- Failure cooldown (Follow-up-Ticket 5, final review): a node
+              -- whose most recent run terminally failed/was cancelled and
+              -- got reset to frontier (reset_node_for_failed_request) would
+              -- otherwise be picked again immediately, bounding it to at
+              -- most 1 attempt/day instead of hammering a doomed node in a
+              -- tight reset->re-pick loop. Fresh nodes (paper_id IS NULL,
+              -- never attempted) are unaffected — the NOT EXISTS is
+              -- vacuously true when there's no matching research_requests
+              -- row to join against.
+              AND NOT EXISTS (
+                  SELECT 1 FROM research_requests rr
+                  WHERE rr.id = n.paper_id
+                    AND rr.status IN ('failed', 'cancelled')
+                    AND rr.completed_at > NOW() - INTERVAL '24 hours'
+              )
             ORDER BY score DESC, n.created_at ASC
             LIMIT 1
         """),

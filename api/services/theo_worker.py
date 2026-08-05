@@ -1145,6 +1145,21 @@ async def cleanup_stale_deferred() -> None:
                     f"Quota did not recover within {DEFERRED_MAX_AGE_HOURS} hours "
                     f"after the run was deferred. Marked failed to keep the queue bounded."
                 )
+                # Reset seed nodes BEFORE committing the deferred -> failed
+                # flip (atomicity fix, final review): reset_node_for_failed_request
+                # only checks research_nodes.status = 'researching' — it
+                # never looks at the request's status — so doing it first is
+                # always safe, and it closes the window where the DB could
+                # show request=failed with its node still stuck
+                # 'researching' (e.g. on a crash between the two steps,
+                # which the feeder's failure-cooldown NOT EXISTS clause
+                # assumes never persists). Node claim is dead either way —
+                # unlike 'deferred' itself, a request this stale is not
+                # coming back (Ticket 6).
+                from pipeline.lyra.research_graph import reset_node_for_failed_request
+
+                for rid in stale_ids:
+                    reset_node_for_failed_request(rid)
                 session.execute(
                     text(
                         """
@@ -1159,16 +1174,11 @@ async def cleanup_stale_deferred() -> None:
                     {"msg": reason, "ids": stale_ids},
                 )
                 session.commit()
-            # Release credit reservations and reset seed nodes outside the
-            # session above — both helpers use their own session, so the
-            # order doesn't matter. These requests just flipped deferred ->
-            # failed, so unlike the 'deferred' state itself, their node
-            # claim is now dead and must go back to frontier (Ticket 6).
-            from pipeline.lyra.research_graph import reset_node_for_failed_request
-
+            # Release credit reservations outside the session above — the
+            # helper uses its own session, so the order relative to the
+            # commit above doesn't matter.
             for rid in stale_ids:
                 _release_reservation(rid)
-                reset_node_for_failed_request(rid)
             logger.warning(
                 f"[THEO] Marked {len(stale_ids)} stale-deferred request(s) failed "
                 f"(>{DEFERRED_MAX_AGE_HOURS}h without quota recovery)."
