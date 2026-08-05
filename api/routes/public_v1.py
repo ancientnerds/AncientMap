@@ -9,6 +9,7 @@ All endpoints are rate-limited to 10 requests per minute per IP.
 """
 
 import logging
+import uuid
 from datetime import UTC
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response
@@ -30,6 +31,8 @@ from api.schemas.public_v1 import (
     CardPublic,
     CardsResponse,
     ChannelPublic,
+    ClaimItem,
+    ClaimsResponse,
     EmpireListOut,
     EmpireOut,
     FacetSource,
@@ -201,6 +204,20 @@ def _activity_items(rows) -> list[dict]:
             "kind": r.kind,
             "summary": r.summary,
             "details": r.details,
+        }
+        for r in rows
+    ]
+
+
+def _claim_items(rows) -> list[dict]:
+    """Shape knowledge_claims rows for the Focus-Card (spec §7). Pure."""
+    return [
+        {
+            "text": r.text,
+            "status": r.status,
+            "confidence": r.confidence,
+            "external_source_count": r.external_source_count,
+            "paper_ids": r.paper_ids,
         }
         for r in rows
     ]
@@ -1811,6 +1828,56 @@ def create_public_api() -> FastAPI:
         response = ActivityResponse(
             items=[ActivityItem(**item) for item in _activity_items(rows)],
             license=RESEARCH_LICENSE,
+        )
+        cache_set(cache_key, response.model_dump(), ttl=60)
+        return response
+
+    # =========================================================================
+    # 22. GET /knowledge/claims — Claims for a research node (Focus-Card)
+    # =========================================================================
+
+    @public_app.get(
+        "/knowledge/claims",
+        summary="Claims for a research node",
+        description=(
+            "The permanent researcher's world-model claims tied to a single "
+            "knowledge graph node — powers the Focus-Card on the Knowledge "
+            "page.\n\n"
+            f"**License: {RESEARCH_LICENSE}** — attribution to **Ancient Nerds** "
+            "(https://ancientnerds.com) is the only requirement."
+        ),
+        response_model=ClaimsResponse,
+        tags=["Knowledge Graph"],
+        dependencies=[Depends(rate_limit_dependency)],
+        responses={429: {"description": "Rate limit exceeded"}},
+    )
+    async def get_knowledge_claims(
+        node_id: str = Query(..., description="research_nodes UUID"),
+        db: Session = Depends(get_db),
+    ):
+        try:
+            uuid.UUID(node_id)
+        except ValueError:
+            raise HTTPException(422, "node_id must be a valid UUID") from None
+
+        cache_key = f"pubv1:knowledge_claims:{node_id}"
+        cached = cache_get(cache_key)
+        if cached:
+            return cached
+
+        rows = db.execute(
+            text("""
+                SELECT text, status, confidence, external_source_count, paper_ids
+                FROM knowledge_claims
+                WHERE node_id = CAST(:nid AS uuid)
+                ORDER BY updated_at DESC
+                LIMIT 20
+            """),
+            {"nid": node_id},
+        ).fetchall()
+
+        response = ClaimsResponse(
+            items=[ClaimItem(**i) for i in _claim_items(rows)], license=RESEARCH_LICENSE
         )
         cache_set(cache_key, response.model_dump(), ttl=60)
         return response

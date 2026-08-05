@@ -605,3 +605,24 @@ class ActivityResponse(BaseModel):
 
     items: list[ActivityItem] = Field(description="Activity events, newest first")
     license: str = Field(description="Reuse license for this data")
+
+
+class ClaimItem(BaseModel):
+    """One claim in the permanent researcher's world model (spec §7)."""
+
+    text: str = Field(description="The claim statement")
+    status: str = Field(description="established | contested | refuted | open")
+    confidence: float = Field(description="Confidence score 0-1")
+    external_source_count: int = Field(
+        description="Number of external tier-1/2 sources backing this claim (self-citations excluded)"
+    )
+    paper_ids: list[str] | None = Field(
+        None, description="IDs of research papers asserting this claim"
+    )
+
+
+class ClaimsResponse(BaseModel):
+    """Claims tied to a research node, for the Knowledge page focus-card (spec §7)."""
+
+    items: list[ClaimItem] = Field(description="Claims for this node, most recently updated first")
+    license: str = Field(description="Reuse license for this data")
