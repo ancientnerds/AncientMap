@@ -287,7 +287,12 @@ def _stage_audit(
                 sid = entry.get("id", "") or original_sid
                 tier_val = entry.get("reliability_tier", 0)
                 source = registry.sources.get(sid)
-                if source:
+                # self_source's tier 4 is authoritative (theo_citations.py
+                # register_source forces it) — the audit prompt only scores
+                # tiers 1-3 (_audit_one's tier_str never shows "[self]"), so
+                # an unconditional overwrite would clobber it back down to a
+                # plain external tier (Follow-up-Ticket 5).
+                if source and not source.self_source:
                     source.reliability_tier = tier_val
                     total_scored += 1
             for entry in parsed.get("rejected_sources", []):
