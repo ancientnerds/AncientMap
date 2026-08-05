@@ -1,6 +1,33 @@
 """Tests for the research knowledge-graph builder (pure functions, no DB)."""
 
-from pipeline.lyra.research_graph import build_graph_from_state, is_junk_label, normalize_label
+from pipeline.lyra.research_graph import (
+    build_graph_from_state,
+    is_junk_label,
+    normalize_label,
+    reset_node_for_failed_request,
+)
+
+
+class _FakeGraphSession:
+    """Captures executed statement/params pairs; supports the `with
+    get_session() as session:` context-manager usage (see
+    tests/pipeline/test_thinking_log.py's _FakeSession for the pattern)."""
+
+    def __init__(self):
+        self.executed = []
+        self.committed = False
+
+    def execute(self, stmt, params=None):
+        self.executed.append((str(stmt), params))
+
+    def commit(self):
+        self.committed = True
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
 
 
 class FakeAngle:
@@ -79,6 +106,30 @@ def test_epoch_for_year_buckets():
     assert epoch_for_year(800) == "500 - 1000 AD"
     assert epoch_for_year(1900) == "1500+ AD"
     assert epoch_for_year(None) is None
+
+
+def test_reset_node_for_failed_request_resets_frontier(monkeypatch):
+    fake = _FakeGraphSession()
+    import pipeline.database as database_module
+
+    monkeypatch.setattr(database_module, "get_session", lambda: fake)
+    reset_node_for_failed_request("req-1")
+    assert fake.committed
+    stmt, params = fake.executed[0]
+    assert "UPDATE research_nodes" in stmt
+    assert "SET status = 'frontier'" in stmt
+    assert "WHERE paper_id = CAST(:rid AS uuid) AND status = 'researching'" in stmt
+    assert params["rid"] == "req-1"
+
+
+def test_reset_node_for_failed_request_never_raises(monkeypatch):
+    import pipeline.database as database_module
+
+    def boom():
+        raise RuntimeError("db down")
+
+    monkeypatch.setattr(database_module, "get_session", boom)
+    reset_node_for_failed_request("req-1")  # must not raise
 
 
 def test_entity_mention_threshold():

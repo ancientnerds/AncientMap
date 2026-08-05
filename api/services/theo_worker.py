@@ -183,6 +183,15 @@ async def _process_request(
                     f"Research {status}: {question[:200]}",
                     {"request_id": request_id, "failed": True},
                 )
+            if status in ("cancelled", "failed"):
+                # The run will never complete — reset its seed node to
+                # frontier so it can be requeued (Follow-up-Ticket 6).
+                # 'deferred' is deliberately excluded: it retries and still
+                # holds a legitimate claim on the node.
+                from pipeline.lyra.research_graph import reset_node_for_failed_request
+
+                reset_node_for_failed_request(request_id)
+
             if status == "cancelled":
                 emit({"type": "done", "status": "cancelled"})
                 logger.info(f"[THEO] Request {request_id} cancelled by user")
@@ -320,6 +329,13 @@ async def _process_request(
             )
         _release_reservation(request_id)
         outer_status = "deferred" if is_quota_error else "failed"
+        if outer_status == "failed":
+            # Same terminal-failure reset as the ctx.error branch above —
+            # this is the crash path (exception raised before/outside
+            # orchestrator.run returning ctx), 'deferred' still excluded.
+            from pipeline.lyra.research_graph import reset_node_for_failed_request
+
+            reset_node_for_failed_request(request_id)
         emit({"type": "done", "status": outer_status})
         if is_batch:
             from pipeline.lyra.thinking_log import log_thinking
@@ -440,6 +456,11 @@ def _read_limiter_activity(is_batch: bool) -> int | None:
 def _mark_failed_running(request_id: str, msg: str) -> None:
     """Mark a still-'running' request failed and release its credit reservation."""
     _release_reservation(request_id)
+    from pipeline.lyra.research_graph import reset_node_for_failed_request
+
+    # Timeout/stall kills land here — the seed node would otherwise sit
+    # 'researching' forever (Follow-up-Ticket 6).
+    reset_node_for_failed_request(request_id)
     try:
         with get_session() as session:
             session.execute(
@@ -1138,10 +1159,16 @@ async def cleanup_stale_deferred() -> None:
                     {"msg": reason, "ids": stale_ids},
                 )
                 session.commit()
-            # Release credit reservations outside the session above. The
-            # helper uses its own session, so the order doesn't matter.
+            # Release credit reservations and reset seed nodes outside the
+            # session above — both helpers use their own session, so the
+            # order doesn't matter. These requests just flipped deferred ->
+            # failed, so unlike the 'deferred' state itself, their node
+            # claim is now dead and must go back to frontier (Ticket 6).
+            from pipeline.lyra.research_graph import reset_node_for_failed_request
+
             for rid in stale_ids:
                 _release_reservation(rid)
+                reset_node_for_failed_request(rid)
             logger.warning(
                 f"[THEO] Marked {len(stale_ids)} stale-deferred request(s) failed "
                 f"(>{DEFERRED_MAX_AGE_HOURS}h without quota recovery)."

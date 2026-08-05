@@ -208,6 +208,38 @@ def mark_node_explored(paper_request_id: str) -> None:
         logger.error("[GRAPH] mark_node_explored failed for %s: %s", paper_request_id, exc)
 
 
+def reset_node_for_failed_request(paper_request_id: str) -> None:
+    """Reset the node that seeded this research request back to frontier
+    when its run dies without ever completing (failed/cancelled) — mirrors
+    mark_node_explored's exact pattern for the terminal-failure case.
+
+    Without this, a node stuck 'researching' from a dead run is a dead end:
+    the miner's NOT EXISTS suppression treats the pair as already covered
+    forever, and the curator's connection/hypothesis insert is a no-op
+    (`ON CONFLICT (kind, norm_label) DO NOTHING`), so the label can never be
+    requeued (Follow-up-Ticket 6, 2026-08-04 final review). Deliberately NOT
+    called for 'deferred' runs — those retry and still hold a legitimate
+    claim on the node; resetting them would let the feeder double-queue the
+    same node while the deferred run is still pending."""
+    try:
+        from pipeline.database import get_session
+
+        with get_session() as session:
+            session.execute(
+                text("""
+                    UPDATE research_nodes
+                    SET status = 'frontier', updated_at = NOW()
+                    WHERE paper_id = CAST(:rid AS uuid) AND status = 'researching'
+                """),
+                {"rid": paper_request_id},
+            )
+            session.commit()
+    except Exception as exc:  # noqa: BLE001 — best-effort by design
+        logger.error(
+            "[GRAPH] reset_node_for_failed_request failed for %s: %s", paper_request_id, exc
+        )
+
+
 def allow_synthesis(recent_seed_kinds: list[str]) -> bool:
     """Max 1 of 3 recent batch runs may be synthesis (connection/hypothesis)
     — fresh external topics keep the majority (anti-echo, spec §4).
