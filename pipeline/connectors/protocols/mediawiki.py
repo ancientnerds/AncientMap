@@ -204,7 +204,6 @@ class MediaWikiProtocol:
         self,
         category: str,
         limit: int = 50,
-        recursive: bool = False,
     ) -> list[dict[str, Any]]:
         """
         Get images from a Commons category.
@@ -212,7 +211,6 @@ class MediaWikiProtocol:
         Args:
             category: Category name (with or without "Category:" prefix)
             limit: Maximum results
-            recursive: Include subcategories
 
         Returns:
             List of image info dictionaries

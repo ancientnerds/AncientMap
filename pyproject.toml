@@ -34,6 +34,56 @@ Repository = "https://github.com/AncientNerds/AncientMap.git"
 Issues = "https://github.com/AncientNerds/AncientMap/issues"
 
 # =============================================================================
+# Import-Linter (architecture contracts, run in CI via lint-imports)
+# =============================================================================
+# Both contracts are RATCHETS: they freeze the cross-layer imports that exist
+# today (2026-08-05) as documented exceptions. Any NEW cross-layer import
+# fails CI. Shrink the ignore lists over time; never grow them without an
+# architectural decision.
+[tool.importlinter]
+root_packages = ["api", "pipeline"]
+
+[[tool.importlinter.contracts]]
+name = "pipeline must not import api (frozen exceptions only)"
+type = "forbidden"
+source_modules = ["pipeline"]
+forbidden_modules = ["api"]
+ignore_imports = [
+    # Theo/Lyra research runs inside the API container and reuses its
+    # service singletons (Qdrant, embeddings, Redis, Discord webhook).
+    "pipeline.connectors.cache -> api.cache",
+    "pipeline.lyra.curator -> api.services.notify",
+    "pipeline.lyra.graph_full_ingest -> api.routes.public_v1",
+    "pipeline.lyra.handlers.cross_pollination -> api.services.lyra_embeddings",
+    "pipeline.lyra.theo_research_index -> api.services.lyra_embeddings",
+    "pipeline.lyra.theo_sources -> api.services.lyra_tools",
+]
+
+[[tool.importlinter.contracts]]
+name = "api may only use sanctioned pipeline module families"
+type = "forbidden"
+source_modules = ["api"]
+forbidden_modules = ["pipeline"]
+ignore_imports = [
+    # Shared DB layer — the one crossing CODE_AUDIT.md D5 always allowed.
+    "api.** -> pipeline.database",
+    # Sanctioned families (status 2026-08-05): research pipeline runs
+    # in-process, renderers/utils/normalizers are shared code.
+    "api.** -> pipeline.config",
+    "api.** -> pipeline.connectors",
+    "api.** -> pipeline.connectors.**",
+    "api.** -> pipeline.lyra.**",
+    "api.** -> pipeline.utils.**",
+    "api.** -> pipeline.normalizers.**",
+    "api.** -> pipeline.historical_boundaries.**",
+    "api.** -> pipeline.article_html_renderer",
+    "api.** -> pipeline.research_html_renderer",
+    "api.** -> pipeline.sites_html_renderer",
+    "api.** -> pipeline.static_exporter",
+    "api.** -> pipeline.library_aggregator",
+]
+
+# =============================================================================
 # Mypy Configuration
 # =============================================================================
 [tool.mypy]

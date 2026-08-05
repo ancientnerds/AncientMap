@@ -13,7 +13,7 @@ from pydantic import BaseModel
 from sqlalchemy import text
 
 from api.services.jwt_auth import require_founder
-from pipeline.database import DiscordUser, VectorSyncState, get_session
+from pipeline.database import DiscordUser, get_session
 
 router = APIRouter()
 logger = logging.getLogger(__name__)

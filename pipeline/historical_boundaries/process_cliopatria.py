@@ -32,8 +32,7 @@ from pathlib import Path
 
 try:
     import geojson
-    from shapely.geometry import MultiPolygon, Polygon, mapping, shape
-    from shapely.ops import unary_union
+    from shapely.geometry import mapping, shape
 except ImportError as e:
     print(f"Missing dependency: {e}")
     print("\nInstall required packages:")

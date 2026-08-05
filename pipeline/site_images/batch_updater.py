@@ -271,7 +271,6 @@ def run_megalithic(session: Session, limit: int = None) -> int:
 def run_all_sources(
     sources: list[str] = None,
     limit: int = None,
-    skip_existing: bool = True,
 ):
     """
     Run image acquisition from all specified sources.
@@ -279,7 +278,6 @@ def run_all_sources(
     Args:
         sources: List of source IDs to run (or None for all)
         limit: Maximum sites to process per source
-        skip_existing: Skip sites that already have images
     """
     source_methods = {
         "wikidata": run_wikidata,

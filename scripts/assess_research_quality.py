@@ -246,6 +246,21 @@ def assess_citation_integrity(data: dict) -> dict:
 # Gate 3: Source Tier Mix
 # ---------------------------------------------------------------------------
 
+def _fail_gate(name: str, reason: str) -> dict:
+    """Hard-fail a gate when a precondition is missing (was undefined before
+    2026-08-05 — a paper without a References section crashed with NameError
+    instead of failing the gate)."""
+    return {
+        "name": name,
+        "description": reason,
+        "gate_passed": False,
+        "score": 0.0,
+        "details": {},
+        "fixes": [reason],
+        "weight": 0.2,
+    }
+
+
 def assess_source_tiers(data: dict) -> dict:
     """Check for meaningful source diversity — Academic + Reputable + primary."""
     result = data.get("result", {})
@@ -588,10 +603,9 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--auth-token",
-        default=os.getenv(
-            "AUTH_TOKEN",
-            "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI0NDIwMDAxMTI3NTYwNjQyNjAiLCJ1c2VyX2lkIjoiMjZlMDYzMWItNjY0Yy00NTg4LTk0M2EtMDk1NjE2YWFjODhiIiwiZXhwIjoxNzc2ODA1NjgyLCJpYXQiOjE3NzYyMDA4ODJ9.DxQqBrI0rAJE1wD0WgkIuyb6Ipgc8UlrsjhLJoA_Zso",
-        ),
+        # No hardcoded fallback — tokens expire after 7 days and must never be
+        # committed (gitleaks gate). Grab a fresh one from browser localStorage.
+        default=os.getenv("AUTH_TOKEN", ""),
     )
     args = parser.parse_args()
 

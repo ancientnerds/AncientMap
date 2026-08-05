@@ -385,7 +385,7 @@ function EndpointCard({ ep, facets }: { ep: ParsedEndpoint; facets: FacetsData |
               <pre
                 className="api-response-body"
                 ref={responseRef}
-                dangerouslySetInnerHTML={{ __html: highlightJson(response.body) }}
+                dangerouslySetInnerHTML={/* nosemgrep: semgrep.tsx-dangerously-set-inner-html -- highlightJson escapes every token via escapeHtml before adding span markup */ { __html: highlightJson(response.body) }}
               />
             </div>
           )}

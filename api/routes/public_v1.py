@@ -61,6 +61,7 @@ from api.schemas.public_v1 import (
     StatsResponse,
     StatusResponse,
 )
+from api.services.lyra_tools import _escape_ilike
 from api.services.rate_limiter import RateLimiter, get_client_ip
 from pipeline.database import get_db
 
@@ -1310,19 +1311,18 @@ def create_public_api() -> FastAPI:
             conditions.append("uc.enrichment_status IN ('enriched', 'promoted', 'pending')")
 
         if q:
-            q_escaped = q.strip().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            q_escaped = _escape_ilike(q.strip())
             conditions.append("(uc.name ILIKE :q OR uc.corrected_name ILIKE :q)")
             params["q"] = f"%{q_escaped}%"
         if country:
-            c_escaped = (
-                country.strip().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-            )
+            c_escaped = _escape_ilike(country.strip())
             conditions.append("uc.country ILIKE :country")
             params["country"] = f"%{c_escaped}%"
 
         where_clause = " AND ".join(conditions)
 
         total = db.execute(
+            # nosemgrep: semgrep.api-sql-fstring-interpolation -- where_clause is built from hardcoded fragments only; user input is bound via :params
             text(f"SELECT COUNT(*) FROM user_contributions uc WHERE {where_clause}"),
             params,
         ).scalar()
@@ -1401,14 +1401,16 @@ def create_public_api() -> FastAPI:
         params: dict = {"limit": page_size, "offset": offset}
 
         if q:
-            q_escaped = q.strip().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            q_escaped = _escape_ilike(q.strip())
             where_parts.append("(title ILIKE :q_pattern OR content ILIKE :q_pattern)")
             params["q_pattern"] = f"%{q_escaped}%"
 
         where_clause = " AND ".join(where_parts)
 
         count_result = db.execute(
-            text(f"SELECT COUNT(*) FROM news_articles WHERE {where_clause}"), params
+            # nosemgrep: semgrep.api-sql-fstring-interpolation -- where_clause is built from hardcoded fragments only; user input is bound via :params
+            text(f"SELECT COUNT(*) FROM news_articles WHERE {where_clause}"),
+            params,
         )
         total_count = count_result.scalar() or 0
 
@@ -1570,7 +1572,7 @@ def create_public_api() -> FastAPI:
         params: dict = {"limit": page_size, "offset": offset}
 
         if q:
-            q_escaped = q.strip().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            q_escaped = _escape_ilike(q.strip())
             where_parts.append(
                 "(r.result_json::jsonb->>'title' ILIKE :q_pattern OR r.question ILIKE :q_pattern)"
             )
@@ -1580,7 +1582,9 @@ def create_public_api() -> FastAPI:
 
         total_count = (
             db.execute(
-                text(f"SELECT COUNT(*) FROM research_requests r WHERE {where_clause}"), params
+                # nosemgrep: semgrep.api-sql-fstring-interpolation -- where_clause is built from hardcoded fragments only; user input is bound via :params
+                text(f"SELECT COUNT(*) FROM research_requests r WHERE {where_clause}"),
+                params,
             ).scalar()
             or 0
         )

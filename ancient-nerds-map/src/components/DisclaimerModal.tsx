@@ -43,7 +43,7 @@ function DisclaimerModal({ isOpen, onClose }: DisclaimerModalProps) {
         <div
           className="disclaimer-content"
           ref={contentRef}
-          dangerouslySetInnerHTML={{ __html: getDisclaimerHTML(__BUILD_HASH__, __BUILD_TIME__) }}
+          dangerouslySetInnerHTML={/* nosemgrep: semgrep.tsx-dangerously-set-inner-html -- static HTML from build-time constants, no user input */ { __html: getDisclaimerHTML(__BUILD_HASH__, __BUILD_TIME__) }}
         />
       </div>
     </div>

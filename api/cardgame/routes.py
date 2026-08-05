@@ -23,6 +23,7 @@ from api.cardgame.models import (
     CardStats,
 )
 from api.services.jwt_auth import get_current_user, get_optional_user
+from api.services.lyra_tools import _escape_ilike
 from api.services.rate_limiter import RateLimiter, get_client_ip
 from pipeline.database import DiscordUser, UnifiedSite, get_session
 from pipeline.historical_boundaries.empire_metadata import EMPIRE_METADATA
@@ -229,7 +230,9 @@ def get_collection(
         if group:
             query = query.filter(CardStats.category_group == group)
         if civilization:
-            query = query.filter(CardStats.civilization.ilike(f"%{civilization}%"))
+            query = query.filter(
+                CardStats.civilization.ilike(f"%{_escape_ilike(civilization)}%", escape="\\")
+            )
 
         total = query.count()
         rows = (

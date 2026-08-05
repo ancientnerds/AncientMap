@@ -6,7 +6,7 @@ Exports register_commands(bot) — called once from discord_bot._get_bot().
 import asyncio
 import logging
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 
 import discord
 from discord import app_commands
@@ -18,6 +18,7 @@ from api.cardgame.constants import (
     RARITY_NAMES,
     TYPE_ADVANTAGE_BONUS,
 )
+from api.services.lyra_tools import _escape_ilike
 from api.services.rate_limiter import RateLimiter
 
 logger = logging.getLogger(__name__)
@@ -73,7 +74,7 @@ def register_commands(bot: discord.Client) -> None:
                 # Fuzzy search by name
                 site = (
                     session.query(UnifiedSite)
-                    .filter(UnifiedSite.name.ilike(f"%{name}%"))
+                    .filter(UnifiedSite.name.ilike(f"%{_escape_ilike(name)}%", escape="\\"))
                     .filter(UnifiedSite.source_id == "ancient_nerds")
                     .first()
                 )

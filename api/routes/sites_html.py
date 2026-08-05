@@ -53,6 +53,7 @@ async def sites_index(db: Session = Depends(get_db)):
 async def sites_by_country(slug: str, db: Session = Depends(get_db)):
     """All curated sites of one country, matched by country slug."""
     rows = db.execute(
+        # nosemgrep: semgrep.api-sql-fstring-interpolation -- _CURATED_WHERE is a module-level constant, no user input
         text(f"SELECT DISTINCT country FROM unified_sites WHERE {_CURATED_WHERE}")
     ).fetchall()
     country = next((row.country for row in rows if country_slug(row.country) == slug), None)

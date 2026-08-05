@@ -7,6 +7,7 @@ from pydantic import BaseModel
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from api.services.lyra_tools import _escape_ilike
 from pipeline.database import LibrarySource, NewsItem, get_db
 
 logger = logging.getLogger(__name__)
@@ -51,11 +52,11 @@ def search_library(
     query = db.query(LibrarySource)
 
     if q:
-        pattern = f"%{q}%"
+        pattern = f"%{_escape_ilike(q)}%"
         query = query.filter(
-            (LibrarySource.title.ilike(pattern))
-            | (LibrarySource.snippet.ilike(pattern))
-            | (LibrarySource.domain.ilike(pattern))
+            (LibrarySource.title.ilike(pattern, escape="\\"))
+            | (LibrarySource.snippet.ilike(pattern, escape="\\"))
+            | (LibrarySource.domain.ilike(pattern, escape="\\"))
         )
 
     if period:

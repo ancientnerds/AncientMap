@@ -646,7 +646,6 @@ def update_site_thumbnails(session: Session, matches: list[SiteMatch]) -> int:
 def search_commons_fallback(
     session: Session,
     limit: int = 10000,
-    skip_existing: bool = True,
 ) -> int:
     """
     Search Commons for images of sites that don't have one yet.

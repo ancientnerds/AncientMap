@@ -14,7 +14,7 @@ import os
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 
 from pipeline.lyra.theo_citations import CitationRegistry
 
@@ -202,7 +202,7 @@ class ResearchState:
         """Hours until deadline."""
         if not self.deadline:
             return 999.0
-        delta = (self.deadline - datetime.utcnow()).total_seconds()
+        delta = (self.deadline - datetime.now(UTC)).total_seconds()
         return max(0, delta / 3600)
 
     @property

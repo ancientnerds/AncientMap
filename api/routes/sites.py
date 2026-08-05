@@ -1963,6 +1963,7 @@ async def replace_source(
             ):
                 db.execute(
                     text(
+                        # nosemgrep: semgrep.api-sql-fstring-interpolation -- tbl comes from the hardcoded tuple above; :src is bound
                         f"DELETE FROM {tbl}"  # noqa: S608
                         f" WHERE site_id IN ({src_filter})"
                     ),
@@ -1983,6 +1984,7 @@ async def replace_source(
             ):
                 db.execute(
                     text(
+                        # nosemgrep: semgrep.api-sql-fstring-interpolation -- tbl comes from the hardcoded tuple above; :src is bound
                         f"UPDATE {tbl} SET site_id = NULL"  # noqa: S608
                         f" WHERE site_id IN ({src_filter})"
                     ),

@@ -1,0 +1,20 @@
+# gitleaks configuration — secrets scanning for code AND full git history.
+# CI runs: gitleaks git --no-banner (see .github/workflows/ci.yml, sast job).
+# Historical, individually-triaged findings live in .gitleaksignore.
+#
+# Triage policy: every allowlist entry needs a reason. Never allowlist a
+# finding that is a real credential — rotate it instead.
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Public identifiers that are not credentials"
+
+# Discord snowflake IDs (guild/client/channel IDs) are public identifiers,
+# not credentials. The default discord-client-id rule matches any 17-19 digit
+# number near the word "discord".
+regexes = [
+    '''932330696956063765''',  # DISCORD_GUILD_ID default (public guild ID)
+    '''968657029658980432''',  # Lyra test channel ID (public)
+]

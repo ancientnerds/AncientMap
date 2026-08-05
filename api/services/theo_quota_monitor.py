@@ -41,11 +41,10 @@ import asyncio
 import logging
 import os
 import time
-from datetime import UTC, datetime, timezone
+from datetime import UTC, datetime
 
 from api.services.notify import send_discord_webhook
 from api.services.theo_config import (
-    DEFERRED_RETRY_BACKOFF_S,
     QUOTA_FREEZE_PCT,
     QUOTA_HEALTHY_PCT,
     QUOTA_PROBE_INTERVAL_S,
@@ -127,7 +126,6 @@ _state: dict = {
 }
 
 _started = False
-_start_lock = asyncio.Lock() if False else None  # noqa: F841 — placeholder, see start_watchdog
 
 
 def get_watchdog_state() -> dict:

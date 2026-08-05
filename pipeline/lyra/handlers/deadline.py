@@ -3,7 +3,7 @@
 import logging
 
 from pipeline.lyra.handlers import BaseHandler
-from pipeline.lyra.research_events import AllAnglesSaturated, DeadlineApproaching, DebateComplete
+from pipeline.lyra.research_events import AllAnglesSaturated, DebateComplete
 from pipeline.lyra.research_state import ResearchPhase
 
 logger = logging.getLogger(__name__)

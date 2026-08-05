@@ -1,0 +1,96 @@
+# Semgrep rules derived from docs/procedures/CODE_AUDIT.md "Scanning Strategy".
+# These encode the mechanical audit patterns as CI-blocking checks.
+# Patterns that need cross-function context (credits without FOR UPDATE,
+# rollback-in-loop, except:pass triage) stay in the LLM audit — they are not
+# expressible as binary syntactic rules without heavy noise.
+#
+# ruff's flake8-bandit (S) already covers eval/exec and shell=True for
+# api/ + pipeline/ — those are intentionally NOT duplicated here.
+
+rules:
+  # D2-SEC / A05: SQL built via f-string interpolation (S608 is disabled in
+  # ruff because pipeline/ builds SQL dynamically by design — so this rule
+  # guards the request path only).
+  - id: api-sql-fstring-interpolation
+    languages: [python]
+    severity: ERROR
+    message: >-
+      SQL keyword inside an f-string with interpolation. Use parameterized
+      binding (:param) instead — f-string SQL in api/ is an audit gate
+      violation (CODE_AUDIT.md D2-SEC, OWASP A05).
+    paths:
+      include:
+        - api/
+    patterns:
+      - pattern-regex: 'f["''][^"'']*\b(SELECT|INSERT|UPDATE|DELETE)\b[^"'']*\{'
+
+  # P6: datetime.utcnow() is deprecated in Python 3.12+ and returns naive
+  # datetimes. Quality gate requires 0 occurrences.
+  - id: python-datetime-utcnow
+    languages: [python]
+    severity: ERROR
+    message: >-
+      datetime.utcnow() is deprecated — use datetime.now(UTC)
+      (CODE_AUDIT.md P6).
+    pattern-either:
+      - pattern: datetime.utcnow()
+      - pattern: datetime.datetime.utcnow()
+
+  # D2-SEC: ILIKE/LIKE pattern built from an unescaped variable — % and _
+  # metacharacters leak through. Use _escape_ilike from
+  # api/services/lyra_tools.py (never duplicate it).
+  - id: python-ilike-unescaped
+    languages: [python]
+    severity: ERROR
+    message: >-
+      ILIKE/LIKE pattern interpolates a raw variable — escape % and _ first
+      via _escape_ilike (api/services/lyra_tools.py), or pass escape=
+      (CODE_AUDIT.md D2-SEC).
+    patterns:
+      - pattern-either:
+          - pattern: $Q.ilike(f"%{$V}%")
+          - pattern: $Q.like(f"%{$V}%")
+      - metavariable-pattern:
+          metavariable: $V
+          patterns:
+            - pattern-not: _escape_ilike(...)
+
+  # D2-SEC: non-httpOnly cookies. Only the OAuth handoff cookie is allowed
+  # (mark that one line with nosemgrep + reason).
+  - id: python-cookie-httponly-false
+    languages: [python]
+    severity: ERROR
+    message: >-
+      Cookie set with httponly=False — JS-readable cookies are an XSS
+      exfiltration surface. Only the OAuth handoff cookie is exempt
+      (CODE_AUDIT.md D2-SEC).
+    pattern-regex: 'httponly\s*=\s*False'
+
+  # D2-SEC: timing-unsafe HMAC comparison. Webhook signatures must use
+  # hmac.compare_digest (CODE_AUDIT.md quality gate).
+  - id: python-hmac-timing-unsafe-compare
+    languages: [python]
+    severity: ERROR
+    message: >-
+      HMAC digest compared with == — use hmac.compare_digest to prevent
+      timing attacks (CODE_AUDIT.md D2-SEC).
+    pattern-either:
+      - pattern: $SIG == hmac.new(...).hexdigest()
+      - pattern: hmac.new(...).hexdigest() == $SIG
+      - pattern: $SIG == hmac.new(...).digest()
+      - pattern: hmac.new(...).digest() == $SIG
+
+  # D2-SEC / LLM05: raw HTML injection in React. Every use must be reviewed
+  # and annotated with nosemgrep + justification.
+  - id: tsx-dangerously-set-inner-html
+    languages: [generic]
+    severity: ERROR
+    message: >-
+      dangerouslySetInnerHTML renders raw HTML — XSS risk. If the content is
+      static/trusted, annotate the line with a nosemgrep comment stating why
+      (CODE_AUDIT.md D2-SEC).
+    paths:
+      include:
+        - ancient-nerds-map/src/
+    # The trailing = restricts matches to actual JSX usage (not comments).
+    pattern: dangerouslySetInnerHTML=

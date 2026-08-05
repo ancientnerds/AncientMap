@@ -17,7 +17,7 @@ import json
 import logging
 import time
 from collections.abc import Callable
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 from pipeline.lyra.config import _get_settings
 from pipeline.lyra.research_events import (
@@ -98,8 +98,8 @@ class ConvergenceOrchestrator:
             disabled_adapters=list(disabled_adapters or []),
             config=config,
             emit=emit,
-            started_at=datetime.utcnow(),
-            deadline=datetime.utcnow() + timedelta(hours=config.deadline_hours),
+            started_at=datetime.now(UTC),
+            deadline=datetime.now(UTC) + timedelta(hours=config.deadline_hours),
         )
 
         state.log("orchestrator", f"Starting convergence pipeline for: {question[:80]}...")

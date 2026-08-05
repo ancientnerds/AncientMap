@@ -81,7 +81,7 @@ The static exporter writes `"on"` in `sources.json` from `enabled_by_default`. T
 ## Deployment
 
 ### Flow
-Push to `main` → GitHub Actions CI (4 jobs: lint-frontend, lint-backend, security-scan, docker-build) → deploy job SSHes into VPS.
+Push to `main` → GitHub Actions CI (lint-frontend, lint-backend, security-scan, sast, container-scan) → deploy job SSHes into VPS. The sast job (semgrep + gitleaks + LLM-prompt-guard check) and container-scan job (trivy) block the deploy like the lint jobs. Local equivalents: `semgrep scan --config .semgrep`, `lint-imports`, `vulture api/ pipeline/ .vulture_whitelist.py --min-confidence 80`, `npx knip` (in ancient-nerds-map/).
 
 ### Deploy script (`.github/workflows/ci.yml`)
 On the VPS at `/var/www/ancientnerds`:

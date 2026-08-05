@@ -25,6 +25,7 @@ from sqlalchemy.orm import Session
 
 from api.services import jwt_auth
 from api.services.jwt_auth import FOUNDER_ROLE_ID, create_token, get_current_user, require_founder
+from api.services.lyra_tools import _escape_ilike
 from api.services.rate_limiter import RateLimiter, get_client_ip
 from pipeline.database import CreditGrant, DiscordUser, TokenUsageLog, get_session
 
@@ -556,7 +557,7 @@ async def discord_oauth_callback(
         key="an_auth_token",
         value=jwt_token,
         max_age=120,  # Short-lived: frontend reads it immediately on load
-        httponly=False,  # JS needs to read it
+        httponly=False,  # nosemgrep: semgrep.python-cookie-httponly-false -- OAuth handoff cookie, 120s TTL, frontend must read it (CODE_AUDIT.md documented exception)
         samesite="lax",
         secure=True,
         path="/",
@@ -725,7 +726,7 @@ async def admin_list_users(
     with get_session() as session:
         query = session.query(DiscordUser)
         if q:
-            q_safe = q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            q_safe = _escape_ilike(q)
             query = query.filter(DiscordUser.username.ilike(f"%{q_safe}%", escape="\\"))
         if role:
             role_ids = [r.strip() for r in role.split(",") if r.strip()]
@@ -793,7 +794,7 @@ async def admin_adjust_credits(
                     user_id=user.id,
                     amount=0,
                     reason="unlimited_set" if user.is_unlimited else "unlimited_removed",
-                    grant_period=str(int(datetime.utcnow().timestamp())),
+                    grant_period=str(int(datetime.now(UTC).timestamp())),
                 )
             )
         elif body.action == "set":
@@ -803,7 +804,7 @@ async def admin_adjust_credits(
                     user_id=user.id,
                     amount=body.amount,
                     reason="founder_grant",
-                    grant_period=str(int(datetime.utcnow().timestamp())),
+                    grant_period=str(int(datetime.now(UTC).timestamp())),
                 )
             )
         elif body.action == "add":
@@ -813,7 +814,7 @@ async def admin_adjust_credits(
                     user_id=user.id,
                     amount=body.amount,
                     reason="founder_grant",
-                    grant_period=str(int(datetime.utcnow().timestamp())),
+                    grant_period=str(int(datetime.now(UTC).timestamp())),
                 )
             )
         elif body.action == "remove":
@@ -823,7 +824,7 @@ async def admin_adjust_credits(
                     user_id=user.id,
                     amount=-body.amount,
                     reason="founder_grant",
-                    grant_period=str(int(datetime.utcnow().timestamp())),
+                    grant_period=str(int(datetime.now(UTC).timestamp())),
                 )
             )
 
@@ -877,7 +878,7 @@ async def admin_bulk_credits(
                     user_id=u.id,
                     amount=body.amount,
                     reason="bulk_role_grant",
-                    grant_period=str(int(datetime.utcnow().timestamp())),
+                    grant_period=str(int(datetime.now(UTC).timestamp())),
                 )
             )
 

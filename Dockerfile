@@ -46,6 +46,14 @@ RUN groupadd --gid 1000 appgroup && \
 COPY --from=builder /opt/venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
+# Strip the installer toolchain from the runtime image: nothing imports
+# pip/setuptools/wheel at runtime (verified 2026-08-05: only comments and
+# never-imported benchmark scripts reference pkg_resources), and their
+# vendored sub-packages (wheel 0.45.1, jaraco.context 5.3.0, msgpack 1.1.2)
+# carry HIGH CVEs that the Trivy CI gate blocks on.
+RUN /opt/venv/bin/pip uninstall -y pip setuptools wheel && \
+    /usr/local/bin/python -m pip uninstall -y setuptools wheel pip
+
 # Copy application code
 COPY api/ ./api/
 COPY pipeline/ ./pipeline/
