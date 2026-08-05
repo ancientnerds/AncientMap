@@ -3,6 +3,7 @@
 All tests exercise pure logic — no real HTTP calls are made.
 """
 
+import httpx
 import pytest
 
 from pipeline.lyra.config import LyraSettings
@@ -10,6 +11,7 @@ from pipeline.lyra.theo_sources import (
     BLOCKED_DOMAINS,
     SOURCE_GROUPS,
     MultiSourceSearch,
+    NaraAdapter,
     RawSource,
     _is_blocked,
     _reconstruct_abstract,
@@ -129,3 +131,138 @@ def test_openalex_abstract_reconstruction_repeated_word():
     }
     result = _reconstruct_abstract(inverted)
     assert result == "to be or to be not"
+
+
+# ---------------------------------------------------------------------------
+# NARA adapter (Catalog API v2 — declassified/archival primary sources)
+# ---------------------------------------------------------------------------
+
+_NARA_FIXTURE = {
+    "body": {
+        "hits": {
+            "total": {"value": 2, "relation": "eq"},
+            "hits": [
+                {
+                    "_id": "12345",
+                    "_source": {
+                        "record": {
+                            "naId": 12345,
+                            "title": "Memorandum on Project Stargate",
+                            "scopeAndContentNote": "A" * 600,
+                            "productionDates": [{"year": 1983, "logicalDate": "1983-05-01"}],
+                            "levelOfDescription": "item",
+                            "generalRecordsTypes": ["Textual Records"],
+                        }
+                    },
+                },
+                {
+                    "_id": "67890",
+                    "_source": {
+                        "record": {
+                            "naId": 67890,
+                            "title": "Photographs of remote viewing test site",
+                            "levelOfDescription": "fileUnit",
+                            "generalRecordsTypes": ["Photographs and other Graphic Materials"],
+                        }
+                    },
+                },
+            ],
+        }
+    }
+}
+
+
+def _fake_nara_response(json_body: dict, status_code: int = 200) -> httpx.Response:
+    request = httpx.Request("GET", "https://catalog.archives.gov/api/v2/records/search")
+    return httpx.Response(status_code, json=json_body, request=request)
+
+
+async def test_nara_adapter_parses_hits(monkeypatch):
+    """NaraAdapter parses hits into RawSource: tier 1, NARA venue, /id/{naId} URL,
+    scopeAndContentNote truncated to ~500 chars, first productionDates year as date.
+    The second hit has neither scopeAndContentNote nor productionDates, exercising
+    the levelOfDescription+generalRecordsTypes snippet fallback and empty date.
+    """
+    adapter = NaraAdapter("fake-key")
+    monkeypatch.setattr(
+        adapter._client, "request", lambda *a, **kw: _fake_nara_response(_NARA_FIXTURE)
+    )
+
+    results = await adapter.search("Stargate Project remote viewing", max_results=2)
+
+    assert len(results) == 2
+
+    first = results[0]
+    assert first.url == "https://catalog.archives.gov/id/12345"
+    assert first.title == "Memorandum on Project Stargate"
+    assert first.snippet == "A" * 500
+    assert first.date == "1983"
+    assert first.venue == "U.S. National Archives (primary source document)"
+    assert first.source_api == "nara"
+    assert first.default_tier == 1
+
+    second = results[1]
+    assert second.url == "https://catalog.archives.gov/id/67890"
+    assert second.title == "Photographs of remote viewing test site"
+    assert second.snippet == "fileUnit, Photographs and other Graphic Materials"
+    assert second.date == ""
+    assert second.venue == "U.S. National Archives (primary source document)"
+    assert second.default_tier == 1
+
+
+async def test_nara_adapter_http_error_returns_empty(monkeypatch):
+    """A failing HTTP call (e.g. bad key / 5xx) is swallowed — returns [], mirrors
+    the try/except-around-_do pattern used by CORE/Europeana/Smithsonian."""
+    adapter = NaraAdapter("fake-key")
+    monkeypatch.setattr(
+        adapter._client,
+        "request",
+        lambda *a, **kw: _fake_nara_response({}, status_code=500),
+    )
+
+    results = await adapter.search("Stargate Project", max_results=2)
+    assert results == []
+
+
+def test_nara_registered_with_key(monkeypatch):
+    """NaraAdapter is registered in MultiSourceSearch._adapters when NARA_API_KEY is set."""
+    monkeypatch.setenv("NARA_API_KEY", "fake-key")
+    settings = LyraSettings()
+    searcher = MultiSourceSearch(settings)
+    assert "nara" in searcher._adapters
+    assert isinstance(searcher._adapters["nara"], NaraAdapter)
+
+
+def test_nara_absent_without_key(monkeypatch):
+    """Without NARA_API_KEY set, the adapter is not registered at all."""
+    monkeypatch.delenv("NARA_API_KEY", raising=False)
+    settings = LyraSettings()
+    searcher = MultiSourceSearch(settings)
+    assert "nara" not in searcher._adapters
+
+
+def test_nara_in_standard_full_exhaustive_not_minimal():
+    """nara is a source-group member of standard/full/exhaustive, but not minimal."""
+    assert "nara" not in SOURCE_GROUPS["minimal"]
+    assert "nara" in SOURCE_GROUPS["standard"]
+    assert "nara" in SOURCE_GROUPS["full"]
+    assert "nara" in SOURCE_GROUPS["exhaustive"]
+
+
+def test_nara_effective_selection_with_key(monkeypatch):
+    """With the key set, nara is among the adapters actually selected for 'standard'."""
+    monkeypatch.setenv("NARA_API_KEY", "fake-key")
+    settings = LyraSettings()
+    searcher = MultiSourceSearch(settings)
+    active_names = [n for n in SOURCE_GROUPS["standard"] if n in searcher._adapters]
+    assert "nara" in active_names
+
+
+def test_nara_effective_selection_without_key(monkeypatch):
+    """Without the key, nara is listed in the group but not actually selectable —
+    MultiSourceSearch.search() filters wanted_names down to `name in self._adapters`."""
+    monkeypatch.delenv("NARA_API_KEY", raising=False)
+    settings = LyraSettings()
+    searcher = MultiSourceSearch(settings)
+    active_names = [n for n in SOURCE_GROUPS["standard"] if n in searcher._adapters]
+    assert "nara" not in active_names

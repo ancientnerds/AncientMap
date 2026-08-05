@@ -120,6 +120,7 @@ SOURCE_GROUPS: dict[str, list[str]] = {
         "openalex",
         "crossref",
         "wikipedia",
+        "nara",
         "minimax",
     ],
     "full": [
@@ -133,6 +134,7 @@ SOURCE_GROUPS: dict[str, list[str]] = {
         "europeana",
         "smithsonian",
         "wikipedia",
+        "nara",
         "minimax",
     ],
     "exhaustive": [
@@ -147,6 +149,7 @@ SOURCE_GROUPS: dict[str, list[str]] = {
         "smithsonian",
         "wikipedia",
         "internet_archive",
+        "nara",
         "minimax",
     ],
 }
@@ -1303,6 +1306,85 @@ class TranscriptAdapter(SourceAdapter):
             return []
 
 
+class NaraAdapter(SourceAdapter):
+    """U.S. National Archives Catalog API v2 — requires API key.
+
+    Declassified/archival primary-source government records. Only searches
+    `availableOnline=true` records so every hit links to an actual scan, not
+    just finding-aid metadata. Quota: 10,000 calls/month — no throttling
+    needed beyond the shared retry/backoff in `_retry_request`.
+    """
+
+    @property
+    def name(self) -> str:
+        return "nara"
+
+    @property
+    def default_tier(self) -> int:
+        return 1  # Primary sources — declassified/archival government records outrank secondary literature
+
+    def __init__(self, api_key: str) -> None:
+        self._client = httpx.Client(
+            base_url="https://catalog.archives.gov/api/v2",
+            headers={"x-api-key": api_key, "Accept": "application/json"},
+            timeout=_API_TIMEOUT,
+        )
+
+    async def search(self, query: str, max_results: int = 10) -> list[RawSource]:
+        def _do() -> list[RawSource]:
+            resp = _retry_request(
+                self._client,
+                "GET",
+                "/records/search",
+                params={
+                    "q": query,
+                    "limit": str(max_results),
+                    "availableOnline": "true",
+                },
+            )
+            resp.raise_for_status()
+            data = resp.json()
+
+            results: list[RawSource] = []
+            hits = data.get("body", {}).get("hits", {}).get("hits", [])
+            for hit in hits:
+                record = hit.get("_source", {}).get("record") or {}
+                na_id = record.get("naId")
+                if not na_id:
+                    continue
+
+                snippet = (record.get("scopeAndContentNote") or "")[:500]
+                if not snippet:
+                    level = record.get("levelOfDescription") or ""
+                    types = record.get("generalRecordsTypes") or []
+                    snippet = ", ".join(part for part in [level, *types] if part)
+
+                date = ""
+                production_dates = record.get("productionDates") or []
+                if production_dates and isinstance(production_dates[0], dict):
+                    year = production_dates[0].get("year")
+                    date = str(year) if year else ""
+
+                results.append(
+                    RawSource(
+                        url=f"https://catalog.archives.gov/id/{na_id}",
+                        title=record.get("title") or "",
+                        snippet=snippet,
+                        date=date,
+                        venue="U.S. National Archives (primary source document)",
+                        source_api=self.name,
+                        default_tier=self.default_tier,
+                    )
+                )
+            return results
+
+        try:
+            return await asyncio.to_thread(_do)
+        except Exception as exc:
+            logger.warning("NARA search failed for '%s': %s", query, exc)
+            return []
+
+
 # ---------------------------------------------------------------------------
 # Unpaywall enricher (post-search, not a search adapter)
 # ---------------------------------------------------------------------------
@@ -1392,6 +1474,10 @@ class MultiSourceSearch:
         if smithsonian_key:
             self._adapters["smithsonian"] = SmithsonianAdapter(smithsonian_key)
 
+        nara_key = os.getenv("NARA_API_KEY", "")
+        if nara_key:
+            self._adapters["nara"] = NaraAdapter(nara_key)
+
         available = list(self._adapters.keys())
         logger.info("MultiSourceSearch initialized with %d adapters: %s", len(available), available)
 
@@ -1405,7 +1491,7 @@ class MultiSourceSearch:
 
         source_group values:
         - "minimal": AncientNerds DB + Semantic Scholar + MiniMax
-        - "standard": + OpenAlex + Wikipedia + Crossref
+        - "standard": + OpenAlex + Wikipedia + Crossref + NARA
         - "full": + CORE + Europeana + Smithsonian
         - "exhaustive": all sources + Internet Archive + Unpaywall enrichment
 
