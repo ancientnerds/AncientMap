@@ -22,6 +22,17 @@ interface GraphData {
   total_nodes: number
 }
 
+interface ClaimItem {
+  text: string
+  status: string
+  confidence: number
+  external_source_count: number
+  paper_ids: string[] | null
+}
+
+// Kinds whose Focus-Card is worth a claims lookup (spec §7 world model).
+const CLAIMS_KINDS = new Set(['connection', 'hypothesis', 'topic', 'site'])
+
 // Color by node CLASS; focus mode dims everything outside the neighborhood.
 const KIND_COLORS: Record<string, string> = {
   paper: '#ffd700',
@@ -71,6 +82,24 @@ function nodeBaseRgb(node: RenderNode): Rgb {
   return KIND_RGB[node.kind] ?? DEFAULT_RGB
 }
 
+// Focus-Card outcome badge (hypothesis nodes only) — same palette as the
+// node outcome tints above, plus an "open" state for inconclusive/no verdict.
+const OUTCOME_BADGE: Record<string, { text: string; color: string }> = {
+  confirmed: { text: 'confirmed', color: '#4ade80' },
+  refuted: { text: 'refuted', color: '#94a3b8' },
+}
+function outcomeBadge(outcome: string | null | undefined): { text: string; color: string } {
+  return (outcome && OUTCOME_BADGE[outcome]) || { text: 'open', color: '#fbbf24' }
+}
+
+// World-model claim status → dot color (Focus-Card claims list, spec §7).
+const CLAIM_STATUS_COLOR: Record<string, string> = {
+  established: '#4ade80',
+  contested: '#fbbf24',
+  refuted: '#94a3b8',
+  open: '#3aa8c2',
+}
+
 // Terminal kinds ride along as companions of their node (a video always
 // brings its channel, a site its epoch/country) but are never expanded —
 // hubs cannot fan out.
@@ -115,6 +144,8 @@ export default function KnowledgePage() {
   // How many hops of connections to reveal around the focused bubble.
   const [depth, setDepth] = useState(1)
   const [hover, setHover] = useState<{ node: RenderNode; x: number; y: number } | null>(null)
+  // null = loading or not applicable for this kind; [] = fetched, none found.
+  const [claims, setClaims] = useState<ClaimItem[] | null>(null)
   const current = useCurrentResearch()
 
   const focusRef = useRef<{ id: string; set: Set<string> } | null>(null)
@@ -412,6 +443,31 @@ export default function KnowledgePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [depth])
 
+  // Lazy world-model claims for the Focus-Card (spec §7): only the kinds a
+  // curator/miner would actually attach claims to. Reset on every focus
+  // change so a stale list never lingers under a newly focused node.
+  useEffect(() => {
+    setClaims(null)
+    if (!focused || !CLAIMS_KINDS.has(focused.kind)) return
+    let cancelled = false
+    fetch(`/api/v1/knowledge/claims?node_id=${encodeURIComponent(focused.id)}`)
+      .then((r) => {
+        if (!r.ok) throw new Error(`${r.status}`)
+        return r.json()
+      })
+      .then((d: { items: ClaimItem[] }) => {
+        if (!cancelled) setClaims(d.items)
+      })
+      .catch(() => {
+        // Claims are additive world-model context for the Focus-Card, not
+        // load-bearing graph data — a failed/empty fetch just leaves the
+        // claims list empty instead of surfacing an error state.
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [focused])
+
   const takeScreenshot = useCallback(() => {
     const url = rendererRef.current?.screenshot()
     if (!url) return
@@ -445,6 +501,8 @@ export default function KnowledgePage() {
       frontier: data.nodes.filter((n) => n.status === 'frontier').length,
     }
   }, [data])
+
+  const focusedBadge = focused?.kind === 'hypothesis' ? outcomeBadge(focused.outcome) : null
 
   return (
     <div className="knowledge-page">
@@ -544,7 +602,30 @@ export default function KnowledgePage() {
             {focused.status === 'researching' ? ' · researching now' : ''}
           </span>
           <h3>{focused.label}</h3>
+          {focused.question && <p className="kg-card-question">{focused.question}</p>}
+          {focusedBadge && (
+            <span
+              className="kg-badge"
+              style={{ color: focusedBadge.color, borderColor: focusedBadge.color }}
+            >
+              {focusedBadge.text}
+            </span>
+          )}
           <div className="kg-infocard-meta">{focused.degree} connections</div>
+          {claims && claims.length > 0 && (
+            <ul className="kg-claim-list">
+              {claims.slice(0, 5).map((claim, i) => (
+                <li key={i} className="kg-claim">
+                  <span
+                    className="kg-claim-dot"
+                    style={{ background: CLAIM_STATUS_COLOR[claim.status] ?? '#7ab4c8' }}
+                  />
+                  <span className="kg-claim-text">{claim.text}</span>
+                  <span className="kg-claim-confidence">{Math.round(claim.confidence * 100)}%</span>
+                </li>
+              ))}
+            </ul>
+          )}
           <div className="kg-infocard-actions">
             {focused.kind === 'paper' && focused.paper_slug && (
               <a href={`/research.html?slug=${focused.paper_slug}`}>Read the paper →</a>

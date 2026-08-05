@@ -313,6 +313,68 @@
   margin-bottom: 10px;
 }
 
+.kg-card-question {
+  margin: 0 0 8px;
+  font-size: 0.76rem;
+  font-style: italic;
+  color: #9ab8c2;
+  line-height: 1.45;
+}
+
+.kg-badge {
+  display: inline-block;
+  margin-bottom: 8px;
+  padding: 2px 8px;
+  border: 1px solid;
+  border-radius: 10px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.6rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.kg-claim-list {
+  list-style: none;
+  margin: 0 0 10px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border-top: 1px solid #1f4a56;
+  border-bottom: 1px solid #1f4a56;
+  padding: 8px 0;
+}
+
+.kg-claim {
+  display: grid;
+  grid-template-columns: 8px 1fr auto;
+  align-items: start;
+  gap: 6px;
+}
+
+.kg-claim-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  margin-top: 4px;
+}
+
+.kg-claim-text {
+  font-size: 0.68rem;
+  color: #e0e0e0;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.kg-claim-confidence {
+  font-size: 0.6rem;
+  color: #7ab4c8;
+  white-space: nowrap;
+}
+
 .kg-infocard-actions {
   display: flex;
   flex-direction: column;
@@ -393,5 +455,9 @@
     left: 10px;
     bottom: 10px;
     width: auto;
+  }
+
+  .kg-claim:nth-child(n + 4) {
+    display: none;
   }
 }
