@@ -20,6 +20,10 @@ export interface RenderNode {
   degree: number
   paper_slug: string | null
   site_id: string | null
+  /** Curator-authored research question (thinking layer, spec §7). */
+  question?: string | null
+  /** Hypothesis verdict: confirmed | refuted | inconclusive (thinking layer). */
+  outcome?: string | null
   /** Sub-cluster key within the island (country, channel, source paper, …). */
   group?: string
   /** Server-provided ordering hint (country nodes: mean site longitude). */
@@ -94,7 +98,9 @@ export class KnowledgeGraphRenderer {
   private nodeColorFn: (n: RenderNode) => Rgb = () => [0.5, 0.7, 0.8]
 
   private clusterDefs: ClusterDef[] = []
-  private clusterLabels: HTMLDivElement[] = []
+  // Index-aligned with clusterDefs; null for defs with no label (e.g. a
+  // second ClusterDef sharing another island's label — see rebuildClusterLabels).
+  private clusterLabels: (HTMLDivElement | null)[] = []
   private visibleKinds: Set<string> | null = null
 
   private labeledNodes: RenderNode[] = []
@@ -106,6 +112,9 @@ export class KnowledgeGraphRenderer {
   private paused = false
   private hoverIndex = -1
   private flyTarget: { look: THREE.Vector3; zoom: number; t: number } | null = null
+  // Catches container resizes the window 'resize' event misses (sidebar
+  // toggles, layout-only reflows without a viewport change).
+  private resizeObserver: ResizeObserver
 
   constructor(
     private container: HTMLElement,
@@ -133,6 +142,8 @@ export class KnowledgeGraphRenderer {
 
     this.handleResize()
     window.addEventListener('resize', this.handleResize)
+    this.resizeObserver = new ResizeObserver(this.handleResize)
+    this.resizeObserver.observe(container)
     this.renderer.domElement.addEventListener('pointerdown', this.handlePointerDown)
     this.renderer.domElement.addEventListener('pointermove', this.handlePointerMove)
     this.renderer.domElement.addEventListener('click', this.handleClick)
@@ -481,11 +492,12 @@ export class KnowledgeGraphRenderer {
   dispose(): void {
     cancelAnimationFrame(this.rafId)
     window.removeEventListener('resize', this.handleResize)
+    this.resizeObserver.disconnect()
     this.renderer.domElement.removeEventListener('pointerdown', this.handlePointerDown)
     this.renderer.domElement.removeEventListener('pointermove', this.handlePointerMove)
     this.renderer.domElement.removeEventListener('click', this.handleClick)
     this.disposeGraphObjects()
-    for (const el of this.clusterLabels) el.remove()
+    for (const el of this.clusterLabels) el?.remove()
     this.clusterLabels = []
     for (const el of this.nodeLabelEls) el.remove()
     this.nodeLabelEls = []
@@ -507,8 +519,12 @@ export class KnowledgeGraphRenderer {
   }
 
   private rebuildClusterLabels(): void {
-    for (const el of this.clusterLabels) el.remove()
+    for (const el of this.clusterLabels) el?.remove()
     this.clusterLabels = this.clusterDefs.map((c) => {
+      // Defs with no label (e.g. a second kind sharing another island's
+      // name) get no DOM element at all — just a null placeholder so index
+      // alignment with clusterDefs holds for updateLabels().
+      if (!c.label) return null
       const el = document.createElement('div')
       el.className = 'kg-cluster-label'
       el.textContent = c.label

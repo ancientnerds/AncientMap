@@ -550,7 +550,7 @@ class GraphNode(BaseModel):
 
     id: str = Field(description="Node UUID")
     label: str = Field(description="Human-readable node label")
-    kind: str = Field(description="topic | paper | site | entity")
+    kind: str = Field(description="topic | paper | site | entity | connection | hypothesis")
     status: str = Field(description="reference | frontier | researching | explored")
     signal: float = Field(description="Accumulated interest signal from content sources")
     degree: int = Field(description="Number of edges touching this node")
@@ -562,6 +562,10 @@ class GraphNode(BaseModel):
         None, description="Slug of the published paper (explored paper nodes only)"
     )
     site_id: str | None = Field(None, description="Linked archaeological site UUID")
+    # Thinking layer (spec §7): curator-authored nodes carry their stored
+    # research question; hypothesis nodes their verdict.
+    question: str | None = None
+    outcome: str | None = Field(None, description="confirmed | refuted | inconclusive")
 
 
 class GraphEdge(BaseModel):
@@ -600,4 +604,25 @@ class ActivityResponse(BaseModel):
     """Chronological thinking-layer activity feed (spec §7)."""
 
     items: list[ActivityItem] = Field(description="Activity events, newest first")
+    license: str = Field(description="Reuse license for this data")
+
+
+class ClaimItem(BaseModel):
+    """One claim in the permanent researcher's world model (spec §7)."""
+
+    text: str = Field(description="The claim statement")
+    status: str = Field(description="established | contested | refuted | open")
+    confidence: float = Field(description="Confidence score 0-1")
+    external_source_count: int = Field(
+        description="Number of external tier-1/2 sources backing this claim (self-citations excluded)"
+    )
+    paper_ids: list[str] | None = Field(
+        None, description="IDs of research papers asserting this claim"
+    )
+
+
+class ClaimsResponse(BaseModel):
+    """Claims tied to a research node, for the Knowledge page focus-card (spec §7)."""
+
+    items: list[ClaimItem] = Field(description="Claims for this node, most recently updated first")
     license: str = Field(description="Reuse license for this data")

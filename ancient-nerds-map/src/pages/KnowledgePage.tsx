@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import PageHeader from '../components/layout/PageHeader'
-import { useCurrentResearch } from '../hooks/useCurrentResearch'
+import LiveResearchPanel from '../components/theo/LiveResearchPanel'
 import { navigateGlobeToSite } from '../utils/globeNavigation'
 import {
   KnowledgeGraphRenderer,
@@ -22,6 +22,41 @@ interface GraphData {
   total_nodes: number
 }
 
+interface ClaimItem {
+  text: string
+  status: string
+  confidence: number
+  external_source_count: number
+  paper_ids: string[] | null
+}
+
+// Kinds whose Focus-Card is worth a claims lookup (spec §7 world model).
+const CLAIMS_KINDS = new Set(['connection', 'hypothesis', 'topic', 'site'])
+
+interface ActivityItem {
+  created_at: string
+  kind: 'curator' | 'miner' | 'run_event'
+  summary: string
+  details: Record<string, unknown> | null
+}
+
+const ACTIVITY_ICON: Record<ActivityItem['kind'], string> = {
+  curator: '🧠',
+  miner: '⛏️',
+  run_event: '🔬',
+}
+
+/** Coarse "X ago" relative time — no date library needed for a feed. */
+function relativeTime(iso: string): string {
+  const diffS = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 1000))
+  if (diffS < 60) return 'just now'
+  const diffMin = Math.floor(diffS / 60)
+  if (diffMin < 60) return `${diffMin}m ago`
+  const diffH = Math.floor(diffMin / 60)
+  if (diffH < 24) return `${diffH}h ago`
+  return `${Math.floor(diffH / 24)}d ago`
+}
+
 // Color by node CLASS; focus mode dims everything outside the neighborhood.
 const KIND_COLORS: Record<string, string> = {
   paper: '#ffd700',
@@ -37,6 +72,8 @@ const KIND_COLORS: Record<string, string> = {
   video: '#ef4444',
   channel: '#f97316',
   journal: '#eab308',
+  connection: '#5eead4', // thinking layer: curator-mined link candidates
+  hypothesis: '#fbbf24', // thinking layer: falsifiable hypotheses
 }
 
 type Rgb = [number, number, number]
@@ -46,12 +83,52 @@ function hexToRgb(hex: string): Rgb {
   return [((v >> 16) & 255) / 255, ((v >> 8) & 255) / 255, (v & 255) / 255]
 }
 
+function rgbToHex([r, g, b]: Rgb): string {
+  const channel = (x: number) => Math.round(x * 255).toString(16).padStart(2, '0')
+  return `#${channel(r)}${channel(g)}${channel(b)}`
+}
+
 const KIND_RGB: Record<string, Rgb> = Object.fromEntries(
   Object.entries(KIND_COLORS).map(([k, c]) => [k, hexToRgb(c)]),
 ) as Record<string, Rgb>
 const DEFAULT_RGB: Rgb = [0.4, 0.47, 0.53]
 const RESEARCHING_RGB: Rgb = hexToRgb('#c02023')
 const DIM_RGB: Rgb = [0.16, 0.2, 0.22]
+// Outcome tints for hypothesis nodes (spec §7): green once confirmed, grey
+// once refuted (dead end). Open hypotheses keep the base amber.
+const OUTCOME_CONFIRMED_RGB: Rgb = hexToRgb('#4ade80')
+const OUTCOME_REFUTED_RGB: Rgb = hexToRgb('#94a3b8')
+
+/**
+ * A node's class color before status/focus effects — shared by the initial
+ * fill and focus recoloring so the two paths never drift apart.
+ */
+function nodeBaseRgb(node: RenderNode): Rgb {
+  if (node.kind === 'hypothesis') {
+    if (node.outcome === 'confirmed') return OUTCOME_CONFIRMED_RGB
+    if (node.outcome === 'refuted') return OUTCOME_REFUTED_RGB
+  }
+  return KIND_RGB[node.kind] ?? DEFAULT_RGB
+}
+
+// Focus-Card outcome badge (hypothesis nodes only) — same palette as the
+// node outcome tints above, plus an "open" state for inconclusive/no verdict.
+const OUTCOME_BADGE: Record<string, { text: string; color: string }> = {
+  confirmed: { text: 'confirmed', color: '#4ade80' },
+  refuted: { text: 'refuted', color: '#94a3b8' },
+  inconclusive: { text: 'inconclusive', color: '#7ab4c8' },
+}
+function outcomeBadge(outcome: string | null | undefined): { text: string; color: string } {
+  return (outcome && OUTCOME_BADGE[outcome]) || { text: 'open', color: '#fbbf24' }
+}
+
+// World-model claim status → dot color (Focus-Card claims list, spec §7).
+const CLAIM_STATUS_COLOR: Record<string, string> = {
+  established: '#4ade80',
+  contested: '#fbbf24',
+  refuted: '#94a3b8',
+  open: '#3aa8c2',
+}
 
 // Terminal kinds ride along as companions of their node (a video always
 // brings its channel, a site its epoch/country) but are never expanded —
@@ -64,6 +141,7 @@ const LAYERS: Record<string, string[]> = {
   sites: ['site'],
   content: ['story', 'video', 'channel', 'journal', 'person'],
   research: ['paper', 'topic', 'entity'],
+  thinking: ['connection', 'hypothesis'],
 }
 
 // The map: research sits at the center (Theo's brain), everything else forms
@@ -72,6 +150,13 @@ const CLUSTERS: ClusterDef[] = [
   { kind: 'paper', label: 'Papers', x: 0, y: 40, color: KIND_COLORS.paper },
   { kind: 'topic', label: 'Topics', x: 60, y: 340, color: KIND_COLORS.topic },
   { kind: 'entity', label: 'Entities', x: -340, y: 200, color: KIND_COLORS.entity },
+  // Thinking layer (spec §7): connection + hypothesis nodes are Theo's
+  // in-progress reasoning — offspring of the research region, so they sit
+  // adjacent to Papers. The layout is per-kind (ClusterDef has one `kind`),
+  // so this is two adjacent islands close enough to read as one; only the
+  // first carries the "Thinking" label so it doesn't render twice.
+  { kind: 'connection', label: 'Thinking', x: 350, y: 200, color: KIND_COLORS.connection },
+  { kind: 'hypothesis', label: '', x: 560, y: 160, color: KIND_COLORS.hypothesis },
   { kind: 'site', label: 'Sites', x: 950, y: 0, color: KIND_COLORS.site },
   { kind: 'period', label: 'Epochs', x: -850, y: 380, color: KIND_COLORS.period },
   { kind: 'empire', label: 'Empires', x: -1000, y: 0, color: KIND_COLORS.empire },
@@ -96,7 +181,10 @@ export default function KnowledgePage() {
   // How many hops of connections to reveal around the focused bubble.
   const [depth, setDepth] = useState(1)
   const [hover, setHover] = useState<{ node: RenderNode; x: number; y: number } | null>(null)
-  const current = useCurrentResearch()
+  // null = loading or not applicable for this kind; [] = fetched, none found.
+  const [claims, setClaims] = useState<ClaimItem[] | null>(null)
+  const [activity, setActivity] = useState<ActivityItem[]>([])
+  const [activityOpen, setActivityOpen] = useState(false)
 
   const focusRef = useRef<{ id: string; set: Set<string> } | null>(null)
   // Directed adjacency: out = src->dst, in = dst->src.
@@ -112,6 +200,32 @@ export default function KnowledgePage() {
       })
       .then(setData)
       .catch(() => setError(true))
+  }, [])
+
+  // Thinking-layer activity feed (spec §7): initial load + 60s poll, same
+  // pattern as useCurrentResearch. Fails silently — the panel just keeps
+  // showing the last known feed instead of surfacing an error.
+  useEffect(() => {
+    let cancelled = false
+    const load = () => {
+      fetch('/api/v1/knowledge/activity?limit=50')
+        .then((r) => {
+          if (!r.ok) throw new Error(`${r.status}`)
+          return r.json()
+        })
+        .then((d: { items: ActivityItem[] }) => {
+          if (!cancelled) setActivity(d.items)
+        })
+        .catch(() => {
+          /* silent — feed keeps showing the last known items */
+        })
+    }
+    load()
+    const timer = setInterval(load, 60_000)
+    return () => {
+      cancelled = true
+      clearInterval(timer)
+    }
   }, [])
 
   // Build the directed adjacency indexes once per dataset (for focus mode).
@@ -195,7 +309,7 @@ export default function KnowledgePage() {
     renderer.setColorFn((n) => {
       if (focus && !focus.set.has(n.id)) return DIM_RGB
       if (n.status === 'researching') return RESEARCHING_RGB
-      const base = KIND_RGB[n.kind] ?? DEFAULT_RGB
+      const base = nodeBaseRgb(n)
       if (n.status === 'frontier') return [base[0] * 0.55, base[1] * 0.55, base[2] * 0.55]
       return base
     })
@@ -220,6 +334,13 @@ export default function KnowledgePage() {
 
   const focusNode = useCallback(
     (node: RenderNode | null) => {
+      // Clear eagerly, in the same batch as setFocused, so the previous
+      // node's claims never flash under the newly focused card for a frame.
+      // Guarded by identity: focusNode() is also called on layer/depth
+      // toggles to refresh the SAME node's focus set — setFocused bails on
+      // an unchanged node then, so an unconditional clear here would wipe
+      // claims permanently (the fetch effect never refires to replace them).
+      if (focusRef.current?.id !== node?.id) setClaims(null)
       if (!node) {
         focusRef.current = null
         setFocused(null)
@@ -393,6 +514,30 @@ export default function KnowledgePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [depth])
 
+  // Lazy world-model claims for the Focus-Card (spec §7): only the kinds a
+  // curator/miner would actually attach claims to. focusNode() already
+  // cleared `claims` synchronously on focus change (no stale-flash frame).
+  useEffect(() => {
+    if (!focused || !CLAIMS_KINDS.has(focused.kind)) return
+    let cancelled = false
+    fetch(`/api/v1/knowledge/claims?node_id=${encodeURIComponent(focused.id)}`)
+      .then((r) => {
+        if (!r.ok) throw new Error(`${r.status}`)
+        return r.json()
+      })
+      .then((d: { items: ClaimItem[] }) => {
+        if (!cancelled) setClaims(d.items)
+      })
+      .catch(() => {
+        // Claims are additive world-model context for the Focus-Card, not
+        // load-bearing graph data — a failed/empty fetch just leaves the
+        // claims list empty instead of surfacing an error state.
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [focused])
+
   const takeScreenshot = useCallback(() => {
     const url = rendererRef.current?.screenshot()
     if (!url) return
@@ -427,6 +572,8 @@ export default function KnowledgePage() {
     }
   }, [data])
 
+  const focusedBadge = focused?.kind === 'hypothesis' ? outcomeBadge(focused.outcome) : null
+
   return (
     <div className="knowledge-page">
       <PageHeader currentPage="knowledge">
@@ -439,12 +586,6 @@ export default function KnowledgePage() {
           {data ? `${data.total_nodes.toLocaleString()} nodes` : '…'} · {counts.explored} explored
           · {counts.frontier} frontier topics
         </p>
-        {current?.running && (
-          <div className="kg-live">
-            <span className="kg-live-dot" />
-            Theo is researching: <em>{current.running.question.slice(0, 90)}…</em>
-          </div>
-        )}
         <div className="kg-controls">
           <input
             className="kg-search"
@@ -462,6 +603,12 @@ export default function KnowledgePage() {
               {layer}
             </button>
           ))}
+          <button
+            className={`kg-chip kg-chip--activity ${activityOpen ? 'active' : ''}`}
+            onClick={() => setActivityOpen((v) => !v)}
+          >
+            Activity
+          </button>
           <span className="kg-depth">
             depth
             {[1, 2, 3].map((d) => (
@@ -479,6 +626,9 @@ export default function KnowledgePage() {
             📷
           </button>
         </div>
+      </div>
+      <div className="kg-live-slot">
+        <LiveResearchPanel showGraphLink={false} />
       </div>
 
       <div className="kg-stage">
@@ -518,14 +668,52 @@ export default function KnowledgePage() {
           </button>
           <span
             className="kg-infocard-kind"
-            style={{ color: KIND_COLORS[focused.kind] ?? '#7ab4c8' }}
+            style={{ color: rgbToHex(nodeBaseRgb(focused)) }}
           >
             {focused.kind}
             {focused.status === 'frontier' ? ' · frontier' : ''}
             {focused.status === 'researching' ? ' · researching now' : ''}
           </span>
           <h3>{focused.label}</h3>
+          {focused.question && <p className="kg-card-question">{focused.question}</p>}
+          {focusedBadge && (
+            <span
+              className="kg-badge"
+              style={{ color: focusedBadge.color, borderColor: focusedBadge.color }}
+            >
+              {focusedBadge.text}
+            </span>
+          )}
           <div className="kg-infocard-meta">{focused.degree} connections</div>
+          {claims && claims.length > 0 && (
+            <ul className="kg-claim-list">
+              {claims.slice(0, 5).map((claim, i) => (
+                <li key={i} className="kg-claim">
+                  <span
+                    className="kg-claim-dot"
+                    style={{ background: CLAIM_STATUS_COLOR[claim.status] ?? '#7ab4c8' }}
+                  />
+                  <span className="kg-claim-text">{claim.text}</span>
+                  <span className="kg-claim-confidence">
+                    {Math.round(claim.confidence * 100)}%{' · '}
+                    {/* Zero external sources IS the echo-chamber signal —
+                        shown (not hidden) and tinted as a warning. */}
+                    <span
+                      className={
+                        claim.external_source_count === 0
+                          ? 'kg-claim-sources kg-claim-sources--zero'
+                          : 'kg-claim-sources'
+                      }
+                    >
+                      {claim.external_source_count === 0
+                        ? '0 ext.'
+                        : `×${claim.external_source_count} ext.`}
+                    </span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
           <div className="kg-infocard-actions">
             {focused.kind === 'paper' && focused.paper_slug && (
               <a href={`/research.html?slug=${focused.paper_slug}`}>Read the paper →</a>
@@ -540,9 +728,47 @@ export default function KnowledgePage() {
         </div>
       )}
 
+      {activityOpen && (
+        <div className="kg-activity">
+          <button
+            className="kg-activity-close"
+            onClick={() => setActivityOpen(false)}
+            aria-label="Close"
+          >
+            ×
+          </button>
+          <h3 className="kg-activity-title">Activity</h3>
+          {activity.length === 0 ? (
+            <p className="kg-activity-empty">
+              Theo hasn&apos;t thought yet — the first thinking pass runs Mon–Thu 02:00–05:00 UTC.
+            </p>
+          ) : (
+            <ul className="kg-activity-list">
+              {activity.map((item) => (
+                <li
+                  key={item.created_at + item.kind}
+                  className={`kg-activity-item${
+                    item.details?.failed === true ? ' kg-activity-item--failed' : ''
+                  }`}
+                  title={item.summary}
+                >
+                  <span className="kg-activity-icon">{ACTIVITY_ICON[item.kind]}</span>
+                  <span className="kg-activity-summary">{item.summary}</span>
+                  <span className="kg-activity-time">{relativeTime(item.created_at)}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+
       <div className="kg-legend">
         {Object.entries(KIND_COLORS)
-          .filter(([kind]) => ['site', 'paper', 'topic', 'story', 'period', 'person'].includes(kind))
+          .filter(([kind]) =>
+            ['site', 'paper', 'topic', 'story', 'period', 'person', 'connection', 'hypothesis'].includes(
+              kind,
+            ),
+          )
           .map(([kind, color]) => (
             <span key={kind}>
               <i style={{ background: color }} /> {kind}

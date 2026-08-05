@@ -8,11 +8,17 @@ function formatElapsed(seconds: number | null): string {
   return h > 0 ? `${h}h ${m}m` : `${m}m`
 }
 
+interface LiveResearchPanelProps {
+  /** Render the "Explore the Knowledge Graph →" link. Off on the Knowledge
+   * page itself, where a self-link would be absurd. Default true. */
+  showGraphLink?: boolean
+}
+
 /**
  * Public live view of the permanent researcher — visible without login.
  * Renders nothing until the public /research/current endpoint responds.
  */
-export default function LiveResearchPanel() {
+export default function LiveResearchPanel({ showGraphLink = true }: LiveResearchPanelProps) {
   const current = useCurrentResearch()
   if (!current) return null
   if (!current.running && current.queued_batch === 0) return null
@@ -46,9 +52,11 @@ export default function LiveResearchPanel() {
           )}
         </div>
       )}
-      <a className="lrp-graph-link" href="/knowledge.html">
-        Explore the Knowledge Graph →
-      </a>
+      {showGraphLink && (
+        <a className="lrp-graph-link" href="/knowledge.html">
+          Explore the Knowledge Graph →
+        </a>
+      )}
     </div>
   )
 }

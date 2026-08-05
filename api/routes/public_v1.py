@@ -5,10 +5,13 @@ Mounted as a sub-application at /api/v1 with its own OpenAPI docs:
   - /api/v1/docs   — Swagger UI
   - /api/v1/redoc  — ReDoc
 
-All endpoints are rate-limited to 10 requests per minute per IP.
+Rate limits per IP: 10 requests/minute for standard endpoints; 60/minute
+for the Knowledge-Graph read endpoints (/graph, /knowledge/activity,
+/knowledge/claims), which the Knowledge page polls more frequently.
 """
 
 import logging
+import uuid
 from datetime import UTC
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response
@@ -30,6 +33,8 @@ from api.schemas.public_v1 import (
     CardPublic,
     CardsResponse,
     ChannelPublic,
+    ClaimItem,
+    ClaimsResponse,
     EmpireListOut,
     EmpireOut,
     FacetSource,
@@ -64,6 +69,17 @@ logger = logging.getLogger(__name__)
 _limiter = RateLimiter(max_requests=10, window_seconds=60, namespace="public_v1")
 
 RATE_LIMIT = 10
+
+# Knowledge-graph read endpoints (/graph, /knowledge/activity, /knowledge/claims)
+# are polled by the Knowledge page (60s activity poll, a claims fetch per focus
+# click) — the general 10/min public-API budget would throttle normal browsing.
+# Dedicated namespace so this budget can never borrow from (or starve) the rest
+# of the public API's 10/min limiter.
+_knowledge_limiter = RateLimiter(
+    max_requests=60, window_seconds=60, namespace="public_v1_knowledge"
+)
+
+KNOWLEDGE_RATE_LIMIT = 60
 
 # Research papers are open access: reuse freely, attribution is the only
 # requirement. Served as machine-readable fields on every paper response.
@@ -113,26 +129,39 @@ def paper_summary_kwargs(row) -> dict:
     }
 
 
-async def rate_limit_dependency(request: Request, response: Response):
-    """FastAPI dependency that enforces rate limiting and sets response headers."""
-    ip = get_client_ip(request)
-    allowed, remaining, reset_seconds = _limiter.check_with_info(ip)
+def _make_rate_limit_dependency(limiter: RateLimiter, limit: int):
+    """Build a FastAPI dependency that enforces `limiter`'s budget and sets
+    the standard X-RateLimit-* headers. Shared by the general public-API
+    limiter and the knowledge-graph read endpoints' limiter — same logic,
+    different namespace/budget, so the body is never copy-pasted."""
 
-    response.headers["X-RateLimit-Limit"] = str(RATE_LIMIT)
-    response.headers["X-RateLimit-Remaining"] = str(remaining)
-    response.headers["X-RateLimit-Reset"] = str(reset_seconds)
+    async def dependency(request: Request, response: Response):
+        ip = get_client_ip(request)
+        allowed, remaining, reset_seconds = limiter.check_with_info(ip)
 
-    if not allowed:
-        raise HTTPException(
-            status_code=429,
-            detail="Rate limit exceeded. Max 10 requests per minute.",
-            headers={
-                "X-RateLimit-Limit": str(RATE_LIMIT),
-                "X-RateLimit-Remaining": "0",
-                "X-RateLimit-Reset": str(reset_seconds),
-                "Retry-After": str(reset_seconds),
-            },
-        )
+        response.headers["X-RateLimit-Limit"] = str(limit)
+        response.headers["X-RateLimit-Remaining"] = str(remaining)
+        response.headers["X-RateLimit-Reset"] = str(reset_seconds)
+
+        if not allowed:
+            raise HTTPException(
+                status_code=429,
+                detail=f"Rate limit exceeded. Max {limit} requests per minute.",
+                headers={
+                    "X-RateLimit-Limit": str(limit),
+                    "X-RateLimit-Remaining": "0",
+                    "X-RateLimit-Reset": str(reset_seconds),
+                    "Retry-After": str(reset_seconds),
+                },
+            )
+
+    return dependency
+
+
+rate_limit_dependency = _make_rate_limit_dependency(_limiter, RATE_LIMIT)
+knowledge_rate_limit_dependency = _make_rate_limit_dependency(
+    _knowledge_limiter, KNOWLEDGE_RATE_LIMIT
+)
 
 
 # Default source colors (same as internal sources router)
@@ -206,6 +235,20 @@ def _activity_items(rows) -> list[dict]:
     ]
 
 
+def _claim_items(rows) -> list[dict]:
+    """Shape knowledge_claims rows for the Focus-Card (spec §7). Pure."""
+    return [
+        {
+            "text": r.text,
+            "status": r.status,
+            "confidence": r.confidence,
+            "external_source_count": r.external_source_count,
+            "paper_ids": r.paper_ids,
+        }
+        for r in rows
+    ]
+
+
 def create_public_api() -> FastAPI:
     """Create the public API v1 sub-application with its own OpenAPI docs."""
 
@@ -213,7 +256,11 @@ def create_public_api() -> FastAPI:
         title="Ancient Nerds Map — Public API",
         description=(
             "Access archaeological site data from 750K+ sites worldwide.\n\n"
-            "All endpoints are rate-limited to **10 requests per minute** per IP address.\n\n"
+            "Standard endpoints are rate-limited to **10 requests per minute** per IP "
+            "address. The Knowledge-Graph read endpoints (`/graph`, "
+            "`/knowledge/activity`, `/knowledge/claims`) get a higher **60 requests "
+            "per minute** budget, matched to how often the Knowledge page polls "
+            "them.\n\n"
             "Data is sourced from Pleiades, DARE, UNESCO, OpenStreetMap, Wikidata, "
             "and other open archaeological databases.\n\n"
             "Deep-research papers (`/research`) are open access under "
@@ -1691,7 +1738,7 @@ def create_public_api() -> FastAPI:
         ),
         response_model=GraphResponse,
         tags=["Knowledge Graph"],
-        dependencies=[Depends(rate_limit_dependency)],
+        dependencies=[Depends(knowledge_rate_limit_dependency)],
         responses={429: {"description": "Rate limit exceeded"}},
     )
     async def get_graph(
@@ -1720,7 +1767,8 @@ def create_public_api() -> FastAPI:
                            WHERE us.country = n.label AND us.source_id = 'ancient_nerds'
                        ) END AS order_hint,
                        n.site_id::text AS site_id,
-                       CASE WHEN n.kind = 'paper' AND rr.is_public THEN rr.slug END AS paper_slug
+                       CASE WHEN n.kind = 'paper' AND rr.is_public THEN rr.slug END AS paper_slug,
+                       n.question, n.outcome
                 FROM research_nodes n
                 LEFT JOIN (
                     SELECT node_id, COUNT(*) AS cnt FROM (
@@ -1750,6 +1798,8 @@ def create_public_api() -> FastAPI:
                 order_hint=float(r.order_hint) if r.order_hint is not None else None,
                 paper_slug=r.paper_slug,
                 site_id=r.site_id,
+                question=r.question,
+                outcome=r.outcome,
             )
             for r in node_rows
         ]
@@ -1783,7 +1833,7 @@ def create_public_api() -> FastAPI:
         ),
         response_model=ActivityResponse,
         tags=["Knowledge Graph"],
-        dependencies=[Depends(rate_limit_dependency)],
+        dependencies=[Depends(knowledge_rate_limit_dependency)],
         responses={429: {"description": "Rate limit exceeded"}},
     )
     async def get_knowledge_activity(
@@ -1808,6 +1858,56 @@ def create_public_api() -> FastAPI:
         response = ActivityResponse(
             items=[ActivityItem(**item) for item in _activity_items(rows)],
             license=RESEARCH_LICENSE,
+        )
+        cache_set(cache_key, response.model_dump(), ttl=60)
+        return response
+
+    # =========================================================================
+    # 22. GET /knowledge/claims — Claims for a research node (Focus-Card)
+    # =========================================================================
+
+    @public_app.get(
+        "/knowledge/claims",
+        summary="Claims for a research node",
+        description=(
+            "The permanent researcher's world-model claims tied to a single "
+            "knowledge graph node — powers the Focus-Card on the Knowledge "
+            "page.\n\n"
+            f"**License: {RESEARCH_LICENSE}** — attribution to **Ancient Nerds** "
+            "(https://ancientnerds.com) is the only requirement."
+        ),
+        response_model=ClaimsResponse,
+        tags=["Knowledge Graph"],
+        dependencies=[Depends(knowledge_rate_limit_dependency)],
+        responses={429: {"description": "Rate limit exceeded"}},
+    )
+    async def get_knowledge_claims(
+        node_id: str = Query(..., description="research_nodes UUID"),
+        db: Session = Depends(get_db),
+    ):
+        try:
+            uuid.UUID(node_id)
+        except ValueError:
+            raise HTTPException(422, "node_id must be a valid UUID") from None
+
+        cache_key = f"pubv1:knowledge_claims:{node_id}"
+        cached = cache_get(cache_key)
+        if cached:
+            return cached
+
+        rows = db.execute(
+            text("""
+                SELECT text, status, confidence, external_source_count, paper_ids
+                FROM knowledge_claims
+                WHERE node_id = CAST(:nid AS uuid)
+                ORDER BY updated_at DESC
+                LIMIT 20
+            """),
+            {"nid": node_id},
+        ).fetchall()
+
+        response = ClaimsResponse(
+            items=[ClaimItem(**i) for i in _claim_items(rows)], license=RESEARCH_LICENSE
         )
         cache_set(cache_key, response.model_dump(), ttl=60)
         return response
