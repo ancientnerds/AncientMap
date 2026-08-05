@@ -61,7 +61,19 @@ def _insert_frontier(
                 (gen_random_uuid(), :label, :norm_label, :kind, 'frontier', :created_from,
                  :signal, CAST(NULLIF(:site_id, '') AS uuid), NOW(), NOW())
             ON CONFLICT (kind, norm_label) DO UPDATE SET
-                source_signal = research_nodes.source_signal + excluded.source_signal,
+                -- Capped (2026-08-05, Follow-up-Ticket 2): unbounded
+                -- accumulation measured on the live graph — frontier heads
+                -- at source_signal 1180+, climbing ~+120/day via hourly
+                -- injector runs. Harmless while sites stayed 'reference'
+                -- (never picked); with the reference->frontier promotion
+                -- above, a runaway top node would monopolize the picker
+                -- indefinitely (same failure mode as the "null" node at
+                -- signal 2220, 2026-07-31 incident). The cap keeps relative
+                -- ordering among moderate signals intact while bounding the
+                -- top.
+                source_signal = LEAST(
+                    research_nodes.source_signal + excluded.source_signal, 500.0
+                ),
                 status = CASE
                     WHEN research_nodes.status = 'reference' THEN 'frontier'
                     ELSE research_nodes.status

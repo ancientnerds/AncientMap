@@ -55,7 +55,18 @@ def test_insert_frontier_still_accumulates_source_signal():
     session = _FakeInjectorSession()
     _insert_frontier(session, "Nan Madol", "site", 2.0, kind="site", site_id="abc")
     stmt, params = session.executed[0]
-    assert "source_signal = research_nodes.source_signal + excluded.source_signal" in stmt
+    assert "research_nodes.source_signal + excluded.source_signal" in stmt
+
+
+def test_insert_frontier_caps_accumulated_signal_at_500():
+    # Follow-up-Ticket 2: unbounded accumulation hit source_signal 1180+ on
+    # the live graph (+120/day) — LEAST(..., 500.0) bounds the top while
+    # leaving ordering among moderate signals intact.
+    session = _FakeInjectorSession()
+    _insert_frontier(session, "Nan Madol", "site", 2.0, kind="site", site_id="abc")
+    stmt, params = session.executed[0]
+    assert "source_signal = LEAST(" in stmt
+    assert "research_nodes.source_signal + excluded.source_signal, 500.0" in stmt
 
 
 def test_insert_frontier_returns_is_new_flag():
