@@ -75,7 +75,8 @@ def _extract_from_description(
                 },
             },
         )
-    except LyraAPIError:
+    except LyraAPIError as exc:
+        logger.warning("Description extraction failed for %r: %s", headline[:80], exc)
         return [], []
 
     text = response.text
@@ -330,13 +331,22 @@ def verify_video_posts(
 
                 import httpx
 
-                from pipeline.lyra.blocked_domains import BLOCKED_DOMAINS
+                from pipeline.lyra.blocked_domains import BLOCKED_DOMAINS, is_public_http_url
 
-                existing = item.web_sources or []
+                # Fresh list, NOT the tracked JSONB value — mutating the same
+                # object in place and reassigning it is invisible to
+                # SQLAlchemy's change detection (lost update on web_sources).
+                existing = list(item.web_sources or [])
                 seen = {s["url"] for s in existing if isinstance(s, dict)}
                 for url in desc_source_urls:
                     domain = urlparse(url).netloc.replace("www.", "")
                     if url in seen or domain in BLOCKED_DOMAINS:
+                        continue
+                    # SSRF guard: these URLs are LLM-extracted from untrusted
+                    # video descriptions — never HEAD non-http(s) schemes or
+                    # hosts resolving to private/loopback/link-local IPs.
+                    # Rejected URLs take the same path as a failed HEAD.
+                    if not is_public_http_url(url):
                         continue
                     # Validate URL is alive (quick HEAD check)
                     try:
@@ -454,8 +464,11 @@ def _web_verify_items(items: list[NewsItem], settings: LyraSettings) -> int:
         if not all_results:
             continue
 
-        # Save web search sources IMMEDIATELY — don't wait for LLM verdict
-        existing = item.web_sources or []
+        # Save web search sources IMMEDIATELY — don't wait for LLM verdict.
+        # Fresh list, NOT the tracked JSONB value — in-place mutation +
+        # reassigning the same object is invisible to SQLAlchemy's change
+        # detection (lost update on web_sources).
+        existing = list(item.web_sources or [])
         seen = {s["url"] for s in existing if isinstance(s, dict)}
         for r in all_results[:5]:
             if r.url not in seen:

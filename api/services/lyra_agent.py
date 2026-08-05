@@ -17,6 +17,7 @@ import os
 import re
 import time
 from collections.abc import AsyncIterator
+from datetime import UTC, datetime
 from typing import Any
 
 from langchain_core.messages import (
@@ -1044,19 +1045,19 @@ def _get_related_news(
 
     if country:
         conditions.append("us.country ILIKE :country")
-        params["country"] = f"%{country}%"
+        params["country"] = f"%{_escape_ilike(country)}%"
     if category:
         conditions.append("ni.news_category = :category")
         params["category"] = category
     if channel:
         conditions.append("nc.name ILIKE :channel")
-        params["channel"] = f"%{channel}%"
+        params["channel"] = f"%{_escape_ilike(channel)}%"
     if period:
         conditions.append("us.period_name ILIKE :period")
-        params["period"] = f"%{period}%"
+        params["period"] = f"%{_escape_ilike(period)}%"
     if site_type:
         conditions.append("us.site_type ILIKE :site_type")
-        params["site_type"] = f"%{site_type}%"
+        params["site_type"] = f"%{_escape_ilike(site_type)}%"
     if min_significance is not None:
         conditions.append("ni.significance >= :min_sig")
         params["min_sig"] = min_significance
@@ -1215,8 +1216,6 @@ async def _extract_news_filters(query: str) -> dict:
     Returns a dict of filter kwargs suitable for _get_related_news().
     Uses Anthropic structured output for guaranteed valid JSON.
     """
-    from datetime import datetime
-
     from api.services.lyra_router import get_request_context
 
     try:
@@ -1228,7 +1227,7 @@ async def _extract_news_filters(query: str) -> dict:
         model_name = LLM_MODEL
 
     prompt = _NEWS_FILTER_EXTRACTION_PROMPT_TEMPLATE.replace(
-        "{current_year}", str(datetime.now().year)
+        "{current_year}", str(datetime.now(UTC).year)
     )
     try:
         backend_impl = get_backend(model_name, backend_type)
@@ -1317,7 +1316,7 @@ def _build_messages(
         # it has a web_search tool and should actually use it.
         web_search_hint = ""
         if web_search:
-            today = time.strftime("%Y-%m-%d")
+            today = datetime.now(UTC).strftime("%Y-%m-%d")
             web_search_hint = (
                 f"\n\n## Web Search (enabled by user)\n"
                 f"Today's date is {today}. The user enabled live web search.\n"

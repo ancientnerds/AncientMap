@@ -1178,6 +1178,23 @@ def _regenerate_summary(body: str, settings: LyraSettings) -> str:
     sep_idx = body.find("\n---")
     if sep_idx < 0:
         return body
+
+    # Only replace when the pre-separator span really is the italic summary
+    # block. Without this guard, a body whose first "---" comes after a title
+    # or real prose (e.g. when D9 detection latched onto an italic attribution
+    # line) gets that content overwritten by the generated summary
+    # (mass-content-destruction path, audit 2026-08-05).
+    head = body[:sep_idx].strip()
+    if not head.startswith("*") or "##" in head or len(head) > 1500:
+        logger.warning(
+            "[assessor] D9: pre-separator span is not a summary block "
+            "(starts_italic=%s, has_heading=%s, len=%d) — skipping regeneration",
+            head.startswith("*"),
+            "##" in head,
+            len(head),
+        )
+        return body
+
     body_after = body[sep_idx + 4 :].strip()
 
     # Get first 300 chars of each section for context

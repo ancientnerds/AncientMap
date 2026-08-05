@@ -35,7 +35,13 @@ def claim_daily(session: Session, user: DiscordUser) -> dict:
     now = datetime.now(UTC)
 
     # Lock user row to prevent concurrent credit manipulation
-    session.query(DiscordUser).filter(DiscordUser.id == user.id).with_for_update().first()
+    (
+        session.query(DiscordUser)
+        .filter(DiscordUser.id == user.id)
+        .populate_existing()
+        .with_for_update()
+        .first()
+    )
 
     ps = (
         session.query(CardPlayerStats)
@@ -208,7 +214,7 @@ def claim_starter_deck(session: Session, user: DiscordUser) -> list[dict]:
         )
         result.append(_card_to_dict(session, card))
 
-    ps.total_cards = len(starter_cards)
+    ps.total_cards += len(starter_cards)
 
     return result
 

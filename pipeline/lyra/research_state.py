@@ -117,7 +117,7 @@ class ResearchState:
 
     # Phase tracking
     phase: ResearchPhase = ResearchPhase.DECOMPOSING
-    started_at: datetime = field(default_factory=datetime.utcnow)
+    started_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     deadline: datetime | None = None  # set on init: started_at + deadline_hours
 
     # Research angles

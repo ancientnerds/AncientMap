@@ -328,7 +328,10 @@ class LyraBot(discord.Client):
         intents.message_content = True
         intents.dm_messages = True
         intents.members = True
-        super().__init__(intents=intents)
+        # The bot echoes user questions and relays LLM output — without this,
+        # injected @everyone/@here/role mentions would ping with the bot's
+        # permissions (audit 2026-08-05).
+        super().__init__(intents=intents, allowed_mentions=discord.AllowedMentions.none())
         self.tree = app_commands.CommandTree(self)
         # Dedup set: prevents double-processing the same message on gateway reconnects
         self._processed_ids: set[int] = set()

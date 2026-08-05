@@ -30,11 +30,16 @@ rules:
     languages: [python]
     severity: ERROR
     message: >-
-      datetime.utcnow() is deprecated — use datetime.now(UTC)
-      (CODE_AUDIT.md P6).
+      datetime.utcnow is deprecated — use datetime.now(UTC)
+      (CODE_AUDIT.md P6). Also matches the bare (parens-less) reference form
+      used in default_factory/default= — that variant slipped through the
+      original call-only rule (audit 2026-08-05).
     pattern-either:
       - pattern: datetime.utcnow()
       - pattern: datetime.datetime.utcnow()
+      - pattern: default_factory=datetime.utcnow
+      - pattern: default=datetime.utcnow
+      - pattern: onupdate=datetime.utcnow
 
   # D2-SEC: ILIKE/LIKE pattern built from an unescaped variable — % and _
   # metacharacters leak through. Use _escape_ilike from

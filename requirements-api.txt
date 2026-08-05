@@ -42,6 +42,7 @@ Pillow>=10.0.0
 # --- Content rendering ---
 markdown>=3.5.0
 markdown-it-py>=3.0.0
+nh3>=0.3.0  # allowlist HTML sanitizer for LLM-derived markdown (audit 2026-08-05)
 youtube-transcript-api>=1.0.0
 
 # --- Auth ---

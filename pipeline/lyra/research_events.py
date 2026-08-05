@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 import time
+from collections import deque
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 
@@ -194,7 +195,10 @@ class EventBus:
 
     def __init__(self, state=None):
         self._handlers: dict[type, list[EventHandler]] = {}
-        self._history: list[ResearchEvent] = []
+        # Bounded: a 72h research run emits tens of thousands of events — an
+        # unbounded list is a slow memory leak. Nothing indexes the history
+        # (debug iteration/len only), so a deque with maxlen is a drop-in.
+        self._history: deque[ResearchEvent] = deque(maxlen=2000)
         self._handler_instances: dict[type, object] = {}  # class -> instance registry
         # Optional ResearchState ref so handler exceptions can be surfaced to
         # the orchestrator's deadline loop (it watches state.error). Without
@@ -284,5 +288,5 @@ class EventBus:
                         )
 
     @property
-    def history(self) -> list[ResearchEvent]:
+    def history(self) -> deque[ResearchEvent]:
         return self._history

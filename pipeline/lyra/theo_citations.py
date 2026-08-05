@@ -387,17 +387,28 @@ def score_tier_by_domain(url: str) -> int:
     """
     if not url:
         return 3
-    lowered = url.lower()
-    # Strip scheme + optional www. to make substring checks robust
-    if "://" in lowered:
-        lowered = lowered.split("://", 1)[1]
-    lowered = lowered.removeprefix("www.")
+    # Match against the HOST only — substring checks over the whole URL let
+    # paths/queries spoof tiers (evil.com/?x=nature.com scored tier 1).
+    candidate = url.strip().lower()
+    if "://" not in candidate:
+        candidate = "//" + candidate  # scheme-less input: force netloc parsing
+    # .hostname strips userinfo, port, and IPv6 brackets from the netloc.
+    host = (urllib.parse.urlparse(candidate).hostname or "").removeprefix("www.")
+    if not host:
+        return 3
+
+    def _host_matches(domain: str) -> bool:
+        if domain.startswith("."):
+            # TLD-style suffix entries (".edu", ".ac.uk", ".gov")
+            return host.endswith(domain)
+        return host == domain or host.endswith("." + domain)
+
     # Tier 1 takes priority — check first
     for domain in _TIER_1_DOMAINS:
-        if domain in lowered:
+        if _host_matches(domain):
             return 1
     for domain in _TIER_2_DOMAINS:
-        if domain in lowered:
+        if _host_matches(domain):
             return 2
     return 3
 

@@ -1142,6 +1142,18 @@ def generate_weekly_article(
             len(assess_result.fixes_applied),
         )
 
+    # ── 8. RE-VERIFY CITATIONS ───────────────────────────────────
+    # The assessor's D2/D3 fixes insert [N] markers that the step-5 pass never
+    # saw — without re-verification they would reach publish unverified
+    # (citation-laundering path, audit 2026-08-05). Only runs when the
+    # assessor actually changed something.
+    if assess_result.fixes_applied:
+        with _step(step_data, "reverify_citations", t0_total) as s:
+            logger.info("Re-verifying citations after assessment fixes")
+            body = asyncio.run(verify_all_citations(body, unified_sources, settings=settings))
+            body, unified_sources = _cleanup_citations(body, unified_sources)
+            s["count"] = len(re.findall(r"\[\d+\]", body))
+
     # ── 9. POLISH ────────────────────────────────────────────────
     with _step(step_data, "polish", t0_total) as s:
         logger.info("Polishing article for coherence")

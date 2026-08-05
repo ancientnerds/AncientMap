@@ -223,20 +223,25 @@ def search_similar(question: str, limit: int = 5) -> list[dict]:
         score_threshold=0.3,
     ).points
 
-    # Group by paper_id, keep best score per paper
+    # Group by paper_id, keep best score per paper. Points indexed before a
+    # payload field existed lack that key entirely (same pre-schema problem
+    # as section_text in search_sections below), so read via .get().
     best_per_paper: dict[str, dict] = {}
     for hit in results:
-        pid = hit.payload["paper_id"]
+        payload = hit.payload or {}
+        pid = payload.get("paper_id")
+        if not pid:
+            continue  # pre-schema point without paper identity — can't group
         if pid not in best_per_paper or hit.score > best_per_paper[pid]["score"]:
             best_per_paper[pid] = {
                 "paper_id": pid,
-                "paper_title": hit.payload["paper_title"],
-                "paper_slug": hit.payload["paper_slug"],
-                "author_username": hit.payload["author_username"],
-                "author_discord_id": hit.payload["author_discord_id"],
-                "published_at": hit.payload["published_at"],
+                "paper_title": payload.get("paper_title", ""),
+                "paper_slug": payload.get("paper_slug", ""),
+                "author_username": payload.get("author_username", ""),
+                "author_discord_id": payload.get("author_discord_id"),
+                "published_at": payload.get("published_at"),
                 "score": round(hit.score, 3),
-                "best_section_title": hit.payload["section_title"],
+                "best_section_title": payload.get("section_title", ""),
             }
 
     # Sort by score descending, return top N
@@ -271,16 +276,20 @@ def search_sections(query: str, limit: int = 3) -> list[dict]:
         score_threshold=0.35,
     ).points
 
-    # Deduplicate by paper_id
+    # Deduplicate by paper_id. Pre-schema points may lack newer payload
+    # fields entirely, so read every field via .get().
     best_per_paper: dict[str, dict] = {}
     for hit in results:
-        pid = hit.payload["paper_id"]
+        payload = hit.payload or {}
+        pid = payload.get("paper_id")
+        if not pid:
+            continue  # pre-schema point without paper identity — can't group
         if pid not in best_per_paper or hit.score > best_per_paper[pid]["score"]:
             best_per_paper[pid] = {
                 "paper_id": pid,
-                "paper_title": hit.payload["paper_title"],
-                "paper_slug": hit.payload["paper_slug"],
-                "section_title": hit.payload["section_title"],
+                "paper_title": payload.get("paper_title", ""),
+                "paper_slug": payload.get("paper_slug", ""),
+                "section_title": payload.get("section_title", ""),
                 # Read the always-present `text_preview` (<=2000 chars), not
                 # `section_text`. text_preview is written on every index call;
                 # full `section_text` was added to the payload schema later, so
@@ -288,9 +297,9 @@ def search_sections(query: str, limit: int = 3) -> list[dict]:
                 # KeyError('section_text') on every PublicResearch query. The
                 # only consumer (PublicResearchAdapter) slices [:500], so the
                 # 2000-char preview is more than enough.
-                "section_text": hit.payload["text_preview"],
-                "section_index": hit.payload["section_index"],
-                "author_username": hit.payload["author_username"],
+                "section_text": payload.get("text_preview", ""),
+                "section_index": payload.get("section_index", 0),
+                "author_username": payload.get("author_username", ""),
                 "score": round(hit.score, 3),
             }
 

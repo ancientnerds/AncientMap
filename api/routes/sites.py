@@ -22,6 +22,7 @@ from sqlalchemy.orm import Session
 
 from api.cache import cache_delete_pattern, cache_get, cache_set
 from api.services.jwt_auth import require_founder
+from api.services.lyra_tools import _escape_ilike
 from api.services.rate_limiter import RateLimiter, get_client_ip
 from pipeline.database import DiscordUser, get_db
 from pipeline.normalizers.site_type import normalize_site_type
@@ -579,6 +580,15 @@ async def get_clustered_sites(
     """
     if not _heavy_limiter.check(get_client_ip(req)):
         raise HTTPException(status_code=429, detail="Too many requests")
+
+    source_key = ",".join(sorted(source)) if source else "all"
+    cache_key = f"sites:clustered:{resolution}:{source_key}"
+
+    # Try cache first (30 min TTL, same as /all)
+    cached = cache_get(cache_key)
+    if cached:
+        return cached
+
     params = {}
     source_filter = ""
 
@@ -630,11 +640,13 @@ async def get_clustered_sites(
             }
         )
 
-    return {
+    response = {
         "resolution": resolution,
         "cluster_count": len(clusters),
         "clusters": clusters,
     }
+    cache_set(cache_key, response, ttl=1800)
+    return response
 
 
 @router.get("/random")
@@ -730,9 +742,9 @@ async def search_sites(
         return {"count": 0, "sites": []}
 
     # Escape SQL LIKE wildcards in user input
-    normalized_escaped = normalized.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    normalized_escaped = _escape_ilike(normalized)
     spaceless = normalized.replace(" ", "")
-    spaceless_escaped = spaceless.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    spaceless_escaped = _escape_ilike(spaceless)
 
     # Single query: exact > spaceless > substring, prefer rows with card_description
     query = text("""
@@ -1126,13 +1138,14 @@ async def get_site_detail(
                    cs.best_wiki_url, cs.source_language
             FROM unified_sites us
             LEFT JOIN card_stats cs ON cs.site_id = us.id
-            WHERE unaccent(us.name) ILIKE unaccent(:name)
+            WHERE unaccent(us.name) ILIKE unaccent(:name_pattern) ESCAPE '\\'
                OR unaccent(us.name_normalized) = LOWER(unaccent(:name))
                OR REPLACE(unaccent(us.name_normalized), ' ', '') = LOWER(REPLACE(unaccent(:name), ' ', ''))
-               OR us.id IN (SELECT site_id FROM unified_site_names WHERE unaccent(name) ILIKE unaccent(:name))
+               OR us.id IN (SELECT site_id FROM unified_site_names WHERE unaccent(name) ILIKE unaccent(:name_pattern) ESCAPE '\\')
             LIMIT 1
         """)
-        result = db.execute(query, {"name": site_id})
+        # Escaped pattern for ILIKE; raw value for the exact-equality comparisons
+        result = db.execute(query, {"name": site_id, "name_pattern": _escape_ilike(site_id)})
 
     row = result.fetchone()
 
@@ -2271,6 +2284,9 @@ async def mark_sites_audited(
         {"source_id": body.source_id},
     )
     db.commit()
+
+    # /all serves the "aud" field from cache — bust it so audits show immediately
+    cache_delete_pattern("sites:*")
 
     return {
         "source_id": body.source_id,

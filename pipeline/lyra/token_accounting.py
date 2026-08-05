@@ -23,9 +23,18 @@ from __future__ import annotations
 
 import contextvars
 import logging
+import threading
 from typing import Any
 
 logger = logging.getLogger(__name__)
+
+# Serializes the read-modify-write on state.total_tokens. LLM-call helpers
+# run on ThreadPoolExecutor workers (research_stages fans audits/specialists
+# out across threads) in addition to the event-loop thread, and
+# `x = getattr(...) + n` is NOT atomic — the GIL only guarantees each
+# bytecode op, not the whole read-add-store sequence, so concurrent adds
+# can drop increments without this lock.
+_TOTAL_TOKENS_LOCK = threading.Lock()
 
 # The state object whose total_tokens field should be incremented for
 # LLM calls made within this context. `None` means we're outside a
@@ -93,8 +102,5 @@ def add_usage(usage: dict | None) -> None:
         return
     if tokens <= 0:
         return
-    # ResearchState.total_tokens is a plain int — no lock needed because
-    # asyncio handlers run on the same event loop thread; the only thread
-    # hop is asyncio.to_thread which copies the contextvar but doesn't
-    # parallelise writes (the worker holds the GIL during the add).
-    state.total_tokens = getattr(state, "total_tokens", 0) + tokens
+    with _TOTAL_TOKENS_LOCK:
+        state.total_tokens = getattr(state, "total_tokens", 0) + tokens

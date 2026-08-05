@@ -569,15 +569,19 @@ async def discord_oauth_callback(
 async def get_me(user: DiscordUser = Depends(get_current_user)):
     """Get current authenticated user profile."""
     try:
-        # Read credits from DB (grants are applied at login + webhook, not here)
+        # Read credits from DB (grants are applied at login + webhook, not here).
+        # Capture everything needed while the session is open — attribute access
+        # after the with-block raises DetachedInstanceError.
         with get_session() as session:
             db_user = session.query(DiscordUser).filter(DiscordUser.id == user.id).first()
             if db_user:
                 credits = db_user.credits
                 is_unlimited = db_user.is_unlimited
+                grant_anchor_date = db_user.grant_anchor_date
             else:
                 credits = user.credits
                 is_unlimited = False
+                grant_anchor_date = None
 
         avatar_url = None
         if user.avatar_hash:
@@ -589,10 +593,8 @@ async def get_me(user: DiscordUser = Depends(get_current_user)):
 
         # Next grant date for monthly tiers
         next_grant_date = None
-        if tier in ("explorer", "pathfinder", "scholar") and db_user and db_user.grant_anchor_date:
-            from datetime import timedelta
-
-            anchor = db_user.grant_anchor_date
+        if tier in ("explorer", "pathfinder", "scholar") and grant_anchor_date:
+            anchor = grant_anchor_date
             now = datetime.now(UTC)
             # Find next anniversary of anchor day
             y, m = now.year, now.month
@@ -775,11 +777,16 @@ async def admin_adjust_credits(
     if body.action in ("set", "add", "remove") and body.amount < 0:
         raise HTTPException(status_code=400, detail="amount must be non-negative")
 
+    try:
+        target_user_id = uuid.UUID(body.user_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid user_id") from None
+
     with get_session() as session:
         user = (
             session.query(DiscordUser)
             .filter(
-                DiscordUser.id == uuid.UUID(body.user_id),
+                DiscordUser.id == target_user_id,
             )
             .with_for_update()
             .first()

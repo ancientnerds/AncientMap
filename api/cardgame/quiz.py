@@ -274,11 +274,26 @@ def submit_quiz_answers(
         raise ValueError("Quiz session not found")
     if str(quiz.user_id) != str(user.id):
         raise ValueError("This quiz belongs to another player")
+
+    # Lock the quiz row so concurrent submits serialize, then check double-submit
+    quiz = (
+        session.query(QuizSession)
+        .filter(QuizSession.id == quiz.id)
+        .populate_existing()
+        .with_for_update()
+        .first()
+    )
     if quiz.score is not None:
         raise QuizAlreadySubmittedError("Quiz already submitted")
 
     # Lock user row to prevent concurrent credit manipulation
-    user = session.query(DiscordUser).filter(DiscordUser.id == user.id).with_for_update().first()
+    user = (
+        session.query(DiscordUser)
+        .filter(DiscordUser.id == user.id)
+        .populate_existing()
+        .with_for_update()
+        .first()
+    )
 
     correct = 0
     results = []

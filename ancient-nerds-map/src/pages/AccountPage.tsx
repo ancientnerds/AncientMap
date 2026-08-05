@@ -433,6 +433,7 @@ export default function AccountPage() {
   const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null)
   const [creditAction, setCreditAction] = useState<CreditAction>('add')
   const [creditAmount, setCreditAmount] = useState(100)
+  const [creditAdjustLoading, setCreditAdjustLoading] = useState(false)
   const [adminError, setAdminError] = useState<string | null>(null)
   const [adminSuccess, setAdminSuccess] = useState<string | null>(null)
   const searchTimer = useRef<ReturnType<typeof setTimeout>>()
@@ -703,7 +704,8 @@ export default function AccountPage() {
 
   // Admin: adjust credits
   const handleCreditAdjust = async (action: CreditAction, amount: number) => {
-    if (!token || !selectedUser) return
+    if (!token || !selectedUser || creditAdjustLoading) return
+    setCreditAdjustLoading(true)
     setAdminError(null)
     setAdminSuccess(null)
     try {
@@ -742,6 +744,8 @@ export default function AccountPage() {
       }
     } catch {
       setAdminError('Failed to adjust credits')
+    } finally {
+      setCreditAdjustLoading(false)
     }
   }
 
@@ -1293,28 +1297,29 @@ export default function AccountPage() {
                       />
                       <button
                         className="admin-apply-btn"
+                        disabled={creditAdjustLoading}
                         onClick={() => handleCreditAdjust(creditAction, creditAmount)}
                       >
                         Apply
                       </button>
                     </div>
                     <div className="admin-shortcuts">
-                      <button className="admin-shortcut-btn add" onClick={() => handleCreditAdjust('add', 100)}>
+                      <button className="admin-shortcut-btn add" disabled={creditAdjustLoading} onClick={() => handleCreditAdjust('add', 100)}>
                         +100
                       </button>
-                      <button className="admin-shortcut-btn add" onClick={() => handleCreditAdjust('add', 500)}>
+                      <button className="admin-shortcut-btn add" disabled={creditAdjustLoading} onClick={() => handleCreditAdjust('add', 500)}>
                         +500
                       </button>
-                      <button className="admin-shortcut-btn add" onClick={() => handleCreditAdjust('add', 1000)}>
+                      <button className="admin-shortcut-btn add" disabled={creditAdjustLoading} onClick={() => handleCreditAdjust('add', 1000)}>
                         +1000
                       </button>
                       {!selectedUser.is_unlimited && (
-                        <button className="admin-shortcut-btn set" onClick={() => handleCreditAdjust('set_unlimited', 1)}>
+                        <button className="admin-shortcut-btn set" disabled={creditAdjustLoading} onClick={() => handleCreditAdjust('set_unlimited', 1)}>
                           Set Unlimited
                         </button>
                       )}
                       {selectedUser.is_unlimited && (
-                        <button className="admin-shortcut-btn remove" onClick={() => handleCreditAdjust('set_unlimited', 0)}>
+                        <button className="admin-shortcut-btn remove" disabled={creditAdjustLoading} onClick={() => handleCreditAdjust('set_unlimited', 0)}>
                           Remove Unlimited
                         </button>
                       )}

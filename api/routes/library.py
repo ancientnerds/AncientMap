@@ -1,17 +1,23 @@
 """Library API — search across aggregated citation sources."""
 
+import json
 import logging
+import uuid
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from api.services.lyra_tools import _escape_ilike
+from api.services.rate_limiter import RateLimiter, get_client_ip
 from pipeline.database import LibrarySource, NewsItem, get_db
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+# /refresh re-runs the aggregator + static export (expensive); throttle hard.
+_refresh_limiter = RateLimiter(max_requests=2, window_seconds=600, namespace="library_refresh")
 
 
 class LibrarySourceResponse(BaseModel):
@@ -106,6 +112,11 @@ def library_by_site(site_id: str, db: Session = Depends(get_db)):
     1. Direct site citations (parent_refs with type='site' and id=site_id)
     2. Story citations (parent_refs with type='story' and id matching news items for this site)
     """
+    try:
+        uuid.UUID(site_id)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="Invalid site ID format") from None
+
     # 1. Get news item IDs for this site
     news_ids = [
         str(row[0]) for row in db.query(NewsItem.id).filter(NewsItem.site_id == site_id).all()
@@ -114,12 +125,12 @@ def library_by_site(site_id: str, db: Session = Depends(get_db)):
     # 2. Build JSONB containment queries
     #    @> checks if the JSONB array contains an element matching the pattern
     conditions = [
-        LibrarySource.parent_refs.op("@>")(f'[{{"type": "site", "id": "{site_id}"}}]'),
+        LibrarySource.parent_refs.op("@>")(json.dumps([{"type": "site", "id": site_id}])),
     ]
     # Add story ref conditions in batches (avoid huge OR chains)
     for nid in news_ids:
         conditions.append(
-            LibrarySource.parent_refs.op("@>")(f'[{{"type": "story", "id": "{nid}"}}]')
+            LibrarySource.parent_refs.op("@>")(json.dumps([{"type": "story", "id": nid}]))
         )
 
     from sqlalchemy import or_
@@ -152,8 +163,11 @@ def library_by_site(site_id: str, db: Session = Depends(get_db)):
 
 
 @router.post("/refresh")
-def refresh_library():
+def refresh_library(req: Request):
     """Re-run the library aggregator and static export."""
+    if not _refresh_limiter.check(get_client_ip(req)):
+        raise HTTPException(status_code=429, detail="Too many requests")
+
     from pipeline.library_aggregator import aggregate_library
     from pipeline.static_exporter import StaticExporter
 

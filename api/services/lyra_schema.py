@@ -331,12 +331,21 @@ def expand_markers(
                 attribution = f"*Photo: {attr_str}*"
             else:
                 attribution = ""
+            # LLM-supplied URL: only http(s) may become a rendered image
+            # (javascript:/data: via indirect prompt injection — audit
+            # 2026-08-05). Same guard for links below.
+            if not str(e.get("original_url", "")).startswith(("http://", "https://")):
+                issues.append(f"Dropped image marker with non-http URL: {marker}")
+                return e.get("title", "")
             img_line = f"![{e['title']}]({e['original_url']})"
             return f"{img_line}\n{attribution}" if attribution else img_line
 
         # Links: «lN» → [text](url)
         if marker in link_map:
             e = link_map[marker]
+            if not str(e.get("url", "")).startswith(("http://", "https://")):
+                issues.append(f"Dropped link marker with non-http URL: {marker}")
+                return e.get("text", "")
             return f"[{e['text']}]({e['url']})"
 
         # Countries: «fN» → [name](flag:code)

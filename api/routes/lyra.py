@@ -316,7 +316,11 @@ def _stream_response_with_credits(
 
         except Exception as e:
             logger.error(f"Lyra stream error: {e}", exc_info=True)
-            # Refund the 1-credit deposit if done event never fired (no answer generated)
+            yield f"event: error\ndata: {json.dumps({'type': 'error', 'error': 'An internal error occurred'})}\n\n"
+        finally:
+            # Refund the 1-credit deposit if the done event never fired (no answer
+            # billed). Runs on ALL exits — including client disconnect
+            # (GeneratorExit), which `except Exception` does not catch.
             if not done_fired:
                 try:
                     with get_db_session() as session:
@@ -329,8 +333,7 @@ def _stream_response_with_credits(
                         if u:
                             u.credits += 1
                 except Exception:
-                    logger.error("Failed to refund deposit after stream error", exc_info=True)
-            yield f"event: error\ndata: {json.dumps({'type': 'error', 'error': 'An internal error occurred'})}\n\n"
+                    logger.error("Failed to refund deposit after stream abort", exc_info=True)
 
     return StreamingResponse(
         generate(),
@@ -418,7 +421,7 @@ def _reconcile_credits(
 
 def _update_chat_streak(session: "Session", user_id: uuid.UUID) -> None:  # type: ignore[name-defined]  # noqa: F821
     """Update daily chat streak in CardPlayerStats.feature_flags."""
-    from datetime import date
+    from datetime import UTC, datetime, timedelta
 
     from api.cardgame.models import CardPlayerStats
 
@@ -427,15 +430,14 @@ def _update_chat_streak(session: "Session", user_id: uuid.UUID) -> None:  # type
         return
 
     flags = ps.feature_flags or {}
-    today = date.today().isoformat()
+    today_date = datetime.now(UTC).date()
+    today = today_date.isoformat()
     last_chat = flags.get("lyra_last_chat_date")
 
     if last_chat == today:
         return  # already chatted today
 
-    from datetime import timedelta
-
-    yesterday = (date.today() - timedelta(days=1)).isoformat()
+    yesterday = (today_date - timedelta(days=1)).isoformat()
     if last_chat == yesterday:
         flags["lyra_chat_streak"] = flags.get("lyra_chat_streak", 0) + 1
     else:

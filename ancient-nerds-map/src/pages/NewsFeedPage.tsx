@@ -200,9 +200,11 @@ export default function NewsFeedPage() {
       .catch(() => {})
   }, [])
 
-  // Infinite scroll — fetch next page from server when sentinel enters viewport
+  // Infinite scroll — fetch next page from server when sentinel enters viewport.
+  // Gated on error so a failed fetch doesn't auto-retry in a loop — the user
+  // clears it via the Retry button, a filter change, or pull-to-refresh.
   useEffect(() => {
-    if (!sentinelRef.current || !hasMore || loading) return
+    if (!sentinelRef.current || !hasMore || loading || error) return
     const observer = new IntersectionObserver(
       entries => {
         if (entries[0].isIntersecting) {
@@ -213,7 +215,7 @@ export default function NewsFeedPage() {
     )
     observer.observe(sentinelRef.current)
     return () => observer.disconnect()
-  }, [hasMore, loading, page, fetchPage])
+  }, [hasMore, loading, error, page, fetchPage])
 
   // Pull-to-refresh: touch (mobile) + wheel/trackpad (desktop)
   useEffect(() => {
@@ -649,7 +651,10 @@ export default function NewsFeedPage() {
               const screenshotSrc = item.screenshot_url
                 ? `${config.api.baseUrl}${item.screenshot_url.replace('/api', '')}`
                 : item.video.thumbnail_url
-              const deepLink = item.youtube_deep_url || item.youtube_url || '#'
+              const rawDeepLink = item.youtube_deep_url || item.youtube_url
+              const deepLink = rawDeepLink && (rawDeepLink.startsWith('https://') || rawDeepLink.startsWith('http://'))
+                ? rawDeepLink
+                : '#'
 
               return (
                 <div key={item.id} data-story-id={item.id} className="news-page-card" style={item.significance != null ? getSignificanceNervStyle(item.significance) : undefined}>

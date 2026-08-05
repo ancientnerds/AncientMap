@@ -18,6 +18,26 @@ import httpx
 
 logger = logging.getLogger(__name__)
 
+
+class MiniMaxAuthError(RuntimeError):
+    """Terminal MiniMax failure no retry can fix (invalid/expired key, 403).
+
+    Raised instead of the old silent `return ""` — an auth-dead key producing
+    empty specialists/audits/prose for hours was the root cause of the empty
+    papers on 2026-06-03/06-17. Non-auth terminal failures still return
+    empty (callers have degraded-mode paths); converting those to raises
+    needs a per-handler audit (see docs/audits/AUDIT_REPORT_2026-08-05.md).
+    """
+
+
+def _is_auth_error(err: object) -> bool:
+    """Match HTTP 401/403 / auth wording in an error string."""
+    s = str(err or "").lower()
+    return (
+        re.search(r"\b40[13]\b", s) is not None or "authentication" in s or "invalid api key" in s
+    )
+
+
 from pipeline.lyra.minimax_limiter import (
     InsufficientQuotaError,
     QuotaExhaustedError,
@@ -130,7 +150,9 @@ def minimax_chat(
                 logger.info(f"MiniMax error ({err_str[:50]}), retrying in {wait}s...")
                 time.sleep(wait)
                 continue
-            logger.warning(f"MiniMax M3 chat failed: {e}")
+            if _is_auth_error(e):
+                raise MiniMaxAuthError(f"MiniMax auth failure: {e}") from e
+            logger.error(f"MiniMax M3 chat failed terminally (returning empty): {e}")
             return ""
 
     content = data.get("choices", [{}])[0].get("message", {}).get("content", "")
@@ -313,8 +335,13 @@ def minimax_chat_anthropic(
                     continue
                 break
 
-    logger.warning(
-        f"MiniMax M3 Anthropic SDK call failed after {attempt + 1} attempts: {last_error}"
+    if _is_auth_error(last_error):
+        raise MiniMaxAuthError(f"MiniMax auth failure: {last_error}") from (
+            last_error if isinstance(last_error, BaseException) else None
+        )
+    logger.error(
+        f"MiniMax M3 Anthropic SDK call failed terminally after {attempt + 1} attempts "
+        f"(returning empty): {last_error}"
     )
     return ""
 
@@ -698,7 +725,7 @@ def structured_llm_call(
         # session before this hook was added.
         coerced = _coerce_to_schema(parsed, schema)
         return coerced if coerced is not _SCHEMA_DROP else {}
-    except (QuotaExhaustedError, InsufficientQuotaError):
+    except (QuotaExhaustedError, InsufficientQuotaError, MiniMaxAuthError):
         # Quota death is not retryable here — it must reach the worker's
         # defer path. Swallowing it into {} made decomposition report
         # "no research angles" and marked the run 'failed' permanently:
@@ -721,7 +748,7 @@ def structured_llm_call(
         parsed = json.loads(cleaned)
         coerced = _coerce_to_schema(parsed, schema)
         return coerced if coerced is not _SCHEMA_DROP else {}
-    except (QuotaExhaustedError, InsufficientQuotaError):
+    except (QuotaExhaustedError, InsufficientQuotaError, MiniMaxAuthError):
         raise
     except Exception as exc:
         logger.error("Structured LLM call failed after retry: %s", exc)

@@ -66,6 +66,17 @@ async def check_relevance(question: str) -> str | None:
     raw = re.sub(r"<think>.*?</think>", "", raw, flags=re.DOTALL).strip()
     parsed = _parse_json(raw)
 
+    if not parsed:
+        # EXPLICIT fail-open: an unparseable classifier verdict must not
+        # block a user's request, but it has to be visible — a silently
+        # permissive gate looks identical to a working one in the logs.
+        logger.warning(
+            "[relevance_gate] unparseable LLM output — failing OPEN "
+            "(treating question as relevant). raw=%r",
+            raw[:200],
+        )
+        return None
+
     if parsed.get("relevant", True):
         return None
 

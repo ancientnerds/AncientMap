@@ -68,7 +68,7 @@ def cache_get(key: str) -> Any | None:
     if client:
         try:
             value = client.get(key)
-            if value:
+            if value is not None:
                 return json.loads(value)
         except Exception as e:
             logger.warning(f"Cache get error for {key}: {e}")

@@ -53,6 +53,7 @@ export default function ContributeModal({
   const coordsBeforePickerRef = useRef<string>('')
   const validCoordsBeforePickerRef = useRef<[number, number] | null>(null)
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const savedIndicatorTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [hasBeenOpened, setHasBeenOpened] = useState(false)
   const [turnstileKey, setTurnstileKey] = useState(0)
   const wasOpenRef = useRef(false)
@@ -153,11 +154,15 @@ export default function ContributeModal({
     if (hasContent && submitStatus === 'idle') {
       saveTimeoutRef.current = setTimeout(() => {
         setShowSavedIndicator(true)
-        setTimeout(() => setShowSavedIndicator(false), 2000)
+        if (savedIndicatorTimeoutRef.current) clearTimeout(savedIndicatorTimeoutRef.current)
+        savedIndicatorTimeoutRef.current = setTimeout(() => setShowSavedIndicator(false), 2000)
       }, 500)
     }
 
-    return () => { if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current) }
+    return () => {
+      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current)
+      if (savedIndicatorTimeoutRef.current) clearTimeout(savedIndicatorTimeoutRef.current)
+    }
   }, [formValues, submitStatus])
 
   const handleResetForm = useCallback(() => {

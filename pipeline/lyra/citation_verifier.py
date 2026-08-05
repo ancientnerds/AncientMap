@@ -194,8 +194,14 @@ async def verify_all_citations(
     1. Find the sentence containing [N]
     2. Look up source [N]'s title and snippet
     3. Ask LLM: "does this source support this claim?"
-    4. If no: remove [N] from the sentence
-    5. If sentence has no remaining citations: remove the sentence
+    4. If no (or the check errors — fail closed): remove [N] from the sentence
+
+    KNOWN LIMITATION: rejected sentences keep their prose — only the [N]
+    marker is stripped, so the claim remains as uncited text in the article.
+    The Theo pipeline has strip_uncited_factual_paragraphs for this; the
+    article pipeline currently has no equivalent pass. (Docstring corrected
+    2026-08-05 — it previously promised sentence removal that was never
+    implemented. Tracked in docs/audits/AUDIT_REPORT_2026-08-05.md.)
 
     Loops until all citations verified or max_iterations reached.
 
@@ -281,14 +287,24 @@ async def verify_all_citations(
             async with semaphore:
                 return await _check_cite(cite_num)
 
+        ordered_cites = sorted(body_cites)
         results = await asyncio.gather(
-            *[_capped_check(cn) for cn in sorted(body_cites)],
+            *[_capped_check(cn) for cn in ordered_cites],
             return_exceptions=True,
         )
 
-        for result in results:
+        for ordered_cite, result in zip(ordered_cites, results, strict=True):
             if isinstance(result, Exception):
-                logger.warning("[verifier] Citation check raised: %s", result)
+                # Fail CLOSED: an infrastructure error at the final gate must
+                # not pass an unverified citation through to publish. Losing a
+                # possibly-valid citation beats publishing an unverified one
+                # (project rule: wrong citations are worse than nothing).
+                logger.warning(
+                    "[verifier] Citation [%d] check raised — rejecting: %s",
+                    ordered_cite,
+                    result,
+                )
+                rejected_cites.add(ordered_cite)
                 continue
             cite_num, supported = result
             if not supported:

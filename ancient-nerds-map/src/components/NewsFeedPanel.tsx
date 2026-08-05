@@ -163,7 +163,10 @@ export default function NewsFeedPanel({ onClose, onSiteHover, onSiteClick, onAsk
           const screenshotSrc = item.screenshot_url
             ? `${config.api.baseUrl}${item.screenshot_url.replace('/api', '')}`
             : item.video.thumbnail_url
-          const deepLink = item.youtube_deep_url || item.youtube_url || '#'
+          const rawDeepLink = item.youtube_deep_url || item.youtube_url
+          const deepLink = rawDeepLink && (rawDeepLink.startsWith('https://') || rawDeepLink.startsWith('http://'))
+            ? rawDeepLink
+            : '#'
 
           return (
             <NewsCard

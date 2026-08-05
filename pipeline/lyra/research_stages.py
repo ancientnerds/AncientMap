@@ -293,7 +293,10 @@ def _stage_audit(
                 # tiers 1-3 (_audit_one's tier_str never shows "[self]"), so
                 # an unconditional overwrite would clobber it back down to a
                 # plain external tier (Follow-up-Ticket 5).
-                if source and not source.self_source:
+                # Only accept a real score — the LLM omitting the field
+                # yields tier_val 0, and an unconditional write would reset
+                # already-scored sources back to unscored.
+                if source and not source.self_source and tier_val in (1, 2, 3):
                     source.reliability_tier = tier_val
                     total_scored += 1
             for entry in parsed.get("rejected_sources", []):
@@ -475,7 +478,7 @@ def _stage_write_section(
 
     # Split into web and YouTube, assign numbers separately
     sid_to_label: dict[str, str] = {}  # sid -> "[N]" or "[VN]"
-    web_num = 0
+    web_nums: set[int] = set()
     yt_num = 0
     for sid in sorted(all_source_ids):
         source = registry.get_reference(sid)
@@ -486,9 +489,12 @@ def _stage_write_section(
             yt_num += 1
             sid_to_label[sid] = f"[V{yt_num}]"
         else:
-            web_num += 1
-            registry.assign_reference_number(sid)
-            sid_to_label[sid] = f"[{web_num}]"
+            # Label prose with the registry-assigned number — the registry
+            # keeps numbers stable across pipeline iterations, so a local
+            # counter drifts from it and mislabels citations on re-entry.
+            num = registry.assign_reference_number(sid)
+            web_nums.add(num)
+            sid_to_label[sid] = f"[{num}]"
 
     # Build findings with citation markers attached
     findings_lines: list[str] = []
@@ -543,7 +549,7 @@ def _stage_write_section(
         logger.info("[journal] Write returned empty, retrying (%d/3)", _write_attempt + 1)
 
     # Strip invalid markers — keep only valid [N] and [VN]
-    valid_web = {str(i) for i in range(1, web_num + 1)}
+    valid_web = {str(n) for n in web_nums}
     valid_yt = {f"V{i}" for i in range(1, yt_num + 1)}
 
     def _filter_citation(m: re.Match) -> str:
@@ -842,8 +848,10 @@ def research_cluster(
             prose = _strip_unsupported_claims(prose, critical)
             logger.info("[journal] Stripped %d unsupported claims from prose", len(critical))
 
-        # Track best attempt
-        if score > best_score:
+        # Track best attempt — a PASSED draft always beats a failed one
+        # regardless of raw score; among drafts with the same passed status,
+        # higher score wins.
+        if (passed, score) > (best_passed, best_score):
             best_prose = prose
             best_score = score
             best_passed = passed

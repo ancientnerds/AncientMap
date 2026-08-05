@@ -2323,7 +2323,7 @@ def _check_single(
             SELECT COUNT(*) FROM (
                 SELECT qs.id, q->>'type' as qtype,
                        q->>'correct' as correct_answer,
-                       qs.answers_key->(q_idx::int) as user_answer
+                       qs.answers_key->(q_idx::int - 1) as user_answer
                 FROM quiz_sessions qs,
                      jsonb_array_elements(qs.questions) WITH ORDINALITY arr(q, q_idx)
                 WHERE qs.user_id = :uid AND qs.score IS NOT NULL
@@ -2341,7 +2341,7 @@ def _check_single(
             SELECT COUNT(*) FROM (
                 SELECT qs.id, q->>'type' as qtype,
                        q->>'correct' as correct_answer,
-                       qs.answers_key->(q_idx::int) as user_answer
+                       qs.answers_key->(q_idx::int - 1) as user_answer
                 FROM quiz_sessions qs,
                      jsonb_array_elements(qs.questions) WITH ORDINALITY arr(q, q_idx)
                 WHERE qs.user_id = :uid AND qs.score IS NOT NULL
@@ -2559,15 +2559,29 @@ def claim_achievement_reward(
     )
     if not ua:
         raise ValueError("Achievement not unlocked")
-    if ua.claimed:
-        raise ValueError("Achievement already claimed")
 
     a_def = ACHIEVEMENTS.get(achievement_id)
     if not a_def:
         raise ValueError("Unknown achievement")
 
-    # Lock and refresh user row (identity map: this also refreshes `user.credits`)
-    user = session.query(DiscordUser).filter(DiscordUser.id == user.id).with_for_update().first()
+    # Lock user row; populate_existing() forces a refresh of already-loaded
+    # attributes (the identity map would otherwise keep stale values)
+    user = (
+        session.query(DiscordUser)
+        .filter(DiscordUser.id == user.id)
+        .populate_existing()
+        .with_for_update()
+        .first()
+    )
+
+    # Guarded claim: only one concurrent request can flip claimed False -> True
+    claimed_rows = (
+        session.query(UserAchievement)
+        .filter(UserAchievement.id == ua.id, UserAchievement.claimed.is_(False))
+        .update({"claimed": True, "claimed_at": datetime.now(UTC)}, synchronize_session=False)
+    )
+    if claimed_rows != 1:
+        raise ValueError("Achievement already claimed")
 
     # Grant credits
     if a_def["reward_credits"] > 0:
@@ -2623,9 +2637,6 @@ def claim_achievement_reward(
         if cards:
             card_info = cards
 
-    # Mark claimed
-    ua.claimed = True
-    ua.claimed_at = datetime.now(UTC)
     session.flush()
 
     return {

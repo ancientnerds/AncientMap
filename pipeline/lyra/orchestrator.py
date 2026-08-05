@@ -464,6 +464,10 @@ def _run_migrations(engine) -> None:
         )
         # Enable pg_trgm for fuzzy matching (used by discoveries API)
         conn.execute(text("CREATE EXTENSION IF NOT EXISTS pg_trgm"))
+        # unaccent is used by the name-normalization migration further down;
+        # relying on init_extensions.sql alone breaks on DBs initialized
+        # before it existed (audit 2026-08-05).
+        conn.execute(text("CREATE EXTENSION IF NOT EXISTS unaccent"))
         conn.execute(
             text("""
             CREATE INDEX IF NOT EXISTS idx_usn_name_trgm
@@ -1381,13 +1385,20 @@ def _run_migrations(engine) -> None:
                         )
                         _fixed += 1
                 logger.info(f"Fixed published_at for {_fixed} videos")
-            # Stamp sentinel so this doesn't run again
-            conn.execute(
-                text("""
-                UPDATE news_videos SET tags = COALESCE(tags, '[]'::jsonb) || '["__dates_fixed"]'::jsonb
-                WHERE id = (SELECT id FROM news_videos LIMIT 1)
-            """)
-            )
+                # Stamp sentinel so this doesn't run again. INSIDE the
+                # api-key guard (audit 2026-08-05): stamping without a key
+                # marked the fix "done" while permanently skipping it.
+                conn.execute(
+                    text("""
+                    UPDATE news_videos SET tags = COALESCE(tags, '[]'::jsonb) || '["__dates_fixed"]'::jsonb
+                    WHERE id = (SELECT id FROM news_videos LIMIT 1)
+                """)
+                )
+            else:
+                logger.warning(
+                    "published_at date fix skipped: no YouTube API key — will retry "
+                    "on next startup once a key is configured"
+                )
 
         # Missing columns on unified_sites that models define but were never migrated
         conn.execute(text("ALTER TABLE unified_sites ADD COLUMN IF NOT EXISTS raw_data JSONB"))
@@ -1541,18 +1552,36 @@ def _run_migrations(engine) -> None:
         """)
         )
 
-        # Card descriptions column for Forgotten Worlds card game
+        # Card descriptions column for Forgotten Worlds card game.
+        # Guarded (audit 2026-08-05): card_stats is created by the API
+        # container's models, never by this orchestrator's create_all_tables()
+        # — on a fresh DB an unguarded ALTER would roll back the ENTIRE
+        # migration batch. The ALTER TYPE is conditioned on the current length
+        # so it stops taking an ACCESS EXCLUSIVE lock on every startup.
         conn.execute(
-            text("ALTER TABLE card_stats ADD COLUMN IF NOT EXISTS card_description VARCHAR(150)")
+            text("""
+                DO $$
+                BEGIN
+                    IF to_regclass('card_stats') IS NOT NULL THEN
+                        ALTER TABLE card_stats
+                            ADD COLUMN IF NOT EXISTS card_description VARCHAR(150);
+                        IF (SELECT character_maximum_length
+                            FROM information_schema.columns
+                            WHERE table_name = 'card_stats'
+                              AND column_name = 'card_description') IS DISTINCT FROM 200 THEN
+                            ALTER TABLE card_stats
+                                ALTER COLUMN card_description TYPE VARCHAR(200);
+                        END IF;
+                        ALTER TABLE card_stats
+                            ADD COLUMN IF NOT EXISTS last_enriched TIMESTAMP;
+                    END IF;
+                END $$;
+            """)
         )
-        conn.execute(text("ALTER TABLE card_stats ALTER COLUMN card_description TYPE VARCHAR(200)"))
 
-        # Audit & enrichment tracking columns
+        # Audit tracking column
         conn.execute(
             text("ALTER TABLE unified_sites ADD COLUMN IF NOT EXISTS last_audited TIMESTAMP")
-        )
-        conn.execute(
-            text("ALTER TABLE card_stats ADD COLUMN IF NOT EXISTS last_enriched TIMESTAMP")
         )
 
         # Snapshot source tracking: which database a snapshot belongs to

@@ -7,7 +7,7 @@
  * submit to POST /radar/{id}/merge.
  */
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { config } from '../config'
 
 export interface ApproveFields {
@@ -154,20 +154,26 @@ export function MergeModal({ itemName, nearbyAnSite, onMerge, onClose }: MergeMo
   const [error, setError] = useState<string | null>(null)
   const [submittingId, setSubmittingId] = useState<string | null>(null)
 
+  // Monotonic request counter — a stale response must not overwrite a newer one
+  const searchSeqRef = useRef(0)
+
   const search = useCallback(async (q: string) => {
     if (q.trim().length < 2) {
       setResults([])
       return
     }
+    const seq = ++searchSeqRef.current
     setSearching(true)
     try {
       const resp = await fetch(`${config.api.baseUrl}/sites/search?q=${encodeURIComponent(q.trim())}&limit=8`)
       if (resp.ok) {
         const data = await resp.json()
-        setResults(data.sites ?? [])
+        if (seq === searchSeqRef.current) setResults(data.sites ?? [])
       }
+    } catch {
+      if (seq === searchSeqRef.current) setResults([])
     } finally {
-      setSearching(false)
+      if (seq === searchSeqRef.current) setSearching(false)
     }
   }, [])
 

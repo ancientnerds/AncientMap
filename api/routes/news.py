@@ -4,6 +4,7 @@ News Feed API Routes.
 Serves Lyra pipeline news items, channels, articles, and stats.
 """
 
+import hmac
 import logging
 import os
 import re
@@ -705,7 +706,8 @@ async def article_citations(article_id: int, db: Session = Depends(get_db)):
             speculative_tag=matched.speculative_tag,
         )
 
-    cache_set(cache_key, result, ttl=3600)  # 1 hour cache
+    # Serialize Pydantic models — json.dumps in cache_set can't handle them raw
+    cache_set(cache_key, {k: v.model_dump() for k, v in result.items()}, ttl=3600)  # 1 hour cache
     return result
 
 
@@ -910,13 +912,11 @@ async def get_lyra_logs(
 ):
     """Return the last N lines from the Lyra pipeline log file.
 
-    Protected by LYRA_ADMIN_KEY — pass as ?key= or Authorization: Bearer header.
+    Protected by LYRA_ADMIN_KEY — pass via X-Admin-Key header.
     """
     admin_key = os.environ.get("LYRA_ADMIN_KEY", "")
-    provided = request.query_params.get("key", "") or (
-        request.headers.get("authorization", "").removeprefix("Bearer ").strip()
-    )
-    if not admin_key or provided != admin_key:
+    provided = request.headers.get("X-Admin-Key", "")
+    if not admin_key or not hmac.compare_digest(provided, admin_key):
         raise HTTPException(status_code=403, detail="Invalid admin key")
     if not LYRA_LOG_PATH.exists():
         raise HTTPException(status_code=404, detail="Log file not found")

@@ -6,7 +6,7 @@ Uses SQLAlchemy 2.0 with GeoAlchemy2 for PostGIS support.
 
 import uuid
 from contextlib import contextmanager
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Optional
 
 from geoalchemy2 import Geometry
@@ -1425,8 +1425,10 @@ class ResearchNode(Base):
     question: Mapped[str | None] = mapped_column(Text, nullable=True)
     # confirmed | refuted | inconclusive — hypothesis nodes only (2026-08-04).
     outcome: Mapped[str | None] = mapped_column(String(20), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(UTC))
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC)
+    )
 
     __table_args__ = (UniqueConstraint("kind", "norm_label", name="uq_research_node_kind_label"),)
 
@@ -1453,7 +1455,7 @@ class ResearchEdge(Base):
     )
     kind: Mapped[str] = mapped_column(String(20), nullable=False)
     weight: Mapped[float] = mapped_column(Float, default=1.0)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(UTC))
 
     __table_args__ = (UniqueConstraint("src", "dst", "kind", name="uq_research_edge"),)
 
@@ -1486,8 +1488,10 @@ class KnowledgeClaim(Base):
     # sources back it (self-citations never count — spec §5).
     paper_ids: Mapped[list | None] = mapped_column(JSONB, nullable=True)
     external_source_count: Mapped[int] = mapped_column(Integer, default=0)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(UTC))
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC)
+    )
 
     # UNIQUE enforces the refuted-is-terminal invariant at the DB level:
     # duplicate norm_text rows would let the curator's LIMIT-1 lookup pick
@@ -1511,7 +1515,9 @@ class ThinkingLogEntry(Base):
     kind: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
     summary: Mapped[str] = mapped_column(String(500), nullable=False)
     details: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(UTC), index=True
+    )
 
     def __repr__(self) -> str:
         return f"<ThinkingLogEntry {self.kind} {self.summary[:40]!r}>"

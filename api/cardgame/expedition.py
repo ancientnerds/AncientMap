@@ -262,7 +262,13 @@ def play_expedition_stage(
         raise ValueError(f"Unknown expedition: {expedition_id}")
 
     # Lock user row to prevent concurrent credit manipulation
-    session.query(DiscordUser).filter(DiscordUser.id == user.id).with_for_update().first()
+    (
+        session.query(DiscordUser)
+        .filter(DiscordUser.id == user.id)
+        .populate_existing()
+        .with_for_update()
+        .first()
+    )
 
     exp = EXPEDITIONS[expedition_id]
 

@@ -186,7 +186,7 @@ jobs:
       - name: Trivy config scan (Dockerfiles + compose)
         run: |
           mkdir -p /tmp/dockerscan
-          cp Dockerfile Dockerfile.lyra docker-compose.yml /tmp/dockerscan/
+          cp Dockerfile* docker-compose.yml /tmp/dockerscan/
           trivy config /tmp/dockerscan --severity HIGH,CRITICAL --exit-code 1
 
       - name: Build API image

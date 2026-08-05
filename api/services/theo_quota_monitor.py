@@ -65,6 +65,30 @@ TIER_THROTTLED = "THROTTLED"
 TIER_EXHAUSTED = "EXHAUSTED"
 TIER_UNKNOWN = "UNKNOWN"  # probe failed; no opinion yet
 
+# Fail-closed threshold (audit 2026-08-05): a single failed probe keeps the
+# previous tier — transient network blips must not flap the limiter — but a
+# stale tier held forever fails OPEN (a dead probe endpoint would leave a
+# last-known HEALTHY in place and batch claims would keep starting blind).
+# After this many CONSECUTIVE probe failures (5 x QUOTA_PROBE_INTERVAL_S
+# without a successful measurement) the tier is demoted to TIER_UNKNOWN,
+# which blocks batch claims in theo_worker._batch_claim_allowed.
+_PROBE_FAILURE_DEMOTE_THRESHOLD = 5
+
+
+def _tier_after_probe_failure(prev_tier: str, consecutive_failures: int) -> str:
+    """Tier to hold after a failed probe: previous tier below the demotion
+    threshold, TIER_UNKNOWN at or above it (see comment on the constant)."""
+    if consecutive_failures >= _PROBE_FAILURE_DEMOTE_THRESHOLD:
+        if prev_tier != TIER_UNKNOWN:
+            logger.warning(
+                "[THEO-WATCHDOG] %d consecutive probe failures — demoting tier %s -> %s.",
+                consecutive_failures,
+                prev_tier,
+                TIER_UNKNOWN,
+            )
+        return TIER_UNKNOWN
+    return prev_tier
+
 
 def _classify_tier(
     five_hour_remaining_percent: float | None,
@@ -157,6 +181,10 @@ def _notify_transition(prev_tier: str, new_tier: str, snapshot: dict) -> None:
     Same tier (e.g. EXHAUSTED -> EXHAUSTED with different %) is silent —
     we only notify on the transition itself. The weekly and 5h values in
     the embed come from the probe that triggered the transition.
+
+    Sync by design (the webhook in notify.py is a blocking httpx call) —
+    the async probe loop invokes this via `asyncio.to_thread` so a slow
+    Discord endpoint cannot stall the loop.
     """
     if prev_tier == new_tier:
         return
@@ -288,7 +316,9 @@ async def _loop() -> None:
     while True:
         prev_tier = _state["tier"]
         try:
-            quota = probe_minimax_quota()  # 60s server-side cache
+            # Sync httpx call — run in a thread so the probe never blocks
+            # the event loop. 60s server-side cache.
+            quota = await asyncio.to_thread(probe_minimax_quota)
             _state["probe_count"] += 1
             _state["last_probe_at"] = datetime.now(UTC).isoformat()
             if quota.get("ok"):
@@ -317,8 +347,9 @@ async def _loop() -> None:
                 _state["last_probe_ok"] = False
                 _state["consecutive_failures"] += 1
                 _state["last_error"] = quota.get("error", "unknown")
-                # Probe failed: keep the previous tier, log it.
-                new_tier = prev_tier if prev_tier != TIER_UNKNOWN else TIER_UNKNOWN
+                # Probe failed: keep the previous tier for transient blips,
+                # demote to UNKNOWN at the fail-closed threshold.
+                new_tier = _tier_after_probe_failure(prev_tier, _state["consecutive_failures"])
                 logger.debug(
                     "[THEO-WATCHDOG] Probe failed (consecutive=%d): %s",
                     _state["consecutive_failures"],
@@ -327,7 +358,7 @@ async def _loop() -> None:
         except Exception as exc:  # noqa: BLE001 — probe is best-effort
             _state["consecutive_failures"] += 1
             _state["last_error"] = str(exc)[:200]
-            new_tier = prev_tier if prev_tier != TIER_UNKNOWN else TIER_UNKNOWN
+            new_tier = _tier_after_probe_failure(prev_tier, _state["consecutive_failures"])
             logger.warning("[THEO-WATCHDOG] Probe raised: %s", exc)
 
         # Re-assert the limiter clamp on EVERY probe, not just on tier
@@ -383,7 +414,7 @@ async def _loop() -> None:
                 logger.info("[THEO-WATCHDOG] Tier %s -> %s.", prev_tier, new_tier)
             _state["tier"] = new_tier
             _state["since"] = now_iso
-            _notify_transition(prev_tier, new_tier, _state)
+            await asyncio.to_thread(_notify_transition, prev_tier, new_tier, _state)
         else:
             # Same tier: don't re-notify, but periodically log so a healthy
             # state is visible in the docker logs without flooding them.

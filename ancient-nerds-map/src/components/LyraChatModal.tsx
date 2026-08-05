@@ -173,6 +173,14 @@ function LyraInlineVideo({ news, children }: { news: NewsHighlight; children?: R
     return `${m}:${String(sec).padStart(2, '0')}`
   }
 
+  // Clear pending hover/leave timers on unmount
+  useEffect(() => {
+    return () => {
+      if (hoverTimer.current) clearTimeout(hoverTimer.current)
+      if (leaveTimer.current) clearTimeout(leaveTimer.current)
+    }
+  }, [])
+
   const handleMouseEnter = () => {
     if (leaveTimer.current) { clearTimeout(leaveTimer.current); leaveTimer.current = null }
     if (!expanded) {
@@ -486,7 +494,7 @@ export default function LyraChatModal({
     }
     el.addEventListener('scroll', onScroll, { passive: true })
     return () => el.removeEventListener('scroll', onScroll)
-  }, [isAuthenticated]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isOpen, isAuthenticated]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Focus input when opening (if authenticated)
   useEffect(() => {
@@ -1358,7 +1366,9 @@ export default function LyraChatModal({
                                         {msg.structuredOutput.links.map((l, i) => (
                                           <div key={i} className="lyra-so-item">
                                             <span className="lyra-so-marker">[{String((l as Record<string, unknown>).citation ?? l.marker)}]</span>
-                                            <a className="lyra-so-link" href={lyraUrlTransform(l.url)} target="_blank" rel="noopener noreferrer">{l.text}</a>
+                                            {l.url && (l.url.startsWith('http://') || l.url.startsWith('https://'))
+                                              ? <a className="lyra-so-link" href={l.url} target="_blank" rel="noopener noreferrer">{l.text}</a>
+                                              : <span className="lyra-so-name">{l.text}</span>}
                                           </div>
                                         ))}
                                       </div>

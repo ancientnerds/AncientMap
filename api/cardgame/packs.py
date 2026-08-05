@@ -104,7 +104,13 @@ def open_pack(
         raise InvalidPackTypeError(f"Unknown pack type: {pack_type}")
 
     # Lock user row to prevent concurrent credit manipulation
-    session.query(DiscordUser).filter(DiscordUser.id == user.id).with_for_update().first()
+    (
+        session.query(DiscordUser)
+        .filter(DiscordUser.id == user.id)
+        .populate_existing()
+        .with_for_update()
+        .first()
+    )
 
     cost = pack["cost"]
     if user.credits < cost:
@@ -141,11 +147,7 @@ def open_pack(
         card = _pick_card(session, tier, owned_ids)
 
         if card is None:
-            # No cards exist at this tier at all — try any tier
-            card = session.query(CardStats).order_by(func.random()).first()
-
-        if card is None:
-            continue
+            raise RuntimeError(f"No cards exist at rarity tier {tier} — pack roll cannot proceed")
 
         card_dict = _card_to_dict(session, card)
 

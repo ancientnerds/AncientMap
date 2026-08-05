@@ -24,7 +24,13 @@ from pathlib import Path
 
 import httpx
 
+from pipeline.lyra.blocked_domains import is_public_http_url
+
 logger = logging.getLogger(__name__)
+
+# Hard cap on downloaded image bodies — connector URLs are remote-controlled
+# data; without a cap a hostile/broken host can balloon disk and memory.
+_MAX_IMAGE_BYTES = 25 * 1024 * 1024
 
 
 # Wikimedia (upload.wikimedia.org and friends) rate-limits aggressive bot
@@ -198,17 +204,40 @@ async def download_candidate(cand: ImageCandidate, out_path: Path) -> bool:
     if not src:
         return False
 
+    # SSRF guard: connector results are remote-controlled data — reject
+    # non-http(s) schemes and hosts resolving to private/loopback/link-local
+    # IPs. The check does a blocking DNS lookup, so keep it off the loop.
+    if not await asyncio.to_thread(is_public_http_url, src):
+        logger.warning("rejected unsafe image url (non-http(s) or non-public host): %s", src)
+        return False
+
     if _is_wikimedia_host(src):
         await _throttle_wikimedia()
 
-    def _dl() -> None:
-        resp = httpx.get(
+    def _fetch() -> httpx.Response:
+        return httpx.get(
             src,
             timeout=60.0,
             follow_redirects=True,
             headers={"User-Agent": "AncientNerdsResearch/1.0 (https://ancientnerds.com)"},
         )
+
+    def _dl() -> None:
+        resp = _fetch()
+        if resp.status_code == 429:
+            # Honor Retry-After (capped at 60s) and retry exactly once.
+            try:
+                delay = float(resp.headers.get("retry-after", ""))
+            except ValueError:
+                delay = 5.0
+            time.sleep(min(max(delay, 0.0), 60.0))
+            resp = _fetch()
         resp.raise_for_status()
+        content_type = resp.headers.get("content-type", "")
+        if not content_type.startswith("image/"):
+            raise ValueError(f"not an image (content-type={content_type!r})")
+        if len(resp.content) > _MAX_IMAGE_BYTES:
+            raise ValueError(f"body of {len(resp.content)} bytes exceeds {_MAX_IMAGE_BYTES} cap")
         out_path.parent.mkdir(parents=True, exist_ok=True)
         out_path.write_bytes(resp.content)
 

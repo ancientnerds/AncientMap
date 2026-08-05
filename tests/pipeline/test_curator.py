@@ -36,6 +36,14 @@ class _FakeSession:
         self._rowcount = rowcount
         self.committed = False
 
+    def begin_nested(self):
+        # Savepoint no-op: the curator wraps each item in
+        # session.begin_nested() since the 2026-08-05 audit (per-item
+        # isolation) — tests only need a working context manager.
+        import contextlib
+
+        return contextlib.nullcontext()
+
     def execute(self, stmt, params=None):
         self.executed.append((str(stmt), params or {}))
         existing_status = self._existing_status

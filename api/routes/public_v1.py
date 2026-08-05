@@ -405,7 +405,7 @@ def create_public_api() -> FastAPI:
             params["sources"] = source
         if country:
             conditions.append("country ILIKE :country")
-            params["country"] = country
+            params["country"] = _escape_ilike(country)
         if period is not None:
             conditions.append("(period_start IS NULL OR period_start <= :period)")
             params["period"] = period
@@ -489,7 +489,7 @@ def create_public_api() -> FastAPI:
             return cached
 
         # Escape ILIKE wildcard characters in user input
-        q_escaped = q_clean.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        q_escaped = _escape_ilike(q_clean)
 
         # Spaceless matching: compare with spaces/diacritics stripped
         query = text("""
@@ -795,7 +795,7 @@ def create_public_api() -> FastAPI:
         params: dict = {"limit": page_size, "offset": offset}
 
         if q:
-            q_escaped = q.strip().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            q_escaped = _escape_ilike(q.strip())
             where_parts.append(
                 "(ni.headline ILIKE :q_pattern OR ni.summary ILIKE :q_pattern"
                 " OR nc.name ILIKE :q_pattern)"
@@ -1100,9 +1100,8 @@ def create_public_api() -> FastAPI:
             conditions.append("us.id::text = :site_id")
             params["site_id"] = site_id
         if country:
-            country_escaped = country.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
             conditions.append("us.country ILIKE :country")
-            params["country"] = country_escaped
+            params["country"] = _escape_ilike(country)
         if rarity is not None:
             conditions.append("cs.rarity_tier = :rarity")
             params["rarity"] = rarity
@@ -1684,6 +1683,11 @@ def create_public_api() -> FastAPI:
         limit: int = Query(20, ge=1, le=50, description="Max images"),
         db: Session = Depends(get_db),
     ):
+        try:
+            uuid.UUID(site_id)
+        except ValueError:
+            raise HTTPException(status_code=422, detail="Invalid site ID format") from None
+
         cache_key = f"pubv1:images:{site_id}:{limit}"
         cached = cache_get(cache_key)
         if cached:
@@ -1698,10 +1702,7 @@ def create_public_api() -> FastAPI:
             ORDER BY sort_order
             LIMIT :limit
         """)
-        try:
-            result = db.execute(query, {"site_id": site_id, "limit": limit})
-        except Exception:
-            raise HTTPException(status_code=400, detail="Invalid site ID format") from None
+        result = db.execute(query, {"site_id": site_id, "limit": limit})
 
         rows = result.fetchall()
         if not rows:

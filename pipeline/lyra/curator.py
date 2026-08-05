@@ -223,107 +223,131 @@ def _apply_curator_output(session, out: dict) -> dict:
             stats["dropped"] += 1
             continue
         norm = normalize_label(claim_text)[:500]
-        existing = session.execute(
-            text("SELECT status FROM knowledge_claims WHERE norm_text = :norm LIMIT 1"),
-            {"norm": norm},
-        ).fetchone()
-        if existing and existing.status == "refuted":
-            continue  # refuted is terminal (spec §1)
+        # Per-item savepoint: a single bad item (constraint violation,
+        # DataError) must not roll back the entire nightly pass
+        # (audit 2026-08-05).
+        try:
+            with session.begin_nested():
+                existing = session.execute(
+                    text("SELECT status FROM knowledge_claims WHERE norm_text = :norm LIMIT 1"),
+                    {"norm": norm},
+                ).fetchone()
+                if existing and existing.status == "refuted":
+                    continue  # refuted is terminal (spec §1)
 
-        ext = int(cu.get("external_source_count") or 0)
-        # Hard rule, not prompt-only (spec §5 / I8): "established" requires
-        # >=2 independent external sources. The prompt asks the LLM to
-        # respect this but nothing enforces it upstream — enforce here.
-        if status == "established" and ext < 2:
-            status = "open"
-            stats["demoted"] += 1
+                ext = int(cu.get("external_source_count") or 0)
+                # Hard rule, not prompt-only (spec §5 / I8): "established"
+                # requires >=2 independent external sources. The prompt asks
+                # the LLM to respect this but nothing enforces it upstream —
+                # enforce here.
+                if status == "established" and ext < 2:
+                    status = "open"
+                    stats["demoted"] += 1
 
-        paper_ids = json.dumps(cu.get("paper_ids") or [])
-        if existing:
-            session.execute(
-                text("""
-                    UPDATE knowledge_claims
-                    SET status = :status, confidence = :conf,
-                        external_source_count = :ext,
-                        paper_ids = (SELECT COALESCE(jsonb_agg(DISTINCT e), '[]'::jsonb)
-                                     FROM jsonb_array_elements(
-                                          COALESCE(paper_ids, '[]'::jsonb)
-                                          || CAST(:paper_ids AS jsonb)) e),
-                        updated_at = NOW()
-                    WHERE norm_text = :norm
-                """),
-                {
-                    "status": status,
-                    "conf": float(cu.get("confidence") or 0.5),
-                    "ext": ext,
-                    "paper_ids": paper_ids,
-                    "norm": norm,
-                },
-            )
-        else:
-            session.execute(
-                text("""
-                    INSERT INTO knowledge_claims
-                        (id, text, norm_text, node_id, status, confidence,
-                         external_source_count, paper_ids, created_at, updated_at)
-                    VALUES
-                        (:id, :text, :norm,
-                         (SELECT id FROM research_nodes
-                          WHERE norm_label = :node_norm LIMIT 1),
-                         :status, :conf, :ext, CAST(:paper_ids AS jsonb), NOW(), NOW())
-                """),
-                {
-                    "id": str(uuid.uuid4()),
-                    "text": claim_text,
-                    "norm": norm,
-                    "node_norm": normalize_label(cu.get("node_label") or "")[:500],
-                    "status": status,
-                    "conf": float(cu.get("confidence") or 0.5),
-                    "ext": ext,
-                    "paper_ids": paper_ids,
-                },
-            )
-        stats["claims"] += 1
+                paper_ids = json.dumps(cu.get("paper_ids") or [])
+                if existing:
+                    session.execute(
+                        text("""
+                            UPDATE knowledge_claims
+                            SET status = :status, confidence = :conf,
+                                external_source_count = :ext,
+                                paper_ids = (SELECT COALESCE(jsonb_agg(DISTINCT e), '[]'::jsonb)
+                                             FROM jsonb_array_elements(
+                                                  COALESCE(paper_ids, '[]'::jsonb)
+                                                  || CAST(:paper_ids AS jsonb)) e),
+                                updated_at = NOW()
+                            WHERE norm_text = :norm
+                        """),
+                        {
+                            "status": status,
+                            "conf": float(cu.get("confidence") or 0.5),
+                            "ext": ext,
+                            "paper_ids": paper_ids,
+                            "norm": norm,
+                        },
+                    )
+                else:
+                    session.execute(
+                        text("""
+                            INSERT INTO knowledge_claims
+                                (id, text, norm_text, node_id, status, confidence,
+                                 external_source_count, paper_ids, created_at, updated_at)
+                            VALUES
+                                (:id, :text, :norm,
+                                 (SELECT id FROM research_nodes
+                                  WHERE norm_label = :node_norm LIMIT 1),
+                                 :status, :conf, :ext, CAST(:paper_ids AS jsonb), NOW(), NOW())
+                        """),
+                        {
+                            "id": str(uuid.uuid4()),
+                            "text": claim_text,
+                            "norm": norm,
+                            "node_norm": normalize_label(cu.get("node_label") or "")[:500],
+                            "status": status,
+                            "conf": float(cu.get("confidence") or 0.5),
+                            "ext": ext,
+                            "paper_ids": paper_ids,
+                        },
+                    )
+            stats["claims"] += 1
+        except Exception as exc:  # noqa: BLE001 — per-item isolation
+            logger.warning("[curator] claim update failed, dropping item: %s", exc)
+            stats["dropped"] += 1
 
     for conn in out.get("connections", [])[:MAX_CONNECTIONS_PER_PASS]:
         label = conn.get("label") or ""
-        if _insert_topic_node(
-            session,
-            label,
-            "connection",
-            conn.get("question") or "",
-            conn.get("rationale") or "",
-        ):
-            _link_connection_endpoints(session, label)
-            stats["connections"] += 1
+        try:
+            with session.begin_nested():
+                if _insert_topic_node(
+                    session,
+                    label,
+                    "connection",
+                    conn.get("question") or "",
+                    conn.get("rationale") or "",
+                ):
+                    _link_connection_endpoints(session, label)
+                    stats["connections"] += 1
+        except Exception as exc:  # noqa: BLE001 — per-item isolation
+            logger.warning("[curator] connection insert failed, dropping item: %s", exc)
+            stats["dropped"] += 1
 
     for hyp in out.get("hypotheses", [])[:MAX_HYPOTHESES_PER_PASS]:
-        if _insert_topic_node(
-            session,
-            hyp.get("label") or "",
-            "hypothesis",
-            hyp.get("question") or "",
-            hyp.get("rationale") or "",
-        ):
-            stats["hypotheses"] += 1
+        try:
+            with session.begin_nested():
+                if _insert_topic_node(
+                    session,
+                    hyp.get("label") or "",
+                    "hypothesis",
+                    hyp.get("question") or "",
+                    hyp.get("rationale") or "",
+                ):
+                    stats["hypotheses"] += 1
+        except Exception as exc:  # noqa: BLE001 — per-item isolation
+            logger.warning("[curator] hypothesis insert failed, dropping item: %s", exc)
+            stats["dropped"] += 1
 
     for ho in out.get("hypothesis_outcomes", []):
         outcome = ho.get("outcome")
         if outcome not in _VALID_OUTCOMES:
             stats["dropped"] += 1
             continue
-        result = session.execute(
-            text("""
-                UPDATE research_nodes
-                SET outcome = :outcome, updated_at = NOW()
-                WHERE kind = 'hypothesis' AND norm_label = :norm
-            """),
-            {
-                "outcome": outcome,
-                "norm": normalize_label(ho.get("node_label") or "")[:500],
-            },
-        )
-        stats["outcomes"] += result.rowcount
+        try:
+            with session.begin_nested():
+                result = session.execute(
+                    text("""
+                        UPDATE research_nodes
+                        SET outcome = :outcome, updated_at = NOW()
+                        WHERE kind = 'hypothesis' AND norm_label = :norm
+                    """),
+                    {
+                        "outcome": outcome,
+                        "norm": normalize_label(ho.get("node_label") or "")[:500],
+                    },
+                )
+                stats["outcomes"] += result.rowcount
+        except Exception as exc:  # noqa: BLE001 — per-item isolation
+            logger.warning("[curator] outcome update failed, dropping item: %s", exc)
+            stats["dropped"] += 1
 
     session.commit()
     return stats

@@ -10,22 +10,21 @@ from datetime import datetime
 from html import escape
 
 import markdown  # noqa: I001 — third-party, separated intentionally
+import nh3
 
 BASE_URL = "https://ancientnerds.com"
 
-# Strip dangerous HTML from Markdown output (defense-in-depth for LLM-generated content)
-_DANGEROUS_TAGS_RE = re.compile(
-    r"<\s*/?\s*(?:script|iframe|object|embed|form|input|textarea|button)\b[^>]*>",
-    re.IGNORECASE,
-)
-_EVENT_HANDLER_RE = re.compile(r"\s+on\w+\s*=\s*[\"'][^\"']*[\"']", re.IGNORECASE)
-
 
 def _sanitize_html(html: str) -> str:
-    """Remove dangerous tags and event handler attributes from HTML."""
-    html = _DANGEROUS_TAGS_RE.sub("", html)
-    html = _EVENT_HANDLER_RE.sub("", html)
-    return html
+    """Allowlist-sanitize Markdown output (nh3/ammonia).
+
+    Replaces the old regex blocklist, which was bypassable: it only stripped
+    *quoted* event handlers, so `<img src=x onerror=alert(1)>`,
+    `<svg onload=...>`, `<details ontoggle=...>` and `javascript:` hrefs all
+    passed through into public pages (audit 2026-08-05). Runs BEFORE
+    external_links_new_tab so the added target/rel attributes survive.
+    """
+    return nh3.clean(html)
 
 
 _A_TAG_RE = re.compile(r"<a\s+[^>]*>")
@@ -838,7 +837,12 @@ def render_404_html(what: str = "Page") -> str:
 
 
 def _json_str(s: str) -> str:
-    """Escape a string for safe JSON embedding inside a <script> tag."""
+    """Escape a string for safe JSON embedding inside a <script> tag.
+
+    json.dumps alone does not escape "<" — an LLM-derived title containing
+    "</script><script>" would break out of the JSON-LD block (audit
+    2026-08-05).
+    """
     import json
 
-    return json.dumps(s, ensure_ascii=False)
+    return json.dumps(s, ensure_ascii=False).replace("<", "\\u003c")

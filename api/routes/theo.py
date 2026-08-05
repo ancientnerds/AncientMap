@@ -18,12 +18,15 @@ Endpoints:
 """
 
 import asyncio
+import ipaddress
 import json
 import logging
 import os
 import re
+import socket
 import uuid
 from datetime import UTC, datetime
+from urllib.parse import urlparse
 
 import httpx
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
@@ -38,7 +41,7 @@ from api.services.theo_config import (
     THEO_RESEARCH_COST,
     THEO_RESEARCHER_ROLE_ID,
 )
-from api.services.theo_worker import get_live_events
+from api.services.theo_worker import get_live_events, release_reservation_in_session
 from pipeline.database import DiscordUser, ResearchRequest, TtsRequest, get_session
 
 DISCORD_GUILD_ID = os.getenv("DISCORD_GUILD_ID", "932330696956063765")
@@ -110,6 +113,43 @@ def _make_slug(title: str) -> str:
     slug = re.sub(r"[^a-z0-9\s-]", "", slug)
     slug = re.sub(r"[\s-]+", "-", slug).strip("-")
     return slug[:250]
+
+
+def _validate_web_urls(web_urls: list[str]) -> None:
+    """SSRF gate for user-supplied web_urls (audit 2026-08-05).
+
+    These URLs are fetched server-side by the research pipeline, so they
+    must never be able to reach internal services. Each URL must parse as
+    http(s) with a hostname, and EVERY address the hostname resolves to
+    must be globally routable — private, loopback, link-local, and other
+    reserved ranges (everything `ipaddress` does not consider global) are
+    rejected. A hostname that does not resolve is rejected too: a URL we
+    cannot resolve is a URL we cannot vouch for.
+
+    Raises HTTP 422 naming the offending URL. Blocking DNS resolution —
+    call via `asyncio.to_thread` from async routes.
+    """
+    for url in web_urls:
+        parsed = urlparse(url)
+        if parsed.scheme not in ("http", "https") or not parsed.hostname:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Invalid web_url (must be http(s) with a hostname): {url}",
+            )
+        try:
+            infos = socket.getaddrinfo(parsed.hostname, None)
+        except socket.gaierror:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Unresolvable hostname in web_url: {url}",
+            ) from None
+        for info in infos:
+            addr = ipaddress.ip_address(info[4][0])
+            if not addr.is_global:
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"web_url resolves to a non-public address: {url}",
+                )
 
 
 async def _refresh_roles(user: DiscordUser) -> list[str]:
@@ -347,6 +387,11 @@ async def submit_research(
     if not _theo_limiter.check(get_client_ip(req)):
         raise HTTPException(status_code=429, detail="Too many requests. Please wait.")
 
+    # SSRF gate BEFORE any credit reservation — a rejected URL must not
+    # leave a reservation behind. DNS resolution runs in a thread.
+    if body.web_urls:
+        await asyncio.to_thread(_validate_web_urls, body.web_urls)
+
     credit_cost = THEO_RESEARCH_COST
 
     # Check user's active request count + atomic credit reservation
@@ -443,7 +488,9 @@ async def submit_research(
 
             check_achievements(session, user.id, "research_submit")
         except Exception:
-            pass  # Non-critical — don't fail the submission
+            # Non-critical — achievements must never break the submission,
+            # but the failure has to be visible in the logs.
+            logger.warning("check_achievements failed", exc_info=True)
 
         # Get queue position
         position = session.execute(
@@ -522,7 +569,9 @@ async def get_quota():
     from pipeline.lyra.minimax_limiter import limiter
     from pipeline.lyra.minimax_shared import probe_minimax_quota
 
-    quota = probe_minimax_quota()
+    # Sync httpx call (60s server-side cache) — run in a thread so a slow
+    # MiniMax endpoint cannot block the event loop.
+    quota = await asyncio.to_thread(probe_minimax_quota)
     return {
         "quota": quota,
         "limiter": limiter.stats,
@@ -883,10 +932,37 @@ async def patch_research_section(
         )
         result["section_approvals"] = new_approvals
 
-        session.execute(
-            text("UPDATE research_requests SET result_json = :result WHERE id = :id"),
-            {"id": request_id, "result": json.dumps(result)},
+        # Optimistic concurrency enforced IN the UPDATE (audit 2026-08-05):
+        # the Python version check above is only a fast path — two
+        # concurrent PATCHes could both pass it (TOCTOU). The WHERE clause
+        # re-checks the STORED approvals version (absent = 0, matching the
+        # Python-side default); rowcount 0 means another writer won.
+        updated = session.execute(
+            text("""
+                UPDATE research_requests
+                SET result_json = :result
+                WHERE id = :id
+                  AND COALESCE((result_json::jsonb->'section_approvals'->>'version')::int, 0)
+                      = :expected_version
+            """),
+            {
+                "id": request_id,
+                "result": json.dumps(result),
+                "expected_version": body.expected_version,
+            },
         )
+        if updated.rowcount == 0:
+            fresh_version = session.execute(
+                text(
+                    "SELECT COALESCE((result_json::jsonb->'section_approvals'->>'version')::int, 0)"
+                    " FROM research_requests WHERE id = :id"
+                ),
+                {"id": request_id},
+            ).scalar()
+            raise HTTPException(
+                status_code=409,
+                detail=f"Stale version {body.expected_version}; current is {fresh_version}",
+            )
         session.commit()
 
     return build_block_list_response(
@@ -1044,6 +1120,13 @@ async def delete_research(request_id: str, req: Request):
                 text("UPDATE research_requests SET status = 'cancelled' WHERE id = :id"),
                 {"id": request_id},
             )
+            if row.status == "queued":
+                # A queued row is never claimed by the worker, so no worker
+                # path would ever release the credit reservation made at
+                # submission — it would leak forever. Release it here, in
+                # the SAME transaction as the status flip. Running rows are
+                # released by the worker's cancelled-terminal path.
+                release_reservation_in_session(session, row.user_id)
         else:
             # completed, failed, cancelled — actually delete
             session.execute(
@@ -1327,7 +1410,8 @@ async def publish_research(
 
             check_achievements(session, user.id, "research_publish")
         except Exception:
-            pass  # Non-critical
+            # Non-critical — achievements must never break publishing.
+            logger.warning("check_achievements failed", exc_info=True)
 
     # Index the assembled publication (not the raw report) so search results
     # don't return rejected content.
@@ -1462,7 +1546,8 @@ async def edit_research(
 
                 check_achievements(session, user.id, "research_citation")
             except Exception:
-                pass  # Non-critical
+                # Non-critical — achievements must never break the edit flow.
+                logger.warning("check_achievements failed", exc_info=True)
 
     return {"status": "updated", "result": result}
 

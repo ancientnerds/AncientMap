@@ -1596,58 +1596,70 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
 
     // Call parent to update age slider
     onAgeRangeSync([minYear, maxYear])
-  }, [visibleEmpires, empiresWithAgeSync, empireYears, empireYearOptions, onAgeRangeSync])
+  }, [visibleEmpires, empiresWithAgeSync, empireYears, empireYearOptions, empireMetadata, onAgeRangeSync])
 
-  // Toggle empire visibility
+  // Toggle empire visibility.
+  // Side effects run OUTSIDE the setState updaters — updaters must be pure
+  // (StrictMode double-invokes them). Set updates stay functional so batched
+  // calls from the select all/none/invert handlers accumulate correctly.
   const toggleEmpire = (id: string) => {
     const empire = EMPIRES.find(e => e.id === id)
+    const hiding = visibleEmpires.has(id)
+
+    if (hiding) {
+      // Also remove age sync when hiding
+      const nextAgeSyncSize = empiresWithAgeSync.has(id)
+        ? empiresWithAgeSync.size - 1
+        : empiresWithAgeSync.size
+      // Reset age slider when no empires are synced
+      if (nextAgeSyncSize === 0 && onAgeRangeSync) {
+        onAgeRangeSync([-5000, 1500])
+      }
+      setEmpiresWithAgeSync(p => {
+        const n = new Set(p)
+        n.delete(id)
+        return n
+      })
+      // Clear all empire geometry
+      removeEmpireFromGlobe(id)
+      delete empireLoadedYearsRef.current[id]
+      setLoadedEmpires(prev => {
+        const next = new Set(prev)
+        next.delete(id)
+        return next
+      })
+      // Fade out empire label
+      const label = empireLabelsRef.current[id]
+      if (label) {
+        fadeLabelOut(label, fadeManagerRef.current, `empire-label-${id}`)
+      }
+      // Remove ancient cities
+      removeAncientCities(id)
+      // Remove region labels
+      removeRegionLabels(id)
+    } else {
+      // Load at global timeline year if enabled, otherwise default (peak extent)
+      const timelineYear = globalTimelineEnabled ? globalTimelineYear : undefined
+      loadEmpireBorders(id, timelineYear)  // Load if not already loaded (will add geometry to scene)
+      // Load cities and region labels for current year
+      const currentYear = empireYears[id]
+      if (currentYear !== undefined && empire) {
+        loadAncientCities(id, currentYear)
+        loadRegionLabels(id, currentYear)
+      }
+      // Fade in empire label
+      const label = empireLabelsRef.current[id]
+      if (label && showEmpireLabels) {
+        fadeLabelIn(label, fadeManagerRef.current, `empire-label-${id}`)
+      }
+    }
+
     setVisibleEmpires(prev => {
       const next = new Set(prev)
-      if (next.has(id)) {
+      if (hiding) {
         next.delete(id)
-        // Also remove age sync when hiding
-        setEmpiresWithAgeSync(p => {
-          const n = new Set(p)
-          n.delete(id)
-          // Reset age slider when no empires are synced
-          if (n.size === 0 && onAgeRangeSync) {
-            onAgeRangeSync([-5000, 1500])
-          }
-          return n
-        })
-        // Clear all empire geometry
-        removeEmpireFromGlobe(id)
-        delete empireLoadedYearsRef.current[id]
-        setLoadedEmpires(prev => {
-          const next = new Set(prev)
-          next.delete(id)
-          return next
-        })
-        // Fade out empire label
-        const label = empireLabelsRef.current[id]
-        if (label) {
-          fadeLabelOut(label, fadeManagerRef.current, `empire-label-${id}`)
-        }
-        // Remove ancient cities
-        removeAncientCities(id)
-        // Remove region labels
-        removeRegionLabels(id)
       } else {
         next.add(id)
-        // Load at global timeline year if enabled, otherwise default (peak extent)
-        const timelineYear = globalTimelineEnabled ? globalTimelineYear : undefined
-        loadEmpireBorders(id, timelineYear)  // Load if not already loaded (will add geometry to scene)
-        // Load cities and region labels for current year
-        const currentYear = empireYears[id]
-        if (currentYear !== undefined && empire) {
-          loadAncientCities(id, currentYear)
-          loadRegionLabels(id, currentYear)
-        }
-        // Fade in empire label
-        const label = empireLabelsRef.current[id]
-        if (label && showEmpireLabels) {
-          fadeLabelIn(label, fadeManagerRef.current, `empire-label-${id}`)
-        }
       }
       return next
     })
@@ -1828,7 +1840,6 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
       // Fade in
       fadeManagerRef.current.fadeTo(`route-${routeId}`, [material], 1, { duration: 400 })
 
-      console.log(`[Routes] Loaded ${routeId} (${features.length} features)`)
     } catch (err) {
       if (!abortController.signal.aborted) {
         console.error(`[Routes] Failed to load ${routeId}:`, err)

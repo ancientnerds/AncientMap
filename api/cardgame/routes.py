@@ -16,7 +16,6 @@ from api.cardgame.constants import (
     get_level,
 )
 from api.cardgame.models import (
-    CardBattle,
     CardCollection,
     CardDeck,
     CardPlayerStats,

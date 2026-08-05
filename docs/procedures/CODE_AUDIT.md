@@ -119,7 +119,6 @@ Step 1 mechanical scans run on ALL files in these directories. Step 2 deep revie
 | `api/routes/seo.py` | grep |
 | `api/services/turnstile.py` | deep |
 | `api/routes/auth.py` | deep |
-| `api/routes/patreon.py` | deep |
 | `api/services/jwt_auth.py` | deep |
 | `api/services/discord_bot.py` | deep |
 | `api/cache.py` | deep |
@@ -171,6 +170,55 @@ Step 1 mechanical scans run on ALL files in these directories. Step 2 deep revie
 | `pipeline/video/asset_collector.py` | grep |
 | `pipeline/site_images/batch_updater.py` | grep |
 | `pipeline/lyra/prompts/*.txt` (all) | deep |
+| `api/routes/library.py` | deep |
+| `api/routes/research_html.py` | grep |
+| `api/routes/sites_html.py` | grep |
+| `api/services/notify.py` | grep |
+| `api/services/theo_blocks.py` | deep |
+| `api/services/theo_quota_monitor.py` | deep |
+| `api/cardgame/lyra_duel.py` | deep |
+| `pipeline/lyra/convergence_orchestrator.py` | deep |
+| `pipeline/lyra/research_state.py` | deep |
+| `pipeline/lyra/research_stages.py` | deep |
+| `pipeline/lyra/research_events.py` | grep |
+| `pipeline/lyra/handlers/*.py` (all) | deep |
+| `pipeline/lyra/theo_sources.py` | deep |
+| `pipeline/lyra/theo_citations.py` | deep |
+| `pipeline/lyra/theo_research_index.py` | grep |
+| `pipeline/lyra/theo_specialists.py` | grep |
+| `pipeline/lyra/theo_quality_judge.py` | grep |
+| `pipeline/lyra/theo_image_captions.py` | grep |
+| `pipeline/lyra/minimax_limiter.py` | deep |
+| `pipeline/lyra/minimax_shared.py` | deep |
+| `pipeline/lyra/token_accounting.py` | grep |
+| `pipeline/lyra/curator.py` | deep |
+| `pipeline/lyra/graph_full_ingest.py` | deep |
+| `pipeline/lyra/graph_injectors.py` | grep |
+| `pipeline/lyra/graph_miner.py` | grep |
+| `pipeline/lyra/research_graph.py` | deep |
+| `pipeline/lyra/thinking_log.py` | grep |
+| `pipeline/lyra/web_research.py` | deep |
+| `pipeline/lyra/relevance_gate.py` | grep |
+| `pipeline/lyra/citation_verifier.py` | deep |
+| `pipeline/lyra/journal_assessor.py` | deep |
+| `pipeline/lyra/hallucination_gate.py` | deep |
+| `pipeline/lyra/image_fetcher.py` | deep |
+| `pipeline/lyra/image_gates.py` | grep |
+| `pipeline/lyra/image_diversity.py` | grep |
+| `pipeline/lyra/hero_picker.py` | grep |
+| `pipeline/lyra/illustration_specialist.py` | grep |
+| `pipeline/lyra/research_images.py` | grep |
+| `pipeline/lyra/meaningful_images.py` | grep |
+| `pipeline/lyra/blocked_domains.py` | grep |
+| `pipeline/lyra/schemas.py` | grep |
+| `pipeline/lyra/story_web_queries.py` | grep |
+| `pipeline/lyra/angle_image_queries.py` | grep |
+| `pipeline/lyra/article_checklist.py` | grep |
+| `pipeline/lyra/research_checklist.py` | grep |
+| `pipeline/lyra/canonical_coverage.py` | grep |
+| `pipeline/lyra/coherence_pass.py` | grep |
+| `pipeline/lyra/` one-off scripts (`backfill_*.py`, `fix_source_urls.py`, `clean_image_titles.py`, `reflow_images.py`, `rewrite_image_captions.py`) | grep |
+| `pipeline/lyra/tts_generator.py` | grep |
 
 ### frontend / full
 
@@ -189,6 +237,12 @@ Step 1 mechanical scans run on ALL files in these directories. Step 2 deep revie
 | `ancient-nerds-map/src/utils/countryFlags.ts` | grep |
 | `ancient-nerds-map/src/contexts/AuthContext.tsx` | deep |
 | `ancient-nerds-map/src/pages/AccountPage.tsx` | deep |
+| `ancient-nerds-map/src/pages/KnowledgePage.tsx` | deep |
+| `ancient-nerds-map/src/pages/knowledgeGraphRenderer.ts` | grep |
+| `ancient-nerds-map/src/components/theo/LiveResearchPanel.tsx` | grep |
+| `ancient-nerds-map/src/components/RadarReviewModals.tsx` | grep |
+| `ancient-nerds-map/src/hooks/useIsFounder.ts` | grep |
+| `ancient-nerds-map/src/hooks/useCurrentResearch.ts` | grep |
 
 ### security (adds to above)
 

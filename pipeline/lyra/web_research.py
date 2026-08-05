@@ -31,6 +31,33 @@ from pipeline.lyra.minimax_shared import (
 logger = logging.getLogger(__name__)
 
 PROMPTS_DIR = Path(__file__).parent / "prompts"
+
+# Unreliable sources (social media, forums, tourism, fringe) — corrections
+# citing these never receive a [wN] web-citation marker.
+_CORRECTION_BLOCKED_DOMAINS = (
+    "reddit.com", "instagram.com", "facebook.com", "tiktok.com",
+    "twitter.com", "x.com", "pinterest.com", "linkedin.com",
+    "quora.com", "medium.com", "tumblr.com", "4chan.org",
+    "tripadvisor.com", "yelp.com", "booking.com",
+    "gaia.com", "ancient-origins.net", "ancient-code.com",
+    "amazon.com", "ebay.com", "etsy.com",
+)  # fmt: skip
+
+
+def _is_blocked_correction_domain(url: str) -> bool:
+    """Suffix-match the URL host against the blocklist.
+
+    Substring matching over the full URL was wrong twice over: "x.com"
+    blocked linux.com/phoenix.com, and a blocked domain in a query string
+    blocked an innocent host (audit 2026-08-05).
+    """
+    from urllib.parse import urlparse
+
+    host = urlparse(url).netloc.lower().rsplit("@", 1)[-1].split(":", 1)[0]
+    host = host.removeprefix("www.")
+    return any(host == d or host.endswith("." + d) for d in _CORRECTION_BLOCKED_DOMAINS)
+
+
 ARTICLE_TIMEOUT = 600.0
 
 # M3 is a reasoning model — thinking consumes ~2-4K tokens from the budget
@@ -272,25 +299,14 @@ class MiniMaxWebResearch(WebResearchBackend):
                 continue
 
             # Build the replacement — append [wN] marker if we have a valid URL
-            # Filter out unreliable sources (social media, forums, tourism, fringe)
-            BLOCKED_DOMAINS = (
-                "reddit.com", "instagram.com", "facebook.com", "tiktok.com",
-                "twitter.com", "x.com", "pinterest.com", "linkedin.com",
-                "quora.com", "medium.com", "tumblr.com", "4chan.org",
-                "tripadvisor.com", "yelp.com", "booking.com",
-                "gaia.com", "ancient-origins.net", "ancient-code.com",
-                "amazon.com", "ebay.com", "etsy.com",
-            )  # fmt: skip
             replacement = replace if not is_confirmation else find
             is_reliable = (
                 source_url
                 and source_url.startswith(("http://", "https://"))
-                and not any(d in source_url for d in BLOCKED_DOMAINS)
+                and not _is_blocked_correction_domain(source_url)
             )
             if is_reliable:
                 if source_url not in seen_urls:
-                    marker_num += 1
-                    seen_urls[source_url] = marker_num
                     # Find matching search result for full metadata
                     ref = None
                     for r in search_results:
@@ -298,13 +314,23 @@ class MiniMaxWebResearch(WebResearchBackend):
                             ref = r
                             break
                     if ref is None:
-                        from urllib.parse import urlparse
-
-                        domain = urlparse(source_url).netloc.replace("www.", "")
-                        ref = WebSearchResult(title=domain, url=source_url, snippet="")
-                    web_refs.append(ref)
-                mn = seen_urls[source_url]
-                replacement = f"{replacement} [w{mn}]"
+                        # The LLM cited a URL that is NOT among the actual
+                        # search results. Never fabricate a reference for it —
+                        # hallucinated URLs must not become published citations
+                        # (audit 2026-08-05). Apply the text correction
+                        # without a [wN] marker instead.
+                        logger.warning(
+                            "Correction source_url not in search results, "
+                            "dropping citation (keeping text fix): %s",
+                            source_url[:120],
+                        )
+                    else:
+                        marker_num += 1
+                        seen_urls[source_url] = marker_num
+                        web_refs.append(ref)
+                if source_url in seen_urls:
+                    mn = seen_urls[source_url]
+                    replacement = f"{replacement} [w{mn}]"
 
             corrected = corrected.replace(find, replacement, 1)
             if not is_confirmation:

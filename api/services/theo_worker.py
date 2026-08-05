@@ -26,6 +26,24 @@ from pipeline.database import get_session
 logger = logging.getLogger(__name__)
 
 
+def release_reservation_in_session(session, user_id: str) -> None:
+    """Release one research-cost credit reservation for `user_id` inside the
+    caller's open transaction (no commit here — the caller owns it).
+
+    Shared by the worker's failure/cancel paths below and by the
+    queued->cancelled branch of DELETE /theo/research/{id} (api/routes/theo.py),
+    which must release atomically with the status flip — a queued row is
+    never claimed by the worker, so no worker path would ever release it.
+    """
+    session.execute(
+        text("""
+            UPDATE discord_users SET reserved_credits = GREATEST(reserved_credits - :cost, 0)
+            WHERE discord_id = :uid AND is_unlimited = FALSE
+        """),
+        {"uid": user_id, "cost": THEO_RESEARCH_COST},
+    )
+
+
 def _release_reservation(request_id: str) -> None:
     """Release reserved credits when a research request fails or is cancelled."""
     try:
@@ -36,13 +54,7 @@ def _release_reservation(request_id: str) -> None:
             ).fetchone()
             if not row:
                 return
-            session.execute(
-                text("""
-                    UPDATE discord_users SET reserved_credits = GREATEST(reserved_credits - :cost, 0)
-                    WHERE discord_id = :uid AND is_unlimited = FALSE
-                """),
-                {"uid": row.user_id, "cost": THEO_RESEARCH_COST},
-            )
+            release_reservation_in_session(session, row.user_id)
             session.commit()
     except Exception as exc:
         logger.warning(f"[THEO] Reservation release failed for {request_id}: {exc}")
@@ -82,6 +94,11 @@ _active_runs: dict[str, tuple[asyncio.Task, bool]] = {}
 _live_events: dict[str, list[dict]] = {}
 _MAX_EVENTS_PER_REQUEST = 500
 _MAX_LIVE_ENTRIES = 100
+
+# Cap on the per-run in-memory pipeline_trace list (audit 2026-08-05): a
+# 72h low-priority batch run emits events the whole time, so the list must
+# be bounded. When the cap is exceeded the OLDEST entries are dropped.
+_PIPELINE_TRACE_MAX = 5000
 
 _shutdown = False
 
@@ -128,14 +145,26 @@ async def _process_request(
 
     # Mark request as running. started_at is the batch-pacing clock: the next
     # batch task may only start THEO_MIN_TASK_INTERVAL_S after this moment.
+    # The UPDATE is conditional on a still-claimable status: a DELETE can flip
+    # the row to 'cancelled' between the poll loop's SELECT and this claim, and
+    # an unconditional UPDATE would resurrect it to 'running'. 'deferred' is
+    # claimable too — the poll loop re-claims deferred rows after the back-off.
     with get_session() as session:
-        session.execute(
+        claimed = session.execute(
             text(
-                "UPDATE research_requests SET status = 'running', started_at = NOW() WHERE id = :id"
+                "UPDATE research_requests SET status = 'running', started_at = NOW() "
+                "WHERE id = :id AND status IN ('queued', 'deferred')"
             ),
             {"id": request_id},
         )
         session.commit()
+    if claimed.rowcount == 0:
+        _live_events.pop(request_id, None)
+        logger.info(
+            "[THEO] Request %s no longer claimable (cancelled or picked up elsewhere) — skipping.",
+            request_id,
+        )
+        return
 
     pipeline_trace: list[dict] = []
     start = time.monotonic()
@@ -143,6 +172,12 @@ async def _process_request(
     def emit(event: dict) -> None:
         _append_event(request_id, event)
         pipeline_trace.append(event)
+        # Cap the in-memory trace: a multi-day batch run emits events for
+        # 72h+ and the list would otherwise grow unbounded in worker memory.
+        # Oldest entries drop first. (The DB flush caps separately — this
+        # bound is only about the worker process's RAM.)
+        if len(pipeline_trace) > _PIPELINE_TRACE_MAX:
+            del pipeline_trace[: len(pipeline_trace) - _PIPELINE_TRACE_MAX]
 
     try:
         force_include = (specialist_options or {}).get("force_include", [])
@@ -254,7 +289,9 @@ async def _process_request(
             emit({"type": "done", "status": "completed"})
             try:
                 with get_session() as session:
-                    session.execute(
+                    # Guarded on status='running': a DELETE that cancelled the
+                    # row mid-run must not be overwritten back to 'completed'.
+                    completed = session.execute(
                         text("""
                             UPDATE research_requests
                             SET status = 'completed',
@@ -267,7 +304,7 @@ async def _process_request(
                                 sites_found = :sites,
                                 tools_used = :tools,
                                 completed_at = NOW()
-                            WHERE id = :id
+                            WHERE id = :id AND status = 'running'
                         """),
                         {
                             "id": request_id,
@@ -282,6 +319,12 @@ async def _process_request(
                         },
                     )
                     session.commit()
+                    if completed.rowcount == 0:
+                        logger.warning(
+                            "[THEO] Request %s was no longer 'running' at completion "
+                            "(cancelled mid-run?) — result not written.",
+                            request_id,
+                        )
             except Exception as db_exc:
                 logger.error(f"[THEO] DB commit failed for {request_id}: {db_exc}")
             logger.info(
@@ -308,7 +351,9 @@ async def _process_request(
                     f"Research completed: {question[:200]}",
                     {"request_id": request_id},
                 )
-                _auto_publish(request_id)
+                # Sync DB + citation work — run in a thread so the event loop
+                # (SSE streams, other runs) is not blocked for its duration.
+                await asyncio.to_thread(_auto_publish, request_id)
 
     except Exception as exc:
         from pipeline.lyra.minimax_limiter import (
@@ -1022,7 +1067,7 @@ async def _feeder_loop() -> None:
             if now - injector_last >= 3600:
                 from pipeline.lyra.graph_injectors import run_all_injectors
 
-                run_all_injectors()
+                await asyncio.to_thread(run_all_injectors)
                 injector_last = now
             # Full structural ingest (sites, periods, empires, stories,
             # videos, journals, entities): once at startup — so a deploy

@@ -270,12 +270,17 @@ def run_full_ingest() -> dict[str, int]:
                 ("empires", _ingest_empires),
                 ("content", _ingest_content),
             ):
+                # Snapshot the id cache: a rollback discards the layer's rows,
+                # but cached UUIDs of those rows would poison every later
+                # layer with FK violations (audit 2026-08-05).
+                cache_before = dict(w.node_ids)
                 try:
                     fn(w)
                     session.commit()
                     stats[name] = w.nodes_written
                 except Exception as exc:  # noqa: BLE001 — per-layer isolation
                     session.rollback()
+                    w.node_ids = cache_before
                     logger.error("[GRAPH] Full ingest layer %r failed: %s", name, exc)
             stats["nodes_total"] = w.nodes_written
             stats["edges_total"] = w.edges_written

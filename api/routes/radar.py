@@ -29,6 +29,14 @@ router = APIRouter()
 CACHE_TTL = 300  # 5 minutes
 
 
+def _require_uuid(value: str, status_code: int, detail: str) -> None:
+    """Reject non-UUID identifiers before they hit Postgres (avoids 500s)."""
+    try:
+        uuid.UUID(value)
+    except ValueError:
+        raise HTTPException(status_code=status_code, detail=detail) from None
+
+
 def find_similar_sites_batch(
     db: Session,
     names: list[str],
@@ -731,6 +739,7 @@ async def promote_to_db(
     after applying optional founder overrides. Wikipedia/thumbnail/QID are
     score bonuses, not blockers.
     """
+    _require_uuid(contribution_id, 404, "Contribution not found")
 
     # Fetch the contribution
     row = db.execute(
@@ -865,6 +874,7 @@ async def dismiss_contribution(
     re-processes 'rejected' rows each cycle, which would resurrect the card.
     'dismissed' is excluded from the pipeline work query.
     """
+    _require_uuid(contribution_id, 404, "Contribution not found")
     row = db.execute(
         text("SELECT enrichment_status, enrichment_data FROM user_contributions WHERE id = :id"),
         {"id": contribution_id},
@@ -911,6 +921,8 @@ async def merge_into_site(
     Stores the candidate's name(s) as aliases so future news mentions match
     the existing site directly and this card never regenerates.
     """
+    _require_uuid(contribution_id, 404, "Contribution not found")
+    _require_uuid(body.site_id, 422, "Invalid site_id format")
     row = db.execute(
         text("""
         SELECT name, corrected_name, enrichment_status, enrichment_data

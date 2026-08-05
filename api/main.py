@@ -23,6 +23,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+import asyncio
 import traceback
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -63,6 +64,17 @@ from api.routes.public_v1 import create_public_api
 from pipeline.config import get_settings
 
 logger = logging.getLogger(__name__)
+
+# Strong references to fire-and-forget startup tasks (Theo worker, Discord bot,
+# cache warmers). The event loop keeps only weak references to tasks, so without
+# this the daemons can be garbage-collected mid-run.
+_background_tasks: set = set()
+
+
+def _create_background_task(coro) -> None:
+    task = asyncio.create_task(coro)
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
 
 
 @asynccontextmanager
@@ -497,11 +509,9 @@ async def lifespan(app: FastAPI):
 
     # Start Theo research worker
     try:
-        import asyncio as _asyncio
-
         from api.services.theo_worker import start_worker as _start_theo
 
-        _asyncio.create_task(_start_theo())
+        _create_background_task(_start_theo())
         logger.info("[STARTUP] Theo research worker task created")
     except Exception as e:
         logger.warning(f"[STARTUP] Theo worker startup failed (non-fatal): {e}")
@@ -510,11 +520,9 @@ async def lifespan(app: FastAPI):
     try:
         bot_token = os.environ.get("DISCORD_BOT_TOKEN", "")
         if bot_token:
-            import asyncio
-
             from api.services.discord_bot import start_bot
 
-            asyncio.create_task(start_bot())
+            _create_background_task(start_bot())
             print("[STARTUP] Discord bot task created", flush=True)
         else:
             print("[STARTUP] DISCORD_BOT_TOKEN not set, skipping bot", flush=True)
@@ -529,8 +537,6 @@ async def lifespan(app: FastAPI):
     get_redis_client()  # Initialize Redis connection
 
     # Pre-warm cache in background so the health endpoint responds immediately
-    import asyncio
-
     # Warm up connector status cache (non-blocking)
     async def _warm_connector_cache():
         await asyncio.sleep(2)  # Let server finish binding
@@ -542,7 +548,7 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.warning(f"[STARTUP] Connector cache warm-up failed (non-fatal): {e}")
 
-    asyncio.create_task(_warm_connector_cache())
+    _create_background_task(_warm_connector_cache())
 
     async def _warm_cache():
         await asyncio.sleep(2)  # Let the server finish binding
@@ -591,7 +597,7 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.warning(f"[STARTUP] Failed to pre-warm cache: {e}")
 
-    asyncio.create_task(_warm_cache())
+    _create_background_task(_warm_cache())
 
     yield
     # Shutdown
