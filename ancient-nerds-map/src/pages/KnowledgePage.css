@@ -351,6 +351,11 @@
   opacity: 0.75;
 }
 
+.kg-claim-sources--zero {
+  color: #c02023;
+  opacity: 0.8;
+}
+
 .kg-infocard-actions {
   display: flex;
   flex-direction: column;
@@ -386,7 +391,7 @@
 .kg-activity {
   position: absolute;
   left: 18px;
-  bottom: 44px;
+  bottom: 60px;
   z-index: 11;
   width: 300px;
   max-height: 320px;

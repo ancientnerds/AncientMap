@@ -5,7 +5,9 @@ Mounted as a sub-application at /api/v1 with its own OpenAPI docs:
   - /api/v1/docs   — Swagger UI
   - /api/v1/redoc  — ReDoc
 
-All endpoints are rate-limited to 10 requests per minute per IP.
+Rate limits per IP: 10 requests/minute for standard endpoints; 60/minute
+for the Knowledge-Graph read endpoints (/graph, /knowledge/activity,
+/knowledge/claims), which the Knowledge page polls more frequently.
 """
 
 import logging
@@ -127,49 +129,39 @@ def paper_summary_kwargs(row) -> dict:
     }
 
 
-async def rate_limit_dependency(request: Request, response: Response):
-    """FastAPI dependency that enforces rate limiting and sets response headers."""
-    ip = get_client_ip(request)
-    allowed, remaining, reset_seconds = _limiter.check_with_info(ip)
+def _make_rate_limit_dependency(limiter: RateLimiter, limit: int):
+    """Build a FastAPI dependency that enforces `limiter`'s budget and sets
+    the standard X-RateLimit-* headers. Shared by the general public-API
+    limiter and the knowledge-graph read endpoints' limiter — same logic,
+    different namespace/budget, so the body is never copy-pasted."""
 
-    response.headers["X-RateLimit-Limit"] = str(RATE_LIMIT)
-    response.headers["X-RateLimit-Remaining"] = str(remaining)
-    response.headers["X-RateLimit-Reset"] = str(reset_seconds)
+    async def dependency(request: Request, response: Response):
+        ip = get_client_ip(request)
+        allowed, remaining, reset_seconds = limiter.check_with_info(ip)
 
-    if not allowed:
-        raise HTTPException(
-            status_code=429,
-            detail="Rate limit exceeded. Max 10 requests per minute.",
-            headers={
-                "X-RateLimit-Limit": str(RATE_LIMIT),
-                "X-RateLimit-Remaining": "0",
-                "X-RateLimit-Reset": str(reset_seconds),
-                "Retry-After": str(reset_seconds),
-            },
-        )
+        response.headers["X-RateLimit-Limit"] = str(limit)
+        response.headers["X-RateLimit-Remaining"] = str(remaining)
+        response.headers["X-RateLimit-Reset"] = str(reset_seconds)
+
+        if not allowed:
+            raise HTTPException(
+                status_code=429,
+                detail=f"Rate limit exceeded. Max {limit} requests per minute.",
+                headers={
+                    "X-RateLimit-Limit": str(limit),
+                    "X-RateLimit-Remaining": "0",
+                    "X-RateLimit-Reset": str(reset_seconds),
+                    "Retry-After": str(reset_seconds),
+                },
+            )
+
+    return dependency
 
 
-async def knowledge_rate_limit_dependency(request: Request, response: Response):
-    """FastAPI dependency that enforces rate limiting for the knowledge-graph
-    read endpoints, on their own 60/min namespace (see _knowledge_limiter)."""
-    ip = get_client_ip(request)
-    allowed, remaining, reset_seconds = _knowledge_limiter.check_with_info(ip)
-
-    response.headers["X-RateLimit-Limit"] = str(KNOWLEDGE_RATE_LIMIT)
-    response.headers["X-RateLimit-Remaining"] = str(remaining)
-    response.headers["X-RateLimit-Reset"] = str(reset_seconds)
-
-    if not allowed:
-        raise HTTPException(
-            status_code=429,
-            detail="Rate limit exceeded. Max 60 requests per minute.",
-            headers={
-                "X-RateLimit-Limit": str(KNOWLEDGE_RATE_LIMIT),
-                "X-RateLimit-Remaining": "0",
-                "X-RateLimit-Reset": str(reset_seconds),
-                "Retry-After": str(reset_seconds),
-            },
-        )
+rate_limit_dependency = _make_rate_limit_dependency(_limiter, RATE_LIMIT)
+knowledge_rate_limit_dependency = _make_rate_limit_dependency(
+    _knowledge_limiter, KNOWLEDGE_RATE_LIMIT
+)
 
 
 # Default source colors (same as internal sources router)
@@ -264,7 +256,11 @@ def create_public_api() -> FastAPI:
         title="Ancient Nerds Map — Public API",
         description=(
             "Access archaeological site data from 750K+ sites worldwide.\n\n"
-            "All endpoints are rate-limited to **10 requests per minute** per IP address.\n\n"
+            "Standard endpoints are rate-limited to **10 requests per minute** per IP "
+            "address. The Knowledge-Graph read endpoints (`/graph`, "
+            "`/knowledge/activity`, `/knowledge/claims`) get a higher **60 requests "
+            "per minute** budget, matched to how often the Knowledge page polls "
+            "them.\n\n"
             "Data is sourced from Pleiades, DARE, UNESCO, OpenStreetMap, Wikidata, "
             "and other open archaeological databases.\n\n"
             "Deep-research papers (`/research`) are open access under "

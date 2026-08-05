@@ -336,7 +336,11 @@ export default function KnowledgePage() {
     (node: RenderNode | null) => {
       // Clear eagerly, in the same batch as setFocused, so the previous
       // node's claims never flash under the newly focused card for a frame.
-      setClaims(null)
+      // Guarded by identity: focusNode() is also called on layer/depth
+      // toggles to refresh the SAME node's focus set — setFocused bails on
+      // an unchanged node then, so an unconditional clear here would wipe
+      // claims permanently (the fetch effect never refires to replace them).
+      if (focusRef.current?.id !== node?.id) setClaims(null)
       if (!node) {
         focusRef.current = null
         setFocused(null)
@@ -691,13 +695,20 @@ export default function KnowledgePage() {
                   />
                   <span className="kg-claim-text">{claim.text}</span>
                   <span className="kg-claim-confidence">
-                    {Math.round(claim.confidence * 100)}%
-                    {claim.external_source_count > 0 && (
-                      <span className="kg-claim-sources">
-                        {' '}
-                        · ×{claim.external_source_count} ext.
-                      </span>
-                    )}
+                    {Math.round(claim.confidence * 100)}%{' · '}
+                    {/* Zero external sources IS the echo-chamber signal —
+                        shown (not hidden) and tinted as a warning. */}
+                    <span
+                      className={
+                        claim.external_source_count === 0
+                          ? 'kg-claim-sources kg-claim-sources--zero'
+                          : 'kg-claim-sources'
+                      }
+                    >
+                      {claim.external_source_count === 0
+                        ? '0 ext.'
+                        : `×${claim.external_source_count} ext.`}
+                    </span>
                   </span>
                 </li>
               ))}
