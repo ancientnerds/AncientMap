@@ -3,6 +3,8 @@
 from datetime import UTC, datetime
 from unittest.mock import MagicMock
 
+import pytest
+
 from pipeline.lyra.journal_assessor import (
     QUALITY_BLOCKED_DOMAINS,
     SPELLING_FIXES,
@@ -240,8 +242,16 @@ class TestAssessmentResult:
         assert r.score == 8
 
 
+@pytest.mark.live_llm
 class TestD1ProperNouns:
-    """Test mechanical fuzzy-match proper noun checking."""
+    """Test mechanical fuzzy-match proper noun checking.
+
+    Marked live_llm (Follow-up-Ticket 3, 2026-08-05): _check_d1_proper_nouns
+    unconditionally calls call_api (real MiniMax) whenever the body has any
+    proper nouns, wrapped in a broad try/except that swallows failures —
+    several tests here (test_exact_match_passes, test_fuzzy_mismatch_detected,
+    test_spelling_fixes_in_proper_nouns) hit the network every run. The whole
+    class is marked together rather than splitting it method-by-method."""
 
     def test_extract_proper_nouns(self):
         text = "The Montesiepi Chapel was built by Galgano Guidotti near San Galgano."
@@ -373,8 +383,10 @@ class TestD9SummaryMechanical:
         # Mock the LLM layer so it doesn't make real API calls
         from pipeline.lyra import journal_assessor
         from pipeline.lyra.config import NormalizedResponse, TextBlock
+
         monkeypatch.setattr(
-            journal_assessor, "call_api",
+            journal_assessor,
+            "call_api",
             lambda **kwargs: NormalizedResponse(content=[TextBlock(text='{"accurate": true}')]),
         )
         body = (
@@ -389,9 +401,13 @@ class TestD9SummaryMechanical:
     def test_mismatched_noun_detected(self, monkeypatch):
         from pipeline.lyra import journal_assessor
         from pipeline.lyra.config import NormalizedResponse, TextBlock
+
         monkeypatch.setattr(
-            journal_assessor, "call_api",
-            lambda **kwargs: NormalizedResponse(content=[TextBlock(text='{"accurate": false, "issues": ["mismatch"]}')]),
+            journal_assessor,
+            "call_api",
+            lambda **kwargs: NormalizedResponse(
+                content=[TextBlock(text='{"accurate": false, "issues": ["mismatch"]}')]
+            ),
         )
         body = (
             "*This week covers discoveries at Galano Giati site.*\n\n"
@@ -411,9 +427,13 @@ class TestD9SummaryMechanical:
     def test_summary_noun_not_in_body_flagged(self, monkeypatch):
         from pipeline.lyra import journal_assessor
         from pipeline.lyra.config import NormalizedResponse, TextBlock
+
         monkeypatch.setattr(
-            journal_assessor, "call_api",
-            lambda **kwargs: NormalizedResponse(content=[TextBlock(text='{"accurate": false, "issues": ["not in body"]}')]),
+            journal_assessor,
+            "call_api",
+            lambda **kwargs: NormalizedResponse(
+                content=[TextBlock(text='{"accurate": false, "issues": ["not in body"]}')]
+            ),
         )
         body = (
             "*Amazing finds at Xanadu Palace revealed.*\n\n"
