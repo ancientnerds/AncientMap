@@ -168,8 +168,15 @@ jobs:
 
       - name: Run unit tests (DB-less subset)
         env:
+          # LYRA_-prefixed names are what pipeline config actually reads
+          # (first CI execution 2026-08-06 failed on the un-prefixed ones).
+          LYRA_ANTHROPIC_API_KEY: ci-dummy
+          LYRA_MINIMAX_API_KEY: ci-dummy
           MINIMAX_API_KEY: ci-dummy
           ANTHROPIC_API_KEY: ci-dummy
+          # Low-priority crawl pacing (>=60s/LLM-call) is the DEFAULT — it
+          # paced the mocked dispatch tests straight into the 90s timeout.
+          LYRA_THEO_LOW_PRIORITY: "0"
         run: python -m pytest -q -m "not integration and not live_llm and not slow" --timeout 90 --tb=short
 
   sast:
