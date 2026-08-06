@@ -5,6 +5,10 @@ on:
     branches: [main, develop]
   pull_request:
     branches: [main]
+  # Manual trigger — added 2026-08-06 during the GitHub Actions outage:
+  # dispatch runs are created via the API and bypass stalled push-event
+  # processing. Also handy as a general re-run button.
+  workflow_dispatch:
 
 concurrency:
   group: ci-${{ github.ref }}
