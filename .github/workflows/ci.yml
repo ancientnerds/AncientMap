@@ -249,7 +249,7 @@ jobs:
       contains(fromJSON('["success", "skipped"]'), needs.security-scan.result) &&
       contains(fromJSON('["success", "skipped"]'), needs.container-scan.result) &&
       github.ref == 'refs/heads/main' &&
-      github.event_name == 'push'
+      contains(fromJSON('["push", "workflow_dispatch"]'), github.event_name)
     steps:
       - name: Setup SSH agent
         uses: webfactory/ssh-agent@v0.9.0

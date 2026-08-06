@@ -22,6 +22,14 @@ COPY scripts/ ./scripts/
 # Create empty data dirs (mount points)
 RUN mkdir -p /app/data/raw /app/public/data /app/ancient-nerds-map/public/data
 
+# Non-root user (DS-0002, container-scan gate 2026-08-06). uid 1000 matches
+# the api/lyra containers AND the VPS deploy user that owns the mounted
+# data dirs, so volume writes keep working.
+RUN groupadd --gid 1000 appgroup && \
+    useradd --uid 1000 --gid appgroup --shell /bin/bash --create-home appuser && \
+    chown -R appuser:appgroup /app
+USER appuser
+
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONPATH=/app
