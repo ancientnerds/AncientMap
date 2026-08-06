@@ -258,7 +258,7 @@ jobs:
 
       - name: Deploy via SSH
         run: |
-          ssh -o StrictHostKeyChecking=accept-new -p ${{ secrets.VPS_PORT }} ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} 'set -e
+          ssh -o StrictHostKeyChecking=accept-new -o ServerAliveInterval=30 -o ServerAliveCountMax=10 -p ${{ secrets.VPS_PORT }} ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} 'set -e
             cd /var/www/ancientnerds
             BEFORE=$(git rev-parse HEAD)
             echo "==> Preserving snapshots..."
@@ -297,7 +297,12 @@ jobs:
               if [ "$already" = "0" ]; then
                 echo "    Applying: $fname"
                 docker cp "$f" ancient_nerds_db:/tmp/"$fname"
-                docker exec -i ancient_nerds_db psql -U ancient_map -d ancient_map -f /tmp/"$fname"
+                # lock_timeout: an ALTER queued behind a long transaction
+                # blocked the whole lock queue for 4+ min on 2026-08-06
+                # (leaked idle-in-transaction session) until the SSH pipe
+                # died. Fail fast + loud instead; the DB additionally kills
+                # idle-in-transaction sessions after 15min (ALTER SYSTEM).
+                docker exec -i -e PGOPTIONS="-c lock_timeout=20s -c statement_timeout=600s" ancient_nerds_db psql -U ancient_map -d ancient_map -v ON_ERROR_STOP=1 -f /tmp/"$fname"
                 docker exec -i ancient_nerds_db psql -U ancient_map -d ancient_map -c \
                   "INSERT INTO applied_migrations (filename) VALUES ('"'"'$fname'"'"');"
               fi
