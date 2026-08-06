@@ -19,6 +19,7 @@ from __future__ import annotations
 import json
 import logging
 from collections import Counter
+from datetime import timedelta
 
 from sqlalchemy import text
 
@@ -91,18 +92,29 @@ class _GraphWriter:
             return cached
         row = self.session.execute(
             text("""
-                INSERT INTO research_nodes
-                    (id, label, norm_label, kind, status, created_from, source_signal,
-                     site_id, created_at, updated_at)
-                VALUES
-                    (gen_random_uuid(), :label, :norm_label, :kind, :status, :created_from,
-                     :signal, CAST(NULLIF(:site_id, '') AS uuid), NOW(), NOW())
-                ON CONFLICT (kind, norm_label) DO UPDATE SET
-                    -- keep the existing status (never downgrade frontier/explored),
-                    -- refresh the site link when the ingest knows it
-                    site_id = COALESCE(research_nodes.site_id, excluded.site_id),
-                    updated_at = NOW()
-                RETURNING id::text
+                WITH upsert AS (
+                    INSERT INTO research_nodes
+                        (id, label, norm_label, kind, status, created_from, source_signal,
+                         site_id, created_at, updated_at)
+                    VALUES
+                        (gen_random_uuid(), :label, :norm_label, :kind, :status, :created_from,
+                         :signal, CAST(NULLIF(:site_id, '') AS uuid), NOW(), NOW())
+                    ON CONFLICT (kind, norm_label) DO UPDATE SET
+                        -- keep the existing status (never downgrade frontier/explored).
+                        -- The WHERE gate skips the write entirely unless the ingest
+                        -- can fill a missing site link — unchanged structural nodes
+                        -- no longer get updated_at=NOW() churn on every run.
+                        site_id = excluded.site_id,
+                        updated_at = NOW()
+                    WHERE research_nodes.site_id IS NULL AND excluded.site_id IS NOT NULL
+                    RETURNING id::text AS id
+                )
+                SELECT COALESCE(
+                    (SELECT id FROM upsert),
+                    (SELECT id::text FROM research_nodes
+                     WHERE kind = :kind AND norm_label = :norm_label)
+                ) AS id,
+                EXISTS (SELECT 1 FROM upsert) AS written
             """),
             {
                 "label": label[:500],
@@ -115,13 +127,14 @@ class _GraphWriter:
             },
         ).fetchone()
         self.node_ids[key] = row.id
-        self.nodes_written += 1
+        if row.written:
+            self.nodes_written += 1
         return row.id
 
     def edge(self, src: str | None, dst: str | None, kind: str) -> None:
         if not src or not dst or src == dst:
             return
-        self.session.execute(
+        result = self.session.execute(
             text("""
                 INSERT INTO research_edges (id, src, dst, kind, weight, created_at)
                 VALUES (gen_random_uuid(), CAST(:src AS uuid), CAST(:dst AS uuid),
@@ -130,7 +143,8 @@ class _GraphWriter:
             """),
             {"src": src, "dst": dst, "kind": kind},
         )
-        self.edges_written += 1
+        # rowcount is 0 when ON CONFLICT skipped — count real writes only
+        self.edges_written += result.rowcount
 
 
 def _ingest_sites(w: _GraphWriter) -> None:
@@ -202,14 +216,39 @@ def _ingest_content(w: _GraphWriter) -> None:
         ).fetchall()
     }
 
-    stories = w.session.execute(
-        text("""
-            SELECT id, headline, site_id::text AS site_id, video_id, entities
-            FROM news_items WHERE headline IS NOT NULL
-        """)
-    ).fetchall()
+    # Bound the story scan with a created_at watermark: only news_items newer
+    # than the newest existing story node's created_at minus 7 days (the
+    # overlap re-links late-arriving edges for recently ingested stories).
+    # First run (no story nodes yet) scans everything to build the graph.
+    # Both timestamps are DB-side NOW() defaults, so they compare cleanly.
+    watermark = w.session.execute(
+        text("SELECT MAX(created_at) FROM research_nodes WHERE kind = 'story'")
+    ).scalar()
+    if watermark is not None:
+        stories = w.session.execute(
+            text("""
+                SELECT id, headline, site_id::text AS site_id, video_id, entities
+                FROM news_items
+                WHERE headline IS NOT NULL AND created_at >= :cutoff
+            """),
+            {"cutoff": watermark - timedelta(days=7)},
+        ).fetchall()
+        logger.info(
+            "[GRAPH] Story scan bounded to created_at >= %s (%d items)",
+            watermark - timedelta(days=7),
+            len(stories),
+        )
+    else:
+        stories = w.session.execute(
+            text("""
+                SELECT id, headline, site_id::text AS site_id, video_id, entities
+                FROM news_items WHERE headline IS NOT NULL
+            """)
+        ).fetchall()
 
-    # Pass 1: mention counts across all stories (>=2 gate for person/culture).
+    # Pass 1: mention counts across the scanned stories (>=2 gate for
+    # person/culture). With the watermark bound, the gate applies within the
+    # scan window — nodes minted by earlier full scans persist regardless.
     people_lists: list[list[str]] = []
     culture_lists: list[list[str]] = []
     parsed: dict[int, dict] = {}
@@ -274,10 +313,15 @@ def run_full_ingest() -> dict[str, int]:
                 # but cached UUIDs of those rows would poison every later
                 # layer with FK violations (audit 2026-08-05).
                 cache_before = dict(w.node_ids)
+                nodes_before = w.nodes_written
+                edges_before = w.edges_written
                 try:
                     fn(w)
                     session.commit()
-                    stats[name] = w.nodes_written
+                    # Per-layer DELTAS (the old code stored the cumulative
+                    # nodes_written under each layer name).
+                    stats[f"{name}_nodes"] = w.nodes_written - nodes_before
+                    stats[f"{name}_edges"] = w.edges_written - edges_before
                 except Exception as exc:  # noqa: BLE001 — per-layer isolation
                     session.rollback()
                     w.node_ids = cache_before

@@ -28,6 +28,22 @@ logger = logging.getLogger(__name__)
 CYCLE_INTERVAL = 3600  # 1 hour between pipeline runs
 MAX_ARTICLE_ATTEMPTS = 3  # Stop retrying after 3 failures per week
 
+# Liveness file for the docker-compose lyra healthcheck (audit P9). Touched at
+# every main-loop wake (60s), at each pipeline-step start, and around article
+# generation; the healthcheck flags the container unhealthy once the mtime
+# goes stale. Keep the 900s threshold in docker-compose.yml in sync with the
+# touch points here.
+HEARTBEAT_FILE = Path("/tmp/lyra_heartbeat")  # noqa: S108 — container scratch path, fixed in compose healthcheck
+
+
+def _touch_heartbeat() -> None:
+    """Refresh the container-liveness file. Crash-safe by contract: a full
+    /tmp or read-only filesystem must never take down the pipeline loop."""
+    try:
+        HEARTBEAT_FILE.touch()
+    except OSError:
+        logger.debug("Heartbeat file touch failed", exc_info=True)
+
 
 def _bust_radar_cache():
     """Tell the API to drop cached radar responses after pipeline updates."""
@@ -301,6 +317,9 @@ def _write_step_heartbeat(
     cycle_start: float,
 ) -> None:
     """Write incremental step data to heartbeat so the frontend sees live progress."""
+    # A step start also proves the loop is alive — refresh the container
+    # healthcheck file so hour-long cycles don't read as hangs.
+    _touch_heartbeat()
     from pipeline.database import engine
 
     step_data = _build_step_data(step_results, running_step=running_step)
@@ -1339,66 +1358,12 @@ def _run_migrations(engine) -> None:
         """)
         )
 
-        # One-time fix: re-fetch real published_at from YouTube API for videos
-        # where datetime.now(UTC) fallback corrupted the date.
-        # Done inline with conn (get_session has a shorter statement timeout).
-        _dates_fixed = conn.execute(
-            text("""
-            SELECT 1 FROM news_videos
-            WHERE tags IS NOT NULL AND tags @> '"__dates_fixed"'::jsonb
-            LIMIT 1
-        """)
-        ).fetchone()
-        if not _dates_fixed:
-            from datetime import datetime as _dt
-
-            from pipeline.lyra.config import LyraSettings as _LS
-
-            _api_key = _LS().youtube_api_key
-            if _api_key:
-                from pipeline.utils.http import fetch_with_retry as _fetch
-
-                _all_ids = [
-                    r[0] for r in conn.execute(text("SELECT id FROM news_videos")).fetchall()
-                ]
-                _fixed = 0
-                for _i in range(0, len(_all_ids), 50):
-                    _batch = _all_ids[_i : _i + 50]
-                    try:
-                        _resp = _fetch(
-                            "https://www.googleapis.com/youtube/v3/videos",
-                            params={"id": ",".join(_batch), "part": "snippet", "key": _api_key},
-                        )
-                        _data = _resp.json()
-                    except Exception as _e:
-                        logger.warning(f"YouTube API date fix batch failed: {_e}")
-                        continue
-                    for _item in _data.get("items", []):
-                        _pub = _item.get("snippet", {}).get("publishedAt", "")
-                        try:
-                            _real = _dt.fromisoformat(_pub.replace("Z", "+00:00"))
-                        except (ValueError, AttributeError):
-                            continue
-                        conn.execute(
-                            text("UPDATE news_videos SET published_at = :d WHERE id = :id"),
-                            {"d": _real, "id": _item["id"]},
-                        )
-                        _fixed += 1
-                logger.info(f"Fixed published_at for {_fixed} videos")
-                # Stamp sentinel so this doesn't run again. INSIDE the
-                # api-key guard (audit 2026-08-05): stamping without a key
-                # marked the fix "done" while permanently skipping it.
-                conn.execute(
-                    text("""
-                    UPDATE news_videos SET tags = COALESCE(tags, '[]'::jsonb) || '["__dates_fixed"]'::jsonb
-                    WHERE id = (SELECT id FROM news_videos LIMIT 1)
-                """)
-                )
-            else:
-                logger.warning(
-                    "published_at date fix skipped: no YouTube API key — will retry "
-                    "on next startup once a key is configured"
-                )
+        # NOTE: the one-time YouTube published_at repair used to run here.
+        # It makes batched HTTP calls, so running it inside this single
+        # migration transaction held every earlier ALTER TABLE's ACCESS
+        # EXCLUSIVE lock across network I/O (audit P10, 2026-08-06). It now
+        # runs from main() AFTER this transaction commits — see
+        # _fix_youtube_published_dates.
 
         # Missing columns on unified_sites that models define but were never migrated
         conn.execute(text("ALTER TABLE unified_sites ADD COLUMN IF NOT EXISTS raw_data JSONB"))
@@ -1810,6 +1775,83 @@ def _run_migrations(engine) -> None:
         conn.commit()
 
 
+def _fix_youtube_published_dates(engine) -> None:
+    """One-time repair: re-fetch real published_at from the YouTube API for
+    videos where the datetime.now(UTC) ingest fallback corrupted the date.
+
+    Called from main() AFTER _run_migrations has committed, on its own
+    connection (audit P10, 2026-08-06): the batched YouTube HTTP calls used
+    to run INSIDE the single migration transaction, holding every earlier
+    ALTER TABLE's ACCESS EXCLUSIVE lock across network I/O.
+
+    Sentinel semantics preserved: stamped only on a keyed run, so a deploy
+    without a YouTube API key retries on the next startup. Done with
+    engine.connect() rather than get_session (shorter statement timeout
+    there).
+    """
+    with engine.connect() as conn:
+        already_fixed = conn.execute(
+            text("""
+            SELECT 1 FROM news_videos
+            WHERE tags IS NOT NULL AND tags @> '"__dates_fixed"'::jsonb
+            LIMIT 1
+        """)
+        ).fetchone()
+    if already_fixed:
+        return
+
+    from pipeline.lyra.config import LyraSettings as _LS
+
+    api_key = _LS().youtube_api_key
+    if not api_key:
+        logger.warning(
+            "published_at date fix skipped: no YouTube API key — will retry "
+            "on next startup once a key is configured"
+        )
+        return
+
+    from datetime import datetime as _dt
+
+    from pipeline.utils.http import fetch_with_retry as _fetch
+
+    with engine.connect() as conn:
+        all_ids = [r[0] for r in conn.execute(text("SELECT id FROM news_videos")).fetchall()]
+        fixed = 0
+        for i in range(0, len(all_ids), 50):
+            batch = all_ids[i : i + 50]
+            try:
+                resp = _fetch(
+                    "https://www.googleapis.com/youtube/v3/videos",
+                    params={"id": ",".join(batch), "part": "snippet", "key": api_key},
+                )
+                data = resp.json()
+            except Exception as e:
+                logger.warning(f"YouTube API date fix batch failed: {e}")
+                continue
+            for item in data.get("items", []):
+                pub = item.get("snippet", {}).get("publishedAt", "")
+                try:
+                    real = _dt.fromisoformat(pub.replace("Z", "+00:00"))
+                except (ValueError, AttributeError):
+                    continue
+                conn.execute(
+                    text("UPDATE news_videos SET published_at = :d WHERE id = :id"),
+                    {"d": real, "id": item["id"]},
+                )
+                fixed += 1
+        logger.info(f"Fixed published_at for {fixed} videos")
+        # Stamp sentinel so this doesn't run again. Kept INSIDE the api-key
+        # guard (audit 2026-08-05): stamping without a key marked the fix
+        # "done" while permanently skipping it.
+        conn.execute(
+            text("""
+            UPDATE news_videos SET tags = COALESCE(tags, '[]'::jsonb) || '["__dates_fixed"]'::jsonb
+            WHERE id = (SELECT id FROM news_videos LIMIT 1)
+        """)
+        )
+        conn.commit()
+
+
 def main() -> None:
     """Main entry point for the Lyra pipeline service."""
     parser = argparse.ArgumentParser(description="Lyra news pipeline orchestrator")
@@ -1822,6 +1864,11 @@ def main() -> None:
 
     setup_logging()
     logger.info("Lyra Whiskerbyte pipeline starting...")
+
+    # Create the healthcheck liveness file immediately: migrations below can
+    # take minutes, and the docker healthcheck errors (= unhealthy after
+    # start_period) while the file doesn't exist yet.
+    _touch_heartbeat()
 
     settings = LyraSettings()
 
@@ -1840,6 +1887,17 @@ def main() -> None:
             f"[STARTUP] Migrations ROLLED BACK due to exception: {mig_err}. "
             "All schema changes in this release are lost — fix the failing "
             "statement and restart."
+        )
+
+    # One-time YouTube published_at repair — runs AFTER the migration
+    # transaction has committed because it makes batched HTTP calls (P10).
+    # The sentinel stays unstamped on failure, so the next startup retries.
+    try:
+        _fix_youtube_published_dates(engine)
+    except Exception:
+        logger.exception(
+            "[STARTUP] YouTube published_at date fix failed — sentinel not "
+            "stamped, will retry on next startup"
         )
 
     # Seed channels
@@ -1915,6 +1973,7 @@ def main() -> None:
     article_week_tracked: str | None = None  # ISO date of the week we're tracking
 
     while True:
+        _touch_heartbeat()
         now = time.time()
 
         # Run pipeline every hour
@@ -1955,7 +2014,10 @@ def main() -> None:
             except Exception:
                 logger.exception("Failed to write heartbeat")
 
-        # Weekly article generation (with retry limit)
+        # Weekly article generation (with retry limit). Touch first: the
+        # pipeline cycle above may have run for a long time, and article
+        # generation itself can hold the loop for many minutes.
+        _touch_heartbeat()
         if should_generate_article():
             current_week = time.strftime("%Y-W%W", time.gmtime())
             if current_week != article_week_tracked:
@@ -1984,7 +2046,9 @@ def main() -> None:
                         MAX_ARTICLE_ATTEMPTS,
                     )
 
-        # Sleep before next check
+        # Sleep before next check. Touch right before sleeping so the mtime
+        # is at most 60s (the sleep length) plus one iteration's work old.
+        _touch_heartbeat()
         time.sleep(60)  # Check every minute
 
 

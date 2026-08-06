@@ -29,6 +29,7 @@ from pipeline.normalizers.site_type import normalize_site_type
 
 _heavy_limiter = RateLimiter(max_requests=50, window_seconds=60, namespace="heavy_sites")
 _viewport_limiter = RateLimiter(max_requests=60, window_seconds=60, namespace="viewport")
+_search_limiter = RateLimiter(max_requests=20, window_seconds=60, namespace="site_search")
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -658,7 +659,17 @@ def random_sites(
     """Return random sites proportionally sampled across all sources."""
     if not _heavy_limiter.check(get_client_ip(req)):
         raise HTTPException(status_code=429, detail="Too many requests")
-    # Step 1: get per-source counts
+
+    # Short-TTL cache: this endpoint feeds a discovery widget, so a fresh
+    # random draw once per 5 minutes is acceptable — and it saves the
+    # sampling query on every widget load.
+    cache_key = f"sites:random:{limit}"
+    cached = cache_get(cache_key)
+    if cached:
+        return cached
+
+    # Step 1: get per-source counts (drives proportional allocation and the
+    # random-offset upper bounds in step 3)
     counts_result = db.execute(
         text("SELECT source_id, COUNT(*) AS cnt FROM unified_sites GROUP BY source_id")
     )
@@ -681,51 +692,75 @@ def random_sites(
         factor = limit / alloc_total
         allocations = {src: max(1, round(n * factor)) for src, n in allocations.items()}
 
-    # Step 3: sample from each source
+    # Step 3: sample every source in ONE round trip (was: one ORDER BY
+    # RANDOM() full scan per source, ~20 queries). TABLESAMPLE SYSTEM was
+    # rejected: it samples whole-table pages BEFORE the source filter, so
+    # small sources would need ~100% sampling rates to fill their minimum
+    # slots. Instead each source contributes a contiguous id-ordered slice
+    # starting at a random offset (unnest + LATERAL = the per-source
+    # random-offset technique in a single statement). Slices are shuffled
+    # together below; per-5-min randomness via the cache above is fine for
+    # the discovery widget this endpoint feeds.
+    counts_by_src = dict(source_counts)
+    srcs = list(allocations.keys())
+    ns = [allocations[src] for src in srcs]
+    offs = [
+        random.randint(0, max(counts_by_src[src] - allocations[src], 0))  # noqa: S311 — sampling offsets, not crypto
+        for src in srcs
+    ]
+    query = text("""
+        SELECT us.id::text AS id, us.name, us.lat, us.lon, us.source_id, us.site_type,
+               us.period_start, us.period_name, us.description, us.country, us.source_url,
+               cs.card_description
+        FROM unnest(CAST(:srcs AS text[]), CAST(:offs AS int[]), CAST(:ns AS int[]))
+             AS alloc(source_id, off, n)
+        CROSS JOIN LATERAL (
+            SELECT id, name, lat, lon, source_id, site_type, period_start,
+                   period_name, description, country, source_url
+            FROM unified_sites u
+            WHERE u.source_id = alloc.source_id
+            ORDER BY u.id
+            OFFSET alloc.off LIMIT alloc.n
+        ) us
+        LEFT JOIN card_stats cs ON cs.site_id = us.id
+    """)
+    result = db.execute(query, {"srcs": srcs, "offs": offs, "ns": ns})
+
     all_sites = []
-    for src, n in allocations.items():
-        query = text("""
-            SELECT us.id::text, us.name, us.lat, us.lon, us.source_id, us.site_type,
-                   us.period_start, us.period_name, us.description, us.country, us.source_url,
-                   cs.card_description
-            FROM unified_sites us
-            LEFT JOIN card_stats cs ON cs.site_id = us.id
-            WHERE us.source_id = :src
-            ORDER BY RANDOM()
-            LIMIT :n
-        """)
-        result = db.execute(query, {"src": src, "n": n})
-        for row in result:
-            site = {
-                "id": row.id,
-                "n": row.name,
-                "la": row.lat,
-                "lo": row.lon,
-                "s": row.source_id,
-                "t": row.site_type,
-                "p": row.period_start,
-            }
-            if row.period_name:
-                site["pn"] = row.period_name
-            if row.description:
-                site["d"] = row.description
-            if row.country:
-                site["c"] = row.country
-            if row.source_url:
-                site["u"] = row.source_url
-            if row.card_description:
-                site["cd"] = row.card_description
-            all_sites.append(site)
+    for row in result:
+        site = {
+            "id": row.id,
+            "n": row.name,
+            "la": row.lat,
+            "lo": row.lon,
+            "s": row.source_id,
+            "t": row.site_type,
+            "p": row.period_start,
+        }
+        if row.period_name:
+            site["pn"] = row.period_name
+        if row.description:
+            site["d"] = row.description
+        if row.country:
+            site["c"] = row.country
+        if row.source_url:
+            site["u"] = row.source_url
+        if row.card_description:
+            site["cd"] = row.card_description
+        all_sites.append(site)
 
     # Shuffle the combined results so sources are interleaved
     random.shuffle(all_sites)
     all_sites = all_sites[:limit]
 
-    return {"count": len(all_sites), "sites": all_sites}
+    response = {"count": len(all_sites), "sites": all_sites}
+    cache_set(cache_key, response, ttl=300)
+    return response
 
 
 @router.get("/search")
 def search_sites(
+    req: Request,
     q: str = Query(..., min_length=2, description="Search query"),
     limit: int = Query(20, ge=1, le=100, description="Max results"),
     db: Session = Depends(get_db),
@@ -737,9 +772,20 @@ def search_sites(
     """
     from pipeline.utils.text import normalize_name
 
+    if not _search_limiter.check(get_client_ip(req)):
+        raise HTTPException(status_code=429, detail="Too many requests")
+
     normalized = normalize_name(q)
     if not normalized or len(normalized) < 2:
         return {"count": 0, "sites": []}
+
+    # Cache keyed on the effective query params (normalized q + limit); the
+    # "sites:" prefix means any site write busts it via cache_delete_pattern.
+    q_hash = hashlib.md5(normalized.encode(), usedforsecurity=False).hexdigest()
+    cache_key = f"sites:search:{q_hash}:{limit}"
+    cached = cache_get(cache_key)
+    if cached:
+        return cached
 
     # Escape SQL LIKE wildcards in user input
     normalized_escaped = _escape_ilike(normalized)
@@ -800,7 +846,9 @@ def search_sites(
             site["cd"] = row.card_description
         sites.append(site)
 
-    return {"count": len(sites), "sites": sites}
+    response = {"count": len(sites), "sites": sites}
+    cache_set(cache_key, response, ttl=120)
+    return response
 
 
 # =============================================================================
@@ -934,60 +982,63 @@ def restore_all_upload_snapshots(
 ):
     """Restore ALL sites from today's upload snapshots in one transaction.
 
-    Collects old_data from every snapshot_row linked to today's upload-type
-    snapshots, keeps earliest snapshot per site (= pre-upload state), and
-    writes the original values back. Use this to undo a broken bulk upload
-    that was split across many chunked snapshots.
+    Keeps the earliest snapshot per site (= pre-upload state) and writes the
+    original values back in a single batched UPDATE ... FROM (was: one UPDATE
+    per row, thousands of round trips). Restores the same column set as
+    restore_snapshot, including raw_data / parent_site_id / source_record_id.
+    Use this to undo a broken bulk upload split across many chunked snapshots.
     """
-    snap_rows = db.execute(
-        text("""
-            SELECT DISTINCT ON (sr.site_id)
-                sr.site_id::text AS site_id, sr.old_data
+    snap_count = (
+        db.execute(
+            text("""
+            SELECT COUNT(DISTINCT sr.site_id)
             FROM snapshot_rows sr
             JOIN db_snapshots ds ON ds.id = sr.snapshot_id
             WHERE ds.snapshot_type = 'upload'
               AND ds.created_at >= CURRENT_DATE
-            ORDER BY sr.site_id, ds.created_at ASC
         """)
-    ).fetchall()
-
-    if not snap_rows:
+        ).scalar()
+        or 0
+    )
+    if not snap_count:
         raise HTTPException(status_code=404, detail="No upload snapshots found today")
 
-    count = 0
-    for row in snap_rows:
-        data = row.old_data
-        db.execute(
-            text("""
-                UPDATE unified_sites SET
-                    name = :name, name_normalized = :name_normalized,
-                    lat = :lat, lon = :lon,
-                    geom = ST_SetSRID(ST_MakePoint(:lon, :lat), 4326),
-                    site_type = :site_type, period_start = :period_start,
-                    period_end = :period_end, period_name = :period_name,
-                    country = :country, description = :description,
-                    thumbnail_url = :thumbnail_url, source_url = :source_url,
-                    edited_by = :edited_by, updated_at = NOW()
-                WHERE id::text = :site_id
-            """),
-            {
-                "site_id": data["id"],
-                "name": data.get("name"),
-                "name_normalized": data.get("name_normalized"),
-                "lat": data.get("lat"),
-                "lon": data.get("lon"),
-                "site_type": data.get("site_type"),
-                "period_start": data.get("period_start"),
-                "period_end": data.get("period_end"),
-                "period_name": data.get("period_name"),
-                "country": data.get("country"),
-                "description": data.get("description"),
-                "thumbnail_url": data.get("thumbnail_url"),
-                "source_url": data.get("source_url"),
-                "edited_by": data.get("edited_by", "initial"),
-            },
-        )
-        count += 1
+    result = db.execute(
+        text("""
+            UPDATE unified_sites us SET
+                name = snap.old_data->>'name',
+                name_normalized = snap.old_data->>'name_normalized',
+                lat = (snap.old_data->>'lat')::double precision,
+                lon = (snap.old_data->>'lon')::double precision,
+                geom = ST_SetSRID(ST_MakePoint(
+                    (snap.old_data->>'lon')::double precision,
+                    (snap.old_data->>'lat')::double precision
+                ), 4326),
+                site_type = snap.old_data->>'site_type',
+                period_start = (snap.old_data->>'period_start')::integer,
+                period_end = (snap.old_data->>'period_end')::integer,
+                period_name = snap.old_data->>'period_name',
+                country = snap.old_data->>'country',
+                description = snap.old_data->>'description',
+                thumbnail_url = snap.old_data->>'thumbnail_url',
+                source_url = snap.old_data->>'source_url',
+                edited_by = COALESCE(snap.old_data->>'edited_by', 'initial'),
+                raw_data = snap.old_data->'raw_data',
+                parent_site_id = NULLIF(snap.old_data->>'parent_site_id', '')::uuid,
+                source_record_id = snap.old_data->>'source_record_id',
+                updated_at = NOW()
+            FROM (
+                SELECT DISTINCT ON (sr.site_id) sr.site_id, sr.old_data
+                FROM snapshot_rows sr
+                JOIN db_snapshots ds ON ds.id = sr.snapshot_id
+                WHERE ds.snapshot_type = 'upload'
+                  AND ds.created_at >= CURRENT_DATE
+                ORDER BY sr.site_id, ds.created_at ASC
+            ) snap
+            WHERE us.id = snap.site_id
+        """)
+    )
+    count = result.rowcount
 
     db.commit()
     cache_delete_pattern("sites:*")
@@ -1570,6 +1621,11 @@ def batch_upload_sites(
     insert_params = []
     card_stats_params = []
     errors: list[dict] = []
+    # Resolved site id per row, parallel to `sites`. Carries the generated id
+    # for inserts so the enrichment passes below (citations/reflinks/hero)
+    # attach to the exact row — resolving by name equality attached data to
+    # the first duplicate-named site and was O(n²).
+    row_site_ids: list[str] = []
 
     for site in sites:
         period_start = site.period_start
@@ -1579,6 +1635,7 @@ def batch_upload_sites(
         site_type = normalize_site_type(site.site_type) if site.site_type else None
 
         if site.existing_id:
+            row_site_ids.append(site.existing_id)
             update_params.append(
                 {
                     "site_id": site.existing_id,
@@ -1605,6 +1662,7 @@ def batch_upload_sites(
                 )
         else:
             new_id = str(_uuid.uuid4())
+            row_site_ids.append(new_id)
             name_norm = normalize_name(site.name) if site.name else site.name
             record_id = f"upload-{new_id[:8]}"
             insert_params.append(
@@ -1702,19 +1760,15 @@ def batch_upload_sites(
 
     # Batch citations: collect all params, execute once
     citation_params = []
-    for site in sites:
+    for site, sid in zip(sites, row_site_ids, strict=True):
         if not site.description_citations:
             continue
-        sid = site.existing_id or next(
-            (p["id"] for p in insert_params if p["name"] == site.name), None
+        citation_params.append(
+            {
+                "site_id": sid,
+                "citations": json.dumps(site.description_citations),
+            }
         )
-        if sid:
-            citation_params.append(
-                {
-                    "site_id": sid,
-                    "citations": json.dumps(site.description_citations),
-                }
-            )
     if citation_params:
         db.execute(
             text("""
@@ -1731,13 +1785,8 @@ def batch_upload_sites(
 
     # Batch ref links: collect all params, execute once
     reflink_params = []
-    for site in sites:
+    for site, sid in zip(sites, row_site_ids, strict=True):
         if not site.reference_links:
-            continue
-        sid = site.existing_id or next(
-            (p["id"] for p in insert_params if p["name"] == site.name), None
-        )
-        if not sid:
             continue
         for idx, link in enumerate(site.reference_links[:5]):
             url = link.get("url", "")
@@ -1799,13 +1848,8 @@ def batch_upload_sites(
     # image locally if needed.
     hero_params = []
     hero_site_ids: set[str] = set()
-    for site in sites:
+    for site, sid in zip(sites, row_site_ids, strict=True):
         if not site.hero_url:
-            continue
-        sid = site.existing_id or next(
-            (p["id"] for p in insert_params if p["name"] == site.name), None
-        )
-        if not sid:
             continue
         hero_site_ids.add(sid)
         url_hash = hashlib.md5(site.hero_url.encode(), usedforsecurity=False).hexdigest()[:16]
@@ -2028,8 +2072,13 @@ def replace_source(
         # Build insert params
         insert_params = []
         card_params = []
+        # Resolved site id per row, parallel to `sites` — the enrichment
+        # passes below key on this instead of name equality (duplicate names
+        # attached data to the first match and were O(n²)).
+        row_site_ids = []
         for site in sites:
             site_id = site.existing_id or str(_uuid.uuid4())
+            row_site_ids.append(site_id)
             period_start = site.period_start
             if period_start is None and site.period_name:
                 period_start = _period_to_year(site.period_name)
@@ -2114,20 +2163,15 @@ def replace_source(
 
         # Batch citations
         citation_params = []
-        for site in sites:
+        for site, enrich_id in zip(sites, row_site_ids, strict=True):
             if not site.description_citations:
                 continue
-            enrich_id = site.existing_id or next(
-                (p["id"] for p in insert_params if p["name"] == site.name),
-                None,
+            citation_params.append(
+                {
+                    "site_id": enrich_id,
+                    "citations": json.dumps(site.description_citations),
+                }
             )
-            if enrich_id:
-                citation_params.append(
-                    {
-                        "site_id": enrich_id,
-                        "citations": json.dumps(site.description_citations),
-                    }
-                )
         if citation_params:
             db.execute(
                 text("""
@@ -2144,14 +2188,8 @@ def replace_source(
 
         # Batch ref links
         reflink_params = []
-        for site in sites:
+        for site, enrich_id in zip(sites, row_site_ids, strict=True):
             if not site.reference_links:
-                continue
-            enrich_id = site.existing_id or next(
-                (p["id"] for p in insert_params if p["name"] == site.name),
-                None,
-            )
-            if not enrich_id:
                 continue
             for idx, link in enumerate(site.reference_links[:5]):
                 url = link.get("url", "")

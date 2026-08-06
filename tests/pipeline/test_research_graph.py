@@ -4,6 +4,7 @@ from pipeline.lyra.research_graph import (
     build_graph_from_state,
     is_junk_label,
     normalize_label,
+    persist_graph,
     reset_node_for_failed_request,
 )
 
@@ -95,6 +96,139 @@ def test_leads_to_edges_from_paper_to_topics():
     # Duplicate rabbit hole across angles must not produce duplicate edges
     dsts = [e["dst_norm"] for e in leads]
     assert len(dsts) == len(set(dsts))
+
+
+def test_builder_stamps_request_id_only_on_paper_node():
+    # Audit P15: stamping every node gave frontier rabbit holes the creating
+    # run's paper_id, so _pick_frontier's 24h failure cooldown (keyed on
+    # paper_id -> research_requests) blocked ALL topics a run surfaced when
+    # that run later failed. Only the paper node may carry the run id;
+    # topics get theirs via link_node_to_request when actually researched.
+    nodes, _edges = build_graph_from_state(FakeState(), "req-123")
+    for n in nodes:
+        if n["kind"] == "paper":
+            assert n["request_id"] == "req-123"
+        else:
+            assert n["request_id"] == ""
+
+
+def test_builder_edges_carry_endpoint_kinds():
+    # Audit P14: persist_graph resolves endpoints by exact (kind, norm) when
+    # the edge says which kind each side is — the builder must emit them.
+    _nodes, edges = build_graph_from_state(FakeState(), "req-123")
+    assert edges
+    for e in edges:
+        assert e["src_kind"] == "paper"
+        assert e["dst_kind"] == "topic"
+
+
+class _FakePersistSession:
+    """Node INSERT ... RETURNING gets sequential ids (id-1, id-2, ...);
+    every stmt/params pair is recorded. Edge inserts don't call fetchone."""
+
+    def __init__(self):
+        self.executed = []
+        self.committed = False
+        self._next_id = 0
+
+    def execute(self, stmt, params=None):
+        self.executed.append((str(stmt), params))
+        sess = self
+
+        class _R:
+            def fetchone(self):
+                sess._next_id += 1
+                return type("Row", (), {"id": f"id-{sess._next_id}"})()
+
+        return _R()
+
+    def commit(self):
+        self.committed = True
+
+
+def _persist_nodes():
+    """A paper and a topic sharing the same norm_label, plus a second topic.
+    Insert order fixes the fake ids: paper=id-1, topic(atlantis)=id-2,
+    topic(ekpyrosis)=id-3."""
+    return [
+        {
+            "label": "Atlantis",
+            "norm_label": "atlantis",
+            "kind": "paper",
+            "status": "explored",
+            "created_from": "paper",
+            "request_id": "req-1",
+        },
+        {
+            "label": "Atlantis",
+            "norm_label": "atlantis",
+            "kind": "topic",
+            "status": "frontier",
+            "created_from": "rabbit_hole",
+            "request_id": "",
+        },
+        {
+            "label": "Ekpyrosis",
+            "norm_label": "ekpyrosis",
+            "kind": "topic",
+            "status": "frontier",
+            "created_from": "rabbit_hole",
+            "request_id": "",
+        },
+    ]
+
+
+def test_persist_graph_resolves_edge_endpoints_by_kind_and_norm():
+    # Audit P14: with a paper and a topic sharing a norm_label, the old
+    # norm-only lookup (kind order topic > paper) resolved the PAPER side of
+    # an edge to the topic's id. Kind-qualified edges must hit exactly.
+    session = _FakePersistSession()
+    edges = [
+        {
+            "src_norm": "atlantis",
+            "dst_norm": "atlantis",
+            "kind": "leads_to",
+            "src_kind": "paper",
+            "dst_kind": "topic",
+        }
+    ]
+    persist_graph(_persist_nodes(), edges, session)
+    edge_inserts = [(s, p) for s, p in session.executed if "INSERT INTO research_edges" in s]
+    assert len(edge_inserts) == 1
+    _, params = edge_inserts[0]
+    assert params["src"] == "id-1"  # the paper node, not the same-norm topic
+    assert params["dst"] == "id-2"
+    assert session.committed
+
+
+def test_persist_graph_norm_only_fallback_for_kindless_edges():
+    # scripts/backfill_research_graph.py builds bare src_norm/dst_norm edges
+    # — the ordered fallback (topic > paper > entity > person) must survive
+    # for that caller, unchanged.
+    session = _FakePersistSession()
+    edges = [{"src_norm": "atlantis", "dst_norm": "ekpyrosis", "kind": "related"}]
+    persist_graph(_persist_nodes(), edges, session)
+    edge_inserts = [(s, p) for s, p in session.executed if "INSERT INTO research_edges" in s]
+    assert len(edge_inserts) == 1
+    _, params = edge_inserts[0]
+    assert params["src"] == "id-2"  # topic wins over paper in the fallback order
+    assert params["dst"] == "id-3"
+
+
+def test_persist_graph_drops_edges_with_unresolvable_endpoints():
+    session = _FakePersistSession()
+    edges = [
+        {
+            "src_norm": "atlantis",
+            "dst_norm": "missing topic",
+            "kind": "leads_to",
+            "src_kind": "paper",
+            "dst_kind": "topic",
+        }
+    ]
+    persist_graph(_persist_nodes(), edges, session)
+    edge_inserts = [(s, p) for s, p in session.executed if "INSERT INTO research_edges" in s]
+    assert edge_inserts == []
 
 
 def test_epoch_for_year_buckets():

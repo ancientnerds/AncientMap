@@ -415,6 +415,13 @@ class ConvergenceOrchestrator:
             )
 
             if isinstance(exc, (QuotaExhaustedError, InsufficientQuotaError)):
+                # Flush progress before re-raising (audit P19): the deferred
+                # run is re-claimed after the 5h window resets, and without
+                # this flush the research_requests row loses everything since
+                # the last 30s tick — debug_log/tokens/llm_calls read as
+                # stale/NULL while the request sits in 'deferred'.
+                # _flush_progress_to_db is best-effort and never raises.
+                _flush_progress_to_db(state, request_id)
                 raise
             state.error = f"Pipeline error: {exc}"
             logger.exception("Convergence pipeline failed")

@@ -8,12 +8,15 @@ before a user spends credits on a full research run.
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
-import re
 
 from pipeline.lyra.config import thinking_for_effort
-from pipeline.lyra.minimax_shared import MiniMaxTerminalError, minimax_chat_anthropic
+from pipeline.lyra.minimax_shared import (
+    MiniMaxTerminalError,
+    minimax_chat_anthropic,
+    parse_fenced_json,
+    strip_think_tags,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -38,19 +41,6 @@ _SYSTEM_PROMPT = (
 )
 
 
-def _parse_json(raw: str) -> dict:
-    cleaned = raw.strip()
-    if cleaned.startswith("```"):
-        cleaned = cleaned.split("\n", 1)[1] if "\n" in cleaned else cleaned[3:]
-        cleaned = cleaned.rsplit("```", 1)[0].strip()
-    try:
-        result = json.loads(cleaned)
-    except (json.JSONDecodeError, ValueError):
-        logger.warning("Relevancy gate: failed to parse JSON: %s", cleaned[:200])
-        return {}
-    return result if isinstance(result, dict) else {}
-
-
 async def check_relevance(question: str) -> str | None:
     """Return None if the question is on-topic, or a rejection message if not."""
     # A binary relevance check needs almost no reasoning — cap M3 thinking to a
@@ -71,8 +61,10 @@ async def check_relevance(question: str) -> str | None:
         logger.warning("[relevance_gate] classifier backend down — failing OPEN: %s", exc)
         return None
     # Strip any residual <think> tags the SDK path may have missed
-    raw = re.sub(r"<think>.*?</think>", "", raw, flags=re.DOTALL).strip()
-    parsed = _parse_json(raw)
+    raw = strip_think_tags(raw)
+    parsed = parse_fenced_json(raw, default={}, log_label="relevance_gate")
+    if not isinstance(parsed, dict):
+        parsed = {}
 
     if not parsed:
         # EXPLICIT fail-open: an unparseable classifier verdict must not

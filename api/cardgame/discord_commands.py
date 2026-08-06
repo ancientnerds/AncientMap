@@ -181,26 +181,13 @@ def register_commands(bot: discord.Client) -> None:
                 )
                 return
 
-            from api.cardgame.models import CardCollection, CardStats
-            from pipeline.database import UnifiedSite, get_session
+            from api.cardgame.leaderboard_service import fetch_collection_page
+            from pipeline.database import get_session
 
             with get_session() as session:
-                query = (
-                    session.query(CardCollection, CardStats, UnifiedSite)
-                    .join(CardStats, CardCollection.site_id == CardStats.site_id)
-                    .join(UnifiedSite, CardCollection.site_id == UnifiedSite.id)
-                    .filter(CardCollection.user_id == user.id)
-                )
-                if rarity is not None:
-                    query = query.filter(CardStats.rarity_tier == rarity)
-
-                total = query.count()
                 per_page = 10
-                rows = (
-                    query.order_by(CardStats.rarity_tier.desc(), CardStats.total_power.desc())
-                    .offset((page - 1) * per_page)
-                    .limit(per_page)
-                    .all()
+                rows, total = fetch_collection_page(
+                    session, user.id, rarity=rarity, page=page, per_page=per_page
                 )
 
                 if not rows:
@@ -662,23 +649,11 @@ def register_commands(bot: discord.Client) -> None:
     async def leaderboard_command(interaction: discord.Interaction, sort: str = "wins"):
         await interaction.response.defer(ephemeral=True)
         try:
-            from api.cardgame.models import CardPlayerStats
-            from pipeline.database import DiscordUser, get_session
+            from api.cardgame.leaderboard_service import get_leaderboard_entries
+            from pipeline.database import get_session
 
             with get_session() as session:
-                query = session.query(CardPlayerStats, DiscordUser).join(
-                    DiscordUser, CardPlayerStats.user_id == DiscordUser.id
-                )
-                if sort == "wins":
-                    query = query.order_by(CardPlayerStats.wins.desc())
-                elif sort == "cards":
-                    query = query.order_by(CardPlayerStats.total_cards.desc())
-                elif sort == "power":
-                    query = query.order_by(CardPlayerStats.xp.desc())
-                elif sort == "streak":
-                    query = query.order_by(CardPlayerStats.best_streak.desc())
-
-                rows = query.limit(10).all()
+                rows = get_leaderboard_entries(session, sort, limit=10)
                 if not rows:
                     await interaction.followup.send("No players yet!", ephemeral=True)
                     return
@@ -688,16 +663,16 @@ def register_commands(bot: discord.Client) -> None:
                     color=0xFFC107,
                 )
                 lines = []
-                for i, (ps, user) in enumerate(rows, 1):
-                    name = user.username if user else "Unknown"
+                for i, entry in enumerate(rows, 1):
+                    name = entry["username"]
                     if sort == "wins":
-                        val = f"{ps.wins}W / {ps.losses}L"
+                        val = f"{entry['wins']}W / {entry['losses']}L"
                     elif sort == "cards":
-                        val = f"{ps.total_cards} cards"
+                        val = f"{entry['total_cards']} cards"
                     elif sort == "power":
-                        val = f"{ps.xp} XP"
+                        val = f"{entry['xp']} XP"
                     elif sort == "streak":
-                        val = f"{ps.best_streak} best streak"
+                        val = f"{entry['best_streak']} best streak"
                     lines.append(f"**{i}.** {name} — {val}")
 
                 embed.description = "\n".join(lines)

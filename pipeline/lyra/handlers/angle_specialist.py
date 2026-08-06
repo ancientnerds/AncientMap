@@ -12,6 +12,7 @@ from pipeline.lyra.handlers import BaseHandler
 from pipeline.lyra.minimax_shared import (
     MiniMaxTerminalError,
     minimax_chat_anthropic,
+    parse_fenced_json,
     structured_llm_call,
 )
 from pipeline.lyra.schemas import SPECIALIST_FINDINGS_SCHEMA
@@ -717,12 +718,4 @@ class SpecialistHandler(BaseHandler):
 
 def _parse_json(text: str) -> dict:
     """Parse JSON from LLM output, stripping markdown fences if present."""
-    cleaned = text.strip()
-    if cleaned.startswith("```"):
-        cleaned = cleaned.split("\n", 1)[1] if "\n" in cleaned else cleaned[3:]
-        cleaned = cleaned.rsplit("```", 1)[0].strip()
-    try:
-        return json.loads(cleaned)
-    except (json.JSONDecodeError, ValueError):
-        logger.warning("Failed to parse specialist JSON: %s", cleaned[:200])
-        return {}
+    return parse_fenced_json(text, default={}, log_label="angle_specialist")

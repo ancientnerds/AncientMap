@@ -15,6 +15,7 @@ from api.cardgame.constants import (
     RARITY_NAMES,
     get_level,
 )
+from api.cardgame.leaderboard_service import fetch_collection_page, get_leaderboard_entries
 from api.cardgame.models import (
     CardCollection,
     CardDeck,
@@ -22,7 +23,6 @@ from api.cardgame.models import (
     CardStats,
 )
 from api.services.jwt_auth import get_current_user, get_optional_user
-from api.services.lyra_tools import _escape_ilike
 from api.services.rate_limiter import RateLimiter, get_client_ip
 from pipeline.database import DiscordUser, UnifiedSite, get_session
 from pipeline.historical_boundaries.empire_metadata import EMPIRE_METADATA
@@ -186,38 +186,7 @@ def get_leaderboard(
 ):
     """Top players leaderboard (public)."""
     with get_session() as session:
-        query = session.query(CardPlayerStats, DiscordUser).join(
-            DiscordUser, CardPlayerStats.user_id == DiscordUser.id
-        )
-
-        if sort == "wins":
-            query = query.order_by(CardPlayerStats.wins.desc())
-        elif sort == "cards":
-            query = query.order_by(CardPlayerStats.total_cards.desc())
-        elif sort == "power":
-            query = query.order_by(CardPlayerStats.xp.desc())
-        elif sort == "streak":
-            query = query.order_by(CardPlayerStats.best_streak.desc())
-
-        rows = query.limit(limit).all()
-
-        result = []
-        for ps, user in rows:
-            result.append(
-                {
-                    "username": user.username if user else "Unknown",
-                    "avatar_hash": user.avatar_hash if user else None,
-                    "wins": ps.wins,
-                    "losses": ps.losses,
-                    "draws": ps.draws,
-                    "total_cards": ps.total_cards,
-                    "xp": ps.xp,
-                    "best_streak": ps.best_streak,
-                    "daily_streak": ps.daily_streak,
-                }
-            )
-
-        return {"leaderboard": result}
+        return {"leaderboard": get_leaderboard_entries(session, sort, limit)}
 
 
 # ---------------------------------------------------------------------------
@@ -236,28 +205,14 @@ def get_collection(
 ):
     """Get user's card collection (paginated, filterable)."""
     with get_session() as session:
-        query = (
-            session.query(CardCollection, CardStats, UnifiedSite)
-            .join(CardStats, CardCollection.site_id == CardStats.site_id)
-            .join(UnifiedSite, CardCollection.site_id == UnifiedSite.id)
-            .filter(CardCollection.user_id == user.id)
-        )
-
-        if rarity is not None:
-            query = query.filter(CardStats.rarity_tier == rarity)
-        if group:
-            query = query.filter(CardStats.category_group == group)
-        if civilization:
-            query = query.filter(
-                CardStats.civilization.ilike(f"%{_escape_ilike(civilization)}%", escape="\\")
-            )
-
-        total = query.count()
-        rows = (
-            query.order_by(CardStats.rarity_tier.desc(), CardStats.total_power.desc())
-            .offset((page - 1) * per_page)
-            .limit(per_page)
-            .all()
+        rows, total = fetch_collection_page(
+            session,
+            user.id,
+            rarity=rarity,
+            group=group,
+            civilization=civilization,
+            page=page,
+            per_page=per_page,
         )
 
         cards = []

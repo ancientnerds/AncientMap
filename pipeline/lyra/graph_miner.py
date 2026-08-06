@@ -72,10 +72,16 @@ def mine_link_prediction(session, limit: int = 20) -> list:
                   ON n_site.kind = 'site' AND n_site.norm_label = n_topic.norm_label
                 WHERE n_topic.status = 'explored' AND n_topic.kind = 'topic'
             ),
+            -- neigh restricted to edges touching the bridged site nodes BEFORE
+            -- the self-join (the previous version materialized every
+            -- research_edge twice). The x/y joins below only consume rows
+            -- whose a-side is a bridged site node, so this is lossless.
             neigh AS (
                 SELECT src AS a, dst AS b FROM research_edges
+                WHERE src IN (SELECT site_node FROM bridged)
                 UNION
                 SELECT dst AS a, src AS b FROM research_edges
+                WHERE dst IN (SELECT site_node FROM bridged)
             )
             SELECT b1.label AS a_label, b2.label AS b_label,
                    COUNT(DISTINCT x.b) AS shared,
@@ -85,10 +91,15 @@ def mine_link_prediction(session, limit: int = 20) -> list:
             JOIN bridged b2 ON b2.topic_id > b1.topic_id
             JOIN neigh y ON y.a = b2.site_node AND y.b = x.b
             JOIN research_nodes rn ON rn.id = x.b AND rn.kind IN ('story', 'culture', 'person')
+            -- direction-explicit on research_edges (topic ids are not in the
+            -- restricted neigh anymore); matches the old both-orientation
+            -- neigh semantics exactly
             WHERE NOT EXISTS (
-                SELECT 1 FROM neigh d
-                WHERE (d.a = b1.topic_id AND d.b = b2.topic_id)
-                   OR (d.a = b1.site_node AND d.b = b2.site_node)
+                SELECT 1 FROM research_edges d
+                WHERE (d.src = b1.topic_id AND d.dst = b2.topic_id)
+                   OR (d.src = b2.topic_id AND d.dst = b1.topic_id)
+                   OR (d.src = b1.site_node AND d.dst = b2.site_node)
+                   OR (d.src = b2.site_node AND d.dst = b1.site_node)
             )
             GROUP BY b1.topic_id, b2.topic_id, b1.label, b2.label
             HAVING COUNT(DISTINCT x.b) >= 2

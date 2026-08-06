@@ -23,6 +23,11 @@ logger = logging.getLogger(__name__)
 
 SNAPSHOTS_DIR = Path("public/data/snapshots")
 
+# Retention for file snapshots: keep the newest N, prune the rest (files +
+# manifest entries) after each new snapshot write. Without this the snapshot
+# dir and manifest grow unbounded (audit P6-16).
+_MAX_FILE_SNAPSHOTS = 50
+
 # Source IDs that hold user-curated, editable site data. A "unified" snapshot
 # covers exactly these; everything else (wikidata, osm, etc.) is reproducible
 # from its scraper and not worth snapshotting per-row.
@@ -731,10 +736,24 @@ def export_file_snapshot(db: Session) -> str:
         }
     )
     snapshots.sort(key=lambda s: s["date"], reverse=True)
+
+    # Retention sweep: keep the newest _MAX_FILE_SNAPSHOTS, delete older
+    # files and drop their manifest entries.
+    pruned = snapshots[_MAX_FILE_SNAPSHOTS:]
+    snapshots = snapshots[:_MAX_FILE_SNAPSHOTS]
+    for entry in pruned:
+        (SNAPSHOTS_DIR / entry["file"]).unlink(missing_ok=True)
     manifest["snapshots"] = snapshots
 
     with open(manifest_path, "w", encoding="utf-8") as f:
         json.dump(manifest, f, indent=2)
 
+    if pruned:
+        logger.info(
+            "Pruned %d file snapshot(s) beyond retention of %d: %s",
+            len(pruned),
+            _MAX_FILE_SNAPSHOTS,
+            ", ".join(e["date"] for e in pruned),
+        )
     logger.info(f"File snapshot {snapshot_key}: {len(sites)} sites")
     return snapshot_key

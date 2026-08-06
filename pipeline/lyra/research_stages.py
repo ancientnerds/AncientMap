@@ -32,6 +32,7 @@ from pipeline.lyra.minimax_shared import (
     MINIMAX_MODEL,
     MiniMaxTerminalError,
     minimax_chat_anthropic,
+    parse_fenced_json,
 )
 from pipeline.lyra.theo_citations import CitationRegistry, audit_citations
 from pipeline.lyra.theo_quality_judge import get_restart_stage, judge_paper
@@ -57,6 +58,10 @@ _SOURCE_APIS = "standard"
 _MAX_PIPELINE_ITERATIONS = 2
 _MAX_PARALLEL_AUDIT = 10
 _QUALITY_PASS_THRESHOLD = 72
+
+# YouTube URL fragments — used to split video sources ([VN] citations,
+# rejection protection) from web/academic sources throughout this module.
+_YT_DOMAINS = ("youtu.be/", "youtube.com/")
 
 
 # ---------------------------------------------------------------------------
@@ -89,15 +94,7 @@ def _load_prompt(name: str) -> str:
 
 def _parse_json(text: str) -> dict | list:
     """Parse JSON from M3 response, handling markdown fencing."""
-    cleaned = text.strip()
-    if cleaned.startswith("```"):
-        cleaned = cleaned.split("\n", 1)[1] if "\n" in cleaned else cleaned[3:]
-        cleaned = cleaned.rsplit("```", 1)[0].strip()
-    try:
-        return json.loads(cleaned)
-    except (json.JSONDecodeError, ValueError):
-        logger.warning("Failed to parse JSON from M3 response: %s", cleaned[:200])
-        return {}
+    return parse_fenced_json(text, default={}, log_label="research_stages")
 
 
 def _classify_source_type(url: str) -> str:
@@ -169,14 +166,13 @@ def _build_source_list(registry: CitationRegistry) -> list[dict]:
 
 def _build_video_source_list(registry: CitationRegistry) -> list[dict]:
     """Build the YouTube video sources list for ClusterResult."""
-    yt_domains = ("youtu.be/", "youtube.com/")
     result: list[dict] = []
     num = 0
     for sid in sorted(registry.sources.keys()):
         source = registry.get_reference(sid)
         if source is None:
             continue
-        if not (source.url and any(d in source.url for d in yt_domains)):
+        if not (source.url and any(d in source.url for d in _YT_DOMAINS)):
             continue
         num += 1
         result.append(
@@ -315,12 +311,11 @@ def _stage_audit(
     # verdict on our own paper is a false positive from missing context, not
     # a real quality signal (Follow-up-Ticket 10, same guard style as the
     # YouTube/story protection above).
-    yt_domains = ("youtu.be/", "youtube.com/")
     _protected_sids = protected_sids or set()
     protected = 0
     for rid in rejected_ids:
         source = registry.sources.get(rid)
-        is_youtube = source and source.url and any(d in source.url for d in yt_domains)
+        is_youtube = source and source.url and any(d in source.url for d in _YT_DOMAINS)
         is_story_source = rid in _protected_sids
         is_self_source = bool(source and source.self_source)
         if is_youtube or is_story_source or is_self_source:
@@ -483,9 +478,8 @@ def _stage_write_section(
         all_source_ids.update(claim.source_ids)
 
     # Also include YouTube sources so they get [VN] markers
-    yt_domains = ("youtu.be/", "youtube.com/")
     for sid, source in registry.sources.items():
-        if source.url and any(d in source.url for d in yt_domains):
+        if source.url and any(d in source.url for d in _YT_DOMAINS):
             all_source_ids.add(sid)
 
     # Split into web and YouTube, assign numbers separately
@@ -496,7 +490,7 @@ def _stage_write_section(
         source = registry.get_reference(sid)
         if source is None:
             continue
-        is_yt = source.url and any(d in source.url for d in yt_domains)
+        is_yt = source.url and any(d in source.url for d in _YT_DOMAINS)
         if is_yt:
             yt_num += 1
             sid_to_label[sid] = f"[V{yt_num}]"

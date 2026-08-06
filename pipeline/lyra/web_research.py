@@ -26,6 +26,7 @@ from pipeline.lyra.minimax_shared import (
     create_minimax_client,
     minimax_chat,
     minimax_search,
+    parse_fenced_json,
 )
 
 logger = logging.getLogger(__name__)
@@ -210,31 +211,16 @@ class MiniMaxWebResearch(WebResearchBackend):
         if not text:
             return []
 
-        # Parse JSON — handle markdown fencing
-        cleaned = text.strip()
-        if cleaned.startswith("```"):
-            cleaned = cleaned.split("\n", 1)[1] if "\n" in cleaned else cleaned[3:]
-            cleaned = cleaned.rsplit("```", 1)[0].strip()
-
         try:
-            result = json.loads(cleaned)
+            result = parse_fenced_json(text)
             queries = result.get("queries", [])
             if isinstance(queries, list):
                 return [q for q in queries if isinstance(q, str)]
         except (json.JSONDecodeError, KeyError):
-            logger.warning(f"Failed to parse M3 claims JSON: {cleaned[:200]}")
+            logger.warning(f"Failed to parse M3 claims JSON: {text.strip()[:200]}")
         return []
 
     # -- Section verification (structured corrections) --
-
-    @staticmethod
-    def _parse_json(text: str) -> list | dict:
-        """Parse JSON from M3 response, stripping markdown fences."""
-        cleaned = text.strip()
-        if cleaned.startswith("```"):
-            cleaned = cleaned.split("\n", 1)[1] if "\n" in cleaned else cleaned[3:]
-            cleaned = cleaned.rsplit("```", 1)[0].strip()
-        return json.loads(cleaned)
 
     def _verify_section(
         self, section_text: str, search_results: list[WebSearchResult]
@@ -265,7 +251,7 @@ class MiniMaxWebResearch(WebResearchBackend):
 
         # Parse structured corrections
         try:
-            corrections = self._parse_json(text)
+            corrections = parse_fenced_json(text)
         except (json.JSONDecodeError, ValueError):
             logger.warning(f"Failed to parse corrections JSON: {text[:200]}")
             return SectionVerification(corrected_text=section_text)

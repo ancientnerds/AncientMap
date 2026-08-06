@@ -1791,7 +1791,6 @@ def create_public_api() -> FastAPI:
             {"kinds": kind_list} if kind_list else {},
         ).fetchall()
 
-        node_ids = {r.id for r in node_rows}
         nodes = [
             GraphNode(
                 id=r.id,
@@ -1809,14 +1808,20 @@ def create_public_api() -> FastAPI:
             for r in node_rows
         ]
 
+        # Filter edges in SQL against the selected node set (both endpoints
+        # must be selected) — previously ALL research_edges were fetched and
+        # filtered in Python. unnest + hash join instead of = ANY(...) so the
+        # 15k-id list isn't linearly scanned per edge.
         edge_rows = db.execute(
-            text("SELECT src::text AS src, dst::text AS dst, kind FROM research_edges")
+            text("""
+                SELECT e.src::text AS src, e.dst::text AS dst, e.kind
+                FROM research_edges e
+                JOIN unnest(CAST(:ids AS uuid[])) AS sel_src(id) ON sel_src.id = e.src
+                JOIN unnest(CAST(:ids AS uuid[])) AS sel_dst(id) ON sel_dst.id = e.dst
+            """),
+            {"ids": [r.id for r in node_rows]},
         ).fetchall()
-        edges = [
-            GraphEdge(src=r.src, dst=r.dst, kind=r.kind)
-            for r in edge_rows
-            if r.src in node_ids and r.dst in node_ids
-        ]
+        edges = [GraphEdge(src=r.src, dst=r.dst, kind=r.kind) for r in edge_rows]
 
         response = GraphResponse(nodes=nodes, edges=edges, total_nodes=total_nodes)
         cache_set(cache_key, response.model_dump(), ttl=300)

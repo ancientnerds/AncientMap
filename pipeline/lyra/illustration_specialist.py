@@ -7,10 +7,11 @@ multiple opportunities per paragraph — targeting 3+ per substantial paragraph.
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 import re
 from pathlib import Path
+
+from pipeline.lyra.minimax_shared import parse_fenced_json
 
 logger = logging.getLogger(__name__)
 
@@ -39,20 +40,9 @@ def parse_opportunities(raw: str) -> list[dict]:
     """
     if not raw or not raw.strip():
         return []
-    cleaned = raw.strip()
-    if cleaned.startswith("```"):
-        cleaned = cleaned.split("\n", 1)[1] if "\n" in cleaned else cleaned[3:]
-        cleaned = cleaned.rsplit("```", 1)[0].strip()
-    try:
-        data = json.loads(cleaned)
-    except (json.JSONDecodeError, ValueError):
-        m = re.search(r"\{[\s\S]*\}", cleaned)
-        if not m:
-            return []
-        try:
-            data = json.loads(m.group(0))
-        except (json.JSONDecodeError, ValueError):
-            return []
+    data = parse_fenced_json(raw, default=None, extract_object=True)
+    if data is None:
+        return []
     opps = data.get("opportunities", [])
     out: list[dict] = []
     dropped = 0
@@ -82,7 +72,9 @@ def split_paper_into_paragraphs(paper_text: str) -> list[dict]:
     """Split paper text into paragraphs with section context.
 
     Skips abstract, introduction, references, and sources sections.
-    Returns list of {text, paragraph_index, section}.
+    Returns list of {text, paragraph_index, section, line_idx} where
+    line_idx is the paragraph's first line in ``paper_text.split("\\n")``
+    (used by research_images.inject_source_images for insertion).
     """
     _SKIP_SECTIONS = frozenset({"abstract", "introduction", "references", "sources"})
 
@@ -102,6 +94,7 @@ def split_paper_into_paragraphs(paper_text: str) -> list[dict]:
 
         if line.strip() and current_section not in _SKIP_SECTIONS:
             para_lines = []
+            start_idx = i
             while i < len(lines) and lines[i].strip():
                 para_lines.append(lines[i])
                 i += 1
@@ -112,6 +105,7 @@ def split_paper_into_paragraphs(paper_text: str) -> list[dict]:
                         "text": para_text,
                         "paragraph_index": paragraph_index,
                         "section": current_section,
+                        "line_idx": start_idx,
                     }
                 )
                 paragraph_index += 1

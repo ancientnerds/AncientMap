@@ -7,10 +7,10 @@ concrete image search queries used downstream to fan out across connectors.
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
-import re
 from pathlib import Path
+
+from pipeline.lyra.minimax_shared import parse_fenced_json
 
 logger = logging.getLogger(__name__)
 
@@ -21,27 +21,18 @@ _MAX_QUERY_LEN = 80  # hard cap to reject verbose LLM output
 
 
 def parse_queries(raw: str) -> list[str]:
-    """Parse the generator's JSON output into a deduplicated, capped list.
+    """Parse a generator's JSON output into a deduplicated, capped list.
 
     Filters empty strings and anything longer than 80 chars. Preserves the
     input order. Caps at 5 queries. Returns [] on any parse failure.
+
+    Canonical implementation — story_web_queries imports this too (P7-17).
     """
     if not raw or not raw.strip():
         return []
-    cleaned = raw.strip()
-    if cleaned.startswith("```"):
-        cleaned = cleaned.split("\n", 1)[1] if "\n" in cleaned else cleaned[3:]
-        cleaned = cleaned.rsplit("```", 1)[0].strip()
-    try:
-        data = json.loads(cleaned)
-    except (json.JSONDecodeError, ValueError):
-        m = re.search(r"\{[\s\S]*\}", cleaned)
-        if not m:
-            return []
-        try:
-            data = json.loads(m.group(0))
-        except (json.JSONDecodeError, ValueError):
-            return []
+    data = parse_fenced_json(raw, default=None, extract_object=True)
+    if data is None:
+        return []
     raw_queries = data.get("queries")
     if not isinstance(raw_queries, list):
         return []

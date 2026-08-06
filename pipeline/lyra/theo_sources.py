@@ -408,22 +408,23 @@ class OpenAlexAdapter(SourceAdapter):
         )
 
     def _request_with_retry(self, params: dict) -> dict:
-        """GET /works with exponential backoff on 429/500."""
+        """GET /works with exponential backoff on 429/500/503.
+
+        The final in-loop attempt raises via raise_for_status — no extra
+        unconditional 5th request after the backoff attempts are spent.
+        """
         import time as _time
 
         for attempt in range(4):  # initial + 3 retries
             resp = self._client.get("/works", params=params)
-            if resp.status_code in (429, 500, 503):
+            if resp.status_code in (429, 500, 503) and attempt < 3:
                 wait = 2**attempt  # 1, 2, 4 seconds
                 logger.info("OpenAlex %d, retrying in %ds...", resp.status_code, wait)
                 _time.sleep(wait)
                 continue
             resp.raise_for_status()
             return resp.json()
-        # Final attempt — let it raise
-        resp = self._client.get("/works", params=params)
-        resp.raise_for_status()
-        return resp.json()
+        raise RuntimeError("unreachable: final OpenAlex attempt returns or raises")
 
     async def search(self, query: str, max_results: int = 10) -> list[RawSource]:
         def _do() -> list[RawSource]:

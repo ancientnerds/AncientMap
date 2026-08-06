@@ -13,12 +13,13 @@ the report; wiring and repair live in handlers/paper.py.
 
 from __future__ import annotations
 
-import json
 import logging
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
+
+from pipeline.lyra.minimax_shared import parse_fenced_json
 
 logger = logging.getLogger(__name__)
 
@@ -236,13 +237,7 @@ async def run_coherence_pass(
 
     try:
         raw = await llm_call(prompt_filled, "", 2048, settings, 0.2)
-        # Strip markdown fences before parsing — same local pattern as the
-        # sibling parsers (tweet_verifier._web_verify_items, relevance_gate).
-        cleaned = raw.strip()
-        if cleaned.startswith("```"):
-            cleaned = cleaned.split("\n", 1)[1] if "\n" in cleaned else cleaned[3:]
-            cleaned = cleaned.rsplit("```", 1)[0].strip()
-        data = json.loads(cleaned)
+        data = parse_fenced_json(raw)
     except Exception as exc:
         logger.warning("coherence_pass LLM failure: %s", exc)
         return CoherenceResult(

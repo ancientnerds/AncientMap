@@ -21,12 +21,12 @@ Verdict schema:
 
 from __future__ import annotations
 
-import json
 import logging
 import re
 
 from pipeline.lyra.image_fetcher import ImageCandidate
 from pipeline.lyra.meaningful_images import STRICT_VLM_PROMPT
+from pipeline.lyra.minimax_shared import parse_fenced_json
 
 logger = logging.getLogger(__name__)
 
@@ -90,17 +90,8 @@ def parse_vlm_verdict(raw: str) -> dict | None:
     """Parse the VLM response JSON. Returns None on any failure."""
     if not raw:
         return None
-    s = raw.strip()
-    if s.startswith("```"):
-        s = s.split("\n", 1)[1] if "\n" in s else s[3:]
-        s = s.rsplit("```", 1)[0].strip()
-    m = re.search(r"\{[\s\S]*\}", s)
-    if not m:
-        return None
-    try:
-        return json.loads(m.group(0))
-    except (json.JSONDecodeError, ValueError):
-        return None
+    v = parse_fenced_json(raw, default=None, extract_object=True)
+    return v if isinstance(v, dict) else None
 
 
 def verdict_is_meaningful(v: dict | None) -> bool:

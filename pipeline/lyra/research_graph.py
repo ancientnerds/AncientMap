@@ -57,7 +57,8 @@ def build_graph_from_state(state: Any, request_id: str) -> tuple[list[dict], lis
 
     Pure function (no DB): returns node dicts keyed for upsert and edge dicts
     referencing nodes by ``(kind, norm_label)`` via ``src_norm``/``dst_norm``
-    (both sides are created in the same batch, so label refs are resolvable).
+    plus ``src_kind``/``dst_kind`` (both sides are created in the same batch,
+    so label refs are resolvable exactly, without kind-order guessing).
 
     Emitted structure:
     - one ``paper`` node (explored) for the run
@@ -84,20 +85,37 @@ def build_graph_from_state(state: Any, request_id: str) -> tuple[list[dict], lis
                 "kind": kind,
                 "status": status,
                 "created_from": created_from,
-                "request_id": request_id,
+                # Only the paper node carries the creating run's id (audit
+                # P15, 2026-08-06): stamping every node gave each frontier
+                # rabbit hole the run's paper_id too, so _pick_frontier's
+                # 24h failure cooldown (keyed on paper_id) blocked ALL
+                # topics a run had surfaced when that run later
+                # failed/was cancelled. The feeder stamps a node's own run
+                # via link_node_to_request when it actually researches it.
+                "request_id": request_id if kind == "paper" else "",
             }
         elif existing["status"] == "frontier" and status == "explored":
             # Explored always wins over frontier for the same label.
             existing["status"] = "explored"
         return norm
 
-    def add_edge(src_norm: str, dst_norm: str, kind: str) -> None:
+    def add_edge(
+        src_norm: str, dst_norm: str, kind: str, src_kind: str = "paper", dst_kind: str = "topic"
+    ) -> None:
         # Empty norm = junk label rejected by add_node — no node, no edge.
         if not src_norm or not dst_norm:
             return
         key = (src_norm, dst_norm, kind)
         if key not in edges and src_norm != dst_norm:
-            edges[key] = {"src_norm": src_norm, "dst_norm": dst_norm, "kind": kind}
+            # src_kind/dst_kind let persist_graph resolve endpoints by exact
+            # (kind, norm) instead of a kind-order guess (audit P14).
+            edges[key] = {
+                "src_norm": src_norm,
+                "dst_norm": dst_norm,
+                "kind": kind,
+                "src_kind": src_kind,
+                "dst_kind": dst_kind,
+            }
 
     add_node(paper_label, "paper", "explored", "paper")
 
@@ -151,15 +169,28 @@ def persist_graph(nodes: list[dict], edges: list[dict], session) -> None:
         ).fetchone()
         norm_to_id[(n["kind"], n["norm_label"])] = str(row.id)
 
-    def node_id(norm: str) -> str | None:
-        for kind in ("topic", "paper", "entity", "person"):
-            found = norm_to_id.get((kind, norm))
+    def node_id(norm: str, kind: str | None) -> str | None:
+        """Resolve an edge endpoint to its node id.
+
+        Edges that carry the endpoint kind (build_graph_from_state emits
+        ``src_kind``/``dst_kind``) get an exact (kind, norm) lookup — a
+        paper and a topic sharing the same norm_label can no longer be
+        confused. The ordered norm-only scan is kept ONLY for callers whose
+        edge dicts genuinely lack kind info
+        (scripts/backfill_research_graph.py builds bare src_norm/dst_norm
+        edges); the historical topic>paper order is preserved for those.
+        """
+        if kind:
+            return norm_to_id.get((kind, norm))
+        for k in ("topic", "paper", "entity", "person"):
+            found = norm_to_id.get((k, norm))
             if found:
                 return found
         return None
 
     for e in edges:
-        src, dst = node_id(e["src_norm"]), node_id(e["dst_norm"])
+        src = node_id(e["src_norm"], e.get("src_kind"))
+        dst = node_id(e["dst_norm"], e.get("dst_kind"))
         if not src or not dst:
             continue
         session.execute(
@@ -287,6 +318,12 @@ def _pick_frontier(session, kinds: tuple[str, ...]) -> dict | None:
     """Pick the highest-value frontier node of the given kinds and mark it
     researching.
 
+    Claiming is race-safe (audit P11): the SELECT locks the picked row with
+    FOR UPDATE OF n SKIP LOCKED (a concurrent picker skips the locked row
+    and takes the next-best node) and the UPDATE re-asserts
+    status = 'frontier' with a rowcount check against out-of-transaction
+    claims.
+
     Score = source_signal
             + kind weight (hypothesis 3.0, connection 2.0 — orders
               hypothesis above connection within the synthesis pool; it
@@ -339,9 +376,14 @@ def _pick_frontier(session, kinds: tuple[str, ...]) -> dict | None:
             ) recent ON recent.hit = n.id
             WHERE n.status = 'frontier' AND n.kind = ANY(:kinds)
               -- junk-label insurance: a garbage node must never cost a
-              -- multi-hour research run (see JUNK_LABELS, 2026-07-31)
-              AND LOWER(TRIM(n.label)) NOT IN
-                  ('null', 'none', 'nan', 'undefined', 'unknown', 'n/a', 'na', '')
+              -- multi-hour research run. Bound from the JUNK_LABELS
+              -- constant (the old literal list had drifted from it, audit
+              -- P13). LOWER(TRIM()) approximates normalize_label — good
+              -- enough for insurance; every insert path already rejects
+              -- junk via is_junk_label. The TRIM <> '' check covers
+              -- whitespace-only labels ("" is not in JUNK_LABELS).
+              AND NOT (LOWER(TRIM(n.label)) = ANY(:junk_labels))
+              AND TRIM(n.label) <> ''
               -- Failure cooldown (Follow-up-Ticket 5, final review): a node
               -- whose most recent run terminally failed/was cancelled and
               -- got reset to frontier (reset_node_for_failed_request) would
@@ -359,19 +401,34 @@ def _pick_frontier(session, kinds: tuple[str, ...]) -> dict | None:
               )
             ORDER BY score DESC, n.created_at ASC
             LIMIT 1
+            FOR UPDATE OF n SKIP LOCKED
         """),
-        {"kinds": list(kinds)},
+        {"kinds": list(kinds), "junk_labels": sorted(JUNK_LABELS)},
     ).fetchone()
     if not row:
         return None
-    session.execute(
+    # FOR UPDATE OF n SKIP LOCKED above row-locks the picked node until this
+    # transaction commits, so two concurrent pickers can never claim the same
+    # node (the second skips the locked row and picks the next-best one). The
+    # status guard + rowcount check below are the second line of defense
+    # against a claim that slipped in from OUTSIDE this transaction (e.g. a
+    # manual psql UPDATE committed between our SELECT and UPDATE).
+    updated = session.execute(
         text("""
             UPDATE research_nodes
             SET status = 'researching', updated_at = NOW()
-            WHERE id = CAST(:id AS uuid)
+            WHERE id = CAST(:id AS uuid) AND status = 'frontier'
         """),
         {"id": row.id},
     )
+    if updated.rowcount != 1:
+        session.rollback()
+        logger.warning(
+            "[GRAPH] Lost frontier claim on node %s (%s) — already taken, no pick",
+            row.id,
+            row.label,
+        )
+        return None
     session.commit()
     return {
         "id": row.id,

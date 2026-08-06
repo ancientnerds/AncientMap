@@ -370,39 +370,62 @@ class MiniMaxLimiter:
         """Acquire a rate-limited slot. Blocks while the caller's lane is at
         its concurrency limit. A quota freeze is slept out in place (see
         _wait_while_frozen); QuotaExhaustedError only fires after the wait
-        cap. Low-priority contexts (bind_low_priority) pace on the crawl
-        lane — 1 in flight, >= _crawl_delay_s between calls — while
-        high-priority callers use the adaptive lane concurrently."""
+        cap. The freeze is re-checked AFTER slot acquisition — a thread that
+        passed the pre-check (or slept in condition.wait()) while another
+        thread reported quota exhaustion releases its slot and goes back to
+        waiting instead of firing into a known-empty quota (audit P17a).
+        Low-priority contexts (bind_low_priority) pace on the crawl lane —
+        1 in flight, >= _crawl_delay_s between calls — while high-priority
+        callers use the adaptive lane concurrently."""
         low = _run_low_priority.get()
-        self._wait_while_frozen()
+        while True:
+            self._wait_while_frozen()
 
-        with self._condition:
-            if low:
-                while self._low_active_count >= 1:
-                    self._condition.wait()
-                self._low_active_count += 1
-                self._low_lane_calls += 1
-                delay = max(self._current_delay, _crawl_delay_s)
-                last = self._low_last_call_time
-            else:
-                while self._active_count >= self._current_concurrency:
-                    self._condition.wait()
-                self._active_count += 1
-                delay = self._current_delay
-                last = self._last_call_time
-            self._total_requests += 1
+            with self._condition:
+                if low:
+                    while self._low_active_count >= 1:
+                        self._condition.wait()
+                    self._low_active_count += 1
+                else:
+                    while self._active_count >= self._current_concurrency:
+                        self._condition.wait()
+                    self._active_count += 1
 
-        # Enforce minimum delay between requests, per lane
-        now = time.monotonic()
-        wait = delay - (now - last)
-        if wait > 0:
-            time.sleep(wait)
+                # Freeze re-check under the lock: without it, a thread past
+                # the pre-check above proceeds straight into a freshly-set
+                # freeze. Release the slot and wait the freeze out.
+                if self._is_frozen_locked():
+                    if low:
+                        self._low_active_count -= 1
+                    else:
+                        self._active_count -= 1
+                    self._condition.notify_all()
+                    continue
 
-        with self._lock:
-            if low:
-                self._low_last_call_time = time.monotonic()
-            else:
-                self._last_call_time = time.monotonic()
+                # Claim the next send-slot timestamp UNDER the lock (same
+                # pattern as SemanticScholarAdapter._wait_for_rate_limit in
+                # theo_sources, audit P17b): previously _last_call_time was
+                # read here but compared/re-stamped outside the lock, so N
+                # concurrent threads could read the same value, compute the
+                # same wait, and send simultaneously. Each thread now
+                # reserves its own slot; the sleep happens outside the lock
+                # so later claimants aren't serialized behind it.
+                now = time.monotonic()
+                if low:
+                    delay = max(self._current_delay, _crawl_delay_s)
+                    sleep_s = max(0.0, self._low_last_call_time + delay - now)
+                    self._low_last_call_time = now + sleep_s
+                    self._low_lane_calls += 1
+                else:
+                    delay = self._current_delay
+                    sleep_s = max(0.0, self._last_call_time + delay - now)
+                    self._last_call_time = now + sleep_s
+                self._total_requests += 1
+                break
+
+        # Sleep out the claimed inter-request gap, per lane
+        if sleep_s > 0:
+            time.sleep(sleep_s)
 
         slot = _Slot(_limiter=self)
         try:

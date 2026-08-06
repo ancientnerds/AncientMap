@@ -19,7 +19,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from api.cache import cache_delete_pattern
+from api.cache import cache_delete_pattern, cache_get, cache_set
 from api.services.jwt_auth import get_optional_user
 from api.services.rate_limiter import RateLimiter, get_client_ip
 from api.services.turnstile import verify_turnstile as _verify_turnstile_shared
@@ -44,6 +44,12 @@ def get_lyra_stats(db: Session = Depends(get_db)):
     - total_sites_known: sites in Lyra's knowledge base (unified_sites)
     - total_name_variants: alternate names Lyra can match (unified_site_names)
     """
+    # "sites:" prefix so site writes bust this via cache_delete_pattern("sites:*")
+    cache_key = "sites:contrib:lyra_stats"
+    cached = cache_get(cache_key)
+    if cached:
+        return cached
+
     # Sites discovered by Lyra
     discoveries = (
         db.execute(
@@ -74,11 +80,13 @@ def get_lyra_stats(db: Session = Depends(get_db)):
         or 0
     )
 
-    return {
+    response = {
         "total_discoveries": discoveries,
         "total_sites_known": sites_known,
         "total_name_variants": name_variants,
     }
+    cache_set(cache_key, response, ttl=300)
+    return response
 
 
 @router.get("/lyra/list")
@@ -329,6 +337,11 @@ def get_site_types(db: Session = Depends(get_db)):
 
     Returns the distinct site types from the unified_sites table.
     """
+    cache_key = "sites:contrib:site_types"
+    cached = cache_get(cache_key)
+    if cached:
+        return cached
+
     try:
         result = db.execute(
             text("""
@@ -341,7 +354,9 @@ def get_site_types(db: Session = Depends(get_db)):
         )
 
         types = [row.site_type for row in result if row.site_type]
-        return {"site_types": types}
+        response = {"site_types": types}
+        cache_set(cache_key, response, ttl=300)
+        return response
     except SQLAlchemyError as e:
         logger.error(f"Database error fetching site types: {e}")
         raise HTTPException(status_code=500, detail="Database error fetching site types") from e
@@ -354,6 +369,11 @@ def get_countries(db: Session = Depends(get_db)):
 
     Returns distinct countries for autocomplete suggestions.
     """
+    cache_key = "sites:contrib:countries"
+    cached = cache_get(cache_key)
+    if cached:
+        return cached
+
     try:
         result = db.execute(
             text("""
@@ -366,7 +386,9 @@ def get_countries(db: Session = Depends(get_db)):
         )
 
         countries = [row.country for row in result if row.country]
-        return {"countries": countries}
+        response = {"countries": countries}
+        cache_set(cache_key, response, ttl=300)
+        return response
     except SQLAlchemyError as e:
         logger.error(f"Database error fetching countries: {e}")
         raise HTTPException(status_code=500, detail="Database error fetching countries") from e

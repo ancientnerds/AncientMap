@@ -15,6 +15,7 @@ from pipeline.lyra.minimax_limiter import (
     is_plan_rate_throttle,
     is_quota_error,
 )
+from pipeline.lyra.minimax_shared import parse_fenced_json
 
 logger = logging.getLogger(__name__)
 
@@ -817,12 +818,8 @@ def _text_parses_as_json(content: list) -> bool:
     """
     for block in content or []:
         if getattr(block, "type", None) == "text":
-            cleaned = (getattr(block, "text", "") or "").strip()
-            if cleaned.startswith("```"):
-                cleaned = cleaned.split("\n", 1)[1] if "\n" in cleaned else cleaned[3:]
-                cleaned = cleaned.rsplit("```", 1)[0].strip()
             try:
-                json.loads(cleaned)
+                parse_fenced_json(getattr(block, "text", "") or "")
                 return True
             except (json.JSONDecodeError, ValueError):
                 continue
@@ -846,12 +843,13 @@ def _extract_tool_use_json(content: list) -> str | None:
 
 
 def parse_json_response(text: str) -> dict:
-    """Parse JSON from an LLM response, stripping markdown fences if present."""
-    cleaned = text.strip()
-    if cleaned.startswith("```"):
-        cleaned = cleaned.split("\n", 1)[1] if "\n" in cleaned else cleaned[3:]
-        cleaned = cleaned.rsplit("```", 1)[0].strip()
-    return json.loads(cleaned)
+    """Parse JSON from an LLM response, stripping markdown fences if present.
+
+    Thin delegate kept for the existing import surface (article_generator,
+    video/script_adapter, tests) — the canonical implementation lives in
+    minimax_shared.parse_fenced_json (audit P7-17).
+    """
+    return parse_fenced_json(text)  # type: ignore[return-value]
 
 
 def parse_prefilled_json(text: str) -> dict:

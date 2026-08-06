@@ -65,6 +65,70 @@ from pipeline.lyra.minimax_limiter import (
     is_quota_error,
 )
 
+# ---------------------------------------------------------------------------
+# Shared LLM-output parsing helpers — the ONE canonical implementation of the
+# fence-strip + json.loads block (and the <think>-tag strip) that used to be
+# copy-pasted across ~12 modules (audit P7-17).
+# ---------------------------------------------------------------------------
+
+# M3 wraps reasoning in <think>...</think> tags.
+_THINK_TAG_RE = re.compile(r"<think>.*?</think>", re.DOTALL)
+
+# Sentinel for parse_fenced_json: "no default — re-raise the parse error".
+_PARSE_RAISE = object()
+
+
+def strip_think_tags(text: str) -> str:
+    """Strip M3 ``<think>...</think>`` reasoning blocks and trim whitespace."""
+    return _THINK_TAG_RE.sub("", text or "").strip()
+
+
+def strip_code_fences(text: str) -> str:
+    """Strip a wrapping markdown code fence (```json ... ```) if present."""
+    cleaned = (text or "").strip()
+    if cleaned.startswith("```"):
+        cleaned = cleaned.split("\n", 1)[1] if "\n" in cleaned else cleaned[3:]
+        cleaned = cleaned.rsplit("```", 1)[0].strip()
+    return cleaned
+
+
+def parse_fenced_json(
+    text: str,
+    *,
+    default: object = _PARSE_RAISE,
+    extract_object: bool = False,
+    log_label: str = "",
+) -> dict | list:
+    """Parse JSON from an LLM response, stripping markdown fences first.
+
+    Args:
+        default: value returned when parsing fails. When omitted, the
+            ``json.JSONDecodeError`` propagates to the caller (callers with
+            their own try/except keep their existing error handling).
+        extract_object: on parse failure, additionally try the outermost
+            ``{...}`` block in the text (LLMs love prepending prose).
+        log_label: when set, a parse failure that returns ``default`` is
+            logged as a WARNING tagged with this label so call sites stay
+            distinguishable in the logs.
+    """
+    cleaned = strip_code_fences(text)
+    try:
+        return json.loads(cleaned)
+    except (json.JSONDecodeError, ValueError):
+        if extract_object:
+            m = re.search(r"\{[\s\S]*\}", cleaned)
+            if m:
+                try:
+                    return json.loads(m.group(0))
+                except (json.JSONDecodeError, ValueError):
+                    pass
+        if default is _PARSE_RAISE:
+            raise
+        if log_label:
+            logger.warning("%s: failed to parse JSON: %s", log_label, cleaned[:200])
+        return default  # type: ignore[return-value]
+
+
 # MiniMax model — single source of truth for every call site (config.py,
 # web_research.py, tweet_verifier.py, research_stages.py all import this).
 # Upgraded M3 → M3 on 2026-06-01; verified live via the Anthropic endpoint
@@ -177,8 +241,7 @@ def minimax_chat(
 
     content = data.get("choices", [{}])[0].get("message", {}).get("content", "")
     # M3 wraps reasoning in <think>...</think> tags -- strip them
-    clean = re.sub(r"<think>.*?</think>", "", content, flags=re.DOTALL).strip()
-    return clean
+    return strip_think_tags(content)
 
 
 def minimax_chat_anthropic(
@@ -264,7 +327,7 @@ def minimax_chat_anthropic(
                         parts.append(block.text)
                 content = "\n".join(parts)
                 # M3 may still wrap reasoning in <think>...</think> tags -- strip them
-                clean = re.sub(r"<think>.*?</think>", "", content, flags=re.DOTALL).strip()
+                clean = strip_think_tags(content)
                 # Surface silent truncation: M3's interleaved thinking can
                 # consume the entire max_tokens budget, leaving zero/partial
                 # output. Log it so the caller can raise max_tokens if needed.
@@ -740,11 +803,7 @@ def structured_llm_call(
                 max_tokens,
             )
         text = resp.content[0].text if resp.content else ""
-        cleaned = text.strip()
-        if cleaned.startswith("```"):
-            cleaned = cleaned.split("\n", 1)[1] if "\n" in cleaned else cleaned[3:]
-            cleaned = cleaned.rsplit("```", 1)[0].strip()
-        parsed = json.loads(cleaned)
+        parsed = parse_fenced_json(text)
         # Boundary normalisation — drop schema-violating items so handlers
         # never see a string where they expect a dict (etc.). The same
         # AttributeError took down 4 separate handlers in one debugging
@@ -767,11 +826,7 @@ def structured_llm_call(
         raw = minimax_chat_anthropic(
             system, user_message, max_tokens, settings, temperature=temperature
         )
-        cleaned = raw.strip()
-        if cleaned.startswith("```"):
-            cleaned = cleaned.split("\n", 1)[1] if "\n" in cleaned else cleaned[3:]
-            cleaned = cleaned.rsplit("```", 1)[0].strip()
-        parsed = json.loads(cleaned)
+        parsed = parse_fenced_json(raw)
         coerced = _coerce_to_schema(parsed, schema)
         return coerced if coerced is not _SCHEMA_DROP else {}
     except (QuotaExhaustedError, InsufficientQuotaError, MiniMaxAuthError, MiniMaxTerminalError):

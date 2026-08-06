@@ -18,6 +18,11 @@ from datetime import UTC, datetime
 
 from pipeline.lyra.theo_citations import CitationRegistry
 
+# debug_log ring-buffer cap: a 72h run appends entries for every LLM call /
+# search round, and the whole list lives in memory and is serialized by the
+# worker. Oldest entries are dropped past this size.
+_DEBUG_LOG_MAX_ENTRIES = 5000
+
 
 class ResearchPhase(enum.Enum):
     DECOMPOSING = "decomposing"
@@ -191,11 +196,17 @@ class ResearchState:
     emit: Callable[[dict], None] | None = None
 
     def log(self, stage: str, msg: str, **data):
-        """Append to debug log."""
+        """Append to debug log (ring buffer capped at _DEBUG_LOG_MAX_ENTRIES).
+
+        Stays a plain list — worker code reads and serializes it as one.
+        """
         entry = {"ts": time.time(), "stage": stage, "level": "info", "msg": msg}
         if data:
             entry["data"] = data
         self.debug_log.append(entry)
+        overflow = len(self.debug_log) - _DEBUG_LOG_MAX_ENTRIES
+        if overflow > 0:
+            del self.debug_log[0:overflow]
 
     @property
     def time_remaining_hours(self) -> float:

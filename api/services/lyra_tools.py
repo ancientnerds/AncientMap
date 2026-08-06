@@ -87,16 +87,24 @@ _VAGUE_TERMS = frozenset(
 )
 
 
+def _has_named_entity(query: str) -> bool:
+    """True when a capitalized word appears beyond the sentence start.
+
+    Shared heuristic — used here for vague-query detection and by
+    lyra_agent._classify_intent (single definition, audit P7-17).
+    """
+    return any(
+        w[0].isupper() and i > 0 for i, w in enumerate(query.split()) if w and w[0].isalpha()
+    )
+
+
 def _is_vague_query(query: str) -> bool:
     """Detect vague/exploratory queries that need expansion before retrieval."""
     words = query.lower().split()
     if len(words) > 12:
         return False
-    # Check for named entities (uppercase words beyond sentence start)
-    has_named_entity = any(
-        w[0].isupper() and i > 0 for i, w in enumerate(query.split()) if w and w[0].isalpha()
-    )
-    if has_named_entity:
+    # Named entities (uppercase words beyond sentence start) → not vague
+    if _has_named_entity(query):
         return False
     # Contains vague/exploratory terms
     return bool(set(words) & _VAGUE_TERMS)

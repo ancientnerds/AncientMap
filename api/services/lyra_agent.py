@@ -58,6 +58,7 @@ from api.services.lyra_tools import (
     HybridSearchUnavailableError,
     _escape_ilike,
     _expand_query,
+    _has_named_entity,
     _hybrid_search,
     _is_vague_query,
     _reorder_by_relevance,
@@ -182,9 +183,7 @@ def _classify_intent(query: str) -> str:
     if words & _INTENT_COMPARE_WORDS:
         return "compare"
     # Channel-specific query: proper noun + channel-verb → transcript search
-    has_named_entity = any(
-        w[0].isupper() and i > 0 for i, w in enumerate(query.split()) if w and w[0].isalpha()
-    )
+    has_named_entity = _has_named_entity(query)
     if has_named_entity and words & _CHANNEL_QUERY_WORDS:
         return "channel"
     if has_named_entity:
@@ -296,6 +295,13 @@ def _extract_source_chunks(raw_tool_results: list[str]) -> list[dict]:
     return chunks
 
 
+# Matches one numbered web_search result line:
+#   [N] Title — URL\n    Content: "snippet..."
+# Single canonical pattern — _extract_web_sources is the only parser;
+# _build_entities_catalogue reuses it (audit P7-17).
+_WEB_CITATION_RE = re.compile(r'\[(\d+)\] (.+?) — (https?://\S+)(?:\n\s+Content: "(.+?)")?')
+
+
 def _extract_web_sources(raw_tool_results: list[str]) -> list[dict]:
     """Extract numbered web citations from raw_tool_results.
 
@@ -308,10 +314,7 @@ def _extract_web_sources(raw_tool_results: list[str]) -> list[dict]:
 
     results: list[dict] = []
     for raw in sources:
-        for m in re.finditer(
-            r'\[(\d+)\] (.+?) — (https?://\S+)(?:\n\s+Content: "(.+?)")?',
-            raw,
-        ):
+        for m in _WEB_CITATION_RE.finditer(raw):
             entry = {
                 "citation": int(m.group(1)),
                 "text": m.group(2),
@@ -426,95 +429,6 @@ def _check_grounding(text: str) -> tuple[str, float]:
     return text, ratio
 
 
-def _count_markers(text: str) -> dict[str, int]:
-    """Count guillemet markers by type in the text."""
-    counts: dict[str, int] = {}
-    for m in re.finditer(r"«([a-z])\d+»", text):
-        prefix = m.group(1)
-        counts[prefix] = counts.get(prefix, 0) + 1
-    # Also count expanded markers (post expand_markers)
-    for m in re.finditer(r"\]\((site|lyra-video|flag|empire|coord):", text):
-        tag_map = {"site": "s", "lyra-video": "v", "flag": "f", "empire": "e", "coord": "c"}
-        prefix = tag_map.get(m.group(1), "?")
-        counts[prefix] = counts.get(prefix, 0) + 1
-    # Count plain links (web citations) as "l" markers
-    for _m in re.finditer(r"\]\(https?://", text):
-        counts["l"] = counts.get("l", 0) + 1
-    return counts
-
-
-def _inject_web_citations(text: str, web_sources: list[dict]) -> tuple[str, list[dict]]:
-    """Inject [N] citations into prose by matching web source snippets.
-
-    Haiku refuses to write [N] despite instructions, so we do it in code:
-    1. Extract keywords from each source snippet
-    2. Find sentences in prose that match those keywords
-    3. Insert [N] after the first matching sentence per source
-    4. Renumber sequentially
-
-    This is deterministic — no LLM guessing, just content matching.
-    """
-    if not web_sources or not text.strip():
-        return text, []
-
-    # Build keyword sets per source from snippets
-    source_keywords: list[tuple[dict, set[str]]] = []
-    for src in web_sources:
-        snippet = (src.get("snippet", "") + " " + src.get("text", "")).lower()
-        words = set(re.findall(r"\w{4,}", snippet))
-        if words:
-            source_keywords.append((src, words))
-
-    if not source_keywords:
-        return text, []
-
-    # Split prose into sentences with their positions
-    sentence_spans: list[tuple[int, int, set[str]]] = []
-    for m in re.finditer(r"[^.!?\n]+[.!?]", text):
-        sent_words = set(re.findall(r"\w{4,}", m.group().lower()))
-        sentence_spans.append((m.start(), m.end(), sent_words))
-
-    if not sentence_spans:
-        return text, []
-
-    # Match each source to its best sentence
-    used: list[tuple[int, dict]] = []  # (insert_position, source)
-    matched_sources: set[int] = set()
-
-    for src, kw_set in source_keywords:
-        best_pos = -1
-        best_score = 2  # minimum 3 keyword matches required
-        for _start, end, sent_words in sentence_spans:
-            score = len(kw_set & sent_words)
-            if score > best_score:
-                best_score = score
-                best_pos = end
-        if best_pos >= 0 and src["citation"] not in matched_sources:
-            used.append((best_pos, src))
-            matched_sources.add(src["citation"])
-
-    if not used:
-        return text, []
-
-    # Insert citations (reverse order to preserve positions)
-    used.sort(key=lambda x: x[0], reverse=True)
-    for pos, src in used:
-        text = text[:pos] + f" [{src['citation']}]" + text[pos:]
-
-    # Collect used sources and renumber sequentially
-    kept = [src for _, src in sorted(used, key=lambda x: x[0])]
-    old_to_new: dict[int, int] = {}
-    for new_num, src in enumerate(kept, 1):
-        old_num = src["citation"]
-        if old_num != new_num:
-            old_to_new[old_num] = new_num
-        src["citation"] = new_num
-    for old_num in sorted(old_to_new.keys(), reverse=True):
-        text = text.replace(f"[{old_num}]", f"[{old_to_new[old_num]}]")
-
-    return text, kept
-
-
 def _build_entities_catalogue(
     all_sites: list[dict],
     all_news: list[dict],
@@ -607,23 +521,18 @@ def _build_entities_catalogue(
     # Extract numbered web search citations from raw_tool_results.
     # Stored separately as web_sources (NOT in links) to prevent the
     # model from using «lN» guillemet markers for them — we want [N].
+    # Same parser as the synthesis path; this catalogue omits the snippet
+    # key entirely when empty (keeps the JSON payload unchanged).
     _web_sources = []
-    for _raw in raw_tool_results:
-        if not _raw.startswith("[web_search"):
-            continue
-        # Match: [N] Title — URL\n    Content: "snippet..."
-        for m in re.finditer(
-            r'\[(\d+)\] (.+?) — (https?://\S+)(?:\n\s+Content: "(.+?)")?',
-            _raw,
-        ):
-            ws_entry: dict = {
-                "citation": int(m.group(1)),
-                "text": m.group(2),
-                "url": m.group(3),
-            }
-            if m.group(4):
-                ws_entry["snippet"] = m.group(4)
-            _web_sources.append(ws_entry)
+    for ws in _extract_web_sources(raw_tool_results):
+        ws_entry: dict = {
+            "citation": ws["citation"],
+            "text": ws["text"],
+            "url": ws["url"],
+        }
+        if ws["snippet"]:
+            ws_entry["snippet"] = ws["snippet"]
+        _web_sources.append(ws_entry)
     if _web_sources:
         _entities["web_sources"] = _web_sources
 

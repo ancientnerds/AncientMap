@@ -13,7 +13,6 @@ Usage:
 from __future__ import annotations
 
 import difflib
-import json
 import logging
 import re
 from dataclasses import dataclass, field
@@ -22,6 +21,8 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 from pipeline.lyra.config import LyraAPIError, LyraSettings, _get_settings, call_api
+from pipeline.lyra.minimax_shared import parse_fenced_json
+from pipeline.lyra.research_images import _significant_keywords
 
 logger = logging.getLogger(__name__)
 
@@ -93,15 +94,7 @@ def _load_prompt(name: str) -> str:
 
 def _parse_json(text: str) -> dict | list:
     """Parse JSON from M3 response, handling markdown fencing."""
-    cleaned = text.strip()
-    if cleaned.startswith("```"):
-        cleaned = cleaned.split("\n", 1)[1] if "\n" in cleaned else cleaned[3:]
-        cleaned = cleaned.rsplit("```", 1)[0].strip()
-    try:
-        return json.loads(cleaned)
-    except (json.JSONDecodeError, ValueError):
-        logger.warning("Failed to parse assessor JSON: %s", cleaned[:200])
-        return {}
+    return parse_fenced_json(text, default={}, log_label="journal_assessor")
 
 
 def _extract_domain(url: str) -> str:
@@ -902,10 +895,8 @@ def _check_d1_proper_nouns(body: str, sources: list[dict], settings: LyraSetting
 
 _IMG_PATTERN = re.compile(r"!\[([^\]]*)\]\([^)]+\)")
 
-
-def _significant_keywords(text: str) -> set[str]:
-    """Extract significant keywords (4+ chars, lowercased) from text."""
-    return {w.lower() for w in re.findall(r"[A-Za-z]+", text) if len(w) >= 4}
+# _significant_keywords is imported from research_images (single canonical
+# definition, audit P7-17) — used by D4 placement checks below.
 
 
 def _check_d4_screenshots(body: str, sources: list[dict] | None = None) -> dict:

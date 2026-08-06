@@ -154,6 +154,20 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    healthcheck:
+      # The orchestrator touches /tmp/lyra_heartbeat at every main-loop wake
+      # (60s), at each pipeline-step start, and around article generation
+      # (see _touch_heartbeat in pipeline/lyra/orchestrator.py). Threshold
+      # 900s: 3x the 60s wake interval would be 180s, but single LLM-heavy
+      # steps (summarize/tts/article) legitimately hold the loop for minutes
+      # without returning — 15x still catches genuine hangs (wedged DB call,
+      # dead process) without flagging long steps. start_period covers
+      # startup (create_all_tables + migrations can take minutes).
+      test: ["CMD", "python", "-c", "import os,sys,time; sys.exit(0 if time.time() - os.path.getmtime('/tmp/lyra_heartbeat') < 900 else 1)"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 15m
 
   # ==========================================================================
   # Webcam Stream Proxy (HLS stream extraction + CORS proxy)

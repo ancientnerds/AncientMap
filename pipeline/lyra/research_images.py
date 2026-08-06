@@ -29,6 +29,8 @@ from dataclasses import dataclass, field
 
 import httpx
 
+from pipeline.lyra.illustration_specialist import split_paper_into_paragraphs
+
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
@@ -110,7 +112,10 @@ def _is_license_allowed(license_str: str) -> bool:
 
 
 def _significant_keywords(text: str) -> set[str]:
-    """Extract keywords (4+ chars, lowercased) for fuzzy matching."""
+    """Extract keywords (4+ chars, lowercased) for fuzzy matching.
+
+    Canonical definition — journal_assessor imports this too (audit P7-17).
+    """
     return {w.lower() for w in re.findall(r"[A-Za-z]+", text) if len(w) >= 4}
 
 
@@ -460,43 +465,13 @@ def inject_source_images(
     safe_images.sort(key=lambda img: img.quality_score, reverse=True)
     candidates = safe_images[: max_images * 2]  # Keep extras for matching
 
-    # Split paper into paragraphs with section awareness
-    _SKIP_SECTIONS = frozenset({"abstract", "introduction", "references", "sources"})
+    # Split paper into paragraphs with section awareness — canonical splitter
+    # shared with the illustration specialist (audit P7-17). Adds the keyword
+    # sets this matcher needs on top.
     lines = paper_text.split("\n")
-
-    # Find paragraph blocks and their section context
-    paragraphs: list[dict] = []  # {text, line_idx, section, keywords}
-    current_section = ""
-
-    i = 0
-    while i < len(lines):
-        line = lines[i]
-        heading_match = re.match(r"^##\s+(.+)$", line)
-        if heading_match:
-            current_section = heading_match.group(1).strip().lower()
-            i += 1
-            continue
-
-        # Collect paragraph (non-empty lines until blank)
-        if line.strip() and current_section not in _SKIP_SECTIONS:
-            para_lines = []
-            start_idx = i
-            while i < len(lines) and lines[i].strip():
-                para_lines.append(lines[i])
-                i += 1
-            para_text = "\n".join(para_lines)
-            # Only consider substantial paragraphs (>80 chars)
-            if len(para_text) > 80 and not para_text.startswith("!["):
-                paragraphs.append(
-                    {
-                        "text": para_text,
-                        "line_idx": start_idx,
-                        "section": current_section,
-                        "keywords": _significant_keywords(para_text),
-                    }
-                )
-        else:
-            i += 1
+    paragraphs = split_paper_into_paragraphs(paper_text)
+    for para in paragraphs:
+        para["keywords"] = _significant_keywords(para["text"])
 
     if not paragraphs:
         return paper_text
