@@ -131,8 +131,8 @@ async def lifespan(app: FastAPI):
             END $$""",
             # Ensure token_usage_logs has web_search_requests column
             "ALTER TABLE token_usage_logs ADD COLUMN IF NOT EXISTS web_search_requests INTEGER NOT NULL DEFAULT 0",
-            # Strip orphaned [N] citation markers from sites lacking citation metadata
-            "UPDATE unified_sites SET description = regexp_replace(description, '\\s*\\[\\d+\\]', '', 'g') WHERE description ~ '\\[\\d+\\]' AND NOT jsonb_exists(COALESCE(raw_data, '{}'), 'description_citations')",
+            # (Orphan-citation strip moved to migrations/0011 — it scanned
+            # 750K rows on every boot and was silently skipped on timeout.)
             # Theo research: approval tracking, debug log, LLM call count
             "ALTER TABLE research_requests ADD COLUMN IF NOT EXISTS approved_by VARCHAR(100)",
             "ALTER TABLE research_requests ADD COLUMN IF NOT EXISTS approved_at TIMESTAMP",
@@ -358,6 +358,19 @@ async def lifespan(app: FastAPI):
             WHERE id = :id
               AND NOT jsonb_exists(COALESCE(raw_data, cast('{}' as jsonb)), 'description_citations')
         """)
+
+        def _is_contention_error(exc: Exception) -> bool:
+            """True only for lock (55P03) / statement (57014) timeouts.
+
+            Those are EXPECTED under Lyra-orchestrator lock contention and may
+            be skipped (the next boot retries). Every other error used to be
+            swallowed as "lock contention" too, leaving silent schema drift
+            while the API started healthy (audit 2026-08-05, M5) — now it
+            aborts startup so the deploy health check fails loudly.
+            """
+            pgcode = getattr(getattr(exc, "orig", None), "pgcode", None)
+            return pgcode in ("55P03", "57014")
+
         # Run DDL migrations first (fast), then data fixes.
         # Use lock_timeout=5s so ALTER TABLE fails fast on lock contention
         # (e.g. Lyra orchestrator holding locks on unified_sites) instead of
@@ -369,7 +382,11 @@ async def lifespan(app: FastAPI):
                     conn.execute(_text("SET statement_timeout = '30s'"))
                     conn.execute(_text(_sql))
             except Exception as _mig_err:
-                logger.warning(f"[STARTUP] Migration skipped (lock contention): {_mig_err}")
+                if _is_contention_error(_mig_err):
+                    logger.warning(f"[STARTUP] Migration skipped (lock/stmt timeout): {_mig_err}")
+                    continue
+                logger.error(f"[STARTUP] Migration FAILED (aborting startup): {_sql[:120]}")
+                raise
         for _sid, _dc in _citation_seed.items():
             try:
                 with engine.begin() as conn:
@@ -377,7 +394,13 @@ async def lifespan(app: FastAPI):
                     conn.execute(_text("SET statement_timeout = '30s'"))
                     conn.execute(_cite_sql, {"id": _sid, "dc": _json.dumps(_dc)})
             except Exception as _seed_err:
-                logger.warning(f"[STARTUP] Citation seed skipped (lock contention): {_seed_err}")
+                if _is_contention_error(_seed_err):
+                    logger.warning(
+                        f"[STARTUP] Citation seed skipped (lock/stmt timeout): {_seed_err}"
+                    )
+                    continue
+                logger.error(f"[STARTUP] Citation seed FAILED (aborting startup): {_sid}")
+                raise
         logger.info(
             "[STARTUP] Database tables verified (includes discord_users, credit_grants, token_usage_logs)"
         )

@@ -200,18 +200,13 @@ export function createMapboxInitEffect(
   const mapboxService = new MapboxGlobeService()
   deps.mapboxServiceRef.current = mapboxService
 
-  console.log('[Mapbox] Initializing Mapbox GL JS...')
+  // Initially hidden via CSS (opacity: 0) until showMapbox triggers mapbox-primary-mode class
   mapboxService.initialize(deps.mapboxContainerRef.current, 'dark')
-    .then(() => {
-      console.log('[Mapbox] Mapbox GL JS ready')
-      // Initially hidden via CSS (opacity: 0) until showMapbox triggers mapbox-primary-mode class
-    })
     .catch((err) => {
       console.error('[Mapbox] Failed to initialize:', err)
     })
 
   return () => {
-    console.log('[Mapbox] Disposing Mapbox GL JS')
     mapboxService.dispose()
     deps.mapboxServiceRef.current = null
   }
@@ -259,7 +254,6 @@ export function createAutoSwitchEffect(
   if (!deps.mapboxServiceRef.current?.getIsInitialized()) return
 
   if (deps.zoom >= TRANSITION_POINT && !deps.showMapbox) {
-    console.log('[AUTO-SWITCH] Zoom >= 66%, switching to Mapbox')
     // Set flag BEFORE enabling Mapbox to prevent zoom effect from running
     deps.justEnteredMapbox.current = true
     deps.setShowMapbox(true)
@@ -268,7 +262,6 @@ export function createAutoSwitchEffect(
       deps.setShowMapboxOfflineWarning(true)
     }
   } else if (deps.zoom < TRANSITION_POINT && deps.showMapbox) {
-    console.log('[AUTO-SWITCH] Zoom < 66%, switching to Three.js')
     deps.setShowMapbox(false)
     // Hide warning when switching back to Three.js
     deps.setShowMapboxOfflineWarning(false)

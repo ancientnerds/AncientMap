@@ -1,4 +1,5 @@
 """Tests for pipeline.lyra.hallucination_gate."""
+
 import pytest
 
 from pipeline.lyra.hallucination_gate import (
@@ -50,7 +51,7 @@ def test_extract_persons_ignores_common_places():
 
 
 def test_extract_person_honorific_single_word():
-    """"Dr. Kisheton" is extracted even though "Dr." breaks the 2-word run.
+    """ "Dr. Kisheton" is extracted even though "Dr." breaks the 2-word run.
 
     The baseline PERSON_RE requires two capitalized words in a row, so a
     period-terminated honorific followed by a single surname slips through.
@@ -63,7 +64,7 @@ def test_extract_person_honorific_single_word():
 
 
 def test_extract_person_multi_word_run_catches_honorific():
-    """"Professor Smith" matches PERSON_RE as a 2-word run; single-word
+    """ "Professor Smith" matches PERSON_RE as a 2-word run; single-word
     fallback should not also emit "Smith" separately."""
     prose = "Professor Smith confirmed the reading."
     specs = extract_specifics(prose)
@@ -74,7 +75,7 @@ def test_extract_person_multi_word_run_catches_honorific():
 
 
 def test_extract_person_honorific_without_period():
-    """"Dr Singh" (no period after honorific) matches the 2-word PERSON_RE."""
+    """ "Dr Singh" (no period after honorific) matches the 2-word PERSON_RE."""
     prose = "Dr Singh reported the finding."
     specs = extract_specifics(prose)
     person_texts = {s.text for s in specs if s.kind == "person"}
@@ -192,7 +193,9 @@ def test_verify_checks_source_snippets():
         "Dr. Paolo Debertolis studied this.",
     )
     specs = [Specific(kind="person", text="Paolo Debertolis", sentence="X.")]
-    unsupported = verify_against_pack(specs, pack="", sources=registry.sources, original_question="")
+    unsupported = verify_against_pack(
+        specs, pack="", sources=registry.sources, original_question=""
+    )
     assert not unsupported
 
 
@@ -203,9 +206,7 @@ def test_verify_checks_source_snippets():
 
 def test_delete_sentences_with_specifics_removes_offenders():
     prose = "Kisheton measured the room. The pattern exists. Debertolis confirmed this."
-    unsupported = [
-        Specific(kind="person", text="Kisheton", sentence="Kisheton measured the room.")
-    ]
+    unsupported = [Specific(kind="person", text="Kisheton", sentence="Kisheton measured the room.")]
     result = delete_sentences_with_specifics(prose, unsupported)
     assert "Kisheton" not in result
     assert "The pattern exists" in result
@@ -272,9 +273,7 @@ async def test_repair_prose_falls_back_to_deletion_after_retries():
         return "David Kisheton did it. More prose here."
 
     unsupported = [
-        Specific(
-            kind="person", text="David Kisheton", sentence="David Kisheton did it."
-        )
+        Specific(kind="person", text="David Kisheton", sentence="David Kisheton did it.")
     ]
     result, remaining, retries = await repair_prose(
         "David Kisheton did it. More prose here.",

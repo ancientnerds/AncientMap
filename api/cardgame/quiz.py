@@ -211,6 +211,17 @@ def generate_quiz(session: Session, user_id) -> dict:
     """
     now = datetime.now(UTC)
 
+    # Lock the user row so concurrent quiz starts serialize — the daily-limit
+    # count below races with the insert otherwise; populate_existing() forces
+    # a refresh of already-loaded attributes
+    (
+        session.query(DiscordUser)
+        .filter(DiscordUser.id == user_id)
+        .populate_existing()
+        .with_for_update()
+        .first()
+    )
+
     today_count = (
         session.query(QuizSession)
         .filter(

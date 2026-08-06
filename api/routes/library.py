@@ -1,7 +1,9 @@
 """Library API — search across aggregated citation sources."""
 
+import hmac
 import json
 import logging
+import os
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -164,7 +166,18 @@ def library_by_site(site_id: str, db: Session = Depends(get_db)):
 
 @router.post("/refresh")
 def refresh_library(req: Request):
-    """Re-run the library aggregator and static export."""
+    """Re-run the library aggregator and static export.
+
+    Internal endpoint: requires the X-Internal-Key header matching
+    LIBRARY_REFRESH_KEY (audit 2026-08-05, M2). The deploy pipeline reads the
+    key from the VPS .env; fails closed with 503 when unconfigured.
+    """
+    expected = os.getenv("LIBRARY_REFRESH_KEY", "")
+    if not expected:
+        raise HTTPException(status_code=503, detail="LIBRARY_REFRESH_KEY not configured")
+    provided = req.headers.get("X-Internal-Key", "")
+    if not hmac.compare_digest(provided, expected):
+        raise HTTPException(status_code=403, detail="Invalid internal key")
     if not _refresh_limiter.check(get_client_ip(req)):
         raise HTTPException(status_code=429, detail="Too many requests")
 

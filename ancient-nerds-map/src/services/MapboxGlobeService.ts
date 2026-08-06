@@ -115,7 +115,6 @@ export class MapboxGlobeService {
 
     await new Promise<void>((resolve, _reject) => {
       this.map!.on('load', () => {
-        console.log('[MapboxGlobe] Map loaded')
         this.setupFog()
         this.applyDarkTealTheme()
         this.setupEventListeners()
@@ -153,7 +152,6 @@ export class MapboxGlobeService {
   private applyDarkTealTheme(): void {
     if (!this.map || this.currentStyle !== 'dark') return
     applyTealTheme(this.map)
-    console.log('[MapboxGlobe] Applied dark teal theme')
   }
 
   private setupEventListeners(): void {
@@ -235,8 +233,6 @@ export class MapboxGlobeService {
 
     // Visibility/opacity handled by CSS via mapbox-primary-mode class
     document.body.classList.add('mapbox-primary-mode')
-
-    console.log('[MapboxGlobe] Primary mode enabled (wheel zoom via unified slider)')
   }
 
   /**
@@ -254,8 +250,6 @@ export class MapboxGlobeService {
       this.container.removeEventListener('wheel', this.wheelHandler)
       this.wheelHandler = null
     }
-
-    console.log('[MapboxGlobe] Primary mode disabled')
   }
 
   /**
@@ -990,8 +984,6 @@ export class MapboxGlobeService {
         this.siteHoverCallback(null, 0, 0)
       }
     })
-
-    console.log(`[MapboxGlobe] Added ${sites.length} sites with size ${this.currentDotSize}`)
   }
 
   // Legacy compatibility

@@ -69,7 +69,6 @@ export function useAdminMode({
             const cache = await caches.open('api-sites')
             const keys = await cache.keys()
             await Promise.all(keys.map(key => cache.delete(key)))
-            console.log('[Admin] Cleared Service Worker sites cache')
           } catch (e) {
             console.warn('[Admin] Could not clear SW cache:', e)
           }

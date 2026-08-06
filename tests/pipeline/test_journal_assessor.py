@@ -22,6 +22,7 @@ from pipeline.lyra.journal_assessor import (
     _extract_proper_nouns,
     _fix_d7_citation_format,
     _fix_d8_week_date,
+    _format_sources_for_prompt,
     _significant_keywords,
     _validate_d1_correction,
 )
@@ -63,6 +64,42 @@ class TestD7CitationFormat:
         body = "Evidence [1] in sources."
         fixed = _fix_d7_citation_format(body, [{"citation": 1}])
         assert "[1]" in fixed
+
+
+class TestFormatSourcesForPrompt:
+    # P5-15: the D2 coverage fixer picks citations from this block — without
+    # snippets the LLM matched sentences to sources blind (the laundering
+    # root cause). Snippets must travel when the source dicts carry them.
+
+    def test_includes_snippet_when_available(self):
+        sources = [
+            {
+                "citation": 1,
+                "label": "Paper",
+                "url": "https://x.test/p",
+                "snippet": "Radiocarbon dates place the wall at 3300 BCE.",
+            }
+        ]
+        block = _format_sources_for_prompt(sources)
+        assert "[1] Paper — https://x.test/p" in block
+        assert "Radiocarbon dates place the wall at 3300 BCE." in block
+
+    def test_snippet_truncated_to_300_chars(self):
+        sources = [{"citation": 1, "label": "P", "url": "u", "snippet": "x" * 500}]
+        block = _format_sources_for_prompt(sources)
+        snippet_line = next(ln for ln in block.splitlines() if "Snippet:" in ln)
+        assert "x" * 300 in snippet_line
+        assert "x" * 301 not in snippet_line
+        assert snippet_line.endswith("...")
+
+    def test_no_snippet_line_without_snippet(self):
+        sources = [{"citation": 2, "label": "L", "url": "u"}]
+        assert "Snippet:" not in _format_sources_for_prompt(sources)
+
+    def test_snippet_equal_to_label_skipped(self):
+        # _assemble_from_clusters defaults snippet to the label — no signal.
+        sources = [{"citation": 3, "label": "Same", "url": "u", "snippet": "Same"}]
+        assert "Snippet:" not in _format_sources_for_prompt(sources)
 
 
 class TestD8WeekDate:

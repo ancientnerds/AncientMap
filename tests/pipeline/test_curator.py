@@ -30,10 +30,13 @@ from pipeline.lyra.curator import (
 
 
 class _FakeSession:
-    def __init__(self, existing_status=None, rowcount=1):
+    def __init__(self, existing_status=None, rowcount=1, papers=None):
         self.executed = []
         self._existing_status = existing_status
         self._rowcount = rowcount
+        # paper_id -> report markdown, served as research_requests.result_json
+        # for the P5-15 external-source derivation.
+        self._papers = papers or {}
         self.committed = False
 
     def begin_nested(self):
@@ -49,6 +52,8 @@ class _FakeSession:
         existing_status = self._existing_status
         rowcount = self._rowcount
         stmt_str = str(stmt)
+        papers = self._papers
+        bound = params or {}
 
         class _R:
             def __init__(self):
@@ -57,6 +62,11 @@ class _FakeSession:
             def fetchone(self):
                 if "SELECT status FROM knowledge_claims" in stmt_str and existing_status:
                     return type("Row", (), {"status": existing_status})()
+                if "FROM research_requests" in stmt_str:
+                    report = papers.get(bound.get("pid"))
+                    if report is None:
+                        return None
+                    return type("Row", (), {"result_json": json.dumps({"report": report})})()
                 return None
 
         return _R()
@@ -144,8 +154,25 @@ def test_connection_cap_before_junk_filter_wastes_a_slot():
 
 # ---------------------------------------------------------------------------
 # _apply_curator_output — claims (refuted terminal, enum enforcement,
-# established demotion, paper_ids provenance)
+# established demotion, paper_ids provenance, P5-15 server-side
+# external-source derivation)
 # ---------------------------------------------------------------------------
+
+_P1 = "11111111-1111-1111-1111-111111111111"
+_P2 = "22222222-2222-2222-2222-222222222222"
+
+# Reference-line shapes exactly as theo_citations.format_references_list
+# emits them (rich DOI form and legacy form, with/without tier labels).
+_ACADEMIC_REF = (
+    "[1] Smith, J. (2024). Dating the site. JAS. DOI: 10.1/x (accessed 2026-08-01) [Academic]"
+)
+_REPUTABLE_REF = "[2] Site — https://en.wikipedia.org/wiki/Site (accessed 2026-08-01) [Reputable]"
+_TIER3_REF = "[3] Some blog — https://blog.example.com/post (accessed 2026-08-01)"
+_SELF_REF = "[4] [self] Prior AN paper — https://ancientnerds.com/research/x (accessed 2026-08-01)"
+
+
+def _report(*ref_lines):
+    return "Prose about the claim.\n\n## References\n\n" + "\n".join(ref_lines) + "\n"
 
 
 def test_refuted_claim_never_reopens():
@@ -190,7 +217,9 @@ def test_established_claim_demoted_below_two_external_sources():
 
 
 def test_established_claim_with_two_external_sources_not_demoted():
-    s = _FakeSession()
+    # Since P5-15 the reported count must be substantiated by the cited
+    # papers' references — provide a paper carrying two tier-labeled refs.
+    s = _FakeSession(papers={_P1: _report(_ACADEMIC_REF, _REPUTABLE_REF)})
     stats = _apply_curator_output(
         s,
         _out(
@@ -200,6 +229,7 @@ def test_established_claim_with_two_external_sources_not_demoted():
                     "status": "established",
                     "confidence": 0.9,
                     "external_source_count": 2,
+                    "paper_ids": [_P1],
                 }
             ]
         ),
@@ -249,6 +279,170 @@ def test_claim_update_dedup_appends_paper_ids():
     stmt, params = next(e for e in s.executed if "UPDATE knowledge_claims" in e[0])
     assert "jsonb_agg(DISTINCT e)" in stmt
     assert json.loads(params["paper_ids"]) == ["p3"]
+
+
+# ---------------------------------------------------------------------------
+# _apply_curator_output — P5-15: external_source_count derived server-side
+# from the cited papers' [Academic]/[Reputable] references; the LLM can
+# lower the count but never raise it above what the papers substantiate.
+# ---------------------------------------------------------------------------
+
+
+def test_llm_reported_count_capped_by_papers_and_demoted():
+    # LLM says 5, the cited paper carries ONE tier-labeled reference (the
+    # tier-3 and [self] lines don't count) -> ext floors to 1 -> demoted.
+    s = _FakeSession(papers={_P1: _report(_ACADEMIC_REF, _TIER3_REF, _SELF_REF)})
+    stats = _apply_curator_output(
+        s,
+        _out(
+            claim_updates=[
+                {
+                    "text": "Claim D",
+                    "status": "established",
+                    "confidence": 0.9,
+                    "external_source_count": 5,
+                    "paper_ids": [_P1],
+                }
+            ]
+        ),
+    )
+    assert stats["demoted"] == 1
+    stmt, params = next(e for e in s.executed if "INSERT INTO knowledge_claims" in e[0])
+    assert params["status"] == "open"
+    assert params["ext"] == 1
+
+
+def test_llm_can_lower_but_never_raise_external_count():
+    # LLM says 1, papers show 3 -> stays 1 (min of reported and derived).
+    third = "[3] Third — https://example.edu/paper (accessed 2026-08-01) [Academic]"
+    s = _FakeSession(papers={_P1: _report(_ACADEMIC_REF, _REPUTABLE_REF, third)})
+    stats = _apply_curator_output(
+        s,
+        _out(
+            claim_updates=[
+                {
+                    "text": "Claim E",
+                    "status": "contested",
+                    "confidence": 0.6,
+                    "external_source_count": 1,
+                    "paper_ids": [_P1],
+                }
+            ]
+        ),
+    )
+    assert stats["demoted"] == 0
+    stmt, params = next(e for e in s.executed if "INSERT INTO knowledge_claims" in e[0])
+    assert params["ext"] == 1
+
+
+def test_established_without_paper_ids_is_demoted():
+    # Fail-closed: no cited papers means the externals cannot be
+    # substantiated -> derived floor 0 -> established demotes to open.
+    s = _FakeSession()
+    stats = _apply_curator_output(
+        s,
+        _out(
+            claim_updates=[
+                {
+                    "text": "Claim F",
+                    "status": "established",
+                    "confidence": 0.9,
+                    "external_source_count": 2,
+                }
+            ]
+        ),
+    )
+    assert stats["demoted"] == 1
+    stmt, params = next(e for e in s.executed if "INSERT INTO knowledge_claims" in e[0])
+    assert params["status"] == "open"
+    assert params["ext"] == 0
+
+
+def test_unknown_or_invalid_paper_ids_count_zero_and_demote():
+    # _P2 is a valid UUID with no research_requests row; "not-a-uuid" must
+    # not even reach SQL (CAST would abort the item) — both derive 0.
+    s = _FakeSession(papers={})
+    stats = _apply_curator_output(
+        s,
+        _out(
+            claim_updates=[
+                {
+                    "text": "Claim G",
+                    "status": "established",
+                    "confidence": 0.9,
+                    "external_source_count": 4,
+                    "paper_ids": [_P2, "not-a-uuid"],
+                }
+            ]
+        ),
+    )
+    assert stats["demoted"] == 1
+    assert stats["claims"] == 1  # item applied (as open), not dropped
+    stmt, params = next(e for e in s.executed if "INSERT INTO knowledge_claims" in e[0])
+    assert params["status"] == "open"
+    assert params["ext"] == 0
+    # the non-UUID id was rejected Python-side, only _P2 was queried
+    fetches = [p for st, p in s.executed if "FROM research_requests" in st]
+    assert [p["pid"] for p in fetches] == [_P2]
+
+
+def test_paper_external_refs_cached_per_pass():
+    # Two claim_updates citing the same paper -> one research_requests load.
+    s = _FakeSession(papers={_P1: _report(_ACADEMIC_REF, _REPUTABLE_REF)})
+    stats = _apply_curator_output(
+        s,
+        _out(
+            claim_updates=[
+                {
+                    "text": "Claim H",
+                    "status": "established",
+                    "confidence": 0.9,
+                    "external_source_count": 2,
+                    "paper_ids": [_P1],
+                },
+                {
+                    "text": "Claim I",
+                    "status": "established",
+                    "confidence": 0.8,
+                    "external_source_count": 2,
+                    "paper_ids": [_P1],
+                },
+            ]
+        ),
+    )
+    assert stats["claims"] == 2
+    assert stats["demoted"] == 0
+    fetches = [e for e in s.executed if "FROM research_requests" in e[0]]
+    assert len(fetches) == 1
+
+
+def test_same_source_across_papers_counts_once():
+    # Both papers cite the SAME academic source under different [N] prefixes
+    # and access dates — one independent external source, not two.
+    ref_a = (
+        "[1] Smith, J. (2024). Dating the site. JAS. DOI: 10.1/x (accessed 2026-08-01) [Academic]"
+    )
+    ref_b = (
+        "[7] Smith, J. (2024). Dating the site. JAS. DOI: 10.1/x (accessed 2026-08-03) [Academic]"
+    )
+    s = _FakeSession(papers={_P1: _report(ref_a), _P2: _report(ref_b)})
+    stats = _apply_curator_output(
+        s,
+        _out(
+            claim_updates=[
+                {
+                    "text": "Claim J",
+                    "status": "established",
+                    "confidence": 0.9,
+                    "external_source_count": 2,
+                    "paper_ids": [_P1, _P2],
+                }
+            ]
+        ),
+    )
+    assert stats["demoted"] == 1
+    stmt, params = next(e for e in s.executed if "INSERT INTO knowledge_claims" in e[0])
+    assert params["ext"] == 1
 
 
 # ---------------------------------------------------------------------------

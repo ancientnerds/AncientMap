@@ -7,7 +7,7 @@ from pathlib import Path
 
 from pipeline.lyra.config import _get_settings
 from pipeline.lyra.handlers import BaseHandler
-from pipeline.lyra.minimax_shared import structured_llm_call
+from pipeline.lyra.minimax_shared import MiniMaxTerminalError, structured_llm_call
 from pipeline.lyra.research_events import AllAnglesSaturated, SynthesisReady
 from pipeline.lyra.research_state import ResearchPhase
 from pipeline.lyra.schemas import CROSS_ANGLE_SCHEMA, SYNTHESIS_SCHEMA
@@ -99,16 +99,28 @@ class SynthesisHandler(BaseHandler):
             if not cross_prompt_exists:
                 return None
             cross_prompt = cross_prompt_path.read_text(encoding="utf-8")
-            async with self.semaphore:
-                result = await asyncio.to_thread(
-                    structured_llm_call,
-                    cross_prompt,
-                    user_msg,
-                    CROSS_ANGLE_SCHEMA,
-                    self.state.config.max_tokens_synthesis,
-                    settings,
-                    temperature=settings.temperature_synthesis,
+            try:
+                async with self.semaphore:
+                    result = await asyncio.to_thread(
+                        structured_llm_call,
+                        cross_prompt,
+                        user_msg,
+                        CROSS_ANGLE_SCHEMA,
+                        self.state.config.max_tokens_synthesis,
+                        settings,
+                        temperature=settings.temperature_synthesis,
+                    )
+            except MiniMaxTerminalError as exc:
+                # Degraded mode: cross-angle detection is supplementary — use
+                # the existing skip path (same as a missing prompt) rather
+                # than failing the whole synthesis handler. The main
+                # _synthesize() call deliberately has NO such catch: an
+                # empty synthesis means an empty paper, so it propagates.
+                logger.warning(
+                    "[synthesis] cross-angle detection failed terminally — skipping: %s",
+                    exc,
                 )
+                return None
             self.state.llm_call_count += 1
             return result
 

@@ -138,8 +138,6 @@ export async function loadGeoLabels(ctx: GeoLabelContext): Promise<void> {
   if (!ctx.sceneRef.current) return
 
   const { scene } = ctx.sceneRef.current
-  const startTime = performance.now()
-  console.log('[Loading] Starting label creation...')
 
   const res = await offlineFetch('/data/labels.json')
   const data: { labels: GeoLabel[] } = await res.json()
@@ -147,8 +145,6 @@ export async function loadGeoLabels(ctx: GeoLabelContext): Promise<void> {
 
   const labelsToLoad = data.labels.filter(l => l.type !== 'metropol' && l.type !== 'city')
   ctx.totalLabelsCountRef.current = labelsToLoad.length
-
-  const createStart = performance.now()
 
   // Create all label textures directly
   for (const label of labelsToLoad) {
@@ -179,10 +175,6 @@ export async function loadGeoLabels(ctx: GeoLabelContext): Promise<void> {
     ctx.allLabelMeshesRef.current.push(mesh)
   }
 
-  const createTime = performance.now() - createStart
-  const totalTime = performance.now() - startTime
-  console.log(`[Loading] Labels DONE: ${labelsToLoad.length} in ${totalTime.toFixed(0)}ms (create: ${createTime.toFixed(0)}ms)`)
-
   ctx.labelsLoadedRef.current = true
   ctx.setLabelsLoaded(true)
   if (ctx.geoLabelsVisibleRef.current) ctx.updateGeoLabelsRef.current?.()
@@ -202,7 +194,6 @@ export async function loadGeoLabels(ctx: GeoLabelContext): Promise<void> {
 export function handleLabelReload(ctx: GeoLabelContext): void {
   if (!ctx.sceneRef.current || !ctx.needsLabelReloadRef.current) return
 
-  console.log('[Globe] Starting label recovery...')
   const { scene } = ctx.sceneRef.current
 
   // Dispose old label meshes and clear arrays

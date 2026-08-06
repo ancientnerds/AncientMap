@@ -22,6 +22,7 @@ Criteria (numbered to match the spec):
   13. (Manual: card description matches conclusion.)
   14. Pipeline passes all judge+audit gates without override.
 """
+
 import os
 import re
 
@@ -70,9 +71,7 @@ async def test_shining_ones_regen_satisfies_criteria():
     #    and footnote `[^n]`).
     non_numeric = re.findall(r"\[([^\]\n]+)\](?!\()", body)
     offenders = [
-        t
-        for t in non_numeric
-        if not (t.isdigit() or t.startswith("^") or t.startswith("N -"))
+        t for t in non_numeric if not (t.isdigit() or t.startswith("^") or t.startswith("N -"))
     ]
     assert not offenders, f"Non-numeric bracketed tokens leaked: {offenders!r}"
     # 4. "Shining Ones" defined in first 500 words of body.
@@ -80,13 +79,9 @@ async def test_shining_ones_regen_satisfies_criteria():
     assert "shining ones" in first_500, "Title concept 'Shining Ones' not defined early"
     # 5-7. Canonical + user-subquestion coverage via paragraph counts.
     paragraphs = [p for p in body.split("\n\n") if len(p.strip()) > 80]
-    watchers = sum(
-        1 for p in paragraphs if "watcher" in p.lower() or "book of enoch" in p.lower()
-    )
+    watchers = sum(1 for p in paragraphs if "watcher" in p.lower() or "book of enoch" in p.lower())
     assert watchers >= 3, f"Watchers/Enoch under-covered ({watchers} paragraphs)"
-    giza = sum(
-        1 for p in paragraphs if "giza" in p.lower() or "great pyramid" in p.lower()
-    )
+    giza = sum(1 for p in paragraphs if "giza" in p.lower() or "great pyramid" in p.lower())
     assert giza >= 3, f"Giza under-covered ({giza} paragraphs)"
     quantum = sum(1 for p in paragraphs if "quantum" in p.lower())
     assert quantum >= 3, (

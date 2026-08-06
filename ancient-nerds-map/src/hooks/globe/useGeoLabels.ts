@@ -580,8 +580,6 @@ export function useGeoLabels(options: UseGeoLabelsOptions) {
     if (!scene || labelsLoadedRef.current || labelsLoadingRef.current) return
 
     labelsLoadingRef.current = true
-    const startTime = performance.now()
-    console.log('[GeoLabels] Starting label creation...')
 
     const loadLabels = async () => {
       const res = await offlineFetch('/data/labels.json')
@@ -590,8 +588,6 @@ export function useGeoLabels(options: UseGeoLabelsOptions) {
 
       const labelsToLoad = data.labels.filter(l => l.type !== 'metropol' && l.type !== 'city')
       totalLabelsCountRef.current = labelsToLoad.length
-
-      const createStart = performance.now()
 
       // Create all label textures directly
       for (const label of labelsToLoad) {
@@ -613,10 +609,6 @@ export function useGeoLabels(options: UseGeoLabelsOptions) {
         allLabelMeshesRef.current.push(mesh)
       }
 
-      const createTime = performance.now() - createStart
-      const totalTime = performance.now() - startTime
-      console.log(`[GeoLabels] Labels DONE: ${labelsToLoad.length} in ${totalTime.toFixed(0)}ms (create: ${createTime.toFixed(0)}ms)`)
-
       labelsLoadedRef.current = true
       setLabelsLoaded(true)
       onLabelsLoaded?.(labelsToLoad.length)
@@ -634,8 +626,6 @@ export function useGeoLabels(options: UseGeoLabelsOptions) {
   useEffect(() => {
     const handleLabelReload = () => {
       if (!scene) return
-
-      console.log('[GeoLabels] Starting label recovery...')
 
       // Dispose old label meshes and clear arrays
       const disposeLabelMesh = (mesh: THREE.Mesh) => {

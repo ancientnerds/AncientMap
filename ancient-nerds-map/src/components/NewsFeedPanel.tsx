@@ -9,6 +9,7 @@ import { config } from '../config'
 import { DataStore } from '../data/DataStore'
 import { usePipelineStatus } from './nerv/usePipelineStatus'
 import type { NewsItemData, NewsFeedResponse } from '../types/news'
+import AiNoticeBanner from './layout/AiNoticeBanner'
 import NewsCard from './news/NewsCard'
 import './news/news-cards.css'
 
@@ -30,7 +31,7 @@ export default function NewsFeedPanel({ onClose, onSiteHover, onSiteClick, onAsk
   const [error, setError] = useState<string | null>(null)
   const [showLyraProfile, setShowLyraProfile] = useState(false)
   const [online, setOnline] = useState(false)
-  const [headlinesOnly, setHeadlinesOnly] = useState(false)
+  const [headlinesOnly, setHeadlinesOnly] = useState(() => localStorage.getItem('stories_headlines_only') === 'true')
   const scrollRef = useRef<HTMLDivElement>(null)
 
   const fetchFeed = useCallback(async (pageNum: number, append: boolean = false, signal?: AbortSignal) => {
@@ -40,7 +41,12 @@ export default function NewsFeedPanel({ onClose, onSiteHover, onSiteClick, onAsk
       const resp = await fetch(`${config.api.baseUrl}/news/feed?page=${pageNum}&page_size=20&include_speculative=true`, { signal })
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
       const data: NewsFeedResponse = await resp.json()
-      setItems(prev => append ? [...prev, ...data.items] : data.items)
+      setItems(prev => {
+        if (!append) return data.items
+        // Dedupe by id — page boundaries shift when new items land between fetches
+        const seen = new Set(prev.map(i => i.id))
+        return [...prev, ...data.items.filter(i => !seen.has(i.id))]
+      })
       setTotalCount(data.total_count)
       setHasMore(data.has_more)
       setPage(pageNum)
@@ -95,7 +101,11 @@ export default function NewsFeedPanel({ onClose, onSiteHover, onSiteClick, onAsk
         <div className="news-feed-actions">
           <button
             className={`news-feed-btn${headlinesOnly ? ' active' : ''}`}
-            onClick={() => setHeadlinesOnly(prev => !prev)}
+            onClick={() => setHeadlinesOnly(prev => {
+              const next = !prev
+              localStorage.setItem('stories_headlines_only', String(next))
+              return next
+            })}
             title={headlinesOnly ? 'Show full cards' : 'Headlines only'}
             aria-label="Toggle headlines only"
           >
@@ -145,9 +155,7 @@ export default function NewsFeedPanel({ onClose, onSiteHover, onSiteClick, onAsk
       {/* Content */}
       <div className="news-feed-content" ref={scrollRef}>
         {/* AI disclosure */}
-        <div className="news-feed-ai-notice">
-          Content is AI-generated from YouTube video content. Always verify with original sources.
-        </div>
+        <AiNoticeBanner />
         {error && (
           <div className="news-feed-error">
             {error}

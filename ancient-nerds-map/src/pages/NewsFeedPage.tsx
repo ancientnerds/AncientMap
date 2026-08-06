@@ -135,7 +135,12 @@ export default function NewsFeedPage() {
       const resp = await fetch(`${config.api.baseUrl}/news/feed?${params}`, { signal })
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
       const data: { items: NewsItemData[]; has_more: boolean; total_count: number; page: number } = await resp.json()
-      setItems(prev => append ? [...prev, ...data.items] : data.items)
+      setItems(prev => {
+        if (!append) return data.items
+        // Dedupe by id — page boundaries shift when new items land between fetches
+        const seen = new Set(prev.map(i => i.id))
+        return [...prev, ...data.items.filter(i => !seen.has(i.id))]
+      })
       setHasMore(data.has_more)
       setTotalCount(data.total_count)
       setPage(data.page)
@@ -686,6 +691,7 @@ export default function NewsFeedPage() {
                       webSources={item.web_sources}
                       verified={item.verified}
                       onSiteLoaded={setSelectedSite}
+                      onAskLyra={() => window.open(`/lyra.html?news=${item.id}`, '_blank', 'noopener,noreferrer')}
                     />
                   </div>
                 </div>

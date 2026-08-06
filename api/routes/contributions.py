@@ -35,7 +35,7 @@ router = APIRouter()
 
 
 @router.get("/lyra/stats")
-async def get_lyra_stats(db: Session = Depends(get_db)):
+def get_lyra_stats(db: Session = Depends(get_db)):
     """
     Get Lyra's knowledge stats for the dossier modal.
 
@@ -82,7 +82,7 @@ async def get_lyra_stats(db: Session = Depends(get_db)):
 
 
 @router.get("/lyra/list")
-async def get_lyra_contributions(
+def get_lyra_contributions(
     page: int = 1,
     page_size: int = 20,
     min_mentions: int = 1,
@@ -323,7 +323,7 @@ async def create_contribution(
 
 
 @router.get("/site-types")
-async def get_site_types(db: Session = Depends(get_db)):
+def get_site_types(db: Session = Depends(get_db)):
     """
     Get list of existing site types for the dropdown.
 
@@ -348,7 +348,7 @@ async def get_site_types(db: Session = Depends(get_db)):
 
 
 @router.get("/countries")
-async def get_countries(db: Session = Depends(get_db)):
+def get_countries(db: Session = Depends(get_db)):
     """
     Get list of countries from existing sites.
 

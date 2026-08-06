@@ -535,6 +535,15 @@ export default function AccountPage() {
         setAchievementsLoaded(true)
       })
       .catch(() => {})
+    // The retroactive full check moved off the GET (backend perf) — run it
+    // once here and refresh the list if it unlocked anything
+    apiFetch<{ achievements_unlocked: unknown[] }>('/cards/achievements/check', token, { method: 'POST' })
+      .then(res => {
+        if (res.achievements_unlocked.length === 0) return
+        return apiFetch<{ achievements: AchievementData[] }>('/cards/achievements', token)
+          .then(data => setAchievements(data.achievements))
+      })
+      .catch(() => {})
   }, [tab, token, achievementsLoaded])
 
   const claimAchievement = async (achievementId: string) => {

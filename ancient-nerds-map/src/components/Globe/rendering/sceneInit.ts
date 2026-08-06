@@ -106,7 +106,6 @@ export function initializeScene(
     console.warn('[Globe] WebGL context lost - will recover when restored')
   })
   canvas.addEventListener('webglcontextrestored', () => {
-    console.log('[Globe] WebGL context restored - scheduling label reload')
     refs.webglContextLostRef.current = false
     // Labels need to be reloaded as their textures were lost
     refs.needsLabelReloadRef.current = true
@@ -125,17 +124,13 @@ export function initializeScene(
     const wasHidden = !refs.isPageVisibleRef.current
     refs.isPageVisibleRef.current = !document.hidden
     if (wasHidden && refs.isPageVisibleRef.current) {
-      console.log('[Globe] Tab became visible - resuming')
       // Force a render to refresh the display
       renderer.render(scene, camera)
       // Check if labels need recovery (context was lost while hidden)
       if (refs.needsLabelReloadRef.current) {
-        console.log('[Globe] Triggering label recovery after context restore')
         // Dispatch custom event that the label loading effect will catch
         window.dispatchEvent(new CustomEvent('webgl-labels-need-reload'))
       }
-    } else if (!refs.isPageVisibleRef.current) {
-      console.log('[Globe] Tab hidden - pausing render loop')
     }
   }
   document.addEventListener('visibilitychange', handleVisibilityChange)
@@ -145,7 +140,6 @@ export function initializeScene(
   const debugInfo = gl.getExtension('WEBGL_debug_renderer_info')
   if (debugInfo) {
     const rendererName = gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL) as string
-    console.log('[GPU] Renderer:', rendererName)
 
     // Extract clean GPU name from ANGLE string like "ANGLE (NVIDIA, NVIDIA GeForce RTX 3080 ...)"
     const angleMatch = rendererName.match(/ANGLE \([^,]+, ([^(]+)/)
@@ -705,7 +699,6 @@ export function initializeScene(
       // Store refs for animation loop to update during warp
       refs.logoSpriteRef.current = logoSprite
       refs.logoMaterialRef.current = logoMat
-      console.log(`[Logo] Loaded and initialized. Current warp progress: ${currentProgress.toFixed(2)}, splashDone: ${refs.splashDoneRef.current}`)
     }
   }
   logoImg.onerror = (err) => console.error('Failed to load AN logo:', err)

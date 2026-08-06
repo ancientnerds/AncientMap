@@ -7,7 +7,7 @@ from pathlib import Path
 
 from pipeline.lyra.config import _get_settings
 from pipeline.lyra.handlers import BaseHandler
-from pipeline.lyra.minimax_shared import minimax_chat_anthropic
+from pipeline.lyra.minimax_shared import MiniMaxTerminalError, minimax_chat_anthropic
 from pipeline.lyra.research_events import AngleCreated, AngleSaturated, SourcesFound
 
 logger = logging.getLogger(__name__)
@@ -129,15 +129,27 @@ class SearchHandler(BaseHandler):
                 + "\n".join(f"- {g}" for g in specialist_gaps)
             )
             settings = _get_settings()
-            async with self.semaphore:
-                raw = await asyncio.to_thread(
-                    minimax_chat_anthropic,
-                    prompt,
-                    user_msg,
-                    4096,
-                    settings,
-                    temperature=settings.temperature_research,
+            try:
+                async with self.semaphore:
+                    raw = await asyncio.to_thread(
+                        minimax_chat_anthropic,
+                        prompt,
+                        user_msg,
+                        4096,
+                        settings,
+                        temperature=settings.temperature_research,
+                    )
+            except MiniMaxTerminalError as exc:
+                # Degraded mode: refinement is an optional improvement — the
+                # angle searches again with its previous queries instead of
+                # killing the run over a refinement call.
+                logger.warning(
+                    "[angle_search] query refinement failed terminally for '%s' — "
+                    "reusing previous queries: %s",
+                    angle.topic,
+                    exc,
                 )
+                raw = ""
             self.state.llm_call_count += 1
             parsed = self._parse_json(raw)
             new_queries = parsed.get("refined_queries", [])

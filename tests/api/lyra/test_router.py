@@ -14,7 +14,6 @@ from api.services.lyra_router import (
     route_request,
 )
 
-
 # ---------------------------------------------------------------------------
 # route_request — always routes to Anthropic cloud
 # ---------------------------------------------------------------------------

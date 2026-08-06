@@ -24,9 +24,29 @@ class MiniMaxAuthError(RuntimeError):
 
     Raised instead of the old silent `return ""` — an auth-dead key producing
     empty specialists/audits/prose for hours was the root cause of the empty
-    papers on 2026-06-03/06-17. Non-auth terminal failures still return
-    empty (callers have degraded-mode paths); converting those to raises
-    needs a per-handler audit (see docs/audits/AUDIT_REPORT_2026-08-05.md).
+    papers on 2026-06-03/06-17. Non-auth terminal failures raise
+    MiniMaxTerminalError (per-handler audit completed 2026-08-06).
+    """
+
+
+class MiniMaxTerminalError(RuntimeError):
+    """Non-auth terminal MiniMax failure after all retries are exhausted.
+
+    Replaces the old silent-empty returns: `minimax_chat_anthropic` /
+    `minimax_chat` returning "" and `structured_llm_call` returning {}
+    after their final retry. Those empties cascaded into empty specialist
+    findings, fake debate convergence, and near-empty papers discovered
+    hours later — the failure class behind the 2026-06-03/06-17 incidents.
+
+    NOT for quota errors: budget exhaustion / persistent plan throttling
+    stay QuotaExhaustedError / InsufficientQuotaError, which the worker's
+    defer path needs to mark runs 'deferred' instead of 'failed'.
+
+    Optional stages (image queries, illustration picks, presentation
+    polish, card description, novelty check, cross-pollination enrichment)
+    catch this at the call site, log a WARNING with the stage name, and
+    run their explicit degraded path. Everything else lets it propagate —
+    the EventBus/orchestrator failure path records it into state.error.
     """
 
 
@@ -152,8 +172,8 @@ def minimax_chat(
                 continue
             if _is_auth_error(e):
                 raise MiniMaxAuthError(f"MiniMax auth failure: {e}") from e
-            logger.error(f"MiniMax M3 chat failed terminally (returning empty): {e}")
-            return ""
+            logger.error(f"MiniMax M3 chat failed terminally: {e}")
+            raise MiniMaxTerminalError(f"MiniMax M3 chat failed terminally: {e}") from e
 
     content = data.get("choices", [{}])[0].get("message", {}).get("content", "")
     # M3 wraps reasoning in <think>...</think> tags -- strip them
@@ -340,10 +360,13 @@ def minimax_chat_anthropic(
             last_error if isinstance(last_error, BaseException) else None
         )
     logger.error(
-        f"MiniMax M3 Anthropic SDK call failed terminally after {attempt + 1} attempts "
-        f"(returning empty): {last_error}"
+        f"MiniMax M3 Anthropic SDK call failed terminally after {attempt + 1} attempts: "
+        f"{last_error}"
     )
-    return ""
+    raise MiniMaxTerminalError(
+        f"MiniMax M3 Anthropic SDK call failed terminally after {attempt + 1} attempts: "
+        f"{last_error}"
+    ) from (last_error if isinstance(last_error, BaseException) else None)
 
 
 # --- Quota probe --------------------------------------------------------
@@ -674,7 +697,10 @@ def structured_llm_call(
     stage explicitly (no accidental defaults). Use the per-stage values on
     LyraSettings: temperature_research/synthesis/verification/narrative.
 
-    Returns parsed dict. Falls back to text parsing on failure.
+    Returns parsed dict. Falls back to text parsing on failure. If BOTH the
+    structured attempt and the text fallback fail, raises MiniMaxTerminalError
+    (never silently returns {} — that failure mode produced "no research
+    angles" runs and empty papers before 2026-08-06).
     """
     from pipeline.lyra.config import _get_settings, call_api
 
@@ -725,7 +751,7 @@ def structured_llm_call(
         # session before this hook was added.
         coerced = _coerce_to_schema(parsed, schema)
         return coerced if coerced is not _SCHEMA_DROP else {}
-    except (QuotaExhaustedError, InsufficientQuotaError, MiniMaxAuthError):
+    except (QuotaExhaustedError, InsufficientQuotaError, MiniMaxAuthError, MiniMaxTerminalError):
         # Quota death is not retryable here — it must reach the worker's
         # defer path. Swallowing it into {} made decomposition report
         # "no research angles" and marked the run 'failed' permanently:
@@ -748,8 +774,10 @@ def structured_llm_call(
         parsed = json.loads(cleaned)
         coerced = _coerce_to_schema(parsed, schema)
         return coerced if coerced is not _SCHEMA_DROP else {}
-    except (QuotaExhaustedError, InsufficientQuotaError, MiniMaxAuthError):
+    except (QuotaExhaustedError, InsufficientQuotaError, MiniMaxAuthError, MiniMaxTerminalError):
         raise
     except Exception as exc:
         logger.error("Structured LLM call failed after retry: %s", exc)
-        return {}
+        raise MiniMaxTerminalError(
+            f"structured_llm_call failed after structured attempt + text fallback: {exc}"
+        ) from exc

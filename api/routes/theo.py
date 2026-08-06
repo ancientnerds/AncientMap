@@ -34,7 +34,12 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 
-from api.services.jwt_auth import get_current_user, get_optional_user, require_researcher
+from api.services.jwt_auth import (
+    FOUNDER_ROLE_ID,
+    get_current_user,
+    get_optional_user,
+    require_researcher,
+)
 from api.services.rate_limiter import RateLimiter, get_client_ip
 from api.services.theo_config import (
     MAX_REQUESTS_PER_USER,
@@ -150,6 +155,21 @@ def _validate_web_urls(web_urls: list[str]) -> None:
                     status_code=422,
                     detail=f"web_url resolves to a non-public address: {url}",
                 )
+
+
+async def _require_fresh_researcher(user: DiscordUser) -> list[str]:
+    """403 unless the user's FRESH Discord roles include Researcher.
+
+    Publish/approve/unpublish gate on live Discord roles (not the JWT
+    snapshot) so a de-roled user loses library powers immediately
+    (audit 2026-08-05, governance decision: Researcher for approve/
+    unpublish/publish, founder-only for the quality override).
+    Returns the fresh roles for follow-up checks.
+    """
+    fresh_roles = await _refresh_roles(user)
+    if not THEO_RESEARCHER_ROLE_ID or THEO_RESEARCHER_ROLE_ID not in fresh_roles:
+        raise HTTPException(status_code=403, detail="Researcher role required")
+    return fresh_roles
 
 
 async def _refresh_roles(user: DiscordUser) -> list[str]:
@@ -1126,7 +1146,7 @@ async def delete_research(request_id: str, req: Request):
                 # submission — it would leak forever. Release it here, in
                 # the SAME transaction as the status flip. Running rows are
                 # released by the worker's cancelled-terminal path.
-                release_reservation_in_session(session, row.user_id)
+                release_reservation_in_session(session, request_id)
         else:
             # completed, failed, cancelled — actually delete
             session.execute(
@@ -1173,9 +1193,11 @@ async def approve_research(
     """Approve a research paper after human review.
 
     Stores approved_by (username) and approved_at (ISO timestamp)
-    in result_json. Required before publishing.
+    in result_json. Required before publishing. Requires the Researcher
+    role (fresh) in addition to ownership.
     """
     _validate_uuid(request_id)
+    await _require_fresh_researcher(user)
 
     with get_session() as session:
         row = session.execute(
@@ -1249,9 +1271,7 @@ async def publish_research(
     _validate_uuid(request_id)
 
     # Refresh roles from Discord and verify Researcher role
-    fresh_roles = await _refresh_roles(user)
-    if not THEO_RESEARCHER_ROLE_ID or THEO_RESEARCHER_ROLE_ID not in fresh_roles:
-        raise HTTPException(status_code=403, detail="Researcher role required to publish")
+    fresh_roles = await _require_fresh_researcher(user)
 
     with get_session() as session:
         row = session.execute(
@@ -1283,6 +1303,11 @@ async def publish_research(
         quality_passed = bool(quality_score.get("passed"))
         if not quality_passed:
             override_reason = (x_theo_override_reason or "").strip()
+            if override and FOUNDER_ROLE_ID not in fresh_roles:
+                raise HTTPException(
+                    status_code=403,
+                    detail="Quality-gate override is founder-only (governance decision 2026-08-06)",
+                )
             if not (override and override_reason):
                 raise HTTPException(
                     status_code=409,
@@ -1291,8 +1316,8 @@ async def publish_research(
                         "quality_passed": quality_passed,
                         "failing_metrics": ["quality_score.passed"],
                         "hint": (
-                            "Pass ?override=1 with a non-empty X-Theo-Override-Reason "
-                            "header to publish anyway."
+                            "Founders may pass ?override=1 with a non-empty "
+                            "X-Theo-Override-Reason header to publish anyway."
                         ),
                     },
                 )
@@ -1446,8 +1471,13 @@ async def unpublish_research(
     request_id: str,
     user: DiscordUser = Depends(get_current_user),
 ):
-    """Remove a paper from the public library (keeps the private result)."""
+    """Remove a paper from the public library (keeps the private result).
+
+    Requires the Researcher role (fresh) in addition to ownership — a
+    de-roled user must not be able to mutate public-library state.
+    """
     _validate_uuid(request_id)
+    await _require_fresh_researcher(user)
 
     with get_session() as session:
         row = session.execute(

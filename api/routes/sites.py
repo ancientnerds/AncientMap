@@ -250,7 +250,7 @@ def _load_pinned_sites(
 
 
 @router.get("/all")
-async def get_all_sites(
+def get_all_sites(
     req: Request,
     db: Session = Depends(get_db),
     source: list[str] | None = Query(None, description="Filter by source IDs"),
@@ -489,7 +489,7 @@ async def get_all_sites(
 
 
 @router.get("/viewport")
-async def get_sites_in_viewport(
+def get_sites_in_viewport(
     req: Request,
     min_lat: float = Query(..., ge=-90, le=90),
     max_lat: float = Query(..., ge=-90, le=90),
@@ -560,7 +560,7 @@ async def get_sites_in_viewport(
 
 
 @router.get("/clustered")
-async def get_clustered_sites(
+def get_clustered_sites(
     req: Request,
     resolution: int = Query(3, ge=0, le=7, description="H3 resolution (0=global, 7=fine)"),
     source: list[str] | None = Query(None),
@@ -650,7 +650,7 @@ async def get_clustered_sites(
 
 
 @router.get("/random")
-async def random_sites(
+def random_sites(
     req: Request,
     limit: int = Query(50, ge=1, le=200, description="Number of random sites"),
     db: Session = Depends(get_db),
@@ -725,7 +725,7 @@ async def random_sites(
 
 
 @router.get("/search")
-async def search_sites(
+def search_sites(
     q: str = Query(..., min_length=2, description="Search query"),
     limit: int = Query(20, ge=1, le=100, description="Max results"),
     db: Session = Depends(get_db),
@@ -809,7 +809,7 @@ async def search_sites(
 
 
 @router.get("/snapshots")
-async def get_snapshots(
+def get_snapshots(
     limit: int = Query(20, ge=1, le=100),
     source_id: str | None = Query(None),
     db: Session = Depends(get_db),
@@ -821,7 +821,7 @@ async def get_snapshots(
 
 
 @router.post("/snapshots/create")
-async def create_snapshot_endpoint(
+def create_snapshot_endpoint(
     source_id: str | None = Query(None),
     description: str = Query("Manual snapshot"),
     _user: DiscordUser = Depends(require_founder),
@@ -864,7 +864,7 @@ async def create_snapshot_endpoint(
 
 
 @router.post("/snapshots/export")
-async def create_unified_snapshot_endpoint(
+def create_unified_snapshot_endpoint(
     description: str = Query("Manual snapshot"),
     _user: DiscordUser = Depends(require_founder),
     db: Session = Depends(get_db),
@@ -884,11 +884,12 @@ async def create_unified_snapshot_endpoint(
         raise
     except Exception as e:
         logger.error("Unified snapshot failed: %s", e, exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Snapshot failed: {e}") from e
+        # Generic detail — exception text stays in the server log (audit follow-up 2026-08-06)
+        raise HTTPException(status_code=500, detail="Snapshot failed") from e
 
 
 @router.get("/snapshots/{snapshot_id}/preview")
-async def preview_snapshot_endpoint(
+def preview_snapshot_endpoint(
     snapshot_id: str,
     db: Session = Depends(get_db),
     _user: DiscordUser = Depends(require_founder),
@@ -903,7 +904,7 @@ async def preview_snapshot_endpoint(
 
 
 @router.post("/snapshots/{snapshot_id}/restore")
-async def restore_snapshot_endpoint(
+def restore_snapshot_endpoint(
     snapshot_id: str,
     _user: DiscordUser = Depends(require_founder),
     db: Session = Depends(get_db),
@@ -927,7 +928,7 @@ async def restore_snapshot_endpoint(
 
 
 @router.post("/snapshots/restore-all-uploads")
-async def restore_all_upload_snapshots(
+def restore_all_upload_snapshots(
     _user: DiscordUser = Depends(require_founder),
     db: Session = Depends(get_db),
 ):
@@ -1003,7 +1004,7 @@ async def restore_all_upload_snapshots(
 
 
 @router.get("/{site_id}/history")
-async def get_site_edit_history(
+def get_site_edit_history(
     site_id: str,
     db: Session = Depends(get_db),
     _user: DiscordUser = Depends(require_founder),
@@ -1016,7 +1017,7 @@ async def get_site_edit_history(
 
 
 @router.get("/{site_id}/alternates")
-async def get_site_alternates(
+def get_site_alternates(
     site_id: str,
     db: Session = Depends(get_db),
 ):
@@ -1103,7 +1104,7 @@ async def get_site_alternates(
 
 
 @router.get("/{site_id}")
-async def get_site_detail(
+def get_site_detail(
     site_id: str,
     db: Session = Depends(get_db),
 ):
@@ -1246,7 +1247,7 @@ def _sync_to_radar(
 
 
 @router.put("/{site_id}")
-async def update_site(
+def update_site(
     site_id: str,
     site_update: SiteUpdateRequest,
     user: DiscordUser = Depends(require_founder),
@@ -1355,7 +1356,7 @@ class BatchSiteUpdate(BaseModel):
 
 
 @router.post("/batch-update")
-async def batch_update_sites(
+def batch_update_sites(
     updates: list[BatchSiteUpdate],
     user: DiscordUser = Depends(require_founder),
     db: Session = Depends(get_db),
@@ -1466,7 +1467,7 @@ async def batch_update_sites(
 
 
 @router.post("/rebuild-static")
-async def rebuild_static_json(
+def rebuild_static_json(
     user: DiscordUser = Depends(require_founder),
     db: Session = Depends(get_db),
 ):
@@ -1521,7 +1522,7 @@ class BatchUploadRequest(BaseModel):
 
 
 @router.post("/batch-upload")
-async def batch_upload_sites(
+def batch_upload_sites(
     body: BatchUploadRequest,
     user: DiscordUser = Depends(require_founder),
     db: Session = Depends(get_db),
@@ -1875,7 +1876,7 @@ class ReplaceSourceRequest(BaseModel):
 
 
 @router.post("/replace-source")
-async def replace_source(
+def replace_source(
     body: ReplaceSourceRequest,
     user: DiscordUser = Depends(require_founder),
     db: Session = Depends(get_db),
@@ -1936,10 +1937,10 @@ async def replace_source(
             db.commit()
         except Exception as e:
             db.rollback()
-            logger.error(f"Snapshot creation failed: {e}")
+            logger.error(f"Snapshot creation failed: {e}", exc_info=True)
             raise HTTPException(
                 status_code=500,
-                detail=f"Snapshot creation failed — database NOT modified: {e}",
+                detail="Snapshot creation failed — database NOT modified",
             ) from None
 
         # Verify snapshot was actually persisted with correct row count
@@ -2231,7 +2232,7 @@ async def replace_source(
 
 
 @router.delete("/{site_id}")
-async def delete_site(
+def delete_site(
     site_id: str,
     user: DiscordUser = Depends(require_founder),
     db: Session = Depends(get_db),
@@ -2268,7 +2269,7 @@ class MarkAuditedRequest(BaseModel):
 
 
 @router.post("/mark-audited")
-async def mark_sites_audited(
+def mark_sites_audited(
     body: MarkAuditedRequest,
     user: DiscordUser = Depends(require_founder),
     db: Session = Depends(get_db),

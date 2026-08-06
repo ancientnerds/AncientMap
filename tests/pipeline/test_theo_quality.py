@@ -60,7 +60,9 @@ def _make_paper(
         parts.append(f"## {section}\n\n{content}\n")
 
     if include_refs:
-        parts.append("## References\n\n[1] Source 1 — https://example.com/1\n[2] Source 2 — https://example.com/2\n[3] Source 3 — https://example.com/3\n")
+        parts.append(
+            "## References\n\n[1] Source 1 — https://example.com/1\n[2] Source 2 — https://example.com/2\n[3] Source 3 — https://example.com/3\n"
+        )
 
     paper = "\n".join(parts)
 

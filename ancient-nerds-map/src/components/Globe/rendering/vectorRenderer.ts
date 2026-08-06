@@ -178,7 +178,6 @@ export async function loadFrontLayer(
       const lines = [line] // Single line object instead of thousands
 
       frontLineLayersRef.current[layerKey] = lines
-      console.log(`[Loading] ${layerKey} DONE`)
       setLayersLoaded(prev => ({ ...prev, [layerKey]: true }))
 
       // Fade in immediately if layer is enabled (don't wait for visibility effect)
@@ -326,8 +325,6 @@ export async function loadFrontLayer(
                 layerLabelsRef.current.plateBoundaries.push({ label: geoLabel, mesh, position })
               })
 
-              console.log(`[Loading] Created ${layerLabelsRef.current.plateBoundaries.length} tectonic plate labels`)
-
               // Trigger visibility update
               setTimeout(() => updateGeoLabelsRef.current?.(), 0)
             })
@@ -391,8 +388,6 @@ export async function loadFrontLayer(
                 layerLabelsRef.current.glaciers.push({ label: geoLabel, mesh, position })
               })
 
-              console.log(`[Loading] Created ${layerLabelsRef.current.glaciers.length} glacier labels`)
-
               // Trigger visibility update
               setTimeout(() => updateGeoLabelsRef.current?.(), 0)
             })
@@ -455,8 +450,6 @@ export async function loadFrontLayer(
 
                 layerLabelsRef.current.coralReefs.push({ label: geoLabel, mesh, position })
               })
-
-              console.log(`[Loading] Created ${layerLabelsRef.current.coralReefs.length} coral reef labels`)
 
               // Trigger visibility update
               setTimeout(() => updateGeoLabelsRef.current?.(), 0)

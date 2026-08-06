@@ -295,7 +295,7 @@ def _find_nearest_an_sites_batch(
 
 
 @router.get("/map")
-async def get_radar_map_data(db: Session = Depends(get_db)):
+def get_radar_map_data(db: Session = Depends(get_db)):
     """Lightweight endpoint for map pins — just coords + display fields."""
     cache_key = "radar:map"
     cached = cache_get(cache_key)
@@ -333,7 +333,7 @@ async def get_radar_map_data(db: Session = Depends(get_db)):
 
 
 @router.get("/sites-map")
-async def get_sites_map(db: Session = Depends(get_db)):
+def get_sites_map(db: Session = Depends(get_db)):
     """All unified_sites with enrichment score for the background map layer."""
     cache_key = "radar:sites-map"
     cached = cache_get(cache_key)
@@ -366,7 +366,7 @@ async def get_sites_map(db: Session = Depends(get_db)):
 
 
 @router.get("/list")
-async def get_radar(
+def get_radar(
     req: Request,
     page: int = Query(1, ge=1),
     page_size: int = Query(24, ge=1, le=100),
@@ -675,7 +675,7 @@ async def get_radar(
 
 
 @router.get("/stats")
-async def get_radar_stats(db: Session = Depends(get_db)):
+def get_radar_stats(db: Session = Depends(get_db)):
     """
     Get summary stats for the radar page header.
     """
@@ -719,14 +719,14 @@ async def get_radar_stats(db: Session = Depends(get_db)):
 
 
 @router.post("/cache-bust")
-async def bust_radar_cache(_user: DiscordUser = Depends(require_founder)):
+def bust_radar_cache(_user: DiscordUser = Depends(require_founder)):
     """Clear radar cache (founders only)."""
     count = cache_delete_pattern("radar:*")
     return {"cleared": count}
 
 
 @router.post("/{contribution_id}/promote")
-async def promote_to_db(
+def promote_to_db(
     contribution_id: str,
     overrides: PromoteOverrides | None = None,
     user: DiscordUser = Depends(require_founder),
@@ -862,7 +862,7 @@ async def promote_to_db(
 
 
 @router.post("/{contribution_id}/dismiss")
-async def dismiss_contribution(
+def dismiss_contribution(
     contribution_id: str,
     user: DiscordUser = Depends(require_founder),
     db: Session = Depends(get_db),
@@ -909,7 +909,7 @@ class MergeRequest(BaseModel):
 
 
 @router.post("/{contribution_id}/merge")
-async def merge_into_site(
+def merge_into_site(
     contribution_id: str,
     body: MergeRequest,
     user: DiscordUser = Depends(require_founder),

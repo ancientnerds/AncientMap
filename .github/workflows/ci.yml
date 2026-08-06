@@ -137,6 +137,37 @@ jobs:
         continue-on-error: true  # Pre-existing workbox/serialize-javascript chain — can't fix until vite-plugin-pwa updates
         run: npm audit --audit-level=critical
 
+  tests:
+    name: Backend Tests
+    runs-on: ubuntu-latest
+    needs: [changes]
+    if: needs.changes.outputs.backend == 'true' || needs.changes.outputs.deps == 'true'
+    # STAGED ROLLOUT (P3-13, 2026-08-06): intentionally NOT in deploy.needs
+    # yet — CI ran zero backend tests for months and the suite has never run
+    # on a clean runner. Promote to a blocking gate once it proves green
+    # here. --timeout converts environment-dependent hangs (e.g. the MiniMax
+    # limiter sleeping on missing quota data) into visible failures.
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-api.txt -r requirements.lyra.txt \
+            pytest pytest-asyncio pytest-mock pytest-timeout
+
+      - name: Run unit tests (DB-less subset)
+        env:
+          MINIMAX_API_KEY: ci-dummy
+          ANTHROPIC_API_KEY: ci-dummy
+        run: python -m pytest -q -m "not integration and not live_llm and not slow" --timeout 90 --tb=short
+
   sast:
     name: SAST & Secrets
     runs-on: ubuntu-latest
@@ -199,10 +230,20 @@ jobs:
     name: Deploy to Production
     runs-on: ubuntu-latest
     needs: [changes, lint-frontend, lint-backend, security-scan, sast, container-scan]
+    # Explicit per-job result checks instead of bare !failure(): during the
+    # 2026-08-06 GitHub runner outage a deploy started although sast and
+    # changes had FAILED at "Set up job" — !failure() did not stop it.
+    # changes + sast must SUCCEED (they always run); the path-filtered jobs
+    # may legitimately be skipped but must not have failed.
     if: |
       always() &&
-      !failure() &&
       !cancelled() &&
+      needs.changes.result == 'success' &&
+      needs.sast.result == 'success' &&
+      contains(fromJSON('["success", "skipped"]'), needs.lint-frontend.result) &&
+      contains(fromJSON('["success", "skipped"]'), needs.lint-backend.result) &&
+      contains(fromJSON('["success", "skipped"]'), needs.security-scan.result) &&
+      contains(fromJSON('["success", "skipped"]'), needs.container-scan.result) &&
       github.ref == 'refs/heads/main' &&
       github.event_name == 'push'
     steps:
@@ -357,7 +398,8 @@ jobs:
             fi
 
             echo "==> Refreshing library data..."
-            if curl -sf --max-time 120 -X POST http://localhost:8000/api/library/refresh > /dev/null; then
+            REFRESH_KEY=$(grep "^LIBRARY_REFRESH_KEY=" .env | cut -d= -f2- | tr -d "\r")
+            if curl -sf --max-time 120 -X POST -H "X-Internal-Key: $REFRESH_KEY" http://localhost:8000/api/library/refresh > /dev/null; then
               echo "    Library refreshed"
             else
               echo "    WARNING: Library refresh failed (non-fatal)"

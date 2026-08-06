@@ -42,7 +42,6 @@ export function useTextureLoading({
     const maxTextureSize = refs.scene.current?.renderer.capabilities.maxTextureSize ?? 0
     const tier = getBasemapTier(maxTextureSize)
     const assets = getBasemapAssets(tier)
-    console.log(`[Loading] Starting texture loading (tier=${tier}, maxTextureSize=${maxTextureSize})...`)
     const loader = new THREE.TextureLoader()
     let loadedCount = 0
     const totalTextures = 2
@@ -50,7 +49,6 @@ export function useTextureLoading({
     const checkAllLoaded = () => {
       loadedCount++
       if (loadedCount >= totalTextures) {
-        console.log('[Loading] Textures DONE')
         refs.highResGrayLoaded.current = true
         refs.highResSatelliteLoaded.current = true
         refs.backgroundLoadingComplete.current = true
@@ -61,7 +59,6 @@ export function useTextureLoading({
 
     // Load grayscale basemap (tiered)
     loader.load(assets.gray, (texture) => {
-      console.log('[Loading] Gray basemap loaded')
       texture.colorSpace = THREE.SRGBColorSpace
       texture.generateMipmaps = true
       texture.minFilter = THREE.LinearMipmapLinearFilter
@@ -76,7 +73,6 @@ export function useTextureLoading({
 
     // Load satellite basemap (tiered)
     loader.load(assets.satellite, (texture) => {
-      console.log('[Loading] Satellite loaded')
       texture.colorSpace = THREE.SRGBColorSpace
       texture.generateMipmaps = true
       texture.minFilter = THREE.LinearMipmapLinearFilter

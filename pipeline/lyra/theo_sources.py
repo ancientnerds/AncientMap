@@ -1259,9 +1259,16 @@ class TranscriptAdapter(SourceAdapter):
 
     async def search(self, query: str, max_results: int = 5) -> list[RawSource]:
         def _do() -> list[RawSource]:
-            from api.services.lyra_tools import _hybrid_search
+            from api.services.lyra_tools import HybridSearchUnavailableError, _hybrid_search
 
-            items, _ = _hybrid_search(query, collection="transcripts", limit=max_results)
+            try:
+                items, _ = _hybrid_search(query, collection="transcripts", limit=max_results)
+            except HybridSearchUnavailableError as exc:
+                # One adapter of many — a Qdrant outage must not kill the
+                # whole research run, but it must be visible (P2-12,
+                # audit 2026-08-05).
+                logger.warning("youtube_transcripts adapter degraded, Qdrant down: %s", exc)
+                return []
 
             results: list[RawSource] = []
             seen_videos: set[str] = set()

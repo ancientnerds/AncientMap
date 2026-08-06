@@ -42,9 +42,7 @@ def test_replaces_underscores_with_spaces() -> None:
 
 
 def test_dedupes_repeated_phrases() -> None:
-    out = _sanitize_caption_field(
-        "derivative work: Zunkir (talk) derivative work: Zunkir (talk)"
-    )
+    out = _sanitize_caption_field("derivative work: Zunkir (talk) derivative work: Zunkir (talk)")
     assert out.count("derivative work: Zunkir (talk)") == 1
 
 

@@ -3,7 +3,7 @@
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import func
 
 from api.cardgame.constants import (
@@ -50,10 +50,29 @@ class DeckCreateRequest(BaseModel):
     name: str = Field(max_length=100)
     card_ids: list[str] = Field(max_length=10)
 
+    @field_validator("card_ids")
+    @classmethod
+    def _card_ids_item_length(cls, v: list[str]) -> list[str]:
+        # Card IDs are UUID strings (36 chars) — 64 is a hard sanity bound
+        for cid in v:
+            if len(cid) > 64:
+                raise ValueError("card_ids entries must be 64 characters or fewer")
+        return v
+
 
 class QuizAnswerRequest(BaseModel):
     session_id: str = Field(max_length=50)
     answers: list[str] = Field(max_length=20)
+
+    @field_validator("answers")
+    @classmethod
+    def _answers_item_length(cls, v: list[str]) -> list[str]:
+        # Answers are site/country/period names — UnifiedSite.name is
+        # String(500), so 500 is the longest legitimate answer
+        for answer in v:
+            if len(answer) > 500:
+                raise ValueError("answers entries must be 500 characters or fewer")
+        return v
 
 
 # ---------------------------------------------------------------------------
@@ -335,6 +354,17 @@ def create_or_update_deck(
         raise HTTPException(status_code=400, detail="Deck can have at most 10 cards")
 
     with get_session() as session:
+        # Lock the user row so concurrent creates serialize — the deck-count
+        # check below races with the insert otherwise; populate_existing()
+        # forces a refresh of already-loaded attributes
+        (
+            session.query(DiscordUser)
+            .filter(DiscordUser.id == user.id)
+            .populate_existing()
+            .with_for_update()
+            .first()
+        )
+
         # Verify all cards are owned by user
         owned = {
             str(r[0])
@@ -713,11 +743,23 @@ _achievement_limiter = RateLimiter(max_requests=10, window_seconds=60, namespace
 _achievement_event_limiter = RateLimiter(
     max_requests=30, window_seconds=60, namespace="achievement_events"
 )
+_achievement_check_limiter = RateLimiter(
+    max_requests=3, window_seconds=60, namespace="achievement_check"
+)
 
 
 class AchievementEventRequest(BaseModel):
     event_type: str = Field(max_length=50)
-    layer_count: int | None = None
+    layer_count: int | None = Field(None, ge=0, le=50)
+
+    @field_validator("event_type")
+    @classmethod
+    def _known_event_type(cls, v: str) -> str:
+        from api.cardgame.achievements import FRONTEND_EVENT_TYPES
+
+        if v not in FRONTEND_EVENT_TYPES:
+            raise ValueError(f"Unknown event type: {v}")
+        return v
 
 
 @router.get("/achievements")
@@ -726,19 +768,15 @@ def get_achievements(
 ):
     """Full achievement list with user unlock/claim status.
 
-    If authenticated, runs a retroactive full check to auto-unlock
-    achievements the user already qualifies for.
+    Read-only — the retroactive full check lives in POST /achievements/check.
     """
-    from api.cardgame.achievements import ACHIEVEMENTS, check_achievements
+    from api.cardgame.achievements import ACHIEVEMENTS
     from api.cardgame.models import UserAchievement
 
     unlocked_map: dict[str, dict] = {}
 
     if user:
         with get_session() as session:
-            # Retroactive check — unlocks anything the user already qualifies for
-            check_achievements(session, user.id, "full_check")
-
             rows = session.query(UserAchievement).filter(UserAchievement.user_id == user.id).all()
             for ua in rows:
                 unlocked_map[ua.achievement_id] = {
@@ -775,6 +813,27 @@ def get_achievements(
         achievements.append(entry)
 
     return {"achievements": achievements, "total": len(achievements)}
+
+
+@router.post("/achievements/check")
+def run_achievement_check(
+    request: Request,
+    user: DiscordUser = Depends(get_current_user),
+):
+    """Retroactive full achievement check (~102 EXISTS queries + unlocks).
+
+    Split out of GET /achievements so the read path stays cheap — the
+    frontend fires this once after loading the achievements tab.
+    """
+    if not _achievement_check_limiter.check(_get_client_ip(request)):
+        raise HTTPException(status_code=429, detail="Too many requests, slow down")
+
+    from api.cardgame.achievements import check_achievements
+
+    with get_session() as session:
+        new_achievements = check_achievements(session, user.id, "full_check")
+
+    return {"achievements_unlocked": new_achievements}
 
 
 @router.post("/achievements/{achievement_id}/claim")

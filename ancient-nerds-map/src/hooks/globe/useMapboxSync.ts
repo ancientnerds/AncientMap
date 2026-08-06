@@ -261,7 +261,6 @@ export function useMapboxSync(options: MapboxSyncOptions) {
 
     // Auto-switch: zoom >= 66% switches to Mapbox, < 66% switches to Three.js
     if (zoomPercent >= transitionPoint && !showMapbox) {
-      console.log('[AUTO-SWITCH] Zoom >= 66%, switching to Mapbox')
       justEnteredMapbox.current = true
       setShowMapbox(true)
       onAutoSwitchToMapbox?.()
@@ -272,7 +271,6 @@ export function useMapboxSync(options: MapboxSyncOptions) {
         onShowOfflineWarning?.(true)
       }
     } else if (zoomPercent < transitionPoint && showMapbox) {
-      console.log('[AUTO-SWITCH] Zoom < 66%, switching to Three.js')
       setShowMapbox(false)
       setShowMapboxOfflineWarning(false)
       onShowOfflineWarning?.(false)
@@ -326,7 +324,6 @@ export function useMapboxSync(options: MapboxSyncOptions) {
 
     const tileType = satelliteModeRef.current ? 'satellite' : 'dark'
     if (mapbox.getStyle() !== tileType) {
-      console.log(`[Mapbox] Switching style: ${mapbox.getStyle()} -> ${tileType}`)
       mapbox.setStyle(tileType)
     }
   }, [mapboxServiceRef])

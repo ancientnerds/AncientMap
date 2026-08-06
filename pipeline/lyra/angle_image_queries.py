@@ -72,18 +72,28 @@ async def generate_queries_for_angle(
     Returns an empty list on failure rather than raising, so the caller can
     skip this angle and continue.
     """
-    from pipeline.lyra.minimax_shared import minimax_chat_anthropic
+    from pipeline.lyra.minimax_shared import MiniMaxTerminalError, minimax_chat_anthropic
 
     system = _PROMPT_PATH.read_text(encoding="utf-8")
     user_msg = f"## Angle topic\n{angle_topic}\n\n## Angle description\n{angle_description}\n"
-    raw = await asyncio.to_thread(
-        minimax_chat_anthropic,
-        system,
-        user_msg,
-        1024,
-        settings,
-        temperature=0.2,
-    )
+    try:
+        raw = await asyncio.to_thread(
+            minimax_chat_anthropic,
+            system,
+            user_msg,
+            1024,
+            settings,
+            temperature=0.2,
+        )
+    except MiniMaxTerminalError as exc:
+        # Optional image stage — a terminally failing query call skips this
+        # angle's image research instead of surfacing into the run.
+        logger.warning(
+            "angle_image_queries: LLM failed terminally for angle '%s': %s",
+            angle_topic[:60],
+            exc,
+        )
+        return []
     queries = parse_queries(raw)
     if not queries:
         logger.warning(

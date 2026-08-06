@@ -7,7 +7,7 @@ import re
 
 from pipeline.lyra.config import _get_settings
 from pipeline.lyra.handlers import BaseHandler
-from pipeline.lyra.minimax_shared import minimax_chat_anthropic
+from pipeline.lyra.minimax_shared import MiniMaxTerminalError, minimax_chat_anthropic
 from pipeline.lyra.research_events import FactCheckComplete, PresentationChecked
 from pipeline.lyra.theo_citations import split_artifact
 
@@ -119,15 +119,28 @@ class PresentationHandler(BaseHandler):
 
         user_msg = f"## Paper to review\n\n{prose_for_llm}"
 
-        async with self.semaphore:
-            corrected_prose = await asyncio.to_thread(
-                minimax_chat_anthropic,
-                _SYSTEM_PROMPT,
-                user_msg,
-                self.state.config.max_tokens_per_call,
-                settings,
-                temperature=settings.temperature_narrative,
+        try:
+            async with self.semaphore:
+                corrected_prose = await asyncio.to_thread(
+                    minimax_chat_anthropic,
+                    _SYSTEM_PROMPT,
+                    user_msg,
+                    self.state.config.max_tokens_per_call,
+                    settings,
+                    temperature=settings.temperature_narrative,
+                )
+        except MiniMaxTerminalError as exc:
+            # Degraded mode: presentation polish is optional — keep the
+            # writer's original prose (the empty string is rejected by the
+            # length check below, same as any bad LLM output) and still run
+            # the mechanical strip/audit passes that follow.
+            logger.warning(
+                "[presentation] LLM pass failed terminally — keeping original prose: %s", exc
             )
+            self.state.log(
+                "presentation", f"Presentation LLM failed terminally, keeping original: {exc}"
+            )
+            corrected_prose = ""
         self.state.llm_call_count += 1
 
         corrected_prose = corrected_prose.strip()

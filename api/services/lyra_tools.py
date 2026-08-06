@@ -218,7 +218,7 @@ def search_sites(
         limit: Maximum results to return (default 10, max 25).
     """
     query = (query or "")[:500].strip()
-    limit = min(limit, 25)
+    limit = max(1, min(limit, 25))
     conditions = ["1=1"]
     params: dict = {"limit": limit}
 
@@ -419,8 +419,8 @@ def search_news(
         limit: Maximum results (default 10, max 20).
     """
     query = (query or "")[:500]
-    limit = min(limit, 20)
-    days_back = min(days_back, 365)
+    limit = max(1, min(limit, 20))
+    days_back = max(1, min(days_back, 365))
 
     conditions = ["ni.created_at > NOW() - :days_interval * INTERVAL '1 day'"]
     params: dict = {"days_interval": days_back, "limit": limit}
@@ -894,6 +894,15 @@ def _is_likely_english(text: str) -> bool:
     return bool(words & _EN_STOPWORDS)
 
 
+class HybridSearchUnavailableError(RuntimeError):
+    """Raised when the semantic search backend (Qdrant/Voyage) fails.
+
+    A backend outage is NOT the same as "no semantic matches" — callers must
+    surface this visibly (tool-error string to the LLM, or WARNING log for
+    internal degradation) instead of treating it as an empty result.
+    """
+
+
 def _hybrid_search(
     query: str,
     collection: str = "sites",
@@ -909,14 +918,17 @@ def _hybrid_search(
     Returns tuple of (list of payload dicts with relevance scores, embed tokens used).
     Used by both _auto_retrieve() and the vector_search tool.
 
-    R1: Catches all exceptions so Qdrant/Voyage failures don't crash the entire request.
-    R2: Falls back to BM25-only if embedding fails.
+    Raises HybridSearchUnavailableError if the search backend (Qdrant/Voyage)
+    fails, so an outage never masquerades as "no semantic matches".
+    R2: Falls back to BM25-only inside _hybrid_search_inner if embedding fails.
     """
     try:
         return _hybrid_search_inner(query, collection, limit, country, period, site_type, channel)
     except Exception as exc:
-        logger.error(f"Hybrid search failed (collection={collection}): {exc}")
-        return [], 0
+        logger.error(f"Hybrid search failed (collection={collection}): {exc}", exc_info=True)
+        raise HybridSearchUnavailableError(
+            f"Hybrid search backend failed (collection={collection}): {exc}"
+        ) from exc
 
 
 def _hybrid_search_inner(
@@ -1077,7 +1089,7 @@ def vector_search(
     Args:
         query: Natural language query.
         collection: Which collection to search: 'sites', 'news', 'transcripts', 'articles', 'empires', or 'research'.
-        limit: Max results (default 5).
+        limit: Max results (default 5, max 20).
         country: Filter by country name (e.g. 'Turkey', 'Egypt').
         period: Filter by period name (e.g. 'Bronze Age', 'Neolithic').
         site_type: Filter by site type (e.g. 'settlement', 'temple').
@@ -1087,15 +1099,23 @@ def vector_search(
     if collection not in _VALID_COLLECTIONS:
         return f"Invalid collection '{collection}'. Must be one of: {', '.join(sorted(_VALID_COLLECTIONS))}"
     query = (query or "")[:500]
-    items, _vt = _hybrid_search(
-        query,
-        collection=collection,
-        limit=limit,
-        country=country,
-        period=period,
-        site_type=site_type,
-        channel=channel,
-    )
+    limit = max(1, min(limit, 20))
+    try:
+        items, _vt = _hybrid_search(
+            query,
+            collection=collection,
+            limit=limit,
+            country=country,
+            period=period,
+            site_type=site_type,
+            channel=channel,
+        )
+    except HybridSearchUnavailableError:
+        return (
+            "vector_search error: semantic search is temporarily unavailable "
+            "(search backend failure). This is NOT an empty result — tell the user "
+            "semantic search is down, and try search_sites or search_news instead."
+        )
     if not items:
         return f"No semantic matches in '{collection}' collection."
     return json.dumps(items, ensure_ascii=False)
@@ -1121,7 +1141,7 @@ def search_radar(
         limit: Max results (default 10, max 20).
     """
     query = (query or "")[:500]
-    limit = min(limit, 20)
+    limit = max(1, min(limit, 20))
     conditions = ["uc.source = 'lyra'"]
     params: dict = {"limit": limit}
 
@@ -1230,7 +1250,7 @@ def get_site_images(
     """
     import uuid as _uuid
 
-    limit = min(limit, 50)
+    limit = max(1, min(limit, 50))
 
     try:
         _uuid.UUID(site)
@@ -1367,11 +1387,18 @@ def search_articles(
         limit: Max results (default 5, max 10).
     """
     query = (query or "").strip()[:500]
-    limit = min(limit, 10)
+    limit = max(1, min(limit, 10))
     if not query:
         return "No query provided. Please specify what to search for in articles."
 
-    items, _vt = _hybrid_search(query, collection="articles", limit=limit)
+    try:
+        items, _vt = _hybrid_search(query, collection="articles", limit=limit)
+    except HybridSearchUnavailableError:
+        return (
+            "search_articles error: semantic search is temporarily unavailable "
+            "(search backend failure). This is NOT an empty result — tell the user "
+            "article search is down right now."
+        )
     if not items:
         return "No article passages found matching the search."
 
@@ -1413,9 +1440,16 @@ def search_empires(
         limit: Max results (default 5, max 10).
     """
     query = (query or "")[:500]
-    limit = min(limit, 10)
+    limit = max(1, min(limit, 10))
 
-    items, _vt = _hybrid_search(query, collection="empires", limit=limit)
+    try:
+        items, _vt = _hybrid_search(query, collection="empires", limit=limit)
+    except HybridSearchUnavailableError:
+        return (
+            "search_empires error: semantic search is temporarily unavailable "
+            "(search backend failure). This is NOT an empty result — tell the user "
+            "empire search is down right now."
+        )
     if not items:
         return "No empires found matching the search."
 

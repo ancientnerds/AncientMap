@@ -666,7 +666,9 @@ def register_commands(bot: discord.Client) -> None:
             from pipeline.database import DiscordUser, get_session
 
             with get_session() as session:
-                query = session.query(CardPlayerStats)
+                query = session.query(CardPlayerStats, DiscordUser).join(
+                    DiscordUser, CardPlayerStats.user_id == DiscordUser.id
+                )
                 if sort == "wins":
                     query = query.order_by(CardPlayerStats.wins.desc())
                 elif sort == "cards":
@@ -686,8 +688,7 @@ def register_commands(bot: discord.Client) -> None:
                     color=0xFFC107,
                 )
                 lines = []
-                for i, ps in enumerate(rows, 1):
-                    user = session.get(DiscordUser, ps.user_id)
+                for i, (ps, user) in enumerate(rows, 1):
                     name = user.username if user else "Unknown"
                     if sort == "wins":
                         val = f"{ps.wins}W / {ps.losses}L"

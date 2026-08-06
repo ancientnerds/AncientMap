@@ -1,4 +1,5 @@
 """Tests for claim-pack integrity in paper handler."""
+
 from unittest.mock import MagicMock
 
 import pytest

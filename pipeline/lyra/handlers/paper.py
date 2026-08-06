@@ -8,7 +8,7 @@ from pathlib import Path
 
 from pipeline.lyra.config import _get_settings
 from pipeline.lyra.handlers import BaseHandler
-from pipeline.lyra.minimax_shared import minimax_chat_anthropic
+from pipeline.lyra.minimax_shared import MiniMaxTerminalError, minimax_chat_anthropic
 from pipeline.lyra.research_events import ModeratorComplete, PaperReady
 from pipeline.lyra.research_state import ResearchPhase
 
@@ -432,18 +432,26 @@ class PaperHandler(BaseHandler):
         else:
             card_input = f"## Title\n\n{self.state.paper_title}\n\n## Paper\n\n{_opener}"
         settings = _get_settings()
-        async with self.semaphore:
-            # 1024 total budget: ~100 tokens of output prose plus headroom for
-            # M3's interleaved thinking. The previous 256 was routinely eaten
-            # by the reasoning chain, leaving card descriptions empty/truncated.
-            self.state.card_description = await asyncio.to_thread(
-                minimax_chat_anthropic,
-                card_system,
-                card_input,
-                1024,
-                settings,
-                temperature=settings.temperature_narrative,
-            )
+        try:
+            async with self.semaphore:
+                # 1024 total budget: ~100 tokens of output prose plus headroom for
+                # M3's interleaved thinking. The previous 256 was routinely eaten
+                # by the reasoning chain, leaving card descriptions empty/truncated.
+                self.state.card_description = await asyncio.to_thread(
+                    minimax_chat_anthropic,
+                    card_system,
+                    card_input,
+                    1024,
+                    settings,
+                    temperature=settings.temperature_narrative,
+                )
+        except MiniMaxTerminalError as exc:
+            # Cosmetic stage: a missing card description must not kill a
+            # fully assembled paper. state.log makes the degradation visible
+            # in the persisted debug log.
+            logger.warning("[paper] card description failed terminally: %s", exc)
+            self.state.log("paper", f"Card description LLM failed terminally: {exc}")
+            self.state.card_description = ""
         self.state.llm_call_count += 1
 
         word_count = len(self.state.paper_text.split())
@@ -706,7 +714,18 @@ class PaperHandler(BaseHandler):
         )
         retry_msg = retry_prefix + user_msg
 
-        raw = await self._llm_call(prompt, retry_msg, max_tokens, settings)
+        try:
+            raw = await self._llm_call(prompt, retry_msg, max_tokens, settings)
+        except MiniMaxTerminalError as exc:
+            # Keep the original draft — the citation-density retry is an
+            # optional improvement pass over prose we already have.
+            logger.warning(
+                "[paper] citation-density retry failed terminally for section '%s' — "
+                "keeping original draft: %s",
+                section_title,
+                exc,
+            )
+            return prose
         retried = raw.strip()
 
         retry_citations = len(re.findall(r"\[\d+\]", retried))

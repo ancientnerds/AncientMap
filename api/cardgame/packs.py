@@ -209,10 +209,11 @@ def _card_to_dict(session: Session, card: CardStats, user_id: uuid.UUID | None =
 
     If user_id is provided, includes star_level and card_xp from their collection.
     """
-    from pipeline.database import UnifiedSite
-
-    site = session.get(UnifiedSite, card.site_id)
     from api.cardgame.constants import RARITY_NAMES, STAR_LEVELS
+
+    # CardStats.site is lazy="joined" — the UnifiedSite row arrives with the
+    # initial card query, no per-card SELECT here
+    site = card.site
 
     d = {
         "site_id": str(card.site_id),

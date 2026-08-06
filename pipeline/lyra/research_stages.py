@@ -28,7 +28,11 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from pipeline.lyra.config import LyraSettings, _get_settings
-from pipeline.lyra.minimax_shared import MINIMAX_MODEL, minimax_chat_anthropic
+from pipeline.lyra.minimax_shared import (
+    MINIMAX_MODEL,
+    MiniMaxTerminalError,
+    minimax_chat_anthropic,
+)
 from pipeline.lyra.theo_citations import CitationRegistry, audit_citations
 from pipeline.lyra.theo_quality_judge import get_restart_stage, judge_paper
 from pipeline.lyra.theo_sources import MultiSourceSearch
@@ -430,7 +434,15 @@ def _stage_synthesis(
     analyses_text = "\n".join(parts)
 
     user_msg = f"## Research question\n\n{question}\n\n## Specialist analyses\n\n{analyses_text}"
-    raw = minimax_chat_anthropic(system, user_msg, _MAX_TOKENS_SYNTHESIS, settings=settings)
+    try:
+        raw = minimax_chat_anthropic(system, user_msg, _MAX_TOKENS_SYNTHESIS, settings=settings)
+    except MiniMaxTerminalError as exc:
+        # Degraded mode: research_cluster's has_findings guard treats an
+        # empty synthesis explicitly ("skipping write" + iteration retry) —
+        # keep that convergence-loop behavior instead of aborting the whole
+        # journal cluster from inside a stage helper.
+        logger.warning("[journal] Synthesis LLM failed terminally: %s", exc)
+        raw = ""
     result = _parse_json(raw)
     if not isinstance(result, dict):
         result = {}
@@ -543,7 +555,18 @@ def _stage_write_section(
     # Retry up to 2 times on empty prose
     prose = ""
     for _write_attempt in range(3):
-        prose = minimax_chat_anthropic(system, user_msg, _MAX_TOKENS_SYNTHESIS, settings=settings)
+        try:
+            prose = minimax_chat_anthropic(
+                system, user_msg, _MAX_TOKENS_SYNTHESIS, settings=settings
+            )
+        except MiniMaxTerminalError as exc:
+            # Terminal = the helper already exhausted its own retries;
+            # re-calling here is pointless. Degraded mode: return "" so
+            # research_cluster's existing "Section writing returned empty
+            # prose" guard skips this iteration.
+            logger.warning("[journal] Write section LLM failed terminally: %s", exc)
+            prose = ""
+            break
         if prose.strip():
             break
         logger.info("[journal] Write returned empty, retrying (%d/3)", _write_attempt + 1)

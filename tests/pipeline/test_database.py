@@ -10,6 +10,7 @@ class TestDatabaseConnection:
     def test_get_db_generator(self):
         """get_db should be a generator function."""
         from pipeline.database import get_db
+
         assert callable(get_db)
 
     def test_database_url_from_env(self, monkeypatch):
@@ -26,6 +27,7 @@ class TestDatabaseModels:
         """UnifiedSite model should be defined."""
         try:
             from pipeline.database import UnifiedSite
+
             assert UnifiedSite is not None
         except ImportError:
             # Model might be in a different location

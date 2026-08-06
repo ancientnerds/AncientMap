@@ -136,7 +136,7 @@ def _make_rate_limit_dependency(limiter: RateLimiter, limit: int):
     limiter and the knowledge-graph read endpoints' limiter — same logic,
     different namespace/budget, so the body is never copy-pasted."""
 
-    async def dependency(request: Request, response: Response):
+    def dependency(request: Request, response: Response):
         ip = get_client_ip(request)
         allowed, remaining, reset_seconds = limiter.check_with_info(ip)
 
@@ -303,7 +303,7 @@ def create_public_api() -> FastAPI:
         dependencies=[Depends(rate_limit_dependency)],
         responses={429: {"description": "Rate limit exceeded"}},
     )
-    async def get_status(db: Session = Depends(get_db)):
+    def get_status(db: Session = Depends(get_db)):
         cache_key = "pubv1:status"
         cached = cache_get(cache_key)
         if cached:
@@ -340,7 +340,7 @@ def create_public_api() -> FastAPI:
         dependencies=[Depends(rate_limit_dependency)],
         responses={429: {"description": "Rate limit exceeded"}},
     )
-    async def get_sites_geojson(
+    def get_sites_geojson(
         response: Response,
         db: Session = Depends(get_db),
         source: list[str] | None = Query(
@@ -477,7 +477,7 @@ def create_public_api() -> FastAPI:
         dependencies=[Depends(rate_limit_dependency)],
         responses={429: {"description": "Rate limit exceeded"}},
     )
-    async def search_sites(
+    def search_sites(
         q: str = Query(..., min_length=2, max_length=200, description="Search query"),
         limit: int = Query(50, ge=1, le=200, description="Max results"),
         db: Session = Depends(get_db),
@@ -548,7 +548,7 @@ def create_public_api() -> FastAPI:
             429: {"description": "Rate limit exceeded"},
         },
     )
-    async def get_site_detail(
+    def get_site_detail(
         site_id: str,
         db: Session = Depends(get_db),
     ):
@@ -600,7 +600,7 @@ def create_public_api() -> FastAPI:
         dependencies=[Depends(rate_limit_dependency)],
         responses={429: {"description": "Rate limit exceeded"}},
     )
-    async def list_sources(db: Session = Depends(get_db)):
+    def list_sources(db: Session = Depends(get_db)):
         cache_key = "pubv1:sources"
         cached = cache_get(cache_key)
         if cached:
@@ -665,7 +665,7 @@ def create_public_api() -> FastAPI:
             429: {"description": "Rate limit exceeded"},
         },
     )
-    async def get_source_detail(
+    def get_source_detail(
         source_id: str,
         db: Session = Depends(get_db),
     ):
@@ -772,7 +772,7 @@ def create_public_api() -> FastAPI:
         dependencies=[Depends(rate_limit_dependency)],
         responses={429: {"description": "Rate limit exceeded"}},
     )
-    async def get_news(
+    def get_news(
         page: int = Query(1, ge=1, description="Page number"),
         page_size: int = Query(20, ge=1, le=50, description="Items per page"),
         q: str | None = Query(
@@ -904,7 +904,7 @@ def create_public_api() -> FastAPI:
         dependencies=[Depends(rate_limit_dependency)],
         responses={429: {"description": "Rate limit exceeded"}},
     )
-    async def list_channels(db: Session = Depends(get_db)):
+    def list_channels(db: Session = Depends(get_db)):
         cache_key = "pubv1:channels"
         cached = cache_get(cache_key)
         if cached:
@@ -934,7 +934,7 @@ def create_public_api() -> FastAPI:
         dependencies=[Depends(rate_limit_dependency)],
         responses={429: {"description": "Rate limit exceeded"}},
     )
-    async def get_stats(db: Session = Depends(get_db)):
+    def get_stats(db: Session = Depends(get_db)):
         cache_key = "pubv1:stats"
         cached = cache_get(cache_key)
         if cached:
@@ -980,7 +980,7 @@ def create_public_api() -> FastAPI:
         dependencies=[Depends(rate_limit_dependency)],
         responses={429: {"description": "Rate limit exceeded"}},
     )
-    async def get_facets(db: Session = Depends(get_db)):
+    def get_facets(db: Session = Depends(get_db)):
         cache_key = "pubv1:facets"
         cached = cache_get(cache_key)
         if cached:
@@ -1068,7 +1068,7 @@ def create_public_api() -> FastAPI:
         dependencies=[Depends(rate_limit_dependency)],
         responses={429: {"description": "Rate limit exceeded"}},
     )
-    async def list_cards(
+    def list_cards(
         site_id: str | None = Query(None, description="Filter by site UUID"),
         country: str | None = Query(None, description="Filter by country name (case-insensitive)"),
         rarity: int | None = Query(None, ge=1, le=5, description="Filter by rarity tier (1-5)"),
@@ -1185,7 +1185,7 @@ def create_public_api() -> FastAPI:
         dependencies=[Depends(rate_limit_dependency)],
         responses={429: {"description": "Rate limit exceeded"}},
     )
-    async def list_empires(
+    def list_empires(
         limit: int = Query(50, ge=1, le=500, description="Max results"),
         offset: int = Query(0, ge=0, description="Pagination offset"),
     ):
@@ -1215,7 +1215,7 @@ def create_public_api() -> FastAPI:
         dependencies=[Depends(rate_limit_dependency)],
         responses={429: {"description": "Rate limit exceeded"}},
     )
-    async def search_empires(
+    def search_empires(
         q: str = Query(..., min_length=2, max_length=200, description="Search query"),
         limit: int = Query(20, ge=1, le=100, description="Max results"),
     ):
@@ -1254,7 +1254,7 @@ def create_public_api() -> FastAPI:
             429: {"description": "Rate limit exceeded"},
         },
     )
-    async def get_empire(polity_id: str):
+    def get_empire(polity_id: str):
         cache_key = f"pubv1:empire:{polity_id}"
         cached = cache_get(cache_key)
         if cached:
@@ -1284,7 +1284,7 @@ def create_public_api() -> FastAPI:
         dependencies=[Depends(rate_limit_dependency)],
         responses={429: {"description": "Rate limit exceeded"}},
     )
-    async def list_radar(
+    def list_radar(
         q: str | None = Query(None, min_length=2, max_length=200, description="Search by name"),
         country: str | None = Query(None, description="Filter by country (case-insensitive)"),
         status: str | None = Query(
@@ -1379,7 +1379,7 @@ def create_public_api() -> FastAPI:
         dependencies=[Depends(rate_limit_dependency)],
         responses={429: {"description": "Rate limit exceeded"}},
     )
-    async def list_articles(
+    def list_articles(
         page: int = Query(1, ge=1, description="Page number"),
         page_size: int = Query(20, ge=1, le=50, description="Items per page"),
         q: str | None = Query(
@@ -1458,12 +1458,12 @@ def create_public_api() -> FastAPI:
         dependencies=[Depends(rate_limit_dependency)],
         responses={429: {"description": "Rate limit exceeded"}},
     )
-    async def search_articles(
+    def search_articles(
         q: str = Query(..., min_length=2, max_length=200, description="Search keyword"),
         limit: int = Query(20, ge=1, le=50, description="Max results"),
         db: Session = Depends(get_db),
     ):
-        return await list_articles(page=1, page_size=limit, q=q, db=db)
+        return list_articles(page=1, page_size=limit, q=q, db=db)
 
     # =========================================================================
     # 16. GET /articles/{article_id} — Full article detail
@@ -1484,7 +1484,7 @@ def create_public_api() -> FastAPI:
             429: {"description": "Rate limit exceeded"},
         },
     )
-    async def get_article(
+    def get_article(
         article_id: int,
         db: Session = Depends(get_db),
     ):
@@ -1550,7 +1550,7 @@ def create_public_api() -> FastAPI:
         dependencies=[Depends(rate_limit_dependency)],
         responses={429: {"description": "Rate limit exceeded"}},
     )
-    async def list_research_papers(
+    def list_research_papers(
         page: int = Query(1, ge=1, description="Page number"),
         page_size: int = Query(20, ge=1, le=50, description="Items per page"),
         q: str | None = Query(
@@ -1629,7 +1629,7 @@ def create_public_api() -> FastAPI:
             429: {"description": "Rate limit exceeded"},
         },
     )
-    async def get_research_paper(
+    def get_research_paper(
         slug: str,
         db: Session = Depends(get_db),
     ):
@@ -1678,7 +1678,7 @@ def create_public_api() -> FastAPI:
             429: {"description": "Rate limit exceeded"},
         },
     )
-    async def get_site_images(
+    def get_site_images(
         site_id: str,
         limit: int = Query(20, ge=1, le=50, description="Max images"),
         db: Session = Depends(get_db),
@@ -1746,7 +1746,7 @@ def create_public_api() -> FastAPI:
         dependencies=[Depends(knowledge_rate_limit_dependency)],
         responses={429: {"description": "Rate limit exceeded"}},
     )
-    async def get_graph(
+    def get_graph(
         kinds: str | None = Query(
             None,
             description="Comma-separated node kinds to include (default: all)",
@@ -1841,7 +1841,7 @@ def create_public_api() -> FastAPI:
         dependencies=[Depends(knowledge_rate_limit_dependency)],
         responses={429: {"description": "Rate limit exceeded"}},
     )
-    async def get_knowledge_activity(
+    def get_knowledge_activity(
         limit: int = Query(50, ge=1, le=200, description="Max activity events"),
         db: Session = Depends(get_db),
     ):
@@ -1886,7 +1886,7 @@ def create_public_api() -> FastAPI:
         dependencies=[Depends(knowledge_rate_limit_dependency)],
         responses={429: {"description": "Rate limit exceeded"}},
     )
-    async def get_knowledge_claims(
+    def get_knowledge_claims(
         node_id: str = Query(..., description="research_nodes UUID"),
         db: Session = Depends(get_db),
     ):

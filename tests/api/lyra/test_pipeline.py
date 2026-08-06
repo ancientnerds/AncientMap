@@ -501,7 +501,13 @@ class TestBuildMessages:
                 context_year=None,
                 retrieved_context="\n\nRetrieved data here",
             )
-        assert "Retrieved data here" in msgs[0].content
+        # LLM01 (audit 2026-08-05): retrieved third-party context must ride
+        # in the USER turn as a fenced data block — never in the system
+        # prompt, where it would carry instruction-level authority.
+        assert "Retrieved data here" not in msgs[0].content
+        assert "Retrieved data here" in msgs[-1].content
+        assert "<retrieved_context>" in msgs[-1].content
+        assert msgs[-1].content.strip().endswith("test")
 
 
 # ---------------------------------------------------------------------------

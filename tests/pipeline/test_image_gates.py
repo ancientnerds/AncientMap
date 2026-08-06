@@ -92,10 +92,10 @@ def test_parse_vlm_verdict_handles_garbage():
 
 def test_parse_vlm_verdict_strips_code_fences():
     raw = (
-        '```json\n'
+        "```json\n"
         '{"primary_entity_in_claim":"x","what_image_actually_shows":"y",'
         '"match":"exact","verdict":"meaningful","reason":"ok"}\n'
-        '```'
+        "```"
     )
     v = parse_vlm_verdict(raw)
     assert v is not None and v["verdict"] == "meaningful"

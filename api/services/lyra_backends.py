@@ -11,7 +11,6 @@ All backends normalize output to the same StreamEvent dicts:
 
 import json
 import logging
-import os
 from collections.abc import AsyncIterator
 from typing import Protocol
 
@@ -35,7 +34,11 @@ class LLMBackend(Protocol):
     """All backends normalize output to StreamEvent dicts."""
 
     def stream(
-        self, messages: list[BaseMessage], tools: list, enable_thinking: bool = True
+        self,
+        messages: list[BaseMessage],
+        tools: list,
+        enable_thinking: bool = True,
+        max_tokens: int | None = None,
     ) -> AsyncIterator[dict]: ...
 
     async def complete(self, messages: list, response_format: dict | None = None) -> dict: ...
@@ -106,11 +109,21 @@ def _langchain_messages_to_openai(messages: list) -> list[dict]:
 
 
 class AnthropicBackend:
-    """Uses anthropic.AsyncAnthropic for native Claude API (no OpenAI compat layer)."""
+    """Uses anthropic.AsyncAnthropic for native Claude API (no OpenAI compat layer).
+
+    ``max_tokens`` is the config-level default output cap; per-request overrides
+    are passed to generate()/stream() — nothing request-specific lives on the
+    instance, so it is safe to share as a singleton.
+    """
 
     def __init__(self, model: str, api_key: str, max_tokens: int):
         import anthropic as _anthropic
 
+        if not api_key:
+            raise RuntimeError(
+                "Anthropic API key is empty — set LYRA_ANTHROPIC_API_KEY "
+                "(or legacy LYRA_API_KEY) in the environment/.env"
+            )
         self.model = model
         self.max_tokens = max_tokens
         self._client = _anthropic.AsyncAnthropic(api_key=api_key, timeout=120.0)
@@ -404,7 +417,11 @@ class AnthropicBackend:
         }
 
     async def stream(
-        self, messages: list[BaseMessage], tools: list, enable_thinking: bool = True
+        self,
+        messages: list[BaseMessage],
+        tools: list,
+        enable_thinking: bool = True,
+        max_tokens: int | None = None,
     ) -> AsyncIterator[dict]:
         """Stream from Anthropic, yielding normalized StreamEvent dicts."""
         system_text, anthropic_msgs = self._to_anthropic_messages(messages)
@@ -415,7 +432,7 @@ class AnthropicBackend:
         stream_kwargs: dict = {
             "model": self.model,
             "messages": anthropic_msgs,
-            "max_tokens": self.max_tokens,
+            "max_tokens": max_tokens or self.max_tokens,
         }
         if system_text:
             stream_kwargs["system"] = [
@@ -469,7 +486,7 @@ class AnthropicBackend:
 
 
 # ---------------------------------------------------------------------------
-# Backend factory — creates singleton backends keyed by model name
+# Backend factory — creates singleton backends keyed by backend type + model
 # ---------------------------------------------------------------------------
 
 _backends: dict[str, LLMBackend] = {}
@@ -480,22 +497,31 @@ def get_backend(
     backend_type: str,
     max_tokens: int | None = None,
 ) -> LLMBackend:
-    """Get or create a backend instance for the given model.
+    """Get or create the singleton backend for the given model.
+
+    Every backend is an AnthropicBackend — ``backend_type`` only namespaces
+    the cache key; it does NOT select a different implementation or route
+    to another provider.
 
     Args:
         model_name: The model to use (e.g. "claude-haiku-4-5-20251001").
-        backend_type: Backend identifier (used for cache keying).
-        max_tokens: Override max output tokens.
-    """
-    key = f"{backend_type}:{model_name}:{max_tokens}"
-    if key not in _backends:
-        from pipeline.lyra.config import get_max_tokens
+        backend_type: Backend identifier (cache-key namespace only).
+        max_tokens: Deprecated and ignored — pass max_tokens per call to
+            generate()/stream() instead. Retained for signature
+            compatibility with existing callers.
 
-        api_key = os.getenv("LYRA_ANTHROPIC_API_KEY") or os.getenv("LYRA_API_KEY") or ""
+    Raises:
+        RuntimeError: if no Anthropic API key is configured (fail loud
+            instead of creating a client that 401s on first use).
+    """
+    key = f"{backend_type}:{model_name}"
+    if key not in _backends:
+        from pipeline.lyra.config import get_api_key, get_max_tokens
+
         _backends[key] = AnthropicBackend(
             model=model_name,
-            api_key=api_key,
-            max_tokens=max_tokens or get_max_tokens(),
+            api_key=get_api_key(),
+            max_tokens=get_max_tokens(),
         )
         logger.info(f"Created AnthropicBackend for {model_name}")
     return _backends[key]

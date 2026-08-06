@@ -1,4 +1,5 @@
 """Test that call_api() correctly wraps documents into content blocks."""
+
 from unittest.mock import MagicMock, patch
 
 import pytest

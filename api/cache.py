@@ -16,9 +16,14 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-# Redis client singleton
+# Redis client singleton — lazy connect with a failure cooldown: on any Redis
+# error we skip Redis for 30s instead of paying a reconnect attempt per call.
+_REDIS_RETRY_COOLDOWN = 30.0  # seconds between reconnect attempts
+
 _redis_client = None
-_redis_available = False
+_redis_failed_at: float | None = None  # monotonic time of last failure
+_redis_state = "init"  # "init" | "connected" | "lost" — for state-change logging
+_redis_lock = threading.Lock()
 
 # In-memory fallback cache when Redis is unavailable
 # Format: {key: (value, expiry_timestamp)}
@@ -41,24 +46,53 @@ def _cleanup_memory_cache():
 
 
 def get_redis_client():
-    """Get or create Redis client singleton."""
-    global _redis_client, _redis_available
+    """Get or create the Redis client singleton (lazy, with 30s failure cooldown)."""
+    global _redis_client, _redis_failed_at, _redis_state
 
-    if _redis_client is not None:
-        return _redis_client if _redis_available else None
+    client = _redis_client
+    if client is not None:
+        return client
 
-    try:
-        import redis
+    with _redis_lock:
+        if _redis_client is not None:
+            return _redis_client
+        now = time.monotonic()
+        if _redis_failed_at is not None and now - _redis_failed_at < _REDIS_RETRY_COOLDOWN:
+            return None
+        try:
+            import redis
 
-        redis_url = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
-        _redis_client = redis.from_url(redis_url, decode_responses=True)
-        _redis_client.ping()
-        _redis_available = True
-        return _redis_client
-    except Exception:
-        _redis_available = False
+            redis_url = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
+            client = redis.from_url(redis_url, decode_responses=True)
+            client.ping()
+        except Exception as e:
+            _redis_failed_at = now
+            if _redis_state != "lost":
+                _redis_state = "lost"
+                logger.warning(
+                    f"Redis unavailable for caching, using in-memory "
+                    f"(retrying every {_REDIS_RETRY_COOLDOWN:.0f}s): {e}"
+                )
+            return None
+        _redis_client = client
+        _redis_failed_at = None
+        _redis_state = "connected"
+        logger.warning("Redis connected for caching")
+        return client
+
+
+def _mark_redis_lost(context: str, exc: Exception) -> None:
+    """Drop the client after a runtime error and start the retry cooldown."""
+    global _redis_client, _redis_failed_at, _redis_state
+    with _redis_lock:
         _redis_client = None
-        return None
+        _redis_failed_at = time.monotonic()
+        if _redis_state != "lost":
+            _redis_state = "lost"
+            logger.warning(
+                f"Redis lost for caching on {context}, using in-memory "
+                f"(retrying every {_REDIS_RETRY_COOLDOWN:.0f}s): {exc}"
+            )
 
 
 def cache_get(key: str) -> Any | None:
@@ -70,8 +104,11 @@ def cache_get(key: str) -> Any | None:
             value = client.get(key)
             if value is not None:
                 return json.loads(value)
-        except Exception as e:
+        except (TypeError, ValueError) as e:
+            # Corrupt cached JSON — not a Redis outage, keep the connection
             logger.warning(f"Cache get error for {key}: {e}")
+        except Exception as e:
+            _mark_redis_lost(f"get {key}", e)
 
     # Fallback to in-memory cache
     with _memory_lock:
@@ -94,8 +131,11 @@ def cache_set(key: str, value: Any, ttl: int = 3600) -> bool:
         try:
             client.setex(key, ttl, json.dumps(value))
             return True
-        except Exception as e:
+        except (TypeError, ValueError) as e:
+            # Unserializable value — not a Redis outage, keep the connection
             logger.warning(f"Cache set error for {key}: {e}")
+        except Exception as e:
+            _mark_redis_lost(f"set {key}", e)
 
     # Fallback to in-memory cache
     with _memory_lock:
@@ -116,7 +156,7 @@ def cache_delete(key: str) -> bool:
             client.delete(key)
             deleted = True
         except Exception as e:
-            logger.warning(f"Cache delete error for {key}: {e}")
+            _mark_redis_lost(f"delete {key}", e)
 
     # Also delete from memory cache
     with _memory_lock:
@@ -143,7 +183,7 @@ def cache_delete_pattern(pattern: str) -> int:
                 if cursor == 0:
                     break
         except Exception as e:
-            logger.warning(f"Cache delete pattern error for {pattern}: {e}")
+            _mark_redis_lost(f"delete pattern {pattern}", e)
 
     # Also delete from memory cache (simple prefix match)
     import fnmatch

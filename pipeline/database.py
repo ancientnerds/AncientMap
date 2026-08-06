@@ -1342,6 +1342,12 @@ class ResearchRequest(Base):
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     specialist_options: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     is_public: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    # Exactly-once guard for the credit-reservation release (migration 0010,
+    # audit 2026-08-05): every release path flips this flag first; only the
+    # flip that wins decrements discord_users.reserved_credits.
+    reservation_released: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default="false"
+    )
     published_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     published_by: Mapped[str | None] = mapped_column(String(100), nullable=True)
     slug: Mapped[str | None] = mapped_column(String(300), nullable=True)

@@ -1235,9 +1235,13 @@ export default function LyraChatModal({
                                       const links = msg.structuredOutput?.links as Array<{ citation?: number; text?: string; url?: string }> | undefined
                                       if (links?.length) {
                                         const urlMap = new Map(links.map(l => [l.citation ?? 0, l.url ?? '']))
-                                        text = text.replace(/(?<!\[)\[(\d+)\](?!\()/g, (_m, n) => {
+                                        // No lookbehind — Safari <16.4 throws a SyntaxError at regex
+                                        // parse time. Capture an optional preceding "[" instead and
+                                        // leave those matches untouched (same effect as (?<!\[)).
+                                        text = text.replace(/(\[?)\[(\d+)\](?!\()/g, (m, pre, n) => {
+                                          if (pre) return m
                                           const url = urlMap.get(Number(n))
-                                          return url ? `[\\[${n}\\]](${url})` : `[${n}]`
+                                          return url ? `[\\[${n}\\]](${url})` : m
                                         })
                                       }
                                       return text

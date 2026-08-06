@@ -59,9 +59,13 @@ def extract_user_subquestions(question: str) -> list[str]:
         if not s:
             continue
         # Skip fragments that have neither enough content nor an
-        # interrogative — those are sentence-splitter artifacts.
+        # interrogative — those are sentence-splitter artifacts. A short
+        # fragment that BEGINS with an interrogative and ends in "?" is a
+        # real question though ("Could they have manipulated matter?" is
+        # 5 words) — artifacts like "(c. 1200 BCE)?" never start with a
+        # question word (audit follow-up 2026-08-06).
         word_count = len(re.findall(r"\b\w+\b", s))
-        if word_count < _MIN_SUBQ_WORDS:
+        if word_count < _MIN_SUBQ_WORDS and not (s.endswith("?") and _INTERROGATIVE_RE.match(s)):
             continue
         if not _INTERROGATIVE_RE.search(s):
             continue

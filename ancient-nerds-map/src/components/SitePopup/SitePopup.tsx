@@ -401,7 +401,7 @@ export default function SitePopup({
         setTimeout(() => setSiteShareSuccess(false), 2000)
       }
     } catch {
-      console.log('Share cancelled')
+      // User cancelled the share sheet — nothing to do
     }
   }
 
@@ -421,7 +421,7 @@ export default function SitePopup({
         setTimeout(() => setShareSuccess(false), 2000)
       }
     } catch {
-      console.log('Share cancelled')
+      // User cancelled the share sheet — nothing to do
     }
   }
 

@@ -3,10 +3,15 @@
 
 import pytest
 
+# Needs the local Postgres/Redis containers (TestClient startup connects) —
+# skipped by the DB-less CI test job (audit P3-13, 2026-08-06).
+pytestmark = pytest.mark.integration
+
+
 # Mark tests that require database connection
 requires_db = pytest.mark.skipif(
     True,  # Skip by default in CI without DB
-    reason="Requires PostgreSQL database connection"
+    reason="Requires PostgreSQL database connection",
 )
 
 
@@ -67,21 +72,27 @@ class TestXSSPrevention:
     def test_html_module_imported(self):
         """OG module should import html module for escaping."""
         import inspect
+
         from api.routes import og
+
         source = inspect.getsource(og)
         assert "import html" in source
 
     def test_html_escape_used(self):
         """OG module should use html.escape for user data."""
         import inspect
+
         from api.routes import og
+
         source = inspect.getsource(og)
         assert "html.escape" in source
 
     def test_escaped_variables_used_in_template(self):
         """OG module should use escaped variables in HTML template."""
         import inspect
+
         from api.routes import og
+
         source = inspect.getsource(og)
         # Check that escaped versions are used
         assert "title_escaped" in source

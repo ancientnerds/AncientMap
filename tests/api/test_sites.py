@@ -3,10 +3,15 @@
 
 import pytest
 
+# Needs the local Postgres/Redis containers (TestClient startup connects) —
+# skipped by the DB-less CI test job (audit P3-13, 2026-08-06).
+pytestmark = pytest.mark.integration
+
+
 # Mark tests that require database connection
 requires_db = pytest.mark.skipif(
     True,  # Skip by default in CI without DB
-    reason="Requires PostgreSQL database connection"
+    reason="Requires PostgreSQL database connection",
 )
 
 
@@ -71,7 +76,7 @@ class TestViewportEndpoint:
                 "max_lat": 45.0,
                 "min_lon": 10.0,
                 "max_lon": 15.0,
-            }
+            },
         )
         assert response.status_code == 200
         data = response.json()

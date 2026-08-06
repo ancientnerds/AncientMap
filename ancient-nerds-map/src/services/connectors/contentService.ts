@@ -112,8 +112,6 @@ async function apiRequest<T>(
     }
   }
 
-  console.log(`[contentService] Fetching: ${url.toString()}`)
-
   const response = await fetch(url.toString(), {
     headers: { Accept: 'application/json' },
   })

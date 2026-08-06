@@ -7,6 +7,10 @@ from unittest.mock import MagicMock, patch
 import pytest
 from fastapi.testclient import TestClient
 
+# Needs the local Postgres/Redis containers (TestClient startup connects) —
+# skipped by the DB-less CI test job (audit P3-13, 2026-08-06).
+pytestmark = pytest.mark.integration
+
 
 def _make_site(name="Test Site", lat=41.89, lon=12.49, **overrides):
     """Build a minimal site payload."""

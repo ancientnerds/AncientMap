@@ -116,10 +116,23 @@ def _extract_domain(url: str) -> str:
 
 
 def _format_sources_for_prompt(sources: list[dict]) -> str:
-    """Format sources list into a readable block for LLM prompts."""
+    """Format sources list into a readable block for LLM prompts.
+
+    Includes each source's snippet (truncated to ~300 chars) when it carries
+    one: the D2 coverage fixer matches sentences to sources with this block,
+    and label+URL alone forced the LLM to pick citations blind — the
+    citation-laundering root cause (audit P5-15). Snippets identical to the
+    label are skipped (_assemble_from_clusters uses the label as the snippet
+    default, so that variant carries no extra signal).
+    """
     lines: list[str] = []
     for s in sources:
         lines.append(f"[{s.get('citation', '?')}] {s.get('label', 'Unknown')} — {s.get('url', '')}")
+        snippet = (s.get("snippet") or "").strip()
+        if snippet and snippet != (s.get("label") or "").strip():
+            if len(snippet) > 300:
+                snippet = snippet[:300].rstrip() + "..."
+            lines.append(f"    Snippet: {snippet}")
     return "\n".join(lines)
 
 

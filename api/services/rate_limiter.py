@@ -10,6 +10,7 @@ Usage:
 
 import logging
 import os
+import threading
 import time
 
 from fastapi import Request
@@ -31,21 +32,67 @@ def get_client_ip(request: Request) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Module-level Redis client (shared by all RateLimiter instances)
+# Module-level Redis client (shared by all RateLimiter instances).
+# Lazy connect with a failure cooldown: a boot-time Redis outage no longer
+# pins in-memory limiting for the process lifetime — we retry every 30s.
 # ---------------------------------------------------------------------------
 
+_REDIS_RETRY_COOLDOWN = 30.0  # seconds between reconnect attempts
+
 _redis_client = None
+_redis_failed_at: float | None = None  # monotonic time of last failed attempt
+_redis_state = "init"  # "init" | "connected" | "lost" — for state-change logging
+_redis_lock = threading.Lock()
 
-try:
-    import redis
 
-    _redis_url = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
-    _redis_client = redis.from_url(_redis_url, decode_responses=True)
-    _redis_client.ping()
-    logger.info("Redis connected for rate limiting")
-except Exception as e:
-    logger.warning(f"Redis not available, using in-memory rate limiting: {e}")
-    _redis_client = None
+def _get_redis():
+    """Return a connected Redis client, or None while unavailable/in cooldown."""
+    global _redis_client, _redis_failed_at, _redis_state
+
+    client = _redis_client
+    if client is not None:
+        return client
+
+    with _redis_lock:
+        if _redis_client is not None:
+            return _redis_client
+        now = time.monotonic()
+        if _redis_failed_at is not None and now - _redis_failed_at < _REDIS_RETRY_COOLDOWN:
+            return None
+        try:
+            import redis
+
+            redis_url = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
+            client = redis.from_url(redis_url, decode_responses=True)
+            client.ping()
+        except Exception as e:
+            _redis_failed_at = now
+            if _redis_state != "lost":
+                _redis_state = "lost"
+                logger.warning(
+                    f"Redis unavailable for rate limiting, using in-memory "
+                    f"(retrying every {_REDIS_RETRY_COOLDOWN:.0f}s): {e}"
+                )
+            return None
+        _redis_client = client
+        _redis_failed_at = None
+        _redis_state = "connected"
+        logger.warning("Redis connected for rate limiting")
+        return client
+
+
+def _mark_redis_lost(exc: Exception) -> None:
+    """Drop the client after a runtime error and start the retry cooldown."""
+    global _redis_client, _redis_failed_at, _redis_state
+    with _redis_lock:
+        _redis_client = None
+        _redis_failed_at = time.monotonic()
+        if _redis_state != "lost":
+            _redis_state = "lost"
+            logger.warning(
+                f"Redis lost for rate limiting, using in-memory "
+                f"(retrying every {_REDIS_RETRY_COOLDOWN:.0f}s): {exc}"
+            )
 
 
 class RateLimiter:
@@ -61,68 +108,42 @@ class RateLimiter:
 
     def check(self, ip: str) -> bool:
         """Return True if the request is allowed, False if rate limited."""
-        if _redis_client is not None:
-            try:
-                return self._check_redis(ip)
-            except Exception as e:
-                logger.error(f"Redis rate limit error, falling back to memory: {e}")
-
-        return self._check_memory(ip)
+        allowed, _, _ = self.check_with_info(ip)
+        return allowed
 
     def check_with_info(self, ip: str) -> tuple[bool, int, int]:
         """Return (allowed, remaining, reset_seconds) for rate-limit headers."""
-        if _redis_client is not None:
+        client = _get_redis()
+        if client is not None:
             try:
-                return self._check_redis_with_info(ip)
+                return self._check_redis_with_info(client, ip)
             except Exception as e:
-                logger.error(f"Redis rate limit error, falling back to memory: {e}")
+                _mark_redis_lost(e)
 
         return self._check_memory_with_info(ip)
 
     # -- Redis path --------------------------------------------------------
 
-    def _check_redis(self, ip: str) -> bool:
-        assert _redis_client is not None  # caller checks before calling
+    def _check_redis_with_info(self, client, ip: str) -> tuple[bool, int, int]:
         key = f"rate_limit:{self.namespace}:{ip}"
-        count = _redis_client.incr(key)
-        if count == 1:
-            _redis_client.expire(key, self.window_seconds)
-        return count <= self.max_requests
-
-    def _check_redis_with_info(self, ip: str) -> tuple[bool, int, int]:
-        assert _redis_client is not None
-        key = f"rate_limit:{self.namespace}:{ip}"
-        pipe = _redis_client.pipeline(transaction=True)
+        # Atomic fixed window: SET NX EX creates the key WITH its TTL in the
+        # same MULTI/EXEC transaction as INCR, so the window expiry can never
+        # be lost between INCR and a separate EXPIRE call (the old two-call
+        # pattern could leave a key without TTL = permanently limited IP).
+        pipe = client.pipeline(transaction=True)
+        pipe.set(key, 0, nx=True, ex=self.window_seconds)
         pipe.incr(key)
         pipe.ttl(key)
-        count, ttl = pipe.execute()
-        if count == 1:
-            _redis_client.expire(key, self.window_seconds)
+        _, count, ttl = pipe.execute()
+        if ttl < 0:
+            # Key without TTL left over from the pre-fix INCR/EXPIRE race:
+            # repair it so the IP is not limited forever.
+            client.expire(key, self.window_seconds)
             ttl = self.window_seconds
         remaining = max(0, self.max_requests - count)
-        reset_seconds = max(0, ttl) if ttl > 0 else self.window_seconds
-        return (count <= self.max_requests, remaining, reset_seconds)
+        return (count <= self.max_requests, remaining, ttl)
 
     # -- In-memory path ----------------------------------------------------
-
-    def _check_memory(self, ip: str) -> bool:
-        now = time.time()
-
-        # Periodic cleanup every 5 minutes
-        if now - self._last_cleanup > 300:
-            self._cleanup(now)
-            self._last_cleanup = now
-
-        timestamps = self._store.get(ip, [])
-        timestamps = [t for t in timestamps if now - t < self.window_seconds]
-
-        if len(timestamps) >= self.max_requests:
-            self._store[ip] = timestamps
-            return False
-
-        timestamps.append(now)
-        self._store[ip] = timestamps
-        return True
 
     def _check_memory_with_info(self, ip: str) -> tuple[bool, int, int]:
         now = time.time()

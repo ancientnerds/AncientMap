@@ -245,21 +245,12 @@ export function runAnimationLoop(ctx: AnimationLoopContext): void {
     if (ctx.warpProgressRef.current < 1 && ctx.layersReadyCalledRef.current) {
       if (ctx.warpStartTimeRef.current === null) {
         ctx.warpStartTimeRef.current = now
-        console.log('[Warp] Starting smooth warp animation (assets ready)')
       }
 
       // FRAME-BASED WARP: ~3 seconds at 60fps (180 frames)
       const PROGRESS_PER_FRAME = 0.0055
       const prevProgress = ctx.warpProgressRef.current
       const newProgress = Math.min(prevProgress + PROGRESS_PER_FRAME, 1.0)
-
-      // Debug logging every 10%
-      const prevPercent = Math.floor(prevProgress * 10)
-      const newPercent = Math.floor(newProgress * 10)
-      if (newPercent > prevPercent) {
-        const elapsed = now - ctx.warpStartTimeRef.current
-        console.log(`[Warp] ${newPercent * 10}% | elapsed=${(elapsed/1000).toFixed(1)}s scale=${(0.3 + 0.7 * newProgress).toFixed(2)}`)
-      }
 
       ctx.warpProgressRef.current = newProgress
       ctx.warpLinearProgressRef.current = newProgress  // Track for dots timing
@@ -301,10 +292,8 @@ export function runAnimationLoop(ctx: AnimationLoopContext): void {
 
       // Transition logo: scale with globe AND fade from red/visible to transparent
       if (ctx.logoSpriteRef.current) {
-        // Debug: log first time logo animation runs
         if (!ctx.logoAnimationStartedRef.current) {
           ctx.logoAnimationStartedRef.current = true
-          console.log(`[Logo] Animation started at warp progress: ${newProgress.toFixed(2)}`)
         }
         // Scale logo with globe (base size: height=1.2, width=1.488)
         const logoHeight = 1.2 * scale
@@ -370,8 +359,6 @@ export function runAnimationLoop(ctx: AnimationLoopContext): void {
 
     // Warp complete
     if (ctx.warpProgressRef.current >= 1 && !ctx.warpCompleteForLabelsRef.current) {
-      const totalTime = ctx.warpStartTimeRef.current ? now - ctx.warpStartTimeRef.current : 0
-      console.log(`[Warp] 100% COMPLETE in ${totalTime.toFixed(0)}ms`)
       ctx.warpCompleteForLabelsRef.current = true
     }
 

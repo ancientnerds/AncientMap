@@ -91,13 +91,9 @@ class ImageCacheClass {
   async getOrFetch(url: string): Promise<string> {
     // Try cache first
     const cached = await this.get(url)
-    if (cached) {
-      console.log('[ImageCache] Cache hit:', url.substring(0, 50))
-      return cached
-    }
+    if (cached) return cached
 
     // Fetch and cache
-    console.log('[ImageCache] Cache miss, fetching:', url.substring(0, 50))
     const blobUrl = await this.cacheFromUrl(url)
 
     // Cleanup old entries periodically
@@ -137,7 +133,6 @@ class ImageCacheClass {
         // Delete oldest entries (first in list)
         const toDelete = keys.slice(0, keys.length - MAX_CACHE_SIZE)
         await Promise.all(toDelete.map(request => cache.delete(request)))
-        console.log(`[ImageCache] Cleaned up ${toDelete.length} old entries`)
       }
     } catch (error) {
       console.warn('[ImageCache] Cleanup failed:', error)
@@ -151,7 +146,6 @@ class ImageCacheClass {
     if (!this.isSupported) return
     await caches.delete(CACHE_NAME)
     this.cachePromise = null
-    console.log('[ImageCache] Cache cleared')
   }
 
   /**

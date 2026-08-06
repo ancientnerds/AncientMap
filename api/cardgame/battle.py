@@ -269,3 +269,28 @@ def apply_battle_result(
                 ps = session.get(CardPlayerStats, winner_user.id)
                 if ps:
                     ps.total_cards += 1
+
+    # Fire battle_complete achievement checks for both participants — this
+    # event was never fired anywhere, leaving warrior_high_stakes,
+    # warrior_snap_master and warrior_flawless unobtainable
+    from api.cardgame.achievements import check_achievements
+
+    snapped_ids = set(battle.snapped_by or [])  # Discord snowflake IDs
+    winner_score = (
+        result["challenger_wins"] if result["winner"] == "challenger" else result["defender_wins"]
+    )
+    for user, is_winner in [
+        (challenger, result["winner"] == "challenger"),
+        (defender, result["winner"] == "defender"),
+    ]:
+        check_achievements(
+            session,
+            user.id,
+            "battle_complete",
+            context={
+                "is_winner": is_winner,
+                "effective_stake": effective_stake,
+                "user_snapped": user.discord_id in snapped_ids,
+                "winner_score": winner_score,
+            },
+        )

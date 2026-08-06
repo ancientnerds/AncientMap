@@ -262,11 +262,18 @@ def test_strip_metrics_count_injection_vs_drop():
 
 
 def test_strip_metrics_count_restored_sections():
-    """When strip would gut a section below threshold, restored_sections increments."""
-    registry, _sources = _build_shining_ones_registry()
+    """A section gutted below threshold — but NOT fully uncited — is restored.
 
-    # Section with 4 long uncited paragraphs that DON'T match any claim — strip
-    # would empty it, so the safeguard restores the original content.
+    Updated 2026-08-06: since the Run-16 change, a section where EVERYTHING
+    is uncited gets dropped (restoring it would just preserve uncited
+    claims). The restore safeguard now only applies when some cited content
+    survives but the strip would still gut the section below the preserve
+    threshold — so the test anchors the section with one cited sentence.
+    """
+    registry, sources = _build_shining_ones_registry()
+    n = registry.assign_reference_number(sources["watchers"])
+
+    cited_anchor = f"A short cited sentence anchors this engineering section [{n}]."
     long_unrelated = (
         "The Roman aqueducts of Segovia were constructed during the reign of Trajan "
         "delivering water with a precise gradient over twenty-five kilometers of countryside "
@@ -274,6 +281,8 @@ def test_strip_metrics_count_restored_sections():
     )
     paper = (
         "## Roman Engineering\n\n"
+        + cited_anchor
+        + "\n\n"
         + long_unrelated
         + "\n\n"
         + long_unrelated
@@ -285,9 +294,30 @@ def test_strip_metrics_count_restored_sections():
     )
 
     metrics: dict = {}
-    strip_uncited_factual_paragraphs(paper, registry, metrics_out=metrics)
+    out = strip_uncited_factual_paragraphs(paper, registry, metrics_out=metrics)
 
     assert metrics["restored_sections"] >= 1
+    # Restored means the original uncited prose survives in the output.
+    assert "aqueducts of Segovia" in out
+
+
+def test_strip_drops_fully_uncited_section():
+    """A section where EVERYTHING is uncited is dropped, not restored
+    (Run-16 behavior: restoring would only preserve uncited claims)."""
+    registry, _sources = _build_shining_ones_registry()
+
+    long_unrelated = (
+        "The Roman aqueducts of Segovia were constructed during the reign of Trajan "
+        "delivering water with a precise gradient over twenty-five kilometers of countryside "
+        "from the Sierra Madre across the meseta into the city center where it served the public baths."
+    )
+    paper = "## Roman Engineering\n\n" + "\n\n".join([long_unrelated] * 4) + "\n"
+
+    metrics: dict = {}
+    out = strip_uncited_factual_paragraphs(paper, registry, metrics_out=metrics)
+
+    assert metrics["restored_sections"] == 0
+    assert "aqueducts of Segovia" not in out
 
 
 def test_format_references_includes_injected_sources():

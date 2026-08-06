@@ -182,7 +182,7 @@ class NewsFiltersResponse(BaseModel):
 
 
 @router.get("/feed", response_model=NewsFeedResponse)
-async def get_news_feed(
+def get_news_feed(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     channel_id: str | None = None,
@@ -350,7 +350,7 @@ async def get_news_feed(
 
 
 @router.get("/item/{item_id}", response_model=NewsItemResponse)
-async def get_news_item(item_id: int, db: Session = Depends(get_db)):
+def get_news_item(item_id: int, db: Session = Depends(get_db)):
     """Get a single news item by ID."""
     item = (
         db.query(NewsItem)
@@ -413,7 +413,7 @@ async def get_news_item(item_id: int, db: Session = Depends(get_db)):
 
 
 @router.get("/filters", response_model=NewsFiltersResponse)
-async def get_news_filters(db: Session = Depends(get_db)):
+def get_news_filters(db: Session = Depends(get_db)):
     """Get available filter options based on existing news data."""
     cache_key = "news:filters"
     cached = cache_get(cache_key)
@@ -523,7 +523,7 @@ async def get_news_filters(db: Session = Depends(get_db)):
 
 
 @router.get("/channels", response_model=list[NewsChannelResponse])
-async def get_news_channels(db: Session = Depends(get_db)):
+def get_news_channels(db: Session = Depends(get_db)):
     """List all enabled news channels."""
     cache_key = "news:channels"
     cached = cache_get(cache_key)
@@ -547,7 +547,7 @@ async def get_news_channels(db: Session = Depends(get_db)):
 
 
 @router.get("/articles", response_model=list[NewsArticleResponse])
-async def get_news_articles(
+def get_news_articles(
     limit: int = Query(10, ge=1, le=50),
     db: Session = Depends(get_db),
 ):
@@ -605,7 +605,7 @@ def _parse_citation_match(m: re.Match) -> tuple[str, str, int | None]:
 
 
 @router.get("/articles/{article_id}/citations")
-async def article_citations(article_id: int, db: Session = Depends(get_db)):
+def article_citations(article_id: int, db: Session = Depends(get_db)):
     """Return news items keyed by citation number for hover cards."""
     cache_key = f"news:article-citations:{article_id}"
     cached = cache_get(cache_key)
@@ -712,7 +712,7 @@ async def article_citations(article_id: int, db: Session = Depends(get_db)):
 
 
 @router.get("/stats", response_model=NewsStatsResponse)
-async def get_news_stats(db: Session = Depends(get_db)):
+def get_news_stats(db: Session = Depends(get_db)):
     """Get news feed statistics."""
     cache_key = "news:stats"
     cached = cache_get(cache_key)
@@ -770,7 +770,7 @@ async def get_news_stats(db: Session = Depends(get_db)):
 
 
 @router.get("/lyra-status", response_model=LyraStatusResponse)
-async def get_lyra_status(db: Session = Depends(get_db)):
+def get_lyra_status(db: Session = Depends(get_db)):
     """Check if the Lyra pipeline is alive based on its heartbeat."""
     cache_key = "news:lyra-status"
     cached = cache_get(cache_key)
@@ -807,7 +807,7 @@ async def get_lyra_status(db: Session = Depends(get_db)):
 
 
 @router.get("/pipeline-status", response_model=PipelineStatusResponse)
-async def get_pipeline_status(
+def get_pipeline_status(
     pipeline: str = Query("news", pattern="^(news|radar|article)$"),
     db: Session = Depends(get_db),
 ):
@@ -905,7 +905,7 @@ async def get_pipeline_status(
 
 
 @router.get("/logs", response_class=PlainTextResponse)
-async def get_lyra_logs(
+def get_lyra_logs(
     request: Request,
     lines: int = Query(default=100, ge=1, le=2000),
     search: str = Query(default="", max_length=200),

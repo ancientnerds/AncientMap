@@ -206,7 +206,7 @@ async def set_hero(
         db.rollback()
         tb = traceback.format_exc()
         print(f"[set-hero] FAILED: {e}\n{tb}", flush=True)
-        raise HTTPException(status_code=500, detail=f"Error: {str(e)}") from None
+        raise HTTPException(status_code=500, detail="Internal error setting hero image") from None
 
 
 class RemoveImageRequest(BaseModel):
@@ -256,7 +256,7 @@ async def remove_image(
     except Exception as e:
         db.rollback()
         print(f"[remove-image] FAILED: {e}", flush=True)
-        raise HTTPException(status_code=500, detail=f"Error: {str(e)}") from None
+        raise HTTPException(status_code=500, detail="Internal error removing image") from None
 
 
 @router.get("/{site_id}")

@@ -3,6 +3,7 @@
 from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import func
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
 from api.cardgame.constants import (
@@ -151,20 +152,23 @@ def claim_starter_deck(session: Session, user: DiscordUser) -> list[dict]:
 
     Raises AlreadyHasStarterError if user already has cards.
     """
-    # Lock player stats row to prevent concurrent starter claims
+    # with_for_update() on a missing row locks nothing — create the stats row
+    # first (racing creators collapse on the primary key), then lock it.
+    # populate_existing() forces a refresh of already-loaded attributes.
+    session.execute(
+        pg_insert(CardPlayerStats)
+        .values(user_id=user.id)
+        .on_conflict_do_nothing(index_elements=["user_id"])
+    )
     ps = (
         session.query(CardPlayerStats)
         .filter(CardPlayerStats.user_id == user.id)
+        .populate_existing()
         .with_for_update()
         .first()
     )
-    if ps and ps.total_cards > 0:
+    if ps.total_cards > 0:
         raise AlreadyHasStarterError("You already have cards")
-
-    if not ps:
-        ps = CardPlayerStats(user_id=user.id)
-        session.add(ps)
-        session.flush()
 
     # Pick 10 well-distributed cards: prefer diverse groups and low tiers
     # Get one card per category group, then fill remaining slots

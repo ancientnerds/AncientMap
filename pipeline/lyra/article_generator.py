@@ -578,6 +578,92 @@ def _cleanup_video_citations(body: str, videos: list[dict]) -> tuple[str, list[d
     return body, cited
 
 
+def _strip_uncited_claims(body: str, unified_sources: list[dict]) -> tuple[str, dict]:
+    """Drop factual paragraphs left uncited after citation verification.
+
+    verify_all_citations removes rejected [N] markers but keeps the sentence
+    prose, so a claim whose citations all failed verification survives as
+    uncited text in the article (audit P5-15). The Theo pipeline already owns
+    the mechanical answer — theo_citations.strip_uncited_factual_paragraphs —
+    so reuse it instead of reimplementing.
+
+    Registry-numbering contract: CitationRegistry.assign_reference_number
+    hands out 1, 2, 3... in call order, and unified_sources carries
+    contiguous citation numbers starting at 1 (built that way by
+    _assemble_from_clusters, kept contiguous by _cleanup_citations), so
+    registering sources in ascending citation order reproduces the article's
+    [N] numbering exactly. The one case the registry CANNOT mirror: two
+    citation entries whose URLs collapse to a single canonical source id
+    (register_source dedupes by URL hash) — reference_numbers maps one
+    number per source id and the registry has no API for a second number on
+    the same source. On any mismatch we SKIP the strip entirely rather than
+    risk citation renumbering corruption; metrics["skipped"] records why.
+
+    registry.claims is deliberately left EMPTY: the strip's rescue path
+    (inject_citation_for_paragraph) attaches [N] markers by lexical overlap
+    with claim text, and the only candidate texts available here are source
+    snippets whose markers the verifier may have just REJECTED — re-attaching
+    them would launder rejected citations back into prose. With no claims the
+    strip can only drop uncited paragraphs, never add markers.
+
+    [VN] video citations are legitimate article citations but invisible to
+    the strip's numeric-[N] check, so they are shielded as numeric sentinels
+    above every number present in the body and restored afterwards.
+
+    Returns (body, metrics): metrics carries the strip counters
+    (uncited_seen/injected/dropped/restored_sections), or "skipped" with the
+    mismatch explanation when the strip was not applied.
+    """
+    from pipeline.lyra.theo_citations import (
+        CitationRegistry,
+        strip_uncited_factual_paragraphs,
+    )
+
+    metrics: dict = {}
+    registry = CitationRegistry()
+    for src in sorted(unified_sources, key=lambda s: s["citation"]):
+        sid = registry.register_source(
+            url=src.get("url") or "",
+            title=src.get("label") or "",
+            snippet=src.get("snippet") or "",
+        )
+        num = registry.assign_reference_number(sid)
+        if num != src["citation"]:
+            reason = (
+                f"registry assigned [{num}] where the article uses [{src['citation']}] "
+                f"for {src.get('url') or src.get('label')!r} — duplicate/empty URLs "
+                "collapse to one registry source id and the registry has no API for "
+                "two numbers on one source"
+            )
+            logger.warning("Uncited-claim strip SKIPPED: %s", reason)
+            metrics["skipped"] = reason
+            return body, metrics
+
+    # Shield [VN] video citations: the sentinel base sits above every [N]
+    # in the body (including hallucinated ones) so shielded markers can't
+    # collide with real numbers, and with registry.claims empty nothing can
+    # inject new numbers during the strip.
+    nums_in_body = [int(m) for m in re.findall(r"\[(\d+)\]", body)]
+    sentinel_base = max(nums_in_body, default=0) + 1000
+    shielded = re.sub(r"\[V(\d+)\]", lambda m: f"[{sentinel_base + int(m.group(1))}]", body)
+
+    stripped = strip_uncited_factual_paragraphs(shielded, registry, metrics_out=metrics)
+
+    def _unshield(m: re.Match) -> str:
+        n = int(m.group(1))
+        return f"[V{n - sentinel_base}]" if n >= sentinel_base else m.group(0)
+
+    body = re.sub(r"\[(\d+)\]", _unshield, stripped)
+    logger.info(
+        "Uncited-claim strip: %d uncited seen, %d injected, %d dropped, %d section(s) restored",
+        metrics.get("uncited_seen", 0),
+        metrics.get("injected", 0),
+        metrics.get("dropped", 0),
+        metrics.get("restored_sections", 0),
+    )
+    return body, metrics
+
+
 def _polish_article(
     verified_body: str,
     settings: LyraSettings,
@@ -1153,6 +1239,21 @@ def generate_weekly_article(
             body = asyncio.run(verify_all_citations(body, unified_sources, settings=settings))
             body, unified_sources = _cleanup_citations(body, unified_sources)
             s["count"] = len(re.findall(r"\[\d+\]", body))
+
+    # ── 8b. STRIP UNCITED CLAIMS (audit P5-15) ───────────────────
+    # Steps 5/8 remove rejected [N] markers but leave the claim prose in
+    # place as uncited text. Mechanically drop factual paragraphs that no
+    # longer carry any citation, reusing Theo's strip (no claim injection —
+    # see _strip_uncited_claims). Cleanup afterwards prunes footer sources
+    # whose last marker went away with a dropped paragraph.
+    with _step(step_data, "strip_uncited", t0_total) as s:
+        body, strip_metrics = _strip_uncited_claims(body, unified_sources)
+        if "skipped" in strip_metrics:
+            s["status"] = "warn"
+        else:
+            body, unified_sources = _cleanup_citations(body, unified_sources)
+            body, unified_videos = _cleanup_video_citations(body, unified_videos)
+            s["count"] = strip_metrics.get("dropped", 0)
 
     # ── 9. POLISH ────────────────────────────────────────────────
     with _step(step_data, "polish", t0_total) as s:

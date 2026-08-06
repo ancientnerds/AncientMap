@@ -38,18 +38,10 @@ export function useLayersReady({
     const allReady = labelsLoaded && texturesReady && basemapVisible && coastlinesLoaded && bordersLoaded
 
     if (allReady) {
-      console.log('[Loading] ALL ASSETS READY (textures, labels, coastlines, borders) - starting warp')
       refs.layersReadyCalled.current = true
       onLayersReady?.()
     } else if (labelsLoaded && texturesReady) {
       // Core textures ready, poll for remaining elements
-      const missing: string[] = []
-      if (!basemapVisible) missing.push('basemap')
-      if (!coastlinesLoaded) missing.push('coastlines')
-      if (!bordersLoaded) missing.push('borders')
-      console.log(`[Loading] Textures/labels ready. Waiting for: ${missing.join(', ')}`)
-
-      // Poll for remaining elements
       const checkInterval = setInterval(() => {
         const nowBasemapVisible = refs.basemapMesh.current?.visible === true
         const nowCoastlinesLoaded = layersLoaded['coastlines'] === true
@@ -57,7 +49,6 @@ export function useLayersReady({
         if (nowBasemapVisible && nowCoastlinesLoaded && nowBordersLoaded) {
           clearInterval(checkInterval)
           if (!refs.layersReadyCalled.current) {
-            console.log('[Loading] All visual elements ready - starting warp')
             refs.layersReadyCalled.current = true
             onLayersReady?.()
           }

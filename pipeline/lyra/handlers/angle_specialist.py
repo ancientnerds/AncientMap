@@ -9,7 +9,11 @@ from pathlib import Path
 
 from pipeline.lyra.config import _get_settings
 from pipeline.lyra.handlers import BaseHandler
-from pipeline.lyra.minimax_shared import minimax_chat_anthropic, structured_llm_call
+from pipeline.lyra.minimax_shared import (
+    MiniMaxTerminalError,
+    minimax_chat_anthropic,
+    structured_llm_call,
+)
 from pipeline.lyra.schemas import SPECIALIST_FINDINGS_SCHEMA
 
 PROMPTS_DIR = Path(__file__).resolve().parent.parent / "prompts"
@@ -474,19 +478,33 @@ class SpecialistHandler(BaseHandler):
         )
 
         settings = _get_settings()
-        async with self.semaphore:
-            raw = await asyncio.to_thread(
-                minimax_chat_anthropic,
-                prompt,
-                user_msg,
-                # M3's interleaved thinking shares this budget with output;
-                # 4096 was getting truncated mid-array on novelty assessments
-                # with 10+ new findings. Match the main specialist call so
-                # thinking has room without starving the JSON output.
-                self.state.config.max_tokens_per_call,
-                settings,
-                temperature=settings.temperature_research,
+        try:
+            async with self.semaphore:
+                raw = await asyncio.to_thread(
+                    minimax_chat_anthropic,
+                    prompt,
+                    user_msg,
+                    # M3's interleaved thinking shares this budget with output;
+                    # 4096 was getting truncated mid-array on novelty assessments
+                    # with 10+ new findings. Match the main specialist call so
+                    # thinking has room without starving the JSON output.
+                    self.state.config.max_tokens_per_call,
+                    settings,
+                    temperature=settings.temperature_research,
+                )
+        except MiniMaxTerminalError as exc:
+            # Degraded mode mirrors the missing-prompt default above: count
+            # every new claim as incremental novelty. Reporting zero here
+            # (the old silent-"" outcome) would prematurely saturate the
+            # angle and quietly shorten the research.
+            logger.warning(
+                "[novelty] check failed terminally for angle '%s' — counting all "
+                "%d new claims as incremental: %s",
+                angle.topic,
+                new_count,
+                exc,
             )
+            return {"incremental": new_count, "rabbit_holes": 0, "rabbit_hole_topics": []}
         self.state.llm_call_count += 1
 
         parsed = _parse_json(raw)

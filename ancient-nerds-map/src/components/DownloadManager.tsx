@@ -401,19 +401,14 @@ export default function DownloadManager({ isOpen, onClose, sources, isOffline, o
     try {
       // Get all image URLs for this source
       const imageUrls = await OfflineStorage.getImageUrlsForSource(sourceId)
-      if (imageUrls.length === 0) {
-        console.log(`[DownloadManager] No images found for source ${sourceId}`)
-        return
-      }
+      if (imageUrls.length === 0) return
 
       setImageDownloadProgress({ loaded: 0, total: imageUrls.length })
 
       // Bulk cache images with progress
-      const cached = await ImageCache.bulkCache(imageUrls, (loaded, total) => {
+      await ImageCache.bulkCache(imageUrls, (loaded, total) => {
         setImageDownloadProgress({ loaded, total })
       })
-
-      console.log(`[DownloadManager] Cached ${cached}/${imageUrls.length} images for ${sourceId}`)
     } catch (error) {
       console.error(`[DownloadManager] Failed to download images for ${sourceId}:`, error)
     } finally {

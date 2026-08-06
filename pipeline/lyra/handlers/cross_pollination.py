@@ -19,7 +19,7 @@ from pathlib import Path
 
 from pipeline.lyra.config import _get_settings
 from pipeline.lyra.handlers import BaseHandler
-from pipeline.lyra.minimax_shared import structured_llm_call
+from pipeline.lyra.minimax_shared import MiniMaxTerminalError, structured_llm_call
 from pipeline.lyra.research_events import (
     AllAnglesRound1Complete,
     AllAnglesRound2Complete,
@@ -102,16 +102,29 @@ class CrossPollinationHandler(BaseHandler):
         )
 
         settings = _get_settings()
-        async with self.semaphore:
-            result = await asyncio.to_thread(
-                structured_llm_call,
-                prompt,
-                user_msg,
-                CROSS_POLLINATION_SCHEMA,
-                self.state.config.max_tokens_per_call,
-                settings,
-                temperature=settings.temperature_synthesis,
+        try:
+            async with self.semaphore:
+                result = await asyncio.to_thread(
+                    structured_llm_call,
+                    prompt,
+                    user_msg,
+                    CROSS_POLLINATION_SCHEMA,
+                    self.state.config.max_tokens_per_call,
+                    settings,
+                    temperature=settings.temperature_synthesis,
+                )
+        except MiniMaxTerminalError as exc:
+            # Degraded mode: cross-pollination is enrichment — every angle
+            # keeps its pre-enrichment queries and round 2 proceeds. Must
+            # still fall through to emit CrossPollinationComplete below, or
+            # the pipeline stalls waiting for round 2.
+            logger.warning(
+                "[cross_pollination] LLM failed terminally after %s — angles keep "
+                "pre-enrichment queries: %s",
+                round_label,
+                exc,
             )
+            result = {}
         self.state.llm_call_count += 1
 
         # ---- Drift gate prep -----------------------------------------------

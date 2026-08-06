@@ -2,8 +2,9 @@
 """Pytest configuration and fixtures for Ancient Nerds Map tests."""
 
 import os
+from collections.abc import Generator
+
 import pytest
-from typing import Generator
 
 # Set test environment variables before importing app
 os.environ.setdefault("TESTING", "true")
@@ -21,6 +22,7 @@ def anyio_backend() -> str:
 def test_client() -> Generator:
     """Create a test client for the FastAPI application."""
     from fastapi.testclient import TestClient
+
     from api.main import app
 
     with TestClient(app) as client:
@@ -31,6 +33,7 @@ def test_client() -> Generator:
 def async_client():
     """Create an async test client for async tests."""
     import httpx
+
     from api.main import app
 
     return httpx.AsyncClient(app=app, base_url="http://test")

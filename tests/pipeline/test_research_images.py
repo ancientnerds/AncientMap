@@ -77,29 +77,35 @@ class TestSearchWikimediaImages:
                 "pages": {
                     "123": {
                         "title": "File:Gobekli_Tepe_pillar.jpg",
-                        "imageinfo": [{
-                            "mime": "image/jpeg",
-                            "thumburl": "https://upload.wikimedia.org/thumb/Gobekli_Tepe_pillar.jpg",
-                            "url": "https://upload.wikimedia.org/Gobekli_Tepe_pillar.jpg",
-                            "extmetadata": {
-                                "LicenseShortName": {"value": "CC BY-SA 4.0"},
-                                "Artist": {"value": "<a href='...'>Klaus-Peter Simon</a>"},
-                                "ImageDescription": {"value": "T-shaped limestone pillar at Gobekli Tepe"},
-                            },
-                        }],
+                        "imageinfo": [
+                            {
+                                "mime": "image/jpeg",
+                                "thumburl": "https://upload.wikimedia.org/thumb/Gobekli_Tepe_pillar.jpg",
+                                "url": "https://upload.wikimedia.org/Gobekli_Tepe_pillar.jpg",
+                                "extmetadata": {
+                                    "LicenseShortName": {"value": "CC BY-SA 4.0"},
+                                    "Artist": {"value": "<a href='...'>Klaus-Peter Simon</a>"},
+                                    "ImageDescription": {
+                                        "value": "T-shaped limestone pillar at Gobekli Tepe"
+                                    },
+                                },
+                            }
+                        ],
                     },
                     "456": {
                         "title": "File:Unlicensed_photo.jpg",
-                        "imageinfo": [{
-                            "mime": "image/jpeg",
-                            "thumburl": "https://upload.wikimedia.org/thumb/Unlicensed.jpg",
-                            "url": "https://upload.wikimedia.org/Unlicensed.jpg",
-                            "extmetadata": {
-                                "LicenseShortName": {"value": "CC BY-NC-ND 3.0"},
-                                "Artist": {"value": "Someone"},
-                                "ImageDescription": {"value": "Should be rejected"},
-                            },
-                        }],
+                        "imageinfo": [
+                            {
+                                "mime": "image/jpeg",
+                                "thumburl": "https://upload.wikimedia.org/thumb/Unlicensed.jpg",
+                                "url": "https://upload.wikimedia.org/Unlicensed.jpg",
+                                "extmetadata": {
+                                    "LicenseShortName": {"value": "CC BY-NC-ND 3.0"},
+                                    "Artist": {"value": "Someone"},
+                                    "ImageDescription": {"value": "Should be rejected"},
+                                },
+                            }
+                        ],
                     },
                 }
             }
@@ -297,8 +303,7 @@ class TestInjectSourceImages:
     def test_max_images_respected(self):
         paper = self._make_paper()
         images = [
-            self._make_image(f"topic {i}", url=f"https://example.com/{i}.jpg")
-            for i in range(10)
+            self._make_image(f"topic {i}", url=f"https://example.com/{i}.jpg") for i in range(10)
         ]
 
         result = inject_source_images(paper, images, max_images=2)
@@ -318,7 +323,10 @@ class TestInjectSourceImages:
         result = inject_source_images(paper, [img])
 
         # Check markdown format: ![alt](url) followed by *attribution*
-        assert "![Image of Gobekli Tepe limestone pillars monoliths](https://example.com/img.jpg)" in result
+        assert (
+            "![Image of Gobekli Tepe limestone pillars monoliths](https://example.com/img.jpg)"
+            in result
+        )
         assert "*Author, Wikimedia Commons, CC BY-SA 4.0*" in result
 
     def test_images_not_placed_in_references_section(self):

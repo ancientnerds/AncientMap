@@ -36,17 +36,10 @@ class OfflineFetchService {
     // Initialize from browser's online status
     this._isOffline = !navigator.onLine
 
-    // Listen for browser online/offline events
-    window.addEventListener('online', () => {
-      if (this._isOffline) {
-        console.log('[OfflineFetch] Browser went online')
-        // Don't auto-switch - let user control it
-      }
-    })
-
+    // Listen for browser offline events. There is deliberately no 'online'
+    // listener — going back online must not auto-switch; the user controls it.
     window.addEventListener('offline', () => {
       if (!this._isOffline) {
-        console.log('[OfflineFetch] Browser went offline - switching to offline mode')
         this.setOfflineMode(true)
       }
     })
@@ -66,7 +59,6 @@ class OfflineFetchService {
     if (this._isOffline === offline) return
 
     this._isOffline = offline
-    console.log(`[OfflineFetch] Mode changed to: ${offline ? 'OFFLINE' : 'ONLINE'}`)
 
     // Notify all listeners
     this.listeners.forEach(listener => listener(offline))

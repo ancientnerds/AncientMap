@@ -10,8 +10,11 @@ Endpoints:
 """
 
 import calendar
+import hashlib
+import hmac
 import logging
 import os
+import secrets
 import uuid
 from datetime import UTC, datetime, timedelta
 
@@ -171,6 +174,11 @@ def get_user_tier(roles: list[str]) -> str:
 # expiry check via `exp`, so no cleanup task is needed.
 _OAUTH_STATE_TTL_SECONDS = 600
 _OAUTH_STATE_AUDIENCE = "oauth_state"
+# Browser-binding nonce (audit 2026-08-05, M3): the state JWT alone is valid
+# in ANY browser — an attacker could complete their own OAuth flow inside a
+# victim's session (login CSRF). The redirect sets this cookie; the state
+# carries only the SHA-256 of its value; the callback requires both to match.
+_OAUTH_NONCE_COOKIE = "an_oauth_nonce"
 
 # Rate limit on OAuth redirects: 15 per minute per IP. Was 5/min, but legitimate
 # users retrying after a flaky first attempt routinely tripped it.
@@ -192,24 +200,33 @@ _ALLOWED_RETURN_PATHS = frozenset(
 )
 
 
-def _create_oauth_state(return_to: str) -> str:
-    """Create a signed CSRF state token. Stateless — survives API restarts."""
+def _create_oauth_state(return_to: str, nonce: str) -> str:
+    """Create a signed CSRF state token bound to a browser nonce.
+
+    Stateless — survives API restarts. The state embeds only the nonce's
+    SHA-256; the raw nonce lives in an httpOnly cookie, so a state token is
+    worthless outside the browser that started the flow.
+    """
     if not jwt_auth.SECRET_KEY:
         raise RuntimeError("API_SECRET_KEY not set — cannot sign OAuth state")
     payload = {
         "aud": _OAUTH_STATE_AUDIENCE,
         "rt": return_to,
+        "nh": hashlib.sha256(nonce.encode()).hexdigest(),
         "exp": datetime.now(UTC) + timedelta(seconds=_OAUTH_STATE_TTL_SECONDS),
         "iat": datetime.now(UTC),
     }
     return jwt.encode(payload, jwt_auth.SECRET_KEY, algorithm=jwt_auth.ALGORITHM)
 
 
-def _consume_oauth_state(state: str) -> str | None:
-    """Verify a signed state token and return its return_to path, or None.
+def _consume_oauth_state(state: str, nonce_cookie: str | None) -> str | None:
+    """Verify a signed state token + browser nonce, return return_to or None.
 
-    Returns None for any failure (expired, tampered, wrong audience, return_to
-    not in allowlist). Callers must redirect to /account.html?error=... on None.
+    Returns None for any failure (expired, tampered, wrong audience,
+    return_to not in allowlist, missing/mismatched nonce cookie). A login
+    link opened in a DIFFERENT browser than the one that started the flow
+    has no nonce cookie and fails here by design — the user simply restarts
+    the login. Callers redirect to /account.html?error=... on None.
     """
     if not state or not jwt_auth.SECRET_KEY:
         return None
@@ -221,6 +238,11 @@ def _consume_oauth_state(state: str) -> str | None:
             audience=_OAUTH_STATE_AUDIENCE,
         )
     except jwt.PyJWTError:
+        return None
+    nonce_hash = payload.get("nh")
+    if not isinstance(nonce_hash, str) or not nonce_cookie:
+        return None
+    if not hmac.compare_digest(nonce_hash, hashlib.sha256(nonce_cookie.encode()).hexdigest()):
         return None
     return_to = payload.get("rt")
     if not isinstance(return_to, str) or return_to not in _ALLOWED_RETURN_PATHS:
@@ -257,6 +279,34 @@ def get_eligible_periods(anchor: datetime, now: datetime) -> list[str]:
 
     # Cap to last 3 periods (accumulation window)
     return periods[-3:]
+
+
+def resolve_monthly_grant_period(
+    period: str, anchor: datetime, existing_created_at: list[datetime]
+) -> str | None:
+    """Decide the grant_period key for a calendar period, or None to skip.
+
+    A grant row for this calendar month may exist from a PREVIOUS
+    subscription cycle: cancel + rejoin in the same month resets the anchor,
+    and until 2026-08-06 the old row silently swallowed the new cycle's
+    grant — a paying rejoiner received nothing until the next calendar month
+    (audit finding M4). Rows created before the current anchor belong to an
+    earlier cycle; the new cycle's grant gets a ".N"-suffixed period so the
+    (user_id, reason, grant_period) unique constraint stays intact and
+    legacy rows keep their plain "YYYY-MM" keys.
+    """
+    if anchor.tzinfo is None:
+        anchor = anchor.replace(tzinfo=UTC)
+    current_cycle = [
+        c
+        for c in existing_created_at
+        if (c.replace(tzinfo=UTC) if c.tzinfo is None else c) >= anchor
+    ]
+    if current_cycle:
+        return None  # this subscription cycle already got the period
+    if not existing_created_at:
+        return period
+    return f"{period}.{len(existing_created_at)}"
 
 
 def process_credit_grants(session: Session, user: DiscordUser) -> None:
@@ -331,16 +381,21 @@ def process_credit_grants(session: Session, user: DiscordUser) -> None:
             max_balance = monthly_amount * cap_multiplier
 
             for period in get_eligible_periods(user.grant_anchor_date, now):
-                existing = (
+                same_period = (
                     session.query(CreditGrant)
                     .filter(
                         CreditGrant.user_id == user.id,
                         CreditGrant.reason == reason,
-                        CreditGrant.grant_period == period,
+                        CreditGrant.grant_period.like(f"{period}%"),
                     )
-                    .first()
+                    .all()
                 )
-                if existing:
+                grant_period = resolve_monthly_grant_period(
+                    period,
+                    user.grant_anchor_date,
+                    [g.created_at for g in same_period],
+                )
+                if grant_period is None:
                     continue
 
                 effective = min(monthly_amount, max(0, max_balance - user.credits))
@@ -355,19 +410,21 @@ def process_credit_grants(session: Session, user: DiscordUser) -> None:
                             user_id=user.id,
                             amount=effective,
                             reason=reason,
-                            grant_period=period,
+                            grant_period=grant_period,
                         )
                     )
                     session.flush()
                     nested.commit()
                 except IntegrityError:
                     logger.info(
-                        f"Monthly grant already exists for {user.username} ({reason}, period={period})"
+                        f"Monthly grant already exists for {user.username} "
+                        f"({reason}, period={grant_period})"
                     )
                     user.credits -= effective  # revert in-memory change
                     continue
                 logger.info(
-                    f"Granted {effective} monthly credits to {user.username} ({reason}, period={period})"
+                    f"Granted {effective} monthly credits to {user.username} "
+                    f"({reason}, period={grant_period})"
                 )
 
 
@@ -385,7 +442,8 @@ async def discord_oauth_redirect(req: Request, return_to: str | None = None):
     if not return_to or return_to not in _ALLOWED_RETURN_PATHS:
         return_to = "/account.html"
 
-    state = _create_oauth_state(return_to)
+    nonce = secrets.token_urlsafe(32)
+    state = _create_oauth_state(return_to, nonce)
 
     from urllib.parse import urlencode
 
@@ -398,7 +456,18 @@ async def discord_oauth_redirect(req: Request, return_to: str | None = None):
         "prompt": "consent",
     }
     url = f"https://discord.com/api/oauth2/authorize?{urlencode(params)}"
-    return RedirectResponse(url=url)
+    response = RedirectResponse(url=url)
+    # samesite="lax" survives the top-level GET redirect back from Discord.
+    response.set_cookie(
+        key=_OAUTH_NONCE_COOKIE,
+        value=nonce,
+        max_age=_OAUTH_STATE_TTL_SECONDS,
+        httponly=True,
+        samesite="lax",
+        secure=True,
+        path="/",
+    )
+    return response
 
 
 @router.get("/discord/callback")
@@ -416,11 +485,11 @@ async def discord_oauth_callback(
     if not code or not state:
         return RedirectResponse(url="/account.html?error=missing_params")
 
-    # Validate CSRF state. _consume_oauth_state returns None for tampered,
-    # expired, or unknown-return-to tokens. PyJWT raises ExpiredSignatureError
-    # internally which we surface as invalid_state — the user sees one error
-    # code regardless of whether the state was forged or merely stale.
-    return_to = _consume_oauth_state(state)
+    # Validate CSRF state + browser nonce. _consume_oauth_state returns None
+    # for tampered, expired, unknown-return-to, or nonce-mismatched tokens.
+    # The user sees one error code regardless of whether the state was
+    # forged, stale, or opened in a different browser.
+    return_to = _consume_oauth_state(state, req.cookies.get(_OAUTH_NONCE_COOKIE))
     if return_to is None:
         return RedirectResponse(url="/account.html?error=invalid_state")
 
@@ -501,6 +570,11 @@ async def discord_oauth_callback(
                 )
                 if re_check.status_code != 200:
                     return RedirectResponse(url="/account.html?error=not_in_guild")
+                # Membership confirmed — take the roles from THIS response.
+                # Until 2026-08-06 roles stayed [] here, wiping the stored
+                # tier roles; the next login then saw them as "newly gained"
+                # and reset grant_anchor_date (audit finding M4 side effect).
+                roles = re_check.json().get("roles", [])
 
     # Upsert user in database
     try:
@@ -562,6 +636,9 @@ async def discord_oauth_callback(
         secure=True,
         path="/",
     )
+    # Single-use: the nonce dies with the completed login, so a captured
+    # callback URL cannot be replayed even in this browser.
+    response.delete_cookie(_OAUTH_NONCE_COOKIE, path="/")
     return response
 
 
@@ -825,11 +902,16 @@ async def admin_adjust_credits(
                 )
             )
         elif body.action == "remove":
+            # Ledger the ACTUAL delta, not the requested amount — the clamp
+            # to 0 means removing 500 from a 300-credit balance deducts only
+            # 300, and the ledger must reconcile with the balance
+            # (audit 2026-08-05).
+            old_credits = user.credits
             user.credits = max(0, user.credits - body.amount)
             session.add(
                 CreditGrant(
                     user_id=user.id,
-                    amount=-body.amount,
+                    amount=user.credits - old_credits,
                     reason="founder_grant",
                     grant_period=str(int(datetime.now(UTC).timestamp())),
                 )

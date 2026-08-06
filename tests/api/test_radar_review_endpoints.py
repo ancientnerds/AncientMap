@@ -11,6 +11,10 @@ from api.main import app
 from api.services.jwt_auth import require_founder
 from pipeline.database import get_db
 
+# Needs the local Postgres/Redis containers (TestClient startup connects) —
+# skipped by the DB-less CI test job (audit P3-13, 2026-08-06).
+pytestmark = pytest.mark.integration
+
 
 class FakeRow:
     def __init__(self, mapping):
@@ -68,9 +72,7 @@ class TestPromoteGuards:
 
     def test_already_promoted_409(self, founder_client):
         client, session = founder_client
-        row = FakeRow(
-            {**ENRICHED_ITEM, "promoted_site_id": "22222222-2222-2222-2222-222222222222"}
-        )
+        row = FakeRow({**ENRICHED_ITEM, "promoted_site_id": "22222222-2222-2222-2222-222222222222"})
         session.execute.return_value.fetchone.return_value = row
         resp = client.post("/api/radar/x/promote")
         assert resp.status_code == 409

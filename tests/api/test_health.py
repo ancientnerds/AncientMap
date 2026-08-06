@@ -3,6 +3,10 @@
 
 import pytest
 
+# Needs the local Postgres/Redis containers (TestClient startup connects) —
+# skipped by the DB-less CI test job (audit P3-13, 2026-08-06).
+pytestmark = pytest.mark.integration
+
 
 class TestRootEndpoint:
     """Test root endpoint (health check)."""

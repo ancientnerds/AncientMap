@@ -26,21 +26,37 @@ from pipeline.database import get_session
 logger = logging.getLogger(__name__)
 
 
-def release_reservation_in_session(session, user_id: str) -> None:
-    """Release one research-cost credit reservation for `user_id` inside the
+def release_reservation_in_session(session, request_id: str) -> None:
+    """Release the request's credit reservation EXACTLY ONCE inside the
     caller's open transaction (no commit here — the caller owns it).
+
+    Idempotent via research_requests.reservation_released (migration 0010,
+    audit 2026-08-05): defer -> re-claim -> second defer/failure,
+    stale-deferred cleanup, and DELETE-cancel can all call this for the same
+    row — only the first call decrements reserved_credits, so drained
+    reservations can no longer eat other requests' holds.
 
     Shared by the worker's failure/cancel paths below and by the
     queued->cancelled branch of DELETE /theo/research/{id} (api/routes/theo.py),
     which must release atomically with the status flip — a queued row is
     never claimed by the worker, so no worker path would ever release it.
     """
+    row = session.execute(
+        text("""
+            UPDATE research_requests SET reservation_released = TRUE
+            WHERE id = :id AND reservation_released = FALSE
+            RETURNING user_id
+        """),
+        {"id": request_id},
+    ).fetchone()
+    if row is None:
+        return  # already released (or unknown id) — exactly-once guard
     session.execute(
         text("""
             UPDATE discord_users SET reserved_credits = GREATEST(reserved_credits - :cost, 0)
             WHERE discord_id = :uid AND is_unlimited = FALSE
         """),
-        {"uid": user_id, "cost": THEO_RESEARCH_COST},
+        {"uid": row.user_id, "cost": THEO_RESEARCH_COST},
     )
 
 
@@ -48,13 +64,7 @@ def _release_reservation(request_id: str) -> None:
     """Release reserved credits when a research request fails or is cancelled."""
     try:
         with get_session() as session:
-            row = session.execute(
-                text("SELECT user_id FROM research_requests WHERE id = :id"),
-                {"id": request_id},
-            ).fetchone()
-            if not row:
-                return
-            release_reservation_in_session(session, row.user_id)
+            release_reservation_in_session(session, request_id)
             session.commit()
     except Exception as exc:
         logger.warning(f"[THEO] Reservation release failed for {request_id}: {exc}")
@@ -70,15 +80,17 @@ def _deduct_credits(request_id: str) -> None:
             ).fetchone()
             if not row:
                 return
+            # Deduct ALWAYS on completion; release the reservation only when
+            # this request still holds one (a deferred run already released
+            # at defer time — the flag guard prevents a double decrement).
             session.execute(
                 text("""
-                    UPDATE discord_users
-                    SET credits = credits - :cost,
-                        reserved_credits = GREATEST(reserved_credits - :cost, 0)
+                    UPDATE discord_users SET credits = credits - :cost
                     WHERE discord_id = :uid AND is_unlimited = FALSE
                 """),
                 {"uid": row.user_id, "cost": THEO_RESEARCH_COST},
             )
+            release_reservation_in_session(session, request_id)
             session.commit()
     except Exception as exc:
         logger.warning(f"[THEO] Credit deduction failed for {request_id}: {exc}")

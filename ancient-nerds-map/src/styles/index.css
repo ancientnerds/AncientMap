@@ -13492,16 +13492,6 @@ body.news-feed-open .historical-borders-panel {
   color: var(--accent-primary);
 }
 
-.news-feed-ai-notice {
-  margin: 0 16px;
-  padding: 6px 10px;
-  font-size: 10px;
-  color: var(--crt-600);
-  border-bottom: 1px solid var(--border-accent-subtle);
-  text-align: center;
-  flex-shrink: 0;
-}
-
 /* =============================================================================
    News Page - dedicated full-page grid layout (/news.html)
    ============================================================================= */

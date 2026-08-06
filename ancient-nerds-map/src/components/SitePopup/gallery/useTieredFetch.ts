@@ -58,7 +58,6 @@ export function useTieredFetch(
       setLoading(true)
       try {
         const result = await fetchFn(tier)
-        console.log(`[useTieredFetch] ${CONTENT_TIERS[tier].label}:`, result.items.length, 'items from', result.sources_searched)
         setItems(result.items)
 
         // Aggregate metadata additively

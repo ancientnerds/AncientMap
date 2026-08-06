@@ -1107,10 +1107,7 @@ export default function DbAuditPage() {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         })
-        if (rebuildRes.ok) {
-          const rebuildResult = await rebuildRes.json()
-          console.log(`Static rebuild complete in ${rebuildResult.elapsed_seconds}s`)
-        } else {
+        if (!rebuildRes.ok) {
           console.error('Static rebuild failed:', await rebuildRes.text())
         }
       } catch (e) {

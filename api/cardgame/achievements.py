@@ -1513,9 +1513,35 @@ _EVENT_ACHIEVEMENTS: dict[str, list[str]] = {
         "cartographer_sea_level",
         "cartographer_trade_routes",
     ],
-    # Retroactive full check — used when loading the achievements page
+    # Retroactive full check — POST /achievements/check
     "full_check": list(ACHIEVEMENTS.keys()),
 }
+
+
+# ---------------------------------------------------------------------------
+# Frontend-reported feature events (achievement id -> event name)
+# ---------------------------------------------------------------------------
+
+_EXPLORER_EVENT_MAP = {
+    "explorer_screenshot": "screenshot_taken",
+    "explorer_street_view": "street_view_opened",
+    "explorer_offline": "offline_downloaded",
+    "explorer_random": "random_site_used",
+}
+
+_CARTOGRAPHER_EVENT_MAP = {
+    "cartographer_measure": "measurement_used",
+    "cartographer_proximity": "proximity_used",
+    "cartographer_satellite": "satellite_enabled",
+    "cartographer_layers": "layers_enabled",
+    "cartographer_sea_level": "sea_level_adjusted",
+    "cartographer_trade_routes": "trade_routes_enabled",
+}
+
+# Valid event_type values for POST /achievements/event
+FRONTEND_EVENT_TYPES = frozenset(_EXPLORER_EVENT_MAP.values()) | frozenset(
+    _CARTOGRAPHER_EVENT_MAP.values()
+)
 
 
 # ---------------------------------------------------------------------------
@@ -1923,18 +1949,13 @@ def _check_single(
         "explorer_offline",
         "explorer_random",
     ):
-        event_map = {
-            "explorer_screenshot": "screenshot_taken",
-            "explorer_street_view": "street_view_opened",
-            "explorer_offline": "offline_downloaded",
-            "explorer_random": "random_site_used",
-        }
-        if context and context.get("event_type") == event_map[aid]:
+        evt = _EXPLORER_EVENT_MAP[aid]
+        if context and context.get("event_type") == evt:
             return True
         # Check feature_flags
         ps = session.get(CardPlayerStats, user_id)
         if ps and ps.feature_flags:
-            return ps.feature_flags.get(event_map[aid], False)
+            return ps.feature_flags.get(evt, False)
         return False
 
     # --- CARTOGRAPHER (frontend events) ---
@@ -1946,15 +1967,7 @@ def _check_single(
         "cartographer_sea_level",
         "cartographer_trade_routes",
     ):
-        event_map = {
-            "cartographer_measure": "measurement_used",
-            "cartographer_proximity": "proximity_used",
-            "cartographer_satellite": "satellite_enabled",
-            "cartographer_layers": "layers_enabled",
-            "cartographer_sea_level": "sea_level_adjusted",
-            "cartographer_trade_routes": "trade_routes_enabled",
-        }
-        evt = event_map[aid]
+        evt = _CARTOGRAPHER_EVENT_MAP[aid]
         if aid == "cartographer_layers":
             if context and context.get("event_type") == "layers_enabled":
                 return (context.get("layer_count", 0) or 0) >= 5

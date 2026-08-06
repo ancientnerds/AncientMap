@@ -4,10 +4,11 @@ import uuid
 from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from api.cardgame.constants import LYRA_TIERS, PACK_PRICES
-from api.cardgame.models import CardDeck, CardPlayerStats, CardStats, LyraBattle
+from api.cardgame.models import CardCollection, CardDeck, CardPlayerStats, CardStats, LyraBattle
 from api.cardgame.synergies import describe_synergies
 from pipeline.database import CreditGrant, DiscordUser
 
@@ -74,18 +75,21 @@ def _get_player_deck(
     if not deck_row:
         return [], None
 
-    # Load deck cards
-    from api.cardgame.models import CardCollection
+    deck_card_ids = deck_row.card_ids or []
+    if not deck_card_ids:
+        return [], deck_row
 
-    card_rows = (
-        session.query(CardCollection, CardStats)
-        .join(CardStats, CardCollection.site_id == CardStats.site_id)
-        .filter(CardCollection.user_id == user.id)
+    # Load only the deck's cards — filtering in SQL instead of loading the
+    # user's entire collection
+    deck_cards = (
+        session.query(CardStats)
+        .join(CardCollection, CardCollection.site_id == CardStats.site_id)
+        .filter(
+            CardCollection.user_id == user.id,
+            CardCollection.site_id.in_([uuid.UUID(cid) for cid in deck_card_ids]),
+        )
         .all()
     )
-
-    deck_card_ids = set(deck_row.card_ids) if deck_row.card_ids else set()
-    deck_cards = [cs for cs, _ in card_rows if str(cs.site_id) in deck_card_ids]
 
     return deck_cards[:10], deck_row
 
@@ -142,6 +146,17 @@ def resolve_lyra_duel(
     """
     cfg = LYRA_TIERS[tier]
 
+    # Lock the user row before mutating credits/XP; populate_existing() forces
+    # a refresh of already-loaded attributes (the identity map would otherwise
+    # keep stale values)
+    user = (
+        session.query(DiscordUser)
+        .filter(DiscordUser.id == user.id)
+        .populate_existing()
+        .with_for_update()
+        .first()
+    )
+
     # Get player's deck
     player_cards, deck_row = _get_player_deck(session, user)
     if len(player_cards) < 5:
@@ -175,6 +190,27 @@ def resolve_lyra_duel(
     xp_earned = cfg["win_xp"] if player_won else cfg["loss_xp"]
     pack_reward = cfg["win_pack"] if player_won else None
 
+    # Record the battle BEFORE granting rewards — the unique index
+    # uq_lyra_battles_user_tier_day (migration 0012) rejects a racing
+    # same-day duplicate here, before any credits/XP change hands
+    battle = LyraBattle(
+        user_id=user.id,
+        lyra_tier=tier,
+        result="win" if player_won else "loss",
+        player_score=player_score,
+        lyra_score=lyra_score,
+        credits_earned=credits_earned,
+        xp_earned=xp_earned,
+        pack_reward=pack_reward,
+    )
+    session.add(battle)
+    try:
+        session.flush()
+    except IntegrityError:
+        raise ValueError(
+            f"You've already challenged {cfg['name']} today. Come back tomorrow!"
+        ) from None
+
     # Credit grant
     user.credits += credits_earned
     session.add(
@@ -207,19 +243,6 @@ def resolve_lyra_duel(
             )
         )
         pack_cards = open_pack(session, user, pack_reward)
-
-    # Record battle
-    battle = LyraBattle(
-        user_id=user.id,
-        lyra_tier=tier,
-        result="win" if player_won else "loss",
-        player_score=player_score,
-        lyra_score=lyra_score,
-        credits_earned=credits_earned,
-        xp_earned=xp_earned,
-        pack_reward=pack_reward,
-    )
-    session.add(battle)
 
     return {
         "tier": tier,

@@ -1,4 +1,5 @@
 """Tests for pipeline.lyra.canonical_coverage."""
+
 import pytest
 
 from pipeline.lyra.canonical_coverage import (

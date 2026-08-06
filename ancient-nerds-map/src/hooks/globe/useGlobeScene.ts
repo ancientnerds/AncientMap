@@ -230,7 +230,6 @@ export function useGlobeScene(options: UseGlobeSceneOptions) {
     canvas.addEventListener('webglcontextrestored', () => {
       webglContextLostRef.current = false
       needsLabelReloadRef.current = true
-      console.log('[Globe] WebGL context restored')
     })
 
     // Page visibility handling

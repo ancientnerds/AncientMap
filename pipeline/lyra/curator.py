@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import uuid
 from datetime import datetime, timedelta
 
@@ -196,6 +197,100 @@ def _link_connection_endpoints(session, conn_label: str) -> None:
         )
 
 
+# Reference lines carrying an external-source tier label, as emitted by
+# theo_citations.format_references_list: "[N] ... [Academic]" / "[Reputable]".
+# Tier-3 lines (no label) and [self]/tier-4 prior papers carry no label and
+# are deliberately NOT external corroboration (spec 2026-08-04 §5).
+_EXTERNAL_REF_LABEL_RE = re.compile(r"\[(?:Academic|Reputable)\]\s*$")
+_REF_NUM_PREFIX_RE = re.compile(r"^\[\d+\]\s*")
+_REF_ACCESSED_RE = re.compile(r"\s*\(accessed [^)]*\)")
+
+
+def _normalize_ref_identity(line: str) -> str:
+    """Collapse a references-list line to a numbering-independent identity.
+
+    The same source cited by two papers appears under different [N] prefixes
+    and access dates — strip both plus the tier label so it counts ONCE
+    toward the external-source floor (two papers echoing one academic source
+    are one independent source, not two)."""
+    s = _REF_NUM_PREFIX_RE.sub("", line.strip())
+    s = _REF_ACCESSED_RE.sub("", s)
+    s = _EXTERNAL_REF_LABEL_RE.sub("", s)
+    return re.sub(r"\s+", " ", s).strip().lower()
+
+
+def _paper_external_refs(session, paper_id: str, cache: dict) -> frozenset[str]:
+    """[Academic]/[Reputable] reference identities in one paper's final report.
+
+    Server-side floor for the LLM's self-reported external_source_count
+    (audit P5-15): the curator prompt shows refs samples, but the count the
+    LLM returns is unverified. This loads the cited paper's result_json (the
+    same research_requests rows _gather_inputs reads) and collects the
+    tier-labeled lines from the References section via split_artifact.
+
+    Fail-closed: a non-UUID paper id, a missing/incomplete row, an
+    unparseable result_json, or a report without references all yield the
+    empty set — the established-claims gate then sees a floor of 0 and
+    demotes (wrong citations are worse than nothing).
+
+    `cache` is the per-pass memo (paper_id -> identities) so a paper cited
+    by many claim_updates is loaded and parsed once.
+    """
+    if paper_id in cache:
+        return cache[paper_id]
+    refs: frozenset[str] = frozenset()
+    try:
+        uuid.UUID(paper_id)
+    except (ValueError, TypeError, AttributeError):
+        logger.warning("[curator] claim cites non-UUID paper id %r — counts 0 external", paper_id)
+        cache[paper_id] = refs
+        return refs
+
+    row = session.execute(
+        text("""
+            SELECT result_json FROM research_requests
+            WHERE id = CAST(:pid AS uuid) AND status = 'completed'
+        """),
+        {"pid": paper_id},
+    ).fetchone()
+    report = ""
+    if row is not None and row.result_json:
+        try:
+            report = json.loads(row.result_json).get("report") or ""
+        except (json.JSONDecodeError, TypeError, AttributeError):
+            logger.warning(
+                "[curator] unparseable result_json for paper %s — counts 0 external", paper_id
+            )
+    if not report:
+        if row is None:
+            logger.warning(
+                "[curator] claim cites unknown/incomplete paper %s — counts 0 external", paper_id
+            )
+        cache[paper_id] = refs
+        return refs
+
+    from pipeline.lyra.theo_citations import split_artifact
+
+    _prose, _heading, refs_body = split_artifact(report)
+    refs = frozenset(
+        _normalize_ref_identity(line)
+        for line in refs_body.splitlines()
+        if _EXTERNAL_REF_LABEL_RE.search(line.strip())
+    )
+    cache[paper_id] = refs
+    return refs
+
+
+def _derived_external_count(session, paper_ids: list, cache: dict) -> int:
+    """Distinct external ([Academic]/[Reputable]) references across the cited
+    papers — the server-side ceiling for the LLM-reported count. No papers
+    cited -> 0 (an established claim must substantiate its externals)."""
+    identities: set[str] = set()
+    for pid in paper_ids:
+        identities |= _paper_external_refs(session, str(pid), cache)
+    return len(identities)
+
+
 def _apply_curator_output(session, out: dict) -> dict:
     """Apply a validated curator output. Pure DB writes, no LLM. Returns
     counters for the thinking log. Refuted claims never reopen.
@@ -216,6 +311,10 @@ def _apply_curator_output(session, out: dict) -> dict:
         "demoted": 0,
     }
 
+    # Per-pass memo: paper_id -> external reference identities, so a paper
+    # cited by several claim_updates is loaded and parsed once (P5-15).
+    paper_ext_cache: dict[str, frozenset[str]] = {}
+
     for cu in out.get("claim_updates", []):
         claim_text = (cu.get("text") or "").strip()
         status = cu.get("status")
@@ -235,7 +334,25 @@ def _apply_curator_output(session, out: dict) -> dict:
                 if existing and existing.status == "refuted":
                     continue  # refuted is terminal (spec §1)
 
-                ext = int(cu.get("external_source_count") or 0)
+                # P5-15: the LLM's self-reported count is untrusted — derive
+                # a server-side ceiling from what the cited papers actually
+                # reference. The LLM may lower the count (it may know two
+                # refs are not independent) but can never raise it above what
+                # the papers substantiate. No/unknown papers -> derived 0 ->
+                # "established" demotes below (fail-closed).
+                reported_ext = int(cu.get("external_source_count") or 0)
+                derived_ext = _derived_external_count(
+                    session, cu.get("paper_ids") or [], paper_ext_cache
+                )
+                ext = min(reported_ext, derived_ext)
+                if ext < reported_ext:
+                    logger.info(
+                        "[curator] external_source_count capped %d -> %d "
+                        "([Academic]/[Reputable] refs in cited papers) for claim %r",
+                        reported_ext,
+                        ext,
+                        claim_text[:80],
+                    )
                 # Hard rule, not prompt-only (spec §5 / I8): "established"
                 # requires >=2 independent external sources. The prompt asks
                 # the LLM to respect this but nothing enforces it upstream —
