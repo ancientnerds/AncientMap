@@ -157,19 +157,23 @@ server {
         add_header Cache-Control "public, max-age=86400";
     }
 
-    # SEO: Pre-rendered HTML for crawlers hitting /site.html?id={uuid}
+    # Legacy site URL. /sites/{country}/{slug} is now the canonical page and
+    # serves identical content to every user agent, so the old parameter URL
+    # just 301s there (the API resolves the uuid to its slug). This also
+    # retires the crawler user-agent rewrite that used to live here — showing
+    # crawlers different content than users is cloaking-adjacent and Google
+    # never fetched those URLs anyway.
     location = /site.html {
-        set $seo_redirect_site "";
-        if ($is_bot) {
-            set $seo_redirect_site "B";
-        }
-        if ($arg_id ~ "^[0-9a-fA-F-]{36}$") {
-            set $seo_redirect_site "${seo_redirect_site}S";
-        }
-        if ($seo_redirect_site = "BS") {
-            rewrite ^ /seo/site/$arg_id? last;
-        }
-        try_files $uri =404;
+        proxy_pass http://127.0.0.1:8000/site.html;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+
+    # Legacy research URL -> canonical /research/{slug}
+    location = /research.html {
+        proxy_pass http://127.0.0.1:8000/research.html;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
     }
 
     location / {

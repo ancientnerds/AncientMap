@@ -113,6 +113,13 @@ services:
     volumes:
       - ./public/data:/app/public/data
       - ./logs:/app/logs:ro
+      # SEO routes serve the real built app shell (pipeline/app_shell.py).
+      # Mount the PARENT of dist/, not dist/ itself: the deploy swaps builds
+      # in with `mv dist dist-old && mv dist-new dist`, which replaces the
+      # directory inode. A mount on dist/ would stay bound to the deleted
+      # inode and serve stale shells — and this container is not rebuilt when
+      # only frontend files change.
+      - ./ancient-nerds-map:/app/frontend:ro
     depends_on:
       db:
         condition: service_healthy

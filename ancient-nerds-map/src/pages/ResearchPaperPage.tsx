@@ -14,6 +14,7 @@ import TheoPaperBody from '../components/theo/TheoPaperBody'
 import ImageLightbox, { type LightboxImage } from '../components/ImageLightbox'
 import { useIsFounder } from '../hooks/useIsFounder'
 import { inferSourceType } from '../utils/sourceType'
+import { anRoute } from '../types/anRoute'
 import '../styles/theo.css'
 
 interface HeroImage {
@@ -210,8 +211,10 @@ export default function ResearchPaperPage() {
   const progressRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const slug = useMemo(() => {
-    const params = new URLSearchParams(window.location.search)
-    return params.get('slug') || ''
+    // /research/{slug} is canonical; ?slug= is the legacy entry form.
+    const route = anRoute()
+    if (route?.type === 'research') return route.slug
+    return new URLSearchParams(window.location.search).get('slug') || ''
   }, [])
 
   useEffect(() => {

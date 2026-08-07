@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <!--
+      Placeholder head. The API replaces the title/description/OG tags per
+      story before serving this shell at /news-archive/{slug} — see
+      pipeline/app_shell.py. Direct hits on /story.html redirect to the archive.
+    -->
+    <title>Story Archive | Ancient Nerds</title>
+    <meta name="description" content="Archaeology stories from the Ancient Nerds video digest — excavations, dating results, and reinterpretations, each with its source." />
+    <meta name="robots" content="index, follow, max-image-preview:large" />
+
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <meta name="theme-color" content="#0a1a1f" />
+
+    <meta property="og:type" content="article" />
+    <meta property="og:site_name" content="Ancient Nerds" />
+    <meta property="og:title" content="Story Archive | Ancient Nerds" />
+    <meta property="og:description" content="Archaeology stories, each traced to its source." />
+    <meta property="og:image" content="https://ancientnerds.com/landing/og-image.png" />
+    <meta property="og:locale" content="en_US" />
+
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:site" content="@AncientNerdsDAO" />
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@400;500;600;700&family=Orbitron:wght@400;500;600;700;900&family=Inter:wght@300;400;500;600&family=Saira+Extra+Condensed:wght@400;700;800&display=swap" rel="stylesheet" />
+  </head>
+  <body>
+    <div id="root"></div>
+    <div class="crt-glow"></div>
+    <script type="module" src="/src/storyMain.tsx"></script>
+    <!-- Legal links overlay - Impressumspflicht § 5 DDG / § 18 MStV (findable from every page) -->
+    <div class="an-legal-overlay">
+      <a href="/imprint.html">Imprint</a>
+      <a href="/privacy.html">Privacy</a>
+      <a href="/terms.html">Terms</a>
+    </div>
+    <style>
+      .an-legal-overlay{position:fixed;bottom:8px;right:12px;z-index:99999;display:flex;gap:12px;font-family:"JetBrains Mono","Fira Code",monospace;font-size:0.65rem;opacity:0.35;transition:opacity 0.2s;pointer-events:auto}
+      .an-legal-overlay:hover{opacity:1}
+      .an-legal-overlay a{color:#999;text-decoration:none;letter-spacing:0.05em;text-transform:uppercase}
+      .an-legal-overlay a:hover{color:#c02023}
+      @media print{.an-legal-overlay{display:none}}
+      @media (max-width:600px){.an-legal-overlay{font-size:0.55rem;bottom:4px;right:6px;gap:8px}}
+    </style>
+  </body>
+</html>

@@ -5,13 +5,19 @@ import SitePopup from '../components/SitePopup/SitePopup'
 import { useSiteDetailData } from '../components/SiteDetail/useSiteDetailData'
 import { getCountryFlatFlagUrl } from '../utils/countryFlags'
 import type { LyraContextType } from '../types/ai'
+import { anRoute } from '../types/anRoute'
 
 import '../styles/site-page.css'
 
 const LyraChatModal = lazy(() => import('../components/LyraChatModal'))
 
 export default function SitePage() {
-  const siteId = useMemo(() => new URLSearchParams(window.location.search).get('id'), [])
+  // /sites/{country}/{slug} carries the resolved id; /site.html?id= is the legacy form.
+  const siteId = useMemo(() => {
+    const route = anRoute()
+    if (route?.type === 'site') return route.id
+    return new URLSearchParams(window.location.search).get('id')
+  }, [])
 
   const { site, isLoading, error } = useSiteDetailData(siteId)
   const [showLyra, setShowLyra] = useState(false)

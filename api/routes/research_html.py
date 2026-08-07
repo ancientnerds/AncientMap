@@ -7,19 +7,26 @@ nginx proxies them directly (see ancientnerds-nginx-config).
 """
 
 import logging
+from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, Response
+from fastapi.responses import RedirectResponse
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from api.routes.public_v1 import PAPER_SUMMARY_COLUMNS, paper_summary_kwargs
-from pipeline.article_html_renderer import BASE_URL, render_404_html, render_medium_copy_html
+from api.seo_shell import shell_response
+from pipeline import seo_pages
+from pipeline.article_html_renderer import (
+    BASE_URL,
+    markdown_to_html,
+    render_404_html,
+    render_medium_copy_html,
+)
 from pipeline.database import get_db
 from pipeline.research_html_renderer import (
     format_image_captions_medium,
     format_references_md,
-    render_research_listing_html,
-    render_research_paper_html,
     strip_leading_title_heading,
 )
 
@@ -29,6 +36,13 @@ router = APIRouter()
 _HTML_HEADERS = {"Cache-Control": "public, max-age=1800"}
 
 _PUBLIC_WHERE = "r.is_public = TRUE AND r.status = 'completed' AND r.slug IS NOT NULL"
+
+
+@router.get("/research.html")
+async def legacy_research_redirect(slug: str = ""):
+    """301 the legacy /research.html?slug=… entry URL to /research/{slug}."""
+    target = f"/research/{quote(slug)}" if slug else "/theo.html#research-library"
+    return RedirectResponse(url=target, status_code=301)
 
 
 @router.get("/research/")
@@ -44,8 +58,7 @@ async def research_listing(db: Session = Depends(get_db)):
     ).fetchall()
 
     papers = [paper_summary_kwargs(row) for row in rows]
-    html = render_research_listing_html(papers)
-    return Response(content=html, media_type="text/html", headers=_HTML_HEADERS)
+    return shell_response(seo_pages.research_index_page(papers), _HTML_HEADERS)
 
 
 def _fetch_paper(slug: str, db: Session):
@@ -82,8 +95,10 @@ async def research_paper_page(slug: str, db: Session = Depends(get_db)):
     # is what external consumers should see — same rule as /api/v1/research.
     content = row.published_report or row.report or ""
 
-    html = render_research_paper_html(paper_summary_kwargs(row), content)
-    return Response(content=html, media_type="text/html", headers=_HTML_HEADERS)
+    return shell_response(
+        seo_pages.research_page(paper_summary_kwargs(row), markdown_to_html(content)),
+        _HTML_HEADERS,
+    )
 
 
 @router.get("/research/{slug}/medium")

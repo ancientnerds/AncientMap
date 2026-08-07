@@ -16,15 +16,16 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from api.routes.articles_html import public_stories_query
+from api.seo_shell import shell_response
+from pipeline import seo_pages
 from pipeline.article_html_renderer import render_404_html, story_slug
 from pipeline.database import NewsItem, get_db
 from pipeline.sites_html_renderer import (
     country_slug,
-    render_country_sites_html,
-    render_site_detail_html,
-    render_sites_index_html,
+    encode_path,
     site_id_prefix_from_slug,
     site_id_short,
+    site_path,
     site_slug,
 )
 
@@ -34,6 +35,11 @@ router = APIRouter()
 _HTML_HEADERS = {"Cache-Control": "public, max-age=3600"}
 
 _CURATED_WHERE = "source_id = 'ancient_nerds' AND country IS NOT NULL AND country != ''"
+
+# Plain concatenation of two module constants — the id is bound, never formatted in.
+_LEGACY_SITE_SQL = text(
+    "SELECT name, country FROM unified_sites WHERE id::text = :id AND " + _CURATED_WHERE
+)
 
 
 @router.get("/sites/")
@@ -52,8 +58,7 @@ async def sites_index(db: Session = Depends(get_db)):
     countries = [
         {"name": row.country, "slug": country_slug(row.country), "count": row.count} for row in rows
     ]
-    html = render_sites_index_html(countries)
-    return Response(content=html, media_type="text/html", headers=_HTML_HEADERS)
+    return shell_response(seo_pages.sites_index_page(countries), _HTML_HEADERS)
 
 
 @router.get("/sites/{slug}")
@@ -85,16 +90,28 @@ async def sites_by_country(slug: str, db: Session = Depends(get_db)):
 
     sites = [
         {
-            "id": row.id,
             "name": row.name,
-            "site_type": row.site_type,
-            "period_name": row.period_name,
             "description": row.description,
+            "path": site_path(country, row.name, row.id),
         }
         for row in site_rows
     ]
-    html = render_country_sites_html(country, slug, sites)
-    return Response(content=html, media_type="text/html", headers=_HTML_HEADERS)
+    return shell_response(seo_pages.country_sites_page(country, sites), _HTML_HEADERS)
+
+
+@router.get("/site.html")
+async def legacy_site_redirect(id: str = "", db: Session = Depends(get_db)):
+    """
+    301 the legacy /site.html?id={uuid} URL to its canonical slug URL.
+
+    Shared links and bookmarks keep working, and Google consolidates the
+    ranking signals on one URL per site instead of two. The built
+    site.html shell is still read from disk to serve /sites/{country}/{slug} —
+    only this HTTP path is redirected.
+    """
+    row = db.execute(_LEGACY_SITE_SQL, {"id": id}).fetchone() if id else None
+    target = site_path(row.country, row.name, id) if row else "/sites/"
+    return RedirectResponse(url=encode_path(target), status_code=301)
 
 
 def _site_404() -> Response:
@@ -152,8 +169,9 @@ async def site_detail(country: str, slug: str, db: Session = Depends(get_db)):
         "lon": row.lon,
         "source_url": row.source_url,
     }
-    html = render_site_detail_html(site, _related_content(row, db))
-    return Response(content=html, media_type="text/html", headers=_HTML_HEADERS)
+    return shell_response(
+        seo_pages.site_detail_page(site, _related_content(row, db)), _HTML_HEADERS
+    )
 
 
 def _related_content(row, db: Session) -> dict:
@@ -216,13 +234,13 @@ def _related_content(row, db: Session) -> dict:
             {"pid": row.parent_site_id},
         ).fetchone()
         if p:
-            parent = {"name": p.name, "slug": site_slug(p.name, p.id)}
+            parent = {"name": p.name, "path": site_path(row.country, p.name, p.id)}
 
     # Nearest curated neighbours in the same country: relevant to the reader
     # and spreads internal links instead of always pointing at the same
     # alphabetically-first sites.
     siblings = [
-        {"name": r.name, "slug": site_slug(r.name, r.id)}
+        {"name": r.name, "path": site_path(row.country, r.name, r.id)}
         for r in db.execute(
             text(f"""
                 SELECT id::text AS id, name

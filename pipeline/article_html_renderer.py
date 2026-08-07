@@ -160,6 +160,19 @@ def _first_image_url(content_md: str) -> str | None:
     return m.group(1) if m else None
 
 
+def markdown_to_html(content_md: str, *, toc: bool = True) -> str:
+    """
+    Markdown -> sanitized HTML with external links opened in a new tab.
+
+    Single definition: article pages, research papers, Medium copies and
+    the SEO fragments all render markdown the same way, so a sanitizer
+    change cannot apply to some pages and miss others.
+    """
+    extensions = ["extra", "smarty", "toc"] if toc else ["extra", "smarty"]
+    md = markdown.Markdown(extensions=extensions)
+    return external_links_new_tab(_sanitize_html(md.convert(content_md)))
+
+
 def slugify(title: str) -> str:
     """Generate URL-safe slug from article title."""
     slug = title.lower().strip()

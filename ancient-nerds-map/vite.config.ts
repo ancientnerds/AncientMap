@@ -79,6 +79,7 @@ export default defineConfig({
         landing: resolve(__dirname, 'index.html'),
         main: resolve(__dirname, 'globe.html'),
         news: resolve(__dirname, 'news.html'),
+        story: resolve(__dirname, 'story.html'),
         radar: resolve(__dirname, 'radar.html'),
         lyra: resolve(__dirname, 'lyra.html'),
         lyraOps: resolve(__dirname, 'lyra-ops.html'),

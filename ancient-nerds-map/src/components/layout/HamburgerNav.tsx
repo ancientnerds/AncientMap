@@ -5,6 +5,7 @@ const NAV_ITEMS = [
   { page: 'globe', label: 'Globe', href: '/globe.html', icon: 'M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zM2 12h20M12 2a15 15 0 0 1 4 10 15 15 0 0 1-4 10 15 15 0 0 1-4-10A15 15 0 0 1 12 2z' },
   { page: 'search', label: 'Search', href: '/search.html', icon: 'M21 21l-6-6m2-5a7 7 0 1 1-14 0 7 7 0 0 1 14 0z' },
   { page: 'news', label: 'Stories', href: '/news.html', icon: 'M19 20H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v1m2 13a2 2 0 0 1-2-2V7m2 13a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-2' },
+  { page: 'story-archive', label: 'Story Archive', href: '/news-archive/', icon: 'M20 21v-8H4v8M4 13l1.5-9h13L20 13M9 8h6M9 17h6' },
   { page: 'radar', label: 'Radar', href: '/radar.html', icon: 'M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.48-8.48l2.83-2.83' },
   { page: 'articles', label: 'Journal', href: '/articles.html', icon: 'M4 19.5A2.5 2.5 0 0 1 6.5 17H20M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z' },
   { page: 'lyra', label: 'Lyra', href: '/lyra.html', icon: 'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z' },

@@ -6,21 +6,20 @@ These routes live outside /api/ so nginx proxies them directly.
 """
 
 import logging
-from collections import defaultdict
 
 from fastapi import APIRouter, Depends, Response
 from sqlalchemy.orm import Session, joinedload
 
+from api.seo_shell import shell_response
+from pipeline import seo_pages
 from pipeline.article_html_renderer import (
     BASE_URL,
+    markdown_to_html,
     render_404_html,
-    render_article_html,
-    render_article_listing_html,
     render_medium_copy_html,
-    render_news_archive_html,
-    render_story_html,
     slugify,
     story_id_from_slug,
+    story_slug,
 )
 from pipeline.database import NewsArticle, NewsItem, NewsVideo, get_db
 
@@ -66,8 +65,7 @@ async def articles_listing(db: Session = Depends(get_db)):
         for article in articles
     ]
 
-    html = render_article_listing_html(article_dicts)
-    return Response(content=html, media_type="text/html", headers=_HTML_HEADERS)
+    return shell_response(seo_pages.article_index_page(article_dicts), _HTML_HEADERS)
 
 
 @router.get("/articles/{slug}")
@@ -89,16 +87,18 @@ async def article_page(slug: str, db: Session = Depends(get_db)):
             headers={"Cache-Control": "public, max-age=300"},
         )
 
-    html = render_article_html(
-        title=article.title,
-        content_md=article.content,
-        summary=article.summary,
-        published_at=article.published_at,
-        week_start=article.week_start,
-        week_end=article.week_end,
-        slug=slug,
+    return shell_response(
+        seo_pages.article_page(
+            {
+                "title": article.title,
+                "slug": slug,
+                "summary": article.summary,
+                "published_at": article.published_at,
+            },
+            markdown_to_html(article.content),
+        ),
+        _HTML_HEADERS,
     )
-    return Response(content=html, media_type="text/html", headers=_HTML_HEADERS)
 
 
 @router.get("/articles/{slug}/medium")
@@ -151,38 +151,18 @@ async def _render_news_archive_page(page: int, db: Session) -> Response:
         .all()
     )
 
-    # Group by date
-    grouped: dict[str, list[dict]] = defaultdict(list)
-    for item in items:
-        video = item.video
-        site = item.site
-
-        date_label = ""
-        if video and video.published_at:
-            date_label = video.published_at.strftime("%B %d, %Y")
-        elif item.created_at:
-            date_label = item.created_at.strftime("%B %d, %Y")
-
-        youtube_url = f"https://www.youtube.com/watch?v={video.id}" if video else ""
-
-        grouped[date_label].append(
-            {
-                "id": item.id,
-                "headline": item.headline,
-                "summary": item.summary,
-                "facts": item.facts,
-                "site_name": site.name if site else (item.site_name_extracted or ""),
-                "site_id": str(site.id) if site else "",
-                "video_title": video.title if video else "",
-                "youtube_url": youtube_url,
-            }
-        )
-
-    # Convert to ordered list of tuples
-    items_by_date = list(grouped.items())  # already ordered by query
-
-    html = render_news_archive_html(items_by_date, total_count, page, total_pages)
-    return Response(content=html, media_type="text/html", headers=_HTML_HEADERS_SHORT)
+    stories = [
+        {
+            "slug": story_slug(item.headline, item.id),
+            "headline": item.headline,
+            "summary": item.summary,
+        }
+        for item in items
+    ]
+    return shell_response(
+        seo_pages.story_archive_page(stories, page, total_pages, total_count),
+        _HTML_HEADERS_SHORT,
+    )
 
 
 @router.get("/news-archive/")
@@ -233,6 +213,7 @@ async def story_page(slug: str, db: Session = Depends(get_db)):
         "post_text": item.post_text,
         "site_name": site.name if site else (item.site_name_extracted or ""),
         "site_id": str(site.id) if site else "",
+        "site_country": site.country if site else "",
         "screenshot_url": item.screenshot_url,
         "youtube_url": f"https://www.youtube.com/watch?v={video.id}" if video else "",
         "video_title": video.title if video else "",
@@ -241,5 +222,4 @@ async def story_page(slug: str, db: Session = Depends(get_db)):
         "news_category": item.news_category,
     }
 
-    html = render_story_html(story)
-    return Response(content=html, media_type="text/html", headers=_HTML_HEADERS)
+    return shell_response(seo_pages.story_page(story), _HTML_HEADERS)
