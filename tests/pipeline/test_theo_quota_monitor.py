@@ -211,6 +211,7 @@ def test_notify_transition_is_silent_when_webhook_unset(monkeypatch):
 # --- Recovery restores full speed (2026-07-19) -------------------------------
 
 
+@pytest.mark.real_limiter_pacing
 def test_restore_limiter_full_speed_clears_crawl_clamp():
     """After the quota block resets (tier -> HEALTHY), the limiter must NOT
     keep the THROTTLED-era clamp. Observed live 2026-07-19: 20+ min after

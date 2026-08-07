@@ -12,6 +12,46 @@ os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")
 os.environ.setdefault("TURNSTILE_SECRET_KEY", "test-secret")
 
 
+def pytest_configure(config):
+    config.addinivalue_line(
+        "markers",
+        "real_limiter_pacing: opt out of the pacing stub — for tests that "
+        "assert the limiter's own delay/concurrency values",
+    )
+
+
+@pytest.fixture(autouse=True)
+def _no_llm_pacing(request):
+    """Neutralize MiniMax rate-limiter pacing for the whole test suite.
+
+    The limiter enforces real wall-clock delays (0.5s base, 60s crawl lane,
+    freeze windows). Against mocked LLM clients that is pure dead time: the
+    first CI run of the backend-tests job (2026-08-06) blew the 90s
+    per-test timeout on 20 dispatch tests that pass in milliseconds locally
+    when a .env happens to disable crawl pacing. Env vars alone can't fix
+    this reliably — the pacing lives in module/instance state — so the
+    suite pins it to zero and restores afterwards.
+    """
+    if request.node.get_closest_marker("real_limiter_pacing"):
+        yield
+        return
+
+    from pipeline.lyra import minimax_limiter as ml
+
+    saved_crawl = ml._crawl_delay_s
+    saved = (ml.limiter._base_delay, ml.limiter._max_delay, ml.limiter._current_delay)
+    ml._crawl_delay_s = 0.0
+    ml.limiter._base_delay = 0.0
+    ml.limiter._max_delay = 0.0
+    ml.limiter._current_delay = 0.0
+    ml.limiter._frozen_until = 0.0
+    try:
+        yield
+    finally:
+        ml._crawl_delay_s = saved_crawl
+        ml.limiter._base_delay, ml.limiter._max_delay, ml.limiter._current_delay = saved
+
+
 @pytest.fixture(scope="session")
 def anyio_backend() -> str:
     """Use asyncio for async tests."""

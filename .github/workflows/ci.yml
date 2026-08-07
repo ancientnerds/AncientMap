@@ -376,6 +376,20 @@ jobs:
               REBUILD="$REBUILD webcam-proxy"
             fi
 
+            # Drift guard (2026-08-07): $CHANGED only covers THIS pull. When a
+            # deploy dies after `git pull` (that night: SSH pipe broke during a
+            # blocked migration), the next run sees an empty diff and silently
+            # skips the rebuild — prod then serves old code from a repo that
+            # already has the new commit. Compare the RUNNING container commit
+            # against HEAD and force a rebuild on mismatch.
+            RUNNING_COMMIT=$(curl -sf --max-time 5 http://localhost:8000/ | sed -n "s/.*\"commit\":\"\([^\"]*\)\".*/\1/p")
+            HEAD_SHORT=$(git rev-parse --short=8 HEAD)
+            if [ "$RUNNING_COMMIT" != "$HEAD_SHORT" ]; then
+              echo "==> Container drift: running=${RUNNING_COMMIT:-none} head=$HEAD_SHORT — forcing api+lyra rebuild"
+              case "$REBUILD" in *api*) ;; *) REBUILD="$REBUILD api";; esac
+              case "$REBUILD" in *lyra*) ;; *) REBUILD="$REBUILD lyra";; esac
+            fi
+
             if [ -n "$REBUILD" ]; then
               echo "==> Rebuilding:$REBUILD"
               docker compose rm -sf $REBUILD 2>/dev/null || true
