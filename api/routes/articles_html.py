@@ -33,8 +33,14 @@ _HTML_HEADERS_SHORT = {"Cache-Control": "public, max-age=1800"}
 STORIES_PER_PAGE = 50
 
 
-def _public_stories_query(db: Session):
-    """Base query for publicly listed news stories (same filter everywhere)."""
+def public_stories_query(db: Session):
+    """
+    Base query for publicly listed news stories (same filter everywhere).
+
+    Authoritative: /news-archive/{slug} serves exactly this set, so the
+    sitemap and any page linking to a story must use it too — otherwise
+    we advertise URLs that 404.
+    """
     return (
         db.query(NewsItem)
         .join(NewsVideo)
@@ -122,7 +128,7 @@ async def article_medium_copy(slug: str, db: Session = Depends(get_db)):
 
 async def _render_news_archive_page(page: int, db: Session) -> Response:
     """Render one paginated page of the news archive."""
-    total_count = _public_stories_query(db).count()
+    total_count = public_stories_query(db).count()
     total_pages = max(1, -(-total_count // STORIES_PER_PAGE))  # ceil division
 
     if page < 1 or (page > total_pages):
@@ -134,7 +140,7 @@ async def _render_news_archive_page(page: int, db: Session) -> Response:
         )
 
     items = (
-        _public_stories_query(db)
+        public_stories_query(db)
         .options(
             joinedload(NewsItem.video).joinedload(NewsVideo.channel),
             joinedload(NewsItem.site),
@@ -197,7 +203,7 @@ async def story_page(slug: str, db: Session = Depends(get_db)):
     item_id = story_id_from_slug(slug)
     item = (
         (
-            _public_stories_query(db)
+            public_stories_query(db)
             .options(
                 joinedload(NewsItem.video).joinedload(NewsVideo.channel),
                 joinedload(NewsItem.site),

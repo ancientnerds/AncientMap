@@ -11,14 +11,24 @@ from fastapi import APIRouter, Depends, Response
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from api.routes.articles_html import public_stories_query
 from pipeline.article_html_renderer import slugify, story_slug
 from pipeline.database import NewsArticle, NewsItem, get_db
-from pipeline.sites_html_renderer import country_slug
+from pipeline.sites_html_renderer import country_path, encode_path, site_path
 
 router = APIRouter()
 
 # Base URL for the site
 BASE_URL = "https://ancientnerds.com"
+
+
+def _loc(path: str) -> str:
+    """Absolute, percent-encoded, XML-escaped <loc> value for a raw site path.
+
+    Sitemap URLs must be URL-escaped; ~600 site slugs and ~100 news/article
+    slugs contain non-ASCII characters. Takes the UNENCODED path.
+    """
+    return escape(f"{BASE_URL}{encode_path(path)}")
 
 
 @router.api_route("/sitemap.xml", methods=["GET", "HEAD"])
@@ -29,9 +39,10 @@ async def get_sitemap(db: Session = Depends(get_db)):
     """
     # Only include Ancient Nerds Originals (curated sites), not bulk-imported sources
     query = text("""
-        SELECT id, name, updated_at
+        SELECT id, name, country, updated_at
         FROM unified_sites
         WHERE source_id = 'ancient_nerds'
+          AND country IS NOT NULL AND country != ''
         ORDER BY name
     """)
 
@@ -179,7 +190,7 @@ async def get_sitemap(db: Session = Depends(get_db)):
         xml_parts.extend(
             [
                 "  <url>",
-                f"    <loc>{escape(f'{BASE_URL}/sites/{country_slug(row.country)}')}</loc>",
+                f"    <loc>{_loc(country_path(row.country))}</loc>",
                 f"    <lastmod>{today}</lastmod>",
                 "    <changefreq>weekly</changefreq>",
                 "    <priority>0.7</priority>",
@@ -187,17 +198,20 @@ async def get_sitemap(db: Session = Depends(get_db)):
             ]
         )
 
-    # Add each site
+    # --- Site detail pages ---
+    # Canonical form is /sites/{country}/{slug}. The legacy
+    # /site.html?id={uuid} parameter URLs are deliberately NOT listed: Google
+    # left all ~5,000 of them on "Discovered - currently not indexed" and never
+    # fetched a single one (URL Inspection, 2026-08-07). They stay reachable
+    # for the app and canonicalise to the URLs below.
     for site in sites:
-        site_id = str(site.id)
-        site_url = f"{BASE_URL}/site.html?id={site_id}"
         # Use updated_at if available, otherwise use today
         lastmod = site.updated_at.strftime("%Y-%m-%d") if site.updated_at else today
 
         xml_parts.extend(
             [
                 "  <url>",
-                f"    <loc>{site_url}</loc>",
+                f"    <loc>{_loc(site_path(site.country, site.name, site.id))}</loc>",
                 f"    <lastmod>{lastmod}</lastmod>",
                 "    <changefreq>monthly</changefreq>",
                 "    <priority>0.8</priority>",
@@ -209,12 +223,11 @@ async def get_sitemap(db: Session = Depends(get_db)):
     articles = db.query(NewsArticle).order_by(NewsArticle.created_at.desc()).all()
     for article in articles:
         slug = slugify(article.title)
-        article_url = f"{BASE_URL}/articles/{slug}"
         lastmod = article.published_at.strftime("%Y-%m-%d") if article.published_at else today
         xml_parts.extend(
             [
                 "  <url>",
-                f"    <loc>{escape(article_url)}</loc>",
+                f"    <loc>{_loc(f'/articles/{slug}')}</loc>",
                 f"    <lastmod>{lastmod}</lastmod>",
                 "    <changefreq>monthly</changefreq>",
                 "    <priority>0.9</priority>",
@@ -236,7 +249,7 @@ async def get_sitemap(db: Session = Depends(get_db)):
         xml_parts.extend(
             [
                 "  <url>",
-                f"    <loc>{escape(f'{BASE_URL}/research/{paper.slug}')}</loc>",
+                f"    <loc>{_loc(f'/research/{paper.slug}')}</loc>",
                 f"    <lastmod>{lastmod}</lastmod>",
                 "    <changefreq>monthly</changefreq>",
                 "    <priority>0.9</priority>",
@@ -245,20 +258,15 @@ async def get_sitemap(db: Session = Depends(get_db)):
         )
 
     # --- News stories (crawlable /news-archive/{slug} pages) ---
-    stories = (
-        db.query(NewsItem.id, NewsItem.headline, NewsItem.created_at)
-        .filter(NewsItem.post_text.isnot(None))
-        .filter((NewsItem.news_category != "speculative") | (NewsItem.news_category.is_(None)))
-        .order_by(NewsItem.created_at.desc())
-        .all()
-    )
+    # Must be the same filter the route serves, or the sitemap advertises 404s.
+    stories = public_stories_query(db).order_by(NewsItem.created_at.desc()).all()
     for story in stories:
         slug = story_slug(story.headline, story.id)
         lastmod = story.created_at.strftime("%Y-%m-%d") if story.created_at else today
         xml_parts.extend(
             [
                 "  <url>",
-                f"    <loc>{escape(f'{BASE_URL}/news-archive/{slug}')}</loc>",
+                f"    <loc>{_loc(f'/news-archive/{slug}')}</loc>",
                 f"    <lastmod>{lastmod}</lastmod>",
                 "    <changefreq>yearly</changefreq>",
                 "    <priority>0.6</priority>",

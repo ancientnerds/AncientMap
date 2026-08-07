@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 
 from api.routes.og import get_site_data
 from pipeline.database import get_db
-from pipeline.sites_html_renderer import country_slug
+from pipeline.sites_html_renderer import country_path, encode_path, site_path
 
 router = APIRouter()
 
@@ -40,7 +40,17 @@ async def seo_site_page(
     country_escaped = html.escape(site["country"])
     site_type_escaped = html.escape(site["site_type"] or "Archaeological site")
     og_image_url = f"{base_url}/api/og/{site_id}"
-    canonical_url = html.escape(f"{base_url}/site.html?id={site_id}")
+
+    # Canonical is the real SSR page at /sites/{country}/{slug}, which serves
+    # the same content to every user agent. This block only still exists to
+    # give social crawlers OG tags on shared /site.html?id= links; pointing
+    # its canonical at the parameter URL would split the ranking signals.
+    if site["country"]:
+        canonical_path = site_path(site["country"], site["name"], site_id)
+        canonical_url = html.escape(f"{base_url}{encode_path(canonical_path)}")
+    else:
+        canonical_path = f"/site.html?id={site_id}"
+        canonical_url = html.escape(f"{base_url}{canonical_path}")
 
     # Title: "Site Name | Country · Category"
     title_parts: list[str] = []
@@ -62,7 +72,7 @@ async def seo_site_page(
         "@type": "Place",
         "name": site["name"],
         "description": site["description"],
-        "url": f"{base_url}/site.html?id={site_id}",
+        "url": f"{base_url}{canonical_path}",
         "image": f"{base_url}/api/og/{site_id}",
     }
     if site["lat"] is not None and site["lon"] is not None:
@@ -129,8 +139,8 @@ async def seo_site_page(
     <h1>{title_escaped}</h1>
     <p class="meta">{site_type_escaped}{" &mdash; " + country_escaped if site["country"] else ""}{" &mdash; " + coord_str if coord_str else ""}</p>
     <p class="description">{desc_escaped}</p>
-    <p><a href="/site.html?id={html.escape(site_id)}">View on Ancient Nerds Map</a></p>
-    {f'<p><a href="/sites/{country_slug(site["country"])}">More archaeological sites in {country_escaped}</a></p>' if site["country"] else ""}
+    <p><a href="{html.escape(canonical_path)}">Full site profile</a> &middot; <a href="/site.html?id={html.escape(site_id)}">View on Ancient Nerds Map</a></p>
+    {f'<p><a href="{country_path(site["country"])}">More archaeological sites in {country_escaped}</a></p>' if site["country"] else ""}
     <p><a href="/sites/">Browse all sites by country</a> &middot; <a href="/news-archive/">Archaeology news</a> &middot; <a href="/research/">Research papers</a></p>
 </body>
 </html>"""

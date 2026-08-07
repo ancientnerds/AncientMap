@@ -1,8 +1,9 @@
 """
-SEO-friendly HTML site browser: /sites/ and /sites/{country}.
+SEO-friendly HTML site browser: /sites/, /sites/{country} and
+/sites/{country}/{slug}.
 
-These crawlable listings are the link path from the homepage to the
-~5,000 curated site detail pages. Only Ancient Nerds Originals are
+These crawlable pages are the link path from the homepage down to each of
+the ~5,000 curated site detail pages. Only Ancient Nerds Originals are
 listed (same rule as the sitemap) — the bulk-imported 750K sites are
 searchable via the app but not part of the crawl surface.
 """
@@ -10,15 +11,21 @@ searchable via the app but not part of the crawl surface.
 import logging
 
 from fastapi import APIRouter, Depends, Response
+from fastapi.responses import RedirectResponse
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from pipeline.article_html_renderer import render_404_html
-from pipeline.database import get_db
+from api.routes.articles_html import public_stories_query
+from pipeline.article_html_renderer import render_404_html, story_slug
+from pipeline.database import NewsItem, get_db
 from pipeline.sites_html_renderer import (
     country_slug,
     render_country_sites_html,
+    render_site_detail_html,
     render_sites_index_html,
+    site_id_prefix_from_slug,
+    site_id_short,
+    site_slug,
 )
 
 logger = logging.getLogger(__name__)
@@ -88,3 +95,151 @@ async def sites_by_country(slug: str, db: Session = Depends(get_db)):
     ]
     html = render_country_sites_html(country, slug, sites)
     return Response(content=html, media_type="text/html", headers=_HTML_HEADERS)
+
+
+def _site_404() -> Response:
+    return Response(
+        content=render_404_html("Site"),
+        media_type="text/html",
+        status_code=404,
+        headers={"Cache-Control": "public, max-age=300"},
+    )
+
+
+@router.get("/sites/{country}/{slug}")
+async def site_detail(country: str, slug: str, db: Session = Depends(get_db)):
+    """
+    Full crawlable detail page for one curated site.
+
+    Resolution is by the 8-hex ID suffix in the slug, not by the name part,
+    so renaming a site never orphans its URL — a stale name or country in
+    the path is answered with a 301 to the current canonical URL.
+    """
+    prefix = site_id_prefix_from_slug(slug)
+    if not prefix:
+        return _site_404()
+
+    row = db.execute(
+        text(f"""
+            SELECT id::text AS id, name, country, site_type, period_name,
+                   period_start, period_end, description, lat, lon, source_url,
+                   parent_site_id::text AS parent_site_id
+            FROM unified_sites
+            WHERE {_CURATED_WHERE} AND LEFT(REPLACE(id::text, '-', ''), 8) = :prefix
+            LIMIT 1
+        """),
+        {"prefix": prefix},
+    ).fetchone()
+
+    if not row:
+        return _site_404()
+
+    canonical_country = country_slug(row.country)
+    canonical_slug = site_slug(row.name, row.id)
+    if country != canonical_country or slug != canonical_slug:
+        return RedirectResponse(url=f"/sites/{canonical_country}/{canonical_slug}", status_code=301)
+
+    site = {
+        "id": row.id,
+        "name": row.name,
+        "country": row.country,
+        "site_type": row.site_type,
+        "period_name": row.period_name,
+        "period_start": row.period_start,
+        "period_end": row.period_end,
+        "description": row.description,
+        "lat": row.lat,
+        "lon": row.lon,
+        "source_url": row.source_url,
+    }
+    html = render_site_detail_html(site, _related_content(row, db))
+    return Response(content=html, media_type="text/html", headers=_HTML_HEADERS)
+
+
+def _related_content(row, db: Session) -> dict:
+    """Gather alternate names, hero image, news, resources and sibling sites."""
+    alt_names = [
+        r.name
+        for r in db.execute(
+            text("SELECT name FROM unified_site_names WHERE site_id = :sid ORDER BY name"),
+            {"sid": row.id},
+        ).fetchall()
+    ]
+
+    image = None
+    img_row = db.execute(
+        text("""
+            SELECT filename, author, license, commons_page_url
+            FROM wiki_images
+            WHERE site_id = :sid AND (is_excluded = false OR is_excluded IS NULL)
+            ORDER BY is_hero DESC, is_lead DESC, sort_order
+            LIMIT 1
+        """),
+        {"sid": row.id},
+    ).fetchone()
+    if img_row:
+        image = {
+            "url": f"/data/images/wiki/{site_id_short(row.id)}/{img_row.filename}",
+            "author": img_row.author,
+            "license": img_row.license,
+            "commons_url": img_row.commons_page_url,
+        }
+
+    # Same filter the /news-archive/{slug} route serves, so every link resolves.
+    news = [
+        {"slug": story_slug(item.headline, item.id), "headline": item.headline}
+        for item in public_stories_query(db)
+        .filter(NewsItem.site_id == row.id)
+        .order_by(NewsItem.created_at.desc())
+        .limit(10)
+        .all()
+    ]
+
+    links = [
+        {"title": r.title, "url": r.content_url, "content_type": r.content_type}
+        for r in db.execute(
+            text("""
+                SELECT title, content_url, content_type
+                FROM site_content_links
+                WHERE site_id = :sid AND content_url IS NOT NULL
+                ORDER BY relevance_score DESC NULLS LAST
+                LIMIT 15
+            """),
+            {"sid": row.id},
+        ).fetchall()
+    ]
+
+    parent = None
+    if row.parent_site_id:
+        p = db.execute(
+            text("SELECT id::text AS id, name FROM unified_sites WHERE id::text = :pid"),
+            {"pid": row.parent_site_id},
+        ).fetchone()
+        if p:
+            parent = {"name": p.name, "slug": site_slug(p.name, p.id)}
+
+    # Nearest curated neighbours in the same country: relevant to the reader
+    # and spreads internal links instead of always pointing at the same
+    # alphabetically-first sites.
+    siblings = [
+        {"name": r.name, "slug": site_slug(r.name, r.id)}
+        for r in db.execute(
+            text(f"""
+                SELECT id::text AS id, name
+                FROM unified_sites
+                WHERE {_CURATED_WHERE} AND country = :country AND id::text <> :sid
+                ORDER BY (lat - :lat) * (lat - :lat) + (lon - :lon) * (lon - :lon)
+                LIMIT 24
+            """),
+            {"country": row.country, "sid": row.id, "lat": row.lat, "lon": row.lon},
+        ).fetchall()
+    ]
+
+    return {
+        "alt_names": alt_names,
+        "image": image,
+        "news": news,
+        "links": links,
+        "parent": parent,
+        "siblings": siblings,
+    }
