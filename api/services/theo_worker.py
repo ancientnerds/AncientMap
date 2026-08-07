@@ -1265,9 +1265,14 @@ async def cleanup_stale_deferred() -> None:
                     {"hours": DEFERRED_MAX_AGE_HOURS},
                 ).fetchall()
                 stale_ids = [r.id for r in rows]
-                if not stale_ids:
-                    await asyncio.sleep(3600)
-                    continue
+            # NOTHING may await inside the session block: sleeping in here
+            # parked an open transaction on research_requests for a full
+            # hour, which blocked every ALTER TABLE behind it — it killed
+            # two deploys (2026-08-06 migration 0010, 2026-08-07 0013).
+            if not stale_ids:
+                await asyncio.sleep(3600)
+                continue
+            with get_session() as session:
                 reason = (
                     f"Quota did not recover within {DEFERRED_MAX_AGE_HOURS} hours "
                     f"after the run was deferred. Marked failed to keep the queue bounded."
