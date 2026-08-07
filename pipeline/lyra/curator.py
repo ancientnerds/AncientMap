@@ -712,7 +712,7 @@ def run_curator_pass() -> None:
             # 20h gate never closes and the feeder retries all night.
             logger.warning("[THINK] curator returned empty output — skipping apply")
             log_thinking(
-                "curator", "Denkstunde failed: LLM returned no usable output", {"failed": True}
+                "curator", "Curator pass failed: LLM returned no usable output", {"failed": True}
             )
             return
 
@@ -735,7 +735,7 @@ def run_curator_pass() -> None:
         # "established" claim that didn't actually earn it) and must be
         # visible in the Discord embed / activity feed at a glance.
         summary = (
-            f"Denkstunde: {stats['claims']} claims ({stats['demoted']} demoted, "
+            f"Curator pass: {stats['claims']} claims ({stats['demoted']} demoted, "
             f"{stats['dropped']} dropped), {stats['connections']} connections, "
             f"{stats['hypotheses']} hypotheses, {stats['outcomes']} verdicts"
         )
@@ -754,7 +754,7 @@ def run_curator_pass() -> None:
                 {
                     "embeds": [
                         {
-                            "title": "🧠 Theo Denkstunde",
+                            "title": "🧠 Theo Curator Pass",
                             "description": f"{summary}\n{out.get('summary', '')[:500]}",
                             "color": 0x3498DB,
                         }
@@ -768,10 +768,10 @@ def run_curator_pass() -> None:
         from pipeline.lyra.thinking_log import log_thinking
 
         log_thinking(
-            "curator", f"Denkstunde failed: quota exhausted ({exc})"[:500], {"failed": True}
+            "curator", f"Curator pass failed: quota exhausted ({exc})"[:500], {"failed": True}
         )
     except Exception as exc:  # noqa: BLE001 — thinking must never kill the feeder
         logger.error("[THINK] curator pass failed: %s", exc, exc_info=True)
         from pipeline.lyra.thinking_log import log_thinking
 
-        log_thinking("curator", f"Denkstunde failed: {exc}"[:500], {"failed": True})
+        log_thinking("curator", f"Curator pass failed: {exc}"[:500], {"failed": True})

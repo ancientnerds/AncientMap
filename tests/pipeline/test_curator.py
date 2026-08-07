@@ -871,7 +871,7 @@ def test_run_curator_pass_swallows_exceptions_and_logs_failure_row(monkeypatch, 
     assert logged, "expected a failure row in thinking_log — closes the 20h schedule gate (I5/M17)"
     kind, summary, details = logged[0]
     assert kind == "curator"
-    assert "Denkstunde failed" in summary
+    assert "Curator pass failed" in summary
     assert details == {"failed": True}
 
 
