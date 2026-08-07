@@ -12,6 +12,7 @@ crawlers, for the instant before hydration, and without JavaScript.
 """
 
 from dataclasses import dataclass
+from datetime import datetime
 from html import escape
 
 from pipeline.article_html_renderer import (
@@ -101,6 +102,23 @@ def _meta_head(
 <style>{SSR_CSS}</style>{schema_tag}"""
 
 
+def _date_parts(value) -> tuple[str, str]:
+    """
+    (iso date, display date) from a datetime or an ISO string.
+
+    paper_summary_kwargs() hands out published_at as an ISO string while the
+    article rows carry real datetimes; both feed these fragments.
+    """
+    if not value:
+        return "", ""
+    if isinstance(value, str):
+        try:
+            value = datetime.fromisoformat(value)
+        except ValueError:
+            return value[:10], value[:10]
+    return value.strftime("%Y-%m-%d"), value.strftime("%B %d, %Y")
+
+
 def _route_json(page_type: str, payload: dict) -> str:
     """
     JSON literal for window.__AN_ROUTE__.
@@ -163,9 +181,7 @@ def story_page(story: dict) -> SeoPage:
     canonical = f"{BASE_URL}/news-archive/{encode_path(slug)}"
     headline = story["headline"]
     summary = (story.get("summary") or "").strip()
-    published = story.get("published_at")
-    pub_date = published.strftime("%Y-%m-%d") if published else ""
-    pub_display = published.strftime("%B %d, %Y") if published else ""
+    pub_date, pub_display = _date_parts(story.get("published_at"))
 
     screenshot = story.get("screenshot_url") or ""
     if screenshot.startswith("/"):
@@ -425,8 +441,7 @@ def research_page(paper: dict, body_html: str) -> SeoPage:
     title = paper["title"]
     summary = (paper.get("summary") or "").strip()
     author = paper.get("author") or "Theo"
-    published = paper.get("published_at")
-    pub_date = published.strftime("%Y-%m-%d") if published else ""
+    pub_date, _ = _date_parts(paper.get("published_at"))
 
     # Theo is a pipeline, not a person — keep it an Organization in JSON-LD.
     author_schema = (
@@ -667,8 +682,7 @@ def article_page(article: dict, body_html: str) -> SeoPage:
     canonical = f"{BASE_URL}/articles/{encode_path(article['slug'])}"
     title = article["title"]
     summary = (article.get("summary") or "").strip()
-    published = article.get("published_at")
-    pub_date = published.strftime("%Y-%m-%d") if published else ""
+    pub_date, _ = _date_parts(article.get("published_at"))
 
     schema = (
         '{"@context": "https://schema.org", "@type": "Article", '

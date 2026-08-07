@@ -233,3 +233,45 @@ def test_every_listing_targets_a_real_vite_entry(make, expected_entry):
     assert page.entry == expected_entry
     json.loads(page.route)
     assert re.search(r"<title>.*?</title>", page.head)
+
+
+def test_research_page_accepts_an_iso_string_date():
+    """paper_summary_kwargs() serialises published_at to a string, not a datetime.
+
+    Calling .strftime() on it 500'd every /research/{slug} page in production
+    (2026-08-07).
+    """
+    paper = {
+        "title": "A Paper",
+        "slug": "a-paper",
+        "summary": "Abstract.",
+        "author": "Theo",
+        "published_at": "2026-07-01T12:00:00",
+    }
+    page = seo_pages.research_page(paper, "<p>body</p>")
+    assert "2026-07-01" in page.body
+    assert '"datePublished": "2026-07-01"' in page.head
+
+
+def test_research_page_still_accepts_a_datetime():
+    paper = {
+        "title": "A Paper",
+        "slug": "a-paper",
+        "summary": "Abstract.",
+        "author": "Theo",
+        "published_at": datetime(2026, 7, 1),
+    }
+    assert "2026-07-01" in seo_pages.research_page(paper, "<p>body</p>").body
+
+
+def test_article_page_accepts_both_date_forms():
+    for value in ("2026-07-01T00:00:00", datetime(2026, 7, 1)):
+        page = seo_pages.article_page(
+            {"title": "T", "slug": "t", "summary": "s", "published_at": value}, "<p>b</p>"
+        )
+        assert "2026-07-01" in page.body
+
+
+def test_story_page_accepts_an_iso_string_date():
+    page = seo_pages.story_page(_story(published_at="2026-07-01T00:00:00"))
+    assert "2026-07-01" in page.body
