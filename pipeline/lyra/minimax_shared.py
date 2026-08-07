@@ -500,6 +500,15 @@ def probe_minimax_quota(force: bool = False) -> dict:
                             )
                             data["five_hour_end_time"] = entry.get("end_time")
                             data["weekly_end_time"] = entry.get("weekly_end_time")
+                            # Absolute token balances — the ONLY trustworthy
+                            # cost signal. The API `usage` field (our
+                            # total_tokens) misses billed reasoning tokens by
+                            # ~7.7x, measured 2026-08-07. The worker snapshots
+                            # weekly_remains_time at run start/end to measure
+                            # what a paper really costs.
+                            data["weekly_remains_tokens"] = entry.get("weekly_remains_time")
+                            data["five_hour_remains_tokens"] = entry.get("remains_time")
+                            data["weekly_start_time"] = entry.get("weekly_start_time")
                             break
                 result = data
             else:

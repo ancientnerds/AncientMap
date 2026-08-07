@@ -26,6 +26,62 @@ from pipeline.database import get_session
 logger = logging.getLogger(__name__)
 
 
+def _plan_balance_snapshot() -> tuple[int, int] | None:
+    """(weekly_remains_tokens, weekly_start_ms) from the MiniMax plan probe.
+
+    The absolute balance is the only honest cost signal: the API `usage`
+    field we store as total_tokens misses billed reasoning tokens by ~7.7x
+    (measured 2026-08-07). Subtracting an end snapshot from a start snapshot
+    gives what a run REALLY cost. Returns None when the probe fails — a
+    measurement is never worth failing a run over. Blocking HTTP: call via
+    asyncio.to_thread.
+    """
+    try:
+        from pipeline.lyra.minimax_shared import probe_minimax_quota
+
+        probe = probe_minimax_quota(force=True)
+        balance = probe.get("weekly_remains_tokens")
+        week = probe.get("weekly_start_time")
+        if balance is None or week is None:
+            return None
+        return int(balance), int(week)
+    except Exception as exc:  # noqa: BLE001 — measurement must never break a run
+        logger.warning("[THEO] plan balance probe failed: %s", exc)
+        return None
+
+
+def _record_plan_cost(request_id: str, plan_start: tuple[int, int] | None) -> None:
+    """Snapshot the end balance and log the measured cost of this run.
+
+    Skips the subtraction when the run crossed the Monday reset (different
+    billing week) — the balance refilled, so the difference is meaningless.
+    Parallel Lyra/curator traffic is included, so the number is an upper
+    bound for this run, not a pure isolate.
+    """
+    plan_end = _plan_balance_snapshot()
+    if not plan_end:
+        return
+    with get_session() as session:
+        session.execute(
+            text("UPDATE research_requests SET plan_weekly_remains_end = :bal WHERE id = :id"),
+            {"bal": plan_end[0], "id": request_id},
+        )
+        session.commit()
+    if not plan_start:
+        return
+    if plan_start[1] != plan_end[1]:
+        logger.info("[THEO] %s crossed the weekly reset — plan cost not comparable", request_id)
+        return
+    used = plan_start[0] - plan_end[0]
+    logger.info(
+        "[THEO] %s real plan cost: %.1fM tokens (weekly balance %.0fM -> %.0fM)",
+        request_id,
+        used / 1e6,
+        plan_start[0] / 1e6,
+        plan_end[0] / 1e6,
+    )
+
+
 def release_reservation_in_session(session, request_id: str) -> None:
     """Release the request's credit reservation EXACTLY ONCE inside the
     caller's open transaction (no commit here — the caller owns it).
@@ -180,6 +236,18 @@ async def _process_request(
 
     pipeline_trace: list[dict] = []
     start = time.monotonic()
+    plan_start = await asyncio.to_thread(_plan_balance_snapshot)
+    if plan_start:
+        with get_session() as session:
+            session.execute(
+                text("""
+                    UPDATE research_requests
+                    SET plan_weekly_remains_start = :bal, plan_week_start_ms = :week
+                    WHERE id = :id
+                """),
+                {"bal": plan_start[0], "week": plan_start[1], "id": request_id},
+            )
+            session.commit()
 
     def emit(event: dict) -> None:
         _append_event(request_id, event)
@@ -216,6 +284,8 @@ async def _process_request(
         )
 
         duration_ms = int((time.monotonic() - start) * 1000)
+        # Measure the real plan cost before any post-processing spends more.
+        await asyncio.to_thread(_record_plan_cost, request_id, plan_start)
 
         if ctx.error:
             # Release reserved credits on failure/cancel/defer

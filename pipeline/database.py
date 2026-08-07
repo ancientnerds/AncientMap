@@ -11,6 +11,7 @@ from typing import Optional
 
 from geoalchemy2 import Geometry
 from sqlalchemy import (
+    BigInteger,
     Boolean,
     DateTime,
     Float,
@@ -1339,6 +1340,15 @@ class ResearchRequest(Base):
     tools_used: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     total_tokens: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     duration_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Real plan cost (migration 0013): absolute weekly balance from the
+    # MiniMax quota probe at run start/end. total_tokens above misses the
+    # billed reasoning tokens (~7.7x gap), so the true cost is
+    # plan_weekly_remains_start - plan_weekly_remains_end. plan_week_start_ms
+    # pins the billing week so a run crossing the Monday reset is detectable
+    # (its subtraction would otherwise be meaningless).
+    plan_weekly_remains_start: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    plan_weekly_remains_end: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    plan_week_start_ms: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     specialist_options: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     is_public: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
