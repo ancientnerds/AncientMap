@@ -146,11 +146,10 @@ jobs:
     runs-on: ubuntu-latest
     needs: [changes]
     if: needs.changes.outputs.backend == 'true' || needs.changes.outputs.deps == 'true'
-    # STAGED ROLLOUT (P3-13, 2026-08-06): intentionally NOT in deploy.needs
-    # yet — CI ran zero backend tests for months and the suite has never run
-    # on a clean runner. Promote to a blocking gate once it proves green
-    # here. --timeout converts environment-dependent hangs (e.g. the MiniMax
-    # limiter sleeping on missing quota data) into visible failures.
+    # Deploy-blocking since 2026-08-07 (run 31149638773 proved green on a
+    # clean runner: 872 passed in ~30s). --timeout converts environment-
+    # dependent hangs (e.g. the MiniMax limiter's real-time pacing against
+    # mocked clients) into visible failures instead of silent 90s stalls.
     steps:
       - uses: actions/checkout@v4
 
@@ -240,7 +239,7 @@ jobs:
   deploy:
     name: Deploy to Production
     runs-on: ubuntu-latest
-    needs: [changes, lint-frontend, lint-backend, security-scan, sast, container-scan]
+    needs: [changes, lint-frontend, lint-backend, security-scan, sast, container-scan, tests]
     # Explicit per-job result checks instead of bare !failure(): during the
     # 2026-08-06 GitHub runner outage a deploy started although sast and
     # changes had FAILED at "Set up job" — !failure() did not stop it.
@@ -255,6 +254,7 @@ jobs:
       contains(fromJSON('["success", "skipped"]'), needs.lint-backend.result) &&
       contains(fromJSON('["success", "skipped"]'), needs.security-scan.result) &&
       contains(fromJSON('["success", "skipped"]'), needs.container-scan.result) &&
+      contains(fromJSON('["success", "skipped"]'), needs.tests.result) &&
       github.ref == 'refs/heads/main' &&
       contains(fromJSON('["push", "workflow_dispatch"]'), github.event_name)
     steps:
