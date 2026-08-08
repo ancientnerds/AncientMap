@@ -297,6 +297,29 @@ def _site_links_html(story: dict) -> str:
     return f'<h2>Site mentioned</h2><div class="an-links">{"".join(chips)}</div>'
 
 
+def _related_html(related: list | None, site_name: str | None) -> str:
+    """ "Read next" block — an indexed story should never be a dead end.
+
+    Headed by the site when the stories share one, otherwise by the shared
+    category, so the reader knows WHY these are here.
+    """
+    if not related:
+        return ""
+    kind = related[0].get("kind") if isinstance(related[0], dict) else ""
+    if kind == "site" and site_name:
+        heading = f"More about {escape(site_name)}"
+    elif kind == "category":
+        heading = "Related stories"
+    else:
+        heading = "More stories"
+    items = "".join(
+        f'<li><a href="/news-archive/{encode_path(r["slug"])}">{escape(r["headline"])}</a></li>'
+        for r in related
+        if isinstance(r, dict) and r.get("slug") and r.get("headline")
+    )
+    return f"<h2>{heading}</h2><ul>{items}</ul>" if items else ""
+
+
 def story_page(story: dict) -> SeoPage:
     """One news story. 'Story', not 'news': a new video often covers old finds."""
     slug = story_slug(story["headline"], story["id"])
@@ -353,6 +376,7 @@ def story_page(story: dict) -> SeoPage:
 
     site_html = _site_links_html(story)
     sources_html = _sources_html(story.get("web_sources"))
+    related_html = _related_html(story.get("related"), story.get("site_name"))
     # Speculative claims are labelled rather than hidden — the pipeline tags
     # them and readers deserve to see the tag.
     badge = (
@@ -395,6 +419,7 @@ def story_page(story: dict) -> SeoPage:
 {facts_html}
 {site_html}
 {sources_html}
+{related_html}
 <p><a href="/news-archive/">← All stories</a></p>
 </div>"""
 

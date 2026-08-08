@@ -188,6 +188,43 @@ async def news_archive_page(page: int, db: Session = Depends(get_db)):
     return await _render_news_archive_page(page, db)
 
 
+def _related_stories(db: Session, item: NewsItem, limit: int = 5) -> list[dict]:
+    """Other stories worth reading after this one.
+
+    Same site first — that is the strongest link the data offers. Most
+    stories never match a site (the extractor only resolves a minority), so
+    those fall back to the same category, otherwise an indexed story would
+    be a dead end with a single link back to the archive.
+    """
+    base = public_stories_query(db).filter(NewsItem.id != item.id)
+    rows: list[NewsItem] = []
+    kind = ""
+    if item.site_id:
+        rows = (
+            base.filter(NewsItem.site_id == item.site_id)
+            .order_by(NewsItem.created_at.desc())
+            .limit(limit)
+            .all()
+        )
+        kind = "site"
+    if not rows and item.news_category:
+        rows = (
+            base.filter(NewsItem.news_category == item.news_category)
+            .order_by(NewsItem.created_at.desc())
+            .limit(limit)
+            .all()
+        )
+        kind = "category"
+    return [
+        {
+            "slug": story_slug(r.headline, r.id),
+            "headline": r.headline,
+            "kind": kind,
+        }
+        for r in rows
+    ]
+
+
 @router.get("/news-archive/{slug}")
 async def story_page(slug: str, db: Session = Depends(get_db)):
     """Full HTML page for a single news story."""
@@ -237,6 +274,7 @@ async def story_page(slug: str, db: Session = Depends(get_db)):
         "web_sources": item.web_sources,
         "timestamp_seconds": item.timestamp_seconds,
         "speculative_tag": item.speculative_tag,
+        "related": _related_stories(db, item),
     }
 
     return shell_response(seo_pages.story_page(story), _HTML_HEADERS)

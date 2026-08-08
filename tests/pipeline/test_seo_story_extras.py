@@ -165,3 +165,44 @@ class TestCountrylessSite:
     def test_no_site_id_means_no_links_at_all(self):
         body = seo_pages.story_page(_story(site_id="", site_country="")).body
         assert "/globe.html?site=" not in body
+
+
+class TestRelatedStories:
+    """An indexed story used to dead-end with one link back to the archive."""
+
+    def _body(self, related, **over):
+        return seo_pages.story_page(_story(related=related, **over)).body
+
+    def test_same_site_block_is_headed_by_the_site(self):
+        body = self._body(
+            [
+                {
+                    "slug": "other-story-42",
+                    "headline": "Another dig at the same place",
+                    "kind": "site",
+                }
+            ]
+        )
+        assert "More about Mohenjo-daro" in body
+        assert "/news-archive/other-story-42" in body
+        assert "Another dig at the same place" in body
+
+    def test_category_fallback_uses_a_neutral_heading(self):
+        """Most stories never resolve to a site, so the fallback carries the
+        weight — it must not claim a site connection that does not exist."""
+        body = self._body(
+            [{"slug": "cat-story-7", "headline": "A different artifact find", "kind": "category"}]
+        )
+        assert "Related stories" in body
+        assert "More about" not in body
+        assert "/news-archive/cat-story-7" in body
+
+    def test_no_related_stories_renders_nothing(self):
+        body = self._body([])
+        assert "Related stories" not in body
+        assert "More about" not in body
+
+    def test_malformed_entries_are_skipped(self):
+        body = self._body([{"kind": "site"}, "not-a-dict", {"slug": "x-1", "headline": "Real one"}])
+        assert "Real one" in body
+        assert body.count('<li><a href="/news-archive/') == 1
