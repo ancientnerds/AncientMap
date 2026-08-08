@@ -31,6 +31,16 @@ from pipeline.sites_html_renderer import (
 
 # Scoped so it cannot leak into the React tree that replaces it.
 SSR_CSS = """
+/* Palette mirrors ancient-nerds-map/src/styles/tokens.css. These pages are
+   served standalone (crawlers, no-JS) so the tokens cannot be var()-ed in —
+   keep the literals in sync with Tier 1 there:
+     --_palette-green-bright #00cc66   accent / active links
+     --_palette-cyan-500     #00c8c8   --text-link
+     --_palette-dark-750     #0a1a1f   page ground
+     --_palette-red-brand    #c02023   CTA only
+   Before 2026-08-08 this block used Material blue #4fc3f7, which belongs to
+   no part of the design system. */
+
 /* .an-ssr is the scroll container: #root carries overflow:hidden from
    index.css for the globe, so without this the server-rendered content is
    stuck at the first viewport for crawlers and no-JS visitors. */
@@ -41,26 +51,45 @@ SSR_CSS = """
 .an-ssr h1{font-family:'Cormorant Garamond',Georgia,serif;color:#fff;
   font-size:2.3em;line-height:1.2;margin:0 0 12px}
 .an-ssr h2{font-family:'Cormorant Garamond',Georgia,serif;color:#fff;
-  font-size:1.5em;margin:32px 0 10px;border-bottom:1px solid #1a3a44;padding-bottom:6px}
-.an-ssr a{color:#4fc3f7;text-decoration:none}
-.an-ssr a:hover{text-decoration:underline}
+  font-size:1.5em;margin:32px 0 10px;border-bottom:1px solid rgba(0,204,102,.22);
+  padding-bottom:6px;text-shadow:0 0 12px rgba(0,204,102,.10)}
+.an-ssr a{color:#00c8c8;text-decoration:none}
+.an-ssr a:hover{color:#4ae0e0;text-decoration:underline}
 .an-ssr .an-crumb{font-size:13px;color:#708890;margin-bottom:16px}
 .an-ssr .an-meta{color:#708890;font-size:14px;margin-bottom:24px}
 .an-ssr figure{margin:0 0 24px}
-.an-ssr figure img{width:100%;height:auto;border-radius:8px;border:1px solid #1a3a44}
+.an-ssr figure img{width:100%;height:auto;border-radius:8px;
+  border:1px solid rgba(0,204,102,.18)}
 .an-ssr figcaption{color:#708890;font-size:12px;margin-top:6px}
 .an-ssr table{width:100%;border-collapse:collapse;margin:8px 0 24px}
 .an-ssr th,.an-ssr td{text-align:left;padding:8px 12px;
-  border-bottom:1px solid #1a3a44;font-size:.95em;vertical-align:top}
+  border-bottom:1px solid rgba(0,204,102,.14);font-size:.95em;vertical-align:top}
 .an-ssr th{color:#708890;font-weight:500;width:34%}
 .an-ssr ul{margin:8px 0 24px;padding-left:20px}
 .an-ssr li{margin-bottom:6px}
 .an-ssr .an-cta{display:inline-block;background:#c02023;color:#fff;
   padding:10px 18px;border-radius:6px;margin:4px 0 24px;font-weight:500}
-.an-ssr .an-card{border:1px solid #1a3a44;background:#0d2229;border-radius:8px;
-  padding:14px 18px;margin-bottom:12px}
+.an-ssr .an-card{border:1px solid rgba(0,204,102,.18);background:rgba(0,20,25,.45);
+  border-radius:8px;padding:14px 18px;margin-bottom:12px;
+  border-left:2px solid rgba(0,204,102,.45)}
 .an-ssr .an-card h3{margin:0 0 4px;font-size:1.1em}
+.an-ssr .an-card-meta{color:#708890;font-size:12px;margin-top:6px;
+  text-transform:uppercase;letter-spacing:.06em}
 .an-ssr .an-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}
+/* Site links: the one place that leads back into the globe. */
+.an-ssr .an-links{display:flex;flex-wrap:wrap;gap:10px;margin:8px 0 24px}
+.an-ssr .an-chip{display:inline-block;border:1px solid rgba(0,204,102,.35);
+  border-radius:999px;padding:6px 14px;font-size:.9em;color:#00cc66}
+.an-ssr .an-chip:hover{background:rgba(0,204,102,.10);text-decoration:none}
+/* Sources: recherchierte Belege, previously stored but never rendered. */
+.an-ssr .an-src{border-left:2px solid rgba(0,200,200,.35);padding:2px 0 2px 14px;
+  margin-bottom:14px}
+.an-ssr .an-src-title{font-size:.98em}
+.an-ssr .an-src-host{color:#708890;font-size:12px;margin-left:6px}
+.an-ssr .an-src-snip{color:#a8b8bc;font-size:.88em;margin-top:2px}
+.an-ssr .an-badge{display:inline-block;font-size:11px;letter-spacing:.08em;
+  text-transform:uppercase;border-radius:4px;padding:3px 8px;margin-left:8px;
+  border:1px solid rgba(245,197,24,.45);color:#f5c518;vertical-align:middle}
 """
 
 
@@ -156,10 +185,32 @@ def _link_card(href: str, title: str, blurb: str | None = None) -> str:
 
 
 def _story_card(story: dict) -> str:
-    return _link_card(
-        f"/news-archive/{encode_path(story['slug'])}",
-        story["headline"],
-        story.get("summary"),
+    """Listing card with the context the archive already had on hand.
+
+    Date, category, site and channel were loaded by the query and thrown
+    away, so every card looked identical and the reader had to open each one
+    to find out what it was about.
+    """
+    _, pub_display = _date_parts(story.get("published_at"))
+    bits = [b for b in (pub_display, story.get("news_category"), story.get("site_name")) if b]
+    if story.get("channel_name"):
+        bits.append(f"via {story['channel_name']}")
+    meta = f'<div class="an-card-meta">{escape(" · ".join(bits))}</div>' if bits else ""
+    badge = (
+        f'<span class="an-badge">{escape(story["speculative_tag"])}</span>'
+        if story.get("speculative_tag")
+        else ""
+    )
+    href = f"/news-archive/{encode_path(story['slug'])}"
+    blurb = ""
+    if story.get("summary"):
+        text = " ".join(story["summary"].split())
+        if len(text) > 180:
+            text = text[:180].rsplit(" ", 1)[0] + "…"
+        blurb = f"<p>{escape(text)}</p>"
+    return (
+        f'<div class="an-card"><h3><a href="{escape(href)}">{escape(story["headline"])}</a>'
+        f"{badge}</h3>{blurb}{meta}</div>"
     )
 
 
@@ -177,6 +228,69 @@ def _breadcrumb_schema(parts: list[tuple[str, str]]) -> str:
 # --------------------------------------------------------------------------
 # Story (/news-archive/{slug})
 # --------------------------------------------------------------------------
+
+
+def _host_of(url: str) -> str:
+    """Bare hostname for a source line — readers judge a link by its domain."""
+    from urllib.parse import urlparse
+
+    return urlparse(url).netloc.removeprefix("www.")
+
+
+def _sources_html(sources: list | None) -> str:
+    """Render the web sources the pipeline already researched per story.
+
+    They were stored in news_items.web_sources since the tweet-verifier work
+    but never shown, so every story looked unsourced (audit of the SEO pages
+    2026-08-08). Only http(s) links are rendered — the list is LLM-derived.
+    """
+    if not sources:
+        return ""
+    rows = []
+    for src in sources[:8]:
+        if not isinstance(src, dict):
+            continue
+        url = (src.get("url") or "").strip()
+        if not url.startswith(("http://", "https://")):
+            continue
+        title = (src.get("title") or _host_of(url)).strip()
+        snippet = " ".join((src.get("snippet") or "").split())
+        if len(snippet) > 200:
+            snippet = snippet[:200].rsplit(" ", 1)[0] + "…"
+        rows.append(
+            '<div class="an-src">'
+            f'<div class="an-src-title"><a href="{escape(url)}" target="_blank" '
+            f'rel="noopener nofollow">{escape(title)}</a>'
+            f'<span class="an-src-host">{escape(_host_of(url))}</span></div>'
+            + (f'<div class="an-src-snip">{escape(snippet)}</div>' if snippet else "")
+            + "</div>"
+        )
+    if not rows:
+        return ""
+    return "<h2>Sources</h2>" + "".join(rows)
+
+
+def _site_links_html(story: dict) -> str:
+    """Chips back into the app: the site's own page and the globe.
+
+    A story that names a site used to dead-end in plain text; these are the
+    only links from an indexed story into the interactive map.
+    """
+    name = story.get("site_name")
+    if not name:
+        return ""
+    site_id = story.get("site_id")
+    country = story.get("site_country")
+    chips = []
+    if site_id and country:
+        detail = site_path(country, name, site_id)
+        chips.append(f'<a class="an-chip" href="{escape(detail)}">📄 {escape(name)}</a>')
+        chips.append(
+            f'<a class="an-chip" href="/globe.html?site={escape(site_id)}">🌍 Show on the globe</a>'
+        )
+    else:
+        chips.append(f'<span class="an-chip">📍 {escape(name)}</span>')
+    return f'<h2>Site mentioned</h2><div class="an-links">{"".join(chips)}</div>'
 
 
 def story_page(story: dict) -> SeoPage:
@@ -206,6 +320,11 @@ def story_page(story: dict) -> SeoPage:
     # used as an og:image — never shown on the page itself.
     video_html = ""
     youtube_url = story.get("youtube_url") or ""
+    # Jump straight to the moment the story is about — the offset was stored
+    # per item all along and only ever used by the frontend feed.
+    ts = story.get("timestamp_seconds")
+    if youtube_url and isinstance(ts, int) and ts > 0:
+        youtube_url = f"{youtube_url}&t={ts}s"
     if screenshot or youtube_url:
         img = (
             f'<img src="{escape(screenshot)}" alt="{escape(story.get("video_title") or headline)}"'
@@ -228,12 +347,15 @@ def story_page(story: dict) -> SeoPage:
         else:
             video_html = f"<figure>{img}<figcaption>{caption}</figcaption></figure>"
 
-    site_html = ""
-    if story.get("site_name") and story.get("site_country") and story.get("site_id"):
-        url = site_path(story["site_country"], story["site_name"], story["site_id"])
-        site_html = f'<p>Related site: <a href="{escape(url)}">{escape(story["site_name"])}</a></p>'
-    elif story.get("site_name"):
-        site_html = f"<p>Related site: {escape(story['site_name'])}</p>"
+    site_html = _site_links_html(story)
+    sources_html = _sources_html(story.get("web_sources"))
+    # Speculative claims are labelled rather than hidden — the pipeline tags
+    # them and readers deserve to see the tag.
+    badge = (
+        f'<span class="an-badge">{escape(story["speculative_tag"])}</span>'
+        if story.get("speculative_tag")
+        else ""
+    )
 
     schema = (
         '{"@context": "https://schema.org", "@type": "NewsArticle", '
@@ -259,7 +381,7 @@ def story_page(story: dict) -> SeoPage:
 
     body = f"""<div class="an-ssr">
 <nav class="an-crumb">{_crumbs(("Home", "/"), ("Story Archive", "/news-archive/"), (headline, None))}</nav>
-<h1>{escape(headline)}</h1>
+<h1>{escape(headline)}{badge}</h1>
 <div class="an-meta">{f"<time datetime='{pub_date}'>{pub_display}</time>" if pub_date else ""}
 {f" &middot; {escape(story['news_category'])}" if story.get("news_category") else ""}</div>
 {AI_NOTICE_HTML}
@@ -268,6 +390,7 @@ def story_page(story: dict) -> SeoPage:
 {paragraphs}
 {facts_html}
 {site_html}
+{sources_html}
 <p><a href="/news-archive/">← All stories</a></p>
 </div>"""
 

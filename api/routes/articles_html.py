@@ -151,11 +151,22 @@ async def _render_news_archive_page(page: int, db: Session) -> Response:
         .all()
     )
 
+    # The joinedloads above already fetch video + site; the listing used to
+    # drop both and render title-plus-blurb cards only (2026-08-08).
     stories = [
         {
             "slug": story_slug(item.headline, item.id),
             "headline": item.headline,
             "summary": item.summary,
+            "published_at": (
+                item.video.published_at
+                if item.video and item.video.published_at
+                else item.created_at
+            ),
+            "news_category": item.news_category,
+            "site_name": item.site.name if item.site else (item.site_name_extracted or ""),
+            "channel_name": (item.video.channel.name if item.video and item.video.channel else ""),
+            "speculative_tag": item.speculative_tag,
         }
         for item in items
     ]
@@ -220,6 +231,12 @@ async def story_page(slug: str, db: Session = Depends(get_db)):
         "channel_name": video.channel.name if video and video.channel else "",
         "published_at": (video.published_at if video and video.published_at else item.created_at),
         "news_category": item.news_category,
+        # Stored per story since the tweet-verifier work, never rendered until
+        # 2026-08-08: researched web sources, the exact video offset, and the
+        # pipeline's own speculative label.
+        "web_sources": item.web_sources,
+        "timestamp_seconds": item.timestamp_seconds,
+        "speculative_tag": item.speculative_tag,
     }
 
     return shell_response(seo_pages.story_page(story), _HTML_HEADERS)
