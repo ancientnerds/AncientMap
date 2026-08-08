@@ -12,7 +12,8 @@
 # API_SECRET_KEY (rotated independently of the repo).
 ff375895ac8ed55b1b2808be06e7190c0865a9f5:scripts/test_local_pipeline.py:generic-api-key:16
 
-# Serper API key in a deleted script — MUST BE ROTATED at serper.dev (flagged
-# to operator 2026-08-05). History rewrite intentionally avoided (shared repo).
+# Serper API key in a deleted script — ROTATED at serper.dev 2026-08-08, the
+# leaked value is dead. Serper is no longer used anywhere (web search runs on
+# MiniMax). History rewrite intentionally avoided (shared repo).
 35e8f4fe6cdfa64fb197f171b1cdd7d19236a4e3:scripts/process_weblink_batch.py:generic-api-key:23
 6e9db730c36d3c64e97b9d0d5842a6ae6bb10269:scripts/process_weblink_batch.py:generic-api-key:23

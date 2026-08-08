@@ -530,14 +530,20 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"[STARTUP] Contribution migration failed (non-fatal): {e}")
 
-    # Start Theo research worker
-    try:
-        from api.services.theo_worker import start_worker as _start_theo
+    # Start Theo research worker — unless a dedicated worker container owns it.
+    # THEO_WORKER_EXTERNAL=1 is set on the api service in docker-compose so a
+    # deploy can rebuild the API without killing a 15h research run (the run
+    # lives in the theo_worker container, which the deploy skips while busy).
+    if os.environ.get("THEO_WORKER_EXTERNAL") == "1":
+        logger.info("[STARTUP] Theo worker runs in its own container — not started here")
+    else:
+        try:
+            from api.services.theo_worker import start_worker as _start_theo
 
-        _create_background_task(_start_theo())
-        logger.info("[STARTUP] Theo research worker task created")
-    except Exception as e:
-        logger.warning(f"[STARTUP] Theo worker startup failed (non-fatal): {e}")
+            _create_background_task(_start_theo())
+            logger.info("[STARTUP] Theo research worker task created")
+        except Exception as e:
+            logger.warning(f"[STARTUP] Theo worker startup failed (non-fatal): {e}")
 
     # Start Discord bot (if token is configured)
     try:

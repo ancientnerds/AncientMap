@@ -390,6 +390,26 @@ jobs:
               case "$REBUILD" in *lyra*) ;; *) REBUILD="$REBUILD lyra";; esac
             fi
 
+            # The research worker shares the api image but NOT its lifecycle:
+            # a paper takes 7-15h and a rebuild kills it (twice on 2026-08-07,
+            # ~9% of the weekly token budget each). Rebuild it only when it is
+            # idle; a busy worker keeps the old image until the next deploy
+            # after its run finishes. Fail-safe: if the check itself fails we
+            # assume BUSY and skip — a stale worker beats a murdered run.
+            THEO_BUSY=$(docker exec ancient_nerds_db psql -U ancient_map -d ancient_map -tAc \
+              "SELECT COUNT(*) FROM research_requests WHERE status = 'running';" 2>/dev/null || echo "unknown")
+            THEO_EXISTS=$(docker ps -a --filter name=ancient_nerds_theo_worker --format '{{.Names}}')
+            if [ -z "$THEO_EXISTS" ]; then
+              # First deploy after the split (or someone removed it): the API no
+              # longer runs a worker, so skipping here would stop Theo entirely.
+              echo "==> Theo worker container missing — creating it regardless of run state"
+              case "$REBUILD" in *theo-worker*) ;; *) REBUILD="$REBUILD theo-worker";; esac
+            elif [ "$THEO_BUSY" = "0" ]; then
+              case "$REBUILD" in *theo-worker*) ;; *) REBUILD="$REBUILD theo-worker";; esac
+            else
+              echo "==> Theo worker busy (running=$THEO_BUSY) — leaving it on the old image"
+            fi
+
             if [ -n "$REBUILD" ]; then
               echo "==> Rebuilding:$REBUILD"
               docker compose rm -sf $REBUILD 2>/dev/null || true

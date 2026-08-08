@@ -1320,6 +1320,17 @@ async def cleanup_stale_deferred() -> None:
         await asyncio.sleep(3600)  # Every hour
 
 
+def stop_worker() -> None:
+    """Ask every worker loop to exit at its next iteration.
+
+    Used by the standalone worker container's SIGTERM handler
+    (scripts/run_theo_worker.py); inside the API process the lifespan simply
+    tears the task down.
+    """
+    global _shutdown
+    _shutdown = True
+
+
 async def start_worker() -> None:
     """Start the Theo worker background tasks."""
     global _shutdown

@@ -110,6 +110,10 @@ services:
       REDIS_URL: redis://redis:6379/0
       QDRANT_HOST: qdrant
       TRUSTED_PROXY: "1"
+      # The research worker lives in the theo-worker container (see above);
+      # without this the API would run a second poll loop and both would
+      # race for the same queued rows.
+      THEO_WORKER_EXTERNAL: "1"
     volumes:
       - ./public/data:/app/public/data
       - ./logs:/app/logs:ro
@@ -133,6 +137,47 @@ services:
       timeout: 10s
       start_period: 5s
       retries: 3
+
+  # ==========================================================================
+  # Theo Research Worker — same image as the API, different entrypoint.
+  #
+  # Split out of the API process on 2026-08-08: a research run takes 7-15h,
+  # and every API rebuild used to kill the one in flight (observed twice on
+  # 2026-08-07 — a 15h paper and ~9% of the weekly token budget lost each
+  # time). The deploy skips rebuilding THIS container while a run is active
+  # and picks the new code up on the next deploy after it finishes.
+  # ==========================================================================
+  theo-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        BUILD_HASH: ${BUILD_HASH:-unknown}
+    container_name: ancient_nerds_theo_worker
+    restart: unless-stopped
+    command: ["python", "scripts/run_theo_worker.py"]
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      POSTGRES_HOST: db
+      REDIS_HOST: redis
+      REDIS_URL: redis://redis:6379/0
+      QDRANT_HOST: qdrant
+    volumes:
+      - ./public/data:/app/public/data
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
 
   # ==========================================================================
   # Lyra News Pipeline (YouTube monitoring + AI summarization)
