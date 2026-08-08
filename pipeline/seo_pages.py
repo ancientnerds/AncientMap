@@ -31,7 +31,11 @@ from pipeline.sites_html_renderer import (
 
 # Scoped so it cannot leak into the React tree that replaces it.
 SSR_CSS = """
-.an-ssr{max-width:820px;margin:0 auto;padding:88px 24px 64px;
+/* .an-ssr is the scroll container: #root carries overflow:hidden from
+   index.css for the globe, so without this the server-rendered content is
+   stuck at the first viewport for crawlers and no-JS visitors. */
+.an-ssr{height:100vh;overflow-y:auto;overflow-x:hidden;
+  max-width:820px;margin:0 auto;padding:88px 24px 64px;
   font-family:Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
   color:#e0e0e0;line-height:1.65}
 .an-ssr h1{font-family:'Cormorant Garamond',Georgia,serif;color:#fff;

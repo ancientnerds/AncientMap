@@ -77,9 +77,16 @@ QUOTA_WEEKLY_FREEZE_PCT = int(os.getenv("QUOTA_WEEKLY_FREEZE_PCT", "5"))
 # submissions bypass the batch gate entirely. Raise to 7 for always-on.
 THEO_BATCH_MAX_DAYS_TO_RESET = float(os.getenv("THEO_BATCH_MAX_DAYS_TO_RESET", "3"))
 
-# Estimated weekly-budget share of one full-depth batch paper. Observed
-# ~19-25% on the ENTITÄT batch; 25 keeps a margin.
-THEO_PAPER_COST_PCT = float(os.getenv("THEO_PAPER_COST_PCT", "25"))
+# Weekly-budget share of one full-depth batch paper. MEASURED 2026-08-08
+# (migration 0013): the simulation-hypothesis paper burned 54.6M plan tokens
+# of a 597M weekly budget = 9.1% over 15.2h, including the parallel Lyra and
+# curator traffic that shares the plan. 12 keeps a third of headroom on top.
+#
+# The old 25 was an eyeball estimate from the ENTITÄT batch that attributed a
+# whole week's consumption to its papers; it blocked batch starts at 36%
+# weekly remaining. Re-check with scripts/theo_plan_cost.py as n grows —
+# raise it again if a paper ever measures above ~10%.
+THEO_PAPER_COST_PCT = float(os.getenv("THEO_PAPER_COST_PCT", "12"))
 
 # Weekly-% reserved PER REMAINING DAY for Lyra's hourly cycles and
 # interactive research. The dynamic claim requirement is

@@ -1,7 +1,13 @@
 /* Story Archive: single story + listing. Matches the app's dark theme. */
 
+/* .story-page IS the scroll container — fixed height + overflow-y: auto.
+   html/body/#root keep overflow:hidden from index.css (the globe needs it),
+   so a document page that does not claim scrolling for itself is stuck at
+   the first viewport. Same pattern as .site-page in site-page.css. */
 .story-page {
-  min-height: 100vh;
+  height: 100vh;
+  overflow-y: auto;
+  overflow-x: hidden;
   background: var(--bg-deep, #0a1a1f);
   color: #e0e0e0;
 }

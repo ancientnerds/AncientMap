@@ -275,3 +275,13 @@ def test_article_page_accepts_both_date_forms():
 def test_story_page_accepts_an_iso_string_date():
     page = seo_pages.story_page(_story(published_at="2026-07-01T00:00:00"))
     assert "2026-07-01" in page.body
+
+
+def test_ssr_fragment_claims_its_own_scrolling():
+    """#root inherits overflow:hidden from index.css for the globe.
+
+    Without .an-ssr scrolling itself, everything below the first viewport is
+    unreachable for crawlers and no-JS visitors (user report 2026-08-07).
+    """
+    assert "overflow-y:auto" in seo_pages.SSR_CSS
+    assert ".an-ssr{height:100vh" in seo_pages.SSR_CSS

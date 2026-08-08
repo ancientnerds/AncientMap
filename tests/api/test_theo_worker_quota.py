@@ -153,8 +153,10 @@ def test_batch_claim_allowed(gate_open, tier, weekly, expected):
 # 2026-08-04: the weekly budget resets Monday 00:00 UTC and the feeder had
 # burned it to 50% by Tuesday. Batch starts (Entität queue + Dauerforscher)
 # are gated on two adaptive conditions: <=3 days to the reset, and the
-# weekly budget covers the PRE-RESET SHARE of one paper (25% at the
-# measured batch-run pace) plus 5%/remaining-day Lyra reserve. The last
+# weekly budget covers the PRE-RESET SHARE of one paper (12% at the
+# measured batch-run pace — calibrated 2026-08-08 from the first real
+# plan-token measurement, was an eyeballed 25) plus 5%/remaining-day
+# Lyra reserve. The last
 # run of the weekend may cross the reset onto Monday's fresh budget — the
 # weekly must just never hit 0% mid-run (that aborts runs).
 
@@ -173,60 +175,60 @@ def test_window_closed_early_week():
 
 def test_window_opens_friday():
     # Fri 00:00 = exactly 3.0 days to reset. An 18h paper burns entirely
-    # before the reset -> required = 25 (paper) + 3.0 * 5 (Lyra) = 40.
+    # before the reset -> required = 12 (paper) + 3.0 * 5 (Lyra) = 27.
     fri = datetime(2026, 8, 7, 0, 0, tzinfo=UTC)
     assert _claim(fri, weekly=100) is True
-    assert _claim(fri, weekly=41) is True
-    assert _claim(fri, weekly=39) is False  # surplus too small for Friday
+    assert _claim(fri, weekly=28) is True
+    assert _claim(fri, weekly=26) is False  # surplus too small for Friday
 
 
 def test_required_budget_shrinks_toward_reset():
-    # The SAME 35% weekly is not enough on Friday (needs 40) but fine on
-    # Saturday noon (36h left -> 25 + 1.5*5 = 32.5): closer to the reset,
+    # The SAME 22% weekly is not enough on Friday (needs 27) but fine on
+    # Saturday noon (36h left -> 12 + 1.5*5 = 19.5): closer to the reset,
     # less of the budget must stay reserved.
     fri = datetime(2026, 8, 7, 0, 0, tzinfo=UTC)
     sat_noon = datetime(2026, 8, 8, 12, 0, tzinfo=UTC)
-    assert _claim(fri, weekly=35) is False
-    assert _claim(sat_noon, weekly=35) is True
+    assert _claim(fri, weekly=22) is False
+    assert _claim(sat_noon, weekly=22) is True
 
 
 def test_last_run_may_cross_the_reset():
     # Sunday 20:00 = 4h left. An 18h paper burns only 4/18 of its cost
-    # before the reset -> required = 25*0.222 + 0.167*5 ~= 6.4. Even a
+    # before the reset -> required = 12*0.222 + 0.167*5 ~= 3.5. Even a
     # nearly-drained week can still launch the weekend's last run — it
     # finishes on Monday's fresh budget, and Monday itself allows no NEW
     # starts (window closed).
     sun_evening = datetime(2026, 8, 9, 20, 0, tzinfo=UTC)
     assert _claim(sun_evening, weekly=10) is True
-    assert _claim(sun_evening, weekly=6) is False  # pre-reset share won't fit
+    assert _claim(sun_evening, weekly=3) is False  # pre-reset share won't fit
 
 
 def test_measured_pace_scales_pre_reset_share():
     # Sat 22:00 = 26h left. An 18h paper fits entirely before the reset
-    # (required 25 + 1.083*5 ~= 30.4); a slow 30h paper defers 4/30 of its
-    # burn past the reset (required 25*0.867 + 5.4 ~= 27.1). weekly=29
+    # (required 12 + 1.083*5 ~= 17.4); a slow 30h paper defers 4/30 of its
+    # burn past the reset (required 12*0.867 + 5.4 ~= 15.8). weekly=16.5
     # sits exactly between the two.
     sat_night = datetime(2026, 8, 8, 22, 0, tzinfo=UTC)
-    assert _claim(sat_night, weekly=29, run_h=18.0) is False
-    assert _claim(sat_night, weekly=29, run_h=30.0) is True
+    assert _claim(sat_night, weekly=16.5, run_h=18.0) is False
+    assert _claim(sat_night, weekly=16.5, run_h=30.0) is True
 
 
 def test_never_starts_into_empty_weekly():
     # Sun 23:00 = 1h left: even the tiniest pre-reset share (1/18 of a
-    # paper ~= 1.4% + reserve) must fit — the weekly hitting 0% mid-run
+    # paper ~= 0.7% + reserve) must fit — the weekly hitting 0% mid-run
     # aborts the run and freezes the shared plan.
     sun_late = datetime(2026, 8, 9, 23, 0, tzinfo=UTC)
     assert _claim(sun_late, weekly=2) is True
-    assert _claim(sun_late, weekly=1) is False
+    assert _claim(sun_late, weekly=0.5) is False
 
 
 def test_window_env_override(monkeypatch):
     """MAX_DAYS_TO_RESET=7 restores always-on starts (budget still applies)."""
     monkeypatch.setattr("api.services.theo_config.THEO_BATCH_MAX_DAYS_TO_RESET", 7.0)
     monday = datetime(2026, 8, 3, 12, 0, tzinfo=UTC)
-    # 6.5 days to reset -> required 25 + 6.5*5 = 57.5
+    # 6.5 days to reset -> required 12 + 6.5*5 = 44.5
     assert _claim(monday, weekly=100) is True
-    assert _claim(monday, weekly=50) is False
+    assert _claim(monday, weekly=40) is False
 
 
 def test_hours_until_weekly_reset():
