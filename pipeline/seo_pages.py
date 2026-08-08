@@ -446,6 +446,28 @@ def story_page(story: dict) -> SeoPage:
             else ""
         ),
         "siteId": story.get("site_id") or "",
+        # The interactive view is what visitors actually see — it must carry
+        # the same extras as the crawler fragment, not a poorer version.
+        "speculativeTag": story.get("speculative_tag") or "",
+        "sources": [
+            {
+                "url": s.get("url", ""),
+                "title": (s.get("title") or _host_of(s.get("url", ""))),
+                "host": _host_of(s.get("url", "")),
+                "snippet": " ".join((s.get("snippet") or "").split())[:200],
+            }
+            for s in (story.get("web_sources") or [])[:8]
+            if isinstance(s, dict) and (s.get("url") or "").startswith(("http://", "https://"))
+        ],
+        "related": [
+            {
+                "slug": r.get("slug", ""),
+                "headline": r.get("headline", ""),
+                "kind": r.get("kind", ""),
+            }
+            for r in (story.get("related") or [])
+            if isinstance(r, dict) and r.get("slug") and r.get("headline")
+        ],
     }
     return SeoPage("story.html", head, body, _route_json("story", payload))
 
@@ -736,6 +758,13 @@ def story_archive_page(stories: list[dict], page: int, total_pages: int, total: 
                         "slug": s["slug"],
                         "headline": s["headline"],
                         "summary": (s.get("summary") or "")[:300],
+                        # Same context the crawler cards show, so the
+                        # interactive listing is not the poorer view.
+                        "publishedDisplay": _date_parts(s.get("published_at"))[1],
+                        "category": s.get("news_category") or "",
+                        "siteName": s.get("site_name") or "",
+                        "channelName": s.get("channel_name") or "",
+                        "speculativeTag": s.get("speculative_tag") or "",
                     }
                     for s in stories
                 ],

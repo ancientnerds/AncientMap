@@ -32,17 +32,15 @@ export default function StoryPage({ story }: Props) {
           <a href="/">Home</a> / <a href="/news-archive/">Story Archive</a>
         </nav>
 
-        <h1 className="story-title">{story.headline}</h1>
+        <h1 className="story-title">
+          {story.headline}
+          {story.speculativeTag && <span className="story-badge">{story.speculativeTag}</span>}
+        </h1>
 
         <div className="story-meta">
           {story.publishedDisplay && <time dateTime={story.publishedAt}>{story.publishedDisplay}</time>}
           {story.category && <span className="story-tag">{story.category}</span>}
         </div>
-
-        <p className="story-ai-notice">
-          AI-generated text: the text on this page was produced automatically by an AI system.
-          Images are from the original sources, not AI-generated. Always verify with the original sources.
-        </p>
 
         {(story.screenshotUrl || story.youtubeUrl) && (
           <figure className="story-video">
@@ -91,25 +89,60 @@ export default function StoryPage({ story }: Props) {
 
         {story.siteName && (
           <div className="story-site">
-            <h2>Related site</h2>
-            {story.sitePath ? (
-              <p>
-                <a href={story.sitePath}>{story.siteName}</a>
-                {story.siteId && (
-                  <>
-                    {' · '}
-                    <a href={`/globe.html?site=${encodeURIComponent(story.siteId)}`}>Show on the globe</a>
-                  </>
-                )}
-              </p>
-            ) : (
-              <p>{story.siteName}</p>
-            )}
+            <h2>Site mentioned</h2>
+            <div className="story-chips">
+              {story.sitePath ? (
+                <a className="story-chip" href={story.sitePath}>📄 {story.siteName}</a>
+              ) : (
+                <span className="story-chip is-plain">📍 {story.siteName}</span>
+              )}
+              {/* The detail page needs a country, the globe only needs the id —
+                  bulk-imported sites often lack a country. */}
+              {story.siteId && (
+                <a className="story-chip" href={`/globe.html?site=${encodeURIComponent(story.siteId)}`}>
+                  🌍 Show on the globe
+                </a>
+              )}
+            </div>
+          </div>
+        )}
+
+        {story.sources?.length > 0 && (
+          <div className="story-sources">
+            <h2>Sources</h2>
+            {story.sources.map((s, i) => (
+              <div className="story-source" key={i}>
+                <a href={s.url} target="_blank" rel="noopener nofollow">{s.title}</a>
+                <span className="story-source-host">{s.host}</span>
+                {s.snippet && <div className="story-source-snippet">{s.snippet}</div>}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {story.related?.length > 0 && (
+          <div className="story-related">
+            <h2>{story.related[0].kind === 'site' && story.siteName
+              ? `More about ${story.siteName}`
+              : 'Related stories'}</h2>
+            <ul>
+              {story.related.map(r => (
+                <li key={r.slug}>
+                  <a href={`/news-archive/${encodeURIComponent(r.slug)}`}>{r.headline}</a>
+                </li>
+              ))}
+            </ul>
           </div>
         )}
 
         <p className="story-back">
           <a href="/news-archive/">← All stories</a>
+        </p>
+
+        {/* Disclosure belongs on the page (EU AI Act Art. 50) but not as a
+            banner above the story — a quiet footnote does the same job. */}
+        <p className="story-ai-notice">
+          AI-generated text · images from the original sources · always verify with the sources.
         </p>
       </main>
     </div>

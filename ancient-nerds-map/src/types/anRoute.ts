@@ -28,6 +28,9 @@ export interface StoryRoute {
   siteName: string
   sitePath: string
   siteId: string
+  speculativeTag: string
+  sources: { url: string; title: string; host: string; snippet: string }[]
+  related: { slug: string; headline: string; kind: string }[]
 }
 
 interface StoryArchiveRoute {
@@ -35,7 +38,16 @@ interface StoryArchiveRoute {
   page: number
   totalPages: number
   total: number
-  stories: { slug: string; headline: string; summary: string }[]
+  stories: {
+    slug: string
+    headline: string
+    summary: string
+    publishedDisplay?: string
+    category?: string
+    siteName?: string
+    channelName?: string
+    speculativeTag?: string
+  }[]
 }
 
 export type AnRoute =

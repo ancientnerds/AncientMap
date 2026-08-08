@@ -24,7 +24,7 @@
   color: #708890;
   margin-bottom: 16px;
 }
-.story-crumb a { color: #8fa8b0; text-decoration: none; }
+.story-crumb a { color: var(--text-link, #00c8c8); text-decoration: none; }
 .story-crumb a:hover { color: var(--primary-red, #c02023); }
 
 .story-title {
@@ -46,8 +46,8 @@
 }
 
 .story-tag {
-  background: #132830;
-  border: 1px solid #1a3a44;
+  background: rgba(0, 204, 102, 0.08);
+  border: 1px solid rgba(0, 204, 102, 0.30);
   border-radius: 4px;
   padding: 2px 8px;
   font-size: 12px;
@@ -55,14 +55,14 @@
   letter-spacing: 0.05em;
 }
 
+/* EU AI Act Art. 50 disclosure. Required, but it is a footnote — not a
+   banner competing with the headline (user feedback 2026-08-08). */
 .story-ai-notice {
-  border: 1px solid rgba(176, 141, 87, 0.45);
-  background: rgba(176, 141, 87, 0.1);
-  padding: 8px 12px;
-  border-radius: 6px;
-  font-size: 0.85em;
-  color: #c9bda6;
-  margin-bottom: 24px;
+  margin: 28px 0 0;
+  padding-top: 14px;
+  border-top: 1px solid rgba(0, 204, 102, 0.12);
+  font-size: 0.78em;
+  color: var(--text-muted, #6b7d82);
 }
 
 /* Video snapshot — the source frame, previously only used as an og:image */
@@ -71,7 +71,7 @@
   width: 100%;
   height: auto;
   border-radius: 8px;
-  border: 1px solid #1a3a44;
+  border: 1px solid rgba(0, 204, 102, 0.18);
   display: block;
 }
 .story-video-link {
@@ -117,17 +117,22 @@
   color: #fff;
   font-size: 1.6em;
   margin: 36px 0 12px;
-  border-bottom: 1px solid #1a3a44;
+  border-bottom: 1px solid rgba(0, 204, 102, 0.22);
   padding-bottom: 8px;
+  text-shadow: 0 0 12px rgba(0, 204, 102, 0.10);
 }
 
 .story-facts { margin: 12px 0 24px 22px; }
 .story-facts li { margin-bottom: 8px; }
 
 .story-site a,
-.story-back a { color: #4fc3f7; text-decoration: none; }
+.story-sources a,
+.story-related a,
+.story-back a { color: var(--text-link, #00c8c8); text-decoration: none; }
 .story-site a:hover,
-.story-back a:hover { text-decoration: underline; }
+.story-sources a:hover,
+.story-related a:hover,
+.story-back a:hover { color: var(--accent-secondary-hover, #4ae0e0); text-decoration: underline; }
 
 .story-back { margin-top: 40px; }
 
@@ -141,15 +146,19 @@
 
 .story-archive-card {
   display: block;
-  background: #0d2229;
-  border: 1px solid #1a3a44;
+  background: rgba(0, 20, 25, 0.45);
+  border: 1px solid rgba(0, 204, 102, 0.18);
+  border-left: 2px solid rgba(0, 204, 102, 0.45);
   border-radius: 8px;
   padding: 16px 20px;
   text-decoration: none;
   color: inherit;
   transition: border-color 0.15s;
 }
-.story-archive-card:hover { border-color: var(--primary-red, #c02023); }
+.story-archive-card:hover {
+  border-color: rgba(0, 204, 102, 0.55);
+  box-shadow: 0 0 18px rgba(0, 204, 102, 0.10);
+}
 .story-archive-card h3 {
   margin: 0 0 6px;
   font-size: 1.15em;
@@ -168,7 +177,7 @@
   justify-content: center;
   margin-top: 32px;
 }
-.story-pager a { color: #4fc3f7; text-decoration: none; }
+.story-pager a { color: var(--text-link, #00c8c8); text-decoration: none; }
 .story-pager a:hover { text-decoration: underline; }
 
 @media (max-width: 600px) {
@@ -197,3 +206,56 @@
 }
 .site-country-card:hover { border-color: var(--primary-red, #c02023); }
 .site-country-count { color: #708890; font-size: 13px; }
+
+/* ── Story extras (2026-08-08): the data was in the DB all along ───────── */
+
+/* Speculative label from the pipeline — shown, not hidden. */
+.story-badge {
+  display: inline-block;
+  vertical-align: middle;
+  margin-left: 10px;
+  font-family: Inter, sans-serif;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: 4px;
+  border: 1px solid rgba(245, 197, 24, 0.45);
+  color: var(--accent-warm, #f5c518);
+}
+
+/* Site chips: the only links from a story back into the globe. */
+.story-chips { display: flex; flex-wrap: wrap; gap: 10px; margin: 8px 0 4px; }
+.story-chip {
+  display: inline-block;
+  border: 1px solid rgba(0, 204, 102, 0.35);
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: 0.9em;
+  color: var(--accent-primary, #00cc66);
+  text-decoration: none;
+}
+.story-chip:hover { background: rgba(0, 204, 102, 0.10); text-decoration: none; }
+.story-chip.is-plain { color: var(--text-muted, #708890); border-color: rgba(112, 136, 144, 0.35); }
+
+/* Researched sources — stored per story since the verifier work, never shown. */
+.story-source {
+  border-left: 2px solid rgba(0, 200, 200, 0.35);
+  padding: 2px 0 2px 14px;
+  margin-bottom: 14px;
+}
+.story-source-host { color: var(--text-muted, #708890); font-size: 12px; margin-left: 8px; }
+.story-source-snippet { color: #a8b8bc; font-size: 0.88em; margin-top: 2px; }
+
+/* Read-next list. */
+.story-related ul { margin: 10px 0 0 20px; }
+.story-related li { margin-bottom: 8px; }
+
+/* Listing card meta line. */
+.story-card-meta {
+  color: var(--text-muted, #708890);
+  font-size: 12px;
+  margin-top: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}

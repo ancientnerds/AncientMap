@@ -13,6 +13,12 @@ export interface ArchiveEntry {
   slug: string
   headline: string
   summary: string
+  /* Context the listing query already joins — cards looked identical without it. */
+  publishedDisplay?: string
+  category?: string
+  siteName?: string
+  channelName?: string
+  speculativeTag?: string
 }
 
 interface Props {
@@ -45,12 +51,24 @@ export default function StoryArchivePage({ page, totalPages, total, stories }: P
         </div>
 
         <div className="story-archive-list">
-          {stories.map(s => (
-            <a key={s.slug} className="story-archive-card" href={`/news-archive/${s.slug}`}>
-              <h3>{s.headline}</h3>
-              {s.summary && <p>{s.summary}</p>}
-            </a>
-          ))}
+          {stories.map(s => {
+            const meta = [
+              s.publishedDisplay,
+              s.category,
+              s.siteName,
+              s.channelName && `via ${s.channelName}`,
+            ].filter(Boolean)
+            return (
+              <a key={s.slug} className="story-archive-card" href={`/news-archive/${s.slug}`}>
+                <h3>
+                  {s.headline}
+                  {s.speculativeTag && <span className="story-badge">{s.speculativeTag}</span>}
+                </h3>
+                {s.summary && <p>{s.summary}</p>}
+                {meta.length > 0 && <div className="story-card-meta">{meta.join(' · ')}</div>}
+              </a>
+            )
+          })}
         </div>
 
         {totalPages > 1 && (
