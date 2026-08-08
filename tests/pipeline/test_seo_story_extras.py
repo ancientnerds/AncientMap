@@ -148,3 +148,20 @@ class TestArchiveCards:
 
     def test_speculative_tag_marks_the_card(self):
         assert 'an-badge">speculative' in self._cards(speculative_tag="speculative")
+
+
+class TestCountrylessSite:
+    """Bulk-imported sites frequently have no country. The detail URL needs
+    one, the globe link does not — so a missing country must not cost the
+    reader BOTH links (observed live on story 7730, 2026-08-08)."""
+
+    def test_globe_link_survives_a_missing_country(self):
+        body = seo_pages.story_page(
+            _story(site_country="", site_id="abc12345-0000-0000-0000-000000000000")
+        ).body
+        assert "/globe.html?site=abc12345-0000-0000-0000-000000000000" in body
+        assert "/sites/" not in body.split('class="an-links"')[1][:400]
+
+    def test_no_site_id_means_no_links_at_all(self):
+        body = seo_pages.story_page(_story(site_id="", site_country="")).body
+        assert "/globe.html?site=" not in body

@@ -282,14 +282,18 @@ def _site_links_html(story: dict) -> str:
     site_id = story.get("site_id")
     country = story.get("site_country")
     chips = []
+    # The detail page needs a country (it is part of the URL), the globe only
+    # needs the id — so a country-less site still gets its map link instead of
+    # falling back to dead text for both (bulk imports often lack a country).
     if site_id and country:
         detail = site_path(country, name, site_id)
         chips.append(f'<a class="an-chip" href="{escape(detail)}">📄 {escape(name)}</a>')
+    else:
+        chips.append(f'<span class="an-chip">📍 {escape(name)}</span>')
+    if site_id:
         chips.append(
             f'<a class="an-chip" href="/globe.html?site={escape(site_id)}">🌍 Show on the globe</a>'
         )
-    else:
-        chips.append(f'<span class="an-chip">📍 {escape(name)}</span>')
     return f'<h2>Site mentioned</h2><div class="an-links">{"".join(chips)}</div>'
 
 
