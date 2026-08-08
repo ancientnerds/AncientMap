@@ -12,6 +12,7 @@ import json
 import logging
 import time
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from typing import Any
 
 from sqlalchemy import text
@@ -946,6 +947,7 @@ async def _poll_loop() -> None:
     logger.info("[THEO] Worker poll loop started")
     gate_was_open: bool | None = None
     while not _shutdown:
+        _touch_worker_heartbeat()
         try:
             # Quota watchdog gate (2026-06-28). When the tier is EXHAUSTED
             # the limiter is already frozen, so any run we pick up would
@@ -1318,6 +1320,23 @@ async def cleanup_stale_deferred() -> None:
         except Exception as e:
             logger.warning(f"[THEO] Stale-deferred cleanup error: {e}")
         await asyncio.sleep(3600)  # Every hour
+
+
+_HEARTBEAT_FILE = Path("/tmp/theo_worker_heartbeat")  # noqa: S108 — container scratch
+
+
+def _touch_worker_heartbeat() -> None:
+    """Refresh the liveness file the theo-worker container's healthcheck reads.
+
+    The poll loop wakes every few seconds and sleeps at most 60s (EXHAUSTED
+    tier), so a file older than the compose threshold means the loop is
+    wedged — not merely idle. Crash-safe by contract: liveness reporting must
+    never be the thing that kills the worker.
+    """
+    try:
+        _HEARTBEAT_FILE.touch()
+    except OSError as exc:
+        logger.debug("[THEO] heartbeat touch failed: %s", exc)
 
 
 def stop_worker() -> None:
