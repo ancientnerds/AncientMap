@@ -396,8 +396,12 @@ jobs:
             # idle; a busy worker keeps the old image until the next deploy
             # after its run finishes. Fail-safe: if the check itself fails we
             # assume BUSY and skip — a stale worker beats a murdered run.
+            # Single quotes need the '"'"' dance: the whole deploy body is ONE
+            # single-quoted ssh argument, so a bare 'running' ended the string
+            # early. That truncated the query on 2026-08-08 — the check returned
+            # "unknown" and the fail-safe skipped the rebuild.
             THEO_BUSY=$(docker exec ancient_nerds_db psql -U ancient_map -d ancient_map -tAc \
-              "SELECT COUNT(*) FROM research_requests WHERE status = 'running';" 2>/dev/null || echo "unknown")
+              "SELECT COUNT(*) FROM research_requests WHERE status = '"'"'running'"'"'" 2>/dev/null || echo "unknown")
             THEO_EXISTS=$(docker ps -a --filter name=ancient_nerds_theo_worker --format '{{.Names}}')
             if [ -z "$THEO_EXISTS" ]; then
               # First deploy after the split (or someone removed it): the API no

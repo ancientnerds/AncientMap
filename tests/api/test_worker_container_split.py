@@ -56,7 +56,16 @@ class TestDeploySkipsBusyWorker:
     def test_deploy_checks_for_running_research(self):
         ci = (_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
         assert "THEO_BUSY=" in ci
-        assert "WHERE status = 'running'" in ci
+        assert "FROM research_requests WHERE status" in ci
+
+    def test_busy_query_escapes_its_quotes(self):
+        """The deploy body is ONE single-quoted ssh argument, so a bare
+        'running' ends the string early — the query then returns "unknown"
+        and the fail-safe silently skips the rebuild (observed 2026-08-08,
+        the worker sat on stale code for a whole deploy)."""
+        ci = (_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+        escaped = "'" + '"' + "'" + '"' + "'" + "running" + "'" + '"' + "'" + '"' + "'"
+        assert escaped in ci, "status literal must use the '\"'\"' escape dance"
 
     def test_missing_container_is_created_even_while_busy(self):
         """Otherwise the first deploy after the split leaves Theo with no
