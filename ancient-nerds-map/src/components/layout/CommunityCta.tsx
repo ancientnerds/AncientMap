@@ -9,6 +9,15 @@
 
 import { DISCORD_INVITE_URL } from '../../constants/brand'
 
+const HUBS: [string, string][] = [
+  ['/globe.html', '3D Globe'],
+  ['/sites/', 'Sites by country'],
+  ['/news-archive/', 'Story Archive'],
+  ['/research/', 'Research Library'],
+  ['/articles/', 'Weekly Journal'],
+  ['/search.html', 'Search'],
+]
+
 export default function CommunityCta() {
   return (
     <div className="community-cta">
@@ -24,6 +33,17 @@ export default function CommunityCta() {
           Join the Ancient Nerds Discord
         </a>{' '}
         — the people behind these pages are there.
+      </p>
+      {/* HamburgerNav renders its items only after a click
+          (`{open && (`, HamburgerNav.tsx:96), so a crawler sees no navigation
+          at all. These are the only crawlable links between the hubs. */}
+      <p className="community-cta-hubs">
+        {HUBS.map(([href, label], i) => (
+          <span key={href}>
+            {i > 0 && ' · '}
+            <a href={href}>{label}</a>
+          </span>
+        ))}
       </p>
     </div>
   )

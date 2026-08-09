@@ -7,6 +7,10 @@ Allow: /
 # Sitemap location
 Sitemap: https://ancientnerds.com/sitemap.xml
 
+# Guide for AI crawlers and assistants. GPTBot fetched 13,017 URLs here
+# between 31.07. and 09.08.2026 — more than Googlebot (10,227).
+# https://ancientnerds.com/llms.txt
+
 # No Crawl-delay: it capped Bing/Yandex at ~1 URL/sec, which is far too slow
 # for a 7,300-URL sitemap (Google ignores the directive entirely).
 

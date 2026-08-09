@@ -110,6 +110,8 @@ SSR_CSS = """
 .an-ssr .an-cta-block h2{margin-top:0;border:none;padding:0}
 .an-ssr .an-cta-block p{margin:0 0 8px}
 .an-ssr .an-cta-block p:last-child{margin-bottom:0}
+.an-ssr .an-hubs{margin-top:14px;padding-top:12px;font-size:.9em;
+  border-top:1px solid rgba(0,204,102,.14);color:#708890}
 """
 
 
@@ -244,13 +246,29 @@ def _story_card(story: dict) -> str:
     )
 
 
-def community_cta_html() -> str:
-    """Closing block on every indexed page: the globe and the Discord.
+# The hubs every indexed page links to. HamburgerNav renders its items only
+# after a click (`{open && (`, HamburgerNav.tsx:96), so a crawler sees no
+# navigation at all — which is why /news-archive/ was "unknown to Google" on
+# 2026-08-09 despite being a nav entry and sitting in the sitemap since 07.08.
+_HUBS = (
+    ("/globe.html", "3D Globe"),
+    ("/sites/", "Sites by country"),
+    ("/news-archive/", "Story Archive"),
+    ("/research/", "Research Library"),
+    ("/articles/", "Weekly Journal"),
+    ("/search.html", "Search"),
+)
 
-    Until 2026-08-09 an indexed page offered no way into either. Search
-    traffic arrived on 614 pages and found neither the product nor the
-    community — the two things the pages exist to feed.
+
+def community_cta_html() -> str:
+    """Closing block on every indexed page: the hubs, the globe, the Discord.
+
+    Until 2026-08-09 an indexed page offered none of them. Search traffic
+    arrived on 614 pages and found neither the product nor the community —
+    the two things the pages exist to feed — and no crawlable path to any
+    other part of the site.
     """
+    hubs = " &middot; ".join(f'<a href="{href}">{escape(label)}</a>' for href, label in _HUBS)
     return (
         '<div class="an-cta-block">'
         "<h2>Keep exploring</h2>"
@@ -258,6 +276,7 @@ def community_cta_html() -> str:
         f'<p>Questions, finds, corrections? <a href="{DISCORD_INVITE_URL}" '
         'target="_blank" rel="noopener">Join the Ancient Nerds Discord</a> — '
         "the people behind these pages are there.</p>"
+        f'<p class="an-hubs">{hubs}</p>'
         "</div>"
     )
 

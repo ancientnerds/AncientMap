@@ -363,3 +363,10 @@
   font-weight: 500;
 }
 .community-cta-globe:hover { text-decoration: none !important; filter: brightness(1.15); }
+.community-cta-hubs {
+  margin-top: 14px !important;
+  padding-top: 12px;
+  border-top: 1px solid rgba(0, 204, 102, 0.14);
+  font-size: 0.9em;
+  color: #708890;
+}

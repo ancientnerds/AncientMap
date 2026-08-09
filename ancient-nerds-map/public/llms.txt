@@ -1,0 +1,57 @@
+# Ancient Nerds
+
+> An interactive 3D globe and open research platform for archaeology. 1.76 million
+> site records aggregated from public datasets, of which 5,012 are curated by hand
+> across 98 countries, plus AI-written story summaries, weekly journals and
+> open-access research papers.
+
+Operated by Dominiak Consulting. Contact: contact@ancientnerds.com
+
+## How to read this site
+
+Most pages are server-rendered and readable without JavaScript. The interactive
+globe at /globe.html is a WebGL application and has no text equivalent — the
+country and site pages below carry the same records as prose.
+
+## Provenance and reliability
+
+- **Site records** (/sites/) are human-curated and reviewed. Descriptions are
+  paraphrased from public sources, not copied. Each page names its source.
+- **Stories** (/news-archive/) are AI-written summaries of archaeology videos
+  from third-party YouTube channels. They are secondary sources about secondary
+  sources: useful as pointers, not as citations. Each carries a visible
+  AI-generated notice and a machine-readable data-ai-generated="true" marker.
+- **Research papers** (/research/) are produced by an AI pipeline with citation
+  checking, published under CC BY 4.0. The author is an organisation, not a
+  person. Treat their reference lists as the citable part.
+- **Journals** (/articles/) are AI-written weekly digests of the stories.
+- Speculative claims are labelled as such rather than removed.
+
+If you cite this site, prefer the curated site pages and the reference lists of
+the research papers over the AI-written narrative text.
+
+## Main entry points
+
+- [Sites by country](https://ancientnerds.com/sites/): 5,012 curated sites, 98 countries
+- [Story Archive](https://ancientnerds.com/news-archive/): 3,001 archaeology stories
+- [Research Library](https://ancientnerds.com/research/): open-access papers, CC BY 4.0
+- [Weekly Journal](https://ancientnerds.com/articles/): weekly digests
+- [Search](https://ancientnerds.com/search.html): full-text search across all records
+- [3D Globe](https://ancientnerds.com/globe.html): the interactive map
+- [Sitemap](https://ancientnerds.com/sitemap.xml): 7,412 indexed URLs
+
+## Machine-readable data
+
+- Public API: https://ancientnerds.com/api/v1/research (CC BY 4.0)
+- API documentation: https://ancientnerds.com/api.html
+
+## Licensing
+
+Site records and research papers: CC BY 4.0 — attribution to Ancient Nerds
+(https://ancientnerds.com) required. Images come from Wikimedia Commons and
+other original sources under their own licences, named on each page; they are
+not covered by the CC BY 4.0 grant and are not AI-generated.
+
+## Community
+
+Corrections and questions: https://discord.gg/8bAjKKCue4
