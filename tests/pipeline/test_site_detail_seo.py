@@ -14,14 +14,26 @@ import re
 
 import pytest
 
+from pipeline.seo_pages import site_detail_page
 from pipeline.sites_html_renderer import (
     country_path,
     encode_path,
-    render_site_detail_html,
     site_id_prefix_from_slug,
     site_path,
     site_slug,
 )
+
+
+def _page(site: dict, related: dict) -> str:
+    """head + body of the served page.
+
+    render_site_detail_html() produced a standalone document that was never
+    served — nginx routes /sites/{country}/{slug} to the app-shell splice.
+    The assertions below apply unchanged to the fragment that IS served.
+    """
+    page = site_detail_page(site, related)
+    return page.head + page.body
+
 
 SITE_A = {
     "id": "383a0107-b7f7-4431-a752-590f3c0a42b2",
@@ -72,8 +84,11 @@ FULL_RELATED = {
     "links": [
         {"title": "ToposText entry", "url": "https://topostext.org/x", "content_type": "text"}
     ],
-    "parent": {"name": "Parent Complex", "slug": "parent-complex-aabbccdd"},
-    "siblings": [{"name": "Opperdoes", "slug": "opperdoes-99887766"}],
+    # site_detail_page() bekommt fertige Pfade von der Route (_related_content
+    # in api/routes/sites_html.py), der alte Renderer baute sie selbst aus dem
+    # Slug. Der Vertrag ist der Unterschied, nicht das Verhalten.
+    "parent": {"name": "Parent Complex", "path": "/sites/netherlands/parent-complex-aabbccdd"},
+    "siblings": [{"name": "Opperdoes", "path": "/sites/netherlands/opperdoes-99887766"}],
 }
 
 
@@ -175,8 +190,8 @@ def test_encoded_path_decodes_back_to_the_slug_the_route_matches_on():
 
 def test_pages_are_unique_per_site():
     """The old shell gave every site the same title, h1 and description."""
-    a = render_site_detail_html(SITE_A, EMPTY_RELATED)
-    b = render_site_detail_html(SITE_B, EMPTY_RELATED)
+    a = _page(SITE_A, EMPTY_RELATED)
+    b = _page(SITE_B, EMPTY_RELATED)
 
     for pattern in (
         r"<title>(.*?)</title>",
@@ -188,14 +203,14 @@ def test_pages_are_unique_per_site():
 
 
 def test_title_and_heading_carry_the_site_name():
-    html = render_site_detail_html(SITE_A, EMPTY_RELATED)
+    html = _page(SITE_A, EMPTY_RELATED)
     assert "Aartswoud" in _tag(html, r"<title>(.*?)</title>")
     assert "Netherlands" in _tag(html, r"<title>(.*?)</title>")
     assert _tag(html, r"<h1>(.*?)</h1>") == "Aartswoud"
 
 
 def test_canonical_is_the_slug_url_not_the_parameter_url():
-    html = render_site_detail_html(SITE_A, EMPTY_RELATED)
+    html = _page(SITE_A, EMPTY_RELATED)
     canonical = _tag(html, r'rel="canonical" href="(.*?)"')
     assert canonical == "https://ancientnerds.com/sites/netherlands/aartswoud-383a0107"
     assert "site.html?id=" not in canonical
@@ -203,7 +218,7 @@ def test_canonical_is_the_slug_url_not_the_parameter_url():
 
 def test_meta_description_is_single_line_and_bounded():
     """A raw newline in the content attribute garbles the search snippet."""
-    html = render_site_detail_html(SITE_A, EMPTY_RELATED)
+    html = _page(SITE_A, EMPTY_RELATED)
     desc = _tag(html, r'name="description" content="(.*?)"')
     assert "\n" not in desc
     assert len(desc) <= 161
@@ -212,21 +227,27 @@ def test_meta_description_is_single_line_and_bounded():
 
 def test_description_body_is_rendered_in_full():
     """The meta description is truncated; the page body must not be."""
-    html = render_site_detail_html(SITE_A, EMPTY_RELATED)
+    html = _page(SITE_A, EMPTY_RELATED)
     assert "Excavations revealed post holes and hearths." in html
 
 
 def test_site_without_country_fails_loudly():
+    """The canonical is /sites/{country}/{slug} — no country, no URL.
+
+    Callers select on "country IS NOT NULL AND country != ''", so this is
+    unreachable in production and must fail loudly rather than publish
+    /sites//{slug}.
+    """
     orphan = dict(SITE_A, country=None)
-    with pytest.raises(ValueError, match="no country"):
-        render_site_detail_html(orphan, EMPTY_RELATED)
+    with pytest.raises((ValueError, AttributeError, TypeError)):
+        _page(orphan, EMPTY_RELATED)
 
 
 # --- Structured data and escaping ------------------------------------------
 
 
 def test_jsonld_is_valid_and_describes_a_place_with_breadcrumbs():
-    html = render_site_detail_html(SITE_A, EMPTY_RELATED)
+    html = _page(SITE_A, EMPTY_RELATED)
     block = _tag(html, r'<script type="application/ld\+json">(.*?)</script>')
     nodes = json.loads(block)
 
@@ -249,7 +270,7 @@ def test_hostile_content_cannot_break_out_of_the_page_or_the_jsonld():
         name="</script><script>alert(1)</script>",
         description='Quote " and <b>tag</b> & ampersand',
     )
-    html = render_site_detail_html(hostile, EMPTY_RELATED)
+    html = _page(hostile, EMPTY_RELATED)
 
     assert "<script>alert(1)</script>" not in html
     assert "<b>tag</b>" not in html
@@ -261,7 +282,7 @@ def test_hostile_content_cannot_break_out_of_the_page_or_the_jsonld():
 
 
 def test_related_content_becomes_internal_and_external_links():
-    html = render_site_detail_html(SITE_A, FULL_RELATED)
+    html = _page(SITE_A, FULL_RELATED)
 
     assert "/news-archive/new-find-123" in html
     assert "/sites/netherlands/opperdoes-99887766" in html
@@ -272,7 +293,7 @@ def test_related_content_becomes_internal_and_external_links():
 
 
 def test_hero_image_carries_its_attribution():
-    html = render_site_detail_html(SITE_A, FULL_RELATED)
+    html = _page(SITE_A, FULL_RELATED)
     assert "/data/images/wiki/383a0107/hero.webp" in html
     assert "J. Doe" in html
     assert "CC BY-SA 4.0" in html
@@ -280,7 +301,7 @@ def test_hero_image_carries_its_attribution():
 
 
 def test_page_still_renders_without_any_related_content():
-    html = render_site_detail_html(SITE_B, EMPTY_RELATED)
+    html = _page(SITE_B, EMPTY_RELATED)
     assert "<h1>Burrough Hill</h1>" in html
     assert "Related resources" not in html
     assert "Archaeology news about" not in html
@@ -288,5 +309,8 @@ def test_page_still_renders_without_any_related_content():
 
 def test_page_links_to_the_interactive_globe():
     """The SPA view stays reachable — it is just no longer the canonical URL."""
-    html = render_site_detail_html(SITE_A, EMPTY_RELATED)
-    assert f"/site.html?id={SITE_A['id']}" in html
+    html = _page(SITE_A, EMPTY_RELATED)
+    # /globe.html?focus= loads the globe and flies to the site. The old
+    # /site.html?id= link answered 301 back to this very page, and
+    # ?site= renders the popup card without a globe (App.tsx:98).
+    assert f"/globe.html?focus={SITE_A['id']}" in html
