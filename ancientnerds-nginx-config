@@ -10,6 +10,30 @@ server {
     root /var/www/ancientnerds/ancient-nerds-map/dist;
     index index.html;
 
+    # /etc/nginx/nginx.conf has `gzip on` but its gzip_types line is commented
+    # out, so the default applied — text/html only. Result: 27 asset requests
+    # per cold visit, 2.5 MB, none with content-encoding (measured 2026-08-09).
+    # Set here rather than in nginx.conf because only this file is in the repo
+    # and rolled out by the deploy.
+    gzip_vary on;
+    gzip_proxied any;
+    gzip_comp_level 6;
+    gzip_min_length 1024;
+    # Deliberately no image/*, font/woff2 or video/*: those are already
+    # compressed, and re-compressing them costs CPU for nothing.
+    gzip_types
+        text/plain
+        text/css
+        text/xml
+        text/javascript
+        application/javascript
+        application/json
+        application/xml
+        application/rss+xml
+        application/atom+xml
+        application/manifest+json
+        image/svg+xml;
+
     # Force service worker to always revalidate
     location = /sw.js {
         add_header Cache-Control "no-cache, no-store, must-revalidate";
@@ -180,6 +204,13 @@ server {
         try_files $uri $uri/ /index.html;
     }
 
+    # www served the complete site with 200 alongside the apex — two hostnames
+    # carrying all 7,404 indexed URLs (verified 2026-08-09). The certificate
+    # covers both, so www can answer and redirect rather than fail.
+    if ($host = www.ancientnerds.com) {
+        return 301 https://ancientnerds.com$request_uri;
+    }
+
     listen 443 ssl default_server;
     ssl_certificate /etc/letsencrypt/live/ancientnerds.com/fullchain.pem;
     ssl_certificate_key /etc/letsencrypt/live/ancientnerds.com/privkey.pem;
@@ -188,12 +219,13 @@ server {
 }
 
 server {
+    # $host would have kept www on the way to HTTPS; go straight to the apex.
     if ($host = www.ancientnerds.com) {
-        return 301 https://$host$request_uri;
+        return 301 https://ancientnerds.com$request_uri;
     }
 
     if ($host = ancientnerds.com) {
-        return 301 https://$host$request_uri;
+        return 301 https://ancientnerds.com$request_uri;
     }
 
     listen 80;
