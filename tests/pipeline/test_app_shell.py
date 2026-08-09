@@ -142,7 +142,7 @@ def test_story_payload_lets_react_render_without_a_fetch():
 
 
 def test_story_links_to_the_canonical_site_url():
-    page = seo_pages.story_page(_story())
+    page = seo_pages.story_page(_story(site_curated=True))
     assert "/sites/netherlands/aartswoud-383a0107" in page.body
 
 

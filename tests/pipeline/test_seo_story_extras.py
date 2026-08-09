@@ -68,7 +68,7 @@ class TestSources:
 
 class TestSiteLinks:
     def test_site_links_to_detail_page_and_globe(self):
-        body = seo_pages.story_page(_story()).body
+        body = seo_pages.story_page(_story(site_curated=True)).body
         assert "/globe.html?site=abc12345-0000-0000-0000-000000000000" in body
         assert "/sites/pakistan/" in body.lower()
 
@@ -77,6 +77,25 @@ class TestSiteLinks:
         body = seo_pages.story_page(_story(site_id="", site_country="")).body
         assert "Mohenjo-daro" in body
         assert "/globe.html?site=" not in body
+
+    def test_uncurated_site_gets_no_detail_link(self):
+        """/sites/{country}/{slug} serves curated sites only.
+
+        268 published stories linked bulk-imported sites there and every one
+        of them was a 404 (verified live on the ScanPyramids story, 2026-08-09).
+        """
+        body = seo_pages.story_page(_story(site_curated=False)).body
+        assert "/sites/pakistan/" not in body.lower()
+        assert "Mohenjo-daro" in body  # the name still shows, just not linked
+        assert "/globe.html?site=" in body  # the globe only needs the id
+
+    def test_uncurated_site_is_kept_out_of_the_payload_too(self):
+        """The React chip reads sitePath — it must not resurrect the 404."""
+        import json
+
+        route = json.loads(seo_pages.story_page(_story(site_curated=False)).route)
+        assert route["sitePath"] == ""
+        assert route["siteName"] == "Mohenjo-daro"
 
 
 class TestVideoDeepLink:

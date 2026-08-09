@@ -262,6 +262,10 @@ async def story_page(slug: str, db: Session = Depends(get_db)):
         "site_name": site.name if site else (item.site_name_extracted or ""),
         "site_id": str(site.id) if site else "",
         "site_country": site.country if site else "",
+        # /sites/{country}/{slug} serves curated sites only (_CURATED_WHERE in
+        # sites_html.py). Linking a bulk-imported site there is a 404 — 268
+        # published stories did exactly that until 2026-08-09.
+        "site_curated": bool(site and site.source_id == "ancient_nerds"),
         "screenshot_url": item.screenshot_url,
         "youtube_url": f"https://www.youtube.com/watch?v={video.id}" if video else "",
         "video_title": video.title if video else "",

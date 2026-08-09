@@ -300,10 +300,10 @@ def _site_links_html(story: dict) -> str:
     site_id = story.get("site_id")
     country = story.get("site_country")
     chips = []
-    # The detail page needs a country (it is part of the URL), the globe only
-    # needs the id — so a country-less site still gets its map link instead of
-    # falling back to dead text for both (bulk imports often lack a country).
-    if site_id and country:
+    # The detail page needs a country (part of the URL) AND a curated site —
+    # /sites/{country}/{slug} filters on source_id = 'ancient_nerds'. Linking a
+    # bulk-imported site there produced a 404 on 268 published stories.
+    if site_id and country and story.get("site_curated"):
         detail = site_path(country, name, site_id)
         chips.append(f'<a class="an-chip" href="{escape(detail)}">📄 {escape(name)}</a>')
     else:
@@ -460,7 +460,10 @@ def story_page(story: dict) -> SeoPage:
         "siteName": story.get("site_name") or "",
         "sitePath": (
             site_path(story["site_country"], story["site_name"], story["site_id"])
-            if story.get("site_country") and story.get("site_name") and story.get("site_id")
+            if story.get("site_curated")
+            and story.get("site_country")
+            and story.get("site_name")
+            and story.get("site_id")
             else ""
         ),
         "siteId": story.get("site_id") or "",
