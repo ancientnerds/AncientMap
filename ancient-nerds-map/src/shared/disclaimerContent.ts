@@ -7,6 +7,8 @@
  * The CSS classes match the existing disclaimer styles in index.css.
  */
 
+import { DISCORD_INVITE_URL } from '../constants/brand'
+
 export function getDisclaimerHTML(buildHash?: string, buildTime?: string): string {
   const footerHTML = buildHash && buildTime
     ? `<div class="disclaimer-footer"><p>
@@ -126,7 +128,7 @@ export function getDisclaimerHTML(buildHash?: string, buildTime?: string): strin
     <p class="attribution-note">We gratefully acknowledge all data providers and contributors. If you believe any attribution is missing or incorrect, please reach out:</p>
     <div class="contact-links">
       <a href="mailto:ancient.nerds@protonmail.com?subject=Attribution%20Issue">Email</a>
-      <a href="https://discord.gg/8bAjKKCue4" target="_blank" rel="noopener noreferrer">Discord</a>
+      <a href="${DISCORD_INVITE_URL}" target="_blank" rel="noopener noreferrer">Discord</a>
     </div>
   </div>
 </details>
@@ -248,7 +250,7 @@ export function getDisclaimerHTML(buildHash?: string, buildTime?: string): strin
     <p>If you are a YouTube creator and would like your channel excluded from our news pipeline, reach out with the subject &ldquo;Channel Opt-Out&rdquo; and your channel name or URL. We will remove your channel within 7 days.</p>
     <div class="contact-links">
       <a href="mailto:ancient.nerds@protonmail.com?subject=Channel%20Opt-Out">Email</a>
-      <a href="https://discord.gg/8bAjKKCue4" target="_blank" rel="noopener noreferrer">Discord</a>
+      <a href="${DISCORD_INVITE_URL}" target="_blank" rel="noopener noreferrer">Discord</a>
     </div>
   </div>
 </details>
@@ -268,7 +270,7 @@ export function getDisclaimerHTML(buildHash?: string, buildTime?: string): strin
     <p>Please reach out through our community channels:</p>
     <div class="contact-links">
       <a href="mailto:ancient.nerds@protonmail.com">Email</a>
-      <a href="https://discord.gg/8bAjKKCue4" target="_blank" rel="noopener noreferrer">Discord</a>
+      <a href="${DISCORD_INVITE_URL}" target="_blank" rel="noopener noreferrer">Discord</a>
       <a href="https://x.com/AncientNerdsDAO" target="_blank" rel="noopener noreferrer">X (Twitter)</a>
     </div>
   </div>

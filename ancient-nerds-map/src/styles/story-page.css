@@ -8,7 +8,7 @@
   height: 100vh;
   overflow-y: auto;
   overflow-x: hidden;
-  background: var(--bg-deep, #0a1a1f);
+  background: var(--surface-page);
   color: #e0e0e0;
 }
 
@@ -25,7 +25,7 @@
   margin-bottom: 16px;
 }
 .story-crumb a { color: var(--text-link, #00c8c8); text-decoration: none; }
-.story-crumb a:hover { color: var(--primary-red, #c02023); }
+.story-crumb a:hover { color: var(--brand-primary); }
 
 .story-title {
   font-family: 'Cormorant Garamond', Georgia, serif;
@@ -144,16 +144,24 @@
   margin-top: 24px;
 }
 
+/* Panel-Look aus nerv-ui/panel.css, hier direkt gesetzt statt über den
+   Selektor dort mitgenommen: die Karte behält ihre eigene Regel und kann
+   nicht kaputtgehen, wenn panel.css umsortiert wird. Werte gespiegelt aus
+   --nerv-panel-* (panel.css:14-18). Vorher: 8px Radius und kein Glow —
+   sichtbar anders als jede andere Karte im Produkt. */
 .story-archive-card {
   display: block;
-  background: rgba(0, 20, 25, 0.45);
-  border: 1px solid rgba(0, 204, 102, 0.18);
+  background: var(--nerv-panel-bg, rgba(0, 20, 25, 0.35));
+  backdrop-filter: blur(var(--nerv-panel-blur, 16px));
+  -webkit-backdrop-filter: blur(var(--nerv-panel-blur, 16px));
+  border: 1px solid var(--nerv-panel-border, rgba(0, 204, 102, 0.2));
   border-left: 2px solid rgba(0, 204, 102, 0.45);
-  border-radius: 8px;
+  border-radius: var(--nerv-panel-radius, 0);
+  box-shadow: var(--nerv-panel-shadow, 0 0 8px rgba(0, 204, 102, 0.04));
   padding: 16px 20px;
   text-decoration: none;
   color: inherit;
-  transition: border-color 0.15s;
+  transition: border-color 0.15s, box-shadow 0.15s;
 }
 .story-archive-card:hover {
   border-color: rgba(0, 204, 102, 0.55);
@@ -192,19 +200,25 @@
   gap: 12px;
   margin-top: 24px;
 }
+/* Gleiche Panel-Werte wie .story-archive-card — die Länderkacheln standen
+   vorher auf #0d2229/#1a3a44, zwei Farben, die im Designsystem nicht
+   vorkommen. */
 .site-country-card {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background: #0d2229;
-  border: 1px solid #1a3a44;
-  border-radius: 8px;
+  background: var(--nerv-panel-bg, rgba(0, 20, 25, 0.35));
+  backdrop-filter: blur(var(--nerv-panel-blur, 16px));
+  -webkit-backdrop-filter: blur(var(--nerv-panel-blur, 16px));
+  border: 1px solid var(--nerv-panel-border, rgba(0, 204, 102, 0.2));
+  border-radius: var(--nerv-panel-radius, 0);
+  box-shadow: var(--nerv-panel-shadow, 0 0 8px rgba(0, 204, 102, 0.04));
   padding: 14px 18px;
   text-decoration: none;
   color: #e0e0e0;
   transition: border-color 0.15s;
 }
-.site-country-card:hover { border-color: var(--primary-red, #c02023); }
+.site-country-card:hover { border-color: var(--brand-primary); }
 .site-country-count { color: #708890; font-size: 13px; }
 
 /* ── Country listing (/sites/{country}) ────────────────────────────────── */
@@ -243,9 +257,9 @@
   padding-bottom: 6px;
 }
 
-.site-card { display: flex; gap: 16px; align-items: flex-start; }
-.site-card-body { flex: 1; min-width: 0; }
-.site-card-thumb {
+.site-list-card { display: flex; gap: 16px; align-items: flex-start; }
+.site-list-card-body { flex: 1; min-width: 0; }
+.site-list-card-thumb {
   width: 120px;
   height: 90px;
   object-fit: cover;
@@ -253,7 +267,7 @@
   border: 1px solid rgba(0, 204, 102, 0.18);
   flex: 0 0 auto;
 }
-.site-card-meta {
+.site-list-card-meta {
   color: #708890;
   font-size: 12px;
   margin-top: 6px;
@@ -262,7 +276,7 @@
 }
 
 @media (max-width: 600px) {
-  .site-card-thumb { width: 84px; height: 64px; }
+  .site-list-card-thumb { width: 84px; height: 64px; }
 }
 
 /* ── Story extras (2026-08-08): the data was in the DB all along ───────── */
@@ -317,3 +331,35 @@
   text-transform: uppercase;
   letter-spacing: 0.06em;
 }
+
+/* ── Abschlussblock: die zwei Wege aus einer indexierten Seite heraus ──── */
+/* Spiegelt .an-cta-block im SSR-Fragment (pipeline/seo_pages.py). */
+.community-cta {
+  margin-top: 40px;
+  padding: 20px 22px;
+  background: var(--nerv-panel-bg, rgba(0, 20, 25, 0.35));
+  border: 1px solid rgba(0, 204, 102, 0.22);
+  border-left: 2px solid rgba(0, 204, 102, 0.45);
+  border-radius: var(--nerv-panel-radius, 0);
+}
+.community-cta h2 {
+  margin: 0 0 12px;
+  border: none;
+  padding: 0;
+  font-family: 'Cormorant Garamond', Georgia, serif;
+  color: #fff;
+  font-size: 1.4em;
+}
+.community-cta p { margin: 0 0 8px; }
+.community-cta p:last-child { margin-bottom: 0; }
+.community-cta a { color: var(--text-link, #00c8c8); text-decoration: none; }
+.community-cta a:hover { text-decoration: underline; }
+.community-cta-globe {
+  display: inline-block;
+  background: var(--brand-primary);
+  color: #fff !important;
+  padding: 10px 18px;
+  border-radius: 6px;
+  font-weight: 500;
+}
+.community-cta-globe:hover { text-decoration: none !important; filter: brightness(1.15); }

@@ -17,6 +17,7 @@ import CollectionBrowser from '../components/cards/CollectionBrowser'
 import DeckBuilder from '../components/cards/DeckBuilder'
 import PageHeader from '../components/layout/PageHeader'
 import '../styles/account.css'
+import { DISCORD_INVITE_URL } from '../constants/brand'
 
 interface UsageEntry {
   input_tokens: number
@@ -176,7 +177,6 @@ const ROLE_SHORT: Record<string, string> = {
   '1083785826586075278': 'SC',
 }
 
-const DISCORD_INVITE_URL = 'https://discord.gg/ancientnerds'
 const MEE6_URL = 'https://mee6.xyz/m/932330696956063765'
 
 type AccountTab = 'profile' | 'likes' | 'bookmarks' | 'achievements' | 'collection' | 'deckbuilder' | 'admin'

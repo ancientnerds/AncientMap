@@ -178,3 +178,70 @@ class TestBlurb:
 
     def test_missing_text_is_empty(self):
         assert seo_pages.blurb(None) == ""
+
+
+class TestCommunityCta:
+    """Every indexed page must offer a way into the globe and the Discord.
+
+    Until 2026-08-09 an indexed page offered neither: `grep -oic discord` over
+    all nine URL types returned 0, and the globe was reachable only from the
+    site detail type.
+    """
+
+    def _all_page_bodies(self) -> dict[str, str]:
+        from datetime import datetime
+
+        site = {
+            "id": "abc12345-0000-0000-0000-000000000000",
+            "name": "Nemrut",
+            "country": "Türkiye",
+            "site_type": "Temple complex",
+            "period_name": "500 BC - 1 AD",
+            "description": "A place.",
+            "lat": 1.0,
+            "lon": 2.0,
+        }
+        empty = {
+            "alt_names": [],
+            "image": None,
+            "news": [],
+            "links": [],
+            "parent": None,
+            "siblings": [],
+        }
+        story = {
+            "id": 1,
+            "headline": "H",
+            "summary": "S",
+            "facts": [],
+            "post_text": "P",
+            "published_at": datetime(2026, 7, 1),
+        }
+        paper = {"title": "T", "slug": "t", "summary": "S", "published_at": datetime(2026, 7, 1)}
+        return {
+            "story": seo_pages.story_page(story).body,
+            "storyArchive": seo_pages.story_archive_page([], 1, 1, 0).body,
+            "site": seo_pages.site_detail_page(site, empty).body,
+            "sitesIndex": seo_pages.sites_index_page([]).body,
+            "country": seo_pages.country_sites_page("Türkiye", []).body,
+            "research": seo_pages.research_page(paper, "<p>b</p>").body,
+            "researchIndex": seo_pages.research_index_page([]).body,
+            "article": seo_pages.article_page(paper, "<p>b</p>").body,
+            "articleIndex": seo_pages.article_index_page([]).body,
+        }
+
+    def test_every_page_type_offers_discord_and_the_globe(self):
+        for name, body in self._all_page_bodies().items():
+            assert "discord.gg" in body, f"{name} has no Discord link"
+            assert "/globe.html" in body, f"{name} has no globe link"
+
+    def test_the_block_sits_at_the_end(self):
+        for name, body in self._all_page_bodies().items():
+            assert body.rstrip().endswith("</div>"), name
+            assert "an-cta-block" in body, name
+
+    def test_the_invite_is_not_hardcoded_here(self):
+        """One definition per world — the value comes from the renderer module."""
+        from pipeline.article_html_renderer import DISCORD_INVITE_URL
+
+        assert DISCORD_INVITE_URL in seo_pages.community_cta_html()

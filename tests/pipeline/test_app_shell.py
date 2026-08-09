@@ -222,7 +222,7 @@ def test_site_page_links_to_the_globe_with_the_site_preselected():
         "siblings": [],
     }
     body = seo_pages.site_detail_page(site, empty).body
-    assert "/globe.html?site=383a0107-b7f7-4431-a752-590f3c0a42b2" in body
+    assert "/globe.html?focus=383a0107-b7f7-4431-a752-590f3c0a42b2" in body
 
 
 @pytest.mark.parametrize(

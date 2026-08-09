@@ -153,3 +153,27 @@ export const AN_LOGO_PATHS = [
 
 /** Original viewBox of an-logo.svg */
 export const AN_LOGO_VIEWBOX = '200 200 620 500'
+
+// ---------------------------------------------------------------------------
+// Community and deep links
+// ---------------------------------------------------------------------------
+
+/**
+ * The Discord invite. Was hardcoded in 13 places until 2026-08-09, and one of
+ * them (AccountPage) was dead — the Discord API answered "Unknown Invite".
+ * The server-rendered fragments carry the same value in
+ * pipeline/article_html_renderer.py; a shared import is impossible while SSR
+ * runs in Python.
+ */
+export const DISCORD_INVITE_URL = 'https://discord.gg/8bAjKKCue4'
+
+/**
+ * Globe deep link for one site.
+ *
+ * ?focus= loads the globe and flies to the site. ?site= renders the popup
+ * card ALONE, without a globe ("standalone popup mode", App.tsx:98) — the
+ * wrong parameter for a button that says "show it on the globe".
+ */
+export function globeUrlForSite(siteId: string): string {
+  return `/globe.html?focus=${encodeURIComponent(siteId)}`
+}

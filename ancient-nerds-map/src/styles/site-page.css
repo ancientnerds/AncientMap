@@ -211,3 +211,10 @@
     padding: 16px;
   }
 }
+
+/* Abschlussblock unter dem Site-Datensatz (Standalone-Ansicht). */
+.site-page-cta {
+  max-width: 820px;
+  margin: 0 auto;
+  padding: 0 24px 60px;
+}

@@ -14,6 +14,12 @@ import nh3
 
 BASE_URL = "https://ancientnerds.com"
 
+# Mirrored in ancient-nerds-map/src/constants/brand.ts — the React pages need
+# the same value and cannot import from Python. Until 2026-08-09 this link
+# appeared on none of the 7,404 indexed pages, which is where search traffic
+# actually lands.
+DISCORD_INVITE_URL = "https://discord.gg/8bAjKKCue4"
+
 
 def _sanitize_html(html: str) -> str:
     """Allowlist-sanitize Markdown output (nh3/ammonia).

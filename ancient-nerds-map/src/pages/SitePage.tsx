@@ -1,5 +1,6 @@
 import { useMemo, useEffect, useState, lazy, Suspense } from 'react'
 
+import CommunityCta from '../components/layout/CommunityCta'
 import PageHeader from '../components/layout/PageHeader'
 import SitePopup from '../components/SitePopup/SitePopup'
 import { useSiteDetailData } from '../components/SiteDetail/useSiteDetailData'
@@ -94,6 +95,13 @@ export default function SitePage() {
           contextId={lyraContext.id}
         />
       </Suspense>
+      {/* In standalone mode SitePopup renders in normal document flow (see
+          SitePopup.tsx:969), so the block sits below the record. Without it
+          the detail page loses its only way into the globe on hydration —
+          37 links before, 12 after (audit 2026-08-09). */}
+      <div className="site-page-cta">
+        <CommunityCta />
+      </div>
     </div>
   )
 }

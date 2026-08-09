@@ -8,6 +8,7 @@
 
 import { useState } from 'react'
 
+import CommunityCta from '../components/layout/CommunityCta'
 import PageHeader from '../components/layout/PageHeader'
 
 import '../styles/story-page.css'
@@ -57,6 +58,7 @@ export function SitesIndexPage({ countries }: { countries: CountryEntry[] }) {
             </a>
           ))}
         </div>
+        <CommunityCta />
       </main>
     </div>
   )
@@ -65,12 +67,12 @@ export function SitesIndexPage({ countries }: { countries: CountryEntry[] }) {
 function SiteCard({ site }: { site: SiteEntry }) {
   const meta = [site.siteType, site.period].filter(Boolean).join(' · ')
   return (
-    <a className="story-archive-card site-card" href={site.path}>
-      {site.thumb && <img className="site-card-thumb" src={site.thumb} alt={site.name} loading="lazy" />}
-      <div className="site-card-body">
+    <a className="story-archive-card site-list-card" href={site.path}>
+      {site.thumb && <img className="site-list-card-thumb" src={site.thumb} alt={site.name} loading="lazy" />}
+      <div className="site-list-card-body">
         <h3>{site.name}</h3>
         {site.summary && <p>{site.summary}</p>}
-        {meta && <div className="site-card-meta">{meta}</div>}
+        {meta && <div className="site-list-card-meta">{meta}</div>}
       </div>
     </a>
   )
@@ -138,6 +140,7 @@ export function CountrySitesPage({
             </div>
           </section>
         ))}
+        <CommunityCta />
       </main>
     </div>
   )

@@ -5,6 +5,8 @@
  * pre-rendered in window.__AN_ROUTE__, so there is no fetch on mount.
  */
 
+import AiNoticeBanner from '../components/layout/AiNoticeBanner'
+import CommunityCta from '../components/layout/CommunityCta'
 import PageHeader from '../components/layout/PageHeader'
 
 import '../styles/story-page.css'
@@ -50,6 +52,11 @@ export default function StoryArchivePage({ page, totalPages, total, stories }: P
           {totalPages > 1 && ` · page ${page} of ${totalPages}`}
         </div>
 
+        {/* Art. 50 EU AI Act. The crawler fragment carries the notice, but
+            React replaced #root without it — the only page type where the
+            visible label vanished on hydration (audit 2026-08-09). */}
+        <AiNoticeBanner message="Story summaries are AI-generated from YouTube video content. Always verify with original sources." />
+
         <div className="story-archive-list">
           {stories.map(s => {
             const meta = [
@@ -77,6 +84,7 @@ export default function StoryArchivePage({ page, totalPages, total, stories }: P
             {page < totalPages && <a href={pageHref(page + 1)}>Next →</a>}
           </nav>
         )}
+        <CommunityCta />
       </main>
     </div>
   )

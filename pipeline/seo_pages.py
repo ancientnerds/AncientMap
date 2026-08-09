@@ -18,6 +18,7 @@ from html import escape
 from pipeline.article_html_renderer import (
     AI_NOTICE_HTML,
     BASE_URL,
+    DISCORD_INVITE_URL,
     _json_str,
     slugify,
     story_slug,
@@ -100,6 +101,15 @@ SSR_CSS = """
 .an-ssr .an-badge{display:inline-block;font-size:11px;letter-spacing:.08em;
   text-transform:uppercase;border-radius:4px;padding:3px 8px;margin-left:8px;
   border:1px solid rgba(245,197,24,.45);color:#f5c518;vertical-align:middle}
+/* Closing block: the two ways out of an indexed page. Before 2026-08-09
+   there were none — no Discord link on any of the 7,404 pages, and the globe
+   only reachable from the site detail type. */
+.an-ssr .an-cta-block{margin-top:40px;padding:20px 22px;
+  border:1px solid rgba(0,204,102,.22);background:rgba(0,20,25,.45);
+  border-left:2px solid rgba(0,204,102,.45)}
+.an-ssr .an-cta-block h2{margin-top:0;border:none;padding:0}
+.an-ssr .an-cta-block p{margin:0 0 8px}
+.an-ssr .an-cta-block p:last-child{margin-bottom:0}
 """
 
 
@@ -234,6 +244,24 @@ def _story_card(story: dict) -> str:
     )
 
 
+def community_cta_html() -> str:
+    """Closing block on every indexed page: the globe and the Discord.
+
+    Until 2026-08-09 an indexed page offered no way into either. Search
+    traffic arrived on 614 pages and found neither the product nor the
+    community — the two things the pages exist to feed.
+    """
+    return (
+        '<div class="an-cta-block">'
+        "<h2>Keep exploring</h2>"
+        '<p><a class="an-cta" href="/globe.html">Open the interactive 3D globe →</a></p>'
+        f'<p>Questions, finds, corrections? <a href="{DISCORD_INVITE_URL}" '
+        'target="_blank" rel="noopener">Join the Ancient Nerds Discord</a> — '
+        "the people behind these pages are there.</p>"
+        "</div>"
+    )
+
+
 def _breadcrumb_schema(parts: list[tuple[str, str]]) -> str:
     items = ", ".join(
         f'{{"@type": "ListItem", "position": {i}, "name": {_json_str(label)}, "item": "{url}"}}'
@@ -310,7 +338,7 @@ def _site_links_html(story: dict) -> str:
         chips.append(f'<span class="an-chip">📍 {escape(name)}</span>')
     if site_id:
         chips.append(
-            f'<a class="an-chip" href="/globe.html?site={escape(site_id)}">🌍 Show on the globe</a>'
+            f'<a class="an-chip" href="/globe.html?focus={escape(site_id)}">🌍 Show on the globe</a>'
         )
     return f'<h2>Site mentioned</h2><div class="an-links">{"".join(chips)}</div>'
 
@@ -439,6 +467,7 @@ def story_page(story: dict) -> SeoPage:
 {sources_html}
 {related_html}
 <p><a href="/news-archive/">← All stories</a></p>
+{community_cta_html()}
 </div>"""
 
     # The payload rides along in __AN_ROUTE__ so React renders the real page
@@ -620,10 +649,11 @@ def site_detail_page(site: dict, related: dict) -> SeoPage:
 {alt_html}
 {paragraphs}
 <table>{facts}</table>
-<a class="an-cta" href="/globe.html?site={escape(str(site["id"]))}">Show on the interactive globe →</a>
+<a class="an-cta" href="/globe.html?focus={escape(str(site["id"]))}">Show on the interactive globe →</a>
 {news_html}
 {links_html}
 {siblings_html}
+{community_cta_html()}
 </div>"""
 
     return SeoPage("site.html", head, body, _route_json("site", {"id": str(site["id"])}))
@@ -673,6 +703,7 @@ def research_page(paper: dict, body_html: str) -> SeoPage:
 {f"<p><strong>{escape(summary)}</strong></p>" if summary else ""}
 {body_html}
 <p><a href="/research/">← All research papers</a></p>
+{community_cta_html()}
 </div>"""
 
     return SeoPage("research.html", head, body, _route_json("research", {"slug": paper["slug"]}))
@@ -699,6 +730,7 @@ def research_index_page(papers: list[dict]) -> SeoPage:
 <div class="an-meta">{len(papers)} open-access papers &middot; CC BY 4.0</div>
 {AI_NOTICE_HTML}
 {cards}
+{community_cta_html()}
 </div>"""
     return SeoPage("research.html", head, body, _route_json("researchIndex", {}))
 
@@ -724,6 +756,7 @@ def article_index_page(articles: list[dict]) -> SeoPage:
 <div class="an-meta">{len(articles)} issues</div>
 {AI_NOTICE_HTML}
 {cards}
+{community_cta_html()}
 </div>"""
     return SeoPage("articles.html", head, body, _route_json("articleIndex", {}))
 
@@ -763,6 +796,7 @@ def story_archive_page(stories: list[dict], page: int, total_pages: int, total: 
 {AI_NOTICE_HTML}
 {cards}
 {pager}
+{community_cta_html()}
 </div>"""
     return SeoPage(
         "story.html",
@@ -818,6 +852,7 @@ def sites_index_page(countries: list[dict]) -> SeoPage:
 <h1>Archaeological Sites by Country</h1>
 <div class="an-meta">{total:,} curated sites in {len(countries)} countries</div>
 <div class="an-grid">{cards}</div>
+{community_cta_html()}
 </div>"""
     return SeoPage(
         "site.html",
@@ -960,6 +995,7 @@ def country_sites_page(country: str, sites: list[dict]) -> SeoPage:
 <div class="an-meta">{escape(" · ".join(meta_bits))}</div>
 {chip_nav}
 {rows}
+{community_cta_html()}
 </div>"""
     return SeoPage(
         "site.html",
@@ -1029,6 +1065,7 @@ def article_page(article: dict, body_html: str) -> SeoPage:
 {f"<p><strong>{escape(summary)}</strong></p>" if summary else ""}
 {body_html}
 <p><a href="/articles/">← All journals</a></p>
+{community_cta_html()}
 </div>"""
 
     return SeoPage("articles.html", head, body, _route_json("article", {"slug": article["slug"]}))

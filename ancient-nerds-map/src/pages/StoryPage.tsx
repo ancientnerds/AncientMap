@@ -9,7 +9,9 @@
  * visitor sees are built from the same data.
  */
 
+import CommunityCta from '../components/layout/CommunityCta'
 import PageHeader from '../components/layout/PageHeader'
+import { globeUrlForSite } from '../constants/brand'
 import type { StoryRoute } from '../types/anRoute'
 
 import '../styles/story-page.css'
@@ -99,7 +101,7 @@ export default function StoryPage({ story }: Props) {
               {/* The detail page needs a country, the globe only needs the id —
                   bulk-imported sites often lack a country. */}
               {story.siteId && (
-                <a className="story-chip" href={`/globe.html?site=${encodeURIComponent(story.siteId)}`}>
+                <a className="story-chip" href={globeUrlForSite(story.siteId)}>
                   🌍 Show on the globe
                 </a>
               )}
@@ -138,6 +140,8 @@ export default function StoryPage({ story }: Props) {
         <p className="story-back">
           <a href="/news-archive/">← All stories</a>
         </p>
+
+        <CommunityCta />
 
         {/* Disclosure belongs on the page (EU AI Act Art. 50) but not as a
             banner above the story — a quiet footnote does the same job. */}

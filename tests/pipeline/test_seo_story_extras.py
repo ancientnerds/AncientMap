@@ -69,14 +69,14 @@ class TestSources:
 class TestSiteLinks:
     def test_site_links_to_detail_page_and_globe(self):
         body = seo_pages.story_page(_story(site_curated=True)).body
-        assert "/globe.html?site=abc12345-0000-0000-0000-000000000000" in body
+        assert "/globe.html?focus=abc12345-0000-0000-0000-000000000000" in body
         assert "/sites/pakistan/" in body.lower()
 
     def test_site_without_id_stays_plain_text(self):
         """A name the matcher never resolved must not fake a link."""
         body = seo_pages.story_page(_story(site_id="", site_country="")).body
         assert "Mohenjo-daro" in body
-        assert "/globe.html?site=" not in body
+        assert "/globe.html?focus=" not in body
 
     def test_uncurated_site_gets_no_detail_link(self):
         """/sites/{country}/{slug} serves curated sites only.
@@ -87,7 +87,7 @@ class TestSiteLinks:
         body = seo_pages.story_page(_story(site_curated=False)).body
         assert "/sites/pakistan/" not in body.lower()
         assert "Mohenjo-daro" in body  # the name still shows, just not linked
-        assert "/globe.html?site=" in body  # the globe only needs the id
+        assert "/globe.html?focus=" in body  # the globe only needs the id
 
     def test_uncurated_site_is_kept_out_of_the_payload_too(self):
         """The React chip reads sitePath — it must not resurrect the 404."""
@@ -178,12 +178,12 @@ class TestCountrylessSite:
         body = seo_pages.story_page(
             _story(site_country="", site_id="abc12345-0000-0000-0000-000000000000")
         ).body
-        assert "/globe.html?site=abc12345-0000-0000-0000-000000000000" in body
+        assert "/globe.html?focus=abc12345-0000-0000-0000-000000000000" in body
         assert "/sites/" not in body.split('class="an-links"')[1][:400]
 
     def test_no_site_id_means_no_links_at_all(self):
         body = seo_pages.story_page(_story(site_id="", site_country="")).body
-        assert "/globe.html?site=" not in body
+        assert "/globe.html?focus=" not in body
 
 
 class TestRelatedStories:
