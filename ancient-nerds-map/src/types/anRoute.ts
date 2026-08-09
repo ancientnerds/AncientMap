@@ -47,6 +47,7 @@ interface StoryArchiveRoute {
     siteName?: string
     channelName?: string
     speculativeTag?: string
+    screenshotUrl?: string
   }[]
 }
 

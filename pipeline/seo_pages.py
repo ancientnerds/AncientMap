@@ -240,9 +240,19 @@ def _story_card(story: dict) -> str:
     href = f"/news-archive/{encode_path(story['slug'])}"
     summary = blurb(story.get("summary"))
     body = f"<p>{escape(summary)}</p>" if summary else ""
+    # The video frame was stored per story all along and only ever used as an
+    # og:image; the listing rendered 2 images where /news.html rendered 74.
+    shot = story.get("screenshot_url") or ""
+    img = (
+        f'<img class="an-thumb" src="{escape(shot)}" alt="{escape(story["headline"])}"'
+        ' loading="lazy">'
+        if shot
+        else ""
+    )
     return (
-        f'<div class="an-card"><h3><a href="{escape(href)}">{escape(story["headline"])}</a>'
-        f"{badge}</h3>{body}{meta}</div>"
+        f'<div class="an-card an-card-thumbed">{img}<div class="an-card-body">'
+        f'<h3><a href="{escape(href)}">{escape(story["headline"])}</a>'
+        f"{badge}</h3>{body}{meta}</div></div>"
     )
 
 
@@ -841,6 +851,7 @@ def story_archive_page(stories: list[dict], page: int, total_pages: int, total: 
                         "siteName": s.get("site_name") or "",
                         "channelName": s.get("channel_name") or "",
                         "speculativeTag": s.get("speculative_tag") or "",
+                        "screenshotUrl": s.get("screenshot_url") or "",
                     }
                     for s in stories
                 ],

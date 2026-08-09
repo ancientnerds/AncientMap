@@ -167,6 +167,9 @@ async def _render_news_archive_page(page: int, db: Session) -> Response:
             "site_name": item.site.name if item.site else (item.site_name_extracted or ""),
             "channel_name": (item.video.channel.name if item.video and item.video.channel else ""),
             "speculative_tag": item.speculative_tag,
+            # 2,190 of 2,248 stories have one. /news-archive/ showed 2 images,
+            # /news.html showed 74 (audit 2026-08-09).
+            "screenshot_url": item.screenshot_url,
         }
         for item in items
     ]

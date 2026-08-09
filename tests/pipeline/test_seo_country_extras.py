@@ -245,3 +245,26 @@ class TestCommunityCta:
         from pipeline.article_html_renderer import DISCORD_INVITE_URL
 
         assert DISCORD_INVITE_URL in seo_pages.community_cta_html()
+
+
+class TestStoryArchiveThumbnails:
+    """2,190 of 2,248 stories carry a video frame; the listing showed 2 images."""
+
+    def _page(self, **over):
+        story = {"slug": "a-1", "headline": "A story", "summary": "s"}
+        story.update(over)
+        return seo_pages.story_archive_page([story], 1, 1, 1)
+
+    def test_card_shows_the_frame(self):
+        body = self._page(screenshot_url="/data/news/screenshots/x.webp").body
+        assert '<img class="an-thumb" src="/data/news/screenshots/x.webp"' in body
+        assert 'loading="lazy"' in body
+
+    def test_story_without_a_frame_renders_no_img(self):
+        body = self._page().body
+        assert "an-thumb" not in body
+        assert "A story" in body
+
+    def test_the_payload_carries_it_too(self):
+        route = json.loads(self._page(screenshot_url="/data/news/screenshots/x.webp").route)
+        assert route["stories"][0]["screenshotUrl"] == "/data/news/screenshots/x.webp"

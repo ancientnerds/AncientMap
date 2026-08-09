@@ -21,6 +21,7 @@ export interface ArchiveEntry {
   siteName?: string
   channelName?: string
   speculativeTag?: string
+  screenshotUrl?: string
 }
 
 interface Props {
@@ -66,13 +67,29 @@ export default function StoryArchivePage({ page, totalPages, total, stories }: P
               s.channelName && `via ${s.channelName}`,
             ].filter(Boolean)
             return (
-              <a key={s.slug} className="story-archive-card" href={`/news-archive/${s.slug}`}>
-                <h3>
-                  {s.headline}
-                  {s.speculativeTag && <span className="story-badge">{s.speculativeTag}</span>}
-                </h3>
-                {s.summary && <p>{s.summary}</p>}
-                {meta.length > 0 && <div className="story-card-meta">{meta.join(' · ')}</div>}
+              <a
+                key={s.slug}
+                className="story-archive-card site-list-card"
+                href={`/news-archive/${s.slug}`}
+              >
+                {/* The video frame was stored per story all along and only
+                    used as an og:image. 2,190 of 2,248 stories have one. */}
+                {s.screenshotUrl && (
+                  <img
+                    className="site-list-card-thumb"
+                    src={s.screenshotUrl}
+                    alt=""
+                    loading="lazy"
+                  />
+                )}
+                <div className="site-list-card-body">
+                  <h3>
+                    {s.headline}
+                    {s.speculativeTag && <span className="story-badge">{s.speculativeTag}</span>}
+                  </h3>
+                  {s.summary && <p>{s.summary}</p>}
+                  {meta.length > 0 && <div className="story-card-meta">{meta.join(' · ')}</div>}
+                </div>
               </a>
             )
           })}
