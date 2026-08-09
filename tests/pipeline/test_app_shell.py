@@ -25,6 +25,7 @@ SHELL = """<!DOCTYPE html>
     <meta property="og:title" content="placeholder" />
     <meta property="og:image" content="https://ancientnerds.com/landing/og-image.png" />
     <meta name="twitter:card" content="summary_large_image" />
+    <link rel="canonical" href="https://ancientnerds.com/articles.html" />
     <link rel="stylesheet" href="/assets/story-abc123.css" />
   </head>
   <body>
@@ -291,6 +292,24 @@ def test_ssr_fragment_claims_its_own_scrolling():
     """
     assert "overflow-y:auto" in seo_pages.SSR_CSS
     assert ".an-ssr{height:100vh" in seo_pages.SSR_CSS
+
+
+class TestCanonical:
+    """Every indexed document must carry exactly one canonical.
+
+    articles.html and research.html ship their own; until 2026-08-09 the
+    splice left it in place, so /articles/{slug} served two canonicals — the
+    first pointing at /articles.html (verified on prod).
+    """
+
+    def test_only_the_page_canonical_survives(self, shell_dir):
+        html = _render(head='<link rel="canonical" href="https://ancientnerds.com/articles/x">')
+        assert html.count('rel="canonical"') == 1
+        assert "/articles.html" not in html
+
+    def test_the_stylesheet_link_is_untouched(self, shell_dir):
+        """The rule must not eat every <link>."""
+        assert "/assets/story-abc123.css" in _render()
 
 
 class TestNoscriptFallback:

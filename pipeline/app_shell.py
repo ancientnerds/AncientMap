@@ -89,6 +89,11 @@ def _strip_default_head_tags(head: str) -> str:
         head,
         flags=re.IGNORECASE,
     )
+    # The rule above only covered <meta>. articles.html and research.html ship
+    # their own <link rel="canonical">, so every /articles/{slug} served two
+    # canonicals — the shell's pointing at /articles.html, then the real one
+    # (verified on prod 2026-08-09).
+    head = re.sub(r'<link\s+rel="canonical"[^>]*/?>\s*', "", head, flags=re.IGNORECASE)
     return head
 
 
