@@ -17,6 +17,7 @@ import os
 import secrets
 import uuid
 from datetime import UTC, datetime, timedelta
+from typing import TypeGuard
 
 import httpx
 import jwt
@@ -213,7 +214,7 @@ _ALLOWED_RETURN_PATHS = frozenset(
 _ALLOWED_RETURN_PREFIXES = ("/sites/", "/news-archive/", "/research/", "/articles/")
 
 
-def _is_allowed_return(return_to: object) -> bool:
+def _is_allowed_return(return_to: object) -> TypeGuard[str]:
     """Whether return_to is a safe same-origin path to redirect to.
 
     Explicit checks, not a sanitiser: anything not recognised is rejected.
