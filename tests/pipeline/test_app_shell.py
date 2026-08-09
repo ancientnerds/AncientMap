@@ -28,6 +28,12 @@ SHELL = """<!DOCTYPE html>
     <link rel="stylesheet" href="/assets/story-abc123.css" />
   </head>
   <body>
+    <noscript>
+      <div style="min-height: 100vh;">
+        <h1>Archaeological Site Detail - Ancient Nerds</h1>
+        <p>View detailed information about archaeological sites worldwide.</p>
+      </div>
+    </noscript>
     <div id="root"></div>
     <script type="module" src="/assets/story-def456.js"></script>
   </body>
@@ -285,3 +291,28 @@ def test_ssr_fragment_claims_its_own_scrolling():
     """
     assert "overflow-y:auto" in seo_pages.SSR_CSS
     assert ".an-ssr{height:100vh" in seo_pages.SSR_CSS
+
+
+class TestNoscriptFallback:
+    """The shell's no-JS stand-in must not outrank the real content.
+
+    Live on prod until 2026-08-09: every indexed page opened with the
+    shell's boilerplate <h1> ("Archaeological Site Detail - Ancient
+    Nerds"), and its min-height:100vh wrapper pushed the server-rendered
+    content a full viewport below the fold without JavaScript.
+    """
+
+    def test_placeholder_h1_is_gone(self, shell_dir):
+        html = _render(root="<h1>Archaeological Sites in England</h1>")
+        assert "Archaeological Site Detail - Ancient Nerds" not in html
+        assert re.findall(r"<h1[^>]*>(.*?)</h1>", html) == ["Archaeological Sites in England"]
+
+    def test_noscript_block_is_removed_entirely(self, shell_dir):
+        html = _render()
+        assert "<noscript>" not in html
+        assert "min-height: 100vh" not in html
+
+    def test_real_content_and_assets_survive(self, shell_dir):
+        html = _render(root="<p>content</p>")
+        assert '<div id="root"><p>content</p></div>' in html
+        assert "/assets/story-def456.js" in html

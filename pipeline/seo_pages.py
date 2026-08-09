@@ -19,11 +19,13 @@ from pipeline.article_html_renderer import (
     AI_NOTICE_HTML,
     BASE_URL,
     _json_str,
+    slugify,
     story_slug,
 )
 from pipeline.sites_html_renderer import (
     _coord_display,
     _period_display,
+    _year_display,
     country_path,
     encode_path,
     site_path,
@@ -75,6 +77,14 @@ SSR_CSS = """
 .an-ssr .an-card h3{margin:0 0 4px;font-size:1.1em}
 .an-ssr .an-card-meta{color:#708890;font-size:12px;margin-top:6px;
   text-transform:uppercase;letter-spacing:.06em}
+/* Country listings show the hero the image downloader already stored per
+   site (800px webp, ~95 KB) — lazily, so only the cards in view load. */
+.an-ssr .an-card-thumbed{display:flex;gap:16px;align-items:flex-start}
+.an-ssr .an-card-body{flex:1;min-width:0}
+.an-ssr .an-card-thumbed p{margin:0}
+.an-ssr .an-thumb{width:120px;height:90px;object-fit:cover;border-radius:6px;
+  border:1px solid rgba(0,204,102,.18);flex:0 0 auto}
+.an-ssr .an-chip-n{color:#708890;font-size:.85em;margin-left:4px}
 .an-ssr .an-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}
 /* Site links: the one place that leads back into the globe. */
 .an-ssr .an-links{display:flex;flex-wrap:wrap;gap:10px;margin:8px 0 24px}
@@ -173,14 +183,28 @@ def _crumbs(*parts: tuple[str, str | None]) -> str:
     )
 
 
-def _link_card(href: str, title: str, blurb: str | None = None) -> str:
+CARD_BLURB_CHARS = 180
+SOURCE_SNIPPET_CHARS = 200
+
+
+def blurb(text: str | None, limit: int = CARD_BLURB_CHARS) -> str:
+    """Collapse whitespace and cut on a word boundary with an ellipsis.
+
+    One definition for every listing card and for the __AN_ROUTE__ payloads:
+    a hard text[:limit] slice in the payload left the interactive cards
+    reading "the city measured ap" while the crawler fragment ended cleanly.
+    """
+    if not text:
+        return ""
+    collapsed = " ".join(text.split())
+    if len(collapsed) <= limit:
+        return collapsed
+    return collapsed[:limit].rsplit(" ", 1)[0] + "…"
+
+
+def _link_card(href: str, title: str, text: str | None = None) -> str:
     """A linked listing card with an optional truncated blurb."""
-    body = ""
-    if blurb:
-        text = " ".join(blurb.split())
-        if len(text) > 180:
-            text = text[:180].rsplit(" ", 1)[0] + "…"
-        body = f"<p>{escape(text)}</p>"
+    body = f"<p>{escape(blurb(text))}</p>" if text else ""
     return f'<div class="an-card"><h3><a href="{escape(href)}">{escape(title)}</a></h3>{body}</div>'
 
 
@@ -202,15 +226,11 @@ def _story_card(story: dict) -> str:
         else ""
     )
     href = f"/news-archive/{encode_path(story['slug'])}"
-    blurb = ""
-    if story.get("summary"):
-        text = " ".join(story["summary"].split())
-        if len(text) > 180:
-            text = text[:180].rsplit(" ", 1)[0] + "…"
-        blurb = f"<p>{escape(text)}</p>"
+    summary = blurb(story.get("summary"))
+    body = f"<p>{escape(summary)}</p>" if summary else ""
     return (
         f'<div class="an-card"><h3><a href="{escape(href)}">{escape(story["headline"])}</a>'
-        f"{badge}</h3>{blurb}{meta}</div>"
+        f"{badge}</h3>{body}{meta}</div>"
     )
 
 
@@ -254,9 +274,7 @@ def _sources_html(sources: list | None) -> str:
         if not url.startswith(("http://", "https://")):
             continue
         title = (src.get("title") or _host_of(url)).strip()
-        snippet = " ".join((src.get("snippet") or "").split())
-        if len(snippet) > 200:
-            snippet = snippet[:200].rsplit(" ", 1)[0] + "…"
+        snippet = blurb(src.get("snippet"), SOURCE_SNIPPET_CHARS)
         rows.append(
             '<div class="an-src">'
             f'<div class="an-src-title"><a href="{escape(url)}" target="_blank" '
@@ -454,7 +472,7 @@ def story_page(story: dict) -> SeoPage:
                 "url": s.get("url", ""),
                 "title": (s.get("title") or _host_of(s.get("url", ""))),
                 "host": _host_of(s.get("url", "")),
-                "snippet": " ".join((s.get("snippet") or "").split())[:200],
+                "snippet": blurb(s.get("snippet"), SOURCE_SNIPPET_CHARS),
             }
             for s in (story.get("web_sources") or [])[:8]
             if isinstance(s, dict) and (s.get("url") or "").startswith(("http://", "https://"))
@@ -757,7 +775,9 @@ def story_archive_page(stories: list[dict], page: int, total_pages: int, total: 
                     {
                         "slug": s["slug"],
                         "headline": s["headline"],
-                        "summary": (s.get("summary") or "")[:300],
+                        # Same cut as _story_card, so the interactive listing
+                        # is not the one that ends mid-word.
+                        "summary": blurb(s.get("summary")),
                         # Same context the crawler cards show, so the
                         # interactive listing is not the poorer view.
                         "publishedDisplay": _date_parts(s.get("published_at"))[1],
@@ -812,33 +832,130 @@ def sites_index_page(countries: list[dict]) -> SeoPage:
     )
 
 
+# Type sections per country page; the long tail lands in "Other sites".
+# England alone carries 30+ types, most with one or two sites — a section
+# each would bury the list under its own table of contents.
+MAX_TYPE_SECTIONS = 12
+OTHER_TYPES_LABEL = "Other sites"
+
+
+def _site_card(site: dict) -> str:
+    """Listing card with the hero, type and period the query already loaded.
+
+    Until 2026-08-09 a country page rendered name + blurb only, so 218
+    Türkiye sites read as one undifferentiated wall — while site_type,
+    period_name and the local hero webp all sat unused in the same row.
+    """
+    thumb = site.get("thumbnail_url") or ""
+    img = (
+        f'<img class="an-thumb" src="{escape(thumb)}" alt="{escape(site["name"])}" loading="lazy">'
+        if thumb
+        else ""
+    )
+    bits = [b for b in (site.get("site_type"), site.get("period_name")) if b]
+    meta = f'<div class="an-card-meta">{escape(" · ".join(bits))}</div>' if bits else ""
+    summary = blurb(site.get("description"))
+    body = f"<p>{escape(summary)}</p>" if summary else ""
+    return (
+        f'<div class="an-card an-card-thumbed">{img}<div class="an-card-body">'
+        f'<h3><a href="{escape(site["path"])}">{escape(site["name"])}</a></h3>'
+        f"{body}{meta}</div></div>"
+    )
+
+
+def type_sections(sites: list[dict]) -> list[tuple[str, list[dict]]]:
+    """Group a country's sites by type, largest first, tail merged into one.
+
+    Returns [(type label, sites)]. Shared by the crawler fragment and the
+    __AN_ROUTE__ payload so the interactive page groups identically.
+    """
+    by_type: dict[str, list[dict]] = {}
+    for site in sites:
+        by_type.setdefault(site.get("site_type") or OTHER_TYPES_LABEL, []).append(site)
+
+    ranked = sorted(by_type.items(), key=lambda kv: (-len(kv[1]), kv[0]))
+    kept_labels = {label for label, _ in ranked[:MAX_TYPE_SECTIONS] if label != OTHER_TYPES_LABEL}
+    sections = [(label, group) for label, group in ranked if label in kept_labels]
+    tail = [site for label, group in ranked if label not in kept_labels for site in group]
+    if tail:
+        sections.append((OTHER_TYPES_LABEL, sorted(tail, key=lambda s: s["name"])))
+    return sections
+
+
+def _period_span(sites: list[dict]) -> str:
+    """Earliest to latest start year on the page, e.g. "9000 BC – 1964 AD".
+
+    Built from period_start rather than the period_name buckets: the bucket
+    labels are ranges themselves, so chaining two of them ("< 4500 BC – 500
+    BC - 1 AD") reads as noise.
+    """
+    years = [s["period_start"] for s in sites if s.get("period_start") is not None]
+    if not years:
+        return ""
+    first, last = _year_display(min(years)), _year_display(max(years))
+    return first if first == last else f"{first} – {last}"
+
+
 def country_sites_page(country: str, sites: list[dict]) -> SeoPage:
-    """All curated sites of one country."""
+    """All curated sites of one country, grouped by type."""
     canonical = f"{BASE_URL}{encode_path(country_path(country))}"
-    rows = "\n".join(_link_card(s["path"], s["name"], s.get("description")) for s in sites)
+    sections = type_sections(sites)
+
+    chips = "".join(
+        f'<a class="an-chip" href="#{escape(slugify(label))}">{escape(label)} '
+        f'<span class="an-chip-n">{len(group)}</span></a>'
+        for label, group in sections
+    )
+    chip_nav = f'<div class="an-links">{chips}</div>' if len(sections) > 1 else ""
+
+    rows = "\n".join(
+        f'<h2 id="{escape(slugify(label))}">{escape(label)} in {escape(country)} '
+        f"({len(group)})</h2>" + "".join(_site_card(s) for s in group)
+        for label, group in sections
+    )
+
+    # Cards are emitted grouped, so the schema must follow the same order to
+    # describe the page that is actually served.
+    ordered = [site for _, group in sections for site in group]
     items = ", ".join(
         f'{{"@type": "ListItem", "position": {i}, "name": {_json_str(s["name"])}, '
         f'"url": "{BASE_URL}{encode_path(s["path"])}"}}'
-        for i, s in enumerate(sites[:50], start=1)
+        for i, s in enumerate(ordered[:50], start=1)
     )
     schema = (
         '{"@context": "https://schema.org", "@type": "ItemList", '
         f'"name": {_json_str(f"Archaeological Sites in {country}")}, '
         f'"numberOfItems": {len(sites)}, "itemListElement": [{items}]}}'
     )
+
+    # Name the types this country actually has instead of the same
+    # "settlements, temples, tombs" boilerplate on all 100+ country pages.
+    named_types = ", ".join(label.lower() for label, _ in sections[:3])
+    span = _period_span(sites)
+    description = (
+        f"{len(sites)} curated archaeological sites in {country}"
+        + (f" — {named_types} and more" if named_types else "")
+        + (f". Spanning {span}" if span else "")
+        + ". Each with location, historical context and sources."
+    )
+
+    hero = next((s["thumbnail_url"] for s in ordered if s.get("thumbnail_url")), None)
     head = _meta_head(
         title=f"Archaeological Sites in {country} ({len(sites)})",
-        description=(
-            f"{len(sites)} curated archaeological sites in {country}: settlements, temples, "
-            "tombs and more — each with location, historical context and sources."
-        ),
+        description=description,
         canonical=canonical,
+        image=f"{BASE_URL}{hero}" if hero else None,
         schema=schema,
     )
+
+    meta_bits = [f"{len(sites)} curated sites"]
+    if span:
+        meta_bits.append(span)
     body = f"""<div class="an-ssr">
 <nav class="an-crumb">{_crumbs(("Home", "/"), ("Sites", "/sites/"), (country, None))}</nav>
 <h1>Archaeological Sites in {escape(country)}</h1>
-<div class="an-meta">{len(sites)} curated sites</div>
+<div class="an-meta">{escape(" · ".join(meta_bits))}</div>
+{chip_nav}
 {rows}
 </div>"""
     return SeoPage(
@@ -849,13 +966,28 @@ def country_sites_page(country: str, sites: list[dict]) -> SeoPage:
             "country",
             {
                 "country": country,
-                "sites": [
+                "periodSpan": span,
+                "total": len(sites),
+                # Sections, not a flat list: the interactive view then groups
+                # exactly as the crawler fragment does instead of
+                # reimplementing type_sections() in TypeScript.
+                "sections": [
                     {
-                        "name": x["name"],
-                        "path": x["path"],
-                        "summary": (x.get("description") or "")[:200],
+                        "label": label,
+                        "anchor": slugify(label),
+                        "sites": [
+                            {
+                                "name": x["name"],
+                                "path": x["path"],
+                                "summary": blurb(x.get("description")),
+                                "siteType": x.get("site_type") or "",
+                                "period": x.get("period_name") or "",
+                                "thumb": x.get("thumbnail_url") or "",
+                            }
+                            for x in group
+                        ],
                     }
-                    for x in sites
+                    for label, group in sections
                 ],
             },
         ),

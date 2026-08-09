@@ -92,6 +92,25 @@ def _strip_default_head_tags(head: str) -> str:
     return head
 
 
+def _strip_noscript_fallback(body: str) -> str:
+    """
+    Drop the shell's <noscript> stand-in once real content is injected.
+
+    Each entry ships a generic no-JS block — its own <h1>
+    ("Archaeological Site Detail - Ancient Nerds") and a min-height:100vh
+    wrapper — that sits *before* #root. Served as-is it gave every indexed
+    page a boilerplate first <h1> ahead of the real one and pushed the
+    server-rendered content a full viewport down for anything that does
+    not run JavaScript (verified on prod for /sites/england, 2026-08-09).
+
+    The injected fragment is a strictly better no-JS fallback, so the
+    placeholder has nothing left to do.
+    """
+    import re
+
+    return re.sub(r"<noscript>.*?</noscript>\s*", "", body, flags=re.DOTALL | re.IGNORECASE)
+
+
 def render_app_shell(
     entry: str,
     *,
@@ -117,6 +136,7 @@ def render_app_shell(
         raise ShellUnavailableError(f"{entry} has no </head> — not a usable app shell")
     head, rest = html[:head_end], html[head_end:]
     head = _strip_default_head_tags(head)
+    rest = _strip_noscript_fallback(rest)
 
     route_script = f"<script>window.__AN_ROUTE__={route};</script>"
     html = f"{head}{head_html}\n{route_script}\n{rest}"

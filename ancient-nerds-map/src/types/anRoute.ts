@@ -55,7 +55,24 @@ export type AnRoute =
   | StoryArchiveRoute
   | { type: 'site'; id: string }
   | { type: 'sitesIndex'; countries: { name: string; count: number; path: string }[] }
-  | { type: 'country'; country: string; sites: { name: string; path: string; summary: string }[] }
+  | {
+      type: 'country'
+      country: string
+      periodSpan: string
+      total: number
+      sections: {
+        label: string
+        anchor: string
+        sites: {
+          name: string
+          path: string
+          summary: string
+          siteType: string
+          period: string
+          thumb: string
+        }[]
+      }[]
+    }
   | { type: 'research'; slug: string }
   | { type: 'researchIndex' }
   | { type: 'article'; slug: string }

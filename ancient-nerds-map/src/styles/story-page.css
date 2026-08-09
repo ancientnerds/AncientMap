@@ -207,6 +207,64 @@
 .site-country-card:hover { border-color: var(--primary-red, #c02023); }
 .site-country-count { color: #708890; font-size: 13px; }
 
+/* ── Country listing (/sites/{country}) ────────────────────────────────── */
+
+/* Type chips: anchor jumps for crawlers, live filters once React mounts. */
+.site-type-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 20px 0 8px;
+}
+.site-type-chip {
+  border: 1px solid rgba(0, 204, 102, 0.35);
+  background: transparent;
+  color: #00cc66;
+  border-radius: 999px;
+  padding: 6px 14px;
+  font: inherit;
+  font-size: 0.9em;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.site-type-chip:hover { background: rgba(0, 204, 102, 0.1); }
+.site-type-chip.is-active {
+  background: rgba(0, 204, 102, 0.18);
+  border-color: rgba(0, 204, 102, 0.7);
+}
+.site-type-count { color: #708890; font-size: 0.85em; margin-left: 4px; }
+
+.site-section-title {
+  font-family: 'Cormorant Garamond', Georgia, serif;
+  color: #fff;
+  font-size: 1.5em;
+  margin: 32px 0 10px;
+  border-bottom: 1px solid rgba(0, 204, 102, 0.22);
+  padding-bottom: 6px;
+}
+
+.site-card { display: flex; gap: 16px; align-items: flex-start; }
+.site-card-body { flex: 1; min-width: 0; }
+.site-card-thumb {
+  width: 120px;
+  height: 90px;
+  object-fit: cover;
+  border-radius: 6px;
+  border: 1px solid rgba(0, 204, 102, 0.18);
+  flex: 0 0 auto;
+}
+.site-card-meta {
+  color: #708890;
+  font-size: 12px;
+  margin-top: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+@media (max-width: 600px) {
+  .site-card-thumb { width: 84px; height: 64px; }
+}
+
 /* ── Story extras (2026-08-08): the data was in the DB all along ───────── */
 
 /* Speculative label from the pipeline — shown, not hidden. */

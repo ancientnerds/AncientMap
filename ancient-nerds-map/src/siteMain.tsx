@@ -12,7 +12,14 @@ const route = anRoute()
 function Entry() {
   if (route?.type === 'sitesIndex') return <SitesIndexPage countries={route.countries} />
   if (route?.type === 'country') {
-    return <CountrySitesPage country={route.country} sites={route.sites} />
+    return (
+      <CountrySitesPage
+        country={route.country}
+        sections={route.sections}
+        periodSpan={route.periodSpan}
+        total={route.total}
+      />
+    )
   }
   // 'site', or the legacy /site.html?id= entry point
   return <SitePage />

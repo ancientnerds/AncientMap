@@ -80,7 +80,8 @@ async def sites_by_country(slug: str, db: Session = Depends(get_db)):
 
     site_rows = db.execute(
         text(f"""
-            SELECT id::text AS id, name, site_type, period_name, description
+            SELECT id::text AS id, name, site_type, period_name, period_start,
+                   description, thumbnail_url
             FROM unified_sites
             WHERE {_CURATED_WHERE} AND country = :country
             ORDER BY name
@@ -93,6 +94,14 @@ async def sites_by_country(slug: str, db: Session = Depends(get_db)):
             "name": row.name,
             "description": row.description,
             "path": site_path(country, row.name, row.id),
+            # Type, period and hero were selected here since the page was
+            # written and dropped before rendering, so every card looked the
+            # same. thumbnail_url is the local hero webp the image downloader
+            # already writes per site — no join needed.
+            "site_type": row.site_type,
+            "period_name": row.period_name,
+            "period_start": row.period_start,
+            "thumbnail_url": row.thumbnail_url,
         }
         for row in site_rows
     ]

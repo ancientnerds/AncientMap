@@ -6,6 +6,8 @@
  * window.__AN_ROUTE__, so there is no fetch on mount.
  */
 
+import { useState } from 'react'
+
 import PageHeader from '../components/layout/PageHeader'
 
 import '../styles/story-page.css'
@@ -20,6 +22,15 @@ export interface SiteEntry {
   name: string
   path: string
   summary: string
+  siteType: string
+  period: string
+  thumb: string
+}
+
+export interface TypeSection {
+  label: string
+  anchor: string
+  sites: SiteEntry[]
 }
 
 export function SitesIndexPage({ countries }: { countries: CountryEntry[] }) {
@@ -51,7 +62,36 @@ export function SitesIndexPage({ countries }: { countries: CountryEntry[] }) {
   )
 }
 
-export function CountrySitesPage({ country, sites }: { country: string; sites: SiteEntry[] }) {
+function SiteCard({ site }: { site: SiteEntry }) {
+  const meta = [site.siteType, site.period].filter(Boolean).join(' · ')
+  return (
+    <a className="story-archive-card site-card" href={site.path}>
+      {site.thumb && <img className="site-card-thumb" src={site.thumb} alt={site.name} loading="lazy" />}
+      <div className="site-card-body">
+        <h3>{site.name}</h3>
+        {site.summary && <p>{site.summary}</p>}
+        {meta && <div className="site-card-meta">{meta}</div>}
+      </div>
+    </a>
+  )
+}
+
+export function CountrySitesPage({
+  country,
+  sections,
+  periodSpan,
+  total,
+}: {
+  country: string
+  sections: TypeSection[]
+  periodSpan: string
+  total: number
+}) {
+  // The crawler fragment can only offer anchor jumps; with JS the same chips
+  // narrow the list instead of scrolling to it.
+  const [activeType, setActiveType] = useState<string | null>(null)
+  const shown = activeType ? sections.filter(s => s.label === activeType) : sections
+
   return (
     <div className="story-page">
       <PageHeader currentPage="search">
@@ -62,15 +102,42 @@ export function CountrySitesPage({ country, sites }: { country: string; sites: S
           <a href="/">Home</a> / <a href="/sites/">Sites</a> / {country}
         </nav>
         <h1 className="story-title">Archaeological Sites in {country}</h1>
-        <div className="story-meta">{sites.length} curated sites</div>
-        <div className="story-archive-list">
-          {sites.map(s => (
-            <a key={s.path} className="story-archive-card" href={s.path}>
-              <h3>{s.name}</h3>
-              {s.summary && <p>{s.summary}</p>}
-            </a>
-          ))}
+        <div className="story-meta">
+          {total} curated sites{periodSpan && ` · ${periodSpan}`}
         </div>
+        {sections.length > 1 && (
+          <div className="site-type-chips">
+            <button
+              type="button"
+              className={`site-type-chip${activeType === null ? ' is-active' : ''}`}
+              onClick={() => setActiveType(null)}
+            >
+              All <span className="site-type-count">{total}</span>
+            </button>
+            {sections.map(s => (
+              <button
+                key={s.anchor}
+                type="button"
+                className={`site-type-chip${activeType === s.label ? ' is-active' : ''}`}
+                onClick={() => setActiveType(activeType === s.label ? null : s.label)}
+              >
+                {s.label} <span className="site-type-count">{s.sites.length}</span>
+              </button>
+            ))}
+          </div>
+        )}
+        {shown.map(section => (
+          <section key={section.anchor}>
+            <h2 className="site-section-title" id={section.anchor}>
+              {section.label} in {country} ({section.sites.length})
+            </h2>
+            <div className="story-archive-list">
+              {section.sites.map(s => (
+                <SiteCard key={s.path} site={s} />
+              ))}
+            </div>
+          </section>
+        ))}
       </main>
     </div>
   )
