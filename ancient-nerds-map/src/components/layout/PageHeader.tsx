@@ -49,7 +49,7 @@ export default function PageHeader({ children, rightSection, speechBubble, onAva
         {children}
         {!hideLyra && (
           <img
-            src="/lyra.png"
+            src="/lyra.webp"
             alt="Lyra Whiskerbyte"
             className="page-header-avatar lyra-avatar-clickable"
             onClick={onAvatarClick}

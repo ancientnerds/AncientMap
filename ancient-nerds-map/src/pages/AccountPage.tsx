@@ -802,7 +802,7 @@ export default function AccountPage() {
 
         {!isLoggedIn ? (
           <div className="account-signin-container">
-            <img src="/lyra.png" alt="Lyra" className="account-lyra-avatar" />
+            <img src="/lyra.webp" alt="Lyra" className="account-lyra-avatar" />
             <h2 className="account-signin-title">Sign in to Ancient Nerds</h2>
             <p className="account-signin-desc">
               Connect your Discord account to access Lyra and track your credits.

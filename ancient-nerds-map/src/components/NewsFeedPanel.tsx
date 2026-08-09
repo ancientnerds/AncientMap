@@ -127,7 +127,7 @@ export default function NewsFeedPanel({ onClose, onSiteHover, onSiteClick, onAsk
       {/* Lyra intro */}
       <div className="news-feed-lyra">
         <img
-          src="/lyra.png"
+          src="/lyra.webp"
           alt="Lyra"
           className="news-feed-lyra-avatar lyra-avatar-clickable"
           onClick={() => setShowLyraProfile(true)}

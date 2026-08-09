@@ -196,8 +196,42 @@ _ALLOWED_RETURN_PATHS = frozenset(
         "/index.html",
         "/theo.html",
         "/cards.html",
+        "/globe.html",
+        "/search.html",
+        "/library.html",
+        "/knowledge.html",
+        "/sites/",
+        "/news-archive/",
+        "/research/",
+        "/articles/",
     }
 )
+
+# The indexed pages live under generated paths (/sites/{country}/{slug},
+# /news-archive/{slug}, …), so an exact allowlist cannot cover them. Five of
+# six tested paths bounced the Discord returner to /account.html.
+_ALLOWED_RETURN_PREFIXES = ("/sites/", "/news-archive/", "/research/", "/articles/")
+
+
+def _is_allowed_return(return_to: object) -> bool:
+    """Whether return_to is a safe same-origin path to redirect to.
+
+    Explicit checks, not a sanitiser: anything not recognised is rejected.
+    "//evil.com" and "/\\evil.com" are protocol-relative URLs that browsers
+    resolve to a different origin, and CR/LF would split the Location header.
+    """
+    if not isinstance(return_to, str) or not return_to:
+        return False
+    if return_to in _ALLOWED_RETURN_PATHS:
+        return True
+    if not return_to.startswith("/") or return_to.startswith("//"):
+        return False
+    if "\\" in return_to or any(c in return_to for c in "\r\n\t"):
+        return False
+    lowered = return_to.lower()
+    if "%0d" in lowered or "%0a" in lowered:
+        return False
+    return return_to.startswith(_ALLOWED_RETURN_PREFIXES)
 
 
 def _create_oauth_state(return_to: str, nonce: str) -> str:
@@ -245,7 +279,7 @@ def _consume_oauth_state(state: str, nonce_cookie: str | None) -> str | None:
     if not hmac.compare_digest(nonce_hash, hashlib.sha256(nonce_cookie.encode()).hexdigest()):
         return None
     return_to = payload.get("rt")
-    if not isinstance(return_to, str) or return_to not in _ALLOWED_RETURN_PATHS:
+    if not _is_allowed_return(return_to):
         return None
     return return_to
 
@@ -439,7 +473,7 @@ async def discord_oauth_redirect(req: Request, return_to: str | None = None):
         raise HTTPException(status_code=429, detail="Too many login attempts. Try again later.")
 
     # Allowlist return_to to prevent open redirect
-    if not return_to or return_to not in _ALLOWED_RETURN_PATHS:
+    if not _is_allowed_return(return_to):
         return_to = "/account.html"
 
     nonce = secrets.token_urlsafe(32)

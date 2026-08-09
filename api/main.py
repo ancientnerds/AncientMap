@@ -8,6 +8,7 @@ Updated: BitNet LLM optimized for faster responses
 """
 
 import logging
+import mimetypes
 import os
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s | %(name)s | %(message)s")
@@ -706,6 +707,11 @@ app.include_router(interactions.router, prefix="/api/interactions", tags=["inter
 app.include_router(library.router, prefix="/api/library", tags=["library"])
 app.include_router(cardgame_router, prefix="/api/cards", tags=["cards"])
 app.include_router(theo.router, prefix="/api/theo", tags=["theo"])
+
+# Python's mimetypes table has no webp entry on this base image, so StaticFiles
+# labelled every hero as application/octet-stream. Verified in the container:
+# mimetypes.guess_type("a.webp") -> (None, None). Must run before the mounts.
+mimetypes.add_type("image/webp", ".webp")
 
 # Serve wiki images as static files
 _wiki_images_dir = Path("public/data/images/wiki")

@@ -301,7 +301,7 @@ export function HeroHeader({
             onMouseDown={(e) => e.stopPropagation()}
             title="Ask Lyra about this site"
           >
-            <img src="/lyra.png" alt="Lyra" />
+            <img src="/lyra.webp" alt="Lyra" />
             <span className="hero-ask-lyra-label">Ask Lyra</span>
           </button>
         )}
