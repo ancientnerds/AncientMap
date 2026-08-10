@@ -34,6 +34,25 @@ server {
         application/manifest+json
         image/svg+xml;
 
+    # A deploy runs `docker compose up -d --build api`, which leaves the
+    # upstream unreachable for about 110 seconds. nginx answered 502 during
+    # that window — 509 of them since 27.07., 138 to Googlebot. But 502 means
+    # "the gateway is broken", and repeated 502s make Google reduce its crawl
+    # rate. A restart is not a broken gateway: 503 with Retry-After is the
+    # accurate answer, and Google honours it instead of backing off.
+    #
+    # This corrects the status code. It does NOT remove the downtime — that
+    # needs a second API container to restart against (see the audit report).
+    # Measured 2026-08-10: three deploys, windows of 110s, 87s and 110s.
+    error_page 502 504 = @upstream_restarting;
+
+    location @upstream_restarting {
+        add_header Retry-After 120 always;
+        add_header Cache-Control "no-store" always;
+        default_type text/plain;
+        return 503 "Service restarting. Please retry in a couple of minutes.\n";
+    }
+
     # Force service worker to always revalidate
     location = /sw.js {
         add_header Cache-Control "no-cache, no-store, must-revalidate";
