@@ -117,6 +117,9 @@ services:
       # without this the API would run a second poll loop and both would
       # race for the same queued rows.
       THEO_WORKER_EXTERNAL: "1"
+      # Hard dependency, no fallback renderer: api/ssr_client.py posts the
+      # route payloads here and answers 502 if the sidecar is down.
+      SSR_SERVICE_URL: http://ssr:8500
     volumes:
       - ./public/data:/app/public/data
       - ./logs:/app/logs:ro
@@ -134,6 +137,8 @@ services:
         condition: service_healthy
       qdrant:
         condition: service_healthy
+      ssr:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/"]
       interval: 30s
@@ -149,6 +154,32 @@ services:
     container_name: ancient_nerds_api2
     ports:
       - "127.0.0.1:8001:8000"
+
+  # ==========================================================================
+  # SSR Sidecar — renders the indexed React pages (renderToString).
+  #
+  # Only caller is the API (via the compose network, http://ssr:8500), so
+  # nginx never talks to it directly. The localhost port is published anyway
+  # so a curl on the VPS can diagnose it, matching the other services.
+  # ==========================================================================
+  ssr:
+    build:
+      context: .
+      dockerfile: Dockerfile.ssr
+    container_name: ancient_nerds_ssr
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    ports:
+      - "127.0.0.1:8500:8500"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:8500/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
 
   # ==========================================================================
   # Theo Research Worker — same image as the API, different entrypoint.

@@ -1,0 +1,24 @@
+FROM node:20-slim
+
+WORKDIR /app
+
+# Prod-Dependencies reichen: der SSR-Build externalisiert react, react-dom
+# und die Seiten-Libraries — dist-ssr/entry-server.js importiert sie zur
+# Laufzeit aus node_modules.
+COPY ancient-nerds-map/package.json ancient-nerds-map/package-lock.json ./
+RUN npm ci --omit=dev
+
+# dist-ssr entsteht VOR dem Image-Build via `npm run build:ssr` (Deploy-Flow).
+COPY ancient-nerds-map/dist-ssr ./dist-ssr
+COPY ancient-nerds-map/ssr ./ssr
+
+RUN groupadd --gid 1000 appgroup && \
+    useradd --uid 1000 --gid appgroup --shell /bin/bash --create-home appuser
+USER appuser
+
+EXPOSE 8500
+
+HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
+    CMD node -e "fetch('http://localhost:8500/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+
+CMD ["node", "ssr/server.mjs"]
