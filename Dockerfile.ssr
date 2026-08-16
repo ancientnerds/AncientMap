@@ -14,9 +14,9 @@ COPY ancient-nerds-map/ssr ./ssr
 # dist-ssr entsteht VOR dem Image-Build via `npm run build:ssr` (Deploy-Flow).
 COPY ancient-nerds-map/dist-ssr ./dist-ssr
 
-RUN groupadd --gid 1000 appgroup && \
-    useradd --uid 1000 --gid appgroup --shell /bin/bash --create-home appuser
-USER appuser
+# node:20-slim ships a 'node' user at uid/gid 1000 — creating our own
+# collided on the GID and failed the image build (deploy 2026-08-16).
+USER node
 
 # Ohne das rendert react-dom/server mit dem Development-Build (langsam,
 # Dev-Warnungen im Log).
