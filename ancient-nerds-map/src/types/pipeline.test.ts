@@ -85,8 +85,9 @@ describe('PIPELINE_STAGES', () => {
 // ── TOOL_REGISTRY ──
 
 describe('TOOL_REGISTRY', () => {
-  it('has 11 tools', () => {
-    expect(TOOL_REGISTRY).toHaveLength(11)
+  it('has 12 tools', () => {
+    // 6 PostgreSQL + 4 Qdrant + 1 Seshat + 1 Anthropic (web_search)
+    expect(TOOL_REGISTRY).toHaveLength(12)
   })
 
   it('has correct backend assignments', () => {

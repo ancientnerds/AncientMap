@@ -9,6 +9,8 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "type-check": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "video:record": "tsx video/record.ts",
     "video:encode": "tsx video/utils/encode.ts",
     "video:all": "npm run video:record && npm run video:encode"

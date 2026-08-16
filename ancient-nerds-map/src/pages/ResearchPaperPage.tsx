@@ -14,7 +14,7 @@ import TheoPaperBody from '../components/theo/TheoPaperBody'
 import ImageLightbox, { type LightboxImage } from '../components/ImageLightbox'
 import { useIsFounder } from '../hooks/useIsFounder'
 import { inferSourceType } from '../utils/sourceType'
-import { anRoute } from '../types/anRoute'
+import { useRoute } from '../seo/RouteContext'
 import '../styles/theo.css'
 
 interface HeroImage {
@@ -210,12 +210,11 @@ export default function ResearchPaperPage() {
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const progressRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
-  const slug = useMemo(() => {
-    // /research/{slug} is canonical; ?slug= is the legacy entry form.
-    const route = anRoute()
-    if (route?.type === 'research') return route.slug
-    return new URLSearchParams(window.location.search).get('slug') || ''
-  }, [])
+  // /research.html?slug= antwortet seit 2026-08-07 mit 301 auf /research/{slug}.
+  // Der Legacy-Zweig war damit unerreichbar — und las window.location während
+  // des Renderns, was serverseitiges Rendern unmöglich machte.
+  const route = useRoute()
+  const slug = route?.type === 'research' ? route.slug : ''
 
   useEffect(() => {
     if (!slug) {
