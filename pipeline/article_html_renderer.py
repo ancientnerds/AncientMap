@@ -160,12 +160,6 @@ _SHARED_CSS = """
 """
 
 
-def _first_image_url(content_md: str) -> str | None:
-    """Extract the first markdown image URL from article content."""
-    m = re.search(r"!\[.*?\]\((\S+?)\)", content_md)
-    return m.group(1) if m else None
-
-
 def markdown_to_html(content_md: str, *, toc: bool = True) -> str:
     """
     Markdown -> sanitized HTML with external links opened in a new tab.
@@ -213,29 +207,6 @@ def _nav_html() -> str:
         <a href="/sites/">Sites</a>
         <a href="/radar.html">Radar</a>
     </nav>"""
-
-
-def founder_medium_script(medium_path: str) -> str:
-    """
-    JS that injects the "Copy for Medium" link into #mediumSlot — a
-    founders-only editorial tool, shown only when /api/auth/me reports
-    is_founder for the logged-in user.
-    """
-    return f"""
-    <script>
-    (function() {{
-        var token = localStorage.getItem("an_auth_token");
-        if (!token) return;
-        fetch("/api/auth/me", {{ headers: {{ "Authorization": "Bearer " + token }} }})
-            .then(function(r) {{ return r.ok ? r.json() : null; }})
-            .then(function(user) {{
-                if (user && user.is_founder) {{
-                    document.getElementById("mediumSlot").innerHTML =
-                        ' &middot; <a href="{medium_path}" style="color:#c02023">Copy for Medium</a>';
-                }}
-            }});
-    }})();
-    </script>"""
 
 
 def _footer_html() -> str:
@@ -387,15 +358,3 @@ def render_404_html(what: str = "Page") -> str:
     {_footer_html()}
 </body>
 </html>"""
-
-
-def _json_str(s: str) -> str:
-    """Escape a string for safe JSON embedding inside a <script> tag.
-
-    json.dumps alone does not escape "<" — an LLM-derived title containing
-    "</script><script>" would break out of the JSON-LD block (audit
-    2026-08-05).
-    """
-    import json
-
-    return json.dumps(s, ensure_ascii=False).replace("<", "\\u003c")

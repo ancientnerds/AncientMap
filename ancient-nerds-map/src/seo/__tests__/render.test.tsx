@@ -156,6 +156,12 @@ describe('site-Detailseite (Task 11): der SSR-Body trägt den Python-Fragment-In
     expect(html).not.toContain('Loading site details')
   })
 
+  it('kuratierte Site-Records tragen KEINEN Art.-50-Hinweis (menschlich kuratiert)', () => {
+    // Aus tests/pipeline/test_ai_act_notices.py übernommen (Task 16): Art. 50
+    // gilt für KI-generierten Text, nicht für kuratierte Site-Datensätze.
+    expect(html).not.toContain('data-ai-generated')
+  })
+
   it('Bild ohne Credit-Daten: keine leere <figcaption> (Python ließ sie weg)', () => {
     const bare = renderRoute({
       ...FIXTURES.site,

@@ -1,18 +1,19 @@
 /**
- * Head-Tags für jede indexierte Seite — die TypeScript-Portierung von
- * _meta_head() und den neun Seitenfunktionen aus pipeline/seo_pages.py.
+ * Head-Tags für jede indexierte Seite — DIE Definition, seit Task 16 den
+ * Python-Renderer (pipeline/seo_pages.py) gelöscht hat.
  *
  * Reine Funktionen ohne React: der SSR-Dienst ruft renderHead() direkt
- * auf, Vitest vergleicht die Ausgabe byte-genau gegen die Python-Referenz
- * (src/seo/__tests__/pyref/, erzeugt von scripts/gen_meta_reference.py).
- * Solange pipeline/seo_pages.py lebt, ist es die maßgebliche Quelle —
- * Änderungen dort müssen hier nachgezogen und die Referenz neu erzeugt
- * werden.
+ * auf, Vitest vergleicht die Ausgabe byte-genau gegen die eingefrorenen
+ * Referenz-Heads des gelöschten Python-Renderers
+ * (src/seo/__tests__/pyref/, siehe fixtures.ts). Die Referenzen ändern
+ * sich nur noch, wenn jemand diese Datei BEWUSST ändert — dann werden die
+ * pyref-Dateien von Hand mitgezogen und die Abweichung im Commit begründet.
  *
- * Einzige bewusste Abweichung von Python: der <style>{SSR_CSS}</style>-
- * Block wird NICHT eingebettet — nach dem Cutover kommt das CSS aus dem
- * gebauten Vite-Bundle, nicht aus dem Head-Fragment. (renderHead maskiert
- * < zusätzlich am Sink; byte-identisch, weil jsonStr schon maskiert.)
+ * Einzige bewusste Abweichung von der Referenz: der
+ * <style>{SSR_CSS}</style>-Block wird NICHT eingebettet — das CSS kommt
+ * aus dem gebauten Vite-Bundle, nicht aus dem Head-Fragment. (renderHead
+ * maskiert < zusätzlich am Sink; byte-identisch, weil jsonStr schon
+ * maskiert.)
  */
 
 import type {

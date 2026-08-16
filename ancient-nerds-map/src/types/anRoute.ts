@@ -3,9 +3,10 @@
  *
  * The API serves these URLs (/news-archive/…, /sites/…, /research/…,
  * /articles/…) as the real app shell with the content already rendered
- * inside #root for crawlers. This object tells the React entry which page
- * to mount, and for stories it carries the whole payload so the page
- * renders with no extra request and no loading flash.
+ * inside #root by the SSR sidecar. Every type carries its whole payload:
+ * the sidecar renders from it, the browser hydrates the same tree from it
+ * — no extra request, no loading flash (since Task 16 there is no other
+ * renderer this shape could mirror).
  *
  * Read it through seo/RouteContext: the entry calls readInjectedRoute()
  * once and hands the payload to RouteProvider — nothing else touches the

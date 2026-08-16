@@ -1,20 +1,18 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 """
-Crawlable site detail pages (/sites/{country}/{slug}).
+Slug and path contract for the crawlable site pages (/sites/{country}/{slug}).
 
 Regression cover for the 2026-08-07 finding: all ~5,000 site URLs were
-parameter-based (/site.html?id={uuid}) and served one identical SPA shell
-to normal user agents, with unique content revealed only to crawler user
-agents. Google never fetched a single one of them. These tests assert the
-replacement pages are unique, self-describing and correctly linked.
+parameter-based (/site.html?id={uuid}) and Google never fetched a single
+one of them. The page markup itself renders through React since the
+react-ssr cutover — its assertions live in src/seo/__tests__/render.test.tsx
+and meta.test.ts (Task 16). What stays Python, and what this file pins, is
+the URL contract: slugs, paths and percent-encoding in
+pipeline/sites_html_renderer.py, which routes and sitemap build on.
 """
-
-import json
-import re
 
 import pytest
 
-from pipeline.seo_pages import site_detail_page
 from pipeline.sites_html_renderer import (
     country_path,
     encode_path,
@@ -22,81 +20,6 @@ from pipeline.sites_html_renderer import (
     site_path,
     site_slug,
 )
-
-
-def _page(site: dict, related: dict) -> str:
-    """head + body of the served page.
-
-    render_site_detail_html() produced a standalone document that was never
-    served — nginx routes /sites/{country}/{slug} to the app-shell splice.
-    The assertions below apply unchanged to the fragment that IS served.
-    """
-    page = site_detail_page(site, related)
-    return page.head + page.body
-
-
-SITE_A = {
-    "id": "383a0107-b7f7-4431-a752-590f3c0a42b2",
-    "name": "Aartswoud",
-    "country": "Netherlands",
-    "site_type": "City/town/settlement",
-    "period_name": "3000 - 2500 BC",
-    "period_start": -3000,
-    "period_end": -2500,
-    "description": "A Neolithic settlement.\nExcavations revealed post holes and hearths.",
-    "lat": 52.7,
-    "lon": 4.98,
-    "source_url": "https://example.org/ref",
-}
-
-SITE_B = {
-    "id": "74fe5dc2-1e2c-4dd6-b4ed-3cb376c9cd50",
-    "name": "Burrough Hill",
-    "country": "England",
-    "site_type": "Fortress/citadel",
-    "period_name": "1500 - 500 BC",
-    "period_start": -1500,
-    "period_end": -500,
-    "description": "An Iron Age hillfort on an escarpment.",
-    "lat": 52.73,
-    "lon": -0.86,
-    "source_url": None,
-}
-
-EMPTY_RELATED: dict = {
-    "alt_names": [],
-    "image": None,
-    "news": [],
-    "links": [],
-    "parent": None,
-    "siblings": [],
-}
-
-FULL_RELATED = {
-    "alt_names": ["Aartswoud-Zuid", "Aartswoud"],
-    "image": {
-        "url": "/data/images/wiki/383a0107/hero.webp",
-        "author": "J. Doe",
-        "license": "CC BY-SA 4.0",
-        "commons_url": "https://commons.wikimedia.org/wiki/File:X.jpg",
-    },
-    "news": [{"slug": "new-find-123", "headline": "New find at Aartswoud"}],
-    "links": [
-        {"title": "ToposText entry", "url": "https://topostext.org/x", "content_type": "text"}
-    ],
-    # site_detail_page() bekommt fertige Pfade von der Route (_related_content
-    # in api/routes/sites_html.py), der alte Renderer baute sie selbst aus dem
-    # Slug. Der Vertrag ist der Unterschied, nicht das Verhalten.
-    "parent": {"name": "Parent Complex", "path": "/sites/netherlands/parent-complex-aabbccdd"},
-    "siblings": [{"name": "Opperdoes", "path": "/sites/netherlands/opperdoes-99887766"}],
-}
-
-
-def _tag(html: str, pattern: str) -> str:
-    match = re.search(pattern, html, re.DOTALL)
-    assert match, f"pattern not found: {pattern}"
-    return match.group(1)
-
 
 # --- Slugs -----------------------------------------------------------------
 
@@ -183,134 +106,3 @@ def test_encoded_path_decodes_back_to_the_slug_the_route_matches_on():
     assert unquote(slug_part) == site_slug(name, site_id)
     assert unquote(country_part) == "türkiye"
     assert site_id_prefix_from_slug(unquote(slug_part)) == "3ff78ce4"
-
-
-# --- Page uniqueness (the actual regression) -------------------------------
-
-
-def test_pages_are_unique_per_site():
-    """The old shell gave every site the same title, h1 and description."""
-    a = _page(SITE_A, EMPTY_RELATED)
-    b = _page(SITE_B, EMPTY_RELATED)
-
-    for pattern in (
-        r"<title>(.*?)</title>",
-        r"<h1>(.*?)</h1>",
-        r'name="description" content="(.*?)"',
-        r'rel="canonical" href="(.*?)"',
-    ):
-        assert _tag(a, pattern) != _tag(b, pattern), f"identical across sites: {pattern}"
-
-
-def test_title_and_heading_carry_the_site_name():
-    html = _page(SITE_A, EMPTY_RELATED)
-    assert "Aartswoud" in _tag(html, r"<title>(.*?)</title>")
-    assert "Netherlands" in _tag(html, r"<title>(.*?)</title>")
-    assert _tag(html, r"<h1>(.*?)</h1>") == "Aartswoud"
-
-
-def test_canonical_is_the_slug_url_not_the_parameter_url():
-    html = _page(SITE_A, EMPTY_RELATED)
-    canonical = _tag(html, r'rel="canonical" href="(.*?)"')
-    assert canonical == "https://ancientnerds.com/sites/netherlands/aartswoud-383a0107"
-    assert "site.html?id=" not in canonical
-
-
-def test_meta_description_is_single_line_and_bounded():
-    """A raw newline in the content attribute garbles the search snippet."""
-    html = _page(SITE_A, EMPTY_RELATED)
-    desc = _tag(html, r'name="description" content="(.*?)"')
-    assert "\n" not in desc
-    assert len(desc) <= 161
-    assert desc.startswith("A Neolithic settlement.")
-
-
-def test_description_body_is_rendered_in_full():
-    """The meta description is truncated; the page body must not be."""
-    html = _page(SITE_A, EMPTY_RELATED)
-    assert "Excavations revealed post holes and hearths." in html
-
-
-def test_site_without_country_fails_loudly():
-    """The canonical is /sites/{country}/{slug} — no country, no URL.
-
-    Callers select on "country IS NOT NULL AND country != ''", so this is
-    unreachable in production and must fail loudly rather than publish
-    /sites//{slug}.
-    """
-    orphan = dict(SITE_A, country=None)
-    with pytest.raises((ValueError, AttributeError, TypeError)):
-        _page(orphan, EMPTY_RELATED)
-
-
-# --- Structured data and escaping ------------------------------------------
-
-
-def test_jsonld_is_valid_and_describes_a_place_with_breadcrumbs():
-    html = _page(SITE_A, EMPTY_RELATED)
-    block = _tag(html, r'<script type="application/ld\+json">(.*?)</script>')
-    nodes = json.loads(block)
-
-    types = {n["@type"] for n in nodes}
-    assert types == {"Place", "BreadcrumbList"}
-
-    place = next(n for n in nodes if n["@type"] == "Place")
-    assert place["name"] == "Aartswoud"
-    assert place["geo"]["latitude"] == 52.7
-    assert place["address"]["addressCountry"] == "Netherlands"
-
-    crumbs = next(n for n in nodes if n["@type"] == "BreadcrumbList")
-    names = [c["name"] for c in crumbs["itemListElement"]]
-    assert names == ["Home", "Sites", "Netherlands", "Aartswoud"]
-
-
-def test_hostile_content_cannot_break_out_of_the_page_or_the_jsonld():
-    hostile = dict(
-        SITE_A,
-        name="</script><script>alert(1)</script>",
-        description='Quote " and <b>tag</b> & ampersand',
-    )
-    html = _page(hostile, EMPTY_RELATED)
-
-    assert "<script>alert(1)</script>" not in html
-    assert "<b>tag</b>" not in html
-    # JSON-LD must still parse — an unescaped "</script>" would truncate it.
-    json.loads(_tag(html, r'<script type="application/ld\+json">(.*?)</script>'))
-
-
-# --- Internal linking ------------------------------------------------------
-
-
-def test_related_content_becomes_internal_and_external_links():
-    html = _page(SITE_A, FULL_RELATED)
-
-    assert "/news-archive/new-find-123" in html
-    assert "/sites/netherlands/opperdoes-99887766" in html
-    assert "/sites/netherlands/parent-complex-aabbccdd" in html
-    assert '/sites/netherlands"' in html
-    assert "https://topostext.org/x" in html
-    assert "Aartswoud-Zuid" in html
-
-
-def test_hero_image_carries_its_attribution():
-    html = _page(SITE_A, FULL_RELATED)
-    assert "/data/images/wiki/383a0107/hero.webp" in html
-    assert "J. Doe" in html
-    assert "CC BY-SA 4.0" in html
-    assert "commons.wikimedia.org" in html
-
-
-def test_page_still_renders_without_any_related_content():
-    html = _page(SITE_B, EMPTY_RELATED)
-    assert "<h1>Burrough Hill</h1>" in html
-    assert "Related resources" not in html
-    assert "Archaeology news about" not in html
-
-
-def test_page_links_to_the_interactive_globe():
-    """The SPA view stays reachable — it is just no longer the canonical URL."""
-    html = _page(SITE_A, EMPTY_RELATED)
-    # /globe.html?focus= loads the globe and flies to the site. The old
-    # /site.html?id= link answered 301 back to this very page, and
-    # ?site= renders the popup card without a globe (App.tsx:98).
-    assert f"/globe.html?focus={SITE_A['id']}" in html

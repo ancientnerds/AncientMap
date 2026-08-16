@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 """ssr_shell_response() spliced die SSR-Ausgabe in die gebaute Shell (react-ssr Task 9).
 
-Die alte shell_response(SeoPage, headers) bleibt daneben bestehen, bis alle
-neun Routen migriert sind — sie stirbt mit pipeline/seo_pages.py in Task 16.
+Seit Task 16 der einzige Weg: die alte shell_response(SeoPage, headers)
+starb zusammen mit pipeline/seo_pages.py.
 """
 
 from __future__ import annotations

@@ -6,10 +6,9 @@
  * Seit dem Cutover übergibt /sites/{country} das ROHE sites-Array (die
  * SQL-Zeilen, snake_case); die Gruppierung ist eine Darstellungsentscheidung
  * und lebt deshalb hier — countryMeta und CountrySitesPage teilen sich EINE
- * Definition. Bis pipeline/seo_pages.py stirbt (Task 16), ist die
- * Python-Seite die maßgebliche Vorlage; die Tests in
- * __tests__/grouping.test.ts sind die 1:1-Übersetzung von
- * tests/pipeline/test_seo_country_extras.py::TestTypeSections.
+ * Definition. Seit Task 16 die einzige: der Python-Renderer und seine
+ * Tests (test_seo_country_extras.py) sind gelöscht; die 1:1-Übersetzung
+ * in __tests__/grouping.test.ts trägt die Abdeckung allein.
  */
 
 import type { CountrySite } from '../types/anRoute'

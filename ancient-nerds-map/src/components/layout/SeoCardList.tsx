@@ -1,8 +1,8 @@
 /**
- * Linked title-plus-blurb cards — the React counterpart of _link_card()
- * in pipeline/seo_pages.py. One definition for the research library and
- * the journal listing (react-ssr Tasks 12/13), so the two hubs cannot
- * drift apart card-wise.
+ * Linked title-plus-blurb cards — one definition for the research library
+ * and the journal listing (react-ssr Tasks 12/13), so the two hubs cannot
+ * drift apart card-wise. (Started as the React counterpart of the Python
+ * renderer's _link_card(); Task 16 deleted that side.)
  */
 
 import { blurb } from '../../seo/text'

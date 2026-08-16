@@ -1,43 +1,17 @@
 """
-Slugs, paths and display helpers for the crawlable site browser.
+Slugs and paths for the crawlable site browser.
 
-The page markup itself lives in pipeline/seo_pages.py — this module only
-builds the URLs those pages use and formats coordinates and periods. It
-used to render whole documents too; those renderers were never served
-(nginx routes /sites/ to the app-shell splice) and were deleted 2026-08-09.
+The page markup renders through React since the react-ssr cutover
+(src/seo/, Task 16 deleted the Python renderer; the coordinate and period
+display helpers moved to src/seo/display.ts). This module only builds the
+URLs those pages use — routes and sitemap import it, so the slug contract
+lives exactly once.
 """
 
 import re
-from html import escape
 from urllib.parse import quote
 
 from pipeline.article_html_renderer import slugify
-
-
-def _coord_display(lat: float | None, lon: float | None) -> str:
-    """Human-readable coordinate string, or empty when the site has no position."""
-    if lat is None or lon is None:
-        return ""
-    lat_dir = "N" if lat >= 0 else "S"
-    lon_dir = "E" if lon >= 0 else "W"
-    return f"{abs(lat):.4f}&deg; {lat_dir}, {abs(lon):.4f}&deg; {lon_dir}"
-
-
-def _year_display(year: int) -> str:
-    """Format a signed year as an era-qualified label (-500 -> '500 BC')."""
-    return f"{abs(year)} {'BC' if year < 0 else 'AD'}"
-
-
-def _period_display(site: dict) -> str:
-    """Prefer the curated period name, fall back to a start/end year range."""
-    if site.get("period_name"):
-        return str(site["period_name"])
-    start, end = site.get("period_start"), site.get("period_end")
-    if start is None:
-        return ""
-    if end is None:
-        return _year_display(start)
-    return f"{_year_display(start)} – {_year_display(end)}"
 
 
 def country_slug(country: str) -> str:

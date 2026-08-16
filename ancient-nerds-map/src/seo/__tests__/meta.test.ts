@@ -1,8 +1,9 @@
 /**
- * Task 5 des react-ssr-Plans: meta.ts muss die Python-Referenz
- * (pipeline/seo_pages.py::_meta_head() + die neun Seitenfunktionen)
- * byte-genau reproduzieren. Die Referenz-Heads in pyref/ erzeugt
- * scripts/gen_meta_reference.py.
+ * Byte-Parität gegen die eingefrorene Python-Referenz: meta.ts muss die
+ * Heads reproduzieren, die der in Task 16 gelöschte Python-Renderer
+ * einmalig nach pyref/ geschrieben hat (siehe fixtures.ts). Ändert sich
+ * meta.ts bewusst, werden die pyref-Dateien von Hand mitgezogen und die
+ * Abweichung im Commit begründet.
  *
  * Bewusste Abweichungen Python ↔ TypeScript — jede einzeln begründet:
  *
@@ -136,6 +137,28 @@ describe('storyMeta', () => {
   it('lässt die Description bei post_text < 150 Zeichen weg', () => {
     const m = storyMeta(pyrefRoute('story_short') as StoryRoute)
     expect(m.description).toBe('')
+  })
+})
+
+describe('research-Autorschaft im JSON-LD (Art.-50-Fälle aus test_ai_act_notices.py)', () => {
+  // Theo ist eine Pipeline, keine Person — das Schema darf nichts anderes
+  // behaupten. Übernommen in Task 16, als der Python-Renderer starb.
+  it('Theo wird eine Organization mit AI-Pipeline-Kennzeichnung', () => {
+    expect(FIXTURES.research.author).toBe('Theo')
+    const schema = JSON.parse(researchMeta(FIXTURES.research).schema!)
+    expect(schema.author['@type']).toBe('Organization')
+    expect(JSON.stringify(schema.author)).toContain('AI research pipeline')
+    expect(JSON.stringify(schema)).not.toContain('"Person", "name": "Theo"')
+  })
+
+  it('ein menschlicher Autor bleibt eine Person', () => {
+    const schema = JSON.parse(researchMeta(pyrefRoute('research_person') as never).schema!)
+    expect(schema.author).toEqual({ '@type': 'Person', name: 'Dr. Jane Doe' })
+  })
+
+  it('ein Anführungszeichen im Namen kann das JSON nicht brechen', () => {
+    const schema = JSON.parse(researchMeta({ ...FIXTURES.research, author: 'O"Brien' }).schema!)
+    expect(schema.author.name).toBe('O"Brien')
   })
 })
 

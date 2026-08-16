@@ -1,7 +1,8 @@
 /**
  * 1:1-Übersetzung von tests/pipeline/test_seo_country_extras.py::TestTypeSections
- * (plus die _period_span-Fälle aus TestCountryPageHead) nach Vitest — die
- * Python-Tests bleiben bestehen, bis pipeline/seo_pages.py stirbt (Task 16).
+ * (plus die _period_span-Fälle aus TestCountryPageHead) nach Vitest. Die
+ * Python-Tests starben mit dem Renderer in Task 16 — diese Datei trägt
+ * die Abdeckung allein.
  */
 
 import { describe, expect, it } from 'vitest'

@@ -8,9 +8,9 @@
  *
  * Die Payloads tragen rohe DB-Zeilen (snake_case); wie Periode,
  * Koordinaten und Datum dargestellt werden, ist eine
- * Darstellungsentscheidung und lebt deshalb hier. Bis
- * pipeline/seo_pages.py stirbt (Task 16), ist die Python-Seite die
- * maßgebliche Vorlage.
+ * Darstellungsentscheidung und lebt deshalb hier — seit Task 16 als
+ * einzige Definition (der Python-Renderer und seine Display-Helfer sind
+ * gelöscht).
  */
 
 import type { SiteRoute } from '../types/anRoute'

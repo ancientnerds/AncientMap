@@ -1,10 +1,10 @@
 /**
  * Closing block on every indexed page: the globe and the Discord.
  *
- * Mirrors community_cta_html() in pipeline/seo_pages.py. It has to exist in
- * both worlds — the server fragment alone would vanish the instant React
- * replaced #root, which is exactly what happened to the site detail page's
- * globe button (audit 2026-08-09).
+ * Originally mirrored community_cta_html() in the Python renderer; since
+ * react-ssr Task 16 this component is the only definition — server and
+ * browser render it from the same tree. (The old split is why the site
+ * detail page's globe button vanished on mount, audit 2026-08-09.)
  */
 
 import { DISCORD_INVITE_URL } from '../../constants/brand'

@@ -79,7 +79,6 @@ ignore_imports = [
     "api.** -> pipeline.article_html_renderer",
     "api.** -> pipeline.research_html_renderer",
     "api.** -> pipeline.sites_html_renderer",
-    "api.** -> pipeline.seo_pages",
     "api.** -> pipeline.app_shell",
     "api.** -> pipeline.static_exporter",
     "api.** -> pipeline.library_aggregator",

@@ -1,12 +1,14 @@
 /**
  * Fixtures für die SEO-Tests: die Route-Payloads aus pyref/.
  *
- * Beide Seiten jeder Vergleichsprüfung stammen aus EINEM Fixture-Satz:
- * scripts/gen_meta_reference.py rendert die Python-Referenz-Heads UND
- * schreibt die zugehörigen Route-Payloads — Payload und Soll-Head können
- * also nicht auseinanderlaufen. Für sitesIndex ist das Payload wörtlich
- * SeoPage.route; alle übrigen Typen tragen seit den Cutovers (Tasks
- * 10–14) die rohen snake_case-Zeilenfelder — Formatierung lebt in
+ * pyref/ ist seit Task 16 ein EINGEFRORENER Fixture-Satz: die Heads hat
+ * der gelöschte Python-Renderer (pipeline/seo_pages.py, via
+ * scripts/gen_meta_reference.py — beide weg) einmal byte-genau erzeugt,
+ * die zugehörigen Route-Payloads stammen aus demselben Lauf, Payload und
+ * Soll-Head können also nicht auseinanderlaufen. Die Dateien ändern sich
+ * nur noch, wenn jemand meta.ts BEWUSST ändert — dann von Hand nachziehen
+ * und die Abweichung im Commit begründen. Alle Typen tragen die rohen
+ * snake_case-Zeilenfelder (Cutovers Tasks 10–14) — Formatierung lebt in
  * src/seo/.
  */
 
@@ -29,7 +31,7 @@ import type {
 
 export const PYREF_DIR = join(dirname(fileURLToPath(import.meta.url)), 'pyref')
 
-/** Referenz-Head aus pipeline/seo_pages.py, CRLF-normalisiert. */
+/** Eingefrorener Referenz-Head des gelöschten Python-Renderers, CRLF-normalisiert. */
 export function pyrefHead(name: string): string {
   return readFileSync(join(PYREF_DIR, `${name}.html`), 'utf8').replace(/\r\n/g, '\n')
 }
