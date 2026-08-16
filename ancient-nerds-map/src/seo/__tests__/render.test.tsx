@@ -41,25 +41,6 @@ describe('serverseitiges Rendern', () => {
   }
 })
 
-describe('heutige Produktions-Stubs (bis zum Cutover, Task 13)', () => {
-  // pipeline/seo_pages.py injiziert für diese Typen nur Stubs — die Seiten
-  // holen ihre Daten selbst. Die Registry muss auch mit exakt diesen
-  // Payloads rendern, nicht nur mit den Post-Cutover-Fixtures. (site und
-  // research tragen seit Tasks 11/12 das volle Payload — ihre Stubs
-  // existieren nicht mehr.)
-  const stubs = [
-    { type: 'article', slug: 'weekly-journal' },
-    { type: 'articleIndex' },
-  ] as unknown as AnRoute[]
-
-  for (const stub of stubs) {
-    it(`rendert den ${stub.type}-Stub`, () => {
-      const html = renderRoute(stub)
-      expect(html.length).toBeGreaterThan(50)
-    })
-  }
-})
-
 describe('research-Seiten (Task 12): der SSR-Body trägt den Python-Fragment-Inhalt', () => {
   const html = renderRoute(FIXTURES.research)
 
@@ -182,6 +163,56 @@ describe('site-Detailseite (Task 11): der SSR-Body trägt den Python-Fragment-In
     })
     expect(bare).toContain('/data/images/wiki/9c8b7a65/hero.webp')
     expect(bare).not.toContain('<figcaption')
+  })
+})
+
+describe('article-Seite (Task 13): der SSR-Body trägt den Python-Fragment-Inhalt', () => {
+  const html = renderRoute(FIXTURES.article)
+
+  it('genau ein h1, und es trägt den Journaltitel', () => {
+    expect(html.match(/<h1/g)).toHaveLength(1)
+    expect(html).toContain('Week 31: Hoards &amp; Harbours')
+  })
+
+  it('Art.-50-Hinweis sichtbar UND maschinenlesbar (data-ai-generated)', () => {
+    expect(html).toContain('data-ai-generated="true"')
+    expect(html).toContain('AI-generated')
+  })
+
+  it('body_html ist gerendert — komplettes Journal im ersten Render, kein Fetch', () => {
+    expect(html).toContain('<p>body</p>')
+    expect(html).not.toContain('Loading journals')
+  })
+
+  it('Datum und Summary aus dem Payload', () => {
+    expect(html).toContain('2026-08-03')
+    expect(html).toContain('A Viking silver hoard on Gotland')
+  })
+
+  it('Rückweg zum Hub und CommunityCta', () => {
+    expect(html).toContain('href="/articles/"')
+    expect(html).toContain('Keep exploring')
+  })
+})
+
+describe('articleIndex (Task 13): der crawlbare Journal-Hub aus dem Payload', () => {
+  const html = renderRoute(FIXTURES.articleIndex)
+
+  it('genau ein h1: Weekly Archaeology Journal', () => {
+    expect(html.match(/<h1/g)).toHaveLength(1)
+    expect(html).toContain('Weekly Archaeology Journal')
+  })
+
+  it('eine Karte pro Journal, mit Link und Summary-Blurb', () => {
+    expect(html).toContain('href="/articles/week-31-hoards-and-harbours"')
+    expect(html).toContain('href="/articles/week-30-mummies-and-mosaics"')
+    expect(html).toContain('Week 30: Mummies &amp; Mosaics')
+    expect(html).toContain('New Saqqara burials')
+  })
+
+  it('Art.-50-Banner und CommunityCta', () => {
+    expect(html).toContain('data-ai-generated="true"')
+    expect(html).toContain('Keep exploring')
   })
 })
 

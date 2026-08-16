@@ -38,7 +38,6 @@ sys.path.insert(0, str(REPO))
 
 from pipeline.seo_pages import (  # noqa: E402
     SeoPage,
-    _date_parts,
     article_index_page,
     article_page,
     country_sites_page,
@@ -326,14 +325,21 @@ def _paper_route(paper: dict, body_html: str) -> dict:
     }
 
 
-def _article_route(article: dict) -> dict:
+def _article_route(article: dict, body_html: str) -> dict:
+    """The raw payload api/routes/articles_html.py hands the sidecar (Task 13).
+
+    Row fields verbatim (published_at as the isoformat string the route
+    sends); date formatting is a display decision in src/seo/display.ts.
+    """
+    published = article.get("published_at")
     return {
         "type": "article",
         "slug": article["slug"],
         "title": article["title"],
-        "summary": (article.get("summary") or "").strip(),
-        "publishedAt": _date_parts(article.get("published_at"))[0],
-        "heroImageUrl": article.get("hero_image_url") or "",
+        "summary": article.get("summary"),
+        "published_at": published.isoformat() if published else None,
+        "hero_image_url": article.get("hero_image_url"),
+        "body_html": body_html,
     }
 
 
@@ -365,7 +371,7 @@ def cases() -> list[tuple[str, SeoPage, dict | None]]:
             research_index_page(PAPERS_INDEX),
             {"type": "researchIndex", "papers": PAPERS_INDEX},
         ),
-        ("article", article_page(ARTICLE, "<p>body</p>"), _article_route(ARTICLE)),
+        ("article", article_page(ARTICLE, "<p>body</p>"), _article_route(ARTICLE, "<p>body</p>")),
         (
             "articleIndex",
             article_index_page(ARTICLES_INDEX),

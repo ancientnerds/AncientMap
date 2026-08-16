@@ -329,13 +329,14 @@ export function researchIndexMeta(route: ResearchIndexRoute): PageMeta {
   }
 }
 
+/** article_page(): das Payload trägt die rohen Zeilenfelder — Defaults entstehen hier. */
 export function articleMeta(route: ArticleRoute): PageMeta {
   const canonical = `${BASE_URL}/articles/${encodePath(route.slug)}`
-  const summary = route.summary.trim()
+  const summary = (route.summary || '').trim()
   const schema =
     '{"@context": "https://schema.org", "@type": "Article", ' +
     `"headline": ${jsonStr(route.title)}, "description": ${jsonStr(cut(summary, 300))}, ` +
-    `"datePublished": "${route.publishedAt}", ` +
+    `"datePublished": "${isoDate(route.published_at)}", ` +
     '"author": {"@type": "Organization", "name": "Ancient Nerds"}, ' +
     `"mainEntityOfPage": "${canonical}", "url": "${canonical}"}`
   return {
@@ -343,7 +344,7 @@ export function articleMeta(route: ArticleRoute): PageMeta {
     description: summary || route.title,
     canonical,
     ogType: 'article',
-    image: route.heroImageUrl || undefined,
+    image: route.hero_image_url || undefined,
     schema,
   }
 }

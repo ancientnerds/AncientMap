@@ -10,7 +10,7 @@ import logging
 from fastapi import APIRouter, Depends, Response
 from sqlalchemy.orm import Session, joinedload
 
-from api.seo_shell import shell_response
+from api.seo_shell import shell_response, ssr_shell_response
 from pipeline import seo_pages
 from pipeline.article_html_renderer import (
     BASE_URL,
@@ -53,19 +53,19 @@ async def articles_listing(db: Session = Depends(get_db)):
     """HTML listing of all journals — the crawlable hub linking every article page."""
     articles = db.query(NewsArticle).order_by(NewsArticle.created_at.desc()).all()
 
-    article_dicts = [
+    # Since react-ssr Task 13 the sidecar renders head and body from this
+    # payload (articleIndexMeta + ArticleIndexFromPayload); Python only
+    # fetches data. The cards need slug, title and summary — nothing more.
+    return ssr_shell_response(
+        "articles.html",
         {
-            "title": article.title,
-            "summary": article.summary,
-            "slug": slugify(article.title),
-            "published_at": article.published_at.isoformat() if article.published_at else "",
-            "week_start": article.week_start.isoformat() if article.week_start else "",
-            "week_end": article.week_end.isoformat() if article.week_end else "",
-        }
-        for article in articles
-    ]
-
-    return shell_response(seo_pages.article_index_page(article_dicts), _HTML_HEADERS)
+            "type": "articleIndex",
+            "articles": [
+                {"slug": slugify(a.title), "title": a.title, "summary": a.summary} for a in articles
+            ],
+        },
+        _HTML_HEADERS,
+    )
 
 
 @router.get("/articles/{slug}")
@@ -87,16 +87,23 @@ async def article_page(slug: str, db: Session = Depends(get_db)):
             headers={"Cache-Control": "public, max-age=300"},
         )
 
-    return shell_response(
-        seo_pages.article_page(
-            {
-                "title": article.title,
-                "slug": slug,
-                "summary": article.summary,
-                "published_at": article.published_at,
-            },
-            markdown_to_html(article.content),
-        ),
+    # Raw snake_case row fields (react-ssr Task 13); date formatting is a
+    # display decision (src/seo/display.ts). body_html stays Python-markdown
+    # on purpose (nh3-sanitized in markdown_to_html) — React injects the
+    # finished HTML instead of re-rendering the markdown. Journals carry no
+    # hero image; og:image falls back to the default, exactly like the
+    # Python fragment did.
+    return ssr_shell_response(
+        "articles.html",
+        {
+            "type": "article",
+            "slug": slug,
+            "title": article.title,
+            "summary": article.summary,
+            "published_at": (article.published_at.isoformat() if article.published_at else None),
+            "hero_image_url": None,
+            "body_html": markdown_to_html(article.content),
+        },
         _HTML_HEADERS,
     )
 

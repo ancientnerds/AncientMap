@@ -149,20 +149,27 @@ export interface ResearchIndexRoute {
   papers: { slug: string; title: string; summary: string | null }[]
 }
 
-/** Post-cutover contract (react-ssr Tasks 12-14) — production still injects {slug}/{} stubs. */
+/**
+ * One weekly journal issue — the raw row fields the route hands through
+ * (api/routes/articles_html.py, react-ssr Task 13) plus body_html, the
+ * article markdown rendered by the pipeline's Python-markdown renderer
+ * (nh3-sanitized). Same contract as ResearchRoute.
+ */
 export interface ArticleRoute {
   type: 'article'
   slug: string
   title: string
-  summary: string
-  publishedAt: string
-  heroImageUrl: string
+  summary: string | null
+  /** Raw ISO timestamp from the row; date display is a TS decision. */
+  published_at: string | null
+  /** Journals carry no hero today — og:image falls back to the default. */
+  hero_image_url: string | null
+  body_html: string
 }
 
-/** Post-cutover contract (react-ssr Tasks 12-14) — production still injects {slug}/{} stubs. */
 export interface ArticleIndexRoute {
   type: 'articleIndex'
-  articles: { slug: string; title: string; summary: string }[]
+  articles: { slug: string; title: string; summary: string | null }[]
 }
 
 export type AnRoute =
