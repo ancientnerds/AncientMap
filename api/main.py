@@ -32,7 +32,7 @@ from pathlib import Path
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from api.build_info import BUILD_HASH
@@ -62,6 +62,7 @@ from api.routes import (
     wiki_images,
 )
 from api.routes.public_v1 import create_public_api
+from api.ssr_client import SsrUnavailableError
 from pipeline.config import get_settings
 
 logger = logging.getLogger(__name__)
@@ -654,6 +655,13 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
     tb = traceback.format_exception(type(exc), exc, exc.__traceback__)
     logger.error(f"Unhandled error on {request.method} {request.url.path}: {exc}\n{''.join(tb)}")
     return JSONResponse(status_code=500, content={"detail": "Internal server error"})
+
+
+@app.exception_handler(SsrUnavailableError)
+async def ssr_unavailable_handler(request: Request, exc: SsrUnavailableError) -> Response:
+    """The SSR sidecar is a hard dependency — its outage is a gateway error, not a 500."""
+    logger.error(f"SSR service unavailable on {request.method} {request.url.path}: {exc}")
+    return Response(status_code=502, content="Renderer unavailable", media_type="text/plain")
 
 
 # CORS - allow frontend to connect (configured via API_CORS_ORIGINS env var)
