@@ -67,13 +67,17 @@ function asyncLandingCss() {
   }
 }
 
-export default defineConfig({
+export default defineConfig(({ isSsrBuild }) => ({
   envDir: '..',
   define: {
     __BUILD_HASH__: JSON.stringify(commitHash),
     __BUILD_TIME__: JSON.stringify(buildTime),
   },
   build: {
+    // The SSR bundle is imported by the node sidecar, which serves no static
+    // files — copying public/ (61 MB of textures; 1.5 GB if a stale
+    // public/data/ exists locally) into dist-ssr/ only bloats the image.
+    copyPublicDir: !isSsrBuild,
     rollupOptions: {
       input: {
         landing: resolve(__dirname, 'index.html'),
@@ -262,4 +266,4 @@ export default defineConfig({
     }),
     asyncLandingCss(),
   ],
-})
+}))
