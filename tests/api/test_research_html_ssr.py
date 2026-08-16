@@ -121,6 +121,47 @@ def test_research_paper_falls_back_to_the_raw_report():
     assert "raw draft" in render_mock.call_args[0][0]["body_html"]
 
 
+def test_research_paper_strips_the_stored_title_heading():
+    """3 von 16 Live-Papers beginnen mit '# Titel' im gespeicherten Report —
+    ungestrippt servierte die Seite zwei <h1> (das eigene plus dieses)."""
+    report = "# Obsidian Trade Networks in Neolithic Anatolia\n\n## Findings\n\nObsidian moved far."
+    render, shell = _patched()
+    with render as render_mock, shell:
+        asyncio.run(
+            research_paper_page(
+                "obsidian-trade-networks-anatolia",
+                db=FakeDb([_paper_row(published_report=report)]),
+            )
+        )
+
+    body = render_mock.call_args[0][0]["body_html"]
+    assert "<h1" not in body
+    assert "Obsidian moved far." in body
+
+
+def test_research_paper_links_the_references():
+    """Theo speichert References als Plain-Text-Zeilen mit nackten URLs —
+    format_references_md macht daraus klickbare Links, wie im Medium-Pfad."""
+    report = (
+        "## Findings\n\nObsidian moved far.\n\n"
+        "## References\n\n"
+        "[1] Doe, J. (2020). Obsidian sourcing. https://example.org/paper\n"
+        "[2] Roe, R. (2021). Exchange spheres. DOI: 10.1234/abcd"
+    )
+    render, shell = _patched()
+    with render as render_mock, shell:
+        asyncio.run(
+            research_paper_page(
+                "obsidian-trade-networks-anatolia",
+                db=FakeDb([_paper_row(published_report=report)]),
+            )
+        )
+
+    body = render_mock.call_args[0][0]["body_html"]
+    assert '<a href="https://example.org/paper"' in body
+    assert '<a href="https://doi.org/10.1234/abcd"' in body
+
+
 def test_unknown_paper_is_a_404_without_touching_the_renderer():
     render, shell = _patched()
     with render as render_mock, shell as shell_mock:

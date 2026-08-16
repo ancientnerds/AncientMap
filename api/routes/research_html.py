@@ -95,16 +95,28 @@ def _paper_404() -> Response:
     )
 
 
+def _report_markdown(row, title: str) -> str:
+    """The stored report, prepared for rendering — shared by paper page and Medium copy.
+
+    The reviewed publication (rejected blocks hidden, edits substituted) is
+    what external consumers should see — same rule as /api/v1/research. On
+    top of that, two storage quirks are fixed here: papers open with their
+    own title as a markdown heading (3 of 16 live papers use '# Title',
+    which rendered a second <h1> next to the page's own), and Theo emits
+    References as consecutive plain-text lines with bare URLs that markdown
+    collapses into one dead-link paragraph.
+    """
+    return format_references_md(
+        strip_leading_title_heading(row.published_report or row.report or "", title)
+    )
+
+
 @router.get("/research/{slug}")
 async def research_paper_page(slug: str, db: Session = Depends(get_db)):
     """Full HTML research paper page by slug."""
     row = _fetch_paper(slug, db)
     if not row:
         return _paper_404()
-
-    # The reviewed publication (rejected blocks hidden, edits substituted)
-    # is what external consumers should see — same rule as /api/v1/research.
-    content = row.published_report or row.report or ""
 
     # Raw snake_case row fields (react-ssr Task 12); date formatting and
     # author defaults are display decisions and live in src/seo/. body_html
@@ -121,7 +133,7 @@ async def research_paper_page(slug: str, db: Session = Depends(get_db)):
             "author": paper["author"],
             "published_at": paper["published_at"],
             "hero_image_url": paper["hero_image_url"],
-            "body_html": markdown_to_html(content),
+            "body_html": markdown_to_html(_report_markdown(row, paper["title"])),
         },
         _HTML_HEADERS,
     )
@@ -135,13 +147,10 @@ async def research_medium_copy(slug: str, db: Session = Depends(get_db)):
         return _paper_404()
 
     paper = paper_summary_kwargs(row)
-    # Medium paste drops figcaption content — use the markdown-native caption
-    # variant here; the SSR paper page keeps real <figure>/<figcaption>.
-    content = format_image_captions_medium(
-        format_references_md(
-            strip_leading_title_heading(row.published_report or row.report or "", paper["title"])
-        )
-    )
+    # On top of the shared preparation: Medium's editor drops figcaption
+    # content on paste, so captions become markdown-native italic paragraphs
+    # here (the paper page leaves image blocks as plain markdown).
+    content = format_image_captions_medium(_report_markdown(row, paper["title"]))
     html = render_medium_copy_html(
         title=paper["title"],
         content_md=content,
