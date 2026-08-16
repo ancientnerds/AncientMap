@@ -65,16 +65,20 @@ function SiteRecord({ site }: { site: SiteRoute }) {
       {image && (
         <figure>
           <img src={image.url} alt={site.name} loading="lazy" />
-          <figcaption>
-            {/* Commons licence attribution — required, not decorative. */}
-            {image.commons_url ? (
-              <a href={image.commons_url} target="_blank" rel="noopener noreferrer">
-                {credit || 'Wikimedia Commons'}
-              </a>
-            ) : (
-              credit
-            )}
-          </figcaption>
+          {/* Commons licence attribution — required, not decorative. Without
+              any credit content the Python fragment omitted the figcaption
+              entirely; an empty <figcaption></figcaption> is markup noise. */}
+          {(credit || image.commons_url) && (
+            <figcaption>
+              {image.commons_url ? (
+                <a href={image.commons_url} target="_blank" rel="noopener noreferrer">
+                  {credit || 'Wikimedia Commons'}
+                </a>
+              ) : (
+                credit
+              )}
+            </figcaption>
+          )}
         </figure>
       )}
       {altNames.length > 0 && (

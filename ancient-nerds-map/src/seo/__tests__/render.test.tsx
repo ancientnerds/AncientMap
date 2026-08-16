@@ -110,6 +110,15 @@ describe('site-Detailseite (Task 11): der SSR-Body trägt den Python-Fragment-In
   it('kein Fetch-Spinner im ersten Render — das Payload trägt alles', () => {
     expect(html).not.toContain('Loading site details')
   })
+
+  it('Bild ohne Credit-Daten: keine leere <figcaption> (Python ließ sie weg)', () => {
+    const bare = renderRoute({
+      ...FIXTURES.site,
+      image: { url: '/data/images/wiki/9c8b7a65/hero.webp', author: null, license: null, commons_url: null },
+    })
+    expect(bare).toContain('/data/images/wiki/9c8b7a65/hero.webp')
+    expect(bare).not.toContain('<figcaption')
+  })
 })
 
 describe('Standalone-SPA-Modus (/articles.html ohne Payload)', () => {
