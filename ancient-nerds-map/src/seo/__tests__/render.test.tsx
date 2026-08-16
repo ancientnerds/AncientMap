@@ -16,6 +16,7 @@ import { renderToString } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 
 import { AuthProvider } from '../../contexts/AuthContext'
+import ArticlesPage from '../../pages/ArticlesPage'
 import type { AnRoute } from '../../types/anRoute'
 import { SeoRoute } from '../registry'
 import { RouteProvider } from '../RouteContext'
@@ -58,4 +59,22 @@ describe('heutige Produktions-Stubs (bis zum Cutover, Tasks 11-14)', () => {
       expect(html.length).toBeGreaterThan(50)
     })
   }
+})
+
+describe('Standalone-SPA-Modus (/articles.html ohne Payload)', () => {
+  // Produktentscheidung 2026-08: /articles.html (indexiert) und /articles/
+  // bleiben BEIDE bestehen, 301 erst nach Indexierung des neuen Hubs —
+  // articlesMain rendert ohne Payload deshalb ArticlesPage direkt statt
+  // umzuleiten. Der Baum entspricht articlesMain.tsx: RouteProvider ohne
+  // value, ArticlesPage holt ihre Daten selbst.
+  it('rendert ArticlesPage ohne Route und ohne Browser-APIs', () => {
+    const html = renderToString(
+      <RouteProvider>
+        <AuthProvider>
+          <ArticlesPage />
+        </AuthProvider>
+      </RouteProvider>,
+    )
+    expect(html.length).toBeGreaterThan(50)
+  })
 })
