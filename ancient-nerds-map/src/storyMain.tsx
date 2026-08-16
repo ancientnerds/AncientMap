@@ -1,10 +1,12 @@
 /**
  * Entry for the Story Archive routes (/news-archive/ and /news-archive/{slug}).
  *
- * The server injects the route payload and pre-renders the same content
- * into #root; SeoRoute resolves the matching page from the registry.
- * A missing or foreign payload (direct hit on /story.html) redirects at
- * module level, before createRoot — never during a render phase.
+ * The server injects the route payload and pre-renders the same tree into
+ * #root through the SSR sidecar; hydrateRoot adopts that markup instead of
+ * throwing it away (react-ssr Task 15). The composition inside StrictMode
+ * must stay identical to entry-server.tsx — a divergence is a hydration
+ * mismatch. A missing or foreign payload (direct hit on /story.html)
+ * redirects at module level, before any React root exists.
  *
  * No OfflineProvider: nothing under StoryPage/StoryArchivePage consumes
  * useOffline() (only Globe, FilterPanel and SitePopup do).
@@ -24,7 +26,8 @@ if (route?.type !== 'story' && route?.type !== 'storyArchive') {
   // Opened without server context — the archive is the only sensible destination.
   window.location.replace('/news-archive/')
 } else {
-  ReactDOM.createRoot(document.getElementById('root')!).render(
+  ReactDOM.hydrateRoot(
+    document.getElementById('root')!,
     <React.StrictMode>
       <RouteProvider value={route}>
         <AuthProvider>

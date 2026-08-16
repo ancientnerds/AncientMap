@@ -2,12 +2,17 @@
  * Entry for the journal routes (/articles/, /articles/{slug}) and the
  * standalone /articles.html SPA.
  *
- * With a server-injected payload SeoRoute resolves the page from the
- * registry — since react-ssr Task 13 the payload carries everything
- * (articleIndex list, article body_html), so those modes render with no
- * fetch and no hash routing. WITHOUT a payload — a direct hit on the
- * static /articles.html — ArticlesPage renders in standalone SPA mode:
- * it fetches its own data and does hash routing, unchanged.
+ * WITH a server-injected payload the sidecar has pre-rendered the same tree
+ * into #root; hydrateRoot adopts that markup instead of throwing it away
+ * (react-ssr Task 15). The composition inside StrictMode must stay
+ * identical to entry-server.tsx. The payload carries everything (Task 13:
+ * articleIndex list, article body_html), so those modes render with no
+ * fetch and no hash routing.
+ *
+ * WITHOUT a payload — a direct hit on the static /articles.html — there is
+ * no server markup to hydrate, so this stays createRoot: ArticlesPage
+ * renders in standalone SPA mode, fetches its own data and does hash
+ * routing, unchanged.
  *
  * Deliberately NO module-level redirect here (unlike story/site/research):
  * product decision 2026-08 — /articles.html (indexed, avg. position 2.1)
@@ -30,13 +35,27 @@ import { RouteProvider, readInjectedRoute } from './seo/RouteContext'
 import './styles/index.css'
 
 const route = readInjectedRoute()
+const container = document.getElementById('root')!
 
-ReactDOM.createRoot(document.getElementById('root')!).render(
-  <React.StrictMode>
-    <RouteProvider value={route}>
-      <AuthProvider>
-        {route ? <SeoRoute /> : <ArticlesPage />}
-      </AuthProvider>
-    </RouteProvider>
-  </React.StrictMode>,
-)
+if (route) {
+  ReactDOM.hydrateRoot(
+    container,
+    <React.StrictMode>
+      <RouteProvider value={route}>
+        <AuthProvider>
+          <SeoRoute />
+        </AuthProvider>
+      </RouteProvider>
+    </React.StrictMode>,
+  )
+} else {
+  ReactDOM.createRoot(container).render(
+    <React.StrictMode>
+      <RouteProvider value={route}>
+        <AuthProvider>
+          <ArticlesPage />
+        </AuthProvider>
+      </RouteProvider>
+    </React.StrictMode>,
+  )
+}

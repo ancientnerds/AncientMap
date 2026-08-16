@@ -46,29 +46,16 @@ function readCookie(name: string): string | null {
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null)
-  const [token, setToken] = useState<string | null>(() => {
-    // Server render (renderToString): no cookie, no storage — the page
-    // renders logged out; the browser evaluates this initializer itself
-    // on mount.
-    if (typeof window === 'undefined') return null
-    // The OAuth callback sets a short-lived (120s) cookie that the frontend
-    // promotes into localStorage. We used to clear the cookie immediately
-    // after reading it, but in multi-tab setups that races: whichever tab
-    // mounted first stole the token and the others saw nothing. Now we let
-    // the cookie expire on its own — every tab gets to read it during the
-    // ~2 minute window, and they all end up with the same JWT in localStorage.
-    const cookieToken = readCookie(COOKIE_NAME)
-    if (cookieToken) {
-      localStorage.setItem(TOKEN_KEY, cookieToken)
-      return cookieToken
-    }
-    return localStorage.getItem(TOKEN_KEY)
-  })
-  const [isLoading, setIsLoading] = useState(
-    () =>
-      typeof window !== 'undefined' &&
-      (!!localStorage.getItem(TOKEN_KEY) || !!readCookie(COOKIE_NAME)),
-  )
+  // One initial state in EVERY environment — renderToString, hydrateRoot and
+  // plain createRoot all start "unknown, checking": no token, no user,
+  // isLoading true. Reading localStorage/document.cookie in the useState
+  // initializers made the hydrating client's first render disagree with the
+  // server markup (react-ssr Task 15); the real token read lives in the
+  // mount effect below. isLoading starts true (not false) so an auth-gated
+  // page (AccountPage) shows its checking state first instead of flashing
+  // "signed out" for one effect tick.
+  const [token, setToken] = useState<string | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
 
   const clearAuth = useCallback(() => {
     localStorage.removeItem(TOKEN_KEY)
@@ -95,10 +82,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [clearAuth])
 
-  // On mount: validate existing token
+  // On mount: read the stored token and validate it. The OAuth callback sets
+  // a short-lived (120s) cookie that the frontend promotes into localStorage.
+  // We used to clear the cookie immediately after reading it, but in
+  // multi-tab setups that races: whichever tab mounted first stole the token
+  // and the others saw nothing. Now we let the cookie expire on its own —
+  // every tab gets to read it during the ~2 minute window, and they all end
+  // up with the same JWT in localStorage. (StrictMode runs this twice in
+  // dev: the promotion and the /auth/me validation are both idempotent.)
   useEffect(() => {
-    if (token) {
-      validateToken(token)
+    const cookieToken = readCookie(COOKIE_NAME)
+    if (cookieToken) {
+      localStorage.setItem(TOKEN_KEY, cookieToken)
+    }
+    const stored = cookieToken ?? localStorage.getItem(TOKEN_KEY)
+    if (stored) {
+      setToken(stored)
+      validateToken(stored)
+    } else {
+      setIsLoading(false)
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 

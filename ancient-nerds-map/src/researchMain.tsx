@@ -1,11 +1,12 @@
 /**
  * Entry for the research routes (/research/, /research/{slug}).
  *
- * SeoRoute resolves paper and library listing from the registry — since
- * react-ssr Task 12 both payloads carry everything the pages render, so
- * there is no fetch and no redirect. Only a payload-less direct hit on the
+ * The server pre-renders paper and library listing into #root through the
+ * SSR sidecar; hydrateRoot adopts that markup instead of throwing it away
+ * (react-ssr Task 15). Both payloads carry everything the pages render
+ * (Task 12), so there is no fetch. Only a payload-less direct hit on the
  * static /research.html still redirects to the Theo library, exactly as
- * before the cutover.
+ * before the cutover — at module level, before any React root exists.
  *
  * No OfflineProvider: nothing under these pages consumes useOffline()
  * (only Globe, FilterPanel and SitePopup do).
@@ -24,7 +25,8 @@ const route = readInjectedRoute()
 if (!route) {
   window.location.replace('/theo.html#research-library')
 } else {
-  ReactDOM.createRoot(document.getElementById('root')!).render(
+  ReactDOM.hydrateRoot(
+    document.getElementById('root')!,
     <React.StrictMode>
       <RouteProvider value={route}>
         <AuthProvider>
