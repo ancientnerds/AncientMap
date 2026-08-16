@@ -11,7 +11,8 @@
  *
  * Einzige bewusste Abweichung von Python: der <style>{SSR_CSS}</style>-
  * Block wird NICHT eingebettet — nach dem Cutover kommt das CSS aus dem
- * gebauten Vite-Bundle, nicht aus dem Head-Fragment.
+ * gebauten Vite-Bundle, nicht aus dem Head-Fragment. (renderHead maskiert
+ * < zusätzlich am Sink; byte-identisch, weil jsonStr schon maskiert.)
  */
 
 import type {
@@ -65,8 +66,13 @@ const thousands = (n: number) => n.toLocaleString('en-US')
 // nur Rohdaten tragen: slug, id, name — nie fertige absolute URLs.
 // ---------------------------------------------------------------------------
 
-/** slugify(): \p{L}\p{N}_ entspricht Pythons Unicode-\w. */
-function slugify(title: string): string {
+/**
+ * slugify(): \p{L}\p{N}_ entspricht Pythons Unicode-\w — ö/ü/é bleiben
+ * erhalten, wie in den Server-Slugs. Exportiert, weil ArticlesPage daraus
+ * Canonical- und /medium-URLs baut; bis 2026-08-16 hatte sie eine eigene
+ * ASCII-\w-Kopie, die Umlaute strippte und damit vom Server abwich.
+ */
+export function slugify(title: string): string {
   let slug = title.toLowerCase().trim()
   slug = slug.replace(/[^\p{L}\p{N}_\s-]/gu, '')
   slug = slug.replace(/[\s_]+/g, '-')

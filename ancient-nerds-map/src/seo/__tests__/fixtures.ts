@@ -27,7 +27,7 @@ import type {
   StoryRoute,
 } from '../../types/anRoute'
 
-const PYREF_DIR = join(dirname(fileURLToPath(import.meta.url)), 'pyref')
+export const PYREF_DIR = join(dirname(fileURLToPath(import.meta.url)), 'pyref')
 
 /** Referenz-Head aus pipeline/seo_pages.py, CRLF-normalisiert. */
 export function pyrefHead(name: string): string {

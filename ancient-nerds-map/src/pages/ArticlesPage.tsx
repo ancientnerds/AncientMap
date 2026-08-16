@@ -22,6 +22,7 @@ import type { NewsItemData } from '../types/news'
 import { newsItemToCardProps } from '../components/news/NewsCard'
 import '../components/news/news-cards.css'
 import { DISCORD_INVITE_URL } from '../constants/brand'
+import { slugify } from '../seo/meta'
 
 interface QualityReport {
   assessment_score: number
@@ -42,15 +43,6 @@ interface Article {
   week_end: string
   published_at: string | null
   quality_report: QualityReport | null
-}
-
-function slugify(title: string): string {
-  return title.toLowerCase().trim()
-    .replace(/[^\w\s-]/g, '')
-    .replace(/[\s_]+/g, '-')
-    .replace(/-+/g, '-')
-    .replace(/^-|-$/g, '')
-    .slice(0, 120)
 }
 
 function formatDateRange(start: string, end: string): string {

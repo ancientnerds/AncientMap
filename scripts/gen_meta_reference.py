@@ -102,10 +102,13 @@ STORY = {
 
 # Under 150 collapsed chars of post_text: since b4690a3 the description /
 # og:description / twitter:description tags must be omitted entirely.
+# The </script> in the headline drives the JSON-LD escape path: _json_str /
+# jsonStr must mask the < to \\u003c or the schema breaks out of its
+# <script> tag; the <title> path must escape it to &lt;/script&gt;.
 STORY_SHORT = {
     **STORY,
     "id": 4712,
-    "headline": "Short dig note from Trundholm",
+    "headline": "Short dig note from Trundholm </script>",
     "summary": "A one-line update from the bog.",
     "post_text": "A one-line update.",
     "screenshot_url": "",

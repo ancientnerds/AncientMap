@@ -12,8 +12,12 @@
  *     Vite-Bundle das CSS. stripSsrStyle() entfernt den Block vor dem
  *     Vergleich; darüber hinaus ist die Toleranz null.
  *
- * Mehr Abweichungen gibt es nicht.
+ * Mehr Abweichungen gibt es nicht. (renderHead maskiert < zusätzlich am
+ * Sink; byte-identisch, weil jsonStr schon maskiert — Defense in Depth,
+ * keine Ausgabedifferenz.)
  */
+
+import { readdirSync } from 'node:fs'
 
 import { describe, expect, it } from 'vitest'
 
@@ -27,11 +31,12 @@ import {
   researchMeta,
   siteMeta,
   sitesIndexMeta,
+  slugify,
   storyArchiveMeta,
   storyMeta,
 } from '../meta'
 import type { StoryRoute } from '../../types/anRoute'
-import { FIXTURES, pyrefHead, pyrefRoute } from './fixtures'
+import { FIXTURES, PYREF_DIR, pyrefHead, pyrefRoute } from './fixtures'
 
 /** Bewusste Ausnahme 1: der SSR-CSS-Block (siehe Dateikommentar). */
 const stripSsrStyle = (head: string) => head.replace(/\n<style>[\s\S]*?<\/style>/, '')
@@ -61,6 +66,23 @@ describe('Head-Gleichheit gegen die Python-Referenz', () => {
     expect(stripSsrStyle(pyrefHead('country'))).not.toContain('<style>')
   })
 
+  it('jede pyref-Referenz wird verglichen — keine verwaisten Dateien', () => {
+    const refs = readdirSync(PYREF_DIR)
+      .filter(f => f.endsWith('.html'))
+      .map(f => f.replace(/\.html$/, ''))
+      .sort()
+    expect(refs).toEqual(Object.keys(PYREF_CASES).sort())
+  })
+
+  it('die Referenz treibt </script> durch den JSON-LD-Pfad', () => {
+    // story_short trägt </script> in der Headline: im Schema als \u003c
+    // maskiert, im <title> HTML-escaped — nirgends als rohes </script>.
+    const head = stripSsrStyle(pyrefHead('story_short'))
+    expect(head).toContain('\\u003c/script>')
+    expect(head).toContain('&lt;/script&gt;')
+    expect(head.match(/<\/script>/g)).toHaveLength(1) // nur der JSON-LD-Schließtag
+  })
+
   for (const [name, metaFn] of Object.entries(PYREF_CASES)) {
     it(`${name}: renderHead() == Python-Head minus <style>`, () => {
       const expected = stripSsrStyle(pyrefHead(name))
@@ -68,6 +90,17 @@ describe('Head-Gleichheit gegen die Python-Referenz', () => {
       expect(actual).toBe(expected)
     })
   }
+})
+
+describe('slugify', () => {
+  it('liefert denselben Slug wie die Python-Seite — Umlaute bleiben', () => {
+    // Bis 2026-08-16 hatte ArticlesPage eine eigene ASCII-\w-Kopie, die
+    // ö/ü strippte; Server-Slugs (article_html_renderer.slugify) behalten
+    // sie. Sichtbar im country-pyref: der Server-Pfad enthält genau den
+    // Slug, den diese Funktion liefert.
+    expect(slugify('Göbekli Tepe')).toBe('göbekli-tepe')
+    expect(FIXTURES.country.sections[0].sites[0].path).toContain(slugify('Göbekli Tepe'))
+  })
 })
 
 describe('countryMeta', () => {

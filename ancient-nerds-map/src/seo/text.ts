@@ -6,6 +6,11 @@
  * Python-Slicing arbeitet auf Codepoints, und die Vitest-Vergleiche gegen
  * die Python-Referenz-Heads müssen byte-genau aufgehen — auch wenn eine
  * Headline ein Emoji trägt.
+ *
+ * Bekanntes Whitespace-Delta für künftige Parity-Diagnose: JS \s matcht
+ * U+FEFF (Python str.split() nicht), Python splittet zusätzlich an
+ * U+0085 und U+001C–001F. In realen Headlines/Descriptions kommt beides
+ * nicht vor.
  */
 
 /** Python `" ".join(s.split())`: Whitespace-Läufe kollabieren, trimmen. */

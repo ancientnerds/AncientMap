@@ -60,6 +60,7 @@ export interface StoryArchiveRoute {
   }[]
 }
 
+/** Post-cutover contract (react-ssr Tasks 11-14) — production still injects {id}/{slug}/{} stubs. */
 export interface SiteRoute {
   type: 'site'
   id: string
@@ -107,6 +108,7 @@ export interface CountryRoute {
   }[]
 }
 
+/** Post-cutover contract (react-ssr Tasks 11-14) — production still injects {id}/{slug}/{} stubs. */
 export interface ResearchRoute {
   type: 'research'
   slug: string
@@ -118,11 +120,13 @@ export interface ResearchRoute {
   heroImageUrl: string
 }
 
+/** Post-cutover contract (react-ssr Tasks 11-14) — production still injects {id}/{slug}/{} stubs. */
 export interface ResearchIndexRoute {
   type: 'researchIndex'
   papers: { slug: string; title: string; summary: string }[]
 }
 
+/** Post-cutover contract (react-ssr Tasks 11-14) — production still injects {id}/{slug}/{} stubs. */
 export interface ArticleRoute {
   type: 'article'
   slug: string
@@ -132,6 +136,7 @@ export interface ArticleRoute {
   heroImageUrl: string
 }
 
+/** Post-cutover contract (react-ssr Tasks 11-14) — production still injects {id}/{slug}/{} stubs. */
 export interface ArticleIndexRoute {
   type: 'articleIndex'
   articles: { slug: string; title: string; summary: string }[]
