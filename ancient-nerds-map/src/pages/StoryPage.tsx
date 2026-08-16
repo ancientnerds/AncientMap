@@ -12,15 +12,16 @@
 import CommunityCta from '../components/layout/CommunityCta'
 import PageHeader from '../components/layout/PageHeader'
 import { globeUrlForSite } from '../constants/brand'
-import type { StoryRoute } from '../types/anRoute'
+import { useRoute } from '../seo/RouteContext'
 
 import '../styles/story-page.css'
 
-interface Props {
-  story: StoryRoute
-}
-
-export default function StoryPage({ story }: Props) {
+export default function StoryPage() {
+  // Das Payload kommt aus dem Route-Kontext (SeoRoute mountet die Seite nur
+  // für story-Routen); außerhalb davon gibt es nichts zu rendern.
+  const route = useRoute()
+  if (route?.type !== 'story') return null
+  const story = route
   const paragraphs = story.postText.split('\n').map(p => p.trim()).filter(Boolean)
 
   return (

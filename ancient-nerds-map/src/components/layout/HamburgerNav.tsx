@@ -30,7 +30,11 @@ interface HamburgerNavProps {
  * This avoids requiring AuthProvider on every page.
  */
 function useAuthToken(): boolean {
-  const [isLoggedIn, setIsLoggedIn] = useState(() => !!localStorage.getItem('an_auth_token'))
+  // Server render (renderToString): no localStorage — the header renders
+  // logged out; the browser evaluates this initializer itself on mount.
+  const [isLoggedIn, setIsLoggedIn] = useState(
+    () => typeof window !== 'undefined' && !!localStorage.getItem('an_auth_token'),
+  )
 
   useEffect(() => {
     // Re-check on storage events (e.g. login in another tab)
@@ -74,10 +78,14 @@ export default function HamburgerNav({ currentPage, openInNewTab }: HamburgerNav
     }
   }, [open, updatePos])
 
-  // Build the auth link based on login state
-  const authItem = isLoggedIn
-    ? { page: 'account', label: 'Account', href: '/account.html', icon: ACCOUNT_ICON }
-    : { page: 'signin', label: 'Sign In', href: `${config.api.baseUrl}/auth/discord?return_to=${encodeURIComponent(window.location.pathname + window.location.search)}`, icon: ACCOUNT_ICON }
+  // Build the auth link based on login state — only while the dropdown is
+  // open: the sign-in return_to reads window.location, which does not exist
+  // during server rendering, and the dropdown can only open in a browser.
+  const authItem = !open
+    ? null
+    : isLoggedIn
+      ? { page: 'account', label: 'Account', href: '/account.html', icon: ACCOUNT_ICON }
+      : { page: 'signin', label: 'Sign In', href: `${config.api.baseUrl}/auth/discord?return_to=${encodeURIComponent(window.location.pathname + window.location.search)}`, icon: ACCOUNT_ICON }
 
   return (
     <div className="hamburger-nav">
@@ -93,7 +101,7 @@ export default function HamburgerNav({ currentPage, openInNewTab }: HamburgerNav
           <line x1="3" y1="18" x2="21" y2="18" />
         </svg>
       </button>
-      {open && (
+      {authItem && (
         <div
           ref={dropRef}
           className="hamburger-dropdown"

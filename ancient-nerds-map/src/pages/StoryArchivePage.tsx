@@ -8,34 +8,19 @@
 import AiNoticeBanner from '../components/layout/AiNoticeBanner'
 import CommunityCta from '../components/layout/CommunityCta'
 import PageHeader from '../components/layout/PageHeader'
+import { useRoute } from '../seo/RouteContext'
 
 import '../styles/story-page.css'
-
-export interface ArchiveEntry {
-  slug: string
-  headline: string
-  summary: string
-  /* Context the listing query already joins — cards looked identical without it. */
-  publishedDisplay?: string
-  category?: string
-  siteName?: string
-  channelName?: string
-  speculativeTag?: string
-  screenshotUrl?: string
-}
-
-interface Props {
-  page: number
-  totalPages: number
-  total: number
-  stories: ArchiveEntry[]
-}
 
 function pageHref(n: number): string {
   return n <= 1 ? '/news-archive/' : `/news-archive/page/${n}`
 }
 
-export default function StoryArchivePage({ page, totalPages, total, stories }: Props) {
+export default function StoryArchivePage() {
+  // Das Payload kommt aus dem Route-Kontext; die Typen aus StoryArchiveRoute.
+  const route = useRoute()
+  if (route?.type !== 'storyArchive') return null
+  const { page, totalPages, total, stories } = route
   return (
     <div className="story-page">
       <PageHeader currentPage="news">

@@ -10,31 +10,18 @@ import { useState } from 'react'
 
 import CommunityCta from '../components/layout/CommunityCta'
 import PageHeader from '../components/layout/PageHeader'
+import { useRoute } from '../seo/RouteContext'
+import type { CountryRoute } from '../types/anRoute'
 
 import '../styles/story-page.css'
 
-export interface CountryEntry {
-  name: string
-  count: number
-  path: string
-}
+type SiteEntry = CountryRoute['sections'][number]['sites'][number]
 
-export interface SiteEntry {
-  name: string
-  path: string
-  summary: string
-  siteType: string
-  period: string
-  thumb: string
-}
-
-export interface TypeSection {
-  label: string
-  anchor: string
-  sites: SiteEntry[]
-}
-
-export function SitesIndexPage({ countries }: { countries: CountryEntry[] }) {
+export function SitesIndexPage() {
+  // Das Payload kommt aus dem Route-Kontext; die Typen aus SitesIndexRoute.
+  const route = useRoute()
+  if (route?.type !== 'sitesIndex') return null
+  const { countries } = route
   const total = countries.reduce((sum, c) => sum + c.count, 0)
 
   return (
@@ -78,20 +65,14 @@ function SiteCard({ site }: { site: SiteEntry }) {
   )
 }
 
-export function CountrySitesPage({
-  country,
-  sections,
-  periodSpan,
-  total,
-}: {
-  country: string
-  sections: TypeSection[]
-  periodSpan: string
-  total: number
-}) {
+export function CountrySitesPage() {
+  const route = useRoute()
   // The crawler fragment can only offer anchor jumps; with JS the same chips
-  // narrow the list instead of scrolling to it.
+  // narrow the list instead of scrolling to it. (Hook vor dem Type-Guard —
+  // Hooks dürfen nicht hinter einem konditionalen return stehen.)
   const [activeType, setActiveType] = useState<string | null>(null)
+  if (route?.type !== 'country') return null
+  const { country, sections, periodSpan, total } = route
   const shown = activeType ? sections.filter(s => s.label === activeType) : sections
 
   return (

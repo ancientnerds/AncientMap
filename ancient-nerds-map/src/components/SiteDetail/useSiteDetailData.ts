@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect } from 'react'
 import { config } from '../../config'
 import { apiDetailToSiteData } from '../../utils/siteApi'
 import { hasMetadataFields } from '../../config/sourceFields'
@@ -26,11 +26,11 @@ export function useSiteDetailData(siteId: string | null): UseSiteDetailDataRetur
   // Standalone page loaded over HTTP — force online mode so gallery/content fetches fire
   useEffect(() => { OfflineFetch.setOfflineMode(false) }, [])
 
-  // Auth: read from localStorage (same pattern as SitePopup)
-  const authToken = useMemo(() => localStorage.getItem('an_auth_token'), [])
-
-  // Check founder status
+  // Check founder status. The token is read inside the effect: localStorage
+  // is a browser API and this hook renders during renderToString (SitePage
+  // sits in the SSR registry), where only effects are skipped.
   useEffect(() => {
+    const authToken = localStorage.getItem('an_auth_token')
     if (!authToken) return
     fetch(`${config.api.baseUrl}/auth/me`, {
       headers: { 'Authorization': `Bearer ${authToken}` },
@@ -38,7 +38,7 @@ export function useSiteDetailData(siteId: string | null): UseSiteDetailDataRetur
       .then(r => r.ok ? r.json() : null)
       .then(data => { if (data?.is_founder) setIsFounder(true) })
       .catch(() => {})
-  }, [authToken])
+  }, [])
 
   // Fetch site data
   useEffect(() => {

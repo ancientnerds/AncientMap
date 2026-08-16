@@ -47,6 +47,10 @@ function readCookie(name: string): string | null {
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null)
   const [token, setToken] = useState<string | null>(() => {
+    // Server render (renderToString): no cookie, no storage — the page
+    // renders logged out; the browser evaluates this initializer itself
+    // on mount.
+    if (typeof window === 'undefined') return null
     // The OAuth callback sets a short-lived (120s) cookie that the frontend
     // promotes into localStorage. We used to clear the cookie immediately
     // after reading it, but in multi-tab setups that races: whichever tab
@@ -60,7 +64,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     return localStorage.getItem(TOKEN_KEY)
   })
-  const [isLoading, setIsLoading] = useState(!!localStorage.getItem(TOKEN_KEY) || !!readCookie(COOKIE_NAME))
+  const [isLoading, setIsLoading] = useState(
+    () =>
+      typeof window !== 'undefined' &&
+      (!!localStorage.getItem(TOKEN_KEY) || !!readCookie(COOKIE_NAME)),
+  )
 
   const clearAuth = useCallback(() => {
     localStorage.removeItem(TOKEN_KEY)
