@@ -8,13 +8,19 @@ WORKDIR /app
 COPY ancient-nerds-map/package.json ancient-nerds-map/package-lock.json ./
 RUN npm ci --omit=dev
 
+# ssr/ zuerst: server.mjs ändert sich selten, dist-ssr bei jedem Deploy —
+# so bleibt der ssr/-Layer im Cache.
+COPY ancient-nerds-map/ssr ./ssr
 # dist-ssr entsteht VOR dem Image-Build via `npm run build:ssr` (Deploy-Flow).
 COPY ancient-nerds-map/dist-ssr ./dist-ssr
-COPY ancient-nerds-map/ssr ./ssr
 
 RUN groupadd --gid 1000 appgroup && \
     useradd --uid 1000 --gid appgroup --shell /bin/bash --create-home appuser
 USER appuser
+
+# Ohne das rendert react-dom/server mit dem Development-Build (langsam,
+# Dev-Warnungen im Log).
+ENV NODE_ENV=production
 
 EXPOSE 8500
 

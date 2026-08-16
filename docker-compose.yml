@@ -175,11 +175,7 @@ services:
         max-file: "3"
     ports:
       - "127.0.0.1:8500:8500"
-    healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://localhost:8500/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
+    # Healthcheck kommt aus dem Image (Dockerfile.ssr) — hier nicht doppeln.
 
   # ==========================================================================
   # Theo Research Worker — same image as the API, different entrypoint.

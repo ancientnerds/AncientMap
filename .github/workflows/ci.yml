@@ -78,6 +78,10 @@ jobs:
       - name: Build
         run: npm run build
 
+      # A broken SSR bundle must fail HERE, not halfway through the deploy.
+      - name: Build SSR bundle
+        run: npm run build:ssr
+
   lint-backend:
     name: Lint Backend
     runs-on: ubuntu-latest
@@ -357,6 +361,17 @@ jobs:
                 rm -rf ancient-nerds-map/dist-new
                 exit 1
               fi
+              # SSR bundle for the sidecar image (Dockerfile.ssr copies it at
+              # image build time; no live server reads the directory, so no
+              # swap dance). Runs BEFORE the dist swap: a failure aborts the
+              # deploy with the old build still live. rm first so a stale
+              # entry-server.js can never pass the check after a crashed build.
+              rm -rf ancient-nerds-map/dist-ssr
+              (cd ancient-nerds-map && npm run build:ssr)
+              if [ ! -f ancient-nerds-map/dist-ssr/entry-server.js ]; then
+                echo "ERROR: SSR build failed — dist-ssr/entry-server.js missing!"
+                exit 1
+              fi
               # Atomic swap using timestamp so dist-old never conflicts
               # (stale dist-old from root-owned build would block mv dist dist-old)
               SWAP_TS=$(date +%s)
@@ -381,6 +396,11 @@ jobs:
             if echo "$CHANGED" | grep -qE "^(scripts/webcam_stream_proxy|Dockerfile\.webcam-proxy)"; then
               REBUILD="$REBUILD webcam-proxy"
             fi
+            # The ssr image embeds dist-ssr, so any frontend change means a
+            # stale bundle inside the running container until a rebuild.
+            if echo "$CHANGED" | grep -qE "^(Dockerfile\.ssr|ancient-nerds-map/)"; then
+              REBUILD="$REBUILD ssr"
+            fi
 
             # Drift guard (2026-08-07): $CHANGED only covers THIS pull. When a
             # deploy dies after `git pull` (that night: SSH pipe broke during a
@@ -395,6 +415,13 @@ jobs:
               case "$REBUILD" in *api*) ;; *) REBUILD="$REBUILD api";; esac
               case "$REBUILD" in *lyra*) ;; *) REBUILD="$REBUILD lyra";; esac
             fi
+
+            # Same code state, always: whenever the api image is rebuilt, the
+            # ssr sidecar is rebuilt with it (simpler and safer than tracking
+            # which side a change touched).
+            case "$REBUILD" in
+              *api*) case "$REBUILD" in *ssr*) ;; *) REBUILD="$REBUILD ssr";; esac;;
+            esac
 
             # The research worker shares the api image but NOT its lifecycle:
             # a paper takes 7-15h and a rebuild kills it (twice on 2026-08-07,
@@ -420,11 +447,13 @@ jobs:
               echo "==> Theo worker busy (running=$THEO_BUSY) — leaving it on the old image"
             fi
 
-            # Wait until one API instance answers on the given port.
+            # Wait until the service answers on the given port. Optional third
+            # arg is the probe path (default /) — the ssr sidecar answers on
+            # /health and 404s on /.
             wait_api() {
               for i in $(seq 1 24); do
                 sleep 5
-                if curl -sf "http://localhost:$1/"; then
+                if curl -sf "http://localhost:$1${3:-/}"; then
                   echo " API on :$1 healthy after $((i * 5))s"
                   return 0
                 fi
@@ -443,6 +472,11 @@ jobs:
               BUILD_HASH=$(git rev-parse --short HEAD) docker compose build $REBUILD
               case "$REBUILD" in
                 *api*)
+                  # ssr first: both api instances depend on it being healthy,
+                  # and --no-deps below skips that ordering on purpose.
+                  echo "==> Starting SSR sidecar (api depends on it being healthy)"
+                  docker compose up -d --no-deps ssr
+                  wait_api 8500 ssr /health
                   echo "==> Rolling API restart (nginx keeps serving from the other instance)"
                   docker compose up -d --no-deps api
                   wait_api 8000 api
@@ -455,8 +489,10 @@ jobs:
             elif echo "$CHANGED" | grep -qE "^docker-compose\.yml"; then
               echo "==> Compose config changed, recreating services..."
               # Build too: a new service referencing the api image (api2) must
-              # not fail on a compose-only deploy.
-              BUILD_HASH=$(git rev-parse --short HEAD) docker compose build api
+              # not fail on a compose-only deploy — same for the ssr image.
+              # up without --no-deps respects depends_on, so ssr is healthy
+              # before either api instance starts.
+              BUILD_HASH=$(git rev-parse --short HEAD) docker compose build api ssr
               BUILD_HASH=$(git rev-parse --short HEAD) docker compose up -d --remove-orphans
               wait_api 8000 api
               wait_api 8001 api2

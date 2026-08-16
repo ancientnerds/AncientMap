@@ -21,6 +21,14 @@ createServer((req, res) => {
     return
   }
   let body = ''
+  // Ohne setEncoding wären die Chunks Buffer, und `body += c` würde jedes
+  // an einer Chunk-Grenze zerschnittene Multibyte-Zeichen still zu U+FFFD
+  // korrumpieren (Çatalhöyük!). Der StringDecoder hinter setEncoding hält
+  // angebrochene Sequenzen bis zum nächsten Chunk zurück.
+  req.setEncoding('utf8')
+  // Client-Abbruch mitten im Body wäre sonst eine uncaught exception, die
+  // den Prozess killt.
+  req.on('error', () => res.destroy())
   req.on('data', c => (body += c))
   req.on('end', () => {
     try {
