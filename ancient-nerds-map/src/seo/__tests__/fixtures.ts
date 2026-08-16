@@ -4,11 +4,10 @@
  * Beide Seiten jeder Vergleichsprüfung stammen aus EINEM Fixture-Satz:
  * scripts/gen_meta_reference.py rendert die Python-Referenz-Heads UND
  * schreibt die zugehörigen Route-Payloads — Payload und Soll-Head können
- * also nicht auseinanderlaufen. Für story/storyArchive/sitesIndex ist das
- * Payload wörtlich SeoPage.route (was Produktion heute injiziert); country
- * und site tragen seit dem Cutover (Tasks 10/11) die rohen SQL-Zeilen; für
- * research/article und die beiden Indexe die Post-Cutover-Form aus dem
- * react-ssr-Plan (Tasks 12–14).
+ * also nicht auseinanderlaufen. Für sitesIndex ist das Payload wörtlich
+ * SeoPage.route; alle übrigen Typen tragen seit den Cutovers (Tasks
+ * 10–14) die rohen snake_case-Zeilenfelder — Formatierung lebt in
+ * src/seo/.
  */
 
 import { readFileSync } from 'node:fs'

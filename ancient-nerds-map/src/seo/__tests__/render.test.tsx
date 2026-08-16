@@ -216,6 +216,111 @@ describe('articleIndex (Task 13): der crawlbare Journal-Hub aus dem Payload', ()
   })
 })
 
+describe('story-Seite (Task 14): der SSR-Body trägt den Python-Fragment-Inhalt', () => {
+  // Inhaltliche Parität zu seo_pages.story_page() — was dort am Python-Body
+  // hing (Quellen, Deeplink, Site-Chips, Related), muss im React-Body stehen.
+  const html = renderRoute(FIXTURES.story)
+
+  it('genau ein h1, und es trägt die Headline', () => {
+    expect(html.match(/<h1/g)).toHaveLength(1)
+    expect(html).toContain('Sun Chariot')
+  })
+
+  it('Datum aus dem rohen ISO-Timestamp: dateTime ISO, Anzeige lang', () => {
+    expect(html).toContain('dateTime="2026-03-14"')
+    expect(html).toContain('March 14, 2026')
+  })
+
+  it('Video-Link mit &t=-Deeplink und absolutiertem Screenshot', () => {
+    expect(html).toContain('https://www.youtube.com/watch?v=abc123&amp;t=754s')
+    expect(html).toContain('https://ancientnerds.com/data/news/screenshots/4711.jpg')
+    expect(html).toContain('by Ancient Architects')
+  })
+
+  it('kuratierte Site: Chip zur Detailseite UND zum Globus', () => {
+    expect(html).toContain('href="/sites/denmark/trundholm-mose-1b2c3d4e"')
+    expect(html).toContain('/globe.html?focus=1b2c3d4e-0000-4000-8000-000000000000')
+  })
+
+  it('unkuratierte Site: kein Detailseiten-Link (wäre ein 404), nur der Globus', () => {
+    const uncurated = renderRoute({ ...FIXTURES.story, site_curated: false })
+    // href="/sites/" (der Hub in CommunityCta) bleibt — nur der Chip zur
+    // Detailseite darf nicht entstehen.
+    expect(uncurated).not.toContain('href="/sites/denmark')
+    expect(uncurated).toContain('📍 <!-- -->Trundholm Mose')
+    expect(uncurated).toContain('/globe.html?focus=1b2c3d4e-0000-4000-8000-000000000000')
+  })
+
+  it('Quellen aus web_sources: Titel, nackter Host, Snippet', () => {
+    expect(html).toContain('https://en.natmus.dk/sun-chariot/')
+    expect(html).toContain('National Museum of Denmark')
+    expect(html).toContain('en.natmus.dk')
+    expect(html).toContain('found in 1902 in the Trundholm bog')
+  })
+
+  it('web_sources ist LLM-derived: ein javascript:-Eintrag wird nie ein href', () => {
+    const evil = renderRoute({
+      ...FIXTURES.story,
+      web_sources: [{ url: 'javascript:alert(1)', title: 'evil' }],
+    })
+    expect(evil).not.toContain('javascript:')
+    expect(evil).not.toContain('>Sources<') // nichts Valides übrig
+  })
+
+  it('Related-Block mit Site-Überschrift und Story-Link', () => {
+    expect(html).toContain('More about Trundholm Mose')
+    expect(html).toContain('href="/news-archive/trundholm-bog-survey-planned-4600"')
+  })
+
+  it('Art.-50-Fußnote maschinenlesbar (data-ai-generated) und CommunityCta', () => {
+    expect(html).toContain('data-ai-generated="true"')
+    expect(html).toContain('AI-generated')
+    expect(html).toContain('Keep exploring')
+  })
+})
+
+describe('storyArchive (Task 14): das paginierte Listing aus dem Rohpayload', () => {
+  const html = renderRoute(FIXTURES.storyArchive)
+
+  it('genau ein h1: Story Archive, mit Zählern', () => {
+    expect(html.match(/<h1/g)).toHaveLength(1)
+    expect(html).toContain('Story Archive')
+    expect(html).toContain('2,248')
+    expect(html).toContain('page 1 of 94')
+  })
+
+  it('Karten mit Link, Thumbnail, Blurb und Meta-Zeile', () => {
+    expect(html).toContain(
+      'href="/news-archive/bronze-age-sun-chariot-a-second-fragment-found-at-trundholm-4711"',
+    )
+    expect(html).toContain('src="/data/news/screenshots/4711.jpg"')
+    expect(html).toContain('Conservators at the National Museum')
+    expect(html).toContain('March 14, 2026')
+    expect(html).toContain('via Ancient Architects')
+  })
+
+  it('Speculative-Badge auf der markierten Karte', () => {
+    expect(html).toContain('speculative')
+  })
+
+  it('Pager Seite 1: nur Next, auf /news-archive/page/2', () => {
+    expect(html).toContain('href="/news-archive/page/2"')
+    expect(html).not.toContain('Previous')
+  })
+
+  it('Pager Seite 2: Previous zurück auf /news-archive/', () => {
+    const page2 = renderRoute(pyrefRoute('storyArchive_page2'))
+    expect(page2).toContain('page 2 of 94')
+    expect(page2).toContain('href="/news-archive/"')
+    expect(page2).toContain('href="/news-archive/page/3"')
+  })
+
+  it('Art.-50-Banner und CommunityCta', () => {
+    expect(html).toContain('data-ai-generated="true"')
+    expect(html).toContain('Keep exploring')
+  })
+})
+
 describe('Standalone-SPA-Modus (/articles.html ohne Payload)', () => {
   // Produktentscheidung 2026-08: /articles.html (indexiert) und /articles/
   // bleiben BEIDE bestehen, 301 erst nach Indexierung des neuen Hubs —

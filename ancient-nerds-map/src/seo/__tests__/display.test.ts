@@ -7,7 +7,7 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { coordDisplay, periodDisplay } from '../display'
+import { coordDisplay, longDate, periodDisplay } from '../display'
 
 describe('coordDisplay', () => {
   it('formatiert Nord/Ost mit vier Nachkommastellen', () => {
@@ -59,5 +59,25 @@ describe('periodDisplay', () => {
 
   it('leer ohne jede Datierung', () => {
     expect(periodDisplay({ period_name: null, period_start: null, period_end: null })).toBe('')
+  })
+})
+
+describe('longDate (_date_parts()[1], react-ssr Task 14)', () => {
+  it('formatiert wie Pythons strftime("%B %d, %Y")', () => {
+    expect(longDate('2026-03-14T09:30:00')).toBe('March 14, 2026')
+  })
+
+  it('padded den Tag zweistellig — %d, nicht %-d', () => {
+    expect(longDate('2026-03-05')).toBe('March 05, 2026')
+  })
+
+  it('fällt bei unparsbaren Strings auf value[:10] zurück, wie Python', () => {
+    expect(longDate('circa 1400 BC')).toBe('circa 1400')
+    expect(longDate('2026-13-01')).toBe('2026-13-01')
+  })
+
+  it('leer ohne Wert', () => {
+    expect(longDate(null)).toBe('')
+    expect(longDate('')).toBe('')
   })
 })

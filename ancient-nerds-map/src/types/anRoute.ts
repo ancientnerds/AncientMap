@@ -12,49 +12,62 @@
  * window global. Absent when the entry is opened directly, so every
  * consumer must handle undefined.
  *
- * story and storyArchive describe what the server injects TODAY; the
- * other types carry raw snake_case rows since the react-ssr cutovers
- * (country/site Tasks 10/11, research/article Tasks 12/13) — display
- * formatting lives in src/seo/, not in the payload.
+ * Every type carries raw snake_case rows since the react-ssr cutovers
+ * (country/site Tasks 10/11, research/article Tasks 12/13, story/
+ * storyArchive Task 14) — display formatting lives in src/seo/, not in
+ * the payload.
  */
 
+/**
+ * One news story — the raw row fields api/routes/articles_html.py::story_page
+ * hands through (react-ssr Task 14): NewsItem columns verbatim plus the
+ * video/site joins and _related_stories(). The http(s) source filter, the
+ * &t= video deeplink, screenshot absolutization and date formatting are
+ * display decisions and live in src/seo/ and StoryPage.
+ */
 export interface StoryRoute {
   type: 'story'
   id: number
   headline: string
   summary: string
-  facts: string[]
-  postText: string
-  screenshotUrl: string
-  youtubeUrl: string
-  videoTitle: string
-  channelName: string
-  publishedAt: string
-  publishedDisplay: string
-  category: string
-  siteName: string
-  sitePath: string
-  siteId: string
-  speculativeTag: string
-  sources: { url: string; title: string; host: string; snippet: string }[]
+  facts: string[] | null
+  /** Never null: public_stories_query filters on post_text IS NOT NULL. */
+  post_text: string
+  /** Matched site name, else the extractor's raw guess, else ''. */
+  site_name: string
+  site_id: string
+  site_country: string
+  /** /sites/{country}/{slug} serves curated sites only — gates the detail link. */
+  site_curated: boolean
+  screenshot_url: string | null
+  youtube_url: string
+  video_title: string
+  channel_name: string
+  /** Raw ISO timestamp: video publish date, else item creation. */
+  published_at: string
+  news_category: string | null
+  /** LLM-derived JSON — only clean http(s) entries may render as links. */
+  web_sources: { url?: string | null; title?: string | null; snippet?: string | null }[] | null
+  timestamp_seconds: number | null
+  speculative_tag: string | null
   related: { slug: string; headline: string; kind: string }[]
 }
 
 export interface StoryArchiveRoute {
   type: 'storyArchive'
   page: number
-  totalPages: number
+  total_pages: number
   total: number
   stories: {
     slug: string
     headline: string
     summary: string
-    publishedDisplay?: string
-    category?: string
-    siteName?: string
-    channelName?: string
-    speculativeTag?: string
-    screenshotUrl?: string
+    published_at: string
+    news_category: string | null
+    site_name: string
+    channel_name: string
+    speculative_tag: string | null
+    screenshot_url: string | null
   }[]
 }
 

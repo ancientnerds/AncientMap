@@ -92,10 +92,24 @@ export function countryPath(country: string): string {
   return `/sites/${slugify(country)}`
 }
 
-function sitePath(country: string, name: string, siteId: string): string {
+/**
+ * site_path(): Detailpfad einer kuratierten Site. Exportiert für StoryPage,
+ * die den Chip zur Site-Seite seit dem Story-Cutover (Task 14) selbst baut —
+ * gegated auf site_curated, sonst wäre der Link ein 404.
+ */
+export function sitePath(country: string, name: string, siteId: string): string {
   const stem = slugify(name)
   const suffix = siteId.replace(/-/g, '').slice(0, 8)
   return `${countryPath(country)}/${stem ? `${stem}-${suffix}` : suffix}`
+}
+
+/**
+ * story_page(): relative Screenshot-Pfade werden absolut — og:image und das
+ * NewsArticle-Schema verlangen absolute URLs; StoryPage nutzt dieselbe Form.
+ */
+export function absoluteUrl(path: string | null): string {
+  if (!path) return ''
+  return path.startsWith('/') ? `${BASE_URL}${path}` : path
 }
 
 /**
@@ -158,24 +172,25 @@ export function renderHead(m: PageMeta): string {
 export function storyMeta(route: StoryRoute): PageMeta {
   const canonical = `${BASE_URL}/news-archive/${encodePath(storySlug(route.headline, route.id))}`
   const summary = route.summary.trim()
+  const screenshot = absoluteUrl(route.screenshot_url)
   const schema =
     '{"@context": "https://schema.org", "@type": "NewsArticle", ' +
     `"headline": ${jsonStr(route.headline)}, ` +
     `"description": ${jsonStr(cut(summary, 300))}, ` +
-    `"datePublished": "${route.publishedAt}", ` +
-    `"image": "${esc(route.screenshotUrl || DEFAULT_OG_IMAGE)}", ` +
+    `"datePublished": "${isoDate(route.published_at)}", ` +
+    `"image": "${esc(screenshot || DEFAULT_OG_IMAGE)}", ` +
     '"author": {"@type": "Organization", "name": "Ancient Nerds", ' +
     `"url": "${BASE_URL}"}, ` +
     '"publisher": {"@type": "Organization", "name": "Ancient Nerds", ' +
     `"url": "${BASE_URL}"}, ` +
     `"mainEntityOfPage": "${canonical}", "url": "${canonical}"}`
-  const postText = collapse(route.postText)
+  const postText = collapse(route.post_text)
   return {
     title: route.headline,
     description: Array.from(postText).length >= 150 ? blurb(postText, 300) : '',
     canonical,
     ogType: 'article',
-    image: route.screenshotUrl || undefined,
+    image: screenshot || undefined,
     schema,
   }
 }

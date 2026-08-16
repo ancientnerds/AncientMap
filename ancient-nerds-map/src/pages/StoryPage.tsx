@@ -6,15 +6,53 @@
  *
  * The payload arrives pre-rendered as the server-injected route, so there
  * is no fetch and no loading state — what the crawler was served and what
- * the visitor sees are built from the same data.
+ * the visitor sees are built from the same data. Since the react-ssr
+ * Task 14 cutover the payload is the raw snake_case row; the display
+ * decisions the Python renderer used to make — the http(s) source filter,
+ * the &t= video deeplink, the curated-site link gate — live here.
  */
 
 import CommunityCta from '../components/layout/CommunityCta'
 import PageHeader from '../components/layout/PageHeader'
 import { globeUrlForSite } from '../constants/brand'
+import { isoDate, longDate } from '../seo/display'
+import { absoluteUrl, sitePath } from '../seo/meta'
 import { useRoute } from '../seo/RouteContext'
+import { blurb } from '../seo/text'
+import type { StoryRoute } from '../types/anRoute'
 
 import '../styles/story-page.css'
+
+/** _host_of(): nackter Hostname — Leser beurteilen einen Link an der Domain. */
+function hostOf(url: string): string {
+  // new URL wirft, wo Pythons urlparse ein leeres netloc liefert ("http://") —
+  // derselbe Rückgabewert, nur als catch formuliert.
+  try {
+    return new URL(url).host.replace(/^www\./, '')
+  } catch {
+    return ''
+  }
+}
+
+/**
+ * Der Quellenblock aus den rohen web_sources: erst der [:8]-Schnitt, dann
+ * der http(s)-Filter — die Liste ist LLM-derived, ein javascript:-Eintrag
+ * darf nie ein href werden (Reihenfolge wie im Python-Payload).
+ */
+function storySources(raw: StoryRoute['web_sources']) {
+  return (raw || [])
+    .slice(0, 8)
+    .filter((s): s is { url: string; title?: string | null; snippet?: string | null } => {
+      const url = s?.url
+      return typeof url === 'string' && (url.startsWith('http://') || url.startsWith('https://'))
+    })
+    .map(s => ({
+      url: s.url,
+      title: s.title || hostOf(s.url),
+      host: hostOf(s.url),
+      snippet: blurb(s.snippet, 200),
+    }))
+}
 
 export default function StoryPage() {
   // Das Payload kommt aus dem Route-Kontext (SeoRoute mountet die Seite nur
@@ -22,7 +60,24 @@ export default function StoryPage() {
   const route = useRoute()
   if (route?.type !== 'story') return null
   const story = route
-  const paragraphs = story.postText.split('\n').map(p => p.trim()).filter(Boolean)
+  const paragraphs = story.post_text.split('\n').map(p => p.trim()).filter(Boolean)
+  const summary = story.summary.trim()
+  const facts = story.facts || []
+  const screenshot = absoluteUrl(story.screenshot_url)
+  // Sprung zur Videostelle: der Offset war pro Story gespeichert und wurde
+  // bis zum Cutover in seo_pages.story_page angehängt.
+  const ts = story.timestamp_seconds
+  const youtubeUrl =
+    story.youtube_url && typeof ts === 'number' && Number.isInteger(ts) && ts > 0
+      ? `${story.youtube_url}&t=${ts}s`
+      : story.youtube_url
+  // Die Detailseite braucht ein Land (Teil der URL) UND eine kuratierte Site —
+  // /sites/{country}/{slug} filtert auf source_id = 'ancient_nerds'.
+  const sitePagePath =
+    story.site_curated && story.site_country && story.site_name && story.site_id
+      ? sitePath(story.site_country, story.site_name, story.site_id)
+      : ''
+  const sources = storySources(story.web_sources)
 
   return (
     <div className="story-page">
@@ -37,41 +92,41 @@ export default function StoryPage() {
 
         <h1 className="story-title">
           {story.headline}
-          {story.speculativeTag && <span className="story-badge">{story.speculativeTag}</span>}
+          {story.speculative_tag && <span className="story-badge">{story.speculative_tag}</span>}
         </h1>
 
         <div className="story-meta">
-          {story.publishedDisplay && <time dateTime={story.publishedAt}>{story.publishedDisplay}</time>}
-          {story.category && <span className="story-tag">{story.category}</span>}
+          <time dateTime={isoDate(story.published_at)}>{longDate(story.published_at)}</time>
+          {story.news_category && <span className="story-tag">{story.news_category}</span>}
         </div>
 
-        {(story.screenshotUrl || story.youtubeUrl) && (
+        {(screenshot || youtubeUrl) && (
           <figure className="story-video">
-            {story.youtubeUrl ? (
-              <a href={story.youtubeUrl} target="_blank" rel="noopener noreferrer" className="story-video-link">
-                {story.screenshotUrl && <img src={story.screenshotUrl} alt={story.videoTitle || story.headline} loading="lazy" />}
+            {youtubeUrl ? (
+              <a href={youtubeUrl} target="_blank" rel="noopener noreferrer" className="story-video-link">
+                {screenshot && <img src={screenshot} alt={story.video_title || story.headline} loading="lazy" />}
                 <span className="story-play" aria-hidden="true">▶</span>
               </a>
             ) : (
-              story.screenshotUrl && <img src={story.screenshotUrl} alt={story.videoTitle || story.headline} loading="lazy" />
+              screenshot && <img src={screenshot} alt={story.video_title || story.headline} loading="lazy" />
             )}
-            {(story.videoTitle || story.channelName) && (
+            {(story.video_title || story.channel_name) && (
               <figcaption>
                 Source:{' '}
-                {story.youtubeUrl ? (
-                  <a href={story.youtubeUrl} target="_blank" rel="noopener noreferrer">
-                    {story.videoTitle || 'video'}
+                {youtubeUrl ? (
+                  <a href={youtubeUrl} target="_blank" rel="noopener noreferrer">
+                    {story.video_title || 'video'}
                   </a>
                 ) : (
-                  story.videoTitle
+                  story.video_title
                 )}
-                {story.channelName && ` by ${story.channelName}`}
+                {story.channel_name && ` by ${story.channel_name}`}
               </figcaption>
             )}
           </figure>
         )}
 
-        {story.summary && <p className="story-summary">{story.summary}</p>}
+        {summary && <p className="story-summary">{summary}</p>}
 
         <div className="story-body">
           {paragraphs.map((p, i) => (
@@ -79,30 +134,30 @@ export default function StoryPage() {
           ))}
         </div>
 
-        {story.facts.length > 0 && (
+        {facts.length > 0 && (
           <>
             <h2>Key facts</h2>
             <ul className="story-facts">
-              {story.facts.map((f, i) => (
+              {facts.map((f, i) => (
                 <li key={i}>{f}</li>
               ))}
             </ul>
           </>
         )}
 
-        {story.siteName && (
+        {story.site_name && (
           <div className="story-site">
             <h2>Site mentioned</h2>
             <div className="story-chips">
-              {story.sitePath ? (
-                <a className="story-chip" href={story.sitePath}>📄 {story.siteName}</a>
+              {sitePagePath ? (
+                <a className="story-chip" href={sitePagePath}>📄 {story.site_name}</a>
               ) : (
-                <span className="story-chip is-plain">📍 {story.siteName}</span>
+                <span className="story-chip is-plain">📍 {story.site_name}</span>
               )}
               {/* The detail page needs a country, the globe only needs the id —
                   bulk-imported sites often lack a country. */}
-              {story.siteId && (
-                <a className="story-chip" href={globeUrlForSite(story.siteId)}>
+              {story.site_id && (
+                <a className="story-chip" href={globeUrlForSite(story.site_id)}>
                   🌍 Show on the globe
                 </a>
               )}
@@ -110,10 +165,10 @@ export default function StoryPage() {
           </div>
         )}
 
-        {story.sources?.length > 0 && (
+        {sources.length > 0 && (
           <div className="story-sources">
             <h2>Sources</h2>
-            {story.sources.map((s, i) => (
+            {sources.map((s, i) => (
               <div className="story-source" key={i}>
                 <a href={s.url} target="_blank" rel="noopener nofollow">{s.title}</a>
                 <span className="story-source-host">{s.host}</span>
@@ -123,10 +178,10 @@ export default function StoryPage() {
           </div>
         )}
 
-        {story.related?.length > 0 && (
+        {story.related.length > 0 && (
           <div className="story-related">
-            <h2>{story.related[0].kind === 'site' && story.siteName
-              ? `More about ${story.siteName}`
+            <h2>{story.related[0].kind === 'site' && story.site_name
+              ? `More about ${story.site_name}`
               : 'Related stories'}</h2>
             <ul>
               {story.related.map(r => (
@@ -146,7 +201,7 @@ export default function StoryPage() {
 
         {/* Disclosure belongs on the page (EU AI Act Art. 50) but not as a
             banner above the story — a quiet footnote does the same job. */}
-        <p className="story-ai-notice">
+        <p className="story-ai-notice" data-ai-generated="true">
           AI-generated text · images from the original sources · always verify with the sources.
         </p>
       </main>

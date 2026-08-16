@@ -1,9 +1,10 @@
 /**
  * Anzeige-Helfer der Payload-Seiten — Portierung von _coord_display()
  * und _period_display() aus pipeline/sites_html_renderer.py (react-ssr
- * plan, Task 11) und der ISO-Hälfte von _date_parts() aus seo_pages.py
- * (Tasks 12/13). yearDisplay (_year_display) lebt bereits in grouping.ts
- * und wird von dort importiert, nicht dupliziert.
+ * plan, Task 11) und beider Hälften von _date_parts() aus seo_pages.py
+ * (isoDate: Tasks 12/13, longDate: Task 14). yearDisplay (_year_display)
+ * lebt bereits in grouping.ts und wird von dort importiert, nicht
+ * dupliziert.
  *
  * Die Payloads tragen rohe DB-Zeilen (snake_case); wie Periode,
  * Koordinaten und Datum dargestellt werden, ist eine
@@ -37,6 +38,34 @@ export function coordDisplay(lat: number | null, lon: number | null): string {
  */
 export function isoDate(value: string | null | undefined): string {
   return value ? value.slice(0, 10) : ''
+}
+
+const MONTHS = [
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
+]
+
+/**
+ * _date_parts()[1]: "March 14, 2026" — Python strftime("%B %d, %Y"), der
+ * Tag zweistellig ("March 05"). Unparsbare Strings fallen wie in Python
+ * auf value[:10] zurück (der ValueError-Zweig von _date_parts).
+ */
+export function longDate(value: string | null | undefined): string {
+  if (!value) return ''
+  const m = value.match(/^(\d{4})-(\d{2})-(\d{2})/)
+  const month = m ? MONTHS[Number(m[2]) - 1] : undefined
+  if (!m || !month) return value.slice(0, 10)
+  return `${month} ${m[3]}, ${m[1]}`
 }
 
 /** _period_display(): kuratierter Periodenname, sonst Start-/Endjahr-Spanne. */

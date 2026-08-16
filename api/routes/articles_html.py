@@ -10,8 +10,7 @@ import logging
 from fastapi import APIRouter, Depends, Response
 from sqlalchemy.orm import Session, joinedload
 
-from api.seo_shell import shell_response, ssr_shell_response
-from pipeline import seo_pages
+from api.seo_shell import ssr_shell_response
 from pipeline.article_html_renderer import (
     BASE_URL,
     markdown_to_html,
@@ -158,30 +157,40 @@ async def _render_news_archive_page(page: int, db: Session) -> Response:
         .all()
     )
 
-    # The joinedloads above already fetch video + site; the listing used to
-    # drop both and render title-plus-blurb cards only (2026-08-08).
-    stories = [
+    # Raw snake_case row fields (react-ssr Task 14); blurbs and date display
+    # live in src/seo/. The joinedloads above already fetch video + site; the
+    # listing used to drop both and render title-plus-blurb cards only
+    # (2026-08-08).
+    return ssr_shell_response(
+        "story.html",
         {
-            "slug": story_slug(item.headline, item.id),
-            "headline": item.headline,
-            "summary": item.summary,
-            "published_at": (
-                item.video.published_at
-                if item.video and item.video.published_at
-                else item.created_at
-            ),
-            "news_category": item.news_category,
-            "site_name": item.site.name if item.site else (item.site_name_extracted or ""),
-            "channel_name": (item.video.channel.name if item.video and item.video.channel else ""),
-            "speculative_tag": item.speculative_tag,
-            # 2,190 of 2,248 stories have one. /news-archive/ showed 2 images,
-            # /news.html showed 74 (audit 2026-08-09).
-            "screenshot_url": item.screenshot_url,
-        }
-        for item in items
-    ]
-    return shell_response(
-        seo_pages.story_archive_page(stories, page, total_pages, total_count),
+            "type": "storyArchive",
+            "page": page,
+            "total_pages": total_pages,
+            "total": total_count,
+            "stories": [
+                {
+                    "slug": story_slug(item.headline, item.id),
+                    "headline": item.headline,
+                    "summary": item.summary,
+                    "published_at": (
+                        item.video.published_at
+                        if item.video and item.video.published_at
+                        else item.created_at
+                    ).isoformat(),
+                    "news_category": item.news_category,
+                    "site_name": item.site.name if item.site else (item.site_name_extracted or ""),
+                    "channel_name": (
+                        item.video.channel.name if item.video and item.video.channel else ""
+                    ),
+                    "speculative_tag": item.speculative_tag,
+                    # 2,190 of 2,248 stories have one. /news-archive/ showed 2
+                    # images, /news.html showed 74 (audit 2026-08-09).
+                    "screenshot_url": item.screenshot_url,
+                }
+                for item in items
+            ],
+        },
         _HTML_HEADERS_SHORT,
     )
 
@@ -263,32 +272,41 @@ async def story_page(slug: str, db: Session = Depends(get_db)):
 
     video = item.video
     site = item.site
-    story = {
-        "id": item.id,
-        "headline": item.headline,
-        "summary": item.summary,
-        "facts": item.facts,
-        "post_text": item.post_text,
-        "site_name": site.name if site else (item.site_name_extracted or ""),
-        "site_id": str(site.id) if site else "",
-        "site_country": site.country if site else "",
-        # /sites/{country}/{slug} serves curated sites only (_CURATED_WHERE in
-        # sites_html.py). Linking a bulk-imported site there is a 404 — 268
-        # published stories did exactly that until 2026-08-09.
-        "site_curated": bool(site and site.source_id == "ancient_nerds"),
-        "screenshot_url": item.screenshot_url,
-        "youtube_url": f"https://www.youtube.com/watch?v={video.id}" if video else "",
-        "video_title": video.title if video else "",
-        "channel_name": video.channel.name if video and video.channel else "",
-        "published_at": (video.published_at if video and video.published_at else item.created_at),
-        "news_category": item.news_category,
-        # Stored per story since the tweet-verifier work, never rendered until
-        # 2026-08-08: researched web sources, the exact video offset, and the
-        # pipeline's own speculative label.
-        "web_sources": item.web_sources,
-        "timestamp_seconds": item.timestamp_seconds,
-        "speculative_tag": item.speculative_tag,
-        "related": _related_stories(db, item),
-    }
-
-    return shell_response(seo_pages.story_page(story), _HTML_HEADERS)
+    # Raw snake_case row fields (react-ssr Task 14) — the richest payload in
+    # the system. Display decisions live in src/seo/ and StoryPage: the
+    # http(s) source filter, the &t= video deeplink, screenshot
+    # absolutization, blurbs and date formatting.
+    return ssr_shell_response(
+        "story.html",
+        {
+            "type": "story",
+            "id": item.id,
+            "headline": item.headline,
+            "summary": item.summary,
+            "facts": item.facts,
+            "post_text": item.post_text,
+            "site_name": site.name if site else (item.site_name_extracted or ""),
+            "site_id": str(site.id) if site else "",
+            "site_country": site.country if site else "",
+            # /sites/{country}/{slug} serves curated sites only (_CURATED_WHERE
+            # in sites_html.py). Linking a bulk-imported site there is a 404 —
+            # 268 published stories did exactly that until 2026-08-09.
+            "site_curated": bool(site and site.source_id == "ancient_nerds"),
+            "screenshot_url": item.screenshot_url,
+            "youtube_url": f"https://www.youtube.com/watch?v={video.id}" if video else "",
+            "video_title": video.title if video else "",
+            "channel_name": video.channel.name if video and video.channel else "",
+            "published_at": (
+                video.published_at if video and video.published_at else item.created_at
+            ).isoformat(),
+            "news_category": item.news_category,
+            # Stored per story since the tweet-verifier work, never rendered
+            # until 2026-08-08: researched web sources, the exact video offset,
+            # and the pipeline's own speculative label.
+            "web_sources": item.web_sources,
+            "timestamp_seconds": item.timestamp_seconds,
+            "speculative_tag": item.speculative_tag,
+            "related": _related_stories(db, item),
+        },
+        _HTML_HEADERS,
+    )

@@ -12,16 +12,14 @@ byte. The only tolerated difference is the <style>{SSR_CSS}</style> block,
 which meta.ts deliberately does not embed — after the cutover the CSS
 comes from the built Vite bundle, not from the head fragment.
 
-For story/storyArchive/sitesIndex the payload is taken verbatim from
-SeoPage.route, i.e. exactly what production injects into
-window.__AN_ROUTE__ today. country (react-ssr Task 10), site (Task 11)
-and research/researchIndex (Task 12) are cut over: their routes hand the
-RAW row(s) through — snake_case, no display formatting — and grouping/
-formatting happens in src/seo/ (grouping.ts, display.ts), so the
-reference payload is that raw shape while the head stays the
-Python-rendered byte reference. article/articleIndex follow the same
-raw-payload contract (react-ssr Task 13); head and payload cannot drift
-apart because both come from one fixture.
+For sitesIndex the payload is taken verbatim from SeoPage.route. All
+other types are cut over — country (react-ssr Task 10), site (Task 11),
+research/researchIndex (Task 12), article/articleIndex (Task 13) and
+story/storyArchive (Task 14): their routes hand the RAW row(s) through —
+snake_case, no display formatting — and grouping/formatting happens in
+src/seo/ (grouping.ts, display.ts, text.ts), so the reference payload is
+that raw shape while the head stays the Python-rendered byte reference.
+Head and payload cannot drift apart because both come from one fixture.
 
 Reproducible:  python scripts/gen_meta_reference.py
 """
@@ -277,6 +275,66 @@ ARTICLES_INDEX = [
 # ---------------------------------------------------------------------------
 
 
+def _story_route(story: dict) -> dict:
+    """The raw payload api/routes/articles_html.py::story_page hands the sidecar.
+
+    Row fields verbatim (published_at as the isoformat string the route
+    sends, web_sources unfiltered): the http(s) source filter, the &t=
+    deeplink, screenshot absolutization and date formatting are display
+    decisions and live in src/seo/ and StoryPage (react-ssr Task 14).
+    """
+    return {
+        "type": "story",
+        "id": story["id"],
+        "headline": story["headline"],
+        "summary": story["summary"],
+        "facts": story["facts"],
+        "post_text": story["post_text"],
+        "site_name": story["site_name"],
+        "site_id": story["site_id"],
+        "site_country": story["site_country"],
+        "site_curated": story["site_curated"],
+        "screenshot_url": story["screenshot_url"],
+        "youtube_url": story["youtube_url"],
+        "video_title": story["video_title"],
+        "channel_name": story["channel_name"],
+        "published_at": story["published_at"].isoformat(),
+        "news_category": story["news_category"],
+        "web_sources": story["web_sources"],
+        "timestamp_seconds": story["timestamp_seconds"],
+        "speculative_tag": story["speculative_tag"],
+        "related": story["related"],
+    }
+
+
+def _story_archive_route(stories: list[dict], page: int, total_pages: int, total: int) -> dict:
+    """The raw payload _render_news_archive_page hands the sidecar (Task 14).
+
+    Summaries unblurbed and published_at as isoformat strings — the card
+    blurb and the display date live in StoryArchivePage.
+    """
+    return {
+        "type": "storyArchive",
+        "page": page,
+        "total_pages": total_pages,
+        "total": total,
+        "stories": [
+            {
+                "slug": s["slug"],
+                "headline": s["headline"],
+                "summary": s["summary"],
+                "published_at": s["published_at"].isoformat(),
+                "news_category": s["news_category"],
+                "site_name": s["site_name"],
+                "channel_name": s["channel_name"],
+                "speculative_tag": s["speculative_tag"],
+                "screenshot_url": s["screenshot_url"],
+            }
+            for s in stories
+        ],
+    }
+
+
 def _site_route() -> dict:
     """The raw payload api/routes/sites_html.py::site_detail hands the sidecar.
 
@@ -346,10 +404,18 @@ def _article_route(article: dict, body_html: str) -> dict:
 def cases() -> list[tuple[str, SeoPage, dict | None]]:
     """(name, rendered page, payload override). None = use SeoPage.route."""
     return [
-        ("story", story_page(STORY), None),
-        ("story_short", story_page(STORY_SHORT), None),
-        ("storyArchive", story_archive_page(ARCHIVE_STORIES, 1, 94, 2248), None),
-        ("storyArchive_page2", story_archive_page(ARCHIVE_STORIES, 2, 94, 2248), None),
+        ("story", story_page(STORY), _story_route(STORY)),
+        ("story_short", story_page(STORY_SHORT), _story_route(STORY_SHORT)),
+        (
+            "storyArchive",
+            story_archive_page(ARCHIVE_STORIES, 1, 94, 2248),
+            _story_archive_route(ARCHIVE_STORIES, 1, 94, 2248),
+        ),
+        (
+            "storyArchive_page2",
+            story_archive_page(ARCHIVE_STORIES, 2, 94, 2248),
+            _story_archive_route(ARCHIVE_STORIES, 2, 94, 2248),
+        ),
         ("site", site_detail_page(SITE, SITE_RELATED), _site_route()),
         ("sitesIndex", sites_index_page(COUNTRIES), None),
         # Cut over with react-ssr Task 10: the route hands the raw rows

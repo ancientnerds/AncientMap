@@ -2,13 +2,17 @@
  * StoryArchivePage — the paginated listing at /news-archive/.
  *
  * Reached from the "Story Archive" nav entry. The listing arrives
- * pre-rendered in the server-injected route, so there is no fetch on mount.
+ * pre-rendered in the server-injected route, so there is no fetch on
+ * mount. Since the react-ssr Task 14 cutover the payload carries the raw
+ * snake_case rows; blurbs and date display happen here.
  */
 
 import AiNoticeBanner from '../components/layout/AiNoticeBanner'
 import CommunityCta from '../components/layout/CommunityCta'
 import PageHeader from '../components/layout/PageHeader'
+import { longDate } from '../seo/display'
 import { useRoute } from '../seo/RouteContext'
+import { blurb } from '../seo/text'
 
 import '../styles/story-page.css'
 
@@ -20,7 +24,7 @@ export default function StoryArchivePage() {
   // Das Payload kommt aus dem Route-Kontext; die Typen aus StoryArchiveRoute.
   const route = useRoute()
   if (route?.type !== 'storyArchive') return null
-  const { page, totalPages, total, stories } = route
+  const { page, total_pages: totalPages, total, stories } = route
   return (
     <div className="story-page">
       <PageHeader currentPage="news">
@@ -34,7 +38,10 @@ export default function StoryArchivePage() {
 
         <h1 className="story-title">Story Archive</h1>
         <div className="story-meta">
-          {total.toLocaleString()} stories
+          {/* Explizites en-US: das Default-Locale wäre das des SSR-Hosts —
+              auf einer deutschen Maschine würde "2.248" gerendert, Pythons
+              f"{total:,}" schrieb "2,248". */}
+          {total.toLocaleString('en-US')} stories
           {totalPages > 1 && ` · page ${page} of ${totalPages}`}
         </div>
 
@@ -45,11 +52,12 @@ export default function StoryArchivePage() {
 
         <div className="story-archive-list">
           {stories.map(s => {
+            const summary = blurb(s.summary)
             const meta = [
-              s.publishedDisplay,
-              s.category,
-              s.siteName,
-              s.channelName && `via ${s.channelName}`,
+              longDate(s.published_at),
+              s.news_category,
+              s.site_name,
+              s.channel_name && `via ${s.channel_name}`,
             ].filter(Boolean)
             return (
               <a
@@ -59,10 +67,10 @@ export default function StoryArchivePage() {
               >
                 {/* The video frame was stored per story all along and only
                     used as an og:image. 2,190 of 2,248 stories have one. */}
-                {s.screenshotUrl && (
+                {s.screenshot_url && (
                   <img
                     className="site-list-card-thumb"
-                    src={s.screenshotUrl}
+                    src={s.screenshot_url}
                     alt=""
                     loading="lazy"
                   />
@@ -70,9 +78,9 @@ export default function StoryArchivePage() {
                 <div className="site-list-card-body">
                   <h3>
                     {s.headline}
-                    {s.speculativeTag && <span className="story-badge">{s.speculativeTag}</span>}
+                    {s.speculative_tag && <span className="story-badge">{s.speculative_tag}</span>}
                   </h3>
-                  {s.summary && <p>{s.summary}</p>}
+                  {summary && <p>{summary}</p>}
                   {meta.length > 0 && <div className="story-card-meta">{meta.join(' · ')}</div>}
                 </div>
               </a>
