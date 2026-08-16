@@ -89,6 +89,7 @@ env/
 # =============================================================================
 node_modules/
 ancient-nerds-map/dist/
+ancient-nerds-map/dist-ssr/
 ancient-nerds-map/build/
 *.tsbuildinfo
 
