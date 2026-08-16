@@ -89,23 +89,27 @@ export interface SitesIndexRoute {
   countries: { name: string; count: number; path: string }[]
 }
 
+/**
+ * One raw row of a country listing — snake_case deliberately: the API hands
+ * the SQL row dicts through unchanged (api/routes/sites_html.py). Grouping,
+ * period span and blurbs are display decisions and live in TypeScript
+ * (src/seo/grouping.ts, src/seo/text.ts) since the react-ssr Task 10 cutover.
+ */
+export interface CountrySite {
+  name: string
+  /** Site-relative detail path, built server-side by site_path(). */
+  path: string
+  description: string | null
+  site_type: string | null
+  period_name: string | null
+  period_start: number | null
+  thumbnail_url: string | null
+}
+
 export interface CountryRoute {
   type: 'country'
   country: string
-  periodSpan: string
-  total: number
-  sections: {
-    label: string
-    anchor: string
-    sites: {
-      name: string
-      path: string
-      summary: string
-      siteType: string
-      period: string
-      thumb: string
-    }[]
-  }[]
+  sites: CountrySite[]
 }
 
 /** Post-cutover contract (react-ssr Tasks 11-14) — production still injects {id}/{slug}/{} stubs. */

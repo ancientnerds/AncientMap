@@ -1,44 +1,33 @@
 {
   "type": "country",
   "country": "Türkiye",
-  "periodSpan": "9600 BC – 155 AD",
-  "total": 3,
-  "sections": [
+  "sites": [
     {
-      "label": "Temple complex",
-      "anchor": "temple-complex",
-      "sites": [
-        {
-          "name": "Göbekli Tepe",
-          "path": "/sites/türkiye/göbekli-tepe-9c8b7a65",
-          "summary": "The world's first known temple complex, raised by hunter-gatherers around 9600 BC — millennia before pottery or the wheel. Its T-shaped pillars carry reliefs of foxes, snakes and…",
-          "siteType": "Temple complex",
-          "period": "< 4500 BC",
-          "thumb": "/data/images/wiki/9c8b7a65/hero.webp"
-        },
-        {
-          "name": "Karahan Tepe",
-          "path": "/sites/türkiye/karahan-tepe-1a2b3c4d",
-          "summary": "Sister site of Göbekli Tepe with more than 250 T-shaped pillars still embedded in the bedrock.",
-          "siteType": "Temple complex",
-          "period": "< 4500 BC",
-          "thumb": ""
-        }
-      ]
+      "name": "Göbekli Tepe",
+      "path": "/sites/türkiye/göbekli-tepe-9c8b7a65",
+      "description": "The world's first known temple complex, raised by hunter-gatherers around 9600 BC — millennia before pottery or the wheel.\nIts T-shaped pillars carry reliefs of foxes, snakes and vultures.",
+      "site_type": "Temple complex",
+      "period_name": "< 4500 BC",
+      "period_start": -9600,
+      "thumbnail_url": "/data/images/wiki/9c8b7a65/hero.webp"
     },
     {
-      "label": "Theatre",
-      "anchor": "theatre",
-      "sites": [
-        {
-          "name": "Aspendos Theatre",
-          "path": "/sites/türkiye/aspendos-theatre-5e6f7a8b",
-          "summary": "The best-preserved Roman theatre of the ancient world, built under Marcus Aurelius.",
-          "siteType": "Theatre",
-          "period": "1 – 500 AD",
-          "thumb": ""
-        }
-      ]
+      "name": "Karahan Tepe",
+      "path": "/sites/türkiye/karahan-tepe-1a2b3c4d",
+      "description": "Sister site of Göbekli Tepe with more than 250 T-shaped pillars still embedded in the bedrock.",
+      "site_type": "Temple complex",
+      "period_name": "< 4500 BC",
+      "period_start": -8800,
+      "thumbnail_url": ""
+    },
+    {
+      "name": "Aspendos Theatre",
+      "path": "/sites/türkiye/aspendos-theatre-5e6f7a8b",
+      "description": "The best-preserved Roman theatre of the ancient world, built under Marcus Aurelius.",
+      "site_type": "Theatre",
+      "period_name": "1 – 500 AD",
+      "period_start": 155,
+      "thumbnail_url": ""
     }
   ]
 }

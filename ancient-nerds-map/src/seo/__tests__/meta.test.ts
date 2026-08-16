@@ -99,7 +99,7 @@ describe('slugify', () => {
     // sie. Sichtbar im country-pyref: der Server-Pfad enthält genau den
     // Slug, den diese Funktion liefert.
     expect(slugify('Göbekli Tepe')).toBe('göbekli-tepe')
-    expect(FIXTURES.country.sections[0].sites[0].path).toContain(slugify('Göbekli Tepe'))
+    expect(FIXTURES.country.sites[0].path).toContain(slugify('Göbekli Tepe'))
   })
 })
 

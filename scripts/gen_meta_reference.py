@@ -12,13 +12,17 @@ byte. The only tolerated difference is the <style>{SSR_CSS}</style> block,
 which meta.ts deliberately does not embed — after the cutover the CSS
 comes from the built Vite bundle, not from the head fragment.
 
-For story/storyArchive/sitesIndex/country the payload is taken verbatim
-from SeoPage.route, i.e. exactly what production injects into
-window.__AN_ROUTE__ today. site/research/article and the two index types
-still carry stub payloads in production ({"id"}, {"slug"}, {}), so for
-those the script builds the post-cutover payload shape (react-ssr plan,
-Tasks 11-14) from the same fixture values that fed the Python renderer —
-head and payload cannot drift apart because both come from one fixture.
+For story/storyArchive/sitesIndex the payload is taken verbatim from
+SeoPage.route, i.e. exactly what production injects into
+window.__AN_ROUTE__ today. country cut over with react-ssr Task 10: the
+route hands the RAW sites rows through ({type, country, sites}) and the
+grouping happens in src/seo/grouping.ts, so the reference payload is that
+raw shape while the head stays the Python-rendered byte reference.
+site/research/article and the two index types still carry stub payloads
+in production ({"id"}, {"slug"}, {}), so for those the script builds the
+post-cutover payload shape (react-ssr plan, Tasks 11-14) from the same
+fixture values that fed the Python renderer — head and payload cannot
+drift apart because both come from one fixture.
 
 Reproducible:  python scripts/gen_meta_reference.py
 """
@@ -330,7 +334,14 @@ def cases() -> list[tuple[str, SeoPage, dict | None]]:
         ("storyArchive_page2", story_archive_page(ARCHIVE_STORIES, 2, 94, 2248), None),
         ("site", site_detail_page(SITE, SITE_RELATED), _site_route()),
         ("sitesIndex", sites_index_page(COUNTRIES), None),
-        ("country", country_sites_page("Türkiye", COUNTRY_SITES), None),
+        # Cut over with react-ssr Task 10: the route hands the raw rows
+        # through, countryMeta/CountrySitesPage group in TypeScript. The
+        # Python head stays the byte reference until Task 16.
+        (
+            "country",
+            country_sites_page("Türkiye", COUNTRY_SITES),
+            {"type": "country", "country": "Türkiye", "sites": COUNTRY_SITES},
+        ),
         ("research", research_page(PAPER, "<p>body</p>"), _paper_route(PAPER)),
         ("research_person", research_page(PAPER_PERSON, "<p>body</p>"), _paper_route(PAPER_PERSON)),
         (

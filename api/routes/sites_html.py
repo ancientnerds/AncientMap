@@ -16,11 +16,12 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from api.routes.articles_html import public_stories_query
-from api.seo_shell import shell_response
+from api.seo_shell import shell_response, ssr_shell_response
 from pipeline import seo_pages
 from pipeline.article_html_renderer import render_404_html, story_slug
 from pipeline.database import NewsItem, get_db
 from pipeline.sites_html_renderer import (
+    country_path,
     country_slug,
     encode_path,
     site_id_prefix_from_slug,
@@ -55,10 +56,19 @@ async def sites_index(db: Session = Depends(get_db)):
         """)
     ).fetchall()
 
-    countries = [
-        {"name": row.country, "slug": country_slug(row.country), "count": row.count} for row in rows
-    ]
-    return shell_response(seo_pages.sites_index_page(countries), _HTML_HEADERS)
+    # Since react-ssr Task 10 the sidecar renders head and body from this
+    # payload (sitesIndexMeta + SitesIndexPage); Python only fetches data.
+    return ssr_shell_response(
+        "site.html",
+        {
+            "type": "sitesIndex",
+            "countries": [
+                {"name": row.country, "count": row.count, "path": country_path(row.country)}
+                for row in rows
+            ],
+        },
+        _HTML_HEADERS,
+    )
 
 
 @router.get("/sites/{slug}")
@@ -94,10 +104,9 @@ async def sites_by_country(slug: str, db: Session = Depends(get_db)):
             "name": row.name,
             "description": row.description,
             "path": site_path(country, row.name, row.id),
-            # Type, period and hero were selected here since the page was
-            # written and dropped before rendering, so every card looked the
-            # same. thumbnail_url is the local hero webp the image downloader
-            # already writes per site — no join needed.
+            # Type, period and hero feed the React cards; thumbnail_url is the
+            # local hero webp the image downloader already writes per site —
+            # no join needed.
             "site_type": row.site_type,
             "period_name": row.period_name,
             "period_start": row.period_start,
@@ -105,7 +114,14 @@ async def sites_by_country(slug: str, db: Session = Depends(get_db)):
         }
         for row in site_rows
     ]
-    return shell_response(seo_pages.country_sites_page(country, sites), _HTML_HEADERS)
+    # The raw rows go through as-is; grouping, period span and blurbs are
+    # display decisions and live in src/seo/grouping.ts since react-ssr
+    # Task 10 (countryMeta and CountrySitesPage share one definition).
+    return ssr_shell_response(
+        "site.html",
+        {"type": "country", "country": country, "sites": sites},
+        _HTML_HEADERS,
+    )
 
 
 @router.get("/site.html")

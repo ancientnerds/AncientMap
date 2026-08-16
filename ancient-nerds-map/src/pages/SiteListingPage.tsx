@@ -6,16 +6,17 @@
  * server-injected route, so there is no fetch on mount.
  */
 
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 
 import CommunityCta from '../components/layout/CommunityCta'
 import PageHeader from '../components/layout/PageHeader'
+import { periodSpan, typeSections } from '../seo/grouping'
+import { slugify } from '../seo/meta'
 import { useRoute } from '../seo/RouteContext'
-import type { CountryRoute } from '../types/anRoute'
+import { blurb } from '../seo/text'
+import type { CountrySite } from '../types/anRoute'
 
 import '../styles/story-page.css'
-
-type SiteEntry = CountryRoute['sections'][number]['sites'][number]
 
 export function SitesIndexPage() {
   // Das Payload kommt aus dem Route-Kontext; die Typen aus SitesIndexRoute.
@@ -51,14 +52,17 @@ export function SitesIndexPage() {
   )
 }
 
-function SiteCard({ site }: { site: SiteEntry }) {
-  const meta = [site.siteType, site.period].filter(Boolean).join(' · ')
+function SiteCard({ site }: { site: CountrySite }) {
+  const meta = [site.site_type, site.period_name].filter(Boolean).join(' · ')
+  const summary = blurb(site.description)
   return (
     <a className="story-archive-card site-list-card" href={site.path}>
-      {site.thumb && <img className="site-list-card-thumb" src={site.thumb} alt={site.name} loading="lazy" />}
+      {site.thumbnail_url && (
+        <img className="site-list-card-thumb" src={site.thumbnail_url} alt={site.name} loading="lazy" />
+      )}
       <div className="site-list-card-body">
         <h3>{site.name}</h3>
-        {site.summary && <p>{site.summary}</p>}
+        {summary && <p>{summary}</p>}
         {meta && <div className="site-list-card-meta">{meta}</div>}
       </div>
     </a>
@@ -68,11 +72,17 @@ function SiteCard({ site }: { site: SiteEntry }) {
 export function CountrySitesPage() {
   const route = useRoute()
   // The crawler fragment can only offer anchor jumps; with JS the same chips
-  // narrow the list instead of scrolling to it. (Hook vor dem Type-Guard —
+  // narrow the list instead of scrolling to it. (Hooks vor dem Type-Guard —
   // Hooks dürfen nicht hinter einem konditionalen return stehen.)
   const [activeType, setActiveType] = useState<string | null>(null)
+  // Das Payload trägt die rohen Zeilen (react-ssr Task 10); gruppiert wird
+  // hier — mit derselben typeSections()-Definition wie in countryMeta.
+  const sites = route?.type === 'country' ? route.sites : []
+  const sections = useMemo(() => typeSections(sites), [sites])
   if (route?.type !== 'country') return null
-  const { country, sections, periodSpan, total } = route
+  const { country } = route
+  const total = sites.length
+  const span = periodSpan(sites)
   const shown = activeType ? sections.filter(s => s.label === activeType) : sections
 
   return (
@@ -86,7 +96,7 @@ export function CountrySitesPage() {
         </nav>
         <h1 className="story-title">Archaeological Sites in {country}</h1>
         <div className="story-meta">
-          {total} curated sites{periodSpan && ` · ${periodSpan}`}
+          {total} curated sites{span && ` · ${span}`}
         </div>
         {sections.length > 1 && (
           <div className="site-type-chips">
@@ -99,7 +109,7 @@ export function CountrySitesPage() {
             </button>
             {sections.map(s => (
               <button
-                key={s.anchor}
+                key={s.label}
                 type="button"
                 className={`site-type-chip${activeType === s.label ? ' is-active' : ''}`}
                 onClick={() => setActiveType(activeType === s.label ? null : s.label)}
@@ -110,8 +120,8 @@ export function CountrySitesPage() {
           </div>
         )}
         {shown.map(section => (
-          <section key={section.anchor}>
-            <h2 className="site-section-title" id={section.anchor}>
+          <section key={section.label}>
+            <h2 className="site-section-title" id={slugify(section.label)}>
               {section.label} in {country} ({section.sites.length})
             </h2>
             <div className="story-archive-list">

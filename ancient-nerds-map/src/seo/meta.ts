@@ -26,6 +26,7 @@ import type {
   StoryArchiveRoute,
   StoryRoute,
 } from '../types/anRoute'
+import { periodSpan, typeSections } from './grouping'
 import { blurb, collapse, cut } from './text'
 
 const BASE_URL = 'https://ancientnerds.com'
@@ -251,7 +252,13 @@ export function sitesIndexMeta(route: SitesIndexRoute): PageMeta {
 
 export function countryMeta(route: CountryRoute): PageMeta {
   const canonical = `${BASE_URL}${encodePath(countryPath(route.country))}`
-  const ordered = route.sections.flatMap(s => s.sites)
+  // Das Payload trägt die rohen Zeilen; Sektionen und Zeitspanne entstehen
+  // hier — mit derselben Gruppierung, die CountrySitesPage rendert, damit
+  // das ItemList-Schema die tatsächlich servierte Reihenfolge beschreibt.
+  const sections = typeSections(route.sites)
+  const ordered = sections.flatMap(s => s.sites)
+  const total = route.sites.length
+  const span = periodSpan(route.sites)
   const items = ordered
     .slice(0, 50)
     .map(
@@ -263,19 +270,19 @@ export function countryMeta(route: CountryRoute): PageMeta {
   const schema =
     '{"@context": "https://schema.org", "@type": "ItemList", ' +
     `"name": ${jsonStr(`Archaeological Sites in ${route.country}`)}, ` +
-    `"numberOfItems": ${route.total}, "itemListElement": [${items}]}`
+    `"numberOfItems": ${total}, "itemListElement": [${items}]}`
 
-  const namedTypes = route.sections
+  const namedTypes = sections
     .slice(0, 3)
     .map(s => s.label.toLowerCase())
     .join(', ')
-  const hero = ordered.find(s => s.thumb)?.thumb
+  const hero = ordered.find(s => s.thumbnail_url)?.thumbnail_url
   return {
-    title: `Archaeological Sites in ${route.country} (${route.total})`,
+    title: `Archaeological Sites in ${route.country} (${total})`,
     description:
-      `${route.total} curated archaeological sites in ${route.country}` +
+      `${total} curated archaeological sites in ${route.country}` +
       (namedTypes ? ` — ${namedTypes} and more` : '') +
-      (route.periodSpan ? `. Spanning ${route.periodSpan}` : '') +
+      (span ? `. Spanning ${span}` : '') +
       '. Each with location, historical context and sources.',
     canonical,
     image: hero ? `${BASE_URL}${hero}` : undefined,
