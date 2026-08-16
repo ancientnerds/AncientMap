@@ -19,6 +19,15 @@ Disallow: /api/
 Disallow: /data/basemaps/
 Disallow: /data/historical/
 
+# BUT: Google's renderer obeys robots.txt for subresources too. The site
+# detail pages fetch /api/sites/{id} after hydration; with it blocked, the
+# rendered page hung in its loading state and Google filed it as Soft 404
+# (5 of 15 sampled detail pages, 2026-08-16). Longest-match wins, so these
+# override the /api/ disallow. The JSON answers carry X-Robots-Tag: noindex,
+# so the API responses themselves stay out of the index.
+Allow: /api/sites/
+Allow: /api/news/screenshots/
+
 # Allow important data files
 Allow: /data/labels.json
 Allow: /data/sites/

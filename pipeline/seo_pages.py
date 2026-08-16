@@ -134,24 +134,29 @@ def _meta_head(
     image: str | None = None,
     schema: str | None = None,
 ) -> str:
-    """Shared <head> block — one definition instead of six near-copies."""
+    """Shared <head> block — one definition instead of six near-copies.
+
+    An empty description omits the description tags entirely: an empty
+    content="" is worse than none, because Google shows it verbatim instead
+    of writing a snippet from the page.
+    """
     e_title = escape(title)
     e_desc = escape(" ".join(description.split())[:300])
     img = escape(image or f"{BASE_URL}/landing/og-image.png")
     schema_tag = f'\n<script type="application/ld+json">{schema}</script>' if schema else ""
-    return f"""<title>{e_title} | Ancient Nerds</title>
-<meta name="description" content="{e_desc}">
+    desc_tag = f'\n<meta name="description" content="{e_desc}">' if e_desc else ""
+    og_desc_tag = f'\n<meta property="og:description" content="{e_desc}">' if e_desc else ""
+    tw_desc_tag = f'\n<meta name="twitter:description" content="{e_desc}">' if e_desc else ""
+    return f"""<title>{e_title} | Ancient Nerds</title>{desc_tag}
 <meta name="robots" content="index, follow, max-image-preview:large">
 <link rel="canonical" href="{escape(canonical)}">
 <meta property="og:type" content="{og_type}">
 <meta property="og:url" content="{escape(canonical)}">
 <meta property="og:site_name" content="Ancient Nerds">
-<meta property="og:title" content="{e_title}">
-<meta property="og:description" content="{e_desc}">
+<meta property="og:title" content="{e_title}">{og_desc_tag}
 <meta property="og:image" content="{img}">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="{e_title}">
-<meta name="twitter:description" content="{e_desc}">
+<meta name="twitter:title" content="{e_title}">{tw_desc_tag}
 <meta name="twitter:image" content="{img}">
 <meta name="twitter:site" content="@AncientNerdsDAO">
 <style>{SSR_CSS}</style>{schema_tag}"""
@@ -473,9 +478,15 @@ def story_page(story: dict) -> SeoPage:
         f'"mainEntityOfPage": "{canonical}", "url": "{canonical}"}}'
     )
 
+    # 2,991 of 2,993 summaries open with the headline verbatim, so
+    # description=summary repeated the H1 in every search snippet. post_text
+    # is the actual story body. The 17 stories whose body is under 150 chars
+    # get no description — Google writes a better one from the page than a
+    # truncated stub would be.
+    post_text = " ".join((story.get("post_text") or "").split())
     head = _meta_head(
         title=headline,
-        description=summary or headline,
+        description=blurb(post_text, 300) if len(post_text) >= 150 else "",
         canonical=canonical,
         og_type="article",
         image=screenshot or None,

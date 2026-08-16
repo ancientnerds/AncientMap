@@ -141,6 +141,11 @@ server {
         proxy_buffering on;
         proxy_buffer_size 16k;
         proxy_buffers 4 32k;
+        # robots.txt now allows /api/sites/ and /api/news/screenshots/ so
+        # Google's RENDERER can fetch them (blocked, the hydrated detail pages
+        # hung in their loading state and were filed as Soft 404). noindex
+        # keeps the JSON answers themselves out of the index.
+        add_header X-Robots-Tag "noindex" always;
     }
 
     # Webcam stream proxy (HLS extraction + CORS proxy for SkylineWebcams)

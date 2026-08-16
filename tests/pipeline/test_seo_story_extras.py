@@ -225,3 +225,26 @@ class TestRelatedStories:
         body = self._body([{"kind": "site"}, "not-a-dict", {"slug": "x-1", "headline": "Real one"}])
         assert "Real one" in body
         assert body.count('<li><a href="/news-archive/') == 1
+
+
+class TestStoryMetaDescription:
+    """2,991 of 2,993 summaries open with the headline verbatim — the snippet
+    repeated the H1. The description now comes from the story body."""
+
+    def test_description_comes_from_post_text_not_summary(self):
+        head = seo_pages.story_page(
+            _story(
+                headline="Sanskrit texts describe explosive weapons",
+                summary="Sanskrit texts describe explosive weapons called astras.",
+                post_text="Ancient Indian epics contain detailed passages about "
+                "divine weapons whose described effects range from blinding light "
+                "to the destruction of entire armies in a single strike.",
+            )
+        ).head
+        assert 'content="Ancient Indian epics contain' in head
+        assert 'content="Sanskrit texts describe explosive weapons called' not in head
+
+    def test_short_body_omits_the_description_entirely(self):
+        head = seo_pages.story_page(_story(post_text="Too short.")).head
+        assert 'name="description"' not in head
+        assert 'content=""' not in head  # an empty tag is worse than none
