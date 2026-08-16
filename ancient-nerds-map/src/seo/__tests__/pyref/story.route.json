@@ -1,0 +1,36 @@
+{
+  "type": "story",
+  "id": 4711,
+  "headline": "Bronze Age \"Sun Chariot\" & a second fragment found at Trundholm",
+  "summary": "Conservators at the National Museum confirm a second fragment of the Trundholm Sun Chariot.",
+  "facts": [
+    "Second fragment found in the 1902 spoil heaps"
+  ],
+  "postText": "Archaeologists re-examined spoil heaps from the 1902 Trundholm excavation and recovered a second bronze fragment <matching> the Sun Chariot's spiral ornament.\nThe piece confirms the chariot was cast in at least two moulds, and traces of gold leaf survive on one edge.\nMuseum conservators date the casting to roughly 1400 BC.",
+  "screenshotUrl": "https://ancientnerds.com/data/news/screenshots/4711.jpg",
+  "youtubeUrl": "https://www.youtube.com/watch?v=abc123&t=754s",
+  "videoTitle": "Sun Chariot's Lost Twin?",
+  "channelName": "Ancient Architects",
+  "publishedAt": "2026-03-14",
+  "publishedDisplay": "March 14, 2026",
+  "category": "Excavation",
+  "siteName": "Trundholm Mose",
+  "sitePath": "/sites/denmark/trundholm-mose-1b2c3d4e",
+  "siteId": "1b2c3d4e-0000-4000-8000-000000000000",
+  "speculativeTag": "",
+  "sources": [
+    {
+      "url": "https://en.natmus.dk/sun-chariot/",
+      "title": "The Sun Chariot — National Museum of Denmark",
+      "host": "en.natmus.dk",
+      "snippet": "The Sun Chariot was found in 1902 in the Trundholm bog."
+    }
+  ],
+  "related": [
+    {
+      "slug": "trundholm-bog-survey-planned-4600",
+      "headline": "Trundholm bog survey planned",
+      "kind": "site"
+    }
+  ]
+}

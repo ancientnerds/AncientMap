@@ -1,0 +1,15 @@
+{
+  "type": "researchIndex",
+  "papers": [
+    {
+      "slug": "obsidian-trade-networks-anatolia",
+      "title": "Obsidian Trade Networks in Neolithic Anatolia",
+      "summary": "Sourcing analyses of 1,200 obsidian artefacts reveal two distinct exchange spheres centred on the Cappadocian and Lake Van sources."
+    },
+    {
+      "slug": "gobekli-tepe-water-management",
+      "title": "Water Management at Göbekli Tepe",
+      "summary": "Cistern volumes suggest the enclosures hosted gatherings of several hundred people."
+    }
+  ]
+}

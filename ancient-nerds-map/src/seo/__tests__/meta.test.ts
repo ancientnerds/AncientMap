@@ -1,0 +1,156 @@
+/**
+ * Task 5 des react-ssr-Plans: meta.ts muss die Python-Referenz
+ * (pipeline/seo_pages.py::_meta_head() + die neun Seitenfunktionen)
+ * byte-genau reproduzieren. Die Referenz-Heads in pyref/ erzeugt
+ * scripts/gen_meta_reference.py.
+ *
+ * Bewusste Abweichungen Python ↔ TypeScript — jede einzeln begründet:
+ *
+ *  1. <style>{SSR_CSS}</style>: Python bettet das SSR-CSS in jeden Head
+ *     ein, weil die gesplicten Fragmente ohne das Bundle auskommen müssen.
+ *     meta.ts bettet es NICHT ein — nach dem Cutover liefert das gebaute
+ *     Vite-Bundle das CSS. stripSsrStyle() entfernt den Block vor dem
+ *     Vergleich; darüber hinaus ist die Toleranz null.
+ *
+ * Mehr Abweichungen gibt es nicht.
+ */
+
+import { describe, expect, it } from 'vitest'
+
+import type { PageMeta } from '../meta'
+import {
+  articleIndexMeta,
+  articleMeta,
+  countryMeta,
+  renderHead,
+  researchIndexMeta,
+  researchMeta,
+  siteMeta,
+  sitesIndexMeta,
+  storyArchiveMeta,
+  storyMeta,
+} from '../meta'
+import type { StoryRoute } from '../../types/anRoute'
+import { FIXTURES, pyrefHead, pyrefRoute } from './fixtures'
+
+/** Bewusste Ausnahme 1: der SSR-CSS-Block (siehe Dateikommentar). */
+const stripSsrStyle = (head: string) => head.replace(/\n<style>[\s\S]*?<\/style>/, '')
+
+// Jeder pyref-Name → die Meta-Funktion, die ihn reproduzieren muss.
+// Varianten decken Branches ab: story_short (leere Description seit
+// b4690a3), storyArchive_page2 (Pager-Canonical), research_person
+// (Person- statt Organization-Autor, kein Hero).
+const PYREF_CASES: Record<string, (route: never) => PageMeta> = {
+  story: storyMeta,
+  story_short: storyMeta,
+  storyArchive: storyArchiveMeta,
+  storyArchive_page2: storyArchiveMeta,
+  site: siteMeta,
+  sitesIndex: sitesIndexMeta,
+  country: countryMeta,
+  research: researchMeta,
+  research_person: researchMeta,
+  researchIndex: researchIndexMeta,
+  article: articleMeta,
+  articleIndex: articleIndexMeta,
+}
+
+describe('Head-Gleichheit gegen die Python-Referenz', () => {
+  it('die Referenz enthält den Style-Block, der bewusst gestrippt wird', () => {
+    expect(pyrefHead('country')).toContain('<style>')
+    expect(stripSsrStyle(pyrefHead('country'))).not.toContain('<style>')
+  })
+
+  for (const [name, metaFn] of Object.entries(PYREF_CASES)) {
+    it(`${name}: renderHead() == Python-Head minus <style>`, () => {
+      const expected = stripSsrStyle(pyrefHead(name))
+      const actual = renderHead(metaFn(pyrefRoute(name) as never))
+      expect(actual).toBe(expected)
+    })
+  }
+})
+
+describe('countryMeta', () => {
+  const m = countryMeta(FIXTURES.country)
+
+  it('nennt Land und Anzahl im Title', () => {
+    // Ohne Suffix: " | Ancient Nerds" hängt renderHead() an — und nur im
+    // <title>, weil _meta_head() og:title/twitter:title unsuffigiert lässt.
+    expect(m.title).toBe('Archaeological Sites in Türkiye (3)')
+  })
+
+  it('nennt die echten Typen und die Zeitspanne', () => {
+    expect(m.description).toContain('temple complex, theatre and more')
+    expect(m.description).toContain('Spanning 9600 BC – 155 AD')
+  })
+
+  it('kanonisiert prozentkodiert gegen die Apex-Domain', () => {
+    expect(m.canonical).toBe('https://ancientnerds.com/sites/t%C3%BCrkiye')
+  })
+
+  it('nimmt einen echten Hero als og:image', () => {
+    expect(m.image).toBe('https://ancientnerds.com/data/images/wiki/9c8b7a65/hero.webp')
+  })
+})
+
+describe('storyMeta', () => {
+  it('beschreibt aus post_text, nicht aus summary', () => {
+    const m = storyMeta(FIXTURES.story)
+    expect(m.description.startsWith('Archaeologists re-examined')).toBe(true)
+    expect(m.description).not.toBe(FIXTURES.story.summary)
+  })
+
+  it('lässt die Description bei post_text < 150 Zeichen weg', () => {
+    const m = storyMeta(pyrefRoute('story_short') as StoryRoute)
+    expect(m.description).toBe('')
+  })
+})
+
+describe('renderHead', () => {
+  it('erzeugt genau einen canonical und einen title', () => {
+    const head = renderHead(countryMeta(FIXTURES.country))
+    expect(head.match(/<link rel="canonical"/g)).toHaveLength(1)
+    expect(head.match(/<title>/g)).toHaveLength(1)
+  })
+
+  it('suffigiert nur den <title>, nicht og:title/twitter:title', () => {
+    const head = renderHead(countryMeta(FIXTURES.country))
+    expect(head).toContain('<title>Archaeological Sites in Türkiye (3) | Ancient Nerds</title>')
+    expect(head).toContain('<meta property="og:title" content="Archaeological Sites in Türkiye (3)">')
+  })
+
+  it('maskiert < in JSON-LD, damit kein script-Ausbruch möglich ist', () => {
+    const head = renderHead({
+      title: 'x',
+      description: 'y',
+      canonical: 'https://ancientnerds.com/x',
+      schema: '{"n": "</script><b>"}',
+    })
+    expect(head).not.toContain('</script><b>')
+  })
+})
+
+describe('leere Description (b4690a3: kein content="" ausliefern)', () => {
+  it('lässt description/og:description/twitter:description komplett weg', () => {
+    const head = renderHead({
+      title: 'x',
+      description: '',
+      canonical: 'https://ancientnerds.com/x',
+    })
+    expect(head).not.toContain('name="description"')
+    expect(head).not.toContain('property="og:description"')
+    expect(head).not.toContain('name="twitter:description"')
+    // Der Rest des Heads bleibt vollständig.
+    expect(head).toContain('<title>x | Ancient Nerds</title>')
+    expect(head).toContain('og:image')
+  })
+
+  it('nur-Whitespace zählt als leer', () => {
+    const head = renderHead({
+      title: 'x',
+      description: '  \n\t ',
+      canonical: 'https://ancientnerds.com/x',
+    })
+    expect(head).not.toContain('name="description"')
+  })
+})

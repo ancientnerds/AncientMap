@@ -1,0 +1,30 @@
+{
+  "type": "storyArchive",
+  "page": 1,
+  "totalPages": 94,
+  "total": 2248,
+  "stories": [
+    {
+      "slug": "bronze-age-sun-chariot-a-second-fragment-found-at-trundholm-4711",
+      "headline": "Bronze Age \"Sun Chariot\" & a second fragment found at Trundholm",
+      "summary": "Conservators at the National Museum confirm a second fragment of the Trundholm Sun Chariot.",
+      "publishedDisplay": "March 14, 2026",
+      "category": "Excavation",
+      "siteName": "Trundholm Mose",
+      "channelName": "Ancient Architects",
+      "speculativeTag": "",
+      "screenshotUrl": "/data/news/screenshots/4711.jpg"
+    },
+    {
+      "slug": "karahan-tepe-carvings-reinterpreted-4650",
+      "headline": "Karahan Tepe carvings reinterpreted",
+      "summary": "A new reading of the Karahan Tepe reliefs links them to seasonal feasting.",
+      "publishedDisplay": "March 02, 2026",
+      "category": "Interpretation",
+      "siteName": "Karahan Tepe",
+      "channelName": "Stefan Milo",
+      "speculativeTag": "speculative",
+      "screenshotUrl": ""
+    }
+  ]
+}

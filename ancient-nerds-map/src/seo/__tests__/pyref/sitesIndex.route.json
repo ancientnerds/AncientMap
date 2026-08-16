@@ -1,0 +1,20 @@
+{
+  "type": "sitesIndex",
+  "countries": [
+    {
+      "name": "Türkiye",
+      "count": 218,
+      "path": "/sites/türkiye"
+    },
+    {
+      "name": "Denmark",
+      "count": 42,
+      "path": "/sites/denmark"
+    },
+    {
+      "name": "Peru",
+      "count": 4752,
+      "path": "/sites/peru"
+    }
+  ]
+}
