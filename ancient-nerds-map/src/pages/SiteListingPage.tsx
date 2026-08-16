@@ -2,8 +2,8 @@
  * SiteListingPage — the crawlable browse hubs at /sites/ and /sites/{country}.
  *
  * These are the link path from the homepage down to each of the ~5,000
- * curated site pages. The listing arrives pre-rendered in
- * window.__AN_ROUTE__, so there is no fetch on mount.
+ * curated site pages. The listing arrives pre-rendered in the
+ * server-injected route, so there is no fetch on mount.
  */
 
 import { useState } from 'react'

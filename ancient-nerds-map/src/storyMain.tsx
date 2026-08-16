@@ -1,7 +1,7 @@
 /**
  * Entry for the Story Archive routes (/news-archive/ and /news-archive/{slug}).
  *
- * The server injects window.__AN_ROUTE__ and pre-renders the same content
+ * The server injects the route payload and pre-renders the same content
  * into #root, so this entry only has to pick the matching component.
  */
 
@@ -12,10 +12,10 @@ import { AuthProvider } from './contexts/AuthContext'
 import { OfflineProvider } from './contexts/OfflineContext'
 import StoryArchivePage from './pages/StoryArchivePage'
 import StoryPage from './pages/StoryPage'
-import { anRoute } from './types/anRoute'
+import { RouteProvider, readInjectedRoute } from './seo/RouteContext'
 import './styles/index.css'
 
-const route = anRoute()
+const route = readInjectedRoute()
 
 function Entry() {
   if (route?.type === 'story') return <StoryPage story={route} />
@@ -37,10 +37,12 @@ function Entry() {
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <AuthProvider>
-      <OfflineProvider>
-        <Entry />
-      </OfflineProvider>
-    </AuthProvider>
+    <RouteProvider value={route}>
+      <AuthProvider>
+        <OfflineProvider>
+          <Entry />
+        </OfflineProvider>
+      </AuthProvider>
+    </RouteProvider>
   </React.StrictMode>,
 )

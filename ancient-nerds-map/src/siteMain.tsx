@@ -5,9 +5,9 @@ import { OfflineProvider } from './contexts/OfflineContext'
 import './styles/index.css'
 import SitePage from './pages/SitePage'
 import { CountrySitesPage, SitesIndexPage } from './pages/SiteListingPage'
-import { anRoute } from './types/anRoute'
+import { RouteProvider, readInjectedRoute } from './seo/RouteContext'
 
-const route = anRoute()
+const route = readInjectedRoute()
 
 function Entry() {
   if (route?.type === 'sitesIndex') return <SitesIndexPage countries={route.countries} />
@@ -21,16 +21,18 @@ function Entry() {
       />
     )
   }
-  // 'site', or the legacy /site.html?id= entry point
+  // 'site' — SitePage reads the id from the route context.
   return <SitePage />
 }
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <AuthProvider>
-      <OfflineProvider>
-        <Entry />
-      </OfflineProvider>
-    </AuthProvider>
+    <RouteProvider value={route}>
+      <AuthProvider>
+        <OfflineProvider>
+          <Entry />
+        </OfflineProvider>
+      </AuthProvider>
+    </RouteProvider>
   </React.StrictMode>,
 )

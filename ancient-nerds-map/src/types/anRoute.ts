@@ -1,5 +1,5 @@
 /**
- * window.__AN_ROUTE__ — injected by the server into every indexed page.
+ * The route payload the server injects into every indexed page.
  *
  * The API serves these URLs (/news-archive/…, /sites/…, /research/…,
  * /articles/…) as the real app shell with the content already rendered
@@ -7,8 +7,10 @@
  * to mount, and for stories it carries the whole payload so the page
  * renders with no extra request and no loading flash.
  *
- * Absent when the entry is opened directly (e.g. /site.html?id=…), so
- * every consumer must handle undefined.
+ * Read it through seo/RouteContext: the entry calls readInjectedRoute()
+ * once and hands the payload to RouteProvider — nothing else touches the
+ * window global. Absent when the entry is opened directly, so every
+ * consumer must handle undefined.
  */
 
 export interface StoryRoute {
@@ -78,13 +80,3 @@ export type AnRoute =
   | { type: 'researchIndex' }
   | { type: 'article'; slug: string }
   | { type: 'articleIndex' }
-
-declare global {
-  interface Window {
-    __AN_ROUTE__?: AnRoute
-  }
-}
-
-export function anRoute(): AnRoute | undefined {
-  return typeof window === 'undefined' ? undefined : window.__AN_ROUTE__
-}

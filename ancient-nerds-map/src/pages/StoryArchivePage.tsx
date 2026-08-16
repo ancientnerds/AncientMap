@@ -2,7 +2,7 @@
  * StoryArchivePage — the paginated listing at /news-archive/.
  *
  * Reached from the "Story Archive" nav entry. The listing arrives
- * pre-rendered in window.__AN_ROUTE__, so there is no fetch on mount.
+ * pre-rendered in the server-injected route, so there is no fetch on mount.
  */
 
 import AiNoticeBanner from '../components/layout/AiNoticeBanner'

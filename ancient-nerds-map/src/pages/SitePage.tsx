@@ -1,4 +1,4 @@
-import { useMemo, useEffect, useState, lazy, Suspense } from 'react'
+import { useEffect, useState, lazy, Suspense } from 'react'
 
 import CommunityCta from '../components/layout/CommunityCta'
 import PageHeader from '../components/layout/PageHeader'
@@ -6,19 +6,18 @@ import SitePopup from '../components/SitePopup/SitePopup'
 import { useSiteDetailData } from '../components/SiteDetail/useSiteDetailData'
 import { getCountryFlatFlagUrl } from '../utils/countryFlags'
 import type { LyraContextType } from '../types/ai'
-import { anRoute } from '../types/anRoute'
+import { useRoute } from '../seo/RouteContext'
 
 import '../styles/site-page.css'
 
 const LyraChatModal = lazy(() => import('../components/LyraChatModal'))
 
 export default function SitePage() {
-  // /sites/{country}/{slug} carries the resolved id; /site.html?id= is the legacy form.
-  const siteId = useMemo(() => {
-    const route = anRoute()
-    if (route?.type === 'site') return route.id
-    return new URLSearchParams(window.location.search).get('id')
-  }, [])
+  // /sites/{country}/{slug} carries the resolved id. The legacy /site.html?id=
+  // form answers 301 since 1ad85ed, so the route payload is the only source —
+  // and reading it from context keeps the render free of window access.
+  const route = useRoute()
+  const siteId = route?.type === 'site' ? route.id : null
 
   const { site, isLoading, error } = useSiteDetailData(siteId)
   const [showLyra, setShowLyra] = useState(false)

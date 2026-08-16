@@ -3,10 +3,10 @@ import ReactDOM from 'react-dom/client'
 import { AuthProvider } from './contexts/AuthContext'
 import { OfflineProvider } from './contexts/OfflineContext'
 import ResearchPaperPage from './pages/ResearchPaperPage'
-import { anRoute } from './types/anRoute'
+import { RouteProvider, readInjectedRoute } from './seo/RouteContext'
 import './styles/index.css'
 
-const route = anRoute()
+const route = readInjectedRoute()
 
 function Entry() {
   // The research index has its own listing page in the Theo library; sending
@@ -20,10 +20,12 @@ function Entry() {
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <AuthProvider>
-      <OfflineProvider>
-        <Entry />
-      </OfflineProvider>
-    </AuthProvider>
+    <RouteProvider value={route}>
+      <AuthProvider>
+        <OfflineProvider>
+          <Entry />
+        </OfflineProvider>
+      </AuthProvider>
+    </RouteProvider>
   </React.StrictMode>,
 )

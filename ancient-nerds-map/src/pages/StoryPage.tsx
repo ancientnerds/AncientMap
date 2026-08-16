@@ -4,9 +4,9 @@
  * "Story", not "news": a video published this week routinely covers a find
  * from decades ago, so the archive is dated by its source, not by recency.
  *
- * The payload arrives pre-rendered in window.__AN_ROUTE__, so there is no
- * fetch and no loading state — what the crawler was served and what the
- * visitor sees are built from the same data.
+ * The payload arrives pre-rendered as the server-injected route, so there
+ * is no fetch and no loading state — what the crawler was served and what
+ * the visitor sees are built from the same data.
  */
 
 import CommunityCta from '../components/layout/CommunityCta'

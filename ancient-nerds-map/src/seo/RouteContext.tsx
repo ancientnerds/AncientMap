@@ -11,6 +11,12 @@ import { createContext, useContext, type ReactNode } from 'react'
 
 import type { AnRoute } from '../types/anRoute'
 
+declare global {
+  interface Window {
+    __AN_ROUTE__?: AnRoute
+  }
+}
+
 const RouteCtx = createContext<AnRoute | undefined>(undefined)
 
 export function RouteProvider({ value, children }: { value?: AnRoute; children: ReactNode }) {
