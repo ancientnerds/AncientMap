@@ -69,6 +69,12 @@ jobs:
       - name: Dead files & unused dependencies (knip)
         run: npx knip --no-progress --include files,dependencies,devDependencies
 
+      # The SSR work gates on vitest (route-context guard, render tests).
+      # A guard that only runs when someone remembers to run it locally
+      # prevents nothing (quality review, 2026-08-16).
+      - name: Frontend tests (vitest)
+        run: npm run test
+
       - name: Build
         run: npm run build
 
