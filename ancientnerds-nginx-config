@@ -1,3 +1,11 @@
+# Two API instances; the deploy restarts one at a time, so nginx always has
+# a live backend. On connection errors it retries the other instance
+# (proxy_next_upstream default: error timeout).
+upstream an_api {
+    server 127.0.0.1:8000 max_fails=1 fail_timeout=5s;
+    server 127.0.0.1:8001 max_fails=1 fail_timeout=5s;
+}
+
 # SEO: Detect crawler user-agents for pre-rendered site pages (/?site={uuid})
 map $http_user_agent $is_bot {
     default 0;
@@ -76,7 +84,7 @@ server {
 
     # SEO: Article pages served by API as HTML
     location /articles/ {
-        proxy_pass http://127.0.0.1:8000/articles/;
+        proxy_pass http://an_api/articles/;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         add_header Cache-Control "public, max-age=3600";
@@ -84,7 +92,7 @@ server {
 
     # SEO: News archive served by API as HTML
     location /news-archive/ {
-        proxy_pass http://127.0.0.1:8000/news-archive/;
+        proxy_pass http://an_api/news-archive/;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         add_header Cache-Control "public, max-age=1800";
@@ -92,7 +100,7 @@ server {
 
     # SEO: Research library papers served by API as HTML
     location /research/ {
-        proxy_pass http://127.0.0.1:8000/research/;
+        proxy_pass http://an_api/research/;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         add_header Cache-Control "public, max-age=1800";
@@ -100,7 +108,7 @@ server {
 
     # SEO: Crawlable site browse pages served by API as HTML
     location /sites/ {
-        proxy_pass http://127.0.0.1:8000/sites/;
+        proxy_pass http://an_api/sites/;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         add_header Cache-Control "public, max-age=3600";
@@ -108,7 +116,7 @@ server {
 
     # Bulk site operations need a long timeout (large imports)
     location /api/sites/batch-upload {
-        proxy_pass http://127.0.0.1:8000/api/sites/batch-upload;
+        proxy_pass http://an_api/api/sites/batch-upload;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_read_timeout 600s;
@@ -120,7 +128,7 @@ server {
     }
 
     location /api/sites/replace-source {
-        proxy_pass http://127.0.0.1:8000/api/sites/replace-source;
+        proxy_pass http://an_api/api/sites/replace-source;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_read_timeout 600s;
@@ -132,7 +140,7 @@ server {
     }
 
     location /api/ {
-        proxy_pass http://127.0.0.1:8000/api/;
+        proxy_pass http://an_api/api/;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_read_timeout 120s;
@@ -168,7 +176,7 @@ server {
 
     # Wiki images — served by API container (files are inside Docker)
     location /data/images/wiki/ {
-        proxy_pass http://127.0.0.1:8000/data/images/wiki/;
+        proxy_pass http://an_api/data/images/wiki/;
         proxy_set_header Host $host;
         add_header Cache-Control "public, max-age=86400";
     }
@@ -193,7 +201,7 @@ server {
     # Internal: proxied pre-rendered site pages (reached via rewrite in /site.html block)
     location /seo/site/ {
         internal;
-        proxy_pass http://127.0.0.1:8000/seo/site/;
+        proxy_pass http://an_api/seo/site/;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
     }
@@ -212,14 +220,14 @@ server {
     # crawlers different content than users is cloaking-adjacent and Google
     # never fetched those URLs anyway.
     location = /site.html {
-        proxy_pass http://127.0.0.1:8000/site.html;
+        proxy_pass http://an_api/site.html;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
     }
 
     # Legacy research URL -> canonical /research/{slug}
     location = /research.html {
-        proxy_pass http://127.0.0.1:8000/research.html;
+        proxy_pass http://an_api/research.html;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
     }

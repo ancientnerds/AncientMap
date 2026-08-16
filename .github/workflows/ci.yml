@@ -414,34 +414,49 @@ jobs:
               echo "==> Theo worker busy (running=$THEO_BUSY) — leaving it on the old image"
             fi
 
+            # Wait until one API instance answers on the given port.
+            wait_api() {
+              for i in $(seq 1 24); do
+                sleep 5
+                if curl -sf "http://localhost:$1/"; then
+                  echo " API on :$1 healthy after $((i * 5))s"
+                  return 0
+                fi
+                echo " :$1 attempt $i failed, retrying..."
+              done
+              echo "ERROR: health check on :$1 failed after 120s!"
+              docker compose logs "$2" --tail=30
+              return 1
+            }
+
             if [ -n "$REBUILD" ]; then
-              echo "==> Rebuilding:$REBUILD"
-              docker compose rm -sf $REBUILD 2>/dev/null || true
-              BUILD_HASH=$(git rev-parse --short HEAD) docker compose up -d --build --remove-orphans $REBUILD
+              echo "==> Building:$REBUILD (old containers keep serving)"
+              # Build BEFORE touching containers. The old `rm -sf` + `up --build`
+              # stopped the API first and built while it was down — that was
+              # most of the ~110s outage window per deploy.
+              BUILD_HASH=$(git rev-parse --short HEAD) docker compose build $REBUILD
+              case "$REBUILD" in
+                *api*)
+                  echo "==> Rolling API restart (nginx keeps serving from the other instance)"
+                  docker compose up -d --no-deps api
+                  wait_api 8000 api
+                  docker compose up -d --no-deps api2
+                  wait_api 8001 api2
+                  ;;
+              esac
+              # Recreate the remaining rebuilt services (worker, lyra, proxy).
+              BUILD_HASH=$(git rev-parse --short HEAD) docker compose up -d --remove-orphans $REBUILD
             elif echo "$CHANGED" | grep -qE "^docker-compose\.yml"; then
               echo "==> Compose config changed, recreating services..."
+              # Build too: a new service referencing the api image (api2) must
+              # not fail on a compose-only deploy.
+              BUILD_HASH=$(git rev-parse --short HEAD) docker compose build api
               BUILD_HASH=$(git rev-parse --short HEAD) docker compose up -d --remove-orphans
+              wait_api 8000 api
+              wait_api 8001 api2
             else
               echo "==> No Docker changes, ensuring services are running..."
               docker compose up -d --remove-orphans
-            fi
-            if [ -n "$REBUILD" ]; then
-              echo "==> Waiting for API health..."
-              for i in $(seq 1 24); do
-                sleep 5
-                if curl -sf http://localhost:8000/; then
-                  echo " API healthy after $((i * 5))s"
-                  break
-                fi
-                if [ "$i" = "24" ]; then
-                  echo "ERROR: Health check failed after 120s!"
-                  docker compose logs api --tail=30
-                  exit 1
-                fi
-                echo " Attempt $i failed, retrying..."
-              done
-            else
-              echo "==> API unchanged, skipping health check"
             fi
 
             echo "==> Generating static sitemap..."

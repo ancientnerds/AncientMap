@@ -83,7 +83,10 @@ services:
   # ==========================================================================
   # API Service (FastAPI + Uvicorn)
   # ==========================================================================
-  api:
+  api: &api-service
+    # Explicit tag (matches what compose auto-names anyway) so api2 can run
+    # the same image without building twice.
+    image: ancientnerds-api
     build:
       context: .
       dockerfile: Dockerfile
@@ -137,6 +140,15 @@ services:
       timeout: 10s
       start_period: 5s
       retries: 3
+
+  # Second API instance for zero-downtime deploys: nginx balances an upstream
+  # of 8000+8001 and the deploy restarts one instance at a time. Identical to
+  # api except name and host port.
+  api2:
+    <<: *api-service
+    container_name: ancient_nerds_api2
+    ports:
+      - "127.0.0.1:8001:8000"
 
   # ==========================================================================
   # Theo Research Worker — same image as the API, different entrypoint.
