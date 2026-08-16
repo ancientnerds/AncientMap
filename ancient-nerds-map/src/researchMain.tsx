@@ -1,12 +1,13 @@
 /**
- * Entry for the research routes (/research/{slug}).
+ * Entry for the research routes (/research/, /research/{slug}).
  *
- * SeoRoute resolves the paper page from the registry. researchIndex and
- * missing/foreign payloads (direct hit on /research.html) redirect at
- * module level, before createRoot — the research index has its own listing
- * page in the Theo library, and one canonical listing beats two.
+ * SeoRoute resolves paper and library listing from the registry — since
+ * react-ssr Task 12 both payloads carry everything the pages render, so
+ * there is no fetch and no redirect. Only a payload-less direct hit on the
+ * static /research.html still redirects to the Theo library, exactly as
+ * before the cutover.
  *
- * No OfflineProvider: nothing under ResearchPaperPage consumes useOffline()
+ * No OfflineProvider: nothing under these pages consumes useOffline()
  * (only Globe, FilterPanel and SitePopup do).
  */
 
@@ -20,7 +21,7 @@ import './styles/index.css'
 
 const route = readInjectedRoute()
 
-if (route?.type !== 'research') {
+if (!route) {
   window.location.replace('/theo.html#research-library')
 } else {
   ReactDOM.createRoot(document.getElementById('root')!).render(

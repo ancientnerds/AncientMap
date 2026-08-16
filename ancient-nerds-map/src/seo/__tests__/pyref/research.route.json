@@ -4,6 +4,7 @@
   "title": "Obsidian Trade Networks in Neolithic Anatolia",
   "summary": "Sourcing analyses of 1,200 obsidian artefacts reveal two distinct exchange spheres centred on the Cappadocian and Lake Van sources.",
   "author": "Theo",
-  "publishedAt": "2026-07-02",
-  "heroImageUrl": "https://ancientnerds.com/data/research/obsidian/hero.webp"
+  "published_at": "2026-07-02T04:15:00",
+  "hero_image_url": "https://ancientnerds.com/data/research/obsidian/hero.webp",
+  "body_html": "<p>body</p>"
 }

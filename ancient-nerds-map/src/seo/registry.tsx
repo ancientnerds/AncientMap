@@ -5,15 +5,13 @@
  * den Typ über dieselbe Tabelle auf. Kommt ein Seitentyp dazu, wird er hier
  * eingetragen — und ist damit sofort in beiden Welten vorhanden.
  *
- * research/researchIndex teilen sich ResearchPaperPage, article/articleIndex
- * ArticlesPage: beide Seiten holen ihre Daten heute selbst (die Produktion
- * injiziert nur {slug}- bzw. {}-Stubs, siehe anRoute.ts), und researchIndex
- * leitet der Browser ohnehin vor dem Mount auf die Theo-Library um
- * (researchMain.tsx). In der Tabelle stehen beide Typen trotzdem —
- * entry-server rendert alle 9 ohne Sonderfälle.
+ * article/articleIndex teilen sich ArticlesPage: sie verzweigt intern auf
+ * den Route-Typ und behält daneben ihren Standalone-SPA-Modus für
+ * /articles.html ohne Payload (Produktentscheidung, siehe articlesMain.tsx).
  */
 
 import ArticlesPage from '../pages/ArticlesPage'
+import ResearchIndexPage from '../pages/ResearchIndexPage'
 import ResearchPaperPage from '../pages/ResearchPaperPage'
 import { CountrySitesPage, SitesIndexPage } from '../pages/SiteListingPage'
 import SitePage from '../pages/SitePage'
@@ -36,7 +34,7 @@ export const registry = {
   sitesIndex: { Component: SitesIndexPage, meta: meta.sitesIndexMeta },
   country: { Component: CountrySitesPage, meta: meta.countryMeta },
   research: { Component: ResearchPaperPage, meta: meta.researchMeta },
-  researchIndex: { Component: ResearchPaperPage, meta: meta.researchIndexMeta },
+  researchIndex: { Component: ResearchIndexPage, meta: meta.researchIndexMeta },
   article: { Component: ArticlesPage, meta: meta.articleMeta },
   articleIndex: { Component: ArticlesPage, meta: meta.articleIndexMeta },
 } satisfies Record<AnRoute['type'], Entry>

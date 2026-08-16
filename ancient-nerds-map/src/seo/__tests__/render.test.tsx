@@ -20,7 +20,7 @@ import ArticlesPage from '../../pages/ArticlesPage'
 import type { AnRoute } from '../../types/anRoute'
 import { SeoRoute } from '../registry'
 import { RouteProvider } from '../RouteContext'
-import { FIXTURES } from './fixtures'
+import { FIXTURES, pyrefRoute } from './fixtures'
 
 function renderRoute(route: AnRoute): string {
   return renderToString(
@@ -41,14 +41,13 @@ describe('serverseitiges Rendern', () => {
   }
 })
 
-describe('heutige Produktions-Stubs (bis zum Cutover, Tasks 12-14)', () => {
+describe('heutige Produktions-Stubs (bis zum Cutover, Task 13)', () => {
   // pipeline/seo_pages.py injiziert für diese Typen nur Stubs — die Seiten
   // holen ihre Daten selbst. Die Registry muss auch mit exakt diesen
-  // Payloads rendern, nicht nur mit den Post-Cutover-Fixtures. (site trägt
-  // seit Task 11 das volle Payload — sein Stub existiert nicht mehr.)
+  // Payloads rendern, nicht nur mit den Post-Cutover-Fixtures. (site und
+  // research tragen seit Tasks 11/12 das volle Payload — ihre Stubs
+  // existieren nicht mehr.)
   const stubs = [
-    { type: 'research', slug: 'goebekli-tepe' },
-    { type: 'researchIndex' },
     { type: 'article', slug: 'weekly-journal' },
     { type: 'articleIndex' },
   ] as unknown as AnRoute[]
@@ -59,6 +58,71 @@ describe('heutige Produktions-Stubs (bis zum Cutover, Tasks 12-14)', () => {
       expect(html.length).toBeGreaterThan(50)
     })
   }
+})
+
+describe('research-Seiten (Task 12): der SSR-Body trägt den Python-Fragment-Inhalt', () => {
+  const html = renderRoute(FIXTURES.research)
+
+  it('genau ein h1, und es trägt den Papertitel', () => {
+    expect(html.match(/<h1/g)).toHaveLength(1)
+    expect(html).toContain('Obsidian Trade Networks in Neolithic Anatolia')
+  })
+
+  it('Art.-50-Hinweis sichtbar UND maschinenlesbar (data-ai-generated)', () => {
+    expect(html).toContain('data-ai-generated="true"')
+    expect(html).toContain('AI-generated')
+  })
+
+  it('body_html ist gerendert — kompletter Papertext im ersten Render, kein Fetch', () => {
+    expect(html).toContain('<p>body</p>')
+    expect(html).not.toContain('Loading...')
+  })
+
+  it('Theo-Autorenzeile mit AI-Agent-Kennzeichnung, Datum und Lizenz', () => {
+    expect(html).toContain('by Theo')
+    expect(html).toContain('AI research agent')
+    expect(html).toContain('2026-07-02')
+    expect(html).toContain('CC BY 4.0')
+  })
+
+  it('Hero-Bild und Summary aus dem Payload', () => {
+    expect(html).toContain('https://ancientnerds.com/data/research/obsidian/hero.webp')
+    expect(html).toContain('Sourcing analyses of 1,200 obsidian artefacts')
+  })
+
+  it('Rückweg zur Library und CommunityCta', () => {
+    expect(html).toContain('href="/research/"')
+    expect(html).toContain('Keep exploring')
+  })
+
+  it('menschlicher Autor OHNE AI-Agent-Suffix (Fälle aus TestResearchAuthorship)', () => {
+    const person = renderRoute(pyrefRoute('research_person'))
+    expect(person).toContain('by Dr. Jane Doe')
+    expect(person).not.toContain('AI research agent')
+    // Der Art.-50-Banner bleibt trotzdem: der Papertext ist KI-generiert.
+    expect(person).toContain('data-ai-generated="true"')
+  })
+})
+
+describe('researchIndex (Task 12): echte Listenseite statt Redirect', () => {
+  const html = renderRoute(FIXTURES.researchIndex)
+
+  it('genau ein h1: Research Library', () => {
+    expect(html.match(/<h1/g)).toHaveLength(1)
+    expect(html).toContain('Research Library')
+  })
+
+  it('eine Karte pro Paper, mit Link und Summary-Blurb', () => {
+    expect(html).toContain('href="/research/obsidian-trade-networks-anatolia"')
+    expect(html).toContain('href="/research/gobekli-tepe-water-management"')
+    expect(html).toContain('Water Management at Göbekli Tepe')
+    expect(html).toContain('Cistern volumes suggest')
+  })
+
+  it('Art.-50-Banner und CommunityCta', () => {
+    expect(html).toContain('data-ai-generated="true"')
+    expect(html).toContain('Keep exploring')
+  })
 })
 
 describe('site-Detailseite (Task 11): der SSR-Body trägt den Python-Fragment-Inhalt', () => {

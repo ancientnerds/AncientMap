@@ -4,6 +4,7 @@
   "title": "Water Management at Göbekli Tepe",
   "summary": "Cistern volumes suggest the enclosures hosted gatherings of several hundred people.",
   "author": "Dr. Jane Doe",
-  "publishedAt": "2026-07-02",
-  "heroImageUrl": ""
+  "published_at": "2026-07-02T04:15:00",
+  "hero_image_url": null,
+  "body_html": "<p>body</p>"
 }

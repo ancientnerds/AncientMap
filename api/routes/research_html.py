@@ -15,8 +15,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from api.routes.public_v1 import PAPER_SUMMARY_COLUMNS, paper_summary_kwargs
-from api.seo_shell import shell_response
-from pipeline import seo_pages
+from api.seo_shell import ssr_shell_response
 from pipeline.article_html_renderer import (
     BASE_URL,
     markdown_to_html,
@@ -57,8 +56,20 @@ async def research_listing(db: Session = Depends(get_db)):
         """)
     ).fetchall()
 
+    # Since react-ssr Task 12 the sidecar renders head and body from this
+    # payload (researchIndexMeta + ResearchIndexPage); Python only fetches
+    # data. The cards need slug, title and summary — nothing more.
     papers = [paper_summary_kwargs(row) for row in rows]
-    return shell_response(seo_pages.research_index_page(papers), _HTML_HEADERS)
+    return ssr_shell_response(
+        "research.html",
+        {
+            "type": "researchIndex",
+            "papers": [
+                {"slug": p["slug"], "title": p["title"], "summary": p["summary"]} for p in papers
+            ],
+        },
+        _HTML_HEADERS,
+    )
 
 
 def _fetch_paper(slug: str, db: Session):
@@ -95,8 +106,23 @@ async def research_paper_page(slug: str, db: Session = Depends(get_db)):
     # is what external consumers should see — same rule as /api/v1/research.
     content = row.published_report or row.report or ""
 
-    return shell_response(
-        seo_pages.research_page(paper_summary_kwargs(row), markdown_to_html(content)),
+    # Raw snake_case row fields (react-ssr Task 12); date formatting and
+    # author defaults are display decisions and live in src/seo/. body_html
+    # stays Python-markdown on purpose (nh3-sanitized in markdown_to_html) —
+    # React injects the finished HTML instead of re-rendering the markdown.
+    paper = paper_summary_kwargs(row)
+    return ssr_shell_response(
+        "research.html",
+        {
+            "type": "research",
+            "slug": paper["slug"],
+            "title": paper["title"],
+            "summary": paper["summary"],
+            "author": paper["author"],
+            "published_at": paper["published_at"],
+            "hero_image_url": paper["hero_image_url"],
+            "body_html": markdown_to_html(content),
+        },
         _HTML_HEADERS,
     )
 

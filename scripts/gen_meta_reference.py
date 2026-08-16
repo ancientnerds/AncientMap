@@ -14,16 +14,14 @@ comes from the built Vite bundle, not from the head fragment.
 
 For story/storyArchive/sitesIndex the payload is taken verbatim from
 SeoPage.route, i.e. exactly what production injects into
-window.__AN_ROUTE__ today. country (react-ssr Task 10) and site (Task 11)
-are cut over: their routes hand the RAW row(s) through — snake_case, no
-display formatting — and grouping/formatting happens in src/seo/
-(grouping.ts, display.ts), so the reference payload is that raw shape
-while the head stays the Python-rendered byte reference.
-research/article and the two index types still carry stub payloads in
-production ({"slug"}, {}), so for those the script builds the
-post-cutover payload shape (react-ssr plan, Tasks 12-14) from the same
-fixture values that fed the Python renderer — head and payload cannot
-drift apart because both come from one fixture.
+window.__AN_ROUTE__ today. country (react-ssr Task 10), site (Task 11)
+and research/researchIndex (Task 12) are cut over: their routes hand the
+RAW row(s) through — snake_case, no display formatting — and grouping/
+formatting happens in src/seo/ (grouping.ts, display.ts), so the
+reference payload is that raw shape while the head stays the
+Python-rendered byte reference. article/articleIndex follow the same
+raw-payload contract (react-ssr Task 13); head and payload cannot drift
+apart because both come from one fixture.
 
 Reproducible:  python scripts/gen_meta_reference.py
 """
@@ -308,15 +306,23 @@ def _site_route() -> dict:
     }
 
 
-def _paper_route(paper: dict) -> dict:
+def _paper_route(paper: dict, body_html: str) -> dict:
+    """The raw payload api/routes/research_html.py hands the sidecar (Task 12).
+
+    paper_summary_kwargs fields verbatim — trimming, author default and
+    date formatting are display decisions and live in src/seo/. body_html
+    is the same fixture string the Python renderer receives, so head and
+    payload cannot drift apart.
+    """
     return {
         "type": "research",
         "slug": paper["slug"],
         "title": paper["title"],
-        "summary": (paper.get("summary") or "").strip(),
-        "author": paper.get("author") or "Theo",
-        "publishedAt": _date_parts(paper.get("published_at"))[0],
-        "heroImageUrl": paper.get("hero_image_url") or "",
+        "summary": paper.get("summary"),
+        "author": paper.get("author"),
+        "published_at": paper.get("published_at"),
+        "hero_image_url": paper.get("hero_image_url"),
+        "body_html": body_html,
     }
 
 
@@ -348,8 +354,12 @@ def cases() -> list[tuple[str, SeoPage, dict | None]]:
             country_sites_page("Türkiye", COUNTRY_SITES),
             {"type": "country", "country": "Türkiye", "sites": COUNTRY_SITES},
         ),
-        ("research", research_page(PAPER, "<p>body</p>"), _paper_route(PAPER)),
-        ("research_person", research_page(PAPER_PERSON, "<p>body</p>"), _paper_route(PAPER_PERSON)),
+        ("research", research_page(PAPER, "<p>body</p>"), _paper_route(PAPER, "<p>body</p>")),
+        (
+            "research_person",
+            research_page(PAPER_PERSON, "<p>body</p>"),
+            _paper_route(PAPER_PERSON, "<p>body</p>"),
+        ),
         (
             "researchIndex",
             research_index_page(PAPERS_INDEX),

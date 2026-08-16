@@ -1,13 +1,15 @@
 /**
- * Anzeige-Helfer der Site-Detailseite — Portierung von _coord_display()
+ * Anzeige-Helfer der Payload-Seiten — Portierung von _coord_display()
  * und _period_display() aus pipeline/sites_html_renderer.py (react-ssr
- * plan, Task 11). yearDisplay (_year_display) lebt bereits in grouping.ts
+ * plan, Task 11) und der ISO-Hälfte von _date_parts() aus seo_pages.py
+ * (Tasks 12/13). yearDisplay (_year_display) lebt bereits in grouping.ts
  * und wird von dort importiert, nicht dupliziert.
  *
- * Das site-Payload trägt die rohe DB-Zeile (snake_case); wie Periode und
- * Koordinaten dargestellt werden, ist eine Darstellungsentscheidung und
- * lebt deshalb hier. Bis pipeline/seo_pages.py stirbt (Task 16), ist die
- * Python-Seite die maßgebliche Vorlage.
+ * Die Payloads tragen rohe DB-Zeilen (snake_case); wie Periode,
+ * Koordinaten und Datum dargestellt werden, ist eine
+ * Darstellungsentscheidung und lebt deshalb hier. Bis
+ * pipeline/seo_pages.py stirbt (Task 16), ist die Python-Seite die
+ * maßgebliche Vorlage.
  */
 
 import type { SiteRoute } from '../types/anRoute'
@@ -25,6 +27,16 @@ export function coordDisplay(lat: number | null, lon: number | null): string {
   const latDir = lat >= 0 ? 'N' : 'S'
   const lonDir = lon >= 0 ? 'E' : 'W'
   return `${Math.abs(lat).toFixed(4)}° ${latDir}, ${Math.abs(lon).toFixed(4)}° ${lonDir}`
+}
+
+/**
+ * _date_parts()[0]: "YYYY-MM-DD" aus einem rohen ISO-Timestamp, "" ohne
+ * Wert. Python parst per fromisoformat und strftime("%Y-%m-%d") — für
+ * jeden ISO-String identisch mit den ersten 10 Zeichen, und genau darauf
+ * fällt Python bei unparsbaren Strings ohnehin zurück (value[:10]).
+ */
+export function isoDate(value: string | null | undefined): string {
+  return value ? value.slice(0, 10) : ''
 }
 
 /** _period_display(): kuratierter Periodenname, sonst Start-/Endjahr-Spanne. */

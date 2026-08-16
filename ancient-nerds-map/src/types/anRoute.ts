@@ -12,13 +12,10 @@
  * window global. Absent when the entry is opened directly, so every
  * consumer must handle undefined.
  *
- * story, storyArchive, sitesIndex, country and site describe what the
- * server injects TODAY (country and site as raw SQL rows since the
- * react-ssr Tasks 10/11 cutover). research, article and the two index
- * types describe the post-cutover contract (react-ssr plan, Tasks 12-14):
- * production still injects stubs ({slug}, {}) and those pages fetch their
- * own data until the cutover lands, so only read the extra fields behind
- * a type check.
+ * story and storyArchive describe what the server injects TODAY; the
+ * other types carry raw snake_case rows since the react-ssr cutovers
+ * (country/site Tasks 10/11, research/article Tasks 12/13) — display
+ * formatting lives in src/seo/, not in the payload.
  */
 
 export interface StoryRoute {
@@ -127,22 +124,29 @@ export interface CountryRoute {
   sites: CountrySite[]
 }
 
-/** Post-cutover contract (react-ssr Tasks 12-14) — production still injects {slug}/{} stubs. */
+/**
+ * One public research paper — the raw paper_summary_kwargs fields the
+ * route hands through (api/routes/research_html.py, react-ssr Task 12),
+ * plus body_html: the published report rendered by the pipeline's
+ * Python-markdown renderer (nh3-sanitized). The markdown renderer stays
+ * Python on purpose — React only injects the finished HTML.
+ */
 export interface ResearchRoute {
   type: 'research'
   slug: string
   title: string
-  summary: string
-  author: string
-  /** ISO date (YYYY-MM-DD), pre-formatted server-side like StoryRoute.publishedAt. */
-  publishedAt: string
-  heroImageUrl: string
+  summary: string | null
+  /** published_by; null/absent means the Theo pipeline. */
+  author: string | null
+  /** Raw ISO timestamp from the row; date display is a TS decision. */
+  published_at: string | null
+  hero_image_url: string | null
+  body_html: string
 }
 
-/** Post-cutover contract (react-ssr Tasks 12-14) — production still injects {slug}/{} stubs. */
 export interface ResearchIndexRoute {
   type: 'researchIndex'
-  papers: { slug: string; title: string; summary: string }[]
+  papers: { slug: string; title: string; summary: string | null }[]
 }
 
 /** Post-cutover contract (react-ssr Tasks 12-14) — production still injects {slug}/{} stubs. */

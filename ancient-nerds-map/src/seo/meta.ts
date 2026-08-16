@@ -26,6 +26,7 @@ import type {
   StoryArchiveRoute,
   StoryRoute,
 } from '../types/anRoute'
+import { isoDate } from './display'
 import { periodSpan, typeSections } from './grouping'
 import { blurb, collapse, cut } from './text'
 
@@ -292,18 +293,20 @@ export function countryMeta(route: CountryRoute): PageMeta {
   }
 }
 
+/** research_page(): das Payload trägt die rohen Zeilenfelder — Defaults entstehen hier. */
 export function researchMeta(route: ResearchRoute): PageMeta {
   const canonical = `${BASE_URL}/research/${encodePath(route.slug)}`
-  const summary = route.summary.trim()
+  const summary = (route.summary || '').trim()
+  const author = route.author || 'Theo'
   // Theo ist eine Pipeline, keine Person — im JSON-LD eine Organization.
   const authorSchema =
-    route.author === 'Theo'
+    author === 'Theo'
       ? '{"@type": "Organization", "name": "Ancient Nerds", "description": "AI research pipeline"}'
-      : `{"@type": "Person", "name": ${jsonStr(route.author)}}`
+      : `{"@type": "Person", "name": ${jsonStr(author)}}`
   const schema =
     '{"@context": "https://schema.org", "@type": "ScholarlyArticle", ' +
     `"headline": ${jsonStr(route.title)}, "description": ${jsonStr(cut(summary, 300))}, ` +
-    `"datePublished": "${route.publishedAt}", "author": ${authorSchema}, ` +
+    `"datePublished": "${isoDate(route.published_at)}", "author": ${authorSchema}, ` +
     '"license": "https://creativecommons.org/licenses/by/4.0/", ' +
     `"mainEntityOfPage": "${canonical}", "url": "${canonical}"}`
   return {
@@ -311,7 +314,7 @@ export function researchMeta(route: ResearchRoute): PageMeta {
     description: summary || route.title,
     canonical,
     ogType: 'article',
-    image: route.heroImageUrl || undefined,
+    image: route.hero_image_url || undefined,
     schema,
   }
 }
