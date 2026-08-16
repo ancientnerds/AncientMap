@@ -86,7 +86,8 @@ function storySlug(headline: string, id: number): string {
   return `${slugify(headline)}-${id}`
 }
 
-function countryPath(country: string): string {
+/** country_path(): Länderpfad. Exportiert für SitePage (Crumb + Geschwister-Block). */
+export function countryPath(country: string): string {
   return `/sites/${slugify(country)}`
 }
 
@@ -191,9 +192,11 @@ export function storyArchiveMeta(route: StoryArchiveRoute): PageMeta {
   }
 }
 
+/** site_detail_page(): das Payload trägt die rohe Zeile — Defaults entstehen hier. */
 export function siteMeta(route: SiteRoute): PageMeta {
   const canonical = `${BASE_URL}${encodePath(sitePath(route.country, route.name, route.id))}`
-  const description = route.description.trim()
+  const siteType = route.site_type || 'Archaeological site'
+  const description = (route.description || '').trim()
   const ogImage = route.image ? `${BASE_URL}${route.image.url}` : undefined
 
   const place = [
@@ -203,10 +206,10 @@ export function siteMeta(route: SiteRoute): PageMeta {
     `"address": {"@type": "PostalAddress", "addressCountry": ${jsonStr(route.country)}}`,
   ]
   if (description) place.push(`"description": ${jsonStr(cut(description, 500))}`)
-  if (route.coords.lat !== null && route.coords.lon !== null) {
+  if (route.lat !== null && route.lon !== null) {
     place.push(
-      `"geo": {"@type": "GeoCoordinates", "latitude": ${route.coords.lat}, ` +
-        `"longitude": ${route.coords.lon}}`,
+      `"geo": {"@type": "GeoCoordinates", "latitude": ${route.lat}, ` +
+        `"longitude": ${route.lon}}`,
     )
   }
   if (ogImage) place.push(`"image": "${ogImage}"`)
@@ -229,9 +232,8 @@ export function siteMeta(route: SiteRoute): PageMeta {
     `"itemListElement": [${crumbItems}]}]`
 
   return {
-    title: `${route.name} — ${route.country} · ${route.siteType}`,
-    description:
-      description || `${route.name}: ${route.siteType.toLowerCase()} in ${route.country}.`,
+    title: `${route.name} — ${route.country} · ${siteType}`,
+    description: description || `${route.name}: ${siteType.toLowerCase()} in ${route.country}.`,
     canonical,
     ogType: 'place',
     image: ogImage,

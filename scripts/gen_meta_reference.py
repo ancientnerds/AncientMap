@@ -14,13 +14,14 @@ comes from the built Vite bundle, not from the head fragment.
 
 For story/storyArchive/sitesIndex the payload is taken verbatim from
 SeoPage.route, i.e. exactly what production injects into
-window.__AN_ROUTE__ today. country cut over with react-ssr Task 10: the
-route hands the RAW sites rows through ({type, country, sites}) and the
-grouping happens in src/seo/grouping.ts, so the reference payload is that
-raw shape while the head stays the Python-rendered byte reference.
-site/research/article and the two index types still carry stub payloads
-in production ({"id"}, {"slug"}, {}), so for those the script builds the
-post-cutover payload shape (react-ssr plan, Tasks 11-14) from the same
+window.__AN_ROUTE__ today. country (react-ssr Task 10) and site (Task 11)
+are cut over: their routes hand the RAW row(s) through — snake_case, no
+display formatting — and grouping/formatting happens in src/seo/
+(grouping.ts, display.ts), so the reference payload is that raw shape
+while the head stays the Python-rendered byte reference.
+research/article and the two index types still carry stub payloads in
+production ({"slug"}, {}), so for those the script builds the
+post-cutover payload shape (react-ssr plan, Tasks 12-14) from the same
 fixture values that fed the Python renderer — head and payload cannot
 drift apart because both come from one fixture.
 
@@ -50,7 +51,6 @@ from pipeline.seo_pages import (  # noqa: E402
     story_archive_page,
     story_page,
 )
-from pipeline.sites_html_renderer import _period_display  # noqa: E402
 
 OUT = REPO / "ancient-nerds-map" / "src" / "seo" / "__tests__" / "pyref"
 
@@ -162,6 +162,9 @@ SITE = {
         "around 9600 BC — millennia before pottery or the wheel.\n"
         "Its T-shaped pillars carry reliefs of foxes, snakes and vultures."
     ),
+    # Not rendered by site_detail_page(); rides along in the route payload
+    # for the interactive SitePopup (SiteData.sourceUrl).
+    "source_url": "https://example.org/curated/gobekli-tepe",
 }
 
 SITE_RELATED = {
@@ -180,7 +183,9 @@ SITE_RELATED = {
             "content_type": "reference",
         }
     ],
-    "parent": None,
+    # Taş Tepeler is the real excavation programme Göbekli Tepe belongs to —
+    # a non-None parent so the "Part of" link path is exercised end to end.
+    "parent": {"name": "Taş Tepeler", "path": "/sites/türkiye/taş-tepeler-0f9e8d7c"},
     "siblings": [{"name": "Karahan Tepe", "path": "/sites/türkiye/karahan-tepe-1a2b3c4d"}],
 }
 
@@ -276,29 +281,30 @@ ARTICLES_INDEX = [
 
 
 def _site_route() -> dict:
+    """The raw payload api/routes/sites_html.py::site_detail hands the sidecar.
+
+    Snake_case row fields plus _related_content() verbatim — display
+    formatting (period, coordinates) happens in src/seo/display.ts. The
+    card_stats/citation extras feed only the interactive SitePopup and are
+    None here: they never influence the head.
+    """
     return {
         "type": "site",
         "id": SITE["id"],
         "name": SITE["name"],
         "country": SITE["country"],
-        "siteType": SITE["site_type"] or "Archaeological site",
-        "period": _period_display(SITE),
+        "site_type": SITE["site_type"],
+        "period_name": SITE["period_name"],
+        "period_start": SITE["period_start"],
+        "period_end": SITE["period_end"],
         "description": SITE["description"],
-        "coords": {"lat": SITE["lat"], "lon": SITE["lon"]},
-        "image": {
-            "url": SITE_RELATED["image"]["url"],
-            "author": SITE_RELATED["image"]["author"],
-            "license": SITE_RELATED["image"]["license"],
-            "commonsUrl": SITE_RELATED["image"]["commons_url"],
-        },
-        "altNames": SITE_RELATED["alt_names"],
-        "news": SITE_RELATED["news"],
-        "links": [
-            {"title": link["title"], "url": link["url"], "contentType": link["content_type"]}
-            for link in SITE_RELATED["links"]
-        ],
-        "parent": SITE_RELATED["parent"],
-        "siblings": SITE_RELATED["siblings"],
+        "lat": SITE["lat"],
+        "lon": SITE["lon"],
+        "source_url": SITE["source_url"],
+        "best_wiki_url": None,
+        "source_language": None,
+        "description_citations": None,
+        **SITE_RELATED,
     }
 
 

@@ -16,8 +16,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from api.routes.articles_html import public_stories_query
-from api.seo_shell import shell_response, ssr_shell_response
-from pipeline import seo_pages
+from api.seo_shell import ssr_shell_response
 from pipeline.article_html_renderer import render_404_html, story_slug
 from pipeline.database import NewsItem, get_db
 from pipeline.sites_html_renderer import (
@@ -161,12 +160,20 @@ async def site_detail(country: str, slug: str, db: Session = Depends(get_db)):
     if not prefix:
         return _site_404()
 
+    # card_stats carries the enrichment metadata (non-English wiki source,
+    # description citations live in raw_data) that the interactive record
+    # shows — /api/sites/{id} serves the same fields, and since react-ssr
+    # Task 11 the payload replaces that fetch entirely. No column in
+    # card_stats collides with the unqualified names in _CURATED_WHERE.
     row = db.execute(
         text(f"""
             SELECT id::text AS id, name, country, site_type, period_name,
                    period_start, period_end, description, lat, lon, source_url,
-                   parent_site_id::text AS parent_site_id
+                   parent_site_id::text AS parent_site_id,
+                   raw_data -> 'description_citations' AS description_citations,
+                   cs.best_wiki_url, cs.source_language
             FROM unified_sites
+            LEFT JOIN card_stats cs ON cs.site_id = unified_sites.id
             WHERE {_CURATED_WHERE} AND LEFT(REPLACE(id::text, '-', ''), 8) = :prefix
             LIMIT 1
         """),
@@ -181,21 +188,32 @@ async def site_detail(country: str, slug: str, db: Session = Depends(get_db)):
     if country != canonical_country or slug != canonical_slug:
         return RedirectResponse(url=f"/sites/{canonical_country}/{canonical_slug}", status_code=301)
 
-    site = {
-        "id": row.id,
-        "name": row.name,
-        "country": row.country,
-        "site_type": row.site_type,
-        "period_name": row.period_name,
-        "period_start": row.period_start,
-        "period_end": row.period_end,
-        "description": row.description,
-        "lat": row.lat,
-        "lon": row.lon,
-        "source_url": row.source_url,
-    }
-    return shell_response(
-        seo_pages.site_detail_page(site, _related_content(row, db)), _HTML_HEADERS
+    # The raw row goes through as-is (snake_case, no display formatting —
+    # period/coordinate rendering lives in src/seo/display.ts), plus the
+    # related content with ready-built paths. Since react-ssr Task 11 this
+    # payload is everything SitePage needs: head (siteMeta), crawler body
+    # (SiteRecord) and the interactive SitePopup all render without a fetch.
+    return ssr_shell_response(
+        "site.html",
+        {
+            "type": "site",
+            "id": row.id,
+            "name": row.name,
+            "country": row.country,
+            "site_type": row.site_type,
+            "period_name": row.period_name,
+            "period_start": row.period_start,
+            "period_end": row.period_end,
+            "description": row.description,
+            "lat": row.lat,
+            "lon": row.lon,
+            "source_url": row.source_url,
+            "best_wiki_url": row.best_wiki_url,
+            "source_language": row.source_language,
+            "description_citations": row.description_citations,
+            **_related_content(row, db),
+        },
+        _HTML_HEADERS,
     )
 
 

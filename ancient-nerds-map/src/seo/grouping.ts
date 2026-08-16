@@ -63,8 +63,11 @@ export function typeSections(sites: CountrySite[]): TypeSection[] {
   return sections
 }
 
-/** _year_display(): signiertes Jahr → Ära-Label (-500 → "500 BC"). */
-function yearDisplay(year: number): string {
+/**
+ * _year_display(): signiertes Jahr → Ära-Label (-500 → "500 BC").
+ * Exportiert für src/seo/display.ts (periodDisplay) — EINE Definition.
+ */
+export function yearDisplay(year: number): string {
   return `${Math.abs(year)} ${year < 0 ? 'BC' : 'AD'}`
 }
 

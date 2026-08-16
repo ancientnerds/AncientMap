@@ -12,12 +12,13 @@
  * window global. Absent when the entry is opened directly, so every
  * consumer must handle undefined.
  *
- * story, storyArchive, sitesIndex and country describe what the server
- * injects TODAY (pipeline/seo_pages.py::_route_json). site, research,
- * article and the two index types describe the post-cutover contract
- * (react-ssr plan, Tasks 11-14): production still injects stubs ({id},
- * {slug}, {}) and those pages fetch their own data until the cutover
- * lands, so only read the extra fields behind a type check.
+ * story, storyArchive, sitesIndex, country and site describe what the
+ * server injects TODAY (country and site as raw SQL rows since the
+ * react-ssr Tasks 10/11 cutover). research, article and the two index
+ * types describe the post-cutover contract (react-ssr plan, Tasks 12-14):
+ * production still injects stubs ({slug}, {}) and those pages fetch their
+ * own data until the cutover lands, so only read the extra fields behind
+ * a type check.
  */
 
 export interface StoryRoute {
@@ -60,26 +61,40 @@ export interface StoryArchiveRoute {
   }[]
 }
 
-/** Post-cutover contract (react-ssr Tasks 11-14) — production still injects {id}/{slug}/{} stubs. */
+/**
+ * One curated site detail page — the raw unified_sites row (snake_case,
+ * api/routes/sites_html.py::site_detail hands it through unchanged) plus
+ * _related_content() with ready-built paths. Display formatting (period
+ * label, coordinate string) is a display decision and lives in
+ * src/seo/display.ts, mirroring the CountryRoute convention.
+ */
 export interface SiteRoute {
   type: 'site'
   id: string
   name: string
   country: string
-  siteType: string
-  /** Display string: curated period name, or a start/end year range. */
-  period: string
-  description: string
-  coords: { lat: number | null; lon: number | null }
+  site_type: string | null
+  period_name: string | null
+  period_start: number | null
+  period_end: number | null
+  description: string | null
+  lat: number | null
+  lon: number | null
+  source_url: string | null
+  /** card_stats enrichment — feeds the interactive SitePopup only. */
+  best_wiki_url: string | null
+  source_language: string | null
+  description_citations: { n: number; url: string; title: string; domain: string }[] | null
+  alt_names: string[]
+  /** Hero from wiki_images with its Commons attribution (licence!). */
   image: {
     url: string
     author: string | null
     license: string | null
-    commonsUrl: string | null
+    commons_url: string | null
   } | null
-  altNames: string[]
   news: { slug: string; headline: string }[]
-  links: { title: string | null; url: string; contentType: string | null }[]
+  links: { title: string | null; url: string; content_type: string | null }[]
   parent: { name: string; path: string } | null
   siblings: { name: string; path: string }[]
 }
@@ -112,7 +127,7 @@ export interface CountryRoute {
   sites: CountrySite[]
 }
 
-/** Post-cutover contract (react-ssr Tasks 11-14) — production still injects {id}/{slug}/{} stubs. */
+/** Post-cutover contract (react-ssr Tasks 12-14) — production still injects {slug}/{} stubs. */
 export interface ResearchRoute {
   type: 'research'
   slug: string
@@ -124,13 +139,13 @@ export interface ResearchRoute {
   heroImageUrl: string
 }
 
-/** Post-cutover contract (react-ssr Tasks 11-14) — production still injects {id}/{slug}/{} stubs. */
+/** Post-cutover contract (react-ssr Tasks 12-14) — production still injects {slug}/{} stubs. */
 export interface ResearchIndexRoute {
   type: 'researchIndex'
   papers: { slug: string; title: string; summary: string }[]
 }
 
-/** Post-cutover contract (react-ssr Tasks 11-14) — production still injects {id}/{slug}/{} stubs. */
+/** Post-cutover contract (react-ssr Tasks 12-14) — production still injects {slug}/{} stubs. */
 export interface ArticleRoute {
   type: 'article'
   slug: string
@@ -140,7 +155,7 @@ export interface ArticleRoute {
   heroImageUrl: string
 }
 
-/** Post-cutover contract (react-ssr Tasks 11-14) — production still injects {id}/{slug}/{} stubs. */
+/** Post-cutover contract (react-ssr Tasks 12-14) — production still injects {slug}/{} stubs. */
 export interface ArticleIndexRoute {
   type: 'articleIndex'
   articles: { slug: string; title: string; summary: string }[]

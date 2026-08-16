@@ -34,9 +34,9 @@ class OfflineFetchService {
 
   constructor() {
     // The singleton is constructed at import time — which also happens under
-    // renderToString (SitePage imports this via useSiteDetailData). On the
-    // server there is no navigator/window: the service stays "online" and
-    // inert; only effects ever call it, and effects don't run there.
+    // renderToString (SitePage imports this via SitePopup's gallery hooks).
+    // On the server there is no navigator/window: the service stays "online"
+    // and inert; only effects ever call it, and effects don't run there.
     if (typeof window === 'undefined') return
 
     // Initialize from browser's online status

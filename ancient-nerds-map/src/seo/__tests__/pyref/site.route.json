@@ -3,24 +3,28 @@
   "id": "9c8b7a65-4321-4cba-8000-111122223333",
   "name": "Göbekli Tepe",
   "country": "Türkiye",
-  "siteType": "Temple complex",
-  "period": "< 4500 BC",
+  "site_type": "Temple complex",
+  "period_name": "< 4500 BC",
+  "period_start": -9600,
+  "period_end": null,
   "description": "The world's first known temple complex, raised by hunter-gatherers around 9600 BC — millennia before pottery or the wheel.\nIts T-shaped pillars carry reliefs of foxes, snakes and vultures.",
-  "coords": {
-    "lat": 37.2231,
-    "lon": 38.9224
-  },
-  "image": {
-    "url": "/data/images/wiki/9c8b7a65/hero.webp",
-    "author": "Teomancimit",
-    "license": "CC BY-SA 3.0",
-    "commonsUrl": "https://commons.wikimedia.org/wiki/File:G%C3%B6bekli_Tepe.jpg"
-  },
-  "altNames": [
+  "lat": 37.2231,
+  "lon": 38.9224,
+  "source_url": "https://example.org/curated/gobekli-tepe",
+  "best_wiki_url": null,
+  "source_language": null,
+  "description_citations": null,
+  "alt_names": [
     "Göbekli Tepe",
     "Portasar",
     "Potbelly Hill"
   ],
+  "image": {
+    "url": "/data/images/wiki/9c8b7a65/hero.webp",
+    "author": "Teomancimit",
+    "license": "CC BY-SA 3.0",
+    "commons_url": "https://commons.wikimedia.org/wiki/File:G%C3%B6bekli_Tepe.jpg"
+  },
   "news": [
     {
       "slug": "gobekli-tepe-dig-resumes-991",
@@ -31,10 +35,13 @@
     {
       "title": "UNESCO World Heritage listing",
       "url": "https://whc.unesco.org/en/list/1572/",
-      "contentType": "reference"
+      "content_type": "reference"
     }
   ],
-  "parent": null,
+  "parent": {
+    "name": "Taş Tepeler",
+    "path": "/sites/türkiye/taş-tepeler-0f9e8d7c"
+  },
   "siblings": [
     {
       "name": "Karahan Tepe",

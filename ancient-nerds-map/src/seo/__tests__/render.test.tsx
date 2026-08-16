@@ -41,12 +41,12 @@ describe('serverseitiges Rendern', () => {
   }
 })
 
-describe('heutige Produktions-Stubs (bis zum Cutover, Tasks 11-14)', () => {
+describe('heutige Produktions-Stubs (bis zum Cutover, Tasks 12-14)', () => {
   // pipeline/seo_pages.py injiziert für diese Typen nur Stubs — die Seiten
   // holen ihre Daten selbst. Die Registry muss auch mit exakt diesen
-  // Payloads rendern, nicht nur mit den Post-Cutover-Fixtures.
+  // Payloads rendern, nicht nur mit den Post-Cutover-Fixtures. (site trägt
+  // seit Task 11 das volle Payload — sein Stub existiert nicht mehr.)
   const stubs = [
-    { type: 'site', id: '5281654c' },
     { type: 'research', slug: 'goebekli-tepe' },
     { type: 'researchIndex' },
     { type: 'article', slug: 'weekly-journal' },
@@ -59,6 +59,57 @@ describe('heutige Produktions-Stubs (bis zum Cutover, Tasks 11-14)', () => {
       expect(html.length).toBeGreaterThan(50)
     })
   }
+})
+
+describe('site-Detailseite (Task 11): der SSR-Body trägt den Python-Fragment-Inhalt', () => {
+  // Inhaltliche Parität zu tests/pipeline/test_site_detail_seo.py — dieselben
+  // Punkte, die dort am Python-Body hängen, müssen im React-Body stehen.
+  const html = renderRoute(FIXTURES.site)
+
+  it('genau ein h1, und es trägt den Site-Namen', () => {
+    expect(html.match(/<h1/g)).toHaveLength(1)
+    expect(html).toContain('Göbekli Tepe')
+  })
+
+  it('Typ, Periode und Land in der Meta-Zeile ("< 4500 BC" HTML-escaped)', () => {
+    expect(html).toContain('Temple complex')
+    expect(html).toContain('&lt; 4500 BC')
+    expect(html).toContain('Türkiye')
+  })
+
+  it('Hero-Bild mit Commons-Attribution (Lizenzpflicht)', () => {
+    expect(html).toContain('/data/images/wiki/9c8b7a65/hero.webp')
+    expect(html).toContain('Teomancimit')
+    expect(html).toContain('CC BY-SA 3.0')
+    expect(html).toContain('commons.wikimedia.org')
+  })
+
+  it('Alt-Namen ohne den Hauptnamen selbst', () => {
+    expect(html).toContain('Also known as:')
+    expect(html).toContain('Portasar, Potbelly Hill')
+  })
+
+  it('Koordinaten aus coordDisplay', () => {
+    expect(html).toContain('37.2231° N, 38.9224° E')
+  })
+
+  it('interne und externe Links: News, Ressourcen, Parent, Geschwister, Land', () => {
+    expect(html).toContain('/news-archive/gobekli-tepe-dig-resumes-991')
+    expect(html).toContain('https://whc.unesco.org/en/list/1572/')
+    expect(html).toContain('/sites/türkiye/taş-tepeler-0f9e8d7c') // Part of
+    expect(html).toContain('/sites/türkiye/karahan-tepe-1a2b3c4d') // sibling
+    expect(html).toContain('/sites/türkiye') // country listing
+  })
+
+  it('Globus-CTA mit ?focus= und der CommunityCta-Block', () => {
+    expect(html).toContain('/globe.html?focus=9c8b7a65-4321-4cba-8000-111122223333')
+    expect(html).toContain('Keep exploring')
+    expect(html).toContain('discord')
+  })
+
+  it('kein Fetch-Spinner im ersten Render — das Payload trägt alles', () => {
+    expect(html).not.toContain('Loading site details')
+  })
 })
 
 describe('Standalone-SPA-Modus (/articles.html ohne Payload)', () => {

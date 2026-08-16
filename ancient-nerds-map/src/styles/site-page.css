@@ -212,9 +212,44 @@
   }
 }
 
-/* Abschlussblock unter dem Site-Datensatz (Standalone-Ansicht). */
-.site-page-cta {
-  max-width: 820px;
-  margin: 0 auto;
-  padding: 0 24px 60px;
+/* ========== Server-rendered record + related content (react-ssr Task 11) ==========
+   SiteRecord is the crawler/no-JS/pre-mount view of the payload; SitePopup
+   replaces it in the browser. SiteRelatedContent stays below either one —
+   its internal links must survive the swap. Layout comes from .story-main
+   (story-page.css); only the pieces the story pages don't have live here. */
+
+.site-record figure { margin: 0 0 24px; }
+.site-record figure img {
+  width: 100%;
+  height: auto;
+  border-radius: 8px;
+  border: 1px solid rgba(0, 204, 102, 0.18);
 }
+.site-record figcaption { color: var(--text-muted, #708890); font-size: 12px; margin-top: 6px; }
+.site-record figcaption a { color: var(--text-link, #00c8c8); text-decoration: none; }
+.site-record figcaption a:hover { text-decoration: underline; }
+.site-record a { color: var(--text-link, #00c8c8); text-decoration: none; }
+.site-record a:hover { text-decoration: underline; }
+
+.site-record-facts {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 8px 0 24px;
+}
+.site-record-facts th,
+.site-record-facts td {
+  text-align: left;
+  padding: 8px 12px;
+  border-bottom: 1px solid rgba(0, 204, 102, 0.14);
+  font-size: 0.95em;
+  vertical-align: top;
+}
+.site-record-facts th { color: var(--text-muted, #708890); font-weight: 500; width: 34%; }
+
+/* Below the interactive popup the 88px header offset of .story-main would
+   tear a hole into the page — the record above already paid it. */
+.site-related { padding-top: 0; }
+.site-related a { color: var(--text-link, #00c8c8); text-decoration: none; }
+.site-related a:hover { text-decoration: underline; }
+.site-related ul { margin: 10px 0 0 20px; }
+.site-related li { margin-bottom: 8px; }

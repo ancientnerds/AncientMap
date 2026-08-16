@@ -112,7 +112,10 @@
 
 .story-body p { margin-bottom: 16px; }
 
-.story-page h2 {
+/* .site-related sits inside .site-page (SitePage), where the .story-page
+   ancestor rule cannot reach — same headline styling, one definition. */
+.story-page h2,
+.site-related h2 {
   font-family: 'Cormorant Garamond', Georgia, serif;
   color: #fff;
   font-size: 1.6em;
