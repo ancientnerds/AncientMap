@@ -36,7 +36,9 @@ export function SitesIndexPage() {
         </nav>
         <h1 className="story-title">Archaeological Sites by Country</h1>
         <div className="story-meta">
-          {total.toLocaleString()} curated sites in {countries.length} countries
+          {/* Explizites en-US wie in StoryArchivePage: das Default-Locale wäre
+              das des SSR-Hosts — Pythons f"{total:,}" schrieb "5,012". */}
+          {total.toLocaleString('en-US')} curated sites in {countries.length} countries
         </div>
         <div className="site-country-grid">
           {countries.map(c => (
