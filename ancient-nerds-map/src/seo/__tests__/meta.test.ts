@@ -160,6 +160,26 @@ describe('research-Autorschaft im JSON-LD (Art.-50-Fälle aus test_ai_act_notice
     const schema = JSON.parse(researchMeta({ ...FIXTURES.research, author: 'O"Brien' }).schema!)
     expect(schema.author.name).toBe('O"Brien')
   })
+
+  // Art. 50(2): der IPTC-Marker kennzeichnet den TEXT der drei KI-generierten
+  // Seitentypen maschinenlesbar. Kuratierte Seiten (site/country) tragen ihn
+  // NICHT — dort ist der Inhalt nicht KI-generiert.
+  const IPTC_AI_MARKER = 'https://cv.iptc.org/newscodes/digitalsourcetype/trainedAlgorithmicMedia'
+
+  it('story, research und journal tragen den IPTC-trainedAlgorithmicMedia-Marker', () => {
+    for (const meta of [
+      storyMeta(FIXTURES.story),
+      researchMeta(FIXTURES.research),
+      articleMeta(pyrefRoute('article') as never),
+    ]) {
+      expect(JSON.parse(meta.schema!).digitalSourceType).toBe(IPTC_AI_MARKER)
+    }
+  })
+
+  it('kuratierte Seiten tragen keinen KI-Marker', () => {
+    expect(siteMeta(pyrefRoute('site') as never).schema ?? '').not.toContain(IPTC_AI_MARKER)
+    expect(countryMeta(pyrefRoute('country') as never).schema ?? '').not.toContain(IPTC_AI_MARKER)
+  })
 })
 
 describe('renderHead', () => {

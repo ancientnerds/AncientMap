@@ -176,6 +176,7 @@ export function storyMeta(route: StoryRoute): PageMeta {
   const screenshot = absoluteUrl(route.screenshot_url)
   const schema =
     '{"@context": "https://schema.org", "@type": "NewsArticle", ' +
+    '"digitalSourceType": "https://cv.iptc.org/newscodes/digitalsourcetype/trainedAlgorithmicMedia", ' +
     `"headline": ${jsonStr(route.headline)}, ` +
     `"description": ${jsonStr(cut(summary, 300))}, ` +
     `"datePublished": "${isoDate(route.published_at)}", ` +
@@ -321,6 +322,7 @@ export function researchMeta(route: ResearchRoute): PageMeta {
       : `{"@type": "Person", "name": ${jsonStr(author)}}`
   const schema =
     '{"@context": "https://schema.org", "@type": "ScholarlyArticle", ' +
+    '"digitalSourceType": "https://cv.iptc.org/newscodes/digitalsourcetype/trainedAlgorithmicMedia", ' +
     `"headline": ${jsonStr(route.title)}, "description": ${jsonStr(cut(summary, 300))}, ` +
     `"datePublished": "${isoDate(route.published_at)}", "author": ${authorSchema}, ` +
     '"license": "https://creativecommons.org/licenses/by/4.0/", ' +
@@ -351,6 +353,7 @@ export function articleMeta(route: ArticleRoute): PageMeta {
   const summary = (route.summary || '').trim()
   const schema =
     '{"@context": "https://schema.org", "@type": "Article", ' +
+    '"digitalSourceType": "https://cv.iptc.org/newscodes/digitalsourcetype/trainedAlgorithmicMedia", ' +
     `"headline": ${jsonStr(route.title)}, "description": ${jsonStr(cut(summary, 300))}, ` +
     `"datePublished": "${isoDate(route.published_at)}", ` +
     '"author": {"@type": "Organization", "name": "Ancient Nerds"}, ' +
