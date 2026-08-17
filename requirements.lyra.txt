@@ -16,3 +16,6 @@ loguru>=0.7.0
 
 # Cache client for api.cache (shared Redis instead of in-memory fallback)
 redis>=5.0.0
+
+# ID3 tagging of generated TTS audio (Art. 50(2) EU AI Act marking)
+mutagen>=1.47.0

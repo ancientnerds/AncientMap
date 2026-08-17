@@ -196,6 +196,25 @@ def concatenate_mp3s(chunks: list[bytes]) -> bytes:
     return bytes(result)
 
 
+def tag_mp3_ai_generated(path) -> None:
+    """Embed a machine-readable AI-generation marker (Art. 50(2) EU AI Act)."""
+    from mutagen.id3 import ID3, TXXX, ID3NoHeaderError
+
+    try:
+        tags = ID3(path)
+    except ID3NoHeaderError:
+        tags = ID3()
+    tags.add(TXXX(encoding=3, desc="AI-Generated", text="true"))
+    tags.add(
+        TXXX(
+            encoding=3,
+            desc="AI-System",
+            text="MiniMax speech-2.8-hd — Ancient Nerds Theo TTS",
+        )
+    )
+    tags.save(path)
+
+
 # ---------------------------------------------------------------------------
 # Paper audio generation
 # ---------------------------------------------------------------------------
@@ -311,6 +330,7 @@ def generate_paper_audio(tts_request_id: str, settings) -> tuple[str, int]:
     safe_id = str(tts_req.id)
     out_path = AUDIO_DIR / f"{safe_id}.mp3"
     out_path.write_bytes(full_audio)
+    tag_mp3_ai_generated(out_path)
     relative_url = f"/data/audio/{safe_id}.mp3"
 
     logger.info(
