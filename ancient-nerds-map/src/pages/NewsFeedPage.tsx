@@ -653,9 +653,7 @@ export default function NewsFeedPage() {
         {columns.map((colItems, colIdx) => (
           <div key={colIdx} className="news-page-column">
             {colItems.map(item => {
-              const screenshotSrc = item.screenshot_url
-                ? `${config.api.baseUrl}${item.screenshot_url.replace('/api', '')}`
-                : item.video.thumbnail_url
+              const screenshotSrc = item.screenshot_url || item.video.thumbnail_url
               const rawDeepLink = item.youtube_deep_url || item.youtube_url
               const deepLink = rawDeepLink && (rawDeepLink.startsWith('https://') || rawDeepLink.startsWith('http://'))
                 ? rawDeepLink

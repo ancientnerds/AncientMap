@@ -3,7 +3,6 @@ import { WebcamGallery } from './WebcamGallery'
 import { SourceFavicon } from './galleryUtils'
 import LazyImage from '../../LazyImage'
 import NewsCard from '../../news/NewsCard'
-import { config } from '../../../config'
 import type { GalleryContentProps } from '../types'
 
 // Text item structure (from unified connectors or legacy)
@@ -82,9 +81,7 @@ export function GalleryContent({
       <div className="gallery-grid-container">
         <div className="gallery-stories-list">
           {storiesItems!.map(item => {
-            const screenshotUrl = item.screenshot_url
-              ? `${config.api.baseUrl}${item.screenshot_url.replace('/api', '')}`
-              : item.video.thumbnail_url
+            const screenshotUrl = item.screenshot_url || item.video.thumbnail_url
             const deepLink = item.youtube_deep_url || item.youtube_url || '#'
             return (
               <NewsCard

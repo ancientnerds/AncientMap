@@ -335,9 +335,10 @@ export default memo(NewsCard)
  * Adapter: convert NewsItemData (from API) → NewsCardProps.
  */
 export function newsItemToCardProps(item: NewsItemData): NewsCardProps {
-  const screenshotUrl = item.screenshot_url
-    ? `${config.api.baseUrl}${item.screenshot_url.replace('/api', '')}`
-    : item.video.thumbnail_url
+  // screenshot_url is passed through unchanged — /data/news/screenshots/ is
+  // served by nginx in prod and servePublicData in dev; legacy /api/... rows
+  // keep working through the retained mount until the DB backfill runs.
+  const screenshotUrl = item.screenshot_url || item.video.thumbnail_url
   const deepLink = item.youtube_deep_url || item.youtube_url || '#'
   return {
     headline: item.headline,
@@ -373,9 +374,8 @@ export function newsHighlightToCardProps(news: NewsHighlight): NewsCardProps {
   const deepLink = news.timestamp_seconds
     ? `https://youtu.be/${news.video_id}?t=${news.timestamp_seconds}`
     : `https://youtu.be/${news.video_id}`
-  const screenshotUrl = news.screenshot_url
-    ? `${config.api.baseUrl}${news.screenshot_url.replace('/api', '')}`
-    : `https://img.youtube.com/vi/${news.video_id}/mqdefault.jpg`
+  const screenshotUrl =
+    news.screenshot_url || `https://img.youtube.com/vi/${news.video_id}/mqdefault.jpg`
 
   // Matched = has site metadata from unified_sites join (country/type/period)
   const isMatched = !!(news.site_name && (news.site_country || news.site_type || news.site_period_name))

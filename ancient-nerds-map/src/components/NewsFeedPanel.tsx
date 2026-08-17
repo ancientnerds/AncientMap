@@ -168,9 +168,10 @@ export default function NewsFeedPanel({ onClose, onSiteHover, onSiteClick, onAsk
         )}
 
         {items.map(item => {
-          const screenshotSrc = item.screenshot_url
-            ? `${config.api.baseUrl}${item.screenshot_url.replace('/api', '')}`
-            : item.video.thumbnail_url
+          // screenshot_url is served as-is: /data/news/screenshots/ (nginx in
+          // prod, servePublicData in dev); legacy /api/... rows keep working
+          // through the retained mount until the DB backfill runs.
+          const screenshotSrc = item.screenshot_url || item.video.thumbnail_url
           const rawDeepLink = item.youtube_deep_url || item.youtube_url
           const deepLink = rawDeepLink && (rawDeepLink.startsWith('https://') || rawDeepLink.startsWith('http://'))
             ? rawDeepLink

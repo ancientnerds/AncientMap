@@ -726,7 +726,9 @@ _wiki_images_dir = Path("public/data/images/wiki")
 _wiki_images_dir.mkdir(parents=True, exist_ok=True)
 app.mount("/data/images/wiki", StaticFiles(directory=str(_wiki_images_dir)), name="wiki-images")
 
-# Serve news screenshots as static files
+# LEGACY mount — new screenshot URLs use /data/news/screenshots/ (nginx serves
+# public/data/news/ directly; robots.txt disallows /api/). This mount stays
+# because /api/news/screenshots/ og:image URLs are cached at Google/Discord.
 _screenshots_dir = Path("public/data/news/screenshots")
 _screenshots_dir.mkdir(parents=True, exist_ok=True)
 app.mount(

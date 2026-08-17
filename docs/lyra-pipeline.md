@@ -156,11 +156,12 @@ Soft-deletes semantic duplicates. Feature extraction: numbers, words > 3 chars, 
 
 ### 9. Screenshots (`screenshot_extractor.py`)
 
-Extracts one frame per news item at the post timestamp. Two-step: yt-dlp downloads 3s clip (max 480p), ffmpeg extracts WebP frame (q75). 3 retries via Webshare auto-rotating proxy.
+Extracts one frame per news item at the post timestamp. Two-step: yt-dlp downloads 3s clip (max 720p — Google Discover requires images >= 1200px wide), ffmpeg extracts WebP frame (q75). 3 retries via Webshare auto-rotating proxy.
 
 - **Reads:** `news_items.timestamp_seconds`
-- **Writes:** `news_items.screenshot_url` -> `public/data/news/screenshots/{video_id}_{ts}.webp`
+- **Writes:** file `public/data/news/screenshots/{video_id}_{ts}.webp`, URL `news_items.screenshot_url` = `/data/news/screenshots/{video_id}_{ts}.webp` (nginx serves it directly; the legacy `/api/news/screenshots/` mount stays for cached og:image URLs)
 - **External:** yt-dlp (with proxy), ffmpeg
+- **Backfill:** `python -m pipeline.lyra.screenshot_extractor --backfill-hires` re-extracts existing screenshots narrower than 1200px at 720p (sequential, resumable via the width check; deleted/private videos keep their old file)
 
 ### 10. Backfill (`transcript_fetcher.py`)
 
