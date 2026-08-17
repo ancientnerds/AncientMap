@@ -18,7 +18,7 @@ from pathlib import Path
 
 UID = "442000112756064260"
 PROMPTS_DIR = Path("/home/deploy/theo_batch/prompts")
-SQL_OUT = Path("/tmp/bulk_insert.sql")
+SQL_OUT = Path("/tmp/bulk_insert.sql")  # noqa: S108 — one-shot ops script on the VPS
 SKIP_SLUGS = {"polygonal-masonry", "gobekli-tepe"}
 
 

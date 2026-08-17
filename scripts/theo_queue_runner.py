@@ -26,10 +26,9 @@ import os
 import re
 import sys
 import time
-from pathlib import Path
-
-import urllib.request
 import urllib.error
+import urllib.request
+from pathlib import Path
 
 DEFAULT_API = os.getenv("THEO_API", "http://localhost:8000/api")
 DEFAULT_POLL = int(os.getenv("THEO_POLL", "60"))
