@@ -35,12 +35,14 @@ from sqlalchemy import text
 from pipeline.database import get_session
 from pipeline.wiki_image_downloader import (
     COMMONS_API_URL,
-    WIKIPEDIA_ACTION_API,
     _download_client,
     _http_client,
     commons_page_url_for,
     extract_title_from_url,
+    fetch_article_images,
+    fetch_commons_category_images,
     parse_attribution,
+    resolve_wikidata_entity,
     wikipedia_opensearch,
 )
 
@@ -256,12 +258,15 @@ def main() -> None:
 
 
 # =============================================================================
-# Phase 2: heroes. The importer renamed every lead image to hero.webp, so the
-# stem carries no Commons title. The article's lead image is the obvious
-# candidate — but articles change, and a wrong credit is worse than none
-# (source-integrity rule). So the candidate must PROVE itself: its thumbnail
-# is downloaded and perceptually compared against the local hero.webp;
-# attribution is only written on a match.
+# Phase 2: heroes. The importer renamed every hero image to hero.webp, so the
+# stem carries no Commons title. The importer picked the hero as the most
+# panoramic image across its whole pool — article media-list, Wikidata image
+# claims (P18/P3451/P4291/P5775) and the Commons category (P373) — NOT the
+# article lead: comparing against the lead alone rejected ~3 of 4 heroes
+# (2026-08-17). So the proof walks the same pool, prefilters by aspect ratio
+# and perceptually compares each surviving candidate's thumbnail against the
+# local hero.webp; attribution is only written on a dhash match. A wrong
+# credit is worse than none (source-integrity rule).
 # =============================================================================
 
 HERO_DIR = Path("public/data/images/wiki")
@@ -292,24 +297,31 @@ def hamming(a: int, b: int) -> int:
     return bin(a ^ b).count("1")
 
 
-def _lead_image_title(article_title: str) -> str | None:
-    """The article's lead image file title via prop=pageimages."""
-    resp = _http_client.get(
-        WIKIPEDIA_ACTION_API,
-        params={
-            "action": "query",
-            "titles": article_title,
-            "prop": "pageimages",
-            "piprop": "name",
-            "redirects": "1",
-            "format": "json",
-        },
-    )
-    resp.raise_for_status()
-    pages = resp.json().get("query", {}).get("pages", {})
-    page: dict = next(iter(pages.values()), {})
-    name = page.get("pageimage")
-    return f"File:{name}" if name else None
+def _hero_candidate_titles(article_title: str) -> list[str]:
+    """Every File: title the importer could have picked the hero from."""
+    titles = [img["title"] for img in fetch_article_images(article_title)]
+    time.sleep(REQUEST_DELAY)
+    wikidata = resolve_wikidata_entity(article_title)
+    time.sleep(REQUEST_DELAY)
+    if wikidata:
+        titles.extend(f"File:{filename}" for filename in wikidata.get("images", {}).values())
+        category = wikidata.get("commons_category")
+        if category:
+            # The importer capped the category at 20-50 files; 100 leaves room
+            # for files added since without ballooning the imageinfo batches.
+            titles.extend(
+                img["title"] for img in fetch_commons_category_images(category, limit=100)
+            )
+            time.sleep(REQUEST_DELAY)
+
+    seen: set[str] = set()
+    unique: list[str] = []
+    for title in titles:
+        key = title.replace(" ", "_").lower()
+        if key not in seen:
+            seen.add(key)
+            unique.append(title)
+    return unique
 
 
 def _hero_rows() -> list[dict]:
@@ -332,14 +344,14 @@ def backfill_heroes(limit: int | None) -> None:
         rows = rows[:limit]
     logger.info(f"{len(rows)} hero rows without attribution")
 
-    written = no_article = no_lead = no_local = mismatch = 0
+    written = no_article = no_local = unproven = 0
     for i, row in enumerate(rows):
         # At the TOP of the loop: the first version sat below the continue
         # branches and never fired — two silent hours (2026-08-17).
         if i % 50 == 0:
             logger.info(
-                f"  heroes {i}/{len(rows)}: written={written} mismatch={mismatch} "
-                f"no_lead={no_lead} no_article={no_article}"
+                f"  heroes {i}/{len(rows)}: written={written} unproven={unproven} "
+                f"no_article={no_article} no_local={no_local}"
             )
         local_path = HERO_DIR / row["site_id"].replace("-", "")[:8] / "hero.webp"
         if not local_path.exists():
@@ -357,50 +369,55 @@ def backfill_heroes(limit: int | None) -> None:
             continue
 
         try:
-            lead = _lead_image_title(article)
-            time.sleep(REQUEST_DELAY)
-            if not lead:
-                no_lead += 1
-                continue
+            titles = _hero_candidate_titles(article)
 
-            found = fetch_batch([lead])
-            time.sleep(REQUEST_DELAY)
-            meta = found.get(lead)
-            if not meta or not meta.get("original_url"):
-                no_lead += 1
-                continue
+            with Image.open(local_path) as local:
+                local_hash = dhash(local)
 
-            local = Image.open(local_path)
-            # Wikimedia only serves fixed thumbnail widths since 2026 — any
-            # other value is HTTP 400 ("Use thumbnail sizes listed on
-            # https://w.wiki/GHai"). The dhash proof is scale-invariant (both
-            # sides resize to 9x8), so a fixed standard width is enough.
-            thumb_url = (
-                meta["original_url"].replace("/commons/", "/commons/thumb/", 1)
-                + f"/{HERO_THUMB_WIDTH}px-{meta['original_url'].rsplit('/', 1)[-1]}"
-            )
-            thumb_resp = _download_client.get(thumb_url)
-            time.sleep(REQUEST_DELAY)
-            if thumb_resp.status_code != 200:
-                no_lead += 1
-                continue
-            remote = Image.open(io.BytesIO(thumb_resp.content))
+            meta_by_title: dict[str, dict] = {}
+            for start in range(0, len(titles), BATCH_SIZE):
+                meta_by_title.update(fetch_batch(titles[start : start + BATCH_SIZE]))
+                time.sleep(REQUEST_DELAY)
 
-            distance = hamming(dhash(local), dhash(remote))
-            if distance > DHASH_MAX_DISTANCE:
-                mismatch += 1
-                continue
+            proven = None
+            for title in titles:
+                meta = meta_by_title.get(title)
+                if not meta or not meta.get("original_url"):
+                    continue
+                # Commons thumbs never crop, so a diverging aspect ratio means
+                # a different photograph — no need to download its thumbnail.
+                if not ratio_matches(local_path, meta.get("width"), meta.get("height")):
+                    continue
+                # Wikimedia only serves fixed thumbnail widths since 2026 — any
+                # other value is HTTP 400 ("Use thumbnail sizes listed on
+                # https://w.wiki/GHai"). The dhash proof is scale-invariant
+                # (both sides resize to 9x8), so a fixed standard width works.
+                thumb_url = (
+                    meta["original_url"].replace("/commons/", "/commons/thumb/", 1)
+                    + f"/{HERO_THUMB_WIDTH}px-{meta['original_url'].rsplit('/', 1)[-1]}"
+                )
+                thumb_resp = _download_client.get(thumb_url)
+                time.sleep(REQUEST_DELAY)
+                if thumb_resp.status_code != 200:
+                    continue
+                remote = Image.open(io.BytesIO(thumb_resp.content))
+                if hamming(local_hash, dhash(remote)) <= DHASH_MAX_DISTANCE:
+                    proven = meta
+                    break
 
-            apply_batch({row["id"]: meta})
-            written += 1
+            if proven:
+                apply_batch({row["id"]: proven})
+                written += 1
+            else:
+                unproven += 1
         except Exception as exc:
             logger.warning(f"hero {row['site_id'][:8]} failed ({exc}); left NULL")
 
     logger.info("=" * 60)
     logger.info(f"Hero attribution written: {written}")
     logger.info(
-        f"Left NULL: mismatch={mismatch} (lead image changed since import), "
-        f"no_lead={no_lead}, no_article={no_article}, no_local_file={no_local}"
+        f"Left NULL: unproven={unproven} (no candidate passed the dhash proof), "
+        f"no_article={no_article}, no_local_file={no_local}"
     )
 
 
