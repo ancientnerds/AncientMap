@@ -102,6 +102,9 @@ class NewsItemResponse(BaseModel):
     verified: bool = False
     verified_at: str | None = None
     web_sources: list[dict] | None = None
+    # Art. 50(2) EU AI Act: machine-readable marking of the AI-generated text.
+    ai_generated: bool = True
+    ai_system: str = "lyra-news"
 
 
 class NewsFeedResponse(BaseModel):
@@ -120,6 +123,9 @@ class NewsArticleResponse(BaseModel):
     week_end: str
     published_at: str | None = None
     quality_report: dict | None = None
+    # Art. 50(2) EU AI Act: machine-readable marking of the AI-generated text.
+    ai_generated: bool = True
+    ai_system: str = "lyra-journal"
 
 
 class RejectionBreakdown(BaseModel):
