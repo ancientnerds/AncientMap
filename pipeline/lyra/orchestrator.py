@@ -1891,18 +1891,33 @@ def main() -> None:
     from pipeline.database import create_all_tables, engine
 
     create_all_tables()
-    try:
-        _run_migrations(engine)
-    except Exception as mig_err:
-        # All migrations run in one transaction (committed at the end of
-        # _run_migrations). Any failure rolls back the whole batch, so a single
-        # broken statement silently strands every column added in this release.
-        # Log loudly enough that the next deploy notices.
-        logger.error(
-            f"[STARTUP] Migrations ROLLED BACK due to exception: {mig_err}. "
-            "All schema changes in this release are lost — fix the failing "
-            "statement and restart."
-        )
+    for mig_attempt in (1, 2, 3):
+        try:
+            _run_migrations(engine)
+            break
+        except Exception as mig_err:
+            # All migrations run in one transaction (committed at the end of
+            # _run_migrations). Any failure rolls back the whole batch, so a
+            # single broken statement silently strands every column added in
+            # this release. Deadlocks (40P01) and lock timeouts (55P03) are
+            # expected when api and lyra boot simultaneously and both migrate
+            # unified_sites — the batch is idempotent, so wait out the other
+            # booter and rerun it. Log everything else loudly enough that the
+            # next deploy notices.
+            pgcode = getattr(getattr(mig_err, "orig", None), "pgcode", None)
+            if pgcode in ("40P01", "55P03", "57014") and mig_attempt < 3:
+                logger.warning(
+                    f"[STARTUP] Migration batch hit lock contention (pgcode {pgcode}, "
+                    f"attempt {mig_attempt}/3) — retrying in {5 * mig_attempt}s"
+                )
+                time.sleep(5 * mig_attempt)
+                continue
+            logger.error(
+                f"[STARTUP] Migrations ROLLED BACK due to exception: {mig_err}. "
+                "All schema changes in this release are lost — fix the failing "
+                "statement and restart."
+            )
+            break
 
     # One-time YouTube published_at repair — runs AFTER the migration
     # transaction has committed because it makes batched HTTP calls (P10).

@@ -394,47 +394,63 @@ async def lifespan(app: FastAPI):
         """)
 
         def _is_contention_error(exc: Exception) -> bool:
-            """True only for lock (55P03) / statement (57014) timeouts.
+            """True only for lock (55P03) / statement (57014) timeouts and
+            deadlocks (40P01).
 
-            Those are EXPECTED under Lyra-orchestrator lock contention and may
-            be skipped (the next boot retries). Every other error used to be
-            swallowed as "lock contention" too, leaving silent schema drift
-            while the API started healthy (audit 2026-08-05, M5) — now it
-            aborts startup so the deploy health check fails loudly.
+            Those are EXPECTED when the Lyra orchestrator migrates the same
+            tables during a simultaneous boot and may be skipped after the
+            retries below (the next boot completes them). Every other error
+            used to be swallowed as "lock contention" too, leaving silent
+            schema drift while the API started healthy (audit 2026-08-05,
+            M5) — now it aborts startup so the deploy health check fails
+            loudly.
             """
             pgcode = getattr(getattr(exc, "orig", None), "pgcode", None)
-            return pgcode in ("55P03", "57014")
+            return pgcode in ("55P03", "57014", "40P01")
+
+        def _exec_boot_statement(sql, params=None, label: str = "Migration") -> None:
+            """One statement in its own transaction, retried on contention.
+
+            api and lyra boot together on deploys that rebuild both, and both
+            migrate unified_sites — a deadlock (40P01) kills whichever boot
+            PostgreSQL picks as victim. Every statement here is idempotent,
+            so wait out the other booter and retry before giving up.
+            """
+            import time as _time
+
+            for _attempt in (1, 2, 3):
+                try:
+                    with engine.begin() as conn:
+                        conn.execute(_text("SET lock_timeout = '5s'"))
+                        conn.execute(_text("SET statement_timeout = '30s'"))
+                        conn.execute(sql, params)
+                    return
+                except Exception as _mig_err:
+                    if not _is_contention_error(_mig_err):
+                        logger.error(f"[STARTUP] {label} FAILED (aborting startup): {_mig_err}")
+                        raise
+                    if _attempt < 3:
+                        logger.warning(
+                            f"[STARTUP] {label} hit lock contention "
+                            f"(attempt {_attempt}/3) — retrying in {2 * _attempt}s"
+                        )
+                        _time.sleep(2 * _attempt)
+                        continue
+                    logger.warning(
+                        f"[STARTUP] {label} skipped after 3 contention retries "
+                        f"(next boot completes it): {_mig_err}"
+                    )
 
         # Run DDL migrations first (fast), then data fixes.
         # Use lock_timeout=5s so ALTER TABLE fails fast on lock contention
         # (e.g. Lyra orchestrator holding locks on unified_sites) instead of
         # blocking for minutes and racing the health check.
         for _sql in _api_migrations:
-            try:
-                with engine.begin() as conn:
-                    conn.execute(_text("SET lock_timeout = '5s'"))
-                    conn.execute(_text("SET statement_timeout = '30s'"))
-                    conn.execute(_text(_sql))
-            except Exception as _mig_err:
-                if _is_contention_error(_mig_err):
-                    logger.warning(f"[STARTUP] Migration skipped (lock/stmt timeout): {_mig_err}")
-                    continue
-                logger.error(f"[STARTUP] Migration FAILED (aborting startup): {_sql[:120]}")
-                raise
+            _exec_boot_statement(_text(_sql))
         for _sid, _dc in _citation_seed.items():
-            try:
-                with engine.begin() as conn:
-                    conn.execute(_text("SET lock_timeout = '5s'"))
-                    conn.execute(_text("SET statement_timeout = '30s'"))
-                    conn.execute(_cite_sql, {"id": _sid, "dc": _json.dumps(_dc)})
-            except Exception as _seed_err:
-                if _is_contention_error(_seed_err):
-                    logger.warning(
-                        f"[STARTUP] Citation seed skipped (lock/stmt timeout): {_seed_err}"
-                    )
-                    continue
-                logger.error(f"[STARTUP] Citation seed FAILED (aborting startup): {_sid}")
-                raise
+            _exec_boot_statement(
+                _cite_sql, {"id": _sid, "dc": _json.dumps(_dc)}, label="Citation seed"
+            )
         logger.info(
             "[STARTUP] Database tables verified (includes discord_users, credit_grants, token_usage_logs)"
         )
