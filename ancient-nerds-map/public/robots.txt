@@ -19,6 +19,9 @@ Disallow: /api/
 Disallow: /data/basemaps/
 Disallow: /data/historical/
 
+# Measurement redirects (Discord CTA click counting) are not content
+Disallow: /goto/
+
 # BUT: Google's renderer obeys robots.txt for subresources too. The site
 # detail pages fetch /api/sites/{id} after hydration; with it blocked, the
 # rendered page hung in its loading state and Google filed it as Soft 404

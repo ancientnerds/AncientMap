@@ -7,7 +7,7 @@
  * detail page's globe button vanished on mount, audit 2026-08-09.)
  */
 
-import { DISCORD_INVITE_URL } from '../../constants/brand'
+import { discordCtaUrl } from '../../constants/brand'
 
 const HUBS: [string, string][] = [
   ['/globe.html', '3D Globe'],
@@ -29,7 +29,7 @@ export default function CommunityCta() {
       </p>
       <p>
         Questions, finds, corrections?{' '}
-        <a href={DISCORD_INVITE_URL} target="_blank" rel="noopener noreferrer">
+        <a href={discordCtaUrl('seo')} target="_blank" rel="noopener noreferrer">
           Join the Ancient Nerds Discord
         </a>{' '}
         — the people behind these pages are there.

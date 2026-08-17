@@ -17,7 +17,7 @@ import CollectionBrowser from '../components/cards/CollectionBrowser'
 import DeckBuilder from '../components/cards/DeckBuilder'
 import PageHeader from '../components/layout/PageHeader'
 import '../styles/account.css'
-import { DISCORD_INVITE_URL } from '../constants/brand'
+import { discordCtaUrl } from '../constants/brand'
 
 interface UsageEntry {
   input_tokens: number
@@ -791,7 +791,7 @@ export default function AccountPage() {
         {error === 'guild_required' ? (
           <div className="account-error">
             You need to join our Discord server to sign in.{' '}
-            <a href={DISCORD_INVITE_URL} target="_blank" rel="noopener noreferrer"
+            <a href={discordCtaUrl('account')} target="_blank" rel="noopener noreferrer"
                style={{ color: '#7289da', textDecoration: 'underline' }}>
               Join Discord
             </a>

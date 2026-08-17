@@ -159,13 +159,32 @@ export const AN_LOGO_VIEWBOX = '200 200 620 500'
 // ---------------------------------------------------------------------------
 
 /**
- * The Discord invite. Was hardcoded in 13 places until 2026-08-09, and one of
- * them (AccountPage) was dead — the Discord API answered "Unknown Invite".
- * The server-rendered fragments carry the same value in
- * pipeline/article_html_renderer.py; a shared import is impossible while SSR
- * runs in Python.
+ * The raw Discord invite. Was hardcoded in 13 places until 2026-08-09, and
+ * one of them (AccountPage) was dead — the Discord API answered "Unknown
+ * Invite". Since 2026-08-17 human-facing links go through discordCtaUrl()
+ * instead, so clicks are countable; the raw invite remains for machine
+ * surfaces (llms.txt, JSON-LD sameAs) and as the redirect target in
+ * api/routes/goto.py.
+ *
+ * @public kept exported as the single reference value even while no
+ * component imports it — knip must not flag it.
  */
 export const DISCORD_INVITE_URL = 'https://discord.gg/8bAjKKCue4'
+
+/**
+ * Which surface a Discord link lives on. Mirrored in api/routes/goto.py
+ * (ALLOWED_SOURCES) — tests/api/test_goto_discord.py fails if they drift.
+ */
+export type DiscordCtaSource = 'seo' | 'landing' | 'app' | 'account' | 'lyra' | 'disclaimer'
+
+/**
+ * Measurable Discord link: same-origin redirect that logs src + bot flag
+ * (nothing else — no IP, no referer) and 302s to DISCORD_INVITE_URL.
+ * Use this for every human-facing link.
+ */
+export function discordCtaUrl(src: DiscordCtaSource): string {
+  return `/goto/discord?src=${src}`
+}
 
 /**
  * Globe deep link for one site.

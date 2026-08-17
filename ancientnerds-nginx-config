@@ -114,6 +114,17 @@ server {
         add_header Cache-Control "public, max-age=3600";
     }
 
+    # Funnel measurement: same-origin Discord redirect. The API logs one
+    # structured line per click (src + bot flag, no IP/referer) and answers
+    # 302 — read the numbers with scripts/funnel_report.py. no-store because
+    # a cached redirect would skip the API and hide the click from the log.
+    location = /goto/discord {
+        proxy_pass http://an_api/goto/discord;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        add_header Cache-Control "no-store" always;
+    }
+
     # Bulk site operations need a long timeout (large imports)
     location /api/sites/batch-upload {
         proxy_pass http://an_api/api/sites/batch-upload;

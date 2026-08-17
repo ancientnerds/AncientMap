@@ -111,6 +111,12 @@ export default defineConfig(({ isSsrBuild }) => ({
         target: 'http://localhost:8000',
         changeOrigin: true,
         timeout: 60000, // 60 seconds - backend connectors can take time
+      },
+      // Funnel redirect (api/routes/goto.py) — without this, a Discord CTA
+      // click in dev lands on the SPA fallback instead of the 302
+      '/goto/': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
       }
     }
   },
@@ -149,6 +155,9 @@ export default defineConfig(({ isSsrBuild }) => ({
           /^\/sites\//,
           /^\/seo\//,
           /^\/sitemap/,
+          // Funnel redirect: the SW must not answer with the SPA shell —
+          // the whole point is that the click reaches the API log
+          /^\/goto\//,
         ],
         // Pre-cache app shell assets
         globPatterns: ['**/*.{js,css,html,svg,woff2}'],

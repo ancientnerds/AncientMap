@@ -15,9 +15,10 @@ import nh3
 BASE_URL = "https://ancientnerds.com"
 
 # Mirrored in ancient-nerds-map/src/constants/brand.ts — the React pages need
-# the same value and cannot import from Python. Until 2026-08-09 this link
-# appeared on none of the 7,404 indexed pages, which is where search traffic
-# actually lands.
+# the same value and cannot import from Python. Since the react-ssr cutover
+# no Python renderer emits this link anymore; it stays here as the redirect
+# target of the funnel route (api/routes/goto.py), which 302s every
+# /goto/discord?src=... click to it after logging the source.
 DISCORD_INVITE_URL = "https://discord.gg/8bAjKKCue4"
 
 
