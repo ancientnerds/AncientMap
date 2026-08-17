@@ -54,7 +54,7 @@ Mark it as `available = False` with `unavailable_reason` explaining why. Don't w
 When asked to audit code, read `docs/procedures/CODE_AUDIT.md` and follow its Execution Procedure step by step. The procedure includes finding issues, fixing them, and re-auditing until the quality gate passes. Do not stop after the initial report — fix everything fixable, then run a confirming audit.
 
 ### Database Audits
-When asked to audit the database, read `docs/procedures/DATABASE_AUDIT.md` and follow its Execution Procedure step by step. Use per-site judgment and web research — never batch-apply corrections without reviewing each site individually.
+When asked to audit the database, read `docs/procedures/ENRICHMENT_AUDIT.md` and follow its Execution Procedure step by step. Use per-site judgment and web research — never batch-apply corrections without reviewing each site individually.
 
 ## Architecture
 
