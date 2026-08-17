@@ -314,11 +314,45 @@ describe('storyArchive (Task 14): das paginierte Listing aus dem Rohpayload', ()
     expect(html).not.toContain('Previous')
   })
 
-  it('Pager Seite 2: Previous zurück auf /news-archive/', () => {
+  it('Pager Seite 2: Previous zurück auf /news-archive/, Leiste bis Seite 94', () => {
     const page2 = renderRoute(pyrefRoute('storyArchive_page2'))
     expect(page2).toContain('page 2 of 94')
     expect(page2).toContain('href="/news-archive/"')
     expect(page2).toContain('href="/news-archive/page/3"')
+    // Nummerierte Leiste: 1 [2] 3 4 … 94 — letzte Seite in einem Hop,
+    // aktuelle Seite als <span>, nicht als Link.
+    expect(page2).toContain('href="/news-archive/page/4"')
+    expect(page2).toContain('href="/news-archive/page/94"')
+    expect(page2).toMatch(/aria-current="page"[^>]*>2</)
+    expect(page2).toContain('…')
+  })
+
+  it('Nummerierte Leiste mitten im Archiv: 1 … 22 23 [24] 25 26 … 46', () => {
+    // Eigenes Test-Payload — die route.json-Fixtures bleiben eingefroren.
+    const html24 = renderRoute({ ...FIXTURES.storyArchive, page: 24, total_pages: 46 })
+    expect(html24).toContain('href="/news-archive/"') // Seite 1
+    expect(html24).toContain('href="/news-archive/page/22"')
+    expect(html24).toContain('href="/news-archive/page/23"')
+    expect(html24).toContain('href="/news-archive/page/25"')
+    expect(html24).toContain('href="/news-archive/page/26"')
+    expect(html24).toContain('href="/news-archive/page/46"') // letzte Seite
+    // Fenster endet bei ±2 — davor/dahinter nur die Ellipse.
+    expect(html24).not.toContain('href="/news-archive/page/21"')
+    expect(html24).not.toContain('href="/news-archive/page/27"')
+    // Die aktuelle Seite ist ein <span aria-current>, nie ein Link.
+    expect(html24).not.toContain('href="/news-archive/page/24"')
+    expect(html24).toMatch(/aria-current="page"[^>]*>24</)
+    // KEIN rel=prev/next — Google ignoriert es seit 2019.
+    expect(html24).not.toContain('rel="prev"')
+    expect(html24).not.toContain('rel="next"')
+  })
+
+  it('Letzte Seite: kein Next, Leiste zeigt zurück zum Anfang', () => {
+    const last = renderRoute({ ...FIXTURES.storyArchive, page: 46, total_pages: 46 })
+    expect(last).not.toContain('Next')
+    expect(last).toContain('href="/news-archive/"') // Seite 1
+    expect(last).toContain('href="/news-archive/page/45"')
+    expect(last).toMatch(/aria-current="page"[^>]*>46</)
   })
 
   it('Art.-50-Banner und CommunityCta', () => {

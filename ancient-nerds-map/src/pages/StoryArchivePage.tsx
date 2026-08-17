@@ -20,6 +20,28 @@ function pageHref(n: number): string {
   return n <= 1 ? '/news-archive/' : `/news-archive/page/${n}`
 }
 
+/**
+ * Numbered pager: page 1, current ±2 and the last page, with ellipsis gaps
+ * (1 … 22 23 [24] 25 26 … 46). Prev/Next alone meant a click depth of 46 to
+ * the oldest story — the numbered bar caps it at 3 hops. Every entry is a
+ * real <a href> so crawlers follow it; deliberately NO rel=prev/next
+ * (Google has ignored it since 2019).
+ */
+function pagerItems(page: number, totalPages: number): (number | 'gap')[] {
+  const wanted = new Set([1, totalPages])
+  for (let n = page - 2; n <= page + 2; n++) {
+    if (n >= 1 && n <= totalPages) wanted.add(n)
+  }
+  const items: (number | 'gap')[] = []
+  let prev = 0
+  for (const n of [...wanted].sort((a, b) => a - b)) {
+    if (n - prev > 1) items.push('gap')
+    items.push(n)
+    prev = n
+  }
+  return items
+}
+
 export default function StoryArchivePage() {
   // Das Payload kommt aus dem Route-Kontext; die Typen aus StoryArchiveRoute.
   const route = useRoute()
@@ -89,8 +111,23 @@ export default function StoryArchivePage() {
         </div>
 
         {totalPages > 1 && (
-          <nav className="story-pager">
+          <nav className="story-pager" aria-label="Archive pages">
             {page > 1 && <a href={pageHref(page - 1)}>← Previous</a>}
+            {pagerItems(page, totalPages).map((item, i) =>
+              item === 'gap' ? (
+                <span key={`gap-${i}`} className="story-pager-gap">
+                  …
+                </span>
+              ) : item === page ? (
+                <span key={item} className="story-pager-current" aria-current="page">
+                  {item}
+                </span>
+              ) : (
+                <a key={item} href={pageHref(item)}>
+                  {item}
+                </a>
+              ),
+            )}
             {page < totalPages && <a href={pageHref(page + 1)}>Next →</a>}
           </nav>
         )}

@@ -186,10 +186,13 @@
   display: flex;
   gap: 20px;
   justify-content: center;
+  flex-wrap: wrap;
   margin-top: 32px;
 }
 .story-pager a { color: var(--text-link, #00c8c8); text-decoration: none; }
 .story-pager a:hover { text-decoration: underline; }
+.story-pager-current { color: #fff; font-weight: 600; }
+.story-pager-gap { color: #b0b0b0; }
 
 @media (max-width: 600px) {
   .story-main { padding: 76px 16px 60px; }
