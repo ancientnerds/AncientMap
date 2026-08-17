@@ -330,6 +330,13 @@ def backfill_heroes(limit: int | None) -> None:
 
     written = no_article = no_lead = no_local = mismatch = 0
     for i, row in enumerate(rows):
+        # At the TOP of the loop: the first version sat below the continue
+        # branches and never fired — two silent hours (2026-08-17).
+        if i % 50 == 0:
+            logger.info(
+                f"  heroes {i}/{len(rows)}: written={written} mismatch={mismatch} "
+                f"no_lead={no_lead} no_article={no_article}"
+            )
         local_path = HERO_DIR / row["site_id"].replace("-", "")[:8] / "hero.webp"
         if not local_path.exists():
             no_local += 1
@@ -382,12 +389,6 @@ def backfill_heroes(limit: int | None) -> None:
             written += 1
         except Exception as exc:
             logger.warning(f"hero {row['site_id'][:8]} failed ({exc}); left NULL")
-
-        if i % 100 == 0:
-            logger.info(
-                f"  heroes {i}/{len(rows)}: written={written} mismatch={mismatch} "
-                f"no_lead={no_lead} no_article={no_article}"
-            )
 
     logger.info("=" * 60)
     logger.info(f"Hero attribution written: {written}")

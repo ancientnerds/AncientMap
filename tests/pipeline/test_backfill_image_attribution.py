@@ -174,3 +174,20 @@ class TestRatioGuard:
         from pipeline.image_attribution_backfill import ratio_matches
 
         assert ratio_matches(self._local(tmp_path, 800, 600), None, None) is False
+
+
+class TestUtmStripping:
+    """imageinfo URLs started carrying ?utm_… params in 2026 — they broke the
+    thumb construction (400 on every hero) and tainted stored original_urls."""
+
+    def test_query_string_is_stripped_from_the_original_url(self):
+        meta = parse_attribution(
+            {
+                "url": "https://upload.wikimedia.org/x/y/Foo.jpg?uselang=de&utm_source=x",
+                "extmetadata": {},
+            }
+        )
+        assert meta["original_url"] == "https://upload.wikimedia.org/x/y/Foo.jpg"
+
+    def test_empty_url_stays_none(self):
+        assert parse_attribution({"url": "", "extmetadata": {}})["original_url"] is None

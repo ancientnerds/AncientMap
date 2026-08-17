@@ -439,12 +439,18 @@ def parse_attribution(info: dict) -> dict:
         if author_url.startswith("//"):
             author_url = "https:" + author_url
 
+    # The imageinfo url started carrying ?uselang=…&utm_… analytics params in
+    # 2026. Upload originals never need a query string, and keeping it broke
+    # the thumb-URL construction (filename included the query → HTTP 400) and
+    # tainted 45,180 stored original_urls.
+    original_url = (info.get("url") or "").split("?")[0] or None
+
     return {
         "author": author or None,
         "author_url": author_url,
         "license": ext.get("LicenseShortName", {}).get("value", "") or None,
         "license_url": ext.get("LicenseUrl", {}).get("value", "") or None,
-        "original_url": info.get("url"),
+        "original_url": original_url,
         "width": info.get("width"),
         "height": info.get("height"),
     }
