@@ -255,10 +255,6 @@ def main() -> None:
         run(args.limit)
 
 
-if __name__ == "__main__":
-    main()
-
-
 # =============================================================================
 # Phase 2: heroes. The importer renamed every lead image to hero.webp, so the
 # stem carries no Commons title. The article's lead image is the obvious
@@ -399,3 +395,7 @@ def backfill_heroes(limit: int | None) -> None:
         f"Left NULL: mismatch={mismatch} (lead image changed since import), "
         f"no_lead={no_lead}, no_article={no_article}, no_local_file={no_local}"
     )
+
+
+if __name__ == "__main__":
+    main()
