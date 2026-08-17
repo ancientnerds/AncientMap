@@ -265,6 +265,10 @@ def main() -> None:
 # =============================================================================
 
 HERO_DIR = Path("public/data/images/wiki")
+# One of Wikimedia's fixed thumbnail buckets (20/40/60/120/250/330/500/960/
+# 1280/1920/3840) — verified 2026-08-17 that oversize requests still return
+# 200, so no need to cap against the original's width.
+HERO_THUMB_WIDTH = 500
 
 # 64-bit difference hash; distance <= 6 on re-encoded/re-scaled copies of the
 # same photo, typically > 20 between different photos of the same site.
@@ -367,11 +371,13 @@ def backfill_heroes(limit: int | None) -> None:
                 continue
 
             local = Image.open(local_path)
-            # Commons thumbnail at the local hero's width — same scale, so the
-            # perceptual comparison sees the same crop.
+            # Wikimedia only serves fixed thumbnail widths since 2026 — any
+            # other value is HTTP 400 ("Use thumbnail sizes listed on
+            # https://w.wiki/GHai"). The dhash proof is scale-invariant (both
+            # sides resize to 9x8), so a fixed standard width is enough.
             thumb_url = (
                 meta["original_url"].replace("/commons/", "/commons/thumb/", 1)
-                + f"/{local.width}px-{meta['original_url'].rsplit('/', 1)[-1]}"
+                + f"/{HERO_THUMB_WIDTH}px-{meta['original_url'].rsplit('/', 1)[-1]}"
             )
             thumb_resp = _download_client.get(thumb_url)
             time.sleep(REQUEST_DELAY)
