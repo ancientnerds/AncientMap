@@ -3,6 +3,22 @@
 **Date:** 2026-03-19
 **Status:** Research complete. Article 50 obligations apply from August 2, 2026.
 
+> **ADDENDUM 2026-07-31 (supersedes stale statements below):**
+> - Commission guidelines on Art. 50 adopted 2026-07-20; Code of Practice on marking &
+>   labelling final since 2026-06-10, assessed adequate 2026-07-08/09.
+> - AI-Omnibus grace period: Art. 50(2) machine-readable marking applies from
+>   **2026-12-02** for systems in service before 2026-08-02 (ours). Art. 50(1) and 50(4)
+>   apply 2026-08-02 without grace.
+> - Correction to §10: the platform DOES generate synthetic audio (MiniMax speech-2.8-hd
+>   paper narration, ElevenLabs video voiceover) — Art. 50(2) marking applies to it.
+> - The Art. 50(4) editorial-review exception is NOT available: Lyra news, weekly
+>   journals, and batch Theo papers publish fully automatically (LLM-only gates).
+>   Compliance route is labeling (Option A), implemented via
+>   `docs/superpowers/plans/2026-07-31-eu-ai-act-compliance.md`.
+> - **Phase B implemented 2026-08-17**: `ai_generated`/`ai_system` fields on all content
+>   API schemas, IPTC `digitalSourceType: trainedAlgorithmicMedia` in the JSON-LD of the
+>   three AI-generated page types (story/research/journal), ID3 TXXX marking in TTS MP3s.
+
 ---
 
 ## Executive Summary
