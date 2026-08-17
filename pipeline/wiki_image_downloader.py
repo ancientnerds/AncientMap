@@ -418,6 +418,43 @@ def resolve_wikidata_entity(article_title: str) -> dict | None:
 # =============================================================================
 
 
+def parse_attribution(info: dict) -> dict:
+    """Author, licence and URLs out of one imageinfo entry.
+
+    Shared by the category fetcher and the attribution backfill
+    (scripts/backfill_image_attribution.py) — the Artist field is HTML and
+    parsing it twice would drift.
+    """
+    ext = info.get("extmetadata", {})
+
+    author_raw = ext.get("Artist", {}).get("value", "")
+    author = re.sub(r"<[^>]*>", "", author_raw).strip() if author_raw else None
+    if author and len(author) > 200:
+        author = author[:200] + "..."
+
+    author_url = None
+    href_match = re.search(r'href="([^"]+)"', author_raw)
+    if href_match:
+        author_url = href_match.group(1)
+        if author_url.startswith("//"):
+            author_url = "https:" + author_url
+
+    return {
+        "author": author or None,
+        "author_url": author_url,
+        "license": ext.get("LicenseShortName", {}).get("value", "") or None,
+        "license_url": ext.get("LicenseUrl", {}).get("value", "") or None,
+        "original_url": info.get("url"),
+        "width": info.get("width"),
+        "height": info.get("height"),
+    }
+
+
+def commons_page_url_for(file_title: str) -> str:
+    """Canonical Commons page URL for a File: title."""
+    return f"https://commons.wikimedia.org/wiki/{urllib.parse.quote(file_title, safe='')}"
+
+
 def _parse_commons_file_page(page: dict) -> dict | None:
     """Parse a single Commons API page result into an image dict."""
     file_title = page.get("title", "")
@@ -431,44 +468,18 @@ def _parse_commons_file_page(page: dict) -> dict | None:
         return None
     info = info_list[0]
 
-    original_url = info.get("url")
-    if not original_url:
+    meta = parse_attribution(info)
+    if not meta["original_url"]:
         return None
 
-    ext = info.get("extmetadata", {})
-
-    # Parse author (strip HTML)
-    author_raw = ext.get("Artist", {}).get("value", "")
-    author = re.sub(r"<[^>]*>", "", author_raw).strip() if author_raw else None
-    if author and len(author) > 200:
-        author = author[:200] + "..."
-
-    # Parse author URL from HTML
-    author_url = None
-    href_match = re.search(r'href="([^"]+)"', author_raw)
-    if href_match:
-        author_url = href_match.group(1)
-        if author_url.startswith("//"):
-            author_url = "https:" + author_url
-
-    license_name = ext.get("LicenseShortName", {}).get("value", "")
-    license_url = ext.get("LicenseUrl", {}).get("value", "")
-
-    encoded_title = urllib.parse.quote(file_title, safe="")
     return {
         "title": file_title,
         "display_title": file_title.replace("File:", "").rsplit(".", 1)[0],
-        "original_url": original_url,
-        "commons_page_url": f"https://commons.wikimedia.org/wiki/{encoded_title}",
+        "commons_page_url": commons_page_url_for(file_title),
         "is_lead": False,
-        "author": author or None,
-        "author_url": author_url,
-        "license": license_name or None,
-        "license_url": license_url or None,
-        "width": info.get("width"),
-        "height": info.get("height"),
         "source_type": "commons_category",
         "_has_metadata": True,
+        **meta,
     }
 
 
