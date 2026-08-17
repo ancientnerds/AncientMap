@@ -31,8 +31,11 @@ FROM python:3.11-slim AS production
 
 WORKDIR /app
 
-# Install runtime dependencies only
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# Install runtime dependencies only. The upgrade pulls Debian security fixes
+# the base image has not republished yet — trivy blocks the deploy on fixable
+# HIGH/CRITICAL CVEs (first hit: util-linux CVE-2026-53615, fixed in
+# 2.41.5-0+deb13u1 while python:3.11-slim still shipped 2.41-5).
+RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends \
     libpq5 \
     curl \
     && rm -rf /var/lib/apt/lists/* \
