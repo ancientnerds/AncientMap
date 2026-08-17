@@ -107,3 +107,70 @@ class TestFetchBatchMapping:
         ):
             out = fetch_batch(["File:Gone.jpg"])
         assert out == {}
+
+
+class TestDhash:
+    """The hero phase writes attribution only on a perceptual match — a wrong
+    credit is worse than none, so the comparator must separate same-photo
+    rescales from different photos."""
+
+    def _img(self, seed: int):
+        from PIL import Image
+
+        img = Image.new("RGB", (160, 120))
+        px = img.load()
+        for x in range(160):
+            for y in range(120):
+                px[x, y] = ((x * seed) % 256, (y * seed * 3) % 256, (x + y + seed) % 256)
+        return img
+
+    def test_identical_images_have_distance_zero(self):
+        from pipeline.image_attribution_backfill import dhash, hamming
+
+        a = self._img(7)
+        assert hamming(dhash(a), dhash(a.copy())) == 0
+
+    def test_rescaled_copy_stays_under_the_threshold(self):
+        from pipeline.image_attribution_backfill import DHASH_MAX_DISTANCE, dhash, hamming
+
+        a = self._img(7)
+        b = a.resize((80, 60))
+        assert hamming(dhash(a), dhash(b)) <= DHASH_MAX_DISTANCE
+
+    def test_different_images_stay_far_above_the_threshold(self):
+        from pipeline.image_attribution_backfill import DHASH_MAX_DISTANCE, dhash, hamming
+
+        assert hamming(dhash(self._img(7)), dhash(self._img(23))) > DHASH_MAX_DISTANCE
+
+
+class TestRatioGuard:
+    """Stems are exact titles, but extensions are guessed — File:X.jpg can be
+    a different photograph than the original X.png. The local file is ground
+    truth; a diverging aspect ratio must kill the match."""
+
+    def _local(self, tmp_path, w, h):
+        from PIL import Image
+
+        p = tmp_path / "img.webp"
+        Image.new("RGB", (w, h)).save(p, "WEBP")
+        return p
+
+    def test_same_ratio_passes(self, tmp_path):
+        from pipeline.image_attribution_backfill import ratio_matches
+
+        assert ratio_matches(self._local(tmp_path, 800, 600), 4000, 3000) is True
+
+    def test_different_ratio_fails(self, tmp_path):
+        from pipeline.image_attribution_backfill import ratio_matches
+
+        assert ratio_matches(self._local(tmp_path, 800, 600), 3000, 4000) is False
+
+    def test_missing_local_file_accepts_the_title_match(self, tmp_path):
+        from pipeline.image_attribution_backfill import ratio_matches
+
+        assert ratio_matches(tmp_path / "gone.webp", 4000, 3000) is True
+
+    def test_missing_remote_dimensions_reject(self, tmp_path):
+        from pipeline.image_attribution_backfill import ratio_matches
+
+        assert ratio_matches(self._local(tmp_path, 800, 600), None, None) is False
