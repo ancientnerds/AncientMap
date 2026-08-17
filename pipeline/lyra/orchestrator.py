@@ -1570,6 +1570,7 @@ def _run_migrations(engine) -> None:
                     WHERE usn.site_id = us.id
                       AND usn.name_normalized = COALESCE(us.name_normalized, lower(us.name))
                 )
+                ON CONFLICT ON CONSTRAINT uq_usn DO NOTHING
                 """
             )
         )
