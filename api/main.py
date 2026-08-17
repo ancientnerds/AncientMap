@@ -149,6 +149,37 @@ async def lifespan(app: FastAPI):
             "ALTER TABLE research_nodes ADD COLUMN IF NOT EXISTS question TEXT",
             "ALTER TABLE research_nodes ADD COLUMN IF NOT EXISTS outcome VARCHAR(20)",
             "CREATE UNIQUE INDEX IF NOT EXISTS uq_knowledge_claim_norm_text ON knowledge_claims (norm_text)",
+            # FK policy (2026-08-17): every FK onto unified_sites is SET NULL
+            # except the site-owned tables (unified_site_names,
+            # site_content_links, wiki_images) and card_stats (regenerated
+            # derived data). The models said SET NULL for years; existing DBs
+            # kept CASCADE because create_all never alters constraints — the
+            # duplicate-merge audit would have cascaded into user data.
+            """DO $$ DECLARE r RECORD; BEGIN
+                FOR r IN
+                    SELECT tc.table_name, tc.constraint_name, ccu.column_name
+                    FROM information_schema.table_constraints tc
+                    JOIN information_schema.referential_constraints rc
+                        ON rc.constraint_name = tc.constraint_name
+                    JOIN information_schema.key_column_usage ccu
+                        ON ccu.constraint_name = tc.constraint_name
+                    WHERE tc.constraint_type = 'FOREIGN KEY'
+                      AND rc.unique_constraint_name IN (
+                          SELECT constraint_name FROM information_schema.table_constraints
+                          WHERE table_name = 'unified_sites' AND constraint_type = 'PRIMARY KEY')
+                      AND rc.delete_rule = 'CASCADE'
+                      AND tc.table_name NOT IN (
+                          'unified_site_names', 'site_content_links', 'wiki_images', 'card_stats')
+                LOOP
+                    EXECUTE format('ALTER TABLE %I ALTER COLUMN %I DROP NOT NULL',
+                                   r.table_name, r.column_name);
+                    EXECUTE format('ALTER TABLE %I DROP CONSTRAINT %I', r.table_name, r.constraint_name);
+                    EXECUTE format(
+                        'ALTER TABLE %I ADD CONSTRAINT %I FOREIGN KEY (%I) '
+                        'REFERENCES unified_sites(id) ON DELETE SET NULL',
+                        r.table_name, r.constraint_name, r.column_name);
+                END LOOP;
+            END $$""",
         ]
 
         # Populate description_citations for 10 enriched sites (one-time prod data fix).

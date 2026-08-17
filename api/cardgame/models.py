@@ -81,10 +81,13 @@ class CardCollection(Base):
         ForeignKey("discord_users.id", ondelete="CASCADE"),
         nullable=False,
     )
-    site_id: Mapped[uuid.UUID] = mapped_column(
+    # SET NULL, not CASCADE: a collected card is the user's property — deleting
+    # a site must not silently destroy collections (FK policy, aligned with
+    # prod 2026-08-17). card_stats stays CASCADE: regenerated derived data.
+    site_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("unified_sites.id", ondelete="CASCADE"),
-        nullable=False,
+        ForeignKey("unified_sites.id", ondelete="SET NULL"),
+        nullable=True,
     )
     acquired_via: Mapped[str] = mapped_column(String(50), nullable=False)
     # Phase E: Card Evolution
