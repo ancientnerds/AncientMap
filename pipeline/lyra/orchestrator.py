@@ -1580,6 +1580,20 @@ def _run_migrations(engine) -> None:
         # migration used lower(name) which keeps accents (e.g. 'sacsayhuamán'),
         # while normalize_name() strips them — causing AN Originals entries
         # to rank below accent-free external sources in fuzzy matches.
+        # Two rows of one site can normalise to the SAME unaccented form
+        # (e.g. 'ħal-saflieni …' next to 'hal-saflieni …') — the UPDATE below
+        # would then collide on uq_usn and roll back the whole migration batch
+        # (observed on every lyra boot, 2026-08-17: 3 such pairs). Same-target
+        # rows are duplicates by definition; keep the lowest id.
+        conn.execute(
+            text("""
+            DELETE FROM unified_site_names a
+            USING unified_site_names b
+            WHERE a.site_id = b.site_id
+              AND lower(unaccent(a.name_normalized)) = lower(unaccent(b.name_normalized))
+              AND a.id > b.id
+        """)
+        )
         conn.execute(
             text("""
             UPDATE unified_site_names
