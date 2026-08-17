@@ -501,12 +501,12 @@ jobs:
               docker compose up -d --remove-orphans
             fi
 
-            echo "==> Generating static sitemap..."
-            if curl -sf --max-time 30 http://localhost:8000/api/sitemap/sitemap.xml > ancient-nerds-map/dist/sitemap.xml; then
-              echo "    Sitemap written to dist/sitemap.xml"
-            else
-              echo "    WARNING: Sitemap generation failed (non-fatal)"
-            fi
+            # Sitemaps are no longer frozen into dist/ on deploy: nginx
+            # proxies /sitemap.xml and /sitemap-*.xml to the API, which
+            # serves the index + per-type part files live (new stories
+            # appear without a deploy). Drop any stale frozen copy so
+            # nobody mistakes it for the served file.
+            rm -f ancient-nerds-map/dist/sitemap.xml
 
             echo "==> Refreshing library data..."
             REFRESH_KEY=$(grep "^LIBRARY_REFRESH_KEY=" .env | cut -d= -f2- | tr -d "\r")

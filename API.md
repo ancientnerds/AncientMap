@@ -351,13 +351,16 @@ Get Open Graph metadata for social sharing.
 
 ### Sitemap
 
-#### GET /api/sitemap/index.xml
+#### GET /api/sitemap/sitemap.xml
 
-Get XML sitemap index.
+Sitemap index referencing one part file per page type. nginx serves it
+publicly as `https://ancientnerds.com/sitemap.xml`.
 
-#### GET /api/sitemap/sites-{page}.xml
+#### GET /api/sitemap/sitemap-{part}.xml
 
-Get paginated site URLs for search engines.
+Part files: `static`, `sites`, `countries`, `stories`, `research`,
+`articles` — publicly `https://ancientnerds.com/sitemap-{part}.xml`. Each
+URL carries `<lastmod>` where the underlying row provides a date.
 
 ---
 

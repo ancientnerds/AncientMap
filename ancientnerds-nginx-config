@@ -206,11 +206,23 @@ server {
         proxy_set_header X-Real-IP $remote_addr;
     }
 
-    # Sitemap — static file, refreshed on each deploy
+    # Sitemap index + per-type part files — served live by the API instead
+    # of a deploy-time frozen copy, so new stories/papers are advertised
+    # without a deploy. The API sets Cache-Control (public, max-age=3600)
+    # and the XML content type on every sitemap response.
     location = /sitemap.xml {
-        try_files /sitemap.xml =404;
-        add_header Content-Type "application/xml; charset=UTF-8";
-        add_header Cache-Control "public, max-age=86400";
+        proxy_pass http://an_api/api/sitemap/sitemap.xml;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+
+    # Part files (SITEMAP_PARTS in api/routes/sitemap.py). Listed regex
+    # locations win over the prefix try_files cascade; the \.html$ block
+    # above never matches .xml paths.
+    location ~ ^/sitemap-(static|sites|countries|stories|research|articles)\.xml$ {
+        proxy_pass http://an_api/api/sitemap$request_uri;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
     }
 
     # Legacy site URL. /sites/{country}/{slug} is now the canonical page and
