@@ -121,10 +121,13 @@ def extract(video_id: str, timestamp: int, out: Path) -> str:
     finally:
         clip.unlink(missing_ok=True)
     with Image.open(out) as im:
-        if im.width < MIN_WIDTH:
-            # 360p-only source: the existing 854px frame is still the better one.
-            out.unlink(missing_ok=True)
-            return "not_wider"
+        width = im.width
+    # Deleting inside the `with` fails on Windows (WinError 32) — PIL still
+    # holds the handle, and that killed two runs at their first such frame.
+    if width < MIN_WIDTH:
+        # 360p-only source: the existing 854px frame is still the better one.
+        out.unlink(missing_ok=True)
+        return "not_wider"
     return "ok"
 
 
@@ -137,13 +140,7 @@ def upload(paths: list[Path]) -> None:
         timeout=600,
     )
     for p in paths:
-        try:
-            p.unlink(missing_ok=True)
-        except OSError:
-            # Windows hands out WinError 32 while a scanner still has the file
-            # open. The frame is already on the VPS and the next run overwrites
-            # the local copy, so losing this cleanup must not kill a 10h run.
-            pass
+        p.unlink(missing_ok=True)
 
 
 def main() -> None:
