@@ -410,10 +410,11 @@ export default function AccountPage() {
   const [grantsExpanded, setGrantsExpanded] = useState(false)
   const [usageExpanded, setUsageExpanded] = useState(false)
 
-  // Player stats (card game)
+  // Player stats (card game). actionResult is shared by both claim buttons —
+  // a starter claim that fails must say so, not vanish into the console.
   const [playerStats, setPlayerStats] = useState<PlayerStats | null>(null)
   const [claimingDaily, setClaimingDaily] = useState(false)
-  const [dailyResult, setDailyResult] = useState<string | null>(null)
+  const [actionResult, setActionResult] = useState<string | null>(null)
   const [claimingStarter, setClaimingStarter] = useState(false)
 
   // Liked & bookmarked sites
@@ -571,7 +572,7 @@ export default function AccountPage() {
   const claimDaily = async () => {
     if (!token) return
     setClaimingDaily(true)
-    setDailyResult(null)
+    setActionResult(null)
     try {
       const data = await apiFetch<{
         credits: number
@@ -587,11 +588,11 @@ export default function AccountPage() {
         if (r.type === 'credits') parts.push(`Streak bonus: +${r.value} credits!`)
         else if (r.type === 'pack') parts.push(`Streak bonus: ${r.value.charAt(0).toUpperCase() + r.value.slice(1)} Pack!`)
       }
-      setDailyResult(parts.join(' | '))
+      setActionResult(parts.join(' | '))
       handleAchievementResponse(data as unknown as Record<string, unknown>)
       loadPlayerStats()
     } catch (e) {
-      setDailyResult(e instanceof Error ? e.message : 'Failed')
+      setActionResult(e instanceof Error ? e.message : 'Failed')
     } finally {
       setClaimingDaily(false)
     }
@@ -601,13 +602,23 @@ export default function AccountPage() {
   const claimStarter = async () => {
     if (!token) return
     setClaimingStarter(true)
+    setActionResult(null)
     try {
-      const starterData = await apiFetch<Record<string, unknown>>('/cards/starter', token, { method: 'POST' })
-      handleAchievementResponse(starterData)
+      const starterData = await apiFetch<{ cards: CardData[]; count: number }>(
+        '/cards/starter', token, { method: 'POST' }
+      )
+      handleAchievementResponse(starterData as unknown as Record<string, unknown>)
       loadPlayerStats()
+      if (starterData.count === 0) {
+        // An empty deck means no card has computed stats yet. Switching to a
+        // blank Collection tab would read as "the button does nothing".
+        setActionResult('No starter cards available — the card pool has no stats yet.')
+        return
+      }
+      setActionResult(`Starter deck claimed: ${starterData.count} cards`)
       changeTab('collection')
     } catch (e) {
-      console.error('Starter claim failed:', e instanceof Error ? e.message : e)
+      setActionResult(e instanceof Error ? e.message : 'Starter claim failed')
     } finally {
       setClaimingStarter(false)
     }
@@ -955,7 +966,7 @@ export default function AccountPage() {
                       </button>
                     )}
                   </div>
-                  {dailyResult && <div className="account-daily-result">{dailyResult}</div>}
+                  {actionResult && <div className="account-daily-result">{actionResult}</div>}
 
                   <button className="account-logout-btn" onClick={logout}>
                     Sign Out

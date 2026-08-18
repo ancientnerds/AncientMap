@@ -116,6 +116,90 @@ def _run_enrichment_migrations(session) -> None:
     print("[CARDGAME] Enrichment columns ensured on card_stats", flush=True)
 
 
+def _upsert_stats(session, sites, combo_counts, progress: bool) -> tuple[int, int, Counter]:
+    """Compute and upsert card_stats for `sites`. Returns (created, updated, tiers)."""
+    tier_counter: Counter = Counter()
+    created = 0
+    updated = 0
+    total = len(sites)
+
+    for i, site in enumerate(sites):
+        # Gather data for stat computation
+        content_link_count, content_type_count, has_3d = _get_content_stats(session, site.id)
+        wiki_image_count = _get_wiki_image_count(session, site.id)
+        like_count, bookmark_count = _get_engagement(session, site.id)
+        combo_key = (site.site_type, site.period_name)
+        combo_count = combo_counts.get(combo_key, 1)
+
+        stats = compute_all_stats(
+            period_start=site.period_start,
+            period_end=site.period_end,
+            site_type=site.site_type,
+            has_description=bool(site.description),
+            has_thumbnail=bool(site.thumbnail_url),
+            content_link_count=content_link_count,
+            wiki_image_count=wiki_image_count,
+            has_source_url=bool(site.source_url),
+            combo_count=combo_count,
+            is_unesco=_is_unesco(site),
+            like_count=like_count,
+            bookmark_count=bookmark_count,
+            content_type_count=content_type_count,
+            has_3d_model=has_3d,
+            country=site.country,
+        )
+
+        # Tag with empires
+        empires = tag_site(
+            lat=site.lat,
+            lon=site.lon,
+            period_start=site.period_start,
+        )
+        stats["empires"] = empires
+        stats["empire_count"] = len(empires)
+
+        # Upsert
+        existing = session.get(CardStats, site.id)
+        if existing:
+            for key, value in stats.items():
+                setattr(existing, key, value)
+            updated += 1
+        else:
+            session.add(CardStats(site_id=site.id, **stats))
+            created += 1
+
+        tier_counter[stats["rarity_tier"]] += 1
+
+        if progress and (i + 1) % 500 == 0:
+            print(f"[CARDGAME] Processed {i + 1}/{total} sites...", flush=True)
+            session.flush()
+
+    session.flush()
+    return created, updated, tier_counter
+
+
+def backfill_placeholder_stats() -> int:
+    """Compute stats for card_stats rows the description import left as placeholders.
+
+    The card-description import in api/main.py inserts a zeroed row
+    (rarity_tier=0, category_group='unknown') so a generated description has a row
+    to live on. Every card query filters on rarity_tier, so such a row is a card
+    that can never be drawn — by daily, starter, packs, quiz or expeditions.
+    Returns the number of rows filled in.
+    """
+    with get_session() as session:
+        site_ids = [
+            r[0] for r in session.query(CardStats.site_id).filter(CardStats.rarity_tier == 0).all()
+        ]
+        if not site_ids:
+            return 0
+
+        sites = session.query(UnifiedSite).filter(UnifiedSite.id.in_(site_ids)).all()
+        created, updated, _ = _upsert_stats(session, sites, _count_combos(session), progress=False)
+
+    return created + updated
+
+
 def generate_stats() -> None:
     """Compute stats for all Ancient Nerds sites that have a description.
 
@@ -146,63 +230,7 @@ def generate_stats() -> None:
         combo_counts = _count_combos(session)
         print(f"[CARDGAME] Computed {len(combo_counts)} type/period combos", flush=True)
 
-        # Track rarity distribution
-        tier_counter: Counter = Counter()
-        created = 0
-        updated = 0
-
-        for i, site in enumerate(sites):
-            # Gather data for stat computation
-            content_link_count, content_type_count, has_3d = _get_content_stats(session, site.id)
-            wiki_image_count = _get_wiki_image_count(session, site.id)
-            like_count, bookmark_count = _get_engagement(session, site.id)
-            combo_key = (site.site_type, site.period_name)
-            combo_count = combo_counts.get(combo_key, 1)
-
-            stats = compute_all_stats(
-                period_start=site.period_start,
-                period_end=site.period_end,
-                site_type=site.site_type,
-                has_description=bool(site.description),
-                has_thumbnail=bool(site.thumbnail_url),
-                content_link_count=content_link_count,
-                wiki_image_count=wiki_image_count,
-                has_source_url=bool(site.source_url),
-                combo_count=combo_count,
-                is_unesco=_is_unesco(site),
-                like_count=like_count,
-                bookmark_count=bookmark_count,
-                content_type_count=content_type_count,
-                has_3d_model=has_3d,
-                country=site.country,
-            )
-
-            # Tag with empires
-            empires = tag_site(
-                lat=site.lat,
-                lon=site.lon,
-                period_start=site.period_start,
-            )
-            stats["empires"] = empires
-            stats["empire_count"] = len(empires)
-
-            # Upsert
-            existing = session.get(CardStats, site.id)
-            if existing:
-                for key, value in stats.items():
-                    setattr(existing, key, value)
-                updated += 1
-            else:
-                session.add(CardStats(site_id=site.id, **stats))
-                created += 1
-
-            tier_counter[stats["rarity_tier"]] += 1
-
-            if (i + 1) % 500 == 0:
-                print(f"[CARDGAME] Processed {i + 1}/{total} sites...", flush=True)
-                session.flush()
-
-        session.flush()
+        created, updated, tier_counter = _upsert_stats(session, sites, combo_counts, progress=True)
 
     # Print distribution report
     print(f"\n[CARDGAME] Done! Created {created}, updated {updated} card stats.", flush=True)

@@ -115,10 +115,16 @@ async def lifespan(app: FastAPI):
             "ALTER TABLE unified_sites ADD COLUMN IF NOT EXISTS edited_by VARCHAR(20) NOT NULL DEFAULT 'initial'",
             "ALTER TABLE unified_sites ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP",
             "ALTER TABLE unified_sites ADD COLUMN IF NOT EXISTS last_audited TIMESTAMP",
-            # Ensure card_stats enrichment columns exist (model defines them but create_all won't add to existing table)
+            # Ensure card_stats enrichment columns exist (model defines them but create_all won't add to existing table).
+            # Keep this block in CardStats declaration order — a missing entry here
+            # breaks every query that loads the entity, not just the new column.
+            "ALTER TABLE card_stats ADD COLUMN IF NOT EXISTS wikidata_qid VARCHAR(20)",
             "ALTER TABLE card_stats ADD COLUMN IF NOT EXISTS confidence_score FLOAT",
             "ALTER TABLE card_stats ADD COLUMN IF NOT EXISTS source_language VARCHAR(10)",
+            "ALTER TABLE card_stats ADD COLUMN IF NOT EXISTS heritage_designation TEXT",
+            "ALTER TABLE card_stats ADD COLUMN IF NOT EXISTS inception_year INTEGER",
             "ALTER TABLE card_stats ADD COLUMN IF NOT EXISTS best_wiki_url VARCHAR(500)",
+            "ALTER TABLE card_stats ADD COLUMN IF NOT EXISTS commons_image VARCHAR(500)",
             # Ensure db_snapshots has source_id column (added after initial table creation)
             "ALTER TABLE db_snapshots ADD COLUMN IF NOT EXISTS source_id VARCHAR(50)",
             # Widen grant_period from varchar(7) to varchar(10) — "one_time" sentinel is 8 chars
@@ -526,6 +532,23 @@ async def lifespan(app: FastAPI):
                         )
     except Exception as e:
         logger.warning(f"[STARTUP] Card description import failed (non-fatal): {e}")
+
+    # The description import above inserts zeroed placeholder rows (rarity_tier=0)
+    # so a description has a row to live on. Every card query filters on
+    # rarity_tier, so until the stats are computed those are cards nobody can draw.
+    # Off the critical path: on a fresh DB this is thousands of sites (~90s) and
+    # would race the startup health check.
+    async def _backfill_card_stats() -> None:
+        from api.cardgame.generator import backfill_placeholder_stats
+
+        try:
+            filled = await asyncio.to_thread(backfill_placeholder_stats)
+            if filled:
+                logger.info(f"[STARTUP] Computed card stats for {filled} placeholder rows")
+        except Exception as e:
+            logger.warning(f"[STARTUP] Card stat backfill failed (non-fatal): {e}")
+
+    _create_background_task(_backfill_card_stats())
 
     # Migrate any existing JSON contributions into unified_sites
     try:
