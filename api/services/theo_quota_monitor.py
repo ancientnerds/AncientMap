@@ -152,13 +152,19 @@ _state: dict = {
 _started = False
 
 
-def get_watchdog_state() -> dict:
-    """Return the latest watchdog state. Never raises.
+# The daemon runs in the theo-worker container while /research/health is
+# served by the api container. Each probe publishes its result here so the
+# endpoint reports the tier that actually gates the worker instead of its
+# own never-probed UNKNOWN (observed 2026-08-18: endpoint said UNKNOWN
+# while the worker sat at HEALTHY, probe #290). The TTL outlives three
+# probe intervals, so a dead daemon expires into an honest UNKNOWN rather
+# than a stale HEALTHY.
+WATCHDOG_STATE_KEY = "theo:watchdog_state"
+WATCHDOG_STATE_TTL = QUOTA_PROBE_INTERVAL_S * 3
 
-    Includes a fresh `limiter` snapshot so the /research/health endpoint
-    can return quota+limiter+watchdog in one call. The probe is NOT
-    refreshed on each call — it runs on its own schedule in the daemon.
-    """
+
+def _local_snapshot() -> dict:
+    """This process's state plus a fresh limiter snapshot."""
     try:
         from pipeline.lyra.minimax_limiter import limiter
 
@@ -167,6 +173,36 @@ def get_watchdog_state() -> dict:
         limiter_snapshot = {"error": str(exc)}
     # Return a shallow copy so callers can't mutate our state.
     return {**_state, "limiter": limiter_snapshot}
+
+
+def _publish_state() -> None:
+    """Share this probe's result with the other containers."""
+    from api.cache import cache_set
+
+    try:
+        cache_set(WATCHDOG_STATE_KEY, _local_snapshot(), ttl=WATCHDOG_STATE_TTL)
+    except Exception as exc:  # noqa: BLE001 — publishing must not kill the daemon
+        logger.warning("[THEO-WATCHDOG] state publish failed: %s", exc)
+
+
+def get_watchdog_state() -> dict:
+    """Return the latest watchdog state. Never raises.
+
+    Includes a fresh `limiter` snapshot so the /research/health endpoint
+    can return quota+limiter+watchdog in one call. The probe is NOT
+    refreshed on each call — it runs on its own schedule in the daemon.
+
+    A process that does not run the daemon has no state of its own, so it
+    reads what the daemon published. When nothing was published (daemon
+    down or never started) the local UNKNOWN is the truthful answer.
+    """
+    if not _started:
+        from api.cache import cache_get
+
+        published = cache_get(WATCHDOG_STATE_KEY)
+        if published:
+            return published
+    return _local_snapshot()
 
 
 # --- Discord notify ---------------------------------------------------------
@@ -427,6 +463,7 @@ async def _loop() -> None:
                     _state["weekly_remaining_percent"],
                 )
 
+        _publish_state()
         await asyncio.sleep(QUOTA_PROBE_INTERVAL_S)
 
 

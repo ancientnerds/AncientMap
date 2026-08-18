@@ -237,3 +237,56 @@ def test_hours_until_weekly_reset():
     assert tw._hours_until_weekly_reset(datetime(2026, 8, 7, 0, 0, tzinfo=UTC)) == 72.0
     almost_week = tw._hours_until_weekly_reset(datetime(2026, 8, 3, 0, 1, tzinfo=UTC))
     assert 167.9 < almost_week < 168.0
+
+
+class TestWatchdogStateAcrossContainers:
+    """The daemon runs in the theo-worker container, /research/health is
+    served by the api container. Without publishing, the endpoint reported
+    UNKNOWN while the worker sat at HEALTHY (observed 2026-08-18)."""
+
+    def test_a_process_without_the_daemon_reads_the_published_state(self, monkeypatch):
+        from api.services import theo_quota_monitor as qm
+
+        monkeypatch.setattr(qm, "_started", False)
+        published = {"tier": "HEALTHY", "probe_count": 290, "limiter": {}}
+        monkeypatch.setattr(
+            "api.cache.cache_get", lambda key: published if key == qm.WATCHDOG_STATE_KEY else None
+        )
+
+        assert qm.get_watchdog_state() == published
+
+    def test_the_daemon_process_trusts_its_own_state(self, monkeypatch):
+        from api.services import theo_quota_monitor as qm
+
+        monkeypatch.setattr(qm, "_started", True)
+        monkeypatch.setitem(qm._state, "tier", "THROTTLED")
+        monkeypatch.setattr("api.cache.cache_get", lambda key: {"tier": "HEALTHY", "limiter": {}})
+
+        assert qm.get_watchdog_state()["tier"] == "THROTTLED"
+
+    def test_nothing_published_stays_honest(self, monkeypatch):
+        """A dead daemon must expire into UNKNOWN, never a stale HEALTHY."""
+        from api.services import theo_quota_monitor as qm
+
+        monkeypatch.setattr(qm, "_started", False)
+        monkeypatch.setitem(qm._state, "tier", qm.TIER_UNKNOWN)
+        monkeypatch.setattr("api.cache.cache_get", lambda key: None)
+
+        assert qm.get_watchdog_state()["tier"] == "UNKNOWN"
+
+    def test_each_probe_publishes(self, monkeypatch):
+        from api.services import theo_quota_monitor as qm
+
+        written: dict = {}
+        monkeypatch.setattr(
+            "api.cache.cache_set",
+            lambda key, value, ttl=3600: written.update({"key": key, "value": value, "ttl": ttl}),
+        )
+        monkeypatch.setitem(qm._state, "tier", "HEALTHY")
+
+        qm._publish_state()
+
+        assert written["key"] == qm.WATCHDOG_STATE_KEY
+        assert written["value"]["tier"] == "HEALTHY"
+        # Must outlive a probe interval, or the endpoint flaps to UNKNOWN.
+        assert written["ttl"] > qm.QUOTA_PROBE_INTERVAL_S
