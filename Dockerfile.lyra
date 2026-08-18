@@ -31,11 +31,15 @@ FROM python:3.11-slim AS production
 
 WORKDIR /app
 
-# Install runtime dependencies (ffmpeg for screenshot extraction)
+# Runtime dependencies: ffmpeg cuts the screenshot frame, nodejs is the
+# JavaScript runtime yt-dlp needs to solve YouTube's player signatures.
+# Without it YouTube only offers SABR-only formats and every 720p segment
+# download answers 403 (whole hi-res backfill dead, 2026-08-18).
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq5 \
     curl \
     ffmpeg \
+    nodejs \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 

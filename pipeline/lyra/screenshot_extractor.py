@@ -141,6 +141,12 @@ def _extract_frame(
     # Step 1: Download a tiny clip around the timestamp via yt-dlp
     cmd_clip = [
         "yt-dlp",
+        # yt-dlp needs a JS runtime to solve YouTube's player signatures.
+        # Only deno is enabled by default; the image ships nodejs. Without it
+        # YouTube offers SABR-only formats and every segment answers 403
+        # (verified 2026-08-18: 0/10 downloads without, 1280x720 with).
+        "--js-runtimes",
+        "node",
         "-f",
         YTDLP_FORMAT,
         "--download-sections",
