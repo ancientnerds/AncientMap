@@ -494,6 +494,7 @@ class StaticExporter:
                     commons_page_url, is_hero, is_lead,
                     width, height, sort_order
                 FROM wiki_images
+                WHERE is_excluded IS NOT TRUE
                 ORDER BY site_id, sort_order
             """)
             )
