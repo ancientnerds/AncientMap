@@ -35,7 +35,7 @@ WORKDIR /app
 # JavaScript runtime yt-dlp needs to solve YouTube's player signatures.
 # Without it YouTube only offers SABR-only formats and every 720p segment
 # download answers 403 (whole hi-res backfill dead, 2026-08-18).
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends \
     libpq5 \
     curl \
     ffmpeg \

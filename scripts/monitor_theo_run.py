@@ -16,7 +16,7 @@ import re
 import subprocess
 import sys
 import time
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 
 REQUEST_ID = "4a873c4d-49c5-46ee-90ec-bbd49346f1c6"
@@ -101,7 +101,7 @@ def update_issues(seen: set[str], issues: dict[str, list[dict]], log_text: str) 
             continue
         seen.add(key)
         issues.setdefault(category, []).append(
-            {"time": datetime.utcnow().isoformat() + "Z", "line": line[:500]}
+            {"time": datetime.now(UTC).isoformat(), "line": line[:500]}
         )
         new += 1
     return new
