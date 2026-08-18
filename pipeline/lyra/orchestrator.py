@@ -1891,7 +1891,12 @@ def main() -> None:
     from pipeline.database import create_all_tables, engine
 
     create_all_tables()
-    for mig_attempt in (1, 2, 3):
+    # 15s/30s/60s covers a full parallel api boot: the 5s/10s of the first
+    # version ran out while the api container still held its locks, and the
+    # batch rolled back anyway (deploy 2026-08-18). Lyra has no startup
+    # deadline — it polls for work afterwards — so waiting is free.
+    MIGRATION_BACKOFF = (15, 30, 60)
+    for mig_attempt, backoff in enumerate(MIGRATION_BACKOFF, start=1):
         try:
             _run_migrations(engine)
             break
@@ -1905,12 +1910,12 @@ def main() -> None:
             # booter and rerun it. Log everything else loudly enough that the
             # next deploy notices.
             pgcode = getattr(getattr(mig_err, "orig", None), "pgcode", None)
-            if pgcode in ("40P01", "55P03", "57014") and mig_attempt < 3:
+            if pgcode in ("40P01", "55P03", "57014") and mig_attempt < len(MIGRATION_BACKOFF):
                 logger.warning(
                     f"[STARTUP] Migration batch hit lock contention (pgcode {pgcode}, "
-                    f"attempt {mig_attempt}/3) — retrying in {5 * mig_attempt}s"
+                    f"attempt {mig_attempt}/{len(MIGRATION_BACKOFF)}) — retrying in {backoff}s"
                 )
-                time.sleep(5 * mig_attempt)
+                time.sleep(backoff)
                 continue
             logger.error(
                 f"[STARTUP] Migrations ROLLED BACK due to exception: {mig_err}. "
