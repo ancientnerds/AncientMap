@@ -137,7 +137,13 @@ def upload(paths: list[Path]) -> None:
         timeout=600,
     )
     for p in paths:
-        p.unlink(missing_ok=True)
+        try:
+            p.unlink(missing_ok=True)
+        except OSError:
+            # Windows hands out WinError 32 while a scanner still has the file
+            # open. The frame is already on the VPS and the next run overwrites
+            # the local copy, so losing this cleanup must not kill a 10h run.
+            pass
 
 
 def main() -> None:
