@@ -279,7 +279,7 @@ def get_news_feed(
     offset = (page - 1) * page_size
 
     if sort == "significance":
-        order_by = (
+        query = query.order_by(
             NewsItem.significance.desc().nullslast(),
             NewsVideo.published_at.desc(),
             NewsItem.created_at.desc(),
@@ -287,15 +287,15 @@ def get_news_feed(
     elif sort == "significance_asc":
         # Lowest first. Unscored rows still sort last, not first: a NULL means
         # "never rated", which is not the same as "rated 1".
-        order_by = (
+        query = query.order_by(
             NewsItem.significance.asc().nullslast(),
             NewsVideo.published_at.desc(),
             NewsItem.created_at.desc(),
         )
     else:
-        order_by = (NewsVideo.published_at.desc(), NewsItem.created_at.desc())
+        query = query.order_by(NewsVideo.published_at.desc(), NewsItem.created_at.desc())
 
-    items = query.order_by(*order_by).offset(offset).limit(page_size).all()
+    items = query.offset(offset).limit(page_size).all()
 
     result_items = []
     for item in items:
