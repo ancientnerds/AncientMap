@@ -27,6 +27,38 @@ class AlreadyHasStarterError(Exception):
     pass
 
 
+def owned_site_ids(session: Session, user_id) -> set:
+    """Site ids the user already holds.
+
+    card_collections has UNIQUE (user_id, site_id), so handing out a card the
+    user already owns is an IntegrityError, not a silent no-op.
+    """
+    return {
+        r[0]
+        for r in session.query(CardCollection.site_id)
+        .filter(CardCollection.user_id == user_id)
+        .all()
+    }
+
+
+def has_claimed_starter(session: Session, user_id) -> bool:
+    """Whether the user ever received a starter deck.
+
+    Owning cards is not the same thing — the daily reward, contribution rewards
+    and achievements all grant cards too, and gating on card count locked anyone
+    who claimed a daily first out of the starter deck for good.
+    """
+    return (
+        session.query(CardCollection.site_id)
+        .filter(
+            CardCollection.user_id == user_id,
+            CardCollection.acquired_via == "starter",
+        )
+        .first()
+        is not None
+    )
+
+
 def claim_daily(session: Session, user: DiscordUser) -> dict:
     """Claim daily reward: 1 Common card + credits + streak tracking.
 
@@ -83,12 +115,7 @@ def claim_daily(session: Session, user: DiscordUser) -> dict:
     )
 
     # Give 1 Common card
-    owned = {
-        r[0]
-        for r in session.query(CardCollection.site_id)
-        .filter(CardCollection.user_id == user.id)
-        .all()
-    }
+    owned = owned_site_ids(session, user.id)
     from api.cardgame.packs import _pick_card
 
     card = _pick_card(session, 1, owned)
@@ -150,7 +177,7 @@ def claim_daily(session: Session, user: DiscordUser) -> dict:
 def claim_starter_deck(session: Session, user: DiscordUser) -> list[dict]:
     """Give the user 10 starter cards across different categories.
 
-    Raises AlreadyHasStarterError if user already has cards.
+    Raises AlreadyHasStarterError if the user already claimed a starter deck.
     """
     # with_for_update() on a missing row locks nothing — create the stats row
     # first (racing creators collapse on the primary key), then lock it.
@@ -167,23 +194,23 @@ def claim_starter_deck(session: Session, user: DiscordUser) -> list[dict]:
         .with_for_update()
         .first()
     )
-    if ps.total_cards > 0:
-        raise AlreadyHasStarterError("You already have cards")
+    if has_claimed_starter(session, user.id):
+        raise AlreadyHasStarterError("You already claimed your starter deck")
 
     # Pick 10 well-distributed cards: prefer diverse groups and low tiers
-    # Get one card per category group, then fill remaining slots
+    # Get one card per category group, then fill remaining slots.
+    # Cards the user already holds (e.g. from a daily claimed first) are excluded —
+    # UNIQUE (user_id, site_id) makes a duplicate an IntegrityError.
+    owned = owned_site_ids(session, user.id)
     groups_seen: set[str] = set()
     starter_cards: list[CardStats] = []
 
     # First: one card per group (Common/Uncommon)
     for tier in [1, 2]:
-        cards = (
-            session.query(CardStats)
-            .filter(CardStats.rarity_tier == tier)
-            .order_by(func.random())
-            .limit(50)
-            .all()
-        )
+        query = session.query(CardStats).filter(CardStats.rarity_tier == tier)
+        if owned:
+            query = query.filter(CardStats.site_id.notin_(owned))
+        cards = query.order_by(func.random()).limit(50).all()
         for card in cards:
             if card.category_group not in groups_seen and len(starter_cards) < STARTER_DECK_SIZE:
                 groups_seen.add(card.category_group)
@@ -191,17 +218,11 @@ def claim_starter_deck(session: Session, user: DiscordUser) -> list[dict]:
 
     # Fill remaining slots
     if len(starter_cards) < STARTER_DECK_SIZE:
-        existing_ids = {c.site_id for c in starter_cards}
-        fill = (
-            session.query(CardStats)
-            .filter(
-                CardStats.rarity_tier.in_([1, 2]),
-                CardStats.site_id.notin_(existing_ids),
-            )
-            .order_by(func.random())
-            .limit(STARTER_DECK_SIZE - len(starter_cards))
-            .all()
-        )
+        exclude = owned | {c.site_id for c in starter_cards}
+        query = session.query(CardStats).filter(CardStats.rarity_tier.in_([1, 2]))
+        if exclude:
+            query = query.filter(CardStats.site_id.notin_(exclude))
+        fill = query.order_by(func.random()).limit(STARTER_DECK_SIZE - len(starter_cards)).all()
         starter_cards.extend(fill)
 
     # Add to collection
@@ -232,12 +253,7 @@ def reward_site_submission(session: Session, user: DiscordUser) -> dict | None:
     """Award 1 Uncommon+ card for an approved site submission."""
     from api.cardgame.packs import _card_to_dict, _pick_card
 
-    owned = {
-        r[0]
-        for r in session.query(CardCollection.site_id)
-        .filter(CardCollection.user_id == user.id)
-        .all()
-    }
+    owned = owned_site_ids(session, user.id)
     card = _pick_card(session, 2, owned)  # min Uncommon
     if card:
         session.add(
@@ -258,12 +274,7 @@ def reward_image_upload(session: Session, user: DiscordUser) -> dict | None:
     """Award 1 Common card for an approved image upload."""
     from api.cardgame.packs import _card_to_dict, _pick_card
 
-    owned = {
-        r[0]
-        for r in session.query(CardCollection.site_id)
-        .filter(CardCollection.user_id == user.id)
-        .all()
-    }
+    owned = owned_site_ids(session, user.id)
     card = _pick_card(session, 1, owned)
     if card:
         session.add(

@@ -59,6 +59,9 @@ export interface PlayerStats {
   level?: number
   xp_progress?: number
   xp_to_next?: number
+  // Owning cards ≠ having claimed the starter deck: daily, contributions and
+  // achievements grant cards too. Gate the starter button on this, not on count.
+  has_claimed_starter?: boolean
 }
 
 export interface LeaderboardEntry {

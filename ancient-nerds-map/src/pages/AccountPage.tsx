@@ -956,7 +956,7 @@ export default function AccountPage() {
                     >
                       {claimingDaily ? 'Claiming...' : 'Daily Reward'}
                     </button>
-                    {playerStats?.total_cards === 0 && (
+                    {playerStats && !playerStats.has_claimed_starter && (
                       <button
                         className="account-action-btn starter"
                         onClick={claimStarter}

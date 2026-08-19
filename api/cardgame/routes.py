@@ -443,6 +443,8 @@ def activate_deck(
 @router.get("/player-stats")
 def get_player_stats(user: DiscordUser = Depends(get_current_user)):
     """Get current user's player stats."""
+    from api.cardgame.rewards import has_claimed_starter
+
     with get_session() as session:
         ps = session.get(CardPlayerStats, user.id)
         if not ps:
@@ -460,9 +462,11 @@ def get_player_stats(user: DiscordUser = Depends(get_current_user)):
                 "level": level,
                 "xp_progress": xp_progress,
                 "xp_to_next": xp_to_next,
+                "has_claimed_starter": False,
             }
         level, xp_progress, xp_to_next = get_level(ps.xp)
         return {
+            "has_claimed_starter": has_claimed_starter(session, user.id),
             "total_cards": ps.total_cards,
             "wins": ps.wins,
             "losses": ps.losses,

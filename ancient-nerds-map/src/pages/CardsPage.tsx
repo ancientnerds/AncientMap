@@ -304,7 +304,7 @@ export default function CardsPage() {
               >
                 {claimingDaily ? 'Claiming...' : 'Daily Reward'}
               </button>
-              {stats?.total_cards === 0 && (
+              {stats && !stats.has_claimed_starter && (
                 <button
                   className="starter-btn"
                   onClick={claimStarter}
