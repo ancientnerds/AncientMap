@@ -17,6 +17,62 @@ export function getSignificanceLabel(level: number): string {
   return SIGNIFICANCE_LABELS[level] || ''
 }
 
+// ---------------------------------------------------------------------------
+// Sort direction ↔ significance slider
+// ---------------------------------------------------------------------------
+
+export type NewsSort = 'recent' | 'significance' | 'significance_asc'
+
+/**
+ * The "Significance" sort button is a direction toggle: first click sorts
+ * descending (biggest finds first), second ascending. The slider follows that
+ * direction — descending/latest treats the threshold as a floor (≥, the
+ * classic "only show me the good stuff"), ascending as a ceiling (≤, the long
+ * tail without the headline finds). One control less than a separate mode
+ * switch, and it matches what the direction already implies.
+ */
+export function significanceMode(sort: NewsSort): 'min' | 'max' {
+  return sort === 'significance_asc' ? 'max' : 'min'
+}
+
+/**
+ * Slider bounds per mode. Scores run 1–10, so a ceiling of 0 would mean "show
+ * nothing" — the ceiling stops at 1. A floor of 0, in contrast, is the useful
+ * "no floor at all" position.
+ */
+export function significanceRange(mode: 'min' | 'max'): { lo: number; hi: number } {
+  return mode === 'max' ? { lo: 1, hi: 10 } : { lo: 0, hi: 10 }
+}
+
+/**
+ * The end of the slider that filters nothing: no floor (0) resp. no ceiling
+ * (10). Flipping the sort direction carries the threshold over, so an
+ * untouched slider has to land on the new mode's neutral end — otherwise
+ * "I filtered nothing" silently turns into "ceiling 0, i.e. nothing".
+ */
+export function neutralThreshold(mode: 'min' | 'max'): number {
+  return mode === 'max' ? 10 : 0
+}
+
+/**
+ * Threshold → query params. Null means "don't send it": a floor of 0 and a
+ * ceiling of 10 filter nothing, and /news/feed rejects 0 outright (ge=1).
+ */
+export function significanceParams(
+  sort: NewsSort,
+  threshold: number,
+): { min: number | null; max: number | null } {
+  const mode = significanceMode(sort)
+  const neutral = neutralThreshold(mode)
+  if (threshold === neutral) return { min: null, max: null }
+  return mode === 'max' ? { min: null, max: threshold } : { min: threshold, max: null }
+}
+
+/** Click on the significance sort button: off → desc, desc → asc, asc → desc. */
+export function nextSignificanceSort(current: NewsSort): NewsSort {
+  return current === 'significance' ? 'significance_asc' : 'significance'
+}
+
 export function getSignificanceColor(level: number): string {
   if (level >= 9) return '#c02023'      // hot red
   if (level >= 7) return '#d4622a'      // orange

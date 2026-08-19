@@ -46,6 +46,20 @@
   line-height: 1.4;
 }
 
+/* Headline links to the story page. Visually identical to a plain headline —
+   the link exists so the browser context menu offers "Open in new tab"; a
+   plain left click still expands the card (see NewsCard). */
+.news-card-headline a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.news-card-headline a:hover {
+  color: var(--text-primary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
 .news-card-post-text {
   font-size: 14px;
   color: rgba(232, 232, 232, 0.85);

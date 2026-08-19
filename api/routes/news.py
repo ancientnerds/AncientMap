@@ -197,6 +197,7 @@ def get_news_feed(
     period: str | None = None,
     country: str | None = None,
     min_significance: int | None = Query(None, ge=1, le=10),
+    max_significance: int | None = Query(None, ge=1, le=10),
     news_category: str | None = None,
     speculative_tag: str | None = None,
     sort: str | None = None,
@@ -204,7 +205,7 @@ def get_news_feed(
     db: Session = Depends(get_db),
 ):
     """Get paginated news feed items, newest first."""
-    cache_key = f"news:feed:{page}:{page_size}:{channel_id or 'all'}:{site_id or 'all'}:{category or 'all'}:{period or 'all'}:{country or 'all'}:{min_significance or 'all'}:{news_category or 'all'}:{speculative_tag or 'all'}:{sort or 'default'}:{include_speculative}"
+    cache_key = f"news:feed:{page}:{page_size}:{channel_id or 'all'}:{site_id or 'all'}:{category or 'all'}:{period or 'all'}:{country or 'all'}:{min_significance or 'all'}:{max_significance or 'all'}:{news_category or 'all'}:{speculative_tag or 'all'}:{sort or 'default'}:{include_speculative}"
     cached = cache_get(cache_key)
     if cached:
         return cached
@@ -259,6 +260,11 @@ def get_news_feed(
     if min_significance:
         query = query.filter(NewsItem.significance >= min_significance)
 
+    # Ceiling for the ascending sort ("long tail without the headline finds").
+    # Unscored rows drop out of both bounds — NULL compares to neither.
+    if max_significance:
+        query = query.filter(NewsItem.significance <= max_significance)
+
     if speculative_tag:
         query = query.filter(NewsItem.speculative_tag == speculative_tag)
 
@@ -273,23 +279,23 @@ def get_news_feed(
     offset = (page - 1) * page_size
 
     if sort == "significance":
-        items = (
-            query.order_by(
-                NewsItem.significance.desc().nullslast(),
-                NewsVideo.published_at.desc(),
-                NewsItem.created_at.desc(),
-            )
-            .offset(offset)
-            .limit(page_size)
-            .all()
+        order_by = (
+            NewsItem.significance.desc().nullslast(),
+            NewsVideo.published_at.desc(),
+            NewsItem.created_at.desc(),
+        )
+    elif sort == "significance_asc":
+        # Lowest first. Unscored rows still sort last, not first: a NULL means
+        # "never rated", which is not the same as "rated 1".
+        order_by = (
+            NewsItem.significance.asc().nullslast(),
+            NewsVideo.published_at.desc(),
+            NewsItem.created_at.desc(),
         )
     else:
-        items = (
-            query.order_by(NewsVideo.published_at.desc(), NewsItem.created_at.desc())
-            .offset(offset)
-            .limit(page_size)
-            .all()
-        )
+        order_by = (NewsVideo.published_at.desc(), NewsItem.created_at.desc())
+
+    items = query.order_by(*order_by).offset(offset).limit(page_size).all()
 
     result_items = []
     for item in items:

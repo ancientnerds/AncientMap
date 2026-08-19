@@ -88,6 +88,16 @@ function storySlug(headline: string, id: number): string {
   return `${slugify(headline)}-${id}`
 }
 
+/**
+ * Pfad einer Story-Seite. Exportiert, weil die News-Karten seit dem
+ * Kontextmenü-Link (Rechtsklick → „In neuem Tab öffnen") dieselbe URL
+ * bauen müssen wie der Canonical hier — der Server löst den Slug ohnehin
+ * nur über die angehängte ID auf (story_id_from_slug).
+ */
+export function storyPath(headline: string, id: number): string {
+  return `/news-archive/${encodePath(storySlug(headline, id))}`
+}
+
 /** country_path(): Länderpfad. Exportiert für SitePage (Crumb + Geschwister-Block). */
 export function countryPath(country: string): string {
   return `/sites/${slugify(country)}`
@@ -171,7 +181,7 @@ export function renderHead(m: PageMeta): string {
 
 /** story_page(): Description aus post_text (nicht summary), unter 150 Zeichen gar keine. */
 export function storyMeta(route: StoryRoute): PageMeta {
-  const canonical = `${BASE_URL}/news-archive/${encodePath(storySlug(route.headline, route.id))}`
+  const canonical = `${BASE_URL}${storyPath(route.headline, route.id)}`
   const summary = route.summary.trim()
   const screenshot = absoluteUrl(route.screenshot_url)
   const schema =

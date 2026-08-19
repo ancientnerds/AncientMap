@@ -82,14 +82,17 @@ export interface NewsFilters {
   speculative_tags: string[]
 }
 
+/**
+ * The chip dimensions behind the "Filters" disclosure — one active value each.
+ * Significance and sort are NOT in here: they live in the always-visible
+ * control bar (slider + direction toggle) and are coupled to each other.
+ */
 export interface ActiveFilters {
   channel: string | null
   site: string | null
   category: string | null
   period: string | null
   country: string | null
-  min_significance: number | null
   news_category: string | null
   speculative_tag: string | null
-  sort: string | null
 }

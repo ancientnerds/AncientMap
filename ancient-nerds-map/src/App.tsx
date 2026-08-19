@@ -405,7 +405,7 @@ function AppContent() {
 
   // Lyra chat modal state
   const [showLyraChat, setShowLyraChat] = useState(false)
-  const [lyraChatContext, setLyraChatContext] = useState<{ type: 'global' | 'site' | 'empire' | 'news'; id?: string; year?: number }>({ type: 'global' })
+  const [lyraChatContext, setLyraChatContext] = useState<{ type: 'global' | 'site' | 'empire'; id?: string; year?: number }>({ type: 'global' })
 
   // Download manager modal state
   const [showDownloadManager, setShowDownloadManager] = useState(false)
@@ -2065,10 +2065,6 @@ function AppContent() {
               if (match) {
                 updateSelection([match.id])
               }
-            }}
-            onAskLyra={(newsItemId) => {
-              setLyraChatContext({ type: 'news', id: String(newsItemId) })
-              setShowLyraChat(true)
             }}
           />
         )}

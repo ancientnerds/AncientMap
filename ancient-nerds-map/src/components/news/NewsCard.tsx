@@ -8,12 +8,12 @@
  * - Data props (headline, site info, etc.)
  * - onSiteLoaded(siteData) — called after the card fetches a site; parent shows the popup
  * - onSiteHover(hovering) — optional, for globe highlighting
- * - onAskLyra() — optional
  * - size — 'sm' | 'md' | 'lg'
  */
 
 import { useState, useEffect, memo } from 'react'
 import { config } from '../../config'
+import { storyPath } from '../../seo/meta'
 import { apiDetailToSiteData } from '../../utils/siteApi'
 import { formatDuration, formatRelativeDate } from '../../utils/formatters'
 import { SiteBadges, CountryFlag } from '../metadata'
@@ -55,10 +55,14 @@ export interface NewsCardProps {
   sitePeriodName?: string | null
   sitePeriodStart?: number | null
 
+  // Link to the story page — set it and the headline becomes a real <a>, so
+  // right-click / ctrl-click / middle-click open the story in a new tab.
+  // Null for stories without a public page (see storyHrefFor).
+  storyHref?: string | null
+
   // Callbacks — minimal, parent just reacts to results
   onSiteLoaded?: (site: SiteData) => void
   onSiteHover?: (hovering: boolean) => void
-  onAskLyra?: () => void
 
   // Facts (from API expand)
   facts?: string[] | null
@@ -98,9 +102,9 @@ function NewsCard({
   siteType,
   sitePeriodName,
   sitePeriodStart,
+  storyHref,
   onSiteLoaded,
   onSiteHover,
-  onAskLyra,
   facts,
   webSources,
   verified,
@@ -180,7 +184,23 @@ function NewsCard({
         </div>
       )}
 
-      <div className="news-card-headline">{headline}</div>
+      <div className="news-card-headline">
+        {storyHref ? (
+          <a
+            href={storyHref}
+            onClick={e => {
+              // Modifier clicks belong to the browser (new tab / new window) —
+              // let them through, but stop the card from expanding underneath.
+              // A plain left click keeps the card's expand/collapse behaviour,
+              // so the link only ever navigates on purpose.
+              if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) { e.stopPropagation(); return }
+              e.preventDefault()
+            }}
+          >
+            {headline}
+          </a>
+        ) : headline}
+      </div>
       {(!headlinesOnly || expanded) && postText && <div className="news-card-post-text">{postText}</div>}
 
       {hasMatchedSite && (
@@ -311,17 +331,6 @@ function NewsCard({
             </a>
           )}
 
-          {onAskLyra && (
-            <button
-              className="ask-lyra-btn"
-              style={{ marginTop: 6 }}
-              onClick={e => { e.stopPropagation(); onAskLyra() }}
-            >
-              <img src="/lyra.gif" alt="" />
-              Ask Lyra
-            </button>
-          )}
-
           {videoTitle && <div className="news-card-video-title">{videoTitle}</div>}
         </div>
       )}
@@ -330,6 +339,19 @@ function NewsCard({
 }
 
 export default memo(NewsCard)
+
+/**
+ * URL of a story's own page, or null when /news-archive/{slug} would 404.
+ *
+ * Mirrors public_stories_query() in api/routes/articles_html.py — that filter
+ * is authoritative for which stories have a page (post_text present, not
+ * speculative). The feed also serves the ones it excludes, and linking those
+ * would hand the user a 404 from the context menu.
+ */
+export function storyHrefFor(item: NewsItemData): string | null {
+  if (!item.post_text || item.news_category === 'speculative') return null
+  return storyPath(item.headline, item.id)
+}
 
 /**
  * Adapter: convert NewsItemData (from API) → NewsCardProps.
@@ -364,6 +386,7 @@ export function newsItemToCardProps(item: NewsItemData): NewsCardProps {
     facts: item.facts,
     webSources: item.web_sources,
     verified: item.verified,
+    storyHref: storyHrefFor(item),
   }
 }
 

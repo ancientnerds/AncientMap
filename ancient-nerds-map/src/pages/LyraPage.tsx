@@ -4,7 +4,7 @@
  * Renders LyraChatModal in "page" mode — same component, no duplicate logic.
  *
  * Context arrives via URL params: ?site=<uuid> (SitePopupOverlay) or
- * ?news=<id> (NewsFeedPage story cards).
+ * ?news=<id> (deep link into a single story's discussion).
  */
 
 import { useMemo } from 'react'

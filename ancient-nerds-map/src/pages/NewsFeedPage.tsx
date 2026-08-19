@@ -14,13 +14,31 @@ import { SitePopupOverlay } from '../components/SitePopupOverlay'
 import PageHeader from '../components/layout/PageHeader'
 import NewsTicker from '../components/layout/NewsTicker'
 import AiNoticeBanner from '../components/layout/AiNoticeBanner'
-import NewsCard from '../components/news/NewsCard'
-import { getNewsCategoryLabel, getTopicColor, sortTopics, getSignificanceNervStyle } from '../components/news/significance'
+import NewsCard, { storyHrefFor } from '../components/news/NewsCard'
+import SignificanceInfo from '../components/news/SignificanceInfo'
+import {
+  getNewsCategoryLabel,
+  getTopicColor,
+  sortTopics,
+  getSignificanceNervStyle,
+  significanceMode,
+  significanceParams,
+  significanceRange,
+  neutralThreshold,
+  nextSignificanceSort,
+  type NewsSort,
+} from '../components/news/significance'
+import { useDebouncedValue } from '../hooks/useDebouncedValue'
 import '../components/news/news-cards.css'
 
 const LyraProfileModal = lazy(() => import('../components/LyraProfileModal'))
 
 const COLLAPSED_MAX = 10
+
+const NO_FILTERS: ActiveFilters = {
+  channel: null, site: null, category: null, period: null, country: null,
+  news_category: null, speculative_tag: null,
+}
 
 function ExpandableFilterRow({ label, count, searchable, children }: {
   label: string
@@ -107,11 +125,27 @@ export default function NewsFeedPage() {
 
   // Multi-dimension filter state
   const [filters, setFilters] = useState<NewsFilters | null>(null)
-  const [activeFilters, setActiveFilters] = useState<ActiveFilters>({
-    channel: null, site: null, category: null, period: null, country: null,
-    min_significance: null, news_category: null, speculative_tag: null, sort: null,
-  })
+  const [activeFilters, setActiveFilters] = useState<ActiveFilters>(NO_FILTERS)
   const [filtersExpanded, setFiltersExpanded] = useState(false)
+
+  // Significance + sort: always visible, coupled. The slider is a floor while
+  // sorting by date or significance-descending and a ceiling when ascending
+  // (see significanceParams). Dragging fires onChange per notch, so the fetch
+  // hangs off the debounced copy while the slider itself follows the raw value.
+  const [sort, setSort] = useState<NewsSort>('recent')
+  const [threshold, setThreshold] = useState(0)
+  // Debounced as ONE pair, not two values: a direction flip moves both at
+  // once, and a lagging threshold would briefly pair "ceiling" with the old
+  // floor value — "at most 0", which the API rejects (Query(ge=1)) before the
+  // debounce catches up.
+  const sigState = useMemo(() => ({ sort, threshold }), [sort, threshold])
+  const activeSig = useDebouncedValue(sigState, 250)
+  const sliderMode = significanceMode(sort)
+  const sliderRange = significanceRange(sliderMode)
+  // Gradient stop = thumb position, so it has to follow the mode's own range
+  // (the ceiling starts at 1, not 0) instead of a flat threshold × 10.
+  const sliderPercent =
+    ((threshold - sliderRange.lo) / (sliderRange.hi - sliderRange.lo)) * 100
 
   const PAGE_SIZE = 50
 
@@ -128,10 +162,12 @@ export default function NewsFeedPage() {
       if (activeFilters.category) params.set('category', activeFilters.category)
       if (activeFilters.period) params.set('period', activeFilters.period)
       if (activeFilters.country) params.set('country', activeFilters.country)
-      if (activeFilters.min_significance != null) params.set('min_significance', String(activeFilters.min_significance))
       if (activeFilters.news_category) params.set('news_category', activeFilters.news_category)
       if (activeFilters.speculative_tag) params.set('speculative_tag', activeFilters.speculative_tag)
-      if (activeFilters.sort) params.set('sort', activeFilters.sort)
+      const sigParams = significanceParams(activeSig.sort, activeSig.threshold)
+      if (sigParams.min != null) params.set('min_significance', String(sigParams.min))
+      if (sigParams.max != null) params.set('max_significance', String(sigParams.max))
+      if (activeSig.sort !== 'recent') params.set('sort', activeSig.sort)
       const resp = await fetch(`${config.api.baseUrl}/news/feed?${params}`, { signal })
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
       const data: { items: NewsItemData[]; has_more: boolean; total_count: number; page: number } = await resp.json()
@@ -150,7 +186,7 @@ export default function NewsFeedPage() {
     } finally {
       setLoading(false)
     }
-  }, [activeFilters])
+  }, [activeFilters, activeSig])
 
   const PULL_THRESHOLD = 70
 
@@ -318,25 +354,37 @@ export default function NewsFeedPage() {
   }, [])
 
 
-  const handleFilterToggle = (dimension: keyof ActiveFilters, value: string | number | null) => {
+  const handleFilterToggle = (dimension: keyof ActiveFilters, value: string | null) => {
     setActiveFilters(prev => ({
       ...prev,
       [dimension]: prev[dimension] === value ? null : value,
     }))
   }
 
-  const isBreakthroughMode = activeFilters.min_significance === 7 && activeFilters.sort === 'significance'
+  // Badge on the "Filters" toggle counts only what the toggle hides — the
+  // chip dimensions. Slider and sort sit in the bar in plain sight; counting
+  // them reads as "why does it say 1, I didn't pick anything?".
+  const activeFilterCount = Object.values(activeFilters).filter(Boolean).length
+  const sig = significanceParams(sort, threshold)
+  const isFiltered = activeFilterCount > 0 || sig.min != null || sig.max != null || sort !== 'recent'
 
-  const handleBreakthroughToggle = () => {
-    if (isBreakthroughMode) {
-      setActiveFilters(prev => ({ ...prev, min_significance: null, sort: null }))
-    } else {
-      setActiveFilters(prev => ({ ...prev, min_significance: 7, sort: 'significance' }))
-    }
+  const resetAll = () => {
+    setActiveFilters(NO_FILTERS)
+    setThreshold(0)
+    setSort('recent')
   }
 
-
-  const activeFilterCount = Object.values(activeFilters).filter(Boolean).length
+  /**
+   * Sort changes carry the threshold over — a floor of 7 becomes a ceiling of
+   * 7. Only a slider still parked on its neutral end moves to the new mode's
+   * neutral end, so "no significance filter" survives a direction flip.
+   */
+  const changeSort = (next: NewsSort) => {
+    const from = significanceMode(sort)
+    const to = significanceMode(next)
+    if (from !== to && threshold === neutralThreshold(from)) setThreshold(neutralThreshold(to))
+    setSort(next)
+  }
 
   const columns = useMemo(() => {
     const cols: NewsItemData[][] = Array.from({ length: columnCount }, () => [])
@@ -382,14 +430,8 @@ export default function NewsFeedPage() {
                 <span className="news-page-filters-count">{activeFilterCount}</span>
               )}
             </button>
-            {activeFilterCount > 0 && (
-              <button
-                className="news-page-filters-reset"
-                onClick={() => setActiveFilters({
-                  channel: null, site: null, category: null, period: null, country: null,
-                  min_significance: null, news_category: null, speculative_tag: null, sort: null,
-                })}
-              >
+            {isFiltered && (
+              <button className="news-page-filters-reset" onClick={resetAll}>
                 <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
                   <line x1="18" y1="6" x2="6" y2="18" />
                   <line x1="6" y1="6" x2="18" y2="18" />
@@ -401,23 +443,54 @@ export default function NewsFeedPage() {
               <span className="news-page-result-count">{totalCount} result{totalCount !== 1 ? 's' : ''}</span>
             )}
             <div className="news-page-filters-bar-actions">
+              {/* Significance slider. The filled side of the track follows the
+                  mode: floor → filled from the left (what's cut off below),
+                  ceiling → filled from the right. Native range inputs can't
+                  express that, so the track is a gradient whose stop comes in
+                  as --p. */}
+              <label className="news-page-sig">
+                <span className="news-page-sig-caption">
+                  {sliderMode === 'max' ? 'Max Sig' : 'Min Sig'}
+                </span>
+                <input
+                  type="range"
+                  min={sliderRange.lo}
+                  max={sliderRange.hi}
+                  step={1}
+                  value={threshold}
+                  onChange={e => setThreshold(Number(e.target.value))}
+                  className={`news-page-sig-slider${sliderMode === 'max' ? ' is-max' : ''}`}
+                  style={{ '--p': `${sliderPercent}%` } as React.CSSProperties}
+                  aria-label={sliderMode === 'max' ? 'Maximum significance' : 'Minimum significance'}
+                />
+                <span className="news-page-sig-value">{threshold}</span>
+              </label>
+              <SignificanceInfo mode={sliderMode} />
+              <span className="news-page-filters-bar-separator" />
               <button
-                className={`news-page-chip${!isBreakthroughMode && activeFilters.sort == null ? ' active' : ''}`}
-                onClick={() => setActiveFilters(prev => ({ ...prev, sort: null, min_significance: null }))}
+                className={`news-page-chip${sort === 'recent' ? ' active' : ''}`}
+                onClick={() => changeSort('recent')}
+                title="Newest stories first"
               >
                 Latest
               </button>
+              {/* Direction toggle: inactive → click sorts descending (biggest
+                  finds first, ▼); active → click flips to ascending (▲). The
+                  arrow slot always occupies space (visibility, not mounting),
+                  otherwise the button widens on activation and the whole row
+                  jumps. */}
               <button
-                className={`news-page-chip${!isBreakthroughMode && activeFilters.sort === 'significance' ? ' active' : ''}`}
-                onClick={() => setActiveFilters(prev => ({ ...prev, sort: 'significance', min_significance: null }))}
+                className={`news-page-chip${sort !== 'recent' ? ' active' : ''}`}
+                onClick={() => changeSort(nextSignificanceSort(sort))}
+                aria-pressed={sort !== 'recent'}
+                title={sort === 'significance_asc'
+                  ? 'Lowest significance first — click for highest first'
+                  : 'Highest significance first — click for lowest first'}
               >
-                Top Rated
-              </button>
-              <button
-                className={`news-page-chip news-page-chip-breakthrough${isBreakthroughMode ? ' active' : ''}`}
-                onClick={handleBreakthroughToggle}
-              >
-                Breakthroughs
+                Significance
+                <span className={`news-page-sort-arrow${sort === 'recent' ? ' is-hidden' : ''}`} aria-hidden="true">
+                  {sort === 'significance_asc' ? '▲' : '▼'}
+                </span>
               </button>
               <span className="news-page-filters-bar-separator" />
               <button
@@ -539,27 +612,6 @@ export default function NewsFeedPage() {
                 </ExpandableFilterRow>
               )}
 
-              {/* Significance threshold row */}
-              <div className="news-page-filter-row">
-                <span className="news-page-filter-label">Significance</span>
-                <div className="news-page-chips">
-                  {([
-                    { label: 'All', value: null },
-                    { label: 'New Research 6+', value: 6 },
-                    { label: 'Significant 7+', value: 7 },
-                    { label: 'Breaking 9+', value: 9 },
-                  ] as const).map(opt => (
-                    <button
-                      key={opt.label}
-                      className={`news-page-chip${activeFilters.min_significance === opt.value ? ' active' : ''}`}
-                      onClick={() => handleFilterToggle('min_significance', opt.value)}
-                    >
-                      {opt.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
               {/* Topic row (news categories + speculative tags merged, sorted scientific → fringe) */}
               {(filters.news_categories.length > 0 || (filters.speculative_tags && filters.speculative_tags.length > 0)) && (
                 <div className="news-page-filter-row">
@@ -642,7 +694,7 @@ export default function NewsFeedPage() {
       {/* Empty state */}
       {!error && !loading && items.length === 0 && (
         <div className="news-page-empty">
-          {Object.values(activeFilters).some(Boolean)
+          {isFiltered
             ? 'No items match the current filters.'
             : 'No news items yet. Check back soon.'}
         </div>
@@ -688,8 +740,8 @@ export default function NewsFeedPage() {
                       facts={item.facts}
                       webSources={item.web_sources}
                       verified={item.verified}
+                      storyHref={storyHrefFor(item)}
                       onSiteLoaded={setSelectedSite}
-                      onAskLyra={() => window.open(`/lyra.html?news=${item.id}`, '_blank', 'noopener,noreferrer')}
                     />
                   </div>
                 </div>

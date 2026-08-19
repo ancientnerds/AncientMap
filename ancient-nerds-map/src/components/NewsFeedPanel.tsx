@@ -10,7 +10,7 @@ import { DataStore } from '../data/DataStore'
 import { usePipelineStatus } from './nerv/usePipelineStatus'
 import type { NewsItemData, NewsFeedResponse } from '../types/news'
 import AiNoticeBanner from './layout/AiNoticeBanner'
-import NewsCard from './news/NewsCard'
+import NewsCard, { storyHrefFor } from './news/NewsCard'
 import './news/news-cards.css'
 
 const LyraProfileModal = lazy(() => import('./LyraProfileModal'))
@@ -19,10 +19,9 @@ interface Props {
   onClose: () => void
   onSiteHover?: (siteId: string | null) => void
   onSiteClick?: (siteName: string, lat: number, lon: number) => void
-  onAskLyra?: (newsItemId: number) => void
 }
 
-export default function NewsFeedPanel({ onClose, onSiteHover, onSiteClick, onAskLyra }: Props) {
+export default function NewsFeedPanel({ onClose, onSiteHover, onSiteClick }: Props) {
   const [items, setItems] = useState<NewsItemData[]>([])
   const [totalCount, setTotalCount] = useState(0)
   const [page, setPage] = useState(1)
@@ -205,9 +204,9 @@ export default function NewsFeedPanel({ onClose, onSiteHover, onSiteClick, onAsk
               facts={item.facts}
               webSources={item.web_sources}
               verified={item.verified}
+              storyHref={storyHrefFor(item)}
               onSiteLoaded={(site) => onSiteClick?.(site.title, site.coordinates[1], site.coordinates[0])}
               onSiteHover={(hovering) => onSiteHover?.(hovering && item.site_id ? item.site_id : null)}
-              onAskLyra={onAskLyra ? () => onAskLyra(item.id) : undefined}
             />
           )
         })}

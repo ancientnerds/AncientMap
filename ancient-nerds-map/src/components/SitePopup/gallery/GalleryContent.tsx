@@ -2,7 +2,7 @@ import { GalleryGrid } from './GalleryGrid'
 import { WebcamGallery } from './WebcamGallery'
 import { SourceFavicon } from './galleryUtils'
 import LazyImage from '../../LazyImage'
-import NewsCard from '../../news/NewsCard'
+import NewsCard, { storyHrefFor } from '../../news/NewsCard'
 import type { GalleryContentProps } from '../types'
 
 // Text item structure (from unified connectors or legacy)
@@ -102,6 +102,7 @@ export function GalleryContent({
                 durationMinutes={item.video.duration_minutes}
                 timestampSeconds={item.timestamp_seconds}
                 facts={item.facts}
+                storyHref={storyHrefFor(item)}
               />
             )
           })}
