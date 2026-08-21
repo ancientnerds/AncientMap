@@ -516,7 +516,13 @@ function ArticleFromPayload({ article }: { article: ArticleRoute }) {
       </PageHeader>
       <AiNoticeBanner message="This journal's text is AI-generated from YouTube video content; images are from the original sources. Always verify with original sources." />
       <main className="articles-page-content">
-        <div className="articles-reader-layout">
+        {/* Ohne TOC: einspaltig. Das Grid ist 220px + 720px, die SEO-Ansicht
+            rendert aber kein Inhaltsverzeichnis — der Artikel landete als
+            einziges Kind in der 220px-Spalte und wurde auf seine
+            Mindestbreite gequetscht (gemessen: 359px statt 720px). Sichtbar
+            wurde das erst, als die Bildbegrenzung die Box nicht mehr
+            künstlich aufspannte. */}
+        <div className="articles-reader-layout is-solo">
           <article className="articles-reader">
             <Breadcrumbs
               trail={[

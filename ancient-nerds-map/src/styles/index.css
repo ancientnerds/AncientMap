@@ -18234,6 +18234,14 @@ div.lyra-inline-video-wrap {
 
 
 /* ── Reader layout: 2-column grid with TOC sidebar ── */
+/* Einspaltige Variante für die SEO-Ansicht, die kein Inhaltsverzeichnis
+   rendert: ohne sie fällt der Artikel als einziges Grid-Kind in die
+   220px-Spalte und wird auf seine Mindestbreite gequetscht. */
+.articles-reader-layout.is-solo {
+  grid-template-columns: minmax(0, 720px);
+  justify-content: center;
+}
+
 .articles-reader-layout {
   display: grid;
   grid-template-columns: 220px minmax(0, 720px);
