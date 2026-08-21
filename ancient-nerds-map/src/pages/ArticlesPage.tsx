@@ -357,6 +357,62 @@ function SourcesAttribution({ citationItems }: { citationItems: Map<string, News
 }
 
 /** TOC sidebar component. */
+/**
+ * Überschriften aus fertigem body_html — die SEO-Ansicht bekommt HTML, kein
+ * Markdown, kann extractHeadings() also nicht benutzen. Der Anker kommt aus
+ * dem id-Attribut, das article_html_renderer._heading_anchors setzt: so kann
+ * der Link nicht danebenzeigen, weil beide dieselbe Quelle lesen.
+ */
+function extractHtmlHeadings(html: string): { text: string; slug: string }[] {
+  return [...html.matchAll(/<h2 id="([^"]+)">(.*?)<\/h2>/gs)].map(m => ({
+    slug: m[1],
+    text: m[2].replace(/<[^>]+>/g, '').trim(),
+  }))
+}
+
+/**
+ * Scroll-Spy für das Inhaltsverzeichnis: welche Überschrift steht gerade
+ * oben. Beide Leseansichten (SPA und SEO) benutzen ihn.
+ *
+ * Der Observer wird im Effekt-Cleanup getrennt, nicht im Timeout — ein
+ * return aus dem Timeout-Callback verpufft, so blieb der alte Observer bei
+ * jedem Artikelwechsel am Leben.
+ */
+function useActiveHeading(headings: { slug: string }[], enabled: boolean): string | null {
+  const [active, setActive] = useState<string | null>(null)
+  useEffect(() => {
+    if (!enabled || headings.length === 0) {
+      setActive(null)
+      return
+    }
+    let observer: IntersectionObserver | null = null
+    // Kurze Verzögerung, bis die Überschriften im DOM stehen.
+    const timer = setTimeout(() => {
+      const elements = headings
+        .map(h => document.getElementById(h.slug))
+        .filter((el): el is HTMLElement => el !== null)
+      if (elements.length === 0) return
+      observer = new IntersectionObserver(
+        entries => {
+          for (const entry of entries) {
+            if (entry.isIntersecting) {
+              setActive(entry.target.id)
+              break
+            }
+          }
+        },
+        { rootMargin: '-80px 0px -70% 0px', threshold: 0 },
+      )
+      elements.forEach(el => observer!.observe(el))
+    }, 100)
+    return () => {
+      clearTimeout(timer)
+      observer?.disconnect()
+    }
+  }, [enabled, headings])
+  return active
+}
+
 function TableOfContents({ headings, activeSlug }: {
   headings: { text: string; slug: string }[]
   activeSlug: string | null
@@ -503,6 +559,11 @@ function ArticleFromPayload({ article }: { article: ArticleRoute }) {
   const isFounder = useIsFounder()
   const pubDate = isoDate(article.published_at)
   const summary = (article.summary || '').trim()
+  // Dasselbe Inhaltsverzeichnis wie in der SPA-Ansicht — die hatte es seit
+  // jeher, die indexierte Ansicht nicht, obwohl gerade dort die langen
+  // Ausgaben liegen.
+  const headings = useMemo(() => extractHtmlHeadings(article.body_html), [article.body_html])
+  const activeHeading = useActiveHeading(headings, true)
 
   return (
     <div className="articles-page">
@@ -522,7 +583,8 @@ function ArticleFromPayload({ article }: { article: ArticleRoute }) {
             Mindestbreite gequetscht (gemessen: 359px statt 720px). Sichtbar
             wurde das erst, als die Bildbegrenzung die Box nicht mehr
             künstlich aufspannte. */}
-        <div className="articles-reader-layout is-solo">
+        <div className={`articles-reader-layout${headings.length > 0 ? '' : ' is-solo'}`}>
+          <TableOfContents headings={headings} activeSlug={activeHeading} />
           <article className="articles-reader">
             <Breadcrumbs
               trail={[
@@ -610,8 +672,6 @@ function ArticlesStandalone() {
   const [pinnedCitations, setPinnedCitations] = useState<{ num: string; rect: DOMRect }[]>([])
   const hoverTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // TOC active heading tracking
-  const [activeHeading, setActiveHeading] = useState<string | null>(null)
 
   const cancelHoverClose = () => {
     if (hoverTimeout.current) {
@@ -756,35 +816,10 @@ function ArticlesStandalone() {
     [selectedArticle],
   )
 
-  useEffect(() => {
-    if (view !== 'reading' || headings.length === 0) {
-      setActiveHeading(null)
-      return
-    }
-    // Small delay to let DOM render heading elements
-    const timer = setTimeout(() => {
-      const elements = headings
-        .map(h => document.getElementById(h.slug))
-        .filter((el): el is HTMLElement => el !== null)
-      if (elements.length === 0) return
+  // TOC active heading tracking — derselbe Hook wie in der SEO-Ansicht.
+  const activeHeading = useActiveHeading(headings, view === 'reading')
 
-      const observer = new IntersectionObserver(
-        (entries) => {
-          // Find the topmost visible heading
-          for (const entry of entries) {
-            if (entry.isIntersecting) {
-              setActiveHeading(entry.target.id)
-              break
-            }
-          }
-        },
-        { rootMargin: '-80px 0px -70% 0px', threshold: 0 },
-      )
-      elements.forEach(el => observer.observe(el))
-      return () => observer.disconnect()
-    }, 100)
-    return () => clearTimeout(timer)
-  }, [view, headings])
+
 
   // Determine if we have citations loaded (for rich source rendering)
   const hasCitations = citationItems.size > 0

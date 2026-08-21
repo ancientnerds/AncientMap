@@ -50,6 +50,32 @@ class TestUntouched:
         assert html.count("<p>") == 2
 
 
+class TestHeadingAnchors:
+    """
+    h2/h3 need ids so a table of contents can link to them. Python-Markdown's
+    toc extension writes them and nh3 strips them again (id is not on its
+    allowlist), so they are added back after sanitizing.
+    """
+
+    def test_headings_get_a_slug_id(self):
+        html = render("## Baalbek monolith & the quarry\n\n### Sources")
+        assert '<h2 id="baalbek-monolith-the-quarry">' in html
+        assert '<h3 id="sources">' in html
+
+    def test_heading_text_survives_unchanged(self):
+        html = render("## Baalbek monolith & the quarry")
+        assert "Baalbek monolith &amp; the quarry</h2>" in html
+
+    def test_markup_inside_a_heading_does_not_land_in_the_id(self):
+        html = render("## The *big* stone")
+        assert '<h2 id="the-big-stone">' in html
+        assert "<em>big</em>" in html
+
+    def test_heading_without_sluggable_text_keeps_no_id(self):
+        html = render("## ###")
+        assert "id=" not in html
+
+
 class TestSafety:
     """
     The caption is the one place where an attribute value becomes element

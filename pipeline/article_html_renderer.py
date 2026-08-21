@@ -218,6 +218,31 @@ def _figure_with_caption(html: str) -> str:
     return _IMG_ONLY_PARA_RE.sub(wrap, html)
 
 
+_HEADING_RE = re.compile(r"<(h2|h3)>(.*?)</\1>", re.DOTALL)
+
+
+def _heading_anchors(html: str) -> str:
+    """
+    Give h2/h3 an id so a table of contents can link to them.
+
+    Python-Markdown's toc extension writes ids, but nh3 drops the attribute:
+    id is not on its allowlist. Rather than widen the sanitizer for every
+    element, the anchors are added back here, after sanitizing, from the
+    heading's own text — the same slugify the rest of the app uses, so the
+    frontend can rebuild the same targets.
+    """
+
+    def anchor(match: re.Match) -> str:
+        tag, inner = match.group(1), match.group(2)
+        text = re.sub(r"<[^>]+>", "", inner).strip()
+        slug = slugify(unescape(text))
+        if not slug:
+            return match.group(0)
+        return f'<{tag} id="{escape(slug)}">{inner}</{tag}>'
+
+    return _HEADING_RE.sub(anchor, html)
+
+
 def markdown_to_html(content_md: str, *, toc: bool = True) -> str:
     """
     Markdown -> sanitized HTML with external links opened in a new tab.
@@ -228,7 +253,8 @@ def markdown_to_html(content_md: str, *, toc: bool = True) -> str:
     """
     extensions = ["extra", "smarty", "toc"] if toc else ["extra", "smarty"]
     md = markdown.Markdown(extensions=extensions)
-    return _figure_with_caption(external_links_new_tab(_sanitize_html(md.convert(content_md))))
+    html = _sanitize_html(md.convert(content_md))
+    return _heading_anchors(_figure_with_caption(external_links_new_tab(html)))
 
 
 def slugify(title: str) -> str:
