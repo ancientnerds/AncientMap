@@ -129,11 +129,13 @@ function SiteRelatedContent({ site }: { site: SiteRoute }) {
   const links = site.links.filter(l => l.url)
   return (
     <div className="story-main site-related">
-      <p>
-        <a className="community-cta-globe" href={globeUrlForSite(site.id)}>
-          Show on the interactive globe →
+      {/* Derselbe Button wie im Abschlussblock — eine Klasse, eine Stufe in
+          nerv-ui/button.css, kein zweiter Globus-Knopf mit eigenem Look. */}
+      <div className="community-cta-actions">
+        <a className="community-cta-btn" href={globeUrlForSite(site.id)}>
+          Show this site on the globe
         </a>
-      </p>
+      </div>
       {site.parent && (
         <p>
           Part of <a href={site.parent.path}>{site.parent.name}</a>

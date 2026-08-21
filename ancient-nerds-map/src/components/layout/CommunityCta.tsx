@@ -23,17 +23,25 @@ export default function CommunityCta() {
     <div className="community-cta">
       <h2>Keep exploring</h2>
       <p>
-        <a className="community-cta-globe" href="/globe.html">
-          Open the interactive 3D globe →
+        Every site on this page sits on the globe, and the people who research
+        them are on the Discord.
+      </p>
+      {/* Two equal NERV action buttons. The globe used to be a rounded red
+          pill and Discord only an inline link inside a sentence — two styles
+          on the one block that appears on all nine indexed page types. */}
+      <div className="community-cta-actions">
+        <a className="community-cta-btn" href="/globe.html">
+          Open the 3D globe
         </a>
-      </p>
-      <p>
-        Questions, finds, corrections?{' '}
-        <a href={discordCtaUrl('seo')} target="_blank" rel="noopener noreferrer">
-          Join the Ancient Nerds Discord
-        </a>{' '}
-        — the people behind these pages are there.
-      </p>
+        <a
+          className="community-cta-btn"
+          href={discordCtaUrl('seo')}
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          Join the Discord
+        </a>
+      </div>
       {/* HamburgerNav renders its items only after a click
           (`{open && (`, HamburgerNav.tsx:96), so a crawler sees no navigation
           at all. These are the only crawlable links between the hubs. */}

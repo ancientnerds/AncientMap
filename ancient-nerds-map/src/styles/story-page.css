@@ -28,7 +28,7 @@
 .story-crumb a:hover { color: var(--brand-primary); }
 
 .story-title {
-  font-family: 'Cormorant Garamond', Georgia, serif;
+  font-family: var(--font-heading);
   color: #fff;
   font-size: 2.4em;
   line-height: 1.2;
@@ -48,7 +48,7 @@
 .story-tag {
   background: rgba(0, 204, 102, 0.08);
   border: 1px solid rgba(0, 204, 102, 0.30);
-  border-radius: 4px;
+  border-radius: var(--nerv-panel-radius, 0);
   padding: 2px 8px;
   font-size: 12px;
   text-transform: uppercase;
@@ -70,13 +70,22 @@
 .story-video img {
   width: 100%;
   height: auto;
-  border-radius: 8px;
+  border-radius: var(--nerv-panel-radius, 0);
   border: 1px solid rgba(0, 204, 102, 0.18);
   display: block;
 }
 .story-video-link {
   position: relative;
   display: block;
+}
+/* Without a screenshot the link has no content — the play glyph is an
+   absolute overlay — so it collapsed to zero height and could not be
+   clicked at all (4 of 2,409 story pages). A frame gives it a body. */
+.story-video-link.is-posterless {
+  min-height: 140px;
+  border: 1px dashed rgba(0, 204, 102, 0.25);
+  border-radius: var(--nerv-panel-radius, 0);
+  background: rgba(0, 204, 102, 0.05);
 }
 .story-video-link .story-play {
   position: absolute;
@@ -88,13 +97,30 @@
   color: #fff;
   text-shadow: 0 2px 12px rgba(0, 0, 0, 0.8);
   background: rgba(0, 0, 0, 0.18);
-  border-radius: 8px;
+  border-radius: var(--nerv-panel-radius, 0);
   opacity: 0.85;
   transition: opacity 0.15s, background 0.15s;
 }
 .story-video-link:hover .story-play {
   opacity: 1;
   background: rgba(0, 0, 0, 0.32);
+}
+/* The player that replaces the poster on click. Same 16:9 frame and rounded
+   border as the still, so nothing jumps when it swaps in. */
+.story-video-embed {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: var(--nerv-panel-radius, 0);
+  overflow: hidden;
+  border: 1px solid rgba(0, 204, 102, 0.18);
+}
+.story-video-embed iframe {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: none;
 }
 .story-video figcaption {
   color: #708890;
@@ -116,7 +142,7 @@
    ancestor rule cannot reach — same headline styling, one definition. */
 .story-page h2,
 .site-related h2 {
-  font-family: 'Cormorant Garamond', Georgia, serif;
+  font-family: var(--font-heading);
   color: #fff;
   font-size: 1.6em;
   margin: 36px 0 12px;
@@ -174,7 +200,7 @@
   margin: 0 0 6px;
   font-size: 1.15em;
   color: #fff;
-  font-family: 'Cormorant Garamond', Georgia, serif;
+  font-family: var(--font-heading);
 }
 .story-archive-card p {
   margin: 0;
@@ -240,7 +266,7 @@
   border: 1px solid rgba(0, 204, 102, 0.35);
   background: transparent;
   color: #00cc66;
-  border-radius: 999px;
+  border-radius: var(--nerv-panel-radius, 0);
   padding: 6px 14px;
   font: inherit;
   font-size: 0.9em;
@@ -255,7 +281,7 @@
 .site-type-count { color: #708890; font-size: 0.85em; margin-left: 4px; }
 
 .site-section-title {
-  font-family: 'Cormorant Garamond', Georgia, serif;
+  font-family: var(--font-heading);
   color: #fff;
   font-size: 1.5em;
   margin: 32px 0 10px;
@@ -269,7 +295,7 @@
   width: 120px;
   height: 90px;
   object-fit: cover;
-  border-radius: 6px;
+  border-radius: var(--nerv-panel-radius, 0);
   border: 1px solid rgba(0, 204, 102, 0.18);
   flex: 0 0 auto;
 }
@@ -292,12 +318,12 @@
   display: inline-block;
   vertical-align: middle;
   margin-left: 10px;
-  font-family: Inter, sans-serif;
+  font-family: var(--font-body);
   font-size: 11px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   padding: 3px 8px;
-  border-radius: 4px;
+  border-radius: var(--nerv-panel-radius, 0);
   border: 1px solid rgba(245, 197, 24, 0.45);
   color: var(--accent-warm, #f5c518);
 }
@@ -307,7 +333,7 @@
 .story-chip {
   display: inline-block;
   border: 1px solid rgba(0, 204, 102, 0.35);
-  border-radius: 999px;
+  border-radius: var(--nerv-panel-radius, 0);
   padding: 6px 14px;
   font-size: 0.9em;
   color: var(--accent-primary, #00cc66);
@@ -352,7 +378,7 @@
   margin: 0 0 12px;
   border: none;
   padding: 0;
-  font-family: 'Cormorant Garamond', Georgia, serif;
+  font-family: var(--font-heading);
   color: #fff;
   font-size: 1.4em;
 }
@@ -360,15 +386,30 @@
 .community-cta p:last-child { margin-bottom: 0; }
 .community-cta a { color: var(--text-link, #00c8c8); text-decoration: none; }
 .community-cta a:hover { text-decoration: underline; }
-.community-cta-globe {
-  display: inline-block;
-  background: var(--brand-primary);
-  color: #fff !important;
-  padding: 10px 18px;
-  border-radius: 6px;
-  font-weight: 500;
+/* Beide CTAs sind derselbe Button. Schrift, Versalien und Transition kommen
+   aus der Action-Stufe in nerv-ui/button.css — hier stehen nur Größe, Farbe
+   und Rahmen, wie es der Kommentar dort vorschreibt. */
+.community-cta-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 14px 0 4px;
 }
-.community-cta-globe:hover { text-decoration: none !important; filter: brightness(1.15); }
+.community-cta-btn {
+  display: inline-block;
+  padding: 10px 18px;
+  font-size: 13px;
+  background: var(--accent-glow-05);
+  border: 1px solid var(--accent-glow-40);
+  border-left: 2px solid var(--accent-primary);
+  color: var(--accent-primary) !important;
+  text-decoration: none !important;
+}
+.community-cta-btn:hover {
+  background: var(--accent-glow-12);
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 12px var(--accent-glow-20);
+}
 .community-cta-hubs {
   margin-top: 14px !important;
   padding-top: 12px;

@@ -17,6 +17,10 @@
 .articles-hero-cta,
 .articles-share-btn,
 .articles-back-to-top,
+/* Der Abschlussblock jeder indexierten Seite (CommunityCta) — bis 2026-08-21
+   ein runder roter Knopf mit eigenem Style, der einzige seiner Art im
+   Produkt. */
+.community-cta-btn,
 .search-bar-random-btn,
 .search-bar-filter-btn,
 .news-page-chip,
