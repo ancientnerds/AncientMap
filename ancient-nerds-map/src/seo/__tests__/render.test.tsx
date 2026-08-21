@@ -315,6 +315,30 @@ describe('story-Seite (Task 14): der SSR-Body trägt den Python-Fragment-Inhalt'
     expect(html).toContain('href="/news-archive/trundholm-bog-survey-planned-4600"')
   })
 
+  // Seit 2026-08-21 rendert <Breadcrumbs> Markup UND BreadcrumbList-Schema
+  // aus einer Liste — vorher stand die Kette in sieben Seiten handgeschrieben
+  // und ohne Schema.
+  it('BreadcrumbList-Schema passt zur sichtbaren Krümelnavigation', () => {
+    const scripts = [...html.matchAll(/<script type="application\/ld\+json">(.*?)<\/script>/gs)]
+    const crumbs = scripts
+      .map(m => JSON.parse(m[1].replace(/\\u003c/g, '<')))
+      .find(s => s['@type'] === 'BreadcrumbList')
+    expect(crumbs).toBeDefined()
+    expect(crumbs.itemListElement.map((e: { name: string }) => e.name)).toEqual([
+      'Home',
+      'Story Archive',
+      FIXTURES.story.headline,
+    ])
+    // Positionen lückenlos ab 1, sonst ignoriert Google die Kette.
+    expect(crumbs.itemListElement.map((e: { position: number }) => e.position)).toEqual([1, 2, 3])
+    // Die aktuelle Seite ist der letzte Eintrag und trägt bewusst kein item.
+    expect(crumbs.itemListElement[1].item).toBe('https://ancientnerds.com/news-archive/')
+    expect(crumbs.itemListElement[2].item).toBeUndefined()
+    // Und die sichtbare Zeile zeigt dieselben Stationen.
+    expect(html).toContain('<nav class="story-crumb">')
+    expect(html).toContain('href="/news-archive/"')
+  })
+
   it('Art.-50-Fußnote maschinenlesbar (data-ai-generated) und CommunityCta', () => {
     expect(html).toContain('data-ai-generated="true"')
     expect(html).toContain('AI-generated')

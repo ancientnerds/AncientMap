@@ -12,6 +12,7 @@
  * the &t= video deeplink, the curated-site link gate — live here.
  */
 
+import Breadcrumbs from '../components/layout/Breadcrumbs'
 import CommunityCta from '../components/layout/CommunityCta'
 import PageHeader from '../components/layout/PageHeader'
 import { SiteBadges, CountryFlag } from '../components/metadata'
@@ -118,9 +119,13 @@ export default function StoryPage() {
       </PageHeader>
 
       <main className="story-main">
-        <nav className="story-crumb">
-          <a href="/">Home</a> / <a href="/news-archive/">Story Archive</a>
-        </nav>
+        <Breadcrumbs
+          trail={[
+            { name: 'Home', path: '/' },
+            { name: 'Story Archive', path: '/news-archive/' },
+            { name: story.headline },
+          ]}
+        />
 
         <h1 className="story-title">
           {story.headline}

@@ -3,6 +3,22 @@
 /* .site-page IS the scroll container — fixed height + overflow-y: auto.
    position:sticky on PageHeader sticks within this container.
    html/body keep overflow:hidden from index.css (globe page needs it). */
+/* Krümelleiste über dem Record UND über dem Popup: sie liegt ausserhalb des
+   interactive-Zweigs, damit sie den Mount überlebt. Nur Abstände — die Zeile
+   selbst kommt aus .story-crumb. */
+.site-crumb-bar {
+  padding-top: 88px;
+  padding-bottom: 0;
+}
+.site-crumb-bar .story-crumb {
+  margin-bottom: 0;
+}
+/* Der Record bringt sein eigenes Top-Padding mit; unter der Leiste wäre das
+   doppelt. */
+.site-crumb-bar + .site-record {
+  padding-top: 12px;
+}
+
 .site-page {
   height: 100vh;
   overflow-y: auto;

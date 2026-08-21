@@ -7,6 +7,7 @@
  * snake_case rows; blurbs and date display happen here.
  */
 
+import Breadcrumbs from '../components/layout/Breadcrumbs'
 import AiNoticeBanner from '../components/layout/AiNoticeBanner'
 import CommunityCta from '../components/layout/CommunityCta'
 import PageHeader from '../components/layout/PageHeader'
@@ -54,9 +55,7 @@ export default function StoryArchivePage() {
       </PageHeader>
 
       <main className="story-main">
-        <nav className="story-crumb">
-          <a href="/">Home</a> / Story Archive
-        </nav>
+        <Breadcrumbs trail={[{ name: 'Home', path: '/' }, { name: 'Story Archive' }]} />
 
         <h1 className="story-title">Story Archive</h1>
         <div className="story-meta">

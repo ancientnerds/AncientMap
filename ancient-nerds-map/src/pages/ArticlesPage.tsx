@@ -20,6 +20,7 @@ import ReactMarkdown, { type Components } from 'react-markdown'
 import { config } from '../config'
 import { useIsFounder } from '../hooks/useIsFounder'
 import CitationPopover from '../components/news/CitationPopover'
+import Breadcrumbs from '../components/layout/Breadcrumbs'
 import CommunityCta from '../components/layout/CommunityCta'
 import PageHeader from '../components/layout/PageHeader'
 import PageStatsBar from '../components/layout/PageStatsBar'
@@ -555,9 +556,7 @@ function ArticleIndexFromPayload({ route }: { route: ArticleIndexRoute }) {
       </PageHeader>
       <AiNoticeBanner message="Journal text is AI-generated from YouTube video content; images are from the original sources. Always verify with original sources." />
       <main className="story-main">
-        <nav className="story-crumb">
-          <a href="/">Home</a> / Journal
-        </nav>
+        <Breadcrumbs trail={[{ name: 'Home', path: '/' }, { name: 'Journal' }]} />
         <h1 className="story-title">Weekly Archaeology Journal</h1>
         <div className="story-meta">{route.articles.length} issues</div>
         <SeoCardList

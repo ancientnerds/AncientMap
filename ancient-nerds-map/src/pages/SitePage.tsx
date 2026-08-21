@@ -18,6 +18,7 @@
 
 import { useEffect, useMemo, useState, lazy, Suspense, Fragment } from 'react'
 
+import Breadcrumbs from '../components/layout/Breadcrumbs'
 import CommunityCta from '../components/layout/CommunityCta'
 import PageHeader from '../components/layout/PageHeader'
 import SitePopup from '../components/SitePopup/SitePopup'
@@ -53,10 +54,6 @@ function SiteRecord({ site }: { site: SiteRoute }) {
 
   return (
     <main className="story-main site-record">
-      <nav className="story-crumb">
-        <a href="/">Home</a> / <a href="/sites/">Sites</a> /{' '}
-        <a href={countryPath(site.country)}>{site.country}</a> / {site.name}
-      </nav>
       <h1 className="story-title">{site.name}</h1>
       <div className="story-meta">
         {siteType}
@@ -275,6 +272,21 @@ export default function SitePage() {
           {site.country}
         </span>
       </PageHeader>
+      {/* Ausserhalb des interactive-Zweigs: SiteRecord wird beim Mount durch
+          SitePopup ersetzt, und mit ihm verschwand die Krümelnavigation samt
+          BreadcrumbList-Schema — gemessen 2026-08-21, dieselbe Falle wie bei
+          der h1. Google rendert JS, also muss beides beide Zustände
+          überleben. */}
+      <div className="story-main site-crumb-bar">
+        <Breadcrumbs
+          trail={[
+            { name: 'Home', path: '/' },
+            { name: 'Sites', path: '/sites/' },
+            { name: site.country, path: countryPath(site.country) },
+            { name: site.name },
+          ]}
+        />
+      </div>
       {interactive ? (
         <SitePopup
           isStandalone={true}

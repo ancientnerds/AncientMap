@@ -11,6 +11,7 @@
  * banner is mandatory here, exactly like on the paper pages.
  */
 
+import Breadcrumbs from '../components/layout/Breadcrumbs'
 import AiNoticeBanner from '../components/layout/AiNoticeBanner'
 import CommunityCta from '../components/layout/CommunityCta'
 import PageHeader from '../components/layout/PageHeader'
@@ -31,9 +32,7 @@ export default function ResearchIndexPage() {
       </PageHeader>
       <AiNoticeBanner message="Research paper text is AI-generated; images are from cited sources. Always verify claims with original sources." />
       <main className="story-main">
-        <nav className="story-crumb">
-          <a href="/">Home</a> / Research
-        </nav>
+        <Breadcrumbs trail={[{ name: 'Home', path: '/' }, { name: 'Research' }]} />
         <h1 className="story-title">Research Library</h1>
         <div className="story-meta">{papers.length} open-access papers · CC BY 4.0</div>
         <SeoCardList

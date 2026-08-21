@@ -191,12 +191,23 @@ export function HeroHeader({
       <div className="popup-hero-vignette" />
       <div className="popup-hero-content">
         <div className="popup-title-row">
-          <h2
-            className="popup-title-overlay"
-            style={{
-              fontSize: title.length > 50 ? '14px' : title.length > 40 ? '16px' : title.length > 30 ? '18px' : '22px'
-            }}
-          >{title}</h2>
+          {/* Auf /sites/{country}/{slug} IST dieses Popup die Seite, also
+              gehört ihm die h1. Der SSR-Record bringt eine mit, aber auf
+              mount ersetzt das Popup ihn — gemessen 2026-08-21: danach hatte
+              die Seite null h1, und Googlebot rendert JS. Auf dem Globus
+              (isStandalone=false) bleibt es eine h2: dort ist das Popup ein
+              Fenster über der Karte, nicht die Seite. */}
+          {(() => {
+            const Heading = isStandalone ? 'h1' : 'h2'
+            return (
+              <Heading
+                className="popup-title-overlay"
+                style={{
+                  fontSize: title.length > 50 ? '14px' : title.length > 40 ? '16px' : title.length > 30 ? '18px' : '22px'
+                }}
+              >{title}</Heading>
+            )
+          })()}
           <button
             className={`title-action-btn ${titleCopied ? 'copied' : ''}`}
             onMouseDown={(e) => e.stopPropagation()}

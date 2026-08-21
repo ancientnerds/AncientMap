@@ -8,6 +8,7 @@
 
 import { useMemo, useState } from 'react'
 
+import Breadcrumbs from '../components/layout/Breadcrumbs'
 import CommunityCta from '../components/layout/CommunityCta'
 import PageHeader from '../components/layout/PageHeader'
 import { periodSpan, typeSections } from '../seo/grouping'
@@ -31,9 +32,7 @@ export function SitesIndexPage() {
         <span className="page-header-title">Sites</span>
       </PageHeader>
       <main className="story-main">
-        <nav className="story-crumb">
-          <a href="/">Home</a> / Sites
-        </nav>
+        <Breadcrumbs trail={[{ name: 'Home', path: '/' }, { name: 'Sites' }]} />
         <h1 className="story-title">Archaeological Sites by Country</h1>
         <div className="story-meta">
           {/* Explizites en-US wie in StoryArchivePage: das Default-Locale wäre
@@ -93,9 +92,13 @@ export function CountrySitesPage() {
         <span className="page-header-title">{country}</span>
       </PageHeader>
       <main className="story-main">
-        <nav className="story-crumb">
-          <a href="/">Home</a> / <a href="/sites/">Sites</a> / {country}
-        </nav>
+        <Breadcrumbs
+          trail={[
+            { name: 'Home', path: '/' },
+            { name: 'Sites', path: '/sites/' },
+            { name: country },
+          ]}
+        />
         <h1 className="story-title">Archaeological Sites in {country}</h1>
         <div className="story-meta">
           {total} curated sites{span && ` · ${span}`}

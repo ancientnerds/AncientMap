@@ -96,6 +96,12 @@
   border-radius: var(--nerv-panel-radius, 0);
   border: 1px solid rgba(0, 204, 102, 0.18);
   display: block;
+  /* Reserviert den Platz VOR dem Laden. Das Standbild ist ein Videoframe,
+     also immer 16:9 — ohne die Angabe springt der ganze Artikel nach unten,
+     sobald das Bild eintrifft (Layout Shift zählt ins Ranking). Der Player,
+     der es ersetzt, hat dieselbe Ratio, also ruckelt auch der Tausch nicht. */
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
 }
 .story-video-link {
   position: relative;
