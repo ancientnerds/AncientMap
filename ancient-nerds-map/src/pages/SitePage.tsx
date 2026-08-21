@@ -126,13 +126,6 @@ function SiteRelatedContent({ site }: { site: SiteRoute }) {
   const links = site.links.filter(l => l.url)
   return (
     <div className="story-main site-related">
-      {/* Derselbe Button wie im Abschlussblock — eine Klasse, eine Stufe in
-          nerv-ui/button.css, kein zweiter Globus-Knopf mit eigenem Look. */}
-      <div className="community-cta-actions">
-        <a className="community-cta-btn" href={globeUrlForSite(site.id)}>
-          Show this site on the globe
-        </a>
-      </div>
       {site.parent && (
         <p>
           Part of <a href={site.parent.path}>{site.parent.name}</a>
@@ -180,7 +173,10 @@ function SiteRelatedContent({ site }: { site: SiteRoute }) {
           </p>
         </section>
       )}
-      <CommunityCta />
+      {/* Der Globus-Button zeigt hier auf DIESE Site statt auf den Globus
+          allgemein — vorher hatte die Seite als einzige zwei Globus-Knöpfe
+          mit verschiedenen Zielen. */}
+      <CommunityCta globeHref={globeUrlForSite(site.id)} globeLabel="Show this site on the globe" />
     </div>
   )
 }

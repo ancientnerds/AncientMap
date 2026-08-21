@@ -44,7 +44,10 @@ export default function Breadcrumbs({ trail }: { trail: Crumb[] }) {
           </span>
         ))}
       </nav>
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: schema }} />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={/* nosemgrep: semgrep.tsx-dangerously-set-inner-html -- schema is JSON.stringify output of an object built right here; the replace above turns every less-than sign into its < escape, so a crumb name can never close the script tag early. Same technique as seo/meta.ts jsonStr() */ { __html: schema }}
+      />
     </>
   )
 }

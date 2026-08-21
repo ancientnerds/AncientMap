@@ -18,7 +18,20 @@ const HUBS: [string, string][] = [
   ['/search.html', 'Search'],
 ]
 
-export default function CommunityCta() {
+interface CommunityCtaProps {
+  /**
+   * Where the globe button points. The site detail page passes its own
+   * focused URL so the page has ONE globe button instead of two that lead
+   * to different places (its own plus the generic one down here).
+   */
+  globeHref?: string
+  globeLabel?: string
+}
+
+export default function CommunityCta({
+  globeHref = '/globe.html',
+  globeLabel = 'Open the 3D globe',
+}: CommunityCtaProps = {}) {
   return (
     <div className="community-cta">
       <h2>Keep exploring</h2>
@@ -30,8 +43,8 @@ export default function CommunityCta() {
           pill and Discord only an inline link inside a sentence — two styles
           on the one block that appears on all nine indexed page types. */}
       <div className="community-cta-actions">
-        <a className="community-cta-btn" href="/globe.html">
-          Open the 3D globe
+        <a className="community-cta-btn" href={globeHref}>
+          {globeLabel}
         </a>
         <a
           className="community-cta-btn"
