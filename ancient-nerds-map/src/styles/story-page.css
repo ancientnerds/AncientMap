@@ -55,6 +55,29 @@
   letter-spacing: 0.05em;
 }
 
+/* Flagge + Land in der Meta-Zeile; die Flagge selbst kommt aus
+   components/metadata (meta.css), hier nur die Ausrichtung. */
+.story-meta-country {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Signifikanz-Stempel wie auf der Karte — Farbe kommt inline aus
+   getSignificanceColor, damit beide Orte dieselbe Skala zeigen. */
+.story-significance {
+  font-family: var(--font-heading);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+}
+
+/* Die Badges stehen als eigener Block unter der Meta-Zeile. */
+.story-main > .meta-badges {
+  margin: -8px 0 22px;
+}
+
 /* EU AI Act Art. 50 disclosure. Required, but it is a footnote — not a
    banner competing with the headline (user feedback 2026-08-08). */
 .story-ai-notice {

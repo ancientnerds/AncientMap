@@ -40,6 +40,12 @@ export interface StoryRoute {
   site_country: string
   /** /sites/{country}/{slug} serves curated sites only — gates the detail link. */
   site_curated: boolean
+  /** Feeds the same SiteBadges the cards use. Null when no site matched. */
+  site_type: string | null
+  site_period_name: string | null
+  site_period_start: number | null
+  /** Lyra's 1–10 score; drives the same stamp the cards show. */
+  significance: number | null
   screenshot_url: string | null
   youtube_url: string
   video_title: string

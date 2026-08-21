@@ -14,11 +14,18 @@
 
 import CommunityCta from '../components/layout/CommunityCta'
 import PageHeader from '../components/layout/PageHeader'
+import { SiteBadges, CountryFlag } from '../components/metadata'
 import InlineVideo from '../components/news/InlineVideo'
 import { splitPostText } from '../components/news/postText'
+import {
+  getNewsCategoryLabel,
+  getTopicColor,
+  getSignificanceColor,
+  getSignificanceLabel,
+} from '../components/news/significance'
 import { globeUrlForSite } from '../constants/brand'
 import { isoDate, longDate } from '../seo/display'
-import { absoluteUrl, sitePath } from '../seo/meta'
+import { absoluteUrl, countryPath, sitePath } from '../seo/meta'
 import { useRoute } from '../seo/RouteContext'
 import { blurb } from '../seo/text'
 import type { StoryRoute } from '../types/anRoute'
@@ -120,10 +127,44 @@ export default function StoryPage() {
           {story.speculative_tag && <span className="story-badge">{story.speculative_tag}</span>}
         </h1>
 
+        {/* Dieselben Metadaten wie auf der Karte, mit denselben Komponenten:
+            Flagge, Typ- und Zeitalter-Badge, Kategorie-Label statt rohem
+            "remote_sensing", Signifikanz-Stempel. Bis 2026-08-21 zeigte die
+            Seite nur Datum und die rohe Kategorie. */}
         <div className="story-meta">
           <time dateTime={isoDate(story.published_at)}>{longDate(story.published_at)}</time>
-          {story.news_category && <span className="story-tag">{story.news_category}</span>}
+          {story.site_country && (
+            <span className="story-meta-country">
+              <CountryFlag country={story.site_country} size="sm" showName />
+            </span>
+          )}
+          {story.news_category && (
+            <span
+              className="story-tag"
+              style={{
+                color: getTopicColor(story.news_category),
+                borderColor: `${getTopicColor(story.news_category)}55`,
+              }}
+            >
+              {getNewsCategoryLabel(story.news_category)}
+            </span>
+          )}
+          {story.significance != null && story.significance >= 6 && (
+            <span
+              className="story-significance"
+              style={{ color: getSignificanceColor(story.significance) }}
+            >
+              {getSignificanceLabel(story.significance)}
+            </span>
+          )}
         </div>
+
+        <SiteBadges
+          category={story.site_type}
+          period={story.site_period_name}
+          periodStart={story.site_period_start}
+          size="md"
+        />
 
         {(screenshot || youtubeUrl) && (
           <figure className="story-video">
@@ -209,6 +250,14 @@ export default function StoryPage() {
                 <a className="story-chip" href={sitePagePath}>📄 {story.site_name}</a>
               ) : (
                 <span className="story-chip is-plain">📍 {story.site_name}</span>
+              )}
+              {/* Ohne kuratierte Detailseite endete der Block hier als toter
+                  Text. Die Länderseite existiert für jede Site mit Land und
+                  führt den Leser weiter statt zurück zu Google. */}
+              {!sitePagePath && story.site_country && (
+                <a className="story-chip" href={countryPath(story.site_country)}>
+                  🗺️ More sites in {story.site_country}
+                </a>
               )}
               {/* The detail page needs a country, the globe only needs the id —
                   bulk-imported sites often lack a country. */}

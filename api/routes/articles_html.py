@@ -301,6 +301,15 @@ async def story_page(slug: str, db: Session = Depends(get_db)):
             "site_name": site.name if site else (item.site_name_extracted or ""),
             "site_id": str(site.id) if site else "",
             "site_country": site.country if site else "",
+            # Same three fields the feed hands the cards (news.py:339-341), so
+            # the story page can render the SAME badge components instead of
+            # its own chip. The site is already joinedload-ed above — no extra
+            # query. Missing here since the Python renderer, which had no
+            # badges at all.
+            "site_type": site.site_type if site else None,
+            "site_period_name": site.period_name if site else None,
+            "site_period_start": site.period_start if site else None,
+            "significance": item.significance,
             # /sites/{country}/{slug} serves curated sites only (_CURATED_WHERE
             # in sites_html.py). Linking a bulk-imported site there is a 404 —
             # 268 published stories did exactly that until 2026-08-09.

@@ -248,13 +248,50 @@ describe('story-Seite (Task 14): der SSR-Body trägt den Python-Fragment-Inhalt'
     expect(html).toContain('/globe.html?focus=1b2c3d4e-0000-4000-8000-000000000000')
   })
 
-  it('unkuratierte Site: kein Detailseiten-Link (wäre ein 404), nur der Globus', () => {
+  it('unkuratierte Site: kein Detailseiten-Link (wäre ein 404), dafür die Länderseite', () => {
     const uncurated = renderRoute({ ...FIXTURES.story, site_curated: false })
-    // href="/sites/" (der Hub in CommunityCta) bleibt — nur der Chip zur
-    // Detailseite darf nicht entstehen.
-    expect(uncurated).not.toContain('href="/sites/denmark')
+    // Der Detailpfad trägt IMMER ein zweites Segment — nur der wäre der 404.
+    // Die Länderseite darunter existiert für jede Site mit Land.
+    expect(uncurated).not.toContain('href="/sites/denmark/')
     expect(uncurated).toContain('📍 <!-- -->Trundholm Mose')
+    expect(uncurated).toContain('href="/sites/denmark"')
     expect(uncurated).toContain('/globe.html?focus=1b2c3d4e-0000-4000-8000-000000000000')
+  })
+
+  it('kuratierte Site behält den Detaillink und bekommt KEINEN Länder-Chip', () => {
+    expect(html).toContain('href="/sites/denmark/trundholm-mose-1b2c3d4e"')
+    expect(html).not.toContain('More sites in')
+  })
+
+  // Seit 2026-08-21 trägt das Payload site_type/period/significance, damit die
+  // Seite dieselben Komponenten rendert wie die Karten.
+  it('Badges, Flagge, Kategorie-Label und Signifikanz aus dem Payload', () => {
+    const rich = renderRoute({
+      ...FIXTURES.story,
+      site_country: 'Denmark',
+      site_type: 'Burial mound',
+      site_period_start: -1400,
+      news_category: 'remote_sensing',
+      significance: 8,
+    })
+    expect(rich).toContain('Burial mound')          // Typ-Badge
+    expect(rich).toContain('Bronze Age')            // Zeitalter aus period_start
+    expect(rich).toContain('Remote Sensing')        // Label statt "remote_sensing"
+    expect(rich).not.toContain('>remote_sensing<')
+    expect(rich).toContain('Breakthrough')          // Signifikanz-Stempel (8)
+    expect(rich).toContain('meta-flag')             // Länderflagge
+  })
+
+  it('ohne Site-Metadaten bleiben die Badges weg', () => {
+    const bare = renderRoute({
+      ...FIXTURES.story,
+      site_type: null,
+      site_period_name: null,
+      site_period_start: null,
+      significance: null,
+    })
+    expect(bare).not.toContain('meta-badges')
+    expect(bare).not.toContain('story-significance')
   })
 
   it('Quellen aus web_sources: Titel, nackter Host, Snippet', () => {
