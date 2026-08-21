@@ -73,6 +73,11 @@
   z-index: 2;
 }
 
+/* No background, ever — a filled chip read as a stray blue box sitting on
+   the card. The icons are bare strokes that pick up the NERV green and
+   glow on hover, like the active pills elsewhere in the UI. drop-shadow
+   rather than text-shadow: the glow has to follow the SVG stroke, not a
+   text box. */
 .news-card-action {
   display: inline-flex;
   align-items: center;
@@ -81,29 +86,27 @@
   height: 20px;
   padding: 0;
   border: none;
-  border-radius: 2px;
   background: transparent;
   color: var(--text-secondary);
-  opacity: 0.4;
+  opacity: 0.45;
   cursor: pointer;
-  transition: opacity 0.2s, color 0.2s, background 0.2s;
+  transition: opacity 0.2s, color 0.2s, filter 0.2s;
 }
 
 .news-feed-item:hover .news-card-action {
-  opacity: 0.85;
-  background: var(--surface-page);
+  opacity: 0.75;
 }
 
-.news-card-action:hover,
-.news-card-action:focus-visible {
+/* Qualified with .news-feed-item on purpose: the card-hover rule above is
+   (0,3,0) — two classes plus :hover — so a bare `.news-card-action:hover`
+   (0,2,0) loses and the icon stays at 0.75 while only the colour changes.
+   Matching the specificity and coming later is what makes it win. */
+.news-feed-item .news-card-action:hover,
+.news-feed-item .news-card-action:focus-visible,
+.news-feed-item .news-card-action.copied {
   opacity: 1;
   color: var(--accent-primary);
-  background: var(--accent-glow-10);
-}
-
-.news-card-action.copied {
-  opacity: 1;
-  color: var(--accent-primary);
+  filter: drop-shadow(0 0 5px var(--glow-green));
 }
 
 /* Headline links to the story page. Visually identical to a plain headline —
