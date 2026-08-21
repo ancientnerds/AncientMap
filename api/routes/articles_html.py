@@ -31,19 +31,32 @@ _HTML_HEADERS_SHORT = {"Cache-Control": "public, max-age=1800"}
 STORIES_PER_PAGE = 50
 
 
+def story_page_query(db: Session):
+    """
+    Every story that HAS a page at /news-archive/{slug}.
+
+    The only requirement is a body to render. Speculative stories are part
+    of this set since 2026-08-20: they were excluded by accident of the
+    first SEO commit (29a3711), which used one filter for "has a page" and
+    "belongs in the index". That left 505 of 3,176 stories reachable in the
+    app but 404 on their own URL — while 62 stories carrying a speculative
+    *tag* under a different category had pages all along. They are served,
+    but marked noindex in storyMeta(), so the fringe stays out of Google.
+    """
+    return db.query(NewsItem).join(NewsVideo).filter(NewsItem.post_text.isnot(None))
+
+
 def public_stories_query(db: Session):
     """
-    Base query for publicly listed news stories (same filter everywhere).
+    The stories we advertise to crawlers: archive listing, sitemap, related
+    links, site pages.
 
-    Authoritative: /news-archive/{slug} serves exactly this set, so the
-    sitemap and any page linking to a story must use it too — otherwise
-    we advertise URLs that 404.
+    Authoritative for the *index*, not for what exists — a story outside
+    this set still has a page (see story_page_query), it just isn't linked
+    from a crawl hub and carries noindex.
     """
-    return (
-        db.query(NewsItem)
-        .join(NewsVideo)
-        .filter(NewsItem.post_text.isnot(None))
-        .filter((NewsItem.news_category != "speculative") | (NewsItem.news_category.is_(None)))
+    return story_page_query(db).filter(
+        (NewsItem.news_category != "speculative") | (NewsItem.news_category.is_(None))
     )
 
 
@@ -250,7 +263,7 @@ async def story_page(slug: str, db: Session = Depends(get_db)):
     item_id = story_id_from_slug(slug)
     item = (
         (
-            public_stories_query(db)
+            story_page_query(db)
             .options(
                 joinedload(NewsItem.video).joinedload(NewsVideo.channel),
                 joinedload(NewsItem.site),

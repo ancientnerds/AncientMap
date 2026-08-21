@@ -46,6 +46,48 @@
   line-height: 1.4;
 }
 
+/* Icon-only action row, bottom right of every card that has a story page.
+   Dimmed at rest so it never competes with the headline; full strength on
+   card hover and on focus (keyboard users get no hover). */
+.news-card-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 2px;
+  margin-top: 6px;
+}
+
+.news-card-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  opacity: 0.45;
+  cursor: pointer;
+  transition: opacity 0.2s, color 0.2s, background 0.2s;
+}
+
+.news-feed-item:hover .news-card-action {
+  opacity: 0.8;
+}
+
+.news-card-action:hover,
+.news-card-action:focus-visible {
+  opacity: 1;
+  color: var(--accent-primary);
+  background: var(--accent-glow-10);
+}
+
+.news-card-action.copied {
+  opacity: 1;
+  color: var(--accent-primary);
+}
+
 /* Headline links to the story page. Visually identical to a plain headline —
    the link exists so the browser context menu offers "Open in new tab"; a
    plain left click still expands the card (see NewsCard). */

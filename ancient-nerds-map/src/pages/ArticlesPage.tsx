@@ -38,6 +38,7 @@ import '../components/news/news-cards.css'
 import '../styles/story-page.css'
 import { discordCtaUrl } from '../constants/brand'
 import { slugify } from '../seo/meta'
+import { shareOrCopy } from '../utils/share'
 
 interface QualityReport {
   assessment_score: number
@@ -436,14 +437,8 @@ function ShareButton({ article }: { article: { title: string } }) {
   const [copied, setCopied] = useState(false)
 
   const handleShare = async () => {
-    const url = shareUrl(article)
-    if (navigator.share) {
-      try {
-        await navigator.share({ title: article.title, url })
-        return
-      } catch { /* user cancelled or API unavailable */ }
-    }
-    await navigator.clipboard.writeText(url)
+    const result = await shareOrCopy(article.title, shareUrl(article))
+    if (result !== 'copied') return
     setCopied(true)
     setTimeout(() => setCopied(false), 1500)
   }

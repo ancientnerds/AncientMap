@@ -4,6 +4,7 @@ import { SiteData, PERIOD_COLORS, getSourceColor, getCategoryColor, getSourceInf
 import { config } from '../../config'
 import { useOffline } from '../../contexts/OfflineContext'
 import { reportAchievementEvent } from '../../utils/cardApi'
+import { shareOrCopy } from '../../utils/share'
 
 // Unified content service for gallery items
 import { toLightboxImages } from '../../services/connectors'
@@ -386,43 +387,32 @@ export default function SitePopup({
   // Share URL — nginx serves dynamic OG tags to crawlers on site.html
   const shareUrl = `${window.location.origin}/site.html?id=${displaySite.id}`
 
-  // Share site popup URL
+  // Share site popup URL. The clipboard gets title + URL (the share sheet
+  // shows the title itself, a bare pasted link would not).
+  const shareOptions = {
+    text: `${displaySite.title} - Archaeological Site`,
+  }
+
   const handleShareSite = async () => {
-    try {
-      if (navigator.share) {
-        await navigator.share({
-          title: displaySite.title,
-          text: `${displaySite.title} - Archaeological Site`,
-          url: shareUrl
-        })
-      } else {
-        await navigator.clipboard.writeText(`${displaySite.title}\n${shareUrl}`)
-        setSiteShareSuccess(true)
-        setTimeout(() => setSiteShareSuccess(false), 2000)
-      }
-    } catch {
-      // User cancelled the share sheet — nothing to do
-    }
+    const result = await shareOrCopy(displaySite.title, shareUrl, {
+      ...shareOptions,
+      copyText: `${displaySite.title}\n${shareUrl}`,
+    })
+    if (result !== 'copied') return
+    setSiteShareSuccess(true)
+    setTimeout(() => setSiteShareSuccess(false), 2000)
   }
 
   // Share Google Maps location
   const googleMapsUrl = `https://www.google.com/maps/@${lat},${lng},15z/data=!3m1!1e3`
   const handleShareGoogleMaps = async () => {
-    try {
-      if (navigator.share) {
-        await navigator.share({
-          title: displaySite.title,
-          text: `${displaySite.title} - Archaeological Site`,
-          url: googleMapsUrl
-        })
-      } else {
-        await navigator.clipboard.writeText(`${displaySite.title}\n${googleMapsUrl}`)
-        setShareSuccess(true)
-        setTimeout(() => setShareSuccess(false), 2000)
-      }
-    } catch {
-      // User cancelled the share sheet — nothing to do
-    }
+    const result = await shareOrCopy(displaySite.title, googleMapsUrl, {
+      ...shareOptions,
+      copyText: `${displaySite.title}\n${googleMapsUrl}`,
+    })
+    if (result !== 'copied') return
+    setShareSuccess(true)
+    setTimeout(() => setShareSuccess(false), 2000)
   }
 
   // Handle gallery item click

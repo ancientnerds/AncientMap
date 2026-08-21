@@ -13,8 +13,9 @@
 
 import { useState, useEffect, memo } from 'react'
 import { config } from '../../config'
-import { storyPath } from '../../seo/meta'
+import { absoluteUrl, storyPath } from '../../seo/meta'
 import { apiDetailToSiteData } from '../../utils/siteApi'
+import { shareOrCopy } from '../../utils/share'
 import { formatDuration, formatRelativeDate } from '../../utils/formatters'
 import { SiteBadges, CountryFlag } from '../metadata'
 import LazyImage from '../LazyImage'
@@ -115,6 +116,7 @@ function NewsCard({
   const [loading, setLoading] = useState(false)
   const [playing, setPlaying] = useState(false)
   const [showEmbedHint, setShowEmbedHint] = useState(false)
+  const [copied, setCopied] = useState(false)
 
   // Show help hint after a delay when embed is active
   useEffect(() => {
@@ -139,6 +141,17 @@ function NewsCard({
   const displaySiteName = siteName || siteNameExtracted
   const siteIdentifier = siteId || siteName
   const isClickable = !!(onSiteLoaded && siteIdentifier)
+
+  // Share the canonical public URL, not window.location — a story shared
+  // from the globe panel or a localhost tab has to open the story page.
+  const handleShare = async (e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (!storyHref) return
+    const result = await shareOrCopy(headline, absoluteUrl(storyHref))
+    if (result !== 'copied') return
+    setCopied(true)
+    setTimeout(() => setCopied(false), 1500)
+  }
 
   const handleSiteClick = async () => {
     if (loading || !siteIdentifier || !onSiteLoaded) return
@@ -334,6 +347,44 @@ function NewsCard({
           {videoTitle && <div className="news-card-video-title">{videoTitle}</div>}
         </div>
       )}
+
+      {/* Icon-only actions, bottom right. Both act on the story page, so the
+          row only exists where that page does — the same gate the headline
+          link uses (storyHrefFor). */}
+      {storyHref && (
+        <div className="news-card-actions">
+          <button
+            className={`news-card-action${copied ? ' copied' : ''}`}
+            onClick={handleShare}
+            title={copied ? 'Link copied' : 'Share story'}
+            aria-label={copied ? 'Link copied' : 'Share story'}
+          >
+            {copied ? (
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+            ) : (
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" />
+                <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" /><line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
+              </svg>
+            )}
+          </button>
+          <a
+            className="news-card-action"
+            href={storyHref}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={e => e.stopPropagation()}
+            title="Open story in new tab"
+            aria-label="Open story in new tab"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" /><polyline points="15 3 21 3 21 9" /><line x1="10" y1="14" x2="21" y2="3" />
+            </svg>
+          </a>
+        </div>
+      )}
     </div>
   )
 }
@@ -343,13 +394,13 @@ export default memo(NewsCard)
 /**
  * URL of a story's own page, or null when /news-archive/{slug} would 404.
  *
- * Mirrors public_stories_query() in api/routes/articles_html.py — that filter
- * is authoritative for which stories have a page (post_text present, not
- * speculative). The feed also serves the ones it excludes, and linking those
- * would hand the user a 404 from the context menu.
+ * Mirrors story_page_query() in api/routes/articles_html.py: a body is the
+ * only requirement. Speculative stories do get a page (noindex) — the gate
+ * here is not an editorial one, it only keeps us from handing the user a
+ * dead link.
  */
 export function storyHrefFor(item: NewsItemData): string | null {
-  if (!item.post_text || item.news_category === 'speculative') return null
+  if (!item.post_text) return null
   return storyPath(item.headline, item.id)
 }
 

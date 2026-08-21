@@ -138,6 +138,21 @@ describe('storyMeta', () => {
     const m = storyMeta(pyrefRoute('story_short') as StoryRoute)
     expect(m.description).toBe('')
   })
+
+  // Seit 2026-08-20 haben spekulative Stories eine Seite (vorher 404), aber
+  // sie darf nicht in den Index. Der Schalter hängt an der KATEGORIE — ein
+  // speculative_tag unter normaler Kategorie ist seit Februar indexiert.
+  it('spekulative Kategorie ⇒ noindex im Head', () => {
+    const m = storyMeta({ ...FIXTURES.story, news_category: 'speculative' })
+    expect(m.robots).toBe('noindex, follow, max-image-preview:large')
+    expect(renderHead(m)).toContain('<meta name="robots" content="noindex, follow, max-image-preview:large">')
+  })
+
+  it('ein speculative_tag allein ändert den Index-Status nicht', () => {
+    const m = storyMeta({ ...FIXTURES.story, speculative_tag: 'giants' })
+    expect(m.robots).toBeUndefined()
+    expect(renderHead(m)).toContain('<meta name="robots" content="index, follow, max-image-preview:large">')
+  })
 })
 
 describe('research-Autorschaft im JSON-LD (Art.-50-Fälle aus test_ai_act_notices.py)', () => {

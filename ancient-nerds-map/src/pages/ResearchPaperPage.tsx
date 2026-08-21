@@ -21,6 +21,7 @@ import { useIsFounder } from '../hooks/useIsFounder'
 import { isoDate } from '../seo/display'
 import { useRoute } from '../seo/RouteContext'
 import SanitizedMarkdownHtml from '../seo/SanitizedMarkdownHtml'
+import { shareOrCopy } from '../utils/share'
 import '../styles/theo.css'
 import '../styles/story-page.css'
 
@@ -85,14 +86,7 @@ export default function ResearchPaperPage() {
   }, [ttsStatus, title, isPlaying])
 
   const handleShare = useCallback(() => {
-    if (navigator.share) {
-      navigator.share({
-        title: title || 'Research Paper',
-        url: window.location.href,
-      }).catch(() => { /* cancelled */ })
-    } else {
-      navigator.clipboard.writeText(window.location.href)
-    }
+    void shareOrCopy(title || 'Research Paper', window.location.href)
   }, [title])
 
   const handlePlayPause = useCallback(() => {

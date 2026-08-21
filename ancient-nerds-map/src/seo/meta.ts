@@ -46,7 +46,16 @@ export interface PageMeta {
   ogType?: string
   image?: string
   schema?: string
+  /**
+   * Overrides the robots directive. Only speculative stories set it: they
+   * have a page (people share and open them) but stay out of the index —
+   * "ancient astronauts" ranking under our name is not what we want.
+   */
+  robots?: string
 }
+
+const ROBOTS_INDEX = 'index, follow, max-image-preview:large'
+const ROBOTS_NOINDEX = 'noindex, follow, max-image-preview:large'
 
 /** Python html.escape(): &, <, >, " und — anders als viele JS-Helfer — auch '. */
 const esc = (s: string) =>
@@ -162,7 +171,7 @@ export function renderHead(m: PageMeta): string {
   const ogDescTag = d ? `\n<meta property="og:description" content="${d}">` : ''
   const twDescTag = d ? `\n<meta name="twitter:description" content="${d}">` : ''
   return `<title>${t} | Ancient Nerds</title>${descTag}
-<meta name="robots" content="index, follow, max-image-preview:large">
+<meta name="robots" content="${m.robots ?? ROBOTS_INDEX}">
 <link rel="canonical" href="${canonical}">
 <meta property="og:type" content="${m.ogType ?? 'website'}">
 <meta property="og:url" content="${canonical}">
@@ -204,6 +213,11 @@ export function storyMeta(route: StoryRoute): PageMeta {
     ogType: 'article',
     image: screenshot || undefined,
     schema,
+    // Speculative stories are served but not indexed. Deliberately keyed on
+    // the CATEGORY, not on speculative_tag: 62 tagged stories under a normal
+    // category have been indexed since February, and pulling them out now
+    // would drop live pages out of Google for no reason.
+    robots: route.news_category === 'speculative' ? ROBOTS_NOINDEX : undefined,
   }
 }
 

@@ -17,6 +17,7 @@ import { SiteBadges, CountryFlag, CopyButton } from './metadata'
 import { FitText } from './FitText'
 import { extractCountry } from '../utils/searchUtils'
 import { formatCoord } from '../utils/formatters'
+import { shareOrCopy } from '../utils/share'
 import { getSourceColor } from '../data/sites'
 import type { SiteData } from '../data/sites'
 import './site-card.css'
@@ -192,16 +193,10 @@ export function ShareSiteLink({ siteId, title }: { siteId: string; title: string
     e.stopPropagation()
 
     const shareUrl = `${window.location.origin}/site.html?id=${siteId}`
-
-    if (navigator.share) {
-      try {
-        await navigator.share({ title: `${title} - Ancient Nerds`, url: shareUrl })
-      } catch { /* cancelled */ }
-    } else {
-      await navigator.clipboard.writeText(shareUrl)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-    }
+    const result = await shareOrCopy(`${title} - Ancient Nerds`, shareUrl)
+    if (result !== 'copied') return
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
   }
 
   return (
