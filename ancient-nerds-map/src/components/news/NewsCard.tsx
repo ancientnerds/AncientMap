@@ -186,6 +186,12 @@ function NewsCard({
         )
       })()}
 
+      {/* Head block — everything above the thumbnail. It exists to anchor the
+          action icons: as a child of the card they sat at the bottom of
+          whatever was currently rendered and jumped down on expand. Anchored
+          here they stay put next to the site badges, expanded or not. Same
+          flex column and 6px gap as the card, so the rhythm is unchanged. */}
+      <div className="news-card-head">
       <div className="news-card-meta">
         <span className="news-card-channel">{channelName}</span>
         {publishedAt && <span className="news-feed-date">{formatRelativeDate(publishedAt)}</span>}
@@ -255,6 +261,45 @@ function NewsCard({
           <span className="news-feed-site-unmatched-name site-name-text">{siteNameExtracted}</span>
         </div>
       )}
+
+      {/* Icon-only actions, bottom right of the head block — the free space
+          next to the site badges. Absolute, so they cost no height, and
+          anchored to the head, so expanding the card never moves them. */}
+      {storyHref && (
+        <div className="news-card-actions">
+          <button
+            className={`news-card-action${copied ? ' copied' : ''}`}
+            onClick={handleShare}
+            title={copied ? 'Link copied' : 'Share story'}
+            aria-label={copied ? 'Link copied' : 'Share story'}
+          >
+            {copied ? (
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+            ) : (
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" />
+                <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" /><line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
+              </svg>
+            )}
+          </button>
+          <a
+            className="news-card-action"
+            href={storyHref}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={e => e.stopPropagation()}
+            title="Open story in new tab"
+            aria-label="Open story in new tab"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" /><polyline points="15 3 21 3 21 9" /><line x1="10" y1="14" x2="21" y2="3" />
+            </svg>
+          </a>
+        </div>
+      )}
+      </div>{/* /news-card-head */}
 
       {(!headlinesOnly || expanded) && screenshotUrl && (
         playing && videoId ? (
@@ -345,44 +390,6 @@ function NewsCard({
           )}
 
           {videoTitle && <div className="news-card-video-title">{videoTitle}</div>}
-        </div>
-      )}
-
-      {/* Icon-only actions, bottom right. Both act on the story page, so the
-          row only exists where that page does — the same gate the headline
-          link uses (storyHrefFor). */}
-      {storyHref && (
-        <div className="news-card-actions">
-          <button
-            className={`news-card-action${copied ? ' copied' : ''}`}
-            onClick={handleShare}
-            title={copied ? 'Link copied' : 'Share story'}
-            aria-label={copied ? 'Link copied' : 'Share story'}
-          >
-            {copied ? (
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="20 6 9 17 4 12" />
-              </svg>
-            ) : (
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" />
-                <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" /><line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
-              </svg>
-            )}
-          </button>
-          <a
-            className="news-card-action"
-            href={storyHref}
-            target="_blank"
-            rel="noopener noreferrer"
-            onClick={e => e.stopPropagation()}
-            title="Open story in new tab"
-            aria-label="Open story in new tab"
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" /><polyline points="15 3 21 3 21 9" /><line x1="10" y1="14" x2="21" y2="3" />
-            </svg>
-          </a>
         </div>
       )}
     </div>

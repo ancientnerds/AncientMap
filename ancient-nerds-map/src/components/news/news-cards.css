@@ -46,34 +46,52 @@
   line-height: 1.4;
 }
 
-/* Icon-only action row, bottom right of every card that has a story page.
-   Dimmed at rest so it never competes with the headline; full strength on
-   card hover and on focus (keyboard users get no hover). */
-.news-card-actions {
+/* Head block: meta, headline, story text, site badges — everything above the
+   thumbnail. Mirrors .news-feed-item's own column and gap so wrapping these
+   children changed no spacing; it exists purely as the anchor below. */
+.news-card-head {
+  position: relative;
   display: flex;
-  justify-content: flex-end;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* Icon-only actions, bottom right of the head block — the free strip beside
+   the site badges.
+   ABSOLUTE ON PURPOSE, twice over: as a flex child they added their own
+   height plus the 6px stack gap to every card, and anchored to the card they
+   sat under whatever was currently rendered, so expanding a story dragged
+   them down past the facts. Anchored to the head they cost no layout and
+   never move. */
+.news-card-actions {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  display: flex;
   align-items: center;
   gap: 2px;
-  margin-top: 6px;
+  z-index: 2;
 }
 
 .news-card-action {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
+  width: 20px;
+  height: 20px;
   padding: 0;
   border: none;
+  border-radius: 2px;
   background: transparent;
   color: var(--text-secondary);
-  opacity: 0.45;
+  opacity: 0.4;
   cursor: pointer;
   transition: opacity 0.2s, color 0.2s, background 0.2s;
 }
 
 .news-feed-item:hover .news-card-action {
-  opacity: 0.8;
+  opacity: 0.85;
+  background: var(--surface-page);
 }
 
 .news-card-action:hover,
