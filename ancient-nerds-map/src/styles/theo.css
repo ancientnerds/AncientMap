@@ -71,7 +71,7 @@
 
 /* THEO IDENTITY — keep amber */
 .theo-quote {
-  font-family: 'Cormorant Garamond', Georgia, serif;
+  font-family: var(--font-body);
   font-style: italic;
   font-size: 18px;
   color: var(--text-primary);
@@ -1084,7 +1084,7 @@
   width: 100%;
   height: auto;
   display: block;
-  border-radius: 4px;
+  border-radius: var(--nerv-panel-radius, 0);
   border: 1px solid var(--theo-border, rgba(212, 145, 42, 0.18));
   cursor: zoom-in;
 }
@@ -2066,7 +2066,7 @@
   max-height: 420px;
   object-fit: cover;
   display: block;
-  border-radius: 8px;
+  border-radius: var(--nerv-panel-radius, 0);
 }
 .theo-paper-hero-caption {
   margin-top: 6px;
@@ -2979,7 +2979,7 @@
   max-width: 100%;
   max-height: 540px;
   object-fit: contain;
-  border-radius: 4px;
+  border-radius: var(--nerv-panel-radius, 0);
   background: rgba(0, 0, 0, 0.25);
 }
 
@@ -2990,6 +2990,27 @@
    TheoCarousel.tsx (.theo-carousel* classes, wired via TheoPaperBody +
    galleryParser). See the fix(theo-ui) commit that removed this rule
    family's dangling orphan declarations for the full archaeology. */
+/* Der geteilte Markdown-Renderer wrappt freistehende Bilder seit 2026-08-21
+   in <figure> mit <figcaption> (article_html_renderer._figure_with_caption).
+   Research-Papers laufen durch denselben Renderer, kannten die Klassen aber
+   nicht — ohne diese Regel stünde die Bildunterschrift hier ungestylt.
+   Werte gespiegelt aus der bestehenden em-Caption direkt darunter. */
+.theo-md-body .article-figure {
+  margin: 20px 0 24px;
+  padding: 0;
+}
+.theo-md-body .article-figcaption {
+  display: block;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 12.5px;
+  line-height: 1.5;
+  margin: 8px auto 0;
+  max-width: 640px;
+  padding: 0 16px;
+}
+.theo-md-body .article-figcaption a { color: var(--accent-primary); }
+
 .theo-md-body img + em,
 .theo-md-body p > em:only-child {
   /* Caption line that immediately follows an image */

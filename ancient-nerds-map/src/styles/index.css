@@ -17685,7 +17685,7 @@ div.lyra-inline-video-wrap {
   margin-left: 12px;
   padding: 4px 14px;
   border: 1px solid var(--brand-primary);
-  border-radius: 4px;
+  border-radius: var(--nerv-panel-radius, 0);
   background: transparent;
   color: var(--brand-primary);
   cursor: pointer;
@@ -17708,7 +17708,7 @@ div.lyra-inline-video-wrap {
 }
 
 .articles-hero-title {
-  font-family: 'Cormorant Garamond', serif;
+  font-family: var(--font-heading);
   font-size: 42px;
   font-weight: 600;
   line-height: 1.2;
@@ -17814,7 +17814,7 @@ div.lyra-inline-video-wrap {
 }
 
 .articles-grid-card-title {
-  font-family: 'Cormorant Garamond', serif;
+  font-family: var(--font-heading);
   font-size: 20px;
   font-weight: 600;
   line-height: 1.3;
@@ -17873,7 +17873,7 @@ div.lyra-inline-video-wrap {
 }
 
 .articles-reader-title {
-  font-family: 'Cormorant Garamond', serif;
+  font-family: var(--font-heading);
   font-size: 36px;
   font-weight: 600;
   line-height: 1.25;
@@ -17905,7 +17905,7 @@ div.lyra-inline-video-wrap {
 
 /* Reader body typography */
 .articles-reader-body h2 {
-  font-family: 'Cormorant Garamond', serif;
+  font-family: var(--font-heading);
   font-size: 22px;
   font-weight: 600;
   margin: 32px 0 12px;
@@ -17999,7 +17999,7 @@ div.lyra-inline-video-wrap {
 
 /* Sources heading */
 .articles-reader-body h3#sources {
-  font-family: 'Cormorant Garamond', serif;
+  font-family: var(--font-heading);
   font-size: 18px;
   font-weight: 600;
   margin: 32px 0 12px;
@@ -18032,7 +18032,7 @@ div.lyra-inline-video-wrap {
 .articles-quality-report {
   margin-top: 32px;
   border: 1px solid var(--border-accent);
-  border-radius: 8px;
+  border-radius: var(--nerv-panel-radius, 0);
   overflow: hidden;
 }
 .articles-quality-summary {
@@ -18065,7 +18065,7 @@ div.lyra-inline-video-wrap {
   display: inline-block;
   padding: 2px 8px;
   margin: 2px 4px 2px 0;
-  border-radius: 4px;
+  border-radius: var(--nerv-panel-radius, 0);
   font-size: 0.85em;
 }
 .articles-quality-dim.pass { background: rgba(40, 167, 69, 0.15); color: #5cb85c; }
@@ -18082,7 +18082,7 @@ div.lyra-inline-video-wrap {
   justify-content: center;
   width: 28px;
   height: 28px;
-  border-radius: 50%;
+  border-radius: var(--nerv-panel-radius, 0);
   font-size: 0.75em;
   font-weight: 600;
 }
@@ -18279,7 +18279,7 @@ div.lyra-inline-video-wrap {
   color: var(--text-tertiary, #64748b);
   text-decoration: none;
   border-left: 2px solid transparent;
-  border-radius: 0 4px 4px 0;
+  border-radius: var(--nerv-panel-radius, 0);
   transition: color 0.15s, border-color 0.15s, background 0.15s;
 }
 
@@ -18372,7 +18372,7 @@ div.lyra-inline-video-wrap {
 }
 
 .articles-attribution-heading {
-  font-family: 'Cormorant Garamond', serif;
+  font-family: var(--font-heading);
   font-size: 18px;
   font-weight: 600;
   margin: 0 0 12px;
