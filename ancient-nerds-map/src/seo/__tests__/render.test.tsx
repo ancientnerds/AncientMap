@@ -283,6 +283,45 @@ describe('story-Seite (Task 14): der SSR-Body trägt den Python-Fragment-Inhalt'
     expect(html).toContain('AI-generated')
     expect(html).toContain('Keep exploring')
   })
+
+  // Seit 2026-08-21: news_items.summary ist keine geschriebene Zusammenfassung,
+  // sondern Headline + die ersten drei Fakten (summarizer.py). Als erster
+  // Absatz wiederholte sie die H1 und danach die "Key facts"-Liste.
+  it('kein summary-Absatz mehr — der Body beginnt mit dem post_text', () => {
+    expect(html).not.toContain('story-summary')
+    expect(html).not.toContain(FIXTURES.story.summary)
+    expect(html).toContain('Archaeologists re-examined spoil heaps')
+  })
+
+  // post_text ist Tweet-Copy: die nackte Quell-URL am Ende stand mitten im
+  // Artikel als toter Text. Sie gehört als echter Link zu den Quellen.
+  it('angehängte Tweet-URL verlässt den Fließtext und wird eine Quelle', () => {
+    const withLink = renderRoute({
+      ...FIXTURES.story,
+      web_sources: null,
+      post_text: `${FIXTURES.story.post_text} https://www.english-heritage.org.uk/stonehenge/`,
+    })
+    const body = withLink.slice(withLink.indexOf('story-body'), withLink.indexOf('Key facts'))
+    expect(body).not.toContain('english-heritage')
+    expect(withLink).toContain('>Sources<')
+    expect(withLink).toContain('href="https://www.english-heritage.org.uk/stonehenge/"')
+    expect(withLink).toContain('english-heritage.org.uk') // nackter Host wie bei web_sources
+  })
+
+  it('eine URL, die schon in web_sources steht, erscheint nicht doppelt', () => {
+    const dupe = renderRoute({
+      ...FIXTURES.story,
+      post_text: `${FIXTURES.story.post_text} https://en.natmus.dk/sun-chariot/`,
+    })
+    expect(dupe.match(/href="https:\/\/en\.natmus\.dk\/sun-chariot\/"/g)).toHaveLength(1)
+  })
+
+  // Der Player ersetzt das Standbild erst im Client; der SSR-Body muss
+  // weiterhin den YouTube-Link tragen (Crawler und no-JS-Besucher).
+  it('das Standbild bleibt serverseitig ein echter YouTube-Link', () => {
+    expect(html).toContain('class="story-video-link"')
+    expect(html).toContain('href="https://www.youtube.com/watch?v=abc123&amp;t=754s"')
+  })
 })
 
 describe('storyArchive (Task 14): das paginierte Listing aus dem Rohpayload', () => {

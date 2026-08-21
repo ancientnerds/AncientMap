@@ -11,7 +11,7 @@
  * - size — 'sm' | 'md' | 'lg'
  */
 
-import { useState, useEffect, memo } from 'react'
+import { useState, memo } from 'react'
 import { config } from '../../config'
 import { absoluteUrl, storyPath } from '../../seo/meta'
 import { apiDetailToSiteData } from '../../utils/siteApi'
@@ -19,6 +19,8 @@ import { shareOrCopy } from '../../utils/share'
 import { formatDuration, formatRelativeDate } from '../../utils/formatters'
 import { SiteBadges, CountryFlag } from '../metadata'
 import LazyImage from '../LazyImage'
+import InlineVideo from './InlineVideo'
+import { splitPostText } from './postText'
 import {
   getSignificanceColor,
   getSignificanceLabel,
@@ -114,26 +116,7 @@ function NewsCard({
 }: NewsCardProps) {
   const [expanded, setExpanded] = useState(false)
   const [loading, setLoading] = useState(false)
-  const [playing, setPlaying] = useState(false)
-  const [showEmbedHint, setShowEmbedHint] = useState(false)
   const [copied, setCopied] = useState(false)
-
-  // Show help hint after a delay when embed is active
-  useEffect(() => {
-    if (!playing) { setShowEmbedHint(false); return }
-    const timer = setTimeout(() => setShowEmbedHint(true), 3000)
-    return () => clearTimeout(timer)
-  }, [playing])
-
-  // Pause this card when another card starts playing
-  useEffect(() => {
-    if (!playing) return
-    const handler = (e: Event) => {
-      if ((e as CustomEvent).detail !== videoId) setPlaying(false)
-    }
-    window.addEventListener('newscard-play', handler)
-    return () => window.removeEventListener('newscard-play', handler)
-  }, [playing, videoId])
 
   const playSize = PLAY_SIZE[size]
   const pinSize = PIN_SIZE[size]
@@ -220,7 +203,12 @@ function NewsCard({
           </a>
         ) : headline}
       </div>
-      {(!headlinesOnly || expanded) && postText && <div className="news-card-post-text">{postText}</div>}
+      {/* Same tweet artefact as on the story page: the trailing source URL is
+          plain, unclickable text in a teaser, so it goes. The story page
+          renders it as a real link under Sources. */}
+      {(!headlinesOnly || expanded) && postText && (
+        <div className="news-card-post-text">{splitPostText(postText).paragraphs.join('\n')}</div>
+      )}
 
       {hasMatchedSite && (
         <div className="news-feed-site-block">
@@ -301,30 +289,14 @@ function NewsCard({
       )}
       </div>{/* /news-card-head */}
 
-      {(!headlinesOnly || expanded) && screenshotUrl && (
-        playing && videoId ? (
-          <div className="news-card-embed" onClick={e => e.stopPropagation()}>
-            <iframe
-              src={`https://www.youtube.com/embed/${videoId}?start=${timestampSeconds || 0}&autoplay=1`}
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-              referrerPolicy="strict-origin-when-cross-origin"
-              allowFullScreen
-              title={headline || 'YouTube video'}
-            />
-            {showEmbedHint && (
-              <div className="news-card-embed-hint">
-                Not loading? Disable VPN or{' '}
-                <a href={deepLink} target="_blank" rel="noopener noreferrer">watch on YouTube</a>
-              </div>
-            )}
-          </div>
-        ) : (
+      {(!headlinesOnly || expanded) && screenshotUrl && (() => {
+        const thumb = (play?: () => void) => (
           <a
             className="news-card-thumb"
             href={videoId ? undefined : deepLink}
             target={videoId ? undefined : '_blank'}
             rel={videoId ? undefined : 'noopener noreferrer'}
-            onClick={e => { e.stopPropagation(); if (videoId) { e.preventDefault(); window.dispatchEvent(new CustomEvent('newscard-play', { detail: videoId })); setPlaying(true) } }}
+            onClick={e => { e.stopPropagation(); if (play) { e.preventDefault(); play() } }}
           >
             <LazyImage src={screenshotUrl} alt="" />
             <svg className="news-card-play" width={playSize} height={playSize} viewBox="0 0 24 24" fill="currentColor">
@@ -338,7 +310,21 @@ function NewsCard({
             )}
           </a>
         )
-      )}
+        // No video id means there is nothing to embed — the thumbnail stays a
+        // plain link out to the source.
+        if (!videoId) return thumb()
+        return (
+          <InlineVideo
+            videoId={videoId}
+            startSeconds={timestampSeconds}
+            title={headline || 'YouTube video'}
+            watchUrl={deepLink}
+            embedClassName="news-card-embed"
+          >
+            {play => thumb(play)}
+          </InlineVideo>
+        )
+      })()}
 
       {expanded && (
         <div className="news-card-expanded">
