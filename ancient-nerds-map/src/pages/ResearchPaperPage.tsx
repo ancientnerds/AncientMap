@@ -14,6 +14,7 @@
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react'
+import Breadcrumbs from '../components/layout/Breadcrumbs'
 import AiNoticeBanner from '../components/layout/AiNoticeBanner'
 import CommunityCta from '../components/layout/CommunityCta'
 import PageHeader from '../components/layout/PageHeader'
@@ -150,6 +151,13 @@ export default function ResearchPaperPage() {
       <div className="theo-paper-page">
         {/* Paper header */}
         <div className="theo-paper-header">
+          <Breadcrumbs
+            trail={[
+              { name: 'Home', path: '/' },
+              { name: 'Research', path: '/research/' },
+              { name: title },
+            ]}
+          />
           <h1 className="theo-paper-title">{title}</h1>
           <div className="theo-paper-meta">
             <span style={{ color: 'var(--text-dimmed)', fontSize: 12 }}>

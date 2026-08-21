@@ -518,6 +518,13 @@ function ArticleFromPayload({ article }: { article: ArticleRoute }) {
       <main className="articles-page-content">
         <div className="articles-reader-layout">
           <article className="articles-reader">
+            <Breadcrumbs
+              trail={[
+                { name: 'Home', path: '/' },
+                { name: 'Journal', path: '/articles/' },
+                { name: article.title },
+              ]}
+            />
             <h1 className="articles-reader-title">{article.title}</h1>
             <div className="articles-reader-meta">
               {pubDate && <span className="articles-reader-date">{pubDate}</span>}
