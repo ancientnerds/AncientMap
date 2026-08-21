@@ -55,6 +55,11 @@ def _item(**overrides) -> SimpleNamespace:
         name="Trundholm Mose",
         country="Denmark",
         source_id="ancient_nerds",
+        # Seit 2026-08-21 im Payload: die Story-Seite rendert damit dieselben
+        # Badges wie die Karten (SiteBadges/CountryFlag).
+        site_type="Burial mound",
+        period_name="Bronze Age",
+        period_start=-1400,
     )
     row = {
         "id": 4711,
@@ -71,6 +76,7 @@ def _item(**overrides) -> SimpleNamespace:
         ],
         "timestamp_seconds": 754,
         "speculative_tag": None,
+        "significance": 8,
         "created_at": datetime(2026, 3, 15, 8, 0),
         "video": video,
         "site": site,
@@ -114,6 +120,12 @@ def test_story_hands_the_full_raw_payload():
     assert route["site_id"] == "1b2c3d4e-0000-4000-8000-000000000000"
     assert route["site_country"] == "Denmark"
     assert route["site_curated"] is True
+    # Badge-Felder: dieselben drei, die der Feed den Karten gibt, plus der
+    # Score für den Signifikanz-Stempel.
+    assert route["site_type"] == "Burial mound"
+    assert route["site_period_name"] == "Bronze Age"
+    assert route["site_period_start"] == -1400
+    assert route["significance"] == 8
     assert route["related"] == [
         {
             "slug": "trundholm-bog-survey-planned-4600",

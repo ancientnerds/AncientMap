@@ -17949,7 +17949,19 @@ div.lyra-inline-video-wrap {
   text-decoration: underline;
 }
 
-/* Figures / screenshots */
+/* Figures / screenshots.
+   Bilder im Journal kamen als nacktes <img> in einem <p> und rendern damit in
+   Naturgröße: 1280px in einer 720px-Spalte, gemessen auf der Live-Seite
+   2026-08-21. Die Begrenzung gilt für JEDES Bild im Reader-Body, nicht nur
+   für die mit Figure-Klasse — sonst fällt das nächste ungewrappte Bild wieder
+   heraus. */
+.articles-reader-body img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+  margin: 0 auto;
+}
+
 .articles-reader-body .article-figure {
   margin: 24px 0;
   padding: 0;

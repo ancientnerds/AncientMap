@@ -7,7 +7,7 @@ proper meta tags, and styling matching the site's dark theme.
 
 import re
 from datetime import datetime
-from html import escape
+from html import escape, unescape
 
 import markdown  # noqa: I001 — third-party, separated intentionally
 import nh3
@@ -161,6 +161,63 @@ _SHARED_CSS = """
 """
 
 
+# A paragraph that contains nothing but an image — how Markdown renders a
+# standalone ![alt](src). Anything else (an image inside a sentence) is left
+# alone.
+_IMG_ONLY_PARA_RE = re.compile(r"<p>\s*(<img\b[^>]*/?>)\s*</p>")
+_ALT_RE = re.compile(r'\balt="([^"]*)"')
+# Pipeline screenshots are named {video_id}_{offset_seconds}.ext — the
+# convention the exporter writes and ArticlesPage documents. It is the only
+# thing that ties a frame back to its source, so it is worth reading.
+_SCREENSHOT_RE = re.compile(r"/data/news/screenshots/([A-Za-z0-9_-]{11})_(\d+)\.")
+
+
+def _figure_with_caption(html: str) -> str:
+    """
+    Wrap standalone images in <figure> and give them a caption.
+
+    Journal bodies rendered bare <img> inside a <p>: no caption, no credit,
+    and at their intrinsic width they broke 560px out of a 720px text column
+    (measured on the live page, 2026-08-21). The caption is the alt text the
+    writer already provides; for pipeline screenshots a link back to the exact
+    frame is appended, so a reader can check what they are looking at.
+
+    Runs AFTER sanitizing: the substrings moved here are already clean, and
+    the added link is built from a regex-validated video id, never from raw
+    input.
+    """
+
+    def wrap(match: re.Match) -> str:
+        img = match.group(1)
+        alt_match = _ALT_RE.search(img)
+        # The alt value is safe INSIDE an attribute but not as element content:
+        # nh3 leaves "<script>" unescaped in an attribute (inert there), and an
+        # alt like `<img src=x onerror=alert(1)` carries no ">" at all, so it
+        # would survive the regex and become live markup in the caption.
+        # Unescape first, then escape for text — escaping twice would print
+        # "&quot;" at the reader.
+        alt = escape(unescape(alt_match.group(1))) if alt_match else ""
+        shot = _SCREENSHOT_RE.search(img)
+        credit = ""
+        if shot:
+            video_id, offset = shot.group(1), shot.group(2)
+            url = f"https://www.youtube.com/watch?v={video_id}&t={offset}s"
+            credit = (
+                f'<a href="{url}" target="_blank" rel="noopener noreferrer">'
+                "Video frame · watch the source</a>"
+            )
+        if not alt and not credit:
+            return f"<figure class='article-figure'>{img}</figure>"
+        separator = " · " if alt and credit else ""
+        caption = f"{alt}{separator}{credit}"
+        return (
+            f'<figure class="article-figure">{img}'
+            f'<figcaption class="article-figcaption">{caption}</figcaption></figure>'
+        )
+
+    return _IMG_ONLY_PARA_RE.sub(wrap, html)
+
+
 def markdown_to_html(content_md: str, *, toc: bool = True) -> str:
     """
     Markdown -> sanitized HTML with external links opened in a new tab.
@@ -171,7 +228,7 @@ def markdown_to_html(content_md: str, *, toc: bool = True) -> str:
     """
     extensions = ["extra", "smarty", "toc"] if toc else ["extra", "smarty"]
     md = markdown.Markdown(extensions=extensions)
-    return external_links_new_tab(_sanitize_html(md.convert(content_md)))
+    return _figure_with_caption(external_links_new_tab(_sanitize_html(md.convert(content_md))))
 
 
 def slugify(title: str) -> str:
