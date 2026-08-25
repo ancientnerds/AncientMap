@@ -14,6 +14,7 @@ Usage:
 from __future__ import annotations
 
 import asyncio
+import importlib.util
 import logging
 import os
 import re
@@ -1466,7 +1467,21 @@ class MultiSourceSearch:
         # Always available (no key required, or key is optional)
         self._adapters["ancientnerds_db"] = UnifiedSitesAdapter()
         self._adapters["ancientnerds_research"] = PublicResearchAdapter()
-        self._adapters["youtube_transcripts"] = TranscriptAdapter()
+        # youtube_transcripts reuses api.services.lyra_tools._hybrid_search, so it
+        # needs the api package (plus its Qdrant/embedding stack). Dockerfile.lyra
+        # copies pipeline/ only, so inside the lyra container that import raises
+        # ModuleNotFoundError on EVERY query — the adapter logged a warning per
+        # research cluster and contributed nothing (observed 2026-08-25). Register
+        # it only where it can actually run. find_spec("api") locates the package
+        # without executing api/__init__.py, which would pull in the whole FastAPI
+        # app; probing a submodule instead would import that parent.
+        if importlib.util.find_spec("api") is not None:
+            self._adapters["youtube_transcripts"] = TranscriptAdapter()
+        else:
+            logger.info(
+                "youtube_transcripts adapter unavailable: the api package is not "
+                "part of this image (lyra ships pipeline/ only)"
+            )
         self._adapters["semantic_scholar"] = SemanticScholarAdapter()
         self._adapters["openalex"] = OpenAlexAdapter()
         self._adapters["crossref"] = CrossrefAdapter()
