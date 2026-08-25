@@ -23,7 +23,7 @@ import json
 import logging
 import re
 import time
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -57,6 +57,10 @@ _MAX_TOKENS_SYNTHESIS = 49152
 _SOURCE_APIS = "standard"
 _MAX_PIPELINE_ITERATIONS = 2
 _MAX_PARALLEL_AUDIT = 10
+# Budget for the WHOLE audit stage, not per source. A throttled run legitimately
+# takes ~17min for 80 sources (measured 2026-08-25, limiter at concurrency 1),
+# so this leaves headroom without letting a wedged call hang the pipeline.
+_AUDIT_STAGE_TIMEOUT = 2400
 _QUALITY_PASS_THRESHOLD = 72
 
 # YouTube URL fragments — used to split video sources ([VN] citations,
@@ -272,37 +276,62 @@ def _stage_audit(
             parsed["_sid"] = sid
         return parsed
 
-    # Run audits in parallel batches
+    # Run audits in parallel batches. Consume in COMPLETION order: the pool runs
+    # _MAX_PARALLEL_AUDIT threads, but the MiniMax limiter serialises them down to
+    # 1-2 in-flight calls under a 429 throttle, so futures finish badly out of
+    # submission order. Waiting on them in submission order meant one slow call
+    # blocked the head of the queue until it burned its own per-future deadline
+    # while finished results sat ready behind it — that silently dropped 7-10
+    # sources per run on 2026-08-25, and concurrent.futures.TimeoutError has an
+    # empty str() so the log line said only "Audit call failed for <sid>: ".
+    # as_completed removes the head-of-line blocking; the deadline now covers the
+    # whole stage instead of each source.
+    completed = 0
     with ThreadPoolExecutor(max_workers=_MAX_PARALLEL_AUDIT) as pool:
         futures = {pool.submit(_audit_one, sid, source): sid for sid, source in source_items}
-        for future in futures:
-            try:
-                parsed = future.result(timeout=120)
-            except Exception as exc:
-                logger.warning("[journal] Audit call failed for %s: %s", futures[future], exc)
-                continue
-            if not isinstance(parsed, dict):
-                continue
-            original_sid = parsed.get("_sid", "")
-            for entry in parsed.get("scored_sources", []):
-                sid = entry.get("id", "") or original_sid
-                tier_val = entry.get("reliability_tier", 0)
-                source = registry.sources.get(sid)
-                # self_source's tier 4 is authoritative (theo_citations.py
-                # register_source forces it) — the audit prompt only scores
-                # tiers 1-3 (_audit_one's tier_str never shows "[self]"), so
-                # an unconditional overwrite would clobber it back down to a
-                # plain external tier (Follow-up-Ticket 5).
-                # Only accept a real score — the LLM omitting the field
-                # yields tier_val 0, and an unconditional write would reset
-                # already-scored sources back to unscored.
-                if source and not source.self_source and tier_val in (1, 2, 3):
-                    source.reliability_tier = tier_val
-                    total_scored += 1
-            for entry in parsed.get("rejected_sources", []):
-                rid = entry.get("id", "") or original_sid
-                if rid:
-                    rejected_ids.add(rid)
+        try:
+            for future in as_completed(futures, timeout=_AUDIT_STAGE_TIMEOUT):
+                completed += 1
+                try:
+                    parsed = future.result()
+                except Exception as exc:
+                    # Log the type too: several exceptions here carry an empty message.
+                    logger.warning(
+                        "[journal] Audit call failed for %s: %s: %s",
+                        futures[future],
+                        type(exc).__name__,
+                        exc,
+                    )
+                    continue
+                if not isinstance(parsed, dict):
+                    continue
+                original_sid = parsed.get("_sid", "")
+                for entry in parsed.get("scored_sources", []):
+                    sid = entry.get("id", "") or original_sid
+                    tier_val = entry.get("reliability_tier", 0)
+                    source = registry.sources.get(sid)
+                    # self_source's tier 4 is authoritative (theo_citations.py
+                    # register_source forces it) — the audit prompt only scores
+                    # tiers 1-3 (_audit_one's tier_str never shows "[self]"), so
+                    # an unconditional overwrite would clobber it back down to a
+                    # plain external tier (Follow-up-Ticket 5).
+                    # Only accept a real score — the LLM omitting the field
+                    # yields tier_val 0, and an unconditional write would reset
+                    # already-scored sources back to unscored.
+                    if source and not source.self_source and tier_val in (1, 2, 3):
+                        source.reliability_tier = tier_val
+                        total_scored += 1
+                for entry in parsed.get("rejected_sources", []):
+                    rid = entry.get("id", "") or original_sid
+                    if rid:
+                        rejected_ids.add(rid)
+        except TimeoutError:
+            logger.warning(
+                "[journal] Audit stage hit its %ds budget after %d/%d sources",
+                _AUDIT_STAGE_TIMEOUT,
+                completed,
+                len(futures),
+            )
 
     # Remove rejected sources — protect YouTube, pre-verified story sources,
     # and self-source (own prior papers) records. self_source is provenance
