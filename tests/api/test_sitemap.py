@@ -77,7 +77,9 @@ SITES = [
 ]
 
 COUNTRIES = [
-    SimpleNamespace(country="Türkiye", lastmod=datetime(2026, 8, 1)),
+    # Nach dem Template-Floor (21.08.): Türkiye liegt DANACH und gewinnt,
+    # United Kingdom liegt davor und wird auf den Floor gehoben.
+    SimpleNamespace(country="Türkiye", lastmod=datetime(2026, 9, 1)),
     SimpleNamespace(country="United Kingdom", lastmod=datetime(2026, 7, 2)),
 ]
 
@@ -144,13 +146,19 @@ def test_lastmod_is_iso_date_and_only_where_data_exists():
         for value in _lastmods(resp):
             assert re.fullmatch(r"\d{4}-\d{2}-\d{2}", value), (name, value)
     # Statische Einstiege haben keine Row-Daten — ein erfundenes "today"
-    # würde tägliche Änderung signalisieren. Und die Site ohne updated_at/
-    # created_at (COALESCE beim echten DB-Zugriff) bekommt schlicht keins.
+    # würde tägliche Änderung signalisieren.
     assert _lastmods(asyncio.run(sm.sitemap_static())) == []
+
+
+def test_sites_lastmod_is_floored_at_the_template_change():
+    """Row-lastmod endet im März, aber JEDE /sites/-Seite änderte sich mit
+    dem Rendering-Umbau (react-ssr 16.08. + NERV 21.08.) — Google hält
+    ~2.500 davon für Soft 404 aus der Spinner-Ära und crawlt ohne neues
+    lastmod nicht nach. Der Floor gilt auch für Rows ganz ohne Datum."""
     sites = _root(asyncio.run(sm.sitemap_sites(db=_execute_db(SITES))))
     urls = list(sites.iter(f"{NS}url"))
     assert len(urls) == 3
-    assert sum(1 for u in urls if u.find(f"{NS}lastmod") is not None) == 2
+    assert [u.findtext(f"{NS}lastmod") for u in urls] == ["2026-08-21"] * 3
 
 
 def test_no_url_appears_in_two_parts():
@@ -191,13 +199,14 @@ def test_countries_part_carries_the_hub_and_per_country_lastmod():
     resp = asyncio.run(sm.sitemap_countries(db=_execute_db(COUNTRIES)))
     root = _root(resp)
     urls = list(root.iter(f"{NS}url"))
-    # Hub zuerst, mit dem globalen Maximum als lastmod.
+    # Hub zuerst, mit dem globalen Maximum als lastmod. Der Floor hebt nur
+    # ältere Daten an — ein Row-Datum NACH dem Template-Umbau gewinnt.
     hub = urls[0]
     assert hub.findtext(f"{NS}loc") == "https://ancientnerds.com/sites/"
-    assert hub.findtext(f"{NS}lastmod") == "2026-08-01"
+    assert hub.findtext(f"{NS}lastmod") == "2026-09-01"
     assert urls[1].findtext(f"{NS}loc") == "https://ancientnerds.com/sites/t%C3%BCrkiye"
-    assert urls[1].findtext(f"{NS}lastmod") == "2026-08-01"
-    assert urls[2].findtext(f"{NS}lastmod") == "2026-07-02"
+    assert urls[1].findtext(f"{NS}lastmod") == "2026-09-01"
+    assert urls[2].findtext(f"{NS}lastmod") == "2026-08-21"
 
 
 def test_research_and_articles_parts_link_hub_and_detail_pages():

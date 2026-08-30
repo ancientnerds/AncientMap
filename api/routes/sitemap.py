@@ -76,6 +76,19 @@ def _newest(lastmods: list[datetime | None]) -> datetime | None:
     return max((d for d in lastmods if d), default=None)
 
 
+# Every /sites/ page changed materially with the rendering overhaul
+# (react-ssr hydration fix 2026-08-16, NERV sweep 2026-08-21): Google filed
+# ~2,500 of them as Soft 404 while hydration replaced the record with a
+# loading spinner (crawls 2026-08-10..13, verified via URL Inspection
+# 2026-08-30). The row lastmod says March — "nothing new, keep the verdict".
+# The floor advertises the template change so the recrawl actually happens.
+_SITES_TEMPLATE_CHANGED = datetime(2026, 8, 21)
+
+
+def _sites_lastmod(row_lastmod: datetime | None) -> datetime:
+    return max(row_lastmod, _SITES_TEMPLATE_CHANGED) if row_lastmod else _SITES_TEMPLATE_CHANGED
+
+
 @router.api_route("/sitemap.xml", methods=["GET", "HEAD"])
 async def sitemap_index():
     """Sitemap index — robots.txt points here, the parts hang below it.
@@ -152,7 +165,9 @@ async def sitemap_sites(db: Session = Depends(get_db)):
             ORDER BY name
         """)
     ).fetchall()
-    urls = [_url(site_path(row.country, row.name, row.id), row.lastmod) for row in rows]
+    urls = [
+        _url(site_path(row.country, row.name, row.id), _sites_lastmod(row.lastmod)) for row in rows
+    ]
     return _xml(_urlset(urls))
 
 
@@ -173,8 +188,8 @@ async def sitemap_countries(db: Session = Depends(get_db)):
             ORDER BY country
         """)
     ).fetchall()
-    urls = [_url("/sites/", _newest([row.lastmod for row in rows]))]
-    urls += [_url(country_path(row.country), row.lastmod) for row in rows]
+    urls = [_url("/sites/", _sites_lastmod(_newest([row.lastmod for row in rows])))]
+    urls += [_url(country_path(row.country), _sites_lastmod(row.lastmod)) for row in rows]
     return _xml(_urlset(urls))
 
 
