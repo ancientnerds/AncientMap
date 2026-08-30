@@ -65,6 +65,8 @@ export interface StoryArchiveRoute {
   page: number
   total_pages: number
   total: number
+  /** Archive search term (?q=) — '' on the plain listing. */
+  q?: string
   stories: {
     slug: string
     headline: string

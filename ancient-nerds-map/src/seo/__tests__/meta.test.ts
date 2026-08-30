@@ -155,6 +155,21 @@ describe('storyMeta', () => {
   })
 })
 
+describe('storyArchiveMeta mit Suche', () => {
+  // ?q= ist ein unendlicher URL-Raum — Ergebnisseiten sind für Menschen,
+  // nie für den Index. Der Canonical bleibt die saubere Archivseite.
+  it('?q= ⇒ noindex, Canonical bleibt /news-archive/', () => {
+    const m = storyArchiveMeta({ ...FIXTURES.storyArchive, q: 'chariot' })
+    expect(m.robots).toBe('noindex, follow, max-image-preview:large')
+    expect(m.canonical).toBe('https://ancientnerds.com/news-archive/')
+  })
+
+  it('leeres oder fehlendes q bleibt indexierbar', () => {
+    expect(storyArchiveMeta({ ...FIXTURES.storyArchive, q: '  ' }).robots).toBeUndefined()
+    expect(storyArchiveMeta(FIXTURES.storyArchive).robots).toBeUndefined()
+  })
+})
+
 describe('research-Autorschaft im JSON-LD (Art.-50-Fälle aus test_ai_act_notices.py)', () => {
   // Theo ist eine Pipeline, keine Person — das Schema darf nichts anderes
   // behaupten. Übernommen in Task 16, als der Python-Renderer starb.

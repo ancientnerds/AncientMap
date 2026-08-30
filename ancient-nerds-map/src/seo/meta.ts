@@ -231,6 +231,9 @@ export function storyArchiveMeta(route: StoryArchiveRoute): PageMeta {
       `${thousands(route.total)} archaeology stories from the Ancient Nerds video digest — ` +
       'excavations, dating results, and reinterpretations, each with its source.',
     canonical,
+    // Suchergebnisse (?q=) sind für Menschen: unendlicher URL-Raum, nie in
+    // den Index. Der Canonical bleibt die saubere Archivseite.
+    robots: (route.q ?? '').trim() ? ROBOTS_NOINDEX : undefined,
   }
 }
 

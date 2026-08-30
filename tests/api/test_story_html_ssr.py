@@ -16,7 +16,7 @@ from datetime import datetime
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
-from api.routes.articles_html import news_archive_page, story_page
+from api.routes.articles_html import _like_escape, news_archive_page, story_page
 
 
 def _orm_db(*, first=None, rows=None, count=0) -> MagicMock:
@@ -197,6 +197,7 @@ def test_story_archive_keeps_its_pagination():
     assert route["page"] == 2
     assert route["total_pages"] == 3  # ceil(120 / 50)
     assert route["total"] == 120
+    assert route["q"] == ""  # kein Suchbegriff → leer, nie fehlend
     assert route["stories"] == [
         {
             "slug": "sun-chariot-fragment-found-4711",
@@ -210,6 +211,38 @@ def test_story_archive_keeps_its_pagination():
             "screenshot_url": "/data/news/screenshots/4711.jpg",
         }
     ]
+
+
+def test_archive_search_carries_q_and_filters_the_listing():
+    """?q= landet getrimmt/gekappt im Payload; die Query bekommt den
+    zusätzlichen ILIKE-Filter (headline OR summary) VOR count()."""
+    db = _orm_db(rows=[_item()], count=1)
+    render, shell = _patched()
+    with render as render_mock, shell:
+        resp = asyncio.run(news_archive_page(1, q="  chariot  ", db=db))
+
+    assert resp.status_code == 200
+    route = render_mock.call_args[0][0]
+    assert route["q"] == "chariot"
+    assert route["total"] == 1
+    assert route["total_pages"] == 1
+
+
+def test_archive_search_with_no_hits_renders_page_one_not_a_404():
+    """0 Treffer → total_pages=1 → Seite 1 rendert die leere Liste samt
+    Suchfeld, statt in den Out-of-range-404 zu laufen."""
+    render, shell = _patched()
+    with render as render_mock, shell:
+        resp = asyncio.run(news_archive_page(1, q="xenoglyph", db=_orm_db(rows=[], count=0)))
+
+    assert resp.status_code == 200
+    route = render_mock.call_args[0][0]
+    assert route["stories"] == []
+    assert route["q"] == "xenoglyph"
+
+
+def test_like_escape_neutralises_wildcards():
+    assert _like_escape("100%_done\\") == "100\\%\\_done\\\\"
 
 
 def test_out_of_range_page_is_a_404_without_touching_the_renderer():

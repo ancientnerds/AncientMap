@@ -8,6 +8,7 @@ These routes live outside /api/ so nginx proxies them directly.
 import logging
 
 from fastapi import APIRouter, Depends, Response
+from sqlalchemy import or_
 from sqlalchemy.orm import Session, joinedload
 
 from api.seo_shell import ssr_shell_response
@@ -145,9 +146,29 @@ async def article_medium_copy(slug: str, db: Session = Depends(get_db)):
     return Response(content=html, media_type="text/html")
 
 
-async def _render_news_archive_page(page: int, db: Session) -> Response:
-    """Render one paginated page of the news archive."""
-    total_count = public_stories_query(db).count()
+def _like_escape(term: str) -> str:
+    """Literal ILIKE pattern: a user's "100%" must not act as a wildcard."""
+    return term.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
+async def _render_news_archive_page(page: int, db: Session, q: str = "") -> Response:
+    """Render one paginated page of the news archive, optionally filtered.
+
+    q is the archive search box (plain GET form, works without JS). The
+    results stay server-rendered like the listing itself; the ?q= URLs are
+    noindex (storyArchiveMeta) so the search space never enters the index.
+    """
+    q = q.strip()[:100]
+    base = public_stories_query(db)
+    if q:
+        pattern = f"%{_like_escape(q)}%"
+        base = base.filter(
+            or_(
+                NewsItem.headline.ilike(pattern, escape="\\"),
+                NewsItem.summary.ilike(pattern, escape="\\"),
+            )
+        )
+    total_count = base.count()
     total_pages = max(1, -(-total_count // STORIES_PER_PAGE))  # ceil division
 
     if page < 1 or (page > total_pages):
@@ -159,8 +180,7 @@ async def _render_news_archive_page(page: int, db: Session) -> Response:
         )
 
     items = (
-        public_stories_query(db)
-        .options(
+        base.options(
             joinedload(NewsItem.video).joinedload(NewsVideo.channel),
             joinedload(NewsItem.site),
         )
@@ -181,6 +201,7 @@ async def _render_news_archive_page(page: int, db: Session) -> Response:
             "page": page,
             "total_pages": total_pages,
             "total": total_count,
+            "q": q,
             "stories": [
                 {
                     "slug": story_slug(item.headline, item.id),
@@ -209,15 +230,15 @@ async def _render_news_archive_page(page: int, db: Session) -> Response:
 
 
 @router.get("/news-archive/")
-async def news_archive(db: Session = Depends(get_db)):
-    """First page of the crawlable news archive."""
-    return await _render_news_archive_page(1, db)
+async def news_archive(q: str = "", db: Session = Depends(get_db)):
+    """First page of the crawlable news archive; ?q= filters it."""
+    return await _render_news_archive_page(1, db, q)
 
 
 @router.get("/news-archive/page/{page}")
-async def news_archive_page(page: int, db: Session = Depends(get_db)):
-    """Subsequent pages of the crawlable news archive."""
-    return await _render_news_archive_page(page, db)
+async def news_archive_page(page: int, q: str = "", db: Session = Depends(get_db)):
+    """Subsequent pages of the crawlable news archive; ?q= filters them."""
+    return await _render_news_archive_page(page, db, q)
 
 
 def _related_stories(db: Session, item: NewsItem, limit: int = 5) -> list[dict]:

@@ -383,6 +383,11 @@ describe('story-Seite (Task 14): der SSR-Body trägt den Python-Fragment-Inhalt'
     expect(html).toContain('class="story-video-link"')
     expect(html).toContain('href="https://www.youtube.com/watch?v=abc123&amp;t=754s"')
   })
+
+  it('Share-Knopf schon im SSR-Markup — Browser-APIs erst im Click-Handler', () => {
+    expect(html).toContain('class="story-share"')
+    expect(html).toContain('aria-label="Share story"')
+  })
 })
 
 describe('storyArchive (Task 14): das paginierte Listing aus dem Rohpayload', () => {
@@ -453,6 +458,37 @@ describe('storyArchive (Task 14): das paginierte Listing aus dem Rohpayload', ()
     expect(last).toContain('href="/news-archive/"') // Seite 1
     expect(last).toContain('href="/news-archive/page/45"')
     expect(last).toMatch(/aria-current="page"[^>]*>46</)
+  })
+
+  it('Suchformular: plain GET auf /news-archive/ — funktioniert ohne JS', () => {
+    expect(html).toContain('role="search"')
+    expect(html).toContain('action="/news-archive/"')
+    expect(html).toContain('name="q"')
+  })
+
+  it('aktive Suche: Wert im Feld, Trefferzeile, Pager trägt q weiter', () => {
+    const searched = renderRoute({
+      ...FIXTURES.storyArchive,
+      q: 'chariot',
+      total: 60,
+      total_pages: 2,
+    })
+    expect(searched).toContain('value="chariot"')
+    expect(searched).toContain('matching')
+    expect(searched).toContain('href="/news-archive/page/2?q=chariot"')
+    expect(searched).toContain('clear search')
+  })
+
+  it('leere Trefferliste nennt den Begriff und führt zurück ins Archiv', () => {
+    const empty = renderRoute({
+      ...FIXTURES.storyArchive,
+      q: 'xenoglyph',
+      stories: [],
+      total: 0,
+      total_pages: 1,
+    })
+    expect(empty).toContain('No stories match')
+    expect(empty).toContain('Browse all stories')
   })
 
   it('Art.-50-Banner und CommunityCta', () => {

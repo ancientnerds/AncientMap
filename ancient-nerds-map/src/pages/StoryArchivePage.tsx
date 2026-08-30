@@ -17,8 +17,11 @@ import { blurb } from '../seo/text'
 
 import '../styles/story-page.css'
 
-function pageHref(n: number): string {
-  return n <= 1 ? '/news-archive/' : `/news-archive/page/${n}`
+function pageHref(n: number, q: string): string {
+  // Der Pager muss die aktive Suche weitertragen, sonst blättert Seite 2
+  // wieder im ungefilterten Archiv.
+  const query = q ? `?q=${encodeURIComponent(q)}` : ''
+  return n <= 1 ? `/news-archive/${query}` : `/news-archive/page/${n}${query}`
 }
 
 /**
@@ -48,6 +51,7 @@ export default function StoryArchivePage() {
   const route = useRoute()
   if (route?.type !== 'storyArchive') return null
   const { page, total_pages: totalPages, total, stories } = route
+  const q = (route.q ?? '').trim()
   return (
     <div className="story-page">
       <PageHeader currentPage="news">
@@ -63,13 +67,39 @@ export default function StoryArchivePage() {
               auf einer deutschen Maschine würde "2.248" gerendert, Pythons
               f"{total:,}" schrieb "2,248". */}
           {total.toLocaleString('en-US')} stories
+          {q && ` matching “${q}”`}
           {totalPages > 1 && ` · page ${page} of ${totalPages}`}
+          {q && (
+            <a className="story-search-clear" href="/news-archive/">
+              clear search
+            </a>
+          )}
         </div>
+
+        {/* Plain GET aufs Archiv — die Suche funktioniert ohne JavaScript,
+            der Server filtert (articles_html.py) und die ?q=-Seiten sind
+            noindex (storyArchiveMeta). */}
+        <form className="story-search" action="/news-archive/" method="get" role="search">
+          <input
+            type="search"
+            name="q"
+            defaultValue={q}
+            placeholder="Search stories…"
+            aria-label="Search stories"
+          />
+          <button type="submit">Search</button>
+        </form>
 
         {/* Art. 50 EU AI Act. The crawler fragment carries the notice, but
             React replaced #root without it — the only page type where the
             visible label vanished on hydration (audit 2026-08-09). */}
         <AiNoticeBanner message="Story summaries are AI-generated from YouTube video content. Always verify with original sources." />
+
+        {stories.length === 0 && q && (
+          <p className="story-archive-empty">
+            No stories match “{q}”. <a href="/news-archive/">Browse all stories</a>
+          </p>
+        )}
 
         <div className="story-archive-list">
           {stories.map(s => {
@@ -111,7 +141,7 @@ export default function StoryArchivePage() {
 
         {totalPages > 1 && (
           <nav className="story-pager" aria-label="Archive pages">
-            {page > 1 && <a href={pageHref(page - 1)}>← Previous</a>}
+            {page > 1 && <a href={pageHref(page - 1, q)}>← Previous</a>}
             {pagerItems(page, totalPages).map((item, i) =>
               item === 'gap' ? (
                 <span key={`gap-${i}`} className="story-pager-gap">
@@ -122,12 +152,12 @@ export default function StoryArchivePage() {
                   {item}
                 </span>
               ) : (
-                <a key={item} href={pageHref(item)}>
+                <a key={item} href={pageHref(item, q)}>
                   {item}
                 </a>
               ),
             )}
-            {page < totalPages && <a href={pageHref(page + 1)}>Next →</a>}
+            {page < totalPages && <a href={pageHref(page + 1, q)}>Next →</a>}
           </nav>
         )}
         <CommunityCta />
