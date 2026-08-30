@@ -15,10 +15,10 @@ import { useState, memo } from 'react'
 import { config } from '../../config'
 import { absoluteUrl, storyPath } from '../../seo/meta'
 import { apiDetailToSiteData } from '../../utils/siteApi'
-import { shareOrCopy } from '../../utils/share'
 import { formatDuration, formatRelativeDate } from '../../utils/formatters'
 import { SiteBadges, CountryFlag } from '../metadata'
 import LazyImage from '../LazyImage'
+import ShareButton from '../ShareButton'
 import InlineVideo from './InlineVideo'
 import { splitPostText } from './postText'
 import {
@@ -116,7 +116,6 @@ function NewsCard({
 }: NewsCardProps) {
   const [expanded, setExpanded] = useState(false)
   const [loading, setLoading] = useState(false)
-  const [copied, setCopied] = useState(false)
 
   const playSize = PLAY_SIZE[size]
   const pinSize = PIN_SIZE[size]
@@ -124,17 +123,6 @@ function NewsCard({
   const displaySiteName = siteName || siteNameExtracted
   const siteIdentifier = siteId || siteName
   const isClickable = !!(onSiteLoaded && siteIdentifier)
-
-  // Share the canonical public URL, not window.location — a story shared
-  // from the globe panel or a localhost tab has to open the story page.
-  const handleShare = async (e: React.MouseEvent) => {
-    e.stopPropagation()
-    if (!storyHref) return
-    const result = await shareOrCopy(headline, absoluteUrl(storyHref))
-    if (result !== 'copied') return
-    setCopied(true)
-    setTimeout(() => setCopied(false), 1500)
-  }
 
   const handleSiteClick = async () => {
     if (loading || !siteIdentifier || !onSiteLoaded) return
@@ -255,23 +243,11 @@ function NewsCard({
           anchored to the head, so expanding the card never moves them. */}
       {storyHref && (
         <div className="news-card-actions">
-          <button
-            className={`news-card-action${copied ? ' copied' : ''}`}
-            onClick={handleShare}
-            title={copied ? 'Link copied' : 'Share story'}
-            aria-label={copied ? 'Link copied' : 'Share story'}
-          >
-            {copied ? (
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="20 6 9 17 4 12" />
-              </svg>
-            ) : (
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" />
-                <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" /><line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
-              </svg>
-            )}
-          </button>
+          <ShareButton
+            className="news-card-action"
+            title={headline}
+            url={absoluteUrl(storyHref)}
+          />
           <a
             className="news-card-action"
             href={storyHref}

@@ -24,9 +24,10 @@ import {
   getSignificanceColor,
   getSignificanceLabel,
 } from '../components/news/significance'
+import ShareButton from '../components/ShareButton'
 import { globeUrlForSite } from '../constants/brand'
 import { isoDate, longDate } from '../seo/display'
-import { absoluteUrl, countryPath, sitePath } from '../seo/meta'
+import { absoluteUrl, countryPath, sitePath, storyPath } from '../seo/meta'
 import { useRoute } from '../seo/RouteContext'
 import { blurb } from '../seo/text'
 import type { StoryRoute } from '../types/anRoute'
@@ -162,6 +163,14 @@ export default function StoryPage() {
               {getSignificanceLabel(story.significance)}
             </span>
           )}
+          {/* Kanonische URL statt window.location — geteilt wird immer die
+              öffentliche Story-Seite, egal von wo sie gerade offen ist. */}
+          <ShareButton
+            className="story-share"
+            title={story.headline}
+            url={absoluteUrl(storyPath(story.headline, story.id))}
+            label="Share"
+          />
         </div>
 
         <SiteBadges

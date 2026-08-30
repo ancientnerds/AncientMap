@@ -194,6 +194,40 @@
 
 .story-back { margin-top: 40px; }
 
+/* Suchfeld überm Listing — plain GET, funktioniert ohne JS. Farbwerte wie
+   story-chip/story-tag weiter oben. */
+.story-search {
+  display: flex;
+  gap: 8px;
+  margin-top: 16px;
+}
+.story-search input {
+  flex: 1;
+  max-width: 420px;
+  background: rgba(10, 22, 26, 0.6);
+  border: 1px solid rgba(0, 204, 102, 0.30);
+  border-radius: var(--nerv-panel-radius, 0);
+  padding: 8px 12px;
+  color: #e0e0e0;
+  font-size: 14px;
+}
+.story-search input:focus { outline: none; border-color: rgba(0, 204, 102, 0.6); }
+.story-search button {
+  background: rgba(0, 204, 102, 0.08);
+  border: 1px solid rgba(0, 204, 102, 0.35);
+  border-radius: var(--nerv-panel-radius, 0);
+  padding: 8px 16px;
+  color: var(--accent-primary, #00cc66);
+  font-size: 13px;
+  cursor: pointer;
+}
+.story-search button:hover { background: rgba(0, 204, 102, 0.15); }
+
+.story-search-clear { color: var(--text-link, #00c8c8); }
+
+.story-archive-empty { margin-top: 24px; color: var(--text-muted, #708890); }
+.story-archive-empty a { color: var(--text-link, #00c8c8); }
+
 /* Listing */
 .story-archive-list {
   display: flex;
@@ -370,6 +404,23 @@
 }
 .story-chip:hover { background: rgba(0, 204, 102, 0.10); text-decoration: none; }
 .story-chip.is-plain { color: var(--text-muted, #708890); border-color: rgba(112, 136, 144, 0.35); }
+
+/* Share-Knopf in der Meta-Zeile — Chip-Optik, aber ein <button>. Der
+   copied-Zustand kommt aus ShareButton (Icon wechselt aufs Häkchen). */
+.story-share {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: 1px solid rgba(0, 204, 102, 0.35);
+  border-radius: var(--nerv-panel-radius, 0);
+  padding: 3px 10px;
+  font-size: 12px;
+  color: var(--accent-primary, #00cc66);
+  cursor: pointer;
+}
+.story-share:hover { background: rgba(0, 204, 102, 0.10); }
+.story-share.copied { color: var(--text-link, #00c8c8); border-color: rgba(0, 200, 200, 0.35); }
 
 /* Researched sources — stored per story since the verifier work, never shown. */
 .story-source {
