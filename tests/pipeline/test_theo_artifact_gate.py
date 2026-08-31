@@ -8,8 +8,11 @@ list vs registry).
 
 from pipeline.lyra.theo_citations import (
     _collect_non_numeric_markers,
+    detect_language_bleed,
     normalize_grouped_markers,
+    repair_artifact,
     split_artifact,
+    validate_or_repair,
     validate_paper_artifact,
 )
 
@@ -237,9 +240,7 @@ for length testing purposes.
 
 
 from pipeline.lyra.theo_citations import (
-    repair_artifact,
     replace_references_section,
-    validate_or_repair,
 )
 
 # DMT-class defects: grouped marker + orphan high marker + rendered refs
@@ -475,3 +476,107 @@ def test_normalize_leaves_leading_zero_ranges_alone():
     text, n = normalize_grouped_markers("The dig ran through [07-08].")
     assert text == "The dig ran through [07-08]."
     assert n == 0
+
+
+# --- False-positive guards on the publish gate (2026-08-31) -----------------
+# Seven of fifteen August papers were held by the auto-publish gate; all but
+# one failed only on checks that fire on legitimate scholarly prose. These
+# pin the distinction between real defects and the prose they must tolerate.
+
+
+def test_language_bleed_allows_parenthetical_gloss():
+    """A glossed native-script term is scholarship, not LLM drift.
+
+    Held paper f48e477c ran aground on exactly this sentence.
+    """
+    prose = 'The term "shakoki" (遮光器, "light-blocker") refers to Arctic snow goggles.'
+    assert detect_language_bleed(prose) == []
+
+
+def test_language_bleed_still_flags_drifted_prose():
+    """The check exists because MiniMax M3 drifts into Chinese — keep that."""
+    prose = "The excavation report notes 实验考古学的方法论 before returning to English."
+    assert detect_language_bleed(prose) == ["实验考古学的方法论"]
+
+
+def test_language_bleed_still_flags_long_parenthetical_run():
+    """A whole clause inside parens is drift, not a gloss — length decides."""
+    prose = "The monument (与那国島にある大河ドラマ「琉球の風」での結婚の地に建てられた記念碑) stands there."
+    assert detect_language_bleed(prose) != []
+
+
+def test_non_numeric_markers_allow_quoted_interpolation():
+    """Square brackets inside a quotation are editorial interpolation — the
+    standard scholarly convention for adapting a quote, not a pipeline
+    artifact. Held papers a56973e7 and 4bf89556 failed only on these.
+    """
+    prose = (
+        'Carlotto concedes that "paleomagnetic evidence of a shift over '
+        '[the past 100,000 years] is inconclusive" and moves on.'
+    )
+    assert _collect_non_numeric_markers(prose) == []
+
+
+def test_non_numeric_markers_allow_single_quoted_interpolation():
+    prose = "He reported that 'NONE of the 19 scanned [Petrie Museum] objects match'."
+    assert _collect_non_numeric_markers(prose) == []
+
+
+def test_non_numeric_markers_still_flag_artifacts_outside_quotes():
+    """Unquoted bracket tokens stay suspect — that is the check's whole job."""
+    prose = "The corners meet at right angles [N2] and the polish is modern [5620e1fb87f7]."
+    tokens = _collect_non_numeric_markers(prose)
+    assert "N2" in tokens
+    assert "5620e1fb87f7" in tokens
+
+
+def test_non_numeric_markers_still_flag_artifacts_inside_quotes():
+    """A quote is not a laundering channel for pipeline artifacts."""
+    prose = 'He wrote that "the polish is modern [N1]" in the report.'
+    assert _collect_non_numeric_markers(prose) == ["N1"]
+
+
+def test_repair_strips_empty_bracket_artifacts():
+    """`[ ]` is what a stripped citation marker leaves behind — reader-visible
+    junk (24 of them in held paper a56973e7) that no check flags, because the
+    token is empty. Repair must remove it.
+    """
+    md = (
+        "# T\n\nThe ice-mass critique [ ] [ ] was withdrawn [1].\n\n"
+        "## References\n\n[1] A Source — https://example.org/a\n"
+    )
+    repaired, report = repair_artifact(md)
+    assert "[ ]" not in repaired
+    assert report["passed"]
+
+
+def test_validate_or_repair_keeps_repaired_text_when_issues_remain():
+    """A partial repair must be PERSISTED, not discarded.
+
+    Every one of the six held papers had its reference numbering fixed by the
+    deterministic repair, then thrown away because one unrelated issue
+    survived — so each stayed held AND broken, and a manual publish would
+    have shipped the broken numbering. The report still fails (caller holds);
+    only the text improves.
+    """
+    md = (
+        "# T\n\nFirst claim [2] then a second [5].\n\n"
+        "Unfixable leftover [Petrie Museum] outside any quote.\n\n"
+        "## References\n\n"
+        "[2] Source Two — https://example.org/b\n"
+        "[5] Source Five — https://example.org/e\n"
+    )
+    text, report = validate_or_repair(md)
+    assert not report["passed"], "the unfixable marker must still hold the paper"
+    assert "[1]" in text and "[2]" in text, "renumbering must survive"
+    assert not report["non_contiguous"], "report must describe the text returned"
+
+
+def test_language_bleed_still_flags_bare_translation():
+    """A parenthetical holding ONLY foreign script translates an English
+    phrase rather than glossing a foreign one — the shape MiniMax drift
+    takes. Pinned separately from the gloss exemption because the two are
+    one character class apart.
+    """
+    prose = "Experimental archaeology (实验考古学) has demonstrated this method."
+    assert detect_language_bleed(prose) == ["实验考古学"]

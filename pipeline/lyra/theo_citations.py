@@ -456,13 +456,74 @@ def strip_debug_tokens(text: str) -> str:
     return _DEBUG_TOKEN_RE.sub("", text)
 
 
+def contains_non_latin_script(text: str) -> bool:
+    """True when `text` carries any CJK / Cyrillic / Arabic run.
+
+    The unconditional form of the bleed test, for callers deciding whether
+    third-party metadata is usable as English prose at all (image captions
+    built from Wikimedia's multilingual `description` field). Prose checks
+    want `detect_language_bleed`, which tolerates glosses.
+    """
+    return bool(_LANGUAGE_BLEED_RE.search(text))
+
+
+# A parenthetical introducing a foreign term — `(遮光器, "light-blocker")` —
+# is scholarship, not drift. A whole clause in another script never is, so
+# the gloss exemption is capped by how much foreign text the parenthetical
+# carries in total (not per run: `「琉球の風」` splits one Japanese sentence
+# into short runs that would each slip under a per-run cap).
+_GLOSS_MAX_FOREIGN_CHARS = 24
+
+
+def _foreign_char_count(text: str) -> int:
+    """Characters belonging to a non-Latin script.
+
+    Counts the whole foreign span, not just what _LANGUAGE_BLEED_RE matches:
+    kana and CJK brackets sit outside the ideograph range but are every bit
+    as much Japanese, and a budget that ignores them would read a full
+    sentence as a short term. General Punctuation (em-dashes, curly quotes)
+    is excluded — that block is ordinary English typography.
+    """
+    return sum(1 for ch in text if ord(ch) > 0x02FF and not 0x2000 <= ord(ch) <= 0x206F)
+
+
+def _gloss_spans(text: str) -> list[tuple[int, int]]:
+    """Inner spans of parentheticals that read as a term gloss.
+
+    A gloss EXPLAINS the foreign term, so it carries Latin prose alongside
+    the script: `(遮光器, "light-blocker")`. A parenthetical holding nothing
+    but foreign script is a bare translation of an English phrase —
+    `Experimental archaeology (实验考古学)` — which is the exact shape
+    MiniMax drift takes, and stays flagged.
+    """
+    spans: list[tuple[int, int]] = []
+    for m in re.finditer(r"\(([^()\n]{0,160})\)", text):
+        inner = m.group(1)
+        foreign = _foreign_char_count(inner)
+        latin = sum(1 for ch in inner if ch.isascii() and ch.isalpha())
+        if 0 < foreign <= _GLOSS_MAX_FOREIGN_CHARS and latin >= 3:
+            spans.append((m.start(1), m.end(1)))
+    return spans
+
+
 def detect_language_bleed(text: str) -> list[str]:
     """Return non-Latin-script substrings that leaked into English prose.
 
     Used to catch LLM language drift like '实验考古学' embedded mid-sentence.
     Greek is intentionally not flagged (legitimate for quoting ancient terms).
+
+    Parenthetical glosses are exempt (2026-08-31): a paper introducing
+    `the term "shakoki" (遮光器, "light-blocker")` is doing scholarship, and
+    treating that as drift held three finished papers in August 2026. The
+    exemption is bounded by _GLOSS_MAX_NON_LATIN_CHARS — a parenthetical
+    carrying a full foreign clause is still drift.
     """
-    return _LANGUAGE_BLEED_RE.findall(text)
+    spans = _gloss_spans(text)
+    return [
+        m.group(0)
+        for m in _LANGUAGE_BLEED_RE.finditer(text)
+        if not any(start <= m.start() and m.end() <= end for start, end in spans)
+    ]
 
 
 # ---------------------------------------------------------------------------
@@ -1156,6 +1217,33 @@ def strip_uncited_factual_paragraphs(
 # ---------------------------------------------------------------------------
 
 
+# Quotation spans, for telling an editorial interpolation from an artifact.
+# Straight single quotes need the alnum guards or every possessive apostrophe
+# ("Beall's collection") would open a span that swallows the rest of the line.
+_QUOTATION_RES = (
+    re.compile(r"\"([^\"\n]{0,600})\""),
+    re.compile(r"“([^”\n]{0,600})”"),
+    re.compile(r"‘([^’\n]{0,600})’"),
+    re.compile(r"(?<![A-Za-z0-9])'([^'\n]{0,600})'(?![A-Za-z0-9])"),
+)
+
+
+def _quotation_spans(prose: str) -> list[tuple[int, int]]:
+    """Inner spans of quoted passages, straight and typographic."""
+    return [(m.start(1), m.end(1)) for rx in _QUOTATION_RES for m in rx.finditer(prose)]
+
+
+def _is_artifact_shaped_token(token: str) -> bool:
+    """Token shapes that are pipeline artifacts wherever they appear.
+
+    Used to keep a quotation from laundering an artifact: `"the polish is
+    modern [N1]"` is still a defect, `"over [the past 100,000 years]"` is not.
+    """
+    if _is_strippable_artifact_token(token):
+        return True
+    return bool(re.fullmatch(r"\d+(?:\s*[,;]\s*\d+)+", token))  # grouped [9, 7, 1]
+
+
 def _collect_non_numeric_markers(prose: str) -> list[str]:
     """Bracketed tokens in prose that are not plain [N] citations.
 
@@ -1164,7 +1252,13 @@ def _collect_non_numeric_markers(prose: str) -> list[str]:
     they are invisible to renumbering). Markdown links [x](y) are excluded via
     the negative lookahead; footnotes [^n] and [N - topic] placeholders (already
     counted separately) are skipped. Deduplicated, first-seen order.
+
+    Brackets INSIDE a quotation are editorial interpolation — the standard way
+    to adapt a quote to its sentence (`"evidence over [the past 100,000 years]
+    is inconclusive"`) — and are not flagged unless the token is itself
+    artifact-shaped (2026-08-31: two finished papers were held over this).
     """
+    quotations = _quotation_spans(prose)
     out: list[str] = []
     seen: set[str] = set()
     for m in re.finditer(r"\[([^\]\n]+)\](?!\()", prose):
@@ -1174,6 +1268,10 @@ def _collect_non_numeric_markers(prose: str) -> list[str]:
         if token.startswith("^"):
             continue
         if _PLACEHOLDER_MARKER_RE.match(f"[{token}]"):
+            continue
+        if not _is_artifact_shaped_token(token) and any(
+            start <= m.start() and m.end() <= end for start, end in quotations
+        ):
             continue
         if token in seen:
             continue
@@ -1598,6 +1696,8 @@ def _is_strippable_artifact_token(token: str) -> bool:
     link labels, nested-bracket alt text) is left in place; the validator then
     flags it and the paper HOLDS for a human instead of being silently rewritten.
     """
+    if not token:  # `[ ]` — what a stripped marker leaves behind, reader-visible
+        return True
     if re.fullmatch(r"N\d*", token):  # [N], [N1], [N7] writer artifacts
         return True
     if token in ("...", "…"):
@@ -1719,15 +1819,22 @@ def repair_artifact(markdown: str) -> tuple[str, dict]:
 def validate_or_repair(markdown: str) -> tuple[str, dict]:
     """Validate; on failure attempt the deterministic repair once.
 
-    Returns (text, report). The text is only replaced when the repair reaches
-    a passing state — a still-failing repair returns the ORIGINAL text with
-    the original failing report, so callers hold the unmodified paper.
+    Returns (text, report). The repair never fabricates or remaps a citation,
+    so its output is kept whenever it strictly reduces the issue count — even
+    when the paper still fails and the caller must hold it.
+
+    Discarding a partial repair (behaviour until 2026-08-31) left held papers
+    BOTH broken and unpublished: all six papers held that August had their
+    reference numbering repaired and then thrown away, so the manual publish
+    they were waiting for would have shipped the broken numbering anyway.
     """
     report = validate_paper_artifact(markdown)
     if report["passed"]:
         return markdown, report
     repaired, repaired_report = repair_artifact(markdown)
     if repaired_report["passed"]:
+        return repaired, repaired_report
+    if len(repaired_report["issues"]) < len(report["issues"]):
         return repaired, repaired_report
     return markdown, report
 

@@ -3,7 +3,9 @@
 Walks `result_json.report` and rewrites alt text + the first segment of each
 `*Title. Photo: Artist / Source.*` caption using `_clean_title()` — strips
 .jpg/.png extensions, trailing Wikimedia upload-id groups, and collapses
-underscores into spaces.
+underscores into spaces. Also drops caption tails carrying non-Latin script
+(Wikimedia's multilingual `description`), which the artifact gate would
+otherwise read as LLM language bleed and hold the paper over.
 
 No external API calls, no reliance on stored probative_images metadata — this
 backfill works on the markdown alone, which matters for papers whose
@@ -29,7 +31,9 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 from sqlalchemy import text
 
 from pipeline.database import engine
+from pipeline.lyra.theo_citations import contains_non_latin_script
 from pipeline.lyra.theo_image_captions import _clean_title
+from pipeline.research_html_renderer import _ATTRIBUTION_SPLIT_RE
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
@@ -43,6 +47,39 @@ _BLOCK_RE = re.compile(
     r"(?:\s*\n\[Source\]\([^)]+\))?)?",
     re.MULTILINE,
 )
+
+
+# Any caption, whether it still follows its image or was detached by reflow
+# (see research_html_renderer._ORPHAN_CAPTION_RE). Galleries stack several
+# captions under one image, so anchoring on `![alt](path)` like _BLOCK_RE
+# does would miss every caption but the first. "Photo:" is required so
+# ordinary italic emphasis in prose is never touched.
+_CAPTION_RE = re.compile(r"\*(?P<cap>[^*\n]*Photo:[^*\n]+)\*")
+
+
+def _drop_non_latin_tail(caption: str) -> str:
+    """Drop a caption's description tail when it carries non-Latin script.
+
+    Wikimedia ships `description` multilingually, so captions built before
+    2026-08-31 can end in Japanese or Arabic. That lands foreign script in
+    the paper's prose, where the artifact gate reads it as LLM language
+    bleed and holds the finished paper — the Yonaguni and Sumerian-ziggurat
+    papers both died on captions the pipeline wrote itself. `build_caption`
+    now refuses such descriptions at the source; this repairs the papers
+    written before it did.
+
+    Splitting is delegated to the renderer's attribution regex, which cuts
+    at the LAST known source label and so survives artists whose names carry
+    periods. A caption whose ATTRIBUTION is itself non-Latin does not match
+    and is left intact: credit is a licensing obligation, so that paper
+    holds for a human rather than losing its byline silently.
+    """
+    if not contains_non_latin_script(caption):
+        return caption
+    m = _ATTRIBUTION_SPLIT_RE.match(caption)
+    if not m or not contains_non_latin_script(m.group("tail")):
+        return caption
+    return m.group("head") + "."
 
 
 def _rewrite_caption(caption: str) -> str:
@@ -85,6 +122,19 @@ def _rewrite_report(report: str) -> tuple[str, int]:
         return f"![{cleaned_alt}]({path}){new_tail}"
 
     new_text = _BLOCK_RE.sub(_sub, report)
+
+    # Second pass over EVERY caption — galleries detach captions from their
+    # image, so the block-anchored pass above cannot reach them all.
+    def _sub_caption(match: re.Match) -> str:
+        nonlocal rewrites
+        cap = match.group("cap")
+        cleaned = _drop_non_latin_tail(cap)
+        if cleaned == cap:
+            return match.group(0)
+        rewrites += 1
+        return f"*{cleaned}*"
+
+    new_text = _CAPTION_RE.sub(_sub_caption, new_text)
     return new_text, rewrites
 
 

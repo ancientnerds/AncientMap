@@ -165,3 +165,26 @@ def test_find_section_for_claim_with_registry_handles_missing_source_ids():
     paper = "# T\n\n## Intro\n\n[1]"
     assert find_section_for_claim_with_registry(paper, [], registry) is None
     assert find_section_for_claim_with_registry(paper, ["unknown_sid"], registry) is None
+
+
+def test_caption_drops_multilingual_source_description():
+    """A Wikimedia description carrying a non-Latin translation is NOT usable
+    caption prose — it is the pipeline's own text, and the artifact gate's
+    language-bleed check would hold the finished paper over it (2026-08-31:
+    Yonaguni + Sumerian-ziggurat papers held for exactly this). Fall back to
+    the rationale, which is always Latin-script.
+    """
+    c = _cand(
+        title="SumerianZiggurat",
+        description="English: Sumerian ziggurat; Arabic: الزقورة السومرية",
+    )
+    cap = build_caption(c, rationale="A mudbrick ziggurat platform in southern Mesopotamia.")
+    assert "الزقورة" not in cap
+    assert "mudbrick ziggurat platform" in cap
+
+
+def test_caption_keeps_latin_source_description():
+    """The non-Latin rule must not cost us ordinary source descriptions."""
+    c = _cand(description="Bronze Age sky disc found near Nebra")
+    cap = build_caption(c, rationale="Unused rationale.")
+    assert "Bronze Age sky disc found near Nebra" in cap

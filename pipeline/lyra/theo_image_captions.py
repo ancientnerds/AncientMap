@@ -11,6 +11,7 @@ from __future__ import annotations
 import re
 
 from pipeline.lyra.image_fetcher import ImageCandidate
+from pipeline.lyra.theo_citations import contains_non_latin_script
 
 _SOURCE_LABEL = {
     "wikimedia": "Wikimedia Commons",
@@ -159,7 +160,13 @@ def build_caption(cand: ImageCandidate, rationale: str) -> str:
 
     tail: str = ""
     source_desc = (getattr(cand, "description", "") or "").strip()
-    if source_desc and len(source_desc) <= 120:
+    # Wikimedia ships `description` multilingually ("English: Sumerian
+    # ziggurat; Arabic: الزقورة السومرية"). Embedding that puts non-Latin
+    # script into the paper's prose, where the artifact gate reads it as LLM
+    # language bleed and holds the finished paper — two August 2026 papers
+    # (Yonaguni, Sumerian ziggurat) died on captions the pipeline wrote
+    # itself. The rationale below is always English, so prefer it.
+    if source_desc and len(source_desc) <= 120 and not contains_non_latin_script(source_desc):
         tail = _sanitize_caption_field(source_desc.rstrip("."))
     if not tail:
         tail = _sanitize_caption_field(_trim_relevance(rationale))
