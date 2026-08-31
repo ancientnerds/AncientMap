@@ -30,8 +30,10 @@ set -uo pipefail
 # the weekly budget, and the batch window opens Friday.
 MIN_WEEKLY=${MIN_WEEKLY:-35}
 # Below this the limiter starts freezing between calls; a paper begun here
-# would sleep more than it works.
+# would sleep more than it works. Waited out rather than stopped on.
 MIN_5H=${MIN_5H:-25}
+WAIT_STEP_S=${WAIT_STEP_S:-900}
+MAX_WAIT_5H_S=${MAX_WAIT_5H_S:-28800}   # 8h — well past a full 5h window
 SKIP_SLUGS="${SKIP_SLUGS:-}"
 PROGRESS=${PROGRESS:-/tmp/rework_progress.log}
 : > "$PROGRESS"
@@ -61,10 +63,20 @@ for slug in "${SLUGS[@]}"; do
         echo "[$(date -Is)] STOP: weekly ${w}% below the Theo reserve ${MIN_WEEKLY}%" >> "$PROGRESS"
         break
     fi
-    if [ "${h:--1}" -lt "$MIN_5H" ] 2>/dev/null; then
-        echo "[$(date -Is)] STOP: 5h window ${h}% — the limiter would freeze mid-paper" >> "$PROGRESS"
-        break
-    fi
+    # The 5h window is the one gate worth WAITING on: it is rolling, so it
+    # refills by itself within hours, while the weekly budget only resets on
+    # Monday. Stopping on it would end a run that just needed to sit still.
+    waited=0
+    while [ "${h:--1}" -lt "$MIN_5H" ] 2>/dev/null; do
+        if [ "$waited" -ge "$MAX_WAIT_5H_S" ]; then
+            echo "[$(date -Is)] STOP: 5h window still ${h}% after $((waited / 3600))h" >> "$PROGRESS"
+            break 2
+        fi
+        echo "[$(date -Is)] 5h window ${h}% — waiting ${WAIT_STEP_S}s for it to refill" >> "$PROGRESS"
+        sleep "$WAIT_STEP_S"
+        waited=$((waited + WAIT_STEP_S))
+        h=$(quota five_hour_remaining_percent)
+    done
 
     log="/tmp/rework_${slug:0:40}.log"
     docker exec ancient_nerds_theo_worker python -m pipeline.lyra.backfill_probative_images \
