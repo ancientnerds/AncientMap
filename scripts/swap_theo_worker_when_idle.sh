@@ -28,6 +28,13 @@ set -euo pipefail
 POLL_SECONDS="${POLL_SECONDS:-60}"
 MAX_WAIT_HOURS="${MAX_WAIT_HOURS:-20}"
 COMPOSE_DIR="${COMPOSE_DIR:-/var/www/ancientnerds}"
+# 'running' -> 'completed' is committed BEFORE _auto_publish runs
+# (theo_worker.py: the completion UPDATE, then `await asyncio.to_thread(
+# _auto_publish, ...)`), and auto-publish then does citation repair, the
+# publish transaction and Qdrant indexing. A count of 0 therefore does NOT
+# mean the worker is finished. Wait this long and re-check before swapping,
+# so the swap can't cut a publish in half.
+SETTLE_SECONDS="${SETTLE_SECONDS:-300}"
 
 cd "$COMPOSE_DIR"
 deadline=$(( $(date +%s) + MAX_WAIT_HOURS * 3600 ))
@@ -47,7 +54,15 @@ while :; do
         "SELECT COUNT(*) FROM research_requests WHERE status = 'running'" 2>/dev/null || echo "unknown")
 
     if [ "$busy" = "0" ]; then
-        echo "[$(date -Is)] Worker idle — swapping container in."
+        echo "[$(date -Is)] Count is 0 — settling ${SETTLE_SECONDS}s so auto-publish can finish."
+        sleep "$SETTLE_SECONDS"
+        recheck=$(docker exec ancient_nerds_db psql -U ancient_map -d ancient_map -tAc \
+            "SELECT COUNT(*) FROM research_requests WHERE status = 'running'" 2>/dev/null || echo "unknown")
+        if [ "$recheck" != "0" ]; then
+            echo "[$(date -Is)] A run started during the settle window (running=$recheck) — back to waiting."
+            continue
+        fi
+        echo "[$(date -Is)] Still idle — swapping container in."
         docker compose up -d --no-build theo-worker
         sleep 10
         docker ps --filter name=ancient_nerds_theo_worker \
