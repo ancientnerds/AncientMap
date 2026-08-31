@@ -38,10 +38,17 @@ SKIP_SLUGS="${SKIP_SLUGS:-}"
 PROGRESS=${PROGRESS:-/tmp/rework_progress.log}
 : > "$PROGRESS"
 
-quota() {  # $1 = five_hour_remaining_percent | weekly_remaining_percent
+# ONE probe, both numbers, echoed as "<weekly> <5h>". Two forced probes
+# back to back is a wasted API round-trip on a budget we are trying to save.
+#
+# `or -1` would be wrong here: a genuine 0% is falsy, so an exhausted window
+# would report as an unreadable probe. `is None` is the only correct test.
+quota() {
     docker exec ancient_nerds_theo_worker python -c "
 from pipeline.lyra.minimax_shared import probe_minimax_quota
-print(int(probe_minimax_quota(force=True).get('$1') or -1))
+p = probe_minimax_quota(force=True)
+w, h = p.get('weekly_remaining_percent'), p.get('five_hour_remaining_percent')
+print(int(w) if w is not None else -1, int(h) if h is not None else -1)
 " 2>/dev/null | tail -1
 }
 
@@ -53,8 +60,7 @@ mapfile -t SLUGS < <(docker exec ancient_nerds_db psql -U ancient_map -d ancient
 for slug in "${SLUGS[@]}"; do
     case " $SKIP_SLUGS " in *" $slug "*) continue;; esac
 
-    w=$(quota weekly_remaining_percent)
-    h=$(quota five_hour_remaining_percent)
+    read -r w h <<< "$(quota)"
     echo "[$(date -Is)] weekly=${w}% 5h=${h}% next=$slug" >> "$PROGRESS"
 
     # Fail CLOSED on an unreadable probe: -1 stops the run rather than
@@ -75,7 +81,7 @@ for slug in "${SLUGS[@]}"; do
         echo "[$(date -Is)] 5h window ${h}% — waiting ${WAIT_STEP_S}s for it to refill" >> "$PROGRESS"
         sleep "$WAIT_STEP_S"
         waited=$((waited + WAIT_STEP_S))
-        h=$(quota five_hour_remaining_percent)
+        read -r w h <<< "$(quota)"
     done
 
     log="/tmp/rework_${slug:0:40}.log"
