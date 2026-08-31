@@ -104,11 +104,20 @@ _SOURCE_RANK = {
 }
 
 
+# A banner is displayed far wider than an inline image, so anything below
+# this is upscaled mush. Added 2026-08-31: the solar-superflares paper ran a
+# 194x110 Europeana TV frame as its hero because scoring weighed the aspect
+# ratio and nothing else about the pixels, and a thumbnail is the easiest
+# thing in any pool to be wide.
+HERO_MIN_WIDTH = 600
+
+
 @dataclass
 class HeroCandidate:
     entry: dict
     score: float
     reason: str
+    eligible: bool = True
 
 
 def _tokenize(text: str) -> set[str]:
@@ -118,26 +127,25 @@ def _tokenize(text: str) -> set[str]:
     return {w for w in words if w not in _STOPWORDS}
 
 
-def _aspect_ratio(web_path: str) -> float:
-    """Return width/height for the image file backing `web_path`, or 0.0 on failure.
+def _dimensions(web_path: str) -> tuple[int, int]:
+    """(width, height) of the file backing `web_path`, or (0, 0) on failure.
 
     We don't want to hard-require Pillow just for hero-picking, so we try
-    importing lazily and fall back to 0.0 if unavailable. A zero ratio means
-    the landscape-bonus component drops to 0 but the pick still works.
+    importing lazily. Zeroes mean the landscape bonus drops to 0 and the
+    size floor cannot be judged; the pick still works.
     """
     if not web_path.startswith("/data/"):
-        return 0.0
+        return (0, 0)
     local = _IMAGES_ROOT / web_path.lstrip("/")
     if not local.exists():
-        return 0.0
+        return (0, 0)
     try:
         from PIL import Image  # type: ignore
 
         with Image.open(local) as img:
-            w, h = img.size
-            return (w / h) if h else 0.0
+            return img.size
     except Exception:
-        return 0.0
+        return (0, 0)
 
 
 def _cand_from_entry(entry: dict) -> ImageCandidate:
@@ -163,7 +171,8 @@ def _score_entry(entry: dict, title_tokens: set[str], position_index: int) -> He
     relevance = overlap * 3.0  # strong signal; boost by 3 per shared keyword
 
     # Aspect ratio: prefer landscape.
-    ratio = _aspect_ratio(entry.get("web_path", "") or "")
+    width, height = _dimensions(entry.get("web_path", "") or "")
+    ratio = (width / height) if height else 0.0
     if ratio >= 1.6:
         aspect_bonus = 2.5
     elif ratio >= 1.35:
@@ -185,11 +194,15 @@ def _score_entry(entry: dict, title_tokens: set[str], position_index: int) -> He
     writer_bonus = 1.5 if entry.get("section_heading") == "[inline]" else 0.0
 
     score = relevance + aspect_bonus + position_bonus + source_bonus + writer_bonus
+    # Unknown dimensions (Pillow missing, file not on this host) stay
+    # eligible: a size we cannot read is not evidence of a small image.
+    eligible = width == 0 or width >= HERO_MIN_WIDTH
     reason = (
-        f"overlap={overlap} aspect={ratio:.2f} pos={position_index} "
+        f"overlap={overlap} aspect={ratio:.2f} w={width} pos={position_index} "
         f"src={entry.get('source_name', '?')} writer={int(writer_bonus > 0)}"
+        f"{'' if eligible else ' BELOW-MIN-WIDTH'}"
     )
-    return HeroCandidate(entry=entry, score=score, reason=reason)
+    return HeroCandidate(entry=entry, score=score, reason=reason, eligible=eligible)
 
 
 def pick_hero_image(
@@ -215,7 +228,10 @@ def pick_hero_image(
     if not ranked:
         return None
 
-    ranked.sort(key=lambda c: c.score, reverse=True)
+    # Every image wide enough to be a banner outranks every one that isn't,
+    # regardless of score. Sorting rather than filtering keeps a paper whose
+    # images are ALL small from losing its hero entirely.
+    ranked.sort(key=lambda c: (c.eligible, c.score), reverse=True)
     best = ranked[0]
 
     logger.info(

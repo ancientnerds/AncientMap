@@ -35,26 +35,46 @@ def _tokens(s: str) -> set[str]:
     return {t for t in re.split(r"\W+", s.lower()) if len(t) > 3}
 
 
+def _metadata_overlap(cand: ImageCandidate, what_image_must_show: str) -> int:
+    """Count of content tokens (length > 3) shared by the candidate's
+    title+description and the specialist's must-show description."""
+    haystack = f"{cand.title} {cand.description}".strip()
+    if not haystack or not what_image_must_show:
+        return 0
+    return len(_tokens(haystack) & _tokens(what_image_must_show))
+
+
 def metadata_gate_passes(cand: ImageCandidate, what_image_must_show: str) -> bool:
     """Cheap text-similarity check. Rejects clearly-irrelevant candidates.
 
-    Requires at least 2 shared content tokens (length > 3) between the
-    image's title+description and the specialist's must_show description,
-    AND at least 20% coverage of the must-show tokens. The 2-token rule
-    catches generic single-word coincidences (Run 15: a Nazca-lines image
-    matched an O'Brien-book paragraph because both contained "lines"); the
-    20% rule scales the bar with prompt specificity. VLM still runs as the
-    strict downstream gate.
+    One shared content token is enough. This filter exists to keep obvious
+    junk away from the expensive vision judge, NOT to decide relevance — the
+    judge does that, and it sees the image while this only sees a title.
+
+    It required 2 shared tokens plus 20% coverage until 2026-08-31, which
+    made it the de-facto decider: museum and Commons titles are terse
+    ("Solar flare", "Object 1983.104.2") and routinely share one word with a
+    full sentence of must-show text, so 587 of 971 opportunities across 12
+    papers reached the judge with nothing left to judge.
+
+    The single-token coincidence the old rule guarded against (Run 15: a
+    Nazca-lines image matched an O'Brien-book paragraph on "lines") is now
+    handled where it belongs — such a candidate ranks last via
+    `rank_by_metadata_overlap` and is refused by the judge on sight.
     """
-    haystack = f"{cand.title} {cand.description}".strip()
-    if not haystack or not what_image_must_show:
-        return False
-    h_tokens = _tokens(haystack)
-    m_tokens = _tokens(what_image_must_show)
-    if not m_tokens:
-        return False
-    shared = h_tokens & m_tokens
-    return len(shared) >= 2 and (len(shared) / len(m_tokens)) >= 0.20
+    return _metadata_overlap(cand, what_image_must_show) >= 1
+
+
+def rank_by_metadata_overlap(
+    cands: list[ImageCandidate], what_image_must_show: str
+) -> list[ImageCandidate]:
+    """Best-matching candidates first, ties keeping their original order.
+
+    The probe budget per opportunity is spent in list order, so with a
+    deliberately wide pre-filter the ranking is what keeps the vision calls
+    pointed at the most promising images.
+    """
+    return sorted(cands, key=lambda c: -_metadata_overlap(c, what_image_must_show))
 
 
 # Re-export for the handful of callers (handlers/probative_images.py and dev
@@ -101,12 +121,33 @@ def verdict_is_meaningful(v: dict | None) -> bool:
     return v.get("verdict") == "meaningful"
 
 
-# Backward-compat aliases. Under the strict schema, a candidate is either
-# meaningful (keep, tag as verified) or not (drop entirely) — there's no
-# "safe but unverified" middle ground like the old lenient soft_accept.
 def verdict_is_accept(v: dict | None) -> bool:
+    """The image literally depicts the claim — citable as visual evidence.
+
+    Drives the `verified` flag, which decides whether the caption presents
+    the picture as evidence or as an illustration.
+    """
     return verdict_is_meaningful(v)
 
 
 def verdict_is_safe(v: dict | None) -> bool:
-    return verdict_is_meaningful(v)
+    """The image may be embedded at all — as evidence OR as an illustration.
+
+    The judge grades on three levels (meaningful / weak / misleading) and
+    until 2026-08-31 both gates were the same function, so `weak` — "related
+    but not literal", the judge's explicit middle — was discarded with the
+    misleading ones. Across 12 papers that cost 862 of 971 opportunities
+    every candidate they had, and a paper on solar superflares ended up with
+    no picture of the Sun: statistical claims ("2,889 superflares on 56,450
+    stars") are not LITERALLY depictable by any photograph, so science papers
+    could not earn an image at all.
+
+    `weak` therefore embeds, but never as evidence — `verdict_is_accept`
+    stays False and the caption says so. `misleading` and `off_topic` are
+    still dropped, whichever field carries the bad news.
+    """
+    if not v:
+        return False
+    if v.get("verdict") not in ("meaningful", "weak"):
+        return False
+    return v.get("match") != "off_topic"

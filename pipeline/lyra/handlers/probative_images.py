@@ -29,6 +29,7 @@ from pipeline.lyra.image_gates import (
     build_vlm_prompt,
     metadata_gate_passes,
     parse_vlm_verdict,
+    rank_by_metadata_overlap,
     verdict_is_accept,
     verdict_is_safe,
 )
@@ -611,6 +612,10 @@ async def _process_one_opportunity(
         )
         cands = [c for c in fetched if metadata_gate_passes(c, must_show)]
 
+    # The pre-filter is deliberately wide (one shared token), so order is what
+    # aims the probe budget below at the most promising candidates.
+    cands = rank_by_metadata_overlap(cands, must_show)
+
     if not cands:
         print(
             f"[probative] no candidates for para {para_idx} keyword '{keyword}' — "
@@ -625,12 +630,19 @@ async def _process_one_opportunity(
     # unverified but does NOT gate embedding — the reviewer decides in the UI.
     # Only forbidden-elements and poor-quality are safety rejects.
     max_per_opp = getattr(settings, "probative_images_max_per_opportunity", 3)
+    # Probe budget, separate from the embed cap: the loop below runs until
+    # `max_per_opp` candidates are ACCEPTED, so without a second bound a
+    # widened pre-filter would pay for a vision call on every straggler in a
+    # long candidate list. Downloads and VLM calls are the expensive steps
+    # here and they share MiniMax quota with the research runs themselves.
+    max_probes = max_per_opp * 2
+    probes = 0
     tagged: list[tuple] = []  # (cand, verified_bool)
     seen_subjects: set[str] = set()
     seen_urls: set[str] = set()
 
     for cand in cands:
-        if len(tagged) >= max_per_opp:
+        if len(tagged) >= max_per_opp or probes >= max_probes:
             break
         cand_url = getattr(cand, "url", "") or ""
         cand_subject = _subject_fingerprint(cand)
@@ -674,6 +686,7 @@ async def _process_one_opportunity(
             probe_path.unlink(missing_ok=True)
             continue
         prompt = build_vlm_prompt(para_text, must_show, forbidden)
+        probes += 1
         raw = await asyncio.to_thread(minimax_vlm, ctx.client, image_bytes, prompt)
         verdict = parse_vlm_verdict(raw)
         if not verdict_is_safe(verdict):
@@ -734,7 +747,7 @@ async def _process_one_opportunity(
             continue
 
         web_path = f"/data/research-images/{ctx.paper_id}/p{para_idx}_{keyword_slug}{suffix}.jpg"
-        md = image_markdown(accepted_cand, web_path, rationale)
+        md = image_markdown(accepted_cand, web_path, rationale, verified=verified)
         if is_gallery:
             prefix = f"gallery:{para_hash}|verified:{'yes' if verified else 'no'}|"
             md = re_module.sub(

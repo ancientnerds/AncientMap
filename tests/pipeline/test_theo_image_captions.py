@@ -188,3 +188,35 @@ def test_caption_keeps_latin_source_description():
     c = _cand(description="Bronze Age sky disc found near Nebra")
     cap = build_caption(c, rationale="Unused rationale.")
     assert "Bronze Age sky disc found near Nebra" in cap
+
+
+def test_caption_marks_an_unverified_image_as_illustration():
+    """`weak`-verdict images embed, but must never read as evidence.
+
+    The judge's middle verdict means "related, not literal". Showing such a
+    picture with the same caption as a verified one would let it pass for
+    proof of the claim it sits under.
+    """
+    c = _cand(title="Solar flare", artist="NASA")
+    cap = build_caption(c, rationale="A solar flare erupting from the Sun.", verified=False)
+    assert cap.startswith("*Illustration: ")
+    assert "Solar flare" in cap
+    assert "NASA" in cap
+
+
+def test_verified_caption_carries_no_illustration_marker():
+    c = _cand(title="Solar flare", artist="NASA")
+    cap = build_caption(c, rationale="A solar flare erupting from the Sun.")
+    assert "Illustration:" not in cap
+
+
+def test_illustration_marker_keeps_the_attribution_split_parsable():
+    """clean_image_titles and the HTML renderer split on `. Photo:` — the
+    marker must not break that contract."""
+    from pipeline.research_html_renderer import _ATTRIBUTION_SPLIT_RE
+
+    c = _cand(title="Solar flare", artist="NASA", description="A flare in 2012")
+    cap = build_caption(c, rationale="unused", verified=False).strip("*")
+    m = _ATTRIBUTION_SPLIT_RE.match(cap)
+    assert m is not None
+    assert "Photo: NASA" in m.group("head")

@@ -134,11 +134,18 @@ def _sanitize_caption_field(text: str) -> str:
     return cleaned
 
 
-def build_caption(cand: ImageCandidate, rationale: str) -> str:
+def build_caption(cand: ImageCandidate, rationale: str, verified: bool = True) -> str:
     """Assemble the single-line caption placed below the image.
 
     Format (empty pieces are dropped):
         *{Title}. Photo: {Artist} / {Source}. {Short description or relevance}.*
+
+    `verified=False` prefixes the title with `Illustration: `. Those images
+    passed the judge's MIDDLE verdict — related to the passage but not a
+    literal depiction of its claim — and must not read as proof of the
+    sentence they sit under. The marker goes on the title segment so the
+    `. Photo:` attribution split stays intact for the HTML renderer and the
+    caption backfill.
 
     Description precedence (second position):
       1. `cand.description` from the source, if present and ≤120 chars.
@@ -150,6 +157,8 @@ def build_caption(cand: ImageCandidate, rationale: str) -> str:
     page where the license is shown in context.
     """
     lead = _sanitize_caption_field(_clean_title(cand.title)) or "Untitled image"
+    if not verified:
+        lead = f"Illustration: {lead}"
 
     attribution: list[str] = []
     artist_clean = _sanitize_caption_field(cand.artist or "")
@@ -195,6 +204,7 @@ def image_markdown(
     cand: ImageCandidate,
     image_path_web: str,
     rationale: str,
+    verified: bool = True,
 ) -> str:
     """Build the full markdown block: alt-texted image + caption line + source link.
 
@@ -202,9 +212,11 @@ def image_markdown(
     Commons file page, Met object page, Europeana record etc. — NOT the
     license template URL. Readers want to see where the image came from;
     license_url is only a last-resort fallback.
+
+    `verified=False` marks the caption as an illustration (see build_caption).
     """
     alt = (_clean_title(cand.title) or "Research image").replace("]", "")
-    caption = build_caption(cand, rationale)
+    caption = build_caption(cand, rationale, verified=verified)
     source_url = _encode_parens(getattr(cand, "url", "") or getattr(cand, "license_url", ""))
     src_path = _encode_parens(image_path_web)
     url_part = f"\n[Source]({source_url})" if source_url else ""
