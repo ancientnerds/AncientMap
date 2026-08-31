@@ -276,6 +276,7 @@ HERO_DIR = Path("public/data/images/wiki")
 # 200, so no need to cap against the original's width.
 HERO_THUMB_WIDTH = 500
 
+
 def _hero_candidate_titles(article_title: str) -> list[str]:
     """Every File: title the importer could have picked the hero from."""
     titles = [img["title"] for img in fetch_article_images(article_title)]
