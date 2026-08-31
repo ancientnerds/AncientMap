@@ -3,9 +3,14 @@
 No external API calls, no AI image generation — selects from the images that
 the probative-image handler already embedded in the paper. Scoring factors:
 
+- **Evidence before illustration**: an image the judge would not call a
+  depiction of any claim never leads the paper, whatever else it scores.
+- **Minimum width**: a banner is displayed far wider than an inline image,
+  so anything below HERO_MIN_WIDTH ranks behind everything above it.
 - **Title relevance**: overlap of keywords between the paper title and the
   image's title/rationale/section_heading. Images whose metadata echoes the
-  headline beat generic period-art shots.
+  headline beat generic period-art shots, and words from the title's leading
+  clause count twice.
 - **Aspect ratio**: banner crops work best on landscape images; we read the
   image file from disk and prefer anything ≥ 1.4:1 wide.
 - **Section position**: earlier sections carry the headline argument, so an
@@ -118,6 +123,7 @@ class HeroCandidate:
     score: float
     reason: str
     eligible: bool = True
+    is_evidence: bool = True
 
 
 def _tokenize(text: str) -> set[str]:
@@ -125,6 +131,22 @@ def _tokenize(text: str) -> set[str]:
         return set()
     words = re.findall(r"[a-zA-Z]{3,}", text.lower())
     return {w for w in words if w not in _STOPWORDS}
+
+
+def _title_lead(title: str) -> str:
+    """The paper's leading concept — text before the first comma or colon.
+
+    "Solar Superflares, Cosmic Impacts, and Fire-and-Flood Mythology" is a
+    paper about superflares that also covers mythology, not an equal split.
+    Titles without a separator fall back to their first four words, which is
+    the same idea for a title written as one phrase.
+    """
+    if not title:
+        return ""
+    head = re.split(r"[,:;—–]", title, maxsplit=1)[0].strip()
+    if head and head != title.strip():
+        return head
+    return " ".join(title.split()[:4])
 
 
 def _dimensions(web_path: str) -> tuple[int, int]:
@@ -160,7 +182,9 @@ def _cand_from_entry(entry: dict) -> ImageCandidate:
     )
 
 
-def _score_entry(entry: dict, title_tokens: set[str], position_index: int) -> HeroCandidate:
+def _score_entry(
+    entry: dict, title_tokens: set[str], lead_tokens: set[str], position_index: int
+) -> HeroCandidate:
     # Title relevance: tokens shared between headline and image metadata.
     meta_text = " ".join(
         str(entry.get(k, "") or "")
@@ -168,7 +192,13 @@ def _score_entry(entry: dict, title_tokens: set[str], position_index: int) -> He
     )
     meta_tokens = _tokenize(meta_text)
     overlap = len(title_tokens & meta_tokens)
-    relevance = overlap * 3.0  # strong signal; boost by 3 per shared keyword
+    # Words from the paper title's LEADING clause count twice. "Solar
+    # Superflares, Cosmic Impacts, and Fire-and-Flood Mythology" is about
+    # superflares first; without this a flood tablet matching the tail ties
+    # with a solar image matching the head, and the tie fell to whichever
+    # had the better position bonus.
+    lead_overlap = len(lead_tokens & meta_tokens)
+    relevance = (overlap + lead_overlap) * 3.0
 
     # Aspect ratio: prefer landscape.
     width, height = _dimensions(entry.get("web_path", "") or "")
@@ -197,12 +227,17 @@ def _score_entry(entry: dict, title_tokens: set[str], position_index: int) -> He
     # Unknown dimensions (Pillow missing, file not on this host) stay
     # eligible: a size we cannot read is not evidence of a small image.
     eligible = width == 0 or width >= HERO_MIN_WIDTH
+    # Papers embedded before the two-tier split carry no `verified` key;
+    # absent means evidence, so legacy sets are not all demoted.
+    is_evidence = bool(entry.get("verified", True))
     reason = (
         f"overlap={overlap} aspect={ratio:.2f} w={width} pos={position_index} "
         f"src={entry.get('source_name', '?')} writer={int(writer_bonus > 0)}"
         f"{'' if eligible else ' BELOW-MIN-WIDTH'}"
     )
-    return HeroCandidate(entry=entry, score=score, reason=reason, eligible=eligible)
+    return HeroCandidate(
+        entry=entry, score=score, reason=reason, eligible=eligible, is_evidence=is_evidence
+    )
 
 
 def pick_hero_image(
@@ -219,11 +254,12 @@ def pick_hero_image(
         return None
 
     title_tokens = _tokenize(paper_title)
+    lead_tokens = _tokenize(_title_lead(paper_title))
     ranked: list[HeroCandidate] = []
     for idx, entry in enumerate(probative_images):
         if not entry.get("web_path"):
             continue
-        ranked.append(_score_entry(entry, title_tokens, idx))
+        ranked.append(_score_entry(entry, title_tokens, lead_tokens, idx))
 
     if not ranked:
         return None
@@ -231,7 +267,10 @@ def pick_hero_image(
     # Every image wide enough to be a banner outranks every one that isn't,
     # regardless of score. Sorting rather than filtering keeps a paper whose
     # images are ALL small from losing its hero entirely.
-    ranked.sort(key=lambda c: (c.eligible, c.score), reverse=True)
+    # Evidence outranks illustration outranks undersized. A banner presents
+    # the paper: an image the judge would not call a depiction of any claim
+    # must not be the first thing a reader sees.
+    ranked.sort(key=lambda c: (c.eligible, c.is_evidence, c.score), reverse=True)
     best = ranked[0]
 
     logger.info(

@@ -68,3 +68,57 @@ def test_min_width_is_above_thumbnail_territory():
 
 def test_no_images_means_no_hero():
     assert pick_hero_image("Any", []) is None
+
+
+def test_evidence_outranks_an_illustration_as_banner(tmp_path, monkeypatch):
+    """A banner presents the paper. An image the judge would not call a
+    depiction of any claim must not be the first thing a reader sees —
+    the reworked paper picked an ice-core chart marked "Illustration:".
+    """
+    # Same title, same size, same position bonus — `verified` is the ONLY
+    # difference, so the assertion cannot pass on relevance by accident.
+    illustration = _write(tmp_path, monkeypatch, "chart.jpg", (1600, 900))
+    evidence = _write(tmp_path, monkeypatch, "flare.jpg", (1600, 900))
+    entries = [
+        {**_entry(illustration, "Solar image"), "verified": False},
+        {**_entry(evidence, "Solar image"), "verified": True},
+    ]
+    assert pick_hero_image("Solar Superflares", entries)["src"] == evidence
+
+
+def test_leading_title_words_weigh_double(tmp_path, monkeypatch):
+    """ "Solar Superflares, Cosmic Impacts, and Fire-and-Flood Mythology" is
+    about superflares first; a flood tablet matching the tail must not tie
+    with a solar image matching the head."""
+    flood = _write(tmp_path, monkeypatch, "flood.jpg", (960, 700))
+    solar = _write(tmp_path, monkeypatch, "solar.jpg", (960, 700))
+    entries = [
+        {**_entry(flood, "Babylonian flood tablet"), "verified": True},
+        {**_entry(solar, "Solar flare eruption"), "verified": True},
+    ]
+    hero = pick_hero_image("Solar Superflares, Cosmic Impacts, and Flood Mythology", entries)
+    assert hero["src"] == solar
+
+
+def test_missing_verified_key_is_treated_as_evidence(tmp_path, monkeypatch):
+    """Papers embedded before the two-tier split carry no `verified` key —
+    they must not all be demoted to illustrations."""
+    a = _write(tmp_path, monkeypatch, "a.jpg", (960, 700))
+    hero = pick_hero_image("Any", [_entry(a, "Legacy image")])
+    assert hero["src"] == a
+
+
+def test_title_lead_splits_on_the_first_separator():
+    from pipeline.lyra.hero_picker import _title_lead
+
+    assert _title_lead("Solar Superflares, Cosmic Impacts, and Flood Myth") == "Solar Superflares"
+    assert _title_lead("Yonaguni: Natural or Man-Made?") == "Yonaguni"
+
+
+def test_title_lead_falls_back_to_the_first_words():
+    from pipeline.lyra.hero_picker import _title_lead
+
+    assert _title_lead("The engineering and origins of the Baalbek megaliths") == (
+        "The engineering and origins"
+    )
+    assert _title_lead("") == ""
