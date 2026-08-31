@@ -74,6 +74,70 @@ TIER_UNKNOWN = "UNKNOWN"  # probe failed; no opinion yet
 # which blocks batch claims in theo_worker._batch_claim_allowed.
 _PROBE_FAILURE_DEMOTE_THRESHOLD = 5
 
+# --- Training-corpus growth guard -------------------------------------------
+# The corpus (docs/TRAINING_DATA_POLICY.md) is append-only by design, so the
+# only thing between it and a full disk is a loud counter. Checked from the
+# probe loop rather than a second daemon: it is one cheap query every ~6h.
+_CORPUS_WARN_BYTES = 5 * 1024**3
+_CORPUS_ALARM_BYTES = 20 * 1024**3
+_CORPUS_CHECK_EVERY_PROBES = 360  # 6h at QUOTA_PROBE_INTERVAL_S=60
+_corpus_alert_level = ""  # "" | "warn" | "alarm"; re-notify only on change
+
+
+def _check_corpus_size() -> None:
+    """Log training-corpus growth, notify on threshold crossings.
+
+    Blocking DB call — invoke via asyncio.to_thread.
+    """
+    global _corpus_alert_level
+    try:
+        from pipeline.lyra.training_corpus import corpus_size_report
+
+        report = corpus_size_report()
+    except Exception as exc:  # noqa: BLE001 — a size probe never breaks the watchdog
+        logger.warning("[THEO-WATCHDOG] Corpus size probe failed: %s", exc)
+        return
+
+    total = report["total_bytes"]
+    gib = total / 1024**3
+    logger.info(
+        "[THEO-WATCHDOG] Training corpus: %.2f GiB (%d documents, %d artifacts)",
+        gib,
+        report["documents"],
+        report["artifacts"],
+    )
+
+    if total >= _CORPUS_ALARM_BYTES:
+        level = "alarm"
+    elif total >= _CORPUS_WARN_BYTES:
+        level = "warn"
+    else:
+        level = ""
+
+    if level and level != _corpus_alert_level:
+        send_discord_webhook(
+            {
+                "embeds": [
+                    {
+                        "title": "📚 Training corpus growth",
+                        "description": (
+                            f"The corpus is at **{gib:.1f} GiB** "
+                            f"({report['documents']} documents, "
+                            f"{report['artifacts']} artifacts).\n"
+                            + (
+                                "Past the 20 GiB alarm threshold — check disk headroom "
+                                "and the archive dump retention."
+                                if level == "alarm"
+                                else "Past the 5 GiB notice threshold."
+                            )
+                        ),
+                        "color": 0xE67E22 if level == "alarm" else 0x95A5A6,
+                    }
+                ]
+            }
+        )
+    _corpus_alert_level = level
+
 
 def _tier_after_probe_failure(prev_tier: str, consecutive_failures: int) -> str:
     """Tier to hold after a failed probe: previous tier below the demotion
@@ -464,6 +528,8 @@ async def _loop() -> None:
                 )
 
         _publish_state()
+        if _state["probe_count"] and _state["probe_count"] % _CORPUS_CHECK_EVERY_PROBES == 0:
+            await asyncio.to_thread(_check_corpus_size)
         await asyncio.sleep(QUOTA_PROBE_INTERVAL_S)
 
 

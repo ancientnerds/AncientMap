@@ -206,6 +206,7 @@ class ConvergenceOrchestrator:
         from pipeline.lyra.handlers.paper import PaperHandler
         from pipeline.lyra.handlers.presentation import PresentationHandler
         from pipeline.lyra.handlers.probative_images import ProbativeImagesHandler
+        from pipeline.lyra.handlers.state_persist import StatePersistHandler
         from pipeline.lyra.handlers.synthesis import SynthesisHandler
 
         # Instantiate handlers
@@ -227,6 +228,7 @@ class ConvergenceOrchestrator:
         image_gen = ImageGenerationHandler(state, bus, semaphore)
         judge = JudgeHandler(state, bus, semaphore)
         deadline_handler = DeadlineHandler(state, bus, semaphore)
+        state_persist = StatePersistHandler(state, bus, semaphore)
 
         # Register all handlers on the bus
         # Event flow:
@@ -258,6 +260,7 @@ class ConvergenceOrchestrator:
             image_gen,
             judge,
             deadline_handler,
+            state_persist,
         ]
         for handler in all_handlers:
             handler.register()

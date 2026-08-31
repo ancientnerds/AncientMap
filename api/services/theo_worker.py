@@ -186,6 +186,76 @@ def get_live_events(request_id: str) -> list[dict]:
     return _live_events.get(request_id, [])
 
 
+def _paper_artifact(ctx) -> dict:
+    """Run-closing metrics that never reach result_json.
+
+    Written after the result row is committed, which is also the first moment
+    they exist: strip metrics and the coherence/hallucination checks are
+    produced by the presentation stage, i.e. after PaperReady. The paper text
+    itself is deliberately absent — it is already in result_json.
+    """
+    return {
+        "title": ctx.paper_title,
+        "card_description": ctx.card_description,
+        "audit": ctx.audit_result,
+        "quality_score": ctx.quality_score,
+        "probative_images": getattr(ctx, "probative_images", []) or [],
+        "probative_images_diversity": getattr(ctx, "probative_images_diversity", {}),
+        "image_candidate_pool": getattr(ctx, "image_candidate_pool", {}),
+        "strip_metrics": getattr(ctx, "strip_metrics", None),
+        "coherence_result": getattr(ctx, "coherence_result", None),
+        "hallucination_metrics": getattr(ctx, "hallucination_metrics", None),
+    }
+
+
+def _failure_snapshot(ctx, status: str) -> dict:
+    """Everything a dying run still holds in memory.
+
+    Quota deaths are the common terminal state, and until now they discarded
+    hours of completed research — angles, findings and any partial paper were
+    only ever in RAM. Unlike the success path, paper_text belongs in here:
+    nothing else stores it.
+    """
+    from dataclasses import asdict
+
+    return {
+        "status": status,
+        "error": ctx.error,
+        "phase": getattr(ctx.phase, "value", str(ctx.phase)),
+        "angles": [asdict(a) for a in getattr(ctx, "angles", None) or []],
+        "specialist_analyses": getattr(ctx, "specialist_analyses", {}),
+        "synthesis": getattr(ctx, "synthesis", {}),
+        "cross_angle_connections": getattr(ctx, "cross_angle_connections", []),
+        "debate_result": getattr(ctx, "debate_result", {}),
+        "moderated_result": getattr(ctx, "moderated_result", {}),
+        "paper_text": getattr(ctx, "paper_text", ""),
+    }
+
+
+async def _persist_training_corpus(ctx, request_id: str, artifact: tuple[str, dict]) -> None:
+    """Close out the run's training-corpus record.
+
+    Called only after the result (or failure) row is committed. The corpus is
+    a passenger on the run: it must never be able to cost us a paper, so a
+    write failure here is logged loudly and dropped rather than raised.
+    Nothing reads these tables back.
+    """
+    try:
+        from pipeline.lyra.training_corpus import persist_run_corpus, save_artifact
+
+        kind, payload = artifact
+        await asyncio.to_thread(save_artifact, request_id, kind, payload, "")
+        stats = await asyncio.to_thread(persist_run_corpus, ctx, request_id)
+        logger.info(
+            "[THEO] %s corpus: %d documents, %d source links",
+            request_id,
+            stats["documents"],
+            stats["links"],
+        )
+    except Exception as exc:
+        logger.error("[THEO] %s training-corpus write failed: %s", request_id, exc)
+
+
 def _terminal_status_for_error(ctx) -> str:
     """Route a run that ended with ctx.error to its terminal status.
 
@@ -350,6 +420,9 @@ async def _process_request(
                     session.commit()
                 log = logger.warning if status == "deferred" else logger.error
                 log(f"[THEO] Request {request_id} {status}: {ctx.error}")
+            await _persist_training_corpus(
+                ctx, request_id, ("failure_snapshot", _failure_snapshot(ctx, status))
+            )
         else:
             # Deduct credits and release reservation on success
             _deduct_credits(request_id)
@@ -410,6 +483,10 @@ async def _process_request(
                         )
             except Exception as db_exc:
                 logger.error(f"[THEO] DB commit failed for {request_id}: {db_exc}")
+            # After the commit, in its own session: the citation state is only
+            # final once presentation has pruned references, and an archive
+            # error must not roll back the result we just wrote.
+            await _persist_training_corpus(ctx, request_id, ("paper_final", _paper_artifact(ctx)))
             logger.info(
                 f"[THEO] Request {request_id} completed in {duration_ms}ms"
                 f" ({ctx.total_tokens} tokens)"

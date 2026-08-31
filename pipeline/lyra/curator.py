@@ -662,6 +662,25 @@ def _gather_inputs(session) -> dict:
     }
 
 
+def _archive_curator_pass(user_message: str, out: dict) -> None:
+    """Keep the curator's full input and structured output.
+
+    thinking_log only ever held the 500-char prose summary and the effect of
+    the pass (rows changed). The world-model state the curator reasoned over
+    and the claim-by-claim verdicts it produced were discarded — and that pair
+    is exactly what a future model would learn to imitate. Best-effort: the
+    nightly pass must not fail over an archive write.
+    """
+    try:
+        from pipeline.lyra.training_corpus import save_artifact
+
+        day = datetime.now().date().isoformat()
+        save_artifact(None, "curator_input", json.loads(user_message), day)
+        save_artifact(None, "curator_output", out, day)
+    except Exception as exc:  # noqa: BLE001 — corpus write is never load-bearing
+        logger.error("[THINK] curator artifact write failed: %s", exc)
+
+
 def run_curator_pass() -> None:
     """One nightly thinking pass. Best-effort — never raises.
 
@@ -715,6 +734,8 @@ def run_curator_pass() -> None:
                 "curator", "Curator pass failed: LLM returned no usable output", {"failed": True}
             )
             return
+
+        _archive_curator_pass(user_message, out)
 
         with get_session() as session:
             stats = _apply_curator_output(session, out)

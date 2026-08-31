@@ -160,6 +160,15 @@ class LyraSettings(BaseSettings):
     minimax_source_max_content_chars: int = 12000
     long_context_hard_ceiling_tokens: int = 1_000_000
 
+    # Training corpus (docs/TRAINING_DATA_POLICY.md). The archive always keeps
+    # the uncapped text of pages the pipeline fetches anyway — that costs no
+    # extra traffic. Enabling this ALSO fetches sources the prompt path skips
+    # (Wikipedia, sources whose abstract already exceeds the fetch threshold)
+    # purely for the corpus: more HTTP per angle, zero effect on prompts or
+    # quota. Off until the first runs have been observed.
+    theo_archive_extra_fetch: bool = False
+    theo_archive_extra_fetch_cap: int = 800
+
     # MiniMax recommended sampling + latency knobs (verified accepted on /anthropic).
     # top_p=0.95 is MiniMax's own recommendation for M3 (trims the improbable
     # token tail without over-constraining). Applied for the MiniMax backend only;

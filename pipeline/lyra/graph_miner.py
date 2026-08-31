@@ -286,6 +286,15 @@ def run_miner() -> list[dict]:
         candidates = merge_candidates(
             links, spatial, tensions, existing_connection_norms=existing_connection_norms
         )
+        # The merge — not the SQL behind it — is the part that cannot be
+        # recomputed later, so the corpus keeps the scored candidates while
+        # thinking_log keeps only their labels.
+        try:
+            from pipeline.lyra.training_corpus import save_artifact
+
+            save_artifact(None, "miner_candidates", {"candidates": candidates})
+        except Exception as exc:  # noqa: BLE001 — corpus write is never load-bearing
+            logger.error("[THINK] miner artifact write failed: %s", exc)
         log_thinking(
             "miner",
             f"Miner: {len(candidates)} connection candidates "

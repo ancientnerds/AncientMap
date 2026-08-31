@@ -51,6 +51,11 @@ class CitedSource:
     # never independent corroboration (spec 2026-08-04 §5). Forces
     # reliability_tier=4 at registration, overriding the domain scorer.
     self_source: bool = False
+    # Provenance for the training corpus: which adapter found this source, and
+    # the licence it reported (empty when the adapter does not know one —
+    # training_corpus.resolve_license falls back to the domain table).
+    source_api: str = ""
+    license: str = ""
 
 
 @dataclass
@@ -88,6 +93,8 @@ class CitationRegistry:
         venue: str = "",
         citation_count: int = 0,
         self_source: bool = False,
+        source_api: str = "",
+        license: str = "",
     ) -> str:
         """Register a web source. Returns source id. Deduplicates by canonical URL hash.
 
@@ -120,6 +127,10 @@ class CitationRegistry:
                 existing.venue = venue
             if citation_count and not existing.citation_count:
                 existing.citation_count = citation_count
+            if source_api and not existing.source_api:
+                existing.source_api = source_api
+            if license and not existing.license:
+                existing.license = license
             if self_source and not existing.self_source:
                 existing.self_source = True
                 existing.reliability_tier = 4
@@ -152,6 +163,8 @@ class CitationRegistry:
             venue=venue,
             citation_count=citation_count,
             self_source=self_source,
+            source_api=source_api,
+            license=license,
         )
         return source_id
 

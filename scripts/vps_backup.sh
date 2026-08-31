@@ -42,12 +42,32 @@ else
 fi
 
 # 2. Backup database
-pg_dump -U ancient_map -h localhost -p 5432 -Fc ancient_map > "$BACKUP_DIR/database_${TIMESTAMP}.dump"
+# theo_source_archive holds the training corpus: large, append-only, and only
+# reproducible by re-crawling the web. Its DATA is excluded here so that ten
+# daily dumps do not carry ten copies of it — the table definition stays in
+# the dump, so a restore still yields a working schema. The corpus gets its
+# own, less frequent dump below.
+pg_dump -U ancient_map -h localhost -p 5432 -Fc \
+    --exclude-table-data='public.theo_source_archive' \
+    ancient_map > "$BACKUP_DIR/database_${TIMESTAMP}.dump"
 if [ $? -eq 0 ]; then
     echo "✓ Database backed up"
 else
     echo "✗ Database backup FAILED"
     exit 1
+fi
+
+# 2b. Training corpus — weekly, keep 2. It grows slowly and never changes
+# retroactively, so a daily copy would dominate the backup directory without
+# improving what we could actually recover.
+LATEST_CORPUS=$(ls -t "$BACKUP_DIR"/corpus_*.dump 2>/dev/null | head -1)
+if [ -z "$LATEST_CORPUS" ] || [ -n "$(find "$LATEST_CORPUS" -mtime +6 2>/dev/null)" ]; then
+    pg_dump -U ancient_map -h localhost -p 5432 -Fc \
+        -t 'public.theo_source_archive' \
+        ancient_map > "$BACKUP_DIR/corpus_${TIMESTAMP}.dump"
+    echo "✓ Training corpus backed up"
+else
+    echo "- Training corpus dump still fresh (weekly cadence)"
 fi
 
 # 3. Show backup sizes
@@ -61,5 +81,6 @@ echo "Cleaning up old backups (keeping last 10)..."
 cd "$BACKUP_DIR"
 ls -t contributions_*.json 2>/dev/null | tail -n +11 | xargs -r rm
 ls -t database_*.dump 2>/dev/null | tail -n +11 | xargs -r rm
+ls -t corpus_*.dump 2>/dev/null | tail -n +3 | xargs -r rm
 
 echo "=== Backup complete ==="

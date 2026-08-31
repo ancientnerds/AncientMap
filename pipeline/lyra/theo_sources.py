@@ -177,6 +177,13 @@ class RawSource:
     # Own prior papers (ancientnerds_research): context/pointer only, never
     # independent corroboration (spec 2026-08-04 §5).
     self_source: bool = False
+    # Licence as reported by the adapter, when it knows one (OpenAlex OA
+    # locations, Europeana rights). Empty otherwise — the training corpus
+    # resolves the rest by domain and leaves genuinely unknown ones empty.
+    license: str = ""
+    # The query that surfaced this result. Filled by MultiSourceSearch, not by
+    # the adapters: query -> source -> cited is retrieval training material.
+    query: str = ""
 
 
 # ---------------------------------------------------------------------------
@@ -439,7 +446,7 @@ class OpenAlexAdapter(SourceAdapter):
             params: dict[str, str] = {
                 "search": clean_query,
                 "filter": "type:!paratext",
-                "select": "id,title,doi,publication_date,cited_by_count,authorships,primary_location,abstract_inverted_index,open_access",
+                "select": "id,title,doi,publication_date,cited_by_count,authorships,primary_location,best_oa_location,abstract_inverted_index,open_access",
                 "sort": "cited_by_count:desc",
                 "per_page": str(min(max_results, 100)),
             }
@@ -481,6 +488,11 @@ class OpenAlexAdapter(SourceAdapter):
                 if source_obj.get("display_name"):
                     venue = source_obj["display_name"]
 
+                # OpenAlex reports the licence on the location record. The open
+                # access copy is the one we would ever archive, so it wins.
+                oa_loc = work.get("best_oa_location") or {}
+                license_name = oa_loc.get("license") or loc.get("license") or ""
+
                 results.append(
                     RawSource(
                         url=url,
@@ -493,6 +505,7 @@ class OpenAlexAdapter(SourceAdapter):
                         citation_count=work.get("cited_by_count") or 0,
                         source_api=self.name,
                         default_tier=self.default_tier,
+                        license=license_name,
                     )
                 )
             return results
@@ -772,6 +785,11 @@ class EuropeanaAdapter(SourceAdapter):
                     else ""
                 )
 
+                # Europeana's rich profile carries per-item rights URLs
+                # (rightsstatements.org / creativecommons.org).
+                rights = item.get("rights") or []
+                license_name = str(rights[0]) if isinstance(rights, list) and rights else ""
+
                 results.append(
                     RawSource(
                         url=url,
@@ -782,6 +800,7 @@ class EuropeanaAdapter(SourceAdapter):
                         venue=venue,
                         source_api=self.name,
                         default_tier=self.default_tier,
+                        license=license_name,
                     )
                 )
             return results
@@ -1543,16 +1562,22 @@ class MultiSourceSearch:
 
         # 2. For each query, run all selected adapters in parallel
         all_tasks = []
+        task_queries: list[str] = []
         for query in queries:
             for adapter in active_adapters:
                 all_tasks.append(adapter.search(query))
+                task_queries.append(query)
 
         all_results: list[list[RawSource]] = await asyncio.gather(*all_tasks)
 
-        # 3. Flatten
+        # 3. Flatten, tagging each result with the query that produced it.
+        # gather preserves task order, so task_queries lines up positionally.
         flat: list[RawSource] = []
-        for result_list in all_results:
-            flat.extend(result_list)
+        for query, result_list in zip(task_queries, all_results, strict=True):
+            for r in result_list:
+                if not r.query:
+                    r.query = query
+                flat.append(r)
 
         # 4. Filter blocked domains
         filtered = [r for r in flat if not _is_blocked(r.url)]

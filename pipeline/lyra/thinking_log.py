@@ -36,19 +36,29 @@ _PRUNE_FAILURE_DAYS = 365
 
 
 def prune_thinking_log(session) -> int:
-    """Delete aged thinking_log rows; returns the number deleted.
+    """Move aged thinking_log rows to thinking_log_archive; returns the count.
 
     Non-failure entries older than 90 days go; failure entries
-    (details.failed = true) survive until 365 days. Commits itself (mirrors
-    log_thinking). Deliberately not wrapped in try/except — the only caller
-    is log_thinking's curator hook, which already sits inside its blanket
-    best-effort except."""
+    (details.failed = true) survive until 365 days. The feed keeps its audited
+    retention — but the curator's reasoning summaries are training material,
+    so the rows are moved rather than dropped. Delete and archive are one
+    statement so no window exists in which a row is gone from both.
+
+    Commits itself (mirrors log_thinking). Deliberately not wrapped in
+    try/except — the only caller is log_thinking's curator hook, which already
+    sits inside its blanket best-effort except."""
     result = session.execute(
         text("""
-            DELETE FROM thinking_log
-            WHERE created_at < NOW() - make_interval(days => :failure_days)
-               OR (created_at < NOW() - make_interval(days => :default_days)
-                   AND COALESCE(details->>'failed', 'false') <> 'true')
+            WITH aged AS (
+                DELETE FROM thinking_log
+                WHERE created_at < NOW() - make_interval(days => :failure_days)
+                   OR (created_at < NOW() - make_interval(days => :default_days)
+                       AND COALESCE(details->>'failed', 'false') <> 'true')
+                RETURNING id, kind, summary, details, created_at
+            )
+            INSERT INTO thinking_log_archive (id, kind, summary, details, created_at)
+            SELECT id, kind, summary, details, created_at FROM aged
+            ON CONFLICT (id) DO NOTHING
         """),
         {"default_days": _PRUNE_DEFAULT_DAYS, "failure_days": _PRUNE_FAILURE_DAYS},
     )

@@ -1148,7 +1148,20 @@ async def delete_research(request_id: str, req: Request):
                 # released by the worker's cancelled-terminal path.
                 release_reservation_in_session(session, request_id)
         else:
-            # completed, failed, cancelled — actually delete
+            # completed, failed, cancelled — actually delete.
+            # The row is copied to the training corpus first, in the same
+            # transaction: the paper stops being visible and stops being
+            # servable, but the run itself (result, trace, debug log) is
+            # material we cannot reproduce. Stored as a whole-row jsonb dump
+            # because research_requests gains columns via boot-time ALTERs.
+            session.execute(
+                text("""
+                    INSERT INTO research_requests_archive (id, row)
+                    SELECT id, to_jsonb(r) FROM research_requests r WHERE id = :id
+                    ON CONFLICT (id) DO NOTHING
+                """),
+                {"id": request_id},
+            )
             session.execute(
                 text("DELETE FROM research_requests WHERE id = :id"),
                 {"id": request_id},
