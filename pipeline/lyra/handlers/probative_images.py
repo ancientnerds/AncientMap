@@ -11,12 +11,15 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import io
 import logging
 import re as re_module
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
+
+from PIL import Image
 
 from pipeline.lyra.config import _get_settings
 from pipeline.lyra.handlers import BaseHandler
@@ -39,6 +42,7 @@ from pipeline.lyra.theo_image_captions import (
     insert_image_after_paragraph,
     resolve_section_heading,
 )
+from pipeline.utils.imagehash import DHASH_MAX_DISTANCE, dhash, hamming
 
 logger = logging.getLogger(__name__)
 
@@ -80,6 +84,14 @@ class _EmbedContext:
     embedded: list[dict] = field(default_factory=list)
     placed_source_urls: set[str] = field(default_factory=set)
     placed_subjects: set[str] = field(default_factory=set)
+    # Content-level dedup (2026-08-31). URL and subject dedup both miss the
+    # case where two DIFFERENT catalogue entries resolve to the same picture:
+    # the published solar-superflares paper carried one 194x110 Europeana
+    # frame twice (identical bytes, item IDs 1151959 vs 1151659), and the
+    # Petrie paper used a single photo as evidence for two separate claims.
+    # md5 catches identical bytes, dhash the re-encoded/rescaled copies.
+    placed_content_hashes: set[str] = field(default_factory=set)
+    placed_dhashes: list[int] = field(default_factory=list)
     # Per-strategy embed counts surfaced on quality_score.meta as embed_*
     # so we can see in production how often each fallback path fired.
     # Keys: exact, normalized, first_sentence, section_fallback, failed.
@@ -91,10 +103,41 @@ class _EmbedContext:
     # Reason an opportunity didn't produce an embed. Keys:
     #   no_section, no_canonical_section, no_pool_candidates,
     #   no_fetched_candidates, all_unsafe_vlm, dedup_blocked,
-    #   anchor_match_failed, download_failed.
+    #   duplicate_content, anchor_match_failed, download_failed.
     # Surfaced on state.embed_skip_reasons so we can post-mortem failures
     # without container-log access (Run 11 silently lost 123/124 opps).
     skip_reasons: dict[str, int] = field(default_factory=dict)
+
+
+def _claim_image_content(ctx, image_bytes: bytes) -> bool:
+    """Claim this picture for the paper. False when it is already in it.
+
+    The last dedup line, and the only one that looks at pixels: URL dedup
+    fails when two catalogue entries point at the same file, subject dedup
+    when neither carries a recognisable subject. Claims only on success, so
+    a rejected duplicate never displaces the copy already placed.
+
+    Undecodable bytes are claimed rather than rejected — a body we cannot
+    read is not evidence that the picture is a repeat, and refusing it here
+    would silently drop images over a Pillow quirk.
+    """
+    digest = hashlib.md5(image_bytes, usedforsecurity=False).hexdigest()
+    if digest in ctx.placed_content_hashes:
+        return False
+
+    try:
+        with Image.open(io.BytesIO(image_bytes)) as img:
+            fingerprint = dhash(img)
+    except Exception:  # noqa: BLE001 — an unreadable body must not kill the run
+        ctx.placed_content_hashes.add(digest)
+        return True
+
+    if any(hamming(fingerprint, seen) <= DHASH_MAX_DISTANCE for seen in ctx.placed_dhashes):
+        return False
+
+    ctx.placed_content_hashes.add(digest)
+    ctx.placed_dhashes.append(fingerprint)
+    return True
 
 
 def _subject_fingerprint(cand) -> str:
@@ -237,6 +280,14 @@ async def _resolve_writer_markers(ctx: _EmbedContext) -> list[dict]:
 
         final_path = ctx.paper_dir / f"writer_img_{i}.jpg"
         if not await download_candidate(cand, final_path):
+            ctx.paper_text = ctx.paper_text.replace(f"[[IMG:{short}]]", "")
+            continue
+
+        # Same picture, different catalogue entry: drop the file rather than
+        # leave an orphan in the paper directory.
+        if not _claim_image_content(ctx, final_path.read_bytes()):
+            logger.info("[probative] skip duplicate writer image content %s", cand_url)
+            final_path.unlink(missing_ok=True)
             ctx.paper_text = ctx.paper_text.replace(f"[[IMG:{short}]]", "")
             continue
 
@@ -608,6 +659,20 @@ async def _process_one_opportunity(
                 ctx.placed_source_urls.discard(cand_url)
             continue
         image_bytes = probe_path.read_bytes()
+        # Content dedup BEFORE the VLM call: a picture already in the paper
+        # cannot become admissible by being judged again, and the vision
+        # call is the expensive step here.
+        if not _claim_image_content(ctx, image_bytes):
+            logger.info(
+                "[probative] skip duplicate image content for para %d: %s",
+                para_idx,
+                (cand.title or cand_url or "")[:80],
+            )
+            ctx.skip_reasons["duplicate_content"] = ctx.skip_reasons.get("duplicate_content", 0) + 1
+            if cand_url:
+                ctx.placed_source_urls.discard(cand_url)
+            probe_path.unlink(missing_ok=True)
+            continue
         prompt = build_vlm_prompt(para_text, must_show, forbidden)
         raw = await asyncio.to_thread(minimax_vlm, ctx.client, image_bytes, prompt)
         verdict = parse_vlm_verdict(raw)

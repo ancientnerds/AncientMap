@@ -33,6 +33,7 @@ from PIL import Image
 from sqlalchemy import text
 
 from pipeline.database import get_session
+from pipeline.utils.imagehash import DHASH_MAX_DISTANCE, dhash, hamming
 from pipeline.wiki_image_downloader import (
     COMMONS_API_URL,
     _download_client,
@@ -274,28 +275,6 @@ HERO_DIR = Path("public/data/images/wiki")
 # 1280/1920/3840) — verified 2026-08-17 that oversize requests still return
 # 200, so no need to cap against the original's width.
 HERO_THUMB_WIDTH = 500
-
-# 64-bit difference hash; distance <= 6 on re-encoded/re-scaled copies of the
-# same photo, typically > 20 between different photos of the same site.
-DHASH_MAX_DISTANCE = 6
-
-
-def dhash(image) -> int:
-    """64-bit difference hash of a PIL image (9x8 grayscale gradient)."""
-    gray = image.convert("L").resize((9, 8), Image.LANCZOS)
-    pixels = list(gray.getdata())
-    bits = 0
-    for row in range(8):
-        for col in range(8):
-            left = pixels[row * 9 + col]
-            right = pixels[row * 9 + col + 1]
-            bits = (bits << 1) | (1 if left > right else 0)
-    return bits
-
-
-def hamming(a: int, b: int) -> int:
-    return bin(a ^ b).count("1")
-
 
 def _hero_candidate_titles(article_title: str) -> list[str]:
     """Every File: title the importer could have picked the hero from."""
