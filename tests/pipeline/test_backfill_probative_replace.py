@@ -63,3 +63,37 @@ def test_strip_does_not_eat_ordinary_italics():
     """Only captions carrying `Photo:` are attribution lines."""
     md = "# T\n\nThe word *emphasis* matters here [1].\n"
     assert "*emphasis*" in _strip_inline_images(md)
+
+
+# --- published_report sync (2026-08-31) -------------------------------------
+# A PUBLISHED paper renders `published_report`, the snapshot taken at publish
+# time — not `report`. Replacing images in `report` alone left the live
+# solar-superflares page pointing at five files the same run had deleted.
+
+
+def _prose_matches(a: str, b: str) -> bool:
+    """The check the backfill uses to decide whether a snapshot was curated."""
+    return _strip_inline_images(a).strip() == _strip_inline_images(b).strip()
+
+
+def test_uncurated_snapshot_is_recognised_as_syncable():
+    """Auto-published papers copy `report` verbatim, so the image-free prose
+    is identical even though the image sets differ."""
+    report = REPORT
+    published = REPORT.replace("p2_terrace.jpg", "p2_terrace.jpg")  # same prose
+    assert _prose_matches(published, report)
+
+
+def test_curated_snapshot_is_detected_and_left_alone():
+    """Block-level review can drop a paragraph from the published snapshot.
+    That divergence must be visible, or the backfill would overwrite the
+    reviewer's decisions."""
+    curated = REPORT.replace("More prose that must survive [2].", "")
+    assert not _prose_matches(curated, REPORT)
+
+
+def test_image_differences_alone_never_read_as_curation():
+    """Images are exactly what the backfill is allowed to change, so a
+    snapshot differing only in its pictures must still count as syncable."""
+    stripped = _strip_inline_images(REPORT)
+    assert _prose_matches(stripped, REPORT)

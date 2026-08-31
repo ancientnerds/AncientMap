@@ -151,6 +151,7 @@ async def _process_paper(paper: dict, apply: bool, replace: bool = False) -> tup
         return (slug, False, "invalid result_json (skipping)")
 
     report = result.get("report", "")
+    original_report = report
     if not report:
         return (slug, False, "empty report (skipping)")
     if _has_inline_images(report):
@@ -187,7 +188,34 @@ async def _process_paper(paper: dict, apply: bool, replace: bool = False) -> tup
         result["hero_image"] = hero
         if "published_hero_image" in result:
             result["published_hero_image"] = hero
-        _delete_unreferenced_images(paper_id, embedded)
+        # A PUBLISHED paper renders `published_report`, not `report` — the
+        # snapshot taken at publish time. Updating only `report` leaves the
+        # public page pointing at image files this run just deleted, which is
+        # exactly what happened to solar-superflares on 2026-08-31.
+        #
+        # Only refresh it when nobody curated it: block-level review can make
+        # the snapshot diverge from the report, and those decisions must not
+        # be silently discarded. Comparing the image-free prose is the test —
+        # the images are precisely what this run is allowed to change.
+        published = result.get("published_report")
+        published_synced = True
+        if published is not None:
+            if (
+                _strip_inline_images(published).strip()
+                == _strip_inline_images(original_report).strip()
+            ):
+                result["published_report"] = new_report
+            else:
+                published_synced = False
+                logger.warning(
+                    "%s: published_report diverges from report (curated?) — left untouched, "
+                    "and its image files are kept so the public page keeps rendering. "
+                    "Re-publish the paper to pick up the new images.",
+                    slug,
+                )
+        # Deleting the old files is only safe once nothing references them.
+        if published_synced:
+            _delete_unreferenced_images(paper_id, embedded)
     else:
         result.setdefault("probative_images", []).extend(embedded)
     result["probative_images_diversity"] = diversity
