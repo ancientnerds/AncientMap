@@ -738,10 +738,20 @@ def _auto_publish(request_id: str) -> None:
                 result["report"] = repaired_text
             result["audit"] = artifact_report
 
-            if not (quality.get("passed") and artifact_report["passed"]):
+            # The stored `quality.passed` has the audit verdict from write
+            # time baked into it, so repairing the artifact could never lift
+            # it — five papers sat held on that stale flag after the
+            # 2026-08-31 citation fixes made their audits pass. Re-derive it
+            # from the audit we just recomputed, with the same rule the judge
+            # applies; the LLM measurements it cannot redo stay as stored.
+            from pipeline.lyra.quality_gate import recompute_quality_passed
+
+            quality_passed = recompute_quality_passed(quality, artifact_report)
+            if not (quality_passed and artifact_report["passed"]):
                 logger.warning(
-                    "[THEO] Auto-publish gate failed for %s (quality=%s audit=%s) — held.",
+                    "[THEO] Auto-publish gate failed for %s (quality=%s stored=%s audit=%s) — held.",
                     request_id,
+                    quality_passed,
                     quality.get("passed"),
                     artifact_report["passed"],
                 )
@@ -756,7 +766,8 @@ def _auto_publish(request_id: str) -> None:
                                     "description": (
                                         f"`{request_id}`\n"
                                         f"**{(result.get('title') or row.question)[:200]}**\n"
-                                        f"quality_passed={quality.get('passed')} "
+                                        f"quality_passed={quality_passed} "
+                                        f"(stored={quality.get('passed')}) "
                                         f"recomputed_audit_passed={artifact_report['passed']}\n"
                                         f"issues: {(artifact_report.get('issues') or [])[:3]}"
                                     ),

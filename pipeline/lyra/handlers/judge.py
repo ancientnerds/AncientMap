@@ -10,6 +10,7 @@ import logging
 import re
 
 from pipeline.lyra.handlers import BaseHandler
+from pipeline.lyra.quality_gate import quality_gate_passed
 from pipeline.lyra.research_events import ImageGenComplete, QualityPassed
 from pipeline.lyra.research_state import ResearchPhase
 
@@ -229,15 +230,15 @@ class JudgeHandler(BaseHandler):
         # either case (the caller decides), but `passed` now truthfully signals
         # citation integrity so downstream consumers (UI, auto-publish flows)
         # can distinguish clean from bug-riddled output.
-        passed = bool(
-            audit_result.get("passed", False)
-            and scores["citation_coverage"] >= 9
-            and scores["reference_integrity"] == 10
-            and not audit_result.get("placeholder_markers")
-            and not audit_result.get("language_bleed")
-            and hall_metrics.get("final", 0) == 0
-            and high_contradictions == 0
-            and not undefined_title_terms
+        passed = quality_gate_passed(
+            audit_passed=bool(audit_result.get("passed", False)),
+            citation_coverage=scores["citation_coverage"],
+            reference_integrity=scores["reference_integrity"],
+            placeholder_markers=len(audit_result.get("placeholder_markers") or []),
+            language_bleed=len(audit_result.get("language_bleed") or []),
+            hallucination_final=hall_metrics.get("final", 0),
+            high_contradictions=high_contradictions,
+            undefined_title_terms=len(undefined_title_terms or []),
         )
 
         # Badge polish (H1): if the paper failed the gate, a Gold badge is
