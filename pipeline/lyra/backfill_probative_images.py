@@ -207,9 +207,7 @@ async def _process_paper(paper: dict, apply: bool, replace: bool = False) -> tup
     )
 
 
-async def backfill(
-    slug: str | None, apply: bool, process_all: bool, replace: bool = False
-) -> None:
+async def backfill(slug: str | None, apply: bool, process_all: bool, replace: bool = False) -> None:
     """Run the backfill."""
     if replace:
         logger.info("REPLACE MODE — existing images are stripped and re-embedded")
