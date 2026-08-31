@@ -76,3 +76,65 @@ def test_undecodable_bytes_are_claimed_not_crashed():
     """A non-image body must not take the run down; it just isn't deduped."""
     ctx = _Ctx()
     assert _claim_image_content(ctx, b"not an image at all") is True
+
+
+# --- Image budget (2026-08-31) ---------------------------------------------
+# Recovering the judge's middle verdict took the solar-superflares paper from
+# 7 images to 89: 52 opportunities that used to yield nothing now yield up to
+# three each. A paper is not a slideshow.
+
+from pipeline.lyra.handlers.probative_images import (  # noqa: E402
+    _limit_tagged,
+    _release_image_slot,
+    _reserve_image_slot,
+)
+
+
+class _BudgetCtx:
+    def __init__(self, max_images=24, placed=0):
+        self.max_images = max_images
+        self.images_placed = placed
+
+
+def test_reserve_slot_stops_at_the_paper_budget():
+    ctx = _BudgetCtx(max_images=2)
+    assert _reserve_image_slot(ctx) is True
+    assert _reserve_image_slot(ctx) is True
+    assert _reserve_image_slot(ctx) is False
+    assert ctx.images_placed == 2
+
+
+def test_released_slot_is_reusable():
+    """A failed download must give its slot back, or the budget leaks."""
+    ctx = _BudgetCtx(max_images=1)
+    assert _reserve_image_slot(ctx) is True
+    _release_image_slot(ctx)
+    assert _reserve_image_slot(ctx) is True
+
+
+def test_release_never_goes_negative():
+    ctx = _BudgetCtx(max_images=5)
+    _release_image_slot(ctx)
+    assert ctx.images_placed == 0
+
+
+def test_limit_tagged_keeps_only_one_illustration():
+    """Illustrations support a passage, they don't prove it — stacking three
+    under one paragraph is decoration."""
+    tagged = [("a", False), ("b", False), ("c", False)]
+    assert _limit_tagged(tagged, 3) == [("a", False)]
+
+
+def test_limit_tagged_puts_evidence_first():
+    tagged = [("illustration", False), ("evidence", True)]
+    assert _limit_tagged(tagged, 3) == [("evidence", True), ("illustration", False)]
+
+
+def test_limit_tagged_respects_the_per_opportunity_cap():
+    tagged = [("e1", True), ("e2", True), ("e3", True), ("i1", False)]
+    assert _limit_tagged(tagged, 3) == [("e1", True), ("e2", True), ("e3", True)]
+
+
+def test_limit_tagged_keeps_all_evidence_below_the_cap():
+    tagged = [("e1", True), ("i1", False), ("i2", False)]
+    assert _limit_tagged(tagged, 3) == [("e1", True), ("i1", False)]

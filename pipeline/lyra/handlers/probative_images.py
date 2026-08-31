@@ -93,6 +93,11 @@ class _EmbedContext:
     # md5 catches identical bytes, dhash the re-encoded/rescaled copies.
     placed_content_hashes: set[str] = field(default_factory=set)
     placed_dhashes: list[int] = field(default_factory=list)
+    # Paper-wide image budget. `embedded` is only extended after the gather
+    # completes, so it cannot bound anything while opportunities are running —
+    # this counter is claimed live by _reserve_image_slot.
+    max_images: int = 24
+    images_placed: int = 0
     # Per-strategy embed counts surfaced on quality_score.meta as embed_*
     # so we can see in production how often each fallback path fired.
     # Keys: exact, normalized, first_sentence, section_fallback, failed.
@@ -104,7 +109,8 @@ class _EmbedContext:
     # Reason an opportunity didn't produce an embed. Keys:
     #   no_section, no_canonical_section, no_pool_candidates,
     #   no_fetched_candidates, all_unsafe_vlm, dedup_blocked,
-    #   duplicate_content, anchor_match_failed, download_failed.
+    #   duplicate_content, paper_image_budget, anchor_match_failed,
+    #   download_failed.
     # Surfaced on state.embed_skip_reasons so we can post-mortem failures
     # without container-log access (Run 11 silently lost 123/124 opps).
     skip_reasons: dict[str, int] = field(default_factory=dict)
@@ -139,6 +145,37 @@ def _claim_image_content(ctx, image_bytes: bytes) -> bool:
     ctx.placed_content_hashes.add(digest)
     ctx.placed_dhashes.append(fingerprint)
     return True
+
+
+def _reserve_image_slot(ctx) -> bool:
+    """Claim one image from the paper's budget. False when it is spent.
+
+    Reserved BEFORE the download rather than counted after it, because the
+    download is an await: two opportunities would otherwise both see the last
+    free slot and both take it. Release the slot if the download fails.
+    """
+    if ctx.images_placed >= ctx.max_images:
+        return False
+    ctx.images_placed += 1
+    return True
+
+
+def _release_image_slot(ctx) -> None:
+    """Give a reserved slot back after a failed download."""
+    ctx.images_placed = max(0, ctx.images_placed - 1)
+
+
+def _limit_tagged(tagged: list[tuple], max_per_opp: int) -> list[tuple]:
+    """Evidence first, at most one illustration, capped at max_per_opp.
+
+    Illustrations (the judge's `weak` verdict) support a passage; they do not
+    prove it. Three of them stacked under one paragraph is decoration, and
+    with the middle verdict recovered on 2026-08-31 that is exactly what
+    happened — one paper went from 7 images to 89.
+    """
+    evidence = [t for t in tagged if t[1]]
+    illustration = [t for t in tagged if not t[1]][:1]
+    return (evidence + illustration)[:max_per_opp]
 
 
 def _subject_fingerprint(cand) -> str:
@@ -279,8 +316,15 @@ async def _resolve_writer_markers(ctx: _EmbedContext) -> list[dict]:
             ctx.paper_text = ctx.paper_text.replace(f"[[IMG:{short}]]", "")
             continue
 
+        # Writer-placed images count against the same paper budget as the
+        # probative ones — they are pictures in the same article.
+        if not _reserve_image_slot(ctx):
+            ctx.paper_text = ctx.paper_text.replace(f"[[IMG:{short}]]", "")
+            continue
+
         final_path = ctx.paper_dir / f"writer_img_{i}.jpg"
         if not await download_candidate(cand, final_path):
+            _release_image_slot(ctx)
             ctx.paper_text = ctx.paper_text.replace(f"[[IMG:{short}]]", "")
             continue
 
@@ -288,6 +332,7 @@ async def _resolve_writer_markers(ctx: _EmbedContext) -> list[dict]:
         # leave an orphan in the paper directory.
         if not _claim_image_content(ctx, final_path.read_bytes()):
             logger.info("[probative] skip duplicate writer image content %s", cand_url)
+            _release_image_slot(ctx)
             final_path.unlink(missing_ok=True)
             ctx.paper_text = ctx.paper_text.replace(f"[[IMG:{short}]]", "")
             continue
@@ -433,6 +478,7 @@ async def embed_probative_images(
         registry=registry,
         paper_dir=paper_dir,
         client=client,
+        max_images=getattr(_get_settings(), "probative_images_max_per_paper", 24),
     )
 
     try:
@@ -727,6 +773,8 @@ async def _process_one_opportunity(
         ctx.skip_reasons["no_safe_candidates"] = ctx.skip_reasons.get("no_safe_candidates", 0) + 1
         return []
 
+    tagged = _limit_tagged(tagged, max_per_opp)
+
     keyword_slug = re_module.sub(r"[^a-zA-Z0-9]", "_", keyword[:30])
     embedded: list[dict] = []
 
@@ -741,9 +789,15 @@ async def _process_one_opportunity(
     )
 
     for i, (accepted_cand, verified) in enumerate(tagged):
+        if not _reserve_image_slot(ctx):
+            ctx.skip_reasons["paper_image_budget"] = (
+                ctx.skip_reasons.get("paper_image_budget", 0) + 1
+            )
+            break
         suffix = "" if i == 0 else f"_{i}"
         final_path = ctx.paper_dir / f"p{para_idx}_{keyword_slug}{suffix}.jpg"
         if not await download_candidate(accepted_cand, final_path):
+            _release_image_slot(ctx)
             continue
 
         web_path = f"/data/research-images/{ctx.paper_id}/p{para_idx}_{keyword_slug}{suffix}.jpg"
