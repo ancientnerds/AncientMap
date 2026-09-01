@@ -3,12 +3,25 @@
 # before the MiniMax budget runs dry.
 #
 # WHY TWO QUOTA GATES
-# The weekly budget is what Theo's Friday batch window competes for, but the
-# 5-hour ROLLING window is what actually stops a backfill mid-paper: on
-# 2026-08-31 the weekly still read 52% while the 5h window sat at 0% and the
-# limiter froze in place with a six-hour wait cap, so the run slept instead of
-# working. Both are checked before each paper; neither is checked during one,
-# because abandoning a half-embedded paper wastes what it already spent.
+# The weekly budget is what Theo's Friday batch window competes for; the
+# 5-hour window is what stops a backfill mid-paper. On 2026-08-31 the weekly
+# still read 52% while the 5h window sat at 0% and the limiter froze in place
+# with a six-hour wait cap, so the run slept instead of working. Both are
+# checked before each paper, neither during one — abandoning a half-embedded
+# paper wastes what it already spent.
+#
+# The 5h window is a FIXED BLOCK, not a sliding one: the probe's
+# `five_hour_end_time` lands on 00:00/05:00/10:00... UTC, so an exhausted
+# window stays at 0% until its block ends, however long ago the spending
+# stopped. Waiting is still right, but expect it to sit at 0% for the rest of
+# the block rather than creeping back up.
+#
+# BOTH READINGS LAG. MiniMax bills reasoning tokens hours late (see the
+# ~7x accounting gap), so the weekly figure understates what a run has
+# actually cost: four papers read as -6% live on 2026-08-31 and had settled
+# to -16% by the next morning, with no container having called the API in
+# between. MIN_WEEKLY therefore needs far more headroom than the arithmetic
+# suggests — the number it is comparing is stale by hours.
 #
 # WHY IT IS NOT SAFE TO PUSH WHILE THIS RUNS
 # The deploy skips rebuilding ancient_nerds_theo_worker only while a row in
@@ -27,8 +40,11 @@
 set -uo pipefail
 
 # Reserve for Theo: THEO_PAPER_COST_PCT says one research run costs ~25% of
-# the weekly budget, and the batch window opens Friday.
-MIN_WEEKLY=${MIN_WEEKLY:-35}
+# the weekly budget and the batch window opens Friday, so 25 is the floor
+# that keeps ONE paper possible. 45 leaves room for the billing lag above —
+# at 35 the settled figure could already be under Theo's reserve by the time
+# the backfill notices.
+MIN_WEEKLY=${MIN_WEEKLY:-45}
 # Below this the limiter starts freezing between calls; a paper begun here
 # would sleep more than it works. Waited out rather than stopped on.
 MIN_5H=${MIN_5H:-25}
@@ -69,9 +85,9 @@ for slug in "${SLUGS[@]}"; do
         echo "[$(date -Is)] STOP: weekly ${w}% below the Theo reserve ${MIN_WEEKLY}%" >> "$PROGRESS"
         break
     fi
-    # The 5h window is the one gate worth WAITING on: it is rolling, so it
-    # refills by itself within hours, while the weekly budget only resets on
-    # Monday. Stopping on it would end a run that just needed to sit still.
+    # The 5h window is the one gate worth WAITING on: its block ends within
+    # hours, while the weekly budget only resets on Monday. Stopping on it
+    # would end a run that just needed to sit still until the next block.
     waited=0
     while [ "${h:--1}" -lt "$MIN_5H" ] 2>/dev/null; do
         if [ "$waited" -ge "$MAX_WAIT_5H_S" ]; then
