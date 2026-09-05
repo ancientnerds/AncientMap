@@ -191,7 +191,13 @@ export default function SitePage() {
 
   // Browser-only gate: SitePopup reads localStorage/window during render
   // and cannot go through renderToString. Server and first client render
-  // agree on the static record, then the effect swaps in the popup.
+  // agree on the static record, then the effect swaps in the popup — but
+  // only once the source registry is in hand. Until 2026-09-05 this was a
+  // .finally(): the popup mounted even when /api/sources/ failed, and for
+  // Google's renderer it always fails (robots-disallowed), so Google indexed
+  // a popup full of "No photos found" instead of the record and filed ~2,100
+  // detail pages as Soft 404. Without the registry the record stays; it
+  // carries everything the page is about (see DataStore.sourcesAvailable).
   const [interactive, setInteractive] = useState(false)
   useEffect(() => {
     // Standalone page loaded over HTTP — force online mode so SitePopup's
@@ -199,8 +205,8 @@ export default function SitePage() {
     // shows (both lived in useSiteDetailData before react-ssr Task 11).
     OfflineFetch.setOfflineMode(false)
     let cancelled = false
-    DataStore.loadSources().finally(() => {
-      if (!cancelled) setInteractive(true)
+    DataStore.sourcesAvailable().then(available => {
+      if (available && !cancelled) setInteractive(true)
     })
     return () => {
       cancelled = true

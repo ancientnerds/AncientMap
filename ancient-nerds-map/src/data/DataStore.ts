@@ -323,6 +323,28 @@ class DataStoreClass {
   }
 
   /**
+   * Load the source registry and report whether it is usable.
+   *
+   * This is the gate SitePage checks before it swaps the static site record
+   * for SitePopup. Google's renderer applies robots.txt to a page's own
+   * fetches, and /api/sources/ is disallowed there — so for Googlebot the
+   * fetch rejects, the answer is false, and the record stays. What Google
+   * then indexes is the SSR content (hero, facts, cited description) rather
+   * than a popup whose robots-blocked galleries read "No photos found /
+   * 0 sources returned results", which its Soft-404 classifier took at face
+   * value on ~2,100 detail pages (GSC, 2026-09-05). Never throws: an
+   * unreachable registry is an answer, not an error.
+   */
+  async sourcesAvailable(): Promise<boolean> {
+    try {
+      await this.loadSources()
+    } catch {
+      return false
+    }
+    return this.sources.size > 0
+  }
+
+  /**
    * Check if currently running in offline mode
    */
   isOffline(): boolean {
