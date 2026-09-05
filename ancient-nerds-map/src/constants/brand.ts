@@ -187,12 +187,22 @@ export function discordCtaUrl(src: DiscordCtaSource): string {
 }
 
 /**
- * Globe deep link for one site.
+ * Globe deep link for one site, as an href.
  *
- * ?focus= loads the globe and flies to the site. ?site= renders the popup
- * card ALONE, without a globe ("standalone popup mode", App.tsx:98) — the
- * wrong parameter for a button that says "show it on the globe".
+ * #focus= loads the globe and flies to the site (App.tsx reads the fragment
+ * as well as the older ?focus= query). ?site= renders the popup card ALONE,
+ * without a globe ("standalone popup mode", App.tsx:98) — the wrong
+ * parameter for a button that says "show it on the globe".
+ *
+ * A fragment, not a query: this link sits on every one of the ~5,000 site
+ * pages and ~2,600 story pages. As ?focus= it produced one distinct URL per
+ * site, and Googlebot crawled and rendered 861 of them in 14 days — each a
+ * full globe load including /api/sites/all — for a page whose canonical is
+ * /globe.html anyway (nginx log, 2026-09-05). Crawlers never request
+ * fragment variants. The window.open() paths in SiteCard/globeNavigation
+ * keep ?focus=: they reuse a named window, and a hash-only change would not
+ * reload it.
  */
 export function globeUrlForSite(siteId: string): string {
-  return `/globe.html?focus=${encodeURIComponent(siteId)}`
+  return `/globe.html#focus=${encodeURIComponent(siteId)}`
 }

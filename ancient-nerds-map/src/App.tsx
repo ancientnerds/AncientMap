@@ -101,11 +101,16 @@ function getStandaloneSiteId(): string | null {
   return urlParams.get('site')
 }
 
-// Check for focus mode (opened via ?focus= URL from search page)
-// Loads the globe normally, then centers on the site and opens its popup
+// Check for focus mode (opened via a #focus= or ?focus= URL)
+// Loads the globe normally, then centers on the site and opens its popup.
+// Hrefs on the SEO pages use the fragment form (globeUrlForSite, brand.ts)
+// so crawlers see one /globe.html instead of one URL per site; the query
+// form stays valid for window.open() callers and every link already out
+// there.
 function getFocusSiteId(): string | null {
-  const urlParams = new URLSearchParams(window.location.search)
-  return urlParams.get('focus')
+  const fromQuery = new URLSearchParams(window.location.search).get('focus')
+  if (fromQuery) return fromQuery
+  return new URLSearchParams(window.location.hash.replace(/^#/, '')).get('focus')
 }
 
 // Check for coordinate fly-to (opened via ?lat=&lon= from Lyra coord links)

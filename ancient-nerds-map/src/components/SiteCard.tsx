@@ -18,6 +18,7 @@ import { FitText } from './FitText'
 import { extractCountry } from '../utils/searchUtils'
 import { formatCoord } from '../utils/formatters'
 import { shareOrCopy } from '../utils/share'
+import { globeUrlForSite } from '../constants/brand'
 import { getSourceColor } from '../data/sites'
 import type { SiteData } from '../data/sites'
 import './site-card.css'
@@ -152,7 +153,7 @@ export function ViewOnGlobeLink({ siteId }: { siteId: string }) {
 
   return (
     <a
-      href={`/globe.html?focus=${siteId}`}
+      href={globeUrlForSite(siteId)}
       className="site-card-globe-link"
       onClick={handleClick}
     >

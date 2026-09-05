@@ -146,8 +146,9 @@ describe('site-Detailseite (Task 11): der SSR-Body trägt den Python-Fragment-In
     expect(html).toContain('/sites/türkiye') // country listing
   })
 
-  it('Globus-CTA mit ?focus= und der CommunityCta-Block', () => {
-    expect(html).toContain('/globe.html?focus=9c8b7a65-4321-4cba-8000-111122223333')
+  it('Globus-CTA mit #focus= (Fragment, nicht Query) und der CommunityCta-Block', () => {
+    expect(html).toContain('/globe.html#focus=9c8b7a65-4321-4cba-8000-111122223333')
+    expect(html).not.toContain('/globe.html?focus=')
     expect(html).toContain('Keep exploring')
     expect(html).toContain('discord')
   })
@@ -245,7 +246,7 @@ describe('story-Seite (Task 14): der SSR-Body trägt den Python-Fragment-Inhalt'
 
   it('kuratierte Site: Chip zur Detailseite UND zum Globus', () => {
     expect(html).toContain('href="/sites/denmark/trundholm-mose-1b2c3d4e"')
-    expect(html).toContain('/globe.html?focus=1b2c3d4e-0000-4000-8000-000000000000')
+    expect(html).toContain('/globe.html#focus=1b2c3d4e-0000-4000-8000-000000000000')
   })
 
   it('unkuratierte Site: kein Detailseiten-Link (wäre ein 404), dafür die Länderseite', () => {
@@ -255,7 +256,7 @@ describe('story-Seite (Task 14): der SSR-Body trägt den Python-Fragment-Inhalt'
     expect(uncurated).not.toContain('href="/sites/denmark/')
     expect(uncurated).toContain('📍 <!-- -->Trundholm Mose')
     expect(uncurated).toContain('href="/sites/denmark"')
-    expect(uncurated).toContain('/globe.html?focus=1b2c3d4e-0000-4000-8000-000000000000')
+    expect(uncurated).toContain('/globe.html#focus=1b2c3d4e-0000-4000-8000-000000000000')
   })
 
   it('kuratierte Site behält den Detaillink und bekommt KEINEN Länder-Chip', () => {
