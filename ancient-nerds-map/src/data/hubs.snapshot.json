@@ -1,0 +1,617 @@
+{
+  "exported_at": "2026-09-05T18:11:19.855479Z",
+  "countries": [
+    {
+      "country": "Afghanistan",
+      "path": "/sites/afghanistan",
+      "sites": 25
+    },
+    {
+      "country": "Albania",
+      "path": "/sites/albania",
+      "sites": 29
+    },
+    {
+      "country": "Algeria",
+      "path": "/sites/algeria",
+      "sites": 35
+    },
+    {
+      "country": "Andorra",
+      "path": "/sites/andorra",
+      "sites": 1
+    },
+    {
+      "country": "Armenia",
+      "path": "/sites/armenia",
+      "sites": 21
+    },
+    {
+      "country": "Australia",
+      "path": "/sites/australia",
+      "sites": 30
+    },
+    {
+      "country": "Austria",
+      "path": "/sites/austria",
+      "sites": 25
+    },
+    {
+      "country": "Azerbaijan",
+      "path": "/sites/azerbaijan",
+      "sites": 39
+    },
+    {
+      "country": "Bahrain",
+      "path": "/sites/bahrain",
+      "sites": 13
+    },
+    {
+      "country": "Baltic Sea",
+      "path": "/sites/baltic-sea",
+      "sites": 1
+    },
+    {
+      "country": "Belgium",
+      "path": "/sites/belgium",
+      "sites": 11
+    },
+    {
+      "country": "Belize",
+      "path": "/sites/belize",
+      "sites": 30
+    },
+    {
+      "country": "Bolivia",
+      "path": "/sites/bolivia",
+      "sites": 18
+    },
+    {
+      "country": "Bosnia and Herzegovina",
+      "path": "/sites/bosnia-and-herzegovina",
+      "sites": 12
+    },
+    {
+      "country": "Brazil",
+      "path": "/sites/brazil",
+      "sites": 6
+    },
+    {
+      "country": "Bulgaria",
+      "path": "/sites/bulgaria",
+      "sites": 77
+    },
+    {
+      "country": "Cambodia",
+      "path": "/sites/cambodia",
+      "sites": 4
+    },
+    {
+      "country": "Canada",
+      "path": "/sites/canada",
+      "sites": 6
+    },
+    {
+      "country": "Chile",
+      "path": "/sites/chile",
+      "sites": 3
+    },
+    {
+      "country": "Chile, Easter Island",
+      "path": "/sites/chile-easter-island",
+      "sites": 8
+    },
+    {
+      "country": "China",
+      "path": "/sites/china",
+      "sites": 9
+    },
+    {
+      "country": "Costa Rica",
+      "path": "/sites/costa-rica",
+      "sites": 5
+    },
+    {
+      "country": "Croatia",
+      "path": "/sites/croatia",
+      "sites": 65
+    },
+    {
+      "country": "Cyprus",
+      "path": "/sites/cyprus",
+      "sites": 52
+    },
+    {
+      "country": "Denmark",
+      "path": "/sites/denmark",
+      "sites": 30
+    },
+    {
+      "country": "Ecuador",
+      "path": "/sites/ecuador",
+      "sites": 1
+    },
+    {
+      "country": "Egypt",
+      "path": "/sites/egypt",
+      "sites": 114
+    },
+    {
+      "country": "England",
+      "path": "/sites/england",
+      "sites": 1052
+    },
+    {
+      "country": "Eritrea",
+      "path": "/sites/eritrea",
+      "sites": 5
+    },
+    {
+      "country": "Ethiopia",
+      "path": "/sites/ethiopia",
+      "sites": 10
+    },
+    {
+      "country": "Finland",
+      "path": "/sites/finland",
+      "sites": 13
+    },
+    {
+      "country": "France",
+      "path": "/sites/france",
+      "sites": 180
+    },
+    {
+      "country": "Georgia",
+      "path": "/sites/georgia",
+      "sites": 3
+    },
+    {
+      "country": "Georgia (country)",
+      "path": "/sites/georgia-country",
+      "sites": 27
+    },
+    {
+      "country": "Germany",
+      "path": "/sites/germany",
+      "sites": 107
+    },
+    {
+      "country": "Greece",
+      "path": "/sites/greece",
+      "sites": 403
+    },
+    {
+      "country": "Greenland",
+      "path": "/sites/greenland",
+      "sites": 7
+    },
+    {
+      "country": "Guatemala",
+      "path": "/sites/guatemala",
+      "sites": 72
+    },
+    {
+      "country": "Honduras",
+      "path": "/sites/honduras",
+      "sites": 11
+    },
+    {
+      "country": "Hungary",
+      "path": "/sites/hungary",
+      "sites": 4
+    },
+    {
+      "country": "India",
+      "path": "/sites/india",
+      "sites": 41
+    },
+    {
+      "country": "Indonesia",
+      "path": "/sites/indonesia",
+      "sites": 11
+    },
+    {
+      "country": "Iran",
+      "path": "/sites/iran",
+      "sites": 22
+    },
+    {
+      "country": "Iraq",
+      "path": "/sites/iraq",
+      "sites": 33
+    },
+    {
+      "country": "Ireland",
+      "path": "/sites/ireland",
+      "sites": 68
+    },
+    {
+      "country": "Israel",
+      "path": "/sites/israel",
+      "sites": 25
+    },
+    {
+      "country": "Italy",
+      "path": "/sites/italy",
+      "sites": 223
+    },
+    {
+      "country": "Japan",
+      "path": "/sites/japan",
+      "sites": 8
+    },
+    {
+      "country": "Jordan",
+      "path": "/sites/jordan",
+      "sites": 14
+    },
+    {
+      "country": "Kazakhstan",
+      "path": "/sites/kazakhstan",
+      "sites": 16
+    },
+    {
+      "country": "Laos",
+      "path": "/sites/laos",
+      "sites": 1
+    },
+    {
+      "country": "Lebanon",
+      "path": "/sites/lebanon",
+      "sites": 28
+    },
+    {
+      "country": "Libya",
+      "path": "/sites/libya",
+      "sites": 10
+    },
+    {
+      "country": "Malta",
+      "path": "/sites/malta",
+      "sites": 46
+    },
+    {
+      "country": "Mauritania",
+      "path": "/sites/mauritania",
+      "sites": 6
+    },
+    {
+      "country": "Mexico",
+      "path": "/sites/mexico",
+      "sites": 167
+    },
+    {
+      "country": "Mongolia",
+      "path": "/sites/mongolia",
+      "sites": 7
+    },
+    {
+      "country": "Morocco",
+      "path": "/sites/morocco",
+      "sites": 8
+    },
+    {
+      "country": "Myanmar",
+      "path": "/sites/myanmar",
+      "sites": 5
+    },
+    {
+      "country": "Netherlands",
+      "path": "/sites/netherlands",
+      "sites": 16
+    },
+    {
+      "country": "North Korea",
+      "path": "/sites/north-korea",
+      "sites": 9
+    },
+    {
+      "country": "North Macedonia",
+      "path": "/sites/north-macedonia",
+      "sites": 22
+    },
+    {
+      "country": "Northern Ireland",
+      "path": "/sites/northern-ireland",
+      "sites": 4
+    },
+    {
+      "country": "Northern Mariana Islands",
+      "path": "/sites/northern-mariana-islands",
+      "sites": 1
+    },
+    {
+      "country": "Norway",
+      "path": "/sites/norway",
+      "sites": 13
+    },
+    {
+      "country": "Pakistan",
+      "path": "/sites/pakistan",
+      "sites": 95
+    },
+    {
+      "country": "Panama",
+      "path": "/sites/panama",
+      "sites": 9
+    },
+    {
+      "country": "Paraguay",
+      "path": "/sites/paraguay",
+      "sites": 1
+    },
+    {
+      "country": "Peru",
+      "path": "/sites/peru",
+      "sites": 335
+    },
+    {
+      "country": "Poland",
+      "path": "/sites/poland",
+      "sites": 29
+    },
+    {
+      "country": "Portugal",
+      "path": "/sites/portugal",
+      "sites": 113
+    },
+    {
+      "country": "Republic of The Gambia",
+      "path": "/sites/republic-of-the-gambia",
+      "sites": 2
+    },
+    {
+      "country": "Romania",
+      "path": "/sites/romania",
+      "sites": 7
+    },
+    {
+      "country": "Russia",
+      "path": "/sites/russia",
+      "sites": 8
+    },
+    {
+      "country": "Saudi Arabia",
+      "path": "/sites/saudi-arabia",
+      "sites": 33
+    },
+    {
+      "country": "Scotland",
+      "path": "/sites/scotland",
+      "sites": 83
+    },
+    {
+      "country": "Serbia",
+      "path": "/sites/serbia",
+      "sites": 71
+    },
+    {
+      "country": "Slovakia",
+      "path": "/sites/slovakia",
+      "sites": 8
+    },
+    {
+      "country": "South Korea",
+      "path": "/sites/south-korea",
+      "sites": 18
+    },
+    {
+      "country": "Spain",
+      "path": "/sites/spain",
+      "sites": 282
+    },
+    {
+      "country": "Sri Lanka",
+      "path": "/sites/sri-lanka",
+      "sites": 1
+    },
+    {
+      "country": "Sudan",
+      "path": "/sites/sudan",
+      "sites": 3
+    },
+    {
+      "country": "Sweden",
+      "path": "/sites/sweden",
+      "sites": 42
+    },
+    {
+      "country": "Switzerland",
+      "path": "/sites/switzerland",
+      "sites": 24
+    },
+    {
+      "country": "Syria",
+      "path": "/sites/syria",
+      "sites": 17
+    },
+    {
+      "country": "Taiwan",
+      "path": "/sites/taiwan",
+      "sites": 11
+    },
+    {
+      "country": "Thailand",
+      "path": "/sites/thailand",
+      "sites": 9
+    },
+    {
+      "country": "Tunisia",
+      "path": "/sites/tunisia",
+      "sites": 19
+    },
+    {
+      "country": "Turkmenistan",
+      "path": "/sites/turkmenistan",
+      "sites": 1
+    },
+    {
+      "country": "Türkiye",
+      "path": "/sites/türkiye",
+      "sites": 218
+    },
+    {
+      "country": "USA",
+      "path": "/sites/usa",
+      "sites": 28
+    },
+    {
+      "country": "Ukraine",
+      "path": "/sites/ukraine",
+      "sites": 45
+    },
+    {
+      "country": "United Arab Emirates",
+      "path": "/sites/united-arab-emirates",
+      "sites": 1
+    },
+    {
+      "country": "United Kingdom",
+      "path": "/sites/united-kingdom",
+      "sites": 1
+    },
+    {
+      "country": "United States",
+      "path": "/sites/united-states",
+      "sites": 1
+    },
+    {
+      "country": "Venezuela",
+      "path": "/sites/venezuela",
+      "sites": 1
+    },
+    {
+      "country": "Wales",
+      "path": "/sites/wales",
+      "sites": 118
+    },
+    {
+      "country": "Yemen",
+      "path": "/sites/yemen",
+      "sites": 2
+    }
+  ],
+  "papers": [
+    {
+      "slug": "the-egyptian-hard-stone-precision-debate",
+      "path": "/research/the-egyptian-hard-stone-precision-debate",
+      "title": "The Egyptian Hard-Stone Precision Debate"
+    },
+    {
+      "slug": "submerged-sites-between-geology-and-pseudoarchaeology",
+      "path": "/research/submerged-sites-between-geology-and-pseudoarchaeology",
+      "title": "Submerged Sites Between Geology and Pseudoarchaeology"
+    },
+    {
+      "slug": "ancient-astronaut-artifact-claims-and-scholarly-rebuttals",
+      "path": "/research/ancient-astronaut-artifact-claims-and-scholarly-rebuttals",
+      "title": "Ancient-Astronaut Artifact Claims and Scholarly Rebuttals"
+    },
+    {
+      "slug": "the-lost-universal-tongue-in-myth-and-linguistics",
+      "path": "/research/the-lost-universal-tongue-in-myth-and-linguistics",
+      "title": "The Lost Universal Tongue in Myth and Linguistics"
+    },
+    {
+      "slug": "geomagnetic-excursions-and-pole-shift-catastrophism",
+      "path": "/research/geomagnetic-excursions-and-pole-shift-catastrophism",
+      "title": "Geomagnetic Excursions and Pole Shift Catastrophism"
+    },
+    {
+      "slug": "solar-superflares-cosmic-impacts-and-fire-and-flood-mythology",
+      "path": "/research/solar-superflares-cosmic-impacts-and-fire-and-flood-mythology",
+      "title": "Solar Superflares, Cosmic Impacts, and Fire-and-Flood Mythology"
+    },
+    {
+      "slug": "the-watchers-nephilim-tradition-across-ancient-cultures",
+      "path": "/research/the-watchers-nephilim-tradition-across-ancient-cultures",
+      "title": "The Watchers Nephilim Tradition Across Ancient Cultures"
+    },
+    {
+      "slug": "the-engineering-and-origins-of-the-baalbek-megaliths",
+      "path": "/research/the-engineering-and-origins-of-the-baalbek-megaliths",
+      "title": "The Engineering and Origins of the Baalbek Megaliths"
+    },
+    {
+      "slug": "the-bosnian-pyramid-project",
+      "path": "/research/the-bosnian-pyramid-project",
+      "title": "The Bosnian Pyramid Project"
+    },
+    {
+      "slug": "near-death-experience-phenomenology-and-reincarnation-traditions",
+      "path": "/research/near-death-experience-phenomenology-and-reincarnation-traditions",
+      "title": "Near-Death Experience Phenomenology and Reincarnation Traditions"
+    },
+    {
+      "slug": "the-simulation-hypothesis-arguments-critics-and-ancient-predecessors",
+      "path": "/research/the-simulation-hypothesis-arguments-critics-and-ancient-predecessors",
+      "title": "The Simulation Hypothesis: Arguments, Critics, and Ancient Predecessors"
+    },
+    {
+      "slug": "mogollon-pithouse-sites-across-the-upper-gila",
+      "path": "/research/mogollon-pithouse-sites-across-the-upper-gila",
+      "title": "Mogollon Pithouse Sites Across the Upper Gila"
+    },
+    {
+      "slug": "ardre-viii-and-the-norse-mythological-tradition",
+      "path": "/research/ardre-viii-and-the-norse-mythological-tradition",
+      "title": "Ardre VIII and the Norse Mythological Tradition"
+    },
+    {
+      "slug": "hawaras-labyrinth-between-mainstream-and-fringe-archaeology",
+      "path": "/research/hawaras-labyrinth-between-mainstream-and-fringe-archaeology",
+      "title": "Hawara's Labyrinth Between Mainstream and Fringe Archaeology"
+    },
+    {
+      "slug": "pineal-gland-dmt-in-near-death-and-cross-cultural-mysticism",
+      "path": "/research/pineal-gland-dmt-in-near-death-and-cross-cultural-mysticism",
+      "title": "Pineal Gland DMT in Near-Death and Cross-Cultural Mysticism"
+    },
+    {
+      "slug": "ancient-hermeticism-and-the-modern-kybalion",
+      "path": "/research/ancient-hermeticism-and-the-modern-kybalion",
+      "title": "Ancient Hermeticism and the Modern Kybalion"
+    },
+    {
+      "slug": "stargate-project-and-sri-remote-viewing-evidence",
+      "path": "/research/stargate-project-and-sri-remote-viewing-evidence",
+      "title": "Stargate Project and SRI Remote Viewing Evidence"
+    },
+    {
+      "slug": "cyclical-world-ages-in-comparative-mythology",
+      "path": "/research/cyclical-world-ages-in-comparative-mythology",
+      "title": "Cyclical World Ages in Comparative Mythology"
+    },
+    {
+      "slug": "marss-lost-atmosphere-and-valles-marineris",
+      "path": "/research/marss-lost-atmosphere-and-valles-marineris",
+      "title": "Mars's Lost Atmosphere and Valles Marineris"
+    },
+    {
+      "slug": "the-enuma-elish-tiamat-and-the-sitchin-nibiru-controversy",
+      "path": "/research/the-enuma-elish-tiamat-and-the-sitchin-nibiru-controversy",
+      "title": "The Enuma Elish, Tiamat, and the Sitchin Nibiru Controversy"
+    },
+    {
+      "slug": "the-squatter-man-petroglyph-and-auroral-sky-mythology",
+      "path": "/research/the-squatter-man-petroglyph-and-auroral-sky-mythology",
+      "title": "The Squatter Man Petroglyph and Auroral Sky Mythology"
+    },
+    {
+      "slug": "global-flood-myths-and-the-younger-dryas-catastrophe-debate",
+      "path": "/research/global-flood-myths-and-the-younger-dryas-catastrophe-debate",
+      "title": "Global Flood Myths and the Younger Dryas Catastrophe Debate"
+    },
+    {
+      "slug": "induced-emf-in-ancient-megalithic-stone-structures",
+      "path": "/research/induced-emf-in-ancient-megalithic-stone-structures",
+      "title": "Induced EMF in Ancient Megalithic Stone Structures"
+    },
+    {
+      "slug": "water-erosion-evidence-in-the-osiris-shaft",
+      "path": "/research/water-erosion-evidence-in-the-osiris-shaft",
+      "title": "Water Erosion Evidence in the Osiris Shaft"
+    }
+  ]
+}

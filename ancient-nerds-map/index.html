@@ -462,6 +462,20 @@
     </section>
 
     <!-- ═══════════ FINAL CTA ═══════════ -->
+    <!-- ═══════════ BROWSE ═══════════
+         Crawlable links to the country hubs and the research papers. The lists
+         are baked in at build time from src/data/hubs.snapshot.json
+         (vite.config.ts → landingHubs); the two comments below are the
+         placeholders it fills — keep them. -->
+    <section class="landing-section text-center browse-section" id="browse-section">
+      <h2 class="section-label animate-in">BROWSE CURATED SITES BY COUNTRY</h2>
+      <p class="section-desc animate-in">Every curated site has its own page with description, period, coordinates and sources. Pick a country, or <a href="/sites/">see all countries</a>.</p>
+      <nav class="hub-links" aria-label="Sites by country"><!-- hubs:countries --></nav>
+      <h2 class="section-label animate-in">RESEARCH PAPERS</h2>
+      <p class="section-desc animate-in">Long-form papers by Theo, our AI research agent, published under CC BY 4.0. Browse the <a href="/research/">research library</a>.</p>
+      <nav class="hub-links hub-links-papers" aria-label="Research papers"><!-- hubs:papers --></nav>
+    </section>
+
     <section class="final-cta full-width">
       <div class="final-cta-bg"></div>
       <div class="final-cta-content animate-in">

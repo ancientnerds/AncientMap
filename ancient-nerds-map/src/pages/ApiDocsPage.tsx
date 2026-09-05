@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import PageHeader from '../components/layout/PageHeader'
 import '../styles/api-docs.css'
+import { escapeHtml } from '../utils/escapeHtml'
 
 interface OpenAPIParam {
   name: string
@@ -75,11 +76,6 @@ const ENDPOINT_EXAMPLES: Record<string, { label: string; params: Record<string, 
     { label: 'Greek sites', params: { country: 'Greece' } },
     { label: 'Religious sites', params: { category: 'Religious' } },
   ],
-}
-
-/** Escape HTML entities to prevent XSS when rendering with dangerouslySetInnerHTML. */
-function escapeHtml(s: string): string {
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 }
 
 /** Lightweight JSON syntax highlighter — no deps, just spans with class names. */

@@ -14,7 +14,7 @@ from fastapi.responses import RedirectResponse
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from api.routes.public_v1 import PAPER_SUMMARY_COLUMNS, paper_summary_kwargs
+from api.routes.public_v1 import PAPER_SUMMARY_COLUMNS, PUBLIC_PAPER_WHERE, paper_summary_kwargs
 from api.seo_shell import ssr_shell_response
 from pipeline.article_html_renderer import (
     BASE_URL,
@@ -34,8 +34,6 @@ router = APIRouter()
 
 _HTML_HEADERS = {"Cache-Control": "public, max-age=1800"}
 
-_PUBLIC_WHERE = "r.is_public = TRUE AND r.status = 'completed' AND r.slug IS NOT NULL"
-
 
 @router.get("/research.html")
 async def legacy_research_redirect(slug: str = ""):
@@ -51,7 +49,7 @@ async def research_listing(db: Session = Depends(get_db)):
         text(f"""
             SELECT {PAPER_SUMMARY_COLUMNS}
             FROM research_requests r
-            WHERE {_PUBLIC_WHERE}
+            WHERE {PUBLIC_PAPER_WHERE}
             ORDER BY r.published_at DESC NULLS LAST
         """)
     ).fetchall()
@@ -80,7 +78,7 @@ def _fetch_paper(slug: str, db: Session):
                    r.result_json::jsonb->>'published_report' AS published_report,
                    r.result_json::jsonb->>'report' AS report
             FROM research_requests r
-            WHERE r.slug = :slug AND {_PUBLIC_WHERE}
+            WHERE r.slug = :slug AND {PUBLIC_PAPER_WHERE}
         """),
         {"slug": slug},
     ).fetchone()
