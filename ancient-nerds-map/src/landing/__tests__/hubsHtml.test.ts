@@ -7,7 +7,7 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { countryLinksHtml, paperLinksHtml } from '../hubsHtml'
+import { countryLinksHtml, paperLinksHtml, pickSnapshotPath } from '../hubsHtml'
 
 describe('countryLinksHtml', () => {
   it('one link per country with the site count, in snapshot order', () => {
@@ -42,5 +42,23 @@ describe('paperLinksHtml', () => {
 
   it('throws on an empty snapshot', () => {
     expect(() => paperLinksHtml([])).toThrow(/snapshot/)
+  })
+})
+
+describe('pickSnapshotPath', () => {
+  it('the first existing candidate wins (pipeline copy before committed baseline)', () => {
+    const exists = (p: string) => p.endsWith('public/data/hubs.snapshot.json') || p.endsWith('src/data/hubs.snapshot.json')
+    expect(pickSnapshotPath(['/x/public/data/hubs.snapshot.json', '/x/src/data/hubs.snapshot.json'], exists))
+      .toBe('/x/public/data/hubs.snapshot.json')
+  })
+
+  it('falls through to the committed baseline when the pipeline copy is absent', () => {
+    const exists = (p: string) => p.endsWith('src/data/hubs.snapshot.json')
+    expect(pickSnapshotPath(['/x/public/data/hubs.snapshot.json', '/x/src/data/hubs.snapshot.json'], exists))
+      .toBe('/x/src/data/hubs.snapshot.json')
+  })
+
+  it('throws, naming both candidates, when neither exists', () => {
+    expect(() => pickSnapshotPath(['/a', '/b'], () => false)).toThrow(/\/a, \/b/)
   })
 })

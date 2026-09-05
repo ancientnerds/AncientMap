@@ -1443,6 +1443,17 @@ async def publish_research(
         )
         session.commit()
 
+        # The homepage lists every public paper from public/data/hubs.snapshot.json,
+        # baked in at the next frontend build — refresh it now so the build is
+        # never a publish behind. Outside the transaction: a snapshot failure
+        # must not undo the publication.
+        try:
+            from pipeline.static_exporter import export_hubs_snapshot
+
+            export_hubs_snapshot()
+        except Exception as exc:
+            logger.warning("hubs snapshot refresh failed: %s", exc)
+
         try:
             from api.cardgame.achievements import check_achievements
 
@@ -1514,6 +1525,17 @@ async def unpublish_research(
             {"id": request_id},
         )
         session.commit()
+
+        # The homepage lists every public paper from public/data/hubs.snapshot.json,
+        # baked in at the next frontend build — refresh it now so the build is
+        # never a publish behind. Outside the transaction: a snapshot failure
+        # must not undo the publication.
+        try:
+            from pipeline.static_exporter import export_hubs_snapshot
+
+            export_hubs_snapshot()
+        except Exception as exc:
+            logger.warning("hubs snapshot refresh failed: %s", exc)
 
     # Remove from Qdrant
     try:

@@ -816,6 +816,17 @@ def _auto_publish(request_id: str) -> None:
             session.commit()
             author_discord_id = row.user_id
 
+            # The homepage lists every public paper from public/data/hubs.snapshot.json,
+            # baked in at the next frontend build — refresh it now so the build is
+            # never a publish behind. Outside the transaction: a snapshot failure
+            # must not undo the publication.
+            try:
+                from pipeline.static_exporter import export_hubs_snapshot
+
+                export_hubs_snapshot()
+            except Exception as exc:
+                logger.warning("hubs snapshot refresh failed: %s", exc)
+
         logger.info("[THEO] Auto-published %s as %r", request_id, slug)
         try:
             from pipeline.lyra.theo_research_index import index_paper

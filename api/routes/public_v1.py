@@ -87,12 +87,6 @@ KNOWLEDGE_RATE_LIMIT = 60
 RESEARCH_LICENSE = "CC BY 4.0"
 RESEARCH_ATTRIBUTION = "Ancient Nerds — https://ancientnerds.com"
 
-# What makes a paper public: reviewed and released, finished, and addressable.
-# Shared by the SEO pages (api/routes/research_html.py) and the homepage hub
-# snapshot (scripts/export_hubs.py) so a paper can't be listed in one place
-# and 404 in the other. Expects the research_requests alias `r`.
-PUBLIC_PAPER_WHERE = "r.is_public = TRUE AND r.status = 'completed' AND r.slug IS NOT NULL"
-
 # Shared row→dict mapping for research papers, used by the public JSON API
 # and the SEO HTML pages (api/routes/research_html.py).
 PAPER_SUMMARY_COLUMNS = """

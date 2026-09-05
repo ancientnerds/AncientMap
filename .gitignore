@@ -180,6 +180,7 @@ public/data/news/
 public/data/sites/
 public/data/sources.json
 public/data/sources.json.gz
+public/data/hubs.snapshot.json
 public/data/links.json
 public/data/links.json.gz
 public/data/content/

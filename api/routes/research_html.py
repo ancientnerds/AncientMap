@@ -14,7 +14,7 @@ from fastapi.responses import RedirectResponse
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from api.routes.public_v1 import PAPER_SUMMARY_COLUMNS, PUBLIC_PAPER_WHERE, paper_summary_kwargs
+from api.routes.public_v1 import PAPER_SUMMARY_COLUMNS, paper_summary_kwargs
 from api.seo_shell import ssr_shell_response
 from pipeline.article_html_renderer import (
     BASE_URL,
@@ -24,6 +24,7 @@ from pipeline.article_html_renderer import (
 )
 from pipeline.database import get_db
 from pipeline.research_html_renderer import (
+    PUBLIC_PAPER_WHERE,
     format_image_captions_medium,
     format_references_md,
     strip_leading_title_heading,

@@ -28,10 +28,13 @@ from loguru import logger
 from sqlalchemy import text
 
 from pipeline.database import LibrarySource, get_session
+from pipeline.research_html_renderer import PUBLIC_PAPER_WHERE
+from pipeline.sites_html_renderer import country_path
 
 # Output configuration
 OUTPUT_DIR = Path("public/data")
 GZIP_OUTPUT = True  # Also create .gz versions
+HUBS_SNAPSHOT_NAME = "hubs.snapshot.json"
 
 # Region definitions for chunking site details
 REGIONS = {
@@ -100,6 +103,77 @@ def save_json(path: Path, data: Any, compress: bool = True):
         logger.info(f"  Saved {gz_path.name}: {gz_size / 1024:.1f} KB (gzip)")
 
 
+def fetch_hub_rows(session) -> tuple[list[Any], list[Any]]:
+    """Country hubs and public papers — same scope as sitemap-countries.xml and /research/."""
+    countries = session.execute(
+        text("""
+            SELECT country, COUNT(*) AS sites
+            FROM unified_sites
+            WHERE source_id = 'ancient_nerds'
+              AND country IS NOT NULL AND country != ''
+            GROUP BY country
+            ORDER BY country
+        """)
+    ).fetchall()
+    papers = session.execute(
+        text(f"""
+            SELECT r.slug, r.question, r.result_json::jsonb->>'title' AS title
+            FROM research_requests r
+            WHERE {PUBLIC_PAPER_WHERE}
+            ORDER BY r.published_at DESC NULLS LAST
+        """)
+    ).fetchall()
+    return list(countries), list(papers)
+
+
+def build_hubs_payload(country_rows: list[Any], paper_rows: list[Any]) -> dict:
+    """Rows → the JSON the frontend build bakes into index.html.
+
+    country_rows: objects with .country and .sites (count of curated sites).
+    paper_rows:   objects with .slug, .title, .question — newest first, as the
+                  research listing orders them; a paper without a stored title
+                  is shown under its question, like everywhere else
+                  (paper_summary_kwargs).
+    """
+    countries = [
+        {"country": row.country, "path": country_path(row.country), "sites": int(row.sites)}
+        for row in sorted(country_rows, key=lambda r: r.country)
+    ]
+    papers = [
+        {"slug": row.slug, "path": f"/research/{row.slug}", "title": row.title or row.question}
+        for row in paper_rows
+    ]
+    return {
+        "exported_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+        "countries": countries,
+        "papers": papers,
+    }
+
+
+def build_hubs_snapshot() -> dict:
+    """Query the DB and build the hubs payload (no file written)."""
+    with get_session() as session:
+        countries, papers = fetch_hub_rows(session)
+    return build_hubs_payload(countries, papers)
+
+
+def export_hubs_snapshot(output_dir: Path = OUTPUT_DIR) -> Path:
+    """Write public/data/hubs.snapshot.json — the homepage's hub lists.
+
+    index.html is a static Vite entry, so its crawlable links to the 98
+    /sites/{country} hubs and the /research/{slug} papers are baked in at
+    build time from this file (vite.config.ts → landingHubs). It is written
+    here at every full export and by the Theo publish/unpublish paths, so
+    the next frontend build is never a publish behind. public/data is the
+    bind-mounted volume the containers share with the host checkout; the
+    committed ancient-nerds-map/src/data/hubs.snapshot.json is only the
+    dev/CI baseline (scripts/export_hubs.py --baseline).
+    """
+    path = output_dir / HUBS_SNAPSHOT_NAME
+    save_json(path, build_hubs_snapshot(), compress=False)
+    return path
+
+
 class StaticExporter:
     """Exports database to optimized static JSON files."""
 
@@ -127,6 +201,9 @@ class StaticExporter:
 
         # Export wiki image index
         self._export_wiki_images()
+
+        # Homepage hub lists (country pages + public papers)
+        export_hubs_snapshot(self.output_dir)
 
         if not sites_only:
             # Export content links
@@ -852,11 +929,18 @@ def main():
         "--sites-only", action="store_true", help="Only export sites (skip content)"
     )
     parser.add_argument("--no-gzip", action="store_true", help="Skip gzip compression")
+    parser.add_argument(
+        "--hubs-only", action="store_true", help="Only refresh hubs.snapshot.json (homepage lists)"
+    )
     args = parser.parse_args()
 
     if args.no_gzip:
         global GZIP_OUTPUT
         GZIP_OUTPUT = False
+
+    if args.hubs_only:
+        print(export_hubs_snapshot(Path(args.output)))
+        return
 
     build_static(output_dir=args.output, sites_only=args.sites_only)
 

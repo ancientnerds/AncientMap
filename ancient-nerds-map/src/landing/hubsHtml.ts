@@ -28,6 +28,25 @@ export interface PaperHub {
   title: string
 }
 
+/**
+ * Which snapshot the build reads, first existing wins. The order is a
+ * precedence, not a fallback: on the VPS the pipeline rewrites
+ * public/data/hubs.snapshot.json at every static export and every paper
+ * publish (pipeline/static_exporter.py), so a deploy always bakes in the
+ * current lists; the committed src/data copy is the baseline that lets a
+ * fresh checkout and CI build without a database. No snapshot at all is a
+ * build error.
+ */
+export function pickSnapshotPath(candidates: string[], exists: (path: string) => boolean): string {
+  const found = candidates.find(exists)
+  if (!found) {
+    throw new Error(
+      `no hubs snapshot found — run scripts/export_hubs.py --baseline; looked at: ${candidates.join(', ')}`,
+    )
+  }
+  return found
+}
+
 export function countryLinksHtml(countries: CountryHub[]): string {
   if (countries.length === 0) throw new Error('hubs snapshot has no countries — run scripts/export_hubs.py')
   return countries

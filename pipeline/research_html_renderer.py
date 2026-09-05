@@ -12,6 +12,13 @@ import re
 
 from pipeline.lyra.theo_image_captions import _META_VOICE_RE
 
+# What makes a paper public: reviewed and released, finished, and addressable.
+# The one definition, shared by the SEO pages (api/routes/research_html.py)
+# and the homepage hub snapshot (pipeline/static_exporter.py) so a paper
+# cannot be listed in one place and 404 in the other. Expects the
+# research_requests alias `r`.
+PUBLIC_PAPER_WHERE = "r.is_public = TRUE AND r.status = 'completed' AND r.slug IS NOT NULL"
+
 _REFERENCES_HEADING_RE = re.compile(
     r"^#{1,3}\s*(References|Sources|Bibliography)\b.*$", re.M | re.I
 )

@@ -5,7 +5,7 @@ import { createReadStream, existsSync, readFileSync, statSync } from 'fs'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 
-import { countryLinksHtml, paperLinksHtml, type CountryHub, type PaperHub } from './src/landing/hubsHtml'
+import { countryLinksHtml, paperLinksHtml, pickSnapshotPath, type CountryHub, type PaperHub } from './src/landing/hubsHtml'
 
 const commitHash = execSync('git rev-parse --short HEAD').toString().trim()
 const buildTime = new Date().toISOString()
@@ -44,8 +44,10 @@ function servePublicData(): Plugin {
 // Build time: bake the country hubs and research papers into index.html.
 // The homepage is static, so these are its only crawlable links to the 98
 // /sites/{country} pages and the /research/{slug} papers (see hubsHtml.ts).
-// Data: src/data/hubs.snapshot.json, refreshed by scripts/export_hubs.py.
-// A missing placeholder or an empty snapshot fails the build on purpose.
+// Data: the pipeline's public/data/hubs.snapshot.json when present (VPS,
+// rewritten at every export and paper publish), else the committed
+// src/data baseline. A missing placeholder or an empty snapshot fails the
+// build on purpose.
 function landingHubs(): Plugin {
   return {
     name: 'landing-hubs',
@@ -53,9 +55,21 @@ function landingHubs(): Plugin {
       order: 'pre',
       handler(html: string, ctx: { filename: string }) {
         if (!ctx.filename.endsWith('index.html')) return html
-        const snapshot = JSON.parse(
-          readFileSync(resolve(__dirname, 'src', 'data', 'hubs.snapshot.json'), 'utf8'),
-        ) as { countries: CountryHub[]; papers: PaperHub[] }
+        const snapshotPath = pickSnapshotPath(
+          [
+            resolve(__dirname, '..', 'public', 'data', 'hubs.snapshot.json'),
+            resolve(__dirname, 'src', 'data', 'hubs.snapshot.json'),
+          ],
+          existsSync,
+        )
+        const snapshot = JSON.parse(readFileSync(snapshotPath, 'utf8')) as {
+          exported_at: string
+          countries: CountryHub[]
+          papers: PaperHub[]
+        }
+        console.log(
+          `[landing-hubs] ${snapshotPath}: ${snapshot.countries.length} countries, ${snapshot.papers.length} papers (exported ${snapshot.exported_at})`,
+        )
         const fills: [string, string][] = [
           ['<!-- hubs:countries -->', countryLinksHtml(snapshot.countries)],
           ['<!-- hubs:papers -->', paperLinksHtml(snapshot.papers)],
