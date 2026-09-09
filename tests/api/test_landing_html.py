@@ -19,7 +19,6 @@ from starlette.middleware.gzip import GZipMiddleware
 from api.routes import landing_html
 from api.routes.landing_html import (
     apply_stats,
-    first_sentence,
     journal_teaser,
     lead_window_start,
     paper_teaser,
@@ -27,7 +26,6 @@ from api.routes.landing_html import (
     reading_minutes,
     sites_compact,
     sites_long,
-    story_teaser,
 )
 from pipeline.database import get_db
 
@@ -40,66 +38,30 @@ _SHELL_MARKERS = (
 
 
 def item(id_, *, sig, hours_ago, category="artifact", site=None, post="One sentence. Two. https://x.y"):
-    video = SimpleNamespace(channel=SimpleNamespace(name="Inside Archaeology"))
+    """A joinedload-ed NewsItem row: every attribute story_payload() touches."""
+    video = SimpleNamespace(
+        id=f"vid{id_}",
+        title=f"Video {id_}",
+        published_at=NOW - timedelta(hours=hours_ago),
+        channel=SimpleNamespace(name="Inside Archaeology"),
+    )
     return SimpleNamespace(
         id=id_,
         headline=f"Headline {id_}",
+        summary=f"Summary {id_}",
+        facts=[f"Fact {id_}"],
         post_text=post,
         screenshot_url=f"/data/news/screenshots/{id_}.webp",
         news_category=category,
         significance=sig,
         created_at=NOW - timedelta(hours=hours_ago),
         web_sources=[{"url": "a"}, {"url": "b"}],
+        timestamp_seconds=None,
+        speculative_tag=None,
+        site_name_extracted=None,
         video=video,
         site=site,
     )
-
-
-def test_first_sentence_drops_trailing_links_and_caps_length():
-    assert first_sentence("One sentence. Two. https://x.y") == "One sentence."
-    assert first_sentence("No period https://x.y") == "No period"
-    assert first_sentence(None) == ""
-    long = "word " * 50 + "end."
-    out = first_sentence(long)
-    assert len(out) <= 181 and out.endswith("…")
-
-
-def test_first_sentence_matches_the_typescript_twin():
-    """feedClient.ts::firstSentence, case for case — a refetched card and a
-    server-rendered one show the same string or the swap is visible."""
-    # blurb() collapses whitespace runs before it measures or cuts.
-    assert first_sentence("Text with  double  spaces. More.") == "Text with double spaces."
-    # splitPostText strips the trailing link from the WHOLE text, then splits
-    # paragraphs — a link on its own last line must not survive as the summary.
-    assert first_sentence("Line one\nLine two.") == "Line one"
-    assert first_sentence("\n\nFirst real line. Rest.\nmore") == "First real line."
-    assert first_sentence("Body sentence. Rest.\nhttps://x.y") == "Body sentence."
-    # No space to break on: blurb keeps the slice whole instead of cutting at -1.
-    unbroken = first_sentence("x" * 250 + ".")
-    assert unbroken == "x" * 180 + "…" and len(unbroken) == 181
-
-
-def test_story_teaser_maps_row_and_site():
-    site = SimpleNamespace(
-        id="da3ff939-2402-4bf8-a476-e7725c81c8d5", name="Stirling Castle", country="United Kingdom"
-    )
-    t = story_teaser(item(7, sig=6, hours_ago=3, site=site))
-    assert t == {
-        "id": 7,
-        "headline": "Headline 7",
-        "summary": "One sentence.",
-        "screenshot_url": "/data/news/screenshots/7.webp",
-        "category": "artifact",
-        "significance": 6,
-        "created_at": (NOW - timedelta(hours=3)).isoformat(),
-        "channel": "Inside Archaeology",
-        "sources": 2,
-        "path": "/news-archive/headline-7-7",
-        "site": {"name": "Stirling Castle", "country": "United Kingdom"},
-    }
-    assert story_teaser(item(8, sig=None, hours_ago=1))["site"] is None
-    no_country = SimpleNamespace(id="x", name="Etowah", country=None)
-    assert story_teaser(item(9, sig=2, hours_ago=1, site=no_country))["site"] is None
 
 
 def test_pick_lead_prefers_the_48h_window_and_never_duplicates():
@@ -220,7 +182,15 @@ def test_lead_window_start_is_48h_before_the_given_now():
 
 
 def _landing_data():
-    site = SimpleNamespace(id="16147718-a70b-486e-aaba-9cf71316602c", name="Roman grave", country="Austria")
+    site = SimpleNamespace(
+        id="16147718-a70b-486e-aaba-9cf71316602c",
+        name="Roman grave",
+        country="Austria",
+        site_type="Battlefield",
+        period_name="Roman",
+        period_start=100,
+        source_id="ancient_nerds",
+    )
     recent = [item(i, sig=3, hours_ago=i) for i in range(1, 8)]
     return {
         "recent": recent,
@@ -267,7 +237,19 @@ def test_home_route_hands_the_landing_payload_and_substitutes_hero_counts():
     route = render.call_args[0][0]
     assert route["type"] == "landing"
     assert route["stats"] == {"sites": 1_759_673, "stories": 3189, "journals": 23, "papers": 24}
-    assert route["stories"]["lead"]["id"] == 9 and len(route["stories"]["rail"]) == 6
+    lead = route["stories"]["lead"]
+    assert lead["id"] == 9 and len(route["stories"]["rail"]) == 6
+    # The window runs the story page, so the payload is the story page's own —
+    # full body, video and site, minus the route discriminator.
+    assert lead["headline"] == "Headline 9"
+    assert lead["post_text"] == "One sentence. Two. https://x.y"
+    assert lead["youtube_url"] == "https://www.youtube.com/watch?v=vid9"
+    assert lead["site_curated"] is True
+    # related=[]: a "read next" list inside the window would be a dead end.
+    assert lead["related"] == []
+    assert all(r["related"] == [] for r in route["stories"]["rail"])
+    # "type" belongs to the route, not to a story inside it.
+    assert "type" not in lead and all("type" not in r for r in route["stories"]["rail"])
     assert route["stories"]["categories"] == ["artifact", "bioarchaeology"]
     assert route["journals"]["lead"]["id"] == 74 and route["journals"]["total"] == 23
     assert route["papers"]["lead"]["slug"] == "paper-a" and route["papers"]["total"] == 24

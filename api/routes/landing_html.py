@@ -26,17 +26,16 @@ from fastapi import APIRouter, Depends, Response
 from sqlalchemy import text
 from sqlalchemy.orm import Session, joinedload
 
-from api.routes.articles_html import public_stories_query
+from api.routes.articles_html import public_stories_query, story_payload
 from api.routes.news import get_news_stats
 from api.routes.public_v1 import PAPER_SUMMARY_COLUMNS, paper_summary_kwargs
 from api.routes.theo import get_current_research
 from api.seo_shell import ssr_shell_response
 from api.services.site_stats import get_site_stats
-from pipeline.article_html_renderer import slugify, story_slug
+from pipeline.article_html_renderer import slugify
 from pipeline.database import NewsArticle, NewsItem, NewsVideo, get_db
 from pipeline.research_html_renderer import PUBLIC_PAPER_WHERE
 
-MAX_SUMMARY = 180
 WORDS_PER_MINUTE = 238
 LEAD_WINDOW = timedelta(hours=48)
 CATEGORY_WINDOW = timedelta(days=30)
@@ -46,63 +45,13 @@ RECENT_ROWS = 7
 CHIP_HIDDEN_CATEGORIES = ("unverified", "rejected")
 APPENDIX_SECTIONS = {"sources", "videos"}
 
-_TRAILING_URL = re.compile(r"\s*https?://\S+\s*$")
-_SENTENCE = re.compile(r"^.*?[.!?](?=\s|$)")
 _HEADING = re.compile(r"^##+\s+(.+?)\s*$", re.MULTILINE)
 _IMAGE = re.compile(r"!\[[^\]]*\]\(([^)\s]+)")
 _LINK = re.compile(r"https?://")
 
 
-def first_sentence(post_text: str | None) -> str:
-    """First sentence of the story post, for the card summary.
-
-    Same rule as ancient-nerds-map/src/landing/feedClient.ts::firstSentence:
-    trailing source links off the *whole* text (splitPostText strips them
-    before it splits paragraphs), first paragraph, first sentence, whitespace
-    collapsed, cut at 180 on a word boundary. A refetched card must read
-    exactly like a server-rendered one.
-    """
-    if not post_text:
-        return ""
-    body = post_text.strip()
-    while _TRAILING_URL.search(body):
-        body = _TRAILING_URL.sub("", body)
-    paragraph = next((line for line in (raw.strip() for raw in body.split("\n")) if line), "")
-    match = _SENTENCE.match(paragraph)
-    sentence = " ".join((match.group(0) if match else paragraph).split())
-    if len(sentence) <= MAX_SUMMARY:
-        return sentence
-    cut = sentence[:MAX_SUMMARY]
-    space = cut.rfind(" ")
-    return (cut if space == -1 else cut[:space]) + "…"
-
-
 def reading_minutes(words: int) -> int:
     return math.ceil(words / WORDS_PER_MINUTE) if words else 0
-
-
-def story_teaser(row) -> dict:
-    """NewsItem row (video+channel and site joined) → StoryTeaser.
-
-    `site` is name and country only: detail pages exist just for curated
-    sites, and the card does not link the site, so no path is derived.
-    """
-    site = None
-    if row.site is not None and row.site.country:
-        site = {"name": row.site.name, "country": row.site.country}
-    return {
-        "id": row.id,
-        "headline": row.headline,
-        "summary": first_sentence(row.post_text),
-        "screenshot_url": row.screenshot_url,
-        "category": row.news_category,
-        "significance": row.significance,
-        "created_at": row.created_at.isoformat(),
-        "channel": row.video.channel.name,
-        "sources": len(row.web_sources or []),
-        "path": f"/news-archive/{story_slug(row.headline, row.id)}",
-        "site": site,
-    }
 
 
 def pick_lead_and_rail(recent: list, lead_48h) -> tuple:
@@ -299,9 +248,13 @@ def build_route(data: dict, site_stats: dict, theo_running: dict | None) -> dict
     stories = None
     if data["recent"]:
         lead, rail = pick_lead_and_rail(data["recent"], data["lead_48h"])
+        # The window runs the story page, so the payload IS the story page's
+        # (articles_html.story_payload) — one builder, one shape, one
+        # <StoryArticle>. related=[] because a "read next" list inside the
+        # homepage window would lead nowhere the homepage does not already go.
         stories = {
-            "lead": story_teaser(lead),
-            "rail": [story_teaser(r) for r in rail],
+            "lead": story_payload(lead, related=[]),
+            "rail": [story_payload(r, related=[]) for r in rail],
             "categories": data["categories"],
         }
     journals = None

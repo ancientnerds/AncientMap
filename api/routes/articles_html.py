@@ -278,6 +278,63 @@ def _related_stories(db: Session, item: NewsItem, limit: int = 5) -> list[dict]:
     ]
 
 
+def story_payload(item: NewsItem, related: list[dict]) -> dict:
+    """One story as the frontend consumes it — anRoute.ts::StoryData.
+
+    Raw snake_case row fields (react-ssr Task 14) — the richest payload in
+    the system. Display decisions live in src/seo/ and StoryArticle: the
+    http(s) source filter, the &t= video deeplink, screenshot
+    absolutization, blurbs and date formatting.
+
+    Shared with the homepage (landing_html.build_route), which renders the
+    same <StoryArticle> inside its Stories window and passes related=[] —
+    a window that opens a "read next" list would be a dead end inside a
+    dead end.
+
+    The caller must have joinedload-ed video→channel and site; every access
+    below is on an already-loaded relation.
+    """
+    video = item.video
+    site = item.site
+    return {
+        "id": item.id,
+        "headline": item.headline,
+        "summary": item.summary,
+        "facts": item.facts,
+        "post_text": item.post_text,
+        "site_name": site.name if site else (item.site_name_extracted or ""),
+        "site_id": str(site.id) if site else "",
+        "site_country": site.country if site else "",
+        # Same three fields the feed hands the cards (news.py:339-341), so
+        # the story page can render the SAME badge components instead of
+        # its own chip. The site is already joinedload-ed — no extra query.
+        # Missing here since the Python renderer, which had no badges at all.
+        "site_type": site.site_type if site else None,
+        "site_period_name": site.period_name if site else None,
+        "site_period_start": site.period_start if site else None,
+        "significance": item.significance,
+        # /sites/{country}/{slug} serves curated sites only (_CURATED_WHERE
+        # in sites_html.py). Linking a bulk-imported site there is a 404 —
+        # 268 published stories did exactly that until 2026-08-09.
+        "site_curated": bool(site and site.source_id == "ancient_nerds"),
+        "screenshot_url": item.screenshot_url,
+        "youtube_url": f"https://www.youtube.com/watch?v={video.id}" if video else "",
+        "video_title": video.title if video else "",
+        "channel_name": video.channel.name if video and video.channel else "",
+        "published_at": (
+            video.published_at if video and video.published_at else item.created_at
+        ).isoformat(),
+        "news_category": item.news_category,
+        # Stored per story since the tweet-verifier work, never rendered
+        # until 2026-08-08: researched web sources, the exact video offset,
+        # and the pipeline's own speculative label.
+        "web_sources": item.web_sources,
+        "timestamp_seconds": item.timestamp_seconds,
+        "speculative_tag": item.speculative_tag,
+        "related": related,
+    }
+
+
 @router.get("/news-archive/{slug}")
 async def story_page(slug: str, db: Session = Depends(get_db)):
     """Full HTML page for a single news story."""
@@ -304,52 +361,8 @@ async def story_page(slug: str, db: Session = Depends(get_db)):
             headers={"Cache-Control": "public, max-age=300"},
         )
 
-    video = item.video
-    site = item.site
-    # Raw snake_case row fields (react-ssr Task 14) — the richest payload in
-    # the system. Display decisions live in src/seo/ and StoryPage: the
-    # http(s) source filter, the &t= video deeplink, screenshot
-    # absolutization, blurbs and date formatting.
     return ssr_shell_response(
         "story.html",
-        {
-            "type": "story",
-            "id": item.id,
-            "headline": item.headline,
-            "summary": item.summary,
-            "facts": item.facts,
-            "post_text": item.post_text,
-            "site_name": site.name if site else (item.site_name_extracted or ""),
-            "site_id": str(site.id) if site else "",
-            "site_country": site.country if site else "",
-            # Same three fields the feed hands the cards (news.py:339-341), so
-            # the story page can render the SAME badge components instead of
-            # its own chip. The site is already joinedload-ed above — no extra
-            # query. Missing here since the Python renderer, which had no
-            # badges at all.
-            "site_type": site.site_type if site else None,
-            "site_period_name": site.period_name if site else None,
-            "site_period_start": site.period_start if site else None,
-            "significance": item.significance,
-            # /sites/{country}/{slug} serves curated sites only (_CURATED_WHERE
-            # in sites_html.py). Linking a bulk-imported site there is a 404 —
-            # 268 published stories did exactly that until 2026-08-09.
-            "site_curated": bool(site and site.source_id == "ancient_nerds"),
-            "screenshot_url": item.screenshot_url,
-            "youtube_url": f"https://www.youtube.com/watch?v={video.id}" if video else "",
-            "video_title": video.title if video else "",
-            "channel_name": video.channel.name if video and video.channel else "",
-            "published_at": (
-                video.published_at if video and video.published_at else item.created_at
-            ).isoformat(),
-            "news_category": item.news_category,
-            # Stored per story since the tweet-verifier work, never rendered
-            # until 2026-08-08: researched web sources, the exact video offset,
-            # and the pipeline's own speculative label.
-            "web_sources": item.web_sources,
-            "timestamp_seconds": item.timestamp_seconds,
-            "speculative_tag": item.speculative_tag,
-            "related": _related_stories(db, item),
-        },
+        {"type": "story", **story_payload(item, _related_stories(db, item))},
         _HTML_HEADERS,
     )
