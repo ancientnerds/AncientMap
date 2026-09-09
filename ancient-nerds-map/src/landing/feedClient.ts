@@ -7,6 +7,7 @@
  */
 import { splitPostText } from '../components/news/postText'
 import { storyPath } from '../seo/meta'
+import { blurb } from '../seo/text'
 import type { StoryTeaser } from '../types/anRoute'
 
 export interface FeedItem {
@@ -31,14 +32,16 @@ interface FeedResponse {
 
 const MAX_SUMMARY = 180
 
+/**
+ * First sentence of the post text, capped at MAX_SUMMARY. The cut itself is
+ * blurb()'s job — one definition of "shorten on a word boundary and append
+ * an ellipsis" for cards and descriptions alike.
+ */
 export function firstSentence(postText: string | null): string {
   if (!postText) return ''
   const body = splitPostText(postText).paragraphs[0] ?? ''
   const match = body.match(/^.*?[.!?](?=\s|$)/)
-  const sentence = (match ? match[0] : body).trim()
-  if (sentence.length <= MAX_SUMMARY) return sentence
-  const cut = sentence.slice(0, MAX_SUMMARY)
-  return `${cut.slice(0, cut.lastIndexOf(' '))}…`
+  return blurb((match ? match[0] : body).trim(), MAX_SUMMARY)
 }
 
 export function feedItemToTeaser(it: FeedItem): StoryTeaser {

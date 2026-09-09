@@ -7,7 +7,7 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { coordDisplay, longDate, periodDisplay } from '../display'
+import { coordDisplay, longDate, periodDisplay, shortDate } from '../display'
 
 describe('coordDisplay', () => {
   it('formatiert Nord/Ost mit vier Nachkommastellen', () => {
@@ -79,5 +79,22 @@ describe('longDate (_date_parts()[1], react-ssr Task 14)', () => {
   it('leer ohne Wert', () => {
     expect(longDate(null)).toBe('')
     expect(longDate('')).toBe('')
+  })
+})
+
+describe('shortDate', () => {
+  it('kürzt den Monat auf drei Buchstaben, der Tag ohne führende Null', () => {
+    expect(shortDate('2026-09-07T04:23:33')).toBe('Sep 7')
+    expect(shortDate('2026-12-25')).toBe('Dec 25')
+  })
+
+  it('liest die Felder wörtlich — mit und ohne Zonen-Z dasselbe Datum', () => {
+    expect(shortDate('2026-08-31T00:00:00')).toBe('Aug 31')
+    expect(shortDate('2026-08-31T00:00:00Z')).toBe('Aug 31')
+  })
+
+  it('wirft bei allem, was kein ISO-Datum ist — der Payload garantiert eines', () => {
+    expect(() => shortDate('circa 1400 BC')).toThrow('not an ISO date')
+    expect(() => shortDate('2026-13-01')).toThrow('not an ISO date')
   })
 })

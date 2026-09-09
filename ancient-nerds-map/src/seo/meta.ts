@@ -419,8 +419,8 @@ export function landingMeta(route: LandingRoute): PageMeta {
       `Explore over ${short.replace('M', ' million')} archaeological sites worldwide on an ` +
       'interactive 3D globe. Discover ancient civilizations, historical empires, AI-curated ' +
       'stories, weekly journals and open research papers. Free platform for archaeology enthusiasts.',
+    // Kein ogType/image: renderHead() setzt genau diese beiden Werte als
+    // Default ('website' und DEFAULT_OG_IMAGE = /landing/og-image.png).
     canonical: `${BASE_URL}/`,
-    ogType: 'website',
-    image: `${BASE_URL}/landing/og-image.png`,
   }
 }

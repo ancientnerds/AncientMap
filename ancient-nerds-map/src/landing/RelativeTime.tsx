@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 
+import { shortDate } from '../seo/display'
 import { formatRelativeDate } from '../utils/formatters'
-import { shortDate } from './dates'
 
 /**
  * Server and first client render show the absolute date ("Sep 7"); after

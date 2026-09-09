@@ -68,6 +68,25 @@ export function longDate(value: string | null | undefined): string {
   return `${month} ${m[3]}, ${m[1]}`
 }
 
+/**
+ * "Sep 7" — dieselbe Lesart wie longDate: die Felder verbatim aus dem
+ * ISO-String, nie durch `new Date()`.
+ *
+ * Die Payload-Timestamps tragen keine Zone ("2026-08-31T00:00:00"), und JS
+ * parst die als LOKALZEIT: `new Date(iso).getUTCDate()` verschiebt den Tag
+ * dann um den Offset des Renderers — der SSR-Sidecar (UTC) druckte
+ * "Aug 30", wo ein Browser in CEST "Aug 31" zeigt, und die Hydration
+ * bricht. Anders als longDate fällt hier nichts zurück: die
+ * Landing-Payloads garantieren ISO-Timestamps, ein anderer String ist ein
+ * Fehler im Payload-Builder und soll auffallen.
+ */
+export function shortDate(iso: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso)
+  const month = m ? MONTHS[Number(m[2]) - 1] : undefined
+  if (!m || !month) throw new Error(`shortDate: not an ISO date: ${iso}`)
+  return `${month.slice(0, 3)} ${Number(m[3])}`
+}
+
 /** _period_display(): kuratierter Periodenname, sonst Start-/Endjahr-Spanne. */
 export function periodDisplay(
   site: Pick<SiteRoute, 'period_name' | 'period_start' | 'period_end'>,

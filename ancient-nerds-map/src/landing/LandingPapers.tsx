@@ -1,11 +1,10 @@
-import type { PaperTeaser, TheoStatus } from '../types/anRoute'
-import LazyImage from '../components/LazyImage'
-import { shortDate } from './dates'
+import type { LandingRoute, PaperTeaser } from '../types/anRoute'
+import { shortDate } from '../seo/display'
 import RelativeTime from './RelativeTime'
 import SectionHead from './SectionHead'
 
 interface Props {
-  data: { lead: PaperTeaser; rail: PaperTeaser[]; total: number; theo: TheoStatus | null }
+  data: NonNullable<LandingRoute['papers']>
 }
 
 function Evidence({ paper }: { paper: PaperTeaser }) {
@@ -21,6 +20,8 @@ function Evidence({ paper }: { paper: PaperTeaser }) {
 
 export default function LandingPapers({ data }: Props) {
   const { lead, rail, total, theo } = data
+  // published_at, words and minutes are all nullable — the meta lines are
+  // joined from the parts that exist so no separator dangles.
   return (
     <section className="ll-section" id="papers-live" aria-labelledby="ll-fig-3">
       <SectionHead fig={3} name="research papers" status={`${total} public · CC BY 4.0 · by Theo`} />
@@ -28,15 +29,19 @@ export default function LandingPapers({ data }: Props) {
         <a className="ll-lead" href={lead.path}>
           {lead.hero_image_url && (
             <span className="ll-img ll-img-16x9">
-              <LazyImage src={lead.hero_image_url} alt="" width={1280} height={720} />
+              <img src={lead.hero_image_url} alt="" width={1280} height={720} loading="lazy" decoding="async" />
             </span>
           )}
           <span className="ll-body">
             <span className="ll-meta-row">
               <span className="ll-badge ll-cat-paper">paper</span>{' '}
               <span className="ll-meta">
-                {lead.published_at ? `published ${shortDate(lead.published_at)}` : ''}
-                {lead.minutes != null ? ` · ${lead.minutes} min read` : ''}
+                {[
+                  lead.published_at && `published ${shortDate(lead.published_at)}`,
+                  lead.minutes != null && `${lead.minutes} min read`,
+                ]
+                  .filter(Boolean)
+                  .join(' · ')}
               </span>
             </span>
             <span className="ll-title">{lead.title}</span>
@@ -50,9 +55,13 @@ export default function LandingPapers({ data }: Props) {
               <span>
                 <span className="ll-row-title">{p.title}</span>
                 <span className="ll-meta">
-                  {p.words != null ? `${p.words.toLocaleString('en-US')} words · ` : ''}
-                  {p.sources_analyzed.toLocaleString('en-US')} sources
-                  {p.published_at ? ` · ${shortDate(p.published_at)}` : ''}
+                  {[
+                    p.words != null && `${p.words.toLocaleString('en-US')} words`,
+                    `${p.sources_analyzed.toLocaleString('en-US')} sources`,
+                    p.published_at && shortDate(p.published_at),
+                  ]
+                    .filter(Boolean)
+                    .join(' · ')}
                 </span>
               </span>
               <span className="ll-badge ll-cat-paper">paper</span>

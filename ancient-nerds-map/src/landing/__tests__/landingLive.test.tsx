@@ -103,6 +103,45 @@ describe('LandingLive', () => {
     expect(text.startsWith('SIG')).toBe(true)
   })
 
+  it('serves plain lazy <img>, never the JS-gated LazyImage', () => {
+    // LazyImage starts on .lazy-image--hidden and unhides in React's onLoad
+    // — an event that never fires for an image the browser finished before
+    // hydration, and never at all for a crawler without JS.
+    expect(html).not.toContain('lazy-image')
+    expect(html).not.toContain('data:image/svg+xml')
+    const imgs = [...html.matchAll(/<img\b[^>]*>/g)].map(m => m[0])
+    expect(imgs.length).toBeGreaterThan(0)
+    for (const tag of imgs) {
+      expect(tag, tag).toContain('loading="lazy"')
+      expect(tag, tag).toContain('decoding="async"')
+    }
+    // The story without a screenshot keeps its empty aspect-ratio box.
+    expect(imgs).toHaveLength(4)
+  })
+
+  it('joins meta lines from the parts that exist, without a dangling separator', () => {
+    const journals = FIXTURES.landing.journals!
+    const papers = FIXTURES.landing.papers!
+    const row = journals.rail[0]
+    const out = render({
+      ...FIXTURES.landing,
+      journals: { ...journals, rail: [{ ...row, week_start: null, week_end: null }] },
+      papers: { ...papers, lead: { ...papers.lead, published_at: null, minutes: null } },
+    })
+    const metaAfter = (href: string): string => {
+      const tail = out.slice(out.indexOf(`href="${href}"`))
+      const meta = /<span class="ll-meta">([\s\S]*?)<\/span>/.exec(tail)
+      expect(meta, `no ll-meta after ${href}`).not.toBeNull()
+      return meta![1].replace(/<[^>]*>/g, '').trim()
+    }
+    for (const text of [metaAfter(row.path), metaAfter(papers.lead.path)]) {
+      expect(text).not.toContain('· ·')
+      expect(text.startsWith('·')).toBe(false)
+      expect(text.endsWith('·')).toBe(false)
+    }
+    expect(metaAfter(row.path)).toBe(`No. ${row.id} · ${row.minutes} min`)
+  })
+
   it('never prints undefined or null', () => {
     expect(html).not.toMatch(/undefined|null/)
   })

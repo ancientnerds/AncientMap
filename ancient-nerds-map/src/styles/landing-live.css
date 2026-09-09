@@ -1,11 +1,11 @@
 /* Landing live sections (Stories / Journal / Papers) — lead + rail language.
    Tokens from tokens.css; section widths match .landing-section. */
-.landing-live { max-width: 1200px; margin: 0 auto; padding: 0 24px; font-family: var(--font-mono, 'JetBrains Mono', monospace); }
+.landing-live { max-width: 1200px; margin: 0 auto; padding: 0 24px; font-family: var(--font-body); --ll-orange: #ff9830; --ll-red: #ff6b7a; }
 .ll-section { padding: 56px 0 24px; border-top: 1px solid var(--border-accent); }
 .ll-section:first-child { border-top: 0; }
 
 .ll-head { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; margin-bottom: 12px; flex-wrap: wrap; }
-.ll-fig { margin: 0; font-family: var(--font-mono, monospace); font-size: 14px; font-weight: 600; letter-spacing: 0.04em; color: var(--accent-primary); }
+.ll-fig { margin: 0; font-size: 14px; font-weight: 600; letter-spacing: 0.04em; color: var(--accent-primary); }
 .ll-fig b { color: var(--text-primary); font-weight: 600; }
 .ll-status { font-size: 12px; color: var(--text-muted); }
 
@@ -28,8 +28,8 @@
 .ll-site { color: var(--accent-secondary); }
 
 .ll-badge { font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; padding: 1px 6px; border: 1px solid currentColor; border-radius: 3px; color: var(--text-muted); }
-.ll-cat-artifact { color: #ff9830; }
-.ll-cat-bioarchaeology { color: #ff6b7a; }
+.ll-cat-artifact { color: var(--ll-orange); }
+.ll-cat-bioarchaeology { color: var(--ll-red); }
 .ll-cat-underwater, .ll-cat-journal { color: var(--accent-secondary); }
 .ll-cat-theory { color: #c9a3ff; }
 .ll-cat-architecture, .ll-cat-paper { color: var(--accent-primary); }
@@ -54,9 +54,9 @@
 .ll-evidence i { font-style: normal; font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em; }
 .ll-evidence b { font-size: 14px; color: var(--text-primary); }
 
-.ll-theo { display: flex; justify-content: space-between; gap: 12px; margin-top: 12px; padding: 8px 12px; font-size: 12px; color: #ff9830; border: 1px dashed rgba(255, 152, 48, 0.45); text-decoration: none; }
+.ll-theo { display: flex; justify-content: space-between; gap: 12px; margin-top: 12px; padding: 8px 12px; font-size: 12px; color: var(--ll-orange); border: 1px dashed color-mix(in srgb, var(--ll-orange) 45%, transparent); text-decoration: none; }
 .ll-theo b { color: var(--text-primary); }
-.ll-pulse { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: #ff9830; box-shadow: 0 0 6px #ff9830; margin-right: 6px; }
+.ll-pulse { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--ll-orange); box-shadow: 0 0 6px var(--ll-orange); margin-right: 6px; }
 @media (prefers-reduced-motion: no-preference) { .ll-pulse { animation: ll-pulse 1.6s infinite; } }
 @keyframes ll-pulse { 50% { opacity: 0.35; } }
 
@@ -69,7 +69,7 @@
 .ll-chip[aria-pressed='true'] { color: #031; background: var(--accent-primary); border-color: var(--accent-primary); font-weight: 600; }
 .ll-more { margin-top: 10px; width: 100%; border: 1px solid var(--border-accent); background: transparent; color: var(--accent-secondary); font: inherit; font-size: 12px; padding: 8px; cursor: pointer; }
 .ll-more:disabled { opacity: 0.5; cursor: default; }
-.ll-error { color: #ff6b7a; }
+.ll-error { color: var(--ll-red); }
 
 @media (max-width: 900px) {
   .ll-two { grid-template-columns: 1fr; }
