@@ -1,5 +1,19 @@
+/**
+ * The research Papers section: a NERV window running the paper page.
+ *
+ * Same shape as the Stories and Journal sections (2026-09-10): the lead's
+ * payload carries the report's body_html, so the window body is the very
+ * <PaperArticle> /research/{slug} renders — hero, header, byline, reading
+ * time, licence, report text — cut after a whole block by excerpt_html. The
+ * evidence strip sits under it, the older papers beside it.
+ *
+ * The Theo line stays outside the window: it is the state of the agent, not
+ * part of any one paper.
+ */
+import PaperArticle from '../components/theo/PaperArticle'
 import type { LandingRoute, PaperTeaser } from '../types/anRoute'
 import { shortDate } from '../seo/display'
+import LandingWindow from './LandingWindow'
 import RelativeTime from './RelativeTime'
 import SectionHead from './SectionHead'
 
@@ -25,50 +39,51 @@ export default function LandingPapers({ data }: Props) {
   return (
     <section className="ll-section" id="papers-live" aria-labelledby="ll-fig-3">
       <SectionHead fig={3} name="research papers" status={`${total} public · CC BY 4.0 · by Theo`} />
-      <div className="ll-two">
-        <a className="ll-lead" href={lead.path}>
-          {lead.hero_image_url && (
-            <span className="ll-img ll-img-16x9">
-              <img src={lead.hero_image_url} alt="" width={1280} height={720} loading="lazy" decoding="async" />
-            </span>
-          )}
-          <span className="ll-body">
-            <span className="ll-meta-row">
-              <span className="ll-badge">paper</span>{' '}
-              <span className="ll-meta">
-                {[
-                  lead.published_at && `published ${shortDate(lead.published_at)}`,
-                  lead.minutes != null && `${lead.minutes} min read`,
-                ]
-                  .filter(Boolean)
-                  .join(' · ')}
-              </span>
-            </span>
-            <span className="ll-title">{lead.title}</span>
-            {lead.summary && <span className="ll-p">{lead.summary}</span>}
+      <LandingWindow
+        title={
+          <>
+            {'>_ research.log — '}
+            <b>{lead.title}</b>
+          </>
+        }
+        openHref={lead.path}
+        openTitle="Open the paper"
+        archiveHref="/research/"
+        archiveTitle="Research library"
+        listLabel="More papers"
+        article={
+          <>
+            <PaperArticle paper={lead} headingLevel="h3" headlineHref={lead.path} />
+            {lead.excerpted && (
+              <a className="ll-continue" href={lead.path}>
+                continue reading →
+              </a>
+            )}
             <Evidence paper={lead} />
-          </span>
-        </a>
-        <div className="ll-rail">
-          {rail.map(p => (
-            <a key={p.slug} className="ll-row" href={p.path}>
-              <span>
-                <span className="ll-row-title">{p.title}</span>
-                <span className="ll-meta">
-                  {[
-                    p.words != null && `${p.words.toLocaleString('en-US')} words`,
-                    `${p.sources_analyzed.toLocaleString('en-US')} sources`,
-                    p.published_at && shortDate(p.published_at),
-                  ]
-                    .filter(Boolean)
-                    .join(' · ')}
+          </>
+        }
+        list={
+          <>
+            {rail.map(p => (
+              <a key={p.slug} className="ll-row" href={p.path}>
+                <span>
+                  <span className="ll-row-title">{p.title}</span>
+                  <span className="ll-meta">
+                    {[
+                      p.words != null && `${p.words.toLocaleString('en-US')} words`,
+                      `${p.sources_analyzed.toLocaleString('en-US')} sources`,
+                      p.published_at && shortDate(p.published_at),
+                    ]
+                      .filter(Boolean)
+                      .join(' · ')}
+                  </span>
                 </span>
-              </span>
-              <span className="ll-badge">paper</span>
-            </a>
-          ))}
-        </div>
-      </div>
+                <span className="ll-badge">paper</span>
+              </a>
+            ))}
+          </>
+        }
+      />
       {theo && (
         <a className="ll-theo" href="/theo.html">
           <span>

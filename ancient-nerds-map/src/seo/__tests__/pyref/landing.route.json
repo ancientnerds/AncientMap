@@ -118,7 +118,9 @@
       "sections": ["Artifact Discoveries", "Remote Sensing & Technology", "Bioarchaeology & Ancient DNA", "In Brief"],
       "sources": 35,
       "image_url": "/data/news/screenshots/nMxEoIrMwX8_367.webp",
-      "path": "/articles/week-of-august-31-476000-year-old-wooden-structure-found-dire-wolf-pups-born-and-more"
+      "path": "/articles/week-of-august-31-476000-year-old-wooden-structure-found-dire-wolf-pups-born-and-more",
+      "body_html": "<h2 id=\"artifact-discoveries\">Artifact Discoveries</h2>\n<p>Archaeologists at Kalambo Falls in Zambia reported two interlocking logs, shaped with stone tools and preserved in waterlogged sand, that push the oldest known wooden structure back to about 476,000 years ago.</p>\n<p>The find predates <em>Homo sapiens</em>, so whoever cut that notch was not us — which makes the carpentry, not the wood, the headline.</p>",
+      "excerpted": true
     },
     "rail": [
       {
@@ -149,7 +151,10 @@
       "sources_analyzed": 2748,
       "quality_score": 98,
       "hero_image_url": "https://ancientnerds.com/data/research-images/4bf89556/p7.jpg",
-      "path": "/research/the-egyptian-hard-stone-precision-debate"
+      "path": "/research/the-egyptian-hard-stone-precision-debate",
+      "author": null,
+      "body_html": "<p>The Serapeum boxes are the strongest single test of the mainstream account: 27 granite chests, each cut to tolerances that copper tools and sand abrasives are not obviously able to hold.</p>",
+      "excerpted": true
     },
     "rail": [
       {

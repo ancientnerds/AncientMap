@@ -1,6 +1,20 @@
+/**
+ * The weekly Journal section: a NERV window running the journal page.
+ *
+ * Same shape as the Stories section (2026-09-10, owner: "just a window that
+ * shows the story page — and the same for the journals and research papers").
+ * The lead's payload carries the issue's body_html, so the window body is the
+ * very <JournalArticle> /articles/{slug} renders, cut after a whole block by
+ * excerpt_html; the column beside it lists the older issues.
+ *
+ * No in-window swap here: an issue is a long read, not a card. Every row is
+ * a plain link, and so are the section chips of the lead above them.
+ */
+import JournalArticle from '../components/news/JournalArticle'
 import type { LandingRoute } from '../types/anRoute'
 import { shortDate } from '../seo/display'
 import { dateRange } from './dates'
+import LandingWindow from './LandingWindow'
 import SectionHead from './SectionHead'
 
 interface Props {
@@ -25,54 +39,55 @@ export default function LandingJournals({ data }: Props) {
           .filter(Boolean)
           .join(' · ')}
       />
-      <div className="ll-two">
-        <a className="ll-lead" href={lead.path}>
-          {lead.image_url && (
-            <span className="ll-img ll-img-21x9">
-              <img src={lead.image_url} alt="" width={1280} height={549} loading="lazy" decoding="async" />
-            </span>
-          )}
-          <span className="ll-body">
-            <span className="ll-meta-row">
-              <span className="ll-badge">journal</span>{' '}
-              <span className="ll-meta">
-                {[
-                  dateRange(lead.week_start, lead.week_end),
-                  `${lead.words.toLocaleString('en-US')} words`,
-                  `${lead.minutes} min read`,
-                  `${lead.sources} sources`,
-                ]
-                  .filter(Boolean)
-                  .join(' · ')}
-              </span>
-            </span>
-            <span className="ll-title">{lead.title}</span>
-            {lead.summary && <span className="ll-p">{lead.summary}</span>}
+      <LandingWindow
+        title={
+          <>
+            {'>_ journal.log — '}
+            <b>{lead.title}</b>
+          </>
+        }
+        openHref={lead.path}
+        openTitle="Open the journal"
+        archiveHref="/articles.html"
+        archiveTitle="Journal archive"
+        listLabel="More journals"
+        article={
+          <>
+            <JournalArticle article={lead} headingLevel="h3" headlineHref={lead.path} />
+            {lead.excerpted && (
+              <a className="ll-continue" href={lead.path}>
+                continue reading →
+              </a>
+            )}
+          </>
+        }
+        list={
+          <>
             {lead.sections.length > 0 && (
               <span className="ll-toc">
                 {lead.sections.map(s => (
-                  <span key={s}>{s}</span>
+                  <a key={s} href={lead.path}>
+                    {s}
+                  </a>
                 ))}
               </span>
             )}
-          </span>
-        </a>
-        <div className="ll-rail">
-          {rail.map(j => (
-            <a key={j.id} className="ll-row" href={j.path}>
-              <span>
-                <span className="ll-row-title">{j.title}</span>
-                <span className="ll-meta">
-                  {[`No. ${j.id}`, dateRange(j.week_start, j.week_end), `${j.minutes} min`]
-                    .filter(Boolean)
-                    .join(' · ')}
+            {rail.map(j => (
+              <a key={j.id} className="ll-row" href={j.path}>
+                <span>
+                  <span className="ll-row-title">{j.title}</span>
+                  <span className="ll-meta">
+                    {[`No. ${j.id}`, dateRange(j.week_start, j.week_end), `${j.minutes} min`]
+                      .filter(Boolean)
+                      .join(' · ')}
+                  </span>
                 </span>
-              </span>
-              <span className="ll-arrow">→</span>
-            </a>
-          ))}
-        </div>
-      </div>
+                <span className="ll-arrow">→</span>
+              </a>
+            ))}
+          </>
+        }
+      />
       <div className="ll-foot">
         <span>every Sunday · sourced, cited, illustrated</span>
         <a href="/articles.html">all {total} journals →</a>

@@ -239,6 +239,23 @@ export interface PaperTeaser {
   path: string
 }
 
+/**
+ * The lead of a live section is not a bigger teaser — it is the page,
+ * running inside the window. So it carries the page's own body_html, cut at
+ * a block boundary by api/routes/landing_html.py::excerpt_html, plus the
+ * flag that says whether anything was dropped (the "continue reading" link
+ * may not promise text that is not there). The rails stay teasers: they are
+ * links.
+ */
+type JournalLead = JournalTeaser & { body_html: string; excerpted: boolean }
+
+/** author = published_by; null means the Theo pipeline, like ResearchRoute. */
+type PaperLead = PaperTeaser & {
+  body_html: string
+  excerpted: boolean
+  author: string | null
+}
+
 interface TheoStatus {
   question: string
   started_at: string | null
@@ -250,8 +267,8 @@ export interface LandingRoute {
   stats: { sites: number; stories: number; journals: number; papers: number }
   /** null when the source has no rows — the section is then not rendered. */
   stories: { lead: StoryData; rail: StoryData[]; categories: string[] } | null
-  journals: { lead: JournalTeaser; rail: JournalTeaser[]; total: number } | null
-  papers: { lead: PaperTeaser; rail: PaperTeaser[]; total: number; theo: TheoStatus | null } | null
+  journals: { lead: JournalLead; rail: JournalTeaser[]; total: number } | null
+  papers: { lead: PaperLead; rail: PaperTeaser[]; total: number; theo: TheoStatus | null } | null
 }
 
 export type AnRoute =

@@ -62,10 +62,10 @@ describe('LandingLive', () => {
   })
 
   it('formats the journal week from the literal ISO date, not the renderer timezone', () => {
-    // week_start is "2026-08-31T00:00:00" — zoneless. Going through
-    // new Date() would render "Aug 30" wherever the renderer sits east of
-    // UTC and desync server from client.
-    expect(html).toContain('Aug 31 – Sep 6')
+    // The rail row's week_start is "2026-08-24T00:00:00" — zoneless. Going
+    // through new Date() would render "Aug 23" wherever the renderer sits
+    // east of UTC and desync server from client.
+    expect(html).toContain('Aug 24 – Aug 30')
   })
 
   it('names every section landmark with its own fig heading', () => {
@@ -110,27 +110,30 @@ describe('LandingLive', () => {
     // hydration, and never at all for a crawler without JS.
     expect(html).not.toContain('lazy-image')
     expect(html).not.toContain('data:image/svg+xml')
-    // The teaser images only: the article inside the window brings the story
-    // page's own <img> tags (video still, country flag), which are that
-    // page's markup and are asserted there.
+    // The teaser images only: the articles inside the windows bring their
+    // pages' own <img> tags (video still, country flag, paper hero), which are
+    // those pages' markup and are asserted there.
     const imgs = [...html.matchAll(/<span class="ll-img[^"]*"><img\b[^>]*>/g)].map(m => m[0])
     for (const tag of imgs) {
       expect(tag, tag).toContain('loading="lazy"')
       expect(tag, tag).toContain('decoding="async"')
     }
-    // Two of the three story thumbs, the journal lead, the paper lead — the
-    // story without a screenshot keeps its empty aspect-ratio box.
-    expect(imgs).toHaveLength(4)
+    // Two of the three story thumbs — the story without a screenshot keeps
+    // its empty aspect-ratio box, and since the Journal and the Papers
+    // section became windows too (2026-09-10) neither has a teaser image
+    // left: the lead brings its page's own.
+    expect(imgs).toHaveLength(2)
   })
 
   it('joins meta lines from the parts that exist, without a dangling separator', () => {
     const journals = FIXTURES.landing.journals!
     const papers = FIXTURES.landing.papers!
     const row = journals.rail[0]
+    const paperRow = papers.rail[0]
     const out = render({
       ...FIXTURES.landing,
       journals: { ...journals, rail: [{ ...row, week_start: null, week_end: null }] },
-      papers: { ...papers, lead: { ...papers.lead, published_at: null, minutes: null } },
+      papers: { ...papers, rail: [{ ...paperRow, published_at: null, words: null }] },
     })
     const metaAfter = (href: string): string => {
       const tail = out.slice(out.indexOf(`href="${href}"`))
@@ -138,7 +141,7 @@ describe('LandingLive', () => {
       expect(meta, `no ll-meta after ${href}`).not.toBeNull()
       return meta![1].replace(/<[^>]*>/g, '').trim()
     }
-    for (const text of [metaAfter(row.path), metaAfter(papers.lead.path)]) {
+    for (const text of [metaAfter(row.path), metaAfter(paperRow.path)]) {
       expect(text).not.toContain('· ·')
       expect(text.startsWith('·')).toBe(false)
       expect(text.endsWith('·')).toBe(false)
@@ -232,6 +235,12 @@ describe('LandingStories window', () => {
     expect(out).toContain('🌍 Show on the globe')
   })
 
+  it('is one of three windows, all built from the same shell', () => {
+    expect([...html.matchAll(/class="ll-window"/g)]).toHaveLength(3)
+    expect([...html.matchAll(/class="ll-window-bar"/g)]).toHaveLength(3)
+    expect([...html.matchAll(/class="ll-window-article"/g)]).toHaveLength(3)
+  })
+
   it('compact mode lists at most four sources', () => {
     const many = Array.from({ length: 8 }, (_, i) => ({
       url: `https://source-${i}.example/`,
@@ -245,5 +254,89 @@ describe('LandingStories window', () => {
     expect([...out.matchAll(/<div class="story-source">/g)]).toHaveLength(4)
     expect(out).toContain('https://source-3.example/')
     expect(out).not.toContain('https://source-4.example/')
+  })
+})
+
+/**
+ * The Journal and the Papers section are windows running their pages too
+ * (2026-09-10). Same proof as for the stories: the lead's real article is in
+ * the first render, and every row beside it is a link.
+ */
+describe('LandingJournals and LandingPapers windows', () => {
+  const journals = FIXTURES.landing.journals!
+  const papers = FIXTURES.landing.papers!
+  const html = render(FIXTURES.landing)
+
+  it('titles each window with its own log and its own open/archive links', () => {
+    expect(html).toContain('&gt;_ journal.log')
+    expect(html).toContain('&gt;_ research.log')
+    expect(html).toContain(`<a class="popup-window-btn" href="${journals.lead.path}"`)
+    expect(html).toContain('<a class="popup-window-btn" href="/articles.html"')
+    expect(html).toContain(`<a class="popup-window-btn" href="${papers.lead.path}"`)
+    expect(html).toContain('<a class="popup-window-btn" href="/research/"')
+  })
+
+  it('renders both leads as linked h3 — the section labels stay the only h2s above', () => {
+    const journalTitle = /<h3 class="articles-reader-title">(.*?)<\/h3>/.exec(html)
+    expect(journalTitle).not.toBeNull()
+    expect(journalTitle![1]).toContain(`<a href="${journals.lead.path}">`)
+    const paperTitle = /<h3 class="theo-paper-title">(.*?)<\/h3>/.exec(html)
+    expect(paperTitle).not.toBeNull()
+    expect(paperTitle![1]).toContain(`<a href="${papers.lead.path}">`)
+    expect(html).not.toContain('<h1')
+  })
+
+  it('carries the pages own body HTML, not a summary of it', () => {
+    // The journal excerpt keeps its markdown heading and its markup.
+    expect(html).toContain('<h2 id="artifact-discoveries">Artifact Discoveries</h2>')
+    expect(html).toContain('<em>Homo sapiens</em>')
+    expect(html).toContain('476,000 years ago')
+    // The paper body arrives through the page's own .theo-paper-body.
+    expect(html).toContain('class="theo-paper-body theo-md-body"')
+    expect(html).toContain('27 granite chests')
+    // …inside the paper page's own header, byline and licence line.
+    expect(html).toContain('by Theo · AI research agent')
+    expect(html).toContain('CC BY 4.0')
+    expect(html).toContain('class="theo-paper-hero-img"')
+  })
+
+  it('offers "continue reading" exactly where the server cut the body', () => {
+    const links = [...html.matchAll(/<a class="ll-continue" href="([^"]+)"/g)].map(m => m[1])
+    expect(links).toEqual([journals.lead.path, papers.lead.path])
+    expect(html).toContain('continue reading →')
+
+    // excerpted: false means nothing was dropped — then the link would
+    // promise text that is not there.
+    const whole = render({
+      ...FIXTURES.landing,
+      journals: { ...journals, lead: { ...journals.lead, excerpted: false } },
+      papers: { ...papers, lead: { ...papers.lead, excerpted: false } },
+    })
+    expect(whole).not.toContain('ll-continue')
+    expect(whole).toContain('<h2 id="artifact-discoveries">')
+  })
+
+  it('lists the older issues and papers as real links beside the article', () => {
+    for (const href of [
+      ...journals.rail.map(j => j.path),
+      ...papers.rail.map(p => p.path),
+    ]) {
+      expect(html).toContain(`<a class="ll-row" href="${href}">`)
+    }
+    // The lead's own sections sit above that list and open the lead.
+    const toc = /<span class="ll-toc">([\s\S]*?)<\/span><a class="ll-row"/.exec(html)
+    expect(toc).not.toBeNull()
+    for (const section of journals.lead.sections) {
+      expect(toc![1]).toContain(`>${section.replace(/&/g, '&amp;')}</a>`)
+    }
+    expect(toc![1]).not.toContain('href=""')
+  })
+
+  it('keeps the evidence strip in the window and the Theo line outside it', () => {
+    const window = /<div class="ll-window">(?:(?!<\/section>)[\s\S])*?ll-evidence[\s\S]*?<\/div><\/div>/.exec(html)
+    expect(window).not.toBeNull()
+    expect(html).toContain('<i>sources analyzed</i>')
+    // The agent line is the section's, not the paper's: it follows the window.
+    expect(html.indexOf('ll-theo')).toBeGreaterThan(html.indexOf('ll-evidence'))
   })
 })

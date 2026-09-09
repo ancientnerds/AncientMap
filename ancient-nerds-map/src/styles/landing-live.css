@@ -103,20 +103,45 @@
 .ll-window-article::-webkit-scrollbar-thumb,
 .ll-window-list::-webkit-scrollbar-thumb { background: var(--accent-glow-30); }
 
-/* The story page's own classes do the styling inside the article; only the
-   scale changes — a window is not a page. */
-.ll-window-article .story-title { font-size: 1.5em; }
-.ll-window-article .story-title a { color: inherit; text-decoration: none; }
-.ll-window-article .story-body { font-size: 14px; }
+/* The pages' own classes do the styling inside the article; only the scale
+   changes — a window is not a page. Same three lines for all three windows:
+   the headline drops to 1.5em and stops looking like a link, the body drops
+   to 14px. The paper page's own padding goes: .ll-window-article already
+   supplies it, and 24px inside 24px reads as a margin error. */
+.ll-window-article .story-title,
+.ll-window-article .articles-reader-title,
+.ll-window-article .theo-paper-title { font-size: 1.5em; }
+.ll-window-article .story-title a,
+.ll-window-article .articles-reader-title a,
+.ll-window-article .theo-paper-title a { color: inherit; text-decoration: none; }
+.ll-window-article .story-body,
+.ll-window-article .articles-reader-body p,
+.ll-window-article .theo-md-body { font-size: 14px; }
+.ll-window-article .theo-paper-page { padding: 0; }
+
+/* The way out of the excerpt and into the page. */
+.ll-continue {
+  display: block;
+  margin-top: 16px;
+  padding: 10px 0;
+  border-top: 1px solid var(--border-accent);
+  color: var(--text-link);
+  font-size: 13px;
+  text-decoration: none;
+}
+.ll-continue:hover { text-decoration: underline; }
 .ll-window-list .ll-more { margin: 0; border: 0; border-top: 1px solid var(--border-accent); }
 /* The row whose story is in the window. The transparent border on every
    other row keeps the text from shifting 2px when the marker moves. */
 .ll-window-list .ll-row { border-left: 2px solid transparent; }
 .ll-window-list .ll-row[aria-current] { background: var(--nerv-gl); border-left-color: var(--accent-primary); }
 
-.ll-toc { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 4px; }
-.ll-toc span { font-size: 11px; color: var(--nerv-steel); border: 1px solid var(--border-accent); padding: 1px 7px; border-radius: 3px; }
-.ll-toc span::before { content: '§ '; color: var(--nerv-steel-dim); }
+/* The lead issue's sections, above the list of older issues. Links since
+   2026-09-10 — they open the very issue the window is running. */
+.ll-toc { display: flex; flex-wrap: wrap; gap: 5px; padding: 10px 12px; border-bottom: 1px solid var(--border-accent); }
+.ll-toc a { font-size: 11px; color: var(--nerv-steel); border: 1px solid var(--border-accent); padding: 1px 7px; border-radius: 3px; text-decoration: none; }
+.ll-toc a:hover { color: var(--accent-primary); border-color: var(--accent-glow-30); }
+.ll-toc a::before { content: '§ '; color: var(--nerv-steel-dim); }
 .ll-evidence { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 6px; }
 .ll-evidence span { border: 1px solid var(--border-accent); padding: 6px 8px; display: flex; flex-direction: column; }
 .ll-evidence i { font-style: normal; font-size: 10px; color: var(--nerv-steel-dim); text-transform: uppercase; letter-spacing: 0.06em; }
