@@ -71,7 +71,7 @@ async def research_listing(db: Session = Depends(get_db)):
     )
 
 
-def _fetch_paper(slug: str, db: Session):
+def fetch_paper(slug: str, db: Session):
     """Load one public paper row incl. report content, or None."""
     return db.execute(
         text(f"""
@@ -94,7 +94,7 @@ def _paper_404() -> Response:
     )
 
 
-def _report_markdown(row, title: str) -> str:
+def report_markdown(row, title: str) -> str:
     """The stored report, prepared for rendering — shared by paper page and Medium copy.
 
     The reviewed publication (rejected blocks hidden, edits substituted) is
@@ -113,7 +113,7 @@ def _report_markdown(row, title: str) -> str:
 @router.get("/research/{slug}")
 async def research_paper_page(slug: str, db: Session = Depends(get_db)):
     """Full HTML research paper page by slug."""
-    row = _fetch_paper(slug, db)
+    row = fetch_paper(slug, db)
     if not row:
         return _paper_404()
 
@@ -132,7 +132,7 @@ async def research_paper_page(slug: str, db: Session = Depends(get_db)):
             "author": paper["author"],
             "published_at": paper["published_at"],
             "hero_image_url": paper["hero_image_url"],
-            "body_html": markdown_to_html(_report_markdown(row, paper["title"])),
+            "body_html": markdown_to_html(report_markdown(row, paper["title"])),
         },
         _HTML_HEADERS,
     )
@@ -141,7 +141,7 @@ async def research_paper_page(slug: str, db: Session = Depends(get_db)):
 @router.get("/research/{slug}/medium")
 async def research_medium_copy(slug: str, db: Session = Depends(get_db)):
     """Clean, light-themed paper page for copying into Medium's editor."""
-    row = _fetch_paper(slug, db)
+    row = fetch_paper(slug, db)
     if not row:
         return _paper_404()
 
@@ -149,7 +149,7 @@ async def research_medium_copy(slug: str, db: Session = Depends(get_db)):
     # On top of the shared preparation: Medium's editor drops figcaption
     # content on paste, so captions become markdown-native italic paragraphs
     # here (the paper page leaves image blocks as plain markdown).
-    content = format_image_captions_medium(_report_markdown(row, paper["title"]))
+    content = format_image_captions_medium(report_markdown(row, paper["title"]))
     html = render_medium_copy_html(
         title=paper["title"],
         content_md=content,

@@ -29,10 +29,11 @@ from sqlalchemy.orm import Session, joinedload
 from api.routes.articles_html import public_stories_query, story_payload
 from api.routes.news import get_news_stats
 from api.routes.public_v1 import PAPER_SUMMARY_COLUMNS, paper_summary_kwargs
+from api.routes.research_html import fetch_paper, report_markdown
 from api.routes.theo import get_current_research
 from api.seo_shell import ssr_shell_response
 from api.services.site_stats import get_site_stats
-from pipeline.article_html_renderer import slugify
+from pipeline.article_html_renderer import markdown_to_html, slugify
 from pipeline.database import NewsArticle, NewsItem, NewsVideo, get_db
 from pipeline.research_html_renderer import PUBLIC_PAPER_WHERE
 
@@ -44,10 +45,24 @@ RECENT_ROWS = 7
 # Pipeline states that live in news_category but are not topics — never a chip.
 CHIP_HIDDEN_CATEGORIES = ("unverified", "rejected")
 APPENDIX_SECTIONS = {"sources", "videos"}
+# How much of the lead journal / lead paper the homepage window shows before
+# the "continue reading" link takes over. Measured in visible characters, cut
+# at the end of the block that crosses it.
+EXCERPT_CHARS = 2500
+# The blocks markdown_to_html emits at the top level. A cut may only land
+# right after one of them closes.
+EXCERPT_BLOCKS = frozenset(
+    {"p", "h2", "h3", "h4", "ul", "ol", "figure", "blockquote", "pre", "table"}
+)
+# ...and of those, the ones that contain other blocks: their depth is tracked
+# so a cut can never land inside a nested list, quote or figure.
+EXCERPT_CONTAINERS = frozenset({"ul", "ol", "blockquote", "figure", "table"})
 
 _HEADING = re.compile(r"^##+\s+(.+?)\s*$", re.MULTILINE)
 _IMAGE = re.compile(r"!\[[^\]]*\]\(([^)\s]+)")
 _LINK = re.compile(r"https?://")
+_TAG = re.compile(r"<(/?)([a-zA-Z][a-zA-Z0-9]*)[^>]*?(/?)>")
+_WS = re.compile(r"\s+")
 
 
 def reading_minutes(words: int) -> int:
@@ -84,6 +99,49 @@ def journal_teaser(row) -> dict:
     }
 
 
+def excerpt_html(html: str, max_chars: int = EXCERPT_CHARS) -> tuple[str, bool]:
+    """The opening of a rendered body, cut at a top-level block boundary.
+
+    The homepage windows run the journal and the paper page, so the lead
+    carries real body HTML — but not all of it. The cut lands right after the
+    first top-level block whose end pushes the visible text past `max_chars`,
+    so the excerpt is always a whole paragraph, list, quote or figure and the
+    markup that comes back is balanced. Depth is tracked for the blocks that
+    contain other blocks, which is why a list item or a figcaption can never
+    be the last thing in the excerpt.
+
+    Returns (html, cut). `cut` is False when the whole body fits — nothing was
+    dropped, so the caller must not offer a "continue reading" link.
+    """
+    depth = 0
+    seen = 0
+    pos = 0
+    for tag in _TAG.finditer(html):
+        seen += len(_WS.sub(" ", html[pos : tag.start()]).strip())
+        pos = tag.end()
+        closing, name, self_closing = tag.group(1), tag.group(2).lower(), tag.group(3)
+        if name in EXCERPT_CONTAINERS and not self_closing:
+            depth += -1 if closing else 1
+        if closing and not depth and name in EXCERPT_BLOCKS and seen > max_chars:
+            # Only a real cut counts: a body whose last block crosses the
+            # budget is complete, and saying otherwise promises text that is
+            # not there.
+            if html[tag.end() :].strip():
+                return html[: tag.end()], True
+            break
+    return html, False
+
+
+def journal_lead(row) -> dict:
+    """The teaser of the lead issue plus the opening of the issue itself.
+
+    Same body_html the journal page carries (articles_html.article_page),
+    from the same renderer — the homepage window IS that page, only shorter.
+    """
+    body, excerpted = excerpt_html(markdown_to_html(row.content or ""))
+    return journal_teaser(row) | {"body_html": body, "excerpted": excerpted}
+
+
 def paper_teaser(row) -> dict:
     """PAPER_SUMMARY_COLUMNS row → PaperTeaser, via the public API's mapping."""
     p = paper_summary_kwargs(row)
@@ -99,6 +157,23 @@ def paper_teaser(row) -> dict:
         "quality_score": p["quality_score"],
         "hero_image_url": p["hero_image_url"],
         "path": f"/research/{p['slug']}",
+    }
+
+
+def paper_lead(summary_row, full_row) -> dict:
+    """The teaser of the lead paper plus the opening of the report.
+
+    `full_row` is research_html.fetch_paper()'s row: the summary columns plus
+    the stored report. The markdown goes through report_markdown() exactly as
+    research_paper_page does, so the window cannot show text the page does not.
+    `author` rides along because the paper's byline is part of its header.
+    """
+    p = paper_summary_kwargs(summary_row)
+    body, excerpted = excerpt_html(markdown_to_html(report_markdown(full_row, p["title"])))
+    return paper_teaser(summary_row) | {
+        "author": p["author"],
+        "body_html": body,
+        "excerpted": excerpted,
     }
 
 
@@ -237,6 +312,9 @@ def fetch_landing_data(db: Session) -> dict:
         "journals": journals,
         "journal_total": news_stats["total_articles"],
         "papers": papers,
+        # The lead paper's report: PAPER_SUMMARY_COLUMNS carries no body, and
+        # the window runs the paper page, so the report has to come along.
+        "paper_full": fetch_paper(papers[0].slug, db) if papers else None,
         "paper_total": paper_total,
         "news_stats": news_stats,
     }
@@ -257,13 +335,18 @@ def build_route(data: dict, site_stats: dict, theo_running: dict | None) -> dict
             "rail": [story_payload(r, related=[]) for r in rail],
             "categories": data["categories"],
         }
+    # Lead vs rail is not a size difference: the lead runs its page inside the
+    # window and therefore carries body HTML, the rail rows are links and stay
+    # teasers.
     journals = None
     if data["journals"]:
-        teasers = [journal_teaser(j) for j in data["journals"]]
-        journals = {"lead": teasers[0], "rail": teasers[1:], "total": data["journal_total"]}
+        journals = {
+            "lead": journal_lead(data["journals"][0]),
+            "rail": [journal_teaser(j) for j in data["journals"][1:]],
+            "total": data["journal_total"],
+        }
     papers = None
     if data["papers"]:
-        teasers = [paper_teaser(p) for p in data["papers"]]
         theo = None
         if theo_running:
             theo = {
@@ -272,8 +355,8 @@ def build_route(data: dict, site_stats: dict, theo_running: dict | None) -> dict
                 "sites_found": theo_running["sites_found"],
             }
         papers = {
-            "lead": teasers[0],
-            "rail": teasers[1:],
+            "lead": paper_lead(data["papers"][0], data["paper_full"]),
+            "rail": [paper_teaser(p) for p in data["papers"][1:]],
             "total": data["paper_total"],
             "theo": theo,
         }
