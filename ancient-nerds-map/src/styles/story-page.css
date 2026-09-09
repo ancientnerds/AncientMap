@@ -73,8 +73,11 @@
   text-transform: uppercase;
 }
 
-/* Die Badges stehen als eigener Block unter der Meta-Zeile. */
-.story-main > .meta-badges {
+/* Die Badges stehen als eigener Block unter der Meta-Zeile. Zweiter
+   Selektor: dasselbe <StoryArticle> steckt im Stories-Fenster der Startseite,
+   wo .story-main nicht darüber liegt. */
+.story-main > .meta-badges,
+.ll-window-article > .meta-badges {
   margin: -8px 0 22px;
 }
 
@@ -167,10 +170,12 @@
 
 .story-body p { margin-bottom: 16px; }
 
-/* .site-related sits inside .site-page (SitePage), where the .story-page
-   ancestor rule cannot reach — same headline styling, one definition. */
+/* .site-related sits inside .site-page (SitePage) and .ll-window-article in
+   the homepage stories window — both outside .story-page, where the ancestor
+   rule cannot reach. Same headline styling, one definition. */
 .story-page h2,
-.site-related h2 {
+.site-related h2,
+.ll-window-article h2 {
   font-family: var(--font-heading);
   color: #fff;
   font-size: 1.6em;

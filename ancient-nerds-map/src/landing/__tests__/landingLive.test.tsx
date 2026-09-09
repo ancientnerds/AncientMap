@@ -7,6 +7,7 @@ import { renderToString } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 
 import { AuthProvider } from '../../contexts/AuthContext'
+import { storyPath } from '../../seo/meta'
 import { SeoRoute } from '../../seo/registry'
 import { RouteProvider } from '../../seo/RouteContext'
 import { FIXTURES } from '../../seo/__tests__/fixtures'
@@ -35,9 +36,9 @@ describe('LandingLive', () => {
   })
 
   it('links every teaser to its page', () => {
+    const stories = FIXTURES.landing.stories!
     for (const href of [
-      FIXTURES.landing.stories!.lead.path,
-      ...FIXTURES.landing.stories!.rail.map(s => s.path),
+      ...[stories.lead, ...stories.rail].map(s => storyPath(s.headline, s.id)),
       FIXTURES.landing.journals!.lead.path,
       ...FIXTURES.landing.journals!.rail.map(j => j.path),
       FIXTURES.landing.papers!.lead.path,
@@ -93,12 +94,12 @@ describe('LandingLive', () => {
     const rail = FIXTURES.landing.stories!.rail
     const out = render({
       ...FIXTURES.landing,
-      stories: { ...FIXTURES.landing.stories!, rail: [{ ...rail[0], category: null }] },
+      stories: { ...FIXTURES.landing.stories!, rail: [{ ...rail[0], news_category: null }] },
     })
-    const row = out.slice(out.indexOf(`href="${rail[0].path}"`))
+    const row = out.slice(out.indexOf(`href="${storyPath(rail[0].headline, rail[0].id)}"`))
     const meta = /<span class="ll-meta">([\s\S]*?)<\/span>/.exec(row)
     expect(meta).not.toBeNull()
-    const text = meta![1].replace(/<[^>]*>/g, '').trim()
+    const text = meta![1].replace(/<[^>]*>/g, '').replace(/<!-- -->/g, '').trim()
     expect(text.startsWith('·')).toBe(false)
     expect(text.startsWith('SIG')).toBe(true)
   })
@@ -109,13 +110,16 @@ describe('LandingLive', () => {
     // hydration, and never at all for a crawler without JS.
     expect(html).not.toContain('lazy-image')
     expect(html).not.toContain('data:image/svg+xml')
-    const imgs = [...html.matchAll(/<img\b[^>]*>/g)].map(m => m[0])
-    expect(imgs.length).toBeGreaterThan(0)
+    // The teaser images only: the article inside the window brings the story
+    // page's own <img> tags (video still, country flag), which are that
+    // page's markup and are asserted there.
+    const imgs = [...html.matchAll(/<span class="ll-img[^"]*"><img\b[^>]*>/g)].map(m => m[0])
     for (const tag of imgs) {
       expect(tag, tag).toContain('loading="lazy"')
       expect(tag, tag).toContain('decoding="async"')
     }
-    // The story without a screenshot keeps its empty aspect-ratio box.
+    // Two of the three story thumbs, the journal lead, the paper lead — the
+    // story without a screenshot keeps its empty aspect-ratio box.
     expect(imgs).toHaveLength(4)
   })
 
@@ -155,5 +159,91 @@ describe('LandingLive', () => {
     const out = render(bare)
     expect(out).not.toContain('weekly journal')
     expect(out).not.toContain('Theo is researching')
+  })
+})
+
+/**
+ * The Stories section is a window running the story page (2026-09-10).
+ * Everything a crawler needs is in the first render: the lead's whole
+ * article, its sources, the disclosure, and a real link per list row.
+ */
+describe('LandingStories window', () => {
+  const stories = FIXTURES.landing.stories!
+  const html = render(FIXTURES.landing)
+  const lead = stories.lead
+  const leadHref = storyPath(lead.headline, lead.id)
+
+  it('frames the article in a NERV window with the story page as its title', () => {
+    expect(html).toContain('class="ll-window"')
+    expect(html).toContain('class="ll-window-bar"')
+    expect(html).toContain('&gt;_ stories.log')
+    // The bar's controls reuse the app's window buttons, not a second set.
+    expect(html).toContain('class="popup-window-controls ll-window-controls"')
+    expect(html).toContain(`<a class="popup-window-btn" href="${leadHref}"`)
+    expect(html).toContain('<a class="popup-window-btn" href="/news-archive/"')
+  })
+
+  it('renders the lead as h3 — the section label is the only h2 above it', () => {
+    const titles = [...html.matchAll(/<h3 class="story-title">(.*?)<\/h3>/g)].map(m => m[1])
+    expect(titles).toHaveLength(1)
+    expect(titles[0]).toContain(`<a href="${leadHref}">`)
+    expect(html).not.toContain('<h1')
+  })
+
+  it('carries the whole story body, not a first sentence', () => {
+    const body = /<div class="story-body">([\s\S]*?)<\/div>/.exec(html)
+    expect(body).not.toBeNull()
+    const paragraphs = [...body![1].matchAll(/<p>/g)]
+    expect(paragraphs.length).toBe(lead.post_text.split('\n').length)
+    expect(html).toContain('the first Roman mass war grave known from Central Europe')
+  })
+
+  it('shows key facts, sources and the Art.-50 disclosure', () => {
+    expect(html).toContain('>Key facts<')
+    expect(html).toContain('>Sources<')
+    for (const source of lead.web_sources!) {
+      expect(html).toContain(`<a href="${source.url}" target="_blank" rel="noopener nofollow">`)
+    }
+    expect(html).toContain('data-ai-generated="true"')
+  })
+
+  it('lists lead plus rail as real links, the lead marked current', () => {
+    const rows = [...html.matchAll(/<a class="ll-row ll-row-thumb" href="([^"]+)"([^>]*)>/g)]
+    expect(rows).toHaveLength(1 + stories.rail.length)
+    expect(rows.map(m => m[1])).toEqual(
+      [lead, ...stories.rail].map(s => storyPath(s.headline, s.id)),
+    )
+    expect(rows[0][2]).toContain('aria-current="true"')
+    for (const row of rows.slice(1)) expect(row[2]).not.toContain('aria-current')
+  })
+
+  it('compact mode drops the country fallback chip', () => {
+    // An uncurated site keeps the plain 📍 chip and the globe link; "More
+    // sites in {country}" belongs on the page, which has room for it.
+    const out = render({
+      ...FIXTURES.landing,
+      stories: {
+        ...stories,
+        lead: { ...lead, site_curated: false, site_country: 'Austria' },
+      },
+    })
+    expect(out).toContain('📍 <!-- -->Roman grave')
+    expect(out).not.toContain('More sites in')
+    expect(out).toContain('🌍 Show on the globe')
+  })
+
+  it('compact mode lists at most four sources', () => {
+    const many = Array.from({ length: 8 }, (_, i) => ({
+      url: `https://source-${i}.example/`,
+      title: `Source ${i}`,
+      snippet: null,
+    }))
+    const out = render({
+      ...FIXTURES.landing,
+      stories: { ...stories, lead: { ...lead, web_sources: many, post_text: 'Body.' } },
+    })
+    expect([...out.matchAll(/<div class="story-source">/g)]).toHaveLength(4)
+    expect(out).toContain('https://source-3.example/')
+    expect(out).not.toContain('https://source-4.example/')
   })
 })

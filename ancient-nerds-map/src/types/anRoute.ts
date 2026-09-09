@@ -205,27 +205,11 @@ export interface ArticleIndexRoute {
 /**
  * Homepage teasers (landing-live sections, 2026-09-09). Every teaser
  * carries its final href as `path` — the API builds it with the same slug
- * helpers the target pages use (story_slug, slugify), so the client never
- * re-derives a URL. `site` is name and country only; detail pages exist
- * only for curated sites, so no link is derived here.
+ * helpers the target pages use (slugify), so the client never re-derives a
+ * URL. Stories are the exception: they are not teasers at all but whole
+ * StoryData objects, because the Stories section is a window running the
+ * story page (2026-09-10).
  */
-export interface StoryTeaser {
-  id: number
-  headline: string
-  /** First sentence of post_text, trailing source links removed. */
-  summary: string
-  screenshot_url: string | null
-  category: string | null
-  significance: number | null
-  /** Raw ISO timestamp; RelativeTime turns it into "2h ago" after mount. */
-  created_at: string
-  channel: string
-  /** Number of web_sources on the story. */
-  sources: number
-  path: string
-  site: { name: string; country: string | null } | null
-}
-
 interface JournalTeaser {
   id: number
   title: string
@@ -265,7 +249,7 @@ export interface LandingRoute {
   type: 'landing'
   stats: { sites: number; stories: number; journals: number; papers: number }
   /** null when the source has no rows — the section is then not rendered. */
-  stories: { lead: StoryTeaser; rail: StoryTeaser[]; categories: string[] } | null
+  stories: { lead: StoryData; rail: StoryData[]; categories: string[] } | null
   journals: { lead: JournalTeaser; rail: JournalTeaser[]; total: number } | null
   papers: { lead: PaperTeaser; rail: PaperTeaser[]; total: number; theo: TheoStatus | null } | null
 }

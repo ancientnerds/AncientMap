@@ -4,6 +4,7 @@
 @import './nerv-ui/slider.css';
 @import './nerv-ui/panel.css';
 @import './nerv-ui/button.css';
+@import './nerv-ui/window.css';
 @import './nerv-ui/hover.css';
 @import './nerv-shapes.css';
 @import './nerv-animations.css';
@@ -4100,45 +4101,7 @@ body.screenshot-mode .screenshot-mode-buttons {
 .resize-handle.resize-sw { bottom: -4px; left: -4px; cursor: nesw-resize; }
 
 /* Window controls - fixed at top right corner */
-.popup-window-controls {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  display: flex;
-  gap: 4px;
-  z-index: 200;
-}
-
-.popup-window-btn {
-  width: 28px;
-  height: 28px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(0, 20, 25, 0.85);
-  border: 1px solid var(--accent-glow-10);
-  border-radius: 6px;
-  color: #888;
-  cursor: pointer;
-  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
-  backdrop-filter: blur(8px);
-}
-
-a.popup-window-btn {
-  text-decoration: none;
-}
-
-.popup-window-btn:hover {
-  background: var(--accent-glow-15);
-  color: #ccc;
-  border-color: rgba(255, 255, 255, 0.2);
-}
-
-.popup-window-btn.close-btn:hover {
-  background: #e81123;
-  color: white;
-  border-color: #e81123;
-}
+/* .popup-window-controls / .popup-window-btn: nerv-ui/window.css */
 
 /* Standalone mode close button - same style as main popup */
 .popup-standalone-close {
@@ -18686,23 +18649,6 @@ div.lyra-inline-video-wrap {
 .popup-minimized-btn { color: var(--crt-600); }
 .popup-minimized-btn:hover { background: var(--surface-crt); color: var(--accent-primary); }
 .popup-minimized-btn.close-btn:hover { background: var(--status-error-bright); color: var(--surface-page); }
-
-/* Window controls — green terminal buttons */
-.popup-window-btn {
-  background: rgba(10, 14, 20, 0.85);
-  border-color: var(--border-crt);
-  color: var(--crt-600);
-}
-.popup-window-btn:hover {
-  background: var(--surface-crt);
-  color: var(--accent-primary);
-  border-color: var(--crt-700);
-}
-.popup-window-btn.close-btn:hover {
-  background: var(--status-error-bright);
-  color: var(--surface-page);
-  border-color: var(--status-error-bright);
-}
 
 /* Hero header — green vignette instead of teal */
 .popup-hero-header {
