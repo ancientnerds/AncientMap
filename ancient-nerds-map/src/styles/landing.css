@@ -184,6 +184,8 @@ body {
   font-family: 'Cormorant Garamond', serif;
   font-style: italic;
   font-size: clamp(1.1rem, 2.5vw, 1.5rem);
+  /* .hero-tagline is the page <h1> — without this the UA bolds it. */
+  font-weight: 400;
   color: var(--text-faint);
   margin-bottom: 40px;
   text-wrap: balance;
@@ -284,6 +286,13 @@ body {
   text-wrap: pretty;
 }
 
+/* ─── Intro paragraph (below the hero, above #root) ─── */
+
+.landing-intro { padding-top: 48px; padding-bottom: 8px; }
+.landing-intro-text { max-width: 70ch; margin: 0 auto; font-size: 1.05rem; line-height: 1.75; color: var(--text-secondary); text-wrap: pretty; }
+.landing-intro-text a { color: var(--accent-secondary); text-decoration: none; }
+.landing-intro-text a:hover { text-decoration: underline; }
+
 /* ─── Two-Column Feature Layouts ─── */
 
 .feature-row {
@@ -357,8 +366,7 @@ body {
 }
 
 #sitedata-section .feature-image-main,
-#lyra-section .feature-image-main,
-#articles-section .feature-image-main {
+#lyra-section .feature-image-main {
   aspect-ratio: auto;
   object-fit: contain;
 }

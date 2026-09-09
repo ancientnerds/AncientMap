@@ -175,7 +175,7 @@ export default defineConfig(({ isSsrBuild }) => ({
       manifest: {
         name: 'Ancient Nerds Research Platform',
         short_name: 'Ancient Map',
-        description: 'Interactive 3D globe of 750K+ archaeological sites worldwide',
+        description: 'Interactive 3D globe of 1.7M+ archaeological sites worldwide',
         theme_color: '#0a1520',
         background_color: '#0a1520',
         display: 'standalone',
@@ -193,6 +193,9 @@ export default defineConfig(({ isSsrBuild }) => ({
         // (/articles/, /news-archive/, /research/, /sites/ are HTML from the API,
         // not SPA pages — the SW must let them hit the network)
         navigateFallbackDenylist: [
+          // The homepage is server-rendered (GET /home via nginx) — the
+          // precached index.html must never answer a navigation to "/".
+          /^\/$/,
           /^\/api\//,
           /\.html(\?|$)/,
           /^\/articles\//,
