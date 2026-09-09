@@ -6,9 +6,12 @@ contract anRoute.ts::LandingRoute declares.
 
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime, timedelta
 from types import SimpleNamespace
+from unittest.mock import AsyncMock, patch
 
+from api.routes import landing_html
 from api.routes.landing_html import (
     apply_stats,
     first_sentence,
@@ -164,3 +167,71 @@ def test_apply_stats_replaces_only_marked_values():
     assert 'data-stat="sites-long">1.7 million<' in out
     assert 'data-stat="countries">98<' in out
     assert '<div class="hero-stat-value">30+</div>' in out
+
+
+def _landing_data():
+    site = SimpleNamespace(id="16147718-a70b-486e-aaba-9cf71316602c", name="Roman grave", country="Austria")
+    recent = [item(i, sig=3, hours_ago=i) for i in range(1, 8)]
+    return {
+        "recent": recent,
+        "lead_48h": item(9, sig=9, hours_ago=2, category="bioarchaeology", site=site),
+        "categories": ["artifact", "bioarchaeology"],
+        "journals": [
+            SimpleNamespace(id=74, title="Week of August 31", summary="S", content="## A\n\ntext", week_start=None, week_end=None, published_at=None),
+            SimpleNamespace(id=73, title="Week of August 24", summary=None, content="text", week_start=None, week_end=None, published_at=None),
+        ],
+        "journal_total": 23,
+        "papers": [
+            SimpleNamespace(id="a", slug="paper-a", question="Q", published_by=None, published_at=None, sites_found=10, title="Paper A", card_description=None, score=None, badge=None, word_count=None, hero_src=None),
+            SimpleNamespace(id="b", slug="paper-b", question="Q", published_by=None, published_at=None, sites_found=20, title="Paper B", card_description=None, score=None, badge=None, word_count=None, hero_src=None),
+        ],
+        "paper_total": 24,
+        "news_stats": {"total_items": 3189, "total_articles": 23},
+    }
+
+
+def test_home_route_hands_the_landing_payload_and_substitutes_hero_counts():
+    landing_html._cache.clear()
+    # render_app_shell is mocked, so the "injected" body is part of the fake shell
+    shell = '<html><div class="hero-stat-value" data-stat="sites">1.7M+</div><div id="root"><p>live</p></div></html>'
+    with (
+        patch.object(landing_html, "fetch_landing_data", return_value=_landing_data()),
+        patch.object(landing_html, "get_site_stats", return_value={"total_sites": 1_759_673, "curated_countries": 98}),
+        patch.object(landing_html, "get_current_research", new=AsyncMock(return_value={"running": {"question": "Osiris", "started_at": "2026-09-09T06:00:00", "sites_found": 12}})),
+        patch("api.seo_shell.render_page", return_value=("<title>x</title>", "<p>live</p>")) as render,
+        patch("api.seo_shell.render_app_shell", return_value=shell),
+    ):
+        resp = asyncio.run(landing_html.home(db=object()))
+
+    assert resp.status_code == 200
+    assert resp.headers["cache-control"] == "public, max-age=300"
+    body = resp.body.decode()
+    assert 'data-stat="sites">1.76M<' in body and "<p>live</p>" in body
+
+    route = render.call_args[0][0]
+    assert route["type"] == "landing"
+    assert route["stats"] == {"sites": 1_759_673, "stories": 3189, "journals": 23, "papers": 24}
+    assert route["stories"]["lead"]["id"] == 9 and len(route["stories"]["rail"]) == 6
+    assert route["stories"]["categories"] == ["artifact", "bioarchaeology"]
+    assert route["journals"]["lead"]["id"] == 74 and route["journals"]["total"] == 23
+    assert route["papers"]["lead"]["slug"] == "paper-a" and route["papers"]["total"] == 24
+    assert route["papers"]["theo"] == {"question": "Osiris", "started_at": "2026-09-09T06:00:00", "sites_found": 12}
+
+
+def test_home_route_omits_sections_without_rows_and_serves_from_cache():
+    landing_html._cache.clear()
+    data = _landing_data()
+    data.update(recent=[], lead_48h=None, journals=[], papers=[])
+    with (
+        patch.object(landing_html, "fetch_landing_data", return_value=data) as fetch,
+        patch.object(landing_html, "get_site_stats", return_value={"total_sites": 5, "curated_countries": 1}),
+        patch.object(landing_html, "get_current_research", new=AsyncMock(return_value={"running": None})),
+        patch("api.seo_shell.render_page", return_value=("<title>x</title>", "")) as render,
+        patch("api.seo_shell.render_app_shell", return_value='<div id="root"></div>'),
+    ):
+        asyncio.run(landing_html.home(db=object()))
+        asyncio.run(landing_html.home(db=object()))
+
+    route = render.call_args[0][0]
+    assert route["stories"] is None and route["journals"] is None and route["papers"] is None
+    assert fetch.call_count == 1  # second call came from the 300 s cache

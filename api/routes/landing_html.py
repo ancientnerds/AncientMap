@@ -18,10 +18,22 @@ from __future__ import annotations
 
 import math
 import re
+import threading
+import time
 from datetime import UTC, datetime, timedelta
 
-from api.routes.public_v1 import paper_summary_kwargs
+from fastapi import APIRouter, Depends, Response
+from sqlalchemy import text
+from sqlalchemy.orm import Session, joinedload
+
+from api.routes.news import get_news_stats
+from api.routes.public_v1 import PAPER_SUMMARY_COLUMNS, paper_summary_kwargs
+from api.routes.theo import get_current_research
+from api.seo_shell import ssr_shell_response
+from api.services.site_stats import get_site_stats
 from pipeline.article_html_renderer import slugify, story_slug
+from pipeline.database import NewsArticle, NewsItem, NewsVideo, get_db
+from pipeline.research_html_renderer import PUBLIC_PAPER_WHERE
 
 MAX_SUMMARY = 180
 WORDS_PER_MINUTE = 238
@@ -158,3 +170,152 @@ def apply_stats(html: str, stats: dict) -> str:
 
 def lead_window_start(now: datetime | None = None) -> datetime:
     return (now or datetime.now(UTC).replace(tzinfo=None)) - LEAD_WINDOW
+
+
+router = APIRouter()
+_HTML_HEADERS = {"Cache-Control": "public, max-age=300"}
+_CACHE_TTL = 300.0
+# (expires_at, response) — one document per process; ~200 hits/day need no more.
+_cache: dict[str, tuple[float, Response]] = {}
+_cache_lock = threading.Lock()
+
+
+def _story_query(db: Session):
+    """Same base filter as /api/news/feed, minus speculative stories (they are noindex)."""
+    return (
+        db.query(NewsItem)
+        .join(NewsVideo)
+        .options(
+            joinedload(NewsItem.video).joinedload(NewsVideo.channel), joinedload(NewsItem.site)
+        )
+        .filter(
+            NewsItem.post_text.isnot(None),
+            (NewsItem.significance.is_(None)) | (NewsItem.significance >= 2),
+            (NewsItem.news_category != "speculative") | (NewsItem.news_category.is_(None)),
+        )
+    )
+
+
+def fetch_landing_data(db: Session) -> dict:
+    """Every DB read of the route, in one place, so the route itself stays testable."""
+    recent = _story_query(db).order_by(NewsItem.created_at.desc()).limit(RECENT_ROWS).all()
+    lead_48h = (
+        _story_query(db)
+        .filter(NewsItem.created_at >= lead_window_start())
+        .order_by(NewsItem.significance.desc().nulls_last(), NewsItem.created_at.desc())
+        .first()
+    )
+    categories = [
+        row[0]
+        for row in db.execute(
+            text(
+                """
+                SELECT DISTINCT news_category FROM news_items
+                WHERE post_text IS NOT NULL AND news_category IS NOT NULL
+                  AND news_category <> 'speculative'
+                  AND created_at >= NOW() - INTERVAL '30 days'
+                ORDER BY news_category
+                """
+            )
+        )
+    ]
+    journals = (
+        db.query(NewsArticle)
+        .filter(NewsArticle.active.is_(True))
+        .order_by(NewsArticle.week_start.desc())
+        .limit(4)
+        .all()
+    )
+    papers = db.execute(
+        text(
+            f"""
+            SELECT {PAPER_SUMMARY_COLUMNS}
+            FROM research_requests r
+            WHERE {PUBLIC_PAPER_WHERE}
+            ORDER BY r.published_at DESC NULLS LAST
+            LIMIT 6
+            """
+        )
+    ).fetchall()
+    paper_total = (
+        db.execute(
+            text(f"SELECT COUNT(*) FROM research_requests r WHERE {PUBLIC_PAPER_WHERE}")
+        ).scalar()
+        or 0
+    )
+    news_stats = get_news_stats(db)
+    if not isinstance(news_stats, dict):  # cache_get returns the dict, a cold call the model
+        news_stats = news_stats.model_dump()
+    return {
+        "recent": recent,
+        "lead_48h": lead_48h,
+        "categories": categories,
+        "journals": journals,
+        "journal_total": news_stats["total_articles"],
+        "papers": papers,
+        "paper_total": paper_total,
+        "news_stats": news_stats,
+    }
+
+
+def build_route(data: dict, site_stats: dict, theo_running: dict | None) -> dict:
+    """Rows → the {type: "landing"} payload. A source without rows stays None
+    and the section is not rendered at all — no placeholder cards."""
+    stories = None
+    if data["recent"]:
+        lead, rail = pick_lead_and_rail(data["recent"], data["lead_48h"])
+        stories = {
+            "lead": story_teaser(lead),
+            "rail": [story_teaser(r) for r in rail],
+            "categories": data["categories"],
+        }
+    journals = None
+    if data["journals"]:
+        teasers = [journal_teaser(j) for j in data["journals"]]
+        journals = {"lead": teasers[0], "rail": teasers[1:], "total": data["journal_total"]}
+    papers = None
+    if data["papers"]:
+        teasers = [paper_teaser(p) for p in data["papers"]]
+        theo = None
+        if theo_running:
+            theo = {
+                "question": theo_running["question"],
+                "started_at": theo_running["started_at"],
+                "sites_found": theo_running["sites_found"],
+            }
+        papers = {
+            "lead": teasers[0],
+            "rail": teasers[1:],
+            "total": data["paper_total"],
+            "theo": theo,
+        }
+    return {
+        "type": "landing",
+        "stats": {
+            "sites": site_stats["total_sites"],
+            "stories": data["news_stats"]["total_items"],
+            "journals": data["journal_total"],
+            "papers": data["paper_total"],
+        },
+        "stories": stories,
+        "journals": journals,
+        "papers": papers,
+    }
+
+
+@router.get("/home")
+async def home(db: Session = Depends(get_db)):
+    """The homepage document. nginx maps "/" here; see the module docstring."""
+    with _cache_lock:
+        hit = _cache.get("home")
+        if hit and hit[0] > time.monotonic():
+            return hit[1]
+    site_stats = get_site_stats()
+    current = await get_current_research()
+    route = build_route(fetch_landing_data(db), site_stats, current.get("running"))
+    response = ssr_shell_response(
+        "index.html", route, _HTML_HEADERS, postprocess=lambda html: apply_stats(html, site_stats)
+    )
+    with _cache_lock:
+        _cache["home"] = (time.monotonic() + _CACHE_TTL, response)
+    return response

@@ -45,6 +45,7 @@ from api.routes import (
     contributions,
     goto,
     interactions,
+    landing_html,
     library,
     lyra,
     news,
@@ -764,6 +765,7 @@ app.add_middleware(GZipMiddleware, minimum_size=500)
 app.include_router(articles_html.router, tags=["articles-html"])
 app.include_router(research_html.router, tags=["research-html"])
 app.include_router(sites_html.router, tags=["sites-html"])
+app.include_router(landing_html.router, tags=["landing-html"])
 app.include_router(seo.router, tags=["seo"])
 # Funnel measurement: /goto/discord logs the click and 302s to the invite
 # (no /api/ prefix — nginx proxies the exact path)
