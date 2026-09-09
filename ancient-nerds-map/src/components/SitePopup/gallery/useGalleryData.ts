@@ -28,6 +28,8 @@ interface UseGalleryDataOptions {
   thumbnailUrl?: string
   isOffline: boolean
   referenceLinks?: { url: string; title: string; domain: string; kind: string }[]
+  /** Start in the expanded (multi-row grid) layout instead of the one-row strip. */
+  initialExpanded: boolean
 }
 
 export function useGalleryData({
@@ -40,9 +42,10 @@ export function useGalleryData({
   thumbnailUrl,
   isOffline,
   referenceLinks,
+  initialExpanded,
 }: UseGalleryDataOptions): GalleryHookReturn {
   const [activeGalleryTab, setActiveGalleryTab] = useState<GalleryTab>('photos')
-  const [isGalleryExpanded, setIsGalleryExpanded] = useState(false)
+  const [isGalleryExpanded, setIsGalleryExpanded] = useState(initialExpanded)
   const [sketchfabCategoryFilter, setSketchfabCategoryFilter] = useState(false)
 
   // Internal Wikipedia image fetching
