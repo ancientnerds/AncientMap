@@ -152,8 +152,10 @@ channels"). Bausteine, umgesetzt in `src/styles/landing-live.css`:
   Text. Zeilen sind komplett klickbar.
 - Screenshots als Textur: `saturate(.75)` und ein Verlauf nach unten, kein Text im Bild.
 - Theo-Zeile unter den Papers: gestrichelter oranger Rahmen, pulsierender Punkt, "Theo is
-  researching: {Frage} · {Dauer} in · {n} sites found", Link auf `/theo.html`.
-- Mobile unter 768 px: eine Spalte, Lead oben, Liste darunter; Chips scrollen horizontal.
+  researching: {Frage} · started {Zeit} · {n} sites found", Link auf `/theo.html`. Die Zeit folgt
+  derselben Regel wie alle Zeitangaben der Seite: absolut im Server-HTML, relativ ("6h ago") nach
+  der Hydration.
+- Mobile unter 900 px (der Breakpoint der übrigen Landing-Sektionen): eine Spalte, Lead oben, Liste darunter; Chips scrollen horizontal.
 
 Die Mockups aus dem Brainstorming liegen unter `.superpowers/brainstorm/239-1788951798/content/`
 (`stories-cards.html` Variante B, `longreads.html` Variante A).
