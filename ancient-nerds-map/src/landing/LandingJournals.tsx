@@ -51,6 +51,7 @@ export default function LandingJournals({ data }: Props) {
         archiveHref="/articles.html"
         archiveTitle="Journal archive"
         listLabel="More journals"
+        articleTag="div"
         article={
           <>
             <JournalArticle

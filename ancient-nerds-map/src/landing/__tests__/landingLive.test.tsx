@@ -186,6 +186,30 @@ describe('LandingStories window', () => {
     expect(html).toContain('<a class="popup-window-btn" href="/news-archive/"')
   })
 
+  it('names the two window controls — their link text is an arrow glyph', () => {
+    for (const label of [
+      'Open the full story',
+      'Story archive',
+      'Open the journal',
+      'Journal archive',
+      'Open the paper',
+      'Research library',
+    ]) {
+      expect(html).toContain(`aria-label="${label}"`)
+    }
+    const btns = [...html.matchAll(/<a class="popup-window-btn"[^>]*>/g)].map(m => m[0])
+    expect(btns).toHaveLength(6)
+    for (const btn of btns) expect(btn, btn).toContain('aria-label=')
+  })
+
+  it('wraps the article column in <div> where the component brings its own <article>', () => {
+    // JournalArticle renders <article class="articles-reader"> itself; the
+    // other two do not. Two article landmarks for one text is one too many.
+    expect(html).toContain('<div class="ll-window-article"><article class="articles-reader">')
+    expect([...html.matchAll(/<article class="ll-window-article">/g)]).toHaveLength(2)
+    expect([...html.matchAll(/class="ll-window-article"/g)]).toHaveLength(3)
+  })
+
   it('renders the lead as h3 — the section label is the only h2 above it', () => {
     const titles = [...html.matchAll(/<h3 class="story-title">(.*?)<\/h3>/g)].map(m => m[1])
     expect(titles).toHaveLength(1)

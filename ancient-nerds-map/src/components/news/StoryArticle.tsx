@@ -36,7 +36,10 @@ import '../../styles/story-page.css'
 /** Compact mode never lists more than this — the window is not the page. */
 const COMPACT_SOURCES = 4
 
-/** _host_of(): nackter Hostname — Leser beurteilen einen Link an der Domain. */
+/** _host_of(): nackter Hostname — Leser beurteilen einen Link an der Domain.
+ *  ImageLightbox trug dieselbe Zeile und importiert sie jetzt von hier. Der
+ *  einzige Unterschied war `host` statt `hostname`, also ein Port — den
+ *  weder eine Story-Quelle noch eine Bildquelle je fuehrt. */
 export function hostOf(url: string): string {
   // new URL wirft, wo Pythons urlparse ein leeres netloc liefert ("http://") —
   // derselbe Rückgabewert, nur als catch formuliert.
@@ -52,7 +55,7 @@ export function hostOf(url: string): string {
  * ID gibt es nichts einzubetten, dann bleibt das Thumbnail ein reiner Link
  * nach YouTube (kein stiller Fehlschlag, sondern der bisherige Zustand).
  */
-export function videoIdOf(url: string): string {
+function videoIdOf(url: string): string {
   try {
     return new URL(url).searchParams.get('v') || ''
   } catch {
@@ -65,7 +68,7 @@ export function videoIdOf(url: string): string {
  * der http(s)-Filter — die Liste ist LLM-derived, ein javascript:-Eintrag
  * darf nie ein href werden (Reihenfolge wie im Python-Payload).
  */
-export function storySources(raw: StoryData['web_sources']) {
+function storySources(raw: StoryData['web_sources']) {
   return (raw || [])
     .slice(0, 8)
     .filter((s): s is { url: string; title?: string | null; snippet?: string | null } => {

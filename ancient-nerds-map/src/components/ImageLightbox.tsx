@@ -1,6 +1,8 @@
 import { useEffect, useCallback, useState, useRef } from 'react'
 import { createPortal } from 'react-dom'
 
+import { hostOf } from './news/StoryArticle'
+
 export interface LightboxImage {
   src: string
   title?: string
@@ -25,12 +27,8 @@ function getVideoMimeType(src: string): string | undefined {
   }
 }
 
-function hostFromUrl(url: string): string {
-  try { return new URL(url).hostname.replace(/^www\./, '') } catch { return '' }
-}
-
 function isWikimediaHost(url: string): boolean {
-  const h = hostFromUrl(url)
+  const h = hostOf(url)
   return /(^|\.)(wikipedia|wikimedia)\.org$/.test(h)
 }
 
@@ -52,7 +50,7 @@ function matchesKnownSource(sourceType: string | undefined, url: string): boolea
   if (!sourceType) return false
   const pattern = KNOWN_SOURCE_HOSTS[sourceType]
   if (!pattern) return false
-  return pattern.test(hostFromUrl(url))
+  return pattern.test(hostOf(url))
 }
 
 interface ImageLightboxProps {
@@ -463,7 +461,7 @@ export default function ImageLightbox({
                   <line x1="2" y1="12" x2="22" y2="12" />
                   <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
                 </svg>
-                {hostFromUrl(current.sourceUrl)}
+                {hostOf(current.sourceUrl)}
               </a>
             )}
             {current.sourceUrl && current.sourceType === 'david-rumsey' && (

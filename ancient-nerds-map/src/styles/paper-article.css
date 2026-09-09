@@ -3,7 +3,7 @@
    and the shared markdown body (.theo-md-body)
    every Theo surface renders its report in.
 
-   Owned by src/components/research/PaperArticle.tsx
+   Owned by src/components/theo/PaperArticle.tsx
    and, for the ops surfaces (report overlay, live
    view, WordPad editor), by src/pages/TheoPage.tsx —
    both import this file. Moved here out of

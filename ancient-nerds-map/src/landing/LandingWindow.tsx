@@ -23,6 +23,12 @@ interface Props {
   archiveHref: string
   archiveTitle: string
   article: ReactNode
+  /**
+   * The element around the article column. 'div' where the component running
+   * inside already renders its own <article> — JournalArticle does, and an
+   * <article> inside an <article> is two article landmarks for one text.
+   */
+  articleTag?: 'article' | 'div'
   list: ReactNode
   /** aria-label of the list column — the only per-section word in the frame. */
   listLabel: string
@@ -35,6 +41,7 @@ export default function LandingWindow({
   archiveHref,
   archiveTitle,
   article,
+  articleTag: ArticleTag = 'article',
   list,
   listLabel,
 }: Props) {
@@ -43,12 +50,14 @@ export default function LandingWindow({
       <div className="ll-window-bar">
         <span className="ll-window-title">{title}</span>
         <span className="popup-window-controls ll-window-controls">
-          <a className="popup-window-btn" href={openHref} title={openTitle}>↗</a>
-          <a className="popup-window-btn" href={archiveHref} title={archiveTitle}>≡</a>
+          {/* title alone names nothing for a screen reader: the link text is
+              an arrow glyph, so the same words have to be the accessible name. */}
+          <a className="popup-window-btn" href={openHref} title={openTitle} aria-label={openTitle}>↗</a>
+          <a className="popup-window-btn" href={archiveHref} title={archiveTitle} aria-label={archiveTitle}>≡</a>
         </span>
       </div>
       <div className="ll-window-body">
-        <article className="ll-window-article">{article}</article>
+        <ArticleTag className="ll-window-article">{article}</ArticleTag>
         <nav className="ll-window-list" aria-label={listLabel}>
           {list}
         </nav>
