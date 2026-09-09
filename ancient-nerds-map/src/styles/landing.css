@@ -523,39 +523,6 @@ body {
   transform: scale(0.98);
 }
 
-/* ─── Split Two-Column (News & Radar) ─── */
-
-.split-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 48px;
-}
-
-.split-card {
-  position: relative;
-  padding: 40px;
-  contain: layout style paint;
-}
-
-.split-card img {
-  width: 100%;
-  aspect-ratio: 16/10;
-  object-fit: cover;
-  border-radius: 10px;
-  margin: 20px 0;
-  border: 1px solid var(--border-accent);
-}
-
-.split-card .section-label {
-  font-size: 1.3rem;
-}
-
-.split-card .section-desc {
-  font-size: 0.95rem;
-  margin: 0;
-  max-width: none;
-}
-
 /* ─── Tools Grid ─── */
 
 .tools-grid {
@@ -1080,8 +1047,7 @@ body {
 /* ─── Responsive ─── */
 
 @media (max-width: 900px) {
-  .feature-row,
-  .split-row {
+  .feature-row {
     grid-template-columns: 1fr;
     gap: 32px;
   }
@@ -1150,14 +1116,6 @@ body {
     flex: 1 1 0;
     min-width: 0;
     height: 250px;
-  }
-
-  .split-row {
-    gap: 24px;
-  }
-
-  .split-card {
-    padding: 24px;
   }
 
   .final-cta {

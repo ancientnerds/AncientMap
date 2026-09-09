@@ -159,7 +159,9 @@ export default function LandingStories({ initial, total }: Props) {
             {c ? getNewsCategoryLabel(c) : 'All'}
           </button>
         ))}
-        {error && <span className="ll-error ll-meta" role="status">{error}</span>}
+        {/* Always mounted, usually empty: a live region that appears together
+            with its text is ignored by some screen readers. */}
+        <span className="ll-error ll-meta" role="status">{error}</span>
       </div>
       <div className="ll-two">
         <StoryLead story={lead} />
