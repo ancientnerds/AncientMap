@@ -26,6 +26,7 @@ from fastapi import APIRouter, Depends, Response
 from sqlalchemy import text
 from sqlalchemy.orm import Session, joinedload
 
+from api.routes.articles_html import public_stories_query
 from api.routes.news import get_news_stats
 from api.routes.public_v1 import PAPER_SUMMARY_COLUMNS, paper_summary_kwargs
 from api.routes.theo import get_current_research
@@ -38,6 +39,7 @@ from pipeline.research_html_renderer import PUBLIC_PAPER_WHERE
 MAX_SUMMARY = 180
 WORDS_PER_MINUTE = 238
 LEAD_WINDOW = timedelta(hours=48)
+CATEGORY_WINDOW = timedelta(days=30)
 RAIL_ROWS = 6
 RECENT_ROWS = 7
 APPENDIX_SECTIONS = {"sources", "videos"}
@@ -50,22 +52,27 @@ _LINK = re.compile(r"https?://")
 
 
 def first_sentence(post_text: str | None) -> str:
-    """First sentence of the story post, trailing source links removed, ≤180 chars.
+    """First sentence of the story post, for the card summary.
 
-    Mirrors ancient-nerds-map/src/landing/feedClient.ts::firstSentence — a
-    refetched card must read exactly like a server-rendered one.
+    Same rule as ancient-nerds-map/src/landing/feedClient.ts::firstSentence:
+    trailing source links off the *whole* text (splitPostText strips them
+    before it splits paragraphs), first paragraph, first sentence, whitespace
+    collapsed, cut at 180 on a word boundary. A refetched card must read
+    exactly like a server-rendered one.
     """
     if not post_text:
         return ""
-    body = post_text.strip().split("\n", 1)[0]
+    body = post_text.strip()
     while _TRAILING_URL.search(body):
         body = _TRAILING_URL.sub("", body)
-    match = _SENTENCE.match(body)
-    sentence = (match.group(0) if match else body).strip()
+    paragraph = next((line for line in (raw.strip() for raw in body.split("\n")) if line), "")
+    match = _SENTENCE.match(paragraph)
+    sentence = " ".join((match.group(0) if match else paragraph).split())
     if len(sentence) <= MAX_SUMMARY:
         return sentence
     cut = sentence[:MAX_SUMMARY]
-    return cut[: cut.rfind(" ")] + "…"
+    space = cut.rfind(" ")
+    return (cut if space == -1 else cut[:space]) + "…"
 
 
 def reading_minutes(words: int) -> int:
@@ -164,65 +171,82 @@ def apply_stats(html: str, stats: dict) -> str:
         "countries": str(stats["curated_countries"]),
     }
     for key, value in values.items():
-        html = re.sub(rf'(data-stat="{key}"[^>]*>)[^<]*(<)', rf"\g<1>{value}\g<2>", html, count=1)
+        html, hits = re.subn(rf'(data-stat="{key}"[^>]*>)[^<]*(<)', rf"\g<1>{value}\g<2>", html)
+        if not hits:
+            raise ValueError(f'index.html has no data-stat="{key}" marker')
     return html
 
 
-def lead_window_start(now: datetime | None = None) -> datetime:
-    return (now or datetime.now(UTC).replace(tzinfo=None)) - LEAD_WINDOW
+def naive_utc_now() -> datetime:
+    """news_items.created_at is timestamp *without* time zone — every window
+    boundary in this module is measured from here, and only from here."""
+    return datetime.now(UTC).replace(tzinfo=None)
+
+
+def lead_window_start(now: datetime) -> datetime:
+    """Oldest story still allowed to take the lead slot."""
+    return now - LEAD_WINDOW
 
 
 router = APIRouter()
 _HTML_HEADERS = {"Cache-Control": "public, max-age=300"}
 _CACHE_TTL = 300.0
-# (expires_at, response) — one document per process; ~200 hits/day need no more.
-_cache: dict[str, tuple[float, Response]] = {}
+# (expires_at, document bytes) — one document per process; ~200 hits/day need
+# no more. Bytes, not the Response object: GZipMiddleware writes
+# Content-Encoding into the very raw_headers list a Response carries, so a
+# cached object comes back on the next hit already labelled gzip and the
+# middleware then passes the uncompressed body through untouched —
+# ERR_CONTENT_DECODING_FAILED in the browser.
+_cache: dict[str, tuple[float, bytes]] = {}
 _cache_lock = threading.Lock()
 
 
 def _story_query(db: Session):
-    """Same base filter as /api/news/feed, minus speculative stories (they are noindex)."""
+    """The crawl index, plus the feed's significance floor.
+
+    Two rules meet here and they are not the same rule: /api/news/feed keeps
+    speculative stories that score 3 or better, while the crawl index
+    (articles_html.public_stories_query - the one definition of "public",
+    shared with the archive listing and the sitemap) drops them outright. The
+    homepage takes the index set and adds the feed's floor of 2 on top, so
+    every card links a page that is itself indexed.
+    """
     return (
-        db.query(NewsItem)
-        .join(NewsVideo)
+        public_stories_query(db)
         .options(
             joinedload(NewsItem.video).joinedload(NewsVideo.channel), joinedload(NewsItem.site)
         )
-        .filter(
-            NewsItem.post_text.isnot(None),
-            (NewsItem.significance.is_(None)) | (NewsItem.significance >= 2),
-            (NewsItem.news_category != "speculative") | (NewsItem.news_category.is_(None)),
-        )
+        .filter((NewsItem.significance.is_(None)) | (NewsItem.significance >= 2))
     )
 
 
 def fetch_landing_data(db: Session) -> dict:
     """Every DB read of the route, in one place, so the route itself stays testable."""
+    now = naive_utc_now()
     recent = _story_query(db).order_by(NewsItem.created_at.desc()).limit(RECENT_ROWS).all()
     lead_48h = (
         _story_query(db)
-        .filter(NewsItem.created_at >= lead_window_start())
+        .filter(NewsItem.created_at >= lead_window_start(now))
         .order_by(NewsItem.significance.desc().nulls_last(), NewsItem.created_at.desc())
         .first()
     )
+    # The filter chips, from the same public set as the cards — no chip can
+    # open onto stories the homepage would not show.
     categories = [
         row[0]
-        for row in db.execute(
-            text(
-                """
-                SELECT DISTINCT news_category FROM news_items
-                WHERE post_text IS NOT NULL AND news_category IS NOT NULL
-                  AND news_category <> 'speculative'
-                  AND created_at >= NOW() - INTERVAL '30 days'
-                ORDER BY news_category
-                """
-            )
+        for row in public_stories_query(db)
+        .with_entities(NewsItem.news_category)
+        .filter(
+            NewsItem.news_category.isnot(None),
+            NewsItem.created_at >= now - CATEGORY_WINDOW,
         )
+        .distinct()
+        .order_by(NewsItem.news_category)
     ]
     journals = (
         db.query(NewsArticle)
         .filter(NewsArticle.active.is_(True))
-        .order_by(NewsArticle.week_start.desc())
+        .order_by(NewsArticle.week_start.desc().nulls_last())
         .limit(4)
         .all()
     )
@@ -309,7 +333,7 @@ async def home(db: Session = Depends(get_db)):
     with _cache_lock:
         hit = _cache.get("home")
         if hit and hit[0] > time.monotonic():
-            return hit[1]
+            return Response(content=hit[1], media_type="text/html", headers=_HTML_HEADERS)
     site_stats = get_site_stats()
     current = await get_current_research()
     route = build_route(fetch_landing_data(db), site_stats, current.get("running"))
@@ -317,5 +341,5 @@ async def home(db: Session = Depends(get_db)):
         "index.html", route, _HTML_HEADERS, postprocess=lambda html: apply_stats(html, site_stats)
     )
     with _cache_lock:
-        _cache["home"] = (time.monotonic() + _CACHE_TTL, response)
+        _cache["home"] = (time.monotonic() + _CACHE_TTL, response.body)
     return response

@@ -13,7 +13,9 @@ from sqlalchemy import text
 from api.cache import cache_get, cache_set
 from pipeline.database import get_session
 
-CACHE_KEY = "api:stats"
+# v2: the pre-2026-09 value under "api:stats" has no curated_countries and
+# survives a deploy in Redis — the homepage hero would KeyError on it.
+CACHE_KEY = "api:stats:v2"
 
 
 def get_site_stats() -> dict:

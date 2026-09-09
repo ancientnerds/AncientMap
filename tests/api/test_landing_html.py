@@ -11,11 +11,16 @@ from datetime import datetime, timedelta
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+from starlette.middleware.gzip import GZipMiddleware
+
 from api.routes import landing_html
 from api.routes.landing_html import (
     apply_stats,
     first_sentence,
     journal_teaser,
+    lead_window_start,
     paper_teaser,
     pick_lead_and_rail,
     reading_minutes,
@@ -23,8 +28,14 @@ from api.routes.landing_html import (
     sites_long,
     story_teaser,
 )
+from pipeline.database import get_db
 
 NOW = datetime(2026, 9, 9, 12, 0, 0)
+# The three hero markers apply_stats() insists on; a shell without them raises.
+_SHELL_MARKERS = (
+    '<div data-stat="sites">1.7M+</div><span data-stat="sites-long">1.7 million</span>'
+    '<div data-stat="countries">90+</div>'
+)
 
 
 def item(id_, *, sig, hours_ago, category="artifact", site=None, post="One sentence. Two. https://x.y"):
@@ -50,6 +61,21 @@ def test_first_sentence_drops_trailing_links_and_caps_length():
     long = "word " * 50 + "end."
     out = first_sentence(long)
     assert len(out) <= 181 and out.endswith("…")
+
+
+def test_first_sentence_matches_the_typescript_twin():
+    """feedClient.ts::firstSentence, case for case — a refetched card and a
+    server-rendered one show the same string or the swap is visible."""
+    # blurb() collapses whitespace runs before it measures or cuts.
+    assert first_sentence("Text with  double  spaces. More.") == "Text with double spaces."
+    # splitPostText strips the trailing link from the WHOLE text, then splits
+    # paragraphs — a link on its own last line must not survive as the summary.
+    assert first_sentence("Line one\nLine two.") == "Line one"
+    assert first_sentence("\n\nFirst real line. Rest.\nmore") == "First real line."
+    assert first_sentence("Body sentence. Rest.\nhttps://x.y") == "Body sentence."
+    # No space to break on: blurb keeps the slice whole instead of cutting at -1.
+    unbroken = first_sentence("x" * 250 + ".")
+    assert unbroken == "x" * 180 + "…" and len(unbroken) == 181
 
 
 def test_story_teaser_maps_row_and_site():
@@ -169,6 +195,29 @@ def test_apply_stats_replaces_only_marked_values():
     assert '<div class="hero-stat-value">30+</div>' in out
 
 
+def test_apply_stats_replaces_every_occurrence_of_a_marker():
+    html = _SHELL_MARKERS + '<b data-stat="countries">90+</b>'
+    out = apply_stats(html, {"total_sites": 1_759_673, "curated_countries": 98})
+    assert out.count(">98<") == 2
+
+
+def test_apply_stats_raises_when_the_shell_lost_a_marker():
+    """A missing marker is a broken shell, not a cosmetic miss — the hero would
+    ship the hard-coded "90+" forever. Same standard as render_app_shell()
+    refusing a shell without #root."""
+    html = '<div data-stat="sites">1.7M+</div><span data-stat="sites-long">1.7 million</span>'
+    try:
+        apply_stats(html, {"total_sites": 1_759_673, "curated_countries": 98})
+    except ValueError as exc:
+        assert 'data-stat="countries"' in str(exc)
+    else:
+        raise AssertionError("apply_stats accepted a shell without the countries marker")
+
+
+def test_lead_window_start_is_48h_before_the_given_now():
+    assert lead_window_start(NOW) == datetime(2026, 9, 7, 12, 0, 0)
+
+
 def _landing_data():
     site = SimpleNamespace(id="16147718-a70b-486e-aaba-9cf71316602c", name="Roman grave", country="Austria")
     recent = [item(i, sig=3, hours_ago=i) for i in range(1, 8)]
@@ -193,7 +242,12 @@ def _landing_data():
 def test_home_route_hands_the_landing_payload_and_substitutes_hero_counts():
     landing_html._cache.clear()
     # render_app_shell is mocked, so the "injected" body is part of the fake shell
-    shell = '<html><div class="hero-stat-value" data-stat="sites">1.7M+</div><div id="root"><p>live</p></div></html>'
+    shell = (
+        '<html><div class="hero-stat-value" data-stat="sites">1.7M+</div>'
+        '<span data-stat="sites-long">1.7 million</span>'
+        '<div class="hero-stat-value" data-stat="countries">90+</div>'
+        '<div id="root"><p>live</p></div></html>'
+    )
     with (
         patch.object(landing_html, "fetch_landing_data", return_value=_landing_data()),
         patch.object(landing_html, "get_site_stats", return_value={"total_sites": 1_759_673, "curated_countries": 98}),
@@ -207,6 +261,7 @@ def test_home_route_hands_the_landing_payload_and_substitutes_hero_counts():
     assert resp.headers["cache-control"] == "public, max-age=300"
     body = resp.body.decode()
     assert 'data-stat="sites">1.76M<' in body and "<p>live</p>" in body
+    assert 'data-stat="countries">98<' in body
 
     route = render.call_args[0][0]
     assert route["type"] == "landing"
@@ -227,7 +282,7 @@ def test_home_route_omits_sections_without_rows_and_serves_from_cache():
         patch.object(landing_html, "get_site_stats", return_value={"total_sites": 5, "curated_countries": 1}),
         patch.object(landing_html, "get_current_research", new=AsyncMock(return_value={"running": None})),
         patch("api.seo_shell.render_page", return_value=("<title>x</title>", "")) as render,
-        patch("api.seo_shell.render_app_shell", return_value='<div id="root"></div>'),
+        patch("api.seo_shell.render_app_shell", return_value=_SHELL_MARKERS + '<div id="root"></div>'),
     ):
         asyncio.run(landing_html.home(db=object()))
         asyncio.run(landing_html.home(db=object()))
@@ -235,3 +290,42 @@ def test_home_route_omits_sections_without_rows_and_serves_from_cache():
     route = render.call_args[0][0]
     assert route["stories"] is None and route["journals"] is None and route["papers"] is None
     assert fetch.call_count == 1  # second call came from the 300 s cache
+
+
+def test_home_stays_decodable_when_the_client_accepts_gzip():
+    """Two gzip-negotiated hits must decode identically.
+
+    Caching the Response object breaks that: GZipMiddleware sets
+    Content-Encoding on the very `raw_headers` list the Response carries, so
+    the cached object came back on hit two already labelled gzip — and the
+    middleware then passed the uncompressed body through untouched
+    (`content_encoding_set`), which is ERR_CONTENT_DECODING_FAILED in the
+    browser. The cache holds bytes for exactly this reason.
+    """
+    landing_html._cache.clear()
+    shell = "<html>" + _SHELL_MARKERS + '<div id="root">' + "<p>live</p>" * 60 + "</div></html>"
+    app = FastAPI()
+    app.add_middleware(GZipMiddleware, minimum_size=500)
+    app.include_router(landing_html.router)
+    app.dependency_overrides[get_db] = lambda: object()
+    with (
+        patch.object(landing_html, "fetch_landing_data", return_value=_landing_data()) as fetch,
+        patch.object(
+            landing_html,
+            "get_site_stats",
+            return_value={"total_sites": 1_759_673, "curated_countries": 98},
+        ),
+        patch.object(
+            landing_html, "get_current_research", new=AsyncMock(return_value={"running": None})
+        ),
+        patch("api.seo_shell.render_page", return_value=("<title>x</title>", "<p>live</p>")),
+        patch("api.seo_shell.render_app_shell", return_value=shell),
+        TestClient(app) as client,
+    ):
+        first = client.get("/home", headers={"Accept-Encoding": "gzip"})
+        second = client.get("/home", headers={"Accept-Encoding": "gzip"})
+
+    assert first.status_code == 200 and second.status_code == 200
+    assert fetch.call_count == 1  # hit two really is the cached document
+    assert first.text == second.text
+    assert '<div id="root">' in second.text and "<p>live</p>" in second.text
