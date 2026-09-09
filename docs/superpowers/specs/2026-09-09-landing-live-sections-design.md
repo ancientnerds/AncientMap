@@ -11,7 +11,9 @@ bleiben darunter erhalten, abzüglich der beiden, die durch Live-Sektionen erset
 
 Entscheidungen aus dem Brainstorming (09.09.2026):
 
-- Hero: Globus-Video oben, wie heute. Kein Mini-Globus, keine Suchbox, keine Umgestaltung.
+- Hero: Globus-Video oben, wie heute. Kein Mini-Globus, keine Suchbox, keine Umgestaltung des Layouts.
+  Drei SEO-Ergänzungen (Freigabe 09.09.): die H1 trägt den Suchbegriff, ein Intro-Absatz kommt unter
+  den Hero, und die veraltete Zahl "750K+" wird überall durch die echte Größenordnung ersetzt (3.6).
 - Stories: Variante "Lead-Karte plus Liste". Eine große Story, daneben sechs kompakte Zeilen.
 - Journals und Papers: zwei eigene Sektionen, jeweils Lead plus Liste.
 - Kein eigener Abschnitt für Globus-Fähigkeiten. Die vorhandenen Screenshot-Sektionen decken das ab.
@@ -19,11 +21,12 @@ Entscheidungen aus dem Brainstorming (09.09.2026):
 
 ## 2. Seitenaufbau
 
-1. Hero (unverändert, siehe 3.6 für die Zahlen)
-2. `>_ [ fig. 1 — stories, live ]`
-3. `>_ [ fig. 2 — weekly journal ]`
-4. `>_ [ fig. 3 — research papers ]`
-5. Bestehende Sektionen in heutiger Reihenfolge: Globe, Filter, Empires (cinematic), Site data, Lyra,
+1. Hero (Layout unverändert, H1 und Zahlen siehe 3.6)
+2. Intro-Absatz (statisch, siehe 3.6)
+3. `>_ [ fig. 1 — stories, live ]`
+4. `>_ [ fig. 2 — weekly journal ]`
+5. `>_ [ fig. 3 — research papers ]`
+6. Bestehende Sektionen in heutiger Reihenfolge: Globe, Filter, Empires (cinematic), Site data, Lyra,
    Radar, Tools, Sources, API, Founders, Discord, Giants, Browse (Länder-Hubs und Paper-Liste), Final CTA, Footer.
 
 Entfernt werden die Screenshot-Karte "Archaeology Stories" (Split-Row mit Radar) und die Sektion
@@ -155,13 +158,34 @@ channels"). Bausteine, umgesetzt in `src/styles/landing-live.css`:
 Die Mockups aus dem Brainstorming liegen unter `.superpowers/brainstorm/239-1788951798/content/`
 (`stories-cards.html` Variante B, `longreads.html` Variante A).
 
-### 3.6 Hero-Zahlen
+### 3.6 Hero: H1, Zahlen und Intro-Absatz
 
-Der Hero zeigt "750K+ Sites". Die Datenbank hat 1.759.673. Die Werte für Sites und Länder bekommen
-`data-stat="sites"` und `data-stat="countries"`, und die Landing-Route ersetzt sie im Shell-HTML durch
-formatierte Live-Werte ("1.76M" aus der gecachten Stats-Abfrage, "98" als Zahl der Länder mit
-kuratierten Sites). Empires und Sources bleiben statisch "30+" und "20+". Das ist die einzige Änderung
-am Hero. Im statischen Rückfall bleiben die heutigen Texte stehen.
+**H1 mit Suchbegriff.** Heute ist die H1 der Schriftzug "ANCIENT NERDS", ohne ein einziges Suchwort.
+Der Schriftzug bleibt optisch identisch, wird aber ein `<p class="hero-title">`. Die H1 wird die
+Slogan-Zeile darunter mit dem Text "The interactive map of <span data-stat="sites-long">1.7 million</span>
+archaeological sites, explored through data, maps and AI". Sie behält die Klasse und Optik der
+heutigen Slogan-Zeile (`hero-tagline`), es gibt genau eine H1 auf der Seite. "RESEARCH PLATFORM" bleibt.
+
+**Zahlen überall.** Die Datenbank hat 1.759.673 Sites, die Seite behauptet "750K+" an sieben Stellen:
+Hero-Statistik, `<title>`, Description, OG- und Twitter-Description, JSON-LD (WebApplication) und
+PWA-Manifest in `vite.config.ts`. Die Hero-Werte für Sites und Länder bekommen `data-stat="sites"`
+und `data-stat="countries"`; die Landing-Route ersetzt sie und `sites-long` im Shell-HTML durch
+formatierte Live-Werte ("1.76M", "98" Länder mit kuratierten Sites, "1.7 million"). Empires und Sources
+bleiben statisch "30+" und "20+". `landingMeta` formatiert Titel und Description aus `stats.sites`
+("1.7M+"). Die statischen Stellen (JSON-LD, Manifest, Rückfall-Texte in `index.html`) werden einmalig
+auf "1.7 million+" beziehungsweise "1.7M+" gesetzt.
+
+**Intro-Absatz.** Direkt unter dem Hero, vor `#root`, statisch in `index.html`, damit er auch im
+Rückfall steht. Drei bis vier Sätze, monospace, Lesebreite 70 Zeichen, mit Links auf Globus, Stories,
+Journals, Papers und Lyra. Vorschlag (englisch, der User gibt den endgültigen Text frei):
+
+> Ancient Nerds is a free research platform for archaeology and ancient history. A 3D globe maps
+> 1.7 million sites from more than 20 open databases, 5,000 of them curated in depth. Lyra reads the
+> latest archaeology videos and turns them into sourced stories, which become a journal every week.
+> Theo, our research agent, writes long-form papers with thousands of citations, published under CC BY 4.0.
+
+Alle Zahlen darin sind heute korrekt (1.759.673 Sites, 5.004 kuratiert, 20+ Quellen, 2.700 bis 3.200
+analysierte Quellen je Paper). Im statischen Rückfall bleiben Absatz und H1 mit den festen Zahlen stehen.
 
 ## 4. Fehlerfälle
 
@@ -174,7 +198,7 @@ am Hero. Im statischen Rückfall bleiben die heutigen Texte stehen.
 
 ## 5. Tests
 
-- **vitest:** `landingMeta` liefert Titel und Description; `renderToString(<LandingLive/>)` mit einem
+- **vitest:** `landingMeta` liefert Titel und Description mit der formatierten Site-Zahl; `renderToString(<LandingLive/>)` mit einem
   Fixture-Payload enthält alle Story-, Journal- und Paper-Links, keine "undefined"-Strings, und rendert
   ohne Theo-Zeile, wenn `theo` null ist. Bestehender Route-Guard-Test um `landing` erweitern.
 - **pytest (DB-los):** der Payload-Builder bekommt Fake-Rows und liefert die Lead-Regel korrekt
@@ -183,7 +207,8 @@ am Hero. Im statischen Rückfall bleiben die heutigen Texte stehen.
 - **Build-Gate:** `size-limit` auf `dist/assets/landing-*.js` mit 80 kB Brotli im
   `lint-frontend`-Job, gleich nach `npm run build`.
 - **Nach dem Deploy (Playwright):** `/` liefert SSR-HTML mit sieben Story-Links (Lead plus sechs), null
-  Hydration-Fehler in der Konsole, LCP-Element ist das Hero-Bild, und ein Chip-Klick tauscht den Inhalt.
+  Hydration-Fehler in der Konsole, LCP-Element ist das Hero-Bild, genau eine H1 mit dem Suchbegriff,
+  kein "750K" mehr im Dokument, und ein Chip-Klick tauscht den Inhalt.
   Crawler-Sicht mit JS-Blockade prüfen (Lehre aus den 2.100 Soft-404-Seiten).
 
 ## 6. Änderungen außerhalb des Codes
@@ -197,7 +222,7 @@ am Hero. Im statischen Rückfall bleiben die heutigen Texte stehen.
 
 1. Typen, Registry, `landingMeta`, `LandingLive` mit Fixture, vitest.
 2. `landing_html.py` mit Payload-Builder und pytest, Route `/home` in `main.py`.
-3. `index.html`: `#root`, `data-stat`-Spans, Sektionen entfernen, `landingMain.tsx` einbinden;
-   Service-Worker-Denylist; CSS.
+3. `index.html`: `#root`, H1-Tausch, Intro-Absatz, `data-stat`-Spans, Zahlen in Head, JSON-LD und
+   Manifest, Sektionen entfernen, `landingMain.tsx` einbinden; Service-Worker-Denylist; CSS.
 4. Stories-Interaktion (Chips, Load more, relative Zeit).
 5. nginx-Block, size-limit, Deploy, Playwright-Prüfung, GSC-Beobachtung der Startseite.
