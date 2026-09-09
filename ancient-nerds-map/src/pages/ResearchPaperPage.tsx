@@ -15,13 +15,12 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import Breadcrumbs from '../components/layout/Breadcrumbs'
+import PaperArticle from '../components/theo/PaperArticle'
 import AiNoticeBanner from '../components/layout/AiNoticeBanner'
 import CommunityCta from '../components/layout/CommunityCta'
 import PageHeader from '../components/layout/PageHeader'
 import { useIsFounder } from '../hooks/useIsFounder'
-import { isoDate } from '../seo/display'
 import { useRoute } from '../seo/RouteContext'
-import SanitizedMarkdownHtml from '../seo/SanitizedMarkdownHtml'
 import { shareOrCopy } from '../utils/share'
 import '../styles/theo.css'
 import '../styles/story-page.css'
@@ -31,15 +30,6 @@ interface TtsStatus {
   audio_url: string | null
   chars_generated: number | null
   status: string | null
-}
-
-/** ~200 words/min over the visible text of the rendered body HTML. */
-function readingMinutes(bodyHtml: string): number {
-  const words = bodyHtml
-    .replace(/<[^>]+>/g, ' ')
-    .split(/\s+/)
-    .filter(Boolean).length
-  return Math.max(1, Math.ceil(words / 200))
 }
 
 export default function ResearchPaperPage() {
@@ -131,10 +121,6 @@ export default function ResearchPaperPage() {
 
   if (!paper) return null
 
-  const author = paper.author || 'Theo'
-  const pubDate = isoDate(paper.published_at)
-  const summary = (paper.summary || '').trim()
-
   return (
     <div className="theo-page">
       <PageHeader currentPage="theo">
@@ -142,15 +128,10 @@ export default function ResearchPaperPage() {
       </PageHeader>
       <AiNoticeBanner message="Research paper text is AI-generated; images are from cited sources. Always verify claims with original sources." />
 
-      {paper.hero_image_url && (
-        <figure className="theo-paper-hero">
-          <img src={paper.hero_image_url} alt={title} className="theo-paper-hero-img" />
-        </figure>
-      )}
-
-      <div className="theo-paper-page">
-        {/* Paper header */}
-        <div className="theo-paper-header">
+      <PaperArticle
+        paper={paper}
+        headingLevel="h1"
+        lead={
           <Breadcrumbs
             trail={[
               { name: 'Home', path: '/' },
@@ -158,18 +139,9 @@ export default function ResearchPaperPage() {
               { name: title },
             ]}
           />
-          <h1 className="theo-paper-title">{title}</h1>
-          <div className="theo-paper-meta">
-            <span style={{ color: 'var(--text-dimmed)', fontSize: 12 }}>
-              {`${readingMinutes(paper.body_html)} min read`}
-            </span>
-            <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>
-              {`by ${author}${author === 'Theo' ? ' · AI research agent' : ''}`}
-            </span>
-            {pubDate && (
-              <span style={{ color: 'var(--text-dimmed)', fontSize: 12 }}>{pubDate}</span>
-            )}
-            <span style={{ color: 'var(--text-dimmed)', fontSize: 12 }}>CC BY 4.0</span>
+        }
+        actions={
+          <>
             <button className="theo-report-share" onClick={handleShare} title="Share paper" aria-label="Share paper">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
             </button>
@@ -205,22 +177,9 @@ export default function ResearchPaperPage() {
                 )}
               </div>
             )}
-          </div>
-        </div>
-
-        {/* Lead-in summary, exactly like the Python fragment rendered it. */}
-        {summary && (
-          <p>
-            <strong>{summary}</strong>
-          </p>
-        )}
-
-        {/* Paper body — the pipeline's markdown rendering, verbatim. */}
-        <SanitizedMarkdownHtml
-          html={paper.body_html}
-          className="theo-paper-body theo-md-body"
-        />
-
+          </>
+        }
+      >
         {/* Back to the research library */}
         <div style={{ textAlign: 'center', padding: '32px 0' }}>
           <a href="/research/" style={{ color: 'var(--brand-primary)', fontSize: 13, textDecoration: 'none' }}>
@@ -228,7 +187,7 @@ export default function ResearchPaperPage() {
           </a>
         </div>
         <CommunityCta />
-      </div>
+      </PaperArticle>
     </div>
   )
 }
