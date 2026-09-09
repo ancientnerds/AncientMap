@@ -54,9 +54,29 @@ EXCERPT_CHARS = 2500
 EXCERPT_BLOCKS = frozenset(
     {"p", "h2", "h3", "h4", "ul", "ol", "figure", "blockquote", "pre", "table"}
 )
-# ...and of those, the ones that contain other blocks: their depth is tracked
-# so a cut can never land inside a nested list, quote or figure.
-EXCERPT_CONTAINERS = frozenset({"ul", "ol", "blockquote", "figure", "table"})
+# ...and of those, the ones that may not be the LAST thing in an excerpt: a
+# heading is the title of the section that was cut away right behind it.
+EXCERPT_HEADINGS = frozenset({"h2", "h3", "h4"})
+# Everything that nests moves the depth counter, so these are the odd ones out:
+# tags that never close and must not move it.
+VOID_TAGS = frozenset(
+    {
+        "area",
+        "base",
+        "br",
+        "col",
+        "embed",
+        "hr",
+        "img",
+        "input",
+        "link",
+        "meta",
+        "param",
+        "source",
+        "track",
+        "wbr",
+    }
+)
 
 _HEADING = re.compile(r"^##+\s+(.+?)\s*$", re.MULTILINE)
 _IMAGE = re.compile(r"!\[[^\]]*\]\(([^)\s]+)")
@@ -106,9 +126,14 @@ def excerpt_html(html: str, max_chars: int = EXCERPT_CHARS) -> tuple[str, bool]:
     carries real body HTML — but not all of it. The cut lands right after the
     first top-level block whose end pushes the visible text past `max_chars`,
     so the excerpt is always a whole paragraph, list, quote or figure and the
-    markup that comes back is balanced. Depth is tracked for the blocks that
-    contain other blocks, which is why a list item or a figcaption can never
-    be the last thing in the excerpt.
+    markup that comes back is balanced.
+
+    Balanced for EVERY element, not only for the block containers: depth counts
+    each non-void tag, so a cut can no longer land inside a
+    <div class="footnote">, a <dl> or a <details> — only a closing tag that
+    brings the depth back to 0 is a candidate at all. A candidate that is a
+    heading cuts BEFORE itself, because an excerpt whose last line announces
+    the section that was dropped reads as a broken page.
 
     Returns (html, cut). `cut` is False when the whole body fits — nothing was
     dropped, so the caller must not offer a "continue reading" link.
@@ -116,19 +141,31 @@ def excerpt_html(html: str, max_chars: int = EXCERPT_CHARS) -> tuple[str, bool]:
     depth = 0
     seen = 0
     pos = 0
+    heading_at = 0
     for tag in _TAG.finditer(html):
         seen += len(_WS.sub(" ", html[pos : tag.start()]).strip())
         pos = tag.end()
         closing, name, self_closing = tag.group(1), tag.group(2).lower(), tag.group(3)
-        if name in EXCERPT_CONTAINERS and not self_closing:
-            depth += -1 if closing else 1
-        if closing and not depth and name in EXCERPT_BLOCKS and seen > max_chars:
-            # Only a real cut counts: a body whose last block crosses the
-            # budget is complete, and saying otherwise promises text that is
-            # not there.
-            if html[tag.end() :].strip():
-                return html[: tag.end()], True
-            break
+        if self_closing or name in VOID_TAGS:
+            continue
+        if closing:
+            depth -= 1
+        else:
+            if not depth and name in EXCERPT_HEADINGS:
+                heading_at = tag.start()
+            depth += 1
+        if not (closing and not depth and name in EXCERPT_BLOCKS and seen > max_chars):
+            continue
+        end = heading_at if name in EXCERPT_HEADINGS else tag.end()
+        if not html[:end].strip():
+            # The body opens with this heading: cutting in front of it would
+            # leave an empty excerpt, so it stays and the next block decides.
+            continue
+        # Only a real cut counts: a body whose last block crosses the budget
+        # is complete, and saying otherwise promises text that is not there.
+        if html[end:].strip():
+            return html[:end], True
+        break
     return html, False
 
 
@@ -160,17 +197,19 @@ def paper_teaser(row) -> dict:
     }
 
 
-def paper_lead(summary_row, full_row) -> dict:
+def paper_lead(row) -> dict:
     """The teaser of the lead paper plus the opening of the report.
 
-    `full_row` is research_html.fetch_paper()'s row: the summary columns plus
-    the stored report. The markdown goes through report_markdown() exactly as
-    research_paper_page does, so the window cannot show text the page does not.
-    `author` rides along because the paper's byline is part of its header.
+    `row` is research_html.fetch_paper()'s row: PAPER_SUMMARY_COLUMNS plus the
+    stored report, so it carries everything paper_teaser() reads and the
+    summary query's row for the same paper is not needed a second time. The
+    markdown goes through report_markdown() exactly as research_paper_page
+    does, so the window cannot show text the page does not. `author` rides
+    along because the paper's byline is part of its header.
     """
-    p = paper_summary_kwargs(summary_row)
-    body, excerpted = excerpt_html(markdown_to_html(report_markdown(full_row, p["title"])))
-    return paper_teaser(summary_row) | {
+    p = paper_summary_kwargs(row)
+    body, excerpted = excerpt_html(markdown_to_html(report_markdown(row, p["title"])))
+    return paper_teaser(row) | {
         "author": p["author"],
         "body_html": body,
         "excerpted": excerpted,
@@ -302,6 +341,15 @@ def fetch_landing_data(db: Session) -> dict:
         ).scalar()
         or 0
     )
+    # The lead paper's report: PAPER_SUMMARY_COLUMNS carries no body, and the
+    # window runs the paper page, so the report has to come along. Both queries
+    # run in the same request against the same PUBLIC_PAPER_WHERE, so a miss
+    # here is a broken invariant, not an empty section — it says so out loud.
+    paper_full = None
+    if papers:
+        paper_full = fetch_paper(papers[0].slug, db)
+        if paper_full is None:
+            raise RuntimeError(f"lead paper {papers[0].slug} vanished between queries")
     news_stats = get_news_stats(db)
     if not isinstance(news_stats, dict):  # cache_get returns the dict, a cold call the model
         news_stats = news_stats.model_dump()
@@ -312,9 +360,7 @@ def fetch_landing_data(db: Session) -> dict:
         "journals": journals,
         "journal_total": news_stats["total_articles"],
         "papers": papers,
-        # The lead paper's report: PAPER_SUMMARY_COLUMNS carries no body, and
-        # the window runs the paper page, so the report has to come along.
-        "paper_full": fetch_paper(papers[0].slug, db) if papers else None,
+        "paper_full": paper_full,
         "paper_total": paper_total,
         "news_stats": news_stats,
     }
@@ -355,7 +401,7 @@ def build_route(data: dict, site_stats: dict, theo_running: dict | None) -> dict
                 "sites_found": theo_running["sites_found"],
             }
         papers = {
-            "lead": paper_lead(data["papers"][0], data["paper_full"]),
+            "lead": paper_lead(data["paper_full"]),
             "rail": [paper_teaser(p) for p in data["papers"][1:]],
             "total": data["paper_total"],
             "theo": theo,

@@ -188,14 +188,36 @@ def test_excerpt_keeps_a_figure_with_its_image_and_caption_whole():
     assert "after" not in out
 
 
-def test_excerpt_cuts_a_heading_block_without_orphaning_the_tag():
+def test_excerpt_stops_before_a_heading_instead_of_ending_on_it():
+    """A heading is the title of what comes after it. When the heading is the
+    block that crosses the budget, the excerpt ends BEFORE it: an excerpt whose
+    last line announces a section that was cut away reads as broken."""
     html = "<p>" + "a" * 40 + "</p><h2 id=\"s\">Section</h2><p>body</p>"
     out, cut = excerpt_html(html, max_chars=30)
     assert cut is True
     assert out == "<p>" + "a" * 40 + "</p>"
-    # A cut on the heading itself keeps the whole element, never "<h2 id=".
-    out2, _ = excerpt_html(html, max_chars=44)
-    assert out2.endswith("</h2>")
+    # 44 puts the crossing on the heading itself: same end, not "...</h2>".
+    out2, cut2 = excerpt_html(html, max_chars=44)
+    assert cut2 is True
+    assert out2 == "<p>" + "a" * 40 + "</p>"
+
+
+def test_excerpt_never_cuts_inside_a_wrapper_around_a_block():
+    """Depth is tracked for every non-void tag, not only for lists, quotes,
+    figures and tables. A <div class="footnote"> around an <ol> used to be
+    invisible, so the </ol> looked top-level and the excerpt came back with
+    the <div> still open."""
+    html = (
+        "<p>" + "a" * 40 + "</p>"
+        '<div class="footnote"><ol><li>one</li><li>two</li></ol></div>'
+        "<p>after</p><p>tail</p>"
+    )
+    out, cut = excerpt_html(html, max_chars=45)
+    assert cut is True
+    assert out.count("<div") == out.count("</div>") == 1
+    assert out.count("<ol>") == out.count("</ol>") == 1
+    assert out.endswith("<p>after</p>")
+    assert "tail" not in out
 
 
 def test_excerpt_output_has_balanced_tags():
@@ -236,17 +258,17 @@ def test_journal_lead_is_the_teaser_plus_the_rendered_opening():
 
 
 def test_paper_lead_adds_author_and_the_report_opening():
-    summary_row = SimpleNamespace(
+    """One row, not two: fetch_paper() selects PAPER_SUMMARY_COLUMNS on top of
+    the report, so it already carries everything paper_teaser() reads."""
+    row = SimpleNamespace(
         id="a", slug="paper-a", question="Q", published_by=None, published_at=None,
         sites_found=10, title="Paper A", card_description=None, score=None, badge=None,
         word_count=None, hero_src=None,
-    )
-    full_row = SimpleNamespace(
         published_report="# Paper A\n\n" + "word " * 900 + "\n\n## Tail\n\nlast\n",
         report=None,
     )
-    lead = paper_lead(summary_row, full_row)
-    assert {k: lead[k] for k in paper_teaser(summary_row)} == paper_teaser(summary_row)
+    lead = paper_lead(row)
+    assert {k: lead[k] for k in paper_teaser(row)} == paper_teaser(row)
     assert lead["author"] is None
     assert lead["excerpted"] is True
     # report_markdown strips the paper's own title heading, like the page does.
@@ -321,10 +343,13 @@ def _landing_data():
             SimpleNamespace(id="a", slug="paper-a", question="Q", published_by=None, published_at=None, sites_found=10, title="Paper A", card_description=None, score=None, badge=None, word_count=None, hero_src=None),
             SimpleNamespace(id="b", slug="paper-b", question="Q", published_by=None, published_at=None, sites_found=20, title="Paper B", card_description=None, score=None, badge=None, word_count=None, hero_src=None),
         ],
-        # research_html.fetch_paper()'s row for the lead paper — the report the
-        # window runs. PAPER_SUMMARY_COLUMNS alone carries no body.
+        # research_html.fetch_paper()'s row for the lead paper: the summary
+        # columns AND the report, which is why that one row builds the lead.
         "paper_full": SimpleNamespace(
-            published_report="## Findings\n\nreport text", report=None
+            id="a", slug="paper-a", question="Q", published_by=None, published_at=None,
+            sites_found=10, title="Paper A", card_description=None, score=None, badge=None,
+            word_count=None, hero_src=None,
+            published_report="## Findings\n\nreport text", report=None,
         ),
         "paper_total": 24,
         "news_stats": {"total_items": 3189, "total_articles": 23},

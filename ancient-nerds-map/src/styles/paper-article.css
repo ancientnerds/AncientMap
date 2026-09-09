@@ -103,21 +103,6 @@
   display: block;
   border-radius: var(--nerv-panel-radius, 0);
 }
-.theo-paper-hero-caption {
-  margin-top: 6px;
-  font-size: 11px;
-  line-height: 1.4;
-  color: var(--text-muted);
-  font-style: italic;
-  text-align: center;
-}
-.theo-paper-hero-caption a {
-  font-style: normal;
-  color: var(--theo-amber, #d4912a);
-  text-decoration: none;
-}
-.theo-paper-hero-caption a:hover { text-decoration: underline; }
-
 .theo-paper-page {
   max-width: 760px;
   margin: 0 auto;
