@@ -91,14 +91,16 @@ LandingRoute {
   type: 'landing'
   stats:    { sites: number, stories: number, journals: number, papers: number }
   stories:  { lead: StoryData, rail: StoryData[], categories: string[] }
-  journals: { lead: JournalTeaser, rail: JournalTeaser[], total: number }
-  papers:   { lead: PaperTeaser, rail: PaperTeaser[], total: number, theo: TheoStatus | null }
+  journals: { lead: JournalLead, rail: JournalTeaser[], total: number }
+  papers:   { lead: PaperLead, rail: PaperTeaser[], total: number, theo: TheoStatus | null }
 }
 StoryData     = Omit<StoryRoute, 'type'> — dasselbe Payload wie /news-archive/{slug}
 JournalTeaser { id, title, summary, week_start, week_end, published_at, words, minutes,
                 sections: string[], sources, image_url | null, path }
+JournalLead   = JournalTeaser & { body_html, excerpted }
 PaperTeaser   { slug, title, summary, published_at, words, minutes, sources_analyzed,
                 quality_score, hero_image_url | null, path }
+PaperLead     = PaperTeaser & { body_html, excerpted, author | null }
 TheoStatus    { question, started_at, sites_found }
 ```
 
@@ -119,11 +121,22 @@ Regeln:
 - **Journals.** Die 4 neuesten aktiven Artikel nach `week_start`. `words` zählt den Inhalt,
   `minutes` ist `words / 238` aufgerundet, `sections` sind die `##`-Überschriften ohne "Sources" und
   "Videos", `sources` zählt die Links, `image_url` ist der erste Screenshot im Inhalt.
-  `path` ist `/articles/{slugify(title)}`, wie in `articles_html.py`.
+  `path` ist `/articles/{slugify(title)}`, wie in `articles_html.py`. Der Lead trägt seit
+  2026-09-10 zusätzlich `body_html`: dieselbe `markdown_to_html(row.content)`-Ausgabe wie
+  `/articles/{slug}`, gekürzt durch `excerpt_html()`.
 - **Papers.** Die 6 neuesten nach `published_at` unter `PUBLIC_PAPER_WHERE` mit den
   `PAPER_SUMMARY_COLUMNS`. Der Lead ist das neueste. `theo` kommt aus derselben Abfrage, die
   `/api/theo/research/current` benutzt (laufender Batch-Request: Frage, Startzeit, gefundene Sites);
-  die Funktion wird importiert, nicht kopiert.
+  die Funktion wird importiert, nicht kopiert. Der Lead trägt seit 2026-09-10 zusätzlich `author`
+  und `body_html`: `research_html.fetch_paper(slug)` holt den Report nach — die Summary-Spalten
+  tragen keinen Text —, `report_markdown()` bereitet ihn genau wie auf der Paperseite auf.
+- **Der Auszug (2026-09-10).** `excerpt_html(html, max_chars=2500)` schneidet direkt hinter dem
+  ersten Block auf oberster Ebene, dessen Ende den sichtbaren Text über die Grenze schiebt
+  (`p, h2, h3, h4, ul, ol, figure, blockquote, pre, table`). Für `ul/ol/blockquote/figure/table`
+  wird die Verschachtelungstiefe mitgezählt, damit der Schnitt nie zwischen zwei `<li>` oder
+  zwischen `<img>` und `<figcaption>` landet; er liegt immer hinter einem schließenden Tag, nie
+  mitten in einem. Zurück kommt `(html, excerpted)`. `excerpted` ist `false`, wenn nichts wegfiel —
+  der "continue reading"-Link darf keinen Text versprechen, den es nicht gibt.
 - **Stats.** `sites` aus der gecachten `/api/stats`-Logik, `stories` und `journals` aus
   `get_news_stats`, `papers` per Count unter `PUBLIC_PAPER_WHERE`.
 
@@ -155,7 +168,8 @@ Zeile im Payload und wird nicht gerendert. Es gibt keine Platzhalter-Inhalte.
   auf relative Zeit um ("2h ago" über `formatRelativeDate`). So gibt es keinen Hydration-Mismatch.
 - Kein Auto-Rotieren, kein Ticker. Hover auf dem Screenshot zoomt leicht, unter
   `prefers-reduced-motion: reduce` nicht.
-- Journals und Papers haben keine Client-Logik. Sie sind Links.
+- Journals und Papers haben keine Client-Logik. Sie sind seit 2026-09-10 ebenfalls Fenster, aber
+  ohne Tausch: Kopfleiste, Artikel, Liste — und jede Zeile darin ein normaler Link.
 
 ### 3.5 Gestaltung
 
@@ -168,17 +182,27 @@ Farbvariablen und die Kategorie-Farben sind gelöscht; einzige Ausnahme bleibt N
 Sektionslabel im Muster `>_ [ fig. 1 — stories, live ]`, rechts daneben der Status. Bausteine,
 umgesetzt in `src/styles/landing-live.css`:
 
-- Stories-Fenster: Panel-Look wie `.empire-borders-window` (`--surface-raised`, Blur,
+- Fenster (alle drei): Panel-Look wie `.empire-borders-window` (`--surface-raised`, Blur,
   `--border-accent`, 4 px Radius, `--nerv-panel-shadow`), 36 px hohe Titelleiste in
   `rgba(0,15,20,.95)`, Körper als Raster 1.4fr / 1fr — Artikel mit eigenem Scrollbereich (72 vh,
-  dünne grüne Scrollleiste), Liste rechts daneben. Im Artikel gelten die Klassen der Story-Seite;
-  überschrieben werden nur die Größen (`.story-title` 1.5em, `.story-body` 14 px). Die aktive Zeile
-  trägt `--nerv-gl` und einen 2 px grünen Balken links.
-- Lead-Karte (Journal, Papers): Bild 21:9 bzw. 16:9, Badge, Titel in Orbitron, ein Absatz,
-  Meta-Zeile. Journals zeigen die Inhaltsverzeichnis-Chips, Papers den Evidenz-Streifen
-  (sources analyzed, quality, license).
-- Liste: vier Zeilen bei Journal/Papers (nur Text), beim Stories-Fenster mit 96-px-Thumbnail.
-  Zeilen sind komplett klickbar.
+  dünne grüne Scrollleiste), Liste rechts daneben. Der Rahmen ist EINE Komponente,
+  `src/landing/LandingWindow.tsx`; die Sektionen liefern nur Titel, die beiden Kopfleisten-Links,
+  den Artikel und die Liste. Im Artikel gelten die Klassen der jeweiligen Seite; überschrieben
+  werden nur die Größen (`.story-title`/`.articles-reader-title`/`.theo-paper-title` 1.5em,
+  Fließtext 14 px, `.theo-paper-page` ohne eigenes Padding). Die aktive Zeile trägt `--nerv-gl` und
+  einen 2 px grünen Balken links.
+- Journal-Fenster (seit 2026-09-10): `>_ journal.log — {Titel}`, links `<JournalArticle
+  headingLevel="h3">` — die Ausgabe genau so, wie `/articles/{slug}` sie rendert, bis zum Auszug
+  —, darunter der `.ll-continue`-Link auf die Ausgabe, wenn `excerpted` gesetzt ist. Rechts oben
+  die Abschnitts-Chips der Ausgabe (jetzt Links auf sie), darunter die älteren Ausgaben als
+  `.ll-row`. Kein Tausch im Fenster: eine Ausgabe ist eine lange Lektüre, keine Karte, jede Zeile
+  ist ein normaler Link.
+- Papers-Fenster (seit 2026-09-10): `>_ research.log — {Titel}`, links `<PaperArticle
+  headingLevel="h3">` mit Hero, Byline, Lesezeit und Lizenz wie auf `/research/{slug}`, darunter
+  der `.ll-continue`-Link und der Evidenz-Streifen (sources analyzed, quality, length, license).
+  Die Theo-Zeile bleibt außerhalb des Fensters — sie beschreibt den Agenten, nicht das Paper.
+- Liste: eine Zeile je weiterer Ausgabe bzw. weiterem Paper (nur Text), beim Stories-Fenster mit
+  96-px-Thumbnail. Zeilen sind komplett klickbar.
 - Screenshots als Textur: `saturate(.75)` und ein Verlauf nach unten, kein Text im Bild.
 - Theo-Zeile unter den Papers: gestrichelter oranger Rahmen, pulsierender Punkt, "Theo is
   researching: {Frage} · started {Zeit} · {n} sites found", Link auf `/theo.html`. Die Zeit folgt
