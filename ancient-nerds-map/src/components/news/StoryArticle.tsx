@@ -16,6 +16,7 @@
 
 import { SiteBadges, CountryFlag } from '../metadata'
 import ShareButton from '../ShareButton'
+import { hostOf } from '../../utils/hostOf'
 import { globeUrlForSite } from '../../constants/brand'
 import { isoDate, longDate } from '../../seo/display'
 import { absoluteUrl, countryPath, sitePath, storyPath } from '../../seo/meta'
@@ -40,15 +41,6 @@ const COMPACT_SOURCES = 4
  *  ImageLightbox trug dieselbe Zeile und importiert sie jetzt von hier. Der
  *  einzige Unterschied war `host` statt `hostname`, also ein Port — den
  *  weder eine Story-Quelle noch eine Bildquelle je fuehrt. */
-export function hostOf(url: string): string {
-  // new URL wirft, wo Pythons urlparse ein leeres netloc liefert ("http://") —
-  // derselbe Rückgabewert, nur als catch formuliert.
-  try {
-    return new URL(url).host.replace(/^www\./, '')
-  } catch {
-    return ''
-  }
-}
 
 /**
  * Die Video-ID aus der watch-URL — das Payload trägt die URL, keine ID. Ohne

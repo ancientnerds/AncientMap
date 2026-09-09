@@ -1,7 +1,7 @@
 import { useEffect, useCallback, useState, useRef } from 'react'
 import { createPortal } from 'react-dom'
 
-import { hostOf } from './news/StoryArticle'
+import { hostOf } from '../utils/hostOf'
 
 export interface LightboxImage {
   src: string
