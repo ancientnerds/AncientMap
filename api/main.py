@@ -63,6 +63,7 @@ from api.routes import (
     wiki_images,
 )
 from api.routes.public_v1 import create_public_api
+from api.services.site_stats import get_site_stats
 from api.ssr_client import SsrUnavailableError
 from pipeline.config import get_settings
 
@@ -824,37 +825,4 @@ async def root():
 @app.get("/api/stats")
 async def stats():
     """Get database statistics (cached for 5 minutes)."""
-    # Try cache first
-    cache_key = "api:stats"
-    cached = cache_get(cache_key)
-    if cached:
-        return cached
-
-    from sqlalchemy import text
-
-    from pipeline.database import get_session
-
-    with get_session() as session:
-        # Total sites
-        result = session.execute(text("SELECT COUNT(*) FROM unified_sites"))
-        total_sites = result.scalar()
-
-        # By source
-        result = session.execute(
-            text("""
-            SELECT source_id, COUNT(*) as count
-            FROM unified_sites
-            GROUP BY source_id
-            ORDER BY count DESC
-        """)
-        )
-        by_source = {row.source_id: row.count for row in result}
-
-    response = {
-        "total_sites": total_sites,
-        "by_source": by_source,
-    }
-
-    # Cache for 5 minutes
-    cache_set(cache_key, response, ttl=300)
-    return response
+    return get_site_stats()
