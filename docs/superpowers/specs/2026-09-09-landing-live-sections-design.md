@@ -19,7 +19,7 @@ Entscheidungen aus dem Brainstorming (09.09.2026):
 
 ## 2. Seitenaufbau
 
-1. Hero (unverändert, siehe 4.4 für die Zahlen)
+1. Hero (unverändert, siehe 3.6 für die Zahlen)
 2. `>_ [ fig. 1 — stories, live ]`
 3. `>_ [ fig. 2 — weekly journal ]`
 4. `>_ [ fig. 3 — research papers ]`
