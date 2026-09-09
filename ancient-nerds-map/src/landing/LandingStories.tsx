@@ -1,5 +1,8 @@
+import { useState } from 'react'
+
 import type { StoryTeaser } from '../types/anRoute'
 import LazyImage from '../components/LazyImage'
+import { fetchFeed, pickLeadAndRail } from './feedClient'
 import RelativeTime from './RelativeTime'
 import SectionHead from './SectionHead'
 
@@ -77,11 +80,75 @@ export function StoryRow({ story }: { story: StoryTeaser }) {
   )
 }
 
+const PAGE = 7
+const RAIL = 6
+const MAX_LOADS = 2
+
 export default function LandingStories({ initial, total }: Props) {
-  const { lead, rail } = initial
+  const [category, setCategory] = useState<string | null>(null)
+  const [lead, setLead] = useState(initial.lead)
+  const [rail, setRail] = useState(initial.rail)
+  const [loads, setLoads] = useState(0)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function applyChip(next: string | null) {
+    if (next === category || busy) return
+    setError(null)
+    if (next === null) {
+      setCategory(null)
+      setLead(initial.lead)
+      setRail(initial.rail)
+      setLoads(0)
+      return
+    }
+    setBusy(true)
+    try {
+      const { items } = await fetchFeed({ category: next, page: 1, pageSize: PAGE })
+      if (items.length === 0) {
+        setError(`no ${next} stories yet`)
+        return
+      }
+      const picked = pickLeadAndRail(items)
+      setCategory(next)
+      setLead(picked.lead)
+      setRail(picked.rail.slice(0, RAIL))
+      setLoads(0)
+    } catch {
+      setError('feed unavailable')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function loadMore() {
+    if (busy) return
+    setBusy(true)
+    setError(null)
+    try {
+      const shown = new Set([lead.id, ...rail.map(r => r.id)])
+      const { items } = await fetchFeed({ category, page: loads + 2, pageSize: RAIL })
+      setRail(prev => [...prev, ...items.filter(i => !shown.has(i.id))])
+      setLoads(n => n + 1)
+    } catch {
+      setError('feed unavailable')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const chips: (string | null)[] = [null, ...initial.categories]
   return (
     <section className="ll-section" id="stories-live">
       <SectionHead fig={1} name="stories, live" status={`${total.toLocaleString('en-US')} stories · newest first`} />
+      <div className="ll-chips" role="group" aria-label="story categories">
+        {chips.map(c => (
+          <button key={c ?? 'all'} type="button" className="ll-chip" aria-pressed={c === category} onClick={() => applyChip(c)}>
+            {c ?? 'all'}
+          </button>
+        ))}
+        {error && <span className="ll-error ll-meta">{error}</span>}
+      </div>
       <div className="ll-two">
         <StoryLead story={lead} />
         <div className="ll-rail">
@@ -90,6 +157,11 @@ export default function LandingStories({ initial, total }: Props) {
           ))}
         </div>
       </div>
+      {loads < MAX_LOADS ? (
+        <button type="button" className="ll-more" onClick={loadMore} disabled={busy}>
+          {busy ? 'loading…' : 'load more'}
+        </button>
+      ) : null}
       <div className="ll-foot">
         <span>lead = highest significance of the last 48h · rail = newest</span>
         <a href="/news.html">all stories →</a>
