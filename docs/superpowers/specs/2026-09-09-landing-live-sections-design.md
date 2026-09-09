@@ -90,12 +90,11 @@ für den ersten Paint keinen einzigen API-Aufruf.
 LandingRoute {
   type: 'landing'
   stats:    { sites: number, stories: number, journals: number, papers: number }
-  stories:  { lead: StoryTeaser, rail: StoryTeaser[], categories: string[] }
+  stories:  { lead: StoryData, rail: StoryData[], categories: string[] }
   journals: { lead: JournalTeaser, rail: JournalTeaser[], total: number }
   papers:   { lead: PaperTeaser, rail: PaperTeaser[], total: number, theo: TheoStatus | null }
 }
-StoryTeaser   { id, headline, summary, screenshot_url, category, significance, created_at,
-                channel, sources, path, site: { name, country } | null }
+StoryData     = Omit<StoryRoute, 'type'> — dasselbe Payload wie /news-archive/{slug}
 JournalTeaser { id, title, summary, week_start, week_end, published_at, words, minutes,
                 sections: string[], sources, image_url | null, path }
 PaperTeaser   { slug, title, summary, published_at, words, minutes, sources_analyzed,
@@ -107,13 +106,16 @@ Regeln:
 
 - **Stories.** Der öffentliche Story-Index (`public_stories_query`: post_text vorhanden, keine
   spekulativen Stories, weil die noindex sind) plus die Signifikanz-Untergrenze des Feeds (≥ 2 oder
-  null), neueste zuerst. `site` trägt nur Name und Land: Detailseiten gibt es allein für kuratierte
-  Sites, und die Karte verlinkt die Site nicht (verschachtelte Links wären ungültig). Der Lead ist die Story mit der höchsten Signifikanz der letzten 48
-  Stunden, bei Gleichstand die neuere. Gibt es in 48 Stunden keine, ist der Lead die höchste
-  Signifikanz unter den 7 neuesten. Die Liste sind die 7 neuesten ohne den Lead, gekürzt auf 6
-  Zeilen. Sichtbar sind also immer 7 Stories: Lead plus sechs. `summary` ist der erste Satz aus `post_text` über `splitPostText`, `sources` ist die
-  Länge von `web_sources`, `path` kommt aus `story_slug`, `categories` sind die Kategorien mit
-  mindestens einer Story in den letzten 30 Tagen.
+  null), neueste zuerst. Seit 2026-09-10 sind das keine Teaser mehr, sondern **ganze
+  Story-Payloads**: `articles_html.story_payload(row, related=[])` baut sie — dieselbe Funktion, die
+  `/news-archive/{slug}` bedient, damit Fenster und Seite nicht auseinanderlaufen können. `related`
+  bleibt leer; eine "Weiterlesen"-Liste im Fenster führte nirgendwohin. Der Lead ist die Story mit
+  der höchsten Signifikanz der letzten 48 Stunden, bei Gleichstand die neuere. Gibt es in 48 Stunden
+  keine, ist der Lead die höchste Signifikanz unter den 7 neuesten. Die Liste sind die 7 neuesten
+  ohne den Lead, gekürzt auf 6 Zeilen. Sichtbar sind also immer 7 Stories: die im Fenster plus
+  sechs in der Liste. Die Story-URL leitet der Client aus `headline` und `id` ab (`storyPath`, die
+  TS-Seite von `story_slug`); `categories` sind die Kategorien mit mindestens einer Story in den
+  letzten 30 Tagen.
 - **Journals.** Die 4 neuesten aktiven Artikel nach `week_start`. `words` zählt den Inhalt,
   `minutes` ist `words / 238` aufgerundet, `sections` sind die `##`-Überschriften ohne "Sources" und
   "Videos", `sources` zählt die Links, `image_url` ist der erste Screenshot im Inhalt.
@@ -130,10 +132,22 @@ Zeile im Payload und wird nicht gerendert. Es gibt keine Platzhalter-Inhalte.
 
 ### 3.4 Interaktion in der Stories-Sektion
 
-- Kategorie-Chips über der Sektion. Ein Klick lädt `/api/news/feed?news_category={cat}&page_size=7`;
-  der Lead wird die Story mit der höchsten Signifikanz der Antwort, die übrigen sechs die Liste.
-  "all" stellt das Payload wieder her. Während des Ladens bleibt der alte Inhalt stehen, es gibt
-  keinen Spinner-Sprung.
+- Die Sektion ist ein **NERV-Fenster, in dem die Story-Seite läuft**: Titelleiste (`>_ stories.log
+  — {Headline}`, rechts die Fensterknöpfe aus `nerv-ui/window.css`), links der Artikel als
+  `<StoryArticle compact headingLevel="h3">` — Headline, Meta-Zeile, Standbild, Fließtext, Key
+  facts, Site-Chips, Quellen, Art.-50-Fußnote —, rechts die Liste der übrigen Stories. Ein Klick auf
+  eine Zeile tauscht den Fensterinhalt, ohne die Seite zu wechseln.
+- **SEO:** jede Zeile ist ein echter `<a>` auf `/news-archive/{slug}`; der Tausch ist ein
+  `onClick`, der nur einen unmodifizierten Linksklick abfängt. Crawler, Mittelklick und Strg-Klick
+  bekommen den Link. Serverseitig steht der Artikel des Leads komplett im HTML, die Zeile des Leads
+  trägt `aria-current="true"`. Die Sektionsüberschrift bleibt das einzige `h2` über der Story, deren
+  Headline ein `h3` ist — kein `h1` in `#root`.
+- Kategorie-Chips über dem Fenster. Ein Klick lädt `/api/news/feed?news_category={cat}&page_size=7`;
+  die Antwort wird über `feedItemToStory` in dieselbe `StoryData`-Form gebracht, die der Server
+  schickt, der Lead ist die Story mit der höchsten Signifikanz und landet im Fenster. "all" stellt
+  das Payload wieder her. Während des Ladens bleibt der alte Inhalt stehen, es gibt keinen
+  Spinner-Sprung. Der Feed kennt `site_curated` nicht: nachgeladene Stories zeigen deshalb den
+  neutralen Site-Chip statt eines Links auf eine Detailseite, die ein 404 sein könnte.
 - "Load more" holt `/api/news/feed?page_size=6&page=N` (mit der aktiven Kategorie), lässt bereits
   gezeigte IDs aus und hängt den Rest an die Liste. Nach zwei Nachladungen wird der Button zum Link
   "all stories →" auf `/news.html`.
@@ -145,21 +159,32 @@ Zeile im Payload und wird nicht gerendert. Es gibt keine Platzhalter-Inhalte.
 
 ### 3.5 Gestaltung
 
-NERV-Sprache mit den vorhandenen Variablen aus `styles/index.css`, monospace, Sektionslabel im Muster
-`>_ [ fig. 1 — stories, live ]`, rechts daneben der Status ("updated 2h ago · 3,189 stories from 39
-channels"). Bausteine, umgesetzt in `src/styles/landing-live.css`:
+**Eine Palette, die NERV-Palette** (Nutzer-Feedback 2026-09-10: "Warum benutzen wir keine
+einheitlichen Farben?"). Referenz ist die Story-Seite: weiße Orbitron-Überschriften
+(`--text-heading`), neutraler Fließtext (`--nerv-steel`), gedämpfte Meta-Zeilen
+(`--nerv-steel-dim`), grün umrandete Tags, cyan Links (`--text-link`). Die vier privaten
+Farbvariablen und die Kategorie-Farben sind gelöscht; einzige Ausnahme bleibt NERV-Orange
+(`--nerv-o`) für die Theo-Zeile, weil das die Farbe eines laufenden Agenten ist. Monospace,
+Sektionslabel im Muster `>_ [ fig. 1 — stories, live ]`, rechts daneben der Status. Bausteine,
+umgesetzt in `src/styles/landing-live.css`:
 
-- Lead-Karte: Bild 16:9 (Journal 21:9), Badge (STORY / JOURNAL / PAPER), Titel in Orbitron, ein
-  Absatz, Meta-Zeile. Stories zeigen ein Signifikanz-Meter, Journals die Inhaltsverzeichnis-Chips,
-  Papers den Evidenz-Streifen (sources analyzed, quality, license).
-- Liste: sechs beziehungsweise vier Zeilen, Stories mit 96-px-Thumbnail, Journals und Papers nur
-  Text. Zeilen sind komplett klickbar.
+- Stories-Fenster: Panel-Look wie `.empire-borders-window` (`--surface-raised`, Blur,
+  `--border-accent`, 4 px Radius, `--nerv-panel-shadow`), 36 px hohe Titelleiste in
+  `rgba(0,15,20,.95)`, Körper als Raster 1.4fr / 1fr — Artikel mit eigenem Scrollbereich (72 vh,
+  dünne grüne Scrollleiste), Liste rechts daneben. Im Artikel gelten die Klassen der Story-Seite;
+  überschrieben werden nur die Größen (`.story-title` 1.5em, `.story-body` 14 px). Die aktive Zeile
+  trägt `--nerv-gl` und einen 2 px grünen Balken links.
+- Lead-Karte (Journal, Papers): Bild 21:9 bzw. 16:9, Badge, Titel in Orbitron, ein Absatz,
+  Meta-Zeile. Journals zeigen die Inhaltsverzeichnis-Chips, Papers den Evidenz-Streifen
+  (sources analyzed, quality, license).
+- Liste: vier Zeilen bei Journal/Papers (nur Text), beim Stories-Fenster mit 96-px-Thumbnail.
+  Zeilen sind komplett klickbar.
 - Screenshots als Textur: `saturate(.75)` und ein Verlauf nach unten, kein Text im Bild.
 - Theo-Zeile unter den Papers: gestrichelter oranger Rahmen, pulsierender Punkt, "Theo is
   researching: {Frage} · started {Zeit} · {n} sites found", Link auf `/theo.html`. Die Zeit folgt
   derselben Regel wie alle Zeitangaben der Seite: absolut im Server-HTML, relativ ("6h ago") nach
   der Hydration.
-- Mobile unter 900 px (der Breakpoint der übrigen Landing-Sektionen): eine Spalte, Lead oben, Liste darunter; Chips scrollen horizontal.
+- Mobile unter 900 px (der Breakpoint der übrigen Landing-Sektionen): eine Spalte, Artikel bzw. Lead oben, Liste darunter (Trennlinie oben statt links, Artikel ohne eigenen Scrollbereich); Chips scrollen horizontal.
 
 Die Mockups aus dem Brainstorming liegen unter `.superpowers/brainstorm/239-1788951798/content/`
 (`stories-cards.html` Variante B, `longreads.html` Variante A).
