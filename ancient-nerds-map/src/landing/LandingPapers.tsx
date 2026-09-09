@@ -1,6 +1,7 @@
 import type { PaperTeaser, TheoStatus } from '../types/anRoute'
 import LazyImage from '../components/LazyImage'
 import { shortDate } from './dates'
+import RelativeTime from './RelativeTime'
 import SectionHead from './SectionHead'
 
 interface Props {
@@ -21,7 +22,7 @@ function Evidence({ paper }: { paper: PaperTeaser }) {
 export default function LandingPapers({ data }: Props) {
   const { lead, rail, total, theo } = data
   return (
-    <section className="ll-section" id="papers-live">
+    <section className="ll-section" id="papers-live" aria-labelledby="ll-fig-3">
       <SectionHead fig={3} name="research papers" status={`${total} public · CC BY 4.0 · by Theo`} />
       <div className="ll-two">
         <a className="ll-lead" href={lead.path}>
@@ -63,7 +64,7 @@ export default function LandingPapers({ data }: Props) {
         <a className="ll-theo" href="/theo.html">
           <span>
             <i className="ll-pulse" /> Theo is researching: <b>{theo.question}</b>
-            {theo.started_at ? <> · since {shortDate(theo.started_at)}</> : null} · {theo.sites_found.toLocaleString('en-US')} sites found
+            {theo.started_at ? <> · started <RelativeTime iso={theo.started_at} /></> : null} · {theo.sites_found.toLocaleString('en-US')} sites found
           </span>
           <span>watch live →</span>
         </a>

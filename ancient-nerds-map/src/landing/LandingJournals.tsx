@@ -10,7 +10,7 @@ interface Props {
 export default function LandingJournals({ data }: Props) {
   const { lead, rail, total } = data
   return (
-    <section className="ll-section" id="journal-live">
+    <section className="ll-section" id="journal-live" aria-labelledby="ll-fig-2">
       <SectionHead
         fig={2}
         name="weekly journal"

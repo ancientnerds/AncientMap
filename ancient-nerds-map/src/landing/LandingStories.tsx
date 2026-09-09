@@ -38,15 +38,20 @@ function Meter({ value }: { value: number | null }) {
 }
 
 export function StoryLead({ story }: { story: StoryTeaser }) {
+  // Both halves of the row are optional in the payload — an empty row would
+  // be a bare gap above the headline.
+  const hasMetaRow = Boolean(story.category) || story.significance != null
   return (
     <a className="ll-lead" href={story.path}>
       <span className="ll-img ll-img-16x9">
         <LazyImage src={story.screenshot_url ?? PLACEHOLDER} alt="" width={1280} height={720} fallbackSrc={PLACEHOLDER} />
       </span>
       <span className="ll-body">
-        <span className="ll-meta-row">
-          <Badge category={story.category} /> <Meter value={story.significance} />
-        </span>
+        {hasMetaRow && (
+          <span className="ll-meta-row">
+            <Badge category={story.category} /> <Meter value={story.significance} />
+          </span>
+        )}
         <span className="ll-title">{story.headline}</span>
         <span className="ll-p">{story.summary}</span>
         <span className="ll-meta">
@@ -72,7 +77,15 @@ export function StoryRow({ story }: { story: StoryTeaser }) {
       <span>
         <span className="ll-row-title">{story.headline}</span>
         <span className="ll-meta">
-          <Badge category={story.category} /> · SIG {story.significance ?? '–'} · {story.site ? story.site.name : story.channel} ·{' '}
+          {/* The feed does emit category-less stories; the separator only
+              belongs there when the badge in front of it exists. */}
+          {story.category && (
+            <>
+              <Badge category={story.category} />
+              {' · '}
+            </>
+          )}
+          SIG {story.significance ?? '–'} · {story.site ? story.site.name : story.channel} ·{' '}
           <RelativeTime iso={story.created_at} />
         </span>
       </span>
@@ -139,7 +152,7 @@ export default function LandingStories({ initial, total }: Props) {
 
   const chips: (string | null)[] = [null, ...initial.categories]
   return (
-    <section className="ll-section" id="stories-live">
+    <section className="ll-section" id="stories-live" aria-labelledby="ll-fig-1">
       <SectionHead fig={1} name="stories, live" status={`${total.toLocaleString('en-US')} stories · newest first`} />
       <div className="ll-chips" role="group" aria-label="story categories">
         {chips.map(c => (

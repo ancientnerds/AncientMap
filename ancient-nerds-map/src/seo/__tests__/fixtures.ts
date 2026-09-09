@@ -10,6 +10,10 @@
  * und die Abweichung im Commit begründen. Alle Typen tragen die rohen
  * snake_case-Zeilenfelder (Cutovers Tasks 10–14) — Formatierung lebt in
  * src/seo/.
+ *
+ * Eine Ausnahme: `landing.route.json` ist von Hand geschrieben — die
+ * Startseite hatte nie einen Python-Renderer, es gibt also nichts
+ * einzufrieren; die Datei darf mit dem Payload-Builder mitwachsen.
  */
 
 import { readFileSync } from 'node:fs'

@@ -67,10 +67,40 @@ describe('LandingLive', () => {
     expect(html).toContain('Aug 31 – Sep 6')
   })
 
+  it('names every section landmark with its own fig heading', () => {
+    const sections = [...html.matchAll(/<section\b[^>]*>/g)].map(m => m[0])
+    expect(sections).toHaveLength(3)
+    const ids = new Set([...html.matchAll(/\bid="([^"]+)"/g)].map(m => m[1]))
+    for (const tag of sections) {
+      const labelled = /aria-labelledby="([^"]+)"/.exec(tag)
+      expect(labelled, `no aria-labelledby on ${tag}`).not.toBeNull()
+      expect(ids, tag).toContain(labelled![1])
+    }
+  })
+
   it('shows the evidence strip and the Theo line', () => {
     expect(html).toContain('2,748')
     expect(html).toContain('Theo is researching')
     expect(html).toContain('Water erosion evidence in the Osiris Shaft')
+    // The start time follows the page rule: absolute now, relative after
+    // mount — a <time> from RelativeTime, not a frozen "since Sep 9".
+    const theoLine = /<a class="ll-theo"[\s\S]*?<\/a>/.exec(html)![0]
+    expect(theoLine).toContain('started')
+    expect(theoLine).toContain('<time')
+  })
+
+  it('drops the separator in front of a story without a category', () => {
+    const rail = FIXTURES.landing.stories!.rail
+    const out = render({
+      ...FIXTURES.landing,
+      stories: { ...FIXTURES.landing.stories!, rail: [{ ...rail[0], category: null }] },
+    })
+    const row = out.slice(out.indexOf(`href="${rail[0].path}"`))
+    const meta = /<span class="ll-meta">([\s\S]*?)<\/span>/.exec(row)
+    expect(meta).not.toBeNull()
+    const text = meta![1].replace(/<[^>]*>/g, '').trim()
+    expect(text.startsWith('·')).toBe(false)
+    expect(text.startsWith('SIG')).toBe(true)
   })
 
   it('never prints undefined or null', () => {

@@ -1,5 +1,5 @@
 /**
- * Beweis der Serverfähigkeit: jeder der 9 Typen rendert per renderToString
+ * Beweis der Serverfähigkeit: jeder der 10 Typen rendert per renderToString
  * unter Node — ohne window, document, localStorage (Vitest läuft ohne
  * DOM-Environment). Effekte — die Daten-Fetches von SitePage,
  * ResearchPaperPage und ArticlesPage — laufen bei renderToString nicht;
