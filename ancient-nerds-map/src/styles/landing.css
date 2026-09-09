@@ -289,10 +289,10 @@ body {
 /* ─── Intro paragraph (below the hero, above #root) ─── */
 
 .landing-intro { padding-top: 48px; padding-bottom: 8px; }
-.landing-intro-text { max-width: 70ch; margin: 0 auto; font-size: 1.05rem; line-height: 1.75; color: var(--text-secondary); text-wrap: pretty; }
+.landing-intro-text { max-width: 70ch; margin: 0 auto; font-size: 1.05rem; line-height: 1.75; color: var(--nerv-steel); text-wrap: pretty; }
 /* Underlined, not colour-only: Lighthouse link-in-text-block (a11y 1.4.1). */
-.landing-intro-text a { color: var(--accent-secondary); text-decoration: underline; text-decoration-color: color-mix(in srgb, var(--accent-secondary) 45%, transparent); text-underline-offset: 3px; }
-.landing-intro-text a:hover { text-decoration-color: var(--accent-secondary); }
+.landing-intro-text a { color: var(--text-link); text-decoration: underline; text-decoration-color: color-mix(in srgb, var(--text-link) 45%, transparent); text-underline-offset: 3px; }
+.landing-intro-text a:hover { text-decoration-color: var(--text-link); }
 
 /* ─── Two-Column Feature Layouts ─── */
 

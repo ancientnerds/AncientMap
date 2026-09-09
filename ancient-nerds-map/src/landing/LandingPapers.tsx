@@ -34,7 +34,7 @@ export default function LandingPapers({ data }: Props) {
           )}
           <span className="ll-body">
             <span className="ll-meta-row">
-              <span className="ll-badge ll-cat-paper">paper</span>{' '}
+              <span className="ll-badge">paper</span>{' '}
               <span className="ll-meta">
                 {[
                   lead.published_at && `published ${shortDate(lead.published_at)}`,
@@ -64,7 +64,7 @@ export default function LandingPapers({ data }: Props) {
                     .join(' · ')}
                 </span>
               </span>
-              <span className="ll-badge ll-cat-paper">paper</span>
+              <span className="ll-badge">paper</span>
             </a>
           ))}
         </div>

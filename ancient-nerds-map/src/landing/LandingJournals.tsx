@@ -34,7 +34,7 @@ export default function LandingJournals({ data }: Props) {
           )}
           <span className="ll-body">
             <span className="ll-meta-row">
-              <span className="ll-badge ll-cat-journal">journal</span>{' '}
+              <span className="ll-badge">journal</span>{' '}
               <span className="ll-meta">
                 {[
                   dateRange(lead.week_start, lead.week_end),

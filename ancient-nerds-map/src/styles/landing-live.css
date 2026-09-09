@@ -1,15 +1,22 @@
 @import './nerv-ui/window.css';
 
-/* Landing live sections (Stories / Journal / Papers) — lead + rail language.
-   Tokens from tokens.css; section widths match .landing-section. */
-.landing-live { max-width: 1200px; margin: 0 auto; padding: 0 24px; font-family: var(--font-body); --ll-orange: #ff9830; --ll-red: #ff6b7a; --ll-violet: #c9a3ff; --ll-ink: #031; }
+/* Landing live sections (Stories / Journal / Papers).
+
+   ONE palette, the NERV one (owner feedback 2026-09-10: "the text below the
+   globe has weird colours. Why aren't we using unified colours? NERV
+   style!"). The reference is the story page: white Orbitron headings,
+   neutral steel body text, muted steel meta, green outlined tags, cyan
+   links. The four private colour variables that used to sit here — orange,
+   red, violet and a near-black ink — and the per-category badge colours are
+   gone; every value below is a token from tokens.css. */
+.landing-live { max-width: 1200px; margin: 0 auto; padding: 0 24px; font-family: var(--font-body); color: var(--nerv-steel); }
 .ll-section { padding: 56px 0 24px; border-top: 1px solid var(--border-accent); }
 .ll-section:first-child { border-top: 0; }
 
 .ll-head { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; margin-bottom: 12px; flex-wrap: wrap; }
 .ll-fig { margin: 0; font-size: 14px; font-weight: 600; letter-spacing: 0.04em; color: var(--accent-primary); }
-.ll-fig b { color: var(--text-primary); font-weight: 600; }
-.ll-status { font-size: 12px; color: var(--text-muted); }
+.ll-fig b { color: var(--text-heading); font-weight: 600; }
+.ll-status { font-size: 12px; color: var(--nerv-steel-dim); }
 
 .ll-two { display: grid; grid-template-columns: 1.25fr 1fr; gap: 16px; }
 .ll-lead, .ll-row { color: inherit; text-decoration: none; }
@@ -23,30 +30,23 @@
 @media (prefers-reduced-motion: no-preference) { .ll-lead:hover .ll-img img { transform: scale(1.03); } }
 .ll-body { display: flex; flex-direction: column; gap: 6px; padding: 14px 16px 16px; }
 .ll-meta-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-.ll-title { font-family: var(--font-heading); font-size: 17px; letter-spacing: 0.02em; line-height: 1.3; color: var(--text-primary); }
-.ll-p { font-size: 13px; line-height: 1.5; color: var(--text-secondary); }
-.ll-meta { font-size: 11px; color: var(--text-muted); }
-.ll-meta b { color: var(--text-secondary); font-weight: 400; }
-.ll-site { color: var(--accent-secondary); }
+.ll-title { font-family: var(--font-heading); font-size: 17px; letter-spacing: 0.02em; line-height: 1.3; color: var(--text-heading); }
+.ll-p { font-size: 13px; line-height: 1.5; color: var(--nerv-steel); }
+.ll-meta { font-size: 11px; color: var(--nerv-steel-dim); }
+.ll-meta b { color: var(--nerv-steel); font-weight: 400; }
 
-.ll-badge { font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; padding: 1px 6px; border: 1px solid currentColor; border-radius: 3px; color: var(--text-muted); }
-.ll-cat-artifact { color: var(--ll-orange); }
-.ll-cat-bioarchaeology { color: var(--ll-red); }
-.ll-cat-underwater, .ll-cat-journal { color: var(--accent-secondary); }
-.ll-cat-theory { color: var(--ll-violet); }
-.ll-cat-architecture, .ll-cat-paper { color: var(--accent-primary); }
-.ll-sig { font-size: 10px; letter-spacing: 0.05em; color: var(--text-muted); display: inline-flex; align-items: center; gap: 4px; }
-.ll-sig b { color: var(--accent-primary); }
-.ll-meter { display: inline-block; width: 46px; height: 5px; background: rgba(255, 255, 255, 0.08); }
-.ll-meter i { display: block; height: 100%; background: var(--accent-primary); box-shadow: 0 0 4px var(--accent-glow-20); }
+/* One badge, cut like the story page's .story-tag: green tint, green
+   border, green text. A category is not a colour code — orange for
+   artifacts and violet for theory made one list look like five products. */
+.ll-badge { font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; padding: 1px 6px; border-radius: 3px; background: var(--accent-glow-08); border: 1px solid var(--accent-glow-30); color: var(--accent-primary); }
 
 .ll-rail { display: flex; flex-direction: column; border: 1px solid var(--border-accent); background: rgba(0, 15, 20, 0.6); }
 .ll-row { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center; padding: 10px 12px; border-bottom: 1px solid var(--border-accent); }
 .ll-row:last-child { border-bottom: 0; }
 .ll-row-thumb { grid-template-columns: 96px 1fr; }
-.ll-row-title { display: block; font-size: 13px; font-weight: 600; line-height: 1.35; color: var(--text-primary); }
+.ll-row-title { display: block; font-size: 13px; font-weight: 600; line-height: 1.35; color: var(--text-heading); }
 .ll-row .ll-meta { display: block; margin-top: 3px; }
-.ll-arrow { color: var(--text-muted); }
+.ll-arrow { color: var(--nerv-steel-dim); }
 
 /* ── Stories window (2026-09-10) ─────────────────────────────────────────
    The Stories section is not a teaser strip but a window running the story
@@ -109,31 +109,37 @@
 .ll-window-article .story-title a { color: inherit; text-decoration: none; }
 .ll-window-article .story-body { font-size: 14px; }
 .ll-window-list .ll-more { margin: 0; border: 0; border-top: 1px solid var(--border-accent); }
+/* The row whose story is in the window. The transparent border on every
+   other row keeps the text from shifting 2px when the marker moves. */
+.ll-window-list .ll-row { border-left: 2px solid transparent; }
+.ll-window-list .ll-row[aria-current] { background: var(--nerv-gl); border-left-color: var(--accent-primary); }
 
 .ll-toc { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 4px; }
-.ll-toc span { font-size: 11px; color: var(--text-secondary); border: 1px solid var(--border-accent); padding: 1px 7px; border-radius: 3px; }
-.ll-toc span::before { content: '§ '; color: var(--text-muted); }
+.ll-toc span { font-size: 11px; color: var(--nerv-steel); border: 1px solid var(--border-accent); padding: 1px 7px; border-radius: 3px; }
+.ll-toc span::before { content: '§ '; color: var(--nerv-steel-dim); }
 .ll-evidence { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 6px; }
 .ll-evidence span { border: 1px solid var(--border-accent); padding: 6px 8px; display: flex; flex-direction: column; }
-.ll-evidence i { font-style: normal; font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em; }
-.ll-evidence b { font-size: 14px; color: var(--text-primary); }
+.ll-evidence i { font-style: normal; font-size: 10px; color: var(--nerv-steel-dim); text-transform: uppercase; letter-spacing: 0.06em; }
+.ll-evidence b { font-size: 14px; color: var(--text-heading); }
 
-.ll-theo { display: flex; justify-content: space-between; gap: 12px; margin-top: 12px; padding: 8px 12px; font-size: 12px; color: var(--ll-orange); border: 1px dashed color-mix(in srgb, var(--ll-orange) 45%, transparent); text-decoration: none; }
-.ll-theo b { color: var(--text-primary); }
-.ll-pulse { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--ll-orange); box-shadow: 0 0 6px var(--ll-orange); margin-right: 6px; }
+/* The one deliberate exception to the green: NERV orange marks the live
+   agent line, the role it already has on panel headers. */
+.ll-theo { display: flex; justify-content: space-between; gap: 12px; margin-top: 12px; padding: 8px 12px; font-size: 12px; color: var(--nerv-o); border: 1px dashed var(--nerv-og); text-decoration: none; }
+.ll-theo b { color: var(--text-heading); }
+.ll-pulse { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--nerv-o); box-shadow: 0 0 6px var(--nerv-o); margin-right: 6px; }
 @media (prefers-reduced-motion: no-preference) { .ll-pulse { animation: ll-pulse 1.6s infinite; } }
 @keyframes ll-pulse { 50% { opacity: 0.35; } }
 
-.ll-foot { display: flex; justify-content: space-between; gap: 12px; margin-top: 12px; font-size: 12px; color: var(--text-muted); }
-.ll-foot a { color: var(--accent-secondary); text-decoration: none; }
+.ll-foot { display: flex; justify-content: space-between; gap: 12px; margin-top: 12px; font-size: 12px; color: var(--nerv-steel-dim); }
+.ll-foot a { color: var(--text-link); text-decoration: none; }
 .ll-foot a:hover { text-decoration: underline; }
 
 .ll-chips { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; }
-.ll-chip { border: 1px solid var(--border-accent); background: transparent; color: var(--text-muted); font: inherit; font-size: 12px; padding: 3px 10px; border-radius: 99px; cursor: pointer; }
-.ll-chip[aria-pressed='true'] { color: var(--ll-ink); background: var(--accent-primary); border-color: var(--accent-primary); font-weight: 600; }
-.ll-more { margin-top: 10px; width: 100%; border: 1px solid var(--border-accent); background: transparent; color: var(--accent-secondary); font: inherit; font-size: 12px; padding: 8px; cursor: pointer; }
+.ll-chip { border: 1px solid var(--border-accent); background: transparent; color: var(--nerv-steel-dim); font: inherit; font-size: 12px; padding: 3px 10px; border-radius: 99px; cursor: pointer; }
+.ll-chip[aria-pressed='true'] { color: var(--surface-page); background: var(--accent-primary); border-color: var(--accent-primary); font-weight: 600; }
+.ll-more { margin-top: 10px; width: 100%; border: 1px solid var(--border-accent); background: transparent; color: var(--text-link); font: inherit; font-size: 12px; padding: 8px; cursor: pointer; }
 .ll-more:disabled { opacity: 0.5; cursor: default; }
-.ll-error { color: var(--ll-red); }
+.ll-error { color: var(--status-error-soft); }
 
 @media (max-width: 900px) {
   .ll-two { grid-template-columns: 1fr; }
