@@ -137,6 +137,7 @@ const CATEGORY_LABELS: Record<string, string> = {
   theory: 'Theory',
   technology: 'Technology',
   survey: 'Survey',
+  archaeoastronomy: 'Archaeoastronomy',
   art: 'Art',
   general: 'General',
   ancient_astronauts: 'Ancient Astronauts',

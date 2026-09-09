@@ -217,7 +217,9 @@ server {
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_intercept_errors on;
-        error_page 500 502 504 = @home_static;
+        # 404 too: the deploy applies this config before the API container is
+        # rebuilt, so for ~2 min the old API has no /home route (seen 09.09.2026).
+        error_page 404 500 502 504 = @home_static;
     }
 
     location @home_static {

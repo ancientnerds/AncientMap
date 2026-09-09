@@ -42,6 +42,8 @@ LEAD_WINDOW = timedelta(hours=48)
 CATEGORY_WINDOW = timedelta(days=30)
 RAIL_ROWS = 6
 RECENT_ROWS = 7
+# Pipeline states that live in news_category but are not topics — never a chip.
+CHIP_HIDDEN_CATEGORIES = ("unverified", "rejected")
 APPENDIX_SECTIONS = {"sources", "videos"}
 
 _TRAILING_URL = re.compile(r"\s*https?://\S+\s*$")
@@ -245,6 +247,7 @@ def fetch_landing_data(db: Session) -> dict:
         .with_entities(NewsItem.news_category)
         .filter(
             NewsItem.news_category.isnot(None),
+            NewsItem.news_category.notin_(CHIP_HIDDEN_CATEGORIES),
             NewsItem.created_at >= now - CATEGORY_WINDOW,
         )
         .distinct()
@@ -335,7 +338,9 @@ def build_route(data: dict, site_stats: dict, theo_running: dict | None) -> dict
     }
 
 
-@router.get("/home")
+# HEAD too: uptime checks and link checkers probe the homepage with HEAD, and
+# the static file answered it before this route took over "/".
+@router.api_route("/home", methods=["GET", "HEAD"])
 async def home(db: Session = Depends(get_db)):
     """The homepage document. nginx maps "/" here; see the module docstring."""
     with _cache_lock:

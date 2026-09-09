@@ -7,6 +7,7 @@ contract anRoute.ts::LandingRoute declares.
 from __future__ import annotations
 
 import asyncio
+import time
 from datetime import datetime, timedelta
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
@@ -329,3 +330,23 @@ def test_home_stays_decodable_when_the_client_accepts_gzip():
     assert fetch.call_count == 1  # hit two really is the cached document
     assert first.text == second.text
     assert '<div id="root">' in second.text and "<p>live</p>" in second.text
+
+
+def test_home_answers_head_from_the_cache_without_a_body():
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    from pipeline.database import get_db
+
+    landing_html._cache.clear()
+    landing_html._cache["home"] = (time.monotonic() + 300, b"<html>cached</html>")
+    app = FastAPI()
+    app.include_router(landing_html.router)
+    app.dependency_overrides[get_db] = lambda: object()
+    client = TestClient(app)
+
+    head = client.head("/home")
+    assert head.status_code == 200 and head.content == b""
+    assert head.headers["cache-control"] == "public, max-age=300"
+    assert client.get("/home").text == "<html>cached</html>"
+
