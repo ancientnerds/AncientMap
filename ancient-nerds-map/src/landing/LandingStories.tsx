@@ -18,6 +18,7 @@ import StoryArticle from '../components/news/StoryArticle'
 import { getNewsCategoryLabel } from '../components/news/significance'
 import type { LandingRoute, StoryData } from '../types/anRoute'
 import { fetchFeed, pickLeadAndRail, storyHref } from './feedClient'
+import LandingWindow from './LandingWindow'
 import RelativeTime from './RelativeTime'
 import SectionHead from './SectionHead'
 
@@ -113,22 +114,21 @@ export default function LandingStories({ initial, total }: Props) {
         <span className="ll-error ll-meta" role="status">{error}</span>
       </div>
 
-      <div className="ll-window">
-        <div className="ll-window-bar">
-          <span className="ll-window-title">
+      <LandingWindow
+        title={
+          <>
             {'>_ stories.log — '}
             <b>{active.headline}</b>
-          </span>
-          <span className="popup-window-controls ll-window-controls">
-            <a className="popup-window-btn" href={activeHref} title="Open the full story">↗</a>
-            <a className="popup-window-btn" href="/news-archive/" title="Story archive">≡</a>
-          </span>
-        </div>
-        <div className="ll-window-body">
-          <article className="ll-window-article">
-            <StoryArticle story={active} headingLevel="h3" compact headlineHref={activeHref} />
-          </article>
-          <nav className="ll-window-list" aria-label="More stories">
+          </>
+        }
+        openHref={activeHref}
+        openTitle="Open the full story"
+        archiveHref="/news-archive/"
+        archiveTitle="Story archive"
+        listLabel="More stories"
+        article={<StoryArticle story={active} headingLevel="h3" compact headlineHref={activeHref} />}
+        list={
+          <>
             {list.map(s => (
               <a
                 key={s.id}
@@ -169,9 +169,9 @@ export default function LandingStories({ initial, total }: Props) {
                 {busy ? 'loading…' : 'load more'}
               </button>
             ) : null}
-          </nav>
-        </div>
-      </div>
+          </>
+        }
+      />
 
       <div className="ll-foot">
         <span>lead = highest significance of the last 48h · list = newest</span>
