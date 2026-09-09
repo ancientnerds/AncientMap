@@ -20,6 +20,7 @@ import type {
   ArticleIndexRoute,
   ArticleRoute,
   CountryRoute,
+  LandingRoute,
   ResearchIndexRoute,
   ResearchRoute,
   SiteRoute,
@@ -402,5 +403,24 @@ export function articleIndexMeta(route: ArticleIndexRoute): PageMeta {
       `${route.articles.length} weekly journals covering the biggest archaeological ` +
       'discoveries, each sourced and cited.',
     canonical: `${BASE_URL}/articles/`,
+  }
+}
+
+/** "1.7M" — floors to one decimal so the number never overstates the database. */
+export function sitesShort(sites: number): string {
+  return `${Math.floor(sites / 100_000) / 10}M`
+}
+
+export function landingMeta(route: LandingRoute): PageMeta {
+  const short = sitesShort(route.stats.sites)
+  return {
+    title: `Interactive Archaeological Map | Explore ${short}+ Ancient Sites`,
+    description:
+      `Explore over ${short.replace('M', ' million')} archaeological sites worldwide on an ` +
+      'interactive 3D globe. Discover ancient civilizations, historical empires, AI-curated ' +
+      'stories, weekly journals and open research papers. Free platform for archaeology enthusiasts.',
+    canonical: `${BASE_URL}/`,
+    ogType: 'website',
+    image: `${BASE_URL}/landing/og-image.png`,
   }
 }

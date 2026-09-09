@@ -194,6 +194,73 @@ export interface ArticleIndexRoute {
   articles: { slug: string; title: string; summary: string | null }[]
 }
 
+/**
+ * Homepage teasers (landing-live sections, 2026-09-09). Every teaser
+ * carries its final href as `path` — the API builds it with the same
+ * slug helpers the target pages use (story_slug, slugify, site_path), so
+ * the client never re-derives a URL.
+ */
+export interface StoryTeaser {
+  id: number
+  headline: string
+  /** First sentence of post_text, trailing source links removed. */
+  summary: string
+  screenshot_url: string | null
+  category: string | null
+  significance: number | null
+  /** Raw ISO timestamp; RelativeTime turns it into "2h ago" after mount. */
+  created_at: string
+  channel: string
+  /** Number of web_sources on the story. */
+  sources: number
+  path: string
+  site: { name: string; country: string | null; path: string } | null
+}
+
+export interface JournalTeaser {
+  id: number
+  title: string
+  summary: string | null
+  week_start: string | null
+  week_end: string | null
+  published_at: string | null
+  words: number
+  minutes: number
+  /** "##" headings of the issue without the Sources/Videos appendix. */
+  sections: string[]
+  sources: number
+  image_url: string | null
+  path: string
+}
+
+export interface PaperTeaser {
+  slug: string
+  title: string
+  summary: string | null
+  published_at: string | null
+  words: number | null
+  minutes: number | null
+  sources_analyzed: number
+  quality_score: number | null
+  hero_image_url: string | null
+  path: string
+}
+
+export interface TheoStatus {
+  question: string
+  started_at: string | null
+  sites_found: number
+}
+
+export interface LandingRoute {
+  type: 'landing'
+  stats: { sites: number; stories: number; journals: number; papers: number }
+  /** null when the source has no rows — the section is then not rendered. */
+  stories: { lead: StoryTeaser; rail: StoryTeaser[]; categories: string[] } | null
+  journals: { lead: JournalTeaser; rail: JournalTeaser[]; total: number } | null
+  papers: { lead: PaperTeaser; rail: PaperTeaser[]; total: number; theo: TheoStatus | null } | null
+}
+
 export type AnRoute =
   | StoryRoute
   | StoryArchiveRoute
@@ -204,3 +271,4 @@ export type AnRoute =
   | ResearchIndexRoute
   | ArticleRoute
   | ArticleIndexRoute
+  | LandingRoute
