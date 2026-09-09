@@ -21,6 +21,7 @@ import type {
   ArticleIndexRoute,
   ArticleRoute,
   CountryRoute,
+  LandingRoute,
   ResearchIndexRoute,
   ResearchRoute,
   SiteRoute,
@@ -51,4 +52,5 @@ export const FIXTURES = {
   researchIndex: pyrefRoute('researchIndex') as ResearchIndexRoute,
   article: pyrefRoute('article') as ArticleRoute,
   articleIndex: pyrefRoute('articleIndex') as ArticleIndexRoute,
+  landing: pyrefRoute('landing') as LandingRoute,
 }

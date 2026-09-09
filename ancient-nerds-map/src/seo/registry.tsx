@@ -11,6 +11,7 @@
  */
 
 import ArticlesPage from '../pages/ArticlesPage'
+import LandingLive from '../pages/LandingLive'
 import ResearchIndexPage from '../pages/ResearchIndexPage'
 import ResearchPaperPage from '../pages/ResearchPaperPage'
 import { CountrySitesPage, SitesIndexPage } from '../pages/SiteListingPage'
@@ -37,6 +38,7 @@ export const registry = {
   researchIndex: { Component: ResearchIndexPage, meta: meta.researchIndexMeta },
   article: { Component: ArticlesPage, meta: meta.articleMeta },
   articleIndex: { Component: ArticlesPage, meta: meta.articleIndexMeta },
+  landing: { Component: LandingLive, meta: meta.landingMeta },
 } satisfies Record<AnRoute['type'], Entry>
 
 export const ROUTE_TYPES = Object.keys(registry) as AnRoute['type'][]

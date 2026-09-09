@@ -1,0 +1,111 @@
+{
+  "type": "landing",
+  "stats": { "sites": 1759673, "stories": 3189, "journals": 23, "papers": 24 },
+  "stories": {
+    "lead": {
+      "id": 8207,
+      "headline": "Vienna Roman mass grave dated to late 1st-early 2nd century CE; 85% of injuries perimortem",
+      "summary": "Beneath a Vienna soccer field, the first known Roman mass war grave yielded 129 male skeletons.",
+      "screenshot_url": "/data/news/screenshots/YGUoJy_SRr0_1038.webp",
+      "category": "bioarchaeology",
+      "significance": 9,
+      "created_at": "2026-09-07T04:23:33",
+      "channel": "Inside Archaeology",
+      "sources": 5,
+      "path": "/news-archive/vienna-roman-mass-grave-dated-to-late-1st-early-2nd-century-ce-85-of-injuries-perimortem-8207",
+      "site": { "name": "Roman grave", "country": "Austria", "path": "/sites/austria/roman-grave-16147718" }
+    },
+    "rail": [
+      {
+        "id": 8245,
+        "headline": "1-million-year-old stone tools on Sulawesi suggest earliest known seafaring",
+        "summary": "Seven stone flakes found in a Sulawesi cornfield may date to 1.04 to 1.48 million years old.",
+        "screenshot_url": "/data/news/screenshots/TKnMsjxSzTQ_292.webp",
+        "category": "artifact",
+        "significance": 8,
+        "created_at": "2026-09-08T19:33:29",
+        "channel": "Michael Button",
+        "sources": 9,
+        "path": "/news-archive/1-million-year-old-stone-tools-on-sulawesi-suggest-earliest-known-seafaring-8245",
+        "site": null
+      },
+      {
+        "id": 8208,
+        "headline": "DNA confirms Mississippian cacao consumption at Etowah, Georgia, around 1000 years ago",
+        "summary": "Genetic sequencing confirmed cacao DNA on 11th to 12th century pottery shards from Etowah.",
+        "screenshot_url": null,
+        "category": "artifact",
+        "significance": 7,
+        "created_at": "2026-09-07T04:23:33",
+        "channel": "Inside Archaeology",
+        "sources": 5,
+        "path": "/news-archive/dna-confirms-mississippian-cacao-consumption-at-etowah-georgia-around-1000-years-ago-8208",
+        "site": { "name": "Etowah", "country": null, "path": "/sites/unknown/etowah-259326a1" }
+      }
+    ],
+    "categories": ["artifact", "bioarchaeology", "underwater", "theory", "architecture"]
+  },
+  "journals": {
+    "lead": {
+      "id": 74,
+      "title": "Week of August 31: 476,000-Year-Old Wooden Structure Found, Dire Wolf Pups Born, and More",
+      "summary": "Archaeologists at Kalambo Falls uncovered the oldest known wooden structure.",
+      "week_start": "2026-08-31T00:00:00",
+      "week_end": "2026-09-06T23:59:59",
+      "published_at": "2026-09-07T04:20:43",
+      "words": 2762,
+      "minutes": 12,
+      "sections": ["Artifact Discoveries", "Remote Sensing & Technology", "Bioarchaeology & Ancient DNA", "In Brief"],
+      "sources": 35,
+      "image_url": "/data/news/screenshots/nMxEoIrMwX8_367.webp",
+      "path": "/articles/week-of-august-31-476000-year-old-wooden-structure-found-dire-wolf-pups-born-and-more"
+    },
+    "rail": [
+      {
+        "id": 73,
+        "title": "Week of August 24: 25 Turtle Figurines in Turkish Cave, World's First Brand, and More",
+        "summary": null,
+        "week_start": "2026-08-24T00:00:00",
+        "week_end": "2026-08-30T23:59:59",
+        "published_at": "2026-08-30T23:28:56",
+        "words": 2510,
+        "minutes": 11,
+        "sections": [],
+        "sources": 30,
+        "image_url": null,
+        "path": "/articles/week-of-august-24-25-turtle-figurines-in-turkish-cave-worlds-first-brand-and-more"
+      }
+    ],
+    "total": 23
+  },
+  "papers": {
+    "lead": {
+      "slug": "the-egyptian-hard-stone-precision-debate",
+      "title": "The Egyptian Hard-Stone Precision Debate",
+      "summary": "Mainstream explanations of Egyptian hard-stone working are tested against the Serapeum boxes.",
+      "published_at": "2026-08-31T22:07:06",
+      "words": 6466,
+      "minutes": 28,
+      "sources_analyzed": 2748,
+      "quality_score": 98,
+      "hero_image_url": "https://ancientnerds.com/data/research-images/4bf89556/p7.jpg",
+      "path": "/research/the-egyptian-hard-stone-precision-debate"
+    },
+    "rail": [
+      {
+        "slug": "submerged-sites-between-geology-and-pseudoarchaeology",
+        "title": "Submerged Sites Between Geology and Pseudoarchaeology",
+        "summary": null,
+        "published_at": "2026-08-31T22:07:05",
+        "words": 7057,
+        "minutes": 30,
+        "sources_analyzed": 3169,
+        "quality_score": 98,
+        "hero_image_url": null,
+        "path": "/research/submerged-sites-between-geology-and-pseudoarchaeology"
+      }
+    ],
+    "total": 24,
+    "theo": { "question": "Water erosion evidence in the Osiris Shaft", "started_at": "2026-09-09T06:00:00Z", "sites_found": 1340 }
+  }
+}

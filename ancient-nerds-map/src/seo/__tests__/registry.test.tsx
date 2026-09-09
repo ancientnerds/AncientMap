@@ -3,12 +3,13 @@ import { describe, expect, it } from 'vitest'
 import { ROUTE_TYPES, registry } from '../registry'
 
 describe('registry', () => {
-  it('kennt genau die 9 indexierten Seitentypen', () => {
+  it('kennt genau die 10 indexierten Seitentypen', () => {
     expect([...ROUTE_TYPES].sort()).toEqual(
       [
         'article',
         'articleIndex',
         'country',
+        'landing',
         'research',
         'researchIndex',
         'site',
