@@ -196,9 +196,10 @@ export interface ArticleIndexRoute {
 
 /**
  * Homepage teasers (landing-live sections, 2026-09-09). Every teaser
- * carries its final href as `path` — the API builds it with the same
- * slug helpers the target pages use (story_slug, slugify, site_path), so
- * the client never re-derives a URL.
+ * carries its final href as `path` — the API builds it with the same slug
+ * helpers the target pages use (story_slug, slugify), so the client never
+ * re-derives a URL. `site` is name and country only; detail pages exist
+ * only for curated sites, so no link is derived here.
  */
 export interface StoryTeaser {
   id: number
@@ -214,7 +215,7 @@ export interface StoryTeaser {
   /** Number of web_sources on the story. */
   sources: number
   path: string
-  site: { name: string; country: string | null; path: string } | null
+  site: { name: string; country: string | null } | null
 }
 
 export interface JournalTeaser {

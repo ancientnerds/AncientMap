@@ -50,7 +50,7 @@ describe('feedItemToTeaser', () => {
   })
   it('builds the site chip only with id, name and country', () => {
     const t = feedItemToTeaser(item({ site_id: 'da3ff939-2402-4bf8-a476-e7725c81c8d5', site_name: 'Stirling Castle', site_country: 'United Kingdom' }))
-    expect(t.site).toEqual({ name: 'Stirling Castle', country: 'United Kingdom', path: '/sites/united-kingdom/stirling-castle-da3ff939' })
+    expect(t.site).toEqual({ name: 'Stirling Castle', country: 'United Kingdom' })
     expect(feedItemToTeaser(item({ site_id: 'x', site_name: 'Y', site_country: null })).site).toBeNull()
   })
 })

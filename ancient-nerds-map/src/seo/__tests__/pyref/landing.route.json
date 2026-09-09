@@ -13,7 +13,7 @@
       "channel": "Inside Archaeology",
       "sources": 5,
       "path": "/news-archive/vienna-roman-mass-grave-dated-to-late-1st-early-2nd-century-ce-85-of-injuries-perimortem-8207",
-      "site": { "name": "Roman grave", "country": "Austria", "path": "/sites/austria/roman-grave-16147718" }
+      "site": { "name": "Roman grave", "country": "Austria" }
     },
     "rail": [
       {
@@ -40,7 +40,7 @@
         "channel": "Inside Archaeology",
         "sources": 5,
         "path": "/news-archive/dna-confirms-mississippian-cacao-consumption-at-etowah-georgia-around-1000-years-ago-8208",
-        "site": { "name": "Etowah", "country": null, "path": "/sites/unknown/etowah-259326a1" }
+        "site": { "name": "Etowah", "country": null }
       }
     ],
     "categories": ["artifact", "bioarchaeology", "underwater", "theory", "architecture"]

@@ -160,7 +160,7 @@ export default function LandingStories({ initial, total }: Props) {
             {c ?? 'all'}
           </button>
         ))}
-        {error && <span className="ll-error ll-meta">{error}</span>}
+        {error && <span className="ll-error ll-meta" role="status">{error}</span>}
       </div>
       <div className="ll-two">
         <StoryLead story={lead} />

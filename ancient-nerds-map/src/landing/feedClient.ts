@@ -6,7 +6,7 @@
  * first-sentence rule — so a refetched card looks exactly like an SSR one.
  */
 import { splitPostText } from '../components/news/postText'
-import { sitePath, storyPath } from '../seo/meta'
+import { storyPath } from '../seo/meta'
 import type { StoryTeaser } from '../types/anRoute'
 
 export interface FeedItem {
@@ -44,7 +44,7 @@ export function firstSentence(postText: string | null): string {
 export function feedItemToTeaser(it: FeedItem): StoryTeaser {
   const site =
     it.site_id && it.site_name && it.site_country
-      ? { name: it.site_name, country: it.site_country, path: sitePath(it.site_country, it.site_name, it.site_id) }
+      ? { name: it.site_name, country: it.site_country }
       : null
   return {
     id: it.id,
