@@ -199,13 +199,29 @@ server {
         gzip_static on;
     }
 
-    # Redirect legacy /?site={uuid} URLs to the canonical /site.html?id={uuid}
-    # Applies to all visitors (bots and users) — Googlebot follows the 301 and
-    # hits /site.html which has its own pre-rendering block below.
+    # Homepage: server-rendered by the API (GET /home — live Stories/Journal/
+    # Papers sections, api/routes/landing_html.py). While the API or the SSR
+    # sidecar restarts, the static build is served instead: the page stays up
+    # with the three live sections empty. proxy_intercept_errors is needed
+    # because the API answers 502 itself when the sidecar is down — and it is
+    # what makes an upstream-returned status interceptable here at all. 500
+    # too — an exception in the landing route must not take the homepage down.
     location = / {
+        # Legacy /?site={uuid} URLs redirect to the canonical /site.html?id=…
+        # for all visitors (bots included) — Googlebot follows the 301 and
+        # lands on /site.html, which has its own block below.
         if ($arg_site ~ "^[0-9a-fA-F-]{36}$") {
             return 301 /site.html?id=$arg_site;
         }
+        proxy_pass http://an_api/home;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_intercept_errors on;
+        error_page 500 502 504 = @home_static;
+    }
+
+    location @home_static {
+        add_header Cache-Control "no-cache" always;
         try_files /index.html =404;
     }
 
