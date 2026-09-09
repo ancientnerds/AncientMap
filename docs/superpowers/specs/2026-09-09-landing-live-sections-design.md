@@ -75,8 +75,8 @@ und der Austausch nach dem Laden erzeugt einen sichtbaren Sprung. Warum nicht di
 - Registry: `landing: { Component: LandingLive, meta: meta.landingMeta }` in `src/seo/registry.tsx`,
   `LandingRoute` in `src/types/anRoute.ts`.
 - Es hydratisiert nur `#root`. Hero und Screenshot-Sektionen bleiben reines HTML ohne React.
-- Budget für den Entry `landing-*.js`: 80 kB Brotli. Enthalten sind react-dom, die drei Sektionen und
-  die Feed-Logik. Nichts aus `three`, nichts aus `SitePopup`, kein `NewsCard` (447 Zeilen, Inline-Video,
+- Budget für das seitenspezifische JS (`landing-*.js` + `LandingLive-*.js`): 40 kB Brotli, gemessen
+  per `size-limit`; react-dom ist ein geteilter Chunk und zählt nicht mit (Stand 09.09.: 3,4 kB). Nichts aus `three`, nichts aus `SitePopup`, kein `NewsCard` (447 Zeilen, Inline-Video,
   Share-Logik: zu schwer für eine Vorschau).
 - LCP bleibt Logo und Hero-Poster. `#root` reserviert seine Höhe nicht, weil der Inhalt serverseitig
   vollständig ankommt; Bilder tragen `width`/`height` und `aspect-ratio`, damit nichts springt.
@@ -210,8 +210,8 @@ analysierte Quellen je Paper). Im statischen Rückfall bleiben Absatz und H1 mit
 - **pytest (DB-los):** der Payload-Builder bekommt Fake-Rows und liefert die Lead-Regel korrekt
   (48-Stunden-Fenster, kein Duplikat, Fallback auf die 7 neuesten), Wortzahl und Lesezeit, Sektionen
   ohne "Sources"/"Videos".
-- **Build-Gate:** `size-limit` auf `dist/assets/landing-*.js` mit 80 kB Brotli im
-  `lint-frontend`-Job, gleich nach `npm run build`.
+- **Build-Gate:** `size-limit` auf `dist/assets/landing-*.js` und `LandingLive-*.js` mit 40 kB
+  Brotli im `lint-frontend`-Job, gleich nach `npm run build`.
 - **Nach dem Deploy (Playwright):** `/` liefert SSR-HTML mit sieben Story-Links (Lead plus sechs), null
   Hydration-Fehler in der Konsole, LCP-Element ist das Hero-Bild, genau eine H1 mit dem Suchbegriff,
   kein "750K" mehr im Dokument, und ein Chip-Klick tauscht den Inhalt.

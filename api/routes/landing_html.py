@@ -223,7 +223,14 @@ def _story_query(db: Session):
 def fetch_landing_data(db: Session) -> dict:
     """Every DB read of the route, in one place, so the route itself stays testable."""
     now = naive_utc_now()
-    recent = _story_query(db).order_by(NewsItem.created_at.desc()).limit(RECENT_ROWS).all()
+    # Same order as /api/news/feed's default sort, so the client's "load more"
+    # (feed page 2) continues exactly where this first page ends.
+    recent = (
+        _story_query(db)
+        .order_by(NewsVideo.published_at.desc(), NewsItem.created_at.desc())
+        .limit(RECENT_ROWS)
+        .all()
+    )
     lead_48h = (
         _story_query(db)
         .filter(NewsItem.created_at >= lead_window_start(now))
@@ -263,6 +270,7 @@ def fetch_landing_data(db: Session) -> dict:
     ).fetchall()
     paper_total = (
         db.execute(
+            # nosemgrep: semgrep.api-sql-fstring-interpolation -- PUBLIC_PAPER_WHERE is a module-level constant, no user input
             text(f"SELECT COUNT(*) FROM research_requests r WHERE {PUBLIC_PAPER_WHERE}")
         ).scalar()
         or 0
