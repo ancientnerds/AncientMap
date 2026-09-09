@@ -47,11 +47,13 @@ Die Startseite wird der zehnte Seitentyp über den bestehenden React-SSR-Pfad. D
   `{type: "landing", ...}` aus der Datenbank, ruft `ssr_shell_response("index.html", route, headers)`
   und liefert das Dokument. `render_app_shell` setzt den gerenderten Baum in `#root` und
   `window.__AN_ROUTE__`, genau wie bei den anderen Seiten.
-- Die Route hält das fertige HTML 300 Sekunden im Prozess-Cache und sendet
+- Die Route hält das fertige HTML als Bytes 300 Sekunden im Prozess-Cache (nicht das Response-Objekt: die
+  Gzip-Middleware verändert dessen Header in-place) und sendet
   `Cache-Control: public, max-age=300`. Bei rund 200 Aufrufen am Tag reicht das; kein nginx-Cache nötig.
 - nginx: `location = /` proxied auf `http://an_api/home` statt `try_files /index.html`. Die bestehende
   `$arg_site`-Weiterleitung bleibt davor. Für diesen Block gilt `error_page 502 504 = @home_static`, und
-  `@home_static` liefert `/index.html` aus `dist/`. Während der Deploy-Fenster (gemessen 87 bis 110 s)
+  `@home_static` liefert `/index.html` aus `dist/`; `proxy_intercept_errors on` fängt auch die 500/502, die
+  die API selbst sendet, und `error_page 500 502 504` deckt eine Exception in der Route ab. Während der Deploy-Fenster (gemessen 87 bis 110 s)
   bleibt die Startseite damit erreichbar, nur die drei Live-Sektionen sind leer.
 - `GET /` der API bleibt der Health-Check. `/home` ist nur intern erreichbar: nginx leitet `/home` von
   außen weiterhin auf die SPA-Fallback-Regel, es entsteht keine zweite URL für dieselbe Seite.
@@ -93,7 +95,7 @@ LandingRoute {
   papers:   { lead: PaperTeaser, rail: PaperTeaser[], total: number, theo: TheoStatus | null }
 }
 StoryTeaser   { id, headline, summary, screenshot_url, category, significance, created_at,
-                channel, sources, path, site: { name, country, path } | null }
+                channel, sources, path, site: { name, country } | null }
 JournalTeaser { id, title, summary, week_start, week_end, published_at, words, minutes,
                 sections: string[], sources, image_url | null, path }
 PaperTeaser   { slug, title, summary, published_at, words, minutes, sources_analyzed,
@@ -103,8 +105,10 @@ TheoStatus    { question, started_at, sites_found }
 
 Regeln:
 
-- **Stories.** Dieselbe Grundfilterung wie `/api/news/feed` (post_text vorhanden, Signifikanz ≥ 2
-  oder null, neueste zuerst). Der Lead ist die Story mit der höchsten Signifikanz der letzten 48
+- **Stories.** Der öffentliche Story-Index (`public_stories_query`: post_text vorhanden, keine
+  spekulativen Stories, weil die noindex sind) plus die Signifikanz-Untergrenze des Feeds (≥ 2 oder
+  null), neueste zuerst. `site` trägt nur Name und Land: Detailseiten gibt es allein für kuratierte
+  Sites, und die Karte verlinkt die Site nicht (verschachtelte Links wären ungültig). Der Lead ist die Story mit der höchsten Signifikanz der letzten 48
   Stunden, bei Gleichstand die neuere. Gibt es in 48 Stunden keine, ist der Lead die höchste
   Signifikanz unter den 7 neuesten. Die Liste sind die 7 neuesten ohne den Lead, gekürzt auf 6
   Zeilen. Sichtbar sind also immer 7 Stories: Lead plus sechs. `summary` ist der erste Satz aus `post_text` über `splitPostText`, `sources` ist die
