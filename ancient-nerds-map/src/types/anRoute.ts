@@ -60,6 +60,14 @@ export interface StoryRoute {
   related: { slug: string; headline: string; kind: string }[]
 }
 
+/**
+ * The story payload without the route discriminator — what
+ * api/routes/articles_html.py::story_payload() builds. The story page gets
+ * it as its own route, the homepage carries a handful of them inside
+ * LandingRoute.stories, and both render the same <StoryArticle>.
+ */
+export type StoryData = Omit<StoryRoute, 'type'>
+
 export interface StoryArchiveRoute {
   type: 'storyArchive'
   page: number
