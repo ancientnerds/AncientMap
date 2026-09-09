@@ -189,13 +189,22 @@ export default defineConfig(({ isSsrBuild }) => ({
         ]
       },
       workbox: {
+        // The homepage is server-rendered (GET /home via nginx), so the
+        // precached index.html must never answer "/". precacheAndRoute's
+        // default directoryIndex ('index.html') would rewrite that navigation
+        // to /index.html and serve it from the precache before the
+        // NavigationRoute (and its denylist) is ever consulted. Every SPA page
+        // here is an explicit .html URL — nothing needs a directory index.
+        directoryIndex: null,
         // Don't serve index.html for backend routes or server-rendered SEO pages
         // (/articles/, /news-archive/, /research/, /sites/ are HTML from the API,
         // not SPA pages — the SW must let them hit the network)
         navigateFallbackDenylist: [
-          // The homepage is server-rendered (GET /home via nginx) — the
-          // precached index.html must never answer a navigation to "/".
-          /^\/$/,
+          // "/" and "/?utm_source=…" are the server-rendered homepage: neither
+          // the directoryIndex precache hit above nor the navigation fallback
+          // may answer them. NavigationRoute matches pathname + search, hence
+          // the (\?|$) tail the .html entry below uses too.
+          /^\/(\?|$)/,
           /^\/api\//,
           /\.html(\?|$)/,
           /^\/articles\//,

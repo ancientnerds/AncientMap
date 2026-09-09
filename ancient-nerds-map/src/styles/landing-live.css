@@ -1,6 +1,6 @@
 /* Landing live sections (Stories / Journal / Papers) — lead + rail language.
    Tokens from tokens.css; section widths match .landing-section. */
-.landing-live { max-width: 1200px; margin: 0 auto; padding: 0 24px; font-family: var(--font-body); --ll-orange: #ff9830; --ll-red: #ff6b7a; }
+.landing-live { max-width: 1200px; margin: 0 auto; padding: 0 24px; font-family: var(--font-body); --ll-orange: #ff9830; --ll-red: #ff6b7a; --ll-violet: #c9a3ff; --ll-ink: #031; }
 .ll-section { padding: 56px 0 24px; border-top: 1px solid var(--border-accent); }
 .ll-section:first-child { border-top: 0; }
 
@@ -31,7 +31,7 @@
 .ll-cat-artifact { color: var(--ll-orange); }
 .ll-cat-bioarchaeology { color: var(--ll-red); }
 .ll-cat-underwater, .ll-cat-journal { color: var(--accent-secondary); }
-.ll-cat-theory { color: #c9a3ff; }
+.ll-cat-theory { color: var(--ll-violet); }
 .ll-cat-architecture, .ll-cat-paper { color: var(--accent-primary); }
 .ll-sig { font-size: 10px; letter-spacing: 0.05em; color: var(--text-muted); display: inline-flex; align-items: center; gap: 4px; }
 .ll-sig b { color: var(--accent-primary); }
@@ -66,7 +66,7 @@
 
 .ll-chips { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; }
 .ll-chip { border: 1px solid var(--border-accent); background: transparent; color: var(--text-muted); font: inherit; font-size: 12px; padding: 3px 10px; border-radius: 99px; cursor: pointer; }
-.ll-chip[aria-pressed='true'] { color: #031; background: var(--accent-primary); border-color: var(--accent-primary); font-weight: 600; }
+.ll-chip[aria-pressed='true'] { color: var(--ll-ink); background: var(--accent-primary); border-color: var(--accent-primary); font-weight: 600; }
 .ll-more { margin-top: 10px; width: 100%; border: 1px solid var(--border-accent); background: transparent; color: var(--accent-secondary); font: inherit; font-size: 12px; padding: 8px; cursor: pointer; }
 .ll-more:disabled { opacity: 0.5; cursor: default; }
 .ll-error { color: var(--ll-red); }

@@ -366,7 +366,15 @@ body {
 }
 
 #sitedata-section .feature-image-main,
-#lyra-section .feature-image-main {
+#lyra-section .feature-image-main,
+#radar-section .feature-image-main {
+  aspect-ratio: auto;
+  object-fit: contain;
+}
+
+/* One 1280x594 thumbnail — a third of the row cropped to 16:9 loses it. */
+#radar-section .thumbnail-strip img {
+  width: 100%;
   aspect-ratio: auto;
   object-fit: contain;
 }

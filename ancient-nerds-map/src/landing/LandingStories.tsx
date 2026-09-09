@@ -156,7 +156,7 @@ export default function LandingStories({ initial, total }: Props) {
       <div className="ll-chips" role="group" aria-label="story categories">
         {chips.map(c => (
           <button key={c ?? 'all'} type="button" className="ll-chip" aria-pressed={c === category} onClick={() => applyChip(c)}>
-            {c ? getNewsCategoryLabel(c) : 'all'}
+            {c ? getNewsCategoryLabel(c) : 'All'}
           </button>
         ))}
         {error && <span className="ll-error ll-meta" role="status">{error}</span>}

@@ -218,7 +218,7 @@ export interface StoryTeaser {
   site: { name: string; country: string | null } | null
 }
 
-export interface JournalTeaser {
+interface JournalTeaser {
   id: number
   title: string
   summary: string | null
@@ -247,7 +247,7 @@ export interface PaperTeaser {
   path: string
 }
 
-export interface TheoStatus {
+interface TheoStatus {
   question: string
   started_at: string | null
   sites_found: number
