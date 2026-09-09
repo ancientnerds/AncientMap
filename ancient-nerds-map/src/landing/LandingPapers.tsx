@@ -53,7 +53,13 @@ export default function LandingPapers({ data }: Props) {
         listLabel="More papers"
         article={
           <>
-            <PaperArticle paper={lead} headingLevel="h3" headlineHref={lead.path} />
+            <PaperArticle
+              paper={lead}
+              headingLevel="h3"
+              headlineHref={lead.path}
+              minutes={lead.minutes}
+              aiNotice
+            />
             {lead.excerpted && (
               <a className="ll-continue" href={lead.path}>
                 continue reading →

@@ -14,6 +14,7 @@
  */
 
 import { isoDate } from '../../seo/display'
+import AiFootnote from './AiFootnote'
 import ArticleBody from './ArticleBody'
 
 import '../../styles/journal-article.css'
@@ -32,6 +33,12 @@ interface Props {
   headingLevel: 'h1' | 'h3'
   /** Wraps the title in a link — the window's way back to the page. */
   headlineHref?: string
+  /**
+   * Art.-50 footnote under the body. The journal page marks its text with a
+   * page-level <AiNoticeBanner> instead; the homepage window has no page to
+   * put a banner on, so the excerpt carries the marking itself.
+   */
+  aiNotice?: boolean
   lead?: React.ReactNode
   actions?: React.ReactNode
   children?: React.ReactNode
@@ -41,6 +48,7 @@ export default function JournalArticle({
   article,
   headingLevel,
   headlineHref,
+  aiNotice,
   lead,
   actions,
   children,
@@ -67,6 +75,7 @@ export default function JournalArticle({
       )}
       <ArticleBody html={article.body_html} className="articles-reader-body" />
       {children}
+      {aiNotice && <AiFootnote />}
     </article>
   )
 }

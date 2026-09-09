@@ -17,6 +17,7 @@
 
 import SanitizedMarkdownHtml from '../../seo/SanitizedMarkdownHtml'
 import { isoDate } from '../../seo/display'
+import AiFootnote from '../news/AiFootnote'
 
 import '../../styles/paper-article.css'
 
@@ -37,6 +38,19 @@ interface Props {
   headingLevel: 'h1' | 'h3'
   /** Wraps the title in a link — the window's way back to the page. */
   headlineHref?: string
+  /**
+   * Reading time of the WHOLE report, or null to leave the item out. The page
+   * measures it off body_html; the homepage window must not, because its
+   * body_html is an excerpt — counting that announced "1 min read" for a
+   * 28-minute paper. The window passes the payload's own `minutes`.
+   */
+  minutes: number | null
+  /**
+   * Art.-50 footnote under the body. The paper page marks its text with a
+   * page-level <AiNoticeBanner> instead; the homepage window has no page to
+   * put a banner on, so the excerpt carries the marking itself.
+   */
+  aiNotice?: boolean
   lead?: React.ReactNode
   actions?: React.ReactNode
   children?: React.ReactNode
@@ -55,6 +69,8 @@ export default function PaperArticle({
   paper,
   headingLevel,
   headlineHref,
+  minutes,
+  aiNotice,
   lead,
   actions,
   children,
@@ -81,9 +97,11 @@ export default function PaperArticle({
             {headlineHref ? <a href={headlineHref}>{title}</a> : title}
           </Heading>
           <div className="theo-paper-meta">
-            <span style={{ color: 'var(--text-dimmed)', fontSize: 12 }}>
-              {`${readingMinutes(paper.body_html)} min read`}
-            </span>
+            {minutes != null && (
+              <span style={{ color: 'var(--text-dimmed)', fontSize: 12 }}>
+                {`${minutes} min read`}
+              </span>
+            )}
             <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>
               {`by ${author}${author === 'Theo' ? ' · AI research agent' : ''}`}
             </span>
@@ -109,6 +127,7 @@ export default function PaperArticle({
         />
 
         {children}
+        {aiNotice && <AiFootnote />}
       </div>
     </>
   )

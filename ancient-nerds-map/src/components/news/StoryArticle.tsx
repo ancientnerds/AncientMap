@@ -21,6 +21,7 @@ import { isoDate, longDate } from '../../seo/display'
 import { absoluteUrl, countryPath, sitePath, storyPath } from '../../seo/meta'
 import { blurb } from '../../seo/text'
 import type { StoryData } from '../../types/anRoute'
+import AiFootnote from './AiFootnote'
 import InlineVideo from './InlineVideo'
 import { splitPostText } from './postText'
 import {
@@ -98,6 +99,10 @@ export default function StoryArticle({
   children,
 }: StoryArticleProps) {
   const Heading = headingLevel
+  // The section labels sit one level under the headline — h2 on the page, h4
+  // inside the window. A fixed h2 there outranked the h3 headline it belongs
+  // to and landed in the outline beside the section's own ">_ [ fig. 1 ]" h2.
+  const Sub = headingLevel === 'h1' ? 'h2' : 'h4'
   // post_text is tweet copy: the prose ends with a bare source URL. It reads
   // as dead text mid-article, so it moves down into Sources as a real link.
   const { paragraphs, links: postLinks } = splitPostText(story.post_text)
@@ -249,7 +254,7 @@ export default function StoryArticle({
 
       {facts.length > 0 && (
         <>
-          <h2>Key facts</h2>
+          <Sub>Key facts</Sub>
           <ul className="story-facts">
             {facts.map((f, i) => (
               <li key={i}>{f}</li>
@@ -260,7 +265,7 @@ export default function StoryArticle({
 
       {story.site_name && (
         <div className="story-site">
-          <h2>Site mentioned</h2>
+          <Sub>Site mentioned</Sub>
           <div className="story-chips">
             {sitePagePath ? (
               <a className="story-chip" href={sitePagePath}>📄 {story.site_name}</a>
@@ -288,7 +293,7 @@ export default function StoryArticle({
 
       {sources.length > 0 && (
         <div className="story-sources">
-          <h2>Sources</h2>
+          <Sub>Sources</Sub>
           {sources.map((s, i) => (
             <div className="story-source" key={i}>
               <a href={s.url} target="_blank" rel="noopener nofollow">{s.title}</a>
@@ -307,9 +312,7 @@ export default function StoryArticle({
 
       {/* Disclosure belongs on the page (EU AI Act Art. 50) but not as a
           banner above the story — a quiet footnote does the same job. */}
-      <p className="story-ai-notice" data-ai-generated="true">
-        AI-generated text · images from the original sources · always verify with the sources.
-      </p>
+      <AiFootnote />
     </>
   )
 }

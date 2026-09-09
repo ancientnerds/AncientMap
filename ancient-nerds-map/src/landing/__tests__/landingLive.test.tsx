@@ -210,6 +210,19 @@ describe('LandingStories window', () => {
     expect(html).toContain('data-ai-generated="true"')
   })
 
+  it('ranks its sub-headings under the headline, not beside the section label', () => {
+    // On the page the headline is the h1 and "Key facts" an h2. In the window
+    // the headline drops to h3, so the sub-headings have to drop with it —
+    // an h2 in there outranks the very article it belongs to and lands in the
+    // outline next to ">_ [ fig. 1 — stories, live ]".
+    const start = html.indexOf('<h3 class="story-title">')
+    const slice = html.slice(start, html.indexOf('<h2 class="ll-fig"', start))
+    expect(slice).toContain('<h4>Key facts</h4>')
+    expect(slice).toContain('<h4>Site mentioned</h4>')
+    expect(slice).toContain('<h4>Sources</h4>')
+    expect(slice).not.toContain('<h2')
+  })
+
   it('lists lead plus rail as real links, the lead marked current', () => {
     const rows = [...html.matchAll(/<a class="ll-row ll-row-thumb" href="([^"]+)"([^>]*)>/g)]
     expect(rows).toHaveLength(1 + stories.rail.length)
@@ -298,6 +311,23 @@ describe('LandingJournals and LandingPapers windows', () => {
     expect(html).toContain('by Theo · AI research agent')
     expect(html).toContain('CC BY 4.0')
     expect(html).toContain('class="theo-paper-hero-img"')
+  })
+
+  it('reads the paper reading time off the payload, not off the excerpt', () => {
+    // body_html in the window is an excerpt — counting ITS words announced
+    // "1 min read" for a 28-minute paper. The payload's minutes come from the
+    // stored word_count of the whole report (landing_html.paper_teaser).
+    expect(papers.lead.minutes).toBe(28)
+    expect(html).toContain('28 min read')
+    expect(html).not.toContain('1 min read')
+  })
+
+  it('marks both excerpts as AI-generated — the pages banner does not reach here', () => {
+    // Art. 50 EU AI Act: story, journal and paper each carry the footnote,
+    // one per window. The pages keep their own AiNoticeBanner instead.
+    expect([...html.matchAll(/data-ai-generated="true"/g)]).toHaveLength(3)
+    expect([...html.matchAll(/class="story-ai-notice"/g)]).toHaveLength(3)
+    expect(html).not.toContain('ai-notice-banner')
   })
 
   it('offers "continue reading" exactly where the server cut the body', () => {

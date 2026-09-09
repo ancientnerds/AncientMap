@@ -15,7 +15,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import Breadcrumbs from '../components/layout/Breadcrumbs'
-import PaperArticle from '../components/theo/PaperArticle'
+import PaperArticle, { readingMinutes } from '../components/theo/PaperArticle'
 import AiNoticeBanner from '../components/layout/AiNoticeBanner'
 import CommunityCta from '../components/layout/CommunityCta'
 import PageHeader from '../components/layout/PageHeader'
@@ -131,6 +131,7 @@ export default function ResearchPaperPage() {
       <PaperArticle
         paper={paper}
         headingLevel="h1"
+        minutes={readingMinutes(paper.body_html)}
         lead={
           <Breadcrumbs
             trail={[
