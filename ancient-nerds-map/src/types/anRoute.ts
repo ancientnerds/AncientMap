@@ -218,27 +218,11 @@ export interface ArticleIndexRoute {
  *
  * Since 2026-09-10 the three sections are portals on the live pages, not
  * lists beside them (owner: "Why do we still have the list of stories,
- * journals and research papers on the right side?"). What is left to ship is
- * therefore a count per section — the portal shows the rest — plus the six
- * papers the gallery renders as cards.
+ * journals and research papers on the right side?"), and since 2026-09-11
+ * the paper cards are inside the portal too ("The research paper examples
+ * should be inside the portal, not below it") — ResearchIndexRoute carries
+ * them. What is left to ship is a count per section and the agent line.
  */
-export interface PaperCardData {
-  slug: string
-  title: string
-  /** card_description — the blurb under the hero. Null when the paper has none. */
-  summary: string | null
-  /** Hero banner. Null when the paper has none: the card then shows the vignette alone. */
-  hero_image_url: string | null
-  /** published_by; null means the Theo pipeline itself. */
-  author: string | null
-  /** Raw ISO timestamp; date display is a TS decision. */
-  published_at: string | null
-  words: number | null
-  sources_analyzed: number
-  /** Final href, built server-side with the same slug helper /research/ uses. */
-  path: string
-}
-
 interface TheoStatus {
   question: string
   started_at: string | null
@@ -250,8 +234,8 @@ export interface LandingRoute {
   stats: { sites: number; stories: number; journals: number; papers: number }
   /** null when there is no issue at all — the section is then not rendered. */
   journals: { total: number } | null
-  /** null when no paper is public; `items` are the newest six, newest first. */
-  papers: { items: PaperCardData[]; total: number; theo: TheoStatus | null } | null
+  /** null when no paper is public — the section is then not rendered. */
+  papers: { total: number; theo: TheoStatus | null } | null
 }
 
 export type AnRoute =

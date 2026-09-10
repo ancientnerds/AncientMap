@@ -97,8 +97,12 @@
 .ll-portal-link:focus-visible { outline: 2px solid var(--accent-primary); outline-offset: -2px; }
 /* .cta-primary carries the colours (red, like every call to action on the
    landing page); only the size is portal-specific — the widest label,
-   "Open research library ↗", has to fit a 318 px box on a 390 px phone. */
-.ll-portal-cta {
+   "Open research library ↗", has to fit a 318 px box on a 390 px phone.
+   Qualified with .ll-portal on purpose: .cta-primary sets `background:
+   transparent`, the shell links landing.css after this stylesheet, and at
+   equal specificity the later rule wins — the rest state measured
+   rgba(0,0,0,0) live. One extra class settles it. */
+.ll-portal .ll-portal-cta {
   padding: 10px 20px;
   font-size: 0.8rem;
   letter-spacing: 0.1em;
@@ -109,8 +113,8 @@
   background: #000;
   text-align: center;
 }
-.ll-portal-cta:hover,
-.ll-portal-link:focus-visible .ll-portal-cta {
+.ll-portal .ll-portal-cta:hover,
+.ll-portal .ll-portal-link:focus-visible .ll-portal-cta {
   background: var(--brand-primary);
   color: #000;
 }
@@ -128,14 +132,6 @@
   .ll-portal-frame { transition: filter 0.15s ease; }
 }
 
-/* The paper gallery: Theo's cards (src/components/theo/PaperCard.tsx,
-   styles/paper-card.css), three to a row instead of the library's auto-fill,
-   because six papers in four columns leave a ragged second row. The compound
-   selector wins over .theo-public-grid whichever stylesheet the bundler
-   emits first. */
-.ll-gallery { margin-top: 12px; }
-.ll-gallery.theo-public-grid { grid-template-columns: repeat(3, 1fr); }
-
 /* The one deliberate exception to the green: NERV orange marks the live
    agent line, the role it already has on panel headers. */
 .ll-theo { display: flex; justify-content: space-between; gap: 12px; margin-top: 12px; padding: 8px 12px; font-size: 12px; color: var(--nerv-o); border: 1px dashed var(--nerv-og); text-decoration: none; }
@@ -152,7 +148,6 @@
   /* A 1280 px page scaled into a phone needs the taller box to stay legible;
      the frame follows it (see .ll-portal-frame). */
   .ll-portal { aspect-ratio: 4 / 3; }
-  .ll-gallery.theo-public-grid { grid-template-columns: 1fr; }
   /* Two lines instead of one squeezed row. */
   .ll-foot, .ll-theo { flex-direction: column; gap: 6px; }
 }

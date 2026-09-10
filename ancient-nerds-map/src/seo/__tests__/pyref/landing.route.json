@@ -10,30 +10,6 @@
     "total": 23
   },
   "papers": {
-    "items": [
-      {
-        "slug": "the-egyptian-hard-stone-precision-debate",
-        "title": "The Egyptian Hard-Stone Precision Debate",
-        "summary": "Tool marks, drill cores and the question of what Old Kingdom masons could actually do.",
-        "hero_image_url": "https://ancientnerds.com/data/research-images/the-egyptian-hard-stone-precision-debate/hero.jpg",
-        "author": null,
-        "published_at": "2026-08-31T22:07:06",
-        "words": 6466,
-        "sources_analyzed": 2748,
-        "path": "/research/the-egyptian-hard-stone-precision-debate"
-      },
-      {
-        "slug": "submerged-sites-between-geology-and-pseudoarchaeology",
-        "title": "Submerged Sites Between Geology and Pseudoarchaeology",
-        "summary": null,
-        "hero_image_url": null,
-        "author": "theo",
-        "published_at": "2026-08-31T22:07:05",
-        "words": 7057,
-        "sources_analyzed": 3169,
-        "path": "/research/submerged-sites-between-geology-and-pseudoarchaeology"
-      }
-    ],
     "total": 24,
     "theo": {
       "question": "Water erosion evidence in the Osiris Shaft",

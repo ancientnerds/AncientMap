@@ -1,15 +1,13 @@
 """Payload builders for GET /home (landing-live sections, 2026-09-09).
 
-DB-less: rows are SimpleNamespaces. The field names asserted here are the
-contract anRoute.ts::LandingRoute declares.
+DB-less: fetch_landing_data is patched out. The field names asserted here
+are the contract anRoute.ts::LandingRoute declares.
 """
 
 from __future__ import annotations
 
 import asyncio
 import time
-from datetime import datetime
-from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 from fastapi import FastAPI
@@ -17,12 +15,7 @@ from fastapi.testclient import TestClient
 from starlette.middleware.gzip import GZipMiddleware
 
 from api.routes import landing_html
-from api.routes.landing_html import (
-    apply_stats,
-    paper_teaser,
-    sites_compact,
-    sites_long,
-)
+from api.routes.landing_html import apply_stats, sites_compact, sites_long
 from pipeline.database import get_db
 
 # The three hero markers apply_stats() insists on; a shell without them raises.
@@ -30,61 +23,6 @@ _SHELL_MARKERS = (
     '<div data-stat="sites">1.7M+</div><span data-stat="sites-long">1.7 million</span>'
     '<div data-stat="countries">90+</div>'
 )
-
-
-def paper_row(**over):
-    """A PAPER_SUMMARY_COLUMNS row: every column paper_summary_kwargs() reads."""
-    row = {
-        "id": "4bf8",
-        "slug": "the-egyptian-hard-stone-precision-debate",
-        "question": "Q?",
-        "published_by": None,
-        "published_at": datetime(2026, 8, 31, 22, 7, 6),
-        "sites_found": 2748,
-        "title": "The Egyptian Hard-Stone Precision Debate",
-        "card_description": "Summary.",
-        "score": "98",
-        "badge": "Unverified",
-        "word_count": "6466",
-        "hero_src": "/data/research-images/x.jpg",
-    }
-    row.update(over)
-    return SimpleNamespace(**row)
-
-
-def test_paper_teaser_is_the_public_api_mapping_cut_to_the_card():
-    """Everything the card prints and nothing else.
-
-    PaperCard renders a hero, the title over it, the blurb under it and one
-    footer line "by {author} · {date} · {n} sources · {n} words". The quality
-    score and the paper's own question belong to /theo.html and the paper
-    page — the homepage ships neither.
-    """
-    t = paper_teaser(paper_row())
-    assert t == {
-        "slug": "the-egyptian-hard-stone-precision-debate",
-        "title": "The Egyptian Hard-Stone Precision Debate",
-        "summary": "Summary.",
-        "hero_image_url": "https://ancientnerds.com/data/research-images/x.jpg",
-        "author": None,
-        "published_at": "2026-08-31T22:07:06",
-        "words": 6466,
-        "sources_analyzed": 2748,
-        "path": "/research/the-egyptian-hard-stone-precision-debate",
-    }
-
-
-def test_paper_teaser_survives_a_paper_without_hero_blurb_or_counts():
-    """The card renders the vignette alone and drops the missing footer parts;
-    None must reach it as None, never as "" or 0."""
-    t = paper_teaser(
-        paper_row(hero_src=None, card_description=None, word_count=None, published_at=None)
-    )
-    assert t["hero_image_url"] is None
-    assert t["summary"] is None
-    assert t["words"] is None
-    assert t["published_at"] is None
-    assert t["sources_analyzed"] == 2748
 
 
 def test_number_formats():
@@ -128,10 +66,6 @@ def test_apply_stats_raises_when_the_shell_lost_a_marker():
 
 def _landing_data():
     return {
-        "papers": [
-            paper_row(slug="paper-a", title="Paper A"),
-            paper_row(slug="paper-b", title="Paper B", published_by="theo", hero_src=None),
-        ],
         "paper_total": 24,
         "journal_total": 23,
         "news_stats": {"total_items": 3189, "total_articles": 23},
@@ -169,32 +103,18 @@ def test_home_route_hands_the_landing_payload_and_substitutes_hero_counts():
     # itself, so no row of either ships any more.
     assert set(route) == {"type", "stats", "journals", "papers"}
     assert route["journals"] == {"total": 23}
-    papers = route["papers"]["items"]
-    assert [p["slug"] for p in papers] == ["paper-a", "paper-b"]
-    assert route["papers"]["total"] == 24
-    # Every card exactly the keys anRoute.ts::PaperCardData declares.
-    assert all(
-        set(p)
-        == {
-            "slug",
-            "title",
-            "summary",
-            "hero_image_url",
-            "author",
-            "published_at",
-            "words",
-            "sources_analyzed",
-            "path",
-        }
-        for p in papers
-    )
-    assert route["papers"]["theo"] == {"question": "Osiris", "started_at": "2026-09-09T06:00:00", "sites_found": 12}
+    # Papers is a count and the agent line, nothing else: the cards live on
+    # /research/ and the homepage shows them through its portal.
+    assert route["papers"] == {
+        "total": 24,
+        "theo": {"question": "Osiris", "started_at": "2026-09-09T06:00:00", "sites_found": 12},
+    }
 
 
 def test_home_route_omits_sections_without_rows_and_serves_from_cache():
     landing_html._cache.clear()
     data = _landing_data()
-    data.update(papers=[], journal_total=0)
+    data.update(paper_total=0, journal_total=0)
     with (
         patch.object(landing_html, "fetch_landing_data", return_value=data) as fetch,
         patch.object(landing_html, "get_site_stats", return_value={"total_sites": 5, "curated_countries": 1}),

@@ -28,8 +28,6 @@ function windows(html: string): string[] {
   return html.split('<div class="ll-window">').slice(1)
 }
 
-const PAPERS = FIXTURES.landing.papers!.items
-
 describe('LandingLive', () => {
   const html = render(FIXTURES.landing)
 
@@ -81,11 +79,24 @@ describe('LandingLive', () => {
     for (const text of times) expect(text).not.toContain('ago')
   })
 
-  it('runs no list beside a portal any more', () => {
+  it('runs no list beside a portal and no gallery under one', () => {
     // Owner, 2026-09-10: "Why do we still have the list of stories, journals
     // and research papers on the right side?" The page in the frame IS the
-    // list; a second one said the same thing twice.
-    for (const gone of ['ll-window-list', 'll-row', 'll-chip', 'll-more', 'll-badge', 'll-img']) {
+    // list; a second one said the same thing twice. A day later the same
+    // verdict hit the paper cards: "The research paper examples should be
+    // inside the portal, not below it" — they live on /research/, which is
+    // exactly the page the third portal shows.
+    for (const gone of [
+      'll-window-list',
+      'll-row',
+      'll-chip',
+      'll-more',
+      'll-badge',
+      'll-img',
+      'll-gallery',
+      'theo-public-card',
+      'theo-public-grid',
+    ]) {
       expect(html, gone).not.toContain(gone)
     }
   })
@@ -184,68 +195,3 @@ describe('PagePortal', () => {
   })
 })
 
-/**
- * The papers gallery is Theo's public-library card, the same component
- * (2026-09-10, owner: "Why doesn't it look like Theo's research tasks, where
- * you get cards with images?").
- */
-describe('paper gallery', () => {
-  const html = render(FIXTURES.landing)
-  const gallery = html.slice(html.indexOf('theo-public-grid ll-gallery'))
-
-  it('renders one card per paper, each an <a> on its paper page', () => {
-    const cards = [...gallery.matchAll(/<a class="theo-public-card" href="([^"]+)">/g)]
-    expect(cards.map(m => m[1])).toEqual(PAPERS.map(p => p.path))
-    for (const p of PAPERS) expect(gallery).toContain(`>${p.title}</div>`)
-  })
-
-  it('shows the hero image of the papers that have one, and no <img> for the rest', () => {
-    const imgs = [...gallery.matchAll(/<img src="([^"]*)" alt="" class="theo-public-card-img"[^>]*>/g)]
-    const withCover = PAPERS.filter(p => p.hero_image_url)
-    expect(imgs.map(m => m[1])).toEqual(withCover.map(p => p.hero_image_url))
-    // Never <img src="">: that resolves against the page URL and refetches it.
-    for (const img of imgs) expect(img[1]).not.toBe('')
-    expect([...gallery.matchAll(/theo-public-card-vignette/g)]).toHaveLength(PAPERS.length)
-  })
-
-  it('prints the blurb only for a paper that has one', () => {
-    const descs = [...gallery.matchAll(/<p class="theo-public-card-desc">(.*?)<\/p>/g)].map(m => m[1])
-    expect(descs).toEqual(PAPERS.filter(p => p.summary).map(p => p.summary))
-  })
-
-  it('joins the footer from the parts that exist, without a dangling separator', () => {
-    const footers = [...gallery.matchAll(/<div class="theo-public-card-footer">(.*?)<\/div>/g)].map(
-      m => m[1],
-    )
-    expect(footers).toEqual([
-      'by Theo · Aug 31 · 2,748 sources · 6,466 words',
-      'by theo · Aug 31 · 3,169 sources · 7,057 words',
-    ])
-    const bare = render({
-      ...FIXTURES.landing,
-      papers: {
-        ...FIXTURES.landing.papers!,
-        items: [{ ...PAPERS[0], published_at: null, words: null }],
-      },
-    })
-    const only = /<div class="theo-public-card-footer">(.*?)<\/div>/.exec(bare)![1]
-    expect(only).toBe('by Theo · 2,748 sources')
-  })
-
-  it('carries only the fields a card renders — no payload nobody prints', () => {
-    // The Python side asserts the same key set (tests/api/test_landing_html.py).
-    for (const p of PAPERS) {
-      expect(Object.keys(p).sort()).toEqual([
-        'author',
-        'hero_image_url',
-        'path',
-        'published_at',
-        'slug',
-        'sources_analyzed',
-        'summary',
-        'title',
-        'words',
-      ])
-    }
-  })
-})

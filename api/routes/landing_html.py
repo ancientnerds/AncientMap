@@ -11,10 +11,11 @@ static index.html instead — the page stays up, the three sections are empty.
 
 Since 2026-09-10 each section is a portal on the live page and nothing else
 (owner: "Why do we still have the list of stories, journals and research
-papers on the right side?"), so the payload is three counts plus the six
-newest papers, which the section renders as Theo's cards. The story and
-journal rows the payload used to carry — and the queries behind them — are
-gone with the lists that printed them.
+papers on the right side?"), so the payload is three counts and the Theo
+line. The paper cards went the same way a day later ("The research paper
+examples should be inside the portal, not below it"): /research/ renders
+them and the portal shows that page. No row of any kind ships here, and
+the queries behind them are gone with the lists that printed them.
 
 Everything above `fetch_landing_data` is a pure function of rows and is
 what tests/api/test_landing_html.py covers. Spec:
@@ -33,40 +34,11 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from api.routes.news import get_news_stats
-from api.routes.public_v1 import PAPER_SUMMARY_COLUMNS, paper_summary_kwargs
 from api.routes.theo import get_current_research
 from api.seo_shell import ssr_shell_response
 from api.services.site_stats import get_site_stats
 from pipeline.database import get_db
 from pipeline.research_html_renderer import PUBLIC_PAPER_WHERE
-
-# The gallery shows two rows of three.
-PAPER_CARDS = 6
-
-
-def paper_teaser(row) -> dict:
-    """PAPER_SUMMARY_COLUMNS row → PaperCardData, via the public API's mapping.
-
-    The card is Theo's public-library card (PaperCard.tsx): a hero image, the
-    title over it, the blurb under it and one footer line "by {author} ·
-    {date} · {n} sources · {n} words". Every key below is one of those, and
-    nothing else — a field no component prints is a field the homepage must
-    not ship. Filtering paper_summary_kwargs() instead of writing a second
-    mapping keeps the hero URL and the word count from meaning something
-    different here than in /api/v1/research.
-    """
-    p = paper_summary_kwargs(row)
-    return {
-        "slug": p["slug"],
-        "title": p["title"],
-        "summary": p["summary"],
-        "hero_image_url": p["hero_image_url"],
-        "author": p["author"],
-        "published_at": p["published_at"],
-        "words": p["word_count"],
-        "sources_analyzed": p["sources_analyzed"],
-        "path": f"/research/{p['slug']}",
-    }
 
 
 def sites_compact(n: int) -> str:
@@ -110,17 +82,6 @@ _cache_lock = threading.Lock()
 
 def fetch_landing_data(db: Session) -> dict:
     """Every DB read of the route, in one place, so the route itself stays testable."""
-    papers = db.execute(
-        text(
-            f"""
-            SELECT {PAPER_SUMMARY_COLUMNS}
-            FROM research_requests r
-            WHERE {PUBLIC_PAPER_WHERE}
-            ORDER BY r.published_at DESC NULLS LAST
-            LIMIT {PAPER_CARDS}
-            """
-        )
-    ).fetchall()
     paper_total = (
         db.execute(
             # nosemgrep: semgrep.api-sql-fstring-interpolation -- PUBLIC_PAPER_WHERE is a module-level constant, no user input
@@ -132,7 +93,6 @@ def fetch_landing_data(db: Session) -> dict:
     if not isinstance(news_stats, dict):  # cache_get returns the dict, a cold call the model
         news_stats = news_stats.model_dump()
     return {
-        "papers": papers,
         "paper_total": paper_total,
         "journal_total": news_stats["total_articles"],
         "news_stats": news_stats,
@@ -140,10 +100,10 @@ def fetch_landing_data(db: Session) -> dict:
 
 
 def build_route(data: dict, site_stats: dict, theo_running: dict | None) -> dict:
-    """Rows → the {type: "landing"} payload. A source without rows stays None
-    and the section is not rendered at all — no placeholder cards."""
+    """Counts → the {type: "landing"} payload. A section whose source is empty
+    stays None and is not rendered at all — no placeholder content."""
     papers = None
-    if data["papers"]:
+    if data["paper_total"]:
         theo = None
         if theo_running:
             theo = {
@@ -151,11 +111,7 @@ def build_route(data: dict, site_stats: dict, theo_running: dict | None) -> dict
                 "started_at": theo_running["started_at"],
                 "sites_found": theo_running["sites_found"],
             }
-        papers = {
-            "items": [paper_teaser(p) for p in data["papers"]],
-            "total": data["paper_total"],
-            "theo": theo,
-        }
+        papers = {"total": data["paper_total"], "theo": theo}
     return {
         "type": "landing",
         "stats": {
@@ -164,8 +120,8 @@ def build_route(data: dict, site_stats: dict, theo_running: dict | None) -> dict
             "journals": data["journal_total"],
             "papers": data["paper_total"],
         },
-        # The journal section is its portal and a count: /articles.html lists
-        # the issues themselves.
+        # Both sections are their portal and a count: /articles.html lists the
+        # issues, /research/ renders the paper cards.
         "journals": {"total": data["journal_total"]} if data["journal_total"] else None,
         "papers": papers,
     }
