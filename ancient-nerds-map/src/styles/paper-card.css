@@ -19,6 +19,9 @@
 .theo-public-card {
   display: flex;
   flex-direction: column;
+  /* The homepage gallery renders the card as a link: no UA blue, no underline. */
+  color: inherit;
+  text-decoration: none;
   border: 1px solid var(--border-default);
   background: var(--surface-raised);
   cursor: pointer;
