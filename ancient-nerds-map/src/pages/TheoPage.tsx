@@ -13,6 +13,7 @@ import PageHeader from '../components/layout/PageHeader'
 import '../styles/theo.css'
 import '../styles/paper-article.css'
 import QualityBadge, { type QualityScore } from '../components/theo/QualityBadge'
+import PaperCard from '../components/theo/PaperCard'
 import LiveResearchPanel from '../components/theo/LiveResearchPanel'
 import { NervLoadingBar } from '../components/NervLoadingBar'
 
@@ -1400,25 +1401,13 @@ export default function TheoPage() {
           <>
             <div className="theo-public-grid">
               {publicPapers.map(paper => (
-                <div
+                <PaperCard
                   key={paper.slug}
-                  className={`theo-public-card${authUser?.username === paper.published_by ? ' theo-public-card--own' : ''}`}
-                  onClick={() => { window.location.href = `/research.html?slug=${paper.slug}` }}
-                  role="button"
-                  tabIndex={0}
-                  aria-label={paper.title}
-                  onKeyDown={e => { if (e.key === 'Enter') window.location.href = `/research.html?slug=${paper.slug}` }}
-                >
-                  <div className="theo-public-card-hero">
-                    <img src={paper.cover_url} alt="" className="theo-public-card-img" loading="lazy" />
-                    <div className="theo-public-card-vignette" />
-                    <div className="theo-public-card-title">{paper.title}</div>
-                  </div>
-                  <div className="theo-public-card-body">
-                    {paper.card_description && (
-                      <p className="theo-public-card-desc">{paper.card_description}</p>
-                    )}
-                    <div className="theo-public-card-footer">
+                  paper={{ title: paper.title, cover: paper.cover_url, description: paper.card_description }}
+                  className={authUser?.username === paper.published_by ? 'theo-public-card--own' : undefined}
+                  onOpen={() => { window.location.href = `/research.html?slug=${paper.slug}` }}
+                  footer={
+                    <>
                       <span className="theo-public-card-author">
                         {paper.author_avatar && (
                           <img src={paper.author_avatar} alt="" className="theo-author-avatar" />
@@ -1439,9 +1428,9 @@ export default function TheoPage() {
                       >
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
                       </button>
-                    </div>
-                  </div>
-                </div>
+                    </>
+                  }
+                />
               ))}
             </div>
             {publicHasMore && (
