@@ -103,8 +103,16 @@
   font-size: 0.8rem;
   letter-spacing: 0.1em;
   max-width: calc(100% - 24px);
-  background: rgba(0, 15, 20, 0.92);
+  /* Solid black at rest (the portal behind it stays readable), red only when
+     the pointer is on the button itself — hovering the portal shows it,
+     hovering the button arms it. */
+  background: #000;
   text-align: center;
+}
+.ll-portal-cta:hover,
+.ll-portal-link:focus-visible .ll-portal-cta {
+  background: var(--brand-primary);
+  color: #000;
 }
 /* Where there is a pointer the CTA waits for it, so the portal shows the
    page and not a button. Touch devices have no hover to wait for and keep it
