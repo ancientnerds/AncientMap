@@ -130,11 +130,12 @@ Zeile im Payload und wird nicht gerendert. Es gibt keine Platzhalter-Inhalte.
 ### 3.4 Interaktion: das Portal
 
 Wunsch des Betreibers am 2026-09-10: "Ich will eine Art Portal zu den Seiten — wie ein Screenshot,
-der den aktuellen Stand zeigt." Kein Screenshot, sondern die Seite selbst.
+der den aktuellen Stand zeigt." Beides: ein echter Screenshot als Grundschicht, die Seite selbst
+darauf — aber nur dort, wo sie sich lohnt.
 
-- Jede Sektion ist ein **NERV-Fenster mit einem Portal darin** (`src/landing/PagePortal.tsx`): ein
-  `<iframe>` auf die echte Seite — `/news.html`, `/articles.html`, `/research/` — über die volle
-  Breite des Fensterkörpers. Titelleiste `>_ portal — {Pfad}`, rechts die Fensterknöpfe aus
+- Jede Sektion ist ein **NERV-Fenster mit einem Portal darin** (`src/landing/PagePortal.tsx`): das
+  Poster der echten Seite — `/news.html`, `/articles.html`, `/research/` — über die volle Breite
+  des Fensterkörpers, auf dem Desktop ein `<iframe>` derselben Seite darüber. Titelleiste `>_ portal — {Pfad}`, rechts die Fensterknöpfe aus
   `nerv-ui/window.css`: ↗ öffnet die Seite, ≡ das Archiv — und ≡ gibt es nur, wo das Archiv eine
   andere Seite ist (Stories: `/news.html` vs. `/news-archive/`). Der Journal-Hub und die
   Forschungsbibliothek SIND ihr Archiv, dort steht nur ↗.
@@ -150,19 +151,31 @@ der den aktuellen Stand zeigt." Kein Screenshot, sondern die Seite selbst.
   trägt mittig einen `.cta-primary` — dieselbe rote Schaltfläche wie im Hero. Wo es einen Zeiger gibt
   (`@media (hover: hover)`), wartet der CTA auf ihn: unsichtbar, bis das Portal überfahren oder der
   Link per Tastatur fokussiert wird (kurze Opacity-Blende, nur unter
-  `prefers-reduced-motion: no-preference`), und der Rahmen dunkelt dabei auf `brightness(.6)` ab. Auf
+  `prefers-reduced-motion: no-preference`), und was darunter liegt — der Rahmen, oder vor seinem
+  Mount das Poster — dunkelt dabei auf `brightness(.6)` ab. Auf
   Touch-Geräten (`@media (hover: none)`) steht er immer da. `aria-label` trägt die Wörter ohne den
   ↗-Glyphen, den ein Screenreader sonst als "north east arrow" vorliest.
+- **Jedes Portal trägt ein Poster** (`<img class="ll-portal-poster">`, seit 2026-09-10): einen echten
+  Screenshot genau der Seite, auf die es zeigt, aus `/data/previews/{news,articles,research}.jpg`.
+  Betreiber vom Telefon: "Auf dem Handy flackert alles ganz schön — sind Screenshots vielleicht doch
+  besser?" Antwort: hybrid. Das Poster ist die Grundschicht und steht schon im SSR-Baum, aufgenommen
+  bei 1280×800, gelegt mit `object-fit: cover` und `object-position: top` — im 16/10-Desktopkasten
+  ist das der obere Ausschnitt, in der 4/3-Box des Telefons derselbe Ausschnitt, den auch der Rahmen
+  zeigt. Aufgenommen wird es außerhalb des Repos, siehe 6.
+- **Den Rahmen bekommt nur der Desktop.** `window.matchMedia('(hover: hover) and (min-width: 900px)')`
+  entscheidet einmal beim Mount — das ist eine Geräteklasse, keine Fensterbreite, der man hinterher
+  läuft. Telefone und Tablets sehen nur das Poster: kein zweiter Seitenaufruf, kein Nachladen, nichts
+  das flackern kann. Wo der Rahmen kommt, liegt er über dem Poster (`z-index: 1`, der Overlay-Link
+  rückt auf `2`) und ersetzt es optisch.
 - **Der Server rendert nie ein iframe.** SSR und der erste Client-Render liefern denselben Baum:
-  den Container `.ll-portal[data-src]` und den Overlay-Link mit seinem CTA. Damit stimmen Server- und
-  Client-Baum überein, und ein Crawler bekommt einen Link statt eines Rahmens, dem er nicht folgt.
-- Der Rahmen erscheint erst **nach dem Mount**, dann aber auf **allen** Viewports — auch auf dem
-  Telefon, das dafür die 4/3-Box bekommt (3.5). Ausgenommen bleibt nur
+  den Container `.ll-portal[data-src]`, das Poster und den Overlay-Link mit seinem CTA. Damit stimmen
+  Server- und Client-Baum überein, und ein Crawler bekommt ein Bild und einen Link statt eines
+  Rahmens, dem er nicht folgt.
+- Der Rahmen erscheint erst **nach dem Mount**. Ausgenommen bleibt neben der Medienabfrage
   `navigator.connection.saveData`: eine ganze zweite Seite ist genau das, worum dieser Header bittet,
   sie nicht zu laden. Geladen wird erst, wenn das Fenster in Sichtweite scrollt
   (`IntersectionObserver`, `rootMargin: 200px`), damit drei Portale nicht drei Seitenaufrufe auf
-  einer Startseite kosten, die niemand gescrollt hat. Bis dahin ist die Box der dunkle Portalkasten
-  mit dem CTA.
+  einer Startseite kosten, die niemand gescrollt hat. Bis dahin ist die Box das Poster mit dem CTA.
 - **Maßstab:** das iframe liegt 1280 CSS-Pixel breit und wird per `transform: scale()` auf die
   Fensterbreite gebracht; ein `ResizeObserver` auf dem Container schreibt `width / 1280` in
   `--ll-portal-scale`. Nicht verkleinert, sondern skaliert — die Seite darin sieht einen
@@ -265,16 +278,20 @@ analysierte Quellen je Paper). Im statischen Rückfall bleiben Absatz und H1 mit
 - Sidecar oder API antworten nicht: nginx liefert das statische `index.html`, die Live-Sektionen
   fehlen, alles andere funktioniert. Kein zweiter Renderer, wie bei den anderen SSR-Seiten.
 - Payload leer oder unbekannter Typ im Client: `landingMain.tsx` rendert nichts und meldet nichts.
-- Das Portal lädt nicht (Save-Data, Seite im Rahmen langsam oder tot): die Box bleibt der dunkle
-  Portalkasten mit dem CTA — genau das, was Server und erster Client-Render ohnehin liefern.
-  Es gibt keinen Ladezustand und keinen Platzhalterinhalt.
+- Der Rahmen kommt nicht (Telefon, Save-Data, Seite im Rahmen langsam oder tot): die Box bleibt das
+  Poster mit dem CTA — genau das, was Server und erster Client-Render ohnehin liefern. Es gibt
+  keinen Ladezustand und keinen Platzhalterinhalt.
+- Das Poster fehlt (erster Deploy vor dem ersten Lauf von `previews.yml`, Upload gescheitert): der
+  `<img>` bleibt leer über dem dunklen `--surface-deep` des Portalkastens, der CTA steht davor. Kein
+  Rendercode fängt das ab; sichtbar wird es am nächsten Workflow-Lauf von selbst wieder heil.
 
 ## 5. Tests
 
 - **vitest:** `landingMeta` liefert Titel und Description mit der formatierten Site-Zahl;
   `renderToString(<LandingLive/>)` mit dem Fixture-Payload liefert drei Fenster mit je einem
-  `.ll-portal[data-src]` und genau einem `.ll-portal-link` mit `.cta-primary`, kein `<iframe`,
-  keine Listen- und keine Kartenklasse mehr, kein `h1`, kein "undefined"/"null", und keine
+  `.ll-portal[data-src]`, genau einem `img.ll-portal-poster` auf dem Poster der eigenen Seite und
+  genau einem `.ll-portal-link` mit `.cta-primary`, kein `<iframe`, keine Listen- und keine
+  Kartenklasse mehr, kein `h1`, kein "undefined"/"null", und keine
   Theo-Zeile, wenn `theo` null ist. Die Karten prüft `render.test.tsx` am researchIndex-Fixture:
   ein `a.theo-public-card` je Paper mit `href="/research/{slug}"`, `img.theo-public-card-img` nur
   dort, wo es ein Hero gibt, und die Fußzeile aus den vorhandenen Teilen.
@@ -285,7 +302,8 @@ analysierte Quellen je Paper). Im statischen Rückfall bleiben Absatz und H1 mit
   Brotli im `lint-frontend`-Job, gleich nach `npm run build`.
 - **Nach dem Deploy (Playwright):** `/` liefert SSR-HTML mit drei Portalen und ohne eine einzige
   Paper-Karte darunter, `/research/` mit einer Karte je Paper, null Hydration-Fehler in der Konsole, LCP-Element ist das Hero-Bild, genau eine H1 mit dem
-  Suchbegriff, kein "750K" mehr im Dokument; nach dem Scrollen stehen drei iframes im DOM, ein
+  Suchbegriff, kein "750K" mehr im Dokument; drei Poster aus `/data/previews/` laden mit 200, nach
+  dem Scrollen stehen auf dem Desktop drei iframes im DOM und auf 390 px Breite keins, ein
   Wheel-Event über einem Portal scrollt die Seite und nicht den Rahmen, und auf 390 px Breite gibt
   es keinen horizontalen Überlauf. Crawler-Sicht mit JS-Blockade prüfen (Lehre aus den 2.100
   Soft-404-Seiten).
@@ -295,6 +313,22 @@ analysierte Quellen je Paper). Im statischen Rückfall bleiben Absatz und H1 mit
 - `ancientnerds-nginx-config`: `location = /` und der neue `@home_static`-Block. Der Deploy wendet
   die Datei automatisch an (`nginx -t` und reload), aber Konfigurationsänderungen brauchen deine
   Freigabe vor dem Push.
+- **Die Portal-Poster** (`/data/previews/{news,articles,research}.jpg`) liegen nicht im Repo. Sie
+  entstehen im Workflow `.github/workflows/previews.yml`:
+  - `ancient-nerds-map/scripts/capture-previews.mjs` öffnet mit Puppeteer `/news.html`,
+    `/articles.html` und `/research/` auf `PREVIEW_BASE_URL` (Vorgabe `https://ancientnerds.com`)
+    bei 1280×800, wartet auf `networkidle2` plus 1500 ms, entfernt `#cookie-notice` und schreibt je
+    ein JPEG (Qualität 82) nach `PREVIEW_OUT_DIR` (Vorgabe `previews-out`). Lokal: `npm run previews`.
+  - Takt: nach **jedem grünen CI-Lauf auf `main`** (`workflow_run`, also nach jedem Deploy — der
+    löscht mit `git clean -fd public/data/` genau dieses Verzeichnis wieder) und **alle sechs
+    Stunden** (`cron: '23 */6 * * *'`), dazu `workflow_dispatch`. `concurrency: page-previews` ohne
+    `cancel-in-progress`, damit sich Deploy-Lauf und Zeitplan nicht ins Gehege kommen.
+  - Ziel: `scp` nach `/var/www/ancientnerds/public/data/previews/`. nginx liefert das über den
+    bestehenden `location /data/`-Block mit `Cache-Control: public, max-age=3600`; ein Poster ist
+    also höchstens sechs Stunden plus eine Cache-Stunde alt.
+  - Zugang: dieselben Secrets wie der Deploy-Job (`VPS_SSH_KEY` über `webfactory/ssh-agent@v0.9.0`,
+    `VPS_HOST`, `VPS_PORT`, `VPS_USER`). Keine neuen Secrets, kein neuer Schlüssel.
+  - `.gitignore`: `public/data/previews/` und `ancient-nerds-map/previews-out/`.
 - Kein Migrations-, Compose- oder Secrets-Bedarf.
 
 ## 7. Umsetzungsreihenfolge
