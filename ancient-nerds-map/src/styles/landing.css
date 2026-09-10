@@ -562,7 +562,7 @@ body {
   font-weight: 500;
   letter-spacing: 0.05em;
   margin-bottom: 6px;
-  color: var(--accent-secondary);
+  color: var(--accent-primary);
 }
 
 .tool-card p {
@@ -608,7 +608,7 @@ body {
   border-radius: 20px;
   font-size: 0.75rem;
   font-family: var(--font-body);
-  color: var(--accent-secondary);
+  color: var(--accent-primary);
   letter-spacing: 0.03em;
 }
 
@@ -742,7 +742,7 @@ body {
   border-radius: 16px;
   font-size: 0.75rem;
   font-family: var(--font-body);
-  color: var(--accent-secondary);
+  color: var(--accent-primary);
   letter-spacing: 0.03em;
 }
 
