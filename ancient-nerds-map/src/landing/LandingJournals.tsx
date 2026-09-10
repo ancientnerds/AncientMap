@@ -32,7 +32,7 @@ export default function LandingJournals({ data }: Props) {
         <PagePortal
           src="/articles.html"
           poster="/data/previews/articles.jpg"
-          title="Weekly journals — live view"
+          title="Weekly journals"
           openHref="/articles.html"
           openLabel="Open journals"
         />
