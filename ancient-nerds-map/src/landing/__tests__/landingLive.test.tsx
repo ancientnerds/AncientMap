@@ -120,9 +120,10 @@ describe('LandingLive', () => {
 })
 
 /**
- * Each window is a portal: the real page, scaled down, loaded lazily after
- * mount on every viewport (2026-09-10). The frame is decoration — the one
- * interactive thing is the link that covers it and carries the CTA.
+ * Each window is a portal: a poster screenshot of the real page, with the
+ * live frame scaled down on top of it — but only on hover-capable desktops
+ * (2026-09-10). The frame is decoration — the one interactive thing is the
+ * link that covers it and carries the CTA.
  */
 describe('PagePortal', () => {
   const html = render(FIXTURES.landing)
@@ -151,6 +152,21 @@ describe('PagePortal', () => {
 
   it('renders no iframe on the server — the frame is an effect', () => {
     expect(html).not.toContain('<iframe')
+  })
+
+  it('posters every portal with the screenshot of its own page', () => {
+    // Owner, 2026-09-10: "On the phone everything flickers quite a bit — are
+    // screenshots maybe better after all?" The poster is what the server
+    // sends and what a phone keeps; the frame only ever lands on top of it.
+    const posters = ['/data/previews/news.jpg', '/data/previews/articles.jpg', '/data/previews/research.jpg']
+    windows(html).forEach((pane, i) => {
+      const imgs = [...pane.matchAll(/<img class="ll-portal-poster"[^>]*>/g)].map(m => m[0])
+      expect(imgs, posters[i]).toHaveLength(1)
+      expect(imgs[0]).toContain(`src="${posters[i]}"`)
+      const alt = /alt="([^"]*)"/.exec(imgs[0])
+      expect(alt, imgs[0]).not.toBeNull()
+      expect(alt![1], imgs[0]).toMatch(/ current view$/)
+    })
   })
 
   it('covers every portal with one link into its page, carrying a red CTA', () => {

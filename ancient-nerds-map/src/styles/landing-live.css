@@ -71,6 +71,22 @@
   overflow: hidden;
   background: var(--surface-deep);
 }
+/* The poster: a screenshot of the same page, captured at 1280x800 and served
+   from /data/previews/ (see scripts/capture-previews.mjs). It is the bottom
+   layer and, on everything without a hover pointer, the only one — the phone
+   that flickered under a live frame now gets a still image and no second page
+   load at all. `object-fit: cover` with `object-position: top` crops the
+   bottom off the 16/10 desktop box and more of it in the 4/3 phone box, which
+   is the same slice the frame shows there. */
+.ll-portal-poster {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top;
+  display: block;
+}
 .ll-portal-frame {
   position: absolute;
   top: 0;
@@ -80,15 +96,19 @@
   border: 0;
   transform-origin: 0 0;
   transform: scale(var(--ll-portal-scale, 0.5));
+  /* Above the poster it replaces — the poster stays behind it as the thing
+     the visitor already saw while the frame was still loading. */
+  z-index: 1;
   /* Decoration, not a second browser: a wheel or a swipe over the portal
      scrolls the homepage, and nothing inside the frame can be clicked. */
   pointer-events: none;
 }
-/* The whole portal is the link into the page, with the CTA in its middle. */
+/* The whole portal is the link into the page, with the CTA in its middle —
+   on top of both the poster and the frame. */
 .ll-portal-link {
   position: absolute;
   inset: 0;
-  z-index: 1;
+  z-index: 2;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -125,11 +145,15 @@
   .ll-portal-cta { opacity: 0; }
   .ll-portal:hover .ll-portal-cta,
   .ll-portal-link:focus-visible .ll-portal-cta { opacity: 1; }
-  .ll-portal:hover .ll-portal-frame { filter: brightness(0.6); }
+  /* Whichever layer is on top dims — the frame once it is there, the poster
+     below 900 px and before the frame mounts. */
+  .ll-portal:hover .ll-portal-frame,
+  .ll-portal:hover .ll-portal-poster { filter: brightness(0.6); }
 }
 @media (hover: hover) and (prefers-reduced-motion: no-preference) {
   .ll-portal-cta { transition: opacity 0.15s ease; }
-  .ll-portal-frame { transition: filter 0.15s ease; }
+  .ll-portal-frame,
+  .ll-portal-poster { transition: filter 0.15s ease; }
 }
 
 /* The one deliberate exception to the green: NERV orange marks the live

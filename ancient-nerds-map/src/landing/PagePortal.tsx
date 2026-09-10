@@ -1,10 +1,16 @@
 /**
- * PagePortal — the real page, scaled down, running inside a NERV window.
+ * PagePortal — the real page inside a NERV window: a screenshot always, the
+ * live page on top of it where a desktop can afford one.
  *
  * Owner, 2026-09-10: "I want a kind of portal to the pages — like a
- * screenshot that shows the current state." Not a screenshot: an <iframe> on
- * the live URL, so the window is never stale and there is no second renderer
- * to keep in sync.
+ * screenshot that shows the current state", and a day later, from the phone:
+ * "On the phone everything flickers quite a bit — are screenshots maybe
+ * better after all?" Both, then. Every portal carries a poster — a real
+ * screenshot of its page, captured against production every six hours by
+ * .github/workflows/previews.yml and served from /data/previews/. Phones and
+ * tablets see nothing else: no second page load, no layout thrash, no
+ * flicker. Hover-capable desktops at 900 px and up mount the <iframe> over
+ * the poster, so the window there is never stale.
  *
  * The frame is DECORATION, not a second browser: pointer-events off,
  * tabIndex -1, aria-hidden. Nothing inside it can be scrolled, clicked or
@@ -14,13 +20,13 @@
  * covers the whole box and carries the CTA into the page.
  *
  * What the server sends is NOT the iframe. SSR and the first client render
- * emit the container and that link, so the two trees match and a crawler
- * sees a link instead of a frame it will not follow. The frame appears after
- * mount on every viewport — phones included, they get the 4/3 box — except
- * under Save-Data, where a whole second page is exactly what the header asks
- * us not to load, and only once the window scrolls into view
- * (IntersectionObserver, 200 px ahead), so three portals do not cost three
- * page loads on a homepage nobody scrolled.
+ * emit the container, the poster and that link, so the two trees match and a
+ * crawler sees an image and a link instead of a frame it will not follow.
+ * Beyond the media query the frame is held back by Save-Data — a whole
+ * second page is exactly what that header asks us not to load — and it waits
+ * until the window scrolls into view (IntersectionObserver, 200 px ahead),
+ * so three portals do not cost three page loads on a homepage nobody
+ * scrolled.
  *
  * Scale: the frame is laid out at a desktop 1280×800 and transformed to the
  * container's width, which a ResizeObserver writes into --ll-portal-scale.
@@ -30,6 +36,8 @@ import { useEffect, useRef, useState } from 'react'
 interface Props {
   /** Same-origin page the portal shows, e.g. "/news.html". */
   src: string
+  /** Screenshot of that page under /data/previews/, e.g. "/data/previews/news.jpg". */
+  poster: string
   title: string
   openHref: string
   openLabel: string
@@ -37,10 +45,18 @@ interface Props {
 
 /** Layout width of the framed page — the scale divisor, so it lives here. */
 const FRAME_WIDTH = 1280
+/** ...and its layout height, which the poster is captured at. */
+const FRAME_HEIGHT = 800
+/**
+ * Where a live frame is worth its cost: a pointer to reveal it with and room
+ * to read it in. Decided once at mount — this is a class of device, not a
+ * window size to follow around.
+ */
+const DESKTOP = '(hover: hover) and (min-width: 900px)'
 /** Save-Data is not in lib.dom: the Network Information API is a draft. */
 type SaveDataNavigator = Navigator & { connection?: { saveData?: boolean } }
 
-export default function PagePortal({ src, title, openHref, openLabel }: Props) {
+export default function PagePortal({ src, poster, title, openHref, openLabel }: Props) {
   const box = useRef<HTMLDivElement>(null)
   const [live, setLive] = useState(false)
 
@@ -48,6 +64,7 @@ export default function PagePortal({ src, title, openHref, openLabel }: Props) {
     const el = box.current
     if (!el) return
     if ((navigator as SaveDataNavigator).connection?.saveData) return
+    if (!window.matchMedia(DESKTOP).matches) return
     // Measuring starts before the frame exists, so the very first painted
     // frame is already at the right scale instead of at the CSS default.
     const resize = new ResizeObserver(entries => {
@@ -73,6 +90,15 @@ export default function PagePortal({ src, title, openHref, openLabel }: Props) {
 
   return (
     <div className="ll-portal" data-src={src} ref={box}>
+      <img
+        className="ll-portal-poster"
+        src={poster}
+        alt={`${title} — current view`}
+        width={FRAME_WIDTH}
+        height={FRAME_HEIGHT}
+        loading="lazy"
+        decoding="async"
+      />
       {live && (
         <iframe
           className="ll-portal-frame"

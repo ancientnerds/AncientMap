@@ -29,6 +29,7 @@ export default function LandingStories({ total }: { total: number }) {
       >
         <PagePortal
           src="/news.html"
+          poster="/data/previews/news.jpg"
           title="Stories — live view"
           openHref="/news.html"
           openLabel="Open stories"

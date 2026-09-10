@@ -38,6 +38,7 @@ export default function LandingPapers({ data }: Props) {
       >
         <PagePortal
           src="/research/"
+          poster="/data/previews/research.jpg"
           title="Research library — live view"
           openHref="/research/"
           openLabel="Open research library"
