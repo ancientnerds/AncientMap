@@ -108,8 +108,7 @@ export default function LandingStories({ initial, total }: Props) {
         }
         openHref="/news.html"
         openTitle="Open stories"
-        archiveHref="/news-archive/"
-        archiveTitle="Story archive"
+        archive={{ href: '/news-archive/', title: 'Story archive' }}
         listLabel="More stories"
         main={
           <PagePortal

@@ -112,7 +112,13 @@ def test_reading_minutes_rounds_up_at_238_wpm():
     assert reading_minutes(0) == 0
 
 
-def test_journal_teaser_counts_words_sections_and_sources():
+def test_journal_teaser_is_the_row_and_nothing_more():
+    """The row prints "No. {id} · {week} · {minutes} min" and links path.
+
+    The issue itself is one click away in the portal, so the content is
+    counted here and then dropped: a summary, the "##" headings or a link
+    count would be payload no component reads.
+    """
     content = (
         "# Title\n\nIntro text here.\n\n## Artifact Discoveries\n\nText with a [link](https://a.b) "
         "and ![img](/data/news/screenshots/nMxEoIrMwX8_367.webp).\n\n## In Brief\n\nmore\n\n"
@@ -128,14 +134,34 @@ def test_journal_teaser_counts_words_sections_and_sources():
         published_at=datetime(2026, 9, 7, 4, 20, 43),
     )
     t = journal_teaser(row)
-    assert t["sections"] == ["Artifact Discoveries", "In Brief"]
-    assert t["sources"] == 3
+    assert set(t) == {"id", "title", "week_start", "week_end", "published_at", "minutes", "path"}
     assert t["path"] == "/articles/week-of-august-31-wooden-structure-and-more"
-    assert t["words"] == len(content.split()) and t["minutes"] == reading_minutes(t["words"])
-    assert t["week_start"] == "2026-08-31T00:00:00" and t["published_at"] == "2026-09-07T04:20:43"
+    assert t["minutes"] == reading_minutes(len(content.split()))
+    assert t["week_start"] == "2026-08-31T00:00:00" and t["week_end"] == "2026-09-06T23:59:59"
+    assert t["published_at"] == "2026-09-07T04:20:43"
+
+
+def test_journal_teaser_survives_an_issue_without_content_or_dates():
+    row = SimpleNamespace(
+        id=1,
+        title="Week of August 24",
+        summary=None,
+        content=None,
+        week_start=None,
+        week_end=None,
+        published_at=None,
+    )
+    t = journal_teaser(row)
+    assert t["minutes"] == 0
+    assert t["week_start"] is None and t["week_end"] is None and t["published_at"] is None
 
 
 def test_paper_teaser_uses_the_public_api_mapping():
+    """Same rule: "{words} words · {sources} sources · {date}" and the link.
+
+    quality_score, the hero image and the summary belong to the paper page —
+    the row beside the portal prints none of them.
+    """
     row = SimpleNamespace(
         id="4bf8", slug="the-egyptian-hard-stone-precision-debate", question="Q?", published_by=None,
         published_at=datetime(2026, 8, 31, 22, 7, 6), sites_found=2748,
@@ -146,13 +172,9 @@ def test_paper_teaser_uses_the_public_api_mapping():
     assert t == {
         "slug": "the-egyptian-hard-stone-precision-debate",
         "title": "The Egyptian Hard-Stone Precision Debate",
-        "summary": "Summary.",
         "published_at": "2026-08-31T22:07:06",
         "words": 6466,
-        "minutes": 28,
         "sources_analyzed": 2748,
-        "quality_score": 98,
-        "hero_image_url": "https://ancientnerds.com/data/research-images/x.jpg",
         "path": "/research/the-egyptian-hard-stone-precision-debate",
     }
 
@@ -264,15 +286,21 @@ def test_home_route_hands_the_landing_payload_and_substitutes_hero_counts():
     # A row is a link, not an article: no body, no sources, no video.
     assert all(set(s) == set(STORY_TEASER_KEYS) for s in stories)
     assert route["stories"]["categories"] == ["artifact", "bioarchaeology"]
-    # Journals and papers are lists too — every row in the payload, no lead
-    # carrying the page's body HTML.
+    # Journals and papers are lists too — every row in the payload, and every
+    # row exactly the keys anRoute.ts declares: no body, no field nobody reads.
     journals = route["journals"]["items"]
     assert [j["id"] for j in journals] == [74, 73] and route["journals"]["total"] == 23
-    assert all("body_html" not in j for j in journals)
+    assert all(
+        set(j) == {"id", "title", "week_start", "week_end", "published_at", "minutes", "path"}
+        for j in journals
+    )
     papers = route["papers"]["items"]
     assert [p["slug"] for p in papers] == ["paper-a", "paper-b"]
     assert route["papers"]["total"] == 24
-    assert all("body_html" not in p for p in papers)
+    assert all(
+        set(p) == {"slug", "title", "published_at", "words", "sources_analyzed", "path"}
+        for p in papers
+    )
     assert route["papers"]["theo"] == {"question": "Osiris", "started_at": "2026-09-09T06:00:00", "sites_found": 12}
 
 

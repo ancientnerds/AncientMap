@@ -96,15 +96,15 @@ LandingRoute {
 }
 StoryTeaser   { id, headline, screenshot_url, news_category, significance, published_at,
                 site_name, channel_name }
-JournalTeaser { id, title, summary, week_start, week_end, published_at, words, minutes,
-                sections: string[], sources, path }
-PaperTeaser   { slug, title, summary, published_at, words, minutes, sources_analyzed,
-                quality_score, hero_image_url | null, path }
+JournalTeaser { id, title, week_start, week_end, published_at, minutes, path }
+PaperTeaser   { slug, title, published_at, words, sources_analyzed, path }
 TheoStatus    { question, started_at, sites_found }
 ```
 
 Seit 2026-09-10 trägt **kein** Eintrag mehr Body-HTML: die Sektion zeigt die echte Seite im Portal
-(3.4), das Payload liefert nur noch die Liste daneben. `items` ist lead-first — erst der Eintrag,
+(3.4), das Payload liefert nur noch die Liste daneben — und in einer Zeile genau die Felder, die
+sie druckt. Ein Teaser-Feld, das keine Komponente liest, gehört nicht ins Payload; die Schlüssel
+sind auf beiden Seiten festgenagelt (`tests/api/test_landing_html.py`, `landingLive.test.tsx`). `items` ist lead-first — erst der Eintrag,
 mit dem die Sektion führt, dann der Rest in Abfragereihenfolge.
 
 Regeln:
@@ -121,10 +121,9 @@ Regeln:
   Client aus `headline` und `id` ab (`storyPath`, die TS-Seite von `story_slug`), weil er dieselbe
   Liste beim Chip-Klick aus `/api/news/feed` neu baut und der Feed keinen Pfad kennt; `categories`
   sind die Kategorien mit mindestens einer Story in den letzten 30 Tagen.
-- **Journals.** Die 4 neuesten aktiven Artikel nach `week_start`, alle vier als Zeilen. `words`
-  zählt den Inhalt, `minutes` ist `words / 238` aufgerundet, `sections` sind die `##`-Überschriften
-  ohne "Sources" und "Videos", `sources` zählt die Links. `path` ist `/articles/{slugify(title)}`,
-  wie in `articles_html.py`.
+- **Journals.** Die 4 neuesten aktiven Artikel nach `week_start`, alle vier als Zeilen. `minutes`
+  ist die Wortzahl des Inhalts durch 238, aufgerundet — gezählt wird serverseitig, der Text selbst
+  bleibt in der Seite. `path` ist `/articles/{slugify(title)}`, wie in `articles_html.py`.
 - **Papers.** Die 6 neuesten nach `published_at` unter `PUBLIC_PAPER_WHERE` mit den
   `PAPER_SUMMARY_COLUMNS`, alle sechs als Zeilen. `theo` kommt aus derselben Abfrage, die
   `/api/theo/research/current` benutzt (laufender Batch-Request: Frage, Startzeit, gefundene Sites);
@@ -142,8 +141,10 @@ der den aktuellen Stand zeigt." Kein Screenshot, sondern die Seite selbst.
 
 - Jede Sektion ist ein **NERV-Fenster mit einem Portal darin** (`src/landing/PagePortal.tsx`):
   links ein `<iframe>` auf die echte Seite — `/news.html`, `/articles.html`, `/research/` —, rechts
-  die Liste der Einträge. Titelleiste `>_ portal — {Pfad}`, rechts die beiden Fensterknöpfe aus
-  `nerv-ui/window.css` (Seite öffnen, Archiv).
+  die Liste der Einträge. Titelleiste `>_ portal — {Pfad}`, rechts die Fensterknöpfe aus
+  `nerv-ui/window.css`: ↗ öffnet die Seite, ≡ das Archiv — und ≡ gibt es nur, wo das Archiv eine
+  andere Seite ist (Stories: `/news.html` vs. `/news-archive/`). Der Journal-Hub und die
+  Forschungsbibliothek SIND ihr Archiv, dort steht nur ↗.
 - **Der Server rendert nie ein iframe.** SSR und der erste Client-Render liefern denselben Baum:
   den Container `.ll-portal[data-src]`, den Link `.ll-portal-open` in die Seite und eine gedämpfte
   Zeile "live view of {src}". Damit stimmen Server- und Client-Baum überein, und ein Crawler
@@ -193,8 +194,8 @@ umgesetzt in `src/styles/landing-live.css`:
   `--border-accent`, 4 px Radius, `--nerv-panel-shadow`), 36 px hohe Titelleiste in
   `rgba(0,15,20,.95)`, Körper als Raster 1.4fr / 1fr — links `.ll-window-main` mit dem Portal,
   rechts die Liste mit eigenem Scrollbereich (72 vh, dünne grüne Scrollleiste). Der Rahmen ist EINE
-  Komponente, `src/landing/LandingWindow.tsx`; die Sektionen liefern nur Titel, die beiden
-  Kopfleisten-Links, den Inhalt der linken Spalte und die Liste.
+  Komponente, `src/landing/LandingWindow.tsx`; die Sektionen liefern nur Titel, die
+  Kopfleisten-Links (`archive` ist optional), den Inhalt der linken Spalte und die Liste.
 - Portal: `.ll-portal` ist relativ positioniert, 16 / 10, `overflow: hidden`, Hintergrund
   `--surface-deep`. `.ll-portal-frame` liegt absolut bei 1280 × 800 px ohne Rahmen und wird über
   `transform-origin: 0 0` und `scale(var(--ll-portal-scale, .5))` auf die Spalte gebracht. Ohne

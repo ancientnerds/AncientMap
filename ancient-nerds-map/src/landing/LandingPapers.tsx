@@ -35,8 +35,6 @@ export default function LandingPapers({ data }: Props) {
         }
         openHref="/research/"
         openTitle="Open research library"
-        archiveHref="/research/"
-        archiveTitle="Research library"
         listLabel="More papers"
         main={
           <PagePortal

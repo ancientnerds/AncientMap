@@ -150,6 +150,33 @@ describe('LandingLive', () => {
     expect(metaAfter(row.path)).toBe(`No. ${row.id} · ${row.minutes} min`)
   })
 
+  it('carries only the fields a list row prints — no payload nobody renders', () => {
+    // The Python side asserts the same key sets (tests/api/test_landing_html.py):
+    // a teaser is a row beside a portal, so a field no component reads is a
+    // field the homepage must not ship.
+    for (const j of JOURNALS) {
+      expect(Object.keys(j).sort()).toEqual([
+        'id',
+        'minutes',
+        'path',
+        'published_at',
+        'title',
+        'week_end',
+        'week_start',
+      ])
+    }
+    for (const p of PAPERS) {
+      expect(Object.keys(p).sort()).toEqual([
+        'path',
+        'published_at',
+        'slug',
+        'sources_analyzed',
+        'title',
+        'words',
+      ])
+    }
+  })
+
   it('never prints undefined or null', () => {
     expect(html).not.toMatch(/undefined|null/)
   })
@@ -211,20 +238,23 @@ describe('PagePortal', () => {
     }
   })
 
-  it('names the two window controls — their link text is an arrow glyph', () => {
-    for (const label of [
-      'Open stories',
-      'Story archive',
-      'Open journals',
-      'Journal archive',
-      'Open research library',
-      'Research library',
-    ]) {
+  it('names every window control — their link text is an arrow glyph', () => {
+    for (const label of ['Open stories', 'Story archive', 'Open journals', 'Open research library']) {
       expect(html).toContain(`aria-label="${label}"`)
     }
     const btns = [...html.matchAll(/<a class="popup-window-btn"[^>]*>/g)].map(m => m[0])
-    expect(btns).toHaveLength(6)
+    expect(btns).toHaveLength(4)
     for (const btn of btns) expect(btn, btn).toContain('aria-label=')
+  })
+
+  it('carries no second control on the href the first one already opens', () => {
+    // Only Stories has an archive of its own (/news.html vs /news-archive/).
+    // The journal hub and the research library ARE their archive, so the ≡
+    // beside their ↗ pointed at the very same page.
+    const hrefs = windows(html).map(pane =>
+      [...pane.matchAll(/<a class="popup-window-btn" href="([^"]+)"/g)].map(m => m[1]),
+    )
+    expect(hrefs).toEqual([['/news.html', '/news-archive/'], ['/articles.html'], ['/research/']])
   })
 
   it('lists every item beside the portal as a plain link, no in-window swap', () => {

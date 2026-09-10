@@ -46,8 +46,6 @@ export default function LandingJournals({ data }: Props) {
         }
         openHref="/articles.html"
         openTitle="Open journals"
-        archiveHref="/articles.html"
-        archiveTitle="Journal archive"
         listLabel="More journals"
         main={
           <PagePortal

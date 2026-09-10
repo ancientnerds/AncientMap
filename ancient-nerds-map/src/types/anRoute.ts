@@ -222,28 +222,20 @@ export interface StoryTeaser {
 interface JournalTeaser {
   id: number
   title: string
-  summary: string | null
   week_start: string | null
   week_end: string | null
   published_at: string | null
-  words: number
+  /** Reading time of the issue, counted server-side — the row prints it. */
   minutes: number
-  /** "##" headings of the issue without the Sources/Videos appendix. */
-  sections: string[]
-  sources: number
   path: string
 }
 
 interface PaperTeaser {
   slug: string
   title: string
-  summary: string | null
   published_at: string | null
   words: number | null
-  minutes: number | null
   sources_analyzed: number
-  quality_score: number | null
-  hero_image_url: string | null
   path: string
 }
 

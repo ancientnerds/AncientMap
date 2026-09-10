@@ -43,7 +43,6 @@ RAIL_ROWS = 6
 RECENT_ROWS = 7
 # Pipeline states that live in news_category but are not topics — never a chip.
 CHIP_HIDDEN_CATEGORIES = ("unverified", "rejected")
-APPENDIX_SECTIONS = {"sources", "videos"}
 # The fields a homepage list row needs. story_payload() builds the whole
 # story page payload and this is the slice of it the row shows — one mapping,
 # not a second one that could drift from the page.
@@ -59,9 +58,6 @@ STORY_TEASER_KEYS = frozenset(
         "channel_name",
     }
 )
-
-_HEADING = re.compile(r"^##+\s+(.+?)\s*$", re.MULTILINE)
-_LINK = re.compile(r"https?://")
 
 
 def reading_minutes(words: int) -> int:
@@ -89,39 +85,36 @@ def story_teaser(item) -> dict:
 
 
 def journal_teaser(row) -> dict:
-    """NewsArticle row → JournalTeaser."""
-    content = row.content or ""
-    words = len(content.split())
-    sections = [h for h in _HEADING.findall(content) if h.strip().lower() not in APPENDIX_SECTIONS]
+    """NewsArticle row → JournalTeaser: the fields the list row prints.
+
+    The row reads "No. {id} · {week} · {minutes} min" and links `path` — the
+    issue itself lives one click away in the portal, so the content is only
+    ever counted here, never carried.
+    """
     return {
         "id": row.id,
         "title": row.title,
-        "summary": row.summary,
         "week_start": row.week_start.isoformat() if row.week_start else None,
         "week_end": row.week_end.isoformat() if row.week_end else None,
         "published_at": row.published_at.isoformat() if row.published_at else None,
-        "words": words,
-        "minutes": reading_minutes(words),
-        "sections": sections,
-        "sources": len(_LINK.findall(content)),
+        "minutes": reading_minutes(len((row.content or "").split())),
         "path": f"/articles/{slugify(row.title)}",
     }
 
 
 def paper_teaser(row) -> dict:
-    """PAPER_SUMMARY_COLUMNS row → PaperTeaser, via the public API's mapping."""
+    """PAPER_SUMMARY_COLUMNS row → PaperTeaser, via the public API's mapping.
+
+    Same rule as journal_teaser: "{words} words · {sources} sources · {date}"
+    and the link, nothing the row does not print.
+    """
     p = paper_summary_kwargs(row)
-    words = p["word_count"]
     return {
         "slug": p["slug"],
         "title": p["title"],
-        "summary": p["summary"],
         "published_at": p["published_at"],
-        "words": words,
-        "minutes": reading_minutes(words) if words else None,
+        "words": p["word_count"],
         "sources_analyzed": p["sources_analyzed"],
-        "quality_score": p["quality_score"],
-        "hero_image_url": p["hero_image_url"],
         "path": f"/research/{p['slug']}",
     }
 

@@ -52,32 +52,19 @@
       {
         "id": 74,
         "title": "Week of August 31: 476,000-Year-Old Wooden Structure Found, Dire Wolf Pups Born, and More",
-        "summary": "Archaeologists at Kalambo Falls uncovered the oldest known wooden structure.",
         "week_start": "2026-08-31T00:00:00",
         "week_end": "2026-09-06T23:59:59",
         "published_at": "2026-09-07T04:20:43",
-        "words": 2762,
         "minutes": 12,
-        "sections": [
-          "Artifact Discoveries",
-          "Remote Sensing & Technology",
-          "Bioarchaeology & Ancient DNA",
-          "In Brief"
-        ],
-        "sources": 35,
         "path": "/articles/week-of-august-31-476000-year-old-wooden-structure-found-dire-wolf-pups-born-and-more"
       },
       {
         "id": 73,
         "title": "Week of August 24: 25 Turtle Figurines in Turkish Cave, World's First Brand, and More",
-        "summary": null,
         "week_start": "2026-08-24T00:00:00",
         "week_end": "2026-08-30T23:59:59",
         "published_at": "2026-08-30T23:28:56",
-        "words": 2510,
         "minutes": 11,
-        "sections": [],
-        "sources": 30,
         "path": "/articles/week-of-august-24-25-turtle-figurines-in-turkish-cave-worlds-first-brand-and-more"
       }
     ],
@@ -88,25 +75,17 @@
       {
         "slug": "the-egyptian-hard-stone-precision-debate",
         "title": "The Egyptian Hard-Stone Precision Debate",
-        "summary": "Mainstream explanations of Egyptian hard-stone working are tested against the Serapeum boxes.",
         "published_at": "2026-08-31T22:07:06",
         "words": 6466,
-        "minutes": 28,
         "sources_analyzed": 2748,
-        "quality_score": 98,
-        "hero_image_url": "https://ancientnerds.com/data/research-images/4bf89556/p7.jpg",
         "path": "/research/the-egyptian-hard-stone-precision-debate"
       },
       {
         "slug": "submerged-sites-between-geology-and-pseudoarchaeology",
         "title": "Submerged Sites Between Geology and Pseudoarchaeology",
-        "summary": null,
         "published_at": "2026-08-31T22:07:05",
         "words": 7057,
-        "minutes": 30,
         "sources_analyzed": 3169,
-        "quality_score": 98,
-        "hero_image_url": null,
         "path": "/research/submerged-sites-between-geology-and-pseudoarchaeology"
       }
     ],
