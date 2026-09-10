@@ -90,86 +90,93 @@ für den ersten Paint keinen einzigen API-Aufruf.
 LandingRoute {
   type: 'landing'
   stats:    { sites: number, stories: number, journals: number, papers: number }
-  stories:  { lead: StoryData, rail: StoryData[], categories: string[] }
-  journals: { lead: JournalLead, rail: JournalTeaser[], total: number }
-  papers:   { lead: PaperLead, rail: PaperTeaser[], total: number, theo: TheoStatus | null }
+  stories:  { items: StoryTeaser[], categories: string[] }
+  journals: { items: JournalTeaser[], total: number }
+  papers:   { items: PaperTeaser[], total: number, theo: TheoStatus | null }
 }
-StoryData     = Omit<StoryRoute, 'type'> — dasselbe Payload wie /news-archive/{slug}
+StoryTeaser   { id, headline, screenshot_url, news_category, significance, published_at,
+                site_name, channel_name }
 JournalTeaser { id, title, summary, week_start, week_end, published_at, words, minutes,
-                sections: string[], sources, image_url | null, path }
-JournalLead   = JournalTeaser & { body_html, excerpted }
+                sections: string[], sources, path }
 PaperTeaser   { slug, title, summary, published_at, words, minutes, sources_analyzed,
                 quality_score, hero_image_url | null, path }
-PaperLead     = PaperTeaser & { body_html, excerpted, author | null }
 TheoStatus    { question, started_at, sites_found }
 ```
+
+Seit 2026-09-10 trägt **kein** Eintrag mehr Body-HTML: die Sektion zeigt die echte Seite im Portal
+(3.4), das Payload liefert nur noch die Liste daneben. `items` ist lead-first — erst der Eintrag,
+mit dem die Sektion führt, dann der Rest in Abfragereihenfolge.
 
 Regeln:
 
 - **Stories.** Der öffentliche Story-Index (`public_stories_query`: post_text vorhanden, keine
   spekulativen Stories, weil die noindex sind) plus die Signifikanz-Untergrenze des Feeds (≥ 2 oder
-  null), neueste zuerst. Seit 2026-09-10 sind das keine Teaser mehr, sondern **ganze
-  Story-Payloads**: `articles_html.story_payload(row, related=[])` baut sie — dieselbe Funktion, die
-  `/news-archive/{slug}` bedient, damit Fenster und Seite nicht auseinanderlaufen können. `related`
-  bleibt leer; eine "Weiterlesen"-Liste im Fenster führte nirgendwohin. Der Lead ist die Story mit
-  der höchsten Signifikanz der letzten 48 Stunden, bei Gleichstand die neuere. Gibt es in 48 Stunden
-  keine, ist der Lead die höchste Signifikanz unter den 7 neuesten. Die Liste sind die 7 neuesten
-  ohne den Lead, gekürzt auf 6 Zeilen. Sichtbar sind also immer 7 Stories: die im Fenster plus
-  sechs in der Liste. Die Story-URL leitet der Client aus `headline` und `id` ab (`storyPath`, die
-  TS-Seite von `story_slug`); `categories` sind die Kategorien mit mindestens einer Story in den
-  letzten 30 Tagen.
-- **Journals.** Die 4 neuesten aktiven Artikel nach `week_start`. `words` zählt den Inhalt,
-  `minutes` ist `words / 238` aufgerundet, `sections` sind die `##`-Überschriften ohne "Sources" und
-  "Videos", `sources` zählt die Links, `image_url` ist der erste Screenshot im Inhalt.
-  `path` ist `/articles/{slugify(title)}`, wie in `articles_html.py`. Der Lead trägt seit
-  2026-09-10 zusätzlich `body_html`: dieselbe `markdown_to_html(row.content)`-Ausgabe wie
-  `/articles/{slug}`, gekürzt durch `excerpt_html()`.
+  null), neueste zuerst. Der Lead ist die Story mit der höchsten Signifikanz der letzten 48 Stunden,
+  bei Gleichstand die neuere. Gibt es in 48 Stunden keine, ist der Lead die höchste Signifikanz
+  unter den 7 neuesten. Danach folgen die 7 neuesten ohne den Lead, gekürzt auf 6 Zeilen — sichtbar
+  sind also immer 7 Stories. Die Zeilen baut `story_teaser()`, und das ist bewusst keine zweite
+  Abbildung: es filtert `articles_html.story_payload(row, related=[])` — dieselbe Funktion, die
+  `/news-archive/{slug}` bedient — auf `STORY_TEASER_KEYS` herunter, damit `published_at` oder
+  `site_name` in Zeile und Seite nicht Verschiedenes bedeuten können. Die Story-URL leitet der
+  Client aus `headline` und `id` ab (`storyPath`, die TS-Seite von `story_slug`), weil er dieselbe
+  Liste beim Chip-Klick aus `/api/news/feed` neu baut und der Feed keinen Pfad kennt; `categories`
+  sind die Kategorien mit mindestens einer Story in den letzten 30 Tagen.
+- **Journals.** Die 4 neuesten aktiven Artikel nach `week_start`, alle vier als Zeilen. `words`
+  zählt den Inhalt, `minutes` ist `words / 238` aufgerundet, `sections` sind die `##`-Überschriften
+  ohne "Sources" und "Videos", `sources` zählt die Links. `path` ist `/articles/{slugify(title)}`,
+  wie in `articles_html.py`.
 - **Papers.** Die 6 neuesten nach `published_at` unter `PUBLIC_PAPER_WHERE` mit den
-  `PAPER_SUMMARY_COLUMNS`. Der Lead ist das neueste. `theo` kommt aus derselben Abfrage, die
+  `PAPER_SUMMARY_COLUMNS`, alle sechs als Zeilen. `theo` kommt aus derselben Abfrage, die
   `/api/theo/research/current` benutzt (laufender Batch-Request: Frage, Startzeit, gefundene Sites);
-  die Funktion wird importiert, nicht kopiert. Der Lead trägt seit 2026-09-10 zusätzlich `author`
-  und `body_html`: `research_html.fetch_paper(slug)` holt den Report nach — die Summary-Spalten
-  tragen keinen Text —, `report_markdown()` bereitet ihn genau wie auf der Paperseite auf.
-- **Der Auszug (2026-09-10).** `excerpt_html(html, max_chars=2500)` schneidet direkt hinter dem
-  ersten Block auf oberster Ebene, dessen Ende den sichtbaren Text über die Grenze schiebt
-  (`p, h2, h3, h4, ul, ol, figure, blockquote, pre, table`). Für `ul/ol/blockquote/figure/table`
-  wird die Verschachtelungstiefe mitgezählt, damit der Schnitt nie zwischen zwei `<li>` oder
-  zwischen `<img>` und `<figcaption>` landet; er liegt immer hinter einem schließenden Tag, nie
-  mitten in einem. Zurück kommt `(html, excerpted)`. `excerpted` ist `false`, wenn nichts wegfiel —
-  der "continue reading"-Link darf keinen Text versprechen, den es nicht gibt.
+  die Funktion wird importiert, nicht kopiert.
 - **Stats.** `sites` aus der gecachten `/api/stats`-Logik, `stories` und `journals` aus
   `get_news_stats`, `papers` per Count unter `PUBLIC_PAPER_WHERE`.
 
 Fehlt eine Datenquelle (kein Journal, kein Paper, kein laufender Theo), fehlt die Sektion oder die
 Zeile im Payload und wird nicht gerendert. Es gibt keine Platzhalter-Inhalte.
 
-### 3.4 Interaktion in der Stories-Sektion
+### 3.4 Interaktion: das Portal und die Liste
 
-- Die Sektion ist ein **NERV-Fenster, in dem die Story-Seite läuft**: Titelleiste (`>_ stories.log
-  — {Headline}`, rechts die Fensterknöpfe aus `nerv-ui/window.css`), links der Artikel als
-  `<StoryArticle compact headingLevel="h3">` — Headline, Meta-Zeile, Standbild, Fließtext, Key
-  facts, Site-Chips, Quellen, Art.-50-Fußnote —, rechts die Liste der übrigen Stories. Ein Klick auf
-  eine Zeile tauscht den Fensterinhalt, ohne die Seite zu wechseln.
-- **SEO:** jede Zeile ist ein echter `<a>` auf `/news-archive/{slug}`; der Tausch ist ein
-  `onClick`, der nur einen unmodifizierten Linksklick abfängt. Crawler, Mittelklick und Strg-Klick
-  bekommen den Link. Serverseitig steht der Artikel des Leads komplett im HTML, die Zeile des Leads
-  trägt `aria-current="true"`. Die Sektionsüberschrift bleibt das einzige `h2` über der Story, deren
-  Headline ein `h3` ist — kein `h1` in `#root`.
-- Kategorie-Chips über dem Fenster. Ein Klick lädt `/api/news/feed?news_category={cat}&page_size=7`;
-  die Antwort wird über `feedItemToStory` in dieselbe `StoryData`-Form gebracht, die der Server
-  schickt, der Lead ist die Story mit der höchsten Signifikanz und landet im Fenster. "all" stellt
-  das Payload wieder her. Während des Ladens bleibt der alte Inhalt stehen, es gibt keinen
-  Spinner-Sprung. Der Feed kennt `site_curated` nicht: nachgeladene Stories zeigen deshalb den
-  neutralen Site-Chip statt eines Links auf eine Detailseite, die ein 404 sein könnte.
+Wunsch des Betreibers am 2026-09-10: "Ich will eine Art Portal zu den Seiten — wie ein Screenshot,
+der den aktuellen Stand zeigt." Kein Screenshot, sondern die Seite selbst.
+
+- Jede Sektion ist ein **NERV-Fenster mit einem Portal darin** (`src/landing/PagePortal.tsx`):
+  links ein `<iframe>` auf die echte Seite — `/news.html`, `/articles.html`, `/research/` —, rechts
+  die Liste der Einträge. Titelleiste `>_ portal — {Pfad}`, rechts die beiden Fensterknöpfe aus
+  `nerv-ui/window.css` (Seite öffnen, Archiv).
+- **Der Server rendert nie ein iframe.** SSR und der erste Client-Render liefern denselben Baum:
+  den Container `.ll-portal[data-src]`, den Link `.ll-portal-open` in die Seite und eine gedämpfte
+  Zeile "live view of {src}". Damit stimmen Server- und Client-Baum überein, und ein Crawler
+  bekommt einen Link statt eines Rahmens, dem er nicht folgt.
+- Der Rahmen erscheint erst **nach dem Mount** und nur, wenn er sich lohnt: Viewport ≥ 900 px (die
+  Sektion ist darunter einspaltig, eine 1280-px-Seite auf ein Telefon skaliert ist unlesbar), kein
+  `navigator.connection.saveData` und erst, wenn das Fenster in Sichtweite scrollt
+  (`IntersectionObserver`, `rootMargin: 200px`). Danach rutscht der Öffnen-Link als
+  `.ll-portal-open--over` in die Ecke über das Portal.
+- **Maßstab:** das iframe liegt bei 1280 × 800 CSS-Pixeln und wird per `transform: scale()` auf die
+  Spaltenbreite gebracht; ein `ResizeObserver` auf dem Container schreibt `width / 1280` in
+  `--ll-portal-scale`. Nicht verkleinert, sondern skaliert — die Seite darin sieht einen
+  Desktop-Viewport und ordnet sich so an, wie ein Besucher sie sähe. Pointer-Events bleiben an, man
+  darf im Portal scrollen. `prefers-reduced-motion` braucht nichts, es gibt keine Animation.
+- **SEO:** die Liste neben dem Portal bleibt der crawlbare Teil und ändert sich nicht. Jede Zeile
+  ist ein echter `<a>` auf `/news-archive/{slug}`, `/articles/{slug}` bzw. `/research/{slug}`, kein
+  Tausch im Fenster, kein `aria-current`. Die Sektionsüberschrift bleibt das einzige `h2` der
+  Sektion, in `#root` steht kein `h1`.
+- Kategorie-Chips über dem Stories-Fenster. Ein Klick lädt
+  `/api/news/feed?news_category={cat}&page_size=7`; die Antwort wird über `feedItemToTeaser` in
+  dieselbe `StoryTeaser`-Form gebracht, die der Server schickt, und `leadFirst()` sortiert sie nach
+  derselben Regel wie `pick_lead_and_rail`. "all" stellt das Payload wieder her. Während des Ladens
+  bleibt die alte Liste stehen, es gibt keinen Spinner-Sprung.
 - "Load more" holt `/api/news/feed?page_size=6&page=N` (mit der aktiven Kategorie), lässt bereits
-  gezeigte IDs aus und hängt den Rest an die Liste. Nach zwei Nachladungen wird der Button zum Link
-  "all stories →" auf `/news.html`.
+  gezeigte IDs aus und hängt den Rest an die Liste. Nach zwei Nachladungen verschwindet der Button;
+  darunter steht ohnehin "all stories →" auf `/news.html`.
 - Zeitangaben: der Server rendert das absolute Datum ("Sep 8"), der Client stellt nach der Hydration
   auf relative Zeit um ("2h ago" über `formatRelativeDate`). So gibt es keinen Hydration-Mismatch.
-- Kein Auto-Rotieren, kein Ticker. Hover auf dem Screenshot zoomt leicht, unter
-  `prefers-reduced-motion: reduce` nicht.
-- Journals und Papers haben keine Client-Logik. Sie sind seit 2026-09-10 ebenfalls Fenster, aber
-  ohne Tausch: Kopfleiste, Artikel, Liste — und jede Zeile darin ein normaler Link.
+- Journals und Papers haben keine Client-Logik: Kopfleiste, Portal, Liste — und jede Zeile darin ein
+  normaler Link.
+- **X-Frame-Options.** `/research/` kommt aus der API, und die setzte auf jeder Antwort `DENY` —
+  das eigene Portal wäre leer geblieben. Der Header steht seit 2026-09-10 auf `SAMEORIGIN`
+  (`api/main.py`); fremdes Framing bleibt blockiert, ein `frame-ancestors`-CSP existiert nirgends.
 
 ### 3.5 Gestaltung
 
@@ -184,31 +191,27 @@ umgesetzt in `src/styles/landing-live.css`:
 
 - Fenster (alle drei): Panel-Look wie `.empire-borders-window` (`--surface-raised`, Blur,
   `--border-accent`, 4 px Radius, `--nerv-panel-shadow`), 36 px hohe Titelleiste in
-  `rgba(0,15,20,.95)`, Körper als Raster 1.4fr / 1fr — Artikel mit eigenem Scrollbereich (72 vh,
-  dünne grüne Scrollleiste), Liste rechts daneben. Der Rahmen ist EINE Komponente,
-  `src/landing/LandingWindow.tsx`; die Sektionen liefern nur Titel, die beiden Kopfleisten-Links,
-  den Artikel und die Liste. Im Artikel gelten die Klassen der jeweiligen Seite; überschrieben
-  werden nur die Größen (`.story-title`/`.articles-reader-title`/`.theo-paper-title` 1.5em,
-  Fließtext 14 px, `.theo-paper-page` ohne eigenes Padding). Die aktive Zeile trägt `--nerv-gl` und
-  einen 2 px grünen Balken links.
-- Journal-Fenster (seit 2026-09-10): `>_ journal.log — {Titel}`, links `<JournalArticle
-  headingLevel="h3">` — die Ausgabe genau so, wie `/articles/{slug}` sie rendert, bis zum Auszug
-  —, darunter der `.ll-continue`-Link auf die Ausgabe, wenn `excerpted` gesetzt ist. Rechts oben
-  die Abschnitts-Chips der Ausgabe (jetzt Links auf sie), darunter die älteren Ausgaben als
-  `.ll-row`. Kein Tausch im Fenster: eine Ausgabe ist eine lange Lektüre, keine Karte, jede Zeile
-  ist ein normaler Link.
-- Papers-Fenster (seit 2026-09-10): `>_ research.log — {Titel}`, links `<PaperArticle
-  headingLevel="h3">` mit Hero, Byline, Lesezeit und Lizenz wie auf `/research/{slug}`, darunter
-  der `.ll-continue`-Link und der Evidenz-Streifen (sources analyzed, quality, length, license).
-  Die Theo-Zeile bleibt außerhalb des Fensters — sie beschreibt den Agenten, nicht das Paper.
-- Liste: eine Zeile je weiterer Ausgabe bzw. weiterem Paper (nur Text), beim Stories-Fenster mit
-  96-px-Thumbnail. Zeilen sind komplett klickbar.
+  `rgba(0,15,20,.95)`, Körper als Raster 1.4fr / 1fr — links `.ll-window-main` mit dem Portal,
+  rechts die Liste mit eigenem Scrollbereich (72 vh, dünne grüne Scrollleiste). Der Rahmen ist EINE
+  Komponente, `src/landing/LandingWindow.tsx`; die Sektionen liefern nur Titel, die beiden
+  Kopfleisten-Links, den Inhalt der linken Spalte und die Liste.
+- Portal: `.ll-portal` ist relativ positioniert, 16 / 10, `overflow: hidden`, Hintergrund
+  `--surface-deep`. `.ll-portal-frame` liegt absolut bei 1280 × 800 px ohne Rahmen und wird über
+  `transform-origin: 0 0` und `scale(var(--ll-portal-scale, .5))` auf die Spalte gebracht. Ohne
+  Rahmen (Server, Mobile, Save-Data) zentriert die Box den Öffnen-Link und die Zeile
+  "live view of …"; mit Rahmen sitzt der Link als `.ll-portal-open--over` unten rechts.
+- Fenstertitel: `>_ portal — /news.html`, `>_ portal — /articles.html`, `>_ portal — /research/`.
+- Liste: eine Zeile je Story, Ausgabe bzw. Paper (nur Text), beim Stories-Fenster mit
+  96-px-Thumbnail. Zeilen sind komplett klickbar. Kein Auszug, kein Inhaltsverzeichnis, kein
+  Evidenz-Streifen — was das Fenster früher aus der Seite nachbaute, zeigt jetzt die Seite selbst.
 - Screenshots als Textur: `saturate(.75)` und ein Verlauf nach unten, kein Text im Bild.
 - Theo-Zeile unter den Papers: gestrichelter oranger Rahmen, pulsierender Punkt, "Theo is
   researching: {Frage} · started {Zeit} · {n} sites found", Link auf `/theo.html`. Die Zeit folgt
   derselben Regel wie alle Zeitangaben der Seite: absolut im Server-HTML, relativ ("6h ago") nach
   der Hydration.
-- Mobile unter 900 px (der Breakpoint der übrigen Landing-Sektionen): eine Spalte, Artikel bzw. Lead oben, Liste darunter (Trennlinie oben statt links, Artikel ohne eigenen Scrollbereich); Chips scrollen horizontal.
+- Mobile unter 900 px (der Breakpoint der übrigen Landing-Sektionen): eine Spalte, das Portal ohne
+  festes Seitenverhältnis (es gibt dort keinen Rahmen, nur Link und Zeile), die Liste darunter
+  (Trennlinie oben statt links); Chips scrollen horizontal.
 
 Die Mockups aus dem Brainstorming liegen unter `.superpowers/brainstorm/239-1788951798/content/`
 (`stories-cards.html` Variante B, `longreads.html` Variante A).
