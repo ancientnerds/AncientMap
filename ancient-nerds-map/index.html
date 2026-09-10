@@ -143,6 +143,13 @@
 
     <!-- Preload LCP hero poster -->
     <link rel="preload" href="/landing/hero-poster.webp" as="image" type="image/webp" fetchpriority="high" />
+    <!-- Hero fonts, preloaded: the hero text paints before the fonts would otherwise arrive,
+         and the swap from the fallback face moved the whole hero (CLS 0.16 on mobile once
+         nothing else blocked first paint). ~79 KB for the four faces the hero uses. -->
+    <link rel="preload" href="/fonts/orbitron-700.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/fonts/orbitron-600.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/fonts/cormorant-garamond-400i.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/fonts/jetbrains-mono-400.woff2" as="font" type="font/woff2" crossorigin />
 
     <!-- Full styles (made async by Vite plugin — critical CSS is inlined above) -->
     <link rel="stylesheet" href="/src/styles/landing.css" />
