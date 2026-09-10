@@ -76,8 +76,9 @@ und der Austausch nach dem Laden erzeugt einen sichtbaren Sprung. Warum nicht di
   `LandingRoute` in `src/types/anRoute.ts`.
 - Es hydratisiert nur `#root`. Hero und Screenshot-Sektionen bleiben reines HTML ohne React.
 - Budget für das seitenspezifische JS (`landing-*.js` + `LandingLive-*.js`): 40 kB Brotli, gemessen
-  per `size-limit`; react-dom ist ein geteilter Chunk und zählt nicht mit (Stand 09.09.: 3,4 kB). Nichts aus `three`, nichts aus `SitePopup`, kein `NewsCard` (447 Zeilen, Inline-Video,
-  Share-Logik: zu schwer für eine Vorschau).
+  per `size-limit`; react-dom ist ein geteilter Chunk und zählt nicht mit (Stand 10.09.: 2,3 kB,
+  nachdem die Listen und ihr Feed-Client weg sind). Nichts aus `three`, nichts aus `SitePopup`,
+  kein `NewsCard` (447 Zeilen, Inline-Video, Share-Logik: zu schwer für eine Vorschau).
 - LCP bleibt Logo und Hero-Poster. `#root` reserviert seine Höhe nicht, weil der Inhalt serverseitig
   vollständig ankommt; Bilder tragen `width`/`height` und `aspect-ratio`, damit nichts springt.
 
@@ -90,129 +91,137 @@ für den ersten Paint keinen einzigen API-Aufruf.
 LandingRoute {
   type: 'landing'
   stats:    { sites: number, stories: number, journals: number, papers: number }
-  stories:  { items: StoryTeaser[], categories: string[] }
-  journals: { items: JournalTeaser[], total: number }
-  papers:   { items: PaperTeaser[], total: number, theo: TheoStatus | null }
+  journals: { total: number } | null
+  papers:   { items: PaperCardData[], total: number, theo: TheoStatus | null } | null
 }
-StoryTeaser   { id, headline, screenshot_url, news_category, significance, published_at,
-                site_name, channel_name }
-JournalTeaser { id, title, week_start, week_end, published_at, minutes, path }
-PaperTeaser   { slug, title, published_at, words, sources_analyzed, path }
+PaperCardData { slug, title, summary, hero_image_url, author, published_at,
+                words, sources_analyzed, path }
 TheoStatus    { question, started_at, sites_found }
 ```
 
-Seit 2026-09-10 trägt **kein** Eintrag mehr Body-HTML: die Sektion zeigt die echte Seite im Portal
-(3.4), das Payload liefert nur noch die Liste daneben — und in einer Zeile genau die Felder, die
-sie druckt. Ein Teaser-Feld, das keine Komponente liest, gehört nicht ins Payload; die Schlüssel
-sind auf beiden Seiten festgenagelt (`tests/api/test_landing_html.py`, `landingLive.test.tsx`). `items` ist lead-first — erst der Eintrag,
-mit dem die Sektion führt, dann der Rest in Abfragereihenfolge.
+Seit 2026-09-10 trägt das Payload **keine Zeilen** mehr, weil es keine Listen mehr gibt (3.4): jede
+Sektion ist ein Portal auf die echte Seite, und die Seite darin IST ihre Liste. Übrig bleiben drei
+Zähler und die sechs Papers, die die Galerie als Karten rendert — und dort genau die neun Felder, die
+eine Karte druckt. Ein Feld, das keine Komponente liest, gehört nicht ins Payload; die Schlüssel sind
+auf beiden Seiten festgenagelt (`tests/api/test_landing_html.py`, `landingLive.test.tsx`).
 
 Regeln:
 
-- **Stories.** Der öffentliche Story-Index (`public_stories_query`: post_text vorhanden, keine
-  spekulativen Stories, weil die noindex sind) plus die Signifikanz-Untergrenze des Feeds (≥ 2 oder
-  null), neueste zuerst. Der Lead ist die Story mit der höchsten Signifikanz der letzten 48 Stunden,
-  bei Gleichstand die neuere. Gibt es in 48 Stunden keine, ist der Lead die höchste Signifikanz
-  unter den 7 neuesten. Danach folgen die 7 neuesten ohne den Lead, gekürzt auf 6 Zeilen — sichtbar
-  sind also immer 7 Stories. Die Zeilen baut `story_teaser()`, und das ist bewusst keine zweite
-  Abbildung: es filtert `articles_html.story_payload(row, related=[])` — dieselbe Funktion, die
-  `/news-archive/{slug}` bedient — auf `STORY_TEASER_KEYS` herunter, damit `published_at` oder
-  `site_name` in Zeile und Seite nicht Verschiedenes bedeuten können. Die Story-URL leitet der
-  Client aus `headline` und `id` ab (`storyPath`, die TS-Seite von `story_slug`), weil er dieselbe
-  Liste beim Chip-Klick aus `/api/news/feed` neu baut und der Feed keinen Pfad kennt; `categories`
-  sind die Kategorien mit mindestens einer Story in den letzten 30 Tagen.
-- **Journals.** Die 4 neuesten aktiven Artikel nach `week_start`, alle vier als Zeilen. `minutes`
-  ist die Wortzahl des Inhalts durch 238, aufgerundet — gezählt wird serverseitig, der Text selbst
-  bleibt in der Seite. `path` ist `/articles/{slugify(title)}`, wie in `articles_html.py`.
+- **Stories.** Nur der Zähler `stats.stories` aus `get_news_stats`. Die Statuszeile schreibt
+  "{n} stories · newest first", das Portal auf `/news.html` zeigt den Rest. Die Lead-Regel, die
+  Kategorie-Chips und `story_teaser()` sind mit der Liste verschwunden, ebenso die beiden Abfragen,
+  die sie fütterten.
+- **Journals.** Nur `journals.total` (`get_news_stats().total_articles`). `null`, wenn es keine
+  einzige Ausgabe gibt — dann fehlt die Sektion. Statuszeile: "{n} issues · every Sunday".
 - **Papers.** Die 6 neuesten nach `published_at` unter `PUBLIC_PAPER_WHERE` mit den
-  `PAPER_SUMMARY_COLUMNS`, alle sechs als Zeilen. `theo` kommt aus derselben Abfrage, die
-  `/api/theo/research/current` benutzt (laufender Batch-Request: Frage, Startzeit, gefundene Sites);
-  die Funktion wird importiert, nicht kopiert.
+  `PAPER_SUMMARY_COLUMNS`. `paper_teaser()` ist bewusst keine zweite Abbildung: es filtert
+  `public_v1.paper_summary_kwargs(row)` — dieselbe Funktion, die `/api/v1/research` bedient — auf die
+  Kartenfelder herunter, damit `hero_image_url` oder `word_count` hier nichts anderes bedeuten als
+  dort. `quality_score` und `question` bleiben draußen: die Karte auf der Startseite druckt beides
+  nicht. `theo` kommt aus derselben Abfrage, die `/api/theo/research/current` benutzt (laufender
+  Batch-Request: Frage, Startzeit, gefundene Sites); die Funktion wird importiert, nicht kopiert.
 - **Stats.** `sites` aus der gecachten `/api/stats`-Logik, `stories` und `journals` aus
   `get_news_stats`, `papers` per Count unter `PUBLIC_PAPER_WHERE`.
 
 Fehlt eine Datenquelle (kein Journal, kein Paper, kein laufender Theo), fehlt die Sektion oder die
 Zeile im Payload und wird nicht gerendert. Es gibt keine Platzhalter-Inhalte.
 
-### 3.4 Interaktion: das Portal und die Liste
+### 3.4 Interaktion: das Portal
 
 Wunsch des Betreibers am 2026-09-10: "Ich will eine Art Portal zu den Seiten — wie ein Screenshot,
 der den aktuellen Stand zeigt." Kein Screenshot, sondern die Seite selbst.
 
-- Jede Sektion ist ein **NERV-Fenster mit einem Portal darin** (`src/landing/PagePortal.tsx`):
-  links ein `<iframe>` auf die echte Seite — `/news.html`, `/articles.html`, `/research/` —, rechts
-  die Liste der Einträge. Titelleiste `>_ portal — {Pfad}`, rechts die Fensterknöpfe aus
+- Jede Sektion ist ein **NERV-Fenster mit einem Portal darin** (`src/landing/PagePortal.tsx`): ein
+  `<iframe>` auf die echte Seite — `/news.html`, `/articles.html`, `/research/` — über die volle
+  Breite des Fensterkörpers. Titelleiste `>_ portal — {Pfad}`, rechts die Fensterknöpfe aus
   `nerv-ui/window.css`: ↗ öffnet die Seite, ≡ das Archiv — und ≡ gibt es nur, wo das Archiv eine
   andere Seite ist (Stories: `/news.html` vs. `/news-archive/`). Der Journal-Hub und die
   Forschungsbibliothek SIND ihr Archiv, dort steht nur ↗.
+- **Die Liste daneben ist weg** (Betreiber, 2026-09-10: "Warum haben wir rechts immer noch die Liste
+  der Stories, Journals und Research Papers?"). Sie sagte dasselbe wie die Seite im Rahmen. Mit ihr
+  gingen `.ll-window-list`, `.ll-row*`, `.ll-img*`, die Chips, "load more", `feedClient.ts` und
+  `dates.ts`; der Fensterkörper ist eine Spalte.
+- **Der Rahmen ist Dekoration, kein zweiter Browser**: `pointer-events: none`, `tabIndex={-1}`,
+  `aria-hidden="true"` (Betreiber: "das Scrollen im Portal wird verhindert, damit ich normal
+  weiterscrollen kann"). Ein Wheel-Event oder eine Wischgeste über dem Portal scrollt die
+  Startseite, im Rahmen lässt sich nichts anklicken und nichts antabben.
+- **Ein Overlay-Link deckt das ganze Portal** (`.ll-portal-link`, `position: absolute; inset: 0`) und
+  trägt mittig einen `.cta-primary` — dieselbe rote Schaltfläche wie im Hero. Wo es einen Zeiger gibt
+  (`@media (hover: hover)`), wartet der CTA auf ihn: unsichtbar, bis das Portal überfahren oder der
+  Link per Tastatur fokussiert wird (kurze Opacity-Blende, nur unter
+  `prefers-reduced-motion: no-preference`), und der Rahmen dunkelt dabei auf `brightness(.6)` ab. Auf
+  Touch-Geräten (`@media (hover: none)`) steht er immer da. `aria-label` trägt die Wörter ohne den
+  ↗-Glyphen, den ein Screenreader sonst als "north east arrow" vorliest.
 - **Der Server rendert nie ein iframe.** SSR und der erste Client-Render liefern denselben Baum:
-  den Container `.ll-portal[data-src]`, den Link `.ll-portal-open` in die Seite und eine gedämpfte
-  Zeile "live view of {src}". Damit stimmen Server- und Client-Baum überein, und ein Crawler
-  bekommt einen Link statt eines Rahmens, dem er nicht folgt.
-- Der Rahmen erscheint erst **nach dem Mount** und nur, wenn er sich lohnt: Viewport ≥ 900 px (die
-  Sektion ist darunter einspaltig, eine 1280-px-Seite auf ein Telefon skaliert ist unlesbar), kein
-  `navigator.connection.saveData` und erst, wenn das Fenster in Sichtweite scrollt
-  (`IntersectionObserver`, `rootMargin: 200px`). Danach rutscht der Öffnen-Link als
-  `.ll-portal-open--over` in die Ecke über das Portal.
-- **Maßstab:** das iframe liegt bei 1280 × 800 CSS-Pixeln und wird per `transform: scale()` auf die
-  Spaltenbreite gebracht; ein `ResizeObserver` auf dem Container schreibt `width / 1280` in
+  den Container `.ll-portal[data-src]` und den Overlay-Link mit seinem CTA. Damit stimmen Server- und
+  Client-Baum überein, und ein Crawler bekommt einen Link statt eines Rahmens, dem er nicht folgt.
+- Der Rahmen erscheint erst **nach dem Mount**, dann aber auf **allen** Viewports — auch auf dem
+  Telefon, das dafür die 4/3-Box bekommt (3.5). Ausgenommen bleibt nur
+  `navigator.connection.saveData`: eine ganze zweite Seite ist genau das, worum dieser Header bittet,
+  sie nicht zu laden. Geladen wird erst, wenn das Fenster in Sichtweite scrollt
+  (`IntersectionObserver`, `rootMargin: 200px`), damit drei Portale nicht drei Seitenaufrufe auf
+  einer Startseite kosten, die niemand gescrollt hat. Bis dahin ist die Box der dunkle Portalkasten
+  mit dem CTA.
+- **Maßstab:** das iframe liegt 1280 CSS-Pixel breit und wird per `transform: scale()` auf die
+  Fensterbreite gebracht; ein `ResizeObserver` auf dem Container schreibt `width / 1280` in
   `--ll-portal-scale`. Nicht verkleinert, sondern skaliert — die Seite darin sieht einen
-  Desktop-Viewport und ordnet sich so an, wie ein Besucher sie sähe. Pointer-Events bleiben an, man
-  darf im Portal scrollen. `prefers-reduced-motion` braucht nichts, es gibt keine Animation.
-- **SEO:** die Liste neben dem Portal bleibt der crawlbare Teil und ändert sich nicht. Jede Zeile
-  ist ein echter `<a>` auf `/news-archive/{slug}`, `/articles/{slug}` bzw. `/research/{slug}`, kein
-  Tausch im Fenster, kein `aria-current`. Die Sektionsüberschrift bleibt das einzige `h2` der
-  Sektion, in `#root` steht kein `h1`.
-- Kategorie-Chips über dem Stories-Fenster. Ein Klick lädt
-  `/api/news/feed?news_category={cat}&page_size=7`; die Antwort wird über `feedItemToTeaser` in
-  dieselbe `StoryTeaser`-Form gebracht, die der Server schickt, und `leadFirst()` sortiert sie nach
-  derselben Regel wie `pick_lead_and_rail`. "all" stellt das Payload wieder her. Während des Ladens
-  bleibt die alte Liste stehen, es gibt keinen Spinner-Sprung.
-- "Load more" holt `/api/news/feed?page_size=6&page=N` (mit der aktiven Kategorie), lässt bereits
-  gezeigte IDs aus und hängt den Rest an die Liste. Nach zwei Nachladungen verschwindet der Button;
-  darunter steht ohnehin "all stories →" auf `/news.html`.
-- Zeitangaben: der Server rendert das absolute Datum ("Sep 8"), der Client stellt nach der Hydration
+  Desktop-Viewport und ordnet sich so an, wie ein Besucher sie sähe. Die Höhe ist abgeleitet statt
+  fest: `calc(100% / var(--ll-portal-scale))` ist skaliert exakt die Höhe der Box, im 16/10-Desktop
+  dieselben 800 px wie vorher, in der 4/3-Box des Telefons der höhere Ausschnitt, der sie füllt.
+- **Galerie.** Unter dem Papers-Fenster stehen die sechs Papers als Karten (3.5), jede ein `<a>` auf
+  `/research/{slug}` — der crawlbare Teil der Sektion, und der einzige, den es noch braucht.
+- **SEO:** in `#root` steht kein `h1`; die Sektionsüberschrift bleibt das einzige `h2` der Sektion.
+  Jede Sektion verlinkt ihre Seite dreifach (Fensterknopf, Overlay-Link, Fußzeile), die Papers
+  zusätzlich jedes einzelne Paper.
+- Zeitangaben: der Server rendert das absolute Datum ("Sep 9"), der Client stellt nach der Hydration
   auf relative Zeit um ("2h ago" über `formatRelativeDate`). So gibt es keinen Hydration-Mismatch.
-- Journals und Papers haben keine Client-Logik: Kopfleiste, Portal, Liste — und jede Zeile darin ein
-  normaler Link.
+  Übrig ist davon genau eine Stelle, die Startzeit in der Theo-Zeile.
+- Client-Logik gibt es in keiner der drei Sektionen mehr außer dem Portal selbst: Kopfleiste,
+  Portal, Fußzeile — und bei den Papers die Galerie und die Theo-Zeile.
 - **X-Frame-Options.** `/research/` kommt aus der API, und die setzte auf jeder Antwort `DENY` —
   das eigene Portal wäre leer geblieben. Der Header steht seit 2026-09-10 auf `SAMEORIGIN`
   (`api/main.py`); fremdes Framing bleibt blockiert, ein `frame-ancestors`-CSP existiert nirgends.
 
 ### 3.5 Gestaltung
 
-**Eine Palette, die NERV-Palette** (Nutzer-Feedback 2026-09-10: "Warum benutzen wir keine
-einheitlichen Farben?"). Referenz ist die Story-Seite: weiße Orbitron-Überschriften
+**Grün und rot, sonst nichts** (Betreiber, 2026-09-10: "Seit wann benutzen wir diese blaue Schrift?
+Wir haben in NERV nur grün und rot!"). Referenz ist die Story-Seite: weiße Orbitron-Überschriften
 (`--text-heading`), neutraler Fließtext (`--nerv-steel`), gedämpfte Meta-Zeilen
-(`--nerv-steel-dim`), grün umrandete Tags, cyan Links (`--text-link`). Die vier privaten
-Farbvariablen und die Kategorie-Farben sind gelöscht; einzige Ausnahme bleibt NERV-Orange
+(`--nerv-steel-dim`). Jeder Link ist `--accent-primary`, jede Handlungsaufforderung trägt
+`.cta-primary` aus `landing.css` und ist damit rot; `--text-link`, `--accent-secondary` und `--nerv-c`
+kommen in den Live-Sektionen und im Intro-Absatz nicht mehr vor. Einzige Ausnahme bleibt NERV-Orange
 (`--nerv-o`) für die Theo-Zeile, weil das die Farbe eines laufenden Agenten ist. Monospace,
 Sektionslabel im Muster `>_ [ fig. 1 — stories, live ]`, rechts daneben der Status. Bausteine,
 umgesetzt in `src/styles/landing-live.css`:
 
 - Fenster (alle drei): Panel-Look wie `.empire-borders-window` (`--surface-raised`, Blur,
   `--border-accent`, 4 px Radius, `--nerv-panel-shadow`), 36 px hohe Titelleiste in
-  `rgba(0,15,20,.95)`, Körper als Raster 1.4fr / 1fr — links `.ll-window-main` mit dem Portal,
-  rechts die Liste mit eigenem Scrollbereich (72 vh, dünne grüne Scrollleiste). Der Rahmen ist EINE
+  `rgba(0,15,20,.95)`, Titel mit Ellipse, Körper eine Spalte mit 12 px Polster. Der Rahmen ist EINE
   Komponente, `src/landing/LandingWindow.tsx`; die Sektionen liefern nur Titel, die
-  Kopfleisten-Links (`archive` ist optional), den Inhalt der linken Spalte und die Liste.
+  Kopfleisten-Links (`archive` ist optional) und den Inhalt.
 - Portal: `.ll-portal` ist relativ positioniert, 16 / 10, `overflow: hidden`, Hintergrund
-  `--surface-deep`. `.ll-portal-frame` liegt absolut bei 1280 × 800 px ohne Rahmen und wird über
-  `transform-origin: 0 0` und `scale(var(--ll-portal-scale, .5))` auf die Spalte gebracht. Ohne
-  Rahmen (Server, Mobile, Save-Data) zentriert die Box den Öffnen-Link und die Zeile
-  "live view of …"; mit Rahmen sitzt der Link als `.ll-portal-open--over` unten rechts.
+  `--surface-deep`. `.ll-portal-frame` liegt absolut bei 1280 px Breite ohne Rahmen, ohne
+  Pointer-Events, und wird über `transform-origin: 0 0` und `scale(var(--ll-portal-scale, .5))` auf
+  die Spalte gebracht. Darüber `.ll-portal-link` über die volle Fläche mit dem `.ll-portal-cta` in
+  der Mitte — der übernimmt Farbe und Rahmen von `.cta-primary` und ändert nur die Größe, damit die
+  längste Beschriftung ("Open research library ↗") in eine 318-px-Box auf einem 390-px-Telefon passt.
 - Fenstertitel: `>_ portal — /news.html`, `>_ portal — /articles.html`, `>_ portal — /research/`.
-- Liste: eine Zeile je Story, Ausgabe bzw. Paper (nur Text), beim Stories-Fenster mit
-  96-px-Thumbnail. Zeilen sind komplett klickbar. Kein Auszug, kein Inhaltsverzeichnis, kein
-  Evidenz-Streifen — was das Fenster früher aus der Seite nachbaute, zeigt jetzt die Seite selbst.
-- Screenshots als Textur: `saturate(.75)` und ein Verlauf nach unten, kein Text im Bild.
-- Theo-Zeile unter den Papers: gestrichelter oranger Rahmen, pulsierender Punkt, "Theo is
-  researching: {Frage} · started {Zeit} · {n} sites found", Link auf `/theo.html`. Die Zeit folgt
-  derselben Regel wie alle Zeitangaben der Seite: absolut im Server-HTML, relativ ("6h ago") nach
-  der Hydration.
-- Mobile unter 900 px (der Breakpoint der übrigen Landing-Sektionen): eine Spalte, das Portal ohne
-  festes Seitenverhältnis (es gibt dort keinen Rahmen, nur Link und Zeile), die Liste darunter
-  (Trennlinie oben statt links); Chips scrollen horizontal.
+- Papers-Galerie: `.theo-public-grid.ll-gallery` unter dem Fenster, Karten aus
+  `src/components/theo/PaperCard.tsx` mit den Regeln aus `src/styles/paper-card.css` — dieselbe
+  Karte, die die öffentliche Forschungsbibliothek auf `/theo.html` rendert (Betreiber: "Warum sieht
+  die Paper-Galerie nicht aus wie Theos Forschungsaufträge, wo man Karten mit Bildern bekommt?"). Die
+  Regeln wurden aus `theo.css` VERSCHOBEN, nicht kopiert; TheoPage bekommt sie über den Import der
+  Komponente. Drei Karten je Reihe statt des Auto-Fill der Bibliothek, weil sechs Papers in vier
+  Spalten eine ausgefranste zweite Reihe ergeben. Hero-Bild aus `hero_image_url`; fehlt es, zeigt der
+  Hero-Kasten nur die Vignette mit dem Titel — nie ein `<img src="">`. Fußzeile der Karte:
+  "by {Autor} · {Datum} · {n} sources · {n} words", aus den vorhandenen Teilen zusammengesetzt.
+- Theo-Zeile unter der Galerie: gestrichelter oranger Rahmen, pulsierender Punkt, "Theo is
+  researching: {Frage} · started {Zeit} · {n} sites found", Link auf `/theo.html`.
+- Mobile unter 700 px: Portal 4 / 3 mit sichtbarem CTA, Galerie einspaltig, Fußzeile und
+  Theo-Zeile zweizeilig statt in einer gequetschten Reihe. Das seitliche Polster bleibt bei
+  24 px, damit die Live-Sektionen mit den statischen `.landing-section` bündig stehen; bei
+  390 px Viewport läuft trotzdem nichts über: 390 − 2 × 24 − 2 × 12 Fensterpolster = 318 px für
+  Portal und Karten, und der längste CTA braucht davon rund 250 px.
 
 Die Mockups aus dem Brainstorming liegen unter `.superpowers/brainstorm/239-1788951798/content/`
 (`stories-cards.html` Variante B, `longreads.html` Variante A).
@@ -251,24 +260,30 @@ analysierte Quellen je Paper). Im statischen Rückfall bleiben Absatz und H1 mit
 - Sidecar oder API antworten nicht: nginx liefert das statische `index.html`, die Live-Sektionen
   fehlen, alles andere funktioniert. Kein zweiter Renderer, wie bei den anderen SSR-Seiten.
 - Payload leer oder unbekannter Typ im Client: `landingMain.tsx` rendert nichts und meldet nichts.
-- `/api/news/feed` schlägt beim Chip-Klick fehl: der bisherige Inhalt bleibt, der Chip springt
-  zurück, ein kurzer Hinweis "feed unavailable" erscheint in der Statuszeile.
-- Screenshot fehlt (404): `LazyImage`-Fallback wie in den Story-Seiten.
+- Das Portal lädt nicht (Save-Data, Seite im Rahmen langsam oder tot): die Box bleibt der dunkle
+  Portalkasten mit dem CTA — genau das, was Server und erster Client-Render ohnehin liefern.
+  Es gibt keinen Ladezustand und keinen Platzhalterinhalt.
 
 ## 5. Tests
 
-- **vitest:** `landingMeta` liefert Titel und Description mit der formatierten Site-Zahl; `renderToString(<LandingLive/>)` mit einem
-  Fixture-Payload enthält alle Story-, Journal- und Paper-Links, keine "undefined"-Strings, und rendert
-  ohne Theo-Zeile, wenn `theo` null ist. Bestehender Route-Guard-Test um `landing` erweitern.
-- **pytest (DB-los):** der Payload-Builder bekommt Fake-Rows und liefert die Lead-Regel korrekt
-  (48-Stunden-Fenster, kein Duplikat, Fallback auf die 7 neuesten), Wortzahl und Lesezeit, Sektionen
-  ohne "Sources"/"Videos".
+- **vitest:** `landingMeta` liefert Titel und Description mit der formatierten Site-Zahl;
+  `renderToString(<LandingLive/>)` mit dem Fixture-Payload liefert drei Fenster mit je einem
+  `.ll-portal[data-src]` und genau einem `.ll-portal-link` mit `.cta-primary`, kein `<iframe`,
+  keine Listenklasse mehr, die Papers-Galerie als `a.theo-public-card` je Paper (mit
+  `img.theo-public-card-img` nur dort, wo es ein Hero gibt), kein `h1`, kein "undefined"/"null",
+  und keine Theo-Zeile, wenn `theo` null ist.
+- **pytest (DB-los):** `paper_teaser()` bekommt Fake-Rows und liefert exakt die neun Kartenfelder,
+  auch für ein Paper ohne Hero, Blurb, Wortzahl oder Datum; die Route liefert `{type, stats,
+  journals, papers}` und nichts sonst, lässt Sektionen ohne Zeilen weg, antwortet aus dem Cache
+  und bleibt unter gzip dekodierbar.
 - **Build-Gate:** `size-limit` auf `dist/assets/landing-*.js` und `LandingLive-*.js` mit 40 kB
   Brotli im `lint-frontend`-Job, gleich nach `npm run build`.
-- **Nach dem Deploy (Playwright):** `/` liefert SSR-HTML mit sieben Story-Links (Lead plus sechs), null
-  Hydration-Fehler in der Konsole, LCP-Element ist das Hero-Bild, genau eine H1 mit dem Suchbegriff,
-  kein "750K" mehr im Dokument, und ein Chip-Klick tauscht den Inhalt.
-  Crawler-Sicht mit JS-Blockade prüfen (Lehre aus den 2.100 Soft-404-Seiten).
+- **Nach dem Deploy (Playwright):** `/` liefert SSR-HTML mit drei Portalen und sechs Paper-Karten,
+  null Hydration-Fehler in der Konsole, LCP-Element ist das Hero-Bild, genau eine H1 mit dem
+  Suchbegriff, kein "750K" mehr im Dokument; nach dem Scrollen stehen drei iframes im DOM, ein
+  Wheel-Event über einem Portal scrollt die Seite und nicht den Rahmen, und auf 390 px Breite gibt
+  es keinen horizontalen Überlauf. Crawler-Sicht mit JS-Blockade prüfen (Lehre aus den 2.100
+  Soft-404-Seiten).
 
 ## 6. Änderungen außerhalb des Codes
 
@@ -283,5 +298,5 @@ analysierte Quellen je Paper). Im statischen Rückfall bleiben Absatz und H1 mit
 2. `landing_html.py` mit Payload-Builder und pytest, Route `/home` in `main.py`.
 3. `index.html`: `#root`, H1-Tausch, Intro-Absatz, `data-stat`-Spans, Zahlen in Head, JSON-LD und
    Manifest, Sektionen entfernen, `landingMain.tsx` einbinden; Service-Worker-Denylist; CSS.
-4. Stories-Interaktion (Chips, Load more, relative Zeit).
+4. Portal-Verhalten (Overlay-CTA, Lazy-Mount, Maßstab) und die Papers-Galerie.
 5. nginx-Block, size-limit, Deploy, Playwright-Prüfung, GSC-Beobachtung der Startseite.
