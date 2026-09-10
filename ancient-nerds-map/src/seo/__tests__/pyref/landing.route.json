@@ -6,68 +6,7 @@
     "journals": 23,
     "papers": 24
   },
-  "stories": {
-    "items": [
-      {
-        "id": 8207,
-        "headline": "Vienna Roman mass grave dated to late 1st-early 2nd century CE; 85% of injuries perimortem",
-        "screenshot_url": "/data/news/screenshots/YGUoJy_SRr0_1038.webp",
-        "news_category": "bioarchaeology",
-        "significance": 9,
-        "published_at": "2026-09-07T04:23:33",
-        "site_name": "Roman grave",
-        "channel_name": "Inside Archaeology"
-      },
-      {
-        "id": 8245,
-        "headline": "1-million-year-old stone tools on Sulawesi suggest earliest known seafaring",
-        "screenshot_url": "/data/news/screenshots/TKnMsjxSzTQ_292.webp",
-        "news_category": "artifact",
-        "significance": 8,
-        "published_at": "2026-09-08T19:33:29",
-        "site_name": "",
-        "channel_name": "Michael Button"
-      },
-      {
-        "id": 8208,
-        "headline": "DNA confirms Mississippian cacao consumption at Etowah, Georgia, around 1000 years ago",
-        "screenshot_url": null,
-        "news_category": "artifact",
-        "significance": 7,
-        "published_at": "2026-09-07T04:23:33",
-        "site_name": "Etowah",
-        "channel_name": "Inside Archaeology"
-      }
-    ],
-    "categories": [
-      "artifact",
-      "bioarchaeology",
-      "underwater",
-      "theory",
-      "architecture"
-    ]
-  },
   "journals": {
-    "items": [
-      {
-        "id": 74,
-        "title": "Week of August 31: 476,000-Year-Old Wooden Structure Found, Dire Wolf Pups Born, and More",
-        "week_start": "2026-08-31T00:00:00",
-        "week_end": "2026-09-06T23:59:59",
-        "published_at": "2026-09-07T04:20:43",
-        "minutes": 12,
-        "path": "/articles/week-of-august-31-476000-year-old-wooden-structure-found-dire-wolf-pups-born-and-more"
-      },
-      {
-        "id": 73,
-        "title": "Week of August 24: 25 Turtle Figurines in Turkish Cave, World's First Brand, and More",
-        "week_start": "2026-08-24T00:00:00",
-        "week_end": "2026-08-30T23:59:59",
-        "published_at": "2026-08-30T23:28:56",
-        "minutes": 11,
-        "path": "/articles/week-of-august-24-25-turtle-figurines-in-turkish-cave-worlds-first-brand-and-more"
-      }
-    ],
     "total": 23
   },
   "papers": {
@@ -75,6 +14,9 @@
       {
         "slug": "the-egyptian-hard-stone-precision-debate",
         "title": "The Egyptian Hard-Stone Precision Debate",
+        "summary": "Tool marks, drill cores and the question of what Old Kingdom masons could actually do.",
+        "hero_image_url": "https://ancientnerds.com/data/research-images/the-egyptian-hard-stone-precision-debate/hero.jpg",
+        "author": null,
         "published_at": "2026-08-31T22:07:06",
         "words": 6466,
         "sources_analyzed": 2748,
@@ -83,6 +25,9 @@
       {
         "slug": "submerged-sites-between-geology-and-pseudoarchaeology",
         "title": "Submerged Sites Between Geology and Pseudoarchaeology",
+        "summary": null,
+        "hero_image_url": null,
+        "author": "theo",
         "published_at": "2026-08-31T22:07:05",
         "words": 7057,
         "sources_analyzed": 3169,

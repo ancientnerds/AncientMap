@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import time
-from datetime import datetime, timedelta
+from datetime import datetime
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
@@ -17,22 +17,14 @@ from fastapi.testclient import TestClient
 from starlette.middleware.gzip import GZipMiddleware
 
 from api.routes import landing_html
-from api.routes.articles_html import story_payload
 from api.routes.landing_html import (
-    STORY_TEASER_KEYS,
     apply_stats,
-    journal_teaser,
-    lead_window_start,
     paper_teaser,
-    pick_lead_and_rail,
-    reading_minutes,
     sites_compact,
     sites_long,
-    story_teaser,
 )
 from pipeline.database import get_db
 
-NOW = datetime(2026, 9, 9, 12, 0, 0)
 # The three hero markers apply_stats() insists on; a shell without them raises.
 _SHELL_MARKERS = (
     '<div data-stat="sites">1.7M+</div><span data-stat="sites-long">1.7 million</span>'
@@ -40,143 +32,59 @@ _SHELL_MARKERS = (
 )
 
 
-def item(id_, *, sig, hours_ago, category="artifact", site=None, post="One sentence. Two. https://x.y"):
-    """A joinedload-ed NewsItem row: every attribute story_payload() touches."""
-    video = SimpleNamespace(
-        id=f"vid{id_}",
-        title=f"Video {id_}",
-        published_at=NOW - timedelta(hours=hours_ago),
-        channel=SimpleNamespace(name="Inside Archaeology"),
-    )
-    return SimpleNamespace(
-        id=id_,
-        headline=f"Headline {id_}",
-        summary=f"Summary {id_}",
-        facts=[f"Fact {id_}"],
-        post_text=post,
-        screenshot_url=f"/data/news/screenshots/{id_}.webp",
-        news_category=category,
-        significance=sig,
-        created_at=NOW - timedelta(hours=hours_ago),
-        web_sources=[{"url": "a"}, {"url": "b"}],
-        timestamp_seconds=None,
-        speculative_tag=None,
-        site_name_extracted=None,
-        video=video,
-        site=site,
-    )
+def paper_row(**over):
+    """A PAPER_SUMMARY_COLUMNS row: every column paper_summary_kwargs() reads."""
+    row = {
+        "id": "4bf8",
+        "slug": "the-egyptian-hard-stone-precision-debate",
+        "question": "Q?",
+        "published_by": None,
+        "published_at": datetime(2026, 8, 31, 22, 7, 6),
+        "sites_found": 2748,
+        "title": "The Egyptian Hard-Stone Precision Debate",
+        "card_description": "Summary.",
+        "score": "98",
+        "badge": "Unverified",
+        "word_count": "6466",
+        "hero_src": "/data/research-images/x.jpg",
+    }
+    row.update(over)
+    return SimpleNamespace(**row)
 
 
-def test_pick_lead_prefers_the_48h_window_and_never_duplicates():
-    recent = [item(i, sig=3, hours_ago=i) for i in range(1, 8)]  # ids 1..7, newest first
-    lead_48h = item(5, sig=9, hours_ago=5)
-    lead, rail = pick_lead_and_rail(recent, lead_48h)
-    assert lead.id == 5
-    assert [r.id for r in rail] == [1, 2, 3, 4, 6, 7]
+def test_paper_teaser_is_the_public_api_mapping_cut_to_the_card():
+    """Everything the card prints and nothing else.
 
-
-def test_pick_lead_falls_back_to_the_best_of_the_recent_seven():
-    recent = [item(1, sig=2, hours_ago=60), item(2, sig=8, hours_ago=61), item(3, sig=8, hours_ago=62)]
-    lead, rail = pick_lead_and_rail(recent, None)
-    assert lead.id == 2  # tie on 8 → the newer one
-    assert [r.id for r in rail] == [1, 3]
-
-
-def test_pick_lead_keeps_six_rows_when_the_lead_is_outside_the_seven():
-    recent = [item(i, sig=3, hours_ago=i) for i in range(1, 8)]
-    lead, rail = pick_lead_and_rail(recent, item(99, sig=9, hours_ago=40))
-    assert lead.id == 99
-    assert len(rail) == 6 and [r.id for r in rail] == [1, 2, 3, 4, 5, 6]
-
-
-def test_story_teaser_is_the_story_payload_cut_to_the_row_fields():
-    """One mapping, not two. The row shows a headline, a thumbnail and a meta
-    line; everything else story_payload() builds belongs to the story page,
-    which the homepage links instead of rendering."""
-    row = item(9, sig=9, hours_ago=2, site=SimpleNamespace(
-        id="16147718-a70b-486e-aaba-9cf71316602c", name="Roman grave", country="Austria",
-        site_type="Battlefield", period_name="Roman", period_start=100,
-        source_id="ancient_nerds",
-    ))
-    teaser = story_teaser(row)
-    assert set(teaser) == set(STORY_TEASER_KEYS)
-    assert teaser == {k: v for k, v in story_payload(row, related=[]).items() if k in teaser}
-    assert teaser["published_at"] == "2026-09-09T10:00:00"
-    assert teaser["site_name"] == "Roman grave"
-    assert teaser["channel_name"] == "Inside Archaeology"
-
-
-def test_reading_minutes_rounds_up_at_238_wpm():
-    assert reading_minutes(2762) == 12
-    assert reading_minutes(238) == 1
-    assert reading_minutes(0) == 0
-
-
-def test_journal_teaser_is_the_row_and_nothing_more():
-    """The row prints "No. {id} · {week} · {minutes} min" and links path.
-
-    The issue itself is one click away in the portal, so the content is
-    counted here and then dropped: a summary, the "##" headings or a link
-    count would be payload no component reads.
+    PaperCard renders a hero, the title over it, the blurb under it and one
+    footer line "by {author} · {date} · {n} sources · {n} words". The quality
+    score and the paper's own question belong to /theo.html and the paper
+    page — the homepage ships neither.
     """
-    content = (
-        "# Title\n\nIntro text here.\n\n## Artifact Discoveries\n\nText with a [link](https://a.b) "
-        "and ![img](/data/news/screenshots/nMxEoIrMwX8_367.webp).\n\n## In Brief\n\nmore\n\n"
-        "## Sources\n\n1. https://c.d\n\n## Videos\n\nV1. https://youtu.be/x\n"
-    )
-    row = SimpleNamespace(
-        id=74,
-        title="Week of August 31: Wooden Structure, and More",
-        summary="Summary.",
-        content=content,
-        week_start=datetime(2026, 8, 31),
-        week_end=datetime(2026, 9, 6, 23, 59, 59),
-        published_at=datetime(2026, 9, 7, 4, 20, 43),
-    )
-    t = journal_teaser(row)
-    assert set(t) == {"id", "title", "week_start", "week_end", "published_at", "minutes", "path"}
-    assert t["path"] == "/articles/week-of-august-31-wooden-structure-and-more"
-    assert t["minutes"] == reading_minutes(len(content.split()))
-    assert t["week_start"] == "2026-08-31T00:00:00" and t["week_end"] == "2026-09-06T23:59:59"
-    assert t["published_at"] == "2026-09-07T04:20:43"
-
-
-def test_journal_teaser_survives_an_issue_without_content_or_dates():
-    row = SimpleNamespace(
-        id=1,
-        title="Week of August 24",
-        summary=None,
-        content=None,
-        week_start=None,
-        week_end=None,
-        published_at=None,
-    )
-    t = journal_teaser(row)
-    assert t["minutes"] == 0
-    assert t["week_start"] is None and t["week_end"] is None and t["published_at"] is None
-
-
-def test_paper_teaser_uses_the_public_api_mapping():
-    """Same rule: "{words} words · {sources} sources · {date}" and the link.
-
-    quality_score, the hero image and the summary belong to the paper page —
-    the row beside the portal prints none of them.
-    """
-    row = SimpleNamespace(
-        id="4bf8", slug="the-egyptian-hard-stone-precision-debate", question="Q?", published_by=None,
-        published_at=datetime(2026, 8, 31, 22, 7, 6), sites_found=2748,
-        title="The Egyptian Hard-Stone Precision Debate", card_description="Summary.",
-        score="98", badge="Unverified", word_count="6466", hero_src="/data/research-images/x.jpg",
-    )
-    t = paper_teaser(row)
+    t = paper_teaser(paper_row())
     assert t == {
         "slug": "the-egyptian-hard-stone-precision-debate",
         "title": "The Egyptian Hard-Stone Precision Debate",
+        "summary": "Summary.",
+        "hero_image_url": "https://ancientnerds.com/data/research-images/x.jpg",
+        "author": None,
         "published_at": "2026-08-31T22:07:06",
         "words": 6466,
         "sources_analyzed": 2748,
         "path": "/research/the-egyptian-hard-stone-precision-debate",
     }
+
+
+def test_paper_teaser_survives_a_paper_without_hero_blurb_or_counts():
+    """The card renders the vignette alone and drops the missing footer parts;
+    None must reach it as None, never as "" or 0."""
+    t = paper_teaser(
+        paper_row(hero_src=None, card_description=None, word_count=None, published_at=None)
+    )
+    assert t["hero_image_url"] is None
+    assert t["summary"] is None
+    assert t["words"] is None
+    assert t["published_at"] is None
+    assert t["sources_analyzed"] == 2748
 
 
 def test_number_formats():
@@ -218,35 +126,14 @@ def test_apply_stats_raises_when_the_shell_lost_a_marker():
         raise AssertionError("apply_stats accepted a shell without the countries marker")
 
 
-def test_lead_window_start_is_48h_before_the_given_now():
-    assert lead_window_start(NOW) == datetime(2026, 9, 7, 12, 0, 0)
-
-
 def _landing_data():
-    site = SimpleNamespace(
-        id="16147718-a70b-486e-aaba-9cf71316602c",
-        name="Roman grave",
-        country="Austria",
-        site_type="Battlefield",
-        period_name="Roman",
-        period_start=100,
-        source_id="ancient_nerds",
-    )
-    recent = [item(i, sig=3, hours_ago=i) for i in range(1, 8)]
     return {
-        "recent": recent,
-        "lead_48h": item(9, sig=9, hours_ago=2, category="bioarchaeology", site=site),
-        "categories": ["artifact", "bioarchaeology"],
-        "journals": [
-            SimpleNamespace(id=74, title="Week of August 31", summary="S", content="## A\n\ntext", week_start=None, week_end=None, published_at=None),
-            SimpleNamespace(id=73, title="Week of August 24", summary=None, content="text", week_start=None, week_end=None, published_at=None),
-        ],
-        "journal_total": 23,
         "papers": [
-            SimpleNamespace(id="a", slug="paper-a", question="Q", published_by=None, published_at=None, sites_found=10, title="Paper A", card_description=None, score=None, badge=None, word_count=None, hero_src=None),
-            SimpleNamespace(id="b", slug="paper-b", question="Q", published_by=None, published_at=None, sites_found=20, title="Paper B", card_description=None, score=None, badge=None, word_count=None, hero_src=None),
+            paper_row(slug="paper-a", title="Paper A"),
+            paper_row(slug="paper-b", title="Paper B", published_by="theo", hero_src=None),
         ],
         "paper_total": 24,
+        "journal_total": 23,
         "news_stats": {"total_items": 3189, "total_articles": 23},
     }
 
@@ -278,27 +165,27 @@ def test_home_route_hands_the_landing_payload_and_substitutes_hero_counts():
     route = render.call_args[0][0]
     assert route["type"] == "landing"
     assert route["stats"] == {"sites": 1_759_673, "stories": 3189, "journals": 23, "papers": 24}
-    stories = route["stories"]["items"]
-    # Lead first — the 48 h pick — then the six newest without it.
-    assert [s["id"] for s in stories] == [9, 1, 2, 3, 4, 5, 6]
-    assert stories[0]["headline"] == "Headline 9"
-    assert stories[0]["site_name"] == "Roman grave"
-    # A row is a link, not an article: no body, no sources, no video.
-    assert all(set(s) == set(STORY_TEASER_KEYS) for s in stories)
-    assert route["stories"]["categories"] == ["artifact", "bioarchaeology"]
-    # Journals and papers are lists too — every row in the payload, and every
-    # row exactly the keys anRoute.ts declares: no body, no field nobody reads.
-    journals = route["journals"]["items"]
-    assert [j["id"] for j in journals] == [74, 73] and route["journals"]["total"] == 23
-    assert all(
-        set(j) == {"id", "title", "week_start", "week_end", "published_at", "minutes", "path"}
-        for j in journals
-    )
+    # Stories and journals are their portal and a count — the live page lists
+    # itself, so no row of either ships any more.
+    assert set(route) == {"type", "stats", "journals", "papers"}
+    assert route["journals"] == {"total": 23}
     papers = route["papers"]["items"]
     assert [p["slug"] for p in papers] == ["paper-a", "paper-b"]
     assert route["papers"]["total"] == 24
+    # Every card exactly the keys anRoute.ts::PaperCardData declares.
     assert all(
-        set(p) == {"slug", "title", "published_at", "words", "sources_analyzed", "path"}
+        set(p)
+        == {
+            "slug",
+            "title",
+            "summary",
+            "hero_image_url",
+            "author",
+            "published_at",
+            "words",
+            "sources_analyzed",
+            "path",
+        }
         for p in papers
     )
     assert route["papers"]["theo"] == {"question": "Osiris", "started_at": "2026-09-09T06:00:00", "sites_found": 12}
@@ -307,7 +194,7 @@ def test_home_route_hands_the_landing_payload_and_substitutes_hero_counts():
 def test_home_route_omits_sections_without_rows_and_serves_from_cache():
     landing_html._cache.clear()
     data = _landing_data()
-    data.update(recent=[], lead_48h=None, journals=[], papers=[])
+    data.update(papers=[], journal_total=0)
     with (
         patch.object(landing_html, "fetch_landing_data", return_value=data) as fetch,
         patch.object(landing_html, "get_site_stats", return_value={"total_sites": 5, "curated_countries": 1}),
@@ -319,7 +206,7 @@ def test_home_route_omits_sections_without_rows_and_serves_from_cache():
         asyncio.run(landing_html.home(db=object()))
 
     route = render.call_args[0][0]
-    assert route["stories"] is None and route["journals"] is None and route["papers"] is None
+    assert route["journals"] is None and route["papers"] is None
     assert fetch.call_count == 1  # second call came from the 300 s cache
 
 
@@ -363,11 +250,6 @@ def test_home_stays_decodable_when_the_client_accepts_gzip():
 
 
 def test_home_answers_head_from_the_cache_without_a_body():
-    from fastapi import FastAPI
-    from fastapi.testclient import TestClient
-
-    from pipeline.database import get_db
-
     landing_html._cache.clear()
     landing_html._cache["home"] = (time.monotonic() + 300, b"<html>cached</html>")
     app = FastAPI()
@@ -379,4 +261,3 @@ def test_home_answers_head_from_the_cache_without_a_body():
     assert head.status_code == 200 and head.content == b""
     assert head.headers["cache-control"] == "public, max-age=300"
     assert client.get("/home").text == "<html>cached</html>"
-

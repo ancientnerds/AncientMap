@@ -16,7 +16,7 @@ export default function LandingLive() {
   if (route?.type !== 'landing') return null
   return (
     <div className="landing-live">
-      {route.stories && <LandingStories initial={route.stories} total={route.stats.stories} />}
+      <LandingStories total={route.stats.stories} />
       {route.journals && <LandingJournals data={route.journals} />}
       {route.papers && <LandingPapers data={route.papers} />}
     </div>

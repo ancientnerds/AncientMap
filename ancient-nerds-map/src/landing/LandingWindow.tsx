@@ -1,14 +1,15 @@
 /**
  * LandingWindow — the NERV window chrome the three live sections share.
  *
- * Extracted from LandingStories (2026-09-10) when the Journal and the
- * Papers section became windows too: title bar with the window buttons from
- * nerv-ui/window.css, a body split into the portal on the left and the list
- * of the section's items on the right. One definition, so the three
- * sections cannot drift apart.
+ * Extracted from LandingStories (2026-09-10) when the Journal and the Papers
+ * section became windows too: title bar with the window buttons from
+ * nerv-ui/window.css and a body that is one full-width column. One
+ * definition, so the three sections cannot drift apart.
  *
  * The window owns nothing but the frame — what runs inside it is a
- * <PagePortal> on the section's page and the section's own list.
+ * <PagePortal> on the section's page. The lists that used to sit beside the
+ * portal are gone (owner: "Why do we still have the list of stories,
+ * journals and research papers on the right side?").
  */
 import type { ReactNode } from 'react'
 
@@ -25,22 +26,11 @@ interface Props {
    * second button on the same href is a link that leads nowhere new.
    */
   archive?: { href: string; title: string }
-  /** Left column: the portal. */
-  main: ReactNode
-  list: ReactNode
-  /** aria-label of the list column — the only per-section word in the frame. */
-  listLabel: string
+  /** The window body: the portal. */
+  children: ReactNode
 }
 
-export default function LandingWindow({
-  title,
-  openHref,
-  openTitle,
-  archive,
-  main,
-  list,
-  listLabel,
-}: Props) {
+export default function LandingWindow({ title, openHref, openTitle, archive, children }: Props) {
   return (
     <div className="ll-window">
       <div className="ll-window-bar">
@@ -54,12 +44,7 @@ export default function LandingWindow({
           )}
         </span>
       </div>
-      <div className="ll-window-body">
-        <div className="ll-window-main">{main}</div>
-        <nav className="ll-window-list" aria-label={listLabel}>
-          {list}
-        </nav>
-      </div>
+      <div className="ll-window-body">{children}</div>
     </div>
   )
 }

@@ -6,7 +6,6 @@ import type { LandingRoute } from '../../types/anRoute'
 const route: LandingRoute = {
   type: 'landing',
   stats: { sites: 1_759_673, stories: 3189, journals: 23, papers: 24 },
-  stories: null,
   journals: null,
   papers: null,
 }

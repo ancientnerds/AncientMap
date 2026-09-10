@@ -18,34 +18,14 @@
 .ll-fig b { color: var(--text-heading); font-weight: 600; }
 .ll-status { font-size: 12px; color: var(--nerv-steel-dim); }
 
-.ll-row { color: inherit; text-decoration: none; }
-.ll-row:hover .ll-row-title { color: var(--accent-primary); }
-.ll-img { display: block; position: relative; overflow: hidden; background: #0a1a14; }
-.ll-img-16x9 { aspect-ratio: 16 / 9; }
-.ll-img img { width: 100%; height: 100%; object-fit: cover; display: block; filter: saturate(0.75) contrast(1.05); }
-.ll-img::after { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0, 40, 25, 0.15), rgba(0, 10, 6, 0.55)); pointer-events: none; }
-.ll-meta { font-size: 11px; color: var(--nerv-steel-dim); }
-.ll-meta b { color: var(--nerv-steel); font-weight: 400; }
-
-/* One badge, cut like the story page's .story-tag: green tint, green
-   border, green text. A category is not a colour code — orange for
-   artifacts and violet for theory made one list look like five products. */
-.ll-badge { font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; padding: 1px 6px; border-radius: 3px; background: var(--accent-glow-08); border: 1px solid var(--accent-glow-30); color: var(--accent-primary); }
-
-.ll-row { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center; padding: 10px 12px; border-bottom: 1px solid var(--border-accent); }
-.ll-row:last-child { border-bottom: 0; }
-.ll-row-thumb { grid-template-columns: 96px 1fr; }
-.ll-row-title { display: block; font-size: 13px; font-weight: 600; line-height: 1.35; color: var(--text-heading); }
-.ll-row .ll-meta { display: block; margin-top: 3px; }
-.ll-arrow { color: var(--nerv-steel-dim); }
-
 /* ── Portal windows (2026-09-10) ─────────────────────────────────────────
-   Each section is a window with a portal in it: the live page itself,
-   scaled down (src/landing/PagePortal.tsx), and the list of that section's
-   items beside it. Panel look mirrors .empire-borders-window (index.css),
-   the bar mirrors .popup-minimized-bar; the buttons come from
-   nerv-ui/window.css. The --nerv-panel-* fallbacks are load-bearing: the
-   homepage never loads index.css, so panel.css never defines them here. */
+   Each section is a window and nothing but a window: the live page itself,
+   scaled down (src/landing/PagePortal.tsx). The lists that used to sit
+   beside the portal are gone — the page in the frame already IS the list.
+   Panel look mirrors .empire-borders-window (index.css), the bar mirrors
+   .popup-minimized-bar; the buttons come from nerv-ui/window.css. The
+   --nerv-panel-* fallbacks are load-bearing: the homepage never loads
+   index.css, so panel.css never defines them here. */
 .ll-window {
   background: var(--surface-raised);
   backdrop-filter: blur(var(--blur-amount, 16px));
@@ -70,62 +50,81 @@
 .ll-window-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ll-window-title b { color: var(--nerv-steel); font-weight: 600; }
 /* .popup-window-controls is absolute by default — in the bar it is a flex child. */
-.ll-window-controls { position: static; }
+.ll-window-controls { position: static; flex-shrink: 0; }
 
-.ll-window-body { display: grid; grid-template-columns: 1.4fr 1fr; }
-.ll-window-main { padding: 12px; }
-.ll-window-list {
-  display: flex;
-  flex-direction: column;
-  border-left: 1px solid var(--border-accent);
-  max-height: 72vh;
-  overflow-y: auto;
-}
-.ll-window-list::-webkit-scrollbar { width: 6px; }
-.ll-window-list::-webkit-scrollbar-track { background: var(--accent-glow-05); }
-.ll-window-list::-webkit-scrollbar-thumb { background: var(--accent-glow-30); }
-.ll-window-list .ll-more { margin: 0; border: 0; border-top: 1px solid var(--border-accent); }
+.ll-window-body { padding: 12px; }
 
 /* The portal: the live page at desktop width, transformed down to whatever
-   the window column is wide. The frame is laid out at 1280×800 and scaled,
+   the window is wide. The frame is laid out 1280 CSS pixels wide and scaled,
    not resized, so the page inside sees a desktop viewport and lays itself
    out the way a visitor would see it. --ll-portal-scale is written by the
-   ResizeObserver in PagePortal.tsx; the 0.5 default is what a ~640px column
-   would get, so the very first painted frame is not far off.
-   Before the frame exists (and on mobile, and under Save-Data) the box is
-   the link into the page plus one muted line — never an empty rectangle. */
+   ResizeObserver in PagePortal.tsx; the 0.5 default is what a ~640px window
+   would get, so the very first painted frame is not far off. Its height is
+   derived instead of fixed at 800px: scaled by --ll-portal-scale it is
+   exactly the height of the box, which on the desktop 16/10 is the same 800
+   px as before and on the 4/3 phone box is the taller slice that fills it. */
 .ll-portal {
   position: relative;
   aspect-ratio: 16 / 10;
   overflow: hidden;
   background: var(--surface-deep);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
 }
 .ll-portal-frame {
   position: absolute;
   top: 0;
   left: 0;
   width: 1280px;
-  height: 800px;
+  height: calc(100% / var(--ll-portal-scale, 0.5));
   border: 0;
   transform-origin: 0 0;
   transform: scale(var(--ll-portal-scale, 0.5));
+  /* Decoration, not a second browser: a wheel or a swipe over the portal
+     scrolls the homepage, and nothing inside the frame can be clicked. */
+  pointer-events: none;
 }
-.ll-portal-open { color: var(--text-link); font-size: 13px; text-decoration: none; }
-.ll-portal-open:hover { text-decoration: underline; }
-/* With the page in the frame the link has no room of its own left. */
-.ll-portal-open--over {
+/* The whole portal is the link into the page, with the CTA in its middle. */
+.ll-portal-link {
   position: absolute;
-  right: 8px;
-  bottom: 8px;
-  padding: 4px 8px;
-  background: rgba(0, 15, 20, 0.92);
-  border: 1px solid var(--border-accent);
+  inset: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
 }
+.ll-portal-link:focus-visible { outline: 2px solid var(--accent-primary); outline-offset: -2px; }
+/* .cta-primary carries the colours (red, like every call to action on the
+   landing page); only the size is portal-specific — the widest label,
+   "Open research library ↗", has to fit a 318 px box on a 390 px phone. */
+.ll-portal-cta {
+  padding: 10px 20px;
+  font-size: 0.8rem;
+  letter-spacing: 0.1em;
+  max-width: calc(100% - 24px);
+  background: rgba(0, 15, 20, 0.92);
+  text-align: center;
+}
+/* Where there is a pointer the CTA waits for it, so the portal shows the
+   page and not a button. Touch devices have no hover to wait for and keep it
+   visible — the default below the media query. */
+@media (hover: hover) {
+  .ll-portal-cta { opacity: 0; }
+  .ll-portal:hover .ll-portal-cta,
+  .ll-portal-link:focus-visible .ll-portal-cta { opacity: 1; }
+  .ll-portal:hover .ll-portal-frame { filter: brightness(0.6); }
+}
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  .ll-portal-cta { transition: opacity 0.15s ease; }
+  .ll-portal-frame { transition: filter 0.15s ease; }
+}
+
+/* The paper gallery: Theo's cards (src/components/theo/PaperCard.tsx,
+   styles/paper-card.css), three to a row instead of the library's auto-fill,
+   because six papers in four columns leave a ragged second row. The compound
+   selector wins over .theo-public-grid whichever stylesheet the bundler
+   emits first. */
+.ll-gallery { margin-top: 12px; }
+.ll-gallery.theo-public-grid { grid-template-columns: repeat(3, 1fr); }
 
 /* The one deliberate exception to the green: NERV orange marks the live
    agent line, the role it already has on panel headers. */
@@ -139,19 +138,11 @@
 .ll-foot a { color: var(--text-link); text-decoration: none; white-space: nowrap; }
 .ll-foot a:hover { text-decoration: underline; }
 
-.ll-chips { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; }
-.ll-chip { border: 1px solid var(--border-accent); background: transparent; color: var(--nerv-steel-dim); font: inherit; font-size: 12px; padding: 3px 10px; border-radius: 99px; cursor: pointer; }
-.ll-chip[aria-pressed='true'] { color: var(--surface-page); background: var(--accent-primary); border-color: var(--accent-primary); font-weight: 600; }
-.ll-more { margin-top: 10px; width: 100%; border: 1px solid var(--border-accent); background: transparent; color: var(--text-link); font: inherit; font-size: 12px; padding: 8px; cursor: pointer; }
-.ll-more:disabled { opacity: 0.5; cursor: default; }
-.ll-error { color: var(--status-error-soft); }
-
-@media (max-width: 900px) {
-  /* One column, and no portal: PagePortal never mounts its frame below this
-     breakpoint, so the box shrinks to the link and its line instead of
-     reserving a 16/10 rectangle for nothing. The list follows underneath. */
-  .ll-window-body { grid-template-columns: 1fr; }
-  .ll-portal { aspect-ratio: auto; padding: 20px 12px; }
-  .ll-window-list { border-left: 0; border-top: 1px solid var(--border-accent); }
-  .ll-chips { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 4px; }
+@media (max-width: 700px) {
+  /* A 1280 px page scaled into a phone needs the taller box to stay legible;
+     the frame follows it (see .ll-portal-frame). */
+  .ll-portal { aspect-ratio: 4 / 3; }
+  .ll-gallery.theo-public-grid { grid-template-columns: 1fr; }
+  /* Two lines instead of one squeezed row. */
+  .ll-foot, .ll-theo { flex-direction: column; gap: 6px; }
 }

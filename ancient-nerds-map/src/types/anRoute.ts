@@ -195,47 +195,28 @@ export interface ArticleIndexRoute {
 }
 
 /**
- * Homepage teasers (landing-live sections, 2026-09-09). Every teaser
- * carries its final href as `path` — the API builds it with the same slug
- * helpers the target pages use (slugify), so the client never re-derives a
- * URL. Stories are the exception: their path is `storyPath(headline, id)`,
- * because the client rebuilds the same list from /api/news/feed when a
- * category chip is pressed and the feed carries no path.
+ * The homepage payload (landing-live sections, 2026-09-09).
  *
- * A teaser is a LIST ROW and nothing else (2026-09-10): the section itself
- * is a portal on the live page, so no payload here carries body HTML.
+ * Since 2026-09-10 the three sections are portals on the live pages, not
+ * lists beside them (owner: "Why do we still have the list of stories,
+ * journals and research papers on the right side?"). What is left to ship is
+ * therefore a count per section — the portal shows the rest — plus the six
+ * papers the gallery renders as cards.
  */
-export interface StoryTeaser {
-  id: number
-  headline: string
-  screenshot_url: string | null
-  news_category: string | null
-  /** Lyra's 1–10 score. */
-  significance: number | null
-  /** Raw ISO timestamp: video publish date, else item creation. */
-  published_at: string
-  /** Matched site name, else the extractor's raw guess, else ''. */
-  site_name: string
-  channel_name: string
-}
-
-interface JournalTeaser {
-  id: number
-  title: string
-  week_start: string | null
-  week_end: string | null
-  published_at: string | null
-  /** Reading time of the issue, counted server-side — the row prints it. */
-  minutes: number
-  path: string
-}
-
-interface PaperTeaser {
+export interface PaperCardData {
   slug: string
   title: string
+  /** card_description — the blurb under the hero. Null when the paper has none. */
+  summary: string | null
+  /** Hero banner. Null when the paper has none: the card then shows the vignette alone. */
+  hero_image_url: string | null
+  /** published_by; null means the Theo pipeline itself. */
+  author: string | null
+  /** Raw ISO timestamp; date display is a TS decision. */
   published_at: string | null
   words: number | null
   sources_analyzed: number
+  /** Final href, built server-side with the same slug helper /research/ uses. */
   path: string
 }
 
@@ -248,14 +229,10 @@ interface TheoStatus {
 export interface LandingRoute {
   type: 'landing'
   stats: { sites: number; stories: number; journals: number; papers: number }
-  /**
-   * null when the source has no rows — the section is then not rendered.
-   * `items` is lead-first: the pick the section leads with, then the rest in
-   * the order the query returned them.
-   */
-  stories: { items: StoryTeaser[]; categories: string[] } | null
-  journals: { items: JournalTeaser[]; total: number } | null
-  papers: { items: PaperTeaser[]; total: number; theo: TheoStatus | null } | null
+  /** null when there is no issue at all — the section is then not rendered. */
+  journals: { total: number } | null
+  /** null when no paper is public; `items` are the newest six, newest first. */
+  papers: { items: PaperCardData[]; total: number; theo: TheoStatus | null } | null
 }
 
 export type AnRoute =

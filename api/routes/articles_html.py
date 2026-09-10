@@ -286,10 +286,6 @@ def story_payload(item: NewsItem, related: list[dict]) -> dict:
     http(s) source filter, the &t= video deeplink, screenshot
     absolutization, blurbs and date formatting.
 
-    Also the one mapping behind the homepage list rows: landing_html's
-    story_teaser() cuts this dict down to the eight fields a row shows, so
-    "published_at" or "site_name" cannot mean two different things.
-
     The caller must have joinedload-ed video→channel and site; every access
     below is on an already-loaded relation.
     """
