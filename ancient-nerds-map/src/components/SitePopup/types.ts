@@ -101,6 +101,16 @@ export interface SitePopupProps {
   onHighlight?: (siteId: string | null) => void
   onSelect?: (siteId: string, ctrlKey: boolean) => void
   isStandalone?: boolean
+  /**
+   * The full page /sites/{country}/{slug} (SitePage), where site-page.css keeps
+   * the expanded gallery in normal flow below the hero: the gallery opens as
+   * the multi-row grid right away and needs no expanded header. Every other
+   * host — the globe window and the overlays on search, stories, radar,
+   * Lyra — keeps the one-row strip (owner, 2026-09-10: "that was supposed to
+   * be the SEO page only!"). Distinct from isStandalone, which those overlays
+   * set too.
+   */
+  fullPage?: boolean
   onMinimizedChange?: (isMinimized: boolean) => void
   minimizedStackIndex?: number
   onSiteUpdate?: (siteId: string, updatedSite: SiteData) => void

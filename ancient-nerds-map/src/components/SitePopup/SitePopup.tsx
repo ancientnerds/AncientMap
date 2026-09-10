@@ -95,6 +95,7 @@ export default function SitePopup({
   onHighlight,
   onSelect,
   isStandalone = false,
+  fullPage = false,
   onMinimizedChange,
   minimizedStackIndex = -1,
   onSiteUpdate,
@@ -280,7 +281,9 @@ export default function SitePopup({
     // The full page (/sites/{country}/{slug}) has room: open the multi-row
     // grid right away instead of the one-row strip. site-page.css already
     // keeps .expanded in normal flow there instead of overlaying the popup.
-    initialExpanded: isStandalone,
+    // fullPage, not isStandalone: the overlays on search, stories, radar and
+    // Lyra are standalone too, and there the grid would cover the popup.
+    initialExpanded: fullPage,
   })
 
   // Empire gallery hook - fetch images from Wikipedia and AWMC maps
@@ -814,11 +817,11 @@ export default function SitePopup({
 
       {/* Gallery Section */}
       <div className={`popup-gallery-section ${galleryHook.isGalleryExpanded ? 'expanded' : ''}`}>
-        {/* Expanded header — only for the overlay in the windowed popup,
-            where the gallery covers the hero and the title would be lost.
+        {/* Expanded header — wherever the expanded gallery covers the hero
+            (the globe window and every overlay) and the title would be lost.
             On the full page the gallery flows below the hero, so the header
             would just repeat the title with a drag handle. */}
-        {galleryHook.isGalleryExpanded && !isStandalone && (
+        {galleryHook.isGalleryExpanded && !fullPage && (
           <div
             className="gallery-expanded-header"
             onMouseDown={windowHook.handleTitleBarMouseDown}

@@ -292,6 +292,7 @@ export default function SitePage() {
       {interactive ? (
         <SitePopup
           isStandalone={true}
+          fullPage={true}
           site={popupSite}
           onClose={() => { window.location.href = '/globe.html' }}
           onAskLyra={(ctxType, ctxId) => {
