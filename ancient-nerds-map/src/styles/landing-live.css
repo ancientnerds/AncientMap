@@ -96,11 +96,15 @@
   object-position: top;
   display: block;
 }
-/* The whole portal is the link into the page, with the CTA in its middle. */
+/* The whole portal is the link into the page, with the CTA in its middle.
+   color: inherit — the anchor has no text of its own (the CTA span carries
+   its colour), but an unstyled <a> still computes to the browser's blue, and
+   the homepage's rule is: no link without a NERV colour. */
 .ll-portal-link {
   position: absolute;
   inset: 0;
   z-index: 1;
+  color: inherit;
   display: flex;
   align-items: center;
   justify-content: center;
