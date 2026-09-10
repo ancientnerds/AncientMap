@@ -767,37 +767,20 @@ body {
 
 /* ─── Discord Section ─── */
 
+/* Discord's blurple was the one colour on the page that was neither green nor
+   red (owner, 2026-09-10: "not unified at all"): the glyph is now NERV green
+   with the same glow as the section labels, and the button is the page's
+   .cta-primary — one call-to-action style, not a Discord-coloured copy of it. */
 .discord-logo {
   width: 80px;
   height: auto;
   margin-bottom: 24px;
-  filter: drop-shadow(0 0 20px rgba(88, 101, 242, 0.4));
+  color: var(--accent-primary);
+  filter: drop-shadow(0 0 20px rgba(0, 204, 102, 0.35));
 }
 
-.cta-discord {
-  display: inline-block;
+.discord-section .cta-primary {
   margin-top: 24px;
-  padding: 14px 40px;
-  background: transparent;
-  border: 1px solid var(--brand-discord);
-  color: var(--brand-discord);
-  text-decoration: none;
-  font-family: var(--font-heading);
-  font-size: 0.9rem;
-  font-weight: 600;
-  letter-spacing: 0.12em;
-  border-radius: 4px;
-  cursor: pointer;
-  transition: background 0.15s ease, color 0.15s ease, transform 0.1s ease;
-}
-
-.cta-discord:hover {
-  background: var(--brand-discord);
-  color: #000;
-}
-
-.cta-discord:active {
-  transform: scale(0.98);
 }
 
 /* ─── Final CTA ─── */
