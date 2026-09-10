@@ -76,9 +76,11 @@ und der Austausch nach dem Laden erzeugt einen sichtbaren Sprung. Warum nicht di
   `LandingRoute` in `src/types/anRoute.ts`.
 - Es hydratisiert nur `#root`. Hero und Screenshot-Sektionen bleiben reines HTML ohne React.
 - Budget für das seitenspezifische JS (`landing-*.js` + `LandingLive-*.js`): 40 kB Brotli, gemessen
-  per `size-limit`; react-dom ist ein geteilter Chunk und zählt nicht mit (Stand 10.09.: 2,3 kB,
-  nachdem die Listen und ihr Feed-Client weg sind). Nichts aus `three`, nichts aus `SitePopup`,
-  kein `NewsCard` (447 Zeilen, Inline-Video, Share-Logik: zu schwer für eine Vorschau).
+  per `size-limit`; react-dom ist ein geteilter Chunk und zählt nicht mit (Stand 11.09.: 2,13 kB,
+  nachdem die Listen, ihr Feed-Client und die Paper-Galerie weg sind). Nichts aus `three`, nichts
+  aus `SitePopup`, kein `NewsCard` (447 Zeilen, Inline-Video, Share-Logik: zu schwer für eine
+  Vorschau), und seit dem Wegfall der Galerie auch kein `PaperCard` — den Chunk lädt jetzt
+  `/research/`, also zählt ihn das Startseiten-Budget nicht mehr mit.
 - LCP bleibt Logo und Hero-Poster. `#root` reserviert seine Höhe nicht, weil der Inhalt serverseitig
   vollständig ankommt; Bilder tragen `width`/`height` und `aspect-ratio`, damit nichts springt.
 
@@ -92,18 +94,18 @@ LandingRoute {
   type: 'landing'
   stats:    { sites: number, stories: number, journals: number, papers: number }
   journals: { total: number } | null
-  papers:   { items: PaperCardData[], total: number, theo: TheoStatus | null } | null
+  papers:   { total: number, theo: TheoStatus | null } | null
 }
-PaperCardData { slug, title, summary, hero_image_url, author, published_at,
-                words, sources_analyzed, path }
 TheoStatus    { question, started_at, sites_found }
 ```
 
 Seit 2026-09-10 trägt das Payload **keine Zeilen** mehr, weil es keine Listen mehr gibt (3.4): jede
-Sektion ist ein Portal auf die echte Seite, und die Seite darin IST ihre Liste. Übrig bleiben drei
-Zähler und die sechs Papers, die die Galerie als Karten rendert — und dort genau die neun Felder, die
-eine Karte druckt. Ein Feld, das keine Komponente liest, gehört nicht ins Payload; die Schlüssel sind
-auf beiden Seiten festgenagelt (`tests/api/test_landing_html.py`, `landingLive.test.tsx`).
+Sektion ist ein Portal auf die echte Seite, und die Seite darin IST ihre Liste. Seit 2026-09-11 gilt
+das auch für die Paper-Karten (Betreiber: "The research paper examples should be inside the portal,
+not below it") — sie stehen auf `/research/`, und das dritte Portal zeigt genau diese Seite. Übrig
+bleiben drei Zähler und die Theo-Zeile. Ein Feld, das keine Komponente liest, gehört nicht ins
+Payload; die Schlüssel sind auf beiden Seiten festgenagelt (`tests/api/test_landing_html.py`,
+`landingLive.test.tsx`).
 
 Regeln:
 
@@ -113,12 +115,11 @@ Regeln:
   die sie fütterten.
 - **Journals.** Nur `journals.total` (`get_news_stats().total_articles`). `null`, wenn es keine
   einzige Ausgabe gibt — dann fehlt die Sektion. Statuszeile: "{n} issues · every Sunday".
-- **Papers.** Die 6 neuesten nach `published_at` unter `PUBLIC_PAPER_WHERE` mit den
-  `PAPER_SUMMARY_COLUMNS`. `paper_teaser()` ist bewusst keine zweite Abbildung: es filtert
-  `public_v1.paper_summary_kwargs(row)` — dieselbe Funktion, die `/api/v1/research` bedient — auf die
-  Kartenfelder herunter, damit `hero_image_url` oder `word_count` hier nichts anderes bedeuten als
-  dort. `quality_score` und `question` bleiben draußen: die Karte auf der Startseite druckt beides
-  nicht. `theo` kommt aus derselben Abfrage, die `/api/theo/research/current` benutzt (laufender
+- **Papers.** Nur `papers.total`, ein `COUNT(*)` unter `PUBLIC_PAPER_WHERE`. `null`, wenn kein
+  einziges Paper öffentlich ist — dann fehlt die Sektion. Statuszeile: "{n} public · CC BY 4.0 · by
+  Theo". Die Karten liegen auf `/research/` (`api/routes/research_html.py::research_listing`), das
+  Portal zeigt sie; die Sechs-Zeilen-Abfrage und `paper_teaser()` sind mit der Galerie verschwunden.
+  `theo` kommt aus derselben Abfrage, die `/api/theo/research/current` benutzt (laufender
   Batch-Request: Frage, Startzeit, gefundene Sites); die Funktion wird importiert, nicht kopiert.
 - **Stats.** `sites` aus der gecachten `/api/stats`-Logik, `stories` und `journals` aus
   `get_news_stats`, `papers` per Count unter `PUBLIC_PAPER_WHERE`.
@@ -168,16 +169,17 @@ der den aktuellen Stand zeigt." Kein Screenshot, sondern die Seite selbst.
   Desktop-Viewport und ordnet sich so an, wie ein Besucher sie sähe. Die Höhe ist abgeleitet statt
   fest: `calc(100% / var(--ll-portal-scale))` ist skaliert exakt die Höhe der Box, im 16/10-Desktop
   dieselben 800 px wie vorher, in der 4/3-Box des Telefons der höhere Ausschnitt, der sie füllt.
-- **Galerie.** Unter dem Papers-Fenster stehen die sechs Papers als Karten (3.5), jede ein `<a>` auf
-  `/research/{slug}` — der crawlbare Teil der Sektion, und der einzige, den es noch braucht.
+- **Keine Galerie.** Unter dem Papers-Fenster stand bis 2026-09-11 eine Galerie derselben Papers,
+  die im Rahmen schon zu sehen waren. Sie ist weg; die Karten sind jetzt die Bibliothek selbst
+  (3.5), und crawlbar bleibt die Sektion über ihre drei Links auf `/research/`.
 - **SEO:** in `#root` steht kein `h1`; die Sektionsüberschrift bleibt das einzige `h2` der Sektion.
-  Jede Sektion verlinkt ihre Seite dreifach (Fensterknopf, Overlay-Link, Fußzeile), die Papers
-  zusätzlich jedes einzelne Paper.
+  Jede Sektion verlinkt ihre Seite dreifach (Fensterknopf, Overlay-Link, Fußzeile); die einzelnen
+  Papers verlinkt `/research/` selbst und, für Suchmaschinen, die Paper-Liste der Browse-Sektion.
 - Zeitangaben: der Server rendert das absolute Datum ("Sep 9"), der Client stellt nach der Hydration
   auf relative Zeit um ("2h ago" über `formatRelativeDate`). So gibt es keinen Hydration-Mismatch.
   Übrig ist davon genau eine Stelle, die Startzeit in der Theo-Zeile.
 - Client-Logik gibt es in keiner der drei Sektionen mehr außer dem Portal selbst: Kopfleiste,
-  Portal, Fußzeile — und bei den Papers die Galerie und die Theo-Zeile.
+  Portal, Fußzeile — und bei den Papers die Theo-Zeile.
 - **X-Frame-Options.** `/research/` kommt aus der API, und die setzte auf jeder Antwort `DENY` —
   das eigene Portal wäre leer geblieben. Der Header steht seit 2026-09-10 auf `SAMEORIGIN`
   (`api/main.py`); fremdes Framing bleibt blockiert, ein `frame-ancestors`-CSP existiert nirgends.
@@ -203,25 +205,28 @@ umgesetzt in `src/styles/landing-live.css`:
   `--surface-deep`. `.ll-portal-frame` liegt absolut bei 1280 px Breite ohne Rahmen, ohne
   Pointer-Events, und wird über `transform-origin: 0 0` und `scale(var(--ll-portal-scale, .5))` auf
   die Spalte gebracht. Darüber `.ll-portal-link` über die volle Fläche mit dem `.ll-portal-cta` in
-  der Mitte — der übernimmt Farbe und Rahmen von `.cta-primary` und ändert nur die Größe, damit die
-  längste Beschriftung ("Open research library ↗") in eine 318-px-Box auf einem 390-px-Telefon passt.
+  der Mitte — der übernimmt Rahmen und Rot von `.cta-primary` und ändert Größe und Ruhezustand
+  (schwarz statt transparent), damit die längste Beschriftung ("Open research library ↗") in eine
+  318-px-Box auf einem 390-px-Telefon passt und der Knopf vor der Seite dahinter lesbar bleibt. Die
+  beiden Farbregeln stehen als `.ll-portal .ll-portal-cta`: die Shell lädt `landing.css` NACH
+  `landing-live.css`, bei gleicher Spezifität hätte also `.cta-primary` gewonnen.
 - Fenstertitel: `>_ portal — /news.html`, `>_ portal — /articles.html`, `>_ portal — /research/`.
-- Papers-Galerie: `.theo-public-grid.ll-gallery` unter dem Fenster, Karten aus
-  `src/components/theo/PaperCard.tsx` mit den Regeln aus `src/styles/paper-card.css` — dieselbe
-  Karte, die die öffentliche Forschungsbibliothek auf `/theo.html` rendert (Betreiber: "Warum sieht
-  die Paper-Galerie nicht aus wie Theos Forschungsaufträge, wo man Karten mit Bildern bekommt?"). Die
-  Regeln wurden aus `theo.css` VERSCHOBEN, nicht kopiert; TheoPage bekommt sie über den Import der
-  Komponente. Drei Karten je Reihe statt des Auto-Fill der Bibliothek, weil sechs Papers in vier
-  Spalten eine ausgefranste zweite Reihe ergeben. Hero-Bild aus `hero_image_url`; fehlt es, zeigt der
-  Hero-Kasten nur die Vignette mit dem Titel — nie ein `<img src="">`. Fußzeile der Karte:
-  "by {Autor} · {Datum} · {n} sources · {n} words", aus den vorhandenen Teilen zusammengesetzt.
-- Theo-Zeile unter der Galerie: gestrichelter oranger Rahmen, pulsierender Punkt, "Theo is
+- Paper-Karten: `.theo-public-grid` mit `src/components/theo/PaperCard.tsx` und den Regeln aus
+  `src/styles/paper-card.css` — aber auf `/research/` (`ResearchIndexPage`), nicht auf der
+  Startseite. Betreiber, 2026-09-11: "The research paper examples should be inside the portal, not
+  below it. And the research library should have the cards, not plain headings." Damit rendert die
+  Bibliothek dieselbe Karte wie `/theo.html`, und das Portal zeigt sie mit. Der Auto-Fill der
+  Bibliothek bleibt, weil dort alle Papers stehen und nicht sechs. Hero-Bild aus `hero_image_url`;
+  fehlt es, zeigt der Hero-Kasten nur die Vignette mit dem Titel — nie ein `<img src="">`. Fußzeile
+  der Karte: "by {Autor} · {Datum} · {n} sources · {n} words", zusammengesetzt aus den vorhandenen
+  Teilen von `paperCardFooter()` in `src/seo/display.ts` — der Text ist Darstellung, nicht Payload.
+- Theo-Zeile unter dem Fenster: gestrichelter oranger Rahmen, pulsierender Punkt, "Theo is
   researching: {Frage} · started {Zeit} · {n} sites found", Link auf `/theo.html`.
-- Mobile unter 700 px: Portal 4 / 3 mit sichtbarem CTA, Galerie einspaltig, Fußzeile und
+- Mobile unter 700 px: Portal 4 / 3 mit sichtbarem CTA, Fußzeile und
   Theo-Zeile zweizeilig statt in einer gequetschten Reihe. Das seitliche Polster bleibt bei
   24 px, damit die Live-Sektionen mit den statischen `.landing-section` bündig stehen; bei
   390 px Viewport läuft trotzdem nichts über: 390 − 2 × 24 − 2 × 12 Fensterpolster = 318 px für
-  Portal und Karten, und der längste CTA braucht davon rund 250 px.
+  das Portal, und der längste CTA braucht davon rund 250 px.
 
 Die Mockups aus dem Brainstorming liegen unter `.superpowers/brainstorm/239-1788951798/content/`
 (`stories-cards.html` Variante B, `longreads.html` Variante A).
@@ -269,17 +274,17 @@ analysierte Quellen je Paper). Im statischen Rückfall bleiben Absatz und H1 mit
 - **vitest:** `landingMeta` liefert Titel und Description mit der formatierten Site-Zahl;
   `renderToString(<LandingLive/>)` mit dem Fixture-Payload liefert drei Fenster mit je einem
   `.ll-portal[data-src]` und genau einem `.ll-portal-link` mit `.cta-primary`, kein `<iframe`,
-  keine Listenklasse mehr, die Papers-Galerie als `a.theo-public-card` je Paper (mit
-  `img.theo-public-card-img` nur dort, wo es ein Hero gibt), kein `h1`, kein "undefined"/"null",
-  und keine Theo-Zeile, wenn `theo` null ist.
-- **pytest (DB-los):** `paper_teaser()` bekommt Fake-Rows und liefert exakt die neun Kartenfelder,
-  auch für ein Paper ohne Hero, Blurb, Wortzahl oder Datum; die Route liefert `{type, stats,
-  journals, papers}` und nichts sonst, lässt Sektionen ohne Zeilen weg, antwortet aus dem Cache
-  und bleibt unter gzip dekodierbar.
+  keine Listen- und keine Kartenklasse mehr, kein `h1`, kein "undefined"/"null", und keine
+  Theo-Zeile, wenn `theo` null ist. Die Karten prüft `render.test.tsx` am researchIndex-Fixture:
+  ein `a.theo-public-card` je Paper mit `href="/research/{slug}"`, `img.theo-public-card-img` nur
+  dort, wo es ein Hero gibt, und die Fußzeile aus den vorhandenen Teilen.
+- **pytest (DB-los):** `research_listing()` übergibt genau die acht Kartenfelder je Paper; die
+  Landing-Route liefert `{type, stats, journals, papers}` und nichts sonst, lässt Sektionen ohne
+  Inhalt weg, antwortet aus dem Cache und bleibt unter gzip dekodierbar.
 - **Build-Gate:** `size-limit` auf `dist/assets/landing-*.js` und `LandingLive-*.js` mit 40 kB
   Brotli im `lint-frontend`-Job, gleich nach `npm run build`.
-- **Nach dem Deploy (Playwright):** `/` liefert SSR-HTML mit drei Portalen und sechs Paper-Karten,
-  null Hydration-Fehler in der Konsole, LCP-Element ist das Hero-Bild, genau eine H1 mit dem
+- **Nach dem Deploy (Playwright):** `/` liefert SSR-HTML mit drei Portalen und ohne eine einzige
+  Paper-Karte darunter, `/research/` mit einer Karte je Paper, null Hydration-Fehler in der Konsole, LCP-Element ist das Hero-Bild, genau eine H1 mit dem
   Suchbegriff, kein "750K" mehr im Dokument; nach dem Scrollen stehen drei iframes im DOM, ein
   Wheel-Event über einem Portal scrollt die Seite und nicht den Rahmen, und auf 390 px Breite gibt
   es keinen horizontalen Überlauf. Crawler-Sicht mit JS-Blockade prüfen (Lehre aus den 2.100
