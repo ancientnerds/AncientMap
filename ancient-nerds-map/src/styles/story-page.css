@@ -73,11 +73,8 @@
   text-transform: uppercase;
 }
 
-/* Die Badges stehen als eigener Block unter der Meta-Zeile. Zweiter
-   Selektor: dasselbe <StoryArticle> steckt im Stories-Fenster der Startseite,
-   wo .story-main nicht darüber liegt. */
-.story-main > .meta-badges,
-.ll-window-article > .meta-badges {
+/* Die Badges stehen als eigener Block unter der Meta-Zeile. */
+.story-main > .meta-badges {
   margin: -8px 0 22px;
 }
 
@@ -170,20 +167,11 @@
 
 .story-body p { margin-bottom: 16px; }
 
-/* .site-related sits inside .site-page (SitePage) and the homepage stories
-   window in .ll-window-article — both outside .story-page, where the ancestor
-   rule cannot reach. Same headline styling, one definition.
-
-   In the window StoryArticle emits h4, one level under its h3 headline, and
-   the three selectors name the three places it does: a bare `.ll-window-article
-   h4` would also catch a #### in the journal or paper body running in the
-   OTHER two windows, and those bodies keep journal-article.css /
-   paper-article.css typography. */
+/* .site-related sits inside .site-page (SitePage), outside .story-page,
+   where the ancestor rule cannot reach. Same headline styling, one
+   definition. */
 .story-page h2,
-.site-related h2,
-.ll-window-article > h4,
-.ll-window-article .story-site h4,
-.ll-window-article .story-sources h4 {
+.site-related h2 {
   font-family: var(--font-heading);
   color: #fff;
   font-size: 1.6em;
@@ -192,11 +180,6 @@
   padding-bottom: 8px;
   text-shadow: 0 0 12px rgba(0, 204, 102, 0.10);
 }
-/* …at window scale: the headline in there is 1.5em (landing-live.css), so a
-   label under it has to stay smaller, and the 36px gap shrinks with it. */
-.ll-window-article > h4,
-.ll-window-article .story-site h4,
-.ll-window-article .story-sources h4 { font-size: 1.1em; margin: 24px 0 8px; }
 
 .story-facts { margin: 12px 0 24px 22px; }
 .story-facts li { margin-bottom: 8px; }

@@ -1,24 +1,22 @@
 /**
- * The Stories section: a NERV window running the story page.
+ * The Stories section: a NERV window with a portal on /news.html.
  *
- * Not a teaser strip (2026-09-10, owner feedback "the stories preview is
- * stupid"). The payload carries whole StoryData objects, so the window body
- * is the very <StoryArticle> /news-archive/{slug} renders — headline, meta,
- * video still, body, key facts, site chips, sources, Art.-50 footnote — and
- * the list beside it swaps which story is in the window.
+ * Not a teaser strip and not an article either (2026-09-10, owner: "I want
+ * a kind of portal to the pages — like a screenshot that shows the current
+ * state"). The window body is the live story page, scaled down; the column
+ * beside it lists the stories as plain links, which is what a crawler and a
+ * no-JS visitor get.
  *
- * Every list row is a real <a> to the story page. Swapping is an onClick
- * that preventDefaults a plain left click; crawlers, middle clicks and
- * ctrl-clicks get the link they came for, and the server renders the lead's
- * article, so the section is complete without JavaScript.
+ * The only client work left is the list: category chips refetch it from
+ * /api/news/feed, "load more" appends the next page.
  */
-import { useState, type MouseEvent } from 'react'
+import { useState } from 'react'
 
-import StoryArticle from '../components/news/StoryArticle'
 import { getNewsCategoryLabel } from '../components/news/significance'
 import type { LandingRoute, StoryData } from '../types/anRoute'
 import { fetchFeed, pickLeadAndRail, storyHref } from './feedClient'
 import LandingWindow from './LandingWindow'
+import PagePortal from './PagePortal'
 import RelativeTime from './RelativeTime'
 import SectionHead from './SectionHead'
 
@@ -39,7 +37,6 @@ function Badge({ category }: { category: string | null }) {
 export default function LandingStories({ initial, total }: Props) {
   const [category, setCategory] = useState<string | null>(null)
   const [list, setList] = useState<StoryData[]>([initial.lead, ...initial.rail])
-  const [active, setActive] = useState<StoryData>(initial.lead)
   const [loads, setLoads] = useState(0)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -50,7 +47,6 @@ export default function LandingStories({ initial, total }: Props) {
     if (next === null) {
       setCategory(null)
       setList([initial.lead, ...initial.rail])
-      setActive(initial.lead)
       setLoads(0)
       return
     }
@@ -64,7 +60,6 @@ export default function LandingStories({ initial, total }: Props) {
       const picked = pickLeadAndRail(items)
       setCategory(next)
       setList([picked.lead, ...picked.rail.slice(0, RAIL)])
-      setActive(picked.lead)
       setLoads(0)
     } catch {
       setError('feed unavailable')
@@ -89,17 +84,7 @@ export default function LandingStories({ initial, total }: Props) {
     }
   }
 
-  /** Plain left click swaps the window; every modified click stays a link. */
-  function swap(story: StoryData) {
-    return (e: MouseEvent) => {
-      if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return
-      e.preventDefault()
-      setActive(story)
-    }
-  }
-
   const chips: (string | null)[] = [null, ...initial.categories]
-  const activeHref = storyHref(active)
   return (
     <section className="ll-section" id="stories-live" aria-labelledby="ll-fig-1">
       <SectionHead fig={1} name="stories, live" status={`${total.toLocaleString('en-US')} stories · newest first`} />
@@ -117,26 +102,27 @@ export default function LandingStories({ initial, total }: Props) {
       <LandingWindow
         title={
           <>
-            {'>_ stories.log — '}
-            <b>{active.headline}</b>
+            {'>_ portal — '}
+            <b>/news.html</b>
           </>
         }
-        openHref={activeHref}
-        openTitle="Open the full story"
+        openHref="/news.html"
+        openTitle="Open stories"
         archiveHref="/news-archive/"
         archiveTitle="Story archive"
         listLabel="More stories"
-        article={<StoryArticle story={active} headingLevel="h3" compact headlineHref={activeHref} />}
+        main={
+          <PagePortal
+            src="/news.html"
+            title="Stories — live view"
+            openHref="/news.html"
+            openLabel="Open stories"
+          />
+        }
         list={
           <>
             {list.map(s => (
-              <a
-                key={s.id}
-                className="ll-row ll-row-thumb"
-                href={storyHref(s)}
-                aria-current={s.id === active.id ? 'true' : undefined}
-                onClick={swap(s)}
-              >
+              <a key={s.id} className="ll-row ll-row-thumb" href={storyHref(s)}>
                 {/* Plain <img>, never LazyImage: that one starts hidden and
                     unhides in React's onLoad, which never fires for an image
                     the browser already finished before hydration — and never

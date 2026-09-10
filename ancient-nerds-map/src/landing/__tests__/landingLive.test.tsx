@@ -1,7 +1,8 @@
 /**
  * The landing sections render under Node without browser APIs — exactly
- * what the SSR sidecar does. Effects (relative time, feed refetch) do not
- * run in renderToString, so the server output carries absolute dates.
+ * what the SSR sidecar does. Effects (relative time, the portal iframes,
+ * feed refetch) do not run in renderToString, so the server output carries
+ * absolute dates and no iframe at all.
  */
 import { renderToString } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
@@ -23,6 +24,15 @@ function render(route: LandingRoute): string {
   )
 }
 
+/** The three window bodies, in document order. */
+function windows(html: string): string[] {
+  return html.split('<div class="ll-window">').slice(1)
+}
+
+const STORIES = [FIXTURES.landing.stories!.lead, ...FIXTURES.landing.stories!.rail]
+const JOURNALS = [FIXTURES.landing.journals!.lead, ...FIXTURES.landing.journals!.rail]
+const PAPERS = [FIXTURES.landing.papers!.lead, ...FIXTURES.landing.papers!.rail]
+
 describe('LandingLive', () => {
   const html = render(FIXTURES.landing)
 
@@ -35,14 +45,11 @@ describe('LandingLive', () => {
     expect(html).not.toContain('<h1')
   })
 
-  it('links every teaser to its page', () => {
-    const stories = FIXTURES.landing.stories!
+  it('links every item to its page', () => {
     for (const href of [
-      ...[stories.lead, ...stories.rail].map(s => storyPath(s.headline, s.id)),
-      FIXTURES.landing.journals!.lead.path,
-      ...FIXTURES.landing.journals!.rail.map(j => j.path),
-      FIXTURES.landing.papers!.lead.path,
-      ...FIXTURES.landing.papers!.rail.map(p => p.path),
+      ...STORIES.map(s => storyPath(s.headline, s.id)),
+      ...JOURNALS.map(j => j.path),
+      ...PAPERS.map(p => p.path),
     ]) {
       expect(html).toContain(`href="${href}"`)
     }
@@ -62,9 +69,9 @@ describe('LandingLive', () => {
   })
 
   it('formats the journal week from the literal ISO date, not the renderer timezone', () => {
-    // The rail row's week_start is "2026-08-24T00:00:00" — zoneless. Going
-    // through new Date() would render "Aug 23" wherever the renderer sits
-    // east of UTC and desync server from client.
+    // The row's week_start is "2026-08-24T00:00:00" — zoneless. Going through
+    // new Date() would render "Aug 23" wherever the renderer sits east of UTC
+    // and desync server from client.
     expect(html).toContain('Aug 24 – Aug 30')
   })
 
@@ -79,8 +86,7 @@ describe('LandingLive', () => {
     }
   })
 
-  it('shows the evidence strip and the Theo line', () => {
-    expect(html).toContain('2,748')
+  it('shows the Theo line', () => {
     expect(html).toContain('Theo is researching')
     expect(html).toContain('Water erosion evidence in the Osiris Shaft')
     // The start time follows the page rule: absolute now, relative after
@@ -110,18 +116,13 @@ describe('LandingLive', () => {
     // hydration, and never at all for a crawler without JS.
     expect(html).not.toContain('lazy-image')
     expect(html).not.toContain('data:image/svg+xml')
-    // The teaser images only: the articles inside the windows bring their
-    // pages' own <img> tags (video still, country flag, paper hero), which are
-    // those pages' markup and are asserted there.
     const imgs = [...html.matchAll(/<span class="ll-img[^"]*"><img\b[^>]*>/g)].map(m => m[0])
     for (const tag of imgs) {
       expect(tag, tag).toContain('loading="lazy"')
       expect(tag, tag).toContain('decoding="async"')
     }
-    // Two of the three story thumbs — the story without a screenshot keeps
-    // its empty aspect-ratio box, and since the Journal and the Papers
-    // section became windows too (2026-09-10) neither has a teaser image
-    // left: the lead brings its page's own.
+    // Two of the three story rows — the story without a screenshot keeps its
+    // empty aspect-ratio box. Journals and papers have no row image at all.
     expect(imgs).toHaveLength(2)
   })
 
@@ -166,33 +167,57 @@ describe('LandingLive', () => {
 })
 
 /**
- * The Stories section is a window running the story page (2026-09-10).
- * Everything a crawler needs is in the first render: the lead's whole
- * article, its sources, the disclosure, and a real link per list row.
+ * Each window is a portal: the real page, scaled down, loaded lazily on
+ * desktop after mount (2026-09-10, owner: "a kind of portal to the pages —
+ * like a screenshot that shows the current state"). What the crawler gets is
+ * the link list beside it and a plain link into the page — never an iframe,
+ * which is why the first render carries none.
  */
-describe('LandingStories window', () => {
-  const stories = FIXTURES.landing.stories!
+describe('PagePortal', () => {
   const html = render(FIXTURES.landing)
-  const lead = stories.lead
-  const leadHref = storyPath(lead.headline, lead.id)
+  const pages = ['/news.html', '/articles.html', '/research/']
 
-  it('frames the article in a NERV window with the story page as its title', () => {
-    expect(html).toContain('class="ll-window"')
-    expect(html).toContain('class="ll-window-bar"')
-    expect(html).toContain('&gt;_ stories.log')
+  it('frames each section in a NERV window titled after the page it shows', () => {
+    expect([...html.matchAll(/class="ll-window"/g)]).toHaveLength(3)
+    expect([...html.matchAll(/class="ll-window-bar"/g)]).toHaveLength(3)
+    expect([...html.matchAll(/class="ll-window-main"/g)]).toHaveLength(3)
+    for (const page of pages) {
+      expect(html).toContain(`&gt;_ portal — <b>${page}</b>`)
+    }
     // The bar's controls reuse the app's window buttons, not a second set.
     expect(html).toContain('class="popup-window-controls ll-window-controls"')
-    expect(html).toContain(`<a class="popup-window-btn" href="${leadHref}"`)
-    expect(html).toContain('<a class="popup-window-btn" href="/news-archive/"')
+  })
+
+  it('puts exactly one portal per window, pointed at the page of that window', () => {
+    const panes = windows(html)
+    expect(panes).toHaveLength(3)
+    panes.forEach((pane, i) => {
+      const portals = [...pane.matchAll(/<div class="ll-portal" data-src="([^"]+)"/g)]
+      expect(portals, pages[i]).toHaveLength(1)
+      expect(portals[0][1]).toBe(pages[i])
+    })
+  })
+
+  it('renders no iframe on the server — the frame is a desktop-only effect', () => {
+    expect(html).not.toContain('<iframe')
+    const openLinks: [string, string][] = [
+      ['Open stories', '/news.html'],
+      ['Open journals', '/articles.html'],
+      ['Open research library', '/research/'],
+    ]
+    for (const [label, src] of openLinks) {
+      expect(html).toContain(`<a class="ll-portal-open" href="${src}">${label} ↗</a>`)
+      expect(html).toContain(`live view of ${src}`)
+    }
   })
 
   it('names the two window controls — their link text is an arrow glyph', () => {
     for (const label of [
-      'Open the full story',
+      'Open stories',
       'Story archive',
-      'Open the journal',
+      'Open journals',
       'Journal archive',
-      'Open the paper',
+      'Open research library',
       'Research library',
     ]) {
       expect(html).toContain(`aria-label="${label}"`)
@@ -202,195 +227,28 @@ describe('LandingStories window', () => {
     for (const btn of btns) expect(btn, btn).toContain('aria-label=')
   })
 
-  it('wraps the article column in <div> where the component brings its own <article>', () => {
-    // JournalArticle renders <article class="articles-reader"> itself; the
-    // other two do not. Two article landmarks for one text is one too many.
-    expect(html).toContain('<div class="ll-window-article"><article class="articles-reader">')
-    expect([...html.matchAll(/<article class="ll-window-article">/g)]).toHaveLength(2)
-    expect([...html.matchAll(/class="ll-window-article"/g)]).toHaveLength(3)
-  })
-
-  it('renders the lead as h3 — the section label is the only h2 above it', () => {
-    const titles = [...html.matchAll(/<h3 class="story-title">(.*?)<\/h3>/g)].map(m => m[1])
-    expect(titles).toHaveLength(1)
-    expect(titles[0]).toContain(`<a href="${leadHref}">`)
-    expect(html).not.toContain('<h1')
-  })
-
-  it('carries the whole story body, not a first sentence', () => {
-    const body = /<div class="story-body">([\s\S]*?)<\/div>/.exec(html)
-    expect(body).not.toBeNull()
-    const paragraphs = [...body![1].matchAll(/<p>/g)]
-    expect(paragraphs.length).toBe(lead.post_text.split('\n').length)
-    expect(html).toContain('the first Roman mass war grave known from Central Europe')
-  })
-
-  it('shows key facts, sources and the Art.-50 disclosure', () => {
-    expect(html).toContain('>Key facts<')
-    expect(html).toContain('>Sources<')
-    for (const source of lead.web_sources!) {
-      expect(html).toContain(`<a href="${source.url}" target="_blank" rel="noopener nofollow">`)
-    }
-    expect(html).toContain('data-ai-generated="true"')
-  })
-
-  it('ranks its sub-headings under the headline, not beside the section label', () => {
-    // On the page the headline is the h1 and "Key facts" an h2. In the window
-    // the headline drops to h3, so the sub-headings have to drop with it —
-    // an h2 in there outranks the very article it belongs to and lands in the
-    // outline next to ">_ [ fig. 1 — stories, live ]".
-    const start = html.indexOf('<h3 class="story-title">')
-    const slice = html.slice(start, html.indexOf('<h2 class="ll-fig"', start))
-    expect(slice).toContain('<h4>Key facts</h4>')
-    expect(slice).toContain('<h4>Site mentioned</h4>')
-    expect(slice).toContain('<h4>Sources</h4>')
-    expect(slice).not.toContain('<h2')
-  })
-
-  it('lists lead plus rail as real links, the lead marked current', () => {
-    const rows = [...html.matchAll(/<a class="ll-row ll-row-thumb" href="([^"]+)"([^>]*)>/g)]
-    expect(rows).toHaveLength(1 + stories.rail.length)
-    expect(rows.map(m => m[1])).toEqual(
-      [lead, ...stories.rail].map(s => storyPath(s.headline, s.id)),
+  it('lists every item beside the portal as a plain link, no in-window swap', () => {
+    const [stories, journals, papers] = windows(html)
+    const rows = [...stories.matchAll(/<a class="ll-row ll-row-thumb" href="([^"]+)"([^>]*)>/g)]
+    expect(rows.map(m => m[1])).toEqual(STORIES.map(s => storyPath(s.headline, s.id)))
+    for (const row of rows) expect(row[2]).not.toContain('aria-current')
+    expect([...journals.matchAll(/<a class="ll-row" href="([^"]+)"/g)].map(m => m[1])).toEqual(
+      JOURNALS.map(j => j.path),
     )
-    expect(rows[0][2]).toContain('aria-current="true"')
-    for (const row of rows.slice(1)) expect(row[2]).not.toContain('aria-current')
+    expect([...papers.matchAll(/<a class="ll-row" href="([^"]+)"/g)].map(m => m[1])).toEqual(
+      PAPERS.map(p => p.path),
+    )
   })
 
-  it('compact mode drops the country fallback chip', () => {
-    // An uncurated site keeps the plain 📍 chip and the globe link; "More
-    // sites in {country}" belongs on the page, which has room for it.
-    const out = render({
-      ...FIXTURES.landing,
-      stories: {
-        ...stories,
-        lead: { ...lead, site_curated: false, site_country: 'Austria' },
-      },
-    })
-    expect(out).toContain('📍 <!-- -->Roman grave')
-    expect(out).not.toContain('More sites in')
-    expect(out).toContain('🌍 Show on the globe')
-  })
-
-  it('is one of three windows, all built from the same shell', () => {
-    expect([...html.matchAll(/class="ll-window"/g)]).toHaveLength(3)
-    expect([...html.matchAll(/class="ll-window-bar"/g)]).toHaveLength(3)
-    expect([...html.matchAll(/class="ll-window-article"/g)]).toHaveLength(3)
-  })
-
-  it('compact mode lists at most four sources', () => {
-    const many = Array.from({ length: 8 }, (_, i) => ({
-      url: `https://source-${i}.example/`,
-      title: `Source ${i}`,
-      snippet: null,
-    }))
-    const out = render({
-      ...FIXTURES.landing,
-      stories: { ...stories, lead: { ...lead, web_sources: many, post_text: 'Body.' } },
-    })
-    expect([...out.matchAll(/<div class="story-source">/g)]).toHaveLength(4)
-    expect(out).toContain('https://source-3.example/')
-    expect(out).not.toContain('https://source-4.example/')
-  })
-})
-
-/**
- * The Journal and the Papers section are windows running their pages too
- * (2026-09-10). Same proof as for the stories: the lead's real article is in
- * the first render, and every row beside it is a link.
- */
-describe('LandingJournals and LandingPapers windows', () => {
-  const journals = FIXTURES.landing.journals!
-  const papers = FIXTURES.landing.papers!
-  const html = render(FIXTURES.landing)
-
-  it('titles each window with its own log and its own open/archive links', () => {
-    expect(html).toContain('&gt;_ journal.log')
-    expect(html).toContain('&gt;_ research.log')
-    expect(html).toContain(`<a class="popup-window-btn" href="${journals.lead.path}"`)
-    expect(html).toContain('<a class="popup-window-btn" href="/articles.html"')
-    expect(html).toContain(`<a class="popup-window-btn" href="${papers.lead.path}"`)
-    expect(html).toContain('<a class="popup-window-btn" href="/research/"')
-  })
-
-  it('renders both leads as linked h3 — the section labels stay the only h2s above', () => {
-    const journalTitle = /<h3 class="articles-reader-title">(.*?)<\/h3>/.exec(html)
-    expect(journalTitle).not.toBeNull()
-    expect(journalTitle![1]).toContain(`<a href="${journals.lead.path}">`)
-    const paperTitle = /<h3 class="theo-paper-title">(.*?)<\/h3>/.exec(html)
-    expect(paperTitle).not.toBeNull()
-    expect(paperTitle![1]).toContain(`<a href="${papers.lead.path}">`)
-    expect(html).not.toContain('<h1')
-  })
-
-  it('carries the pages own body HTML, not a summary of it', () => {
-    // The journal excerpt keeps its markdown heading and its markup.
-    expect(html).toContain('<h2 id="artifact-discoveries">Artifact Discoveries</h2>')
-    expect(html).toContain('<em>Homo sapiens</em>')
-    expect(html).toContain('476,000 years ago')
-    // The paper body arrives through the page's own .theo-paper-body.
-    expect(html).toContain('class="theo-paper-body theo-md-body"')
-    expect(html).toContain('27 granite chests')
-    // …inside the paper page's own header, byline and licence line.
-    expect(html).toContain('by Theo · AI research agent')
-    expect(html).toContain('CC BY 4.0')
-    expect(html).toContain('class="theo-paper-hero-img"')
-  })
-
-  it('reads the paper reading time off the payload, not off the excerpt', () => {
-    // body_html in the window is an excerpt — counting ITS words announced
-    // "1 min read" for a 28-minute paper. The payload's minutes come from the
-    // stored word_count of the whole report (landing_html.paper_teaser).
-    expect(papers.lead.minutes).toBe(28)
-    expect(html).toContain('28 min read')
-    expect(html).not.toContain('1 min read')
-  })
-
-  it('marks both excerpts as AI-generated — the pages banner does not reach here', () => {
-    // Art. 50 EU AI Act: story, journal and paper each carry the footnote,
-    // one per window. The pages keep their own AiNoticeBanner instead.
-    expect([...html.matchAll(/data-ai-generated="true"/g)]).toHaveLength(3)
-    expect([...html.matchAll(/class="story-ai-notice"/g)]).toHaveLength(3)
-    expect(html).not.toContain('ai-notice-banner')
-  })
-
-  it('offers "continue reading" exactly where the server cut the body', () => {
-    const links = [...html.matchAll(/<a class="ll-continue" href="([^"]+)"/g)].map(m => m[1])
-    expect(links).toEqual([journals.lead.path, papers.lead.path])
-    expect(html).toContain('continue reading →')
-
-    // excerpted: false means nothing was dropped — then the link would
-    // promise text that is not there.
-    const whole = render({
-      ...FIXTURES.landing,
-      journals: { ...journals, lead: { ...journals.lead, excerpted: false } },
-      papers: { ...papers, lead: { ...papers.lead, excerpted: false } },
-    })
-    expect(whole).not.toContain('ll-continue')
-    expect(whole).toContain('<h2 id="artifact-discoveries">')
-  })
-
-  it('lists the older issues and papers as real links beside the article', () => {
-    for (const href of [
-      ...journals.rail.map(j => j.path),
-      ...papers.rail.map(p => p.path),
-    ]) {
-      expect(html).toContain(`<a class="ll-row" href="${href}">`)
-    }
-    // The lead's own sections sit above that list and open the lead.
-    const toc = /<span class="ll-toc">([\s\S]*?)<\/span><a class="ll-row"/.exec(html)
-    expect(toc).not.toBeNull()
-    for (const section of journals.lead.sections) {
-      expect(toc![1]).toContain(`>${section.replace(/&/g, '&amp;')}</a>`)
-    }
-    expect(toc![1]).not.toContain('href=""')
-  })
-
-  it('keeps the evidence strip in the window and the Theo line outside it', () => {
-    const window = /<div class="ll-window">(?:(?!<\/section>)[\s\S])*?ll-evidence[\s\S]*?<\/div><\/div>/.exec(html)
-    expect(window).not.toBeNull()
-    expect(html).toContain('<i>sources analyzed</i>')
-    // The agent line is the section's, not the paper's: it follows the window.
-    expect(html.indexOf('ll-theo')).toBeGreaterThan(html.indexOf('ll-evidence'))
+  it('runs no page article inside a window any more', () => {
+    // The windows showed StoryArticle/JournalArticle/PaperArticle until the
+    // portals replaced them; those components belong to their pages now.
+    expect(html).not.toContain('story-title')
+    expect(html).not.toContain('articles-reader')
+    expect(html).not.toContain('theo-paper')
+    expect(html).not.toContain('data-ai-generated')
+    expect(html).not.toContain('ll-continue')
+    expect(html).not.toContain('ll-toc')
+    expect(html).not.toContain('ll-evidence')
   })
 })

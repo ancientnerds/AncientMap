@@ -3,32 +3,26 @@
  *
  * Extracted from LandingStories (2026-09-10) when the Journal and the
  * Papers section became windows too: title bar with the two window buttons
- * from nerv-ui/window.css, a body split into the article on the left and
- * the list of the other issues on the right. One definition, so the three
+ * from nerv-ui/window.css, a body split into the portal on the left and the
+ * list of the section's items on the right. One definition, so the three
  * sections cannot drift apart.
  *
- * The window owns nothing but the frame — what runs inside it is the page's
- * own article component (StoryArticle, JournalArticle, PaperArticle) and
- * the section's own list.
+ * The window owns nothing but the frame — what runs inside it is a
+ * <PagePortal> on the section's page and the section's own list.
  */
 import type { ReactNode } from 'react'
 
 interface Props {
-  /** Bar caption, e.g. {'>_ stories.log — '}<b>{headline}</b>. */
+  /** Bar caption, e.g. {'>_ portal — '}<b>/news.html</b>. */
   title: ReactNode
-  /** ↗ — the page this window is running. */
+  /** ↗ — the page this window is showing. */
   openHref: string
   openTitle: string
   /** ≡ — the archive of that page type. */
   archiveHref: string
   archiveTitle: string
-  article: ReactNode
-  /**
-   * The element around the article column. 'div' where the component running
-   * inside already renders its own <article> — JournalArticle does, and an
-   * <article> inside an <article> is two article landmarks for one text.
-   */
-  articleTag?: 'article' | 'div'
+  /** Left column: the portal. */
+  main: ReactNode
   list: ReactNode
   /** aria-label of the list column — the only per-section word in the frame. */
   listLabel: string
@@ -40,8 +34,7 @@ export default function LandingWindow({
   openTitle,
   archiveHref,
   archiveTitle,
-  article,
-  articleTag: ArticleTag = 'article',
+  main,
   list,
   listLabel,
 }: Props) {
@@ -57,7 +50,7 @@ export default function LandingWindow({
         </span>
       </div>
       <div className="ll-window-body">
-        <ArticleTag className="ll-window-article">{article}</ArticleTag>
+        <div className="ll-window-main">{main}</div>
         <nav className="ll-window-list" aria-label={listLabel}>
           {list}
         </nav>

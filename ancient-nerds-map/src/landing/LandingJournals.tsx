@@ -1,20 +1,17 @@
 /**
- * The weekly Journal section: a NERV window running the journal page.
+ * The weekly Journal section: a NERV window with a portal on /articles.html.
  *
- * Same shape as the Stories section (2026-09-10, owner: "just a window that
- * shows the story page — and the same for the journals and research papers").
- * The lead's payload carries the issue's body_html, so the window body is the
- * very <JournalArticle> /articles/{slug} renders, cut after a whole block by
- * excerpt_html; the column beside it lists the older issues.
- *
- * No in-window swap here: an issue is a long read, not a card. Every row is
- * a plain link, and so are the section chips of the lead above them.
+ * Same shape as the Stories section (2026-09-10, owner: "I want a kind of
+ * portal to the pages — like a screenshot that shows the current state"):
+ * the live journal hub runs scaled down in the window, the column beside it
+ * lists every issue in the payload as a plain link — newest first, which is
+ * also the crawlable half of the section.
  */
-import JournalArticle from '../components/news/JournalArticle'
 import type { LandingRoute } from '../types/anRoute'
 import { shortDate } from '../seo/display'
 import { dateRange } from './dates'
 import LandingWindow from './LandingWindow'
+import PagePortal from './PagePortal'
 import SectionHead from './SectionHead'
 
 interface Props {
@@ -22,7 +19,9 @@ interface Props {
 }
 
 export default function LandingJournals({ data }: Props) {
-  const { lead, rail, total } = data
+  const { rail, total } = data
+  const items = [data.lead, ...rail]
+  const newest = items[0]
   // Every meta line is assembled from the parts that exist and only then
   // joined: week_start/week_end and published_at are nullable, and a
   // hard-coded " · " between them prints a dangling separator.
@@ -32,8 +31,8 @@ export default function LandingJournals({ data }: Props) {
         fig={2}
         name="weekly journal"
         status={[
-          `No. ${lead.id}`,
-          lead.published_at && `published ${shortDate(lead.published_at)}`,
+          `No. ${newest.id}`,
+          newest.published_at && `published ${shortDate(newest.published_at)}`,
           `${total} issues`,
         ]
           .filter(Boolean)
@@ -42,57 +41,36 @@ export default function LandingJournals({ data }: Props) {
       <LandingWindow
         title={
           <>
-            {'>_ journal.log — '}
-            <b>{lead.title}</b>
+            {'>_ portal — '}
+            <b>/articles.html</b>
           </>
         }
-        openHref={lead.path}
-        openTitle="Open the journal"
+        openHref="/articles.html"
+        openTitle="Open journals"
         archiveHref="/articles.html"
         archiveTitle="Journal archive"
         listLabel="More journals"
-        articleTag="div"
-        article={
-          <>
-            <JournalArticle
-              article={lead}
-              headingLevel="h3"
-              headlineHref={lead.path}
-              aiNotice
-            />
-            {lead.excerpted && (
-              <a className="ll-continue" href={lead.path}>
-                continue reading →
-              </a>
-            )}
-          </>
+        main={
+          <PagePortal
+            src="/articles.html"
+            title="Weekly journals — live view"
+            openHref="/articles.html"
+            openLabel="Open journals"
+          />
         }
-        list={
-          <>
-            {lead.sections.length > 0 && (
-              <span className="ll-toc">
-                {lead.sections.map(s => (
-                  <a key={s} href={lead.path}>
-                    {s}
-                  </a>
-                ))}
+        list={items.map(j => (
+          <a key={j.id} className="ll-row" href={j.path}>
+            <span>
+              <span className="ll-row-title">{j.title}</span>
+              <span className="ll-meta">
+                {[`No. ${j.id}`, dateRange(j.week_start, j.week_end), `${j.minutes} min`]
+                  .filter(Boolean)
+                  .join(' · ')}
               </span>
-            )}
-            {rail.map(j => (
-              <a key={j.id} className="ll-row" href={j.path}>
-                <span>
-                  <span className="ll-row-title">{j.title}</span>
-                  <span className="ll-meta">
-                    {[`No. ${j.id}`, dateRange(j.week_start, j.week_end), `${j.minutes} min`]
-                      .filter(Boolean)
-                      .join(' · ')}
-                  </span>
-                </span>
-                <span className="ll-arrow">→</span>
-              </a>
-            ))}
-          </>
-        }
+            </span>
+            <span className="ll-arrow">→</span>
+          </a>
+        ))}
       />
       <div className="ll-foot">
         <span>every Sunday · sourced, cited, illustrated</span>
