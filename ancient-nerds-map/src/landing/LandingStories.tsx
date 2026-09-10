@@ -13,8 +13,9 @@
 import { useState } from 'react'
 
 import { getNewsCategoryLabel } from '../components/news/significance'
-import type { LandingRoute, StoryData } from '../types/anRoute'
-import { fetchFeed, pickLeadAndRail, storyHref } from './feedClient'
+import { storyPath } from '../seo/meta'
+import type { LandingRoute, StoryTeaser } from '../types/anRoute'
+import { fetchFeed, leadFirst } from './feedClient'
 import LandingWindow from './LandingWindow'
 import PagePortal from './PagePortal'
 import RelativeTime from './RelativeTime'
@@ -36,7 +37,7 @@ function Badge({ category }: { category: string | null }) {
 
 export default function LandingStories({ initial, total }: Props) {
   const [category, setCategory] = useState<string | null>(null)
-  const [list, setList] = useState<StoryData[]>([initial.lead, ...initial.rail])
+  const [list, setList] = useState<StoryTeaser[]>(initial.items)
   const [loads, setLoads] = useState(0)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -46,20 +47,19 @@ export default function LandingStories({ initial, total }: Props) {
     setError(null)
     if (next === null) {
       setCategory(null)
-      setList([initial.lead, ...initial.rail])
+      setList(initial.items)
       setLoads(0)
       return
     }
     setBusy(true)
     try {
-      const { items } = await fetchFeed({ category: next, page: 1, pageSize: PAGE })
+      const items = await fetchFeed({ category: next, page: 1, pageSize: PAGE })
       if (items.length === 0) {
         setError(`no ${next} stories yet`)
         return
       }
-      const picked = pickLeadAndRail(items)
       setCategory(next)
-      setList([picked.lead, ...picked.rail.slice(0, RAIL)])
+      setList(leadFirst(items).slice(0, RAIL + 1))
       setLoads(0)
     } catch {
       setError('feed unavailable')
@@ -74,7 +74,7 @@ export default function LandingStories({ initial, total }: Props) {
     setError(null)
     try {
       const shown = new Set(list.map(s => s.id))
-      const { items } = await fetchFeed({ category, page: loads + 2, pageSize: RAIL })
+      const items = await fetchFeed({ category, page: loads + 2, pageSize: RAIL })
       setList(prev => [...prev, ...items.filter(i => !shown.has(i.id))])
       setLoads(n => n + 1)
     } catch {
@@ -122,7 +122,7 @@ export default function LandingStories({ initial, total }: Props) {
         list={
           <>
             {list.map(s => (
-              <a key={s.id} className="ll-row ll-row-thumb" href={storyHref(s)}>
+              <a key={s.id} className="ll-row ll-row-thumb" href={storyPath(s.headline, s.id)}>
                 {/* Plain <img>, never LazyImage: that one starts hidden and
                     unhides in React's onLoad, which never fires for an image
                     the browser already finished before hydration — and never

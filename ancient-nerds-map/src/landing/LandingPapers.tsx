@@ -20,8 +20,7 @@ interface Props {
 }
 
 export default function LandingPapers({ data }: Props) {
-  const { rail, total, theo } = data
-  const items = [data.lead, ...rail]
+  const { items, total, theo } = data
   // published_at and words are nullable — the meta lines are joined from the
   // parts that exist so no separator dangles.
   return (

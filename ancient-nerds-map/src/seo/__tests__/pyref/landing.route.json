@@ -1,128 +1,72 @@
 {
   "type": "landing",
-  "stats": { "sites": 1759673, "stories": 3189, "journals": 23, "papers": 24 },
+  "stats": {
+    "sites": 1759673,
+    "stories": 3189,
+    "journals": 23,
+    "papers": 24
+  },
   "stories": {
-    "lead": {
-      "id": 8207,
-      "headline": "Vienna Roman mass grave dated to late 1st-early 2nd century CE; 85% of injuries perimortem",
-      "summary": "Beneath a Vienna soccer field, the first known Roman mass war grave yielded 129 male skeletons.",
-      "facts": [
-        "129 male skeletons, all but two of them men aged 20 to 30",
-        "85% of the recorded injuries happened at or around the time of death",
-        "Radiocarbon and coin finds place the burial between 80 and 130 CE"
-      ],
-      "post_text": "Renovation work under a soccer pitch in Vienna-Simmering hit a pit packed with human bone, and the excavation that followed found 129 skeletons laid down in a single event.\nAlmost all are men between 20 and 30, and 85% of the injuries — blade cuts, lance punctures, blunt trauma — happened at or around the time of death.\nThat combination makes it the first Roman mass war grave known from Central Europe. https://www.wien.gv.at/kultur/archaeologie/simmering/",
-      "site_name": "Roman grave",
-      "site_id": "16147718-a70b-486e-aaba-9cf71316602c",
-      "site_country": "Austria",
-      "site_curated": true,
-      "site_type": "Battlefield",
-      "site_period_name": "Roman Imperial",
-      "site_period_start": 80,
-      "significance": 9,
-      "screenshot_url": "/data/news/screenshots/YGUoJy_SRr0_1038.webp",
-      "youtube_url": "https://www.youtube.com/watch?v=YGUoJy_SRr0",
-      "video_title": "Rome's Lost Battle Under a Soccer Field",
-      "channel_name": "Inside Archaeology",
-      "published_at": "2026-09-07T04:23:33",
-      "news_category": "bioarchaeology",
-      "web_sources": [
-        {
-          "url": "https://www.wien.gv.at/kultur/archaeologie/simmering/",
-          "title": "Stadtarchäologie Wien — Simmering",
-          "snippet": "The pit held 129 individuals in a single depositional event."
-        },
-        {
-          "url": "https://www.nature.com/articles/s41598-026-simmering",
-          "title": "Perimortem trauma in a Roman mass grave",
-          "snippet": "Blade and lance injuries dominate the recorded trauma."
-        }
-      ],
-      "timestamp_seconds": 1038,
-      "speculative_tag": "",
-      "related": []
-    },
-    "rail": [
+    "items": [
+      {
+        "id": 8207,
+        "headline": "Vienna Roman mass grave dated to late 1st-early 2nd century CE; 85% of injuries perimortem",
+        "screenshot_url": "/data/news/screenshots/YGUoJy_SRr0_1038.webp",
+        "news_category": "bioarchaeology",
+        "significance": 9,
+        "published_at": "2026-09-07T04:23:33",
+        "site_name": "Roman grave",
+        "channel_name": "Inside Archaeology"
+      },
       {
         "id": 8245,
         "headline": "1-million-year-old stone tools on Sulawesi suggest earliest known seafaring",
-        "summary": "Seven stone flakes found in a Sulawesi cornfield may date to 1.04 to 1.48 million years old.",
-        "facts": [
-          "Seven flakes recovered from the Calio site on Sulawesi",
-          "Bracketed between 1.04 and 1.48 million years old"
-        ],
-        "post_text": "Seven sharp-edged flakes came out of a cornfield at Calio in South Sulawesi, sealed in a layer that dates between 1.04 and 1.48 million years.\nSulawesi has never been connected to the mainland, so whoever knapped them crossed open water to get there.",
-        "site_name": "",
-        "site_id": "",
-        "site_country": "",
-        "site_curated": false,
-        "site_type": null,
-        "site_period_name": null,
-        "site_period_start": null,
-        "significance": 8,
         "screenshot_url": "/data/news/screenshots/TKnMsjxSzTQ_292.webp",
-        "youtube_url": "https://www.youtube.com/watch?v=TKnMsjxSzTQ",
-        "video_title": "Who Crossed to Sulawesi a Million Years Ago?",
-        "channel_name": "Michael Button",
-        "published_at": "2026-09-08T19:33:29",
         "news_category": "artifact",
-        "web_sources": [
-          {
-            "url": "https://www.nature.com/articles/s41586-026-calio",
-            "title": "Early hominin presence on Sulawesi",
-            "snippet": "The Calio flakes predate every other artefact known from Wallacea."
-          }
-        ],
-        "timestamp_seconds": 292,
-        "speculative_tag": "",
-        "related": []
+        "significance": 8,
+        "published_at": "2026-09-08T19:33:29",
+        "site_name": "",
+        "channel_name": "Michael Button"
       },
       {
         "id": 8208,
         "headline": "DNA confirms Mississippian cacao consumption at Etowah, Georgia, around 1000 years ago",
-        "summary": "Genetic sequencing confirmed cacao DNA on 11th to 12th century pottery shards from Etowah.",
-        "facts": ["Cacao DNA recovered from residue on 11th-century sherds"],
-        "post_text": "Residue scraped from Etowah pottery carried cacao DNA, and the sherds themselves date to the 11th and 12th centuries.\nThe nearest cacao grows some 2,000 kilometres south, which puts Etowah on a trade route nobody had mapped that far north.",
-        "site_name": "Etowah",
-        "site_id": "6b0d5cf1-3a2e-4b90-9a11-c0de1f2a3b4c",
-        "site_country": "",
-        "site_curated": false,
-        "site_type": "Settlement",
-        "site_period_name": "Mississippian",
-        "site_period_start": 1000,
-        "significance": 7,
         "screenshot_url": null,
-        "youtube_url": "https://www.youtube.com/watch?v=nMxEoIrMwX8",
-        "video_title": "Cacao 2,000 km From Home",
-        "channel_name": "Inside Archaeology",
-        "published_at": "2026-09-07T04:23:33",
         "news_category": "artifact",
-        "web_sources": [],
-        "timestamp_seconds": null,
-        "speculative_tag": "",
-        "related": []
+        "significance": 7,
+        "published_at": "2026-09-07T04:23:33",
+        "site_name": "Etowah",
+        "channel_name": "Inside Archaeology"
       }
     ],
-    "categories": ["artifact", "bioarchaeology", "underwater", "theory", "architecture"]
+    "categories": [
+      "artifact",
+      "bioarchaeology",
+      "underwater",
+      "theory",
+      "architecture"
+    ]
   },
   "journals": {
-    "lead": {
-      "id": 74,
-      "title": "Week of August 31: 476,000-Year-Old Wooden Structure Found, Dire Wolf Pups Born, and More",
-      "summary": "Archaeologists at Kalambo Falls uncovered the oldest known wooden structure.",
-      "week_start": "2026-08-31T00:00:00",
-      "week_end": "2026-09-06T23:59:59",
-      "published_at": "2026-09-07T04:20:43",
-      "words": 2762,
-      "minutes": 12,
-      "sections": ["Artifact Discoveries", "Remote Sensing & Technology", "Bioarchaeology & Ancient DNA", "In Brief"],
-      "sources": 35,
-      "image_url": "/data/news/screenshots/nMxEoIrMwX8_367.webp",
-      "path": "/articles/week-of-august-31-476000-year-old-wooden-structure-found-dire-wolf-pups-born-and-more",
-      "body_html": "<h2 id=\"artifact-discoveries\">Artifact Discoveries</h2>\n<p>Archaeologists at Kalambo Falls in Zambia reported two interlocking logs, shaped with stone tools and preserved in waterlogged sand, that push the oldest known wooden structure back to about 476,000 years ago.</p>\n<p>The find predates <em>Homo sapiens</em>, so whoever cut that notch was not us — which makes the carpentry, not the wood, the headline.</p>",
-      "excerpted": true
-    },
-    "rail": [
+    "items": [
+      {
+        "id": 74,
+        "title": "Week of August 31: 476,000-Year-Old Wooden Structure Found, Dire Wolf Pups Born, and More",
+        "summary": "Archaeologists at Kalambo Falls uncovered the oldest known wooden structure.",
+        "week_start": "2026-08-31T00:00:00",
+        "week_end": "2026-09-06T23:59:59",
+        "published_at": "2026-09-07T04:20:43",
+        "words": 2762,
+        "minutes": 12,
+        "sections": [
+          "Artifact Discoveries",
+          "Remote Sensing & Technology",
+          "Bioarchaeology & Ancient DNA",
+          "In Brief"
+        ],
+        "sources": 35,
+        "path": "/articles/week-of-august-31-476000-year-old-wooden-structure-found-dire-wolf-pups-born-and-more"
+      },
       {
         "id": 73,
         "title": "Week of August 24: 25 Turtle Figurines in Turkish Cave, World's First Brand, and More",
@@ -134,29 +78,25 @@
         "minutes": 11,
         "sections": [],
         "sources": 30,
-        "image_url": null,
         "path": "/articles/week-of-august-24-25-turtle-figurines-in-turkish-cave-worlds-first-brand-and-more"
       }
     ],
     "total": 23
   },
   "papers": {
-    "lead": {
-      "slug": "the-egyptian-hard-stone-precision-debate",
-      "title": "The Egyptian Hard-Stone Precision Debate",
-      "summary": "Mainstream explanations of Egyptian hard-stone working are tested against the Serapeum boxes.",
-      "published_at": "2026-08-31T22:07:06",
-      "words": 6466,
-      "minutes": 28,
-      "sources_analyzed": 2748,
-      "quality_score": 98,
-      "hero_image_url": "https://ancientnerds.com/data/research-images/4bf89556/p7.jpg",
-      "path": "/research/the-egyptian-hard-stone-precision-debate",
-      "author": null,
-      "body_html": "<p>The Serapeum boxes are the strongest single test of the mainstream account: 27 granite chests, each cut to tolerances that copper tools and sand abrasives are not obviously able to hold.</p>",
-      "excerpted": true
-    },
-    "rail": [
+    "items": [
+      {
+        "slug": "the-egyptian-hard-stone-precision-debate",
+        "title": "The Egyptian Hard-Stone Precision Debate",
+        "summary": "Mainstream explanations of Egyptian hard-stone working are tested against the Serapeum boxes.",
+        "published_at": "2026-08-31T22:07:06",
+        "words": 6466,
+        "minutes": 28,
+        "sources_analyzed": 2748,
+        "quality_score": 98,
+        "hero_image_url": "https://ancientnerds.com/data/research-images/4bf89556/p7.jpg",
+        "path": "/research/the-egyptian-hard-stone-precision-debate"
+      },
       {
         "slug": "submerged-sites-between-geology-and-pseudoarchaeology",
         "title": "Submerged Sites Between Geology and Pseudoarchaeology",
@@ -171,6 +111,10 @@
       }
     ],
     "total": 24,
-    "theo": { "question": "Water erosion evidence in the Osiris Shaft", "started_at": "2026-09-09T06:00:00Z", "sites_found": 1340 }
+    "theo": {
+      "question": "Water erosion evidence in the Osiris Shaft",
+      "started_at": "2026-09-09T06:00:00Z",
+      "sites_found": 1340
+    }
   }
 }

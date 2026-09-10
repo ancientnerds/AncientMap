@@ -29,11 +29,10 @@ from sqlalchemy.orm import Session, joinedload
 from api.routes.articles_html import public_stories_query, story_payload
 from api.routes.news import get_news_stats
 from api.routes.public_v1 import PAPER_SUMMARY_COLUMNS, paper_summary_kwargs
-from api.routes.research_html import fetch_paper, report_markdown
 from api.routes.theo import get_current_research
 from api.seo_shell import ssr_shell_response
 from api.services.site_stats import get_site_stats
-from pipeline.article_html_renderer import markdown_to_html, slugify
+from pipeline.article_html_renderer import slugify
 from pipeline.database import NewsArticle, NewsItem, NewsVideo, get_db
 from pipeline.research_html_renderer import PUBLIC_PAPER_WHERE
 
@@ -45,44 +44,24 @@ RECENT_ROWS = 7
 # Pipeline states that live in news_category but are not topics — never a chip.
 CHIP_HIDDEN_CATEGORIES = ("unverified", "rejected")
 APPENDIX_SECTIONS = {"sources", "videos"}
-# How much of the lead journal / lead paper the homepage window shows before
-# the "continue reading" link takes over. Measured in visible characters, cut
-# at the end of the block that crosses it.
-EXCERPT_CHARS = 2500
-# The blocks markdown_to_html emits at the top level. A cut may only land
-# right after one of them closes.
-EXCERPT_BLOCKS = frozenset(
-    {"p", "h2", "h3", "h4", "ul", "ol", "figure", "blockquote", "pre", "table"}
-)
-# ...and of those, the ones that may not be the LAST thing in an excerpt: a
-# heading is the title of the section that was cut away right behind it.
-EXCERPT_HEADINGS = frozenset({"h2", "h3", "h4"})
-# Everything that nests moves the depth counter, so these are the odd ones out:
-# tags that never close and must not move it.
-VOID_TAGS = frozenset(
+# The fields a homepage list row needs. story_payload() builds the whole
+# story page payload and this is the slice of it the row shows — one mapping,
+# not a second one that could drift from the page.
+STORY_TEASER_KEYS = frozenset(
     {
-        "area",
-        "base",
-        "br",
-        "col",
-        "embed",
-        "hr",
-        "img",
-        "input",
-        "link",
-        "meta",
-        "param",
-        "source",
-        "track",
-        "wbr",
+        "id",
+        "headline",
+        "screenshot_url",
+        "news_category",
+        "significance",
+        "published_at",
+        "site_name",
+        "channel_name",
     }
 )
 
 _HEADING = re.compile(r"^##+\s+(.+?)\s*$", re.MULTILINE)
-_IMAGE = re.compile(r"!\[[^\]]*\]\(([^)\s]+)")
 _LINK = re.compile(r"https?://")
-_TAG = re.compile(r"<(/?)([a-zA-Z][a-zA-Z0-9]*)[^>]*?(/?)>")
-_WS = re.compile(r"\s+")
 
 
 def reading_minutes(words: int) -> int:
@@ -97,12 +76,23 @@ def pick_lead_and_rail(recent: list, lead_48h) -> tuple:
     return lead, rail
 
 
+def story_teaser(item) -> dict:
+    """NewsItem row → StoryTeaser, via the story page's own mapping.
+
+    The homepage shows the live /news.html in an iframe and a list of links
+    beside it, so a row needs a headline, a thumbnail and one meta line — not
+    the article. Filtering story_payload() instead of writing a second
+    mapping keeps the two definitions of "published_at" or "site_name" from
+    drifting apart. related=[] because nothing here renders it.
+    """
+    return {k: v for k, v in story_payload(item, related=[]).items() if k in STORY_TEASER_KEYS}
+
+
 def journal_teaser(row) -> dict:
     """NewsArticle row → JournalTeaser."""
     content = row.content or ""
     words = len(content.split())
     sections = [h for h in _HEADING.findall(content) if h.strip().lower() not in APPENDIX_SECTIONS]
-    image = _IMAGE.search(content)
     return {
         "id": row.id,
         "title": row.title,
@@ -114,69 +104,8 @@ def journal_teaser(row) -> dict:
         "minutes": reading_minutes(words),
         "sections": sections,
         "sources": len(_LINK.findall(content)),
-        "image_url": image.group(1) if image else None,
         "path": f"/articles/{slugify(row.title)}",
     }
-
-
-def excerpt_html(html: str, max_chars: int = EXCERPT_CHARS) -> tuple[str, bool]:
-    """The opening of a rendered body, cut at a top-level block boundary.
-
-    The homepage windows run the journal and the paper page, so the lead
-    carries real body HTML — but not all of it. The cut lands right after the
-    first top-level block whose end pushes the visible text past `max_chars`,
-    so the excerpt is always a whole paragraph, list, quote or figure and the
-    markup that comes back is balanced.
-
-    Balanced for EVERY element, not only for the block containers: depth counts
-    each non-void tag, so a cut can no longer land inside a
-    <div class="footnote">, a <dl> or a <details> — only a closing tag that
-    brings the depth back to 0 is a candidate at all. A candidate that is a
-    heading cuts BEFORE itself, because an excerpt whose last line announces
-    the section that was dropped reads as a broken page.
-
-    Returns (html, cut). `cut` is False when the whole body fits — nothing was
-    dropped, so the caller must not offer a "continue reading" link.
-    """
-    depth = 0
-    seen = 0
-    pos = 0
-    heading_at = 0
-    for tag in _TAG.finditer(html):
-        seen += len(_WS.sub(" ", html[pos : tag.start()]).strip())
-        pos = tag.end()
-        closing, name, self_closing = tag.group(1), tag.group(2).lower(), tag.group(3)
-        if self_closing or name in VOID_TAGS:
-            continue
-        if closing:
-            depth -= 1
-        else:
-            if not depth and name in EXCERPT_HEADINGS:
-                heading_at = tag.start()
-            depth += 1
-        if not (closing and not depth and name in EXCERPT_BLOCKS and seen > max_chars):
-            continue
-        end = heading_at if name in EXCERPT_HEADINGS else tag.end()
-        if not html[:end].strip():
-            # The body opens with this heading: cutting in front of it would
-            # leave an empty excerpt, so it stays and the next block decides.
-            continue
-        # Only a real cut counts: a body whose last block crosses the budget
-        # is complete, and saying otherwise promises text that is not there.
-        if html[end:].strip():
-            return html[:end], True
-        break
-    return html, False
-
-
-def journal_lead(row) -> dict:
-    """The teaser of the lead issue plus the opening of the issue itself.
-
-    Same body_html the journal page carries (articles_html.article_page),
-    from the same renderer — the homepage window IS that page, only shorter.
-    """
-    body, excerpted = excerpt_html(markdown_to_html(row.content or ""))
-    return journal_teaser(row) | {"body_html": body, "excerpted": excerpted}
 
 
 def paper_teaser(row) -> dict:
@@ -194,25 +123,6 @@ def paper_teaser(row) -> dict:
         "quality_score": p["quality_score"],
         "hero_image_url": p["hero_image_url"],
         "path": f"/research/{p['slug']}",
-    }
-
-
-def paper_lead(row) -> dict:
-    """The teaser of the lead paper plus the opening of the report.
-
-    `row` is research_html.fetch_paper()'s row: PAPER_SUMMARY_COLUMNS plus the
-    stored report, so it carries everything paper_teaser() reads and the
-    summary query's row for the same paper is not needed a second time. The
-    markdown goes through report_markdown() exactly as research_paper_page
-    does, so the window cannot show text the page does not. `author` rides
-    along because the paper's byline is part of its header.
-    """
-    p = paper_summary_kwargs(row)
-    body, excerpted = excerpt_html(markdown_to_html(report_markdown(row, p["title"])))
-    return paper_teaser(row) | {
-        "author": p["author"],
-        "body_html": body,
-        "excerpted": excerpted,
     }
 
 
@@ -341,15 +251,6 @@ def fetch_landing_data(db: Session) -> dict:
         ).scalar()
         or 0
     )
-    # The lead paper's report: PAPER_SUMMARY_COLUMNS carries no body, and the
-    # window runs the paper page, so the report has to come along. Both queries
-    # run in the same request against the same PUBLIC_PAPER_WHERE, so a miss
-    # here is a broken invariant, not an empty section — it says so out loud.
-    paper_full = None
-    if papers:
-        paper_full = fetch_paper(papers[0].slug, db)
-        if paper_full is None:
-            raise RuntimeError(f"lead paper {papers[0].slug} vanished between queries")
     news_stats = get_news_stats(db)
     if not isinstance(news_stats, dict):  # cache_get returns the dict, a cold call the model
         news_stats = news_stats.model_dump()
@@ -360,7 +261,6 @@ def fetch_landing_data(db: Session) -> dict:
         "journals": journals,
         "journal_total": news_stats["total_articles"],
         "papers": papers,
-        "paper_full": paper_full,
         "paper_total": paper_total,
         "news_stats": news_stats,
     }
@@ -369,26 +269,20 @@ def fetch_landing_data(db: Session) -> dict:
 def build_route(data: dict, site_stats: dict, theo_running: dict | None) -> dict:
     """Rows → the {type: "landing"} payload. A source without rows stays None
     and the section is not rendered at all — no placeholder cards."""
+    # Every section is a list of links beside a portal on the live page
+    # (2026-09-10), so nothing here carries body HTML. `items` is lead-first:
+    # the row the section leads with, then the rest in query order.
     stories = None
     if data["recent"]:
         lead, rail = pick_lead_and_rail(data["recent"], data["lead_48h"])
-        # The window runs the story page, so the payload IS the story page's
-        # (articles_html.story_payload) — one builder, one shape, one
-        # <StoryArticle>. related=[] because a "read next" list inside the
-        # homepage window would lead nowhere the homepage does not already go.
         stories = {
-            "lead": story_payload(lead, related=[]),
-            "rail": [story_payload(r, related=[]) for r in rail],
+            "items": [story_teaser(r) for r in [lead, *rail]],
             "categories": data["categories"],
         }
-    # Lead vs rail is not a size difference: the lead runs its page inside the
-    # window and therefore carries body HTML, the rail rows are links and stay
-    # teasers.
     journals = None
     if data["journals"]:
         journals = {
-            "lead": journal_lead(data["journals"][0]),
-            "rail": [journal_teaser(j) for j in data["journals"][1:]],
+            "items": [journal_teaser(j) for j in data["journals"]],
             "total": data["journal_total"],
         }
     papers = None
@@ -401,8 +295,7 @@ def build_route(data: dict, site_stats: dict, theo_running: dict | None) -> dict
                 "sites_found": theo_running["sites_found"],
             }
         papers = {
-            "lead": paper_lead(data["paper_full"]),
-            "rail": [paper_teaser(p) for p in data["papers"][1:]],
+            "items": [paper_teaser(p) for p in data["papers"]],
             "total": data["paper_total"],
             "theo": theo,
         }

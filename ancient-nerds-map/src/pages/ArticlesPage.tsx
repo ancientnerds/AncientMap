@@ -505,7 +505,6 @@ function ArticleFromPayload({ article }: { article: ArticleRoute }) {
           <TableOfContents headings={headings} activeSlug={activeHeading} />
           <JournalArticle
             article={article}
-            headingLevel="h1"
             lead={
               <Breadcrumbs
                 trail={[

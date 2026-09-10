@@ -2,16 +2,14 @@
  * StoryArticle — one story as an article: headline, meta, video still, body,
  * key facts, site chips, sources and the Art.-50 footnote.
  *
- * Extracted from StoryPage (2026-09-10) because the homepage Stories window
- * shows the SAME article, not a teaser of it: the payload
- * (api/routes/articles_html.py::story_payload) is identical, so the markup
- * is too — one definition, one set of display rules (the http(s) source
- * filter, the &t= video deeplink, the curated-site link gate).
+ * Extracted from StoryPage (2026-09-10) so the story markup and its display
+ * rules (the http(s) source filter, the &t= video deeplink, the
+ * curated-site link gate) have one definition, separate from the page shell
+ * around them.
  *
  * `children` is the tail the host slots in BEFORE the AI footnote — the
  * story page puts its "read next" block, the back link and the CommunityCta
- * there, so the disclosure stays the last thing on the page. The window
- * passes nothing.
+ * there, so the disclosure stays the last thing on the page.
  */
 
 import { SiteBadges, CountryFlag } from '../metadata'
@@ -21,7 +19,7 @@ import { globeUrlForSite } from '../../constants/brand'
 import { isoDate, longDate } from '../../seo/display'
 import { absoluteUrl, countryPath, sitePath, storyPath } from '../../seo/meta'
 import { blurb } from '../../seo/text'
-import type { StoryData } from '../../types/anRoute'
+import type { StoryRoute } from '../../types/anRoute'
 import AiFootnote from './AiFootnote'
 import InlineVideo from './InlineVideo'
 import { splitPostText } from './postText'
@@ -33,9 +31,6 @@ import {
 } from './significance'
 
 import '../../styles/story-page.css'
-
-/** Compact mode never lists more than this — the window is not the page. */
-const COMPACT_SOURCES = 4
 
 /** _host_of(): nackter Hostname — Leser beurteilen einen Link an der Domain.
  *  ImageLightbox trug dieselbe Zeile und importiert sie jetzt von hier. Der
@@ -60,7 +55,7 @@ function videoIdOf(url: string): string {
  * der http(s)-Filter — die Liste ist LLM-derived, ein javascript:-Eintrag
  * darf nie ein href werden (Reihenfolge wie im Python-Payload).
  */
-function storySources(raw: StoryData['web_sources']) {
+function storySources(raw: StoryRoute['web_sources']) {
   return (raw || [])
     .slice(0, 8)
     .filter((s): s is { url: string; title?: string | null; snippet?: string | null } => {
@@ -76,28 +71,11 @@ function storySources(raw: StoryData['web_sources']) {
 }
 
 interface StoryArticleProps {
-  story: StoryData
-  /** h1 on the story page, h3 inside the homepage window (below its h2 label). */
-  headingLevel: 'h1' | 'h3'
-  /** Window mode: fewer sources, no country fallback chip. */
-  compact?: boolean
-  /** Wraps the headline text in a link — the window's way back to the page. */
-  headlineHref?: string
+  story: StoryRoute
   children?: React.ReactNode
 }
 
-export default function StoryArticle({
-  story,
-  headingLevel,
-  compact,
-  headlineHref,
-  children,
-}: StoryArticleProps) {
-  const Heading = headingLevel
-  // The section labels sit one level under the headline — h2 on the page, h4
-  // inside the window. A fixed h2 there outranked the h3 headline it belongs
-  // to and landed in the outline beside the section's own ">_ [ fig. 1 ]" h2.
-  const Sub = headingLevel === 'h1' ? 'h2' : 'h4'
+export default function StoryArticle({ story, children }: StoryArticleProps) {
   // post_text is tweet copy: the prose ends with a bare source URL. It reads
   // as dead text mid-article, so it moves down into Sources as a real link.
   const { paragraphs, links: postLinks } = splitPostText(story.post_text)
@@ -120,20 +98,19 @@ export default function StoryArticle({
   // The tweet's own link belongs with the researched ones, unless it is
   // already in there — no reason to list the same URL twice.
   const researched = storySources(story.web_sources)
-  const merged = [
+  const sources = [
     ...researched,
     ...postLinks
       .filter(url => !researched.some(s => s.url === url))
       .map(url => ({ url, title: hostOf(url) || url, host: hostOf(url), snippet: '' })),
   ]
-  const sources = compact ? merged.slice(0, COMPACT_SOURCES) : merged
 
   return (
     <>
-      <Heading className="story-title">
-        {headlineHref ? <a href={headlineHref}>{story.headline}</a> : story.headline}
+      <h1 className="story-title">
+        {story.headline}
         {story.speculative_tag && <span className="story-badge">{story.speculative_tag}</span>}
-      </Heading>
+      </h1>
 
       {/* Dieselben Metadaten wie auf der Karte, mit denselben Komponenten:
           Flagge, Typ- und Zeitalter-Badge, Kategorie-Label statt rohem
@@ -249,7 +226,7 @@ export default function StoryArticle({
 
       {facts.length > 0 && (
         <>
-          <Sub>Key facts</Sub>
+          <h2>Key facts</h2>
           <ul className="story-facts">
             {facts.map((f, i) => (
               <li key={i}>{f}</li>
@@ -260,7 +237,7 @@ export default function StoryArticle({
 
       {story.site_name && (
         <div className="story-site">
-          <Sub>Site mentioned</Sub>
+          <h2>Site mentioned</h2>
           <div className="story-chips">
             {sitePagePath ? (
               <a className="story-chip" href={sitePagePath}>📄 {story.site_name}</a>
@@ -270,7 +247,7 @@ export default function StoryArticle({
             {/* Ohne kuratierte Detailseite endete der Block hier als toter
                 Text. Die Länderseite existiert für jede Site mit Land und
                 führt den Leser weiter statt zurück zu Google. */}
-            {!compact && !sitePagePath && story.site_country && (
+            {!sitePagePath && story.site_country && (
               <a className="story-chip" href={countryPath(story.site_country)}>
                 🗺️ More sites in {story.site_country}
               </a>
@@ -288,7 +265,7 @@ export default function StoryArticle({
 
       {sources.length > 0 && (
         <div className="story-sources">
-          <Sub>Sources</Sub>
+          <h2>Sources</h2>
           {sources.map((s, i) => (
             <div className="story-source" key={i}>
               <a href={s.url} target="_blank" rel="noopener nofollow">{s.title}</a>

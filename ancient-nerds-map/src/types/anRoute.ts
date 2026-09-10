@@ -60,14 +60,6 @@ export interface StoryRoute {
   related: { slug: string; headline: string; kind: string }[]
 }
 
-/**
- * The story payload without the route discriminator — what
- * api/routes/articles_html.py::story_payload() builds. The story page gets
- * it as its own route, the homepage carries a handful of them inside
- * LandingRoute.stories, and both render the same <StoryArticle>.
- */
-export type StoryData = Omit<StoryRoute, 'type'>
-
 export interface StoryArchiveRoute {
   type: 'storyArchive'
   page: number
@@ -206,10 +198,27 @@ export interface ArticleIndexRoute {
  * Homepage teasers (landing-live sections, 2026-09-09). Every teaser
  * carries its final href as `path` — the API builds it with the same slug
  * helpers the target pages use (slugify), so the client never re-derives a
- * URL. Stories are the exception: they are not teasers at all but whole
- * StoryData objects, because the Stories section is a window running the
- * story page (2026-09-10).
+ * URL. Stories are the exception: their path is `storyPath(headline, id)`,
+ * because the client rebuilds the same list from /api/news/feed when a
+ * category chip is pressed and the feed carries no path.
+ *
+ * A teaser is a LIST ROW and nothing else (2026-09-10): the section itself
+ * is a portal on the live page, so no payload here carries body HTML.
  */
+export interface StoryTeaser {
+  id: number
+  headline: string
+  screenshot_url: string | null
+  news_category: string | null
+  /** Lyra's 1–10 score. */
+  significance: number | null
+  /** Raw ISO timestamp: video publish date, else item creation. */
+  published_at: string
+  /** Matched site name, else the extractor's raw guess, else ''. */
+  site_name: string
+  channel_name: string
+}
+
 interface JournalTeaser {
   id: number
   title: string
@@ -222,11 +231,10 @@ interface JournalTeaser {
   /** "##" headings of the issue without the Sources/Videos appendix. */
   sections: string[]
   sources: number
-  image_url: string | null
   path: string
 }
 
-export interface PaperTeaser {
+interface PaperTeaser {
   slug: string
   title: string
   summary: string | null
@@ -239,23 +247,6 @@ export interface PaperTeaser {
   path: string
 }
 
-/**
- * The lead of a live section is not a bigger teaser — it is the page,
- * running inside the window. So it carries the page's own body_html, cut at
- * a block boundary by api/routes/landing_html.py::excerpt_html, plus the
- * flag that says whether anything was dropped (the "continue reading" link
- * may not promise text that is not there). The rails stay teasers: they are
- * links.
- */
-type JournalLead = JournalTeaser & { body_html: string; excerpted: boolean }
-
-/** author = published_by; null means the Theo pipeline, like ResearchRoute. */
-type PaperLead = PaperTeaser & {
-  body_html: string
-  excerpted: boolean
-  author: string | null
-}
-
 interface TheoStatus {
   question: string
   started_at: string | null
@@ -265,10 +256,14 @@ interface TheoStatus {
 export interface LandingRoute {
   type: 'landing'
   stats: { sites: number; stories: number; journals: number; papers: number }
-  /** null when the source has no rows — the section is then not rendered. */
-  stories: { lead: StoryData; rail: StoryData[]; categories: string[] } | null
-  journals: { lead: JournalLead; rail: JournalTeaser[]; total: number } | null
-  papers: { lead: PaperLead; rail: PaperTeaser[]; total: number; theo: TheoStatus | null } | null
+  /**
+   * null when the source has no rows — the section is then not rendered.
+   * `items` is lead-first: the pick the section leads with, then the rest in
+   * the order the query returned them.
+   */
+  stories: { items: StoryTeaser[]; categories: string[] } | null
+  journals: { items: JournalTeaser[]; total: number } | null
+  papers: { items: PaperTeaser[]; total: number; theo: TheoStatus | null } | null
 }
 
 export type AnRoute =

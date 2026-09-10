@@ -19,8 +19,7 @@ interface Props {
 }
 
 export default function LandingJournals({ data }: Props) {
-  const { rail, total } = data
-  const items = [data.lead, ...rail]
+  const { items, total } = data
   const newest = items[0]
   // Every meta line is assembled from the parts that exist and only then
   // joined: week_start/week_end and published_at are nullable, and a

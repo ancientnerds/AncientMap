@@ -17,18 +17,18 @@ from fastapi.testclient import TestClient
 from starlette.middleware.gzip import GZipMiddleware
 
 from api.routes import landing_html
+from api.routes.articles_html import story_payload
 from api.routes.landing_html import (
+    STORY_TEASER_KEYS,
     apply_stats,
-    excerpt_html,
-    journal_lead,
     journal_teaser,
     lead_window_start,
-    paper_lead,
     paper_teaser,
     pick_lead_and_rail,
     reading_minutes,
     sites_compact,
     sites_long,
+    story_teaser,
 )
 from pipeline.database import get_db
 
@@ -89,13 +89,30 @@ def test_pick_lead_keeps_six_rows_when_the_lead_is_outside_the_seven():
     assert len(rail) == 6 and [r.id for r in rail] == [1, 2, 3, 4, 5, 6]
 
 
+def test_story_teaser_is_the_story_payload_cut_to_the_row_fields():
+    """One mapping, not two. The row shows a headline, a thumbnail and a meta
+    line; everything else story_payload() builds belongs to the story page,
+    which the homepage links instead of rendering."""
+    row = item(9, sig=9, hours_ago=2, site=SimpleNamespace(
+        id="16147718-a70b-486e-aaba-9cf71316602c", name="Roman grave", country="Austria",
+        site_type="Battlefield", period_name="Roman", period_start=100,
+        source_id="ancient_nerds",
+    ))
+    teaser = story_teaser(row)
+    assert set(teaser) == set(STORY_TEASER_KEYS)
+    assert teaser == {k: v for k, v in story_payload(row, related=[]).items() if k in teaser}
+    assert teaser["published_at"] == "2026-09-09T10:00:00"
+    assert teaser["site_name"] == "Roman grave"
+    assert teaser["channel_name"] == "Inside Archaeology"
+
+
 def test_reading_minutes_rounds_up_at_238_wpm():
     assert reading_minutes(2762) == 12
     assert reading_minutes(238) == 1
     assert reading_minutes(0) == 0
 
 
-def test_journal_teaser_counts_words_sections_sources_and_first_image():
+def test_journal_teaser_counts_words_sections_and_sources():
     content = (
         "# Title\n\nIntro text here.\n\n## Artifact Discoveries\n\nText with a [link](https://a.b) "
         "and ![img](/data/news/screenshots/nMxEoIrMwX8_367.webp).\n\n## In Brief\n\nmore\n\n"
@@ -113,7 +130,6 @@ def test_journal_teaser_counts_words_sections_sources_and_first_image():
     t = journal_teaser(row)
     assert t["sections"] == ["Artifact Discoveries", "In Brief"]
     assert t["sources"] == 3
-    assert t["image_url"] == "/data/news/screenshots/nMxEoIrMwX8_367.webp"
     assert t["path"] == "/articles/week-of-august-31-wooden-structure-and-more"
     assert t["words"] == len(content.split()) and t["minutes"] == reading_minutes(t["words"])
     assert t["week_start"] == "2026-08-31T00:00:00" and t["published_at"] == "2026-09-07T04:20:43"
@@ -139,141 +155,6 @@ def test_paper_teaser_uses_the_public_api_mapping():
         "hero_image_url": "https://ancientnerds.com/data/research-images/x.jpg",
         "path": "/research/the-egyptian-hard-stone-precision-debate",
     }
-
-
-# ── excerpt_html: the lead journal and the lead paper open on the homepage ──
-# The window runs the page, so the lead carries real body HTML — cut at a
-# block boundary, never mid-tag and never inside a list or a figure.
-
-
-def test_excerpt_leaves_a_short_body_whole_and_says_so():
-    html = "<p>One short paragraph.</p>"
-    assert excerpt_html(html, max_chars=2500) == (html, False)
-
-
-def test_excerpt_cuts_directly_after_the_closing_p_that_crosses_the_budget():
-    html = "<p>" + "a" * 40 + "</p><p>second</p><p>third</p>"
-    out, cut = excerpt_html(html, max_chars=30)
-    assert cut is True
-    assert out == "<p>" + "a" * 40 + "</p>"
-
-
-def test_excerpt_waits_for_the_closing_ul_instead_of_cutting_between_list_items():
-    html = "<p>intro</p><ul><li>" + "a" * 40 + "</li><li>second item</li></ul><p>after</p>"
-    out, cut = excerpt_html(html, max_chars=20)
-    assert cut is True
-    assert out.endswith("</ul>")
-    assert out.count("<li>") == out.count("</li>") == 2
-    assert "after" not in out
-
-
-def test_excerpt_never_splits_a_nested_list():
-    html = "<ul><li>one<ul><li>" + "b" * 60 + "</li></ul></li></ul><p>after</p>"
-    out, cut = excerpt_html(html, max_chars=20)
-    assert cut is True
-    assert out.count("<ul>") == out.count("</ul>") == 2
-    assert "after" not in out
-
-
-def test_excerpt_keeps_a_figure_with_its_image_and_caption_whole():
-    html = (
-        "<p>" + "a" * 40 + "</p>"
-        '<figure class="article-figure"><img src="/x.webp" alt="A"/>'
-        "<figcaption>Caption text</figcaption></figure><p>after</p>"
-    )
-    out, cut = excerpt_html(html, max_chars=45)
-    assert cut is True
-    assert out.endswith("</figure>")
-    assert "<img" in out and "</figcaption>" in out
-    assert "after" not in out
-
-
-def test_excerpt_stops_before_a_heading_instead_of_ending_on_it():
-    """A heading is the title of what comes after it. When the heading is the
-    block that crosses the budget, the excerpt ends BEFORE it: an excerpt whose
-    last line announces a section that was cut away reads as broken."""
-    html = "<p>" + "a" * 40 + "</p><h2 id=\"s\">Section</h2><p>body</p>"
-    out, cut = excerpt_html(html, max_chars=30)
-    assert cut is True
-    assert out == "<p>" + "a" * 40 + "</p>"
-    # 44 puts the crossing on the heading itself: same end, not "...</h2>".
-    out2, cut2 = excerpt_html(html, max_chars=44)
-    assert cut2 is True
-    assert out2 == "<p>" + "a" * 40 + "</p>"
-
-
-def test_excerpt_never_cuts_inside_a_wrapper_around_a_block():
-    """Depth is tracked for every non-void tag, not only for lists, quotes,
-    figures and tables. A <div class="footnote"> around an <ol> used to be
-    invisible, so the </ol> looked top-level and the excerpt came back with
-    the <div> still open."""
-    html = (
-        "<p>" + "a" * 40 + "</p>"
-        '<div class="footnote"><ol><li>one</li><li>two</li></ol></div>'
-        "<p>after</p><p>tail</p>"
-    )
-    out, cut = excerpt_html(html, max_chars=45)
-    assert cut is True
-    assert out.count("<div") == out.count("</div>") == 1
-    assert out.count("<ol>") == out.count("</ol>") == 1
-    assert out.endswith("<p>after</p>")
-    assert "tail" not in out
-
-
-def test_excerpt_output_has_balanced_tags():
-    html = (
-        "<h2 id=\"a\">Heading</h2><p>" + "word " * 200 + "</p>"
-        "<blockquote><p>quoted</p></blockquote><ul><li>x</li></ul><p>tail</p>"
-    )
-    out, cut = excerpt_html(html, max_chars=100)
-    assert cut is True
-    for tag in ("p", "h2", "ul", "li", "blockquote"):
-        assert out.count(f"<{tag}") == out.count(f"</{tag}>"), tag
-
-
-def test_excerpt_does_not_claim_a_cut_when_the_last_block_ends_the_document():
-    """The flag drives the "continue reading" link — it may not promise text
-    that is not there. A body whose final block crosses the budget is still
-    complete."""
-    html = "<p>" + "a" * 4000 + "</p>"
-    assert excerpt_html(html, max_chars=100) == (html, False)
-
-
-def test_journal_lead_is_the_teaser_plus_the_rendered_opening():
-    row = SimpleNamespace(
-        id=74,
-        title="Week of August 31",
-        summary="S",
-        content="## A\n\n" + "word " * 900 + "\n\n## B\n\ntail\n",
-        week_start=None,
-        week_end=None,
-        published_at=None,
-    )
-    lead = journal_lead(row)
-    teaser = journal_teaser(row)
-    assert {k: lead[k] for k in teaser} == teaser  # the teaser survives untouched
-    assert lead["excerpted"] is True
-    assert lead["body_html"].startswith("<h2")
-    assert "tail" not in lead["body_html"]
-
-
-def test_paper_lead_adds_author_and_the_report_opening():
-    """One row, not two: fetch_paper() selects PAPER_SUMMARY_COLUMNS on top of
-    the report, so it already carries everything paper_teaser() reads."""
-    row = SimpleNamespace(
-        id="a", slug="paper-a", question="Q", published_by=None, published_at=None,
-        sites_found=10, title="Paper A", card_description=None, score=None, badge=None,
-        word_count=None, hero_src=None,
-        published_report="# Paper A\n\n" + "word " * 900 + "\n\n## Tail\n\nlast\n",
-        report=None,
-    )
-    lead = paper_lead(row)
-    assert {k: lead[k] for k in paper_teaser(row)} == paper_teaser(row)
-    assert lead["author"] is None
-    assert lead["excerpted"] is True
-    # report_markdown strips the paper's own title heading, like the page does.
-    assert "<h1" not in lead["body_html"]
-    assert "last" not in lead["body_html"]
 
 
 def test_number_formats():
@@ -343,14 +224,6 @@ def _landing_data():
             SimpleNamespace(id="a", slug="paper-a", question="Q", published_by=None, published_at=None, sites_found=10, title="Paper A", card_description=None, score=None, badge=None, word_count=None, hero_src=None),
             SimpleNamespace(id="b", slug="paper-b", question="Q", published_by=None, published_at=None, sites_found=20, title="Paper B", card_description=None, score=None, badge=None, word_count=None, hero_src=None),
         ],
-        # research_html.fetch_paper()'s row for the lead paper: the summary
-        # columns AND the report, which is why that one row builds the lead.
-        "paper_full": SimpleNamespace(
-            id="a", slug="paper-a", question="Q", published_by=None, published_at=None,
-            sites_found=10, title="Paper A", card_description=None, score=None, badge=None,
-            word_count=None, hero_src=None,
-            published_report="## Findings\n\nreport text", report=None,
-        ),
         "paper_total": 24,
         "news_stats": {"total_items": 3189, "total_articles": 23},
     }
@@ -383,34 +256,23 @@ def test_home_route_hands_the_landing_payload_and_substitutes_hero_counts():
     route = render.call_args[0][0]
     assert route["type"] == "landing"
     assert route["stats"] == {"sites": 1_759_673, "stories": 3189, "journals": 23, "papers": 24}
-    lead = route["stories"]["lead"]
-    assert lead["id"] == 9 and len(route["stories"]["rail"]) == 6
-    # The window runs the story page, so the payload is the story page's own —
-    # full body, video and site, minus the route discriminator.
-    assert lead["headline"] == "Headline 9"
-    assert lead["post_text"] == "One sentence. Two. https://x.y"
-    assert lead["youtube_url"] == "https://www.youtube.com/watch?v=vid9"
-    assert lead["site_curated"] is True
-    # related=[]: a "read next" list inside the window would be a dead end.
-    assert lead["related"] == []
-    assert all(r["related"] == [] for r in route["stories"]["rail"])
-    # "type" belongs to the route, not to a story inside it.
-    assert "type" not in lead and all("type" not in r for r in route["stories"]["rail"])
+    stories = route["stories"]["items"]
+    # Lead first — the 48 h pick — then the six newest without it.
+    assert [s["id"] for s in stories] == [9, 1, 2, 3, 4, 5, 6]
+    assert stories[0]["headline"] == "Headline 9"
+    assert stories[0]["site_name"] == "Roman grave"
+    # A row is a link, not an article: no body, no sources, no video.
+    assert all(set(s) == set(STORY_TEASER_KEYS) for s in stories)
     assert route["stories"]["categories"] == ["artifact", "bioarchaeology"]
-    # The journal and the paper window run their pages, so their leads carry
-    # body HTML; the rail rows are links and stay teasers.
-    journals = route["journals"]
-    assert journals["lead"]["id"] == 74 and journals["total"] == 23
-    assert '<h2 id="a">A</h2>' in journals["lead"]["body_html"]
-    assert "<p>text</p>" in journals["lead"]["body_html"]
-    assert journals["lead"]["excerpted"] is False
-    assert all("body_html" not in j for j in journals["rail"])
-    papers = route["papers"]
-    assert papers["lead"]["slug"] == "paper-a" and papers["total"] == 24
-    assert papers["lead"]["author"] is None
-    assert "report text" in papers["lead"]["body_html"]
-    assert papers["lead"]["excerpted"] is False
-    assert all("body_html" not in p for p in papers["rail"])
+    # Journals and papers are lists too — every row in the payload, no lead
+    # carrying the page's body HTML.
+    journals = route["journals"]["items"]
+    assert [j["id"] for j in journals] == [74, 73] and route["journals"]["total"] == 23
+    assert all("body_html" not in j for j in journals)
+    papers = route["papers"]["items"]
+    assert [p["slug"] for p in papers] == ["paper-a", "paper-b"]
+    assert route["papers"]["total"] == 24
+    assert all("body_html" not in p for p in papers)
     assert route["papers"]["theo"] == {"question": "Osiris", "started_at": "2026-09-09T06:00:00", "sites_found": 12}
 
 

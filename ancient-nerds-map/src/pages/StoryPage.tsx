@@ -7,9 +7,8 @@
  * The payload arrives pre-rendered as the server-injected route, so there
  * is no fetch and no loading state — what the crawler was served and what
  * the visitor sees are built from the same data. The article itself is
- * <StoryArticle>, shared with the homepage Stories window; this page adds
- * the shell around it: breadcrumbs, the "read next" block, the way back and
- * the CommunityCta.
+ * <StoryArticle>; this page adds the shell around it: breadcrumbs, the
+ * "read next" block, the way back and the CommunityCta.
  */
 
 import Breadcrumbs from '../components/layout/Breadcrumbs'
@@ -45,7 +44,7 @@ export default function StoryPage() {
         {/* Everything after the sources and before the Art.-50 footnote is
             this page's own tail — StoryArticle renders it as its children so
             the disclosure stays the last element on the page. */}
-        <StoryArticle story={story} headingLevel="h1">
+        <StoryArticle story={story}>
           {story.related.length > 0 && (
             <div className="story-related">
               <h2>{story.related[0].kind === 'site' && story.site_name

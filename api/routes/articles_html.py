@@ -279,17 +279,16 @@ def _related_stories(db: Session, item: NewsItem, limit: int = 5) -> list[dict]:
 
 
 def story_payload(item: NewsItem, related: list[dict]) -> dict:
-    """One story as the frontend consumes it — anRoute.ts::StoryData.
+    """One story as the frontend consumes it — anRoute.ts::StoryRoute.
 
     Raw snake_case row fields (react-ssr Task 14) — the richest payload in
     the system. Display decisions live in src/seo/ and StoryArticle: the
     http(s) source filter, the &t= video deeplink, screenshot
     absolutization, blurbs and date formatting.
 
-    Shared with the homepage (landing_html.build_route), which renders the
-    same <StoryArticle> inside its Stories window and passes related=[] —
-    a window that opens a "read next" list would be a dead end inside a
-    dead end.
+    Also the one mapping behind the homepage list rows: landing_html's
+    story_teaser() cuts this dict down to the eight fields a row shows, so
+    "published_at" or "site_name" cannot mean two different things.
 
     The caller must have joinedload-ed video→channel and site; every access
     below is on an already-loaded relation.

@@ -29,9 +29,9 @@ function windows(html: string): string[] {
   return html.split('<div class="ll-window">').slice(1)
 }
 
-const STORIES = [FIXTURES.landing.stories!.lead, ...FIXTURES.landing.stories!.rail]
-const JOURNALS = [FIXTURES.landing.journals!.lead, ...FIXTURES.landing.journals!.rail]
-const PAPERS = [FIXTURES.landing.papers!.lead, ...FIXTURES.landing.papers!.rail]
+const STORIES = FIXTURES.landing.stories!.items
+const JOURNALS = FIXTURES.landing.journals!.items
+const PAPERS = FIXTURES.landing.papers!.items
 
 describe('LandingLive', () => {
   const html = render(FIXTURES.landing)
@@ -97,12 +97,12 @@ describe('LandingLive', () => {
   })
 
   it('drops the separator in front of a story without a category', () => {
-    const rail = FIXTURES.landing.stories!.rail
+    const [story] = STORIES
     const out = render({
       ...FIXTURES.landing,
-      stories: { ...FIXTURES.landing.stories!, rail: [{ ...rail[0], news_category: null }] },
+      stories: { ...FIXTURES.landing.stories!, items: [{ ...story, news_category: null }] },
     })
-    const row = out.slice(out.indexOf(`href="${storyPath(rail[0].headline, rail[0].id)}"`))
+    const row = out.slice(out.indexOf(`href="${storyPath(story.headline, story.id)}"`))
     const meta = /<span class="ll-meta">([\s\S]*?)<\/span>/.exec(row)
     expect(meta).not.toBeNull()
     const text = meta![1].replace(/<[^>]*>/g, '').replace(/<!-- -->/g, '').trim()
@@ -129,12 +129,12 @@ describe('LandingLive', () => {
   it('joins meta lines from the parts that exist, without a dangling separator', () => {
     const journals = FIXTURES.landing.journals!
     const papers = FIXTURES.landing.papers!
-    const row = journals.rail[0]
-    const paperRow = papers.rail[0]
+    const row = journals.items[1]
+    const paperRow = papers.items[1]
     const out = render({
       ...FIXTURES.landing,
-      journals: { ...journals, rail: [{ ...row, week_start: null, week_end: null }] },
-      papers: { ...papers, rail: [{ ...paperRow, published_at: null, words: null }] },
+      journals: { ...journals, items: [{ ...row, week_start: null, week_end: null }] },
+      papers: { ...papers, items: [{ ...paperRow, published_at: null, words: null }] },
     })
     const metaAfter = (href: string): string => {
       const tail = out.slice(out.indexOf(`href="${href}"`))
