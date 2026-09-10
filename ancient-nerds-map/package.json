@@ -11,6 +11,7 @@
     "preview": "vite preview",
     "type-check": "tsc --noEmit",
     "test": "vitest run",
+    "previews": "node scripts/capture-previews.mjs",
     "size": "size-limit",
     "test:watch": "vitest",
     "video:record": "tsx video/record.ts",

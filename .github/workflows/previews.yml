@@ -1,0 +1,62 @@
+# Portal posters: a real screenshot of every page the landing portals point at.
+#
+# Owner, 2026-09-10: "On the phone everything flickers quite a bit — are
+# screenshots maybe better after all?" Phones and tablets now show a poster
+# instead of a live iframe (PagePortal.tsx), so the poster has to stay close to
+# the page it shows: this job runs after every successful CI run on main — i.e.
+# after every deploy, which is also what wipes the directory again
+# (`git clean -fd public/data/`) — and every six hours in between.
+#
+# The images never enter the repository. They land straight in
+# /var/www/ancientnerds/public/data/previews/, which nginx serves under /data/
+# with `Cache-Control: public, max-age=3600`. Same host, same key, same secrets
+# as the deploy job in ci.yml.
+name: Page previews
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+  schedule:
+    - cron: '23 */6 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: page-previews
+  cancel-in-progress: false
+
+jobs:
+  capture:
+    name: Capture and upload
+    # A failed or cancelled CI run deployed nothing, and a branch run deployed
+    # nothing either — only a green main run is worth new screenshots.
+    if: github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main')
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ancient-nerds-map
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: ancient-nerds-map/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Capture the pages
+        run: npm run previews
+
+      - name: Setup SSH agent
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.VPS_SSH_KEY }}
+
+      - name: Upload to the VPS
+        run: |
+          ssh -o StrictHostKeyChecking=accept-new -p ${{ secrets.VPS_PORT }} ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} 'mkdir -p /var/www/ancientnerds/public/data/previews'
+          scp -o StrictHostKeyChecking=accept-new -P ${{ secrets.VPS_PORT }} previews-out/*.jpg ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/var/www/ancientnerds/public/data/previews/
