@@ -273,6 +273,20 @@ server {
         proxy_set_header X-Real-IP $remote_addr;
     }
 
+    # Vite's hashed bundles: the name changes with the content — a year, immutable.
+    location ^~ /assets/ {
+        add_header Cache-Control "public, max-age=31536000, immutable";
+    }
+
+    # Landing screenshots, hero poster and video, self-hosted fonts: versionless
+    # names that change rarely — a week in the browser. Rename a file to replace it.
+    location ^~ /landing/ {
+        add_header Cache-Control "public, max-age=604800";
+    }
+    location ^~ /fonts/ {
+        add_header Cache-Control "public, max-age=604800";
+    }
+
     location / {
         try_files $uri $uri/ /index.html;
     }
@@ -284,7 +298,7 @@ server {
         return 301 https://ancientnerds.com$request_uri;
     }
 
-    listen 443 ssl default_server;
+    listen 443 ssl http2 default_server;
     ssl_certificate /etc/letsencrypt/live/ancientnerds.com/fullchain.pem;
     ssl_certificate_key /etc/letsencrypt/live/ancientnerds.com/privkey.pem;
     include /etc/letsencrypt/options-ssl-nginx.conf;

@@ -5,7 +5,7 @@ import { createReadStream, existsSync, readFileSync, statSync } from 'fs'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 
-import { countryLinksHtml, paperLinksHtml, pickSnapshotPath, type CountryHub, type PaperHub } from './src/landing/hubsHtml'
+import { countryLinksHtml, pickSnapshotPath, type CountryHub } from './src/landing/hubsHtml'
 
 const commitHash = execSync('git rev-parse --short HEAD').toString().trim()
 const buildTime = new Date().toISOString()
@@ -41,9 +41,10 @@ function servePublicData(): Plugin {
   }
 }
 
-// Build time: bake the country hubs and research papers into index.html.
-// The homepage is static, so these are its only crawlable links to the 98
-// /sites/{country} pages and the /research/{slug} papers (see hubsHtml.ts).
+// Build time: bake the country hubs into index.html. The homepage is static,
+// so this is its only crawlable link path to the 98 /sites/{country} pages
+// (see hubsHtml.ts). The papers are linked by /research/, which the research
+// portal opens.
 // Data: the pipeline's public/data/hubs.snapshot.json when present (VPS,
 // rewritten at every export and paper publish), else the committed
 // src/data baseline. A missing placeholder or an empty snapshot fails the
@@ -65,20 +66,13 @@ function landingHubs(): Plugin {
         const snapshot = JSON.parse(readFileSync(snapshotPath, 'utf8')) as {
           exported_at: string
           countries: CountryHub[]
-          papers: PaperHub[]
         }
         console.log(
-          `[landing-hubs] ${snapshotPath}: ${snapshot.countries.length} countries, ${snapshot.papers.length} papers (exported ${snapshot.exported_at})`,
+          `[landing-hubs] ${snapshotPath}: ${snapshot.countries.length} countries (exported ${snapshot.exported_at})`,
         )
-        const fills: [string, string][] = [
-          ['<!-- hubs:countries -->', countryLinksHtml(snapshot.countries)],
-          ['<!-- hubs:papers -->', paperLinksHtml(snapshot.papers)],
-        ]
-        for (const [marker, replacement] of fills) {
-          if (!html.includes(marker)) throw new Error(`index.html lost its ${marker} placeholder`)
-          html = html.replace(marker, replacement)
-        }
-        return html
+        const marker = '<!-- hubs:countries -->'
+        if (!html.includes(marker)) throw new Error(`index.html lost its ${marker} placeholder`)
+        return html.replace(marker, countryLinksHtml(snapshot.countries))
       },
     },
   }

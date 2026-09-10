@@ -34,8 +34,12 @@ Entscheidungen aus dem Brainstorming (09.09.2026):
 
 Entfernt werden die Screenshot-Karte "Archaeology Stories" (Split-Row mit Radar) und die Sektion
 "Weekly Journals". Die Radar-Karte wird zur normalen Feature-Row in der Breite der anderen Sektionen.
-Die Browse-Listen (Länder-Hubs und Paper-Liste) bleiben: sie verlinken für Suchmaschinen jede
-Länder-Hub und jedes Paper, die Portale verlinken nur ihre Seite. Mit dem Site-Search-Portal
+Die Browse-Liste der Länder-Hubs bleibt: sie ist der einzige Crawl-Pfad von der Startseite zu den
+98 `/sites/{country}`-Seiten; ihre Chips tragen den `.source-badge`-Look (grün, Hover rot), die
+Prosa-Links jeder Sektion sind grün unterstrichen (`.section-desc a`). Die Paper-Liste darunter
+fiel am 2026-09-10 (Betreiber: „das ist doch doppelt") — das Research-Portal öffnet `/research/`,
+das jedes Paper verlinkt; damit entfällt auch der Snapshot-Refresh in den Theo-Publish-Pfaden,
+`hubs.snapshot.json` trägt nur noch `countries`. Mit dem Site-Search-Portal
 (2026-09-11) fielen die Tool-Karte „Search" (dieselbe Funktion zweimal auf einer Seite; die fünf
 übrigen Karten stehen zentriert, `.tools-grid` ist Flex) und das im Filter-Streifen doppelt
 eingebundene `filter-source.webp`; die Globe-Sektion trägt ihre Zahl jetzt als `data-stat`-Span

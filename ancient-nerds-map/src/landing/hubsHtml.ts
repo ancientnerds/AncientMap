@@ -1,16 +1,18 @@
 /**
- * Homepage hub lists — static HTML for index.html, built at build time.
+ * Homepage hub list — static HTML for index.html, built at build time.
  *
  * index.html is a static Vite entry with no server behind it, so the only
- * way its crawlable links can reach the 98 country hubs and the research
- * papers is to bake them in. The data is a DB snapshot committed as
- * src/data/hubs.snapshot.json (scripts/export_hubs.py); the Vite plugin in
- * vite.config.ts (landingHubs) replaces two placeholders in index.html with
- * the output of these builders. Why it matters: in the 2026-09-05 GSC
- * sample 45 % of the country hubs and 11 of 25 papers had never been
- * crawled — Google knew them only from the sitemap, no page linked them.
+ * way its crawlable links can reach the 98 country hubs is to bake them in.
+ * The data is a DB snapshot committed as src/data/hubs.snapshot.json
+ * (scripts/export_hubs.py); the Vite plugin in vite.config.ts (landingHubs)
+ * replaces the placeholder in index.html with the output of the builder.
+ * Why it matters: in the 2026-09-05 GSC sample 45 % of the country hubs had
+ * never been crawled — Google knew them only from the sitemap, no page
+ * linked them. (A paper list lived here too until 2026-09-10; the research
+ * portal shows /research/, which links every paper, so the list said it
+ * twice.)
  *
- * Both builders refuse an empty snapshot: an empty section on the homepage
+ * The builder refuses an empty snapshot: an empty section on the homepage
  * would be a silent regression, a failed build is not.
  */
 
@@ -22,18 +24,12 @@ export interface CountryHub {
   sites: number
 }
 
-export interface PaperHub {
-  slug: string
-  path: string
-  title: string
-}
-
 /**
  * Which snapshot the build reads, first existing wins. The order is a
  * precedence, not a fallback: on the VPS the pipeline rewrites
- * public/data/hubs.snapshot.json at every static export and every paper
- * publish (pipeline/static_exporter.py), so a deploy always bakes in the
- * current lists; the committed src/data copy is the baseline that lets a
+ * public/data/hubs.snapshot.json at every static export
+ * (pipeline/static_exporter.py), so a deploy always bakes in the current
+ * list; the committed src/data copy is the baseline that lets a
  * fresh checkout and CI build without a database. No snapshot at all is a
  * build error.
  */
@@ -52,9 +48,4 @@ export function countryLinksHtml(countries: CountryHub[]): string {
   return countries
     .map(c => `<a href="${escapeHtml(c.path)}">${escapeHtml(c.country)} <span>${c.sites}</span></a>`)
     .join('')
-}
-
-export function paperLinksHtml(papers: PaperHub[]): string {
-  if (papers.length === 0) throw new Error('hubs snapshot has no papers — run scripts/export_hubs.py')
-  return papers.map(p => `<a href="${escapeHtml(p.path)}">${escapeHtml(p.title)}</a>`).join('')
 }

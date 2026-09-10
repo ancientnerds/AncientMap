@@ -103,8 +103,8 @@ def save_json(path: Path, data: Any, compress: bool = True):
         logger.info(f"  Saved {gz_path.name}: {gz_size / 1024:.1f} KB (gzip)")
 
 
-def fetch_hub_rows(session) -> tuple[list[Any], list[Any]]:
-    """Country hubs and public papers — same scope as sitemap-countries.xml and /research/."""
+def fetch_hub_rows(session) -> list[Any]:
+    """Country hubs — same scope as sitemap-countries.xml."""
     countries = session.execute(
         text("""
             SELECT country, COUNT(*) AS sites
@@ -115,56 +115,40 @@ def fetch_hub_rows(session) -> tuple[list[Any], list[Any]]:
             ORDER BY country
         """)
     ).fetchall()
-    papers = session.execute(
-        text(f"""
-            SELECT r.slug, r.question, r.result_json::jsonb->>'title' AS title
-            FROM research_requests r
-            WHERE {PUBLIC_PAPER_WHERE}
-            ORDER BY r.published_at DESC NULLS LAST
-        """)
-    ).fetchall()
-    return list(countries), list(papers)
+    return list(countries)
 
 
-def build_hubs_payload(country_rows: list[Any], paper_rows: list[Any]) -> dict:
+def build_hubs_payload(country_rows: list[Any]) -> dict:
     """Rows → the JSON the frontend build bakes into index.html.
 
     country_rows: objects with .country and .sites (count of curated sites).
-    paper_rows:   objects with .slug, .title, .question — newest first, as the
-                  research listing orders them; a paper without a stored title
-                  is shown under its question, like everywhere else
-                  (paper_summary_kwargs).
+    The papers left the snapshot on 2026-09-10: the homepage's research portal
+    opens /research/, which links every paper, so the list was a duplicate.
     """
     countries = [
         {"country": row.country, "path": country_path(row.country), "sites": int(row.sites)}
         for row in sorted(country_rows, key=lambda r: r.country)
     ]
-    papers = [
-        {"slug": row.slug, "path": f"/research/{row.slug}", "title": row.title or row.question}
-        for row in paper_rows
-    ]
     return {
         "exported_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
         "countries": countries,
-        "papers": papers,
     }
 
 
 def build_hubs_snapshot() -> dict:
     """Query the DB and build the hubs payload (no file written)."""
     with get_session() as session:
-        countries, papers = fetch_hub_rows(session)
-    return build_hubs_payload(countries, papers)
+        countries = fetch_hub_rows(session)
+    return build_hubs_payload(countries)
 
 
 def export_hubs_snapshot(output_dir: Path = OUTPUT_DIR) -> Path:
-    """Write public/data/hubs.snapshot.json — the homepage's hub lists.
+    """Write public/data/hubs.snapshot.json — the homepage's country hub list.
 
     index.html is a static Vite entry, so its crawlable links to the 98
-    /sites/{country} hubs and the /research/{slug} papers are baked in at
-    build time from this file (vite.config.ts → landingHubs). It is written
-    here at every full export and by the Theo publish/unpublish paths, so
-    the next frontend build is never a publish behind. public/data is the
+    /sites/{country} hubs are baked in at build time from this file
+    (vite.config.ts → landingHubs). It is written at every full export, so
+    the next frontend build carries the current countries. public/data is the
     bind-mounted volume the containers share with the host checkout; the
     committed ancient-nerds-map/src/data/hubs.snapshot.json is only the
     dev/CI baseline (scripts/export_hubs.py --baseline).

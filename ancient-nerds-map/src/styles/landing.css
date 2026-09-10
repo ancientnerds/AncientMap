@@ -296,9 +296,13 @@ body {
 .landing-intro-text { max-width: 70ch; margin: 0 auto; font-size: 1.05rem; line-height: 1.75; color: var(--nerv-steel); text-wrap: pretty; }
 /* Underlined, not colour-only: Lighthouse link-in-text-block (a11y 1.4.1).
    Green, like every other link on this page — NERV has green and red and
-   nothing else (owner, 2026-09-10). */
-.landing-intro-text a { color: var(--accent-primary); text-decoration: underline; text-decoration-color: color-mix(in srgb, var(--accent-primary) 45%, transparent); text-underline-offset: 3px; }
-.landing-intro-text a:hover { text-decoration-color: var(--accent-primary); }
+   nothing else (owner, 2026-09-10). Every prose link on the page, not just
+   the intro: the browse section's "see all countries" had no rule at all
+   and rendered in the browser's default blue. */
+.landing-intro-text a,
+.section-desc a { color: var(--accent-primary); text-decoration: underline; text-decoration-color: color-mix(in srgb, var(--accent-primary) 45%, transparent); text-underline-offset: 3px; }
+.landing-intro-text a:hover,
+.section-desc a:hover { text-decoration-color: var(--accent-primary); }
 
 /* ─── Two-Column Feature Layouts ─── */
 
@@ -923,14 +927,10 @@ body {
   opacity: 0.75;
 }
 
-/* ─── Browse hubs: homepage links to the country pages and research papers ─── */
+/* ─── Browse hubs: the homepage's links to the 98 country pages ─── */
 
 .browse-section .section-label + .section-desc {
   margin-bottom: 28px;
-}
-
-.browse-section .section-label:not(:first-child) {
-  margin-top: 72px;
 }
 
 .hub-links {
@@ -942,38 +942,31 @@ body {
   margin: 0 auto;
 }
 
+/* The same chip as .source-badge (green on the input surface, teal hairline),
+   plus a count and a red hover because these are links — NERV has green and
+   red and nothing else (owner, 2026-09-10: "the link colour is blue?!"). */
 .hub-links a {
-  color: var(--text-muted);
+  color: var(--accent-primary);
+  background: var(--surface-input);
   text-decoration: none;
-  font-size: 0.82rem;
+  font-size: 0.75rem;
   font-family: var(--font-body);
   letter-spacing: 0.03em;
-  padding: 6px 12px;
+  padding: 6px 16px;
   border: 1px solid var(--border-accent);
-  border-radius: 999px;
-  transition: color 0.3s, border-color 0.3s;
+  border-radius: 20px;
+  transition: color 0.15s, border-color 0.15s;
 }
 
 .hub-links a span {
-  color: var(--text-dimmed);
+  color: var(--nerv-steel-dim);
   margin-left: 4px;
-  font-size: 0.72rem;
+  font-size: 0.7rem;
 }
 
 .hub-links a:hover {
-  color: var(--accent-primary);
-  border-color: var(--accent-primary);
-}
-
-.hub-links-papers {
-  flex-direction: column;
-  align-items: stretch;
-  max-width: 720px;
-}
-
-.hub-links-papers a {
-  border-radius: 6px;
-  text-align: left;
+  color: var(--brand-primary);
+  border-color: var(--brand-primary);
 }
 
 .footer-tagline {

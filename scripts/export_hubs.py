@@ -1,8 +1,7 @@
-"""Refresh the homepage hub lists: country pages + public research papers.
+"""Refresh the homepage hub list: the country pages.
 
 Thin CLI over pipeline.static_exporter.export_hubs_snapshot(). The snapshot
-normally refreshes itself — every full static export writes it, and so do
-the Theo publish, auto-publish and unpublish paths — and the frontend build
+normally refreshes itself — every full static export writes it — and the frontend build
 bakes it into index.html (vite.config.ts → landingHubs). Run this by hand
 only to seed a fresh host or to refresh the committed dev/CI baseline:
 
@@ -45,7 +44,7 @@ def main() -> None:
         path = export_hubs_snapshot()
         payload = json.loads(path.read_text(encoding="utf-8"))
 
-    print(f"{path}: {len(payload['countries'])} countries, {len(payload['papers'])} papers")
+    print(f"{path}: {len(payload['countries'])} countries")
 
 
 if __name__ == "__main__":

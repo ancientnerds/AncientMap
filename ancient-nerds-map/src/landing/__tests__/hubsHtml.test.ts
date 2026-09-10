@@ -1,5 +1,5 @@
 /**
- * The homepage hub lists are static HTML built at build time from
+ * The homepage hub list is static HTML built at build time from
  * src/data/hubs.snapshot.json (vite.config.ts → landingHubs). This is the
  * pure builder: it must escape text, keep the snapshot's order, and refuse
  * to build from an empty snapshot instead of shipping an empty section.
@@ -7,7 +7,7 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { countryLinksHtml, paperLinksHtml, pickSnapshotPath } from '../hubsHtml'
+import { countryLinksHtml, pickSnapshotPath } from '../hubsHtml'
 
 describe('countryLinksHtml', () => {
   it('one link per country with the site count, in snapshot order', () => {
@@ -29,19 +29,6 @@ describe('countryLinksHtml', () => {
 
   it('throws on an empty snapshot rather than rendering nothing', () => {
     expect(() => countryLinksHtml([])).toThrow(/snapshot/)
-  })
-})
-
-describe('paperLinksHtml', () => {
-  it('one link per paper, title escaped', () => {
-    const html = paperLinksHtml([
-      { slug: 'a', path: '/research/a', title: 'Solar "Superflares" & Myth' },
-    ])
-    expect(html).toBe('<a href="/research/a">Solar &quot;Superflares&quot; &amp; Myth</a>')
-  })
-
-  it('throws on an empty snapshot', () => {
-    expect(() => paperLinksHtml([])).toThrow(/snapshot/)
   })
 })
 
