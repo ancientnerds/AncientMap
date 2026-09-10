@@ -31,7 +31,7 @@ export default function LandingLive() {
         name="stories, live"
         status={`${count(stats.stories)} stories · newest first`}
         page="/news.html"
-        poster="/data/previews/news.jpg"
+        poster="news"
         title="Stories"
         openLabel="Open stories"
         archive={{ href: '/news-archive/', title: 'Story archive' }}
@@ -44,7 +44,7 @@ export default function LandingLive() {
           name="weekly journal"
           status={`${journals.total} issues · every Sunday`}
           page="/articles.html"
-          poster="/data/previews/articles.jpg"
+          poster="articles"
           title="Weekly journals"
           openLabel="Open journals"
           foot={{ note: 'every Sunday · sourced, cited, illustrated', link: `all ${journals.total} journals →` }}
@@ -57,7 +57,7 @@ export default function LandingLive() {
           name="research papers"
           status={`${papers.total} public · CC BY 4.0 · by Theo`}
           page="/research/"
-          poster="/data/previews/research.jpg"
+          poster="research"
           title="Research library"
           openLabel="Open research library"
           foot={{ note: 'papers publish when the citation gate passes · all titles are listed below', link: 'research library →' }}
@@ -71,8 +71,7 @@ export default function LandingLive() {
         name="site search"
         status={`${count(stats.sites)} sites · ${stats.sources} sources`}
         page="/search.html"
-        view="/search.html?random"
-        poster="/data/previews/search.jpg"
+        poster="search"
         title="Site search"
         openLabel="Open site search"
         archive={{ href: '/sites/', title: 'Sites by country' }}

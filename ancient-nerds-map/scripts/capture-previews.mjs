@@ -1,11 +1,11 @@
 /**
- * capture-previews.mjs — one JPEG per portal page, taken from the live site.
+ * capture-previews.mjs — the portal posters, taken from the live site: two
+ * WebPs per page, the 1280×800 frame and the same frame at half scale.
  *
- * Owner, 2026-09-10: "On the phone everything flickers quite a bit — are
- * screenshots maybe better after all?" The answer is both. Every portal on the
- * landing page carries a poster image of the page it points at; only
- * hover-capable desktops mount the live iframe on top of it (PagePortal.tsx).
- * Phones and tablets never load a second page — they see this file.
+ * Owner, 2026-09-10: "Those are no screenshots! It lags like hell! The
+ * landing page must load super fast — and mobile first!" Every portal on the
+ * landing page is a poster of the page it points at and nothing else
+ * (PagePortal.tsx); the 640 px file is what a phone downloads.
  *
  * The screenshots are not built into the bundle. They are captured against
  * production by .github/workflows/previews.yml (after every successful deploy
@@ -35,8 +35,13 @@ const PAGES = [
   { name: 'search', path: '/search.html?random', ready: '.site-card' },
 ]
 
-/** The portal frame is laid out at 1280×800 — the poster has to match it. */
-const VIEWPORT = { width: 1280, height: 800, deviceScaleFactor: 1 }
+/** The portal box is 16/10 — the capture is a desktop page at 1280×800. */
+const VIEWPORT = { width: 1280, height: 800 }
+/** The full frame, and the same frame rasterised at half the pixel ratio. */
+const SCALES = [
+  { suffix: '', deviceScaleFactor: 1 },
+  { suffix: '-640', deviceScaleFactor: 0.5 },
+]
 /** networkidle2 fires before the last images decode and the fonts swap in. */
 const SETTLE_MS = 1500
 
@@ -54,7 +59,7 @@ const browser = await puppeteer.launch({
 try {
   for (const { name, path, ready } of PAGES) {
     const page = await browser.newPage()
-    await page.setViewport(VIEWPORT)
+    await page.setViewport({ ...VIEWPORT, deviceScaleFactor: 1 })
     const url = `${BASE}${path}`
     await page.goto(url, { waitUntil: 'networkidle2' })
     if (ready) await page.waitForSelector(ready, { timeout: 60_000 })
@@ -62,11 +67,15 @@ try {
     // The consent bar is fixed to the bottom of every page and would sit in
     // every poster; a visitor dismisses it once, the screenshot cannot.
     await page.evaluate(() => document.querySelector('#cookie-notice')?.remove())
-    const file = join(OUT, `${name}.jpg`)
-    await page.screenshot({ path: file, type: 'jpeg', quality: 82 })
+    for (const { suffix, deviceScaleFactor } of SCALES) {
+      // Same layout, fewer pixels: the ratio changes the raster, not the page.
+      await page.setViewport({ ...VIEWPORT, deviceScaleFactor })
+      const file = join(OUT, `${name}${suffix}.webp`)
+      await page.screenshot({ path: file, type: 'webp', quality: 80 })
+      const { size } = await stat(file)
+      console.log(`${url} -> ${file} (${size.toLocaleString('en-US')} bytes)`)
+    }
     await page.close()
-    const { size } = await stat(file)
-    console.log(`${url} -> ${file} (${size.toLocaleString('en-US')} bytes)`)
   }
 } finally {
   await browser.close()

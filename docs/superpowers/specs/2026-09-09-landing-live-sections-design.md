@@ -28,7 +28,7 @@ Entscheidungen aus dem Brainstorming (09.09.2026):
    - `>_ [ fig. 1 — stories, live ]` auf `/news.html`
    - `>_ [ fig. 2 — weekly journal ]` auf `/articles.html`
    - `>_ [ fig. 3 — research papers ]` auf `/research/`
-   - `>_ [ fig. 4 — site search ]` auf `/search.html` (der Rahmen zeigt `/search.html?random`)
+   - `>_ [ fig. 4 — site search ]` auf `/search.html` (Poster von `/search.html?random`)
 4. Bestehende Sektionen in heutiger Reihenfolge: Globe, Filter, Empires (cinematic), Site data, Lyra,
    Radar, Tools, Sources, API, Founders, Discord, Giants, Browse (Länder-Hubs und Paper-Liste), Final CTA, Footer.
 
@@ -139,12 +139,15 @@ Zeile im Payload und wird nicht gerendert. Es gibt keine Platzhalter-Inhalte.
 ### 3.4 Interaktion: das Portal
 
 Wunsch des Betreibers am 2026-09-10: "Ich will eine Art Portal zu den Seiten — wie ein Screenshot,
-der den aktuellen Stand zeigt." Beides: ein echter Screenshot als Grundschicht, die Seite selbst
-darauf — aber nur dort, wo sie sich lohnt.
+der den aktuellen Stand zeigt." Genau das: ein echter Screenshot, sonst nichts. Die Zwischenversion
+mit einem Live-`<iframe>` der Seite über dem Screenshot (Desktop) fiel am selben Abend: "Das sind
+doch gar keine Screenshots! Das lagt wie Sau! Die Landingpage muss super schnell laden — und mobile
+first!" Vier gerahmte Seiten waren vier weitere Seitenaufrufe, vier React-Bundles und der ganze
+Site-Index der Suche auf einer Startseite, die niemand darum gebeten hat.
 
 - Jede Sektion ist ein **NERV-Fenster mit einem Portal darin** (`src/landing/PagePortal.tsx`): das
   Poster der echten Seite — `/news.html`, `/articles.html`, `/research/`, `/search.html` — über die volle Breite
-  des Fensterkörpers, auf dem Desktop ein `<iframe>` derselben Seite darüber. Titelleiste `>_ portal — {Pfad}`, rechts die Fensterknöpfe aus
+  des Fensterkörpers. Titelleiste `>_ portal — {Pfad}`, rechts die Fensterknöpfe aus
   `nerv-ui/window.css`: ↗ öffnet die Seite, ≡ das Archiv — und ≡ gibt es nur, wo das Archiv eine
   andere Seite ist (Stories: `/news.html` vs. `/news-archive/`, Sites: `/search.html` vs.
   `/sites/`). Der Journal-Hub und die
@@ -153,53 +156,32 @@ darauf — aber nur dort, wo sie sich lohnt.
   der Stories, Journals und Research Papers?"). Sie sagte dasselbe wie die Seite im Rahmen. Mit ihr
   gingen `.ll-window-list`, `.ll-row*`, `.ll-img*`, die Chips, "load more", `feedClient.ts` und
   `dates.ts`; der Fensterkörper ist eine Spalte.
-- **Der Rahmen ist Dekoration, kein zweiter Browser**: `pointer-events: none`, `tabIndex={-1}`,
-  `aria-hidden="true"` (Betreiber: "das Scrollen im Portal wird verhindert, damit ich normal
-  weiterscrollen kann"). Ein Wheel-Event oder eine Wischgeste über dem Portal scrollt die
-  Startseite, im Rahmen lässt sich nichts anklicken und nichts antabben.
 - **Ein Overlay-Link deckt das ganze Portal** (`.ll-portal-link`, `position: absolute; inset: 0`) und
   trägt mittig einen `.cta-primary` — dieselbe rote Schaltfläche wie im Hero. Wo es einen Zeiger gibt
   (`@media (hover: hover)`), wartet der CTA auf ihn: unsichtbar, bis das Portal überfahren oder der
   Link per Tastatur fokussiert wird (kurze Opacity-Blende, nur unter
-  `prefers-reduced-motion: no-preference`), und was darunter liegt — der Rahmen, oder vor seinem
-  Mount das Poster — dunkelt dabei auf `brightness(.6)` ab. Auf
+  `prefers-reduced-motion: no-preference`), und das Poster dunkelt dabei auf `brightness(.6)` ab. Auf
   Touch-Geräten (`@media (hover: none)`) steht er immer da. `aria-label` trägt die Wörter ohne den
   ↗-Glyphen, den ein Screenreader sonst als "north east arrow" vorliest.
-- **Jedes Portal trägt ein Poster** (`<img class="ll-portal-poster">`, seit 2026-09-10): einen echten
-  Screenshot genau der Seite, auf die es zeigt, aus `/data/previews/{news,articles,research}.jpg`.
-  Betreiber vom Telefon: "Auf dem Handy flackert alles ganz schön — sind Screenshots vielleicht doch
-  besser?" Antwort: hybrid. Das Poster ist die Grundschicht und steht schon im SSR-Baum, aufgenommen
-  bei 1280×800, gelegt mit `object-fit: cover` und `object-position: top` — im 16/10-Desktopkasten
-  ist das der obere Ausschnitt, in der 4/3-Box des Telefons derselbe Ausschnitt, den auch der Rahmen
-  zeigt. Aufgenommen wird es außerhalb des Repos, siehe 6.
-- **Den Rahmen bekommt nur der Desktop.** `window.matchMedia('(hover: hover) and (min-width: 900px)')`
-  entscheidet einmal beim Mount — das ist eine Geräteklasse, keine Fensterbreite, der man hinterher
-  läuft. Telefone und Tablets sehen nur das Poster: kein zweiter Seitenaufruf, kein Nachladen, nichts
-  das flackern kann. Wo der Rahmen kommt, liegt er über dem Poster (`z-index: 1`, der Overlay-Link
-  rückt auf `2`) und ersetzt es optisch.
+- **Das Poster ist das Portal** (`<img class="ll-portal-poster">`): ein echter Screenshot genau der
+  Seite, auf die es zeigt, aus `/data/previews/{name}.webp` (1280×800) und `{name}-640.webp` (dieselbe
+  Seite bei halbem Pixelverhältnis), per `srcset`/`sizes` nach der gerenderten Breite gewählt — ein
+  Telefon lädt die 640er-Datei, eine Rasterzelle mit 540 px bei Pixelverhältnis 1 ebenfalls.
+  `loading="lazy"`, `decoding="async"`, `width`/`height` gesetzt, unter der Falte: der erste Paint
+  zahlt nichts dafür. Gelegt mit `object-fit: cover` und `object-position: top` — im 16/10-Kasten der
+  obere Ausschnitt, in der 4/3-Box des Telefons ein höherer. Aufgenommen wird es außerhalb des Repos,
+  siehe 6.
 - **Eine Sektion, eine Komponente.** `src/landing/PortalSection.tsx` ist die Form aller vier
   Sektionen (Label, Fenster, Portal, Fußzeile); `LandingLive.tsx` listet die vier als Daten, die
   Theo-Zeile (`TheoLine.tsx`) kommt als Kind unter das Papers-Fenster. Eine Sektion zeigt auf EINE
-  Seite (`page`): Fenstertitel, ↗, Rahmenquelle, CTA und Fußzeilen-Link kommen aus demselben Prop.
-  Nur die Suche hat eine eigene Ansicht (`view`): Rahmen und Poster zeigen `/search.html?random`,
-  weil eine leere Suchleiste nichts zeigt — `SearchPage.tsx` würfelt mit `?random` einmal beim
-  Laden dieselbe Zufallsauswahl wie der Random-Knopf; jeder Link führt auf `/search.html` ohne
-  Parameter.
-- **Der Server rendert nie ein iframe.** SSR und der erste Client-Render liefern denselben Baum:
-  den Container `.ll-portal[data-src]`, das Poster und den Overlay-Link mit seinem CTA. Damit stimmen
-  Server- und Client-Baum überein, und ein Crawler bekommt ein Bild und einen Link statt eines
-  Rahmens, dem er nicht folgt.
-- Der Rahmen erscheint erst **nach dem Mount**. Ausgenommen bleibt neben der Medienabfrage
-  `navigator.connection.saveData`: eine ganze zweite Seite ist genau das, worum dieser Header bittet,
-  sie nicht zu laden. Geladen wird erst, wenn das Fenster in Sichtweite scrollt
-  (`IntersectionObserver`, `rootMargin: 200px`), damit vier Portale nicht vier Seitenaufrufe auf
-  einer Startseite kosten, die niemand gescrollt hat. Bis dahin ist die Box das Poster mit dem CTA.
-- **Maßstab:** das iframe liegt 1280 CSS-Pixel breit und wird per `transform: scale()` auf die
-  Fensterbreite gebracht; ein `ResizeObserver` auf dem Container schreibt `width / 1280` in
-  `--ll-portal-scale`. Nicht verkleinert, sondern skaliert — die Seite darin sieht einen
-  Desktop-Viewport und ordnet sich so an, wie ein Besucher sie sähe. Die Höhe ist abgeleitet statt
-  fest: `calc(100% / var(--ll-portal-scale))` ist skaliert exakt die Höhe der Box, im 16/10-Desktop
-  dieselben 800 px wie vorher, in der 4/3-Box des Telefons der höhere Ausschnitt, der sie füllt.
+  Seite (`page`): Fenstertitel, ↗, CTA und Fußzeilen-Link kommen aus demselben Prop; das Poster ist
+  ein Name (`poster="news"`), den `PagePortal` und `capture-previews.mjs` teilen. Für die Suche
+  fotografiert die Aufnahme `/search.html?random` — `SearchPage.tsx` würfelt mit `?random` einmal
+  beim Laden dieselbe Zufallsauswahl wie der Random-Knopf, weil eine leere Suchleiste nichts zeigt —,
+  die Startseite selbst kennt den Parameter nicht: jeder Link führt auf `/search.html`.
+- **Kein iframe, kein Effekt, kein Browser-API.** `PagePortal` ist eine reine Funktion des Payloads;
+  Server- und Client-Baum sind identisch, die Hydration hat hier nichts zu tun, und ein Crawler
+  bekommt ein Bild mit `alt` und einen Link.
 - **Keine Galerie.** Unter dem Papers-Fenster stand bis 2026-09-11 eine Galerie derselben Papers,
   die im Rahmen schon zu sehen waren. Sie ist weg; die Karten sind jetzt die Bibliothek selbst
   (3.5), und crawlbar bleibt die Sektion über ihre drei Links auf `/research/`.
@@ -211,9 +193,8 @@ darauf — aber nur dort, wo sie sich lohnt.
   Übrig ist davon genau eine Stelle, die Startzeit in der Theo-Zeile.
 - Client-Logik gibt es in keiner der drei Sektionen mehr außer dem Portal selbst: Kopfleiste,
   Portal, Fußzeile — und bei den Papers die Theo-Zeile.
-- **X-Frame-Options.** `/research/` kommt aus der API, und die setzte auf jeder Antwort `DENY` —
-  das eigene Portal wäre leer geblieben. Der Header steht seit 2026-09-10 auf `SAMEORIGIN`
-  (`api/main.py`); fremdes Framing bleibt blockiert, ein `frame-ancestors`-CSP existiert nirgends.
+- **X-Frame-Options** steht wieder auf `DENY` (`api/main.py`): nichts rahmt diese Seiten mehr; die
+  `SAMEORIGIN`-Lockerung galt nur der iframe-Zwischenversion.
 
 ### 3.5 Gestaltung
 
@@ -238,14 +219,13 @@ umgesetzt in `src/styles/landing-live.css`:
   Komponente, `src/landing/LandingWindow.tsx`; die Sektionen liefern nur Titel, die
   Kopfleisten-Links (`archive` ist optional) und den Inhalt.
 - Portal: `.ll-portal` ist relativ positioniert, 16 / 10, `overflow: hidden`, Hintergrund
-  `--surface-deep`. `.ll-portal-frame` liegt absolut bei 1280 px Breite ohne Rahmen, ohne
-  Pointer-Events, und wird über `transform-origin: 0 0` und `scale(var(--ll-portal-scale, .5))` auf
-  die Spalte gebracht. Darüber `.ll-portal-link` über die volle Fläche mit dem `.ll-portal-cta` in
-  der Mitte — der übernimmt Rahmen und Rot von `.cta-primary` und ändert Größe und Ruhezustand
-  (schwarz statt transparent), damit die längste Beschriftung ("Open research library ↗") in eine
-  318-px-Box auf einem 390-px-Telefon passt und der Knopf vor der Seite dahinter lesbar bleibt. Die
-  beiden Farbregeln stehen als `.ll-portal .ll-portal-cta`: die Shell lädt `landing.css` NACH
-  `landing-live.css`, bei gleicher Spezifität hätte also `.cta-primary` gewonnen.
+  `--surface-deep`; darin absolut das Poster (`.ll-portal-poster`, `object-fit: cover`, oben
+  verankert) und darüber `.ll-portal-link` über die volle Fläche mit dem `.ll-portal-cta` in der
+  Mitte — der übernimmt Rahmen und Rot von `.cta-primary` und ändert Größe und Ruhezustand (schwarz
+  statt transparent), damit die längste Beschriftung ("Open research library ↗") in eine 318-px-Box
+  auf einem 390-px-Telefon passt und der Knopf vor dem Poster lesbar bleibt. Die beiden Farbregeln
+  stehen als `.ll-portal .ll-portal-cta`: die Shell lädt `landing.css` NACH `landing-live.css`, bei
+  gleicher Spezifität hätte also `.cta-primary` gewonnen.
 - Fenstertitel: `>_ portal — /news.html`, `>_ portal — /articles.html`, `>_ portal — /research/`,
   `>_ portal — /search.html`.
 - Paper-Karten: `.theo-public-grid` mit `src/components/theo/PaperCard.tsx` und den Regeln aus
@@ -326,10 +306,9 @@ analysierte Quellen je Paper). Im statischen Rückfall bleiben Absatz und H1 mit
   Brotli im `lint-frontend`-Job, gleich nach `npm run build`.
 - **Nach dem Deploy (Playwright):** `/` liefert SSR-HTML mit vier Portalen und ohne eine einzige
   Paper-Karte darunter, `/research/` mit einer Karte je Paper, null Hydration-Fehler in der Konsole, LCP-Element ist das Hero-Bild, genau eine H1 mit dem
-  Suchbegriff, kein "750K" mehr im Dokument; vier Poster aus `/data/previews/` laden mit 200, nach
-  dem Scrollen stehen auf dem Desktop vier iframes im DOM und auf 390 px Breite keins, ein
-  Wheel-Event über einem Portal scrollt die Seite und nicht den Rahmen, und auf 390 px Breite gibt
-  es keinen horizontalen Überlauf. Crawler-Sicht mit JS-Blockade prüfen (Lehre aus den 2.100
+  Suchbegriff, kein "750K" mehr im Dokument; vier Poster (WebP; auf dem Telefon die
+  640er-Variante) laden mit 200, kein `<iframe>` im DOM auf keiner Breite, und auf 390 px Breite
+  gibt es keinen horizontalen Überlauf. Crawler-Sicht mit JS-Blockade prüfen (Lehre aus den 2.100
   Soft-404-Seiten).
 
 ## 6. Änderungen außerhalb des Codes
@@ -337,13 +316,14 @@ analysierte Quellen je Paper). Im statischen Rückfall bleiben Absatz und H1 mit
 - `ancientnerds-nginx-config`: `location = /` und der neue `@home_static`-Block. Der Deploy wendet
   die Datei automatisch an (`nginx -t` und reload), aber Konfigurationsänderungen brauchen deine
   Freigabe vor dem Push.
-- **Die Portal-Poster** (`/data/previews/{news,articles,research,search}.jpg`) liegen nicht im Repo. Sie
+- **Die Portal-Poster** (`/data/previews/{news,articles,research,search}.webp` und `…-640.webp`) liegen nicht im Repo. Sie
   entstehen im Workflow `.github/workflows/previews.yml`:
   - `ancient-nerds-map/scripts/capture-previews.mjs` öffnet mit Puppeteer `/news.html`,
     `/articles.html`, `/research/` und `/search.html?random` (wartet auf die erste `.site-card`) auf
     `PREVIEW_BASE_URL` (Vorgabe `https://ancientnerds.com`)
     bei 1280×800, wartet auf `networkidle2` plus 1500 ms, entfernt `#cookie-notice` und schreibt je
-    ein JPEG (Qualität 82) nach `PREVIEW_OUT_DIR` (Vorgabe `previews-out`). Lokal: `npm run previews`.
+    zwei WebPs (Qualität 80: das 1280×800-Bild und dasselbe bei `deviceScaleFactor: 0.5` als
+    `-640`) nach `PREVIEW_OUT_DIR` (Vorgabe `previews-out`). Lokal: `npm run previews`.
   - Takt: nach **jedem grünen CI-Lauf auf `main`** (`workflow_run`, also nach jedem Deploy; das Verzeichnis ist gitignored und überlebt dessen
     `git clean -fd`, die Poster fehlen also nur bis zum allerersten Lauf) und **alle sechs
     Stunden** (`cron: '23 */6 * * *'`), dazu `workflow_dispatch`. `concurrency: page-previews` ohne

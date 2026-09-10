@@ -5,8 +5,8 @@
  * differ only in what they point at, so the shape is written once (owner,
  * 2026-09-11: "unified code, no spaghetti") and LandingLive.tsx lists the
  * four as data. A section is a portal on ONE page: that page is the window
- * caption, the ↗ button, the frame source, the CTA target and the foot link —
- * one prop, `page`, so the five cannot drift apart. What a section has beyond
+ * caption, the ↗ button, the CTA target and the foot link — one prop, `page`,
+ * so the four cannot drift apart. What a section has beyond
  * the shape — the Theo line under the papers — comes in as children, between
  * the window and the foot.
  */
@@ -26,15 +26,9 @@ export interface PortalSectionProps {
   status: string
   /** The page this section is a portal on, e.g. "/news.html". */
   page: string
-  /**
-   * What the frame and the poster show when that is not the bare page:
-   * "/search.html?random" opens the search on a random draw, because an
-   * empty search bar is a view of nothing. Every link still leads to `page`.
-   */
-  view?: string
-  /** Its screenshot under /data/previews/, e.g. "/data/previews/news.jpg". */
+  /** Its poster's name under /data/previews/, e.g. "news" (PagePortal). */
   poster: string
-  /** The page's name for people — poster alt and frame title. */
+  /** The page's name for people — the poster alt. */
   title: string
   /** "Open stories" — the ↗ button, the CTA and both their accessible names. */
   openLabel: string
@@ -51,7 +45,6 @@ export default function PortalSection({
   name,
   status,
   page,
-  view,
   poster,
   title,
   openLabel,
@@ -63,7 +56,7 @@ export default function PortalSection({
     <section className="ll-section" id={id} aria-labelledby={`ll-fig-${fig}`}>
       <SectionHead fig={fig} name={name} status={status} />
       <LandingWindow page={page} openTitle={openLabel} archive={archive}>
-        <PagePortal src={view ?? page} poster={poster} title={title} openHref={page} openLabel={openLabel} />
+        <PagePortal poster={poster} title={title} openHref={page} openLabel={openLabel} />
       </LandingWindow>
       {children}
       <div className="ll-foot">

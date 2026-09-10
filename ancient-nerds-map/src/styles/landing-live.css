@@ -14,8 +14,7 @@
 /* Four sections two by two from 901 px up — Stories and Journal on the first
    row, Papers and Sites on the second (owner, 2026-09-11) — and one column
    below, in the same document order. 900 px is the page's own breakpoint
-   (.feature-row in landing.css) and the frame's (PagePortal.tsx), so the
-   cells halve exactly where the live frame appears. */
+   (.feature-row in landing.css). */
 .landing-live {
   max-width: 1200px;
   margin: 0 auto;
@@ -39,9 +38,9 @@
 .ll-status { font-size: 12px; color: var(--nerv-steel-dim); }
 
 /* ── Portal windows (2026-09-10) ─────────────────────────────────────────
-   Each section is a window and nothing but a window: the live page itself,
-   scaled down (src/landing/PagePortal.tsx). The lists that used to sit
-   beside the portal are gone — the page in the frame already IS the list.
+   Each section is a window and nothing but a window: a screenshot of the
+   page (src/landing/PagePortal.tsx). The lists that used to sit beside the
+   portal are gone — the page on the poster already IS the list.
    Panel look mirrors .empire-borders-window (index.css), the bar mirrors
    .popup-minimized-bar; the buttons come from nerv-ui/window.css. The
    --nerv-panel-* fallbacks are load-bearing: the homepage never loads
@@ -74,28 +73,20 @@
 
 .ll-window-body { padding: 12px; }
 
-/* The portal: the live page at desktop width, transformed down to whatever
-   the window is wide. The frame is laid out 1280 CSS pixels wide and scaled,
-   not resized, so the page inside sees a desktop viewport and lays itself
-   out the way a visitor would see it. --ll-portal-scale is written by the
-   ResizeObserver in PagePortal.tsx; the 0.5 default is what a ~640px window
-   would get, so the very first painted frame is not far off. Its height is
-   derived instead of fixed at 800px: scaled by --ll-portal-scale it is
-   exactly the height of the box, which on the desktop 16/10 is the same 800
-   px as before and on the 4/3 phone box is the taller slice that fills it. */
+/* The portal: a screenshot of the page, 16/10 like the 1280x800 capture,
+   and the link that covers it. Nothing runs in here (owner, 2026-09-10:
+   "Those are no screenshots! It lags like hell!") — the box costs one lazy
+   image, on every device. */
 .ll-portal {
   position: relative;
   aspect-ratio: 16 / 10;
   overflow: hidden;
   background: var(--surface-deep);
 }
-/* The poster: a screenshot of the same page, captured at 1280x800 and served
-   from /data/previews/ (see scripts/capture-previews.mjs). It is the bottom
-   layer and, on everything without a hover pointer, the only one — the phone
-   that flickered under a live frame now gets a still image and no second page
-   load at all. `object-fit: cover` with `object-position: top` crops the
-   bottom off the 16/10 desktop box and more of it in the 4/3 phone box, which
-   is the same slice the frame shows there. */
+/* The poster: captured at 1280x800 and served from /data/previews/ in two
+   widths (scripts/capture-previews.mjs). `object-fit: cover` with
+   `object-position: top` shows the top of the page — the same slice in the
+   16/10 desktop box and a taller one in the 4/3 phone box. */
 .ll-portal-poster {
   position: absolute;
   inset: 0;
@@ -105,28 +96,11 @@
   object-position: top;
   display: block;
 }
-.ll-portal-frame {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 1280px;
-  height: calc(100% / var(--ll-portal-scale, 0.5));
-  border: 0;
-  transform-origin: 0 0;
-  transform: scale(var(--ll-portal-scale, 0.5));
-  /* Above the poster it replaces — the poster stays behind it as the thing
-     the visitor already saw while the frame was still loading. */
-  z-index: 1;
-  /* Decoration, not a second browser: a wheel or a swipe over the portal
-     scrolls the homepage, and nothing inside the frame can be clicked. */
-  pointer-events: none;
-}
-/* The whole portal is the link into the page, with the CTA in its middle —
-   on top of both the poster and the frame. */
+/* The whole portal is the link into the page, with the CTA in its middle. */
 .ll-portal-link {
   position: absolute;
   inset: 0;
-  z-index: 2;
+  z-index: 1;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -145,7 +119,7 @@
   font-size: 0.8rem;
   letter-spacing: 0.1em;
   max-width: calc(100% - 24px);
-  /* Solid black at rest (the portal behind it stays readable), red only when
+  /* Solid black at rest (the poster behind it stays readable), red only when
      the pointer is on the button itself — hovering the portal shows it,
      hovering the button arms it. */
   background: #000;
@@ -163,14 +137,10 @@
   .ll-portal-cta { opacity: 0; }
   .ll-portal:hover .ll-portal-cta,
   .ll-portal-link:focus-visible .ll-portal-cta { opacity: 1; }
-  /* Whichever layer is on top dims — the frame once it is there, the poster
-     below 900 px and before the frame mounts. */
-  .ll-portal:hover .ll-portal-frame,
   .ll-portal:hover .ll-portal-poster { filter: brightness(0.6); }
 }
 @media (hover: hover) and (prefers-reduced-motion: no-preference) {
   .ll-portal-cta { transition: opacity 0.15s ease; }
-  .ll-portal-frame,
   .ll-portal-poster { transition: filter 0.15s ease; }
 }
 
@@ -187,8 +157,7 @@
 .ll-foot a:hover { text-decoration: underline; }
 
 @media (max-width: 700px) {
-  /* A 1280 px page scaled into a phone needs the taller box to stay legible;
-     the frame follows it (see .ll-portal-frame). */
+  /* The taller box shows more of the 1280x800 capture on a phone. */
   .ll-portal { aspect-ratio: 4 / 3; }
   /* Two lines instead of one squeezed row. */
   .ll-foot, .ll-theo { flex-direction: column; gap: 6px; }

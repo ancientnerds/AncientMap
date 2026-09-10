@@ -1,8 +1,8 @@
 /**
  * The landing sections render under Node without browser APIs — exactly
- * what the SSR sidecar does. Effects (relative time, the portal iframes) do
- * not run in renderToString, so the server output carries absolute dates and
- * no iframe at all.
+ * what the SSR sidecar does. Effects (relative time) do not run in
+ * renderToString, so the server output carries absolute dates; the portals
+ * have no effect at all, so the server output IS the page.
  */
 import { renderToString } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
@@ -30,15 +30,15 @@ function windows(html: string): string[] {
 
 /**
  * The four portals in document order (Stories, Journal, Papers, Sites): the
- * page each one is on, what its frame shows, its poster, its CTA and the
- * window buttons. Stories and Sites have an archive of their own; the
- * journal hub and the research library ARE their archive.
+ * page each one is on, its poster name, its CTA and the window buttons.
+ * Stories and Sites have an archive of their own; the journal hub and the
+ * research library ARE their archive.
  */
 const SECTIONS = [
-  { page: '/news.html', view: '/news.html', poster: '/data/previews/news.jpg', label: 'Open stories', buttons: ['/news.html', '/news-archive/'] },
-  { page: '/articles.html', view: '/articles.html', poster: '/data/previews/articles.jpg', label: 'Open journals', buttons: ['/articles.html'] },
-  { page: '/research/', view: '/research/', poster: '/data/previews/research.jpg', label: 'Open research library', buttons: ['/research/'] },
-  { page: '/search.html', view: '/search.html?random', poster: '/data/previews/search.jpg', label: 'Open site search', buttons: ['/search.html', '/sites/'] },
+  { page: '/news.html', poster: 'news', label: 'Open stories', buttons: ['/news.html', '/news-archive/'] },
+  { page: '/articles.html', poster: 'articles', label: 'Open journals', buttons: ['/articles.html'] },
+  { page: '/research/', poster: 'research', label: 'Open research library', buttons: ['/research/'] },
+  { page: '/search.html', poster: 'search', label: 'Open site search', buttons: ['/search.html', '/sites/'] },
 ]
 
 describe('LandingLive', () => {
@@ -96,7 +96,7 @@ describe('LandingLive', () => {
 
   it('runs no list beside a portal and no gallery under one', () => {
     // Owner, 2026-09-10: "Why do we still have the list of stories, journals
-    // and research papers on the right side?" The page in the frame IS the
+    // and research papers on the right side?" The page on the poster IS the
     // list; a second one said the same thing twice. A day later the same
     // verdict hit the paper cards: "The research paper examples should be
     // inside the portal, not below it" — they live on /research/, which is
@@ -136,10 +136,10 @@ describe('LandingLive', () => {
 })
 
 /**
- * Each window is a portal: a poster screenshot of the real page, with the
- * live frame scaled down on top of it — but only on hover-capable desktops
- * (2026-09-10). The frame is decoration — the one interactive thing is the
- * link that covers it and carries the CTA.
+ * Each window is a portal: a poster screenshot of the real page and the link
+ * that covers it, carrying the CTA. Nothing else — no frame, no effect
+ * (owner, 2026-09-10: "Those are no screenshots! It lags like hell! The
+ * landing page must load super fast — and mobile first!").
  */
 describe('PagePortal', () => {
   const html = render(FIXTURES.landing)
@@ -149,39 +149,49 @@ describe('PagePortal', () => {
     expect([...html.matchAll(/class="ll-window-bar"/g)]).toHaveLength(4)
     expect([...html.matchAll(/class="ll-window-body"/g)]).toHaveLength(4)
     for (const { page } of SECTIONS) {
-      // The bare page, never the ?random view the frame opens.
       expect(html).toContain(`&gt;_ portal — <b>${page}</b>`)
     }
     // The bar's controls reuse the app's window buttons, not a second set.
     expect(html).toContain('class="popup-window-controls ll-window-controls"')
   })
 
-  it('puts exactly one portal per window, pointed at the view of that window', () => {
+  it('puts exactly one portal per window', () => {
     const panes = windows(html)
     expect(panes).toHaveLength(4)
-    panes.forEach((pane, i) => {
-      const portals = [...pane.matchAll(/<div class="ll-portal" data-src="([^"]+)"/g)]
-      expect(portals, SECTIONS[i].page).toHaveLength(1)
-      expect(portals[0][1]).toBe(SECTIONS[i].view)
-    })
+    for (const pane of panes) {
+      expect([...pane.matchAll(/<div class="ll-portal">/g)]).toHaveLength(1)
+    }
   })
 
-  it('renders no iframe on the server — the frame is an effect', () => {
+  it('runs nothing inside a portal — no frame, no page in a page', () => {
     expect(html).not.toContain('<iframe')
+    expect(html).not.toContain('data-src')
+    expect(html).not.toContain('ll-portal-frame')
+    // The random draw is the capture's business (capture-previews.mjs), not
+    // the page's: the homepage never links or loads it.
+    expect(html).not.toContain('?random')
   })
 
-  it('posters every portal with the screenshot of its own page', () => {
-    // Owner, 2026-09-10: "On the phone everything flickers quite a bit — are
-    // screenshots maybe better after all?" The poster is what the server
-    // sends and what a phone keeps; the frame only ever lands on top of it.
+  it('posters every portal with the screenshot of its own page, in two widths', () => {
     windows(html).forEach((pane, i) => {
+      const { poster } = SECTIONS[i]
       const imgs = [...pane.matchAll(/<img class="ll-portal-poster"[^>]*>/g)].map(m => m[0])
-      expect(imgs, SECTIONS[i].poster).toHaveLength(1)
-      expect(imgs[0]).toContain(`src="${SECTIONS[i].poster}"`)
-      const alt = /alt="([^"]*)"/.exec(imgs[0])
-      expect(alt, imgs[0]).not.toBeNull()
-      expect(alt![1], imgs[0]).toMatch(/ current view$/)
+      expect(imgs, poster).toHaveLength(1)
+      const img = imgs[0]
+      expect(img).toContain(`src="/data/previews/${poster}.webp"`)
+      // The 640 px file is what a phone downloads; the browser picks by the
+      // rendered width in `sizes`, so the phone never pays for 1280 px.
+      // React emits the attribute as srcSet; HTML attribute names are case-insensitive.
+      expect(img).toMatch(new RegExp(`srcset="/data/previews/${poster}-640\.webp 640w, /data/previews/${poster}\.webp 1280w"`, 'i'))
+      expect(img).toContain('sizes="')
+      expect(img).toContain('loading="lazy"')
+      expect(img).toContain('width="1280" height="800"')
+      const alt = /alt="([^"]*)"/.exec(img)
+      expect(alt, img).not.toBeNull()
+      expect(alt![1], img).toMatch(/ current view$/)
     })
+    // JPEGs are gone with the frame — every poster is a WebP.
+    expect(html).not.toContain('.jpg')
   })
 
   it('covers every portal with one link into its page, carrying a red CTA', () => {
@@ -189,8 +199,6 @@ describe('PagePortal', () => {
       const { label, page } = SECTIONS[i]
       const links = [...pane.matchAll(/<a class="ll-portal-link"[^>]*>/g)]
       expect(links, page).toHaveLength(1)
-      // Into the page itself — the search portal frames ?random, its link
-      // opens the plain search.
       expect(links[0][0]).toContain(`href="${page}"`)
       // The visible text ends in a glyph a screen reader reads as "north
       // east arrow" — the accessible name has to be the words alone.
@@ -201,11 +209,6 @@ describe('PagePortal', () => {
     // The old corner link is gone; the CTA replaced it and its muted line.
     expect(html).not.toContain('ll-portal-open')
     expect(html).not.toContain('live view of')
-  })
-
-  it('links nowhere with the ?random view — it is what the frame shows, not a page', () => {
-    expect(html).not.toContain('href="/search.html?random"')
-    expect(html).toContain('data-src="/search.html?random"')
   })
 
   it('names every window control — their link text is an arrow glyph', () => {

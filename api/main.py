@@ -753,9 +753,9 @@ app.add_middleware(
 async def add_security_headers(request: Request, call_next):
     response = await call_next(request)
     response.headers["X-Content-Type-Options"] = "nosniff"
-    # SAMEORIGIN, not DENY: the homepage portals frame /research/ (same
-    # origin); third-party framing stays blocked.
-    response.headers["X-Frame-Options"] = "SAMEORIGIN"
+    # DENY: nothing frames these pages — the homepage portals are screenshots
+    # (PagePortal.tsx), the iframe version of 2026-09-10 is gone.
+    response.headers["X-Frame-Options"] = "DENY"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     return response
 

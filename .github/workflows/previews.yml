@@ -1,9 +1,8 @@
 # Portal posters: a real screenshot of every page the landing portals point at.
 #
-# Owner, 2026-09-10: "On the phone everything flickers quite a bit — are
-# screenshots maybe better after all?" Phones and tablets now show a poster
-# instead of a live iframe (PagePortal.tsx), so the poster has to stay close to
-# the page it shows: this job runs after every successful CI run on main — i.e.
+# Owner, 2026-09-10: "Those are no screenshots! It lags like hell!" Every
+# portal is a poster and nothing else (PagePortal.tsx), so the poster has to
+# stay close to the page it shows: this job runs after every successful CI run on main — i.e.
 # after every deploy — and every six hours in between. The directory is
 # gitignored, so the deploy's `git clean -fd` leaves it alone; a poster is only
 # ever missing until its very first capture.
@@ -60,4 +59,4 @@ jobs:
       - name: Upload to the VPS
         run: |
           ssh -o StrictHostKeyChecking=accept-new -p ${{ secrets.VPS_PORT }} ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} 'mkdir -p /var/www/ancientnerds/public/data/previews'
-          scp -o StrictHostKeyChecking=accept-new -P ${{ secrets.VPS_PORT }} previews-out/*.jpg ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/var/www/ancientnerds/public/data/previews/
+          scp -o StrictHostKeyChecking=accept-new -P ${{ secrets.VPS_PORT }} previews-out/*.webp ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/var/www/ancientnerds/public/data/previews/
