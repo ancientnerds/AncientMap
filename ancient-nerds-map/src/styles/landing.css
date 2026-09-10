@@ -290,9 +290,11 @@ body {
 
 .landing-intro { padding-top: 48px; padding-bottom: 8px; }
 .landing-intro-text { max-width: 70ch; margin: 0 auto; font-size: 1.05rem; line-height: 1.75; color: var(--nerv-steel); text-wrap: pretty; }
-/* Underlined, not colour-only: Lighthouse link-in-text-block (a11y 1.4.1). */
-.landing-intro-text a { color: var(--text-link); text-decoration: underline; text-decoration-color: color-mix(in srgb, var(--text-link) 45%, transparent); text-underline-offset: 3px; }
-.landing-intro-text a:hover { text-decoration-color: var(--text-link); }
+/* Underlined, not colour-only: Lighthouse link-in-text-block (a11y 1.4.1).
+   Green, like every other link on this page — NERV has green and red and
+   nothing else (owner, 2026-09-10). */
+.landing-intro-text a { color: var(--accent-primary); text-decoration: underline; text-decoration-color: color-mix(in srgb, var(--accent-primary) 45%, transparent); text-underline-offset: 3px; }
+.landing-intro-text a:hover { text-decoration-color: var(--accent-primary); }
 
 /* ─── Two-Column Feature Layouts ─── */
 

@@ -5,10 +5,12 @@
    ONE palette, the NERV one (owner feedback 2026-09-10: "the text below the
    globe has weird colours. Why aren't we using unified colours? NERV
    style!"). The reference is the story page: white Orbitron headings,
-   neutral steel body text, muted steel meta, green outlined tags, cyan
-   links. The four private colour variables that used to sit here — orange,
-   red, violet and a near-black ink — and the per-category badge colours are
-   gone; every value below is a token from tokens.css. */
+   neutral steel body text, muted steel meta, green accents. Green and red
+   are the only two colours the page may spend (owner, 2026-09-10: "Since
+   when do we use this blue font? We only have green and red in NERV!"): every
+   link is --accent-primary, every call to action wears .cta-primary from
+   landing.css, which is red. The one deliberate exception is NERV orange on
+   the Theo line, the colour of a running agent. */
 .landing-live { max-width: 1200px; margin: 0 auto; padding: 0 24px; font-family: var(--font-body); color: var(--nerv-steel); }
 .ll-section { padding: 56px 0 24px; border-top: 1px solid var(--border-accent); }
 .ll-section:first-child { border-top: 0; }
@@ -135,7 +137,7 @@
 @keyframes ll-pulse { 50% { opacity: 0.35; } }
 
 .ll-foot { display: flex; justify-content: space-between; gap: 12px; margin-top: 12px; font-size: 12px; color: var(--nerv-steel-dim); }
-.ll-foot a { color: var(--text-link); text-decoration: none; white-space: nowrap; }
+.ll-foot a { color: var(--accent-primary); text-decoration: none; white-space: nowrap; }
 .ll-foot a:hover { text-decoration: underline; }
 
 @media (max-width: 700px) {
