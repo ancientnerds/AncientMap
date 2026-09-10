@@ -1,17 +1,17 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 """
-GET /home — the homepage with live Stories / Journal / Papers sections.
+GET /home — the homepage with live Stories / Journal / Papers / Sites sections.
 
 nginx proxies "/" here (ancientnerds-nginx-config, location = /). The route
 builds a {type: "landing"} payload from the DB, renders it through the SSR
 sidecar into index.html's #root (api/seo_shell.py, same path as every other
 indexed page), substitutes the live counts into the hero and caches the
 document for 300 s. When the API or the sidecar is down nginx serves the
-static index.html instead — the page stays up, the three sections are empty.
+static index.html instead — the page stays up, the four sections are empty.
 
 Since 2026-09-10 each section is a portal on the live page and nothing else
 (owner: "Why do we still have the list of stories, journals and research
-papers on the right side?"), so the payload is three counts and the Theo
+papers on the right side?"), so the payload is four counts and the Theo
 line. The paper cards went the same way a day later ("The research paper
 examples should be inside the portal, not below it"): /research/ renders
 them and the portal shows that page. No row of any kind ships here, and
@@ -116,6 +116,9 @@ def build_route(data: dict, site_stats: dict, theo_running: dict | None) -> dict
         "type": "landing",
         "stats": {
             "sites": site_stats["total_sites"],
+            # Distinct source ids in unified_sites — the by_source keys /api/stats
+            # hands out, so the site-search status line and the API agree.
+            "sources": len(site_stats["by_source"]),
             "stories": data["news_stats"]["total_items"],
             "journals": data["journal_total"],
             "papers": data["paper_total"],

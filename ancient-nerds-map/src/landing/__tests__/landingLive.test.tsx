@@ -23,20 +23,34 @@ function render(route: LandingRoute): string {
   )
 }
 
-/** The three window bodies, in document order. */
+/** The window bodies, in document order. */
 function windows(html: string): string[] {
   return html.split('<div class="ll-window">').slice(1)
 }
 
+/**
+ * The four portals in document order (Stories, Journal, Papers, Sites): the
+ * page each one is on, what its frame shows, its poster, its CTA and the
+ * window buttons. Stories and Sites have an archive of their own; the
+ * journal hub and the research library ARE their archive.
+ */
+const SECTIONS = [
+  { page: '/news.html', view: '/news.html', poster: '/data/previews/news.jpg', label: 'Open stories', buttons: ['/news.html', '/news-archive/'] },
+  { page: '/articles.html', view: '/articles.html', poster: '/data/previews/articles.jpg', label: 'Open journals', buttons: ['/articles.html'] },
+  { page: '/research/', view: '/research/', poster: '/data/previews/research.jpg', label: 'Open research library', buttons: ['/research/'] },
+  { page: '/search.html', view: '/search.html?random', poster: '/data/previews/search.jpg', label: 'Open site search', buttons: ['/search.html', '/sites/'] },
+]
+
 describe('LandingLive', () => {
   const html = render(FIXTURES.landing)
 
-  it('renders three h2 section labels in spec order', () => {
+  it('renders four h2 section labels in spec order', () => {
     const labels = [...html.matchAll(/<h2[^>]*class="ll-fig"[^>]*>(.*?)<\/h2>/g)].map(m => m[1])
-    expect(labels).toHaveLength(3)
+    expect(labels).toHaveLength(4)
     expect(labels[0]).toContain('stories, live')
     expect(labels[1]).toContain('weekly journal')
     expect(labels[2]).toContain('research papers')
+    expect(labels[3]).toContain('site search')
     expect(html).not.toContain('<h1')
   })
 
@@ -44,17 +58,18 @@ describe('LandingLive', () => {
     expect(html).toContain('3,189 stories · newest first')
     expect(html).toContain('23 issues · every Sunday')
     expect(html).toContain('24 public · CC BY 4.0 · by Theo')
+    expect(html).toContain('1,759,673 sites · 30 sources')
   })
 
   it('links the page of every section', () => {
-    for (const href of ['/news.html', '/news-archive/', '/articles.html', '/research/']) {
+    for (const href of ['/news.html', '/news-archive/', '/articles.html', '/research/', '/search.html', '/sites/']) {
       expect(html).toContain(`href="${href}"`)
     }
   })
 
   it('names every section landmark with its own fig heading', () => {
     const sections = [...html.matchAll(/<section\b[^>]*>/g)].map(m => m[0])
-    expect(sections).toHaveLength(3)
+    expect(sections).toHaveLength(4)
     const ids = new Set([...html.matchAll(/\bid="([^"]+)"/g)].map(m => m[1]))
     for (const tag of sections) {
       const labelled = /aria-labelledby="([^"]+)"/.exec(tag)
@@ -113,9 +128,10 @@ describe('LandingLive', () => {
     })
     expect(out).not.toContain('weekly journal')
     expect(out).not.toContain('Theo is researching')
-    // Stories has no source of its own left: the count in stats is the whole
-    // payload, so the section is always there.
+    // Stories and Sites have no source of their own: their counts are in
+    // stats, which is the whole payload, so both sections are always there.
     expect(out).toContain('stories, live')
+    expect(out).toContain('site search')
   })
 })
 
@@ -127,26 +143,26 @@ describe('LandingLive', () => {
  */
 describe('PagePortal', () => {
   const html = render(FIXTURES.landing)
-  const pages = ['/news.html', '/articles.html', '/research/']
 
   it('frames each section in a NERV window titled after the page it shows', () => {
-    expect([...html.matchAll(/class="ll-window"/g)]).toHaveLength(3)
-    expect([...html.matchAll(/class="ll-window-bar"/g)]).toHaveLength(3)
-    expect([...html.matchAll(/class="ll-window-body"/g)]).toHaveLength(3)
-    for (const page of pages) {
+    expect([...html.matchAll(/class="ll-window"/g)]).toHaveLength(4)
+    expect([...html.matchAll(/class="ll-window-bar"/g)]).toHaveLength(4)
+    expect([...html.matchAll(/class="ll-window-body"/g)]).toHaveLength(4)
+    for (const { page } of SECTIONS) {
+      // The bare page, never the ?random view the frame opens.
       expect(html).toContain(`&gt;_ portal — <b>${page}</b>`)
     }
     // The bar's controls reuse the app's window buttons, not a second set.
     expect(html).toContain('class="popup-window-controls ll-window-controls"')
   })
 
-  it('puts exactly one portal per window, pointed at the page of that window', () => {
+  it('puts exactly one portal per window, pointed at the view of that window', () => {
     const panes = windows(html)
-    expect(panes).toHaveLength(3)
+    expect(panes).toHaveLength(4)
     panes.forEach((pane, i) => {
       const portals = [...pane.matchAll(/<div class="ll-portal" data-src="([^"]+)"/g)]
-      expect(portals, pages[i]).toHaveLength(1)
-      expect(portals[0][1]).toBe(pages[i])
+      expect(portals, SECTIONS[i].page).toHaveLength(1)
+      expect(portals[0][1]).toBe(SECTIONS[i].view)
     })
   })
 
@@ -158,11 +174,10 @@ describe('PagePortal', () => {
     // Owner, 2026-09-10: "On the phone everything flickers quite a bit — are
     // screenshots maybe better after all?" The poster is what the server
     // sends and what a phone keeps; the frame only ever lands on top of it.
-    const posters = ['/data/previews/news.jpg', '/data/previews/articles.jpg', '/data/previews/research.jpg']
     windows(html).forEach((pane, i) => {
       const imgs = [...pane.matchAll(/<img class="ll-portal-poster"[^>]*>/g)].map(m => m[0])
-      expect(imgs, posters[i]).toHaveLength(1)
-      expect(imgs[0]).toContain(`src="${posters[i]}"`)
+      expect(imgs, SECTIONS[i].poster).toHaveLength(1)
+      expect(imgs[0]).toContain(`src="${SECTIONS[i].poster}"`)
       const alt = /alt="([^"]*)"/.exec(imgs[0])
       expect(alt, imgs[0]).not.toBeNull()
       expect(alt![1], imgs[0]).toMatch(/ current view$/)
@@ -170,16 +185,13 @@ describe('PagePortal', () => {
   })
 
   it('covers every portal with one link into its page, carrying a red CTA', () => {
-    const labels: [string, string][] = [
-      ['Open stories', '/news.html'],
-      ['Open journals', '/articles.html'],
-      ['Open research library', '/research/'],
-    ]
     windows(html).forEach((pane, i) => {
-      const [label, href] = labels[i]
+      const { label, page } = SECTIONS[i]
       const links = [...pane.matchAll(/<a class="ll-portal-link"[^>]*>/g)]
-      expect(links, href).toHaveLength(1)
-      expect(links[0][0]).toContain(`href="${href}"`)
+      expect(links, page).toHaveLength(1)
+      // Into the page itself — the search portal frames ?random, its link
+      // opens the plain search.
+      expect(links[0][0]).toContain(`href="${page}"`)
       // The visible text ends in a glyph a screen reader reads as "north
       // east arrow" — the accessible name has to be the words alone.
       expect(links[0][0]).toContain(`aria-label="${label}"`)
@@ -191,23 +203,31 @@ describe('PagePortal', () => {
     expect(html).not.toContain('live view of')
   })
 
+  it('links nowhere with the ?random view — it is what the frame shows, not a page', () => {
+    expect(html).not.toContain('href="/search.html?random"')
+    expect(html).toContain('data-src="/search.html?random"')
+  })
+
   it('names every window control — their link text is an arrow glyph', () => {
-    for (const label of ['Open stories', 'Story archive', 'Open journals', 'Open research library']) {
+    for (const label of [
+      'Open stories',
+      'Story archive',
+      'Open journals',
+      'Open research library',
+      'Open site search',
+      'Sites by country',
+    ]) {
       expect(html).toContain(`aria-label="${label}"`)
     }
     const btns = [...html.matchAll(/<a class="popup-window-btn"[^>]*>/g)].map(m => m[0])
-    expect(btns).toHaveLength(4)
+    expect(btns).toHaveLength(6)
     for (const btn of btns) expect(btn, btn).toContain('aria-label=')
   })
 
   it('carries no second control on the href the first one already opens', () => {
-    // Only Stories has an archive of its own (/news.html vs /news-archive/).
-    // The journal hub and the research library ARE their archive, so the ≡
-    // beside their ↗ pointed at the very same page.
     const hrefs = windows(html).map(pane =>
       [...pane.matchAll(/<a class="popup-window-btn" href="([^"]+)"/g)].map(m => m[1]),
     )
-    expect(hrefs).toEqual([['/news.html', '/news-archive/'], ['/articles.html'], ['/research/']])
+    expect(hrefs).toEqual(SECTIONS.map(s => s.buttons))
   })
 })
-

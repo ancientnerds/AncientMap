@@ -528,14 +528,20 @@ body {
 
 /* ─── Tools Grid ─── */
 
+/* Five cards, three to a row, the short last row centred: flex, not a
+   three-column grid, so nothing leaves a hole on the right. (The sixth card,
+   "Search", went when the site-search portal arrived above — the same
+   feature twice on one page, owner 2026-09-11.) */
 .tools-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
   gap: 20px;
   margin-top: 40px;
 }
 
 .tool-card {
+  flex: 0 1 calc((100% - 40px) / 3);
   position: relative;
   padding: 20px;
   transition: border-color 0.3s, box-shadow 0.3s, transform 0.3s;
@@ -1071,8 +1077,8 @@ body {
     display: none;
   }
 
-  .tools-grid {
-    grid-template-columns: 1fr 1fr;
+  .tool-card {
+    flex-basis: calc((100% - 20px) / 2);
   }
 
   .landing-section {
@@ -1095,8 +1101,8 @@ body {
     gap: 20px;
   }
 
-  .tools-grid {
-    grid-template-columns: 1fr;
+  .tool-card {
+    flex-basis: 100%;
   }
 
 

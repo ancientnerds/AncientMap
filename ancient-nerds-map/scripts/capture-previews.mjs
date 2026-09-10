@@ -22,11 +22,17 @@ import { join, resolve } from 'node:path'
 
 import puppeteer from 'puppeteer'
 
-/** The three pages the landing portals point at, named after their poster. */
+/**
+ * The four pages the landing portals show, named after their poster. `ready`
+ * is what a page has to have painted before it is worth a screenshot: the
+ * search is empty until someone types or hits Random, so the portal opens it
+ * on `?random` (SearchPage.tsx) and the poster waits for the first card.
+ */
 const PAGES = [
   { name: 'news', path: '/news.html' },
   { name: 'articles', path: '/articles.html' },
   { name: 'research', path: '/research/' },
+  { name: 'search', path: '/search.html?random', ready: '.site-card' },
 ]
 
 /** The portal frame is laid out at 1280×800 — the poster has to match it. */
@@ -46,11 +52,12 @@ const browser = await puppeteer.launch({
 })
 
 try {
-  for (const { name, path } of PAGES) {
+  for (const { name, path, ready } of PAGES) {
     const page = await browser.newPage()
     await page.setViewport(VIEWPORT)
     const url = `${BASE}${path}`
     await page.goto(url, { waitUntil: 'networkidle2' })
+    if (ready) await page.waitForSelector(ready, { timeout: 60_000 })
     await new Promise(done => setTimeout(done, SETTLE_MS))
     // The consent bar is fixed to the bottom of every page and would sit in
     // every poster; a visitor dismisses it once, the screenshot cannot.

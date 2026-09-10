@@ -4,8 +4,9 @@
 # screenshots maybe better after all?" Phones and tablets now show a poster
 # instead of a live iframe (PagePortal.tsx), so the poster has to stay close to
 # the page it shows: this job runs after every successful CI run on main — i.e.
-# after every deploy, which is also what wipes the directory again
-# (`git clean -fd public/data/`) — and every six hours in between.
+# after every deploy — and every six hours in between. The directory is
+# gitignored, so the deploy's `git clean -fd` leaves it alone; a poster is only
+# ever missing until its very first capture.
 #
 # The images never enter the repository. They land straight in
 # /var/www/ancientnerds/public/data/previews/, which nginx serves under /data/

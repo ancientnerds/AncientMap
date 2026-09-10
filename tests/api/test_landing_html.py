@@ -23,6 +23,12 @@ _SHELL_MARKERS = (
     '<div data-stat="sites">1.7M+</div><span data-stat="sites-long">1.7 million</span>'
     '<div data-stat="countries">90+</div>'
 )
+# What get_site_stats() hands the route; by_source is the /api/stats map.
+_SITE_STATS = {
+    "total_sites": 1_759_673,
+    "by_source": {"ancient_nerds": 5004, "pleiades": 13780},
+    "curated_countries": 98,
+}
 
 
 def test_number_formats():
@@ -83,9 +89,23 @@ def test_home_route_hands_the_landing_payload_and_substitutes_hero_counts():
     )
     with (
         patch.object(landing_html, "fetch_landing_data", return_value=_landing_data()),
-        patch.object(landing_html, "get_site_stats", return_value={"total_sites": 1_759_673, "curated_countries": 98}),
-        patch.object(landing_html, "get_current_research", new=AsyncMock(return_value={"running": {"question": "Osiris", "started_at": "2026-09-09T06:00:00", "sites_found": 12}})),
-        patch("api.seo_shell.render_page", return_value=("<title>x</title>", "<p>live</p>")) as render,
+        patch.object(landing_html, "get_site_stats", return_value=_SITE_STATS),
+        patch.object(
+            landing_html,
+            "get_current_research",
+            new=AsyncMock(
+                return_value={
+                    "running": {
+                        "question": "Osiris",
+                        "started_at": "2026-09-09T06:00:00",
+                        "sites_found": 12,
+                    }
+                }
+            ),
+        ),
+        patch(
+            "api.seo_shell.render_page", return_value=("<title>x</title>", "<p>live</p>")
+        ) as render,
         patch("api.seo_shell.render_app_shell", return_value=shell),
     ):
         resp = asyncio.run(landing_html.home(db=object()))
@@ -98,7 +118,13 @@ def test_home_route_hands_the_landing_payload_and_substitutes_hero_counts():
 
     route = render.call_args[0][0]
     assert route["type"] == "landing"
-    assert route["stats"] == {"sites": 1_759_673, "stories": 3189, "journals": 23, "papers": 24}
+    assert route["stats"] == {
+        "sites": 1_759_673,
+        "sources": 2,
+        "stories": 3189,
+        "journals": 23,
+        "papers": 24,
+    }
     # Stories and journals are their portal and a count — the live page lists
     # itself, so no row of either ships any more.
     assert set(route) == {"type", "stats", "journals", "papers"}
@@ -117,10 +143,22 @@ def test_home_route_omits_sections_without_rows_and_serves_from_cache():
     data.update(paper_total=0, journal_total=0)
     with (
         patch.object(landing_html, "fetch_landing_data", return_value=data) as fetch,
-        patch.object(landing_html, "get_site_stats", return_value={"total_sites": 5, "curated_countries": 1}),
-        patch.object(landing_html, "get_current_research", new=AsyncMock(return_value={"running": None})),
+        patch.object(
+            landing_html,
+            "get_site_stats",
+            return_value={
+                "total_sites": 5,
+                "by_source": {"ancient_nerds": 5},
+                "curated_countries": 1,
+            },
+        ),
+        patch.object(
+            landing_html, "get_current_research", new=AsyncMock(return_value={"running": None})
+        ),
         patch("api.seo_shell.render_page", return_value=("<title>x</title>", "")) as render,
-        patch("api.seo_shell.render_app_shell", return_value=_SHELL_MARKERS + '<div id="root"></div>'),
+        patch(
+            "api.seo_shell.render_app_shell", return_value=_SHELL_MARKERS + '<div id="root"></div>'
+        ),
     ):
         asyncio.run(landing_html.home(db=object()))
         asyncio.run(landing_html.home(db=object()))
@@ -151,7 +189,7 @@ def test_home_stays_decodable_when_the_client_accepts_gzip():
         patch.object(
             landing_html,
             "get_site_stats",
-            return_value={"total_sites": 1_759_673, "curated_countries": 98},
+            return_value=_SITE_STATS,
         ),
         patch.object(
             landing_html, "get_current_research", new=AsyncMock(return_value={"running": None})

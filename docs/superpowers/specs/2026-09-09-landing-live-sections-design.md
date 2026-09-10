@@ -1,4 +1,4 @@
-# Landingpage: Live-Sektionen für Stories, Journals und Research Papers
+# Landingpage: Live-Sektionen für Stories, Journals, Research Papers und Site Search
 
 Datum: 2026-09-09 · Status: Entwurf zur Freigabe · Recherche: `docs/superpowers/research/2026-09-09-landing-page-research.md`
 
@@ -23,16 +23,23 @@ Entscheidungen aus dem Brainstorming (09.09.2026):
 
 1. Hero (Layout unverändert, H1 und Zahlen siehe 3.6)
 2. Intro-Absatz (statisch, siehe 3.6)
-3. `>_ [ fig. 1 — stories, live ]`
-4. `>_ [ fig. 2 — weekly journal ]`
-5. `>_ [ fig. 3 — research papers ]`
-6. Bestehende Sektionen in heutiger Reihenfolge: Globe, Filter, Empires (cinematic), Site data, Lyra,
+3. Vier Portal-Sektionen, ab 901 px als 2×2-Raster (Betreiber, 2026-09-11: „Stories und Journal auf
+   einer Zeile, Research und Sites auf der zweiten"), darunter eine Spalte in derselben Reihenfolge:
+   - `>_ [ fig. 1 — stories, live ]` auf `/news.html`
+   - `>_ [ fig. 2 — weekly journal ]` auf `/articles.html`
+   - `>_ [ fig. 3 — research papers ]` auf `/research/`
+   - `>_ [ fig. 4 — site search ]` auf `/search.html` (der Rahmen zeigt `/search.html?random`)
+4. Bestehende Sektionen in heutiger Reihenfolge: Globe, Filter, Empires (cinematic), Site data, Lyra,
    Radar, Tools, Sources, API, Founders, Discord, Giants, Browse (Länder-Hubs und Paper-Liste), Final CTA, Footer.
 
 Entfernt werden die Screenshot-Karte "Archaeology Stories" (Split-Row mit Radar) und die Sektion
 "Weekly Journals". Die Radar-Karte wird zur normalen Feature-Row in der Breite der anderen Sektionen.
-Die Paper-Liste in der Browse-Sektion bleibt: sie verlinkt alle 24 Papers für Suchmaschinen, die neue
-Sektion zeigt nur sechs.
+Die Browse-Listen (Länder-Hubs und Paper-Liste) bleiben: sie verlinken für Suchmaschinen jede
+Länder-Hub und jedes Paper, die Portale verlinken nur ihre Seite. Mit dem Site-Search-Portal
+(2026-09-11) fielen die Tool-Karte „Search" (dieselbe Funktion zweimal auf einer Seite; die fünf
+übrigen Karten stehen zentriert, `.tools-grid` ist Flex) und das im Filter-Streifen doppelt
+eingebundene `filter-source.webp`; die Globe-Sektion trägt ihre Zahl jetzt als `data-stat`-Span
+statt „Hundreds of thousands".
 
 ## 3. Architektur
 
@@ -92,7 +99,7 @@ für den ersten Paint keinen einzigen API-Aufruf.
 ```
 LandingRoute {
   type: 'landing'
-  stats:    { sites: number, stories: number, journals: number, papers: number }
+  stats:    { sites: number, sources: number, stories: number, journals: number, papers: number }
   journals: { total: number } | null
   papers:   { total: number, theo: TheoStatus | null } | null
 }
@@ -103,7 +110,7 @@ Seit 2026-09-10 trägt das Payload **keine Zeilen** mehr, weil es keine Listen m
 Sektion ist ein Portal auf die echte Seite, und die Seite darin IST ihre Liste. Seit 2026-09-11 gilt
 das auch für die Paper-Karten (Betreiber: "The research paper examples should be inside the portal,
 not below it") — sie stehen auf `/research/`, und das dritte Portal zeigt genau diese Seite. Übrig
-bleiben drei Zähler und die Theo-Zeile. Ein Feld, das keine Komponente liest, gehört nicht ins
+bleiben die Zähler und die Theo-Zeile. Ein Feld, das keine Komponente liest, gehört nicht ins
 Payload; die Schlüssel sind auf beiden Seiten festgenagelt (`tests/api/test_landing_html.py`,
 `landingLive.test.tsx`).
 
@@ -121,6 +128,8 @@ Regeln:
   Portal zeigt sie; die Sechs-Zeilen-Abfrage und `paper_teaser()` sind mit der Galerie verschwunden.
   `theo` kommt aus derselben Abfrage, die `/api/theo/research/current` benutzt (laufender
   Batch-Request: Frage, Startzeit, gefundene Sites); die Funktion wird importiert, nicht kopiert.
+- **Sites.** Nur `stats.sites` und `stats.sources` (`len(by_source)` aus derselben gecachten
+  `get_site_stats()`); Statuszeile "{n} sites · {m} sources". Immer da, wie Stories.
 - **Stats.** `sites` aus der gecachten `/api/stats`-Logik, `stories` und `journals` aus
   `get_news_stats`, `papers` per Count unter `PUBLIC_PAPER_WHERE`.
 
@@ -134,10 +143,11 @@ der den aktuellen Stand zeigt." Beides: ein echter Screenshot als Grundschicht, 
 darauf — aber nur dort, wo sie sich lohnt.
 
 - Jede Sektion ist ein **NERV-Fenster mit einem Portal darin** (`src/landing/PagePortal.tsx`): das
-  Poster der echten Seite — `/news.html`, `/articles.html`, `/research/` — über die volle Breite
+  Poster der echten Seite — `/news.html`, `/articles.html`, `/research/`, `/search.html` — über die volle Breite
   des Fensterkörpers, auf dem Desktop ein `<iframe>` derselben Seite darüber. Titelleiste `>_ portal — {Pfad}`, rechts die Fensterknöpfe aus
   `nerv-ui/window.css`: ↗ öffnet die Seite, ≡ das Archiv — und ≡ gibt es nur, wo das Archiv eine
-  andere Seite ist (Stories: `/news.html` vs. `/news-archive/`). Der Journal-Hub und die
+  andere Seite ist (Stories: `/news.html` vs. `/news-archive/`, Sites: `/search.html` vs.
+  `/sites/`). Der Journal-Hub und die
   Forschungsbibliothek SIND ihr Archiv, dort steht nur ↗.
 - **Die Liste daneben ist weg** (Betreiber, 2026-09-10: "Warum haben wir rechts immer noch die Liste
   der Stories, Journals und Research Papers?"). Sie sagte dasselbe wie die Seite im Rahmen. Mit ihr
@@ -167,6 +177,14 @@ darauf — aber nur dort, wo sie sich lohnt.
   läuft. Telefone und Tablets sehen nur das Poster: kein zweiter Seitenaufruf, kein Nachladen, nichts
   das flackern kann. Wo der Rahmen kommt, liegt er über dem Poster (`z-index: 1`, der Overlay-Link
   rückt auf `2`) und ersetzt es optisch.
+- **Eine Sektion, eine Komponente.** `src/landing/PortalSection.tsx` ist die Form aller vier
+  Sektionen (Label, Fenster, Portal, Fußzeile); `LandingLive.tsx` listet die vier als Daten, die
+  Theo-Zeile (`TheoLine.tsx`) kommt als Kind unter das Papers-Fenster. Eine Sektion zeigt auf EINE
+  Seite (`page`): Fenstertitel, ↗, Rahmenquelle, CTA und Fußzeilen-Link kommen aus demselben Prop.
+  Nur die Suche hat eine eigene Ansicht (`view`): Rahmen und Poster zeigen `/search.html?random`,
+  weil eine leere Suchleiste nichts zeigt — `SearchPage.tsx` würfelt mit `?random` einmal beim
+  Laden dieselbe Zufallsauswahl wie der Random-Knopf; jeder Link führt auf `/search.html` ohne
+  Parameter.
 - **Der Server rendert nie ein iframe.** SSR und der erste Client-Render liefern denselben Baum:
   den Container `.ll-portal[data-src]`, das Poster und den Overlay-Link mit seinem CTA. Damit stimmen
   Server- und Client-Baum überein, und ein Crawler bekommt ein Bild und einen Link statt eines
@@ -174,7 +192,7 @@ darauf — aber nur dort, wo sie sich lohnt.
 - Der Rahmen erscheint erst **nach dem Mount**. Ausgenommen bleibt neben der Medienabfrage
   `navigator.connection.saveData`: eine ganze zweite Seite ist genau das, worum dieser Header bittet,
   sie nicht zu laden. Geladen wird erst, wenn das Fenster in Sichtweite scrollt
-  (`IntersectionObserver`, `rootMargin: 200px`), damit drei Portale nicht drei Seitenaufrufe auf
+  (`IntersectionObserver`, `rootMargin: 200px`), damit vier Portale nicht vier Seitenaufrufe auf
   einer Startseite kosten, die niemand gescrollt hat. Bis dahin ist die Box das Poster mit dem CTA.
 - **Maßstab:** das iframe liegt 1280 CSS-Pixel breit und wird per `transform: scale()` auf die
   Fensterbreite gebracht; ein `ResizeObserver` auf dem Container schreibt `width / 1280` in
@@ -209,7 +227,12 @@ kommen in den Live-Sektionen und im Intro-Absatz nicht mehr vor. Einzige Ausnahm
 Sektionslabel im Muster `>_ [ fig. 1 — stories, live ]`, rechts daneben der Status. Bausteine,
 umgesetzt in `src/styles/landing-live.css`:
 
-- Fenster (alle drei): Panel-Look wie `.empire-borders-window` (`--surface-raised`, Blur,
+- Raster: `.landing-live` ist ein Grid, eine Spalte, ab 901 px zwei (`gap: 48px 24px`); die
+  Sektionen haben keine Trennlinien mehr und `min-width: 0`, damit der Fenstertitel seine Ellipse
+  behält. 900 px ist der Bruchpunkt der Seite (`.feature-row`) und des Rahmens (`PagePortal`), die
+  Zellen halbieren sich also genau dort, wo der Live-Rahmen dazukommt. Fußzeile und Theo-Zeile
+  brechen um (`flex-wrap`), weil eine halbe Spalte für eine Reihe zu schmal ist.
+- Fenster (alle vier): Panel-Look wie `.empire-borders-window` (`--surface-raised`, Blur,
   `--border-accent`, 4 px Radius, `--nerv-panel-shadow`), 36 px hohe Titelleiste in
   `rgba(0,15,20,.95)`, Titel mit Ellipse, Körper eine Spalte mit 12 px Polster. Der Rahmen ist EINE
   Komponente, `src/landing/LandingWindow.tsx`; die Sektionen liefern nur Titel, die
@@ -223,7 +246,8 @@ umgesetzt in `src/styles/landing-live.css`:
   318-px-Box auf einem 390-px-Telefon passt und der Knopf vor der Seite dahinter lesbar bleibt. Die
   beiden Farbregeln stehen als `.ll-portal .ll-portal-cta`: die Shell lädt `landing.css` NACH
   `landing-live.css`, bei gleicher Spezifität hätte also `.cta-primary` gewonnen.
-- Fenstertitel: `>_ portal — /news.html`, `>_ portal — /articles.html`, `>_ portal — /research/`.
+- Fenstertitel: `>_ portal — /news.html`, `>_ portal — /articles.html`, `>_ portal — /research/`,
+  `>_ portal — /search.html`.
 - Paper-Karten: `.theo-public-grid` mit `src/components/theo/PaperCard.tsx` und den Regeln aus
   `src/styles/paper-card.css` — aber auf `/research/` (`ResearchIndexPage`), nicht auf der
   Startseite. Betreiber, 2026-09-11: "The research paper examples should be inside the portal, not
@@ -288,7 +312,7 @@ analysierte Quellen je Paper). Im statischen Rückfall bleiben Absatz und H1 mit
 ## 5. Tests
 
 - **vitest:** `landingMeta` liefert Titel und Description mit der formatierten Site-Zahl;
-  `renderToString(<LandingLive/>)` mit dem Fixture-Payload liefert drei Fenster mit je einem
+  `renderToString(<LandingLive/>)` mit dem Fixture-Payload liefert vier Fenster mit je einem
   `.ll-portal[data-src]`, genau einem `img.ll-portal-poster` auf dem Poster der eigenen Seite und
   genau einem `.ll-portal-link` mit `.cta-primary`, kein `<iframe`, keine Listen- und keine
   Kartenklasse mehr, kein `h1`, kein "undefined"/"null", und keine
@@ -300,10 +324,10 @@ analysierte Quellen je Paper). Im statischen Rückfall bleiben Absatz und H1 mit
   Inhalt weg, antwortet aus dem Cache und bleibt unter gzip dekodierbar.
 - **Build-Gate:** `size-limit` auf `dist/assets/landing-*.js` und `LandingLive-*.js` mit 40 kB
   Brotli im `lint-frontend`-Job, gleich nach `npm run build`.
-- **Nach dem Deploy (Playwright):** `/` liefert SSR-HTML mit drei Portalen und ohne eine einzige
+- **Nach dem Deploy (Playwright):** `/` liefert SSR-HTML mit vier Portalen und ohne eine einzige
   Paper-Karte darunter, `/research/` mit einer Karte je Paper, null Hydration-Fehler in der Konsole, LCP-Element ist das Hero-Bild, genau eine H1 mit dem
-  Suchbegriff, kein "750K" mehr im Dokument; drei Poster aus `/data/previews/` laden mit 200, nach
-  dem Scrollen stehen auf dem Desktop drei iframes im DOM und auf 390 px Breite keins, ein
+  Suchbegriff, kein "750K" mehr im Dokument; vier Poster aus `/data/previews/` laden mit 200, nach
+  dem Scrollen stehen auf dem Desktop vier iframes im DOM und auf 390 px Breite keins, ein
   Wheel-Event über einem Portal scrollt die Seite und nicht den Rahmen, und auf 390 px Breite gibt
   es keinen horizontalen Überlauf. Crawler-Sicht mit JS-Blockade prüfen (Lehre aus den 2.100
   Soft-404-Seiten).
@@ -313,14 +337,15 @@ analysierte Quellen je Paper). Im statischen Rückfall bleiben Absatz und H1 mit
 - `ancientnerds-nginx-config`: `location = /` und der neue `@home_static`-Block. Der Deploy wendet
   die Datei automatisch an (`nginx -t` und reload), aber Konfigurationsänderungen brauchen deine
   Freigabe vor dem Push.
-- **Die Portal-Poster** (`/data/previews/{news,articles,research}.jpg`) liegen nicht im Repo. Sie
+- **Die Portal-Poster** (`/data/previews/{news,articles,research,search}.jpg`) liegen nicht im Repo. Sie
   entstehen im Workflow `.github/workflows/previews.yml`:
   - `ancient-nerds-map/scripts/capture-previews.mjs` öffnet mit Puppeteer `/news.html`,
-    `/articles.html` und `/research/` auf `PREVIEW_BASE_URL` (Vorgabe `https://ancientnerds.com`)
+    `/articles.html`, `/research/` und `/search.html?random` (wartet auf die erste `.site-card`) auf
+    `PREVIEW_BASE_URL` (Vorgabe `https://ancientnerds.com`)
     bei 1280×800, wartet auf `networkidle2` plus 1500 ms, entfernt `#cookie-notice` und schreibt je
     ein JPEG (Qualität 82) nach `PREVIEW_OUT_DIR` (Vorgabe `previews-out`). Lokal: `npm run previews`.
-  - Takt: nach **jedem grünen CI-Lauf auf `main`** (`workflow_run`, also nach jedem Deploy — der
-    löscht mit `git clean -fd public/data/` genau dieses Verzeichnis wieder) und **alle sechs
+  - Takt: nach **jedem grünen CI-Lauf auf `main`** (`workflow_run`, also nach jedem Deploy; das Verzeichnis ist gitignored und überlebt dessen
+    `git clean -fd`, die Poster fehlen also nur bis zum allerersten Lauf) und **alle sechs
     Stunden** (`cron: '23 */6 * * *'`), dazu `workflow_dispatch`. `concurrency: page-previews` ohne
     `cancel-in-progress`, damit sich Deploy-Lauf und Zeitplan nicht ins Gehege kommen.
   - Ziel: `scp` nach `/var/www/ancientnerds/public/data/previews/`. nginx liefert das über den

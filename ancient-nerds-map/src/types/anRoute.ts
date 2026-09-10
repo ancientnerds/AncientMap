@@ -223,7 +223,7 @@ export interface ArticleIndexRoute {
  * should be inside the portal, not below it") — ResearchIndexRoute carries
  * them. What is left to ship is a count per section and the agent line.
  */
-interface TheoStatus {
+export interface TheoStatus {
   question: string
   started_at: string | null
   sites_found: number
@@ -231,7 +231,8 @@ interface TheoStatus {
 
 export interface LandingRoute {
   type: 'landing'
-  stats: { sites: number; stories: number; journals: number; papers: number }
+  /** sources = distinct source ids in unified_sites, the by_source keys of /api/stats. */
+  stats: { sites: number; sources: number; stories: number; journals: number; papers: number }
   /** null when there is no issue at all — the section is then not rendered. */
   journals: { total: number } | null
   /** null when no paper is public — the section is then not rendered. */

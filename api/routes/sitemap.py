@@ -134,7 +134,7 @@ _HOMEPAGE_URL = f"""  <url>
     <image:image>
       <image:loc>{BASE_URL}/landing/og-image.png</image:loc>
       <image:title>Ancient Nerds Interactive Archaeological Research Platform</image:title>
-      <image:caption>Explore over 750,000 archaeological sites worldwide on an interactive 3D globe</image:caption>
+      <image:caption>Explore over 1.7 million archaeological sites worldwide on an interactive 3D globe</image:caption>
     </image:image>
   </url>"""
 

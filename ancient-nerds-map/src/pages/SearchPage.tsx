@@ -210,6 +210,16 @@ export default function SearchPage() {
     doShuffle(sites)
   }, [sites, search, searchAllSources, isLoading, doShuffle, fetchApiRandom])
 
+  // /search.html?random — the homepage portal (LandingLive.tsx) opens the page
+  // on a random draw, because an empty search bar is a view of nothing. The
+  // same draw as the Random button, once the sites are in; once only.
+  const wantsRandom = useRef(new URLSearchParams(window.location.search).has('random'))
+  useEffect(() => {
+    if (isLoading || !wantsRandom.current) return
+    wantsRandom.current = false
+    doShuffle(sites)
+  }, [isLoading, sites, doShuffle])
+
   const handleLoadMoreRandom = useCallback(() => {
     const next = randomVisible + 50
     setRandomSites(randomPoolRef.current.slice(0, next))

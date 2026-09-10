@@ -1,6 +1,6 @@
 @import './nerv-ui/window.css';
 
-/* Landing live sections (Stories / Journal / Papers).
+/* Landing live sections (Stories / Journal / Papers / Sites).
 
    ONE palette, the NERV one (owner feedback 2026-09-10: "the text below the
    globe has weird colours. Why aren't we using unified colours? NERV
@@ -11,9 +11,27 @@
    link is --accent-primary, every call to action wears .cta-primary from
    landing.css, which is red. The one deliberate exception is NERV orange on
    the Theo line, the colour of a running agent. */
-.landing-live { max-width: 1200px; margin: 0 auto; padding: 0 24px; font-family: var(--font-body); color: var(--nerv-steel); }
-.ll-section { padding: 56px 0 24px; border-top: 1px solid var(--border-accent); }
-.ll-section:first-child { border-top: 0; }
+/* Four sections two by two from 901 px up — Stories and Journal on the first
+   row, Papers and Sites on the second (owner, 2026-09-11) — and one column
+   below, in the same document order. 900 px is the page's own breakpoint
+   (.feature-row in landing.css) and the frame's (PagePortal.tsx), so the
+   cells halve exactly where the live frame appears. */
+.landing-live {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 48px 24px 24px;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 48px 24px;
+  font-family: var(--font-body);
+  color: var(--nerv-steel);
+}
+@media (min-width: 901px) {
+  .landing-live { grid-template-columns: 1fr 1fr; }
+}
+/* A grid cell will not shrink below its content by default; the window
+   title's ellipsis needs it to. */
+.ll-section { min-width: 0; }
 
 .ll-head { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; margin-bottom: 12px; flex-wrap: wrap; }
 .ll-fig { margin: 0; font-size: 14px; font-weight: 600; letter-spacing: 0.04em; color: var(--accent-primary); }
@@ -158,13 +176,13 @@
 
 /* The one deliberate exception to the green: NERV orange marks the live
    agent line, the role it already has on panel headers. */
-.ll-theo { display: flex; justify-content: space-between; gap: 12px; margin-top: 12px; padding: 8px 12px; font-size: 12px; color: var(--nerv-o); border: 1px dashed var(--nerv-og); text-decoration: none; }
+.ll-theo { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; margin-top: 12px; padding: 8px 12px; font-size: 12px; color: var(--nerv-o); border: 1px dashed var(--nerv-og); text-decoration: none; }
 .ll-theo b { color: var(--text-heading); }
 .ll-pulse { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--nerv-o); box-shadow: 0 0 6px var(--nerv-o); margin-right: 6px; }
 @media (prefers-reduced-motion: no-preference) { .ll-pulse { animation: ll-pulse 1.6s infinite; } }
 @keyframes ll-pulse { 50% { opacity: 0.35; } }
 
-.ll-foot { display: flex; justify-content: space-between; gap: 12px; margin-top: 12px; font-size: 12px; color: var(--nerv-steel-dim); }
+.ll-foot { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; margin-top: 12px; font-size: 12px; color: var(--nerv-steel-dim); }
 .ll-foot a { color: var(--accent-primary); text-decoration: none; white-space: nowrap; }
 .ll-foot a:hover { text-decoration: underline; }
 
