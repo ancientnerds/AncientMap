@@ -166,9 +166,28 @@ export interface ResearchRoute {
   body_html: string
 }
 
+/**
+ * The research library listing. Since 2026-09-10 it renders Theo's image
+ * cards (owner: "the research library should have the cards, not plain
+ * headings"), so every paper carries what a card prints — hero, blurb and
+ * the parts of its footer line — as raw paper_summary_kwargs fields.
+ */
 export interface ResearchIndexRoute {
   type: 'researchIndex'
-  papers: { slug: string; title: string; summary: string | null }[]
+  papers: {
+    slug: string
+    title: string
+    /** card_description — the blurb under the hero. Null when the paper has none. */
+    summary: string | null
+    /** Hero banner. Null when the paper has none: the card shows the vignette alone. */
+    hero_image_url: string | null
+    /** published_by; null means the Theo pipeline itself. */
+    author: string | null
+    /** Raw ISO timestamp; date display is a TS decision. */
+    published_at: string | null
+    sources_analyzed: number
+    word_count: number | null
+  }[]
 }
 
 /**

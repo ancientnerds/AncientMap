@@ -96,3 +96,30 @@ export function periodDisplay(
   if (site.period_end === null) return yearDisplay(site.period_start)
   return `${yearDisplay(site.period_start)} – ${yearDisplay(site.period_end)}`
 }
+
+/**
+ * Die Fußzeile einer Paper-Karte: "by {Autor} · {Datum} · {n} sources ·
+ * {n} words" — die Zeile, die die Forschungsbibliothek unter jeder Karte
+ * druckt (PaperCard.tsx trägt nur den Kasten, der Text ist Anzeige und
+ * lebt deshalb hier).
+ *
+ * `published_at` und `words` sind nullbar; die Zeile entsteht aus den
+ * Teilen, die es gibt, damit nie ein Trenner ins Leere zeigt. Fehlt
+ * `published_by`, hat Theo selbst publiziert — dieser Default ist eine
+ * Anzeigeentscheidung und steht bewusst nicht im Payload.
+ */
+export function paperCardFooter(paper: {
+  author: string | null
+  published_at: string | null
+  sources_analyzed: number
+  words: number | null
+}): string {
+  return [
+    `by ${paper.author ?? 'Theo'}`,
+    paper.published_at && shortDate(paper.published_at),
+    `${paper.sources_analyzed.toLocaleString('en-US')} sources`,
+    paper.words != null && `${paper.words.toLocaleString('en-US')} words`,
+  ]
+    .filter(Boolean)
+    .join(' · ')
+}

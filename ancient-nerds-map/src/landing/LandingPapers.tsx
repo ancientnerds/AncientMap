@@ -12,7 +12,7 @@
  * part of any one paper.
  */
 import PaperCard from '../components/theo/PaperCard'
-import { shortDate } from '../seo/display'
+import { paperCardFooter } from '../seo/display'
 import type { LandingRoute } from '../types/anRoute'
 import LandingWindow from './LandingWindow'
 import PagePortal from './PagePortal'
@@ -51,16 +51,7 @@ export default function LandingPapers({ data }: Props) {
             key={p.slug}
             href={p.path}
             paper={{ title: p.title, cover: p.hero_image_url, description: p.summary }}
-            // published_at and words are nullable — the line is joined from
-            // the parts that exist so no separator dangles.
-            footer={[
-              `by ${p.author ?? 'Theo'}`,
-              p.published_at && shortDate(p.published_at),
-              `${p.sources_analyzed.toLocaleString('en-US')} sources`,
-              p.words != null && `${p.words.toLocaleString('en-US')} words`,
-            ]
-              .filter(Boolean)
-              .join(' · ')}
+            footer={paperCardFooter(p)}
           />
         ))}
       </div>

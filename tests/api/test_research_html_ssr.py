@@ -70,6 +70,9 @@ def test_research_index_hands_the_paper_list():
     assert resp.status_code == 200
     assert shell_mock.call_args[0][0] == "research.html"
     route = render_mock.call_args[0][0]
+    # Genau die Felder, die eine Karte druckt (PaperCard plus ihre Fußzeile) —
+    # kein Feld mehr, keins weniger. quality_score, license und die Frage des
+    # Papers gehören der Detailseite und /api/v1/research.
     assert route == {
         "type": "researchIndex",
         "papers": [
@@ -77,6 +80,11 @@ def test_research_index_hands_the_paper_list():
                 "slug": "obsidian-trade-networks-anatolia",
                 "title": "Obsidian Trade Networks in Neolithic Anatolia",
                 "summary": "Two exchange spheres centred on Cappadocia and Lake Van.",
+                "hero_image_url": "https://ancientnerds.com/data/research/obsidian/hero.webp",
+                "author": "Theo",
+                "published_at": "2026-07-02T04:15:00",
+                "sources_analyzed": 12,
+                "word_count": 4200,
             }
         ],
     }

@@ -7,7 +7,7 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { coordDisplay, longDate, periodDisplay, shortDate } from '../display'
+import { coordDisplay, longDate, paperCardFooter, periodDisplay, shortDate } from '../display'
 
 describe('coordDisplay', () => {
   it('formatiert Nord/Ost mit vier Nachkommastellen', () => {
@@ -96,5 +96,28 @@ describe('shortDate', () => {
   it('wirft bei allem, was kein ISO-Datum ist — der Payload garantiert eines', () => {
     expect(() => shortDate('circa 1400 BC')).toThrow('not an ISO date')
     expect(() => shortDate('2026-13-01')).toThrow('not an ISO date')
+  })
+})
+
+describe('paperCardFooter', () => {
+  const full = {
+    author: 'theo',
+    published_at: '2026-08-31T22:07:06',
+    sources_analyzed: 2748,
+    words: 6466,
+  }
+
+  it('setzt die Fußzeile aus Autor, Datum, Quellen und Wörtern zusammen', () => {
+    expect(paperCardFooter(full)).toBe('by theo · Aug 31 · 2,748 sources · 6,466 words')
+  })
+
+  it('ohne published_by schreibt Theo selbst — der Default lebt in der Anzeige', () => {
+    expect(paperCardFooter({ ...full, author: null })).toContain('by Theo')
+  })
+
+  it('lässt fehlende Teile weg, ohne dass ein Trenner hängen bleibt', () => {
+    expect(paperCardFooter({ ...full, published_at: null, words: null })).toBe(
+      'by theo · 2,748 sources',
+    )
   })
 })

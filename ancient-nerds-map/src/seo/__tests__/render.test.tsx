@@ -87,20 +87,48 @@ describe('research-Seiten (Task 12): der SSR-Body trägt den Python-Fragment-Inh
 
 describe('researchIndex (Task 12): echte Listenseite statt Redirect', () => {
   const html = renderRoute(FIXTURES.researchIndex)
+  const PAPERS = FIXTURES.researchIndex.papers
 
   it('genau ein h1: Research Library', () => {
     expect(html.match(/<h1/g)).toHaveLength(1)
     expect(html).toContain('Research Library')
   })
 
-  it('eine Karte pro Paper, mit Link und Summary-Blurb', () => {
-    expect(html).toContain('href="/research/obsidian-trade-networks-anatolia"')
-    expect(html).toContain('href="/research/gobekli-tepe-water-management"')
-    expect(html).toContain('Water Management at Göbekli Tepe')
-    expect(html).toContain('Cistern volumes suggest')
+  // Seit 2026-09-10 sind die Karten Theos Bildkarten (Betreiber: "the
+  // research library should have the cards, not plain headings") — dieselbe
+  // Komponente, die /theo.html rendert, in ihrem eigenen Grid.
+  it('eine theo-public-card je Paper, jede ein <a> auf ihre Paperseite', () => {
+    expect(html).toContain('class="theo-public-grid"')
+    const cards = [...html.matchAll(/<a class="theo-public-card" href="([^"]+)">/g)]
+    expect(cards.map(m => m[1])).toEqual(PAPERS.map(p => `/research/${p.slug}`))
+    for (const p of PAPERS) expect(html).toContain(`>${p.title}</div>`)
   })
 
-  it('Art.-50-Banner und CommunityCta', () => {
+  it('Hero-Bild nur für Papers, die eins haben — nie <img src="">', () => {
+    const imgs = [...html.matchAll(/<img src="([^"]*)" alt="" class="theo-public-card-img"[^>]*>/g)]
+    expect(imgs.map(m => m[1])).toEqual(
+      PAPERS.filter(p => p.hero_image_url).map(p => p.hero_image_url),
+    )
+    for (const img of imgs) expect(img[1]).not.toBe('')
+  })
+
+  it('Blurb und Fußzeile aus den vorhandenen Teilen', () => {
+    const descs = [...html.matchAll(/<p class="theo-public-card-desc">(.*?)<\/p>/g)].map(m => m[1])
+    expect(descs).toEqual([
+      'Sourcing analyses of 1,200 obsidian artefacts reveal two distinct exchange spheres centred on the Cappadocian and Lake Van sources.',
+      'Cistern volumes suggest the enclosures hosted gatherings of several hundred people.',
+    ])
+    const footers = [...html.matchAll(/<div class="theo-public-card-footer">(.*?)<\/div>/g)].map(
+      m => m[1],
+    )
+    expect(footers).toEqual([
+      'by Theo · Jul 2 · 1,204 sources · 5,300 words',
+      'by Dr. Jane Doe · 318 sources',
+    ])
+  })
+
+  it('Zähler, Art.-50-Banner und CommunityCta', () => {
+    expect(html).toContain('open-access papers · CC BY 4.0')
     expect(html).toContain('data-ai-generated="true"')
     expect(html).toContain('Keep exploring')
   })

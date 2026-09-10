@@ -57,14 +57,28 @@ async def research_listing(db: Session = Depends(get_db)):
 
     # Since react-ssr Task 12 the sidecar renders head and body from this
     # payload (researchIndexMeta + ResearchIndexPage); Python only fetches
-    # data. The cards need slug, title and summary — nothing more.
+    # data. The listing shows Theo's image cards (PaperCard.tsx) since
+    # 2026-09-10, so the payload carries what such a card prints: the hero,
+    # the blurb and the footer line "by {author} · {date} · {n} sources ·
+    # {n} words". Nothing else — quality_score, license and the paper's own
+    # question belong to the detail page and /api/v1/research.
     papers = [paper_summary_kwargs(row) for row in rows]
     return ssr_shell_response(
         "research.html",
         {
             "type": "researchIndex",
             "papers": [
-                {"slug": p["slug"], "title": p["title"], "summary": p["summary"]} for p in papers
+                {
+                    "slug": p["slug"],
+                    "title": p["title"],
+                    "summary": p["summary"],
+                    "hero_image_url": p["hero_image_url"],
+                    "author": p["author"],
+                    "published_at": p["published_at"],
+                    "sources_analyzed": p["sources_analyzed"],
+                    "word_count": p["word_count"],
+                }
+                for p in papers
             ],
         },
         _HTML_HEADERS,
