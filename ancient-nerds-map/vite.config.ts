@@ -84,10 +84,17 @@ function landingHubs(): Plugin {
   }
 }
 
-// Post-build: make landing page CSS non-render-blocking (critical CSS is inlined in <style>)
-function asyncLandingCss() {
+// Post-build tuning of the HTML entries. On every page: registerSW deferred.
+// On the landing page only: CSS non-render-blocking (the critical CSS is
+// inlined in <style>), and no service-worker INSTALL — the precache is the
+// whole app (139 files, 5.8 MB), which a first visit to the homepage has no
+// business downloading on a phone (owner, 2026-09-10: "The landing page must
+// load super fast — and mobile first!"). The app pages register it; the
+// homepage only asks an already installed worker to update itself, so a
+// visitor with an old worker still gets the one that lets "/" through.
+function tuneLandingHtml() {
   return {
-    name: 'async-landing-css',
+    name: 'tune-landing-html',
     enforce: 'post' as const,
     transformIndexHtml: {
       order: 'post' as const,
@@ -98,6 +105,10 @@ function asyncLandingCss() {
           '<script id="vite-plugin-pwa:register-sw" src="/registerSW.js" defer>'
         )
         if (!ctx.filename.endsWith('index.html')) return html
+        html = html.replace(
+          '<script id="vite-plugin-pwa:register-sw" src="/registerSW.js" defer></script>',
+          '<script>if("serviceWorker" in navigator)addEventListener("load",function(){navigator.serviceWorker.getRegistration().then(function(r){if(r)r.update()})})</script>'
+        )
         // Make landing CSS non-render-blocking (critical CSS is inlined)
         html = html.replace(
           /<link\b([^>]*)href="(\/assets\/landing-[^"]+\.css)"([^>]*)>/g,
@@ -331,6 +342,6 @@ export default defineConfig(({ isSsrBuild }) => ({
         ]
       }
     }),
-    asyncLandingCss(),
+    tuneLandingHtml(),
   ],
 }))

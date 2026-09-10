@@ -74,22 +74,24 @@ Warum nicht Build-Zeit-Snapshot plus Client-Refresh: die Karten wären so frisch
 und der Austausch nach dem Laden erzeugt einen sichtbaren Sprung. Warum nicht die App als Startseite:
 2,5 MB JavaScript und ein 87-MB-Index haben auf einer Startseite nichts verloren.
 
-### 3.2 Client: eine Insel, keine Ganzseiten-Hydration
+### 3.2 Client: kein React auf der Startseite
 
-- Neuer Vite-Entry `src/landingMain.tsx`, eingebunden in `index.html`. Er liest `readInjectedRoute()`,
-  hydratisiert `#root` mit `SeoRoute` und ist damit das Gegenstück zu `siteMain.tsx`. Ohne Payload
-  (statischer Rückfall) rendert er nichts und wirft nicht.
+- Die Startseite lädt **kein React**. Der Vite-Entry `src/landingMain.tsx`, der `#root` hydratisierte,
+  ist seit 2026-09-10 weg (Betreiber: „Die Landingpage muss super schnell laden — und mobile first!"):
+  nach dem Poster-Umbau (3.4) gab es nichts mehr zu hydratisieren, und `client-*.js` (react-dom,
+  ~46 kB gzip) plus Hydration waren der ganze Preis. Die Theo-Zeile zeigt das absolute Datum
+  („Sep 9"), nicht „1d ago".
 - Registry: `landing: { Component: LandingLive, meta: meta.landingMeta }` in `src/seo/registry.tsx`,
-  `LandingRoute` in `src/types/anRoute.ts`.
-- Es hydratisiert nur `#root`. Hero und Screenshot-Sektionen bleiben reines HTML ohne React.
-- Budget für das seitenspezifische JS (`landing-*.js` + `LandingLive-*.js`): 40 kB Brotli, gemessen
-  per `size-limit`; react-dom ist ein geteilter Chunk und zählt nicht mit (Stand 11.09.: 2,13 kB,
-  nachdem die Listen, ihr Feed-Client und die Paper-Galerie weg sind). Nichts aus `three`, nichts
-  aus `SitePopup`, kein `NewsCard` (447 Zeilen, Inline-Video, Share-Logik: zu schwer für eine
-  Vorschau), und seit dem Wegfall der Galerie auch kein `PaperCard` — den Chunk lädt jetzt
-  `/research/`, also zählt ihn das Startseiten-Budget nicht mehr mit.
-- LCP bleibt Logo und Hero-Poster. `#root` reserviert seine Höhe nicht, weil der Inhalt serverseitig
-  vollständig ankommt; Bilder tragen `width`/`height` und `aspect-ratio`, damit nichts springt.
+  `LandingRoute` in `src/types/anRoute.ts` — für den Sidecar, der die Sektionen serverseitig rendert.
+- Hero und Screenshot-Sektionen bleiben reines HTML; die einzigen Skripte sind die Inline-Skripte
+  der Seite (Curtain, Video, Animationen, Cookie-Hinweis) und das Disclaimer-Modul (`landing-*.js`,
+  ~7 kB gzip). Budget per `size-limit`: 12 kB Brotli.
+- **Kein Service-Worker-Install von der Startseite.** Der Precache ist die ganze App (139 Dateien,
+  5,8 MB); ein Erstbesuch der Startseite auf dem Telefon soll das nicht im Hintergrund laden. Der
+  Post-Build-Schritt `tuneLandingHtml()` in `vite.config.ts` ersetzt in `dist/index.html` das
+  injizierte `registerSW.js` durch einen Einzeiler, der einen bereits installierten Worker nur
+  aktualisiert (`getRegistration().then(r => r.update())`) — damit ein alter Worker die Denylist für
+  `/` nachlädt. Die App-Seiten registrieren den Worker wie bisher.
 
 ### 3.3 Daten: das Route-Payload
 
@@ -302,7 +304,7 @@ analysierte Quellen je Paper). Im statischen Rückfall bleiben Absatz und H1 mit
 - **pytest (DB-los):** `research_listing()` übergibt genau die acht Kartenfelder je Paper; die
   Landing-Route liefert `{type, stats, journals, papers}` und nichts sonst, lässt Sektionen ohne
   Inhalt weg, antwortet aus dem Cache und bleibt unter gzip dekodierbar.
-- **Build-Gate:** `size-limit` auf `dist/assets/landing-*.js` und `LandingLive-*.js` mit 40 kB
+- **Build-Gate:** `size-limit` auf `dist/assets/landing-*.js` mit 12 kB
   Brotli im `lint-frontend`-Job, gleich nach `npm run build`.
 - **Nach dem Deploy (Playwright):** `/` liefert SSR-HTML mit vier Portalen und ohne eine einzige
   Paper-Karte darunter, `/research/` mit einer Karte je Paper, null Hydration-Fehler in der Konsole, LCP-Element ist das Hero-Bild, genau eine H1 mit dem

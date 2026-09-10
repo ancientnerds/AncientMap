@@ -3,6 +3,10 @@
 @import './nerv-ui/input.css';
 @import './nerv-ui/slider.css';
 @import './disclaimer.css';
+/* The four portal sections in #root. Linked from here, not from the
+   LandingLive component: the homepage ships no JS entry that could carry
+   the component's CSS, so the page's own stylesheet has to. */
+@import './landing-live.css';
 
 /* ANCIENT NERDS - Landing Page Styles */
 

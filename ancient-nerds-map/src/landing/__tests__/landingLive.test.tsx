@@ -1,8 +1,8 @@
 /**
  * The landing sections render under Node without browser APIs — exactly
- * what the SSR sidecar does. Effects (relative time) do not run in
- * renderToString, so the server output carries absolute dates; the portals
- * have no effect at all, so the server output IS the page.
+ * what the SSR sidecar does. The homepage ships no React to the browser
+ * (no landingMain entry since 2026-09-10), so the server output IS the
+ * page: absolute dates, no effect, nothing left for a client to do.
  */
 import { renderToString } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'

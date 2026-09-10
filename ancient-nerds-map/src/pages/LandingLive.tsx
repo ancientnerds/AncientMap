@@ -1,8 +1,9 @@
 /**
  * LandingLive — the four data-fresh homepage sections rendered into
  * index.html's #root by the SSR sidecar (api/routes/landing_html.py).
- * Hero and screenshot sections around #root stay static HTML; this tree
- * is the only React on the page.
+ * Hero and screenshot sections around #root stay static HTML, and since
+ * 2026-09-10 the browser gets no React at all: this tree is server output
+ * only (no landingMain entry), its CSS comes in through landing.css.
  *
  * Four portals, one shape (PortalSection.tsx), laid out two by two from
  * 901 px up (landing-live.css): Stories and Journal on the first row,
@@ -13,8 +14,6 @@
 import PortalSection from '../landing/PortalSection'
 import TheoLine from '../landing/TheoLine'
 import { useRoute } from '../seo/RouteContext'
-
-import '../styles/landing-live.css'
 
 /** 1759673 → "1,759,673". Explicit en-US: the SSR host has a locale of its own. */
 const count = (n: number) => n.toLocaleString('en-US')

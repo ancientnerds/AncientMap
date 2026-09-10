@@ -1,8 +1,8 @@
 [
   {
-    "name": "homepage page-specific JS (entry + LandingLive; react-dom is a shared chunk)",
-    "path": ["dist/assets/landing-*.js", "dist/assets/LandingLive-*.js"],
-    "limit": "40 kB",
+    "name": "homepage JS (no React: the disclaimer module and nothing else)",
+    "path": ["dist/assets/landing-*.js"],
+    "limit": "12 kB",
     "brotli": true
   }
 ]
