@@ -16,7 +16,12 @@ from datetime import datetime
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
-from api.routes.articles_html import _like_escape, news_archive_page, story_page
+from api.routes.articles_html import (
+    _like_escape,
+    news_archive_page,
+    story_page,
+    story_page_query,
+)
 
 
 def _orm_db(*, first=None, rows=None, count=0) -> MagicMock:
@@ -253,3 +258,69 @@ def test_out_of_range_page_is_a_404_without_touching_the_renderer():
     assert resp.status_code == 404
     render_mock.assert_not_called()
     shell_mock.assert_not_called()
+
+
+def test_rejected_story_keeps_no_page(monkeypatch):
+    """story_page_query filtert seit 2026-09-11 auf significance.
+
+    Vorher verlangte sie nur post_text — die 767 vom Scorer mit 1 („keine
+    Archäologie") verworfenen Items verschwanden damit aus dem Feed, behielten
+    aber eine indexierbare Seite. Die Klausel spiegelt /api/news/feed.
+    """
+    q = MagicMock()
+    q.join.return_value = q
+    q.filter.return_value = q
+    db = MagicMock()
+    db.query.return_value = q
+
+    story_page_query(db)
+
+    conditions = q.filter.call_args[0]
+    assert len(conditions) == 2, "post_text UND significance müssen gefiltert werden"
+    # literal_binds, sonst rendert der Schwellwert als :significance_1 und die
+    # Zusicherung überlebt jede Mutation: >= 1 statt >= 2, AND statt OR (der
+    # Filter wäre unerfüllbar → JEDE Story 410) oder ein weggefallener
+    # IS-NULL-Zweig (→ 410 für alles noch nicht Bewertete).
+    compiled = [str(c.compile(compile_kwargs={"literal_binds": True})) for c in conditions]
+    assert compiled == [
+        "news_items.post_text IS NOT NULL",
+        "news_items.significance IS NULL OR news_items.significance >= 2",
+    ]
+
+
+def test_withdrawn_story_is_410_not_404():
+    """Ein Slug, dessen Zeile es noch gibt, wurde absichtlich zurückgezogen.
+
+    410 nimmt Google die Seite dauerhaft aus dem Index; ein 404 wird monatelang
+    nachgecrawlt, weil er wie „kommt vielleicht wieder" liest.
+    """
+    db = _orm_db()
+    # 1. Aufruf: die gefilterte Story-Query findet nichts. 2. Aufruf: die
+    # Existenzprüfung findet die Zeile trotzdem.
+    db.query.return_value.first.side_effect = [None, (8270,)]
+
+    render, shell = _patched()
+    with render as render_mock, shell as shell_mock:
+        resp = asyncio.run(story_page("bayeux-tapestry-8270", db=db))
+
+    assert resp.status_code == 410
+    assert b"withdrawn" in resp.body
+    assert b"410" in resp.body
+    # Zwei Abfragen: die gefilterte Story-Query und danach die Existenzprobe.
+    # Ohne diese Zusicherung würde auch ein 410-Zweig durchgehen, der gar nicht
+    # erst nachsieht, ob es die Zeile gibt.
+    assert db.query.call_count == 2
+    render_mock.assert_not_called()
+    shell_mock.assert_not_called()
+
+
+def test_unknown_id_stays_404_not_410():
+    """Eine ID, die es nie gab, bleibt 404 — 410 ist für Rückzüge reserviert."""
+    db = _orm_db()
+    db.query.return_value.first.side_effect = [None, None]
+
+    render, shell = _patched()
+    with render, shell:
+        resp = asyncio.run(story_page("never-existed-999999", db=db))
+
+    assert resp.status_code == 404

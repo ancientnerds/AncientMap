@@ -416,15 +416,22 @@ def render_medium_copy_html(
 </html>"""
 
 
-def render_404_html(what: str = "Page") -> str:
-    """Render a styled 404 page."""
+def render_error_html(what: str = "Page", code: int = 404, detail: str | None = None) -> str:
+    """Render a styled error page.
+
+    404 means "we have no such thing". 410 means "we had it and withdrew it on
+    purpose" — Google drops a 410 from the index far faster than a 404, which it
+    re-checks for months on the assumption the page might come back.
+    """
     what = escape(what)
+    headline = "Not Found" if code == 404 else "No Longer Available"
+    body = escape(detail) if detail else f"{what} not found."
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{what} Not Found | Ancient Nerds</title>
+    <title>{what} {headline} | Ancient Nerds</title>
     <meta name="robots" content="noindex">
     <link rel="icon" type="image/svg+xml" href="/favicon.svg">
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -435,8 +442,8 @@ def render_404_html(what: str = "Page") -> str:
 <body>
     {_nav_html()}
     <main class="container" style="text-align:center; padding-top: 80px;">
-        <h1 style="font-size: 3em; color: #c02023;">404</h1>
-        <p style="font-size: 1.2em; margin: 20px 0;">{what} not found.</p>
+        <h1 style="font-size: 3em; color: #c02023;">{code}</h1>
+        <p style="font-size: 1.2em; margin: 20px 0;">{body}</p>
         <p><a href="/articles/">Browse all articles</a> &middot; <a href="/news-archive/">News archive</a> &middot; <a href="/">Home</a></p>
     </main>
     {_footer_html()}

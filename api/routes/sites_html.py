@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session
 
 from api.routes.articles_html import public_stories_query
 from api.seo_shell import ssr_shell_response
-from pipeline.article_html_renderer import render_404_html, story_slug
+from pipeline.article_html_renderer import render_error_html, story_slug
 from pipeline.database import NewsItem, get_db
 from pipeline.sites_html_renderer import (
     country_path,
@@ -81,7 +81,7 @@ async def sites_by_country(slug: str, db: Session = Depends(get_db)):
 
     if not country:
         return Response(
-            content=render_404_html("Country"),
+            content=render_error_html("Country"),
             media_type="text/html",
             status_code=404,
             headers={"Cache-Control": "public, max-age=300"},
@@ -140,7 +140,7 @@ async def legacy_site_redirect(id: str = "", db: Session = Depends(get_db)):
 
 def _site_404() -> Response:
     return Response(
-        content=render_404_html("Site"),
+        content=render_error_html("Site"),
         media_type="text/html",
         status_code=404,
         headers={"Cache-Control": "public, max-age=300"},

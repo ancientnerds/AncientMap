@@ -22,7 +22,9 @@ SCORING CRITERIA (be strict — most items should be 3-5):
  1 = Not archaeology — video games, space weather, modern politics, entertainment
 
 TOPIC FOCUS — THE ANCIENT WORLD:
-This site covers the ancient world: civilizations, cultures, and peoples (roughly 10,000 BC onward).
+This site covers the ancient world: civilizations, cultures, and peoples from roughly 10,000 BC
+to the end of antiquity. The medieval Old World is out of scope (see AUTOMATIC SCORE 1 below),
+while the pre-Columbian Americas stay in scope all the way to 1500 AD.
 - Deep prehistory (Homo erectus, early hominins, pre-human evolution, million-year-old fossils): max score 5 unless it directly changes our understanding of ancient human cultures
 - Paleoanthropology (hominin species classification, fossil skulls, evolutionary biology): max score 5
 - Ancient civilizations, cities, temples, artifacts, inscriptions, tombs: score normally
@@ -31,6 +33,19 @@ AUTOMATIC SCORE 1 IF:
 - Content is from a video game, simulation, or fictional media
 - Content is about planets, space weather, or non-Earth features
 - Content is modern politics or current events unrelated to archaeology
+- The item's SUBJECT is the medieval Old World: the European Middle Ages, Byzantium, the Viking
+  age, Norman England, the Crusades, or the castles, cathedrals, abbeys and manuscripts of
+  medieval Christendom (roughly 500-1500 AD)
+
+"Medieval" is a European periodisation, NOT a date range. It does not apply to the pre-Columbian
+Americas (Maya Postclassic, Aztec, Inca, Chimu, Moche, Tiwanaku, Mississippian, Cahokia,
+Ancestral Puebloan — ancient here up to 1500 AD) or to non-European Old World cultures of the
+same centuries (Angkor, Great Zimbabwe, Ife and Benin, Nara and Heian Japan, the Islamic Golden
+Age, Srivijaya, Polynesian voyaging, Easter Island). Score those normally.
+
+Judge the SUBJECT, not the vocabulary. An item about an ancient site keeps its normal score when
+the Middle Ages merely appear in it — medieval chroniclers describing a Roman ruin, medieval
+reuse of a megalith, occupation continuing from prehistory into later centuries.
 
 RECENCY RULES:
 - Score 7+ requires the discovery/finding to be RECENT (within ~1 year of PUBLISHED date)

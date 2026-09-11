@@ -361,15 +361,22 @@ function NewsCard({
 export default memo(NewsCard)
 
 /**
- * URL of a story's own page, or null when /news-archive/{slug} would 404.
+ * URL of a story's own page, or null when /news-archive/{slug} has none.
  *
- * Mirrors story_page_query() in api/routes/articles_html.py: a body is the
- * only requirement. Speculative stories do get a page (noindex) — the gate
- * here is not an editorial one, it only keeps us from handing the user a
- * dead link.
+ * Mirrors story_page_query() in api/routes/articles_html.py: a body AND a
+ * significance the scorer did not reject. Speculative stories do get a page
+ * (noindex) — the gate here is not an editorial one, it only keeps us from
+ * handing the user a dead link.
+ *
+ * The significance half matters because not every surface filters it: the
+ * journal citation route (/api/news/articles/{id}/citations) resolves items
+ * by video id alone, so a rejected story can still reach a card. Since
+ * 2026-09-11 its page answers 410, and a card must not link there.
+ * significance === null means "not scored yet", not "rejected".
  */
 export function storyHrefFor(item: NewsItemData): string | null {
   if (!item.post_text) return null
+  if (item.significance !== null && item.significance < 2) return null
   return storyPath(item.headline, item.id)
 }
 

@@ -15,7 +15,7 @@ from api.seo_shell import ssr_shell_response
 from pipeline.article_html_renderer import (
     BASE_URL,
     markdown_to_html,
-    render_404_html,
+    render_error_html,
     render_medium_copy_html,
     slugify,
     story_id_from_slug,
@@ -36,15 +36,30 @@ def story_page_query(db: Session):
     """
     Every story that HAS a page at /news-archive/{slug}.
 
-    The only requirement is a body to render. Speculative stories are part
-    of this set since 2026-08-20: they were excluded by accident of the
-    first SEO commit (29a3711), which used one filter for "has a page" and
-    "belongs in the index". That left 505 of 3,176 stories reachable in the
-    app but 404 on their own URL — while 62 stories carrying a speculative
-    *tag* under a different category had pages all along. They are served,
-    but marked noindex in storyMeta(), so the fringe stays out of Google.
+    A story needs a body to render AND a significance the scorer did not
+    reject. Speculative stories are part of this set since 2026-08-20: they
+    were excluded by accident of the first SEO commit (29a3711), which used
+    one filter for "has a page" and "belongs in the index". That left 505 of
+    3,176 stories reachable in the app but 404 on their own URL — while 62
+    stories carrying a speculative *tag* under a different category had pages
+    all along. They are served, but marked noindex in storyMeta(), so the
+    fringe stays out of Google.
+
+    The significance clause mirrors /api/news/feed (news.py) exactly. Until
+    2026-09-11 this query asked only for post_text, so the 767 items the
+    scorer had rejected with significance 1 — "not archaeology" — vanished
+    from the feed but kept a live, indexable page. significance IS NULL means
+    "not scored yet", not "rejected", so those keep their page like the feed
+    keeps them.
     """
-    return db.query(NewsItem).join(NewsVideo).filter(NewsItem.post_text.isnot(None))
+    return (
+        db.query(NewsItem)
+        .join(NewsVideo)
+        .filter(
+            NewsItem.post_text.isnot(None),
+            (NewsItem.significance.is_(None)) | (NewsItem.significance >= 2),
+        )
+    )
 
 
 def public_stories_query(db: Session):
@@ -94,7 +109,7 @@ async def article_page(slug: str, db: Session = Depends(get_db)):
 
     if not article:
         return Response(
-            content=render_404_html("Article"),
+            content=render_error_html("Article"),
             media_type="text/html",
             status_code=404,
             headers={"Cache-Control": "public, max-age=300"},
@@ -133,7 +148,7 @@ async def article_medium_copy(slug: str, db: Session = Depends(get_db)):
 
     if not article:
         return Response(
-            content=render_404_html("Article"),
+            content=render_error_html("Article"),
             media_type="text/html",
             status_code=404,
         )
@@ -173,7 +188,7 @@ async def _render_news_archive_page(page: int, db: Session, q: str = "") -> Resp
 
     if page < 1 or (page > total_pages):
         return Response(
-            content=render_404_html("Page"),
+            content=render_error_html("Page"),
             media_type="text/html",
             status_code=404,
             headers={"Cache-Control": "public, max-age=300"},
@@ -349,8 +364,31 @@ async def story_page(slug: str, db: Session = Depends(get_db)):
     )
 
     if not item:
+        # A slug that still resolves to a real row was withdrawn on purpose —
+        # rejected by the scorer, deduplicated, or out of period scope. Answer
+        # 410 so crawlers drop it; a 404 gets re-crawled for months because it
+        # reads as "maybe it comes back". Unknown ids stay 404.
+        withdrawn = (
+            db.query(NewsItem.id).filter(NewsItem.id == item_id).first()
+            if item_id is not None
+            else None
+        )
+        if withdrawn:
+            return Response(
+                content=render_error_html(
+                    "Story",
+                    410,
+                    # Deliberately does not name a reason: this branch covers
+                    # editorial rejection, deduplication and period scope alike,
+                    # and only a minority are the medieval withdrawals.
+                    "This story has been withdrawn from the archive.",
+                ),
+                media_type="text/html",
+                status_code=410,
+                headers={"Cache-Control": "public, max-age=86400"},
+            )
         return Response(
-            content=render_404_html("Story"),
+            content=render_error_html("Story"),
             media_type="text/html",
             status_code=404,
             headers={"Cache-Control": "public, max-age=300"},

@@ -793,8 +793,14 @@ def create_public_api() -> FastAPI:
 
         offset = (page - 1) * page_size
 
-        # Build WHERE clause
-        where_parts = ["ni.post_text IS NOT NULL"]
+        # Build WHERE clause. The significance clause mirrors /api/news/feed and
+        # story_page_query: without it this CC BY endpoint was the one surface
+        # that still published stories the scorer had rejected — including the
+        # out-of-scope medieval ones withdrawn on 2026-09-11.
+        where_parts = [
+            "ni.post_text IS NOT NULL",
+            "(ni.significance IS NULL OR ni.significance >= 2)",
+        ]
         params: dict = {"limit": page_size, "offset": offset}
 
         if q:

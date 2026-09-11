@@ -19,7 +19,7 @@ from api.seo_shell import ssr_shell_response
 from pipeline.article_html_renderer import (
     BASE_URL,
     markdown_to_html,
-    render_404_html,
+    render_error_html,
     render_medium_copy_html,
 )
 from pipeline.database import get_db
@@ -101,7 +101,7 @@ def fetch_paper(slug: str, db: Session):
 
 def _paper_404() -> Response:
     return Response(
-        content=render_404_html("Paper"),
+        content=render_error_html("Paper"),
         media_type="text/html",
         status_code=404,
         headers={"Cache-Control": "public, max-age=300"},

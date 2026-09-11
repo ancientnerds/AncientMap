@@ -324,6 +324,7 @@ def summarize_video(
     # XML converted by its backend), which were stored raw and crashed
     # /api/news/feed validation. Coerce facts to the declared array-of-strings
     # and drop topics left without any usable facts.
+    returned_count = len(key_topics)
     usable_topics = []
     for topic in key_topics:
         if not isinstance(topic, dict):
@@ -342,7 +343,24 @@ def summarize_video(
     summary_data["key_topics"] = key_topics
 
     if not key_topics:
-        logger.warning(f"No key topics found for {video.id}")
+        if returned_count == 0:
+            # The response parsed fine and the model deliberately returned
+            # nothing: every topic in this video is out of scope (PERIOD SCOPE
+            # in summary.txt tells it to return fewer topics rather than pad
+            # the list). Retrying cannot change that, and leaving the video on
+            # 'transcribed' would re-summarize it every cycle for the rest of
+            # the lookup window. Terminal state, same as the relevance gate's.
+            with get_session() as session:
+                v = session.get(NewsVideo, video.id)
+                if v:
+                    v.status = "skipped"
+            logger.info(f"Skipped {video.id}: no in-scope topics ({video.title})")
+        else:
+            # Topics came back but none survived fact coercion — that IS a
+            # malformed response, so keep the video retryable.
+            logger.warning(
+                f"No usable topics for {video.id}: {returned_count} returned, all unusable"
+            )
         return False
 
     if len(key_topics) > topic_limit:

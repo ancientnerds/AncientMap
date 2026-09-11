@@ -15,6 +15,24 @@ game is still a video game. Such channels commonly tag every upload "archaeology
 history / discovery", so tags are NOT evidence of format. The "when in doubt" rule below does
 NOT apply here: if the format matches, answer NO even when the subject clearly is ancient.
 
+SECOND — period disqualifier. Answer NO when the video is WHOLLY about the medieval Old World:
+the European Middle Ages, Byzantium, the Viking age, Norman England, the Crusades, or the
+castles, cathedrals, abbeys and manuscripts of medieval Christendom (roughly 500-1500 AD).
+
+"Medieval" is a European periodisation, NOT a synonym for "after 500 AD". These are IN scope and
+must never be treated as medieval:
+- The pre-Columbian Americas, ancient here all the way to 1500 AD: Maya Postclassic, Aztec, Inca,
+  Chimu, Moche, Tiwanaku, Mississippian, Cahokia, Ancestral Puebloan
+- Non-European Old World cultures of the same centuries: Angkor, Great Zimbabwe, Ife and Benin,
+  Nara and Heian Japan, the Islamic Golden Age, Srivijaya, Polynesian voyaging, Easter Island
+
+Unlike the format rule, this one DOES defer to "when in doubt, answer YES". Reject only when
+medieval Europe is what the whole video is ABOUT. A video mixing medieval and ancient subjects
+keeps its YES — the per-topic filter downstream drops the medieval parts. So does a video about
+an ancient site in which the Middle Ages merely appear: medieval chroniclers describing a Roman
+ruin, medieval reuse of megalithic stone, occupation continuing from prehistory into later
+centuries.
+
 Otherwise, answer YES (is_archaeology = true) if the video's subject connects to the ancient past in ANY way:
 - Archaeological sites, excavations, artifacts, ancient architecture
 - Ancient civilizations, empires, cultures, peoples
@@ -30,8 +48,8 @@ Otherwise, answer YES (is_archaeology = true) if the video's subject connects to
 Set is_speculative = true when the video promotes non-mainstream claims (ancient aliens,
 lost advanced tech, supernatural explanations, etc.) rather than evidence-based interpretations.
 
-Beyond the format disqualifiers above, answer NO only when the video has nothing to do with
-the ancient world. Examples:
+Beyond the format and period disqualifiers above, answer NO only when the video has nothing to
+do with the ancient world. Examples:
 - Space weather, Mars geology, planetary science
 - Modern politics, product reviews, lifestyle content
 - Flat earth, Hollow Earth (no ancient site connection)
