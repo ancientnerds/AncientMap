@@ -732,8 +732,19 @@ def get_news_stats(db: Session = Depends(get_db)):
         return cached
 
     try:
+        # Published stories, not produced ones — the landing page prints this
+        # number as a content claim (landing_html.py). Counting on post_text
+        # alone overstated it by the 812 items the scorer had rejected, which
+        # are unreachable in the feed and answer 410 on their own URL. They are
+        # accounted for under rejected.low_significance below.
         total_items = (
-            db.query(func.count(NewsItem.id)).filter(NewsItem.post_text.isnot(None)).scalar() or 0
+            db.query(func.count(NewsItem.id))
+            .filter(
+                NewsItem.post_text.isnot(None),
+                (NewsItem.significance.is_(None)) | (NewsItem.significance >= 2),
+            )
+            .scalar()
+            or 0
         )
         total_videos = db.query(func.count(distinct(NewsItem.video_id))).scalar() or 0
         total_channels = (
@@ -753,15 +764,25 @@ def get_news_stats(db: Session = Depends(get_db)):
             .all()
         )
 
+        # Rescored-to-1 items KEEP their post_text (only the deduplicator nulls
+        # it), so they miss the query above entirely. Counting them here is what
+        # makes total_items + rejected add up again.
+        scored_out = (
+            db.query(func.count(NewsItem.id))
+            .filter(NewsItem.post_text.isnot(None), NewsItem.significance == 1)
+            .scalar()
+            or 0
+        )
+
         breakdown = RejectionBreakdown()
+        breakdown.low_significance = scored_out
         for category, count in null_items:
             if category in ("rejected", "unverified"):
                 breakdown.verified_rejected += count
             elif category == "duplicate":
                 breakdown.duplicate = count
             else:
-                # Significance=1 rescored items keep their old category (usually "general")
-                # and items that never got a post matched also land here
+                # Items that never got a post matched also land here
                 breakdown.low_significance += count
     except Exception:
         db.rollback()
