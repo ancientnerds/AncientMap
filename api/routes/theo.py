@@ -545,7 +545,8 @@ async def list_research(req: Request):
         rows = session.execute(
             text("""
                 SELECT id::text, question, status, sites_found, tools_used,
-                       duration_ms, error_message, is_public, approved_by, created_at, completed_at
+                       duration_ms, error_message, is_public, approved_by, created_at,
+                       started_at, completed_at
                 FROM research_requests
                 WHERE user_id = :uid
                 ORDER BY created_at DESC
@@ -569,6 +570,11 @@ async def list_research(req: Request):
             "is_public": r.is_public,
             "approved_by": r.approved_by,
             "created_at": r.created_at.isoformat() if r.created_at else None,
+            # When the worker CLAIMED the row, which is what the live view's
+            # elapsed clock must count from. A batch row can sit queued for
+            # weeks (the single batch lane runs one 7-15h paper at a time), and
+            # counting from created_at showed a 6-hour run as "1629:28:49".
+            "started_at": r.started_at.isoformat() if r.started_at else None,
             "completed_at": r.completed_at.isoformat() if r.completed_at else None,
         }
         for r in rows
@@ -1082,17 +1088,21 @@ async def stream_research(request_id: str, req: Request):
         max_idle = 300  # 5 minutes of no events → close
 
         while idle_count < max_idle:
-            events = get_live_events(request_id)
-            if cursor < len(events):
-                new_events = events[cursor:]
+            # Fetch from the cursor, not the whole list: the events live in
+            # Redis (the worker runs in another container) and re-reading 500
+            # entries once per second per viewer is pure waste. The first
+            # fetch returns the full backlog, so a browser opening mid-run
+            # replays the run so far.
+            new_events = get_live_events(request_id, start=cursor)
+            if new_events:
                 for evt in new_events:
                     event_type = evt.get("type", "progress")
                     yield f"event: {event_type}\ndata: {json.dumps(evt)}\n\n"
-                cursor = len(events)
+                cursor += len(new_events)
                 idle_count = 0
 
                 # Close immediately on terminal event
-                if new_events and new_events[-1].get("type") in ("done", "error"):
+                if new_events[-1].get("type") in ("done", "error"):
                     return
             else:
                 idle_count += 1

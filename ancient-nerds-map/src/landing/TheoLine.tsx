@@ -19,7 +19,11 @@ export default function TheoLine({ theo }: { theo: TheoStatus }) {
             <time dateTime={theo.started_at}>{shortDate(theo.started_at)}</time>
           </>
         ) : null}{' · '}
-        {theo.sites_found.toLocaleString('en-US')} sites found
+        {/* The DB column is sites_found for V1 reasons, but it counts
+            registry.sources — every search result registered across the 13
+            connectors, not archaeological sites. LiveResearchPanel already
+            says "sources"; this line was the last one saying "sites". */}
+        {theo.sites_found.toLocaleString('en-US')} sources found
       </span>
       <span>watch live →</span>
     </a>

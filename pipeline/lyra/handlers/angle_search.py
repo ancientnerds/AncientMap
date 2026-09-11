@@ -95,6 +95,7 @@ class SearchHandler(BaseHandler):
                 },
             }
         )
+        self.emit_connector_breakdown()
         self.state.log(
             "search",
             f"Angle '{angle.topic}' round {angle.search_rounds}: {new_sources} new sources ({len(angle.source_ids)} total)",

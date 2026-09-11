@@ -137,6 +137,7 @@ interface ResearchItem {
   duration_ms: number | null
   error_message: string | null
   created_at: string | null
+  started_at: string | null
   completed_at: string | null
   is_public: boolean
   approved_by: string | null
@@ -645,7 +646,9 @@ export default function TheoPage() {
     if (running && liveOverlayId !== running.id) {
       setLiveOverlayId(running.id)
       setLiveOverlayQuestion(running.question)
-      setLiveOverlayStartedAt(running.created_at || '')
+      // started_at, not created_at: the elapsed clock measures the RUN, and a
+      // batch row's queue wait can be weeks.
+      setLiveOverlayStartedAt(running.started_at || '')
     }
   }, [items, liveOverlayClosed, liveOverlayId])
 
@@ -665,7 +668,7 @@ export default function TheoPage() {
     })
     setLiveOverlayId(item.id)
     setLiveOverlayQuestion(item.question)
-    setLiveOverlayStartedAt(item.created_at || '')
+    setLiveOverlayStartedAt(item.started_at || '')
   }, [])
 
   // Toggle specialist in manual mode

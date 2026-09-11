@@ -24,6 +24,22 @@ class BaseHandler(ABC):
         if self.state.emit:
             self.state.emit(event)
 
+    def emit_connector_breakdown(self):
+        """Emit which search connectors the run has sourced from, and how many.
+
+        A run-wide snapshot rather than a delta, so the UI can replace its
+        state outright and never drift. Counted off the registry, so the
+        numbers are post-dedup: a paper that OpenAlex and Crossref both
+        surfaced counts once, under whichever adapter registered it first.
+        """
+        counts: dict[str, int] = {}
+        for source in self.state.registry.sources.values():
+            # Sources carried in by force_include/web_urls have no adapter.
+            name = source.source_api or "direct"
+            counts[name] = counts.get(name, 0) + 1
+        if counts:
+            self.emit_sse({"type": "connectors", "counts": counts})
+
     @abstractmethod
     def register(self):
         """Register event handlers on the bus. Called once during setup."""

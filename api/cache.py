@@ -81,7 +81,7 @@ def get_redis_client():
         return client
 
 
-def _mark_redis_lost(context: str, exc: Exception) -> None:
+def mark_redis_lost(context: str, exc: Exception) -> None:
     """Drop the client after a runtime error and start the retry cooldown."""
     global _redis_client, _redis_failed_at, _redis_state
     with _redis_lock:
@@ -108,7 +108,7 @@ def cache_get(key: str) -> Any | None:
             # Corrupt cached JSON — not a Redis outage, keep the connection
             logger.warning(f"Cache get error for {key}: {e}")
         except Exception as e:
-            _mark_redis_lost(f"get {key}", e)
+            mark_redis_lost(f"get {key}", e)
 
     # Fallback to in-memory cache
     with _memory_lock:
@@ -135,7 +135,7 @@ def cache_set(key: str, value: Any, ttl: int = 3600) -> bool:
             # Unserializable value — not a Redis outage, keep the connection
             logger.warning(f"Cache set error for {key}: {e}")
         except Exception as e:
-            _mark_redis_lost(f"set {key}", e)
+            mark_redis_lost(f"set {key}", e)
 
     # Fallback to in-memory cache
     with _memory_lock:
@@ -156,7 +156,7 @@ def cache_delete(key: str) -> bool:
             client.delete(key)
             deleted = True
         except Exception as e:
-            _mark_redis_lost(f"delete {key}", e)
+            mark_redis_lost(f"delete {key}", e)
 
     # Also delete from memory cache
     with _memory_lock:
@@ -183,7 +183,7 @@ def cache_delete_pattern(pattern: str) -> int:
                 if cursor == 0:
                     break
         except Exception as e:
-            _mark_redis_lost(f"delete pattern {pattern}", e)
+            mark_redis_lost(f"delete pattern {pattern}", e)
 
     # Also delete from memory cache (simple prefix match)
     import fnmatch

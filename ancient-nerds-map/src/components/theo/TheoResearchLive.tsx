@@ -35,6 +35,33 @@ const THEO_STAGE_WEIGHTS: Record<string, number> = {
 
 const THEO_STAGE_ORDER = Object.keys(THEO_STAGE_WEIGHTS)
 
+// ---------------------------------------------------------------------------
+// Search connectors — display names for the backend adapter ids
+// (pipeline/lyra/theo_sources.py MultiSourceSearch._init_adapters)
+// ---------------------------------------------------------------------------
+
+const CONNECTOR_LABELS: Record<string, string> = {
+  ancientnerds_db: 'Ancient Nerds DB',
+  ancientnerds_research: 'Own Papers',
+  youtube_transcripts: 'YouTube',
+  semantic_scholar: 'Semantic Scholar',
+  openalex: 'OpenAlex',
+  crossref: 'Crossref',
+  wikipedia: 'Wikipedia',
+  internet_archive: 'Internet Archive',
+  minimax: 'Web Search',
+  core: 'CORE',
+  europeana: 'Europeana',
+  smithsonian: 'Smithsonian',
+  nara: 'US National Archives',
+  direct: 'Direct Link',
+}
+
+/** Title-case an adapter id we have no label for yet (new connector shipped). */
+function prettifyConnector(name: string): string {
+  return name.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+}
+
 function computeTheoProgress(nodes: PipelineNodeInstance[]) {
   let progress = 0
   let activeLabel = ''
@@ -110,6 +137,10 @@ export default function TheoResearchLive({ requestId, question, startedAt, onClo
   const [totalRabbitHoles, setTotalRabbitHoles] = useState(0)
   const [rabbitHoleFlash, setRabbitHoleFlash] = useState<string | null>(null)
   const [selectedPhase, setSelectedPhase] = useState<string | null>(null)
+
+  // Which search connectors the run has sourced from (adapter -> count).
+  // Backend sends a run-wide snapshot, so replace rather than merge.
+  const [connectors, setConnectors] = useState<Record<string, number>>({})
 
   // Phase detail data collected from events
   const [phaseDetails, setPhaseDetails] = useState<Record<string, string[]>>({})
@@ -401,6 +432,9 @@ export default function TheoResearchLive({ requestId, question, startedAt, onClo
         }
         break
       }
+      case 'connectors':
+        setConnectors((data.counts as Record<string, number>) || {})
+        break
       case 'sites':
         break
       case 'done':
@@ -609,6 +643,27 @@ export default function TheoResearchLive({ requestId, question, startedAt, onClo
             <NervLoadingBar label="CONNECTING" sublabel="AWAITING PIPELINE" />
           )}
         </div>
+
+        {/* Connectors — which search adapters actually yielded sources */}
+        {Object.keys(connectors).length > 0 && (
+          <div className="theo-connectors">
+            <div className="theo-connectors-label">CONNECTORS</div>
+            <div className="theo-connectors-list">
+              {Object.entries(connectors)
+                .sort((a, b) => b[1] - a[1])
+                .map(([name, count]) => (
+                  <span
+                    key={name}
+                    className="theo-connector-chip"
+                    title={`${count} source${count === 1 ? '' : 's'} registered via ${name}`}
+                  >
+                    {CONNECTOR_LABELS[name] || prettifyConnector(name)}
+                    <span className="theo-connector-count">{count}</span>
+                  </span>
+                ))}
+            </div>
+          </div>
+        )}
 
         {/* V2 Angle Progress Table */}
         {Object.keys(angles).length > 0 && (

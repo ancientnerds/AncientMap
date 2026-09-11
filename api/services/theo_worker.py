@@ -17,6 +17,7 @@ from typing import Any
 
 from sqlalchemy import text
 
+from api.cache import get_redis_client, mark_redis_lost
 from api.services.theo_config import (
     THEO_MIN_TASK_INTERVAL_S,
     THEO_PARALLEL_SLOTS,
@@ -164,6 +165,21 @@ _live_events: dict[str, list[dict]] = {}
 _MAX_EVENTS_PER_REQUEST = 500
 _MAX_LIVE_ENTRIES = 100
 
+# Cross-process event transport (2026-09-11). The pipeline runs in the
+# theo-worker container while GET /theo/research/{id}/stream is served by the
+# api/api2 containers (THEO_WORKER_EXTERNAL=1), so the _live_events dict above
+# is written in one process and read in another — it was always empty on the
+# read side and every live view sat on "CONNECTING / AWAITING PIPELINE" until
+# the stream's 5-minute idle timeout. Redis carries the events across: the
+# worker RPUSHes, the API LRANGEs from its cursor.
+#
+# The list is the backlog too, so a browser opening mid-run replays everything
+# so far instead of starting blind. TTL is refreshed on every push, so it
+# expires relative to the LAST event rather than cutting a 72h batch run off
+# mid-flight.
+_EVENTS_KEY_PREFIX = "theo:events:"
+_EVENTS_TTL_SECONDS = 24 * 3600
+
 # Cap on the per-run in-memory pipeline_trace list (audit 2026-08-05): a
 # 72h low-priority batch run emits events the whole time, so the list must
 # be bounded. When the cap is exceeded the OLDEST entries are dropped.
@@ -173,17 +189,62 @@ _shutdown = False
 
 
 def _append_event(request_id: str, event: dict) -> None:
-    """Append an event to the live events list with bounds checking."""
+    """Append an event to the live events list with bounds checking.
+
+    Mirrors into Redis so the api containers can stream it (see
+    _EVENTS_KEY_PREFIX). The cap is enforced on the in-process list first and
+    the Redis push follows it, so both sides hold the same N events and the
+    reader's cursor stays valid.
+    """
     events = _live_events.get(request_id)
     if events is None:
         return
-    if len(events) < _MAX_EVENTS_PER_REQUEST:
-        events.append(event)
+    if len(events) >= _MAX_EVENTS_PER_REQUEST:
+        return
+    events.append(event)
+
+    client = get_redis_client()
+    if client is None:
+        return
+    key = f"{_EVENTS_KEY_PREFIX}{request_id}"
+    try:
+        pipe = client.pipeline()
+        pipe.rpush(key, json.dumps(event))
+        pipe.expire(key, _EVENTS_TTL_SECONDS)
+        pipe.execute()
+    except Exception as exc:  # noqa: BLE001 — a live view must never kill a 15h run
+        mark_redis_lost(f"theo event push {request_id}", exc)
 
 
-def get_live_events(request_id: str) -> list[dict]:
-    """Return accumulated live events for a request (for SSE streaming)."""
-    return _live_events.get(request_id, [])
+def get_live_events(request_id: str, start: int = 0) -> list[dict]:
+    """Return live events for a request from index `start` (for SSE streaming).
+
+    Reads Redis when it is reachable — that is the only source that sees the
+    theo-worker container's events. Without Redis the worker and the API are
+    necessarily the same process (local dev), where the in-process list holds
+    exactly the same data.
+    """
+    client = get_redis_client()
+    if client is None:
+        return _live_events.get(request_id, [])[start:]
+    try:
+        raw = client.lrange(f"{_EVENTS_KEY_PREFIX}{request_id}", start, -1)
+    except Exception as exc:  # noqa: BLE001 — stream degrades, run continues
+        mark_redis_lost(f"theo event read {request_id}", exc)
+        return _live_events.get(request_id, [])[start:]
+    return [json.loads(item) for item in raw]
+
+
+def _drop_live_events(request_id: str) -> None:
+    """Release a finished run's event buffer in both transports."""
+    _live_events.pop(request_id, None)
+    client = get_redis_client()
+    if client is None:
+        return
+    try:
+        client.delete(f"{_EVENTS_KEY_PREFIX}{request_id}")
+    except Exception as exc:  # noqa: BLE001 — the TTL cleans up regardless
+        mark_redis_lost(f"theo event drop {request_id}", exc)
 
 
 def _paper_artifact(ctx) -> dict:
@@ -279,7 +340,11 @@ async def _process_request(
     """Process a single research request using the V2 convergence pipeline."""
     logger.info(f"[THEO] Starting request {request_id}")
 
-    # Register live events buffer before pipeline starts so SSE streaming works immediately
+    # Register live events buffer before pipeline starts so SSE streaming works
+    # immediately. Clear first: a deferred run re-claimed after the quota
+    # back-off would otherwise append onto the abandoned attempt's Redis list,
+    # replaying dead events and desyncing the two transports' event counts.
+    _drop_live_events(request_id)
     _live_events[request_id] = []
 
     # Mark request as running. started_at is the batch-pacing clock: the next
@@ -298,7 +363,7 @@ async def _process_request(
         )
         session.commit()
     if claimed.rowcount == 0:
-        _live_events.pop(request_id, None)
+        _drop_live_events(request_id)
         logger.info(
             "[THEO] Request %s no longer claimable (cancelled or picked up elsewhere) — skipping.",
             request_id,
@@ -591,9 +656,9 @@ async def _process_request(
         # Delay cleanup so SSE streams have time to read the terminal event
         try:
             loop = asyncio.get_running_loop()
-            loop.call_later(10, _live_events.pop, request_id, None)
+            loop.call_later(10, _drop_live_events, request_id)
         except RuntimeError:
-            _live_events.pop(request_id, None)
+            _drop_live_events(request_id)
 
 
 # Hard ceiling on a single research run. The user's explicit guidance is that

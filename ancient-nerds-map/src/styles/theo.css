@@ -1335,6 +1335,42 @@
   letter-spacing: 2px;
 }
 
+/* — Search connectors — which adapters yielded sources this run — */
+.theo-connectors {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 6px 16px 8px;
+  border-bottom: 1px solid var(--border-default);
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+}
+.theo-connectors-label {
+  font-size: 10px;
+  letter-spacing: 2px;
+  color: var(--text-dimmed);
+  flex-shrink: 0;
+}
+.theo-connectors-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 6px;
+}
+.theo-connector-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 1px 6px;
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--text-muted);
+  border: 1px solid rgba(0, 204, 102, 0.35);
+  background: rgba(0, 204, 102, 0.07);
+}
+.theo-connector-count {
+  color: var(--nerv-g, #00cc66);
+  font-variant-numeric: tabular-nums;
+}
+
 /* — V2 Angle Progress Table — */
 .theo-angles-table {
   padding: 6px 16px 8px;
