@@ -139,6 +139,8 @@ def test_site_detail_hands_the_full_raw_payload():
             author="J. Fotograf",
             license="CC BY-SA 4.0",
             commons_page_url="https://commons.wikimedia.org/wiki/File:Borremose.jpg",
+            width=1600,
+            height=900,
         )
     ]
     link_rows = [
@@ -195,6 +197,11 @@ def test_site_detail_hands_the_full_raw_payload():
         "author": "J. Fotograf",
         "license": "CC BY-SA 4.0",
         "commons_url": "https://commons.wikimedia.org/wiki/File:Borremose.jpg",
+        # Pixelmasse für `<img width height>` — ohne sie springt das Layout
+        # (CLS). Altbestand ohne Masse liefert None, siehe
+        # scripts/backfill_image_dimensions.py.
+        "width": 1600,
+        "height": 900,
     }
     assert route["news"] == [
         {"slug": "bog-body-found-at-borremose-4321", "headline": "Bog body found at Borremose"}

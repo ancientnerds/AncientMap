@@ -11,13 +11,11 @@
  * via the optional `actions` render prop.
  */
 
-import { useState } from 'react'
 import LazyImage from './LazyImage'
 import { SiteBadges, CountryFlag, CopyButton } from './metadata'
 import { FitText } from './FitText'
 import { extractCountry } from '../utils/searchUtils'
 import { formatCoord } from '../utils/formatters'
-import { shareOrCopy } from '../utils/share'
 import { globeUrlForSite } from '../constants/brand'
 import { getSourceColor } from '../data/sites'
 import type { SiteData } from '../data/sites'
@@ -159,64 +157,5 @@ export function ViewOnGlobeLink({ siteId }: { siteId: string }) {
     >
       View on Globe
     </a>
-  )
-}
-
-/**
- * FullPageLink — Opens the dedicated site page.
- */
-export function FullPageLink({ siteId }: { siteId: string }) {
-  return (
-    <a
-      href={`/site.html?id=${siteId}`}
-      className="site-card-action-link"
-      onClick={e => e.stopPropagation()}
-      title="Open full page"
-    >
-      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-        <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
-        <polyline points="15 3 21 3 21 9" />
-        <line x1="10" y1="14" x2="21" y2="3" />
-      </svg>
-      Full Page
-    </a>
-  )
-}
-
-/**
- * ShareSiteLink — Copies the OG share link (with preview image) to clipboard.
- */
-export function ShareSiteLink({ siteId, title }: { siteId: string; title: string }) {
-  const [copied, setCopied] = useState(false)
-
-  const handleShare = async (e: React.MouseEvent) => {
-    e.preventDefault()
-    e.stopPropagation()
-
-    const shareUrl = `${window.location.origin}/site.html?id=${siteId}`
-    const result = await shareOrCopy(`${title} - Ancient Nerds`, shareUrl)
-    if (result !== 'copied') return
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
-  }
-
-  return (
-    <button
-      className={`site-card-action-link${copied ? ' copied' : ''}`}
-      onClick={handleShare}
-      title={copied ? 'Link copied!' : 'Share site'}
-    >
-      {copied ? (
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <polyline points="20 6 9 17 4 12" />
-        </svg>
-      ) : (
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" />
-          <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" /><line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
-        </svg>
-      )}
-      {copied ? 'Copied' : 'Share'}
-    </button>
   )
 }

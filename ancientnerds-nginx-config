@@ -82,11 +82,27 @@ server {
         add_header Cache-Control "no-cache, no-store, must-revalidate";
     }
 
+    # proxy_intercept_errors on den vier SSR-Routen: das error_page oben
+    # wandelt nur 502er um, die NGINX SELBST erzeugt (Upstream nicht
+    # erreichbar). Seit dem Rolling-Restart ist der Upstream aber immer
+    # erreichbar — der Deploy startet `ssr` zuerst, und in diesem Fenster
+    # laufen api und api2 weiter, finden ihren Sidecar nicht und antworten
+    # SELBST mit 502 (SsrUnavailableError, api/seo_shell.py). Das reichte
+    # nginx unverändert durch: 12 solcher 502 in 15 Tagen, ausschliesslich
+    # auf /sites/, /news-archive/ und /research/, geballt an Deploy-Tagen
+    # (10.09.: fünf Stück). Mit intercept greift @upstream_restarting auch
+    # hier — 503 + Retry-After statt "Gateway kaputt".
+    #
+    # Nur 502/504 werden abgefangen: für andere Codes ist kein error_page
+    # definiert, also bleiben die 404 der Routen (render_error_html) und ein
+    # echtes 500 unverändert sichtbar. Ein Bug soll NICHT als 503 erscheinen.
+
     # SEO: Article pages served by API as HTML
     location /articles/ {
         proxy_pass http://an_api/articles/;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
+        proxy_intercept_errors on;
         add_header Cache-Control "public, max-age=3600";
     }
 
@@ -95,6 +111,7 @@ server {
         proxy_pass http://an_api/news-archive/;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
+        proxy_intercept_errors on;
         add_header Cache-Control "public, max-age=1800";
     }
 
@@ -103,6 +120,7 @@ server {
         proxy_pass http://an_api/research/;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
+        proxy_intercept_errors on;
         add_header Cache-Control "public, max-age=1800";
     }
 
@@ -111,6 +129,7 @@ server {
         proxy_pass http://an_api/sites/;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
+        proxy_intercept_errors on;
         add_header Cache-Control "public, max-age=3600";
     }
 

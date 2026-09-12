@@ -262,22 +262,13 @@ export function siteMeta(route: SiteRoute): PageMeta {
   }
   if (ogImage) place.push(`"image": "${ogImage}"`)
 
-  const crumbs: [string, string][] = [
-    ['Home', `${BASE_URL}/`],
-    ['Sites', `${BASE_URL}/sites/`],
-    [route.country, `${BASE_URL}${encodePath(countryPath(route.country))}`],
-    [route.name, canonical],
-  ]
-  const crumbItems = crumbs
-    .map(
-      ([label, url], i) =>
-        `{"@type": "ListItem", "position": ${i + 1}, "name": ${jsonStr(label)}, "item": "${url}"}`,
-    )
-    .join(', ')
-  const schema =
-    `[{"@context": "https://schema.org", ${place.join(', ')}}, ` +
-    '{"@context": "https://schema.org", "@type": "BreadcrumbList", ' +
-    `"itemListElement": [${crumbItems}]}]`
+  // Nur das Place-Objekt, wie bei allen anderen acht Seitentypen auch.
+  // Das BreadcrumbList kommt aus <Breadcrumbs> (components/layout), das
+  // Markup UND Schema aus DERSELBEN Liste rendert — seit 21.08.2026 auf
+  // jeder indexierten Seite. Der Kopf trug bis 12.09.2026 eine zweite,
+  // unabhängig gepflegte Kopie: 5.004 Seiten mit zwei BreadcrumbList, die
+  // auseinanderlaufen konnten, sobald jemand nur eine davon anfasst.
+  const schema = `{"@context": "https://schema.org", ${place.join(', ')}}`
 
   return {
     title: `${route.name} — ${route.country} · ${siteType}`,

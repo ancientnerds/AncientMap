@@ -132,10 +132,31 @@ async def legacy_site_redirect(id: str = "", db: Session = Depends(get_db)):
     ranking signals on one URL per site instead of two. The built
     site.html shell is still read from disk to serve /sites/{country}/{slug} —
     only this HTTP path is redirected.
+
+    Drei Fälle, weil es drei ehrliche Antworten gibt:
+
+    * kuratiert  → die Detailseite. Das ist dieselbe Sache unter neuer URL.
+    * existiert, aber nicht kuratiert → der Globus, auf den Datensatz
+      zentriert. /sites/ war hier bis 12.09.2026 die Antwort, und das ist
+      eine Weiterleitung auf eine NICHT gleichwertige Seite — Google wertet
+      so etwas wie einen Soft 404, und der Besucher landete auf einer
+      generischen Länderliste statt bei seiner Fundstätte. Die
+      Fragment-Form erzeugt keine zweite crawlbare URL (brand.ts).
+    * unbekannte id → 404. Eine Weiterleitung würde behaupten, es gäbe die
+      Sache woanders.
     """
-    row = db.execute(_LEGACY_SITE_SQL, {"id": id}).fetchone() if id else None
-    target = site_path(row.country, row.name, id) if row else "/sites/"
-    return RedirectResponse(url=encode_path(target), status_code=301)
+    if not id:
+        return _site_404()
+    row = db.execute(_LEGACY_SITE_SQL, {"id": id}).fetchone()
+    if row:
+        target = encode_path(site_path(row.country, row.name, id))
+        return RedirectResponse(url=target, status_code=301)
+    exists = db.execute(
+        text("SELECT 1 FROM unified_sites WHERE id::text = :id"), {"id": id}
+    ).fetchone()
+    if exists:
+        return RedirectResponse(url=f"/globe.html#focus={id}", status_code=301)
+    return _site_404()
 
 
 def _site_404() -> Response:
@@ -145,6 +166,28 @@ def _site_404() -> Response:
         status_code=404,
         headers={"Cache-Control": "public, max-age=300"},
     )
+
+
+def _uncurated_site_exists(prefix: str, db: Session) -> str | None:
+    """Volle UUID einer NICHT kuratierten Fundstätte mit diesem 8-Hex-Präfix.
+
+    Als Bereichsabfrage auf der Primärschlüssel-Spalte statt
+    `LEFT(REPLACE(id::text, '-', ''), 8) = :prefix`: die Präfixform ist
+    genau die erste UUID-Gruppe, aber als Ausdruck über 1,7 Mio. Zeilen
+    wäre sie ein Seq-Scan bei jedem 404 — und 404s kann jeder auslösen.
+    """
+    row = db.execute(
+        text("""
+            SELECT id::text AS id FROM unified_sites
+            WHERE id >= CAST(:lo AS uuid) AND id <= CAST(:hi AS uuid)
+            LIMIT 1
+        """),
+        {
+            "lo": f"{prefix}-0000-0000-0000-000000000000",
+            "hi": f"{prefix}-ffff-ffff-ffff-ffffffffffff",
+        },
+    ).fetchone()
+    return row.id if row else None
 
 
 @router.get("/sites/{country}/{slug}")
@@ -181,6 +224,15 @@ async def site_detail(country: str, slug: str, db: Session = Depends(get_db)):
     ).fetchone()
 
     if not row:
+        # Kein kuratierter Treffer heisst nicht "gibt es nicht": die Fundstätte
+        # kann aus einem Massenimport stammen und nur auf dem Globus leben.
+        # Google fand solche URLs im Altbestand (z. B. tell-el-hammam-b7cd329f,
+        # wikidata) und bekam bis 12.09.2026 einen 404 auf einen existierenden
+        # Datensatz. Gleiche Antwort wie bei /site.html?id= — ein Ziel, das es
+        # wirklich gibt.
+        uncurated = _uncurated_site_exists(prefix, db)
+        if uncurated:
+            return RedirectResponse(url=f"/globe.html#focus={uncurated}", status_code=301)
         return _site_404()
 
     canonical_country = country_slug(row.country)
@@ -230,7 +282,7 @@ def _related_content(row, db: Session) -> dict:
     image = None
     img_row = db.execute(
         text("""
-            SELECT filename, author, license, commons_page_url
+            SELECT filename, author, license, commons_page_url, width, height
             FROM wiki_images
             WHERE site_id = :sid AND (is_excluded = false OR is_excluded IS NULL)
             ORDER BY is_hero DESC, is_lead DESC, sort_order
@@ -244,6 +296,11 @@ def _related_content(row, db: Session) -> dict:
             "author": img_row.author,
             "license": img_row.license,
             "commons_url": img_row.commons_page_url,
+            # NULL, solange scripts/backfill_image_dimensions.py für die Zeile
+            # nicht gelaufen ist — SiteRecord lässt die Attribute dann weg,
+            # statt eine falsche Zahl zu raten.
+            "width": img_row.width,
+            "height": img_row.height,
         }
 
     # Same filter the /news-archive/{slug} route serves, so every link resolves.

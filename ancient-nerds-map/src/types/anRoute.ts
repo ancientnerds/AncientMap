@@ -126,6 +126,9 @@ export interface SiteRoute {
     author: string | null
     license: string | null
     commons_url: string | null
+    /** Pixelmasse für `<img width height>` — ohne sie springt das Layout. */
+    width: number | null
+    height: number | null
   } | null
   news: { slug: string; headline: string }[]
   links: { title: string | null; url: string; content_type: string | null }[]

@@ -214,10 +214,43 @@ describe('site-Detailseite (Task 11): der SSR-Body trägt den Python-Fragment-In
   it('Bild ohne Credit-Daten: keine leere <figcaption> (Python ließ sie weg)', () => {
     const bare = renderRoute({
       ...FIXTURES.site,
-      image: { url: '/data/images/wiki/9c8b7a65/hero.webp', author: null, license: null, commons_url: null },
+      image: {
+        url: '/data/images/wiki/9c8b7a65/hero.webp',
+        author: null,
+        license: null,
+        commons_url: null,
+        width: null,
+        height: null,
+      },
     })
     expect(bare).toContain('/data/images/wiki/9c8b7a65/hero.webp')
     expect(bare).not.toContain('<figcaption')
+    // Ohne bekannte Masse werden width/height weggelassen statt geraten —
+    // eine falsche Zahl verursacht genau den Layout-Shift, den sie
+    // verhindern sollen.
+    expect(bare).not.toMatch(/<img[^>]*\swidth=/)
+  })
+
+  it('Hero trägt Masse und wird NICHT lazy geladen (es ist das LCP-Element)', () => {
+    const html = renderRoute({
+      ...FIXTURES.site,
+      image: {
+        url: '/data/images/wiki/9c8b7a65/hero.webp',
+        author: 'Foto: A. Autor',
+        license: 'CC BY-SA 4.0',
+        commons_url: 'https://commons.wikimedia.org/wiki/File:X.jpg',
+        width: 1600,
+        height: 900,
+      },
+    })
+    expect(html).toMatch(/<img[^>]*width="1600"[^>]*height="900"/)
+    expect(html).toMatch(/<img[^>]*fetchpriority="high"/i)
+    expect(html).not.toMatch(/<img[^>]*loading="lazy"[^>]*hero\.webp/)
+  })
+
+  it('der Body trägt das BreadcrumbList — aus <Breadcrumbs>, Markup und Schema aus einer Liste', () => {
+    const html = renderRoute(FIXTURES.site)
+    expect(html.match(/"@type":\s*"BreadcrumbList"/g)).toHaveLength(1)
   })
 })
 

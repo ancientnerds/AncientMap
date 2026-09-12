@@ -211,6 +211,16 @@ describe('research-Autorschaft im JSON-LD (Art.-50-Fälle aus test_ai_act_notice
     expect(countryMeta(pyrefRoute('country') as never).schema ?? '').not.toContain(IPTC_AI_MARKER)
   })
 
+  it('der Kopf der Site-Seite trägt KEIN BreadcrumbList — das steht im Body', () => {
+    // Bis 12.09.2026 gab siteMeta() ein Array [Place, BreadcrumbList] aus,
+    // während <Breadcrumbs> dasselbe Schema im Body rendert: 5.004 Seiten mit
+    // zwei unabhängig gepflegten Kopien. Alle anderen acht Seitentypen geben
+    // ein einzelnes Objekt aus — Site ist jetzt keine Ausnahme mehr.
+    const schema = siteMeta(pyrefRoute('site') as never).schema ?? ''
+    expect(schema).not.toContain('BreadcrumbList')
+    expect(JSON.parse(schema)['@type']).toBe('Place')
+  })
+
   it('Snippet und JSON-LD tragen keine Fußnotenmarker', () => {
     // Google druckte "…Giza Governorate of Egypt [1]." ins Suchergebnis:
     // im Snippet gibt es keine Referenzliste, an der die 1 hängen könnte.

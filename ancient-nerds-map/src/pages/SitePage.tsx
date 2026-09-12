@@ -62,7 +62,19 @@ function SiteRecord({ site }: { site: SiteRoute }) {
       </div>
       {image && (
         <figure>
-          <img src={image.url} alt={site.name} loading="lazy" />
+          {/* Kein loading="lazy": dieses Bild steht direkt unter der h1 und ist
+              das LCP-Element — lazy verzögert genau die Messung, die Google
+              bewertet. width/height verhindern den Layout-Shift; sie fehlen,
+              solange scripts/backfill_image_dimensions.py für die Zeile nicht
+              gelaufen ist, und werden dann weggelassen statt geraten. */}
+          <img
+            src={image.url}
+            alt={site.name}
+            fetchPriority="high"
+            {...(image.width && image.height
+              ? { width: image.width, height: image.height }
+              : {})}
+          />
           {/* Commons licence attribution — required, not decorative. Without
               any credit content the Python fragment omitted the figcaption
               entirely; an empty <figcaption></figcaption> is markup noise. */}
