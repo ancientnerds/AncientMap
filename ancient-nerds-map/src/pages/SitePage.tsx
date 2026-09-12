@@ -66,7 +66,14 @@ function SiteRecord({ site }: { site: SiteRoute }) {
               das LCP-Element — lazy verzögert genau die Messung, die Google
               bewertet. width/height verhindern den Layout-Shift; sie fehlen,
               solange scripts/backfill_image_dimensions.py für die Zeile nicht
-              gelaufen ist, und werden dann weggelassen statt geraten. */}
+              gelaufen ist, und werden dann weggelassen statt geraten.
+
+              React 18 kennt fetchPriority nicht und reicht den Namen
+              unverändert durch, im HTML steht also `fetchPriority="high"`.
+              Das ist korrekt: Attributnamen sind in text/html
+              case-insensitiv, Chrome liest es (live geprüft 12.09.2026).
+              Nicht in fetchpriority ändern — dann beschwert sich TypeScript,
+              und gewonnen wäre nichts. */}
           <img
             src={image.url}
             alt={site.name}
