@@ -41,6 +41,29 @@ function servePublicData(): Plugin {
   }
 }
 
+// Commit-Hash und Build-Zeit als <meta> in jede Entry-HTML — NICHT als
+// define in die Chunks. Als define landete der Hash über DataStore.ts in 28
+// von 101 Chunks und gab ihnen bei jedem Deploy einen neuen Content-Hash,
+// obwohl sich kein Quellcode geändert hatte; Googlebot verbrannte daraufhin
+// zwei Drittel seines Budgets auf /assets/ (Belege in src/constants/buildInfo.ts).
+// .html trägt no-cache, /assets/ ein Jahr immutable — der wechselnde Wert
+// gehört deshalb ins Dokument.
+function buildInfoMeta(): Plugin {
+  return {
+    name: 'build-info-meta',
+    transformIndexHtml: {
+      order: 'pre',
+      handler(html: string) {
+        return html.replace(
+          '</head>',
+          `  <meta name="an-build-hash" content="${commitHash}">\n` +
+            `    <meta name="an-build-time" content="${buildTime}">\n  </head>`,
+        )
+      },
+    },
+  }
+}
+
 // Build time: bake the country hubs into index.html. The homepage is static,
 // so this is its only crawlable link path to the 98 /sites/{country} pages
 // (see hubsHtml.ts). The papers are linked by /research/, which the research
@@ -119,10 +142,6 @@ function tuneLandingHtml() {
 
 export default defineConfig(({ isSsrBuild }) => ({
   envDir: '..',
-  define: {
-    __BUILD_HASH__: JSON.stringify(commitHash),
-    __BUILD_TIME__: JSON.stringify(buildTime),
-  },
   build: {
     // The SSR bundle is imported by the node sidecar, which serves no static
     // files — copying public/ (61 MB of textures; 1.5 GB if a stale
@@ -171,6 +190,7 @@ export default defineConfig(({ isSsrBuild }) => ({
     }
   },
   plugins: [
+    buildInfoMeta(),
     landingHubs(),
     servePublicData(),
     react(),

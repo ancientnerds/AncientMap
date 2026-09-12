@@ -25,6 +25,28 @@ export function cut(text: string, limit: number): string {
 }
 
 /**
+ * Fußnotenmarker aus Fließtext entfernen: "… in Egypt [1]." → "… in Egypt."
+ *
+ * 2.141 der 5.004 kuratierten Beschreibungen tragen `[n]`-Marker aus der
+ * Anreicherung (raw_data.description_citations). In SitePopup lösen sie sich
+ * zu Links auf — in der Meta-Description, im JSON-LD und auf den
+ * Länder-Karten steht dagegen eine nackte Zahl ohne Referenzliste, und
+ * Google druckt sie so ins Snippet ("…Giza Governorate of Egypt [1].",
+ * geprüft an /sites/egypt/tomb-of-the-birds-3cb40a58 am 12.09.2026).
+ *
+ * Bewusst NICHT in blurb(): das ist die byte-genaue Portierung von
+ * seo_pages.blurb() und wird gegen die eingefrorenen Python-Referenzen
+ * verglichen; Story-Snippets tragen keine Marker.
+ *
+ * Ebenso bewusst ohne collapse(): Absatzumbrüche sind Teil der Beschreibung
+ * und stehen so auch im JSON-LD der Referenz-Heads. Entfernt wird der
+ * Marker und das Leerzeichen davor — sonst nichts.
+ */
+export function stripCitations(text: string): string {
+  return text.replace(/[^\S\n]*\[\d+\]/g, '')
+}
+
+/**
  * Whitespace kollabieren und an der Wortgrenze mit Ellipse kappen —
  * seo_pages.blurb(), eine Definition für Listing-Karten und Descriptions.
  */

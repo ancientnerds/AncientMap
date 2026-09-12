@@ -30,7 +30,7 @@ import type {
 } from '../types/anRoute'
 import { isoDate } from './display'
 import { periodSpan, typeSections } from './grouping'
-import { blurb, collapse, cut } from './text'
+import { blurb, collapse, cut, stripCitations } from './text'
 
 const BASE_URL = 'https://ancientnerds.com'
 const DEFAULT_OG_IMAGE = `${BASE_URL}/landing/og-image.png`
@@ -242,7 +242,9 @@ export function storyArchiveMeta(route: StoryArchiveRoute): PageMeta {
 export function siteMeta(route: SiteRoute): PageMeta {
   const canonical = `${BASE_URL}${encodePath(sitePath(route.country, route.name, route.id))}`
   const siteType = route.site_type || 'Archaeological site'
-  const description = (route.description || '').trim()
+  // Snippet und JSON-LD sind maschinenlesbar und haben keine Referenzliste,
+  // an der ein [n] hängen könnte — siehe stripCitations().
+  const description = stripCitations((route.description || '').trim())
   const ogImage = route.image ? `${BASE_URL}${route.image.url}` : undefined
 
   const place = [

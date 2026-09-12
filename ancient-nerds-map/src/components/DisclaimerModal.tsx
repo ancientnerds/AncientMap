@@ -1,9 +1,7 @@
 import { memo, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { getDisclaimerHTML } from '../shared/disclaimerContent'
-
-declare const __BUILD_HASH__: string
-declare const __BUILD_TIME__: string
+import { BUILD_HASH, BUILD_TIME } from '../constants/buildInfo'
 
 interface DisclaimerModalProps {
   isOpen: boolean
@@ -43,7 +41,7 @@ function DisclaimerModal({ isOpen, onClose }: DisclaimerModalProps) {
         <div
           className="disclaimer-content"
           ref={contentRef}
-          dangerouslySetInnerHTML={/* nosemgrep: semgrep.tsx-dangerously-set-inner-html -- static HTML from build-time constants, no user input */ { __html: getDisclaimerHTML(__BUILD_HASH__, __BUILD_TIME__) }}
+          dangerouslySetInnerHTML={/* nosemgrep: semgrep.tsx-dangerously-set-inner-html -- static HTML from build-time constants, no user input */ { __html: getDisclaimerHTML(BUILD_HASH, BUILD_TIME) }}
         />
       </div>
     </div>

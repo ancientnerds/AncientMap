@@ -16,9 +16,7 @@ import { formatRelativeDate } from '../utils/formatters'
 import SiteForm from '../components/SiteForm'
 import type { SiteFormValues } from '../components/SiteForm'
 import '../styles/db-audit.css'
-
-declare const __BUILD_HASH__: string
-const CACHE_BUSTER = `_v=${__BUILD_HASH__}`
+import { CACHE_BUSTER } from '../constants/buildInfo'
 
 interface AuditSite {
   id: string

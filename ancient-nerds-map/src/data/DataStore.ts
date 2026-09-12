@@ -14,12 +14,10 @@ import {
 import { config } from '../config'
 import { OfflineStorage, CompactSite } from '../services/OfflineStorage'
 import { offlineFetch } from '../services/OfflineFetch'
+import { CACHE_BUSTER } from '../constants/buildInfo'
 
 /** API Base URL - from environment config */
 const API_BASE_URL = config.api.baseUrl
-
-/** Cache buster: changes per deploy so SW/browser caches don't serve stale data */
-const CACHE_BUSTER = `_v=${__BUILD_HASH__}`
 
 // =============================================================================
 // DataStore Class

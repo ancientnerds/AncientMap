@@ -14,7 +14,7 @@ import PageHeader from '../components/layout/PageHeader'
 import { periodSpan, typeSections } from '../seo/grouping'
 import { slugify } from '../seo/meta'
 import { useRoute } from '../seo/RouteContext'
-import { blurb } from '../seo/text'
+import { blurb, stripCitations } from '../seo/text'
 import type { CountrySite } from '../types/anRoute'
 
 import '../styles/story-page.css'
@@ -55,7 +55,9 @@ export function SitesIndexPage() {
 
 function SiteCard({ site }: { site: CountrySite }) {
   const meta = [site.site_type, site.period_name].filter(Boolean).join(' · ')
-  const summary = blurb(site.description)
+  // Die Karte kappt nach 180 Zeichen — ein abgeschnittener Fußnotenmarker
+  // hat dort erst recht keine Referenz (stripCitations()).
+  const summary = blurb(stripCitations(site.description || ''))
   return (
     <a className="story-archive-card site-list-card" href={site.path}>
       {site.thumbnail_url && (

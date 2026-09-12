@@ -8,9 +8,9 @@
 import { config } from '../config'
 import type { Site } from '../types/data'
 import { offlineFetch } from './OfflineFetch'
+import { CACHE_BUSTER } from '../constants/buildInfo'
 
 const API_BASE_URL = config.api.baseUrl
-const CACHE_BUSTER = `_v=${__BUILD_HASH__}`
 
 /** Compact site format from API */
 interface CompactSite {
