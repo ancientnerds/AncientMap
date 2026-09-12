@@ -1,5 +1,6 @@
 import { DataStore } from './DataStore'
 import { SourceMeta } from '../types/data'
+import type { DescriptionCitation } from '../types/anRoute'
 import {
   SOURCE_COLORS,
   CATEGORY_COLORS,
@@ -47,7 +48,7 @@ export interface SiteData {
   bestWikiUrl?: string
   sourceLanguage?: string
   referenceLinks?: ReferenceLink[]
-  descriptionCitations?: { n: number; url: string; title: string; domain: string }[]
+  descriptionCitations?: DescriptionCitation[]
 }
 
 // Period list derived from centralized PERIOD_COLORS

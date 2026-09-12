@@ -381,6 +381,20 @@ jobs:
               rm -rf ancient-nerds-map/dist/dist-new 2>/dev/null || true
               mv ancient-nerds-map/dist "ancient-nerds-map/dist-old-$SWAP_TS" 2>/dev/null || true
               mv ancient-nerds-map/dist-new ancient-nerds-map/dist
+              # Googlebot rendert aus seinem eigenen Cache und holt dabei
+              # Bundles nach, die der Deploy gerade ersetzt hat: 37x 404 auf
+              # /assets/*.js in drei Tagen (nginx-Log 10.-12.09.2026), jedes
+              # davon ein gescheiterter Render. Die Namen sind content-gehasht
+              # und kollidieren nie, also bleiben die alten Chunks liegen.
+              # -n: die frischen Dateien gewinnen. -p: die mitgeschleppten
+              # behalten ihre mtime und altern nach 30 Tagen heraus, statt
+              # bei jedem Deploy neu jung zu werden und ewig zu wachsen.
+              if [ -d "ancient-nerds-map/dist-old-$SWAP_TS/assets" ]; then
+                cp -rpn "ancient-nerds-map/dist-old-$SWAP_TS/assets/." \
+                  ancient-nerds-map/dist/assets/ 2>/dev/null || true
+                find ancient-nerds-map/dist/assets -type f -mtime +30 -delete 2>/dev/null || true
+                echo "    Assets: $(ls ancient-nerds-map/dist/assets | wc -l) Dateien (inkl. Vorgänger-Builds)"
+              fi
               find ancient-nerds-map -maxdepth 1 -name 'dist-old*' -exec rm -rf {} + 2>/dev/null || true
               echo "$AFTER" > ancient-nerds-map/dist/.built-commit
               echo "    Frontend built and swapped successfully (commit: $AFTER)"

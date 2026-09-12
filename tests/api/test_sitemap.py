@@ -15,7 +15,7 @@ from __future__ import annotations
 import asyncio
 import re
 import xml.etree.ElementTree as ET
-from datetime import datetime
+from datetime import datetime, timedelta
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
@@ -76,10 +76,17 @@ SITES = [
     ),
 ]
 
+# Der Floor wandert, wenn sich das Rendering wieder ändert (zuletzt 12.09.2026).
+# Die Fixtures hängen sich daran statt an ein Datum: sonst prüft der Test nach
+# der nächsten Verschiebung nicht mehr, was sein Name behauptet.
+_FLOOR = sm._SITES_TEMPLATE_CHANGED
+_FLOOR_DAY = _FLOOR.strftime("%Y-%m-%d")
+_AFTER_FLOOR = _FLOOR + timedelta(days=10)
+
 COUNTRIES = [
-    # Nach dem Template-Floor (21.08.): Türkiye liegt DANACH und gewinnt,
+    # Türkiye liegt NACH dem Template-Floor und gewinnt,
     # United Kingdom liegt davor und wird auf den Floor gehoben.
-    SimpleNamespace(country="Türkiye", lastmod=datetime(2026, 9, 1)),
+    SimpleNamespace(country="Türkiye", lastmod=_AFTER_FLOOR),
     SimpleNamespace(country="United Kingdom", lastmod=datetime(2026, 7, 2)),
 ]
 
@@ -158,7 +165,7 @@ def test_sites_lastmod_is_floored_at_the_template_change():
     sites = _root(asyncio.run(sm.sitemap_sites(db=_execute_db(SITES))))
     urls = list(sites.iter(f"{NS}url"))
     assert len(urls) == 3
-    assert [u.findtext(f"{NS}lastmod") for u in urls] == ["2026-08-21"] * 3
+    assert [u.findtext(f"{NS}lastmod") for u in urls] == [_FLOOR_DAY] * 3
 
 
 def test_no_url_appears_in_two_parts():
@@ -203,10 +210,10 @@ def test_countries_part_carries_the_hub_and_per_country_lastmod():
     # ältere Daten an — ein Row-Datum NACH dem Template-Umbau gewinnt.
     hub = urls[0]
     assert hub.findtext(f"{NS}loc") == "https://ancientnerds.com/sites/"
-    assert hub.findtext(f"{NS}lastmod") == "2026-09-01"
+    assert hub.findtext(f"{NS}lastmod") == _AFTER_FLOOR.strftime("%Y-%m-%d")
     assert urls[1].findtext(f"{NS}loc") == "https://ancientnerds.com/sites/t%C3%BCrkiye"
-    assert urls[1].findtext(f"{NS}lastmod") == "2026-09-01"
-    assert urls[2].findtext(f"{NS}lastmod") == "2026-08-21"
+    assert urls[1].findtext(f"{NS}lastmod") == _AFTER_FLOOR.strftime("%Y-%m-%d")
+    assert urls[2].findtext(f"{NS}lastmod") == _FLOOR_DAY
 
 
 def test_research_and_articles_parts_link_hub_and_detail_pages():

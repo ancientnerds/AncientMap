@@ -1,5 +1,6 @@
 import type { GalleryImage } from '../ImageGallery'
 import type { SiteData } from '../../data/sites'
+import type { DescriptionCitation } from '../../types/anRoute'
 import type { SeshatPolityData } from '../../types/seshat'
 
 // Artifact type (placeholder - API disabled)
@@ -203,7 +204,7 @@ export interface DescriptionSectionProps {
   bestWikiUrl?: string
   sourceLanguage?: string
   referenceLinks?: ReferenceLink[]
-  descriptionCitations?: { n: number; url: string; title: string; domain: string }[]
+  descriptionCitations?: DescriptionCitation[]
 }
 
 export interface MapSectionProps {

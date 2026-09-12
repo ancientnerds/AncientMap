@@ -191,6 +191,26 @@ describe('site-Detailseite (Task 11): der SSR-Body trägt den Python-Fragment-In
     expect(html).not.toContain('data-ai-generated')
   })
 
+  it('Fußnotenmarker werden im Crawler-Body zu Quellen-Links aufgelöst', () => {
+    // 2.141 der 5.004 kuratierten Beschreibungen tragen [n]-Marker. Bis
+    // 12.09.2026 stand hier die nackte Zahl ohne Referenz — Google druckte
+    // sie so ins Snippet. Die Belege liegen im selben Payload.
+    const cited = renderRoute({
+      ...FIXTURES.site,
+      description: 'Ein Tempelkomplex in Türkiye [1]. Errichtet vor 9600 v. Chr. [2].',
+      description_citations: [
+        { n: 1, url: 'https://example.org/a', title: 'Beleg A', domain: 'example.org' },
+      ],
+    })
+    // n=1 hat einen Beleg → echter Link mit Titel.
+    expect(cited).toContain('href="https://example.org/a"')
+    expect(cited).toContain('Beleg A')
+    // n=2 fehlt in der Liste → Hochstellung statt Link ins Leere.
+    expect(cited).toContain('<sup class="popup-citation-sup">[2]</sup>')
+    // Ein String-Kind pro Marker: keine <!-- -->-Trenner im indexierten HTML.
+    expect(cited).not.toContain('[<!-- -->')
+  })
+
   it('Bild ohne Credit-Daten: keine leere <figcaption> (Python ließ sie weg)', () => {
     const bare = renderRoute({
       ...FIXTURES.site,

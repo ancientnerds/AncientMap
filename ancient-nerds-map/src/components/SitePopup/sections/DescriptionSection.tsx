@@ -1,72 +1,14 @@
 import { useState, type ReactNode } from 'react'
 import SiteMetadata from '../../SiteMetadata'
+import CitationText, { hasCitationMarkers } from '../../CitationText'
 import { hasDisplayableRawData } from '../../../config/sourceFields'
 import { isWikipediaUrl } from '../../../services/imageService'
+import { stripCitations } from '../../../seo/text'
 import type { DescriptionSectionProps } from '../types'
 
 /** Truncate domain label for display (e.g. "hiddenincatours.com" → "hiddenincatours") */
 function shortDomain(domain: string): string {
   return domain.replace(/^www\./, '').replace(/\.(com|org|net|edu|gov|io|co\.uk)$/, '')
-}
-
-/** Build a citation lookup map from descriptionCitations array */
-function buildCitationMap(citations?: { n: number; url: string; title: string; domain: string }[]) {
-  const map = new Map<number, { url: string; title: string; domain: string }>()
-  if (citations) {
-    for (const c of citations) map.set(c.n, c)
-  }
-  return map
-}
-
-/** Render description text with superscript citation links */
-function renderWithCitations(
-  text: string,
-  citationMap: Map<number, { url: string; title: string; domain: string }>,
-): ReactNode[] {
-  const parts: ReactNode[] = []
-  const regex = /\[(\d+)\]/g
-  let lastIndex = 0
-  let match: RegExpExecArray | null
-
-  while ((match = regex.exec(text)) !== null) {
-    // Text before the marker
-    if (match.index > lastIndex) {
-      parts.push(text.slice(lastIndex, match.index))
-    }
-    const num = parseInt(match[1], 10)
-    const cite = citationMap.get(num)
-    if (cite) {
-      parts.push(
-        <a
-          key={`cite-${match.index}`}
-          href={cite.url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="popup-citation-sup"
-          title={cite.title}
-        >
-          [{num}]
-        </a>
-      )
-    } else {
-      parts.push(
-        <sup key={`cite-${match.index}`} className="popup-citation-sup">[{num}]</sup>
-      )
-    }
-    lastIndex = regex.lastIndex
-  }
-
-  // Trailing text
-  if (lastIndex < text.length) {
-    parts.push(text.slice(lastIndex))
-  }
-
-  return parts
-}
-
-/** Strip [N] citation markers from text */
-function stripCitations(text: string): string {
-  return text.replace(/\s*\[\d+\]/g, '')
 }
 
 export function DescriptionSection({
@@ -93,8 +35,7 @@ export function DescriptionSection({
     ? (() => { try { return new URL(bestWikiUrl).hostname } catch { return null } })()
     : null
 
-  const hasCitations = /\[\d+\]/.test(description || '')
-  const citationMap = buildCitationMap(descriptionCitations)
+  const hasCitations = hasCitationMarkers(description)
 
   // Build unique citation source domains for favicon display
   const citationSources: { domain: string; url: string; title: string; nums: number[] }[] = []
@@ -124,7 +65,11 @@ export function DescriptionSection({
     descriptionContent = <p className="popup-description loading">Loading description from Wikipedia...</p>
   } else if (description) {
     if (hasCitations && showCitations) {
-      descriptionContent = <p className="popup-description">{renderWithCitations(description, citationMap)}</p>
+      descriptionContent = (
+        <p className="popup-description">
+          <CitationText text={description} citations={descriptionCitations} />
+        </p>
+      )
     } else if (hasCitations) {
       descriptionContent = <p className="popup-description">{stripCitations(description)}</p>
     } else {

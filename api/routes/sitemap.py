@@ -82,7 +82,15 @@ def _newest(lastmods: list[datetime | None]) -> datetime | None:
 # loading spinner (crawls 2026-08-10..13, verified via URL Inspection
 # 2026-08-30). The row lastmod says March — "nothing new, keep the verdict".
 # The floor advertises the template change so the recrawl actually happens.
-_SITES_TEMPLATE_CHANGED = datetime(2026, 8, 21)
+#
+# 2026-09-12: the Soft-404 verdicts still stood, because Google had not been
+# back — URL Inspection on four of them returned lastCrawlTime 10.–13.08.,
+# all still "Soft 404 / pageFetchState SUCCESSFUL". The cause was crawl
+# budget, not the pages (nginx log: 67 % of Googlebot's requests went to
+# /assets/, see src/constants/buildInfo.ts). With the churn gone the floor
+# moves to the day the snippet itself changed: stripCitations() rewrites the
+# meta description and the JSON-LD of 2,141 of the 5,004 curated sites.
+_SITES_TEMPLATE_CHANGED = datetime(2026, 9, 12)
 
 
 def _sites_lastmod(row_lastmod: datetime | None) -> datetime:

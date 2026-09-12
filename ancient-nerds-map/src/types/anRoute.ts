@@ -20,6 +20,21 @@
  */
 
 /**
+ * Ein Fußnotenbeleg einer Site-Beschreibung (raw_data.description_citations).
+ *
+ * `n` ist die Zahl im Text: "… in Egypt [1]." verweist auf n = 1. Die Form
+ * stand bis 2026-09-12 sechsmal wörtlich im Code — SitePopup, SiteData, das
+ * Route-Payload; benannt gehört sie hierher, weil die Zeile aus dem Payload
+ * kommt und alles andere sie nur weiterreicht.
+ */
+export interface DescriptionCitation {
+  n: number
+  url: string
+  title: string
+  domain: string
+}
+
+/**
  * One news story — the raw row fields api/routes/articles_html.py::story_page
  * hands through (react-ssr Task 14): NewsItem columns verbatim plus the
  * video/site joins and _related_stories(). The http(s) source filter, the
@@ -103,7 +118,7 @@ export interface SiteRoute {
   /** card_stats enrichment — feeds the interactive SitePopup only. */
   best_wiki_url: string | null
   source_language: string | null
-  description_citations: { n: number; url: string; title: string; domain: string }[] | null
+  description_citations: DescriptionCitation[] | null
   alt_names: string[]
   /** Hero from wiki_images with its Commons attribution (licence!). */
   image: {

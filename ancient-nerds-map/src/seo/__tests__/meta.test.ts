@@ -210,6 +210,17 @@ describe('research-Autorschaft im JSON-LD (Art.-50-Fälle aus test_ai_act_notice
     expect(siteMeta(pyrefRoute('site') as never).schema ?? '').not.toContain(IPTC_AI_MARKER)
     expect(countryMeta(pyrefRoute('country') as never).schema ?? '').not.toContain(IPTC_AI_MARKER)
   })
+
+  it('Snippet und JSON-LD tragen keine Fußnotenmarker', () => {
+    // Google druckte "…Giza Governorate of Egypt [1]." ins Suchergebnis:
+    // im Snippet gibt es keine Referenzliste, an der die 1 hängen könnte.
+    const meta = siteMeta({
+      ...pyrefRoute('site'),
+      description: 'Ein Tempelkomplex in Türkiye [1]. Errichtet vor 9600 v. Chr. [2].',
+    } as never)
+    expect(meta.description).toBe('Ein Tempelkomplex in Türkiye. Errichtet vor 9600 v. Chr..')
+    expect(meta.schema ?? '').not.toMatch(/\[\d+\]/)
+  })
 })
 
 describe('renderHead', () => {

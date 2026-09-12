@@ -18,6 +18,7 @@
 
 import { useEffect, useMemo, useState, lazy, Suspense, Fragment } from 'react'
 
+import CitationText from '../components/CitationText'
 import Breadcrumbs from '../components/layout/Breadcrumbs'
 import CommunityCta from '../components/layout/CommunityCta'
 import PageHeader from '../components/layout/PageHeader'
@@ -83,9 +84,14 @@ function SiteRecord({ site }: { site: SiteRoute }) {
           <strong>Also known as:</strong> {altNames.join(', ')}
         </p>
       )}
+      {/* Fußnoten werden aufgelöst wie in SitePopup: die Belege stehen im
+          selben Payload, und ein nacktes [1] ohne Referenz war genau das,
+          was Google aus 2.141 dieser Seiten ins Snippet übernahm. */}
       <div className="story-body">
         {paragraphs.map((p, i) => (
-          <p key={i}>{p}</p>
+          <p key={i}>
+            <CitationText text={p} citations={site.description_citations} />
+          </p>
         ))}
       </div>
       <table className="site-record-facts">
