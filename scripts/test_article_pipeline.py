@@ -67,7 +67,7 @@ def run_summarize(videos: list, settings) -> list[str]:
 def score_items(video_ids: list[str], session, settings) -> int:
     """Score significance for news items from the given videos."""
     from pipeline.database import NewsChannel, NewsItem, NewsVideo
-    from pipeline.lyra.significance_scorer import _rescore_item, _load_prompt
+    from pipeline.lyra.significance_scorer import _load_prompt, _rescore_item
 
     prompt = _load_prompt()
     total = 0
@@ -94,30 +94,30 @@ def score_items(video_ids: list[str], session, settings) -> int:
 
 
 def generate_article(settings, force: bool = False) -> bool:
-    """Generate article. If force=True, delete existing article for this week first."""
+    """Generate article. If force=True, delete the covered week's article first."""
     from pipeline.database import NewsArticle, get_session
-    from pipeline.lyra.article_generator import _get_week_range, generate_weekly_article
+    from pipeline.lyra.article_generator import _get_completed_week_range, generate_weekly_article
 
     if force:
-        week_start, _ = _get_week_range()
+        week_start, _ = _get_completed_week_range()
         with get_session() as s:
             existing = s.query(NewsArticle).filter(NewsArticle.week_start == week_start).first()
             if existing:
                 s.delete(existing)
-                logger.info("Deleted existing article for this week (--force)")
+                logger.info("Deleted existing article for the covered week (--force)")
 
     return generate_weekly_article(settings)
 
 
 def print_article(settings) -> None:
     from pipeline.database import NewsArticle, get_session
-    from pipeline.lyra.article_generator import _get_week_range
+    from pipeline.lyra.article_generator import _get_completed_week_range
 
-    week_start, _ = _get_week_range()
+    week_start, _ = _get_completed_week_range()
     with get_session() as s:
         article = s.query(NewsArticle).filter(NewsArticle.week_start == week_start).first()
         if not article:
-            print("No article found for this week.")
+            print("No article found for the covered week.")
             return
         print("\n" + "=" * 72)
         print(f"TITLE:   {article.title}")
@@ -131,7 +131,7 @@ def print_article(settings) -> None:
 
 def cleanup(session) -> None:
     from pipeline.database import NewsArticle, NewsItem, NewsVideo
-    from pipeline.lyra.article_generator import _get_week_range
+    from pipeline.lyra.article_generator import _get_completed_week_range
 
     # Remove news items created from test videos (status == MARKER_STATUS)
     test_videos = session.query(NewsVideo).filter(NewsVideo.status == MARKER_STATUS).all()
@@ -150,8 +150,8 @@ def cleanup(session) -> None:
             v.status = "transcribed"
         logger.info(f"Restored {len(test_videos)} videos to status='transcribed'")
 
-    # Remove article for this week if it only references test video IDs
-    week_start, _ = _get_week_range()
+    # Remove the covered week's article if it only references test video IDs
+    week_start, _ = _get_completed_week_range()
     article = session.query(NewsArticle).filter(NewsArticle.week_start == week_start).first()
     if article:
         session.delete(article)
@@ -225,7 +225,7 @@ def main() -> None:
     if not created:
         print(
             "\nArticle generation returned False.\n"
-            "Either no items scored >= 7, or an article for this week already exists.\n"
+            "Either no items scored >= 7, or the covered week already has an article.\n"
             "Re-run with --force to replace an existing article."
         )
         # Still show any items we created

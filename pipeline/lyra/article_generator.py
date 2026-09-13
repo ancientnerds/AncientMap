@@ -141,11 +141,18 @@ def _load_prompt(name: str) -> str:
     return (PROMPTS_DIR / name).read_text(encoding="utf-8")
 
 
-def _get_week_range() -> tuple[datetime, datetime]:
-    """Get the start (Monday 00:00) and end (Sunday 23:59) of the current week."""
-    now = datetime.now(UTC)
-    start = now - timedelta(days=now.weekday())
-    start = start.replace(hour=0, minute=0, second=0, microsecond=0)
+def _get_completed_week_range(now: datetime | None = None) -> tuple[datetime, datetime]:
+    """Start (Monday 00:00) and end (Sunday 23:59:59) of the week that just ended.
+
+    The journal runs Monday 06:00 UTC (see should_generate_article), so the
+    *current* week is six hours old and holds nothing to write about — the
+    covered week is the one before it.
+    """
+    now = now or datetime.now(UTC)
+    this_monday = (now - timedelta(days=now.weekday())).replace(
+        hour=0, minute=0, second=0, microsecond=0
+    )
+    start = this_monday - timedelta(days=7)
     end = start + timedelta(days=6, hours=23, minutes=59, seconds=59)
     return start, end
 
@@ -1098,7 +1105,7 @@ def generate_weekly_article(
     *,
     week_override: tuple[datetime, datetime] | None = None,
 ) -> bool:
-    """Generate a weekly article from this week's NewsItems.
+    """Generate a weekly article from the completed week's NewsItems.
 
     Pipeline stages:
       1. collect     — query NewsItems, cluster duplicates, diversity-select
@@ -1131,7 +1138,7 @@ def generate_weekly_article(
     if week_override:
         week_start, week_end = week_override
     else:
-        week_start, week_end = _get_week_range()
+        week_start, week_end = _get_completed_week_range()
 
     # Check for existing article
     with get_session() as session:
@@ -1144,7 +1151,7 @@ def generate_weekly_article(
             .first()
         )
         if existing:
-            logger.info("Active article for this week already exists")
+            logger.info("Active article for week %s already exists", week_start.date())
             return False
 
     # Collect items in a short-lived session (don't hold DB connection
@@ -1155,7 +1162,7 @@ def generate_weekly_article(
             s["count"] = len(items)
 
     if not items:
-        logger.info("No significant items this week for article")
+        logger.info("No significant items in week %s for article", week_start.date())
         _write_final_heartbeat(step_data, t0_total, error="No significant items")
         return False
 
@@ -1342,7 +1349,18 @@ def generate_weekly_article(
     return True
 
 
-def should_generate_article() -> bool:
-    """Check if it's time to generate a weekly article (Sunday evening)."""
-    now = datetime.now(UTC)
-    return now.weekday() == 6 and now.hour >= 20  # Sunday 8 PM UTC
+def should_generate_article(now: datetime | None = None) -> bool:
+    """Check if it's time to generate the weekly journal: Monday 06:00 UTC.
+
+    Was Sunday 20:00 UTC until 2026-09-13. The MiniMax weekly token budget
+    resets Monday 00:00 UTC, so the Sunday slot ran on whatever the week had
+    left — on 2026-09-13 that was 1%. A quota trough there costs the whole
+    journal: the limiter waits in place, the Sunday-only window closes at
+    midnight, and nothing retries it on Monday. Six hours after the reset the
+    budget is fresh, Theo's batch gate is shut (it only claims papers in the
+    last THEO_BATCH_MAX_DAYS_TO_RESET days before the reset), the run has an
+    18-hour window instead of four, and Sunday's last news items make it into
+    the journal instead of being cut off at 20:00.
+    """
+    now = now or datetime.now(UTC)
+    return now.weekday() == 0 and now.hour >= 6  # Monday 6 AM UTC

@@ -27,6 +27,11 @@ logger = logging.getLogger(__name__)
 
 CYCLE_INTERVAL = 3600  # 1 hour between pipeline runs
 MAX_ARTICLE_ATTEMPTS = 3  # Stop retrying after 3 failures per week
+# Minimum spacing between article attempts. The main loop wakes every 60s, so
+# three fast failures (no items yet, a wedged LLM backend) used to burn the
+# whole week's retry budget in three minutes. The Monday 06:00 UTC window is
+# 18h long — spacing the retries lets a transient failure actually pass.
+ARTICLE_RETRY_INTERVAL = 1800  # 30 min
 
 # Liveness file for the docker-compose lyra healthcheck (audit P9). Touched at
 # every main-loop wake (60s), at each pipeline-step start, and around article
@@ -2005,6 +2010,7 @@ def main() -> None:
 
     last_pipeline_run = 0.0
     article_attempts = 0
+    last_article_attempt = 0.0
     article_week_tracked: str | None = None  # ISO date of the week we're tracking
 
     while True:
@@ -2049,18 +2055,26 @@ def main() -> None:
             except Exception:
                 logger.exception("Failed to write heartbeat")
 
-        # Weekly article generation (with retry limit). Touch first: the
-        # pipeline cycle above may have run for a long time, and article
-        # generation itself can hold the loop for many minutes.
+        # Weekly journal generation, Monday 06:00 UTC (with retry limit). Touch
+        # first: the pipeline cycle above may have run for a long time, and
+        # article generation itself can hold the loop for many minutes.
         _touch_heartbeat()
         if should_generate_article():
+            # %W weeks start on Monday, so this key is the week the run happens
+            # in — one key per Monday window, covering the week before it.
             current_week = time.strftime("%Y-W%W", time.gmtime())
             if current_week != article_week_tracked:
                 article_attempts = 0
+                last_article_attempt = 0.0
                 article_week_tracked = current_week
 
-            if article_attempts < MAX_ARTICLE_ATTEMPTS:
+            retry_due = (
+                article_attempts == 0
+                or time.time() - last_article_attempt >= ARTICLE_RETRY_INTERVAL
+            )
+            if article_attempts < MAX_ARTICLE_ATTEMPTS and retry_due:
                 article_attempts += 1
+                last_article_attempt = time.time()
                 try:
                     success = generate_weekly_article(settings)
                     if success:
