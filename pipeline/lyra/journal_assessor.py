@@ -33,6 +33,7 @@ PROMPTS_DIR = Path(__file__).parent / "prompts"
 # ---------------------------------------------------------------------------
 
 from pipeline.lyra.blocked_domains import BLOCKED_DOMAINS as QUALITY_BLOCKED_DOMAINS
+from pipeline.lyra.text_sentences import split_sentences
 
 SPELLING_FIXES = {
     "dolman": "dolmen",
@@ -397,7 +398,7 @@ def _fix_d2_citation_coverage(
     source_block = _format_sources_for_prompt(sources)
 
     for para in uncited[:5]:  # Cap at 5 to limit LLM calls
-        sentences = re.split(r"(?<=[.!?])\s+", para)
+        sentences = split_sentences(para)
         if not sentences:
             continue
 
@@ -618,7 +619,7 @@ def _fix_d10_section_balance(
         if word_count <= limit:
             continue
 
-        sentences = re.split(r"(?<=[.!?])\s+", sec["content"])
+        sentences = split_sentences(sec["content"])
         if not sentences:
             continue
 
@@ -1347,9 +1348,17 @@ def assess_and_fix(
     best_body = body
     best_result = AssessmentResult(score=0, passed=False, iteration=0)
 
+    # Accumulated across ALL iterations, not reset per pass. The loop stops on
+    # the first clean iteration, so a per-iteration list is empty exactly when
+    # the assessor succeeded - the published quality report then claimed "no
+    # fixes" while hiding every correction (journal 75 hid "Boleric -> Balearic
+    # Institute of Nature" and "Shima -> Shimao"). It also gated the caller's
+    # citation re-verification, which is skipped when this list is empty, so
+    # assessor-injected [N] markers reached publish unverified.
+    all_fixes: list[dict] = []
+
     for iteration in range(1, max_iterations + 1):
         logger.info("[assessor] === Iteration %d/%d ===", iteration, max_iterations)
-        all_fixes: list[dict] = []
         dims: dict[str, bool] = {}
 
         # --- Mechanical checks first ---
@@ -1479,7 +1488,7 @@ def assess_and_fix(
             score=score,
             passed=passed,
             dimensions=dims,
-            fixes_applied=all_fixes,
+            fixes_applied=list(all_fixes),
             iteration=iteration,
         )
 
@@ -1497,4 +1506,7 @@ def assess_and_fix(
         if passed:
             return best_body, result
 
+    # best_body carries the edits of every iteration, so the report must list
+    # every fix - not just those made up to the best-scoring pass.
+    best_result.fixes_applied = list(all_fixes)
     return best_body, best_result

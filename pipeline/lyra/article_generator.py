@@ -906,6 +906,71 @@ def _deduplicate_citations(body: str) -> str:
     return "\n\n".join(result)
 
 
+# Words that appear in almost any archaeology headline and therefore carry no
+# matching signal for _inject_screenshots. Kept deliberately small: only words
+# seen filling the >=2-keyword threshold on unrelated paragraphs.
+_STOPWORDS = frozenset(
+    {
+        "about",
+        "after",
+        "also",
+        "ancient",
+        "been",
+        "before",
+        "during",
+        "each",
+        "evidence",
+        "found",
+        "from",
+        "have",
+        "into",
+        "made",
+        "more",
+        "most",
+        "near",
+        "over",
+        "research",
+        "reveals",
+        "shows",
+        "site",
+        "sites",
+        "some",
+        "source",
+        "study",
+        "suggest",
+        "suggests",
+        "than",
+        "that",
+        "their",
+        "there",
+        "these",
+        "this",
+        "under",
+        "unique",
+        "used",
+        "using",
+        "very",
+        "were",
+        "what",
+        "when",
+        "where",
+        "which",
+        "with",
+        "years",
+    }
+)
+
+
+def _normalize_keyword(raw: str) -> str:
+    """Lowercase a headline word and drop surrounding punctuation.
+
+    Returns "" for anything shorter than 4 letters after stripping, so
+    connectives and stray punctuation never become match keys.
+    """
+    word = raw.strip().strip("\"'.,;:!?()[]{}—–-").lower()
+    return word if len(word) >= 4 else ""
+
+
 def _inject_screenshots(body: str, items: list[dict]) -> str:
     """Insert a screenshot after each cluster's first paragraph.
 
@@ -921,8 +986,13 @@ def _inject_screenshots(body: str, items: list[dict]) -> str:
         if not url:
             continue
         alt = item.get("headline", "")
-        # Extract significant keywords (4+ chars) for fuzzy matching
-        keywords = {w.lower() for w in alt.split() if len(w) >= 4}
+        # Extract distinctive keywords for fuzzy matching. A bare 4+ char filter
+        # lets filler words ("from", "with", "made", "site") carry the match, so
+        # any two of them clear the >=2 threshold and the image lands under an
+        # unrelated paragraph (journal 75). Only topical words may match.
+        keywords = {
+            w for w in (_normalize_keyword(raw) for raw in alt.split()) if w and w not in _STOPWORDS
+        }
         if keywords:
             screenshot_entries.append((keywords, f"\n![{alt}]({url})\n"))
 
@@ -1076,6 +1146,27 @@ def _write_final_heartbeat(step_data: dict, t0_total: float, *, error: str | Non
         logger.warning("Failed to write article heartbeat", exc_info=True)
 
 
+def _build_research_scores(step_data: dict) -> dict:
+    """Per-cluster scores for the published quality report.
+
+    Keyed by the cluster's full headline. The step key cannot be used as the
+    label: it is a heartbeat id built from ``headline[:30]``, which is how the
+    UI ended up listing clusters as "Barabar Caves feature unique t".
+    """
+    scores: dict = {}
+    for key, value in step_data.items():
+        if not key.startswith("research_") or not isinstance(value, dict):
+            continue
+        label = value.get("label") or key.removeprefix("research_")
+        scores[label] = {
+            "score": value.get("score", 0),
+            "sources": value.get("count", 0),
+            "elapsed": value.get("elapsed", 0),
+            "status": value.get("status", ""),
+        }
+    return scores
+
+
 def _step(step_data: dict, name: str, t0_total: float):
     """Context manager for pipeline steps — handles heartbeat + timing."""
     import contextlib
@@ -1174,15 +1265,23 @@ def generate_weekly_article(
 
     # ── 3. RESEARCH (per cluster via Theo stages) ─────────────────
     section_results: list[tuple[str, str, ClusterResult]] = []
+    # Items whose cluster actually produced prose. A screenshot may only be
+    # injected for these — otherwise the image lands in the article with no
+    # text about it anywhere (orphaned Osiris Shaft figure, journal 75).
+    written_items: list[dict] = []
 
     for section in sections:
         for item in section["items"]:
             question = _formulate_question(item)
             youtube_facts = _build_youtube_facts(item)
+            # Truncated because it doubles as the heartbeat step key; the full
+            # headline rides along in s["label"] for the quality report, which
+            # used to render this 30-char key as the cluster title.
             step_key = f"research_{item['headline'][:30]}"
 
             logger.info("Researching: %s", question[:80])
             with _step(step_data, step_key, t0_total) as s:
+                s["label"] = item["headline"]
                 result = research_cluster(
                     question,
                     youtube_facts,
@@ -1195,6 +1294,7 @@ def generate_weekly_article(
 
             if result.prose:
                 section_results.append((section["category"], section["label"], result))
+                written_items.append(item)
             else:
                 logger.warning("Cluster returned empty prose: %s", question[:60])
 
@@ -1205,7 +1305,7 @@ def generate_weekly_article(
     # ── 4. ASSEMBLE ──────────────────────────────────────────────
     with _step(step_data, "assemble", t0_total) as s:
         body, unified_sources, unified_videos = _assemble_from_clusters(section_results)
-        body = _inject_screenshots(body, all_items)
+        body = _inject_screenshots(body, written_items)
         body = _deduplicate_citations(body)
         s["count"] = len(unified_sources)
 
@@ -1305,15 +1405,7 @@ def generate_weekly_article(
     article_content = _assemble_article(tldr, polished_body, sources_md, videos_md)
     video_ids = list({item["video_id"] for item in all_items})
 
-    research_scores = {}
-    for k, v in step_data.items():
-        if k.startswith("research_") and isinstance(v, dict):
-            research_scores[k.replace("research_", "")] = {
-                "score": v.get("score", 0),
-                "sources": v.get("count", 0),
-                "elapsed": v.get("elapsed", 0),
-                "status": v.get("status", ""),
-            }
+    research_scores = _build_research_scores(step_data)
 
     quality_report = {
         "assessment_score": assess_result.score,

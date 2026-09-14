@@ -36,6 +36,7 @@ from pipeline.lyra.minimax_shared import (
     create_minimax_client,
     minimax_search,
 )
+from pipeline.lyra.site_search import search_sites
 
 logger = logging.getLogger(__name__)
 
@@ -1174,16 +1175,10 @@ class UnifiedSitesAdapter(SourceAdapter):
 
     async def search(self, query: str, max_results: int = 10) -> list[RawSource]:
         def _do() -> list[RawSource]:
-            import json as _json
-
-            from api.services.lyra_tools import search_sites
-
-            # search_sites is a LangChain @tool — use .invoke()
-            raw_json = search_sites.invoke({"query": query, "limit": min(max_results, 25)})
-            if raw_json.startswith("No sites found"):
-                return []
-
-            sites = _json.loads(raw_json)
+            # pipeline.lyra.site_search, not the api LangChain @tool: the Lyra
+            # image has no api package, so the old import failed on every query
+            # and this tier-1 source was silently missing from every journal.
+            sites = search_sites(query, limit=min(max_results, 25))
             results: list[RawSource] = []
             for site in sites:
                 snippet_parts = []
@@ -1485,21 +1480,22 @@ class MultiSourceSearch:
         """Initialize all available adapters based on which API keys are set."""
         # Always available (no key required, or key is optional)
         self._adapters["ancientnerds_db"] = UnifiedSitesAdapter()
-        self._adapters["ancientnerds_research"] = PublicResearchAdapter()
-        # youtube_transcripts reuses api.services.lyra_tools._hybrid_search, so it
-        # needs the api package (plus its Qdrant/embedding stack). Dockerfile.lyra
-        # copies pipeline/ only, so inside the lyra container that import raises
-        # ModuleNotFoundError on EVERY query — the adapter logged a warning per
-        # research cluster and contributed nothing (observed 2026-08-25). Register
-        # it only where it can actually run. find_spec("api") locates the package
-        # without executing api/__init__.py, which would pull in the whole FastAPI
-        # app; probing a submodule instead would import that parent.
+        # youtube_transcripts reuses api.services.lyra_tools._hybrid_search and
+        # ancientnerds_research reaches Qdrant through api.services.lyra_embeddings,
+        # so both need the api package (plus its Qdrant/Voyage stack). Dockerfile.lyra
+        # copies pipeline/ only, so inside the lyra container those imports raise
+        # ModuleNotFoundError on EVERY query — the adapters logged a warning per
+        # research cluster and contributed nothing (246 warnings in the 2026-09-14
+        # run alone). Register them only where they can actually run. find_spec("api")
+        # locates the package without executing api/__init__.py, which would pull in
+        # the whole FastAPI app; probing a submodule instead would import that parent.
         if importlib.util.find_spec("api") is not None:
+            self._adapters["ancientnerds_research"] = PublicResearchAdapter()
             self._adapters["youtube_transcripts"] = TranscriptAdapter()
         else:
             logger.info(
-                "youtube_transcripts adapter unavailable: the api package is not "
-                "part of this image (lyra ships pipeline/ only)"
+                "ancientnerds_research + youtube_transcripts adapters unavailable: "
+                "the api package is not part of this image (lyra ships pipeline/ only)"
             )
         self._adapters["semantic_scholar"] = SemanticScholarAdapter()
         self._adapters["openalex"] = OpenAlexAdapter()

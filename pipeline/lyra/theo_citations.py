@@ -448,6 +448,20 @@ _DEBUG_TOKEN_RE = re.compile(r"\[(?:N|\.\.\.|…)\](?!\()")
 # scholarship may quote Greek terms; same for Hebrew. Revisit if false positives appear.
 _LANGUAGE_BLEED_RE = re.compile(r"[\u4e00-\u9fff\u0400-\u04ff\u0600-\u06ff]+")
 
+# The weekly journal cites YouTube sources as [V1], [V2], ... - a first-class
+# marker produced by prompts/journal_section.txt and resolved against the
+# ### Videos list by article_generator. Theo papers never emit them.
+#
+# The audit used to see only `[N]`, with two consequences for every journal run:
+# a paragraph carrying nothing but [V3] counted as UNCITED (and D1, the only
+# double-weighted judge dimension, is 10 - uncited_paragraphs), and [V3] was
+# reported as a stray pipeline debug token. Both were measurement errors on
+# correctly attributed prose: 9 of 21 paragraphs in journal 75.
+_VIDEO_MARKER_TOKEN_RE = re.compile(r"V\d+")
+
+# Any resolvable citation marker: a plain reference [7] or a video [V2].
+_ANY_CITATION_RE = re.compile(r"\[V?\d+\]")
+
 
 def detect_placeholder_markers(text: str) -> list[str]:
     """Return all [N - topic] style unresolved-citation placeholders in text."""
@@ -1263,8 +1277,9 @@ def _collect_non_numeric_markers(prose: str) -> list[str]:
     Catches pipeline debug IDs ([5620e1fb87f7]), [N1]-style writer artifacts,
     and grouped forms like [9, 7, 1] (grouped digits are NOT a valid marker —
     they are invisible to renumbering). Markdown links [x](y) are excluded via
-    the negative lookahead; footnotes [^n] and [N - topic] placeholders (already
-    counted separately) are skipped. Deduplicated, first-seen order.
+    the negative lookahead; footnotes [^n], journal video citations [VN], and
+    [N - topic] placeholders (already counted separately) are skipped.
+    Deduplicated, first-seen order.
 
     Brackets INSIDE a quotation are editorial interpolation — the standard way
     to adapt a quote to its sentence (`"evidence over [the past 100,000 years]
@@ -1277,6 +1292,8 @@ def _collect_non_numeric_markers(prose: str) -> list[str]:
     for m in re.finditer(r"\[([^\]\n]+)\](?!\()", prose):
         token = m.group(1).strip()
         if not token or token.isdigit():
+            continue
+        if _VIDEO_MARKER_TOKEN_RE.fullmatch(token):  # [V2] journal video citation
             continue
         if token.startswith("^"):
             continue
@@ -1298,7 +1315,7 @@ def audit_citations(paper_text: str, registry: CitationRegistry) -> dict:
 
     Checks:
     1. Every [N] marker in the text maps to a real reference in registry.
-    2. Every paragraph with a factual claim has at least one [N]
+    2. Every paragraph with a factual claim has at least one [N] or [VN]
        (heuristic: paragraphs > 50 chars that don't start with # are factual).
     3. No orphaned references (assigned number but never cited in text).
     4. No unresolved [N - topic] placeholders leaked into prose.
@@ -1373,7 +1390,7 @@ def audit_citations(paper_text: str, registry: CitationRegistry) -> dict:
     factual_paragraphs = [
         p for section, p in paragraphs_with_section if _is_factual_paragraph(p, section)
     ]
-    uncited_paragraphs = sum(1 for p in factual_paragraphs if not re.search(r"\[\d+\]", p))
+    uncited_paragraphs = sum(1 for p in factual_paragraphs if not _ANY_CITATION_RE.search(p))
     if uncited_paragraphs:
         issues.append(
             f"{uncited_paragraphs} paragraph(s) longer than 50 chars contain no citation marker"

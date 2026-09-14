@@ -34,6 +34,7 @@ from pipeline.lyra.minimax_shared import (
     minimax_chat_anthropic,
     parse_fenced_json,
 )
+from pipeline.lyra.text_sentences import is_complete_sentence, split_sentences
 from pipeline.lyra.theo_citations import CitationRegistry, audit_citations
 from pipeline.lyra.theo_quality_judge import get_restart_stage, judge_paper
 from pipeline.lyra.theo_sources import MultiSourceSearch
@@ -615,7 +616,7 @@ def _stage_write_section(
     return prose
 
 
-def _strip_unsupported_claims(prose: str, problems: list[dict]) -> str:
+def _strip_unsupported_claims(prose: str, problems: list[dict]) -> tuple[str, int]:
     """Remove sentences containing claims the judge identified as unsupported.
 
     Each problem has a 'claim' field with the text of the unsupported claim.
@@ -623,6 +624,20 @@ def _strip_unsupported_claims(prose: str, problems: list[dict]) -> str:
     An unsupported claim must not exist in the output — not even without a citation.
 
     Preserves paragraph structure by processing each paragraph independently.
+
+    Two guards keep a removal from mangling the surrounding prose:
+
+    * Sentences come from :func:`split_sentences`, which does not treat the
+      period in "Kevin C. Nolan" as a boundary. The old inline splitter did,
+      and journal 75 shipped a sentence whose second half had been cut away.
+    * A unit that does not look like a whole sentence is left in place. Deleting
+      a fragment cannot remove the claim cleanly, it only leaves debris, so the
+      claim is reported instead and the judge's retry gets another attempt.
+
+    Returns:
+        The prose and the number of sentences actually removed. The caller must
+        not assume ``len(problems)`` removals - judge claims are frequently not
+        verbatim substrings of the prose, so many match nothing at all.
     """
     claims_lower = []
     for problem in problems:
@@ -631,29 +646,38 @@ def _strip_unsupported_claims(prose: str, problems: list[dict]) -> str:
             claims_lower.append(claim.lower())
 
     if not claims_lower:
-        return prose
+        return prose, 0
 
     # Process per-paragraph to preserve structure
     paragraphs = prose.split("\n\n")
     result_paragraphs: list[str] = []
+    removed = 0
 
     for para in paragraphs:
-        sentences = re.split(r"(?<=[.!?])\s+", para)
+        sentences = split_sentences(para)
         kept = []
         for sentence in sentences:
             sent_lower = sentence.lower()
             # Only strip on exact substring match — no fuzzy overlap
-            if any(claim in sent_lower for claim in claims_lower):
-                logger.info("[journal] Stripped unsupported claim: %s", sentence[:80])
-            else:
+            if not any(claim in sent_lower for claim in claims_lower):
                 kept.append(sentence)
+                continue
+            if not is_complete_sentence(sentence) and len(sentences) > 1:
+                logger.warning(
+                    "[journal] Unsupported claim sits in a fragment, keeping it: %s",
+                    sentence[:80],
+                )
+                kept.append(sentence)
+                continue
+            logger.info("[journal] Stripped unsupported claim: %s", sentence[:80])
+            removed += 1
 
         if kept:
             result_paragraphs.append(" ".join(kept))
 
     prose = "\n\n".join(result_paragraphs)
     prose = re.sub(r"  +", " ", prose)
-    return prose.strip()
+    return prose.strip(), removed
 
 
 def _stage_judge(
@@ -891,8 +915,13 @@ def research_cluster(
             and p.get("action") == "strip_claim"
         ]
         if critical:
-            prose = _strip_unsupported_claims(prose, critical)
-            logger.info("[journal] Stripped %d unsupported claims from prose", len(critical))
+            prose, removed = _strip_unsupported_claims(prose, critical)
+            logger.info(
+                "[journal] Stripped %d of %d unsupported claims from prose "
+                "(the rest matched no sentence verbatim)",
+                removed,
+                len(critical),
+            )
 
         # Track best attempt — a PASSED draft always beats a failed one
         # regardless of raw score; among drafts with the same passed status,

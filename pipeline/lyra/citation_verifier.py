@@ -19,6 +19,7 @@ import logging
 import re
 
 from pipeline.lyra.config import LyraAPIError, LyraSettings, _get_settings, call_api
+from pipeline.lyra.text_sentences import split_sentences
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +38,7 @@ _VERIFY_SCHEMA = {
 def _get_sentence_with_citation(text: str, cite_num: int) -> list[str]:
     """Find all sentences containing [cite_num]."""
     pattern = re.compile(rf"\[{cite_num}\]")
-    sentences = re.split(r"(?<=[.!?])\s+", text)
+    sentences = split_sentences(text)
     return [s for s in sentences if pattern.search(s)]
 
 

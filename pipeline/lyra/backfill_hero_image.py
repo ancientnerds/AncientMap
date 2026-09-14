@@ -31,6 +31,7 @@ from sqlalchemy import text
 
 from pipeline.database import engine
 from pipeline.lyra.hero_picker import pick_hero_image
+from pipeline.lyra.text_sentences import split_sentences
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
@@ -93,7 +94,7 @@ def _reconstruct_from_report(report: str) -> list[dict]:
         # the writer cared about; fall back to caption verbatim.
         rationale = caption
         if caption:
-            parts = [s.strip() for s in re.split(r"(?<=[.!?])\s+", caption) if s.strip()]
+            parts = [s.strip() for s in split_sentences(caption) if s.strip()]
             if len(parts) >= 2:
                 rationale = parts[-1]
 

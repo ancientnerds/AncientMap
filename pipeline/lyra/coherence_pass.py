@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import Literal
 
 from pipeline.lyra.minimax_shared import parse_fenced_json
+from pipeline.lyra.text_sentences import split_sentences
 
 logger = logging.getLogger(__name__)
 
@@ -113,11 +114,6 @@ def _split_sections(body: str) -> list[tuple[str, str]]:
     return out
 
 
-# Sentence split — simple but good enough for measurement extraction. Splits on
-# `. `, `? `, `! ` followed by a capital letter or end of string.
-_SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?])\s+(?=[A-Z(])")
-
-
 def extract_numeric_claims(body: str) -> list[NumericClaim]:
     """Walk the body section-by-section and capture every numeric measurement.
 
@@ -129,7 +125,7 @@ def extract_numeric_claims(body: str) -> list[NumericClaim]:
     for section_title, section_text in _split_sections(body):
         if not section_text:
             continue
-        sentences = _SENTENCE_SPLIT_RE.split(section_text)
+        sentences = split_sentences(section_text)
         for sentence in sentences:
             sentence = sentence.strip()
             if not sentence:

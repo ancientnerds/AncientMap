@@ -16,6 +16,9 @@ from langchain_core.tools import tool
 from sqlalchemy import text
 
 from pipeline.database import get_session
+from pipeline.lyra.site_search import escape_ilike
+from pipeline.lyra.site_search import search_sites as _search_sites
+from pipeline.lyra.text_sentences import split_sentences
 
 logger = logging.getLogger(__name__)
 
@@ -157,9 +160,9 @@ async def _expand_query(query: str, *, vague: bool = False) -> list[str]:
         return [query]
 
 
-def _escape_ilike(value: str) -> str:
-    """Escape ILIKE metacharacters (%, _, \\) so they match literally."""
-    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+# Re-exported from pipeline so the Lyra container (which ships pipeline/ only)
+# shares one implementation. Eight api modules import _escape_ilike from here.
+_escape_ilike = escape_ilike
 
 
 # ---------------------------------------------------------------------------
@@ -225,90 +228,9 @@ def search_sites(
         site_type: Filter by site type (e.g. 'settlement', 'temple', 'burial').
         limit: Maximum results to return (default 10, max 25).
     """
-    query = (query or "")[:500].strip()
-    limit = max(1, min(limit, 25))
-    conditions = ["1=1"]
-    params: dict = {"limit": limit}
-
-    if query:
-        conditions.append(
-            "(unaccent(s.name) ILIKE unaccent(:q) OR s.description ILIKE :q OR unaccent(s.name_normalized) ILIKE unaccent(:q_norm))"
-        )
-        q_safe = _escape_ilike(query)
-        params["q"] = f"%{q_safe}%"
-        params["q_norm"] = f"%{q_safe.lower()}%"
-
-    if period:
-        conditions.append("s.period_name ILIKE :period")
-        params["period"] = f"%{_escape_ilike(period)}%"
-
-    if country:
-        conditions.append("s.country ILIKE :country")
-        params["country"] = f"%{_escape_ilike(country)}%"
-
-    if site_type:
-        conditions.append("s.site_type ILIKE :site_type")
-        params["site_type"] = f"%{_escape_ilike(site_type)}%"
-
-    where = " AND ".join(conditions)
-    sql = f"""
-        SELECT s.id::text, s.name, s.lat, s.lon, s.site_type, s.period_name,
-               s.period_start, s.country, s.description, s.thumbnail_url
-        FROM unified_sites s
-        LEFT JOIN source_meta sm ON s.source_id = sm.id
-        WHERE {where}
-        ORDER BY
-            CASE WHEN unaccent(s.name) ILIKE unaccent(:q) THEN 0 ELSE 1 END,
-            sm.priority ASC NULLS LAST,
-            s.period_start ASC NULLS LAST
-        LIMIT :limit
-    """
-    # If no query provided, don't use the ordering by name match
-    if not query:
-        sql = f"""
-            SELECT s.id::text, s.name, s.lat, s.lon, s.site_type, s.period_name,
-                   s.period_start, s.country, s.description, s.thumbnail_url
-            FROM unified_sites s
-            LEFT JOIN source_meta sm ON s.source_id = sm.id
-            WHERE {where}
-            ORDER BY sm.priority ASC NULLS LAST, s.period_start ASC NULLS LAST
-            LIMIT :limit
-        """
-
-    with get_session() as session:
-        result = session.execute(text(sql), params)
-        rows = result.fetchall()
-
-    if not rows:
+    sites = _search_sites(query, period, country, site_type, limit)
+    if not sites:
         return "No sites found matching the search criteria."
-
-    sites = []
-    for r in rows:
-        site = {
-            "id": r.id,
-            "name": r.name,
-            "lat": round(r.lat, 4),
-            "lon": round(r.lon, 4),
-            "type": r.site_type,
-            "period": r.period_name,
-            "country": r.country,
-        }
-        if r.thumbnail_url:
-            site["thumbnail_url"] = r.thumbnail_url
-        if r.description:
-            site["description"] = r.description[:400]
-        sites.append(site)
-
-    # Deduplicate by name (keep first = highest-priority source)
-    seen_names: set[str] = set()
-    deduped: list[dict] = []
-    for site in sites:
-        norm = site["name"].lower().strip()
-        if norm not in seen_names:
-            seen_names.add(norm)
-            deduped.append(site)
-    sites = deduped
-
     return json.dumps(sites, ensure_ascii=False)
 
 
@@ -627,7 +549,7 @@ def _compress_chunks(
         if not text.strip():
             chunk_sentences.append([])
             continue
-        sentences = re.split(r"(?<=[.!?])\s+", text.strip())
+        sentences = split_sentences(text.strip())
         chunk_sentences.append(sentences)
         for j, sent in enumerate(sentences):
             if len(sent.strip()) > 10:  # Skip tiny fragments

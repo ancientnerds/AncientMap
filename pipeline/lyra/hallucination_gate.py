@@ -15,6 +15,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
+from pipeline.lyra.text_sentences import sentence_span, split_sentences
+
 logger = logging.getLogger(__name__)
 _PROMPTS = Path(__file__).resolve().parent / "prompts"
 
@@ -31,8 +33,6 @@ class Specific:
 # ---------------------------------------------------------------------------
 # Regex bank
 # ---------------------------------------------------------------------------
-
-_SENTENCE_RE = re.compile(r"[^.!?]+[.!?]")
 
 # Two-to-four-word capitalized runs — most hallucinated specialists look like
 # "First Last" or "First M. Last". Caught by this baseline pattern.
@@ -120,57 +120,24 @@ _PERSON_STOPWORDS = frozenset(
 
 
 def _sentence_containing(prose: str, match_start: int) -> str:
-    """Return the nearest sentence containing position `match_start`.
+    """Return the sentence containing position `match_start`.
 
-    Used so extractors that run on the whole prose (needed because the
-    sentence splitter naively treats 'Dr.' as a terminator) can still
-    attach a useful sentence context to each Specific.
+    Extractors that need whole-prose context (honorifics, institutions) use
+    this to attach a sentence to each Specific. Boundary detection is shared
+    with every other sentence consumer via ``sentence_span``.
     """
-    # Backward: last sentence terminator before match_start
-    before = prose[:match_start]
-    start = 0
-    for i in range(len(before) - 1, -1, -1):
-        if before[i] in ".!?":
-            # Honor common abbreviations — keep walking back if the character
-            # ending the sentence is itself inside "Dr.", "Mr.", etc.
-            prefix_tail = before[max(0, i - 5) : i]
-            tail_stripped = re.sub(r"[^A-Za-z]", "", prefix_tail).lower()
-            if tail_stripped[-2:] in ("dr", "mr", "ms", "jr", "sr") or tail_stripped[-4:] in (
-                "prof",
-                "dame",
-                "sir",
-            ):
-                continue
-            start = i + 1
-            break
-
-    # Forward: next terminator after match_start
-    end = len(prose)
-    for j in range(match_start, len(prose)):
-        if prose[j] in ".!?":
-            prefix_tail = prose[max(0, j - 5) : j]
-            tail_stripped = re.sub(r"[^A-Za-z]", "", prefix_tail).lower()
-            if tail_stripped[-2:] in ("dr", "mr", "ms", "jr", "sr") or tail_stripped[-4:] in (
-                "prof",
-                "dame",
-                "sir",
-            ):
-                continue
-            end = j + 1
-            break
-
-    return prose[start:end].strip()
+    span_start, span_end = sentence_span(prose, match_start)
+    return prose[span_start:span_end].strip()
 
 
 def extract_specifics(prose: str) -> list[Specific]:
     """Return every specific worth verifying against the evidence pack.
 
     Extracts proper nouns, dates, measurements, quoted phrases, titled
-    works, and named institutions from the full prose. The quick
-    sentence splitter (``_SENTENCE_RE``) is too naive for prose that
-    includes honorifics like "Dr.", so the honorific and institution
-    extractors run on the whole string and lazily compute the containing
-    sentence for each match via ``_sentence_containing``.
+    works, and named institutions from the full prose. The honorific and
+    institution extractors run on the whole string and lazily compute the
+    containing sentence for each match via ``_sentence_containing``, because
+    a match may legitimately straddle what looks like a terminator.
     """
     if not prose:
         return []
@@ -228,8 +195,8 @@ def extract_specifics(prose: str) -> list[Specific]:
 
     # Dates, measurements, quotes, titles — per-sentence is fine (terminator
     # false positives inside these are rare and low-stakes).
-    for s_match in _SENTENCE_RE.finditer(prose):
-        sentence = s_match.group(0).strip()
+    for raw_sentence in split_sentences(prose):
+        sentence = raw_sentence.strip()
         if not sentence:
             continue
 
@@ -316,12 +283,16 @@ def delete_sentences_with_specifics(
     prose: str,
     unsupported: list[Specific],
 ) -> str:
-    """Regex-remove every sentence containing any unsupported specific text."""
+    """Remove every sentence containing any unsupported specific text.
+
+    Uses the shared splitter so a period inside "Kevin C. Nolan" or "ca. 2300
+    BCE" cannot fake a sentence boundary - splitting there would delete half a
+    sentence and leave the other half in the paper.
+    """
     if not unsupported:
         return prose
     keep: list[str] = []
-    for s_match in _SENTENCE_RE.finditer(prose):
-        sentence = s_match.group(0)
+    for sentence in split_sentences(prose):
         contains_bad = any(u.text.lower() in sentence.lower() for u in unsupported)
         if not contains_bad:
             keep.append(sentence)

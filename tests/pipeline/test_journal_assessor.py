@@ -481,3 +481,78 @@ class TestD9SummaryMechanical:
         result = _check_d9_summary(body)
         assert not result["passed"]
         assert any("Xanadu Palace" in issue for issue in result["issues"])
+
+
+class TestFixesAppliedAccumulation:
+    """`fixes_applied` must survive convergence.
+
+    The list used to be reset at the top of every iteration, and the stored
+    result is the last iteration's. Since the loop stops on the first clean
+    pass, the published report claimed "no fixes" precisely when the assessor
+    had succeeded - journal 75 hid "Boleric -> Balearic Institute of Nature"
+    and "Shima -> Shimao". It also gated the caller's citation re-verification,
+    which only runs when this list is non-empty.
+    """
+
+    def _all_clean(self, monkeypatch):
+        """Neutralise every check except D7 so no LLM is reached."""
+        import pipeline.lyra.journal_assessor as ja
+
+        passing = {"passed": True, "issues": []}
+        for name in (
+            "_check_d8_week_date",
+            "_check_d5_source_quality",
+            "_check_d3_academic_citations",
+            "_check_d2_citation_coverage",
+            "_check_d10_section_balance",
+            "_check_d4_screenshots",
+            "_check_d6_spelling",
+            "_check_d9_summary",
+        ):
+            monkeypatch.setattr(ja, name, lambda *a, **kw: dict(passing))
+        monkeypatch.setattr(
+            ja,
+            "_check_d1_proper_nouns",
+            lambda *a, **kw: {"passed": True, "issues": [], "corrections": []},
+        )
+        return ja
+
+    def test_fix_from_an_earlier_iteration_survives_convergence(self, monkeypatch):
+        ja = self._all_clean(monkeypatch)
+
+        calls = {"n": 0}
+
+        def _d7(body, sources):
+            calls["n"] += 1
+            # Fail once, then pass — exactly the shape that used to lose the fix.
+            return {"passed": calls["n"] > 1, "issues": ["comma citation"]}
+
+        monkeypatch.setattr(ja, "_check_d7_citation_format", _d7)
+        monkeypatch.setattr(ja, "_fix_d7_citation_format", lambda body, sources: body)
+
+        body = "Evidence found [6, 7] at the site.\n\n### Sources\n\n1. [x](https://e.org)\n"
+        _fixed, result = ja.assess_and_fix(
+            body,
+            [{"citation": 6, "url": "https://e.org", "label": "x", "type": "web"}],
+            settings=MagicMock(),
+        )
+
+        assert result.passed
+        assert result.iteration == 2
+        assert [f["dimension"] for f in result.fixes_applied] == ["D7"]
+
+    def test_no_fixes_reports_an_empty_list(self, monkeypatch):
+        ja = self._all_clean(monkeypatch)
+        monkeypatch.setattr(
+            ja, "_check_d7_citation_format", lambda *a, **kw: {"passed": True, "issues": []}
+        )
+
+        body = "Evidence found [6] at the site.\n\n### Sources\n\n1. [x](https://e.org)\n"
+        _fixed, result = ja.assess_and_fix(
+            body,
+            [{"citation": 6, "url": "https://e.org", "label": "x", "type": "web"}],
+            settings=MagicMock(),
+        )
+
+        assert result.passed
+        assert result.fixes_applied == []

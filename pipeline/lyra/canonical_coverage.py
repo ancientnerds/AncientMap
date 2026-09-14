@@ -14,6 +14,8 @@ import logging
 import re
 from pathlib import Path
 
+from pipeline.lyra.text_sentences import split_sentences
+
 logger = logging.getLogger(__name__)
 
 _PROMPTS = Path(__file__).resolve().parent / "prompts"
@@ -52,7 +54,7 @@ def extract_user_subquestions(question: str) -> list[str]:
     """
     if not question:
         return []
-    sentences = re.split(r"(?<=[.!?])\s+", question)
+    sentences = split_sentences(question)
     out: list[str] = []
     for s in sentences:
         s = s.strip()

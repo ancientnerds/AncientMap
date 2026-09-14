@@ -11,6 +11,7 @@ from __future__ import annotations
 import re
 
 from pipeline.lyra.image_fetcher import ImageCandidate
+from pipeline.lyra.text_sentences import split_sentences
 from pipeline.lyra.theo_citations import contains_non_latin_script
 
 _SOURCE_LABEL = {
@@ -86,7 +87,7 @@ def _trim_relevance(rationale: str) -> str:
     """
     if not rationale:
         return ""
-    first_sentence = re.split(r"(?<=[.!?])\s+", rationale.strip(), maxsplit=1)[0]
+    first_sentence = split_sentences(rationale.strip(), maxsplit=1)[0]
     stripped = _ARGUE_OPENER_RE.sub("", first_sentence).strip().rstrip(".")
     if not stripped or _META_VOICE_RE.search(stripped):
         return ""
