@@ -43,6 +43,7 @@ from pipeline.utils.http import fetch_with_retry
 from pipeline.utils.text import (
     categorize_period,
     clean_description,
+    clean_llm_name,
     extract_period_from_text,
     normalize_name,
 )
@@ -398,7 +399,10 @@ def _process_single(
             )
             return True
 
-    corrected_name = identification.get("site_name", "")
+    # clean_llm_name() drops the "null"/"unknown" placeholders the model returns
+    # instead of omitting site_name — untreated they became the card title AND
+    # the string this function searches the DB for two lines below.
+    corrected_name = clean_llm_name(identification.get("site_name")) or ""
     confidence = identification.get("confidence", "unknown")
     logger.info(
         f"  [{contribution.name}] Identified as '{corrected_name}' (confidence: {confidence})"
@@ -664,11 +668,7 @@ def _process_single(
             "research": research.to_dict(),
         }
         _maybe_promote(session, contribution, search_name, settings)
-        if contribution.promoted_site_id:
-            _store_garble_alias(
-                session, contribution.promoted_site_id, contribution.name, search_name
-            )
-            # Wikidata aliases stored inside _handle_wikidata_match after promotion
+        # Wikidata aliases stored inside _handle_wikidata_match after promotion
         return result
 
     # If research found a GeoNames or Wikipedia match but no Wikidata QID
@@ -1594,41 +1594,6 @@ def _generate_synthetic_description(
     return " ".join(parts)
 
 
-def _store_garble_alias(
-    session: Session, site_id: uuid.UUID, garbled_name: str, canonical_name: str
-) -> None:
-    """Store a garbled caption name as an alias for faster future matching.
-
-    Only stores if the garbled name differs from the canonical name and
-    the alias doesn't already exist (unique constraint handles races).
-    """
-    garbled_normalized = normalize_name(garbled_name)
-    canonical_normalized = normalize_name(canonical_name)
-    if not garbled_normalized or garbled_normalized == canonical_normalized:
-        return
-
-    existing = (
-        session.query(UnifiedSiteName)
-        .filter(
-            UnifiedSiteName.site_id == site_id,
-            UnifiedSiteName.name_normalized == garbled_normalized,
-        )
-        .first()
-    )
-    if existing:
-        return
-
-    session.add(
-        UnifiedSiteName(
-            site_id=site_id,
-            name=garbled_name,
-            name_normalized=garbled_normalized,
-            name_type="caption_garble",
-        )
-    )
-    logger.info(f"  Stored garble alias: '{garbled_name}' -> site {site_id}")
-
-
 def _check_spatial_an_match(
     session: Session,
     lat: float,
@@ -1996,9 +1961,6 @@ def _handle_db_match(
             f"'{site.name}' ({updated} items linked, {len(external_sources)} ext sources)"
         )
 
-    # Store garbled caption name as alias for faster future matching
-    _store_garble_alias(session, site_uuid, contribution.name, site.name)
-
     contribution.score = _compute_score(contribution)
     return True
 
@@ -2205,9 +2167,8 @@ def _handle_wikidata_match(
     # Promote if score is high enough and has coordinates
     _maybe_promote(session, contribution, site_name, settings)
 
-    # Store garble alias + Wikidata aliases for the promoted site (if promoted)
+    # Store Wikidata aliases for the promoted site (if promoted)
     if contribution.promoted_site_id:
-        _store_garble_alias(session, contribution.promoted_site_id, contribution.name, site_name)
         if enrichment.get("wikidata_names"):
             _store_wikidata_aliases(
                 session,
@@ -2356,11 +2317,6 @@ def _handle_ai_enriched_site(
     )
 
     _maybe_promote(session, contribution, search_name, settings)
-
-    # Store garble alias for the promoted site (if promoted)
-    # No Wikidata aliases here — this path has no Wikidata enrichment
-    if contribution.promoted_site_id:
-        _store_garble_alias(session, contribution.promoted_site_id, contribution.name, search_name)
 
     return True
 

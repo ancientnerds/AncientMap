@@ -925,11 +925,57 @@
   overflow: hidden;
 }
 
+/* Width comes from the viewport, never from the container's HEIGHT. The old
+   ResizeObserver set width = split height to keep the globe square; combined
+   with `flex: 0 0 auto` that made a taller window steal width from the cards,
+   and at 1024x1366 the card pane collapsed to 24px of padding. */
 .radar-split-map {
   position: relative;
-  flex: 0 0 auto;
+  flex: 0 0 clamp(300px, 34vw, 640px);
   height: 100%;
   min-width: 0;
+  transition: flex-basis 0.25s ease, opacity 0.2s ease;
+}
+
+/* Collapsed once the reviewer starts scrolling the card list. RadarMap is
+   unmounted at the same time (see LyraRadarPage.tsx) — its rAF sweep held
+   ~99% of a CPU core for as long as it stayed mounted. */
+.radar-split-view.globe-collapsed .radar-split-map {
+  flex-basis: 0;
+  height: 0;
+  opacity: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+/* Sticky, not absolute: the card pane is the scroller, so an absolutely
+   positioned button would scroll out of reach exactly when the globe is
+   collapsed and you want it back. */
+.radar-globe-toggle {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  width: fit-content;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 11px;
+  font-family: inherit;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.75);
+  background: rgba(10, 26, 31, 0.85);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid var(--accent-glow-30);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.radar-globe-toggle:hover {
+  border-color: rgba(78, 205, 196, 0.55);
+  color: #fff;
 }
 
 .radar-split-map .radar-map-container {
@@ -956,9 +1002,12 @@
   max-width: none;
 }
 
+/* A column never goes below the width the columnCount maths assumes, so a card
+   can't be squeezed to an unreadable 34px. The pane scrolls vertically only;
+   with `flex: 0 1 <basis>` the columns shrink to fit rather than overflow. */
 .radar-split-cards .lyra-discoveries-column {
-  flex: 1;
-  min-width: 0;
+  flex: 1 1 var(--radar-column-width, 320px);
+  min-width: var(--radar-column-width, 320px);
   display: flex;
   flex-direction: column;
   gap: 12px;

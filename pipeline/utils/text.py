@@ -99,6 +99,27 @@ def clean_description(description: str | None, max_length: int = 1000) -> str | 
     return text if text else None
 
 
+# Strings an LLM emits to mean "I have no name for this". They arrive as real
+# JSON strings, not JSON null, so `if value:` and SQL COALESCE both let them
+# through. Until 2026-09-14 they reached the radar as site titles: 47 cards
+# were literally called "null" and the DB was trigram-searched for the word.
+_LLM_NULL_NAMES = {"null", "none", "nil", "n/a", "na", "unknown", "undefined", "-", "--"}
+
+
+def clean_llm_name(name: str | None) -> str | None:
+    """Return a usable site name from LLM output, or None.
+
+    Rejects the placeholder strings models emit instead of omitting the field.
+    Use this at every boundary where a model-supplied name enters the pipeline.
+    """
+    if not name:
+        return None
+    cleaned = re.sub(r"\s+", " ", name).strip().strip("\"'")
+    if not cleaned or cleaned.lower() in _LLM_NULL_NAMES:
+        return None
+    return cleaned
+
+
 _TRANSLITERATION_MAP = {
     "ph": "f",
     "kh": "ch",

@@ -16,7 +16,12 @@ from pipeline.database import (
     UserContribution,
     get_session,
 )
-from pipeline.utils.text import categorize_period, extract_period_from_text, normalize_name
+from pipeline.utils.text import (
+    categorize_period,
+    extract_period_from_text,
+    normalize_name,
+    normalize_transliteration,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -155,6 +160,18 @@ def _find_site_by_name(
     2. Exact match on unified_site_names.name_normalized (alternate names)
     2.5. Spaceless match on unified_site_names.name_normalized
     If multiple results, prefer curated sources (lowest priority number).
+
+    Steps 2/2.5 treat every unified_site_names row as authoritative evidence,
+    so only name types that are themselves authoritative may live in that
+    table: ``label`` (the site's own name), ``wikidata_alias`` (Wikidata
+    "also known as") and ``alias`` (written by a founder merge). The
+    ``caption_garble`` type violated that rule — site_identifier wrote the
+    *unverified* contribution name onto whichever site a 0.35-threshold
+    trigram search had picked, and this function then promoted that guess to
+    an exact match forever. 597 such rows mislinked 588 news items and, via
+    _correct_text_fields() below, rewrote 206 published headlines with the
+    wrong site name ("Jiahu" → "Kahu-Jo-Darro"). Writer and rows removed
+    2026-09-14; do not reintroduce a memoized fuzzy match here.
     """
     normalized = normalize_name(extracted_name)
     if not normalized or len(normalized) < 3:
@@ -220,13 +237,40 @@ def _pick_best_match(
     return min(matches, key=lambda m: source_priority.get(m.source_id, 99))
 
 
-def _correct_text_fields(item: NewsItem, canonical_name: str) -> None:
-    """Replace garbled site_name_extracted with canonical name in text fields.
+def _is_same_name(extracted: str, canonical: str) -> bool:
+    """True when two names are spellings of the same name, not two names.
 
-    Case-insensitive replacement. Only runs if names actually differ.
+    Containment covers expansions ("Hawara" / "Pyramid of Amenemhat III at
+    Hawara"); normalize_transliteration covers spelling variants ("Osireion" /
+    "Osirion"). Anything else is two different places and must not drive a
+    rewrite of published text.
+    """
+    a, b = normalize_name(extracted), normalize_name(canonical)
+    if not a or not b:
+        return False
+    if a in b or b in a:
+        return True
+    return normalize_transliteration(extracted) == normalize_transliteration(canonical)
+
+
+def _correct_text_fields(item: NewsItem, canonical_name: str) -> None:
+    """Replace a garbled site_name_extracted with the canonical spelling.
+
+    Case-insensitive replacement, and only between two spellings of the SAME
+    name. Before the _is_same_name gate this rewrote on any match at all, so a
+    wrong match rewrote the story itself: 206 published headlines carried the
+    matched site's name instead of the one the video said ("Jiahu" appeared as
+    "Kahu-Jo-Darro", a different site 4,000 km away). The site_id link already
+    carries the identification — the text must keep saying what the source said.
     """
     extracted = item.site_name_extracted
     if not extracted or extracted == canonical_name:
+        return
+    if not _is_same_name(extracted, canonical_name):
+        logger.debug(
+            f"Not rewriting text for item {item.id}: '{extracted}' and "
+            f"'{canonical_name}' are different names"
+        )
         return
 
     pattern = re.compile(re.escape(extracted), re.IGNORECASE)
@@ -308,8 +352,43 @@ def match_sites_for_pending_items() -> int:
                 _upsert_lyra_suggestion(session, item)
             item.site_match_tried = True
 
+        session.flush()
+        recount_mentions(session)
+
     logger.info(f"Site matching complete: {matched}/{len(items)} items matched")
     return matched
+
+
+def recount_mentions(session: Session) -> int:
+    """Set every lyra contribution's mention_count to its true news-item count.
+
+    mention_count used to be accumulated with ``+= 1`` per processed item, so
+    every re-match cycle (and every v8/v9 status reset that cleared
+    site_match_tried) counted the same news item again. On 2026-09-14 prod
+    carried 34,061 accumulated mentions against 2,464 news items with a name —
+    one card claimed 1,047 mentions with 21 real items, while the radar UI
+    used that number as a filter, a sort key and a badge.
+
+    The count is derivable, so derive it. Returns the number of rows changed.
+    """
+    counts: dict[str, int] = {}
+    for (extracted,) in session.query(NewsItem.site_name_extracted).filter(
+        NewsItem.site_name_extracted.isnot(None)
+    ):
+        key = normalize_name(extracted)
+        if key:
+            counts[key] = counts.get(key, 0) + 1
+
+    changed = 0
+    for contrib in session.query(UserContribution).filter(UserContribution.source == "lyra"):
+        true_count = counts.get(normalize_name(contrib.corrected_name or contrib.name), 0)
+        if contrib.mention_count != true_count:
+            contrib.mention_count = true_count
+            changed += 1
+
+    if changed:
+        logger.info(f"Recounted mention_count on {changed} lyra contributions")
+    return changed
 
 
 def _extract_topic_metadata(session: Session, item: NewsItem) -> dict:
@@ -362,7 +441,9 @@ def _upsert_lyra_suggestion(
     existing = _find_lyra_contribution(session, normalized)
 
     if existing:
-        existing.mention_count += 1
+        # mention_count is not incremented here — recount_mentions() derives it
+        # from news_items at the end of the cycle. Incrementing double-counted
+        # every item that a status reset sent through matching a second time.
         # Update metadata if we have better data now
         if metadata.get("country") and not existing.country:
             existing.country = metadata["country"]

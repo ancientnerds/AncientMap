@@ -830,15 +830,20 @@ def _run_migrations(engine) -> None:
         )
 
         # Backfill corrected_name from enrichment_data for already-processed items
-        # (including promoted ones that the v9 reset doesn't touch)
+        # (including promoted ones that the v9 reset doesn't touch).
+        # The lower(trim(...)) NOT IN list mirrors _LLM_NULL_NAMES in
+        # pipeline/utils/text.py: the model returns those as JSON *strings*, so
+        # `IS NOT NULL` passes them and they end up as the radar card's title.
         conn.execute(
             text("""
             UPDATE user_contributions
-            SET corrected_name = enrichment_data->'identification'->>'site_name'
+            SET corrected_name = trim(enrichment_data->'identification'->>'site_name')
             WHERE source = 'lyra'
               AND corrected_name IS NULL
               AND enrichment_data IS NOT NULL
               AND enrichment_data->'identification'->>'site_name' IS NOT NULL
+              AND lower(trim(enrichment_data->'identification'->>'site_name'))
+                  NOT IN ('', 'null', 'none', 'nil', 'n/a', 'na', 'unknown', 'undefined', '-', '--')
               AND lower(trim(enrichment_data->'identification'->>'site_name')) != lower(trim(name))
         """)
         )

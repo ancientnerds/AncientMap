@@ -111,6 +111,13 @@ interface RadarStats {
 type StatusFilter = 'all' | 'enriched' | 'pending' | 'added' | 'rejected'
 type SourceFilter = 'all' | 'lyra' | 'user'
 
+/** Narrowest a review card may get. Drives both the column count and the CSS
+ *  min-width, so the two can never disagree (they did: the grid divided by 300
+ *  while nothing stopped a column from rendering at 34px). */
+const MIN_COLUMN_PX = 320
+/** How far the card pane must scroll before the globe collapses. */
+const GLOBE_HIDE_SCROLL_PX = 80
+
 function formatTimestamp(seconds: number): string {
   if (!seconds || seconds <= 0) return ''
   const m = Math.floor(seconds / 60)
@@ -671,9 +678,11 @@ export default function LyraRadarPage() {
   const [hideSpeculative, setHideSpeculative] = useState(false)
   const sentinelRef = useRef<HTMLDivElement>(null)
   const gridRef = useRef<HTMLDivElement>(null)
-  const splitRef = useRef<HTMLDivElement>(null)
-  const mapPaneRef = useRef<HTMLDivElement>(null)
+  const cardsPaneRef = useRef<HTMLDivElement>(null)
   const [showScrollTop, setShowScrollTop] = useState(false)
+  const [globeHiddenByScroll, setGlobeHiddenByScroll] = useState(false)
+  const [globePinned, setGlobePinned] = useState(false)
+  const showGlobe = globePinned || !globeHiddenByScroll
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>('all')
   const [filtersExpanded, setFiltersExpanded] = useState(false)
   const [columnCount, setColumnCount] = useState(1)
@@ -800,10 +809,18 @@ export default function LyraRadarPage() {
     }
   }, [token, authPost, refreshStats])
 
+  // The page root is height:100vh/overflow:hidden, so `window` never scrolls —
+  // the card pane is the only scroller. Both the scroll-to-top button and the
+  // globe collapse hang off it.
   useEffect(() => {
-    const onScroll = () => setShowScrollTop(window.scrollY > 400)
-    window.addEventListener('scroll', onScroll, { passive: true })
-    return () => window.removeEventListener('scroll', onScroll)
+    const pane = cardsPaneRef.current
+    if (!pane) return
+    const onScroll = () => {
+      setShowScrollTop(pane.scrollTop > 400)
+      setGlobeHiddenByScroll(pane.scrollTop > GLOBE_HIDE_SCROLL_PX)
+    }
+    pane.addEventListener('scroll', onScroll, { passive: true })
+    return () => pane.removeEventListener('scroll', onScroll)
   }, [])
 
   const fetchRadar = useCallback(async (
@@ -911,26 +928,14 @@ export default function LyraRadarPage() {
     return () => observer.disconnect()
   }, [hasMore, loading, page, fetchRadar, minMentions, sortBy, statusFilter, sourceFilter, categoryFilter, hideSpeculative])
 
-  // Keep map pane square (width = height of split container)
-  useEffect(() => {
-    const split = splitRef.current
-    const mapPane = mapPaneRef.current
-    if (!split || !mapPane) return
-    const ro = new ResizeObserver(([entry]) => {
-      const h = entry.contentRect.height
-      mapPane.style.width = `${h}px`
-    })
-    ro.observe(split)
-    return () => ro.disconnect()
-  }, [])
-
-  // Auto-detect column count for card grid
+  // Auto-detect column count for card grid. The map pane's width is pure CSS
+  // now — deriving it from the container height used to starve this grid.
   useEffect(() => {
     const el = gridRef.current
     if (!el) return
     const ro = new ResizeObserver(([entry]) => {
       const w = entry.contentRect.width
-      setColumnCount(Math.max(1, Math.floor(w / 300)))
+      setColumnCount(Math.max(1, Math.floor(w / MIN_COLUMN_PX)))
     })
     ro.observe(el)
     return () => ro.disconnect()
@@ -1082,18 +1087,42 @@ export default function LyraRadarPage() {
         ]} />
       )}
 
-      <div className="radar-split-view" ref={splitRef}>
-        {/* LEFT: Map pane */}
-        <div className="radar-split-map" ref={mapPaneRef}>
-          <Suspense fallback={<div style={{ width: '100%', height: '100%' }} />}>
-            <RadarMap items={allRadarMapItems} highlightId={highlightedCardId}
-                      filterFn={mapFilterFn}
-                      onHoverItem={handleMapHover} onPinItem={handleMapPin} />
-          </Suspense>
+      <div className={`radar-split-view${showGlobe ? '' : ' globe-collapsed'}`}>
+        {/* LEFT: Map pane. Unmounted when collapsed so RadarMap's cleanup runs
+            and its requestAnimationFrame sweep stops burning a CPU core. */}
+        <div className="radar-split-map">
+          {showGlobe && (
+            <Suspense fallback={<div style={{ width: '100%', height: '100%' }} />}>
+              <RadarMap items={allRadarMapItems} highlightId={highlightedCardId}
+                        filterFn={mapFilterFn}
+                        onHoverItem={handleMapHover} onPinItem={handleMapPin} />
+            </Suspense>
+          )}
         </div>
 
         {/* RIGHT: Card list */}
-        <div className="radar-split-cards">
+        <div
+          className="radar-split-cards"
+          ref={cardsPaneRef}
+          style={{ ['--radar-column-width' as string]: `${MIN_COLUMN_PX}px` }}
+        >
+          <button
+            className="radar-globe-toggle"
+            onClick={() => {
+              const next = !showGlobe
+              setGlobePinned(next)
+              setGlobeHiddenByScroll(!next)
+            }}
+            title={showGlobe ? 'Hide the globe and widen the review list' : 'Show the globe'}
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <circle cx="12" cy="12" r="10" />
+              <line x1="2" y1="12" x2="22" y2="12" />
+              <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+            </svg>
+            {showGlobe ? 'Hide globe' : 'Show globe'}
+          </button>
+
           <AiNoticeBanner />
 
           {error && (
@@ -1133,7 +1162,7 @@ export default function LyraRadarPage() {
       {showScrollTop && (
         <button
           className="lyra-scroll-top"
-          onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+          onClick={() => cardsPaneRef.current?.scrollTo({ top: 0, behavior: 'smooth' })}
           aria-label="Scroll to top"
         >
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">

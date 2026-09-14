@@ -227,6 +227,13 @@ export default function RadarMap({ items, highlightId, filterFn, onHoverItem, on
       const tick = (now: number) => {
         if (!mapRef.current) return
         const m = mapRef.current
+        // The browser already suspends rAF in a hidden tab, but a re-entry
+        // would otherwise replay the whole elapsed sweep in one frame.
+        if (document.hidden) {
+          sweepStart = now
+          scanAnimRef.current = requestAnimationFrame(tick)
+          return
+        }
         const progress = ((now - sweepStart) % SWEEP_MS) / SWEEP_MS
 
         // 0-360 degree space → -180..180 longitude
