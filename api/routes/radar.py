@@ -424,9 +424,7 @@ def _row_to_item(row) -> dict:
         if isinstance(wd, dict):
             cc = wd.get("commons_category")
             if cc:
-                commons_url = (
-                    f"https://commons.wikimedia.org/wiki/Category:{cc.replace(' ', '_')}"
-                )
+                commons_url = f"https://commons.wikimedia.org/wiki/Category:{cc.replace(' ', '_')}"
             elif wd.get("thumbnail_url"):
                 thumb = wd["thumbnail_url"]
                 # Extract filename from Wikimedia Commons thumbnail URL
@@ -451,9 +449,7 @@ def _row_to_item(row) -> dict:
         "period_end": row.period_end,
         "thumbnail_url": row.thumbnail_url,
         "screenshot_url": getattr(row, "latest_screenshot_url", None),
-        "avg_significance": round(float(row.avg_significance), 1)
-        if row.avg_significance
-        else None,
+        "avg_significance": round(float(row.avg_significance), 1) if row.avg_significance else None,
         "top_news_category": getattr(row, "top_news_category", None),
         "is_speculative": getattr(row, "is_speculative", False),
         "speculative_tag": getattr(row, "speculative_tag", None),
