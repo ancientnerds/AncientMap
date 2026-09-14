@@ -22,12 +22,22 @@ _BEHIND_PROXY = os.environ.get("TRUSTED_PROXY", "").strip() in ("1", "true", "ye
 
 
 def get_client_ip(request: Request) -> str:
-    """Extract client IP. Trusts X-Forwarded-For only when TRUSTED_PROXY=1."""
+    """Extract client IP. Trusts proxy headers only when TRUSTED_PROXY=1.
+
+    Our nginx `location /api/` block sets X-Real-IP but NOT X-Forwarded-For, so
+    reading only XFF meant every request fell through to request.client.host —
+    the docker gateway. Measured on prod 2026-09-14: the whole heavy_radar
+    namespace held a single Redis key, rate_limit:heavy_radar:172.18.0.1, i.e.
+    the 10-per-minute radar budget was shared by the founder, every visitor and
+    every bot at once, while `curl -H "X-Forwarded-For: anything"` bypassed it.
+    """
     ip = request.client.host if request.client else "unknown"
     if _BEHIND_PROXY:
         forwarded = request.headers.get("X-Forwarded-For")
         if forwarded:
             ip = forwarded.split(",")[-1].strip()
+        elif real_ip := request.headers.get("X-Real-IP"):
+            ip = real_ip.strip()
     return ip
 
 

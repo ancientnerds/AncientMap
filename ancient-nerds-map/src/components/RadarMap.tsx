@@ -22,6 +22,7 @@ export interface RadarMapItem {
   period_name: string | null
   lat: number | null
   lon: number | null
+  mention_count: number
 }
 
 interface RadarMapProps {

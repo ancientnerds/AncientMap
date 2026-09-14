@@ -1,15 +1,17 @@
 /**
- * LyraRadarPage - Sites Lyra found in YouTube videos that aren't in our DB yet.
+ * LyraRadarPage — site candidates for the curated set, awaiting a decision.
  * Accessed via /radar.html (separate Vite entry point).
  *
- * Shows candidates for addition: enriched, pending, added (promoted),
- * and rejected items. Matched items are excluded (already in DB).
+ * A candidate is a place named in our own content that is not in the curated
+ * ancient_nerds set. Most of them DO exist under one of the bulk external
+ * sources; that is enrichment (coordinates, metadata), not a duplicate, and
+ * the "Sources" chips on each card say which. Items already resolved to a
+ * curated site (`matched`) and non-sites are excluded entirely.
  */
 
 import { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react'
 import { config } from '../config'
 import { formatCoord, timeAgo } from '../utils/formatters'
-import { getCountryFlatFlagUrl } from '../utils/countryFlags'
 import { SiteBadges, CountryFlag, CopyButton } from '../components/metadata'
 import { SOURCE_CONFIG } from '../constants/colors'
 import { SitePopupOverlay } from '../components/SitePopupOverlay'
@@ -32,17 +34,6 @@ interface VideoReference {
   channel_name: string
   timestamp_seconds: number
   deep_url: string
-}
-
-interface SuggestionMatch {
-  site_id: string
-  name: string
-  similarity: number
-  thumbnail_url: string | null
-  wikipedia_url: string | null
-  country: string | null
-  source_id?: string
-  source_name?: string
 }
 
 interface ExternalSource {
@@ -77,8 +68,6 @@ interface RadarItem {
   unique_videos: number
   unique_channels: number
   last_mentioned: string | null
-  suggestions: SuggestionMatch[]
-  best_match: SuggestionMatch | null
   external_sources: ExternalSource[]
   confidence: string | null
   data_sources: string[]
@@ -103,13 +92,12 @@ interface RadarResponse {
 interface RadarStats {
   total_radar: number
   enriched_count: number
-  pending_count: number
+  rejected_count: number
   added_count: number
-  total_sites_known: number
+  curated_sites: number
 }
 
-type StatusFilter = 'all' | 'enriched' | 'pending' | 'added' | 'rejected'
-type SourceFilter = 'all' | 'lyra' | 'user'
+type StatusFilter = 'all' | 'enriched' | 'added' | 'rejected'
 
 /** Narrowest a review card may get. Drives both the column count and the CSS
  *  min-width, so the two can never disagree (they did: the grid divided by 300
@@ -202,15 +190,14 @@ function getCategoryGroup(category: string): string {
 }
 
 function ScoreBreakdown({ item }: { item: RadarItem }) {
-  let earned = 0
-  for (const w of SCORE_WEIGHTS) {
-    if (w.check(item)) earned += w.points
-  }
-  const pct = Math.round((earned / 100) * 100)
+  // The percentage comes from the API (_score_sql in api/routes/radar.py), the
+  // same number the list was sorted by. SCORE_WEIGHTS only labels the chips —
+  // recomputing the total here is how the two drifted apart on 167 cards.
+  const pct = item.enrichment_score
 
   return (
     <div className="lyra-score-section">
-      <div className="lyra-score-header" title={`Data completeness: ${earned}/100 points. Higher scores mean more metadata (coordinates, period, category, description, images) was found for this site.`}>
+      <div className="lyra-score-header" title={`Data completeness: ${pct}/100 points. Higher scores mean more metadata (coordinates, period, category, description, images) was found for this site.`}>
         <span className="lyra-discovery-percentage" style={{ color: scoreColor(pct) }}>{pct}%</span>
         <span className="lyra-score-badges">
           <StatusPill status={item.enrichment_status} />
@@ -270,7 +257,7 @@ function ScoreBreakdown({ item }: { item: RadarItem }) {
 
 function radarItemToSiteData(item: RadarItem): SiteData {
   return {
-    id: item.best_match?.site_id || item.id,
+    id: item.id,
     title: item.display_name || 'Unknown Site',
     coordinates: [item.lon ?? NaN, item.lat ?? NaN],
     category: item.site_type || 'Unknown',
@@ -280,21 +267,6 @@ function radarItemToSiteData(item: RadarItem): SiteData {
     description: item.description || '',
     sourceId: 'lyra',
     sourceUrl: item.wikipedia_url || undefined,
-  }
-}
-
-function suggestionToSiteData(suggestion: SuggestionMatch, itemName: string): SiteData {
-  return {
-    id: suggestion.site_id,
-    title: suggestion.name || itemName,
-    coordinates: [NaN, NaN],
-    category: 'Unknown',
-    period: 'Unknown',
-    location: suggestion.country || '',
-    description: '',
-    sourceId: suggestion.source_id || 'unknown',
-    sourceUrl: suggestion.wikipedia_url || undefined,
-    image: suggestion.thumbnail_url || undefined,
   }
 }
 
@@ -613,51 +585,6 @@ function RadarCard({ item, onViewSite, onApprove, onDismiss, onMerge }: {
         </div>
       )}
 
-      {/* 11. Best match (high-confidence) */}
-      {item.best_match && (
-        <div className="lyra-discovery-best-match">
-          <span className="lyra-best-match-label">Strong match:</span>
-          <button
-            className="lyra-suggestion-chip lyra-best-match-chip"
-            title={`${Math.round(item.best_match.similarity * 100)}% match`}
-            onClick={() => onViewSite?.(suggestionToSiteData(item.best_match!, item.display_name))}
-          >
-            {item.best_match.name}
-            <span className="lyra-best-match-pct">{Math.round(item.best_match.similarity * 100)}%</span>
-            {item.best_match.country && (
-              <img
-                src={getCountryFlatFlagUrl(item.best_match.country) || ''}
-                alt=""
-                className="lyra-suggestion-flag"
-              />
-            )}
-          </button>
-        </div>
-      )}
-
-      {/* 12. Other suggestions (only for pending items) */}
-      {item.suggestions.filter(s => s.site_id !== item.best_match?.site_id).length > 0 && (
-        <div className="lyra-discovery-suggestions">
-          <span className="lyra-suggestions-label">Similar sites:</span>
-          {item.suggestions.filter(s => s.site_id !== item.best_match?.site_id).slice(0, 3).map((s) => (
-            <button
-              key={s.site_id}
-              className="lyra-suggestion-chip"
-              title={`${Math.round(s.similarity * 100)}% match`}
-              onClick={() => onViewSite?.(suggestionToSiteData(s, item.display_name))}
-            >
-              {s.name}
-              {s.country && (
-                <img
-                  src={getCountryFlatFlagUrl(s.country) || ''}
-                  alt=""
-                  className="lyra-suggestion-flag"
-                />
-              )}
-            </button>
-          ))}
-        </div>
-      )}
     </div>
   )
 }
@@ -671,9 +598,9 @@ export default function LyraRadarPage() {
   const [showLyraProfile, setShowLyraProfile] = useState(false)
   const [selectedSite, setSelectedSite] = useState<SiteData | null>(null)
   const [stats, setStats] = useState<RadarStats | null>(null)
-  const [minMentions, setMinMentions] = useState(1)
+  const [minMentions, setMinMentions] = useState(0)
   const [sortBy, setSortBy] = useState<'score' | 'mentions' | 'recency'>('score')
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('enriched')
   const [categoryFilter, setCategoryFilter] = useState('all')
   const [hideSpeculative, setHideSpeculative] = useState(false)
   const sentinelRef = useRef<HTMLDivElement>(null)
@@ -683,58 +610,60 @@ export default function LyraRadarPage() {
   const [globeHiddenByScroll, setGlobeHiddenByScroll] = useState(false)
   const [globePinned, setGlobePinned] = useState(false)
   const showGlobe = globePinned || !globeHiddenByScroll
-  const [sourceFilter, setSourceFilter] = useState<SourceFilter>('all')
   const [filtersExpanded, setFiltersExpanded] = useState(false)
   const [columnCount, setColumnCount] = useState(1)
   const [allRadarMapItems, setAllRadarMapItems] = useState<RadarItem[]>([])
   const [highlightedCardId, setHighlightedCardId] = useState<string | null>(null)
+  const [pinnedItem, setPinnedItem] = useState<RadarItem | null>(null)
   const radarMapFetched = useRef(false)
 
   // Auth (founder role check)
   const { user, token } = useAuth()
   const isFounder = !!user?.is_founder
-  const [_mapHoveredId, setMapHoveredId] = useState<string | null>(null)
-  const [mapPinnedId, setMapPinnedId] = useState<string | null>(null)
   const hoverTimeoutRef = useRef<number>(0)
 
   const handleMapHover = useCallback((id: string | null) => {
     clearTimeout(hoverTimeoutRef.current)
     if (id) {
-      setMapHoveredId(id)
       setHighlightedCardId(id)
     } else {
-      hoverTimeoutRef.current = window.setTimeout(() => {
-        setMapHoveredId(null)
-        setHighlightedCardId(null)
-      }, 300)
+      hoverTimeoutRef.current = window.setTimeout(() => setHighlightedCardId(null), 300)
     }
   }, [])
 
+  // The map holds every candidate with coordinates; the list holds one page.
+  // Scrolling to the card only works when it happens to be loaded, so fall
+  // back to fetching the item — otherwise the click is a silent no-op, which
+  // it was for 412 of 436 dots on first load.
   const handleMapPin = useCallback((id: string | null) => {
-    if (id && id === mapPinnedId) {
-      setMapPinnedId(null)
-    } else {
-      setMapPinnedId(id)
-      // Scroll to the card in the right pane
-      if (id) {
-        requestAnimationFrame(() => {
-          const cardEl = document.querySelector(`[data-radar-id="${CSS.escape(id)}"]`)
-          if (cardEl) {
-            cardEl.scrollIntoView({ behavior: 'smooth', block: 'center' })
-          }
-        })
-      }
+    if (!id) {
+      setPinnedItem(null)
+      return
     }
-  }, [mapPinnedId])
+    const cardEl = document.querySelector(`[data-radar-id="${CSS.escape(id)}"]`)
+    if (cardEl) {
+      setPinnedItem(null)
+      cardEl.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      setHighlightedCardId(id)
+      return
+    }
+    fetch(`${config.api.baseUrl}/radar/item/${id}`)
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => setPinnedItem(d))
+      .catch(() => setPinnedItem(null))
+  }, [])
 
+  // Mirror EVERY list filter, not just status — otherwise the panes show
+  // different populations and a dot can exist with no reachable card.
   const mapFilterFn = useCallback((item: RadarMapItem) => {
+    if (item.mention_count < minMentions) return false
     if (statusFilter === 'all') return true
     if (statusFilter === 'rejected') {
       return item.enrichment_status === 'rejected' || item.enrichment_status === 'dismissed'
     }
     const mapped = statusFilter === 'added' ? 'promoted' : statusFilter
     return item.enrichment_status === mapped
-  }, [statusFilter])
+  }, [statusFilter, minMentions])
 
   const authPost = useCallback(async (path: string, body?: unknown): Promise<Response> => {
     return fetch(`${config.api.baseUrl}${path}`, {
@@ -829,16 +758,21 @@ export default function LyraRadarPage() {
     mentions: number = minMentions,
     sort: string = sortBy,
     statusParam: string = statusFilter,
-    srcParam: string = sourceFilter,
     catParam: string = categoryFilter,
     specParam: boolean = hideSpeculative
   ) => {
     try {
       setLoading(true)
       setError(null)
-      const url = `${config.api.baseUrl}/radar/list?page=${pageNum}&page_size=24&min_mentions=${mentions}&sort_by=${sort}&status=${statusParam}&source_filter=${srcParam}&news_category=${catParam}&hide_speculative=${specParam}`
+      // page_size=100 (the API max): the review queue is ~420 items, and each
+      // page costs one rate-limited request.
+      const url = `${config.api.baseUrl}/radar/list?page=${pageNum}&page_size=100&min_mentions=${mentions}&sort_by=${sort}&status=${statusParam}&news_category=${catParam}&hide_speculative=${specParam}`
       const resp = await fetch(url)
-      if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
+      if (!resp.ok) {
+        throw new Error(resp.status === 429
+          ? 'Too many requests — the list refreshes in under a minute.'
+          : `HTTP ${resp.status}`)
+      }
       const data: RadarResponse = await resp.json()
       setItems(prev => append ? [...prev, ...data.items] : data.items)
       setHasMore(data.has_more)
@@ -848,12 +782,12 @@ export default function LyraRadarPage() {
     } finally {
       setLoading(false)
     }
-  }, [minMentions, sortBy, statusFilter, sourceFilter, categoryFilter, hideSpeculative])
+  }, [minMentions, sortBy, statusFilter, categoryFilter, hideSpeculative])
 
   // Initial load & filter changes
   useEffect(() => {
-    fetchRadar(1, false, minMentions, sortBy, statusFilter, sourceFilter, categoryFilter, hideSpeculative)
-  }, [minMentions, sortBy, statusFilter, sourceFilter, categoryFilter, hideSpeculative])
+    fetchRadar(1, false, minMentions, sortBy, statusFilter, categoryFilter, hideSpeculative)
+  }, [minMentions, sortBy, statusFilter, categoryFilter, hideSpeculative])
 
   // Fetch stats
   useEffect(() => {
@@ -893,12 +827,10 @@ export default function LyraRadarPage() {
           rejection_reason: null,
           facts: [],
           videos: [],
-          suggestions: [],
           external_sources: [],
           unique_videos: 0,
           unique_channels: 0,
           last_mentioned: null,
-          best_match: null,
           confidence: null,
           data_sources: [],
           commons_url: null,
@@ -919,14 +851,14 @@ export default function LyraRadarPage() {
     const observer = new IntersectionObserver(
       entries => {
         if (entries[0].isIntersecting && hasMore && !loading) {
-          fetchRadar(page + 1, true, minMentions, sortBy, statusFilter, sourceFilter, categoryFilter, hideSpeculative)
+          fetchRadar(page + 1, true, minMentions, sortBy, statusFilter, categoryFilter, hideSpeculative)
         }
       },
       { rootMargin: '200px' }
     )
     observer.observe(sentinelRef.current)
     return () => observer.disconnect()
-  }, [hasMore, loading, page, fetchRadar, minMentions, sortBy, statusFilter, sourceFilter, categoryFilter, hideSpeculative])
+  }, [hasMore, loading, page, fetchRadar, minMentions, sortBy, statusFilter, categoryFilter, hideSpeculative])
 
   // Auto-detect column count for card grid. The map pane's width is pure CSS
   // now — deriving it from the container height used to starve this grid.
@@ -962,18 +894,11 @@ export default function LyraRadarPage() {
     setHasMore(false)
   }
 
-  const handleSourceChange = (value: SourceFilter) => {
-    setSourceFilter(value)
-    setItems([])
-    setPage(1)
-    setHasMore(false)
-  }
-
   return (
     <div className="lyra-discoveries-page">
       {/* Header */}
       <PageHeader
-        speechBubble="I find new sites in YouTube videos that aren't in our database yet"
+        speechBubble="Places named in our own content that aren't in the curated site database yet"
         onAvatarClick={() => setShowLyraProfile(true)}
         currentPage="radar"
       >
@@ -993,7 +918,9 @@ export default function LyraRadarPage() {
             <div className="lyra-filter-group">
               <span className="lyra-discoveries-filter-label">Status:</span>
               <div className="lyra-discoveries-filter-chips">
-                {([['all', 'All'], ['enriched', 'Enriched'], ['pending', 'Pending'], ['added', 'Added'], ['rejected', 'Rejected']] as const).map(([val, label]) => (
+                {/* No 'Pending' chip: match and identify run in the same hourly
+                    cycle, so no contribution is ever read in that state. */}
+                {([['enriched', 'To review'], ['added', 'Added'], ['rejected', 'Rejected'], ['all', 'All']] as const).map(([val, label]) => (
                   <button
                     key={val}
                     className={`news-page-chip${statusFilter === val ? ' active' : ''}`}
@@ -1005,29 +932,15 @@ export default function LyraRadarPage() {
               </div>
             </div>
             <div className="lyra-filter-group">
-              <span className="lyra-discoveries-filter-label">Database:</span>
-              <div className="lyra-discoveries-filter-chips">
-                {([['all', 'All'], ['lyra', 'Radar'], ['user', 'Community']] as const).map(([val, label]) => (
-                  <button
-                    key={val}
-                    className={`news-page-chip${sourceFilter === val ? ' active' : ''}`}
-                    onClick={() => handleSourceChange(val)}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div className="lyra-filter-group">
               <span className="lyra-discoveries-filter-label">Min. mentions:</span>
               <div className="lyra-discoveries-filter-chips">
-                {[1, 2, 3, 5, 10].map(n => (
+                {[0, 2, 3, 5, 10].map(n => (
                   <button
                     key={n}
                     className={`news-page-chip${minMentions === n ? ' active' : ''}`}
                     onClick={() => handleMinMentionsChange(n)}
                   >
-                    {n}+
+                    {n === 0 ? 'Any' : `${n}+`}
                   </button>
                 ))}
               </div>
@@ -1080,10 +993,10 @@ export default function LyraRadarPage() {
       {/* Stats bar */}
       {stats && (
         <PageStatsBar items={[
-          { value: stats.enriched_count, label: 'enriched' } as StatItem,
-          { value: stats.pending_count, label: 'pending', sep: '·' } as StatItem,
+          { value: stats.enriched_count, label: 'to review' } as StatItem,
           { value: stats.added_count, label: 'added', sep: '·' } as StatItem,
-          { value: stats.total_sites_known, label: 'known sites', sep: '·' } as StatItem,
+          { value: stats.rejected_count, label: 'rejected', sep: '·' } as StatItem,
+          { value: stats.curated_sites, label: 'curated sites', sep: '·' } as StatItem,
         ]} />
       )}
 
@@ -1095,7 +1008,23 @@ export default function LyraRadarPage() {
             <Suspense fallback={<div style={{ width: '100%', height: '100%' }} />}>
               <RadarMap items={allRadarMapItems} highlightId={highlightedCardId}
                         filterFn={mapFilterFn}
-                        onHoverItem={handleMapHover} onPinItem={handleMapPin} />
+                        onHoverItem={handleMapHover} onPinItem={handleMapPin}>
+                {pinnedItem && (
+                  <div className="radar-map-card-overlay pinned">
+                    <button
+                      className="radar-map-card-close"
+                      onClick={() => setPinnedItem(null)}
+                      aria-label="Close"
+                    >
+                      &times;
+                    </button>
+                    <RadarCard item={pinnedItem} onViewSite={setSelectedSite}
+                               onApprove={isFounder ? handleApprove : undefined}
+                               onDismiss={isFounder ? handleDismiss : undefined}
+                               onMerge={isFounder ? handleMerge : undefined} />
+                  </div>
+                )}
+              </RadarMap>
             </Suspense>
           )}
         </div>

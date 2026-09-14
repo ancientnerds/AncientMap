@@ -105,21 +105,32 @@ with get_session() as session:
     print(f"\ncorrected_name placeholders to clear: {len(bad)}")
     for r in bad[:10]:
         print(f"    '{r.name}' had corrected_name={r.corrected_name!r}")
-    if APPLY and bad:
+    if bad:
         session.execute(
-            text("UPDATE user_contributions SET corrected_name = NULL WHERE id = ANY(:ids)"),
+            text(
+                "UPDATE user_contributions SET corrected_name = NULL "
+                "WHERE id = ANY(CAST(:ids AS uuid[]))"
+            ),
             {"ids": [r.id for r in bad]},
         )
+        # Raw UPDATE bypasses the identity map; recount_mentions below reads
+        # corrected_name off ORM objects and would otherwise still see 'null'.
+        session.expire_all()
 
     # ── 4. Rebuild mention_count from the real news items ──────────────────
     before_total = session.execute(
         text("SELECT COALESCE(SUM(mention_count),0) FROM user_contributions WHERE source='lyra'")
     ).scalar()
     changed = recount_mentions(session)
+    session.flush()  # without this the SUM below re-reads the pre-change rows
     after_total = session.execute(
         text("SELECT COALESCE(SUM(mention_count),0) FROM user_contributions WHERE source='lyra'")
     ).scalar()
     print(f"\nmention_count rows corrected: {changed} (sum {before_total} -> {after_total})")
+    zeroed = session.execute(
+        text("SELECT COUNT(*) FROM user_contributions WHERE source='lyra' AND mention_count = 0")
+    ).scalar()
+    print(f"  contributions now at 0 mentions: {zeroed} (visible — min_mentions defaults to 0)")
 
     # ── 5. Sites left with no name at all after the alias delete ───────────
     orphans = session.execute(

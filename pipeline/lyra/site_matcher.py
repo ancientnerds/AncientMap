@@ -369,21 +369,31 @@ def recount_mentions(session: Session) -> int:
     one card claimed 1,047 mentions with 21 real items, while the radar UI
     used that number as a filter, a sort key and a badge.
 
+    Counts under BOTH the raw and the AI-corrected name, deduplicated by news
+    item id: the evidence for "Göbekli Tepe" sits on items whose extracted name
+    is still the garbled "Kekili Tepe". Keying on the corrected name alone put
+    252 contributions at zero. This mirrors the evidence join in
+    api/routes/radar.py:_build_radar_query — keep the two in step.
+
     The count is derivable, so derive it. Returns the number of rows changed.
     """
-    counts: dict[str, int] = {}
-    for (extracted,) in session.query(NewsItem.site_name_extracted).filter(
+    items_by_name: dict[str, set] = {}
+    for item_id, extracted in session.query(NewsItem.id, NewsItem.site_name_extracted).filter(
         NewsItem.site_name_extracted.isnot(None)
     ):
         key = normalize_name(extracted)
         if key:
-            counts[key] = counts.get(key, 0) + 1
+            items_by_name.setdefault(key, set()).add(item_id)
 
     changed = 0
     for contrib in session.query(UserContribution).filter(UserContribution.source == "lyra"):
-        true_count = counts.get(normalize_name(contrib.corrected_name or contrib.name), 0)
-        if contrib.mention_count != true_count:
-            contrib.mention_count = true_count
+        keys = {normalize_name(contrib.name), normalize_name(contrib.corrected_name or "")}
+        matched: set = set()
+        for key in keys:
+            if key:
+                matched |= items_by_name.get(key, set())
+        if contrib.mention_count != len(matched):
+            contrib.mention_count = len(matched)
             changed += 1
 
     if changed:

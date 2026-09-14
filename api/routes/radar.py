@@ -1,8 +1,15 @@
 """
-Lyra Radar API - Sites Lyra found in YouTube videos that aren't in our DB yet.
+Lyra Radar API — site candidates for the curated (``ancient_nerds``) set.
 
-Shows candidates for addition: enriched, pending, promoted ("added"), and
-rejected items. Matched items (already in DB) and not_a_site are excluded.
+A candidate is a place named in our own content that is not in the curated
+5,004-site set. It may well exist under one of the bulk external sources
+(osm_historic, wikidata, vici_org, geonames …), and usually does — 377 of the
+553 cards live on prod on 2026-09-14 did. That is not a duplicate, it is
+enrichment: the external row supplies coordinates and metadata the curated set
+still lacks. `data_sources` and `external_sources` on each item say which.
+
+Shows enriched, promoted ("added") and rejected items. `matched` (resolved to a
+curated site) and `not_a_site` are excluded.
 """
 
 import json
@@ -26,7 +33,10 @@ _radar_limiter = RateLimiter(max_requests=10, window_seconds=60, namespace="heav
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-CACHE_TTL = 300  # 5 minutes
+# 60s, not 300s. The Lyra pipeline cannot bust this cache — import-linter
+# forbids pipeline importing api — so the TTL is the whole staleness budget. At
+# 5 minutes a founder who approved a card kept seeing it come back.
+CACHE_TTL = 60
 
 
 def _require_uuid(value: str, status_code: int, detail: str) -> None:
@@ -37,103 +47,22 @@ def _require_uuid(value: str, status_code: int, detail: str) -> None:
         raise HTTPException(status_code=status_code, detail=detail) from None
 
 
-def find_similar_sites_batch(
-    db: Session,
-    names: list[str],
-    limit_per_name: int = 5,
-) -> dict[str, list[dict]]:
-    """
-    Find similar sites for multiple names using pg_trgm.
-
-    Uses the <% operator (not the word_similarity function) so PostgreSQL
-    can use the GIN trigram index on unified_site_names.name_normalized.
-
-    Returns a dict mapping each input name to its top matches.
-    """
-    if not names:
-        return {}
-
-    # Set threshold so <% operator filters at 0.3 similarity
-    db.execute(text("SET LOCAL pg_trgm.word_similarity_threshold = 0.3"))
-
-    per_name_query = text("""
-        SELECT usn.site_id, us.name AS site_name, us.thumbnail_url,
-               us.country, us.source_id, us.source_url,
-               sm.name AS source_name,
-               word_similarity(:qname, usn.name_normalized) AS similarity
-        FROM unified_site_names usn
-        JOIN unified_sites us ON us.id = usn.site_id
-        LEFT JOIN source_meta sm ON sm.id = us.source_id
-        WHERE :qname <% usn.name_normalized
-        ORDER BY usn.name_normalized <->> :qname
-        LIMIT :limit
-    """)
-
-    matches_by_name: dict[str, list[dict]] = {n: [] for n in names}
-
-    for qname in names:
-        rows = db.execute(
-            per_name_query,
-            {
-                "qname": qname,
-                "limit": limit_per_name * 4,
-            },
-        ).fetchall()
-
-        seen_site_ids: set[str] = set()
-        for row in rows:
-            sid = str(row.site_id)
-            if sid in seen_site_ids:
-                continue
-            seen_site_ids.add(sid)
-
-            wikipedia_url = None
-            if row.source_id == "wikidata" and row.source_url:
-                wikipedia_url = row.source_url
-            elif row.site_name:
-                wiki_name = row.site_name.replace(" ", "_")
-                wikipedia_url = f"https://en.wikipedia.org/wiki/{wiki_name}"
-
-            matches_by_name[qname].append(
-                {
-                    "site_id": sid,
-                    "name": row.site_name,
-                    "similarity": round(row.similarity, 2),
-                    "thumbnail_url": row.thumbnail_url,
-                    "wikipedia_url": wikipedia_url,
-                    "country": row.country,
-                    "source_id": row.source_id,
-                    "source_name": row.source_name,
-                }
-            )
-
-            if len(matches_by_name[qname]) >= limit_per_name:
-                break
-
-    return matches_by_name
-
-
-def _compute_display_score(item: dict) -> int:
-    """Compute the same weighted score the frontend displays as a percentage."""
-    score = 25  # name always present
-    if item.get("lat") is not None and item.get("lon") is not None:
-        score += 20
-    if item.get("country"):
-        score += 10
-    if item.get("site_type"):
-        score += 10
-    if item.get("period_name"):
-        score += 10
-    desc = item.get("description") or ""
-    if len(desc) >= 50:
-        score += 10
-    if item.get("wikipedia_url"):
-        score += 5
-    if item.get("thumbnail_url"):
-        score += 5
-    if item.get("wikidata_id"):
-        score += 5
-    return score
+# The enrichment score, as ONE SQL expression. It used to be written out five
+# times (here as dead Python, plus /list, /map, /sites-map, plus SCORE_WEIGHTS
+# in the frontend) and the copies had drifted: two of them scored period_name
+# differently, so 167 of 553 cards showed a percentage that disagreed with the
+# number the list had sorted them by. `p` is the table alias to score.
+def _score_sql(p: str) -> str:
+    return f"""(25
+     + CASE WHEN {p}.lat IS NOT NULL AND {p}.lon IS NOT NULL THEN 20 ELSE 0 END
+     + CASE WHEN {p}.country IS NOT NULL AND {p}.country != '' THEN 10 ELSE 0 END
+     + CASE WHEN {p}.site_type IS NOT NULL AND {p}.site_type != '' THEN 10 ELSE 0 END
+     + CASE WHEN {p}.period_name IS NOT NULL AND {p}.period_name != '' THEN 10 ELSE 0 END
+     + CASE WHEN LENGTH({p}.description) >= 50 THEN 10 ELSE 0 END
+     + CASE WHEN {p}.wikipedia_url IS NOT NULL THEN 5 ELSE 0 END
+     + CASE WHEN {p}.thumbnail_url IS NOT NULL THEN 5 ELSE 0 END
+     + CASE WHEN {p}.wikidata_id IS NOT NULL THEN 5 ELSE 0 END
+    )"""
 
 
 def _missing_core_fields(item: dict) -> list[str]:
@@ -303,26 +232,17 @@ def get_radar_map_data(db: Session = Depends(get_db)):
         return cached
 
     rows = db.execute(
-        text("""
-        SELECT id::text, source, COALESCE(corrected_name, name) AS display_name,
-               COALESCE(enrichment_status, 'pending') AS enrichment_status,
-               country, site_type, period_name, period_start, lat, lon,
-               description, wikipedia_url, thumbnail_url, wikidata_id,
-               (25
-                + 20
-                + CASE WHEN country IS NOT NULL AND country != '' THEN 10 ELSE 0 END
-                + CASE WHEN site_type IS NOT NULL AND site_type != '' THEN 10 ELSE 0 END
-                + CASE WHEN period_name IS NOT NULL AND period_name != '' THEN 10 ELSE 0 END
-                + CASE WHEN LENGTH(description) >= 50 THEN 10 ELSE 0 END
-                + CASE WHEN wikipedia_url IS NOT NULL THEN 5 ELSE 0 END
-                + CASE WHEN thumbnail_url IS NOT NULL THEN 5 ELSE 0 END
-                + CASE WHEN wikidata_id IS NOT NULL THEN 5 ELSE 0 END
-               ) AS enrichment_score,
-               mention_count
-        FROM user_contributions
-        WHERE source IN ('lyra', 'user')
-          AND COALESCE(enrichment_status, 'pending') NOT IN ('matched', 'not_a_site', 'failed')
-          AND lat IS NOT NULL AND lon IS NOT NULL
+        text(f"""
+        SELECT uc.id::text, uc.source, COALESCE(uc.corrected_name, uc.name) AS display_name,
+               COALESCE(uc.enrichment_status, 'pending') AS enrichment_status,
+               uc.country, uc.site_type, uc.period_name, uc.period_start, uc.lat, uc.lon,
+               uc.description, uc.wikipedia_url, uc.thumbnail_url, uc.wikidata_id,
+               {_score_sql("uc")} AS enrichment_score,
+               uc.mention_count
+        FROM user_contributions uc
+        WHERE uc.source IN ('lyra', 'user')
+          AND COALESCE(uc.enrichment_status, 'pending') NOT IN ('matched', 'not_a_site', 'failed')
+          AND uc.lat IS NOT NULL AND uc.lon IS NOT NULL
         LIMIT 5000
     """)
     ).fetchall()
@@ -332,88 +252,27 @@ def get_radar_map_data(db: Session = Depends(get_db)):
     return result
 
 
-@router.get("/sites-map")
-def get_sites_map(db: Session = Depends(get_db)):
-    """All unified_sites with enrichment score for the background map layer."""
-    cache_key = "radar:sites-map"
-    cached = cache_get(cache_key)
-    if cached:
-        return cached
+_VISIBLE_CLAUSE = (
+    "COALESCE(uc.enrichment_status, 'pending') NOT IN ('failed', 'not_a_site', 'matched')"
+)
 
-    rows = db.execute(
-        text("""
-        SELECT id::text, name, lat, lon,
-          (45
-           + CASE WHEN country IS NOT NULL AND country != '' THEN 10 ELSE 0 END
-           + CASE WHEN site_type IS NOT NULL AND site_type != '' THEN 10 ELSE 0 END
-           + CASE WHEN period_name IS NOT NULL AND period_name != '' THEN 10 ELSE 0 END
-           + CASE WHEN LENGTH(description) >= 50 THEN 10 ELSE 0 END
-           + CASE WHEN source_url IS NOT NULL THEN 5 ELSE 0 END
-           + CASE WHEN thumbnail_url IS NOT NULL THEN 5 ELSE 0 END
-          ) AS score
-        FROM unified_sites
-        WHERE lat IS NOT NULL AND lon IS NOT NULL
-        LIMIT 5000
-    """)
-    ).fetchall()
-
-    result = {
-        "cols": ["id", "n", "la", "lo", "sc"],
-        "rows": [[r.id, r.name, float(r.lat), float(r.lon), r.score] for r in rows],
-    }
-    cache_set(cache_key, result, ttl=1800)
-    return result
+_STATUS_CLAUSES = {
+    "all": _VISIBLE_CLAUSE,
+    "enriched": "uc.enrichment_status = 'enriched'",
+    "added": "uc.enrichment_status = 'promoted'",
+    "rejected": "uc.enrichment_status IN ('rejected', 'dismissed')",
+}
 
 
-@router.get("/list")
-def get_radar(
-    req: Request,
-    page: int = Query(1, ge=1),
-    page_size: int = Query(24, ge=1, le=100),
-    min_mentions: int = Query(1, ge=1),
-    sort_by: str = Query("score", pattern="^(score|mentions|recency)$"),
-    status: str = Query("all", pattern="^(all|enriched|pending|added|rejected)$"),
-    source_filter: str = Query("all", pattern="^(all|lyra|user)$"),
-    news_category: str = Query("all"),
-    hide_speculative: bool = Query(False),
-    db: Session = Depends(get_db),
-):
+def _build_radar_query(status_clause: str, order_clause: str, single_id: bool = False) -> str:
+    """The one radar item query. /list pages it; /item/{id} fetches one row.
+
+    Both need identical fields — a dot on the map that renders a different
+    shape of card than the list is how the two panes drift apart.
     """
-    Get Lyra radar items: sites found in YouTube videos that aren't in our DB.
-
-    Excludes matched (already in DB), not_a_site, and failed items.
-    Supports source_filter: 'all' (default), 'lyra' (radar), 'user' (community).
-    """
-    if not _radar_limiter.check(get_client_ip(req)):
-        raise HTTPException(status_code=429, detail="Too many requests")
-    cache_key = f"radar:list:{page}:{page_size}:{min_mentions}:{sort_by}:{status}:{source_filter}:{news_category}:{hide_speculative}"
-    cached = cache_get(cache_key)
-    if cached:
-        return cached
-
-    # ── Status filter → SQL WHERE clause ───────────────────────────
-    status_clause = (
-        "COALESCE(uc.enrichment_status, 'pending') NOT IN ('failed', 'not_a_site', 'matched')"
-    )
-    if status == "enriched":
-        status_clause = "uc.enrichment_status = 'enriched'"
-    elif status == "pending":
-        status_clause = "COALESCE(uc.enrichment_status, 'pending') IN ('pending', 'enriching')"
-    elif status == "added":
-        status_clause = "uc.enrichment_status = 'promoted'"
-    elif status == "rejected":
-        status_clause = "uc.enrichment_status IN ('rejected', 'dismissed')"
-
-    offset = (page - 1) * page_size
-
-    if sort_by == "mentions":
-        order_clause = "c.mention_count DESC, c.id"
-    elif sort_by == "recency":
-        order_clause = "va.last_mentioned DESC NULLS LAST, c.mention_count DESC, c.id"
-    else:
-        order_clause = "c.computed_score DESC, c.mention_count DESC, c.id"
-
-    contributions_query = text(f"""
+    id_filter = "AND uc.id = CAST(:contribution_id AS uuid)" if single_id else ""
+    pagination = "" if single_id else "LIMIT :limit OFFSET :offset"
+    return f"""
         WITH contrib AS (
             SELECT
                 uc.id,
@@ -435,21 +294,12 @@ def get_radar(
                 uc.lon,
                 uc.description,
                 uc.wikidata_id,
-                (25
-                 + CASE WHEN uc.lat IS NOT NULL AND uc.lon IS NOT NULL THEN 20 ELSE 0 END
-                 + CASE WHEN uc.country IS NOT NULL AND uc.country != '' THEN 10 ELSE 0 END
-                 + CASE WHEN uc.site_type IS NOT NULL AND uc.site_type != '' THEN 10 ELSE 0 END
-                 + CASE WHEN uc.period_name IS NOT NULL AND uc.period_name != '' THEN 10 ELSE 0 END
-                 + CASE WHEN LENGTH(uc.description) >= 50 THEN 10 ELSE 0 END
-                 + CASE WHEN uc.wikipedia_url IS NOT NULL THEN 5 ELSE 0 END
-                 + CASE WHEN uc.thumbnail_url IS NOT NULL THEN 5 ELSE 0 END
-                 + CASE WHEN uc.wikidata_id IS NOT NULL THEN 5 ELSE 0 END
-                ) AS computed_score
+                {_score_sql("uc")} AS computed_score
             FROM user_contributions uc
             WHERE uc.source IN ('lyra', 'user')
-              AND (:source_filter = 'all' OR uc.source = :source_filter)
               AND {status_clause}
               AND uc.mention_count >= :min_mentions
+              {id_filter}
         ),
         video_agg AS (
             SELECT
@@ -469,12 +319,20 @@ def get_radar(
                 BOOL_OR(ni.speculative_tag IS NOT NULL) AS is_speculative,
                 (ARRAY_AGG(ni.speculative_tag) FILTER (WHERE ni.speculative_tag IS NOT NULL))[1] AS speculative_tag
             FROM contrib c
-            JOIN news_items ni ON lower(trim(ni.site_name_extracted)) = lower(trim(c.name))
+            -- Match on the raw name AND the AI-corrected one. The pipeline
+            -- keys contributions on normalize_name(corrected_name or name)
+            -- (site_matcher.py:_upsert_lyra_suggestion), so joining on c.name
+            -- alone left 25 cards with no videos, facts, screenshot or
+            -- last_mentioned even though their news items existed.
+            JOIN news_items ni ON lower(trim(ni.site_name_extracted))
+                 IN (lower(trim(c.name)), lower(trim(COALESCE(c.corrected_name, c.name))))
             JOIN news_videos nv ON nv.id = ni.video_id
             JOIN news_channels nc ON nc.id = nv.channel_id
             GROUP BY c.id
-            HAVING (:news_category = 'all' OR MODE() WITHIN GROUP (ORDER BY ni.news_category) FILTER (WHERE ni.news_category IS NOT NULL) = :news_category)
-               AND (:hide_speculative = false OR NOT BOOL_OR(ni.speculative_tag IS NOT NULL))
+            -- No HAVING here: a predicate inside this CTE cannot filter the
+            -- outer LEFT JOIN, it only deletes the group, which silently
+            -- stripped the evidence off every non-matching card while the row
+            -- count stayed at 553. The filters live in the outer WHERE now.
         )
         SELECT
             COUNT(*) OVER() AS _total_count,
@@ -510,157 +368,182 @@ def get_radar(
             va.speculative_tag
         FROM contrib c
         LEFT JOIN video_agg va ON va.contrib_id = c.id
+        WHERE (:news_category = 'all' OR va.top_news_category = :news_category)
+          AND (:hide_speculative = false OR COALESCE(va.is_speculative, false) = false)
         ORDER BY {order_clause}
-        LIMIT :limit OFFSET :offset
-    """)
+        {pagination}
+    """
 
-    params = {
-        "min_mentions": min_mentions,
-        "source_filter": source_filter,
-        "news_category": news_category,
-        "hide_speculative": hide_speculative,
-        "limit": page_size,
-        "offset": offset,
-    }
 
-    contrib_rows = db.execute(contributions_query, params).fetchall()
+def _row_to_item(row) -> dict:
+    enrichment_status = row.enrichment_status
 
-    def _row_to_item(row) -> dict:
-        enrichment_status = row.enrichment_status
+    rejection_reason = None
+    if enrichment_status == "rejected" and row.enrichment_data:
+        rejected = row.enrichment_data.get("rejected_match", {})
+        if rejected.get("reason") == "country_mismatch":
+            rejection_reason = (
+                f'Matched to "{rejected.get("site_name", "?")}" '
+                f"({rejected.get('site_country', '?')}), "
+                f"but video context indicates {rejected.get('contribution_country', '?')}"
+            )
 
-        rejection_reason = None
-        if enrichment_status == "rejected" and row.enrichment_data:
-            rejected = row.enrichment_data.get("rejected_match", {})
-            if rejected.get("reason") == "country_mismatch":
-                rejection_reason = (
-                    f'Matched to "{rejected.get("site_name", "?")}" '
-                    f"({rejected.get('site_country', '?')}), "
-                    f"but video context indicates {rejected.get('contribution_country', '?')}"
-                )
+    period_name = row.period_name
+    if row.period_start is not None:
+        period_name = categorize_period(row.period_start)
 
-        period_name = row.period_name
-        if row.period_start is not None:
-            period_name = categorize_period(row.period_start)
-
-        confidence = None
-        ai_reasoning = None
-        data_sources = []
-        external_sources = []
-        if row.enrichment_data and isinstance(row.enrichment_data, dict):
-            external_sources = row.enrichment_data.get("external_sources", [])
-            ident = row.enrichment_data.get("identification", {})
-            if isinstance(ident, dict):
-                confidence = ident.get("confidence")
-                ai_reasoning = ident.get("reasoning")
-            if row.enrichment_data.get("wikidata"):
-                data_sources.append("wikidata")
-                if isinstance(row.enrichment_data["wikidata"], dict) and row.enrichment_data[
-                    "wikidata"
-                ].get("wikipedia"):
-                    data_sources.append("wikipedia")
-            if row.enrichment_data.get("research"):
-                data_sources.append("ai_research")
-            if row.enrichment_data.get("db_match"):
-                data_sources.append("db_match")
-
-        # Add wikidata source if wikidata_id is present (even without enrichment_data)
-        if row.wikidata_id and "wikidata" not in data_sources:
+    confidence = None
+    ai_reasoning = None
+    data_sources = []
+    external_sources = []
+    if row.enrichment_data and isinstance(row.enrichment_data, dict):
+        external_sources = row.enrichment_data.get("external_sources", [])
+        ident = row.enrichment_data.get("identification", {})
+        if isinstance(ident, dict):
+            confidence = ident.get("confidence")
+            ai_reasoning = ident.get("reasoning")
+        if row.enrichment_data.get("wikidata"):
             data_sources.append("wikidata")
+            if isinstance(row.enrichment_data["wikidata"], dict) and row.enrichment_data[
+                "wikidata"
+            ].get("wikipedia"):
+                data_sources.append("wikipedia")
+        if row.enrichment_data.get("research"):
+            data_sources.append("ai_research")
+        if row.enrichment_data.get("db_match"):
+            data_sources.append("db_match")
 
-        # Derive commons_url from enrichment data
-        commons_url = None
-        if row.enrichment_data and isinstance(row.enrichment_data, dict):
-            wd = row.enrichment_data.get("wikidata", {})
-            if isinstance(wd, dict):
-                cc = wd.get("commons_category")
-                if cc:
-                    commons_url = (
-                        f"https://commons.wikimedia.org/wiki/Category:{cc.replace(' ', '_')}"
-                    )
-                elif wd.get("thumbnail_url"):
-                    thumb = wd["thumbnail_url"]
-                    # Extract filename from Wikimedia Commons thumbnail URL
-                    # Format: .../thumb/a/ab/Filename.jpg/300px-Filename.jpg
-                    parts = thumb.split("/")
-                    if len(parts) >= 2:
-                        # The filename is the second-to-last path segment
-                        commons_url = f"https://commons.wikimedia.org/wiki/File:{parts[-2]}"
+    # Add wikidata source if wikidata_id is present (even without enrichment_data)
+    if row.wikidata_id and "wikidata" not in data_sources:
+        data_sources.append("wikidata")
 
-        return {
-            "id": row.id,
-            "source": row.source,
-            "display_name": row.display_name,
-            "original_name": row.original_name,
-            "enrichment_status": enrichment_status,
-            "enrichment_score": row.computed_score,
-            "rejection_reason": rejection_reason,
-            "country": row.country,
-            "site_type": row.site_type,
-            "period_name": period_name,
-            "period_start": row.period_start,
-            "period_end": row.period_end,
-            "thumbnail_url": row.thumbnail_url,
-            "screenshot_url": getattr(row, "latest_screenshot_url", None),
-            "avg_significance": round(float(row.avg_significance), 1)
-            if row.avg_significance
-            else None,
-            "top_news_category": getattr(row, "top_news_category", None),
-            "is_speculative": getattr(row, "is_speculative", False),
-            "speculative_tag": getattr(row, "speculative_tag", None),
-            "ai_reasoning": ai_reasoning,
-            "wikipedia_url": row.wikipedia_url,
-            "lat": row.lat,
-            "lon": row.lon,
-            "description": row.description,
-            "wikidata_id": row.wikidata_id,
-            "mention_count": row.mention_count,
-            "facts": _flatten_facts(row.all_facts),
-            "videos": _build_video_refs(row.videos),
-            "unique_videos": row.unique_videos,
-            "unique_channels": row.unique_channels,
-            "last_mentioned": row.last_mentioned.isoformat() if row.last_mentioned else None,
-            "suggestions": [],
-            "best_match": None,
-            "external_sources": external_sources,
-            "confidence": confidence,
-            "data_sources": data_sources,
-            "commons_url": commons_url,
-            "nearby_an_site": None,
-        }
+    # Derive commons_url from enrichment data
+    commons_url = None
+    if row.enrichment_data and isinstance(row.enrichment_data, dict):
+        wd = row.enrichment_data.get("wikidata", {})
+        if isinstance(wd, dict):
+            cc = wd.get("commons_category")
+            if cc:
+                commons_url = (
+                    f"https://commons.wikimedia.org/wiki/Category:{cc.replace(' ', '_')}"
+                )
+            elif wd.get("thumbnail_url"):
+                thumb = wd["thumbnail_url"]
+                # Extract filename from Wikimedia Commons thumbnail URL
+                # Format: .../thumb/a/ab/Filename.jpg/300px-Filename.jpg
+                parts = thumb.split("/")
+                if len(parts) >= 2:
+                    # The filename is the second-to-last path segment
+                    commons_url = f"https://commons.wikimedia.org/wiki/File:{parts[-2]}"
 
-    total_count = contrib_rows[0]._total_count if contrib_rows else 0
-    page_items = [_row_to_item(row) for row in contrib_rows]
+    return {
+        "id": row.id,
+        "source": row.source,
+        "display_name": row.display_name,
+        "original_name": row.original_name,
+        "enrichment_status": enrichment_status,
+        "enrichment_score": row.computed_score,
+        "rejection_reason": rejection_reason,
+        "country": row.country,
+        "site_type": row.site_type,
+        "period_name": period_name,
+        "period_start": row.period_start,
+        "period_end": row.period_end,
+        "thumbnail_url": row.thumbnail_url,
+        "screenshot_url": getattr(row, "latest_screenshot_url", None),
+        "avg_significance": round(float(row.avg_significance), 1)
+        if row.avg_significance
+        else None,
+        "top_news_category": getattr(row, "top_news_category", None),
+        "is_speculative": getattr(row, "is_speculative", False),
+        "speculative_tag": getattr(row, "speculative_tag", None),
+        "ai_reasoning": ai_reasoning,
+        "wikipedia_url": row.wikipedia_url,
+        "lat": row.lat,
+        "lon": row.lon,
+        "description": row.description,
+        "wikidata_id": row.wikidata_id,
+        "mention_count": row.mention_count,
+        "facts": _flatten_facts(row.all_facts),
+        "videos": _build_video_refs(row.videos),
+        "unique_videos": row.unique_videos,
+        "unique_channels": row.unique_channels,
+        "last_mentioned": row.last_mentioned.isoformat() if row.last_mentioned else None,
+        "external_sources": external_sources,
+        "confidence": confidence,
+        "data_sources": data_sources,
+        "commons_url": commons_url,
+        "nearby_an_site": None,
+    }
+    # No `suggestions`/`best_match`: those were computed for status
+    # 'pending'/'enriching' only, and nothing ever holds those statuses —
+    # match and identify run in the same hourly cycle, so a contribution
+    # goes straight to a terminal status. The frontend blocks that rendered
+    # them are gone too.
 
-    # ── Batch: find nearest AN site for items with coords ──────────
-    nearby_map = _find_nearest_an_sites_batch(db, page_items)
-    for item in page_items:
+
+def _attach_nearby(db: Session, items: list[dict]) -> list[dict]:
+    nearby_map = _find_nearest_an_sites_batch(db, items)
+    for item in items:
         if item["id"] in nearby_map:
             item["nearby_an_site"] = nearby_map[item["id"]]
+    return items
 
-    # ── Fuzzy suggestions for pending/enriching items only ──────────
-    # Wrapped in try/except: suggestions are optional, a pg_trgm or
-    # missing-table error must not 500 the whole radar list.
-    pending_names = [
-        normalize_name(item["display_name"])
-        for item in page_items
-        if item["enrichment_status"] in ("pending", "enriching")
-    ]
-    if pending_names:
-        try:
-            all_suggestions = find_similar_sites_batch(db, pending_names, limit_per_name=5)
-            name_idx = 0
-            for item in page_items:
-                if item["enrichment_status"] in ("pending", "enriching"):
-                    qname = pending_names[name_idx]
-                    name_idx += 1
-                    suggestions = all_suggestions.get(qname, [])
-                    item["suggestions"] = suggestions
-                    if suggestions and suggestions[0]["similarity"] >= 0.6:
-                        item["best_match"] = suggestions[0]
-        except Exception:
-            logger.warning(
-                "Fuzzy suggestions failed — returning items without suggestions", exc_info=True
-            )
+
+@router.get("/list")
+def get_radar(
+    req: Request,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(24, ge=1, le=100),
+    # Default 0: mention_count is now derived from news_items, so a candidate
+    # whose evidence sits under a different spelling legitimately has 0. A
+    # floor of 1 would hide it entirely.
+    min_mentions: int = Query(0, ge=0),
+    sort_by: str = Query("score", pattern="^(score|mentions|recency)$"),
+    status: str = Query("enriched", pattern="^(all|enriched|added|rejected)$"),
+    news_category: str = Query("all"),
+    hide_speculative: bool = Query(False),
+    db: Session = Depends(get_db),
+):
+    """Page through radar candidates.
+
+    Defaults to `enriched` — the items that are actually awaiting a decision.
+    Under the old `all` default, 132 of 553 cards were already-handled
+    (rejected/dismissed/promoted) work, and promotion raises an item's score,
+    so approved cards floated back to the top of the queue.
+    """
+    if not _radar_limiter.check(get_client_ip(req)):
+        raise HTTPException(status_code=429, detail="Too many requests")
+    cache_key = (
+        f"radar:list:{page}:{page_size}:{min_mentions}:{sort_by}:{status}"
+        f":{news_category}:{hide_speculative}"
+    )
+    cached = cache_get(cache_key)
+    if cached:
+        return cached
+
+    offset = (page - 1) * page_size
+
+    if sort_by == "mentions":
+        order_clause = "c.mention_count DESC, c.id"
+    elif sort_by == "recency":
+        order_clause = "va.last_mentioned DESC NULLS LAST, c.mention_count DESC, c.id"
+    else:
+        order_clause = "c.computed_score DESC, c.mention_count DESC, c.id"
+
+    contrib_rows = db.execute(
+        text(_build_radar_query(_STATUS_CLAUSES[status], order_clause)),
+        {
+            "min_mentions": min_mentions,
+            "news_category": news_category,
+            "hide_speculative": hide_speculative,
+            "limit": page_size,
+            "offset": offset,
+        },
+    ).fetchall()
+
+    total_count = contrib_rows[0]._total_count if contrib_rows else 0
+    page_items = _attach_nearby(db, [_row_to_item(row) for row in contrib_rows])
 
     response = {
         "items": page_items,
@@ -672,6 +555,29 @@ def get_radar(
 
     cache_set(cache_key, response, ttl=CACHE_TTL)
     return response
+
+
+@router.get("/item/{contribution_id}")
+def get_radar_item(contribution_id: str, db: Session = Depends(get_db)):
+    """One radar candidate, in the same shape /list returns.
+
+    The map loads every candidate with coordinates while the list holds one
+    page, so clicking a dot used to hit a card that was not in the DOM and do
+    nothing at all — silently, for 412 of 436 dots on first load.
+    """
+    _require_uuid(contribution_id, 404, "Contribution not found")
+    row = db.execute(
+        text(_build_radar_query(_VISIBLE_CLAUSE, "c.id", single_id=True)),
+        {
+            "contribution_id": contribution_id,
+            "min_mentions": 1,
+            "news_category": "all",
+            "hide_speculative": False,
+        },
+    ).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Contribution not found")
+    return _attach_nearby(db, [_row_to_item(row)])[0]
 
 
 @router.get("/stats")
@@ -689,12 +595,15 @@ def get_radar_stats(db: Session = Depends(get_db)):
             COUNT(*) FILTER (
                 WHERE COALESCE(enrichment_status, 'pending') NOT IN ('failed', 'not_a_site', 'matched')
             ) AS total_radar,
+            -- 'enriched' only. Counting promoted rows here too meant every
+            -- approval incremented both this number and `added`, so the header
+            -- read as if the queue had not shrunk.
             COUNT(*) FILTER (
-                WHERE enrichment_status IN ('enriched', 'promoted')
+                WHERE enrichment_status = 'enriched'
             ) AS enriched_count,
             COUNT(*) FILTER (
-                WHERE COALESCE(enrichment_status, 'pending') IN ('pending', 'enriching')
-            ) AS pending_count,
+                WHERE enrichment_status IN ('rejected', 'dismissed')
+            ) AS rejected_count,
             COUNT(*) FILTER (
                 WHERE enrichment_status = 'promoted'
             ) AS added_count
@@ -704,14 +613,22 @@ def get_radar_stats(db: Session = Depends(get_db)):
 
     row = db.execute(stats_query).fetchone()
 
-    sites_known = db.execute(text("SELECT COUNT(*) FROM unified_sites")).scalar() or 0
+    # The curated set, not all 1.76M unified_sites. This number is the thing a
+    # radar candidate is measured against — quoting the bulk-import total made
+    # the queue look pointless next to it.
+    sites_known = (
+        db.execute(
+            text("SELECT COUNT(*) FROM unified_sites WHERE source_id = 'ancient_nerds'")
+        ).scalar()
+        or 0
+    )
 
     response = {
         "total_radar": (row.total_radar or 0) if row else 0,
         "enriched_count": (row.enriched_count or 0) if row else 0,
-        "pending_count": (row.pending_count or 0) if row else 0,
+        "rejected_count": (row.rejected_count or 0) if row else 0,
         "added_count": (row.added_count or 0) if row else 0,
-        "total_sites_known": sites_known,
+        "curated_sites": sites_known,
     }
 
     cache_set(cache_key, response, ttl=CACHE_TTL)
