@@ -4,7 +4,7 @@ import json
 import logging
 import re
 
-from sqlalchemy import func
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from pipeline.database import (
@@ -12,7 +12,6 @@ from pipeline.database import (
     NewsVideo,
     SourceMeta,
     UnifiedSite,
-    UnifiedSiteName,
     UserContribution,
     get_session,
 )
@@ -146,6 +145,53 @@ _GENERIC_NAME_BLOCKLIST = {
 }
 
 
+# unified_sites.name_normalized and unified_site_names.name_normalized are
+# maintained by Postgres as `left(lower(unaccent(name)), 500)` — see the two
+# UPDATEs in orchestrator.py's startup migrations. That is NOT what
+# normalize_name() produces: NFKD leaves the Turkish dotless ı and the Danish ø
+# alone where unaccent folds them, and normalize_name strips parenthesised
+# suffixes where the column keeps them. Measured on prod 2026-09-14: 124 of the
+# 5,004 curated sites (2.5%) — 'Ayşepınar', 'Işıkkale', 'Kemune (Zahiku)',
+# 'Bølareinen', 'Aké (Yucatan)' — plus ~1.6% of all 1.76M rows and ~2% of the
+# alias table could never be exact-matched from Python. Compute the key on the
+# database side, with the same expression, so both sides agree by construction.
+_KEY_SQL = "left(lower(unaccent(:raw)), 500)"
+
+
+def _match_site_ids(session: Session, extracted_name: str) -> set:
+    """Site ids whose name or alias keys to the same string as `extracted_name`.
+
+    Exact key first (both columns are btree-indexed on name_normalized); the
+    spaceless variant only runs on a miss, because `replace(name_normalized,
+    ' ', '')` has no functional index and costs a parallel sequential scan of
+    1.76M rows — measured at ~125 ms per lookup on prod.
+    """
+    exact = session.execute(
+        text(f"""
+        WITH k AS (SELECT {_KEY_SQL} AS key)
+        SELECT us.id FROM unified_sites us, k WHERE us.name_normalized = k.key
+        UNION
+        SELECT usn.site_id FROM unified_site_names usn, k WHERE usn.name_normalized = k.key
+        """),
+        {"raw": extracted_name},
+    ).fetchall()
+    if exact:
+        return {r[0] for r in exact}
+
+    spaceless = session.execute(
+        text(f"""
+        WITH k AS (SELECT replace({_KEY_SQL}, ' ', '') AS key)
+        SELECT us.id FROM unified_sites us, k
+        WHERE replace(us.name_normalized, ' ', '') = k.key
+        UNION
+        SELECT usn.site_id FROM unified_site_names usn, k
+        WHERE replace(usn.name_normalized, ' ', '') = k.key
+        """),
+        {"raw": extracted_name},
+    ).fetchall()
+    return {r[0] for r in spaceless}
+
+
 def _find_site_by_name(
     session: Session,
     extracted_name: str,
@@ -176,53 +222,24 @@ def _find_site_by_name(
     normalized = normalize_name(extracted_name)
     if not normalized or len(normalized) < 3:
         return None
+    # The blocklist holds plain ASCII country and region names, so the Python
+    # key is adequate here. It is NOT adequate for the DB comparison below.
     if normalized in _GENERIC_NAME_BLOCKLIST:
         return None
 
-    source_filter = UnifiedSite.source_id.in_(matchable_sources)
-    spaceless = normalized.replace(" ", "")
+    # Collect ALL candidates from both primary names and alternate names, then
+    # pick the best by source priority, so a low-priority primary-name hit
+    # never wins over a curated alternate-name hit.
+    site_ids = _match_site_ids(session, extracted_name)
+    if not site_ids:
+        return None
 
-    # Collect ALL candidates from both primary names and alternate names,
-    # then pick the best by source priority. This prevents early return on a
-    # low-priority match when a better one exists in alternate names.
-
-    # 1+1.5. Exact + spaceless match on unified_sites.name_normalized
-    exact = (
-        session.query(UnifiedSite)
-        .filter(
-            UnifiedSite.name_normalized == normalized,
-            source_filter,
-        )
+    combined = {
+        s.id: s
+        for s in session.query(UnifiedSite)
+        .filter(UnifiedSite.id.in_(site_ids), UnifiedSite.source_id.in_(matchable_sources))
         .all()
-    )
-    spaceless_matches = (
-        session.query(UnifiedSite)
-        .filter(
-            func.replace(UnifiedSite.name_normalized, " ", "") == spaceless,
-            source_filter,
-        )
-        .all()
-    )
-    combined = {m.id: m for m in exact + spaceless_matches}
-
-    # 2+2.5. Also check alternate names (unified_site_names)
-    alt_exact = (
-        session.query(UnifiedSiteName).filter(UnifiedSiteName.name_normalized == normalized).all()
-    )
-    alt_spaceless = (
-        session.query(UnifiedSiteName)
-        .filter(func.replace(UnifiedSiteName.name_normalized, " ", "") == spaceless)
-        .all()
-    )
-    alt_site_ids = {m.site_id for m in alt_exact + alt_spaceless} - set(combined.keys())
-
-    if alt_site_ids:
-        alt_candidates = (
-            session.query(UnifiedSite).filter(UnifiedSite.id.in_(alt_site_ids), source_filter).all()
-        )
-        for c in alt_candidates:
-            combined[c.id] = c
-
+    }
     if not combined:
         return None
     if len(combined) == 1:
