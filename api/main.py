@@ -160,10 +160,16 @@ async def lifespan(app: FastAPI):
             "CREATE UNIQUE INDEX IF NOT EXISTS uq_knowledge_claim_norm_text ON knowledge_claims (norm_text)",
             # FK policy (2026-08-17): every FK onto unified_sites is SET NULL
             # except the site-owned tables (unified_site_names,
-            # site_content_links, wiki_images) and card_stats (regenerated
-            # derived data). The models said SET NULL for years; existing DBs
-            # kept CASCADE because create_all never alters constraints — the
-            # duplicate-merge audit would have cascaded into user data.
+            # site_content_links, wiki_images, site_external_ids) and
+            # card_stats (regenerated derived data). The models said SET NULL
+            # for years; existing DBs kept CASCADE because create_all never
+            # alters constraints — the duplicate-merge audit would have
+            # cascaded into user data.
+            # A site-owned table whose site_id sits in its PRIMARY KEY cannot
+            # have NOT NULL dropped: site_external_ids crash-looped the API on
+            # deploy (2026-09-15) until it was listed here. Every new
+            # site-owned CASCADE table goes into this tuple AND into
+            # tests/api/test_fk_policy_exemptions.py.
             """DO $$ DECLARE r RECORD; BEGIN
                 FOR r IN
                     SELECT tc.table_name, tc.constraint_name, ccu.column_name
@@ -178,7 +184,8 @@ async def lifespan(app: FastAPI):
                           WHERE table_name = 'unified_sites' AND constraint_type = 'PRIMARY KEY')
                       AND rc.delete_rule = 'CASCADE'
                       AND tc.table_name NOT IN (
-                          'unified_site_names', 'site_content_links', 'wiki_images', 'card_stats')
+                          'unified_site_names', 'site_content_links', 'wiki_images', 'card_stats',
+                          'site_external_ids')
                 LOOP
                     EXECUTE format('ALTER TABLE %I ALTER COLUMN %I DROP NOT NULL',
                                    r.table_name, r.column_name);
