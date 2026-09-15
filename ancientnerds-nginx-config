@@ -318,7 +318,7 @@ server {
     # Part files (SITEMAP_PARTS in api/routes/sitemap.py). Listed regex
     # locations win over the prefix try_files cascade; the \.html$ block
     # above never matches .xml paths.
-    location ~ ^/sitemap-(static|sites|countries|stories|research|articles)\.xml$ {
+    location ~ ^/sitemap-(static|sites|countries|stories|research|articles|legacy)\.xml$ {
         proxy_pass http://an_api/api/sitemap$request_uri;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
