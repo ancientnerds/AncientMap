@@ -25,6 +25,7 @@ from sqlalchemy.orm import Session
 from api.cache import cache_delete_pattern, cache_get, cache_set
 from api.services.jwt_auth import require_founder
 from api.services.rate_limiter import RateLimiter, get_client_ip
+from api.services.site_promotion import insert_promoted_site
 from pipeline.database import DiscordUser, get_db
 from pipeline.utils.text import categorize_period, normalize_name
 
@@ -698,56 +699,22 @@ def promote_to_db(
     if effective.get("period_start") is not None:
         period_name = categorize_period(effective["period_start"])
 
-    new_site_id = uuid.uuid4()
-    name_norm = normalize_name(display_name)
-
-    # INSERT into unified_sites
-    db.execute(
-        text("""
-        INSERT INTO unified_sites (
-            id, source_id, source_record_id, name, name_normalized,
-            lat, lon, geom,
-            site_type, period_start, period_end, period_name,
-            country, description, thumbnail_url, source_url,
-            edited_by
-        ) VALUES (
-            :id, :source_id, :source_record_id, :name, :name_normalized,
-            :lat, :lon, ST_SetSRID(ST_MakePoint(:lon, :lat), 4326),
-            :site_type, :period_start, :period_end, :period_name,
-            :country, :description, :thumbnail_url, :source_url,
-            'radar_promote'
-        )
-    """),
-        {
-            "id": new_site_id,
-            "source_id": source_id,
-            "source_record_id": str(item["id"]),
-            "name": display_name,
-            "name_normalized": name_norm,
-            "lat": effective["lat"],
-            "lon": effective["lon"],
-            "site_type": effective.get("site_type"),
-            "period_start": effective.get("period_start"),
-            "period_end": effective.get("period_end"),
-            "period_name": period_name,
-            "country": effective.get("country"),
-            "description": effective.get("description"),
-            "thumbnail_url": effective.get("thumbnail_url"),
-            "source_url": effective.get("wikipedia_url"),
-        },
-    )
-
-    # INSERT into unified_site_names for trigram search
-    db.execute(
-        text("""
-        INSERT INTO unified_site_names (site_id, name, name_normalized, name_type)
-        VALUES (:site_id, :name, :name_normalized, 'label')
-    """),
-        {
-            "site_id": new_site_id,
-            "name": display_name,
-            "name_normalized": name_norm,
-        },
+    new_site_id = insert_promoted_site(
+        db,
+        name=display_name,
+        lat=effective["lat"],
+        lon=effective["lon"],
+        site_type=effective.get("site_type"),
+        period_start=effective.get("period_start"),
+        period_end=effective.get("period_end"),
+        period_name=period_name,
+        country=effective.get("country"),
+        description=effective.get("description"),
+        thumbnail_url=effective.get("thumbnail_url"),
+        source_url=effective.get("wikipedia_url"),
+        source_id=source_id,
+        source_record_id=str(item["id"]),
+        edited_by="radar_promote",
     )
 
     # UPDATE the contribution: status + audit entry (overrides recorded, not applied)

@@ -15,6 +15,7 @@ from pipeline.database import (
     UserContribution,
     get_session,
 )
+from pipeline.lyra.site_key import site_key_sql
 from pipeline.utils.text import (
     categorize_period,
     extract_period_from_text,
@@ -145,17 +146,10 @@ _GENERIC_NAME_BLOCKLIST = {
 }
 
 
-# unified_sites.name_normalized and unified_site_names.name_normalized are
-# maintained by Postgres as `left(lower(unaccent(name)), 500)` — see the two
-# UPDATEs in orchestrator.py's startup migrations. That is NOT what
-# normalize_name() produces: NFKD leaves the Turkish dotless ı and the Danish ø
-# alone where unaccent folds them, and normalize_name strips parenthesised
-# suffixes where the column keeps them. Measured on prod 2026-09-14: 124 of the
-# 5,004 curated sites (2.5%) — 'Ayşepınar', 'Işıkkale', 'Kemune (Zahiku)',
-# 'Bølareinen', 'Aké (Yucatan)' — plus ~1.6% of all 1.76M rows and ~2% of the
-# alias table could never be exact-matched from Python. Compute the key on the
-# database side, with the same expression, so both sides agree by construction.
-_KEY_SQL = "left(lower(unaccent(:raw)), 500)"
+# The key is computed on the database side, with the expression the columns
+# are built with — see pipeline/lyra/site_key.py for why normalize_name() is
+# the wrong tool here (124 curated sites were unreachable from a Python key).
+_KEY_SQL = site_key_sql(":raw")
 
 
 def _match_site_ids(session: Session, extracted_name: str) -> set:
