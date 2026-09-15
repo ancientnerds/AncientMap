@@ -8,6 +8,11 @@
     python -m pipeline.lyra.prospector review --id <uuid>
 
 Design: docs/superpowers/specs/2026-09-14-site-proposer-design.md
+
+Session discipline (see pipeline.py): LOAD in one short session, EXTRACT and
+RESOLVE with no session at all, WRITE in a fresh short session. Prod closes
+any connection idle in a transaction for 15 minutes; a resolve phase over a
+thousand names takes longer than that.
 """
 
 from __future__ import annotations
@@ -33,7 +38,7 @@ from pipeline.lyra.prospector.extract_papers import (
     PaperExtraction,
     extract_paper,
 )
-from pipeline.lyra.prospector.pipeline import EvidenceRef, process_mentions
+from pipeline.lyra.prospector.pipeline import EvidenceRef, prepare, write
 from pipeline.lyra.prospector.propose import paper_locator
 from pipeline.lyra.prospector.resolve import ResolverBudget
 
@@ -47,6 +52,9 @@ MAX_TIEBREAK_CALLS = 40
 QUOTA_WEEKLY_FLOOR_PCT = 25
 QUOTA_FIVE_HOUR_FLOOR_PCT = 20
 DAILY_STORY_ITEMS = 60  # ~10 calls; new items arrive at ~13/day
+# Stories are extracted and written in slices so a crash late in an hour-long
+# backfill keeps everything before it, and no slice outlives a session.
+STORY_SLICE_ITEMS = 120  # ~20 calls, ~2-3 minutes
 
 
 class QuotaFloor(RuntimeError):
@@ -66,23 +74,28 @@ def check_quota() -> None:
         raise QuotaFloor(f"5h quota at {five}% — below {QUOTA_FIVE_HOUR_FLOOR_PCT}% floor")
 
 
-# ── papers ──────────────────────────────────────────────────────────────────
-
-
-def _already_extracted(session, unit: PaperUnit) -> bool:
-    from sqlalchemy import text as sql
-
-    return bool(
-        session.execute(
-            sql("""SELECT 1 FROM site_proposal_evidence
-                   WHERE source_table = 'research_requests' AND source_pk = :pk
-                     AND extracted_by = :by LIMIT 1"""),
-            {"pk": unit.request_id, "by": EXTRACTOR_TAG},
-        ).fetchone()
+def _counted(counts: dict) -> int:
+    return sum(
+        v for k, v in counts.items() if k in ("new", "needs_decision", "have_it", "not_a_place")
     )
 
 
+# ── papers ──────────────────────────────────────────────────────────────────
+
+
+def _extracted_paper_ids(session) -> set[str]:
+    from sqlalchemy import text as sql
+
+    rows = session.execute(
+        sql("""SELECT DISTINCT source_pk FROM site_proposal_evidence
+               WHERE source_table = 'research_requests' AND extracted_by = :by"""),
+        {"by": EXTRACTOR_TAG},
+    ).fetchall()
+    return {r.source_pk for r in rows}
+
+
 def process_paper(session, extraction: PaperExtraction, *, resolver: ResolverBudget) -> dict:
+    """Resolve and write one paper. The caller opens `session` AFTER extraction."""
     unit = extraction.unit
     pairs = [
         (
@@ -97,9 +110,10 @@ def process_paper(session, extraction: PaperExtraction, *, resolver: ResolverBud
         )
         for m in extraction.mentions
     ]
-    return process_mentions(
-        session, pairs, resolver=resolver, cited_titles=extraction.cited_titles, label=unit.slug
+    prepared = prepare(
+        pairs, resolver=resolver, cited_titles=extraction.cited_titles, label=unit.slug
     )
+    return write(session, prepared)
 
 
 def run_papers(*, slug: str | None, max_calls: int, dry_run: bool) -> dict:
@@ -110,29 +124,29 @@ def run_papers(*, slug: str | None, max_calls: int, dry_run: bool) -> dict:
     summary: dict[str, dict] = {}
     with get_session() as session:
         units = load_public_papers(session, slug=slug)
-        for unit in units:
-            if not slug and _already_extracted(session, unit):
-                continue
-            try:
-                extraction = extract_paper(
-                    unit, budget=budget, temperature=settings.temperature_verification
-                )
-            except BudgetExhausted as exc:
-                logger.warning("[PROSPECTOR] stopping: %s", exc)
-                break
+        done = set() if slug else _extracted_paper_ids(session)
+    for unit in units:
+        if unit.request_id in done:
+            continue
+        try:
+            extraction = extract_paper(
+                unit, budget=budget, temperature=settings.temperature_verification
+            )
+        except BudgetExhausted as exc:
+            logger.warning("[PROSPECTOR] stopping: %s", exc)
+            break
+        with get_session() as session:
             counts = process_paper(session, extraction, resolver=resolver)
-            summary[unit.slug] = {
-                "windows": extraction.windows,
-                "emitted": extraction.stats.emitted,
-                "grounded": len(extraction.mentions),
-                "rejected": extraction.stats.rejected,
-                **counts,
-            }
             if dry_run:
                 session.rollback()
-            else:
-                session.commit()
-            check_quota()
+        summary[unit.slug] = {
+            "windows": extraction.windows,
+            "emitted": extraction.stats.emitted,
+            "grounded": len(extraction.mentions),
+            "rejected": extraction.stats.rejected,
+            **counts,
+        }
+        check_quota()
     logger.info(
         "[PROSPECTOR] papers done: %d papers, %d calls, %d tokens, %d tiebreaks",
         len(summary),
@@ -154,38 +168,56 @@ def run_stories(*, items: int | None, max_calls: int, dry_run: bool) -> dict:
     check_quota()
     budget = Budget(max_tokens=TOKEN_BUDGET, max_calls=max_calls)
     resolver = ResolverBudget(MAX_TIEBREAK_CALLS)
-    with get_session() as session:
-        units = load_stories(session, unprospected_only=True, limit=items)
+    total_items = 0
+    totals: dict[str, int] = {}
+    remaining = items
+    while remaining is None or remaining > 0:
+        take = STORY_SLICE_ITEMS if remaining is None else min(STORY_SLICE_ITEMS, remaining)
+        with get_session() as session:
+            units = load_stories(session, unprospected_only=True, limit=take)
         if not units:
-            return {"items": 0, "calls": 0, "tokens": 0}
+            break
         try:
             extraction = extract_stories(
                 units, budget=budget, temperature=settings.temperature_verification
             )
         except BudgetExhausted as exc:
             logger.warning("[PROSPECTOR] stopping: %s", exc)
-            return {"items": 0, "calls": budget.calls, "tokens": budget.tokens_used}
+            break
         pairs = [
             (m, EvidenceRef("story", "news_items", str(u.item_id), u.locator, STORY_TAG))
             for u, m in extraction.mentions
         ]
-        counts = process_mentions(session, pairs, resolver=resolver, label="stories")
-        # Every unit the model READ is marked, mentions or not — an item that
-        # names no place must not be re-read next week.
-        mark_prospected(session, [u.item_id for u in units])
+        prepared = prepare(pairs, resolver=resolver, label="stories")
+        with get_session() as session:
+            counts = write(session, prepared)
+            # Every unit the model READ is marked, mentions or not — an item
+            # that names no place must not be re-read next week.
+            mark_prospected(session, [u.item_id for u in units])
+            if dry_run:
+                session.rollback()
+        for k, v in counts.items():
+            totals[k] = totals.get(k, 0) + v
+        total_items += len(units)
+        if remaining is not None:
+            remaining -= len(units)
+        logger.info(
+            "[PROSPECTOR] stories slice: %d items, %d calls so far, %s",
+            len(units),
+            budget.calls,
+            counts,
+        )
         if dry_run:
-            session.rollback()
-        else:
-            session.commit()
+            break
+        check_quota()
     logger.info(
-        "[PROSPECTOR] stories done: %d items, %d calls, %d tokens, %d grounded, %s",
-        len(units),
+        "[PROSPECTOR] stories done: %d items, %d calls, %d tokens, %s",
+        total_items,
         budget.calls,
         budget.tokens_used,
-        len(extraction.mentions),
-        dict(counts),
+        totals,
     )
-    return {"items": len(units), "calls": budget.calls, "tokens": budget.tokens_used, **counts}
+    return {"items": total_items, "calls": budget.calls, "tokens": budget.tokens_used, **totals}
 
 
 # ── radar backlog (zero LLM) ────────────────────────────────────────────────
@@ -202,10 +234,11 @@ def run_radar_backlog() -> dict:
     resolver = ResolverBudget(MAX_TIEBREAK_CALLS)
     with get_session() as session:
         units = load_radar_units(session)
-        pairs = [pair for u in units for pair in mentions_for(u)]
-        prefill = {group_key(u): prefill_for(u) for u in units}
-        counts = process_mentions(session, pairs, resolver=resolver, prefill=prefill, label="radar")
-        session.commit()
+    pairs = [pair for u in units for pair in mentions_for(u)]
+    prefill = {group_key(u): prefill_for(u) for u in units}
+    prepared = prepare(pairs, resolver=resolver, prefill=prefill, label="radar")
+    with get_session() as session:
+        counts = write(session, prepared)
     logger.info("[PROSPECTOR] radar backlog: %d contributions absorbed, %s", len(units), counts)
     return {"contributions": len(units), **counts}
 
@@ -219,8 +252,9 @@ def run_entities_legacy() -> dict:
     resolver = ResolverBudget(MAX_TIEBREAK_CALLS)
     with get_session() as session:
         found, stats = extract_legacy_entities(session)
-        counts = process_mentions(session, to_pairs(found), resolver=resolver, label="entities")
-        session.commit()
+    prepared = prepare(to_pairs(found), resolver=resolver, label="entities")
+    with get_session() as session:
+        counts = write(session, prepared)
     return {"names": stats.emitted, "grounded": stats.grounded, "dropped": stats.rejected, **counts}
 
 
@@ -230,7 +264,7 @@ def run_entities_legacy() -> dict:
 def run_daily() -> int:
     """Orchestrator step (daily): key new curated sites, refresh the token
     frequencies, extract any paper published since the last run and the
-    week's new stories. Returns the number of proposals touched. A quota
+    day's new stories. Returns the number of proposals touched. A quota
     floor just means "not today" — it never raises."""
     from pipeline.lyra.prospector.external_ids import refresh_site_external_ids, refresh_token_df
 
@@ -240,18 +274,9 @@ def run_daily() -> int:
     touched = 0
     try:
         papers = run_papers(slug=None, max_calls=MAX_CALLS_PER_RUN, dry_run=False)
-        touched += sum(
-            v
-            for paper in papers["papers"].values()
-            for k, v in paper.items()
-            if k in ("new", "needs_decision", "have_it", "not_a_place")
-        )
+        touched += sum(_counted(paper) for paper in papers["papers"].values())
         stories = run_stories(items=DAILY_STORY_ITEMS, max_calls=40, dry_run=False)
-        touched += sum(
-            v
-            for k, v in stories.items()
-            if k in ("new", "needs_decision", "have_it", "not_a_place")
-        )
+        touched += _counted(stories)
     except QuotaFloor as exc:
         logger.warning("[PROSPECTOR] daily run stopped: %s", exc)
     return touched

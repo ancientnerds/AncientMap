@@ -130,14 +130,40 @@ class TestRadarBacklog:
 
 
 class TestOnePipeline:
-    def test_every_corpus_goes_through_process_mentions(self):
+    def test_every_corpus_goes_through_prepare_and_write(self):
         from pipeline.lyra import prospector
 
-        src = inspect.getsource(prospector)
-        for fn in ("process_paper", "run_stories", "run_radar_backlog", "run_entities_legacy"):
-            body = src[src.index(f"def {fn}") :]
-            body = body[: body.index("\ndef ", 1)] if "\ndef " in body[1:] else body
-            assert "process_mentions(" in body, fn
+        for fn in (
+            prospector.process_paper,
+            prospector.run_stories,
+            prospector.run_radar_backlog,
+            prospector.run_entities_legacy,
+        ):
+            body = inspect.getsource(fn)
+            assert "prepare(" in body and "write(session, prepared)" in body, fn.__name__
+
+    def test_no_session_is_held_across_the_resolve_phase(self):
+        """prepare() (network, minutes) must run OUTSIDE any `with get_session()`.
+
+        Prod closes a connection idle in a transaction after 15 minutes; the
+        first entities run died on the first dedup statement that way.
+        """
+        from pipeline.lyra import prospector
+
+        for fn in (
+            prospector.run_stories,
+            prospector.run_radar_backlog,
+            prospector.run_entities_legacy,
+        ):
+            lines = inspect.getsource(fn).splitlines()
+            call = next(i for i, l in enumerate(lines) if "prepared = prepare(" in l)
+            indent = len(lines[call]) - len(lines[call].lstrip())
+            # Walk upwards: the nearest enclosing block opener must not be a session.
+            for j in range(call - 1, -1, -1):
+                line = lines[j]
+                if line.strip() and (len(line) - len(line.lstrip())) < indent:
+                    assert "get_session()" not in line, fn.__name__
+                    break
 
     def test_stories_are_marked_read_even_without_mentions(self):
         from pipeline.lyra import prospector
