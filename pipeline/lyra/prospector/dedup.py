@@ -301,6 +301,23 @@ def _countries_disagree(a: str | None, b: str | None) -> bool:
     return normalize_country(a) != normalize_country(b)
 
 
+def gate_country(resolved: str | None, in_text: str | None) -> str | None:
+    """The country a candidate is GATED on.
+
+    A resolved (Wikidata P17 / reverse-geocoded) country always wins. A
+    phrase from the text counts only if normalize_country() maps it to a real
+    country: "New Mexico" or "Catron County" would otherwise disagree with a
+    curated site's "USA" and kill a legitimate match at G1. The phrase itself
+    stays on the card as country_in_text; it just does not vote.
+    """
+    if resolved:
+        return resolved
+    if not in_text:
+        return None
+    code = normalize_country(in_text)
+    return in_text if len(code) == 2 and code.isupper() else None
+
+
 def _keyed_names(name: str) -> set[str]:
     return {t for t in name.lower().replace("-", " ").split() if t}
 

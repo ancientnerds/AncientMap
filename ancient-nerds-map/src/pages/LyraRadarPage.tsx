@@ -613,7 +613,7 @@ export default function LyraRadarPage() {
   const showGlobe = globePinned || !globeHiddenByScroll
   // 'radar' = the YouTube-fed queue; 'proposals' = the prospector's queue
   // (papers/stories, dedup-adjudicated). Founder-only on the API side.
-  const [view, setView] = useState<'radar' | 'proposals'>(
+  const [requestedView, setView] = useState<'radar' | 'proposals'>(
     () => (window.location.hash === '#proposals' ? 'proposals' : 'radar')
   )
   const [filtersExpanded, setFiltersExpanded] = useState(false)
@@ -626,6 +626,9 @@ export default function LyraRadarPage() {
   // Auth (founder role check)
   const { user, token } = useAuth()
   const isFounder = !!user?.is_founder
+  // A visitor who lands on #proposals is not a founder: show them the radar,
+  // not an "access required" message where the list used to be.
+  const view = requestedView === 'proposals' && isFounder ? 'proposals' : 'radar'
   const hoverTimeoutRef = useRef<number>(0)
 
   const handleMapHover = useCallback((id: string | null) => {

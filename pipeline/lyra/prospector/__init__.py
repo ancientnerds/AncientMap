@@ -18,7 +18,7 @@ from pipeline.database import get_session
 from pipeline.lyra.config import _get_settings
 from pipeline.lyra.minimax_shared import probe_minimax_quota
 from pipeline.lyra.prospector.corpus import PaperUnit, load_public_papers
-from pipeline.lyra.prospector.dedup import Candidate, adjudicate
+from pipeline.lyra.prospector.dedup import Candidate, adjudicate, gate_country
 from pipeline.lyra.prospector.extract_papers import (
     EXTRACTOR_TAG,
     Budget,
@@ -41,6 +41,7 @@ MAX_TIEBREAK_CALLS = 40
 QUOTA_WEEKLY_FLOOR_PCT = 25
 QUOTA_FIVE_HOUR_FLOOR_PCT = 20
 RESOLVER_ABORT_RATE = 0.20
+RESOLVER_MIN_SAMPLE = 10
 
 
 class QuotaFloor(RuntimeError):
@@ -93,7 +94,14 @@ def process_paper(session, extraction: PaperExtraction, *, resolver: ResolverBud
     resolutions = resolve_names(
         [reps[k].name for k in site_keys], cited_titles=extraction.cited_titles, budget=resolver
     )
-    if resolver.attempted and resolver.failures / resolver.attempted > RESOLVER_ABORT_RATE:
+    # Infrastructure failures only (see Resolution.infra_failed), and only
+    # once the sample is big enough for a rate to mean anything: the first
+    # full run aborted on a 4-window paper at "2/6" where the two were
+    # ordinary same-name rejections.
+    if (
+        resolver.attempted >= RESOLVER_MIN_SAMPLE
+        and resolver.failures / resolver.attempted > RESOLVER_ABORT_RATE
+    ):
         raise RuntimeError(
             f"[{unit.slug}] resolver failure rate {resolver.failures}/{resolver.attempted} "
             f"exceeds {RESOLVER_ABORT_RATE:.0%} — Wikidata degraded? Nothing written."
@@ -103,8 +111,9 @@ def process_paper(session, extraction: PaperExtraction, *, resolver: ResolverBud
     for i, key in enumerate(site_keys):
         rep = reps[key]
         res = resolutions.get(rep.name)
-        country = (res.country if res else None) or _first(
-            m.country_in_text for m in groups[key] if m.country_in_text
+        country = gate_country(
+            res.country if res else None,
+            _first(m.country_in_text for m in groups[key] if m.country_in_text),
         )
         cands.append(
             Candidate(

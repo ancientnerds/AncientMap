@@ -163,6 +163,12 @@ def ground_mentions(
             # A quote never crosses its paragraph.
             q_start, q_end = sentence_span(source_text, abs_start)
             q_start, q_end = max(q_start, p_start), min(q_end, p_end)
+            # A markdown heading ("## What Three Projects Revealed") is a valid
+            # sighting, but the rendered page shows it without the hashes, so
+            # the quote and its text-fragment link must not carry them either.
+            heading = re.match(r"#{1,6}\s+", source_text[q_start:q_end])
+            if heading:
+                q_start += heading.end()
             grounded.append(
                 Mention(
                     name=surface,
@@ -172,19 +178,34 @@ def ground_mentions(
                     quote=source_text[q_start:q_end].strip(),
                     quote_start=q_start,
                     footnotes=[int(n) for n in _FOOTNOTE_RE.findall(paragraph)],
-                    country_in_text=_verbatim_in(paragraph, raw.get("country_as_written")),
+                    country_in_text=_verbatim_in(
+                        paragraph, raw.get("country_as_written"), country=True
+                    ),
                     period_phrase=_verbatim_in(paragraph, raw.get("period_as_written")),
                 )
             )
     return grounded
 
 
-def _verbatim_in(paragraph: str, phrase: str | None) -> str | None:
-    """The phrase if it occurs verbatim in the paragraph, else None."""
+def _verbatim_in(paragraph: str, phrase: str | None, *, country: bool = False) -> str | None:
+    """The phrase if it occurs verbatim, on word boundaries, in the paragraph.
+
+    For countries a fragment of a longer capitalised name is rejected: the
+    first real paper returned "Mexico" for a paragraph saying "highland New
+    Mexico", and "Africa" would match "South Africa", "Guinea" match "Papua
+    New Guinea". A capitalised word directly before the match means the
+    phrase is part of a bigger proper name — not the country.
+    """
     cleaned = clean_llm_name(phrase)
     if not cleaned:
         return None
-    if cleaned in paragraph:
-        return cleaned
-    i = paragraph.lower().find(cleaned.lower())
-    return paragraph[i : i + len(cleaned)] if i != -1 else None
+    pattern = r"(?<!\w)" + re.escape(cleaned) + r"(?!\w)"
+    m = re.search(pattern, paragraph) or re.search(pattern, paragraph, re.IGNORECASE)
+    if not m:
+        return None
+    if country:
+        before = paragraph[: m.start()]
+        prev = re.search(r"([A-Z][\w'’-]*)\s+$", before)
+        if prev:
+            return None
+    return paragraph[m.start() : m.end()]

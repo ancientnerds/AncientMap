@@ -19,7 +19,7 @@ import uuid
 
 from sqlalchemy import text as sql
 
-from pipeline.lyra.prospector.dedup import Verdict
+from pipeline.lyra.prospector.dedup import Verdict, gate_country
 from pipeline.lyra.prospector.mentions import Mention
 from pipeline.lyra.prospector.resolve import Resolution
 from pipeline.lyra.site_key import site_key_sql
@@ -65,10 +65,18 @@ def _find_existing(session, *, qid, enwiki_title, name_key, country) -> uuid.UUI
         ).fetchone()
         if row:
             return row.id
+    # Same name key, and the countries do not CONTRADICT each other: an
+    # unknown country on either side matches. Two real "Glenwood"s (California
+    # vs Aberdeenshire) still stay separate; a card whose country was learned
+    # or corrected on a later run does not spawn a second card — which the
+    # strict equality did on 2026-09-15 ("Mogollon Village" twice).
     row = session.execute(
         sql("""SELECT id FROM site_proposals
                WHERE wikidata_qid IS NULL AND enwiki_title IS NULL
-                 AND name_key = :k AND COALESCE(country, '') = COALESCE(:c, '')"""),
+                 AND name_key = :k
+                 AND (country IS NULL OR CAST(:c AS text) IS NULL OR country = :c)
+               ORDER BY (country = :c) DESC NULLS LAST, first_seen_at
+               LIMIT 1"""),
         {"k": name_key, "c": country},
     ).fetchone()
     return row.id if row else None
@@ -86,7 +94,9 @@ def upsert_proposal(
     contribution_id: str | None = None,
 ) -> uuid.UUID:
     """Create or update the proposal for `name`. Returns its id."""
-    country = (res.country if res else None) or country_in_text
+    # `country` is what the flag and the gates use; a state or region phrase
+    # from the text is kept in country_in_text but never promoted to country.
+    country = gate_country(res.country if res else None, country_in_text)
     name_key = _name_key(session, name)
     qid = res.qid if res and res.verdict == "resolved" else None
     enwiki = res.canonical_title if res and res.verdict == "resolved" else None

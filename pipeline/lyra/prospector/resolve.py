@@ -31,6 +31,7 @@ from pipeline.lyra.prospector.wiki import TitleResolution, resolve_titles
 from pipeline.lyra.site_identifier import (
     _check_enwiki_sitelinks,
     _enrich_from_wikidata,
+    _fetch_qid_labels,
     _fetch_wikipedia_summary,
     _parse_wikidata_time,
     _pick_wikidata_entity,
@@ -92,10 +93,35 @@ class Resolution:
     instance_of: list[str] = field(default_factory=list)
     in_scope: bool = True
     note: str | None = None
+    # True only when the entity APIs returned nothing for an id we hold — the
+    # signal that Wikidata is degraded. A same-name rejection or a missing
+    # article is a data outcome, not a failure, and must not trip the abort.
+    infra_failed: bool = False
 
     @property
     def has_point(self) -> bool:
         return self.lat is not None and self.lon is not None
+
+
+DESIGNATION_WORDS = (
+    "national monument",
+    "national park",
+    "national historic",
+    "state park",
+    "protected area",
+    "world heritage",
+    "heritage site",
+    "museum",
+    "visitor cent",
+)
+
+
+def _is_designation(instance_of: list[str]) -> bool:
+    """True when any P31 label names a modern designation, not a place type."""
+    if not instance_of:
+        return False
+    labels = _fetch_qid_labels(instance_of)
+    return any(w in label.lower() for label in labels.values() for w in DESIGNATION_WORDS)
 
 
 class ResolverBudget:
@@ -146,7 +172,7 @@ def resolve_names(
             out[name] = res
             continue
         _confirm_and_enrich(res)
-        if res.verdict == "unresolved":
+        if res.infra_failed:
             budget.failures += 1
         out[name] = res
     return out
@@ -189,6 +215,13 @@ def _search(name: str, res: Resolution, budget: ResolverBudget, settings) -> Non
 def _confirm_and_enrich(res: Resolution) -> None:
     """Attach the entity only if its label is the same name; then filter."""
     enrich = _enrich_from_wikidata(res.qid) if res.qid else {}
+    if res.qid and not enrich:
+        # _enrich_from_wikidata swallows network errors and returns {} — this
+        # is the only place a degraded Wikidata becomes visible.
+        res.infra_failed = True
+        res.note = f"Wikidata returned nothing for {res.qid}"
+        res.verdict = "unresolved"
+        return
     label = enrich.get("label_en") or enrich.get("wikipedia_title") or res.canonical_title
     title = enrich.get("wikipedia_title") or res.canonical_title
     if not (
@@ -231,6 +264,17 @@ def _confirm_and_enrich(res: Resolution) -> None:
             break
     if enrich.get("end_time"):
         res.period_end = _parse_wikidata_time(enrich["end_time"])
+    # Wikidata "inception" of a national monument or park is the year it was
+    # DESIGNATED, not the occupation: Gila Cliff Dwellings (13th c.) carries
+    # 1907, Mesa Verde 1906. Both came back out_of_scope on the first real
+    # run. A post-1500 date on a designation-class entity is not a period.
+    if (
+        res.period_start is not None
+        and res.period_start > 1500
+        and _is_designation(res.instance_of)
+    ):
+        res.period_start = res.period_end = None
+        res.note = "Wikidata inception is a designation date (monument/park), period left open"
     if not res.country:
         res.country = lookup_country(res.lat, res.lon)
     if res.canonical_title:
