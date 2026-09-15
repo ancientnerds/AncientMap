@@ -121,11 +121,16 @@ function tuneLandingHtml() {
           '<script id="vite-plugin-pwa:register-sw" src="/registerSW.js">',
           '<script id="vite-plugin-pwa:register-sw" src="/registerSW.js" defer>'
         )
-        if (!ctx.filename.endsWith('index.html')) return html
+        // The four SSR templates serve ~7,000 indexed landing pages; a
+        // visitor arriving from Google gets the same update-only snippet as
+        // the homepage (see comment above). The app entries still install.
+        const updateOnly = ['index.html', 'site.html', 'story.html', 'research.html', 'articles.html']
+        if (!updateOnly.some(name => ctx.filename.endsWith(name))) return html
         html = html.replace(
           '<script id="vite-plugin-pwa:register-sw" src="/registerSW.js" defer></script>',
           '<script>if("serviceWorker" in navigator)addEventListener("load",function(){navigator.serviceWorker.getRegistration().then(function(r){if(r)r.update()})})</script>'
         )
+        if (!ctx.filename.endsWith('index.html')) return html
         // Make landing CSS non-render-blocking (critical CSS is inlined)
         html = html.replace(
           /<link\b([^>]*)href="(\/assets\/landing-[^"]+\.css)"([^>]*)>/g,

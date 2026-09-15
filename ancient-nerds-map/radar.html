@@ -34,10 +34,10 @@
     <meta name="twitter:description" content="AI-powered tracker for newly mentioned archaeological sites. Discover before the mainstream." />
     <meta name="twitter:image" content="https://ancientnerds.com/landing/og-image.png" />
     <meta name="twitter:site" content="@AncientNerdsDAO" />
-
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@400;500;600;700&family=Orbitron:wght@400;500;600;700;900&family=Inter:wght@300;400;500;600&family=Saira+Extra+Condensed:wght@400;700;800&display=swap" rel="stylesheet" />
+    <!-- Self-hosted fonts (public/fonts/fonts.css): same files Google served,
+         no cross-origin render-blocking stylesheet on the SSR pages. -->
+    <link rel="preload" as="font" type="font/woff2" crossorigin href="/fonts/jetbrains-mono-400-latin.woff2" />
+    <link rel="stylesheet" href="/fonts/fonts.css" />
   </head>
   <body>
     <noscript>
