@@ -35,6 +35,13 @@ import { blurb, collapse, cut, stripCitations } from './text'
 const BASE_URL = 'https://ancientnerds.com'
 const DEFAULT_OG_IMAGE = `${BASE_URL}/landing/og-image.png`
 
+// One publisher object for NewsArticle, Article and ScholarlyArticle. The logo
+// is the 180px PNG the site already ships (Google wants a raster, not the SVG).
+const PUBLISHER =
+  '{"@type": "Organization", "name": "Ancient Nerds", ' +
+  `"url": "${BASE_URL}", ` +
+  `"logo": {"@type": "ImageObject", "url": "${BASE_URL}/apple-touch-icon.png", "width": 180, "height": 180}}`
+
 export interface PageMeta {
   /**
    * Roher Title OHNE " | Ancient Nerds". Das Suffix hängt renderHead()
@@ -138,7 +145,7 @@ export function absoluteUrl(path: string | null): string {
  * Zeichen !'()* die encodeURIComponent — anders als quote() — durchlässt.
  * Slugs enthalten sie nie; der Ersatz hält die Parität trotzdem exakt.
  */
-function encodePath(path: string): string {
+export function encodePath(path: string): string {
   return path
     .split('/')
     .map(seg =>
@@ -200,16 +207,19 @@ export function storyMeta(route: StoryRoute): PageMeta {
     `"headline": ${jsonStr(route.headline)}, ` +
     `"description": ${jsonStr(cut(summary, 300))}, ` +
     `"datePublished": "${isoDate(route.published_at)}", ` +
-    `"image": "${esc(screenshot || DEFAULT_OG_IMAGE)}", ` +
+    `"image": ${jsonStr(screenshot || DEFAULT_OG_IMAGE)}, ` +
     '"author": {"@type": "Organization", "name": "Ancient Nerds", ' +
     `"url": "${BASE_URL}"}, ` +
-    '"publisher": {"@type": "Organization", "name": "Ancient Nerds", ' +
-    `"url": "${BASE_URL}"}, ` +
+    `"publisher": ${PUBLISHER}, ` +
     `"mainEntityOfPage": "${canonical}", "url": "${canonical}"}`
   const postText = collapse(route.post_text)
+  // Under 150 chars of post text the summary carries the snippet; only when
+  // both are missing does the tag stay away so Google writes its own.
+  const description =
+    Array.from(postText).length >= 150 ? blurb(postText, 300) : summary ? blurb(summary, 300) : ''
   return {
     title: route.headline,
-    description: Array.from(postText).length >= 150 ? blurb(postText, 300) : '',
+    description,
     canonical,
     ogType: 'article',
     image: screenshot || undefined,
@@ -224,8 +234,12 @@ export function storyMeta(route: StoryRoute): PageMeta {
 
 export function storyArchiveMeta(route: StoryArchiveRoute): PageMeta {
   const suffix = route.page > 1 ? ` — page ${route.page}` : ''
-  const canonical =
+  const q = (route.q ?? '').trim()
+  const base =
     route.page === 1 ? `${BASE_URL}/news-archive/` : `${BASE_URL}/news-archive/page/${route.page}`
+  // Suchergebnisse (?q=) sind noindex — dann muss der Canonical auf die
+  // Seite selbst zeigen, nicht auf das Archiv (widersprüchliche Signale).
+  const canonical = q ? `${base}?q=${encodeURIComponent(q)}` : base
   return {
     title: `Story Archive${suffix}`,
     description:
@@ -233,8 +247,8 @@ export function storyArchiveMeta(route: StoryArchiveRoute): PageMeta {
       'excavations, dating results, and reinterpretations, each with its source.',
     canonical,
     // Suchergebnisse (?q=) sind für Menschen: unendlicher URL-Raum, nie in
-    // den Index. Der Canonical bleibt die saubere Archivseite.
-    robots: (route.q ?? '').trim() ? ROBOTS_NOINDEX : undefined,
+    // den Index.
+    robots: q ? ROBOTS_NOINDEX : undefined,
   }
 }
 
@@ -272,7 +286,7 @@ export function siteMeta(route: SiteRoute): PageMeta {
 
   return {
     title: `${route.name} — ${route.country} · ${siteType}`,
-    description: description || `${route.name}: ${siteType.toLowerCase()} in ${route.country}.`,
+    description,
     canonical,
     ogType: 'place',
     image: ogImage,
@@ -326,7 +340,7 @@ export function countryMeta(route: CountryRoute): PageMeta {
       (span ? `. Spanning ${span}` : '') +
       '. Each with location, historical context and sources.',
     canonical,
-    image: hero ? `${BASE_URL}${hero}` : undefined,
+    image: hero ? absoluteUrl(hero) : undefined,
     schema,
   }
 }
@@ -346,6 +360,8 @@ export function researchMeta(route: ResearchRoute): PageMeta {
     '"digitalSourceType": "https://cv.iptc.org/newscodes/digitalsourcetype/trainedAlgorithmicMedia", ' +
     `"headline": ${jsonStr(route.title)}, "description": ${jsonStr(cut(summary, 300))}, ` +
     `"datePublished": "${isoDate(route.published_at)}", "author": ${authorSchema}, ` +
+    `"publisher": ${PUBLISHER}, ` +
+    (route.hero_image_url ? `"image": ${jsonStr(absoluteUrl(route.hero_image_url))}, ` : '') +
     '"license": "https://creativecommons.org/licenses/by/4.0/", ' +
     `"mainEntityOfPage": "${canonical}", "url": "${canonical}"}`
   return {
@@ -378,6 +394,8 @@ export function articleMeta(route: ArticleRoute): PageMeta {
     `"headline": ${jsonStr(route.title)}, "description": ${jsonStr(cut(summary, 300))}, ` +
     `"datePublished": "${isoDate(route.published_at)}", ` +
     '"author": {"@type": "Organization", "name": "Ancient Nerds"}, ' +
+    `"publisher": ${PUBLISHER}, ` +
+    (route.hero_image_url ? `"image": ${jsonStr(absoluteUrl(route.hero_image_url))}, ` : '') +
     `"mainEntityOfPage": "${canonical}", "url": "${canonical}"}`
   return {
     title: route.title,

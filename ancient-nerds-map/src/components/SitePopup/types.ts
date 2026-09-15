@@ -246,7 +246,8 @@ export type EmpireSeshatTab = 'overview' | 'stats' | 'military' | 'society' | 'h
 
 export interface WindowControlsProps {
   windowState: WindowState
-  siteId?: string
+  /** Full-page URL of the site (canonical /sites/ path for curated sites). */
+  siteHref?: string
   isEmpireMode?: boolean
   onMinimize: (e: React.MouseEvent) => void
   onMaximize: (e: React.MouseEvent) => void

@@ -42,7 +42,7 @@ export default function PaperCard(props: PaperCardProps) {
     <>
       <div className="theo-public-card-hero">
         {paper.cover && (
-          <img src={paper.cover} alt="" className="theo-public-card-img" loading="lazy" />
+          <img src={paper.cover} alt={paper.title} className="theo-public-card-img" loading="lazy" />
         )}
         <div className="theo-public-card-vignette" />
         <div className="theo-public-card-title">{paper.title}</div>

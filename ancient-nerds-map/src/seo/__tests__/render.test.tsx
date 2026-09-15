@@ -105,7 +105,7 @@ describe('researchIndex (Task 12): echte Listenseite statt Redirect', () => {
   })
 
   it('Hero-Bild nur für Papers, die eins haben — nie <img src="">', () => {
-    const imgs = [...html.matchAll(/<img src="([^"]*)" alt="" class="theo-public-card-img"[^>]*>/g)]
+    const imgs = [...html.matchAll(/<img src="([^"]*)" alt="[^"]*" class="theo-public-card-img"[^>]*>/g)]
     expect(imgs.map(m => m[1])).toEqual(
       PAPERS.filter(p => p.hero_image_url).map(p => p.hero_image_url),
     )

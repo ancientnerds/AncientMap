@@ -134,9 +134,13 @@ describe('storyMeta', () => {
     expect(m.description).not.toBe(FIXTURES.story.summary)
   })
 
-  it('lässt die Description bei post_text < 150 Zeichen weg', () => {
-    const m = storyMeta(pyrefRoute('story_short') as StoryRoute)
-    expect(m.description).toBe('')
+  // Bis 15.09.2026 blieb die Description unter 150 Zeichen post_text ganz
+  // weg, obwohl die Summary da war — Google schrieb dann sein eigenes Snippet.
+  it('nimmt bei post_text < 150 Zeichen die Summary als Description', () => {
+    const short = pyrefRoute('story_short') as StoryRoute
+    const m = storyMeta(short)
+    expect(m.description).toBe(short.summary.trim())
+    expect(storyMeta({ ...short, summary: '' }).description).toBe('')
   })
 
   // Seit 2026-08-20 haben spekulative Stories eine Seite (vorher 404), aber
@@ -158,10 +162,13 @@ describe('storyMeta', () => {
 describe('storyArchiveMeta mit Suche', () => {
   // ?q= ist ein unendlicher URL-Raum — Ergebnisseiten sind für Menschen,
   // nie für den Index. Der Canonical bleibt die saubere Archivseite.
-  it('?q= ⇒ noindex, Canonical bleibt /news-archive/', () => {
+  // noindex plus ein Canonical auf eine ANDERE URL sind widersprüchliche
+  // Signale (Google wertet dann eines davon ab) — der Canonical bleibt auf
+  // der Suchseite selbst.
+  it('?q= ⇒ noindex, Canonical zeigt auf die Suchseite selbst', () => {
     const m = storyArchiveMeta({ ...FIXTURES.storyArchive, q: 'chariot' })
     expect(m.robots).toBe('noindex, follow, max-image-preview:large')
-    expect(m.canonical).toBe('https://ancientnerds.com/news-archive/')
+    expect(m.canonical).toBe('https://ancientnerds.com/news-archive/?q=chariot')
   })
 
   it('leeres oder fehlendes q bleibt indexierbar', () => {

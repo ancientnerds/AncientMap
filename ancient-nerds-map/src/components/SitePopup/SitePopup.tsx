@@ -5,6 +5,7 @@ import { config } from '../../config'
 import { useOffline } from '../../contexts/OfflineContext'
 import { reportAchievementEvent } from '../../utils/cardApi'
 import { shareOrCopy } from '../../utils/share'
+import { sitePath } from '../../seo/meta'
 
 // Unified content service for gallery items
 import { toLightboxImages } from '../../services/connectors'
@@ -391,8 +392,15 @@ export default function SitePopup({
       .finally(() => setRawDataLoading(false))
   }, [displaySite.id, displaySite.sourceId, isEmpireMode])
 
-  // Share URL — nginx serves dynamic OG tags to crawlers on site.html
-  const shareUrl = `${window.location.origin}/site.html?id=${displaySite.id}`
+  // Full page: the canonical /sites/{country}/{slug} for curated sites (same
+  // rule as _CURATED_WHERE — ancient_nerds source with a country). Every
+  // other source keeps the id URL, which 301s to the globe focus. The legacy
+  // form was one of the last places still emitting /site.html?id= links,
+  // which Google kept discovering and crawling twice (301 + target).
+  const fullPageUrl = displaySite.sourceId === 'ancient_nerds' && displaySite.location
+    ? sitePath(displaySite.location, displaySite.title, displaySite.id)
+    : `/site.html?id=${displaySite.id}`
+  const shareUrl = `${window.location.origin}${fullPageUrl}`
 
   // Share site popup URL. The clipboard gets title + URL (the share sheet
   // shows the title itself, a bare pasted link would not).
@@ -521,7 +529,7 @@ export default function SitePopup({
       {!isStandalone && windowHook.windowState !== 'minimized' && (
         <WindowControls
           windowState={windowHook.windowState}
-          siteId={displaySite.id}
+          siteHref={fullPageUrl}
           isEmpireMode={isEmpireMode}
           onMinimize={windowHook.handleMinimize}
           onMaximize={windowHook.handleMaximize}
@@ -534,7 +542,7 @@ export default function SitePopup({
         <div className="popup-standalone-close">
           <a
             className="popup-window-btn"
-            href={`/site.html?id=${displaySite.id}`}
+            href={fullPageUrl}
             target="_blank"
             rel="noopener noreferrer"
             title="Open full page"

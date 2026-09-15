@@ -81,6 +81,10 @@ export default function HamburgerNav({ currentPage, openInNewTab }: HamburgerNav
   // Build the auth link based on login state — only while the dropdown is
   // open: the sign-in return_to reads window.location, which does not exist
   // during server rendering, and the dropdown can only open in a browser.
+  // The NAV_ITEMS themselves are always in the DOM (display:none while
+  // closed): Google's renderer only follows links that exist after
+  // hydration, and until 2026-09-15 every page shipped without a single
+  // navigation link, so the hubs were reachable only via the footer CTA.
   const authItem = !open
     ? null
     : isLoggedIn
@@ -101,12 +105,11 @@ export default function HamburgerNav({ currentPage, openInNewTab }: HamburgerNav
           <line x1="3" y1="18" x2="21" y2="18" />
         </svg>
       </button>
-      {authItem && (
-        <div
-          ref={dropRef}
-          className="hamburger-dropdown"
-          style={{ position: 'fixed', top: pos.top, left: pos.left }}
-        >
+      <div
+        ref={dropRef}
+        className="hamburger-dropdown"
+        style={open ? { position: 'fixed', top: pos.top, left: pos.left } : { display: 'none' }}
+      >
           {NAV_ITEMS.map(item => (
             <a
               key={item.page}
@@ -121,6 +124,7 @@ export default function HamburgerNav({ currentPage, openInNewTab }: HamburgerNav
               {item.label}
             </a>
           ))}
+          {authItem && (<>
           <div className="hamburger-divider" />
           <a
             href={authItem.href}
@@ -133,8 +137,8 @@ export default function HamburgerNav({ currentPage, openInNewTab }: HamburgerNav
             </svg>
             {authItem.label}
           </a>
-        </div>
-      )}
+          </>)}
+      </div>
     </div>
   )
 }

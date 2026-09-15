@@ -157,8 +157,12 @@ function firstImageUrl(article: Article): string | null {
 
 // Share/copy/Medium need only the title — payload views (ArticleRoute)
 // and the standalone SPA (Article) both feed them.
+function articlePath(article: { title: string }): string {
+  return `/articles/${slugify(article.title)}`
+}
+
 function shareUrl(article: { title: string }): string {
-  return `https://ancientnerds.com/articles/${slugify(article.title)}`
+  return `https://ancientnerds.com${articlePath(article)}`
 }
 
 function readingTime(content: string): number {
@@ -804,7 +808,11 @@ function ArticlesStandalone() {
         {view === 'listing' && !loading && !error && hero && (
           <>
             <section className="articles-hero" onClick={() => openArticle(hero)}>
-              <h1 className="articles-hero-title">{hero.title}</h1>
+              {/* Real href for crawlers and middle-click; a plain click bubbles
+                  to the card and opens the in-page reader as before. */}
+              <h1 className="articles-hero-title">
+                <a href={articlePath(hero)} onClick={e => e.preventDefault()}>{hero.title}</a>
+              </h1>
               <span className="articles-hero-date">
                 {formatDateRange(hero.week_start, hero.week_end)}
                 <span className="articles-reader-readtime">~{readingTime(hero.content)} min read</span>
@@ -856,7 +864,9 @@ function ArticlesStandalone() {
                           />
                         ) : null
                       })()}
-                      <h2 className="articles-grid-card-title">{article.title}</h2>
+                      <h2 className="articles-grid-card-title">
+                        <a href={articlePath(article)} onClick={e => e.preventDefault()}>{article.title}</a>
+                      </h2>
                       <span className="articles-grid-card-date">
                         {formatDateRange(article.week_start, article.week_end)}
                         <span className="articles-reader-readtime">~{readingTime(article.content)} min read</span>

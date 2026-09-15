@@ -14,6 +14,8 @@
  * angefasst, ohne dass Google es anders bewertet.
  */
 
+import { encodePath } from '../../seo/meta'
+
 const BASE_URL = 'https://ancientnerds.com'
 
 export interface Crumb {
@@ -30,7 +32,7 @@ export default function Breadcrumbs({ trail }: { trail: Crumb[] }) {
       '@type': 'ListItem',
       position: i + 1,
       name: crumb.name,
-      ...(crumb.path ? { item: `${BASE_URL}${crumb.path}` } : {}),
+      ...(crumb.path ? { item: `${BASE_URL}${encodePath(crumb.path)}` } : {}),
     })),
   }).replace(/</g, '\\u003c')
 

@@ -1408,7 +1408,7 @@ export default function TheoPage() {
                   key={paper.slug}
                   paper={{ title: paper.title, cover: paper.cover_url, description: paper.card_description }}
                   className={authUser?.username === paper.published_by ? 'theo-public-card--own' : undefined}
-                  onOpen={() => { window.location.href = `/research.html?slug=${paper.slug}` }}
+                  href={`/research/${paper.slug}`}
                   footer={
                     <>
                       <span className="theo-public-card-author">
@@ -1423,8 +1423,9 @@ export default function TheoPage() {
                         className="theo-public-card-share"
                         aria-label="Copy link"
                         onClick={(e) => {
+                          e.preventDefault()
                           e.stopPropagation()
-                          navigator.clipboard.writeText(window.location.origin + '/theo.html#' + paper.slug)
+                          navigator.clipboard.writeText(`${window.location.origin}/research/${paper.slug}`)
                           setToast({ msg: 'Link copied!', type: 'ok' })
                         }}
                         title="Copy link"

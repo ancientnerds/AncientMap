@@ -716,7 +716,7 @@ export default function KnowledgePage() {
           )}
           <div className="kg-infocard-actions">
             {focused.kind === 'paper' && focused.paper_slug && (
-              <a href={`/research.html?slug=${focused.paper_slug}`}>Read the paper →</a>
+              <a href={`/research/${focused.paper_slug}`}>Read the paper →</a>
             )}
             {focused.site_id && (
               <button onClick={() => navigateGlobeToSite(focused.site_id!)}>Show on globe →</button>

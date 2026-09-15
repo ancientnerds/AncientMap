@@ -2,7 +2,7 @@ import type { WindowControlsProps } from '../types'
 
 export function WindowControls({
   windowState,
-  siteId,
+  siteHref,
   isEmpireMode,
   onMinimize,
   onMaximize,
@@ -10,9 +10,9 @@ export function WindowControls({
 }: WindowControlsProps) {
   return (
     <div className="popup-window-controls">
-      {siteId && !isEmpireMode && (
+      {siteHref && !isEmpireMode && (
         <a
-          href={`/site.html?id=${siteId}`}
+          href={siteHref}
           target="_blank"
           rel="noopener noreferrer"
           className="popup-window-btn"

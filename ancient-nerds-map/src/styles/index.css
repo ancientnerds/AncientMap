@@ -17776,6 +17776,12 @@ div.lyra-inline-video-wrap {
   margin-bottom: 12px;
 }
 
+.articles-hero-title a,
+.articles-grid-card-title a {
+  color: inherit;
+  text-decoration: none;
+}
+
 .articles-grid-card-title {
   font-family: var(--font-heading);
   font-size: 20px;

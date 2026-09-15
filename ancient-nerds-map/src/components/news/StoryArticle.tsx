@@ -183,18 +183,18 @@ export default function StoryArticle({ story, children }: StoryArticleProps) {
                     play()
                   }}
                 >
-                  {screenshot && <img src={screenshot} alt={story.video_title || story.headline} loading="lazy" />}
+                  {screenshot && <img src={screenshot} alt={story.video_title || story.headline} width="1280" height="720" fetchPriority="high" />}
                   <span className="story-play" aria-hidden="true">▶</span>
                 </a>
               )}
             </InlineVideo>
           ) : youtubeUrl ? (
             <a href={youtubeUrl} target="_blank" rel="noopener noreferrer" className="story-video-link">
-              {screenshot && <img src={screenshot} alt={story.video_title || story.headline} loading="lazy" />}
+              {screenshot && <img src={screenshot} alt={story.video_title || story.headline} width="1280" height="720" fetchPriority="high" />}
               <span className="story-play" aria-hidden="true">▶</span>
             </a>
           ) : (
-            screenshot && <img src={screenshot} alt={story.video_title || story.headline} loading="lazy" />
+            screenshot && <img src={screenshot} alt={story.video_title || story.headline} width="1280" height="720" fetchPriority="high" />
           )}
           {(story.video_title || story.channel_name) && (
             <figcaption>

@@ -46,7 +46,7 @@ export default function LiveResearchPanel({ showGraphLink = true }: LiveResearch
             Permanent researcher idle — {current.queued_batch} topics queued
           </span>
           {current.last_published && (
-            <a className="lrp-last" href={`/research.html?slug=${current.last_published.slug}`}>
+            <a className="lrp-last" href={`/research/${current.last_published.slug}`}>
               Latest: {current.last_published.title}
             </a>
           )}

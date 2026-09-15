@@ -122,7 +122,7 @@ export default function StoryArchivePage() {
                   <img
                     className="site-list-card-thumb"
                     src={s.screenshot_url}
-                    alt=""
+                    alt={s.headline}
                     loading="lazy"
                   />
                 )}
