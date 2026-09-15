@@ -613,8 +613,10 @@ export default function LyraRadarPage() {
   const showGlobe = globePinned || !globeHiddenByScroll
   // 'radar' = the YouTube-fed queue; 'proposals' = the prospector's queue
   // (papers/stories, dedup-adjudicated). Founder-only on the API side.
+  // Founders land on the proposals queue (one queue since the radar backlog
+  // was absorbed into it); #radar opens the map-and-history view.
   const [requestedView, setView] = useState<'radar' | 'proposals'>(
-    () => (window.location.hash === '#proposals' ? 'proposals' : 'radar')
+    () => (window.location.hash === '#radar' ? 'radar' : 'proposals')
   )
   const [filtersExpanded, setFiltersExpanded] = useState(false)
   const [columnCount, setColumnCount] = useState(1)
@@ -1064,7 +1066,7 @@ export default function LyraRadarPage() {
             <span className="radar-view-toggle">
               {([['radar', 'Radar'], ['proposals', 'Proposals']] as const).map(([val, label]) => (
                 <button key={val} className={`news-page-chip${view === val ? ' active' : ''}`}
-                        onClick={() => { setView(val); window.location.hash = val === 'proposals' ? '#proposals' : '' }}>
+                        onClick={() => { setView(val); window.location.hash = val === 'radar' ? '#radar' : '#proposals' }}>
                   {label}
                 </button>
               ))}

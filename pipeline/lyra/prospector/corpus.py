@@ -118,6 +118,56 @@ def windows(masked: str, size: int = WINDOW_CHARS) -> list[Window]:
     return out
 
 
+@dataclass(frozen=True)
+class StoryUnit:
+    """One news item, reconstructed deterministically so offsets stay valid."""
+
+    item_id: int
+    video_id: str
+    timestamp_seconds: int | None
+    text: str
+
+    @property
+    def locator(self) -> str:
+        url = f"https://www.youtube.com/watch?v={self.video_id}"
+        return f"{url}&t={self.timestamp_seconds}s" if self.timestamp_seconds else url
+
+
+def story_text(headline: str | None, summary: str | None, facts: list | None) -> str:
+    """headline + summary + facts, joined with single newlines. This is THE
+    stored form every story offset indexes; never change the joiner."""
+    parts = [headline or "", summary or ""]
+    parts.extend(f for f in (facts or []) if isinstance(f, str) and f.strip())
+    return "\n".join(p.strip() for p in parts if p and p.strip())
+
+
+def load_stories(
+    session, *, unprospected_only: bool = True, limit: int | None = None
+) -> list[StoryUnit]:
+    where = "prospected_at IS NULL" if unprospected_only else "TRUE"
+    rows = session.execute(
+        sql(f"""
+        SELECT id, video_id, timestamp_seconds, headline, summary, facts
+        FROM news_items WHERE {where}
+        ORDER BY id
+        {"LIMIT :limit" if limit else ""}
+        """),
+        {"limit": limit} if limit else {},
+    ).fetchall()
+    return [
+        StoryUnit(r.id, r.video_id, r.timestamp_seconds, story_text(r.headline, r.summary, r.facts))
+        for r in rows
+    ]
+
+
+def mark_prospected(session, item_ids: list[int]) -> None:
+    if item_ids:
+        session.execute(
+            sql("UPDATE news_items SET prospected_at = NOW() WHERE id = ANY(:ids)"),
+            {"ids": item_ids},
+        )
+
+
 def paragraph_bounds(text: str, index: int) -> tuple[int, int]:
     """(start, end) of the paragraph containing `index`."""
     start = text.rfind(_PARAGRAPH_BREAK, 0, index)

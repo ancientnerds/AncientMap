@@ -2,28 +2,35 @@
 
 One proposal per real-world place: keyed on the QID when there is one, the
 enwiki title otherwise, and (name key, country) as the last resort — country
-scoped so two real "Glenwood"s stay two cards. Evidence rows are appended
-and deduplicated on (source, char_start); `evidence_count` is DERIVED with
-count(*) on every touch, never incremented (mention_count reached 34,061
-against 2,464 real items that way).
+scoped so two real "Glenwood"s stay two cards, but tolerant of an UNKNOWN
+country on either side so a card whose country was learned later does not
+spawn a twin. Evidence rows are appended and deduplicated on (source,
+char_start); `evidence_count` is DERIVED with count(*) on every touch, never
+incremented (mention_count reached 34,061 against 2,464 real items that way).
 
 A proposal a human has already decided (approved / merged / rejected) is
-never re-opened by the pipeline; it only gains evidence.
+never re-opened by the pipeline; it only gains evidence. `aliases` is never
+touched here — only a founder merging two proposals writes it.
 """
 
 from __future__ import annotations
 
+import json
 import logging
 import urllib.parse
 import uuid
+from typing import TYPE_CHECKING
 
 from sqlalchemy import text as sql
 
 from pipeline.lyra.prospector.dedup import Verdict, gate_country
-from pipeline.lyra.prospector.mentions import Mention
 from pipeline.lyra.prospector.resolve import Resolution
 from pipeline.lyra.site_key import site_key_sql
 from pipeline.utils.text import categorize_period, clean_description
+
+if TYPE_CHECKING:
+    from pipeline.lyra.prospector.mentions import Mention
+    from pipeline.lyra.prospector.pipeline import EvidenceRef
 
 logger = logging.getLogger(__name__)
 
@@ -65,11 +72,6 @@ def _find_existing(session, *, qid, enwiki_title, name_key, country) -> uuid.UUI
         ).fetchone()
         if row:
             return row.id
-    # Same name key, and the countries do not CONTRADICT each other: an
-    # unknown country on either side matches. Two real "Glenwood"s (California
-    # vs Aberdeenshire) still stay separate; a card whose country was learned
-    # or corrected on a later run does not spawn a second card — which the
-    # strict equality did on 2026-09-15 ("Mogollon Village" twice).
     row = session.execute(
         sql("""SELECT id FROM site_proposals
                WHERE wikidata_qid IS NULL AND enwiki_title IS NULL
@@ -92,22 +94,23 @@ def upsert_proposal(
     country_in_text: str | None,
     period_phrase: str | None,
     contribution_id: str | None = None,
+    prior_verdict: str | None = None,
 ) -> uuid.UUID:
     """Create or update the proposal for `name`. Returns its id."""
-    # `country` is what the flag and the gates use; a state or region phrase
-    # from the text is kept in country_in_text but never promoted to country.
     country = gate_country(res.country if res else None, country_in_text)
     name_key = _name_key(session, name)
-    qid = res.qid if res and res.verdict == "resolved" else None
-    enwiki = res.canonical_title if res and res.verdict == "resolved" else None
+    resolved = res is not None and res.verdict == "resolved"
+    qid = res.qid if resolved else None
+    enwiki = res.canonical_title if resolved else None
     status = derive_status(place_class, res, verdict)
 
     ext = verdict.external if verdict else None
     lat = lon = None
     rung = "none"
     precision = None
-    if res and res.has_point and res.verdict == "resolved":
-        lat, lon, rung, precision = res.lat, res.lon, "wikidata_p625", res.coord_precision
+    if resolved and res.has_point:
+        lat, lon, precision = res.lat, res.lon, res.coord_precision
+        rung = res.path if res.path == "contribution" else "wikidata_p625"
     elif ext and ext.get("enrich") and ext.get("lat") is not None:
         lat, lon, rung = ext["lat"], ext["lon"], f"external:{ext['source_id']}"
 
@@ -141,14 +144,16 @@ def upsert_proposal(
         "source_url": res.wikipedia_url if res else None,
         "wikipedia_url": res.wikipedia_url if res else None,
         "dedup_verdict": verdict.verdict if verdict else "not_run",
-        "dedup_trace": _json(verdict.trace if verdict else []),
+        "dedup_trace": json.dumps(
+            verdict.trace if verdict else [], ensure_ascii=False, default=str
+        ),
         "scope_verdict": "in_scope" if (res is None or res.in_scope) else "out_of_scope",
         "resolution_note": res.note if res else None,
         "resolution_path": res.path if res else None,
         "an_site_id": verdict.an_site_id if verdict else None,
         "external_site_id": ext["site_id"] if ext else None,
         "external_source_id": ext["source_id"] if ext else None,
-        "contribution_id": contribution_id,
+        "prior_verdict": prior_verdict,
     }
 
     existing = _find_existing(
@@ -156,22 +161,26 @@ def upsert_proposal(
     )
     if existing is None:
         pid = uuid.uuid4()
-        cols = ", ".join(fields)
-        vals = ", ".join(_bind(k) for k in fields)
+        cols = ", ".join([*fields, "contribution_id"])
+        vals = ", ".join([*(_bind(k) for k in fields), ":contribution_id"])
         session.execute(
             sql(f"INSERT INTO site_proposals (id, status, {cols}) VALUES (:id, :status, {vals})"),
-            {"id": pid, "status": status, **fields},
+            {"id": pid, "status": status, "contribution_id": contribution_id, **fields},
         )
     else:
         pid = existing
         current = session.execute(
             sql("SELECT status FROM site_proposals WHERE id = :id"), {"id": pid}
         ).scalar()
-        sets = ", ".join(f"{k} = {_bind(k)}" for k in fields if k not in ("contribution_id",))
+        sets = ", ".join(f"{k} = {_bind(k)}" for k in fields)
         status_set = "" if current in HUMAN_STATUSES else ", status = :status"
         session.execute(
-            sql(f"UPDATE site_proposals SET {sets}{status_set}, updated_at = NOW() WHERE id = :id"),
-            {"id": pid, "status": status, **fields},
+            sql(
+                f"UPDATE site_proposals SET {sets}{status_set}, "
+                f"contribution_id = COALESCE(contribution_id, :contribution_id), "
+                f"updated_at = NOW() WHERE id = :id"
+            ),
+            {"id": pid, "status": status, "contribution_id": contribution_id, **fields},
         )
     session.execute(
         sql("""UPDATE site_proposals
@@ -187,26 +196,10 @@ def _bind(k: str) -> str:
     return "CAST(:dedup_trace AS jsonb)" if k == "dedup_trace" else f":{k}"
 
 
-def _json(value) -> str:
-    import json
-
-    return json.dumps(value, ensure_ascii=False, default=str)
-
-
-def add_evidence(
-    session,
-    proposal_id: uuid.UUID,
-    mentions: list[Mention],
-    *,
-    corpus: str,
-    source_table: str,
-    source_pk: str,
-    locator_for: callable,
-    extracted_by: str,
-) -> int:
+def add_evidence(session, proposal_id: uuid.UUID, items: list[tuple[Mention, EvidenceRef]]) -> int:
     """Append evidence rows (idempotent) and re-derive the counters."""
     added = 0
-    for m in mentions:
+    for m, ref in items:
         res = session.execute(
             sql("""
             INSERT INTO site_proposal_evidence
@@ -217,20 +210,25 @@ def add_evidence(
             """),
             {
                 "pid": proposal_id,
-                "corpus": corpus,
-                "table": source_table,
-                "pk": source_pk,
+                "corpus": ref.corpus,
+                "table": ref.source_table,
+                "pk": ref.source_pk,
                 "as": m.name,
                 "s": m.char_start,
                 "e": m.char_end,
                 "quote": m.quote,
                 "qs": m.quote_start,
                 "fn": m.footnotes or None,
-                "loc": locator_for(m),
-                "by": extracted_by,
+                "loc": ref.locator,
+                "by": ref.extracted_by,
             },
         )
         added += res.rowcount or 0
+    refresh_counters(session, proposal_id)
+    return added
+
+
+def refresh_counters(session, proposal_id: uuid.UUID) -> None:
     session.execute(
         sql("""
         UPDATE site_proposals p SET
@@ -241,4 +239,3 @@ def add_evidence(
         """),
         {"id": proposal_id},
     )
-    return added

@@ -1,14 +1,14 @@
 /**
  * ProposalsReview — the prospector's queue inside the Radar page.
  *
- * A proposal is a place named in our own papers or stories, resolved to a
- * Wikidata entity where possible and checked against the curated set. Every
- * card shows WHY it was proposed (verbatim quotes with deep links) and WHAT
- * the dedup ladder checked before calling it new. Founder-only: the API
- * refuses without a founder token.
+ * A proposal is a place named in our own papers, stories or the old radar,
+ * resolved to a Wikidata entity where possible and checked against the
+ * curated set. Every card shows WHY it was proposed (verbatim quotes with
+ * deep links) and WHAT the dedup ladder checked before calling it new.
+ * Founder-only: the API refuses without a founder token.
  */
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { config } from '../config'
 import { formatCoord } from '../utils/formatters'
 import { SiteBadges, CountryFlag, CopyButton } from './metadata'
@@ -41,6 +41,7 @@ interface TraceEntry {
 export interface Proposal {
   id: string
   name: string
+  aliases: string[]
   status: string
   place_class: string
   resolved_label: string | null
@@ -48,6 +49,8 @@ export interface Proposal {
   enwiki_title: string | null
   resolution_path: string | null
   resolution_note: string | null
+  prior_verdict: string | null
+  contribution_id: string | null
   lat: number | null
   lon: number | null
   coord_precision: number | null
@@ -98,11 +101,26 @@ const STATUS_PILL: Record<string, [string, string]> = {
   not_a_place: ['Not a place', 'lyra-status-pending'],
 }
 
+const CORPUS_LABEL: Record<string, string> = {
+  paper: 'paper',
+  story: 'story',
+  radar: 'radar',
+  entities_legacy: 'story (2026-03 index)',
+}
+
+const CORPUS_LINK: Record<string, string> = {
+  paper: 'open in paper',
+  story: 'watch',
+  radar: 'watch',
+  entities_legacy: 'watch',
+}
+
 function locationLabel(p: Proposal): string {
   if (p.location_rung === 'wikidata_p625') {
     const prec = p.coord_precision != null ? ` (precision ${p.coord_precision}°)` : ''
     return `coordinates from Wikidata${prec}`
   }
+  if (p.location_rung === 'contribution') return 'coordinates from the radar’s own enrichment'
   if (p.location_rung.startsWith('external:')) return `coordinates from ${p.location_rung.slice(9)}`
   return 'no coordinates — you place the pin'
 }
@@ -128,18 +146,58 @@ function toSiteData(p: Proposal): SiteData {
   }
 }
 
-function ProposalCard({ p, canReview, onViewSite, onApprove, onMerge, onReject }: {
+function SameAsPicker({ p, candidates, onPick, onClose }: {
   p: Proposal
+  candidates: Proposal[]
+  onPick: (otherId: string) => Promise<string | null>
+  onClose: () => void
+}) {
+  const [query, setQuery] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const matches = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    return candidates
+      .filter(c => c.id !== p.id && (!q || c.name.toLowerCase().includes(q)))
+      .slice(0, 8)
+  }, [query, candidates, p.id])
+  return (
+    <div className="radar-modal-overlay" onClick={onClose}>
+      <div className="radar-modal" onClick={e => e.stopPropagation()}>
+        <h3 className="radar-modal-title">“{p.name}” is the same place as…</h3>
+        <p className="radar-modal-hint">The other card folds into this one: its quotes move here, its name becomes an alias.</p>
+        <input className="radar-modal-input" autoFocus placeholder="Type a name from the queue" value={query}
+               onChange={e => setQuery(e.target.value)} />
+        {matches.map(c => (
+          <button key={c.id} className="radar-merge-result"
+                  onClick={async () => { const err = await onPick(c.id); if (err) setError(err); else onClose() }}>
+            <span>{c.name}</span>
+            <span className="radar-merge-meta">{c.evidence_count} mention{c.evidence_count === 1 ? '' : 's'}{c.country ? ` · ${c.country}` : ''}</span>
+          </button>
+        ))}
+        {error && <div className="radar-modal-error">{error}</div>}
+        <div className="radar-modal-actions">
+          <button className="radar-modal-btn radar-modal-cancel" onClick={onClose}>Cancel</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function ProposalCard({ p, all, canReview, onViewSite, onApprove, onMerge, onSameAs, onReject }: {
+  p: Proposal
+  all: Proposal[]
   canReview: boolean
   onViewSite: (s: SiteData) => void
   onApprove: (id: string, overrides: Record<string, unknown>) => Promise<string | null>
   onMerge: (id: string, siteId: string) => Promise<string | null>
+  onSameAs: (id: string, otherId: string) => Promise<string | null>
   onReject: (id: string) => Promise<void>
 }) {
   const [traceOpen, setTraceOpen] = useState(false)
   const [allEvidence, setAllEvidence] = useState(false)
   const [showApprove, setShowApprove] = useState(false)
   const [showMerge, setShowMerge] = useState(false)
+  const [showSameAs, setShowSameAs] = useState(false)
   const [confirmReject, setConfirmReject] = useState(false)
   const [pill, pillCls] = STATUS_PILL[p.status] ?? [p.status, 'lyra-status-pending']
   const nearest = nearestTraceHit(p)
@@ -153,9 +211,17 @@ function ProposalCard({ p, canReview, onViewSite, onApprove, onMerge, onReject }
           {p.name}
           <CopyButton text={p.name} title="Copy name" size={14} />
           <span className={`lyra-status-pill ${pillCls}`}>{pill}</span>
+          {p.prior_verdict && (
+            <span className="lyra-status-pill lyra-status-pending" title="A machine verdict from the old radar, not a human one">
+              previously judged: {p.prior_verdict.replace(/_/g, ' ')}
+            </span>
+          )}
         </h3>
         {p.resolved_label && p.resolved_label !== p.name && (
           <span className="lyra-discovery-original-name">Wikidata label: {p.resolved_label}</span>
+        )}
+        {p.aliases.length > 0 && (
+          <span className="lyra-discovery-original-name">Also named: {p.aliases.join(' · ')}</span>
         )}
       </div>
 
@@ -183,7 +249,9 @@ function ProposalCard({ p, canReview, onViewSite, onApprove, onMerge, onReject }
           )}
         </div>
       )}
-      <div className="proposal-location">{locationLabel(p)}</div>
+      <div className="proposal-location">
+        {locationLabel(p)}{!p.country && p.country_in_text ? ` · text says “${p.country_in_text}”` : ''}
+      </div>
       <SiteBadges category={p.site_type} period={p.period_name} periodStart={p.period_start} size="md" />
 
       {p.thumbnail_url && (
@@ -215,12 +283,15 @@ function ProposalCard({ p, canReview, onViewSite, onApprove, onMerge, onReject }
       </div>
 
       <div className="proposal-evidence">
-        <div className="lyra-score-sources-label">Why it was proposed ({p.evidence_count} mention{p.evidence_count === 1 ? '' : 's'}):</div>
+        <div className="lyra-score-sources-label">
+          Why it was proposed ({p.evidence_count} mention{p.evidence_count === 1 ? '' : 's'}
+          {p.corpus_kinds.length > 0 && <> · {p.corpus_kinds.map(k => CORPUS_LABEL[k] ?? k).join(', ')}</>}):
+        </div>
         {evidence.map((e, i) => (
           <blockquote key={i} className="proposal-quote">
             “{e.quote}”
             <a href={e.locator} target="_blank" rel="noopener noreferrer" className="proposal-quote-link">
-              {e.corpus === 'paper' ? 'open in paper' : e.corpus === 'story' ? 'watch' : 'source'}
+              {CORPUS_LINK[e.corpus] ?? 'source'}
             </a>
           </blockquote>
         ))}
@@ -263,7 +334,8 @@ function ProposalCard({ p, canReview, onViewSite, onApprove, onMerge, onReject }
       {canReview && open && (
         <div className="radar-review-actions">
           <button className="lyra-promote-btn" onClick={() => setShowApprove(true)}>Approve</button>
-          <button className="radar-merge-btn" onClick={() => setShowMerge(true)}>Merge</button>
+          <button className="radar-merge-btn" onClick={() => setShowMerge(true)} title="This is an existing site in the database">Merge</button>
+          <button className="radar-merge-btn" onClick={() => setShowSameAs(true)} title="Another card in this queue names the same place">Same as…</button>
           {confirmReject ? (
             <button className="radar-dismiss-btn radar-dismiss-confirm" onBlur={() => setConfirmReject(false)}
                     onClick={() => { setConfirmReject(false); onReject(p.id) }}>
@@ -289,6 +361,9 @@ function ProposalCard({ p, canReview, onViewSite, onApprove, onMerge, onReject }
       {showMerge && (
         <MergeModal itemName={p.name} nearbyAnSite={nearest}
                     onMerge={(siteId) => onMerge(p.id, siteId)} onClose={() => setShowMerge(false)} />
+      )}
+      {showSameAs && (
+        <SameAsPicker p={p} candidates={all} onPick={(otherId) => onSameAs(p.id, otherId)} onClose={() => setShowSameAs(false)} />
       )}
     </div>
   )
@@ -316,7 +391,7 @@ export default function ProposalsReview({ token, isFounder, onViewSite, columnCo
     if (!token) { setError('Sign in as a founder to review proposals.'); return }
     setLoading(true); setError(null)
     try {
-      const r = await fetch(`${config.api.baseUrl}/proposals?status=${status}&limit=200`, { headers: headers() })
+      const r = await fetch(`${config.api.baseUrl}/proposals?status=${status}&limit=500`, { headers: headers() })
       if (!r.ok) throw new Error(r.status === 403 ? 'Founder access required.' : `HTTP ${r.status}`)
       const d = await r.json()
       setItems(d.items); setCounts(d.counts); setTotal(d.total_count)
@@ -351,6 +426,11 @@ export default function ProposalsReview({ token, isFounder, onViewSite, columnCo
     if (!err) { drop(id); load() }
     return err
   }
+  const onSameAs = async (id: string, otherId: string) => {
+    const err = await post(`${id}/same-as/${otherId}`)
+    if (!err) { drop(otherId); load() }
+    return err
+  }
   const onReject = async (id: string) => {
     const err = await post(`${id}/reject`)
     if (err) alert(`Reject failed: ${err}`); else { drop(id); load() }
@@ -380,8 +460,8 @@ export default function ProposalsReview({ token, isFounder, onViewSite, columnCo
         {Array.from({ length: columnCount }, (_, col) => (
           <div key={col} className="lyra-discoveries-column">
             {items.filter((_, i) => i % columnCount === col).map(p => (
-              <ProposalCard key={p.id} p={p} canReview={isFounder} onViewSite={onViewSite}
-                            onApprove={onApprove} onMerge={onMerge} onReject={onReject} />
+              <ProposalCard key={p.id} p={p} all={items} canReview={isFounder} onViewSite={onViewSite}
+                            onApprove={onApprove} onMerge={onMerge} onSameAs={onSameAs} onReject={onReject} />
             ))}
           </div>
         ))}

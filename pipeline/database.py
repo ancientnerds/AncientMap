@@ -960,6 +960,8 @@ class NewsItem(Base):
 
     # Editorial judgment from the significance scorer (why this score?)
     score_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # When the prospector's story extractor read this item (migration 0016).
+    prospected_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     video: Mapped["NewsVideo"] = relationship("NewsVideo", back_populates="items")
     site: Mapped[Optional["UnifiedSite"]] = relationship("UnifiedSite", lazy="joined")
@@ -1645,6 +1647,12 @@ class SiteProposal(Base):
     )
     evidence_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     corpus_kinds: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    # Other names for the same place — only ever set by a founder merging two
+    # proposals; written to unified_site_names as 'alias' on approve.
+    aliases: Mapped[list[str]] = mapped_column(ARRAY(Text), nullable=False, default=list)
+    # A prior machine verdict on this name (e.g. the radar's LLM rejected a
+    # match). Demotes rank, shows a badge, never hides the card.
+    prior_verdict: Mapped[str | None] = mapped_column(Text, nullable=True)
     reviewed_by: Mapped[str | None] = mapped_column(Text, nullable=True)
     reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     review_notes: Mapped[str | None] = mapped_column(Text, nullable=True)

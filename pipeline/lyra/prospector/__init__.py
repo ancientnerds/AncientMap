@@ -1,6 +1,9 @@
 """Prospector: site candidates mined from our own content, for human review.
 
     python -m pipeline.lyra.prospector papers [--slug S] [--max-calls N] [--dry-run]
+    python -m pipeline.lyra.prospector stories [--items N] [--max-calls N] [--dry-run]
+    python -m pipeline.lyra.prospector radar-backlog
+    python -m pipeline.lyra.prospector entities-legacy
     python -m pipeline.lyra.prospector external-ids [--all]
     python -m pipeline.lyra.prospector review --id <uuid>
 
@@ -12,13 +15,17 @@ from __future__ import annotations
 import argparse
 import logging
 import os
-from collections import defaultdict
 
 from pipeline.database import get_session
 from pipeline.lyra.config import _get_settings
 from pipeline.lyra.minimax_shared import probe_minimax_quota
-from pipeline.lyra.prospector.corpus import PaperUnit, load_public_papers
-from pipeline.lyra.prospector.dedup import Candidate, adjudicate, gate_country
+from pipeline.lyra.prospector.corpus import (
+    PaperUnit,
+    load_public_papers,
+    load_stories,
+    mark_prospected,
+)
+from pipeline.lyra.prospector.dedup import gate_country  # noqa: F401 — re-exported for tests
 from pipeline.lyra.prospector.extract_papers import (
     EXTRACTOR_TAG,
     Budget,
@@ -26,10 +33,9 @@ from pipeline.lyra.prospector.extract_papers import (
     PaperExtraction,
     extract_paper,
 )
-from pipeline.lyra.prospector.mentions import Mention
-from pipeline.lyra.prospector.propose import add_evidence, paper_locator, upsert_proposal
-from pipeline.lyra.prospector.resolve import ResolverBudget, resolve_names
-from pipeline.utils.text import normalize_name
+from pipeline.lyra.prospector.pipeline import EvidenceRef, process_mentions
+from pipeline.lyra.prospector.propose import paper_locator
+from pipeline.lyra.prospector.resolve import ResolverBudget
 
 logger = logging.getLogger(__name__)
 
@@ -40,8 +46,7 @@ MAX_TIEBREAK_CALLS = 40
 # always yields first.
 QUOTA_WEEKLY_FLOOR_PCT = 25
 QUOTA_FIVE_HOUR_FLOOR_PCT = 20
-RESOLVER_ABORT_RATE = 0.20
-RESOLVER_MIN_SAMPLE = 10
+DAILY_STORY_ITEMS = 60  # ~10 calls; new items arrive at ~13/day
 
 
 class QuotaFloor(RuntimeError):
@@ -61,6 +66,9 @@ def check_quota() -> None:
         raise QuotaFloor(f"5h quota at {five}% — below {QUOTA_FIVE_HOUR_FLOOR_PCT}% floor")
 
 
+# ── papers ──────────────────────────────────────────────────────────────────
+
+
 def _already_extracted(session, unit: PaperUnit) -> bool:
     from sqlalchemy import text as sql
 
@@ -75,115 +83,23 @@ def _already_extracted(session, unit: PaperUnit) -> bool:
 
 
 def process_paper(session, extraction: PaperExtraction, *, resolver: ResolverBudget) -> dict:
-    """Resolve, adjudicate and write one paper's grounded mentions."""
     unit = extraction.unit
-    groups: dict[str, list[Mention]] = defaultdict(list)
-    for m in extraction.mentions:
-        groups[normalize_name(m.name)].append(m)
-
-    # Representative surface form per group: the most frequent spelling.
-    reps: dict[str, Mention] = {}
-    for key, ms in groups.items():
-        counts: dict[str, int] = defaultdict(int)
-        for m in ms:
-            counts[m.name] += 1
-        best = max(counts, key=counts.get)
-        reps[key] = next(m for m in ms if m.name == best)
-
-    site_keys = [k for k, m in reps.items() if m.place_class == "site"]
-    resolutions = resolve_names(
-        [reps[k].name for k in site_keys], cited_titles=extraction.cited_titles, budget=resolver
+    pairs = [
+        (
+            m,
+            EvidenceRef(
+                "paper",
+                "research_requests",
+                unit.request_id,
+                paper_locator(unit.slug, m.quote),
+                EXTRACTOR_TAG,
+            ),
+        )
+        for m in extraction.mentions
+    ]
+    return process_mentions(
+        session, pairs, resolver=resolver, cited_titles=extraction.cited_titles, label=unit.slug
     )
-    # Infrastructure failures only (see Resolution.infra_failed), and only
-    # once the sample is big enough for a rate to mean anything: the first
-    # full run aborted on a 4-window paper at "2/6" where the two were
-    # ordinary same-name rejections.
-    if (
-        resolver.attempted >= RESOLVER_MIN_SAMPLE
-        and resolver.failures / resolver.attempted > RESOLVER_ABORT_RATE
-    ):
-        raise RuntimeError(
-            f"[{unit.slug}] resolver failure rate {resolver.failures}/{resolver.attempted} "
-            f"exceeds {RESOLVER_ABORT_RATE:.0%} — Wikidata degraded? Nothing written."
-        )
-
-    cands: list[Candidate] = []
-    for i, key in enumerate(site_keys):
-        rep = reps[key]
-        res = resolutions.get(rep.name)
-        country = gate_country(
-            res.country if res else None,
-            _first(m.country_in_text for m in groups[key] if m.country_in_text),
-        )
-        cands.append(
-            Candidate(
-                idx=i,
-                name=rep.name,
-                qid=res.qid if res and res.verdict == "resolved" else None,
-                enwiki_title=res.canonical_title if res and res.verdict == "resolved" else None,
-                country=country,
-                lat=res.lat if res and res.verdict == "resolved" else None,
-                lon=res.lon if res and res.verdict == "resolved" else None,
-            )
-        )
-    verdicts = adjudicate(session, cands)
-
-    counts: dict[str, int] = defaultdict(int)
-    for i, key in enumerate(site_keys):
-        rep, ms = reps[key], groups[key]
-        res = resolutions.get(rep.name)
-        pid = upsert_proposal(
-            session,
-            name=rep.name,
-            place_class="site",
-            res=res,
-            verdict=verdicts.get(i),
-            country_in_text=_first(m.country_in_text for m in ms if m.country_in_text),
-            period_phrase=_first(m.period_phrase for m in ms if m.period_phrase),
-        )
-        add_evidence(
-            session,
-            pid,
-            ms,
-            corpus="paper",
-            source_table="research_requests",
-            source_pk=unit.request_id,
-            locator_for=lambda m: paper_locator(unit.slug, m.quote),
-            extracted_by=EXTRACTOR_TAG,
-        )
-        counts[verdicts[i].verdict if i in verdicts else "new"] += 1
-
-    # Non-site classes: recorded for the audit trail, never queued for review.
-    for key, rep in reps.items():
-        if rep.place_class == "site":
-            continue
-        pid = upsert_proposal(
-            session,
-            name=rep.name,
-            place_class=rep.place_class,
-            res=None,
-            verdict=None,
-            country_in_text=_first(m.country_in_text for m in groups[key] if m.country_in_text),
-            period_phrase=None,
-        )
-        add_evidence(
-            session,
-            pid,
-            groups[key],
-            corpus="paper",
-            source_table="research_requests",
-            source_pk=unit.request_id,
-            locator_for=lambda m: paper_locator(unit.slug, m.quote),
-            extracted_by=EXTRACTOR_TAG,
-        )
-        counts["not_a_place"] += 1
-    return dict(counts)
-
-
-def _first(it):
-    for x in it:
-        return x
-    return None
 
 
 def run_papers(*, slug: str | None, max_calls: int, dry_run: bool) -> dict:
@@ -227,30 +143,121 @@ def run_papers(*, slug: str | None, max_calls: int, dry_run: bool) -> dict:
     return {"papers": summary, "calls": budget.calls, "tokens": budget.tokens_used}
 
 
-def run_daily() -> int:
-    """Orchestrator step (daily): key any new curated sites, refresh the
-    token frequencies, and extract any paper published since the last run.
+# ── stories ─────────────────────────────────────────────────────────────────
 
-    Papers are a backlog, not a pump (none published since August), so this
-    is usually a no-op costing zero tokens. Returns the number of proposals
-    touched. Never raises on quota: a floor just means "not today".
-    """
+
+def run_stories(*, items: int | None, max_calls: int, dry_run: bool) -> dict:
+    from pipeline.lyra.prospector.extract_stories import EXTRACTOR_TAG as STORY_TAG
+    from pipeline.lyra.prospector.extract_stories import extract_stories
+
+    settings = _get_settings()
+    check_quota()
+    budget = Budget(max_tokens=TOKEN_BUDGET, max_calls=max_calls)
+    resolver = ResolverBudget(MAX_TIEBREAK_CALLS)
+    with get_session() as session:
+        units = load_stories(session, unprospected_only=True, limit=items)
+        if not units:
+            return {"items": 0, "calls": 0, "tokens": 0}
+        try:
+            extraction = extract_stories(
+                units, budget=budget, temperature=settings.temperature_verification
+            )
+        except BudgetExhausted as exc:
+            logger.warning("[PROSPECTOR] stopping: %s", exc)
+            return {"items": 0, "calls": budget.calls, "tokens": budget.tokens_used}
+        pairs = [
+            (m, EvidenceRef("story", "news_items", str(u.item_id), u.locator, STORY_TAG))
+            for u, m in extraction.mentions
+        ]
+        counts = process_mentions(session, pairs, resolver=resolver, label="stories")
+        # Every unit the model READ is marked, mentions or not — an item that
+        # names no place must not be re-read next week.
+        mark_prospected(session, [u.item_id for u in units])
+        if dry_run:
+            session.rollback()
+        else:
+            session.commit()
+    logger.info(
+        "[PROSPECTOR] stories done: %d items, %d calls, %d tokens, %d grounded, %s",
+        len(units),
+        budget.calls,
+        budget.tokens_used,
+        len(extraction.mentions),
+        dict(counts),
+    )
+    return {"items": len(units), "calls": budget.calls, "tokens": budget.tokens_used, **counts}
+
+
+# ── radar backlog (zero LLM) ────────────────────────────────────────────────
+
+
+def run_radar_backlog() -> dict:
+    from pipeline.lyra.prospector.extract_radar import (
+        group_key,
+        load_radar_units,
+        mentions_for,
+        prefill_for,
+    )
+
+    resolver = ResolverBudget(MAX_TIEBREAK_CALLS)
+    with get_session() as session:
+        units = load_radar_units(session)
+        pairs = [pair for u in units for pair in mentions_for(u)]
+        prefill = {group_key(u): prefill_for(u) for u in units}
+        counts = process_mentions(session, pairs, resolver=resolver, prefill=prefill, label="radar")
+        session.commit()
+    logger.info("[PROSPECTOR] radar backlog: %d contributions absorbed, %s", len(units), counts)
+    return {"contributions": len(units), **counts}
+
+
+# ── legacy entities (zero LLM) ──────────────────────────────────────────────
+
+
+def run_entities_legacy() -> dict:
+    from pipeline.lyra.prospector.extract_entities_legacy import extract_legacy_entities, to_pairs
+
+    resolver = ResolverBudget(MAX_TIEBREAK_CALLS)
+    with get_session() as session:
+        found, stats = extract_legacy_entities(session)
+        counts = process_mentions(session, to_pairs(found), resolver=resolver, label="entities")
+        session.commit()
+    return {"names": stats.emitted, "grounded": stats.grounded, "dropped": stats.rejected, **counts}
+
+
+# ── orchestrator step ───────────────────────────────────────────────────────
+
+
+def run_daily() -> int:
+    """Orchestrator step (daily): key new curated sites, refresh the token
+    frequencies, extract any paper published since the last run and the
+    week's new stories. Returns the number of proposals touched. A quota
+    floor just means "not today" — it never raises."""
     from pipeline.lyra.prospector.external_ids import refresh_site_external_ids, refresh_token_df
 
     with get_session() as session:
         refresh_site_external_ids(session, only_missing=True)
         refresh_token_df(session)
+    touched = 0
     try:
-        result = run_papers(slug=None, max_calls=MAX_CALLS_PER_RUN, dry_run=False)
+        papers = run_papers(slug=None, max_calls=MAX_CALLS_PER_RUN, dry_run=False)
+        touched += sum(
+            v
+            for paper in papers["papers"].values()
+            for k, v in paper.items()
+            if k in ("new", "needs_decision", "have_it", "not_a_place")
+        )
+        stories = run_stories(items=DAILY_STORY_ITEMS, max_calls=40, dry_run=False)
+        touched += sum(
+            v
+            for k, v in stories.items()
+            if k in ("new", "needs_decision", "have_it", "not_a_place")
+        )
     except QuotaFloor as exc:
-        logger.warning("[PROSPECTOR] daily run skipped: %s", exc)
-        return 0
-    return sum(
-        v
-        for paper in result["papers"].values()
-        for k, v in paper.items()
-        if k in ("new", "needs_decision", "have_it", "not_a_place")
-    )
+        logger.warning("[PROSPECTOR] daily run stopped: %s", exc)
+    return touched
+
+
+# ── review / CLI ────────────────────────────────────────────────────────────
 
 
 def print_review(proposal_id: str) -> None:
@@ -269,12 +276,14 @@ def print_review(proposal_id: str) -> None:
             ),
             {"id": proposal_id},
         ).fetchall()
-    print(f"{p.name}  [{p.status}]  class={p.place_class}")
+    print(f"{p.name}  [{p.status}]  class={p.place_class}  aliases={list(p.aliases or [])}")
     print(
         f"  resolved: {p.resolved_label or '-'}  qid={p.wikidata_qid or '-'}  via {p.resolution_path or '-'}"
     )
     if p.resolution_note:
         print(f"  note: {p.resolution_note}")
+    if p.prior_verdict:
+        print(f"  prior verdict: {p.prior_verdict}")
     print(f"  location: {p.location_rung}  ({p.lat}, {p.lon})  precision={p.coord_precision}")
     print(
         f"  country={p.country}  type={p.site_type}  period={p.period_name}  scope={p.scope_verdict}"
@@ -282,9 +291,9 @@ def print_review(proposal_id: str) -> None:
     print(f"  dedup: {p.dedup_verdict}  an_site={p.an_site_id}")
     for t in p.dedup_trace or []:
         print(f"    - {t}")
-    print(f"  evidence ({p.evidence_count}):")
+    print(f"  evidence ({p.evidence_count}, {p.corpus_kinds}):")
     for e in ev:
-        print(f'    "{e.quote}"')
+        print(f'    [{e.corpus}] "{e.quote}"')
         print(f"      -> {e.locator}")
 
 
@@ -296,6 +305,12 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--slug")
     p.add_argument("--max-calls", type=int, default=MAX_CALLS_PER_RUN)
     p.add_argument("--dry-run", action="store_true")
+    s = sub.add_parser("stories")
+    s.add_argument("--items", type=int, default=None, help="cap on items (default: all unread)")
+    s.add_argument("--max-calls", type=int, default=MAX_CALLS_PER_RUN)
+    s.add_argument("--dry-run", action="store_true")
+    sub.add_parser("radar-backlog")
+    sub.add_parser("entities-legacy")
     e = sub.add_parser("external-ids")
     e.add_argument("--all", action="store_true")
     r = sub.add_parser("review")
@@ -307,6 +322,12 @@ def main(argv: list[str] | None = None) -> None:
         for slug, c in result["papers"].items():
             print(f"{slug}: {c}")
         print(f"calls={result['calls']} tokens={result['tokens']}")
+    elif args.cmd == "stories":
+        print(run_stories(items=args.items, max_calls=args.max_calls, dry_run=args.dry_run))
+    elif args.cmd == "radar-backlog":
+        print(run_radar_backlog())
+    elif args.cmd == "entities-legacy":
+        print(run_entities_legacy())
     elif args.cmd == "external-ids":
         from pipeline.lyra.prospector.external_ids import (
             refresh_site_external_ids,

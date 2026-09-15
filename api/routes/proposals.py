@@ -1,15 +1,20 @@
 """Review API for prospector proposals (founders only).
 
-GET  /api/proposals?status=new|needs_decision|have_it|...   ranked queue
-GET  /api/proposals/{id}                                    one card
+GET  /api/proposals?status=review|new|needs_decision|have_it|...   ranked queue
+GET  /api/proposals/{id}                                            one card
 POST /api/proposals/{id}/approve   (PromoteOverrides body)  -> unified_sites, source_id='lyra'
 POST /api/proposals/{id}/merge/{site_id}                    -> ONE alias row, status merged
+POST /api/proposals/{id}/same-as/{other_id}                 -> two proposals are one place
 POST /api/proposals/{id}/reject
 
-Ranking is by (has coordinates, corpus diversity, evidence count) and
-explicitly NOT by mention frequency: the frequency head of the corpus is
-"giza plateau", "göbekli tepe", "egypt" — frequency is an anti-signal for
-finding sites we lack.
+Ranking is by (has coordinates, corpus diversity, evidence count), with a
+prior machine verdict demoted to the end — and explicitly NOT by mention
+frequency: the frequency head of the corpus is "giza plateau", "göbekli
+tepe", "egypt", an anti-signal for finding sites we lack.
+
+A proposal that came from the radar backlog carries `contribution_id`; every
+human decision here is mirrored onto that user_contributions row so the
+radar tab shrinks with the queue instead of showing the same card twice.
 """
 
 from __future__ import annotations
@@ -51,7 +56,8 @@ STATUSES = (
 )
 
 _ORDER = """
-    ORDER BY (p.lat IS NOT NULL) DESC,
+    ORDER BY (p.prior_verdict IS NOT NULL) ASC,
+             (p.lat IS NOT NULL) DESC,
              array_length(string_to_array(NULLIF(p.corpus_kinds, ''), ','), 1) DESC NULLS LAST,
              p.evidence_count DESC, p.first_seen_at ASC
 """
@@ -66,6 +72,7 @@ def _row_to_item(session: Session, row) -> dict:
     return {
         "id": str(row.id),
         "name": row.name,
+        "aliases": list(row.aliases or []),
         "status": row.status,
         "place_class": row.place_class,
         "resolved_label": row.resolved_label,
@@ -73,6 +80,8 @@ def _row_to_item(session: Session, row) -> dict:
         "enwiki_title": row.enwiki_title,
         "resolution_path": row.resolution_path,
         "resolution_note": row.resolution_note,
+        "prior_verdict": row.prior_verdict,
+        "contribution_id": str(row.contribution_id) if row.contribution_id else None,
         "lat": row.lat,
         "lon": row.lon,
         "coord_precision": row.coord_precision,
@@ -127,8 +136,8 @@ def _row_to_item(session: Session, row) -> dict:
 @router.get("")
 @router.get("/")
 def list_proposals(
-    status: str = Query("new", pattern="^(" + "|".join(STATUSES) + "|review)$"),
-    limit: int = Query(50, ge=1, le=200),
+    status: str = Query("review", pattern="^(" + "|".join(STATUSES) + "|review)$"),
+    limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),
     _user: DiscordUser = Depends(require_founder),
     db: Session = Depends(get_db),
@@ -137,11 +146,13 @@ def list_proposals(
     where = "p.status IN ('new', 'needs_decision')" if status == "review" else "p.status = :status"
     rows = db.execute(
         text(f"""SELECT COUNT(*) OVER() AS _total, p.* FROM site_proposals p
-                 WHERE {where} {_ORDER} LIMIT :limit OFFSET :offset"""),
+                 WHERE {where} AND p.place_class = 'site' {_ORDER} LIMIT :limit OFFSET :offset"""),
         {"status": status, "limit": limit, "offset": offset},
     ).fetchall()
     counts = db.execute(
-        text("SELECT status, COUNT(*) AS n FROM site_proposals GROUP BY status")
+        text(
+            "SELECT status, COUNT(*) AS n FROM site_proposals WHERE place_class = 'site' GROUP BY status"
+        )
     ).fetchall()
     return {
         "items": [_row_to_item(db, r) for r in rows],
@@ -156,8 +167,7 @@ def get_proposal(
     _user: DiscordUser = Depends(require_founder),
     db: Session = Depends(get_db),
 ):
-    row = _load(db, proposal_id)
-    return _row_to_item(db, row)
+    return _row_to_item(db, _load(db, proposal_id))
 
 
 def _load(db: Session, proposal_id: str):
@@ -192,6 +202,33 @@ def _stamp(db: Session, proposal_id: str, status: str, user: DiscordUser, **cols
     )
 
 
+def _mirror_contribution(db: Session, row, *, enrichment_status: str, site_id=None) -> None:
+    """Keep the radar's own row in step with the decision made here."""
+    if not row.contribution_id:
+        return
+    db.execute(
+        text("""UPDATE user_contributions
+                SET enrichment_status = :st,
+                    promoted_site_id = COALESCE(:site_id, promoted_site_id)
+                WHERE id = :cid"""),
+        {"st": enrichment_status, "site_id": site_id, "cid": row.contribution_id},
+    )
+
+
+def _insert_alias(db: Session, site_id, name: str) -> None:
+    db.execute(
+        text(f"""
+        INSERT INTO unified_site_names (site_id, name, name_normalized, name_type)
+        SELECT :site_id, :name, {site_key_sql(":name")}, 'alias'
+        WHERE NOT EXISTS (
+            SELECT 1 FROM unified_site_names
+            WHERE site_id = :site_id AND name_normalized = {site_key_sql(":name")}
+        )
+        """),
+        {"site_id": site_id, "name": name},
+    )
+
+
 @router.post("/{proposal_id}/approve")
 def approve_proposal(
     proposal_id: str,
@@ -200,7 +237,8 @@ def approve_proposal(
     db: Session = Depends(get_db),
 ):
     """Approve into unified_sites. source_id='lyra' per the owner's decision
-    (2026-09-14: keep the radar tier as is for now)."""
+    (2026-09-14: keep the radar tier as is for now). Founder-merged aliases
+    become unified_site_names rows of type 'alias'."""
     row = _load(db, proposal_id)
     _require_open(row)
     item = dict(row._mapping)
@@ -233,6 +271,10 @@ def approve_proposal(
         source_record_id=f"proposal-{proposal_id}",
         edited_by="proposal_approve",
     )
+    for alias in row.aliases or []:
+        _insert_alias(db, site_id, alias)
+    if row.name != name:
+        _insert_alias(db, site_id, row.name)
     _stamp(
         db,
         proposal_id,
@@ -241,6 +283,7 @@ def approve_proposal(
         promoted_site_id=site_id,
         review_notes=json.dumps({"overrides": override_dict}) if override_dict else None,
     )
+    _mirror_contribution(db, row, enrichment_status="promoted", site_id=site_id)
     db.commit()
     cache_delete_pattern("radar:*")
     cache_delete_pattern("sites:*")
@@ -254,10 +297,10 @@ def merge_proposal(
     user: DiscordUser = Depends(require_founder),
     db: Session = Depends(get_db),
 ):
-    """The candidate IS an existing site: record the name as an alias.
+    """The candidate IS an existing site: record the name(s) as aliases.
 
-    This is the only path by which a candidate name ever enters
-    unified_site_names, and only on an explicit human decision.
+    This and `same-as` are the only paths by which a candidate name ever
+    enters unified_site_names, and both are explicit human decisions.
     """
     row = _load(db, proposal_id)
     _require_open(row)
@@ -267,21 +310,75 @@ def merge_proposal(
     ).fetchone()
     if not site:
         raise HTTPException(status_code=404, detail="Target site not found")
-    db.execute(
-        text(f"""
-        INSERT INTO unified_site_names (site_id, name, name_normalized, name_type)
-        SELECT :site_id, :name, {site_key_sql(":name")}, 'alias'
-        WHERE NOT EXISTS (
-            SELECT 1 FROM unified_site_names
-            WHERE site_id = :site_id AND name_normalized = {site_key_sql(":name")}
-        )
-        """),
-        {"site_id": site_id, "name": row.name},
-    )
+    for alias in [row.name, *(row.aliases or [])]:
+        _insert_alias(db, site_id, alias)
     _stamp(db, proposal_id, "merged", user, merged_into_site_id=site_id)
+    _mirror_contribution(db, row, enrichment_status="matched")
     db.commit()
     cache_delete_pattern("radar:*")
     return {"success": True, "site_id": site_id, "site_name": site.name}
+
+
+@router.post("/{proposal_id}/same-as/{other_id}")
+def same_as(
+    proposal_id: str,
+    other_id: str,
+    user: DiscordUser = Depends(require_founder),
+    db: Session = Depends(get_db),
+):
+    """Two proposals name one place ("SU Site" is "Mogollon Village").
+
+    `other` folds into `proposal`: its evidence moves over, its name and
+    aliases become aliases here, and it is closed as merged. The pipeline
+    never writes aliases; only this decision does.
+    """
+    if proposal_id == other_id:
+        raise HTTPException(status_code=422, detail="A proposal cannot be merged into itself")
+    row = _load(db, proposal_id)
+    other = _load(db, other_id)
+    _require_open(row)
+    _require_open(other)
+    db.execute(
+        text("""
+        INSERT INTO site_proposal_evidence
+            (proposal_id, corpus, source_table, source_pk, mentioned_as, char_start, char_end,
+             quote, quote_start, footnotes, locator, extracted_by)
+        SELECT :keep, corpus, source_table, source_pk, mentioned_as, char_start, char_end,
+               quote, quote_start, footnotes, locator, extracted_by
+        FROM site_proposal_evidence WHERE proposal_id = :gone
+        ON CONFLICT DO NOTHING
+        """),
+        {"keep": proposal_id, "gone": other_id},
+    )
+    db.execute(
+        text("DELETE FROM site_proposal_evidence WHERE proposal_id = :gone"), {"gone": other_id}
+    )
+    new_aliases = [n for n in [other.name, *(other.aliases or [])] if n != row.name]
+    db.execute(
+        text("""
+        UPDATE site_proposals p SET
+            aliases = ARRAY(SELECT DISTINCT unnest(p.aliases || CAST(:new AS text[]))),
+            contribution_id = COALESCE(p.contribution_id, :cid),
+            evidence_count = (SELECT COUNT(*) FROM site_proposal_evidence e WHERE e.proposal_id = p.id),
+            corpus_kinds = (SELECT COALESCE(string_agg(DISTINCT e.corpus, ','), '')
+                            FROM site_proposal_evidence e WHERE e.proposal_id = p.id),
+            updated_at = NOW()
+        WHERE p.id = :keep
+        """),
+        {"keep": proposal_id, "new": new_aliases, "cid": other.contribution_id},
+    )
+    _stamp(
+        db,
+        other_id,
+        "merged",
+        user,
+        review_notes=json.dumps({"merged_into_proposal": proposal_id}),
+        evidence_count=0,
+        corpus_kinds="",
+    )
+    _mirror_contribution(db, other, enrichment_status="matched")
+    db.commit()
+    return {"success": True, "aliases": new_aliases}
 
 
 class RejectBody(BaseModel):
@@ -298,5 +395,9 @@ def reject_proposal(
     row = _load(db, proposal_id)
     _require_open(row)
     _stamp(db, proposal_id, "rejected", user, review_notes=(body.note if body else None))
+    # 'dismissed', not 'rejected': the radar pipeline re-processes 'rejected'
+    # rows and would resurrect the card (see radar.py::dismiss_contribution).
+    _mirror_contribution(db, row, enrichment_status="dismissed")
     db.commit()
+    cache_delete_pattern("radar:*")
     return {"success": True}
