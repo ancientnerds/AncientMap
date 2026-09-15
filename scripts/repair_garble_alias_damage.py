@@ -8,10 +8,17 @@ _correct_text_fields then rewrote the published story text with the wrong
 site's name.
 
 This script undoes the damage. The writer and the unconditional rewrite are
-already removed in code; run this once against prod afterwards.
+already removed in code. It is idempotent: every step detects its own work by
+the damage that is still present, never by state an earlier step removed.
 
     dry run:  ssh ancientnerds "docker exec -i ancient_nerds_api python -u -" < scripts/repair_garble_alias_damage.py
     apply:    ssh ancientnerds "docker exec -e APPLY=1 -i ancient_nerds_api python -u -" < scripts/repair_garble_alias_damage.py
+
+Lesson from the first APPLY run: it printed "headlines restored: 195" and
+"COMMITTED", yet not one headline changed. Step 1 set attributes on ORM
+objects; step 3's session.expire_all() then discarded every unflushed change.
+Hence the flush() at the end of step 1 and the post-commit re-read from the
+database — counts measured in memory are not evidence.
 """
 
 import os
@@ -26,6 +33,22 @@ from pipeline.utils.text import clean_llm_name
 APPLY = os.environ.get("APPLY") == "1"
 MODE = "APPLY" if APPLY else "DRY RUN"
 
+# A linked item whose extracted name is a DIFFERENT place from the linked site,
+# yet whose text carries the site's name, can only have got that name from
+# _correct_text_fields() after an exact-path match — and for two different
+# names the exact path was a caption_garble alias. Items linked through
+# site_identifier's LLM path were never text-rewritten and are left alone.
+REWRITTEN_SQL = """
+    SELECT ni.id, ni.site_name_extracted, us.name AS site_name
+    FROM news_items ni
+    JOIN unified_sites us ON us.id = ni.site_id
+    WHERE ni.site_name_extracted IS NOT NULL
+      AND (   ni.headline  ILIKE '%' || us.name || '%'
+           OR ni.summary   ILIKE '%' || us.name || '%'
+           OR ni.post_text ILIKE '%' || us.name || '%'
+           OR ni.facts::text ILIKE '%' || us.name || '%')
+"""
+
 
 def reverse_rewrite(value: str | None, wrong: str, original: str) -> str | None:
     """Put the source's own wording back: canonical name -> extracted name."""
@@ -34,27 +57,17 @@ def reverse_rewrite(value: str | None, wrong: str, original: str) -> str | None:
     return re.compile(re.escape(wrong), re.IGNORECASE).sub(original, value)
 
 
+def damaged_rows(session) -> list:
+    rows = session.execute(text(REWRITTEN_SQL)).fetchall()
+    return [r for r in rows if not _is_same_name(r.site_name_extracted, r.site_name)]
+
+
 with get_session() as session:
     print(f"=== {MODE} ===\n")
 
-    # ── 1. News items linked through a caption_garble alias ────────────────
-    linked = session.execute(
-        text("""
-        SELECT ni.id, ni.site_name_extracted, us.name AS site_name
-        FROM news_items ni
-        JOIN unified_sites us ON us.id = ni.site_id
-        WHERE EXISTS (
-            SELECT 1 FROM unified_site_names usn
-            WHERE usn.site_id = ni.site_id
-              AND usn.name_type = 'caption_garble'
-              AND lower(usn.name) = lower(ni.site_name_extracted)
-        )
-    """)
-    ).fetchall()
-    print(f"news_items linked via a caption_garble alias: {len(linked)}")
-
-    wrong = [r for r in linked if not _is_same_name(r.site_name_extracted, r.site_name)]
-    print(f"  of those, linked to a DIFFERENT place: {len(wrong)}")
+    # ── 1. Restore text and unlink the items a garble match rewrote ─────────
+    wrong = damaged_rows(session)
+    print(f"news_items rewritten with a different linked site's name: {len(wrong)}")
 
     text_fixed = 0
     samples: list[str] = []
@@ -78,23 +91,15 @@ with get_session() as session:
         item.site_id = None
         item.site_match_tried = False
 
-    print(f"  headlines restored: {text_fixed}")
-    for s in samples:
-        print(s)
+    session.flush()  # step 3's expire_all() would otherwise discard all of this
+    print(f"  headlines changed: {text_fixed}")
+    for line in samples:
+        print(line)
 
     # ── 2. Drop the aliases themselves ─────────────────────────────────────
-    garble = session.query(UnifiedSiteName).filter(
-        UnifiedSiteName.name_type == "caption_garble"
-    )
-    garble_count = garble.count()
-    on_an = session.execute(
-        text("""SELECT COUNT(*) FROM unified_site_names usn
-                JOIN unified_sites us ON us.id = usn.site_id
-                WHERE usn.name_type='caption_garble' AND us.source_id='ancient_nerds'""")
-    ).scalar()
-    print(f"\ncaption_garble aliases to delete: {garble_count} ({on_an} of them on curated sites)")
-    if APPLY:
-        garble.delete(synchronize_session=False)
+    garble = session.query(UnifiedSiteName).filter(UnifiedSiteName.name_type == "caption_garble")
+    print(f"\ncaption_garble aliases to delete: {garble.count()}")
+    garble.delete(synchronize_session=False)
 
     # ── 3. Placeholder corrected_name values ───────────────────────────────
     rows = session.execute(
@@ -102,9 +107,7 @@ with get_session() as session:
                 WHERE source IN ('lyra','user') AND corrected_name IS NOT NULL""")
     ).fetchall()
     bad = [r for r in rows if clean_llm_name(r.corrected_name) is None]
-    print(f"\ncorrected_name placeholders to clear: {len(bad)}")
-    for r in bad[:10]:
-        print(f"    '{r.name}' had corrected_name={r.corrected_name!r}")
+    print(f"corrected_name placeholders to clear: {len(bad)}")
     if bad:
         session.execute(
             text(
@@ -122,29 +125,34 @@ with get_session() as session:
         text("SELECT COALESCE(SUM(mention_count),0) FROM user_contributions WHERE source='lyra'")
     ).scalar()
     changed = recount_mentions(session)
-    session.flush()  # without this the SUM below re-reads the pre-change rows
+    session.flush()
     after_total = session.execute(
         text("SELECT COALESCE(SUM(mention_count),0) FROM user_contributions WHERE source='lyra'")
     ).scalar()
-    print(f"\nmention_count rows corrected: {changed} (sum {before_total} -> {after_total})")
-    zeroed = session.execute(
-        text("SELECT COUNT(*) FROM user_contributions WHERE source='lyra' AND mention_count = 0")
-    ).scalar()
-    print(f"  contributions now at 0 mentions: {zeroed} (visible — min_mentions defaults to 0)")
+    print(f"mention_count rows corrected: {changed} (sum {before_total} -> {after_total})")
 
-    # ── 5. Sites left with no name at all after the alias delete ───────────
-    orphans = session.execute(
-        text("""SELECT COUNT(*) FROM unified_sites us
-                WHERE NOT EXISTS (SELECT 1 FROM unified_site_names usn WHERE usn.site_id = us.id)
-                  AND us.source_id = 'ancient_nerds'""")
-    ).scalar()
-    print(f"curated sites with no unified_site_names row: {orphans}")
-
-    if APPLY:
-        session.commit()
-        print("\nCOMMITTED")
-    else:
+    if not APPLY:
         session.rollback()
         print("\nrolled back — re-run with APPLY=1 to write")
+    else:
+        session.commit()
+        print("\nCOMMITTED — re-reading from the database:")
+        print(f"  items still rewritten with a different site's name: {len(damaged_rows(session))}")
+        requeued = session.execute(
+            text(
+                "SELECT COUNT(*) FROM news_items WHERE site_match_tried = false AND site_name_extracted IS NOT NULL"
+            )
+        ).scalar()
+        garble_left = session.execute(
+            text("SELECT COUNT(*) FROM unified_site_names WHERE name_type = 'caption_garble'")
+        ).scalar()
+        placeholders_left = session.execute(
+            text("""SELECT COUNT(*) FROM user_contributions
+                    WHERE corrected_name IS NOT NULL AND trim(corrected_name) = ''
+                       OR lower(trim(COALESCE(corrected_name,''))) IN ('null','none','unknown','n/a')""")
+        ).scalar()
+        print(f"  news_items requeued for matching: {requeued}")
+        print(f"  caption_garble aliases left: {garble_left}")
+        print(f"  corrected_name placeholders left: {placeholders_left}")
 
     print(f"\n=== {MODE} complete ===")
