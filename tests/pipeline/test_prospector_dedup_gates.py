@@ -119,8 +119,22 @@ def test_auto_skip_requires_all_three_conditions():
     assert not _auto_skip(far, c)  # > 250 m: proximity is never identity in our data
     other_country = hit("Derinkuyu", "Derinkuyu Underground City", "Greece", distance_m=100)
     assert not _auto_skip(other_country, c)
+    # Unknowns never confirm: with neither country nor distance known, a
+    # same-name hit is a question for the human, not a silent skip.
     unknowns = hit("Derinkuyu", "Derinkuyu Underground City", None, distance_m=None)
-    assert _auto_skip(unknowns, c)  # unknown country / distance do not block
+    assert not _auto_skip(unknowns, c)
+    country_only = hit("Derinkuyu", "Derinkuyu Underground City", "Türkiye", distance_m=None)
+    assert _auto_skip(country_only, c)
+    distance_only = hit("Derinkuyu", "Derinkuyu Underground City", None, distance_m=90)
+    assert _auto_skip(distance_only, Candidate(0, "Derinkuyu"))
+
+
+def test_generic_curated_name_cannot_swallow_a_specific_candidate():
+    # First full run: "Funerary Temple" absorbed "Khafre's funerary temple".
+    c = Candidate(0, "Khafre's funerary temple")
+    h = hit("Khafre's funerary temple", "Funerary Temple", None, distance_m=None, signal=0.6)
+    assert h.same_name  # containment says yes ...
+    assert not _auto_skip(h, c)  # ... but nothing physical confirms it
 
 
 def test_proximity_alone_is_context_not_identity():

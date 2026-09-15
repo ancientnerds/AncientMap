@@ -344,11 +344,26 @@ def _gate(hit: Hit, cand: Candidate, df: dict[str, int]) -> None:
 
 
 def _auto_skip(hit: Hit, cand: Candidate) -> bool:
+    """A fuzzy-net hit may be skipped silently only with a POSITIVE confirmation.
+
+    Same name is necessary but not sufficient: containment lets a generic
+    curated name swallow a specific candidate ("Funerary Temple" absorbed
+    "Khafre's funerary temple" on the first full run, with country and
+    distance both unknown). So at least one physical fact must agree —
+    countries both known and equal, or both points known and within 250 m.
+    Unknowns never confirm; they leave the card for a human.
+    """
     if not hit.same_name:
         return False
     if _countries_disagree(cand.country, hit.site_country):
         return False
-    return hit.distance_m is None or hit.distance_m <= AUTO_SKIP_MAX_M
+    near = hit.distance_m is not None and hit.distance_m <= AUTO_SKIP_MAX_M
+    if hit.distance_m is not None and not near:
+        return False
+    same_country = bool(cand.country and hit.site_country) and not _countries_disagree(
+        cand.country, hit.site_country
+    )
+    return near or same_country
 
 
 def adjudicate(session, cands: list[Candidate]) -> dict[int, Verdict]:
