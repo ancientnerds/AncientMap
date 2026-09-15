@@ -46,6 +46,10 @@ Allow: /api/radar/map
 Allow: /api/theo/public
 Allow: /api/v1/openapi.json
 Allow: /api/v1/facets
+# The source registry feeds /search.html and /globe.html; blocked, Google's
+# render of both hung on "LOADING". The popup gate that used to ride on it
+# is /api/app/interactive now, which stays under the /api/ disallow.
+Allow: /api/sources/
 
 # Allow important data files
 Allow: /data/labels.json

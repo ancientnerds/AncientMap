@@ -39,6 +39,7 @@ from api.build_info import BUILD_HASH
 from api.cache import cache_get, cache_set, get_redis_client
 from api.cardgame.routes import router as cardgame_router
 from api.routes import (
+    app_gate,
     articles_html,
     auth,
     content,
@@ -785,6 +786,7 @@ app.include_router(goto.router, tags=["goto"])
 app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 app.include_router(sites.router, prefix="/api/sites", tags=["sites"])
 app.include_router(sources.router, prefix="/api/sources", tags=["sources"])
+app.include_router(app_gate.router, prefix="/api/app", tags=["app"])
 app.include_router(og.router, prefix="/api/og", tags=["og"])
 app.include_router(contributions.router, prefix="/api/contributions", tags=["contributions"])
 app.include_router(lyra.router, prefix="/api/lyra", tags=["lyra"])

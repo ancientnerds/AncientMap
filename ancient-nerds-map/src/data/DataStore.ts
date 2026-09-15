@@ -321,20 +321,26 @@ class DataStoreClass {
   }
 
   /**
-   * Load the source registry and report whether it is usable.
+   * May the interactive app take over a server-rendered page?
    *
    * This is the gate SitePage checks before it swaps the static site record
    * for SitePopup. Google's renderer applies robots.txt to a page's own
-   * fetches, and /api/sources/ is disallowed there — so for Googlebot the
-   * fetch rejects, the answer is false, and the record stays. What Google
-   * then indexes is the SSR content (hero, facts, cited description) rather
-   * than a popup whose robots-blocked galleries read "No photos found /
-   * 0 sources returned results", which its Soft-404 classifier took at face
-   * value on ~2,100 detail pages (GSC, 2026-09-05). Never throws: an
-   * unreachable registry is an answer, not an error.
+   * fetches, and /api/app/interactive is disallowed there (Disallow: /api/,
+   * no Allow for it) — so for Googlebot the probe rejects, the answer is
+   * false, and the record stays. What Google then indexes is the SSR content
+   * (hero, facts, cited description) rather than a popup whose robots-blocked
+   * galleries read "No photos found / 0 sources returned results", which its
+   * Soft-404 classifier took at face value on ~2,100 detail pages (GSC,
+   * 2026-09-05). Until 2026-09-15 the gate was the source registry itself,
+   * which kept /api/sources/ blocked and left /search.html and /globe.html
+   * stuck on "LOADING" in Google's render. Never throws: an unreachable
+   * probe is an answer, not an error. The registry is loaded alongside
+   * because the popup header needs it.
    */
-  async sourcesAvailable(): Promise<boolean> {
+  async interactiveAllowed(): Promise<boolean> {
     try {
+      const probe = await fetch(`${API_BASE_URL}/app/interactive`, { cache: 'no-store' })
+      if (!probe.ok) return false
       await this.loadSources()
     } catch {
       return false
