@@ -50,3 +50,15 @@ Allow: /api/v1/facets
 # Allow important data files
 Allow: /data/labels.json
 Allow: /data/sites/
+
+# AhrefsBot re-fetched 54 immutable /assets/ files ~350 times each (18,970 of
+# its 23,447 requests on 2026-09-15) and pulled the wiki hero images too. A
+# named group replaces the * group for that bot, so the general rules are
+# repeated here.
+User-agent: AhrefsBot
+Disallow: /assets/
+Disallow: /data/images/
+Disallow: /api/
+Disallow: /data/basemaps/
+Disallow: /data/historical/
+Disallow: /goto/

@@ -97,13 +97,27 @@ server {
     # definiert, also bleiben die 404 der Routen (render_error_html) und ein
     # echtes 500 unverändert sichtbar. Ein Bug soll NICHT als 503 erscheinen.
 
+    # Slash normalisation for the four SSR trees (render audit 2026-09-15):
+    #  - /sites, /research, /articles, /news-archive without the slash fell
+    #    through to `location /` and answered 200 with the homepage shell;
+    #  - /sites/england/ and /news-archive/page/2/ reached FastAPI, whose
+    #    redirect_slashes answered 307 to http://…, then nginx 301'd to https
+    #    (two hops, temporary, wrong scheme).
+    # One permanent hop each. $request_uri keeps the original percent-encoding
+    # (türkiye), $uri would have decoded it into the Location header.
+    location ~ ^/(sites|research|articles|news-archive)$ {
+        return 301 https://ancientnerds.com$uri/;
+    }
+    if ($request_uri ~ "^(/(?:sites|research|articles|news-archive)/[^?]+)/(\?.*)?$") {
+        return 301 https://ancientnerds.com$1$2;
+    }
+
     # SEO: Article pages served by API as HTML
     location /articles/ {
         proxy_pass http://an_api/articles/;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_intercept_errors on;
-        add_header Cache-Control "public, max-age=3600";
     }
 
     # SEO: News archive served by API as HTML
@@ -112,7 +126,6 @@ server {
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_intercept_errors on;
-        add_header Cache-Control "public, max-age=1800";
     }
 
     # SEO: Research library papers served by API as HTML
@@ -121,7 +134,6 @@ server {
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_intercept_errors on;
-        add_header Cache-Control "public, max-age=1800";
     }
 
     # SEO: Crawlable site browse pages served by API as HTML
@@ -130,7 +142,6 @@ server {
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_intercept_errors on;
-        add_header Cache-Control "public, max-age=3600";
     }
 
     # Funnel measurement: same-origin Discord redirect. The API logs one
