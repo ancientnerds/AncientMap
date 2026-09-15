@@ -96,6 +96,22 @@ def test_country_route_hands_the_raw_sites_payload():
     ]
 
 
+def test_country_case_variant_301s_to_the_sitemap_slug():
+    """/sites/Denmark is the same hub as /sites/denmark: one permanent hop to
+    the slug the sitemap lists, like the detail route does for its country
+    segment — it answered 404 before (render audit 2026-09-15)."""
+    render, shell = _patched()
+    with render as render_mock, shell as shell_mock:
+        resp = asyncio.run(
+            sites_by_country("Denmark", db=FakeDb([SimpleNamespace(country="Denmark")]))
+        )
+
+    assert resp.status_code == 301
+    assert resp.headers["location"] == "/sites/denmark"
+    render_mock.assert_not_called()
+    shell_mock.assert_not_called()
+
+
 def test_unknown_country_is_a_404_without_touching_the_renderer():
     render, shell = _patched()
     with render as render_mock, shell as shell_mock:

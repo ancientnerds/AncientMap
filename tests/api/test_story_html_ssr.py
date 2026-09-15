@@ -324,3 +324,27 @@ def test_unknown_id_stays_404_not_410():
         resp = asyncio.run(story_page("never-existed-999999", db=db))
 
     assert resp.status_code == 404
+
+
+def test_story_page_301s_a_stale_slug_to_the_canonical_url():
+    """Resolution is by the trailing id; the name part is canonicalised with a
+    301 instead of serving the same story under any slug (the canonical tag
+    alone left /news-archive/anything-4711 answering 200)."""
+    item = _item()
+    render, shell = _patched()
+    with render as render_mock, shell as shell_mock:
+        resp = asyncio.run(story_page("old-headline-4711", db=_orm_db(first=item)))
+
+    assert resp.status_code == 301
+    assert resp.headers["location"] == "/news-archive/sun-chariot-fragment-found-4711"
+    render_mock.assert_not_called()
+    shell_mock.assert_not_called()
+
+
+def test_story_page_keeps_the_canonical_slug_at_200():
+    item = _item()
+    render, shell = _patched()
+    with render, shell:
+        resp = asyncio.run(story_page("sun-chariot-fragment-found-4711", db=_orm_db(first=item)))
+
+    assert resp.status_code == 200

@@ -77,7 +77,8 @@ async def sites_by_country(slug: str, db: Session = Depends(get_db)):
         # nosemgrep: semgrep.api-sql-fstring-interpolation -- _CURATED_WHERE is a module-level constant, no user input
         text(f"SELECT DISTINCT country FROM unified_sites WHERE {_CURATED_WHERE}")
     ).fetchall()
-    country = next((row.country for row in rows if country_slug(row.country) == slug), None)
+    wanted = slug.lower()
+    country = next((row.country for row in rows if country_slug(row.country) == wanted), None)
 
     if not country:
         return Response(
@@ -86,6 +87,10 @@ async def sites_by_country(slug: str, db: Session = Depends(get_db)):
             status_code=404,
             headers={"Cache-Control": "public, max-age=300"},
         )
+    # Case variants (/sites/Turkey) are the same hub: one 301 to the slug the
+    # sitemap lists, like the detail route does for its country segment.
+    if slug != country_slug(country):
+        return RedirectResponse(url=f"/sites/{country_slug(country)}", status_code=301)
 
     site_rows = db.execute(
         text(f"""

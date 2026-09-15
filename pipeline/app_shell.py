@@ -82,7 +82,8 @@ def _strip_default_head_tags(head: str) -> str:
     head = re.sub(r"<title>.*?</title>\s*", "", head, flags=re.DOTALL)
     head = re.sub(
         r'<meta\s+(?:name|property)="'
-        r"(?:description|robots|og:type|og:title|og:description|og:image|og:url|og:site_name"
+        r"(?:title|description|robots|og:type|og:title|og:description|og:image|og:image:width"
+        r"|og:image:height|og:image:alt|og:locale|og:url|og:site_name"
         r'|twitter:card|twitter:title|twitter:description|twitter:image)"'
         r"[^>]*/?>\s*",
         "",

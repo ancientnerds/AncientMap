@@ -8,6 +8,7 @@ These routes live outside /api/ so nginx proxies them directly.
 import logging
 
 from fastapi import APIRouter, Depends, Response
+from fastapi.responses import RedirectResponse
 from sqlalchemy import or_
 from sqlalchemy.orm import Session, joinedload
 
@@ -393,6 +394,13 @@ async def story_page(slug: str, db: Session = Depends(get_db)):
             status_code=404,
             headers={"Cache-Control": "public, max-age=300"},
         )
+
+    # Resolution is by the trailing id; a stale or mangled name part answers
+    # 301 to the canonical slug, as /sites/{country}/{slug} does. The path
+    # segment arrives percent-decoded, story_slug() is the decoded form too.
+    canonical_slug = story_slug(item.headline, item.id)
+    if slug != canonical_slug:
+        return RedirectResponse(url=f"/news-archive/{canonical_slug}", status_code=301)
 
     return ssr_shell_response(
         "story.html",
