@@ -299,9 +299,10 @@ jobs:
             git lfs pull
             echo "==> Fixing wiki image permissions for API container..."
             chmod -R a+w public/data/images/wiki/ 2>/dev/null || true
-            # The library export (POST /api/library/refresh) writes here as the
-            # container's appuser; the checkout above resets the files to the
-            # deploy user with 644 and the refresh died on EACCES (2026-09-15).
+            # Library export (POST /api/library/refresh) writes here as appuser
+            # inside the container; the checkout resets files to deploy:644 and
+            # the refresh died on EACCES (2026-09-15). NO apostrophes in this
+            # block: the whole deploy body is a single-quoted SSH string.
             chmod -R a+w public/data/library/ 2>/dev/null || true
             echo "==> Restoring snapshots..."
             mkdir -p public/data/snapshots
