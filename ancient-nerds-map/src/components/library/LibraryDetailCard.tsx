@@ -10,11 +10,14 @@ const TIER_LABELS: Record<number, { label: string; className: string }> = {
   3: { label: 'General', className: 'library-tier-general' },
 }
 
-const PARENT_LINKS: Record<string, { label: string; href: (id: string) => string }> = {
-  story: { label: 'Story', href: () => '/news.html' },
-  journal: { label: 'Journal', href: () => '/articles.html' },
-  research: { label: 'Research', href: (id) => `/research.html?id=${id}` },
-  site: { label: 'Site', href: (id) => `/site.html?id=${id}` },
+// The link target comes from the export (ParentRef.path, the canonical page);
+// until 2026-09-15 the card built /site.html?id= and /research.html?id= here —
+// redirecting legacy URLs on a page Google renders.
+const PARENT_LABELS: Record<string, string> = {
+  story: 'Story',
+  journal: 'Journal',
+  research: 'Research',
+  site: 'Site',
 }
 
 interface LibraryDetailCardProps {
@@ -98,12 +101,11 @@ export default function LibraryDetailCard({ source, onClose }: LibraryDetailCard
             {nonStoryRefs.length > 0 && (
               <ul className="library-detail-refs">
                 {nonStoryRefs.map((ref: ParentRef, i: number) => {
-                  const link = PARENT_LINKS[ref.type]
                   return (
                     <li key={`${ref.type}-${ref.id}-${i}`}>
-                      <span className="library-card-type-pill">{link?.label || ref.type}</span>
-                      {link ? (
-                        <a href={link.href(ref.id)} target="_blank" rel="noopener noreferrer">{ref.title}</a>
+                      <span className="library-card-type-pill">{PARENT_LABELS[ref.type] || ref.type}</span>
+                      {ref.path ? (
+                        <a href={ref.path} target="_blank" rel="noopener noreferrer">{ref.title}</a>
                       ) : (
                         <span>{ref.title}</span>
                       )}

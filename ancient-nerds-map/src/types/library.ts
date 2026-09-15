@@ -14,6 +14,8 @@ export interface ParentRef {
   type: 'story' | 'journal' | 'research' | 'site'
   id: string
   title: string
+  /** Canonical page of the citing item; null when it has none (withdrawn story). */
+  path: string | null
 }
 
 export interface LibraryPeriod {

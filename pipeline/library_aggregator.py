@@ -13,6 +13,7 @@ import re
 import urllib.parse
 from datetime import UTC, datetime
 
+from pipeline.article_html_renderer import slugify, story_slug
 from pipeline.database import (
     LibrarySource,
     NewsArticle,
@@ -21,6 +22,8 @@ from pipeline.database import (
     UnifiedSite,
     get_session,
 )
+from pipeline.news_visibility import public_story_criteria
+from pipeline.sites_html_renderer import site_path
 from pipeline.utils.text import PERIOD_BUCKETS
 
 logger = logging.getLogger(__name__)
@@ -63,9 +66,16 @@ class LibraryAggregator:
         parent_type: str,
         parent_id: str,
         parent_title: str,
+        parent_path: str | None,
         reliability_tier: int = 0,
     ):
-        """Register a citation. Merges if URL already seen."""
+        """Register a citation. Merges if URL already seen.
+
+        parent_path is the canonical page of the citing item (None when it
+        has none, e.g. a withdrawn story) — the library cards link it. Until
+        2026-09-15 the frontend built /site.html?id= and /research.html?id=
+        from the bare id, i.e. redirecting legacy URLs on a crawlable page.
+        """
         url = url.strip()
         if not url or not title:
             return
@@ -82,7 +92,12 @@ class LibraryAggregator:
         uid = _url_id(url)
         now = datetime.now(UTC)
 
-        parent_ref = {"type": parent_type, "id": parent_id, "title": parent_title[:200]}
+        parent_ref = {
+            "type": parent_type,
+            "id": parent_id,
+            "title": parent_title[:200],
+            "path": parent_path,
+        }
 
         if uid in self.pending:
             row = self.pending[uid]
@@ -131,12 +146,20 @@ class LibraryAggregator:
             .all()
         )
 
+        public_ids = {
+            item_id for (item_id,) in session.query(NewsItem.id).filter(*public_story_criteria())
+        }
         items = session.query(NewsItem).filter(NewsItem.web_sources.isnot(None)).yield_per(500)
         count = 0
         for item in items:
             if not item.web_sources:
                 continue
             period = site_periods.get(item.site_id) if item.site_id else None
+            story_path = (
+                f"/news-archive/{story_slug(item.headline, item.id)}"
+                if item.id in public_ids
+                else None
+            )
             for src in item.web_sources:
                 url = src.get("url", "")
                 title = src.get("title", "")
@@ -151,6 +174,7 @@ class LibraryAggregator:
                         parent_type="story",
                         parent_id=str(item.id),
                         parent_title=item.headline or "",
+                        parent_path=story_path,
                     )
                     count += 1
         self.stats["news_items"] = count
@@ -203,6 +227,7 @@ class LibraryAggregator:
                     parent_type="research",
                     parent_id=str(req.id),
                     parent_title=paper_title,
+                    parent_path=f"/research/{req.slug}" if req.slug else None,
                     reliability_tier=0,
                 )
                 count += 1
@@ -219,6 +244,11 @@ class LibraryAggregator:
             citations = raw.get("description_citations")
             if not citations:
                 continue
+            page_path = (
+                site_path(site.country, site.name, str(site.id))
+                if site.source_id == "ancient_nerds" and site.country
+                else f"/globe.html#focus={site.id}"
+            )
             for cit in citations:
                 url = cit.get("url", "")
                 if url:
@@ -231,6 +261,7 @@ class LibraryAggregator:
                         parent_type="site",
                         parent_id=str(site.id),
                         parent_title=site.name or "",
+                        parent_path=page_path,
                     )
                     count += 1
         self.stats["sites"] = count
@@ -258,6 +289,7 @@ class LibraryAggregator:
                     parent_type="journal",
                     parent_id=str(article.id),
                     parent_title=article.title or "",
+                    parent_path=f"/articles/{slugify(article.title)}" if article.title else None,
                 )
                 count += 1
         self.stats["articles"] = count

@@ -23,6 +23,7 @@ from pipeline.article_html_renderer import (
     story_slug,
 )
 from pipeline.database import NewsArticle, NewsItem, NewsVideo, get_db
+from pipeline.news_visibility import public_story_criteria
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -53,14 +54,7 @@ def story_page_query(db: Session):
     "not scored yet", not "rejected", so those keep their page like the feed
     keeps them.
     """
-    return (
-        db.query(NewsItem)
-        .join(NewsVideo)
-        .filter(
-            NewsItem.post_text.isnot(None),
-            (NewsItem.significance.is_(None)) | (NewsItem.significance >= 2),
-        )
-    )
+    return db.query(NewsItem).join(NewsVideo).filter(*public_story_criteria())
 
 
 def public_stories_query(db: Session):
