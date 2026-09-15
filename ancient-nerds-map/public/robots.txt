@@ -31,6 +31,22 @@ Disallow: /goto/
 Allow: /api/sites/
 Allow: /api/news/screenshots/
 
+# Same rule for the sitemap entry pages, which are client-rendered shells and
+# fetch their content after mount. Google's renderer hands a robots-blocked
+# fetch() a synthetic 499 response, so with these paths blocked it indexed
+# /news.html as "HTTP 499 / Retry" (Live-Test 2026-09-15) and the other
+# shells as empty lists. Read-only, cheap, noindex via X-Robots-Tag.
+Allow: /api/news/feed
+Allow: /api/news/stats
+Allow: /api/news/filters
+Allow: /api/news/articles
+Allow: /api/radar/list
+Allow: /api/radar/stats
+Allow: /api/radar/map
+Allow: /api/theo/public
+Allow: /api/v1/openapi.json
+Allow: /api/v1/facets
+
 # Allow important data files
 Allow: /data/labels.json
 Allow: /data/sites/
