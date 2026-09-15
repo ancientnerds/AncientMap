@@ -82,6 +82,9 @@ ignore_imports = [
     "api.** -> pipeline.app_shell",
     "api.** -> pipeline.static_exporter",
     "api.** -> pipeline.library_aggregator",
+    # Query criteria shared by the story routes and the library aggregator
+    # (one definition of "story has a public page", 2026-09-15).
+    "api.** -> pipeline.news_visibility",
 ]
 
 # =============================================================================
