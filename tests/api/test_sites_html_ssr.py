@@ -69,7 +69,20 @@ def test_country_route_hands_the_raw_sites_payload():
             period_start=-500,
             description="An Iron Age bog fortress.",
             thumbnail_url="/data/images/wiki/5281654c/hero.webp",
-        )
+            hero_filename=None,
+        ),
+        # Hotlinked thumbnail, but a downloaded hero exists: the hub serves the
+        # local copy (Wikimedia answers Googlebot with 403).
+        SimpleNamespace(
+            id="7a1b2c3d-0000-4000-8000-000000000000",
+            name="Trelleborg",
+            site_type="Fortification",
+            period_name="500 - 1000 AD",
+            period_start=980,
+            description="A Viking ring fortress.",
+            thumbnail_url="https://upload.wikimedia.org/wikipedia/commons/thumb/x/Trelleborg.jpg/800px-Trelleborg.jpg",
+            hero_filename="hero.webp",
+        ),
     ]
     render, shell = _patched()
     with render as render_mock, shell as shell_mock:
@@ -92,7 +105,16 @@ def test_country_route_hands_the_raw_sites_payload():
             "period_name": "500 BC - 1 AD",
             "period_start": -500,
             "thumbnail_url": "/data/images/wiki/5281654c/hero.webp",
-        }
+        },
+        {
+            "name": "Trelleborg",
+            "description": "A Viking ring fortress.",
+            "path": "/sites/denmark/trelleborg-7a1b2c3d",
+            "site_type": "Fortification",
+            "period_name": "500 - 1000 AD",
+            "period_start": 980,
+            "thumbnail_url": "/data/images/wiki/7a1b2c3d/hero.webp",
+        },
     ]
 
 

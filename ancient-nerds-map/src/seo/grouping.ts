@@ -67,7 +67,10 @@ export function typeSections(sites: CountrySite[]): TypeSection[] {
  * Exportiert für src/seo/display.ts (periodDisplay) — EINE Definition.
  */
 export function yearDisplay(year: number): string {
-  return `${Math.abs(year)} ${year < 0 ? 'BC' : 'AD'}`
+  // Years stay plain ("9000 BC"); only deep time gets grouped — Atapuerca
+  // put "1400000 BC" into Spain's hub snippet.
+  const n = Math.abs(year)
+  return `${n >= 10_000 ? n.toLocaleString('en-US') : n} ${year < 0 ? 'BC' : 'AD'}`
 }
 
 /**

@@ -34,7 +34,7 @@ router = APIRouter()
 BASE_URL = "https://ancientnerds.com"
 
 #: One part file per page type; /sitemap.xml indexes exactly these.
-SITEMAP_PARTS = ("static", "sites", "countries", "stories", "research", "articles")
+SITEMAP_PARTS = ("static", "sites", "countries", "stories", "research", "articles", "legacy")
 
 # 1h: long enough that crawler bursts hit nginx/API caches, short enough
 # that a freshly published story is advertised within the hour.
@@ -45,19 +45,20 @@ def _xml(content: str) -> Response:
     return Response(content=content, media_type="application/xml", headers=_HEADERS)
 
 
-def _loc(path: str) -> str:
+def _loc(path: str, query: str = "") -> str:
     """Absolute, percent-encoded, XML-escaped <loc> value for a raw site path.
 
     Sitemap URLs must be URL-escaped; ~600 site slugs and ~100 news/article
-    slugs contain non-ASCII characters. Takes the UNENCODED path.
+    slugs contain non-ASCII characters. Takes the UNENCODED path; `query` is
+    appended verbatim after `?` (only the legacy part has one).
     """
-    return escape(f"{BASE_URL}{encode_path(path)}")
+    return escape(f"{BASE_URL}{encode_path(path)}{'?' + query if query else ''}")
 
 
-def _url(path: str, lastmod: datetime | None) -> str:
+def _url(path: str, lastmod: datetime | None, *, query: str = "") -> str:
     """One <url> element; lastmod only where the data actually provides one."""
     lastmod_xml = f"\n    <lastmod>{lastmod.strftime('%Y-%m-%d')}</lastmod>" if lastmod else ""
-    return f"  <url>\n    <loc>{_loc(path)}</loc>{lastmod_xml}\n  </url>"
+    return f"  <url>\n    <loc>{_loc(path, query)}</loc>{lastmod_xml}\n  </url>"
 
 
 def _urlset(urls: list[str], *, image_ns: bool = False) -> str:
@@ -160,9 +161,8 @@ async def sitemap_sites(db: Session = Depends(get_db)):
 
     Only Ancient Nerds Originals — the routes serve curated sites only, and
     bulk-imported sources would be hundreds of thousands of thin pages. The
-    legacy /site.html?id={uuid} URLs stay deliberately unlisted: Google left
-    all ~5,000 on "Discovered - currently not indexed" and never fetched one
-    (URL Inspection, 2026-08-07).
+    legacy /site.html?id={uuid} URLs live in sitemap-legacy.xml for now (see
+    sitemap_legacy); this part lists canonical URLs only.
     """
     rows = db.execute(
         text("""
@@ -177,6 +177,38 @@ async def sitemap_sites(db: Session = Depends(get_db)):
         _url(site_path(row.country, row.name, row.id), _sites_lastmod(row.lastmod)) for row in rows
     ]
     return _xml(_urlset(urls))
+
+
+@router.api_route("/sitemap-legacy.xml", methods=["GET", "HEAD"])
+async def sitemap_legacy(db: Session = Depends(get_db)):
+    """TEMPORARY: the retired /site.html?id={uuid} URLs, so Google recrawls
+    them and processes their 301s.
+
+    On 2026-08-07 Google had never fetched one of these. Between then and the
+    retirement of the nginx crawler rewrite they answered 200, and Google
+    indexed them: on 2026-09-15 462 legacy URLs still carried 5,130
+    impressions in 28 days (11.5 % of the site), URL Inspection showed the
+    legacy URL as Google-selected canonical on 3/3 samples with last crawls
+    08-25 … 09-07, and "augustus mirabilis" / "xiol" ranked only through
+    them. Every one now answers 301 to /sites/{country}/{slug}
+    (legacy_site_redirect); listing redirecting URLs is Google's own advice
+    for moved URLs so the redirects get processed instead of waiting for the
+    natural recrawl (~490 in 14 days). No lastmod: nothing changed on them.
+
+    Remove this part (and the query support in _url) once
+    `scripts/gsc_report.py pages` shows no /site.html?id= impressions for a
+    full week.
+    """
+    rows = db.execute(
+        text("""
+            SELECT id
+            FROM unified_sites
+            WHERE source_id = 'ancient_nerds'
+              AND country IS NOT NULL AND country != ''
+            ORDER BY id
+        """)
+    ).fetchall()
+    return _xml(_urlset([_url("/site.html", None, query=f"id={row.id}") for row in rows]))
 
 
 @router.api_route("/sitemap-countries.xml", methods=["GET", "HEAD"])

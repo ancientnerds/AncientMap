@@ -119,6 +119,7 @@ def _all_part_responses() -> dict[str, Response]:
         "stories": asyncio.run(sm.sitemap_stories(db=_orm_db(STORIES))),
         "research": asyncio.run(sm.sitemap_research(db=_execute_db(PAPERS))),
         "articles": asyncio.run(sm.sitemap_articles(db=_orm_db(ARTICLES))),
+        "legacy": asyncio.run(sm.sitemap_legacy(db=_execute_db(SITES))),
     }
 
 
@@ -166,6 +167,17 @@ def test_sites_lastmod_is_floored_at_the_template_change():
     urls = list(sites.iter(f"{NS}url"))
     assert len(urls) == 3
     assert [u.findtext(f"{NS}lastmod") for u in urls] == [_FLOOR_DAY] * 3
+
+
+def test_legacy_part_lists_the_retired_id_urls_without_lastmod():
+    """Temporary part (see sitemap_legacy): one /site.html?id= per curated site,
+    query intact (not percent-encoded), no lastmod."""
+    resp = asyncio.run(sm.sitemap_legacy(db=_execute_db(SITES)))
+    urls = list(_root(resp).iter(f"{NS}url"))
+    assert [u.findtext(f"{NS}loc") for u in urls] == [
+        f"https://ancientnerds.com/site.html?id={s.id}" for s in SITES
+    ]
+    assert all(u.findtext(f"{NS}lastmod") is None for u in urls)
 
 
 def test_no_url_appears_in_two_parts():

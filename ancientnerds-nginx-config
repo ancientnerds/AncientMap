@@ -12,6 +12,16 @@ map $http_user_agent $is_bot {
     ~*(Googlebot|bingbot|Twitterbot|facebookexternalhit|LinkedInBot|Slackbot|Discordbot|WhatsApp|TelegramBot|Applebot|Pinterestbot|YandexBot|DuckDuckBot) 1;
 }
 
+# JS-executing scrapers that open the site pages' fan-out endpoints while
+# rendering and then abort: 106 of 738 /api/content/by-site requests ended
+# 499 on 12.–15.09.2026 (91 % of YouBot's, 30 % of meta-externalagent's),
+# each leaving a 15–30 s external fan-out running. Search engines are not
+# in this list — they obey the robots.txt disallow on /api/ anyway.
+map $http_user_agent $is_scraper {
+    default 0;
+    ~*(YouBot|meta-externalagent|Amazonbot|PetalBot|Barkrowler|MJ12bot|SemrushBot|AhrefsBot|DotBot|DataForSeoBot|BLEXBot) 1;
+}
+
 server {
     server_name ancientnerds.com www.ancientnerds.com;
 
@@ -180,6 +190,35 @@ server {
         proxy_buffers 4 32k;
     }
 
+    # Fan-out endpoints (external connectors, 15–30 s): scrapers get 403
+    # before the proxy; see the $is_scraper map.
+    location ^~ /api/content/by-site {
+        if ($is_scraper) { return 403; }
+        proxy_pass http://an_api/api/content/by-site;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_read_timeout 120s;
+        proxy_connect_timeout 10s;
+        proxy_send_timeout 60s;
+        proxy_buffering on;
+        proxy_buffer_size 16k;
+        proxy_buffers 4 32k;
+        add_header X-Robots-Tag "noindex" always;
+    }
+    location ^~ /api/library/by-site {
+        if ($is_scraper) { return 403; }
+        proxy_pass http://an_api/api/library/by-site;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_read_timeout 120s;
+        proxy_connect_timeout 10s;
+        proxy_send_timeout 60s;
+        proxy_buffering on;
+        proxy_buffer_size 16k;
+        proxy_buffers 4 32k;
+        add_header X-Robots-Tag "noindex" always;
+    }
+
     location /api/ {
         proxy_pass http://an_api/api/;
         proxy_set_header Host $host;
@@ -237,11 +276,12 @@ server {
     # what makes an upstream-returned status interceptable here at all. 500
     # too — an exception in the landing route must not take the homepage down.
     location = / {
-        # Legacy /?site={uuid} URLs redirect to the canonical /site.html?id=…
-        # for all visitors (bots included) — Googlebot follows the 301 and
-        # lands on /site.html, which has its own block below.
+        # Legacy /?site={uuid}: hand it to the API's legacy resolver
+        # internally, which answers ONE 301 to /sites/{country}/{slug}.
+        # Until 2026-09-15 this was `return 301 /site.html?id=…`, i.e. two
+        # external hops for every old share link.
         if ($arg_site ~ "^[0-9a-fA-F-]{36}$") {
-            return 301 /site.html?id=$arg_site;
+            rewrite ^ /site.html?id=$arg_site? last;
         }
         proxy_pass http://an_api/home;
         proxy_set_header Host $host;

@@ -92,13 +92,25 @@ async def sites_by_country(slug: str, db: Session = Depends(get_db)):
     if slug != country_slug(country):
         return RedirectResponse(url=f"/sites/{country_slug(country)}", status_code=301)
 
+    # thumbnail_url still points at upload.wikimedia.org for 1,710 of 5,004
+    # curated sites, and Wikimedia answers the Googlebot UA with 403 — so
+    # Google Images never saw 43 % of the hub thumbnails (render audit
+    # 2026-09-15). 1,501 of those sites have a downloaded hero in wiki_images;
+    # the hub uses it, with the same pick the detail page makes.
     site_rows = db.execute(
         text(f"""
-            SELECT id::text AS id, name, site_type, period_name, period_start,
-                   description, thumbnail_url
-            FROM unified_sites
-            WHERE {_CURATED_WHERE} AND country = :country
-            ORDER BY name
+            SELECT u.id::text AS id, u.name, u.site_type, u.period_name, u.period_start,
+                   u.description, u.thumbnail_url, h.filename AS hero_filename
+            FROM unified_sites u
+            LEFT JOIN LATERAL (
+                SELECT w.filename
+                FROM wiki_images w
+                WHERE w.site_id = u.id AND (w.is_excluded = false OR w.is_excluded IS NULL)
+                ORDER BY w.is_hero DESC, w.is_lead DESC, w.sort_order
+                LIMIT 1
+            ) h ON true
+            WHERE {_CURATED_WHERE} AND u.country = :country
+            ORDER BY u.name
         """),
         {"country": country},
     ).fetchall()
@@ -114,7 +126,11 @@ async def sites_by_country(slug: str, db: Session = Depends(get_db)):
             "site_type": row.site_type,
             "period_name": row.period_name,
             "period_start": row.period_start,
-            "thumbnail_url": row.thumbnail_url,
+            "thumbnail_url": (
+                f"/data/images/wiki/{site_id_short(row.id)}/{row.hero_filename}"
+                if row.hero_filename
+                else row.thumbnail_url
+            ),
         }
         for row in site_rows
     ]
