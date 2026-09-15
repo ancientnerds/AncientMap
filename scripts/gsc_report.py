@@ -118,12 +118,27 @@ def cmd_sitemaps(session, site_url, args):
 
 
 def cmd_resubmit(session, site_url, args):
-    """Re-submit sitemap.xml so Google downloads it again (picks up new URLs)."""
+    """Re-submit sitemap.xml AND every part it lists.
+
+    Only the index was ever submitted, so the Sitemaps API showed one row
+    without per-part download dates or errors, and Google read
+    sitemap-sites.xml once in 14 days (nginx log, 2026-09-15). Submitting
+    the parts individually makes each one visible in the report and asks
+    Google to fetch it. The PUTs are idempotent.
+    """
+    import xml.etree.ElementTree as ET
+    from urllib.parse import quote
+
     encoded = site_url.replace("/", "%2F").replace(":", "%3A")
-    sitemap = "https%3A%2F%2Fancientnerds.com%2Fsitemap.xml"
-    resp = session.put(f"{API}/sites/{encoded}/sitemaps/{sitemap}")
-    resp.raise_for_status()
-    print(f"Sitemap re-submitted for {site_url} (HTTP {resp.status_code})")
+    index_url = "https://ancientnerds.com/sitemap.xml"
+    index_xml = session.get(index_url, timeout=30)
+    index_xml.raise_for_status()
+    ns = {"sm": "http://www.sitemaps.org/schemas/sitemap/0.9"}
+    parts = [el.text.strip() for el in ET.fromstring(index_xml.content).findall(".//sm:loc", ns)]
+    for url in [index_url, *parts]:
+        resp = session.put(f"{API}/sites/{encoded}/sitemaps/{quote(url, safe='')}")
+        resp.raise_for_status()
+        print(f"submitted {url} (HTTP {resp.status_code})")
 
 
 def cmd_inspect(session, site_url, args):
