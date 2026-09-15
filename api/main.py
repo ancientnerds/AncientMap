@@ -50,6 +50,7 @@ from api.routes import (
     lyra,
     news,
     og,
+    proposals,
     radar,
     research_html,
     seo,
@@ -785,6 +786,7 @@ app.include_router(streetview.router, prefix="/api/streetview", tags=["streetvie
 app.include_router(content.router, prefix="/api/content", tags=["content"])
 app.include_router(news.router, prefix="/api/news", tags=["news"])
 app.include_router(radar.router, prefix="/api/radar", tags=["radar"])
+app.include_router(proposals.router, prefix="/api/proposals", tags=["proposals"])
 app.mount("/api/v1", create_public_api())
 app.include_router(snapshots.router, prefix="/api/snapshots", tags=["snapshots"])
 app.include_router(vector_sync.router, prefix="/api/vector-sync", tags=["vector-sync"])

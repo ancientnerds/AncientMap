@@ -757,6 +757,8 @@ def structured_llm_call(
     settings=None,
     *,
     temperature: float,
+    thinking: dict | None = None,
+    usage: dict | None = None,
 ) -> dict:
     """Call MiniMax/Anthropic with structured output enforcement.
 
@@ -768,6 +770,15 @@ def structured_llm_call(
     `temperature` is a required keyword argument so every call site picks a
     stage explicitly (no accidental defaults). Use the per-stage values on
     LyraSettings: temperature_research/synthesis/verification/narrative.
+
+    `thinking` is forwarded to call_api unchanged. Mechanical callers (the
+    prospector's mention extraction) pass ``{"type": "disabled"}``: with
+    thinking left to default, thinking_for_effort() returns adaptive for
+    EVERY effort level and reasoning tokens cost ~7x the visible output.
+
+    `usage`, when a dict is passed, receives the response's token usage
+    (input_tokens/output_tokens/cache fields) so a caller can enforce its
+    own budget — the return value is the parsed object only.
 
     Returns parsed dict. Falls back to text parsing on failure. If BOTH the
     structured attempt and the text fallback fail, raises MiniMaxTerminalError
@@ -798,13 +809,19 @@ def structured_llm_call(
         # **kwargs to _call_anthropic_api(settings, ...). Passing settings=
         # here would duplicate the positional arg and raise TypeError, which
         # is exactly what broke every structured Theo call after commit 964a66b.
+        call_kwargs: dict = {}
+        if thinking is not None:
+            call_kwargs["thinking"] = thinking
         resp = call_api(
             system=system,
             messages=[{"role": "user", "content": user_message}],
             max_tokens=max_tokens,
             response_format=response_format,
             temperature=temperature,
+            **call_kwargs,
         )
+        if usage is not None:
+            usage.update(resp.usage or {})
         if resp.stop_reason == "max_tokens":
             logger.warning(
                 "Structured LLM call hit max_tokens=%d before finishing "

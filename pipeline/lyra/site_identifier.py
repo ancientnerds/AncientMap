@@ -1249,13 +1249,24 @@ def _enrich_from_wikidata(qid: str) -> dict:
 
     result = {"qid": qid}
 
-    # P625: coordinates
+    # English label — the prospector requires _is_same_name(candidate, label)
+    # after every resolution path, because a search engine can return a real
+    # QID for the wrong building ("Sicyonian Treasury" -> Siphnian Treasury).
+    label_en = entity.get("labels", {}).get("en", {}).get("value")
+    if label_en:
+        result["label_en"] = label_en
+
+    # P625: coordinates. `precision` is in degrees and is the only signal that
+    # separates a site pin from a region centroid: Texas resolves to (31,-99)
+    # with precision 1, Great Zimbabwe to precision 0.001 (verified live).
     p625 = claims.get("P625", [])
     if p625:
         coords = p625[0].get("mainsnak", {}).get("datavalue", {}).get("value", {})
         if "latitude" in coords and "longitude" in coords:
             result["lat"] = coords["latitude"]
             result["lon"] = coords["longitude"]
+            if coords.get("precision") is not None:
+                result["coord_precision"] = float(coords["precision"])
 
     # P17: country (resolve QID to name via Wikidata API)
     p17 = claims.get("P17", [])

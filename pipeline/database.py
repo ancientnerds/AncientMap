@@ -1552,3 +1552,141 @@ def create_all_tables():
 def drop_all_tables():
     """Drop all database tables. USE WITH CAUTION!"""
     Base.metadata.drop_all(bind=engine)
+
+
+# =============================================================================
+# Site proposer ("Prospector") — migration 0015
+# Design: docs/superpowers/specs/2026-09-14-site-proposer-design.md
+# =============================================================================
+
+
+class SiteExternalId(Base):
+    """Hard identifier of a curated site: enwiki title (after redirect
+    resolution) or Wikidata QID. Site-owned and fully re-derivable, so
+    CASCADE is correct. NOT unique on (kind, value) — 115 curated rows share
+    an enwiki title with another curated row, so a lookup returns a set.
+    """
+
+    __tablename__ = "site_external_ids"
+
+    site_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("unified_sites.id", ondelete="CASCADE"), primary_key=True
+    )
+    kind: Mapped[str] = mapped_column(Text, primary_key=True)  # wikidata_qid | enwiki_title
+    value: Mapped[str] = mapped_column(Text, primary_key=True)
+    resolved_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+    def __repr__(self) -> str:
+        return f"<SiteExternalId {self.kind}={self.value} site={self.site_id}>"
+
+
+class SiteProposal(Base):
+    """A place named in our own content, adjudicated against the curated set.
+
+    status: new | needs_decision | have_it | approved | merged | rejected |
+            out_of_scope | not_a_place
+    dedup_verdict / dedup_trace: what the ladder checked and why it decided —
+            rendered on the card so a "new" never appears without its reasoning.
+    location_rung: where lat/lon came from ("wikidata_p625", "external:<source>",
+            "none") — printed literally; a rung of "none" cannot be approved.
+    Every FK into unified_sites is SET NULL (standing rule).
+    """
+
+    __tablename__ = "site_proposals"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    name_key: Mapped[str] = mapped_column(Text, nullable=False)
+    resolved_label: Mapped[str | None] = mapped_column(Text, nullable=True)
+    wikidata_qid: Mapped[str | None] = mapped_column(Text, nullable=True)
+    enwiki_title: Mapped[str | None] = mapped_column(Text, nullable=True)
+    place_class: Mapped[str] = mapped_column(Text, nullable=False)
+    lat: Mapped[float | None] = mapped_column(Float, nullable=True)
+    lon: Mapped[float | None] = mapped_column(Float, nullable=True)
+    geom: Mapped[str | None] = mapped_column(
+        Geometry(geometry_type="POINT", srid=4326, spatial_index=False), nullable=True
+    )
+    coord_precision: Mapped[float | None] = mapped_column(Float, nullable=True)
+    location_rung: Mapped[str] = mapped_column(Text, nullable=False, default="none")
+    country: Mapped[str | None] = mapped_column(Text, nullable=True)
+    country_in_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    site_type: Mapped[str | None] = mapped_column(Text, nullable=True)
+    period_start: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    period_end: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    period_name: Mapped[str | None] = mapped_column(Text, nullable=True)
+    period_phrase: Mapped[str | None] = mapped_column(Text, nullable=True)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    thumbnail_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    source_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    wikipedia_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    status: Mapped[str] = mapped_column(Text, nullable=False, default="new")
+    dedup_verdict: Mapped[str] = mapped_column(Text, nullable=False)
+    dedup_trace: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    scope_verdict: Mapped[str] = mapped_column(Text, nullable=False)
+    resolution_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    resolution_path: Mapped[str | None] = mapped_column(Text, nullable=True)
+    an_site_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("unified_sites.id", ondelete="SET NULL"), nullable=True
+    )
+    external_site_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("unified_sites.id", ondelete="SET NULL"), nullable=True
+    )
+    external_source_id: Mapped[str | None] = mapped_column(Text, nullable=True)
+    contribution_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("user_contributions.id", ondelete="SET NULL"), nullable=True
+    )
+    promoted_site_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("unified_sites.id", ondelete="SET NULL"), nullable=True
+    )
+    merged_into_site_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("unified_sites.id", ondelete="SET NULL"), nullable=True
+    )
+    evidence_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    corpus_kinds: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    reviewed_by: Mapped[str | None] = mapped_column(Text, nullable=True)
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    review_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    first_seen_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=lambda: datetime.now(UTC)
+    )
+
+    def __repr__(self) -> str:
+        return f"<SiteProposal {self.name!r} {self.status} {self.dedup_verdict}>"
+
+
+class SiteProposalEvidence(Base):
+    """One verbatim sentence of our own content that names the proposed place.
+
+    char_start/char_end index the stored source text exactly (the paper's
+    published_report, or the story's deterministic reconstruction), so the
+    quote can be re-verified and deep-linked. Proposal-owned: CASCADE.
+    """
+
+    __tablename__ = "site_proposal_evidence"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    proposal_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("site_proposals.id", ondelete="CASCADE"), nullable=False
+    )
+    corpus: Mapped[str] = mapped_column(
+        Text, nullable=False
+    )  # paper | story | radar | entities_legacy
+    source_table: Mapped[str] = mapped_column(Text, nullable=False)
+    source_pk: Mapped[str] = mapped_column(Text, nullable=False)
+    mentioned_as: Mapped[str] = mapped_column(Text, nullable=False)
+    char_start: Mapped[int] = mapped_column(Integer, nullable=False)
+    char_end: Mapped[int] = mapped_column(Integer, nullable=False)
+    quote: Mapped[str] = mapped_column(Text, nullable=False)
+    quote_start: Mapped[int] = mapped_column(Integer, nullable=False)
+    footnotes: Mapped[list[int] | None] = mapped_column(ARRAY(Integer), nullable=True)
+    locator: Mapped[str] = mapped_column(Text, nullable=False)
+    extracted_by: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    def __repr__(self) -> str:
+        return f"<SiteProposalEvidence {self.corpus}:{self.source_pk} {self.mentioned_as!r}>"

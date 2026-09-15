@@ -1240,3 +1240,83 @@
   color: rgba(255, 255, 255, 0.55);
   white-space: nowrap;
 }
+
+/* =============================================================================
+   Proposals review (prospector queue inside the radar page)
+   ============================================================================= */
+
+.radar-view-toggle {
+  display: inline-flex;
+  gap: 6px;
+  margin-left: 12px;
+}
+
+.proposals-filter {
+  margin: 0 0 12px;
+}
+
+.proposal-location {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.45);
+  margin: -2px 0 8px;
+}
+
+.proposal-evidence {
+  margin: 10px 0 6px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-accent);
+}
+
+.proposal-quote {
+  margin: 6px 0;
+  padding: 6px 10px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: rgba(232, 232, 232, 0.85);
+  border-left: 2px solid var(--accent-glow-40);
+  background: var(--accent-glow-10);
+}
+
+.proposal-quote-link {
+  display: inline-block;
+  margin-left: 8px;
+  font-size: 11px;
+  color: var(--accent-secondary);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.proposal-quote-link:hover {
+  text-decoration: underline;
+}
+
+.proposal-trace {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 4px 0 8px;
+}
+
+.proposal-trace-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.proposal-trace-row.killed {
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.proposal-trace-rung {
+  font-family: var(--font-heading);
+  font-size: 10px;
+  color: var(--accent-glow-85);
+  min-width: 56px;
+}
+
+.proposal-trace-killed {
+  color: #e8a87c;
+}

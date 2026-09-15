@@ -129,6 +129,12 @@ STEPS = {
         True,
         "Identified/enriched {n} site discoveries",
     ),
+    "prospect": (
+        "pipeline.lyra.prospector",
+        "run_daily",
+        False,
+        "Prospector: {n} proposals from new papers",
+    ),
     "library": (
         "pipeline.library_aggregator",
         "aggregate_library",
@@ -156,6 +162,7 @@ STEP_ORDER = [
     "screenshots",
     "backfill",
     "identify",
+    "prospect",
     "library",
     "tts",
 ]
@@ -165,6 +172,7 @@ STEP_ORDER = [
 STEP_INTERVALS: dict[str, int] = {
     "backfill": 24,
     "library": 24,  # Run every 24 cycles (daily)
+    "prospect": 24,  # papers are a backlog, not a pump — daily is plenty
 }
 
 # Named groups for --group CLI flag
@@ -182,7 +190,7 @@ STEP_GROUPS: dict[str, list[str]] = {
         "backfill",
         "library",
     ],
-    "radar": ["identify"],
+    "radar": ["identify", "prospect"],
 }
 
 # Tracks how many cycles have elapsed (reset on container restart is fine)

@@ -26,6 +26,7 @@ import './LyraRadarPage.css'
 
 const LyraProfileModal = lazy(() => import('../components/LyraProfileModal'))
 const RadarMap = lazy(() => import('../components/RadarMap'))
+const ProposalsReview = lazy(() => import('../components/ProposalsReview'))
 import type { RadarMapItem } from '../components/RadarMap'
 import { ApproveModal, MergeModal } from '../components/RadarReviewModals'
 
@@ -610,6 +611,11 @@ export default function LyraRadarPage() {
   const [globeHiddenByScroll, setGlobeHiddenByScroll] = useState(false)
   const [globePinned, setGlobePinned] = useState(false)
   const showGlobe = globePinned || !globeHiddenByScroll
+  // 'radar' = the YouTube-fed queue; 'proposals' = the prospector's queue
+  // (papers/stories, dedup-adjudicated). Founder-only on the API side.
+  const [view, setView] = useState<'radar' | 'proposals'>(
+    () => (window.location.hash === '#proposals' ? 'proposals' : 'radar')
+  )
   const [filtersExpanded, setFiltersExpanded] = useState(false)
   const [columnCount, setColumnCount] = useState(1)
   const [allRadarMapItems, setAllRadarMapItems] = useState<RadarItem[]>([])
@@ -1051,9 +1057,25 @@ export default function LyraRadarPage() {
             </svg>
             {showGlobe ? 'Hide globe' : 'Show globe'}
           </button>
+          {isFounder && (
+            <span className="radar-view-toggle">
+              {([['radar', 'Radar'], ['proposals', 'Proposals']] as const).map(([val, label]) => (
+                <button key={val} className={`news-page-chip${view === val ? ' active' : ''}`}
+                        onClick={() => { setView(val); window.location.hash = val === 'proposals' ? '#proposals' : '' }}>
+                  {label}
+                </button>
+              ))}
+            </span>
+          )}
 
           <AiNoticeBanner />
 
+          {view === 'proposals' && (
+            <Suspense fallback={<div className="news-page-loading">Loading…</div>}>
+              <ProposalsReview token={token} isFounder={isFounder} onViewSite={setSelectedSite} columnCount={columnCount} />
+            </Suspense>
+          )}
+          {view === 'radar' && (<>
           {error && (
             <div className="news-page-error">
               {error}
@@ -1084,6 +1106,7 @@ export default function LyraRadarPage() {
 
           {loading && <div className="news-page-loading">Loading...</div>}
           <div ref={sentinelRef} style={{ height: 1 }} />
+          </>)}
         </div>
       </div>
 
