@@ -6,6 +6,7 @@ import mapboxgl from 'mapbox-gl'
 import 'mapbox-gl/dist/mapbox-gl.css'
 import { MAPBOX, rotateMapboxToken, getMapboxToken } from '../config/mapboxConstants'
 import { applyDarkTealTheme as applyTealTheme, setupDarkFog, hexToRgba } from '../utils/mapboxTheme'
+import { isDemoMode } from '../utils/demoApi'
 
 export type MapboxTileType = 'dark' | 'satellite'
 export type ColorMode = 'category' | 'age' | 'source' | 'country'
@@ -31,6 +32,7 @@ export class MapboxGlobeService {
   private isInitialized = false
   private isInteractive = false
   private isPrimaryMode = false
+  private terrainExaggeration: number | null = null
   private currentSites: MapboxSiteData[] = []
   private pendingSitesAfterStyleLoad: MapboxSiteData[] | null = null
   private currentDotSize: number = 6  // Default dot size (matches Three.js default)
@@ -111,6 +113,9 @@ export class MapboxGlobeService {
       maxTileCacheSize: 200,
       trackResize: true,
       minZoom: MapboxGlobeService.ZOOM_MIN,  // Match entry point zoom
+      // Recordings grab frames via canvas.captureStream(); without a preserved
+      // buffer the frame can be cleared before requestFrame() samples it.
+      preserveDrawingBuffer: isDemoMode(),
     })
 
     await new Promise<void>((resolve, _reject) => {
@@ -465,6 +470,7 @@ export class MapboxGlobeService {
     this.map.once('style.load', () => {
       this.setupFog()
       this.applyDarkTealTheme()
+      this.applyTerrain()
 
       // Restore sites layer if we had one
       if (this.pendingSitesAfterStyleLoad) {
@@ -1638,6 +1644,32 @@ export class MapboxGlobeService {
   // =========================================================================
   // UTILITY
   // =========================================================================
+
+  /**
+   * DEM terrain for video recordings (demo API only). `null` removes it.
+   * Re-applied after every style switch because setStyle drops sources.
+   */
+  setTerrain(exaggeration: number | null): void {
+    this.terrainExaggeration = exaggeration
+    this.applyTerrain()
+  }
+
+  private applyTerrain(): void {
+    if (!this.map || !this.isInitialized) return
+    if (this.terrainExaggeration === null) {
+      this.map.setTerrain(null)
+      return
+    }
+    if (!this.map.getSource('mapbox-dem')) {
+      this.map.addSource('mapbox-dem', {
+        type: 'raster-dem',
+        url: 'mapbox://mapbox.mapbox-terrain-dem-v1',
+        tileSize: 512,
+        maxzoom: 14,
+      })
+    }
+    this.map.setTerrain({ source: 'mapbox-dem', exaggeration: this.terrainExaggeration })
+  }
 
   getMap(): mapboxgl.Map | null {
     return this.map

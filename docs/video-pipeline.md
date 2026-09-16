@@ -1,5 +1,10 @@
 # Weekly Video Pipeline
 
+> **See also:** the site-shorts pipeline (`python -m pipeline.video short`, vertical teasers per site,
+> MiniMax narration + ffmpeg, no Remotion/ElevenLabs) is a separate product in the same package —
+> spec in `docs/superpowers/specs/2026-09-16-site-shorts-prototype-design.md`. This weekly pipeline
+> has no `ELEVENLABS_API_KEY` configured and has not been run in production (status 2026-09-16).
+
 Automated "This Week in Archaeology" — transforms weekly articles into ~10-15 minute narrated YouTube videos.
 
 ## Architecture

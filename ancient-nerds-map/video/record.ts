@@ -14,7 +14,7 @@ import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
 import { mkdirSync, unlinkSync } from 'fs'
 import puppeteer, { type Browser, type Page } from 'puppeteer'
-import type { DemoAPI } from '../src/utils/demoApi'
+import type { CameraState, DemoAPI } from '../src/utils/demoApi'
 
 // Scene imports
 import { heroScene } from './scenes/hero.js'
@@ -26,8 +26,9 @@ import { regionalToursScene } from './scenes/regional-tours.js'
 import { empireSpotlightsScene } from './scenes/empire-spotlights.js'
 import { dataStoriesScene } from './scenes/data-stories.js'
 import { brollScene } from './scenes/b-roll.js'
+import { siteShortScenes } from './scenes/site-short.js'
 import { encodeScene } from './utils/encode.js'
-import { injectTimeControl, StreamRecorder } from './utils/capture.js'
+import { bindRecorderFunctions, injectTimeControl, StreamRecorder } from './utils/capture.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -44,7 +45,11 @@ export interface SceneContext {
 export interface SceneDefinition {
   name: string
   duration: number  // seconds
-  resolution: 'hero' | 'section' | 'tool'
+  resolution: 'hero' | 'section' | 'tool' | 'short'
+  /** Canvas to record; defaults to the Three.js globe. Mapbox scenes pass the Mapbox canvas. */
+  canvasSelector?: string
+  /** Wall-clock ms to wait per captured frame so MediaRecorder keeps up (portrait scenes need ~40). */
+  frameYieldMs?: number
   run: (ctx: SceneContext) => Promise<void>
 }
 
@@ -58,7 +63,26 @@ const ALL_SCENES: SceneDefinition[] = [
   ...empireSpotlightsScene,
   ...dataStoriesScene,
   ...brollScene,
+  ...siteShortScenes,
 ]
+
+/**
+ * CLI flags. Positional = scene name.
+ *   --portrait        1080×1920 viewport (site shorts)
+ *   --input <path>    site.json for the site-short scenes (exposed as SITE_SHORT_INPUT)
+ *   --out <dir>       where the MP4s go (default: public/landing/video)
+ */
+function parseArgs(argv: string[]): { scene?: string; portrait: boolean; input?: string; out?: string } {
+  const result: { scene?: string; portrait: boolean; input?: string; out?: string } = { portrait: false }
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i]
+    if (a === '--portrait') result.portrait = true
+    else if (a === '--input') result.input = argv[++i]
+    else if (a === '--out') result.out = argv[++i]
+    else if (!a.startsWith('--')) result.scene = a
+  }
+  return result
+}
 
 const DEV_SERVER_PORT = 5199  // High port to avoid conflicts
 const DEV_SERVER_URL = `http://localhost:${DEV_SERVER_PORT}`
@@ -95,8 +119,10 @@ async function startDevServer(): Promise<ChildProcess> {
   return vite
 }
 
-async function launchBrowser(): Promise<{ browser: Browser; page: Page }> {
-  console.log('Launching Puppeteer...')
+async function launchBrowser(portrait: boolean): Promise<{ browser: Browser; page: Page }> {
+  console.log(`Launching Puppeteer (${portrait ? '1080x1920' : '1920x1080'})...`)
+  const width = portrait ? 1080 : 1920
+  const height = portrait ? 1920 : 1080
 
   const browser = await puppeteer.launch({
     headless: false,  // Use headed mode for WebGL support on Windows
@@ -108,7 +134,7 @@ async function launchBrowser(): Promise<{ browser: Browser; page: Page }> {
       '--disable-setuid-sandbox',
       '--disable-dev-shm-usage',
       '--disable-web-security',
-      '--window-size=1920,1080',
+      `--window-size=${width},${height}`,
       // Compositor stability:
       '--run-all-compositor-stages-before-draw',
       '--disable-gpu-vsync',
@@ -119,12 +145,16 @@ async function launchBrowser(): Promise<{ browser: Browser; page: Page }> {
       '--enable-features=WebRTCPipeWireCapturer',
     ],
     defaultViewport: {
-      width: 1920,
-      height: 1080,
+      width,
+      height,
     },
   })
 
   const page = await browser.newPage()
+  page.on('console', (msg) => {
+    const text = msg.text()
+    if (text.startsWith('[DemoAPI]') || text.startsWith('[TimeControl]') || text.startsWith('[StreamRecorder]')) console.log('  browser:', text)
+  })
   await loadGlobe(page)
   return { browser, page }
 }
@@ -198,19 +228,25 @@ function createDemoProxy(page: Page): DemoAPI {
     enterMapbox: () => evalDemo(`window.__DEMO.enterMapbox()`),
     exitMapbox: () => evalDemo(`window.__DEMO.exitMapbox()`),
     mapboxJumpTo: (lng, lat, zoom, bearing, pitch) => evalDemo(`window.__DEMO.mapboxJumpTo(${lng}, ${lat}, ${zoom}${bearing !== undefined ? ', ' + bearing : ''}${pitch !== undefined ? ', ' + pitch : ''})`),
+    setTerrain: (exaggeration) => evalDemo(`window.__DEMO.setTerrain(${exaggeration === null ? 'null' : exaggeration})`),
+    mapboxOrbit: (lng, lat, zoom, pitch, b0, b1, ms) => evalDemo(`window.__DEMO.mapboxOrbit(${lng}, ${lat}, ${zoom}, ${pitch}, ${b0}, ${b1}, ${ms})`),
+    mapboxWaitIdle: (timeoutMs) => evalDemo(`window.__DEMO.mapboxWaitIdle(${timeoutMs ?? 15000})`),
     // UI control
     hideAllUI: () => evalDemo(`window.__DEMO.hideAllUI()`),
     showUI: () => evalDemo(`window.__DEMO.showUI()`),
+    getCameraState: () => page.evaluate('window.__DEMO.getCameraState()') as Promise<CameraState>,
     isReady: () => { throw new Error('Use page.evaluate for isReady') },
     waitUntilReady: () => evalDemo(`window.__DEMO.waitUntilReady()`),
   }
 }
 
 async function main() {
-  const requestedScene = process.argv[2]
+  const args = parseArgs(process.argv.slice(2))
+  const requestedScene = args.scene
+  if (args.input) process.env.SITE_SHORT_INPUT = args.input
 
   const baseDir = __dirname
-  const outputDir = join(baseDir, '..', 'public', 'landing', 'video')
+  const outputDir = args.out ?? join(baseDir, '..', 'public', 'landing', 'video')
   const webmDir = join(baseDir, 'output')
 
   // Ensure output dirs exist
@@ -220,9 +256,10 @@ async function main() {
   // Determine which scenes to run
   let scenes = ALL_SCENES
   if (requestedScene) {
-    scenes = ALL_SCENES.filter(s => s.name === requestedScene)
-    if (scenes.length === 0) {
-      console.error(`Unknown scene: ${requestedScene}`)
+    const wanted = requestedScene.split(',')
+    scenes = ALL_SCENES.filter(s => wanted.includes(s.name))
+    if (scenes.length !== wanted.length) {
+      console.error(`Unknown scene(s) in: ${requestedScene}`)
       console.error(`Available scenes: ${ALL_SCENES.map(s => s.name).join(', ')}`)
       process.exit(1)
     }
@@ -236,8 +273,9 @@ async function main() {
     devServer = await startDevServer()
 
     // Launch browser
-    const { browser: b, page } = await launchBrowser()
+    const { browser: b, page } = await launchBrowser(args.portrait)
     browser = b
+    await bindRecorderFunctions(page)
 
     // Create demo API proxy
     const demo = createDemoProxy(page)
@@ -272,7 +310,7 @@ async function main() {
       console.log('='.repeat(50))
 
       // Create and start a fresh StreamRecorder for this scene
-      const recorder = new StreamRecorder({ fps })
+      const recorder = new StreamRecorder({ fps, canvasSelector: scene.canvasSelector, frameYieldMs: scene.frameYieldMs })
       await recorder.start(page)
 
       const ctx: SceneContext = {

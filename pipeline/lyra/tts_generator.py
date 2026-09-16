@@ -110,8 +110,12 @@ def strip_citations(text: str) -> str:
 # ---------------------------------------------------------------------------
 
 
-def call_minimax_tts(text: str, speed: float = 1.0) -> bytes:
-    """Synthesize a single text chunk via MiniMax TTS. Returns raw MP3 bytes."""
+def call_minimax_tts(text: str, speed: float = 1.0, voice_id: str = VOICE_ID) -> bytes:
+    """Synthesize a single text chunk via MiniMax TTS. Returns raw MP3 bytes.
+
+    `voice_id` defaults to the paper narrator; the site-shorts pipeline passes
+    its own voice so both callers share one HTTP path.
+    """
     api_key = os.getenv("LYRA_MINIMAX_API_KEY", "")
     if not api_key:
         raise RuntimeError("LYRA_MINIMAX_API_KEY not set")
@@ -131,7 +135,7 @@ def call_minimax_tts(text: str, speed: float = 1.0) -> bytes:
                 "output_format": "hex",
                 "language_boost": "English",
                 "voice_setting": {
-                    "voice_id": VOICE_ID,
+                    "voice_id": voice_id,
                     "speed": speed,
                     "vol": 1.0,
                     "pitch": 0,

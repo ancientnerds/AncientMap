@@ -11,6 +11,13 @@
 import type { FilterMode } from '../App'
 import type { SiteData } from '../data/sites'
 
+export interface CameraState {
+  distance: number
+  lat: number
+  lng: number
+  animating: boolean
+}
+
 export interface DemoAPI {
   // Camera
   flyTo(lng: number, lat: number): Promise<void>
@@ -51,12 +58,20 @@ export interface DemoAPI {
   enterMapbox(): Promise<void>
   exitMapbox(): void
   mapboxJumpTo(lng: number, lat: number, zoom: number, bearing?: number, pitch?: number): void
+  /** Mapbox DEM terrain for recordings (null disables). Demo-only; the live globe never calls it. */
+  setTerrain(exaggeration: number | null): void
+  /** Sweep the Mapbox bearing from→to around a fixed centre; synthetic-time safe like smoothZoom. */
+  mapboxOrbit(lng: number, lat: number, zoom: number, pitch: number, bearingFrom: number, bearingTo: number, durationMs: number): void
+  /** Resolves once Mapbox reports `idle` (all tiles loaded) or after `timeoutMs`. */
+  mapboxWaitIdle(timeoutMs?: number): Promise<void>
 
   // UI control
   hideAllUI(): void
   showUI(): void
 
   // Status
+  /** Camera distance from the globe centre and the surface point under it (scene debugging). */
+  getCameraState(): CameraState | Promise<CameraState>
   isReady(): boolean
   waitUntilReady(): Promise<void>
 }
@@ -132,7 +147,8 @@ export function registerAppDemoApi(setters: AppDemoSetters): void {
 export interface GlobeDemoRefs {
   isAutoRotatingRef: React.MutableRefObject<boolean>
   manualRotationRef: React.MutableRefObject<boolean>
-  sceneRef: React.MutableRefObject<{ camera: { position: { setLength(d: number): void } }; controls: { update(): void } } | null>
+  sceneRef: React.MutableRefObject<{ camera: { position: { setLength(d: number): void; length(): number; x: number; y: number; z: number } }; controls: { update(): void } } | null>
+  cameraAnimationRef: React.MutableRefObject<number | null>
   warpCompleteForLabelsRef: React.MutableRefObject<boolean>
   dotsAnimationCompleteRef: React.MutableRefObject<boolean>
   flyToDurationRef: React.MutableRefObject<number>
@@ -270,6 +286,47 @@ export function registerGlobeDemoApi(refs: GlobeDemoRefs): void {
       if (map) {
         map.jumpTo({ center: [lng, lat], zoom, bearing: bearing ?? 0, pitch: pitch ?? 0 })
       }
+    },
+    setTerrain: (exaggeration) => {
+      const mapbox = refs.mapboxServiceRef.current
+      if (!mapbox?.getIsInitialized()) {
+        console.warn('[DemoAPI] Mapbox not initialized')
+        return
+      }
+      mapbox.setTerrain(exaggeration)
+    },
+    mapboxOrbit: (lng, lat, zoom, pitch, bearingFrom, bearingTo, durationMs) => {
+      const map = refs.mapboxServiceRef.current?.getMap()
+      if (!map) {
+        console.warn('[DemoAPI] Mapbox not initialized')
+        return
+      }
+      const startTime = performance.now()
+      const step = () => {
+        const t = Math.min((performance.now() - startTime) / durationMs, 1)
+        const eased = t * t * (3 - 2 * t) // smoothstep
+        map.jumpTo({ center: [lng, lat], zoom, pitch, bearing: bearingFrom + (bearingTo - bearingFrom) * eased })
+        if (t < 1) requestAnimationFrame(step)
+      }
+      step()
+    },
+    mapboxWaitIdle: (timeoutMs = 15000) => {
+      return new Promise<void>((resolve) => {
+        const map = refs.mapboxServiceRef.current?.getMap()
+        if (!map) { resolve(); return }
+        const timer = setTimeout(resolve, timeoutMs)
+        map.once('idle', () => { clearTimeout(timer); resolve() })
+      })
+    },
+    getCameraState: () => {
+      const scene = refs.sceneRef.current
+      if (!scene) return { distance: 0, lat: 0, lng: 0, animating: false }
+      const { x, y, z } = scene.camera.position
+      const distance = scene.camera.position.length()
+      const lat = Math.asin(y / distance) * (180 / Math.PI)
+      // Inverse of useFlyToAnimation's lat/lng → direction mapping.
+      const lng = Math.atan2(z, -x) * (180 / Math.PI) - 180
+      return { distance, lat, lng: lng < -180 ? lng + 360 : lng, animating: refs.cameraAnimationRef.current !== null }
     },
     isReady: () => {
       return refs.warpCompleteForLabelsRef.current && refs.dotsAnimationCompleteRef.current

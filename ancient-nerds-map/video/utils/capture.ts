@@ -55,13 +55,37 @@ export async function injectTimeControl(page: Page, fps: number): Promise<void> 
  * Records video directly from the WebGL canvas using captureStream + MediaRecorder.
  * Eliminates per-frame CDP screenshots — Chrome encodes VP9 in a background thread.
  */
+/**
+ * Page bindings survive reloads but cannot be exposed twice on the same page
+ * (Puppeteer throws "already exists"). Bind once per page here and route the
+ * chunks to whichever recorder is active — each scene creates a fresh one.
+ */
+let activeRecorder: StreamRecorder | null = null
+
+export async function bindRecorderFunctions(page: Page): Promise<void> {
+  await page.exposeFunction('__saveVideoChunk', (base64: string) => {
+    activeRecorder?.pushChunk(base64)
+  })
+  await page.exposeFunction('__logProgress', (msg: string) => {
+    process.stdout.write(msg)
+  })
+}
+
 export class StreamRecorder {
   private readonly fps: number
+  private readonly canvasSelector: string
+  private readonly frameYieldMs: number
   private chunks: Buffer[] = []
   private frameCount = 0
 
-  constructor(options: { fps?: number }) {
+  constructor(options: { fps?: number; canvasSelector?: string; frameYieldMs?: number }) {
     this.fps = options.fps ?? 24
+    // Three.js canvas by default; Mapbox scenes record `.mapbox-globe-container canvas`.
+    this.canvasSelector = options.canvasSelector ?? '.globe-container canvas'
+    // Wall-clock pause after each requestFrame() so the VP8 encoder drains.
+    // Synthetic time makes this free for the animation; 0 ms dropped 60 % of
+    // 1080×1920 frames (36/97, Machu Picchu approach, 2026-09-16).
+    this.frameYieldMs = options.frameYieldMs ?? 0
   }
 
   /**
@@ -71,21 +95,12 @@ export class StreamRecorder {
   async start(page: Page): Promise<void> {
     this.chunks = []
     this.frameCount = 0
-
-    // Expose function to receive binary chunks from the browser
-    await page.exposeFunction('__saveVideoChunk', (base64: string) => {
-      this.chunks.push(Buffer.from(base64, 'base64'))
-    })
-
-    // Expose function for progress logging from browser context
-    await page.exposeFunction('__logProgress', (msg: string) => {
-      process.stdout.write(msg)
-    })
+    activeRecorder = this
 
     // Find the WebGL canvas and start captureStream + MediaRecorder
     await page.evaluate(`(function() {
-      var canvas = document.querySelector('.globe-container canvas');
-      if (!canvas) throw new Error('No canvas found in .globe-container');
+      var canvas = document.querySelector(${JSON.stringify(this.canvasSelector)});
+      if (!canvas) throw new Error('No canvas found for ' + ${JSON.stringify(this.canvasSelector)});
 
       // captureStream(0) = manual frame requests only (no automatic capture)
       var stream = canvas.captureStream(0);
@@ -157,7 +172,7 @@ export class StreamRecorder {
         // 4. Yield to event loop so the VP8 encoder can process the frame.
         // Without this, requestFrame() calls pile up faster than the
         // encoder can handle, causing frame drops in the WebM.
-        await new Promise(function(r) { setTimeout(r, 0); });
+        await new Promise(function(r) { setTimeout(r, ${this.frameYieldMs}); });
 
         // Progress logging every 30 frames
         if ((i + 1) % 30 === 0 || i === totalFrames - 1) {
@@ -170,6 +185,11 @@ export class StreamRecorder {
 
     this.frameCount += totalFrames
     console.log('')
+  }
+
+  /** Receive one base64 WebM chunk from the page binding. */
+  pushChunk(base64: string): void {
+    this.chunks.push(Buffer.from(base64, 'base64'))
   }
 
   /**
