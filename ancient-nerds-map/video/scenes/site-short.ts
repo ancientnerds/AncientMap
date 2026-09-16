@@ -30,6 +30,8 @@ interface SiteInput {
   name: string
   lat: number
   lng: number
+  /** Orbit zoom by site type (pipeline/video/shorts_export.orbit_zoom_for); SITE_ZOOM if absent. */
+  orbit_zoom?: number
 }
 
 const HOLD_S = 0.1 // must match OPENING_TRIM_S in pipeline/video/shorts_render.py
@@ -54,7 +56,7 @@ const NATURAL_FOG = {
 const CLUTTER_LAYERS = '^(tunnel|road|bridge|sites)-|^aerialway$|^(path-pedestrian|ferry-aerialway|poi|transit|airport|settlement-subdivision)-label$'
 // z2.2 fills the portrait width with the globe; z1.6 left it a small ball.
 const SPACE_ZOOM = 2.2
-const SITE_ZOOM = 14.2
+const SITE_ZOOM = 14.2 // default orbit zoom; site.json overrides per site type
 const ORBIT_PITCH = 62
 const ORBIT_BEARING_FROM = 20
 const ORBIT_BEARING_TO = 110
@@ -86,19 +88,26 @@ function spacePose(site: SiteInput): MapboxKeyframe {
   return { at: 0, lng: site.lng + START_LNG_OFFSET, lat: site.lat + START_LAT_OFFSET, zoom: SPACE_ZOOM, pitch: 0, bearing: 0 }
 }
 
+function orbitZoom(site: SiteInput): number {
+  return site.orbit_zoom ?? SITE_ZOOM
+}
+
 function orbitEndPose(site: SiteInput): MapboxKeyframe {
-  return { at: 0, lng: site.lng, lat: site.lat, zoom: SITE_ZOOM, pitch: ORBIT_PITCH, bearing: ORBIT_BEARING_TO }
+  return { at: 0, lng: site.lng, lat: site.lat, zoom: orbitZoom(site), pitch: ORBIT_PITCH, bearing: ORBIT_BEARING_TO }
 }
 
 function openingPath(site: SiteInput): MapboxKeyframe[] {
   const space = spacePose(site)
   const here = { lng: site.lng, lat: site.lat }
   const t = (s: number) => s / OPENING_TAKE_S
+  // Terrain off while in space and switched on for the zoom: the return flight
+  // ends with terrain off, and the two loop frames must render identically
+  // (Greenland's ice sheet showed a visible difference with terrain on).
   return [
-    space,
+    { ...space, terrain: null },
     { ...space, at: t(HOLD_S) },
-    { at: t(HOLD_S + ROTATE_S), ...here, zoom: SPACE_ZOOM, pitch: 0, bearing: 0 },
-    { at: t(HOLD_S + ROTATE_S + ZOOM_S), ...here, zoom: SITE_ZOOM, pitch: ORBIT_PITCH, bearing: ORBIT_BEARING_FROM },
+    { at: t(HOLD_S + ROTATE_S), ...here, zoom: SPACE_ZOOM, pitch: 0, bearing: 0, terrain: TERRAIN_EXAGGERATION },
+    { at: t(HOLD_S + ROTATE_S + ZOOM_S), ...here, zoom: orbitZoom(site), pitch: ORBIT_PITCH, bearing: ORBIT_BEARING_FROM },
     { ...orbitEndPose(site), at: 1 },
   ]
 }

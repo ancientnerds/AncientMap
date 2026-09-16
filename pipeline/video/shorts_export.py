@@ -20,6 +20,93 @@ from pipeline.sites_html_renderer import site_path
 
 ASSETS_ROOT = Path(__file__).resolve().parents[2] / "video-assets" / "shorts"
 
+# Orbit zoom for the 3D flyover by site type: a stone circle needs z16 to be
+# visible, a city or a geoglyph field needs z13.5 to fit. Unlisted types get
+# ORBIT_ZOOM_DEFAULT (tuned on Machu Picchu).
+ORBIT_ZOOM_DEFAULT = 14.2
+ORBIT_ZOOM_BY_TYPE: dict[str, float] = {
+    **dict.fromkeys(
+        [
+            "Megalithic structures",
+            "Megalithic stones",
+            "Megalithic statues",
+            "Megalithic walls",
+            "Megalithic",
+            "Stone circle",
+            "Dolmen",
+            "Henge",
+            "Timber circle",
+            "Monument",
+            "Sculptured stone",
+            "Rock art",
+            "Petroglyphs",
+            "Rock relief/carving",
+            "Mound/tumulus",
+            "Barrow",
+            "Cairn",
+            "Gate/archway/bridge",
+            "Minaret/tower",
+            "Theatre",
+            "Well",
+            "Tomb",
+            "Church/cathedral",
+            "Mosque",
+            "Temple",
+            "Inscription",
+            "Bath",
+            "Sanctuary",
+            "Polygonal masonry",
+            "Sacred site",
+        ],
+        16.0,
+    ),
+    **dict.fromkeys(
+        [
+            "Temple complex",
+            "Pyramid complex",
+            "Necropolis/tombs complex",
+            "Castle/palace",
+            "Palace",
+            "Fortress/citadel",
+            "Fortress",
+            "Fortification",
+            "Wall",
+            "Earthwork",
+            "Museum",
+            "Residence/villa/farmhouse",
+            "Forum",
+            "Cemetery",
+            "Archaeological site",
+            "Port",
+            "Quarry",
+            "Mine/quarry",
+            "Reservoir/aqueduct/canal",
+            "Cave Structures",
+        ],
+        15.0,
+    ),
+    **dict.fromkeys(
+        [
+            "City/town/settlement",
+            "City",
+            "Settlement",
+            "Geoglyphs",
+            "Road/avenue/trackway",
+            "Underwater structures",
+            "Geological interest",
+            "Natural feature",
+            "Magnetic anomaly",
+            "Infrastructure",
+        ],
+        13.5,
+    ),
+}
+
+
+def orbit_zoom_for(site_type: str | None) -> float:
+    return ORBIT_ZOOM_BY_TYPE.get(site_type or "", ORBIT_ZOOM_DEFAULT)
+
+
 # Tier names mirror api/cardgame/constants.RARITY_TIERS (pipeline may not import api).
 RARITY_NAMES: dict[int, str] = {5: "Legendary", 4: "Epic", 3: "Rare", 2: "Uncommon", 1: "Common"}
 
@@ -69,6 +156,7 @@ def assemble_site(row: Mapping, images: list[Mapping]) -> dict:
         "lat": float(row["lat"]),
         "lng": float(row["lon"]),
         "site_type": row["site_type"],
+        "orbit_zoom": orbit_zoom_for(row["site_type"]),
         "period_name": row["period_name"],
         "page_path": site_path(row["country"] or "", row["name"], row["id"]),
         "card_text": (row["card_description"] or "").strip(),

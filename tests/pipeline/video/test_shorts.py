@@ -5,7 +5,8 @@ from pathlib import Path
 import pytest
 
 from pipeline.video.media import ff_path
-from pipeline.video.shorts_export import RARITY_NAMES, assemble_site
+from pipeline.video.shorts_audit import evaluate, passed
+from pipeline.video.shorts_export import RARITY_NAMES, assemble_site, orbit_zoom_for
 from pipeline.video.shorts_images import local_image_name
 from pipeline.video.shorts_render import (
     DISSOLVE_S,
@@ -327,6 +328,13 @@ class TestExportShape:
         assert site["page_path"].startswith("/sites/peru/machu-picchu-")
         assert site["card_text"] == "card" and site["lng"] == -72.54
         assert site["images"][0]["is_hero"] is True and site["stats"]["mystery"] == 4
+        assert site["orbit_zoom"] == 15.0  # Fortress/citadel
+
+    def test_orbit_zoom_by_site_type(self):
+        assert orbit_zoom_for("Stone circle") == 16.0
+        assert orbit_zoom_for("Geoglyphs") == 13.5
+        assert orbit_zoom_for("Something new") == 14.2
+        assert orbit_zoom_for(None) == 14.2
 
 
 def test_local_image_name_is_filesystem_safe_and_keeps_original_extension():
@@ -335,3 +343,62 @@ def test_local_image_name_is_filesystem_safe_and_keeps_original_extension():
         local_image_name(3, "Machu_Picchu.webp", "https://upload.wikimedia.org/x/Machu_Picchu.JPG")
         == "03_Machu_Picchu.jpg"
     )
+
+
+def _measurements(**over):
+    m = {
+        "width": 1080,
+        "height": 1920,
+        "fps": 60,
+        "duration": 18.74,
+        "narration_s": 15.12,
+        "opening_frames": 358,
+        "return_frames": 178,
+        "luma_samples": [(0.0, 40.0), (0.25, 42.0), (6.0, 60.0)],
+        "loop_seam": 1.1,
+        "lufs": -14.3,
+        "peak_dbfs": -1.4,
+        "voice_start_db": -5.9,
+        "name_at": 15.93,
+        "name_window_db": -1.5,
+        "tail_db": -91.0,
+        "stills_kept": 8,
+        "stills_rejected": 4,
+        "stills_used": 3,
+        "name_lines": 1,
+    }
+    m.update(over)
+    return m
+
+
+class TestAudit:
+    def test_clean_short_passes_every_check(self):
+        checks = evaluate(_measurements())
+        assert passed(checks)
+        assert {c.name for c in checks} >= {
+            "duration",
+            "no_black_frames",
+            "loop_seam",
+            "name_spoken",
+        }
+
+    def test_black_frames_and_missing_name_fail(self):
+        checks = evaluate(
+            _measurements(luma_samples=[(0.0, 40.0), (1.5, 8.0)], name_window_db=-30.0)
+        )
+        failed = {c.name for c in checks if not c.ok}
+        assert failed == {"no_black_frames", "name_spoken"}
+
+    def test_duration_expects_narration_tail_and_return(self):
+        assert passed(evaluate(_measurements(duration=15.12 + 0.6 + 3.0)))
+        assert not passed(evaluate(_measurements(duration=16.0)))
+        # without a return clip the duration expectation drops the 3 s (the
+        # missing clip itself still fails its own check)
+        checks = evaluate(_measurements(return_frames=0, duration=15.72))
+        assert next(c for c in checks if c.name == "duration").ok
+        assert not next(c for c in checks if c.name == "return_clip").ok
+
+    def test_loudness_peak_and_seam_thresholds(self):
+        assert not passed(evaluate(_measurements(lufs=-17.0)))
+        assert not passed(evaluate(_measurements(peak_dbfs=-0.3)))
+        assert not passed(evaluate(_measurements(loop_seam=5.0)))

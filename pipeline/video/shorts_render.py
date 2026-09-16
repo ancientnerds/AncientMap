@@ -415,7 +415,7 @@ def render_short(site: dict, stills: list[dict], site_dir: Path, voice_id: str) 
     closing = (closing_clip, probe_duration(closing_clip)) if closing_clip.exists() else None
 
     narration_s = probe_duration(narration)
-    plan = dict(opening=opening, closing=closing, opening_start=OPENING_TRIM_S)
+    plan = {"opening": opening, "closing": closing, "opening_start": OPENING_TRIM_S}
     # First pass sizes the slots; the stills that fit (best scores first) are
     # then shown in narration order, and the plan is rebuilt with that order.
     draft = plan_timeline(
