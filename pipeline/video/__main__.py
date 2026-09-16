@@ -1,12 +1,13 @@
 """CLI: build one site short.
 
-    python -m pipeline.video short --name "Machu Picchu" [--voice ID] [--images 8]
+    python -m pipeline.video short --name "Machu Picchu" [--voice ID]
     python -m pipeline.video short --site-id <uuid> --steps tts,render
 
-Steps run in order export → images → tts → render; each reads what the previous
-one wrote into `video-assets/shorts/<slug>/`. The globe clips are recorded
-separately (`npm run video:record -- site-short --portrait --input <site.json>
---out <dir>/clips`) and picked up by the render step when present.
+Steps run in order export → images → select → tts → render; each reads what the
+previous one wrote into `video-assets/shorts/<slug>/`. Only `export` needs the
+database. The globe clips are recorded separately (`npm run video:record --
+short-opening,short-return --portrait --fps 60 --input <site.json> --out
+<dir>/clips`) and picked up by the render step when present.
 """
 
 from __future__ import annotations
@@ -20,9 +21,9 @@ from pathlib import Path
 
 from pipeline.article_html_renderer import slugify
 from pipeline.database import get_session
-from pipeline.video import shorts_export, shorts_images, shorts_render, shorts_tts
+from pipeline.video import shorts_export, shorts_images, shorts_render, shorts_select, shorts_tts
 
-ALL_STEPS = ("export", "images", "tts", "render")
+ALL_STEPS = ("export", "images", "select", "tts", "render")
 
 
 def _parse(argv: list[str]) -> argparse.Namespace:
@@ -34,7 +35,12 @@ def _parse(argv: list[str]) -> argparse.Namespace:
     who.add_argument("--name", help="exact site name; highest-rarity card wins")
     s.add_argument("--voice", default=shorts_tts.DEFAULT_VOICE)
     s.add_argument("--speed", type=float, default=shorts_tts.DEFAULT_SPEED)
-    s.add_argument("--images", type=int, default=8, help="max images to download")
+    s.add_argument("--images", type=int, default=40, help="max images to download")
+    s.add_argument(
+        "--no-vlm",
+        action="store_true",
+        help="select by aspect + hash only (no MiniMax VLM judgement)",
+    )
     s.add_argument("--steps", default=",".join(ALL_STEPS))
     return ap.parse_args(argv)
 
@@ -61,6 +67,41 @@ def _exported_site_dir(args: argparse.Namespace) -> Path:
     raise SystemExit(f"no export for site id {args.site_id}; run the export step first")
 
 
+def _select(site: dict, site_dir: Path, use_vlm: bool) -> None:
+    images = json.loads((site_dir / "images.json").read_text(encoding="utf-8"))
+    cands = [
+        shorts_select.Candidate(
+            image=img,
+            width=int(img["width"]),
+            height=int(img["height"]),
+            dhash=shorts_select.hash_image(Path(img["local_path"])),
+        )
+        for img in images
+    ]
+    if use_vlm:
+        verdicts = shorts_select.judge_all(
+            [Path(i["local_path"]) for i in images], site["name"], site["card_text"]
+        )
+        for cand, verdict in zip(cands, verdicts, strict=True):
+            cand.verdict = verdict
+    kept, rejected = shorts_select.select_stills(cands, require_verdict=use_vlm)
+    selection = {
+        "stills": [
+            {**c.image, "verdict": c.verdict, "score": round(shorts_select.score(c), 2)}
+            for c in kept
+        ],
+        "rejected": [{"filename": c.image["filename"], "reason": why} for c, why in rejected],
+    }
+    (site_dir / "selection.json").write_text(
+        json.dumps(selection, indent=2, ensure_ascii=False), encoding="utf-8"
+    )
+    for c in kept:
+        logging.info("keep  %5.2f %s", shorts_select.score(c), Path(c.image["local_path"]).name)
+    for c, why in rejected:
+        logging.info("drop  %-28s %s", why, Path(c.image["local_path"]).name)
+    logging.info("%d stills selected, %d rejected", len(kept), len(rejected))
+
+
 def run_short(args: argparse.Namespace) -> Path | None:
     steps = [s.strip() for s in args.steps.split(",") if s.strip()]
     unknown = set(steps) - set(ALL_STEPS)
@@ -85,6 +126,9 @@ def run_short(args: argparse.Namespace) -> Path | None:
         )
         logging.info("%d/%d images on disk", len(landed), min(args.images, len(site["images"])))
 
+    if "select" in steps:
+        _select(site, site_dir, use_vlm=not args.no_vlm)
+
     if "tts" in steps:
         shorts_tts.narrate(
             site["card_text"], site_dir / "narration.mp3", voice_id=args.voice, speed=args.speed
@@ -95,8 +139,8 @@ def run_short(args: argparse.Namespace) -> Path | None:
         )
 
     if "render" in steps:
-        images = json.loads((site_dir / "images.json").read_text(encoding="utf-8"))
-        return shorts_render.render_short(site, images, site_dir, voice_id=args.voice)
+        selection = json.loads((site_dir / "selection.json").read_text(encoding="utf-8"))
+        return shorts_render.render_short(site, selection["stills"], site_dir, voice_id=args.voice)
     return None
 
 

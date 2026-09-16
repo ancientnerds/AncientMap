@@ -14,7 +14,7 @@ from pipeline.video.media import probe_duration
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_VOICE = "English_CaptivatingStoryteller"
+DEFAULT_VOICE = "English_expressive_narrator"  # user pick 2026-09-16 (paper narrator)
 DEFAULT_SPEED = 0.92
 
 

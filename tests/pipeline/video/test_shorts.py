@@ -1,4 +1,4 @@
-"""Pure-function tests for the site-shorts pipeline (no network, no ffmpeg)."""
+"""Pure-function tests for the site-shorts pipeline (no network, no ffmpeg, no VLM)."""
 
 from pathlib import Path
 
@@ -8,24 +8,31 @@ from pipeline.video.media import ff_path
 from pipeline.video.shorts_export import RARITY_NAMES, assemble_site
 from pipeline.video.shorts_images import local_image_name
 from pipeline.video.shorts_render import (
+    DISSOLVE_S,
     NAME_AUDIO_DELAY_S,
     NARRATION_TAIL_S,
     build_description,
     clip_filter,
-    is_portrait,
+    final_graph,
     name_alpha,
     name_audio_at,
-    pan_filter,
     plan_timeline,
+    pushin_filter,
+    stills_graph,
     wrap_lines,
 )
+from pipeline.video.shorts_select import (
+    Candidate,
+    aspect_penalty,
+    is_panorama,
+    normalize_subject,
+    order_by_narration,
+    reject_reason,
+    score,
+    select_stills,
+)
 
-IMGS = [
-    (Path("a.jpg"), 4320, 3240),
-    (Path("b.jpg"), 1600, 1200),
-    (Path("c.jpg"), 1600, 1200),
-    (Path("d.jpg"), 1600, 1200),
-]
+IMGS = [Path("a.jpg"), Path("b.jpg"), Path("c.jpg"), Path("d.jpg")]
 OPENING = (Path("short-opening.mp4"), 6.0)
 RETURN = (Path("short-return.mp4"), 3.0)
 
@@ -39,10 +46,10 @@ class TestPlanTimeline:
         segs = plan_timeline(narration_s=16.4, images=IMGS, opening=OPENING, closing=RETURN)
         kinds = [s.kind for s in segs]
         # 17.0 s narration span: 6 s opening, 11 s over 4 stills (3.5 s max each), then the return
-        assert kinds == ["clip", "pan", "pan", "pan", "pan", "return"]
+        assert kinds == ["clip", "still", "still", "still", "still", "return"]
         assert segs[0].duration == 6.0 and segs[0].start == 0.0
         assert segs[1].duration == pytest.approx(11.0 / 4)
-        assert [s.forward for s in segs[1:5]] == [True, False, True, False]
+        assert [s.source for s in segs[1:5]] == ["a.jpg", "b.jpg", "c.jpg", "d.jpg"]
         assert segs[-1].duration == 3.0  # never shortened: its last frame is the loop point
         assert _total(segs) == pytest.approx(17.0 + 3.0)
 
@@ -52,7 +59,7 @@ class TestPlanTimeline:
 
     def test_without_return_clip_name_audio_follows_the_stills(self):
         segs = plan_timeline(narration_s=6.0, images=IMGS, opening=None, closing=None)
-        assert [s.kind for s in segs] == ["pan", "pan"]
+        assert [s.kind for s in segs] == ["still", "still"]
         assert name_audio_at(segs) == pytest.approx(6.0 + NARRATION_TAIL_S)
 
     def test_long_opening_is_capped_at_the_narration_span(self):
@@ -68,14 +75,34 @@ class TestPlanTimeline:
         )
         assert [s.kind for s in segs] == ["clip"]
 
-    def test_portrait_stills_pan_vertically(self):
-        tall = [(Path("tall.jpg"), 1000, 3000)]
-        segs = plan_timeline(narration_s=3.0, images=tall, opening=None, closing=None)
-        assert segs[0].kind == "pan" and segs[0].vertical is True
+    def test_fewer_stills_than_slots_get_longer_slots(self):
+        segs = plan_timeline(narration_s=10.0, images=IMGS[:2], opening=None, closing=None)
+        assert [s.kind for s in segs] == ["still", "still"]
+        assert segs[0].duration == pytest.approx(5.3)
 
-    def test_requires_an_image(self):
+    def test_requires_a_still(self):
         with pytest.raises(ValueError):
             plan_timeline(narration_s=5.0, images=[], opening=None, closing=None)
+
+
+class TestStillsGraph:
+    def test_dissolves_keep_the_total_length(self):
+        lengths, graph = stills_graph([2.75, 2.75, 2.75])
+        assert lengths == [2.75 + DISSOLVE_S, 2.75 + DISSOLVE_S, 2.75]
+        assert graph.count("xfade=transition=fade") == 2
+        assert "offset=2.750[x1]" in graph and "offset=5.500[out]" in graph
+        assert "[x1][v2]xfade" in graph
+
+    def test_single_still_has_no_dissolve(self):
+        lengths, graph = stills_graph([4.0])
+        assert lengths == [4.0]
+        assert "xfade" not in graph and graph.endswith("[out]")
+
+    def test_pushin_zooms_from_100_to_106_percent(self):
+        f = pushin_filter(2.75)
+        assert f.startswith("scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,")
+        assert "scale=eval=frame:w='iw*(1+0.06*t/2.750)':h='ih*(1+0.06*t/2.750)'" in f
+        assert f.endswith("crop=1080:1920,fps=60,format=yuv420p")
 
 
 class TestText:
@@ -128,26 +155,22 @@ class TestFilters:
     def test_ff_path_escapes_drive_colon_and_backslashes(self):
         assert ff_path(Path(r"C:\x\fonts\a.ttf")) == "C\\:/x/fonts/a.ttf"
 
-    def test_pan_filter_moves_from_30_to_70_percent_eased(self):
-        fwd = pan_filter(2.75, forward=True, vertical=False)
-        assert "scale=1080:1920:force_original_aspect_ratio=increase" in fwd
-        assert "x='(iw-ow)*(0.3+0.4*(t/2.750)*(t/2.750)*(3-2*(t/2.750)))':y=0" in fwd
-        back = pan_filter(2.75, forward=False, vertical=False)
-        assert "x='(iw-ow)*(0.7-0.4*(t/2.750)*(t/2.750)*(3-2*(t/2.750)))':y=0" in back
-        tall = pan_filter(2.0, forward=True, vertical=True)
-        assert "x=0:y='(ih-oh)*(0.3+0.4*(t/2.000)*(t/2.000)*(3-2*(t/2.000)))'" in tall
-        assert "fps=60" in fwd
-
-    def test_is_portrait_threshold(self):
-        assert is_portrait(1000, 3000) is True
-        assert is_portrait(1600, 1200) is False
-        assert is_portrait(1080, 1920) is False  # exactly 9:16 fills the frame, no overflow
-
     def test_name_alpha_is_gone_before_the_loop_point(self):
         expr = name_alpha(3.0)
         assert expr.startswith("if(lt(t\\,0.3)\\,t/0.3\\,")
         assert "if(gt(t\\,2.850)\\,0\\," in expr  # fully transparent for the last 0.15 s
         assert "gt(t\\,2.350)" in expr and "(2.850-t)/0.5" in expr
+
+    def test_final_graph_grades_video_and_processes_both_voices(self):
+        g = final_graph(16.7, 19.5)
+        assert g.startswith("[0:v]eq=saturation=0.78") and "[vout];" in g
+        assert g.count("acompressor=") == 2 and g.count("aecho=") == 2
+        assert "adelay=16700:all=1,apad=whole_dur=19.500[n]" in g
+        assert g.count("apad=whole_dur=19.500") == 2  # bounded, never open-ended
+        assert g.endswith(
+            "amix=inputs=2:duration=longest:normalize=0,atrim=duration=19.500,"
+            "loudnorm=I=-14:TP=-1.5:LRA=9[a]"
+        )
 
     def test_clip_filter_adds_name_only_for_the_return(self, tmp_path):
         credit = tmp_path / "credit.txt"
@@ -157,6 +180,102 @@ class TestFilters:
         assert "credit.txt" in plain and "name.txt" not in plain
         assert "name.txt" in named and "fontsize=84" in named
         assert named.endswith("format=yuv420p")
+
+
+def _cand(name, w, h, verdict=None, dh=0):
+    return Candidate(
+        image={"filename": name, "local_path": name}, width=w, height=h, dhash=dh, verdict=verdict
+    )
+
+
+def _good(subject="terraces", quality=4, **over):
+    v = {
+        "kind": "site_photo",
+        "subject": subject,
+        "people_prominent": False,
+        "text_or_overlay": False,
+        "quality": quality,
+        "relevance": 4,
+        "illustrates": "",
+        "vertical_crop_ok": True,
+    }
+    v.update(over)
+    return v
+
+
+class TestSelection:
+    def test_aspect_penalty_is_zero_at_9_16_and_symmetric(self):
+        assert aspect_penalty(1080, 1920) == pytest.approx(0.0)
+        # mirror of 4:3 around 9:16 is (9/16)^2 / (4/3) ≈ 0.2373
+        assert aspect_penalty(1600, 1200) == pytest.approx(aspect_penalty(2373, 10000), rel=1e-3)
+
+    def test_panorama_threshold(self):
+        assert is_panorama(1598, 472) is True
+        assert is_panorama(1600, 960) is False
+
+    @pytest.mark.parametrize(
+        "verdict, reason",
+        [
+            (_good(kind="map_or_document"), "kind=map_or_document"),
+            (_good(people_prominent=True), "people prominent"),
+            (_good(text_or_overlay=True), "text or overlay"),
+            (_good(quality=2), "quality=2"),
+            (_good(relevance=1), "relevance=1"),
+            (_good(vertical_crop_ok=False), "subject lost in 9:16 crop"),
+            (_good(), None),
+        ],
+    )
+    def test_reject_reasons(self, verdict, reason):
+        assert reject_reason(_cand("x", 1600, 1200, verdict), require_verdict=True) == reason
+
+    def test_verdict_required_unless_running_without_vlm(self):
+        c = _cand("x", 1600, 1200)
+        assert reject_reason(c, require_verdict=True) == "no VLM verdict"
+        assert reject_reason(c, require_verdict=False) is None
+        assert reject_reason(_cand("p", 1598, 472), require_verdict=False) == "panorama"
+
+    def test_score_prefers_relevance_then_quality_then_portrait(self):
+        tall = _cand("t", 1600, 2115, _good(quality=4))
+        wide = _cand("w", 1600, 960, _good(quality=4))
+        better_wide = _cand("b", 1600, 960, _good(quality=5))
+        relevant_wide = _cand("r", 1600, 960, _good(quality=3, relevance=5))
+        assert score(tall) > score(wide)  # same verdict: portrait wins
+        assert score(better_wide) > score(wide)  # quality breaks ties
+        assert score(relevant_wide) > score(better_wide)  # relevance beats two quality points
+
+    def test_order_by_narration_follows_the_card_text(self):
+        text = "Built from polished dry-stone walls. Its Intihuatana stone tracks the sun."
+        # hashes ≥ 7 bits apart so nothing counts as a pixel duplicate
+        walls = _cand(
+            "walls", 1600, 1200, _good("walls", 3, illustrates="dry-stone walls"), dh=0x7F
+        )
+        stone = _cand(
+            "stone", 1600, 1200, _good("stone", 5, illustrates="Intihuatana stone"), dh=0x7F << 10
+        )
+        vista = _cand("vista", 1600, 1200, _good("vista", 4, illustrates=""), dh=0x7F << 20)
+        kept, _ = select_stills([walls, stone, vista])
+        assert [c.image["filename"] for c in kept] == ["stone", "vista", "walls"]  # score order
+        ordered = order_by_narration(kept, text, lambda c: c.verdict)
+        assert [c.image["filename"] for c in ordered] == ["walls", "stone", "vista"]
+
+    def test_select_orders_by_score_and_drops_duplicates(self):
+        cands = [
+            _cand("map", 1600, 1362, _good(kind="map_or_document", subject="map"), dh=0x7F << 40),
+            _cand("intihuatana_a", 1600, 1200, _good("Intihuatana stone", 4), dh=0x7F),
+            _cand("intihuatana_b", 1600, 1200, _good("intihuatana stone", 5), dh=0x7F ^ 0b1),
+            _cand("terraces", 1600, 1035, _good("Agricultural terraces", 4), dh=0x7F << 10),
+            _cand("panorama", 1598, 472, _good("valley", 5), dh=0x7F << 20),
+            _cand("windows", 1600, 1200, _good("Three Windows", 3), dh=0x7F << 30),
+        ]
+        kept, rejected = select_stills(cands)
+        assert [c.image["filename"] for c in kept] == ["intihuatana_b", "terraces", "windows"]
+        reasons = {c.image["filename"]: why for c, why in rejected}
+        assert reasons["map"] == "kind=map_or_document"
+        assert reasons["panorama"] == "panorama"
+        assert reasons["intihuatana_a"].startswith("duplicate")
+
+    def test_normalize_subject(self):
+        assert normalize_subject(" Intihuatana Stone! ") == "intihuatana stone"
 
 
 class TestExportShape:
