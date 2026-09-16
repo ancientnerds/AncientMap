@@ -129,12 +129,14 @@ export function encodeScene(
   webmPath: string,
   outputDir: string,
   targetDuration?: number,
+  fps?: number,
 ): { mp4: string; fast: string } {
   return encodeFrames({
     webmPath,
     outputDir,
     name: sceneName,
     targetDuration,
+    fps,
   })
 }
 

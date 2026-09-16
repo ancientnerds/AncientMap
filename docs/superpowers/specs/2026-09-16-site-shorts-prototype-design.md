@@ -25,18 +25,26 @@ No new data sources. Images are fetched at original resolution from Commons into
 `video-assets/` (gitignored), never into `public/`, so the 800 px web thumbnails
 and the pages Google has indexed stay untouched.
 
-## Timeline (target ~22 s)
+## Timeline (target ~25 s, 60 fps, revised 2026-09-16 evening after user review)
 
-1. **Approach (3 s)** — globe from space rotates and flies to the site, zooms in.
-   Recorded with the existing Puppeteer recorder (`ancient-nerds-map/video/`),
-   portrait viewport.
-2. **Narration (≈11 s)** — the card text, spoken by a MiniMax voice. Visual: Mapbox
-   satellite terrain orbit around the site (pitch 60°, slow bearing sweep). If the
-   terrain clip is unavailable, Ken-Burns over the gallery images.
+The narration (card text, MiniMax voice) starts at t = 0 and runs over 1–2.
+
+1. **Opening (6 s, one Mapbox clip)** — satellite globe with labels and site dots:
+   1 s rotate onto the site from space, 2 s continuous zoom down to z14 while the
+   camera tilts, 3 s 3D terrain orbit. Recorded with the Puppeteer recorder
+   (`ancient-nerds-map/video/`, scene `short-opening`, portrait, 60 fps) on the
+   Mapbox globe only, so the zoom never switches canvases. Satellite-streets style
+   for labels, stock atmosphere instead of the app's dark fog, road/POI layers hidden.
+2. **Stills (rest of the narration, ≈11 s)** — gallery photos cover-scaled to the
+   full 1080×1920 frame, each panning left→right or right→left (portrait photos pan
+   vertically), ≤3.5 s per still, hard cuts.
 3. **Beat (1 s)** — cut to black.
-4. **Reveal (5 s)** — hero image with slow zoom; site name, country, rarity ribbon
-   fade in (Orbitron heading font, gold for Legendary).
-5. **Outro (2 s)** — `ancientnerds.com` and the card ribbon hold.
+4. **Reveal (7 s)** — hero image with slow zoom; site name, country, rarity ribbon
+   fade in (Orbitron heading font, gold for Legendary); `ancientnerds.com` at 4.5 s.
+
+The first cut (dark Three.js globe, 24 fps, terrain orbit under the narration,
+blurred-fill Ken-Burns, voice after the approach) was rejected as boring; the
+dark globe's satellite mode also rendered black in the recorder.
 
 Attribution for every Commons image used (author, license) is rendered as a small
 credit line during the reveal and written to `description.txt`.

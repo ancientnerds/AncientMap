@@ -1,8 +1,9 @@
-"""ffmpeg assembly of one site short (1080×1920, 30 fps).
+"""ffmpeg assembly of one site short (1080×1920, 60 fps).
 
-Timeline (spec 2026-09-16):
-  approach clip → narration visuals (terrain orbit, then Ken-Burns) → black beat
-  → hero reveal with name / country / rarity ribbon / credit → URL.
+Timeline (spec 2026-09-16, revised same day):
+  narration from t=0 over: opening clip (globe rotate → zoom → 3D orbit, 6 s)
+  → full-frame stills panning left/right → black beat → hero reveal with
+  name / country / rarity ribbon / credit → URL.
 
 Pure planning helpers (`plan_timeline`, `wrap_lines`, filter builders) are unit
 tested; the ffmpeg calls are thin wrappers verified by ffprobe on the output.
@@ -22,18 +23,17 @@ from pipeline.video.media import ff_path, probe_duration, run_ffmpeg
 
 logger = logging.getLogger(__name__)
 
-W, H, FPS = 1080, 1920, 30
+W, H, FPS = 1080, 1920, 60
 
-APPROACH_MAX_S = 4.0
 NARRATION_TAIL_S = 0.6
-TERRAIN_SLACK_S = 0.5  # deficit the narration tail can absorb before we cut to images
-KENBURNS_MAX_S = 5.0
+OPENING_SLACK_S = 0.5  # deficit the narration tail can absorb before we cut to images
+PAN_MAX_S = 3.5  # faster cuts — 5 s per still read as a slideshow
+PAN_MAX_PX = 900  # longest sweep per still; keeps wide panoramas from swishing
 BEAT_S = 1.0
 REVEAL_S = 7.0
 URL_AT_S = 4.5
 FADE_S = 0.6
-KB_ZOOM = 0.12
-TERRAIN_TRIM_S = 0.3  # Mapbox's first captured frame is still fading in
+OPENING_TRIM_S = 0.0  # the recorder starts lazily, so frame 0 is the real first frame
 REVEAL_ZOOM = 0.08
 CUT_FADE_S = 0.4  # dip-to-black at clip boundaries
 BAND_TOP = 1050  # where the reveal's gradient band starts fading in
@@ -69,7 +69,7 @@ X264 = [
     "-an",
 ]
 
-SegmentKind = Literal["clip", "kenburns", "black", "reveal"]
+SegmentKind = Literal["clip", "pan", "black", "reveal"]
 
 
 @dataclass(frozen=True)
@@ -77,7 +77,8 @@ class Segment:
     kind: SegmentKind
     duration: float
     source: str | None = None
-    zoom_in: bool = True
+    forward: bool = True  # pan direction: left→right / top→bottom
+    vertical: bool = False  # portrait stills pan vertically instead
     start: float = 0.0  # seek offset into a clip source
 
 
@@ -86,48 +87,57 @@ class Segment:
 # ---------------------------------------------------------------------------
 
 
+def is_portrait(width: int, height: int) -> bool:
+    """Narrower than 9:16 → the cover-scaled still is taller than the frame, so pan vertically."""
+    return width * H < height * W
+
+
 def plan_timeline(
     *,
     narration_s: float,
-    images: list[Path],
-    approach: tuple[Path, float] | None,
-    terrain: tuple[Path, float] | None,
-    terrain_start: float = 0.0,
+    images: list[tuple[Path, int, int]],
+    opening: tuple[Path, float] | None,
+    opening_start: float = 0.0,
 ) -> list[Segment]:
-    """Lay out the segments. `images[0]` is the hero used for the reveal.
+    """Lay out the segments. `images[0]` is the hero used for the reveal;
+    each image is (path, width, height).
 
-    Clip tuples carry the *usable* duration (after any trim); `terrain_start`
-    is the seek offset that trim implies.
-
-    Narration visuals cover `narration_s + NARRATION_TAIL_S`: the terrain orbit
-    first (as long as its clip lasts), Ken-Burns images for whatever remains.
-    A terrain deficit of up to TERRAIN_SLACK_S is absorbed by the tail rather
-    than producing a sub-second image cut.
+    The narration starts at t=0 and its visuals cover `narration_s +
+    NARRATION_TAIL_S`: the opening clip first (as long as it lasts, after
+    `opening_start` trim), full-frame panning stills for whatever remains. An
+    opening deficit of up to OPENING_SLACK_S is absorbed by the tail rather
+    than producing a sub-second still.
     """
     if not images:
         raise ValueError("at least one image (the hero) is required")
     segments: list[Segment] = []
-    if approach is not None:
-        segments.append(Segment("clip", min(approach[1], APPROACH_MAX_S), str(approach[0])))
-
     span = narration_s + NARRATION_TAIL_S
     remainder = span
-    if terrain is not None:
-        used = min(terrain[1], span)
+    if opening is not None:
+        used = min(opening[1], span)
         remainder = span - used
-        if remainder <= TERRAIN_SLACK_S:
+        if remainder <= OPENING_SLACK_S:
             remainder = 0.0
-        segments.append(Segment("clip", used, str(terrain[0]), start=terrain_start))
+        segments.append(Segment("clip", used, str(opening[0]), start=opening_start))
 
     if remainder > 0:
         pool = images[1:] or images  # keep the hero fresh for the reveal when we can
-        count = max(1, min(len(pool), math.ceil(remainder / KENBURNS_MAX_S)))
+        count = max(1, min(len(pool), math.ceil(remainder / PAN_MAX_S)))
         each = remainder / count
         for i in range(count):
-            segments.append(Segment("kenburns", each, str(pool[i]), zoom_in=(i % 2 == 0)))
+            path, width, height = pool[i]
+            segments.append(
+                Segment(
+                    "pan",
+                    each,
+                    str(path),
+                    forward=(i % 2 == 0),
+                    vertical=is_portrait(width, height),
+                )
+            )
 
     segments.append(Segment("black", BEAT_S))
-    segments.append(Segment("reveal", REVEAL_S, str(images[0])))
+    segments.append(Segment("reveal", REVEAL_S, str(images[0][0])))
     return segments
 
 
@@ -136,18 +146,19 @@ def wrap_lines(name: str, width: int = NAME_WRAP_CHARS) -> list[str]:
     return textwrap.wrap(name, width=width, break_long_words=True) or [name]
 
 
-def kenburns_filter(zoom_in: bool, duration: float) -> str:
-    """Blurred-fill portrait composite with a slow zoom driven by the frame index."""
-    frames = f"{FPS}*{duration:.3f}"
-    z = f"1+{KB_ZOOM}*on/({frames})" if zoom_in else f"{1 + KB_ZOOM}-{KB_ZOOM}*on/({frames})"
+def pan_filter(duration: float, forward: bool, vertical: bool) -> str:
+    """Cover-scale the still to fill 1080×1920 and sweep the crop window across
+    the overflow axis: horizontally for landscape stills, vertically for
+    portrait ones. The sweep is capped at PAN_MAX_PX and centred."""
+    sign = "+" if forward else "-"
+    progress = f"(t/{duration:.3f}-0.5)"
+    if vertical:
+        window = f"x=0:y='(ih-oh)/2{sign}{progress}*min(ih-oh\\,{PAN_MAX_PX})'"
+    else:
+        window = f"x='(iw-ow)/2{sign}{progress}*min(iw-ow\\,{PAN_MAX_PX})':y=0"
     return (
-        f"[0:v]split[bg][fg];"
-        f"[bg]scale={W}:{H}:force_original_aspect_ratio=increase,crop={W}:{H},"
-        f"boxblur=luma_radius=40:luma_power=3,eq=brightness=-0.12[bgb];"
-        f"[fg]scale={W}:{H}:force_original_aspect_ratio=decrease[fgs];"
-        f"[bgb][fgs]overlay=(W-w)/2:(H-h)/2,scale={W * 2}:{H * 2},"
-        f"zoompan=z='{z}':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=1:s={W}x{H}:fps={FPS},"
-        f"format=yuv420p"
+        f"scale={W}:{H}:force_original_aspect_ratio=increase,"
+        f"crop={W}:{H}:{window},fps={FPS},format=yuv420p"
     )
 
 
@@ -213,7 +224,7 @@ def credit_line(image: dict) -> str:
 
 
 def build_description(
-    site: dict, images_used: list[dict], voice_id: str, terrain_used: bool = False
+    site: dict, images_used: list[dict], voice_id: str, mapbox_used: bool = False
 ) -> str:
     lines = [
         f"{site['name']} — {site['country']}",
@@ -230,8 +241,11 @@ def build_description(
             f"- {img.get('title') or img['filename']} — {img.get('author') or 'Unknown'}"
             f" ({img.get('license') or 'license unknown'}) {img.get('commons_page_url') or img['original_url']}"
         )
-    if terrain_used:
-        lines += ["", f"Terrain flyover: Mapbox Satellite + Terrain DEM ({MAPBOX_CREDIT})."]
+    if mapbox_used:
+        lines += [
+            "",
+            f"Globe and terrain flyover: Mapbox Satellite Streets + Terrain DEM ({MAPBOX_CREDIT}).",
+        ]
     lines += ["", f"Narration: AI-generated voice (MiniMax speech-2.8-hd, {voice_id})."]
     return "\n".join(lines) + "\n"
 
@@ -269,8 +283,7 @@ def render_clip(
     )
 
 
-def render_kenburns(src: Path, duration: float, zoom_in: bool, out: Path) -> Path:
-    filt = kenburns_filter(zoom_in, duration)
+def render_pan(src: Path, duration: float, forward: bool, vertical: bool, out: Path) -> Path:
     return run_ffmpeg(
         [
             "-loop",
@@ -281,8 +294,8 @@ def render_kenburns(src: Path, duration: float, zoom_in: bool, out: Path) -> Pat
             f"{duration:.3f}",
             "-i",
             str(src),
-            "-filter_complex",
-            filt,
+            "-vf",
+            pan_filter(duration, forward, vertical),
             *X264,
         ],
         out,
@@ -377,13 +390,10 @@ def concat_and_mux(parts: list[Path], narration: Path, offset_s: float, out: Pat
 def render_short(site: dict, images: list[dict], site_dir: Path, voice_id: str) -> Path:
     """Assemble `<slug>.mp4` from the site dir's narration, images and clips."""
     narration = site_dir / "narration.mp3"
-    clips = site_dir / "clips"
-    approach_clip = clips / "short-approach.mp4"
-    terrain_clip = clips / "short-terrain.mp4"
-    approach = (approach_clip, probe_duration(approach_clip)) if approach_clip.exists() else None
-    terrain = (
-        (terrain_clip, probe_duration(terrain_clip) - TERRAIN_TRIM_S)
-        if terrain_clip.exists()
+    opening_clip = site_dir / "clips" / "short-opening.mp4"
+    opening = (
+        (opening_clip, probe_duration(opening_clip) - OPENING_TRIM_S)
+        if opening_clip.exists()
         else None
     )
     hero = next((i for i in images if i.get("is_hero")), images[0])
@@ -391,12 +401,10 @@ def render_short(site: dict, images: list[dict], site_dir: Path, voice_id: str) 
 
     segments = plan_timeline(
         narration_s=probe_duration(narration),
-        images=[Path(i["local_path"]) for i in ordered],
-        approach=approach,
-        terrain=terrain,
-        terrain_start=TERRAIN_TRIM_S,
+        images=[(Path(i["local_path"]), int(i["width"]), int(i["height"])) for i in ordered],
+        opening=opening,
+        opening_start=OPENING_TRIM_S,
     )
-    offset = min(approach[1], APPROACH_MAX_S) if approach else 0.0
     work = site_dir / "render"
     work.mkdir(parents=True, exist_ok=True)
     (work / "timeline.json").write_text(
@@ -415,12 +423,11 @@ def render_short(site: dict, images: list[dict], site_dir: Path, voice_id: str) 
                 seg.duration,
                 out,
                 start=seg.start,
-                fade_in=n > 0 and segments[n - 1].kind == "clip",
-                fade_out=segments[n + 1].kind in ("clip", "black"),
-                credit_file=mapbox_credit if seg.source == str(terrain_clip) else None,
+                fade_out=segments[n + 1].kind == "black",
+                credit_file=mapbox_credit,
             )
-        elif seg.kind == "kenburns":
-            render_kenburns(Path(seg.source or ""), seg.duration, seg.zoom_in, out)
+        elif seg.kind == "pan":
+            render_pan(Path(seg.source or ""), seg.duration, seg.forward, seg.vertical, out)
         elif seg.kind == "black":
             render_black(seg.duration, out)
         else:
@@ -428,9 +435,9 @@ def render_short(site: dict, images: list[dict], site_dir: Path, voice_id: str) 
         parts.append(out)
 
     final = site_dir / f"{site['slug']}.mp4"
-    concat_and_mux(parts, narration, offset, final)
+    concat_and_mux(parts, narration, 0.0, final)  # the voice starts with frame 0
     (site_dir / "description.txt").write_text(
-        build_description(site, ordered, voice_id, terrain_used=terrain is not None),
+        build_description(site, ordered, voice_id, mapbox_used=opening is not None),
         encoding="utf-8",
     )
     logger.info("short written: %s (%.2fs)", final, probe_duration(final))

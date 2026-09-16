@@ -110,7 +110,9 @@ export class MapboxGlobeService {
       interactive: false, // Start non-interactive, enable when needed
       antialias: true,
       fadeDuration: 0,
-      maxTileCacheSize: 200,
+      // Recordings replay a zoom path from space to z14; a small cache would
+      // evict the warm-up tiles before the real take.
+      maxTileCacheSize: isDemoMode() ? 2000 : 200,
       trackResize: true,
       minZoom: MapboxGlobeService.ZOOM_MIN,  // Match entry point zoom
       // Recordings grab frames via canvas.captureStream(); without a preserved
@@ -455,6 +457,22 @@ export class MapboxGlobeService {
   setStyle(style: MapboxTileType): void {
     if (!this.map || !this.isInitialized) return
     if (style === this.currentStyle) return
+    this.currentStyle = style
+    this.loadStyle(MapboxGlobeService.STYLES[style])
+  }
+
+  /**
+   * Load an arbitrary style URL (video recordings use satellite-streets for
+   * labels). Reported as 'satellite' so the app's style sync leaves it alone.
+   */
+  setStyleUrl(url: string): void {
+    if (!this.map || !this.isInitialized) return
+    this.currentStyle = 'satellite'
+    this.loadStyle(url)
+  }
+
+  private loadStyle(url: string): void {
+    if (!this.map) return
 
     // Save current sites to restore after style change
     if (this.currentSites.length > 0) {
@@ -463,8 +481,7 @@ export class MapboxGlobeService {
 
     // Selection rings and measurements are already stored in currentSelectedSites/currentMeasurements
 
-    this.currentStyle = style
-    this.map.setStyle(MapboxGlobeService.STYLES[style])
+    this.map.setStyle(url)
 
     // Restore fog, theme, sites, selection rings, and measurements after style loads
     this.map.once('style.load', () => {

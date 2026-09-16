@@ -25,6 +25,8 @@ export interface DemoAPI {
   smoothZoom(from: number, to: number, durationMs: number): void
   setAutoRotate(enabled: boolean): void
   setFlyToDuration(ms: number): void
+  /** Instant camera placement: surface point under the camera + distance from the globe centre. */
+  setCameraPose(lng: number, lat: number, distance: number): void
 
   // Filters
   setFilterMode(mode: FilterMode): void
@@ -64,6 +66,14 @@ export interface DemoAPI {
   mapboxOrbit(lng: number, lat: number, zoom: number, pitch: number, bearingFrom: number, bearingTo: number, durationMs: number): void
   /** Resolves once Mapbox reports `idle` (all tiles loaded) or after `timeoutMs`. */
   mapboxWaitIdle(timeoutMs?: number): Promise<void>
+  /** Swap the Mapbox style by URL (e.g. satellite-streets for labels); resolves on style.load. */
+  setMapboxStyleUrl(url: string): Promise<void>
+  /** Drive the Mapbox camera through keyframes (`at` = 0..1 of durationMs), smoothstep per segment. */
+  mapboxPath(keyframes: MapboxKeyframe[], durationMs: number): void
+  /** Replace the app's dark fog (it blackens satellite imagery at globe zooms) with any Mapbox fog spec. */
+  setMapboxFog(spec: Record<string, unknown>): void
+  /** Hide every style layer whose id matches `pattern` (regex source). Returns how many were hidden. */
+  hideMapboxLayers(pattern: string): number | Promise<number>
 
   // UI control
   hideAllUI(): void
@@ -74,6 +84,15 @@ export interface DemoAPI {
   getCameraState(): CameraState | Promise<CameraState>
   isReady(): boolean
   waitUntilReady(): Promise<void>
+}
+
+export interface MapboxKeyframe {
+  at: number
+  lng: number
+  lat: number
+  zoom: number
+  pitch: number
+  bearing: number
 }
 
 declare global {
@@ -147,7 +166,7 @@ export function registerAppDemoApi(setters: AppDemoSetters): void {
 export interface GlobeDemoRefs {
   isAutoRotatingRef: React.MutableRefObject<boolean>
   manualRotationRef: React.MutableRefObject<boolean>
-  sceneRef: React.MutableRefObject<{ camera: { position: { setLength(d: number): void; length(): number; x: number; y: number; z: number } }; controls: { update(): void } } | null>
+  sceneRef: React.MutableRefObject<{ camera: { position: { setLength(d: number): void; length(): number; set(x: number, y: number, z: number): void; x: number; y: number; z: number }; lookAt(x: number, y: number, z: number): void }; controls: { update(): void } } | null>
   cameraAnimationRef: React.MutableRefObject<number | null>
   warpCompleteForLabelsRef: React.MutableRefObject<boolean>
   dotsAnimationCompleteRef: React.MutableRefObject<boolean>
@@ -171,8 +190,26 @@ export interface GlobeDemoRefs {
   mapboxServiceRef: React.MutableRefObject<any>
 }
 
+type Vec3 = [number, number, number]
+
+/** Unit direction for a surface point — the same mapping useFlyToAnimation uses. */
+function directionFor(lng: number, lat: number): Vec3 {
+  const phi = (90 - lat) * Math.PI / 180
+  const theta = (lng + 180) * Math.PI / 180
+  return [-Math.sin(phi) * Math.cos(theta), Math.cos(phi), Math.sin(phi) * Math.sin(theta)]
+}
+
 export function registerGlobeDemoApi(refs: GlobeDemoRefs): void {
   if (!isDemoMode()) return
+
+  // A pending app fly-to would keep overwriting the camera each frame.
+  const cancelFlyTo = () => {
+    if (refs.cameraAnimationRef.current !== null) {
+      cancelAnimationFrame(refs.cameraAnimationRef.current)
+      refs.cameraAnimationRef.current = null
+    }
+    refs.isAutoRotatingRef.current = false
+  }
 
   const api: Partial<DemoAPI> = {
     setAutoRotate: (enabled) => {
@@ -205,6 +242,15 @@ export function registerGlobeDemoApi(refs: GlobeDemoRefs): void {
     },
     setFlyToDuration: (ms) => {
       refs.flyToDurationRef.current = ms
+    },
+    setCameraPose: (lng, lat, distance) => {
+      const scene = refs.sceneRef.current
+      if (!scene) return
+      cancelFlyTo()
+      const d = directionFor(lng, lat)
+      scene.camera.position.set(d[0] * distance, d[1] * distance, d[2] * distance)
+      scene.camera.lookAt(0, 0, 0)
+      scene.controls.update()
     },
     setSatellite: (on) => {
       refs.setTileLayers(prev => ({ ...prev, satellite: on }))
@@ -309,6 +355,65 @@ export function registerGlobeDemoApi(refs: GlobeDemoRefs): void {
         if (t < 1) requestAnimationFrame(step)
       }
       step()
+    },
+    setMapboxStyleUrl: (url) => {
+      return new Promise<void>((resolve) => {
+        const mapbox = refs.mapboxServiceRef.current
+        const map = mapbox?.getMap()
+        if (!mapbox?.getIsInitialized() || !map) {
+          console.warn('[DemoAPI] Mapbox not initialized')
+          resolve()
+          return
+        }
+        map.once('style.load', () => resolve())
+        mapbox.setStyleUrl(url)
+      })
+    },
+    mapboxPath: (keyframes, durationMs) => {
+      const map = refs.mapboxServiceRef.current?.getMap()
+      if (!map || keyframes.length < 2) {
+        console.warn('[DemoAPI] mapboxPath needs Mapbox and ≥2 keyframes')
+        return
+      }
+      const startTime = performance.now()
+      const lerp = (a: number, b: number, t: number) => a + (b - a) * t
+      const step = () => {
+        const t = Math.min((performance.now() - startTime) / durationMs, 1)
+        let i = 1
+        while (i < keyframes.length - 1 && keyframes[i].at <= t) i++
+        const a = keyframes[i - 1]
+        const b = keyframes[i]
+        const span = Math.max(b.at - a.at, 1e-6)
+        const u = Math.max(0, Math.min(1, (t - a.at) / span))
+        const e = u * u * (3 - 2 * u) // smoothstep per segment
+        map.jumpTo({
+          center: [lerp(a.lng, b.lng, e), lerp(a.lat, b.lat, e)],
+          zoom: lerp(a.zoom, b.zoom, e),
+          pitch: lerp(a.pitch, b.pitch, e),
+          bearing: lerp(a.bearing, b.bearing, e),
+        })
+        if (t < 1) requestAnimationFrame(step)
+      }
+      step()
+    },
+    setMapboxFog: (spec) => {
+      const map = refs.mapboxServiceRef.current?.getMap()
+      if (!map) {
+        console.warn('[DemoAPI] Mapbox not initialized')
+        return
+      }
+      map.setFog(spec as Parameters<typeof map.setFog>[0])
+    },
+    hideMapboxLayers: (pattern) => {
+      const map = refs.mapboxServiceRef.current?.getMap()
+      if (!map) {
+        console.warn('[DemoAPI] Mapbox not initialized')
+        return 0
+      }
+      const re = new RegExp(pattern)
+      const hit = (map.getStyle()?.layers ?? []).filter((l: { id: string }) => re.test(l.id))
+      hit.forEach((l: { id: string }) => map.setLayoutProperty(l.id, 'visibility', 'none'))
+      return hit.length
     },
     mapboxWaitIdle: (timeoutMs = 15000) => {
       return new Promise<void>((resolve) => {

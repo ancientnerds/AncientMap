@@ -71,14 +71,16 @@ const ALL_SCENES: SceneDefinition[] = [
  *   --portrait        1080×1920 viewport (site shorts)
  *   --input <path>    site.json for the site-short scenes (exposed as SITE_SHORT_INPUT)
  *   --out <dir>       where the MP4s go (default: public/landing/video)
+ *   --fps <n>         capture/encode rate (default 24; shorts use 60)
  */
-function parseArgs(argv: string[]): { scene?: string; portrait: boolean; input?: string; out?: string } {
-  const result: { scene?: string; portrait: boolean; input?: string; out?: string } = { portrait: false }
+function parseArgs(argv: string[]): { scene?: string; portrait: boolean; input?: string; out?: string; fps: number } {
+  const result: { scene?: string; portrait: boolean; input?: string; out?: string; fps: number } = { portrait: false, fps: 24 }
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i]
     if (a === '--portrait') result.portrait = true
     else if (a === '--input') result.input = argv[++i]
     else if (a === '--out') result.out = argv[++i]
+    else if (a === '--fps') result.fps = Number(argv[++i])
     else if (!a.startsWith('--')) result.scene = a
   }
   return result
@@ -153,8 +155,13 @@ async function launchBrowser(portrait: boolean): Promise<{ browser: Browser; pag
   const page = await browser.newPage()
   page.on('console', (msg) => {
     const text = msg.text()
-    if (text.startsWith('[DemoAPI]') || text.startsWith('[TimeControl]') || text.startsWith('[StreamRecorder]')) console.log('  browser:', text)
+    const tagged = text.startsWith('[DemoAPI]') || text.startsWith('[TimeControl]') || text.startsWith('[StreamRecorder]')
+    if (tagged || msg.type() === 'error' || msg.type() === 'warn') {
+      const url = msg.location()?.url
+      console.log(`  browser[${msg.type()}]:`, text.slice(0, 300), url ? `(${url.slice(0, 160)})` : '')
+    }
   })
+  page.on('pageerror', (err) => console.log('  browser[pageerror]:', String(err).slice(0, 300)))
   await loadGlobe(page)
   return { browser, page }
 }
@@ -207,6 +214,7 @@ function createDemoProxy(page: Page): DemoAPI {
     smoothZoom: (from, to, ms) => evalDemo(`window.__DEMO.smoothZoom(${from}, ${to}, ${ms})`),
     setAutoRotate: (on) => evalDemo(`window.__DEMO.setAutoRotate(${on})`),
     setFlyToDuration: (ms) => evalDemo(`window.__DEMO.setFlyToDuration(${ms})`),
+    setCameraPose: (lng, lat, d) => evalDemo(`window.__DEMO.setCameraPose(${lng}, ${lat}, ${d})`),
     setFilterMode: (mode) => evalDemo(`window.__DEMO.setFilterMode("${mode}")`),
     setAgeRange: (min, max) => evalDemo(`window.__DEMO.setAgeRange(${min}, ${max})`),
     setSelectedSources: (ids) => evalDemo(`window.__DEMO.setSelectedSources(${JSON.stringify(ids)})`),
@@ -231,6 +239,10 @@ function createDemoProxy(page: Page): DemoAPI {
     setTerrain: (exaggeration) => evalDemo(`window.__DEMO.setTerrain(${exaggeration === null ? 'null' : exaggeration})`),
     mapboxOrbit: (lng, lat, zoom, pitch, b0, b1, ms) => evalDemo(`window.__DEMO.mapboxOrbit(${lng}, ${lat}, ${zoom}, ${pitch}, ${b0}, ${b1}, ${ms})`),
     mapboxWaitIdle: (timeoutMs) => evalDemo(`window.__DEMO.mapboxWaitIdle(${timeoutMs ?? 15000})`),
+    setMapboxStyleUrl: (url) => evalDemo(`window.__DEMO.setMapboxStyleUrl(${JSON.stringify(url)})`),
+    mapboxPath: (keyframes, ms) => evalDemo(`window.__DEMO.mapboxPath(${JSON.stringify(keyframes)}, ${ms})`),
+    setMapboxFog: (spec) => evalDemo(`window.__DEMO.setMapboxFog(${JSON.stringify(spec)})`),
+    hideMapboxLayers: (pattern) => page.evaluate(`window.__DEMO.hideMapboxLayers(${JSON.stringify(pattern)})`) as Promise<number>,
     // UI control
     hideAllUI: () => evalDemo(`window.__DEMO.hideAllUI()`),
     showUI: () => evalDemo(`window.__DEMO.showUI()`),
@@ -286,7 +298,7 @@ async function main() {
     // Inject synthetic time control — freezes performance.now() and Date.now()
     // so every frame advances by exactly 1000/fps ms. This eliminates flicker
     // caused by variable deltaTime in the animation loop.
-    const fps = 24
+    const fps = args.fps
     console.log('\nInjecting synthetic time control...')
     await injectTimeControl(page, fps)
 
@@ -309,9 +321,9 @@ async function main() {
       console.log(`Recording scene: ${scene.name} (${scene.duration}s)`)
       console.log('='.repeat(50))
 
-      // Create and start a fresh StreamRecorder for this scene
+      // Fresh StreamRecorder per scene; it starts on the scene's first capture()
+      // so the setup phase (tiles, poses) never leaks into frame 0.
       const recorder = new StreamRecorder({ fps, canvasSelector: scene.canvasSelector, frameYieldMs: scene.frameYieldMs })
-      await recorder.start(page)
 
       const ctx: SceneContext = {
         page,
@@ -330,7 +342,7 @@ async function main() {
 
       // Encode WebM to MP4
       console.log(`\nEncoding ${scene.name}...`)
-      const result = encodeScene(scene.name, webmPath, outputDir, scene.duration)
+      const result = encodeScene(scene.name, webmPath, outputDir, scene.duration, fps)
       console.log(`  MP4: ${result.mp4}`)
       console.log(`  Fast: ${result.fast}`)
 

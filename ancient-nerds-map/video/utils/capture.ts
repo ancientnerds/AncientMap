@@ -88,13 +88,18 @@ export class StreamRecorder {
     this.frameYieldMs = options.frameYieldMs ?? 0
   }
 
+  private started = false
+
   /**
-   * Start the MediaRecorder in the browser.
-   * Exposes a Node function to receive WebM chunks from the page.
+   * Start the MediaRecorder in the browser. Chrome emits one frame of the
+   * current canvas the moment recording starts, so `capture()` starts lazily:
+   * the first recorded frame is then the scene's first real frame, not the
+   * globe as it looked before the scene's setup ran.
    */
   async start(page: Page): Promise<void> {
     this.chunks = []
     this.frameCount = 0
+    this.started = true
     activeRecorder = this
 
     // Find the WebGL canvas and start captureStream + MediaRecorder
@@ -140,6 +145,7 @@ export class StreamRecorder {
    * double-RAFs for render, then requests a stream frame.
    */
   async capture(page: Page, durationSec: number): Promise<void> {
+    if (!this.started) await this.start(page)
     const totalFrames = Math.ceil(durationSec * this.fps)
     const startFrame = this.frameCount
 

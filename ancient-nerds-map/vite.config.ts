@@ -11,6 +11,11 @@ const commitHash = execSync('git rev-parse --short HEAD').toString().trim()
 const buildTime = new Date().toISOString()
 
 // Dev only: serve /data/ from repo-root public/data/ (production uses nginx alias)
+// Backend for /api and /goto in dev. Defaults to the local API container; the
+// video recorder points it at production (VITE_DEV_API_TARGET=https://ancientnerds.com)
+// so the globe has real site dots without a local database.
+const DEV_API_TARGET = process.env.VITE_DEV_API_TARGET ?? 'http://localhost:8000'
+
 function servePublicData(): Plugin {
   const dataRoot = resolve(__dirname, '..', 'public', 'data')
   const mimeTypes: Record<string, string> = {
@@ -182,14 +187,14 @@ export default defineConfig(({ isSsrBuild }) => ({
   server: {
     proxy: {
       '/api/': {
-        target: 'http://localhost:8000',
+        target: DEV_API_TARGET,
         changeOrigin: true,
         timeout: 60000, // 60 seconds - backend connectors can take time
       },
       // Funnel redirect (api/routes/goto.py) — without this, a Discord CTA
       // click in dev lands on the SPA fallback instead of the 302
       '/goto/': {
-        target: 'http://localhost:8000',
+        target: DEV_API_TARGET,
         changeOrigin: true,
       }
     }

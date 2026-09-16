@@ -8,20 +8,20 @@ from pipeline.video.media import ff_path
 from pipeline.video.shorts_export import RARITY_NAMES, assemble_site
 from pipeline.video.shorts_images import local_image_name
 from pipeline.video.shorts_render import (
-    APPROACH_MAX_S,
     BEAT_S,
     NARRATION_TAIL_S,
     REVEAL_S,
     build_description,
     credit_line,
-    kenburns_filter,
+    is_portrait,
+    pan_filter,
     plan_timeline,
     reveal_filter,
     wrap_lines,
 )
 
-HERO = Path("hero.jpg")
-IMGS = [HERO, Path("a.jpg"), Path("b.jpg"), Path("c.jpg")]
+HERO = (Path("hero.jpg"), 4320, 3240)
+IMGS = [HERO, (Path("a.jpg"), 1600, 1200), (Path("b.jpg"), 1600, 1200), (Path("c.jpg"), 1600, 1200)]
 
 
 def _total(segments):
@@ -29,55 +29,48 @@ def _total(segments):
 
 
 class TestPlanTimeline:
-    def test_full_chain_terrain_covers_narration(self):
+    def test_opening_covers_part_of_the_narration_then_pans(self):
         segs = plan_timeline(
-            narration_s=15.0,
+            narration_s=16.4,
             images=IMGS,
-            approach=(Path("approach.mp4"), 6.0),
-            terrain=(Path("terrain.mp4"), 16.0),
-            terrain_start=0.3,
+            opening=(Path("opening.mp4"), 6.0),
+            opening_start=0.0,
         )
         kinds = [s.kind for s in segs]
-        assert kinds == ["clip", "clip", "black", "reveal"]
-        assert segs[0].start == 0.0 and segs[1].start == 0.3
-        assert segs[0].duration == APPROACH_MAX_S  # capped
-        assert segs[1].duration == pytest.approx(15.0 + NARRATION_TAIL_S)
-        assert segs[-1].source == str(HERO)
-        assert _total(segs) == pytest.approx(APPROACH_MAX_S + 15.6 + BEAT_S + REVEAL_S)
+        # 17.0 s span: 6 s clip, 11 s over 4 stills (3.5 s max) → but only 3 in the pool
+        assert kinds == ["clip", "pan", "pan", "pan", "black", "reveal"]
+        assert segs[0].duration == 6.0 and segs[0].start == 0.0
+        assert segs[1].duration == pytest.approx(11.0 / 3)
+        assert [s.forward for s in segs[1:4]] == [True, False, True]
+        assert segs[-1].source == str(HERO[0])
+        assert _total(segs) == pytest.approx(17.0 + BEAT_S + REVEAL_S)
 
-    def test_short_terrain_falls_back_to_kenburns_for_the_rest(self):
-        segs = plan_timeline(
-            narration_s=15.0,
-            images=IMGS,
-            approach=None,
-            terrain=(Path("terrain.mp4"), 8.0),
-        )
-        assert [s.kind for s in segs] == ["clip", "kenburns", "kenburns", "black", "reveal"]
-        assert segs[0].duration == 8.0
-        # 7.6 s remain → 2 images of 3.8 s, hero kept out of the narration pool
-        assert segs[1].duration == pytest.approx(3.8)
-        assert {segs[1].source, segs[2].source} == {"a.jpg", "b.jpg"}
-        assert segs[1].zoom_in and not segs[2].zoom_in
-
-    def test_terrain_deficit_within_slack_is_absorbed(self):
-        segs = plan_timeline(
-            narration_s=15.0, images=IMGS, approach=None, terrain=(Path("t.mp4"), 15.2)
-        )
+    def test_long_opening_is_capped_at_the_narration_span(self):
+        segs = plan_timeline(narration_s=5.0, images=IMGS, opening=(Path("o.mp4"), 9.0))
         assert [s.kind for s in segs] == ["clip", "black", "reveal"]
-        assert segs[0].duration == pytest.approx(15.2)
+        assert segs[0].duration == pytest.approx(5.0 + NARRATION_TAIL_S)
 
-    def test_no_clips_at_all_uses_images_only(self):
-        segs = plan_timeline(narration_s=12.0, images=IMGS, approach=None, terrain=None)
-        assert [s.kind for s in segs] == ["kenburns", "kenburns", "kenburns", "black", "reveal"]
-        assert _total(segs) == pytest.approx(12.6 + BEAT_S + REVEAL_S)
+    def test_opening_deficit_within_slack_is_absorbed(self):
+        segs = plan_timeline(narration_s=5.0, images=IMGS, opening=(Path("o.mp4"), 5.2))
+        assert [s.kind for s in segs] == ["clip", "black", "reveal"]
+
+    def test_no_opening_uses_stills_only(self):
+        segs = plan_timeline(narration_s=6.0, images=IMGS, opening=None)
+        assert [s.kind for s in segs] == ["pan", "pan", "black", "reveal"]
+        assert _total(segs) == pytest.approx(6.6 + BEAT_S + REVEAL_S)
+
+    def test_portrait_stills_pan_vertically(self):
+        tall = [HERO, (Path("tall.jpg"), 1000, 3000)]
+        segs = plan_timeline(narration_s=3.0, images=tall, opening=None)
+        assert segs[0].kind == "pan" and segs[0].vertical is True
 
     def test_only_hero_available_reuses_it(self):
-        segs = plan_timeline(narration_s=5.0, images=[HERO], approach=None, terrain=None)
-        assert segs[0].kind == "kenburns" and segs[0].source == str(HERO)
+        segs = plan_timeline(narration_s=3.0, images=[HERO], opening=None)
+        assert segs[0].kind == "pan" and segs[0].source == str(HERO[0])
 
     def test_requires_an_image(self):
         with pytest.raises(ValueError):
-            plan_timeline(narration_s=5.0, images=[], approach=None, terrain=None)
+            plan_timeline(narration_s=5.0, images=[], opening=None)
 
 
 class TestText:
@@ -125,7 +118,7 @@ class TestText:
                 "original_url": "u2",
             },
         ]
-        text = build_description(site, imgs, "English_CaptivatingStoryteller", terrain_used=True)
+        text = build_description(site, imgs, "English_CaptivatingStoryteller", mapbox_used=True)
         assert "https://ancientnerds.com/sites/peru/machu-picchu-abcd1234" in text
         assert "© Mapbox © Maxar" in text
         assert "Mapbox" not in build_description(site, imgs, "v")
@@ -138,10 +131,20 @@ class TestFilters:
     def test_ff_path_escapes_drive_colon_and_backslashes(self):
         assert ff_path(Path(r"C:\x\fonts\a.ttf")) == "C\\:/x/fonts/a.ttf"
 
-    def test_kenburns_zoom_direction(self):
-        assert "z='1+0.12*on/(30*4.000)'" in kenburns_filter(True, 4.0)
-        assert "z='1.12-0.12*on/(30*4.000)'" in kenburns_filter(False, 4.0)
-        assert "s=1080x1920" in kenburns_filter(True, 4.0)
+    def test_pan_filter_sweeps_the_overflow_axis(self):
+        fwd = pan_filter(3.4, forward=True, vertical=False)
+        assert "scale=1080:1920:force_original_aspect_ratio=increase" in fwd
+        assert "x='(iw-ow)/2+(t/3.400-0.5)*min(iw-ow\\,900)':y=0" in fwd
+        back = pan_filter(3.4, forward=False, vertical=False)
+        assert "x='(iw-ow)/2-(t/3.400-0.5)*min(iw-ow\\,900)':y=0" in back
+        tall = pan_filter(2.0, forward=True, vertical=True)
+        assert "x=0:y='(ih-oh)/2+(t/2.000-0.5)*min(ih-oh\\,900)'" in tall
+        assert "fps=60" in fwd
+
+    def test_is_portrait_threshold(self):
+        assert is_portrait(1000, 3000) is True
+        assert is_portrait(1600, 1200) is False
+        assert is_portrait(1080, 1920) is False  # exactly 9:16 fills the frame, no overflow
 
     def test_reveal_filter_positions_follow_name_lines(self, tmp_path):
         one = reveal_filter(name_lines=1, ribbon_width=300, rarity_tier=5, text_dir=tmp_path)
