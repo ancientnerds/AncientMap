@@ -78,6 +78,8 @@ export interface DemoAPI {
   hideMapboxLayers(pattern: string): number | Promise<number>
   /** raster-fade-duration for every raster layer; 0 so tiles are opaque on the first captured frame. */
   setMapboxRasterFade(ms: number): void
+  /** True when every tile (imagery + DEM) for the current view is loaded; the recorder polls this per frame. */
+  mapboxTilesLoaded(): boolean
 
   // UI control
   hideAllUI(): void
@@ -452,6 +454,10 @@ export function registerGlobeDemoApi(refs: GlobeDemoRefs): void {
       ;(map.getStyle()?.layers ?? [])
         .filter((l: { id: string; type: string }) => l.type === 'raster')
         .forEach((l: { id: string }) => map.setPaintProperty(l.id, 'raster-fade-duration', ms))
+    },
+    mapboxTilesLoaded: () => {
+      const map = refs.mapboxServiceRef.current?.getMap()
+      return map ? map.areTilesLoaded() : true
     },
     mapboxWaitIdle: (timeoutMs = 15000) => {
       return new Promise<void>((resolve) => {

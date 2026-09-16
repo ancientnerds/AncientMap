@@ -178,6 +178,6 @@ async function runReturn(ctx: SceneContext): Promise<void> {
 const MAPBOX_CANVAS = '.mapbox-globe-container canvas'
 
 export const siteShortScenes: SceneDefinition[] = [
-  { name: 'short-opening', duration: OPENING_TAKE_S, resolution: 'short', canvasSelector: MAPBOX_CANVAS, frameYieldMs: FRAME_YIELD_MS, run: runOpening },
-  { name: 'short-return', duration: RETURN_S, resolution: 'short', canvasSelector: MAPBOX_CANVAS, frameYieldMs: FRAME_YIELD_MS, run: runReturn },
+  { name: 'short-opening', duration: OPENING_TAKE_S, resolution: 'short', canvasSelector: MAPBOX_CANVAS, frameYieldMs: FRAME_YIELD_MS, waitForTiles: true, run: runOpening },
+  { name: 'short-return', duration: RETURN_S, resolution: 'short', canvasSelector: MAPBOX_CANVAS, frameYieldMs: FRAME_YIELD_MS, waitForTiles: true, run: runReturn },
 ]

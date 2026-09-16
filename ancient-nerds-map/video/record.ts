@@ -50,6 +50,8 @@ export interface SceneDefinition {
   canvasSelector?: string
   /** Wall-clock ms to wait per captured frame so MediaRecorder keeps up (portrait scenes need ~40). */
   frameYieldMs?: number
+  /** Mapbox scenes: hold each frame until every tile of the current view is loaded. */
+  waitForTiles?: boolean
   run: (ctx: SceneContext) => Promise<void>
 }
 
@@ -169,7 +171,10 @@ async function launchBrowser(portrait: boolean): Promise<{ browser: Browser; pag
 /** Navigate to the globe and wait until demo API reports ready. */
 async function loadGlobe(page: Page): Promise<void> {
   console.log(`Navigating to ${GLOBE_URL}`)
-  await page.goto(GLOBE_URL, { waitUntil: 'networkidle0', timeout: 60000 })
+  // 'load', not 'networkidle0': a Mapbox scene keeps tiles streaming, so the
+  // reload between scenes never went network-idle and timed out. Readiness
+  // is polled through the demo API below anyway.
+  await page.goto(GLOBE_URL, { waitUntil: 'load', timeout: 60000 })
 
   console.log('Waiting for globe to be ready...')
   const readyTimeout = 120_000
@@ -245,6 +250,7 @@ function createDemoProxy(page: Page): DemoAPI {
     setMapboxFog: (spec) => evalDemo(`window.__DEMO.setMapboxFog(${JSON.stringify(spec)})`),
     hideMapboxLayers: (pattern) => page.evaluate(`window.__DEMO.hideMapboxLayers(${JSON.stringify(pattern)})`) as Promise<number>,
     setMapboxRasterFade: (ms) => evalDemo(`window.__DEMO.setMapboxRasterFade(${ms})`),
+    mapboxTilesLoaded: () => { throw new Error('mapboxTilesLoaded is polled inside the capture loop') },
     // UI control
     hideAllUI: () => evalDemo(`window.__DEMO.hideAllUI()`),
     showUI: () => evalDemo(`window.__DEMO.showUI()`),
@@ -325,7 +331,7 @@ async function main() {
 
       // Fresh StreamRecorder per scene; it starts on the scene's first capture()
       // so the setup phase (tiles, poses) never leaks into frame 0.
-      const recorder = new StreamRecorder({ fps, canvasSelector: scene.canvasSelector, frameYieldMs: scene.frameYieldMs })
+      const recorder = new StreamRecorder({ fps, canvasSelector: scene.canvasSelector, frameYieldMs: scene.frameYieldMs, waitForTiles: scene.waitForTiles })
 
       const ctx: SceneContext = {
         page,

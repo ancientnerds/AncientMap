@@ -75,10 +75,11 @@ export class StreamRecorder {
   private readonly fps: number
   private readonly canvasSelector: string
   private readonly frameYieldMs: number
+  private readonly waitForTiles: boolean
   private chunks: Buffer[] = []
   private frameCount = 0
 
-  constructor(options: { fps?: number; canvasSelector?: string; frameYieldMs?: number }) {
+  constructor(options: { fps?: number; canvasSelector?: string; frameYieldMs?: number; waitForTiles?: boolean }) {
     this.fps = options.fps ?? 24
     // Three.js canvas by default; Mapbox scenes record `.mapbox-globe-container canvas`.
     this.canvasSelector = options.canvasSelector ?? '.globe-container canvas'
@@ -86,6 +87,10 @@ export class StreamRecorder {
     // Synthetic time makes this free for the animation; 0 ms dropped 60 % of
     // 1080×1920 frames (36/97, Machu Picchu approach, 2026-09-16).
     this.frameYieldMs = options.frameYieldMs ?? 0
+    // Mapbox scenes: poll window.__DEMO.mapboxTilesLoaded() before each frame.
+    // A zoom path outruns tile loading otherwise, and zoom-outs have no finer
+    // tiles to fall back on (grey patches, Machu Picchu return flight).
+    this.waitForTiles = options.waitForTiles ?? false
   }
 
   private started = false
@@ -155,6 +160,7 @@ export class StreamRecorder {
     await page.evaluate(`(async function() {
       var totalFrames = ${totalFrames};
       var startFrame = ${startFrame};
+      var tileWaits = 0;
       var stream = window.__captureStream;
       var videoTrack = stream.getVideoTracks()[0];
 
@@ -166,6 +172,22 @@ export class StreamRecorder {
         await new Promise(function(r) {
           requestAnimationFrame(function() { requestAnimationFrame(r); });
         });
+
+        // 2b. Mapbox scenes: hold this frame until its tiles are in, then let the
+        // map draw them before the frame is sampled. setTimeout is wall-clock.
+        if (${this.waitForTiles}) {
+          var polls = 0;
+          while (polls < 400 && !(window.__DEMO && window.__DEMO.mapboxTilesLoaded && window.__DEMO.mapboxTilesLoaded())) {
+            await new Promise(function(r) { setTimeout(r, 25); });
+            polls++;
+          }
+          if (polls > 0) {
+            tileWaits++;
+            await new Promise(function(r) {
+              requestAnimationFrame(function() { requestAnimationFrame(r); });
+            });
+          }
+        }
 
         // 3. Request a frame from the capture stream
         if (videoTrack.requestFrame) {
@@ -187,6 +209,7 @@ export class StreamRecorder {
           window.__logProgress('\\r  Segment progress: ' + pct + '% (' + (i + 1) + '/' + totalFrames + ') | Total frames: ' + globalFrame);
         }
       }
+      if (${this.waitForTiles}) window.__logProgress('\\n  Frames that waited for tiles: ' + tileWaits + '/' + totalFrames);
     })()`)
 
     this.frameCount += totalFrames
