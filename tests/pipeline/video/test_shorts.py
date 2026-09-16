@@ -22,7 +22,6 @@ from pipeline.video.shorts_render import (
     pushin_filter,
     stills_graph,
     wrap_lines,
-    write_room_ir,
 )
 from pipeline.video.shorts_select import (
     Candidate,
@@ -164,32 +163,17 @@ class TestFilters:
         assert "if(gt(t\\,2.850)\\,0\\," in expr  # fully transparent for the last 0.15 s
         assert "gt(t\\,2.350)" in expr and "(2.850-t)/0.5" in expr
 
-    def test_mix_graph_processes_both_voices_through_the_room_and_bounds_them(self):
+    def test_mix_graph_processes_both_voices_dry_and_bounds_them(self):
         g = mix_graph(16.7, 19.5)
-        assert g.count("acompressor=") == 2 and g.count("afir=") == 2
+        assert g.count("acompressor=") == 2
         assert "adelay=16700:all=1[d1]" in g
         assert g.endswith("apad=whole_dur=19.500,atrim=duration=19.500[a]")
-        assert "loudnorm" not in g
+        assert "loudnorm" not in g and "afir" not in g and "aecho" not in g
 
     def test_final_graph_is_look_plus_fixed_gain(self):
         g = final_graph(gain_db(-20.5))
         assert g.startswith("[0:v]eq=saturation=0.78") and "[vout];" in g
         assert g.endswith("[1:a]volume=6.50dB,alimiter=limit=0.84:level=false[a]")
-
-    def test_room_ir_is_a_short_mono_wav_with_a_quiet_tail(self, tmp_path):
-        import wave
-
-        path = write_room_ir(tmp_path / "ir.wav")
-        with wave.open(str(path)) as w:
-            assert (w.getnchannels(), w.getsampwidth(), w.getframerate()) == (1, 2, 48000)
-            frames = w.readframes(w.getnframes())
-        first = int.from_bytes(frames[0:2], "little", signed=True)
-        loudest_tail = max(
-            abs(int.from_bytes(frames[i : i + 2], "little", signed=True))
-            for i in range(2 * 600, len(frames), 2)
-        )
-        assert first == 32767  # direct sound
-        assert 0 < loudest_tail < 0.1 * 32767  # room tail well below the direct sound
 
     def test_clip_filter_adds_name_only_for_the_return(self, tmp_path):
         credit = tmp_path / "credit.txt"

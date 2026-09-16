@@ -45,20 +45,14 @@ OPENING_TRIM_S = 0.1  # the opening take holds its first pose this long; the fir
 MAPBOX_CREDIT = "© Mapbox © Maxar"
 
 # Voice: 48 kHz float, gentle high-pass, a soft 1.8:1 compressor (slow, wide
-# knee) so the level evens out without pumping. The room comes from a
-# convolution with a short synthetic impulse response (see write_room_ir),
-# mixed very low; echo taps sounded metallic. Loudness is not regulated
-# dynamically: the mix is measured once and lifted by a fixed gain to
-# TARGET_LUFS with a true-peak limiter as the only safety net.
+# knee) so the level evens out without pumping. No reverb (user, 2026-09-16).
+# Loudness is not regulated dynamically: the mix is measured once and lifted
+# by a fixed gain to TARGET_LUFS with a true-peak limiter as the only safety net.
 VOICE_CHAIN = (
     "aformat=sample_fmts=fltp:sample_rates=48000:channel_layouts=mono,"
     "highpass=f=80,"
     "acompressor=threshold=-24dB:ratio=1.8:attack=20:release=250:makeup=2:knee=6"
 )
-IR_SAMPLE_RATE = 48000
-IR_RT60_S = 0.45  # small room
-IR_PREDELAY_S = 0.012
-IR_TAIL_LEVEL = 0.06  # tail amplitude relative to the direct sound (≈ -24 dB)
 TARGET_LUFS = -14.0  # YouTube
 PEAK_LIMIT = 0.84  # ≈ -1.5 dBTP
 # "Historical" look for a homogeneous film: slightly desaturated and warm,
@@ -291,61 +285,25 @@ def render_stills(stills: list[Segment], out: Path) -> Path:
     return run_ffmpeg([*args, "-filter_complex", graph, "-map", "[out]", *X264], out)
 
 
-def write_room_ir(path: Path) -> Path:
-    """Synthetic impulse response: the direct sound plus an exponentially
-    decaying noise tail (RT60 = IR_RT60_S) at IR_TAIL_LEVEL. Deterministic."""
-    import math
-    import random
-    import struct
-    import wave
-
-    rng = random.Random(7)
-    n = int(IR_SAMPLE_RATE * IR_RT60_S * 1.5)
-    pre = int(IR_SAMPLE_RATE * IR_PREDELAY_S)
-    decay = math.log(1000) / IR_RT60_S  # -60 dB after RT60
-    samples = [0.0] * n
-    samples[0] = 1.0
-    for i in range(pre, n):
-        t = (i - pre) / IR_SAMPLE_RATE
-        samples[i] = IR_TAIL_LEVEL * rng.uniform(-1, 1) * math.exp(-decay * t)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with wave.open(str(path), "wb") as w:
-        w.setnchannels(1)
-        w.setsampwidth(2)
-        w.setframerate(IR_SAMPLE_RATE)
-        w.writeframes(b"".join(struct.pack("<h", int(max(-1, min(1, s)) * 32767)) for s in samples))
-    return path
-
-
 def mix_graph(name_at_s: float, total_s: float) -> str:
     """filter_complex for the voice pre-mix: inputs 0 = narration, 1 = spoken
-    name, 2 = room impulse response. Both voices are processed, convolved with
-    the room, mixed, and bounded to exactly `total_s`."""
+    name. Both voices are processed, mixed, and bounded to exactly `total_s`."""
     ms = int(round(name_at_s * 1000))
-    # no IR normalisation / auto gain: the IR carries a unity direct path on purpose
-    fir = "afir=dry=1:wet=1:irnorm=-1:gtype=-1:irgain=1"
     return (
-        f"[2:a]aformat=sample_fmts=fltp:sample_rates={IR_SAMPLE_RATE}:channel_layouts=mono,"
-        f"asplit=2[ir0][ir1];"
         f"[0:a]{VOICE_CHAIN}[d0];"
         f"[1:a]{VOICE_CHAIN},adelay={ms}:all=1[d1];"
-        f"[d0][ir0]{fir}[r0];[d1][ir1]{fir}[r1];"
-        f"[r0][r1]amix=inputs=2:duration=longest:normalize=0,"
+        f"[d0][d1]amix=inputs=2:duration=longest:normalize=0,"
         f"apad=whole_dur={total_s:.3f},atrim=duration={total_s:.3f}[a]"
     )
 
 
-def premix(
-    narration: Path, name_audio: Path, room_ir: Path, name_at_s: float, total_s: float, out: Path
-) -> Path:
+def premix(narration: Path, name_audio: Path, name_at_s: float, total_s: float, out: Path) -> Path:
     return run_ffmpeg(
         [
             "-i",
             str(narration),
             "-i",
             str(name_audio),
-            "-i",
-            str(room_ir),
             "-filter_complex",
             mix_graph(name_at_s, total_s),
             "-map",
@@ -510,14 +468,7 @@ def render_short(site: dict, stills: list[dict], site_dir: Path, voice_id: str) 
     used = [s for s in stills if any(seg.source == s["local_path"] for seg in segments)]
     final = site_dir / f"{site['slug']}.mp4"
     total_s = sum(s.duration for s in segments)
-    mix = premix(
-        narration,
-        name_audio,
-        write_room_ir(work / "room_ir.wav"),
-        name_audio_at(segments),
-        total_s,
-        work / "mix.wav",
-    )
+    mix = premix(narration, name_audio, name_audio_at(segments), total_s, work / "mix.wav")
     lufs = measure_lufs(mix)
     logger.info("voice mix %.1f LUFS → gain %+.1f dB", lufs, gain_db(lufs))
     concat_and_mux(parts, mix, gain_db(lufs), final)
