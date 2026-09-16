@@ -241,8 +241,10 @@ function createDemoProxy(page: Page): DemoAPI {
     mapboxWaitIdle: (timeoutMs) => evalDemo(`window.__DEMO.mapboxWaitIdle(${timeoutMs ?? 15000})`),
     setMapboxStyleUrl: (url) => evalDemo(`window.__DEMO.setMapboxStyleUrl(${JSON.stringify(url)})`),
     mapboxPath: (keyframes, ms) => evalDemo(`window.__DEMO.mapboxPath(${JSON.stringify(keyframes)}, ${ms})`),
+    mapboxJumpToPathPose: (keyframes, t) => evalDemo(`window.__DEMO.mapboxJumpToPathPose(${JSON.stringify(keyframes)}, ${t})`),
     setMapboxFog: (spec) => evalDemo(`window.__DEMO.setMapboxFog(${JSON.stringify(spec)})`),
     hideMapboxLayers: (pattern) => page.evaluate(`window.__DEMO.hideMapboxLayers(${JSON.stringify(pattern)})`) as Promise<number>,
+    setMapboxRasterFade: (ms) => evalDemo(`window.__DEMO.setMapboxRasterFade(${ms})`),
     // UI control
     hideAllUI: () => evalDemo(`window.__DEMO.hideAllUI()`),
     showUI: () => evalDemo(`window.__DEMO.showUI()`),

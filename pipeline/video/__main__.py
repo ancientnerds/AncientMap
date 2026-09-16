@@ -18,6 +18,7 @@ import logging
 import sys
 from pathlib import Path
 
+from pipeline.article_html_renderer import slugify
 from pipeline.database import get_session
 from pipeline.video import shorts_export, shorts_images, shorts_render, shorts_tts
 
@@ -45,6 +46,21 @@ def _site_dir_from_id_or_name(args: argparse.Namespace) -> tuple[dict, Path]:
     return site, shorts_export.site_dir(site)
 
 
+def _exported_site_dir(args: argparse.Namespace) -> Path:
+    """Locate a previous export by name (slug) or by site id (scan site.json files)."""
+    if args.name:
+        site_dir = shorts_export.ASSETS_ROOT / slugify(args.name)
+        if not (site_dir / "site.json").exists():
+            raise SystemExit(
+                f"no export for {args.name!r} at {site_dir}; run the export step first"
+            )
+        return site_dir
+    for candidate in shorts_export.ASSETS_ROOT.glob("*/site.json"):
+        if shorts_export.load_site_json(candidate)["id"] == args.site_id:
+            return candidate.parent
+    raise SystemExit(f"no export for site id {args.site_id}; run the export step first")
+
+
 def run_short(args: argparse.Namespace) -> Path | None:
     steps = [s.strip() for s in args.steps.split(",") if s.strip()]
     unknown = set(steps) - set(ALL_STEPS)
@@ -56,9 +72,8 @@ def run_short(args: argparse.Namespace) -> Path | None:
         path = shorts_export.write_site_json(site)
         logging.info("exported %s → %s (%d images)", site["name"], path, len(site["images"]))
     else:
-        # Later steps only need the slug; resolve it through the same lookup
-        # without rewriting site.json.
-        site, site_dir = _site_dir_from_id_or_name(args)
+        # Later steps work offline from the exported site.json (no database).
+        site_dir = _exported_site_dir(args)
         site = shorts_export.load_site_json(site_dir / "site.json")
 
     if "images" in steps:
@@ -73,6 +88,10 @@ def run_short(args: argparse.Namespace) -> Path | None:
     if "tts" in steps:
         shorts_tts.narrate(
             site["card_text"], site_dir / "narration.mp3", voice_id=args.voice, speed=args.speed
+        )
+        # The name is spoken on its own during the return flight; slower so it lands.
+        shorts_tts.narrate(
+            site["name"], site_dir / "name.mp3", voice_id=args.voice, speed=args.speed - 0.07
         )
 
     if "render" in steps:

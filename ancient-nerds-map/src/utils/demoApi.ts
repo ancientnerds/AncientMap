@@ -70,10 +70,14 @@ export interface DemoAPI {
   setMapboxStyleUrl(url: string): Promise<void>
   /** Drive the Mapbox camera through keyframes (`at` = 0..1 of durationMs), smoothstep per segment. */
   mapboxPath(keyframes: MapboxKeyframe[], durationMs: number): void
+  /** Jump straight to the pose the path would have at fraction `t` (warm-up sampling). */
+  mapboxJumpToPathPose(keyframes: MapboxKeyframe[], t: number): void
   /** Replace the app's dark fog (it blackens satellite imagery at globe zooms) with any Mapbox fog spec. */
   setMapboxFog(spec: Record<string, unknown>): void
   /** Hide every style layer whose id matches `pattern` (regex source). Returns how many were hidden. */
   hideMapboxLayers(pattern: string): number | Promise<number>
+  /** raster-fade-duration for every raster layer; 0 so tiles are opaque on the first captured frame. */
+  setMapboxRasterFade(ms: number): void
 
   // UI control
   hideAllUI(): void
@@ -93,6 +97,12 @@ export interface MapboxKeyframe {
   zoom: number
   pitch: number
   bearing: number
+  /**
+   * Terrain exaggeration to apply from this keyframe on (`null` = off). Zooming
+   * out over terrain while the centre moves from mountains to sea puts the
+   * camera below the surface; paths switch terrain off once they are high.
+   */
+  terrain?: number | null
 }
 
 declare global {
@@ -191,6 +201,24 @@ export interface GlobeDemoRefs {
 }
 
 type Vec3 = [number, number, number]
+
+/** Camera pose along a keyframe path at fraction `t` (0..1), smoothstep per segment. */
+function pathPose(keyframes: MapboxKeyframe[], t: number): Omit<MapboxKeyframe, 'at'> {
+  let i = 1
+  while (i < keyframes.length - 1 && keyframes[i].at <= t) i++
+  const a = keyframes[i - 1]
+  const b = keyframes[i]
+  const span = Math.max(b.at - a.at, 1e-6)
+  const u = Math.max(0, Math.min(1, (t - a.at) / span))
+  const e = u * u * (3 - 2 * u)
+  const lerp = (x: number, y: number) => x + (y - x) * e
+  // Terrain state = the latest keyframe at or before t that declares one.
+  let terrain: number | null | undefined
+  for (const k of keyframes) {
+    if (k.at <= t && k.terrain !== undefined) terrain = k.terrain
+  }
+  return { lng: lerp(a.lng, b.lng), lat: lerp(a.lat, b.lat), zoom: lerp(a.zoom, b.zoom), pitch: lerp(a.pitch, b.pitch), bearing: lerp(a.bearing, b.bearing), terrain }
+}
 
 /** Unit direction for a surface point — the same mapping useFlyToAnimation uses. */
 function directionFor(lng: number, lat: number): Vec3 {
@@ -376,25 +404,25 @@ export function registerGlobeDemoApi(refs: GlobeDemoRefs): void {
         return
       }
       const startTime = performance.now()
-      const lerp = (a: number, b: number, t: number) => a + (b - a) * t
+      let terrainApplied: number | null | undefined
       const step = () => {
         const t = Math.min((performance.now() - startTime) / durationMs, 1)
-        let i = 1
-        while (i < keyframes.length - 1 && keyframes[i].at <= t) i++
-        const a = keyframes[i - 1]
-        const b = keyframes[i]
-        const span = Math.max(b.at - a.at, 1e-6)
-        const u = Math.max(0, Math.min(1, (t - a.at) / span))
-        const e = u * u * (3 - 2 * u) // smoothstep per segment
-        map.jumpTo({
-          center: [lerp(a.lng, b.lng, e), lerp(a.lat, b.lat, e)],
-          zoom: lerp(a.zoom, b.zoom, e),
-          pitch: lerp(a.pitch, b.pitch, e),
-          bearing: lerp(a.bearing, b.bearing, e),
-        })
+        const pose = pathPose(keyframes, t)
+        if (pose.terrain !== undefined && pose.terrain !== terrainApplied) {
+          refs.mapboxServiceRef.current?.setTerrain(pose.terrain)
+          terrainApplied = pose.terrain
+        }
+        map.jumpTo({ center: [pose.lng, pose.lat], zoom: pose.zoom, pitch: pose.pitch, bearing: pose.bearing })
         if (t < 1) requestAnimationFrame(step)
       }
       step()
+    },
+    mapboxJumpToPathPose: (keyframes, t) => {
+      const map = refs.mapboxServiceRef.current?.getMap()
+      if (!map || keyframes.length < 2) return
+      const pose = pathPose(keyframes, t)
+      if (pose.terrain !== undefined) refs.mapboxServiceRef.current?.setTerrain(pose.terrain)
+      map.jumpTo({ center: [pose.lng, pose.lat], zoom: pose.zoom, pitch: pose.pitch, bearing: pose.bearing })
     },
     setMapboxFog: (spec) => {
       const map = refs.mapboxServiceRef.current?.getMap()
@@ -414,6 +442,16 @@ export function registerGlobeDemoApi(refs: GlobeDemoRefs): void {
       const hit = (map.getStyle()?.layers ?? []).filter((l: { id: string }) => re.test(l.id))
       hit.forEach((l: { id: string }) => map.setLayoutProperty(l.id, 'visibility', 'none'))
       return hit.length
+    },
+    setMapboxRasterFade: (ms) => {
+      const map = refs.mapboxServiceRef.current?.getMap()
+      if (!map) {
+        console.warn('[DemoAPI] Mapbox not initialized')
+        return
+      }
+      ;(map.getStyle()?.layers ?? [])
+        .filter((l: { id: string; type: string }) => l.type === 'raster')
+        .forEach((l: { id: string }) => map.setPaintProperty(l.id, 'raster-fade-duration', ms))
     },
     mapboxWaitIdle: (timeoutMs = 15000) => {
       return new Promise<void>((resolve) => {
