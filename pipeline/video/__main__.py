@@ -80,11 +80,32 @@ def _parse(argv: list[str]) -> argparse.Namespace:
     return ap.parse_args(argv)
 
 
+DB_ATTEMPTS = 3
+DB_RETRY_WAIT_S = 15.0
+
+
 def _site_dir_from_id_or_name(args: argparse.Namespace) -> tuple[dict, Path]:
-    with get_session() as session:
-        site_id = args.site_id or shorts_export.resolve_site_id(session, args.name)
-        site = shorts_export.export_site(session, site_id)
-    return site, shorts_export.site_dir(site)
+    """Export from the database; a dropped SSH tunnel is retried a few times
+    (the tunnel loop reconnects within seconds), anything else propagates."""
+    from sqlalchemy.exc import OperationalError
+
+    for attempt in range(1, DB_ATTEMPTS + 1):
+        try:
+            with get_session() as session:
+                site_id = args.site_id or shorts_export.resolve_site_id(session, args.name)
+                site = shorts_export.export_site(session, site_id)
+            return site, shorts_export.site_dir(site)
+        except OperationalError as exc:
+            if attempt == DB_ATTEMPTS:
+                raise
+            logging.warning(
+                "database unreachable (attempt %d/%d): %s",
+                attempt,
+                DB_ATTEMPTS,
+                str(exc).splitlines()[0][:120],
+            )
+            time.sleep(DB_RETRY_WAIT_S)
+    raise AssertionError("unreachable")
 
 
 def _exported_site_dir(args: argparse.Namespace) -> Path:

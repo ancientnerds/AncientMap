@@ -130,7 +130,7 @@ async function launchBrowser(portrait: boolean): Promise<{ browser: Browser; pag
 
   const browser = await puppeteer.launch({
     headless: false,  // Use headed mode for WebGL support on Windows
-    protocolTimeout: 300_000,  // 5 minutes for globe loading
+    protocolTimeout: 900_000,  // 15 minutes: globe loading + a capture chunk with tile waits
     args: [
       '--use-angle=default',
       '--enable-webgl',

@@ -24,6 +24,7 @@ import io
 import logging
 import math
 import re
+import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -199,17 +200,40 @@ def vlm_bytes(path: Path) -> bytes:
         return buf.getvalue()
 
 
+VLM_ATTEMPTS = 3
+VLM_RETRY_WAIT_S = 8.0
+
+
 def judge_all(paths: list[Path], site_name: str, card_text: str) -> list[dict | None]:
+    """One verdict per image. A call that returns nothing (HTTP error, SSL
+    reset, unparsable JSON) is retried VLM_ATTEMPTS times with a pause; an
+    image that still has no verdict stays None and is rejected downstream.
+    If *no* image got a verdict the VLM is unreachable and we stop instead of
+    silently selecting nothing."""
     settings = _get_settings()
     client = create_minimax_client(settings.minimax_base_url, settings.minimax_api_key)
     prompt = VLM_PROMPT.format(site=site_name, card_text=card_text)
     verdicts: list[dict | None] = []
     try:
         for path in paths:
-            raw = minimax_vlm(client, vlm_bytes(path), prompt)
-            verdict = parse_fenced_json(raw, default=None, extract_object=True)
-            verdicts.append(verdict if isinstance(verdict, dict) else None)
-            logger.info("vlm %s → %s", path.name, verdicts[-1])
+            verdict: dict | None = None
+            for attempt in range(1, VLM_ATTEMPTS + 1):
+                raw = minimax_vlm(client, vlm_bytes(path), prompt)
+                parsed = parse_fenced_json(raw, default=None, extract_object=True)
+                if isinstance(parsed, dict):
+                    verdict = parsed
+                    break
+                logger.warning(
+                    "vlm %s: no verdict (attempt %d/%d)", path.name, attempt, VLM_ATTEMPTS
+                )
+                if attempt < VLM_ATTEMPTS:
+                    time.sleep(VLM_RETRY_WAIT_S)
+            verdicts.append(verdict)
+            logger.info("vlm %s → %s", path.name, verdict)
     finally:
         client.close()
+    if paths and all(v is None for v in verdicts):
+        raise RuntimeError(
+            f"MiniMax VLM returned no verdict for any of {len(paths)} images — network or quota"
+        )
     return verdicts

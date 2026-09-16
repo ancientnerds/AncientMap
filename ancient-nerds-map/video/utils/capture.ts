@@ -62,6 +62,9 @@ export async function injectTimeControl(page: Page, fps: number): Promise<void> 
  */
 let activeRecorder: StreamRecorder | null = null
 
+/** Frames per page.evaluate() in capture(); keeps each call well under the protocol timeout. */
+const CAPTURE_CHUNK_FRAMES = 60
+
 export async function bindRecorderFunctions(page: Page): Promise<void> {
   await page.exposeFunction('__saveVideoChunk', (base64: string) => {
     activeRecorder?.pushChunk(base64)
@@ -156,15 +159,22 @@ export class StreamRecorder {
 
     console.log(`  Capturing ${totalFrames} frames (${durationSec}s @ ${this.fps}fps)...`)
 
-    // Run the frame loop inside the browser to avoid per-frame CDP round-trips
-    await page.evaluate(`(async function() {
+    // The frame loop runs inside the browser (no per-frame CDP round-trips),
+    // but in chunks: with per-frame tile waits one evaluate() for a whole
+    // 6 s take exceeded Puppeteer's protocol timeout.
+    let tileWaits = 0
+    for (let first = 0; first < totalFrames; first += CAPTURE_CHUNK_FRAMES) {
+      const count = Math.min(CAPTURE_CHUNK_FRAMES, totalFrames - first)
+      tileWaits += await page.evaluate(`(async function() {
       var totalFrames = ${totalFrames};
       var startFrame = ${startFrame};
+      var first = ${first};
+      var count = ${count};
       var tileWaits = 0;
       var stream = window.__captureStream;
       var videoTrack = stream.getVideoTracks()[0];
 
-      for (var i = 0; i < totalFrames; i++) {
+      for (var i = first; i < first + count; i++) {
         // 1. Advance synthetic time by one frame interval
         window.__tickFrame();
 
@@ -209,8 +219,10 @@ export class StreamRecorder {
           window.__logProgress('\\r  Segment progress: ' + pct + '% (' + (i + 1) + '/' + totalFrames + ') | Total frames: ' + globalFrame);
         }
       }
-      if (${this.waitForTiles}) window.__logProgress('\\n  Frames that waited for tiles: ' + tileWaits + '/' + totalFrames);
-    })()`)
+      return tileWaits;
+    })()`) as number
+    }
+    if (this.waitForTiles) console.log(`\n  Frames that waited for tiles: ${tileWaits}/${totalFrames}`)
 
     this.frameCount += totalFrames
     console.log('')
