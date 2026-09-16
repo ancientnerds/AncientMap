@@ -125,8 +125,10 @@ class TestText:
                 "original_url": "u2",
             },
         ]
-        text = build_description(site, imgs, "English_CaptivatingStoryteller")
+        text = build_description(site, imgs, "English_CaptivatingStoryteller", terrain_used=True)
         assert "https://ancientnerds.com/sites/peru/machu-picchu-abcd1234" in text
+        assert "© Mapbox © Maxar" in text
+        assert "Mapbox" not in build_description(site, imgs, "v")
         assert "- Intiwatana — bob (CC BY 2.0) https://c/1" in text
         assert "- y.jpg — Unknown (license unknown) u2" in text
         assert "AI-generated voice" in text

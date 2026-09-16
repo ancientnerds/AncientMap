@@ -37,6 +37,9 @@ TERRAIN_TRIM_S = 0.3  # Mapbox's first captured frame is still fading in
 REVEAL_ZOOM = 0.08
 CUT_FADE_S = 0.4  # dip-to-black at clip boundaries
 BAND_TOP = 1050  # where the reveal's gradient band starts fading in
+# Mapbox ToS: satellite/terrain frames need attribution in the video itself;
+# the DOM logo is not part of the captured canvas.
+MAPBOX_CREDIT = "© Mapbox © Maxar"
 NAME_WRAP_CHARS = 16
 
 FONT_DIR = Path(__file__).resolve().parents[2] / "video-assets" / "fonts"
@@ -209,7 +212,9 @@ def credit_line(image: dict) -> str:
     return " · ".join(parts)
 
 
-def build_description(site: dict, images_used: list[dict], voice_id: str) -> str:
+def build_description(
+    site: dict, images_used: list[dict], voice_id: str, terrain_used: bool = False
+) -> str:
     lines = [
         f"{site['name']} — {site['country']}",
         "",
@@ -225,6 +230,8 @@ def build_description(site: dict, images_used: list[dict], voice_id: str) -> str
             f"- {img.get('title') or img['filename']} — {img.get('author') or 'Unknown'}"
             f" ({img.get('license') or 'license unknown'}) {img.get('commons_page_url') or img['original_url']}"
         )
+    if terrain_used:
+        lines += ["", f"Terrain flyover: Mapbox Satellite + Terrain DEM ({MAPBOX_CREDIT})."]
     lines += ["", f"Narration: AI-generated voice (MiniMax speech-2.8-hd, {voice_id})."]
     return "\n".join(lines) + "\n"
 
@@ -241,15 +248,21 @@ def render_clip(
     start: float = 0.0,
     fade_in: bool = False,
     fade_out: bool = False,
+    credit_file: Path | None = None,
 ) -> Path:
-    fades = ""
+    extra = ""
+    if credit_file is not None:
+        extra += (
+            f",drawtext=fontfile='{ff_path(FONT_BODY)}':textfile='{ff_path(credit_file)}':"
+            f"fontcolor=white@0.7:fontsize=22:x=w-text_w-28:y=h-52"
+        )
     if fade_in:
-        fades += f",fade=t=in:st=0:d={CUT_FADE_S}"
+        extra += f",fade=t=in:st=0:d={CUT_FADE_S}"
     if fade_out:
-        fades += f",fade=t=out:st={duration - CUT_FADE_S:.3f}:d={CUT_FADE_S}"
+        extra += f",fade=t=out:st={duration - CUT_FADE_S:.3f}:d={CUT_FADE_S}"
     vf = (
         f"scale={W}:{H}:force_original_aspect_ratio=increase,crop={W}:{H},fps={FPS}"
-        f"{fades},format=yuv420p"
+        f"{extra},format=yuv420p"
     )
     return run_ffmpeg(
         ["-ss", f"{start:.3f}", "-i", str(src), "-t", f"{duration:.3f}", "-vf", vf, *X264], out
@@ -390,6 +403,8 @@ def render_short(site: dict, images: list[dict], site_dir: Path, voice_id: str) 
         json.dumps([asdict(s) for s in segments], indent=2), encoding="utf-8"
     )
 
+    mapbox_credit = work / "mapbox_credit.txt"
+    mapbox_credit.write_text(MAPBOX_CREDIT, encoding="utf-8")
     parts: list[Path] = []
     for n, seg in enumerate(segments):
         out = work / f"{n:02d}_{seg.kind}.mp4"
@@ -402,6 +417,7 @@ def render_short(site: dict, images: list[dict], site_dir: Path, voice_id: str) 
                 start=seg.start,
                 fade_in=n > 0 and segments[n - 1].kind == "clip",
                 fade_out=segments[n + 1].kind in ("clip", "black"),
+                credit_file=mapbox_credit if seg.source == str(terrain_clip) else None,
             )
         elif seg.kind == "kenburns":
             render_kenburns(Path(seg.source or ""), seg.duration, seg.zoom_in, out)
@@ -414,7 +430,8 @@ def render_short(site: dict, images: list[dict], site_dir: Path, voice_id: str) 
     final = site_dir / f"{site['slug']}.mp4"
     concat_and_mux(parts, narration, offset, final)
     (site_dir / "description.txt").write_text(
-        build_description(site, ordered, voice_id), encoding="utf-8"
+        build_description(site, ordered, voice_id, terrain_used=terrain is not None),
+        encoding="utf-8",
     )
     logger.info("short written: %s (%.2fs)", final, probe_duration(final))
     return final
