@@ -338,10 +338,8 @@ def write_report() -> Path:
         "",
     ]
     out = shorts_export.ASSETS_ROOT / "AUDIT-REPORT.md"
-    out.write_text("
-".join(lines), encoding="utf-8")
-    print("
-".join(lines))
+    out.write_text("\n".join(lines), encoding="utf-8")
+    print("\n".join(lines))
     return out
 
 
