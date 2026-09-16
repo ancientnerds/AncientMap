@@ -203,31 +203,20 @@ def _luma_samples(video: Path, step_s: float = 0.25) -> list[tuple[float, float]
 
 
 def _frame(video: Path, at: str, out: Path) -> Path:
-    seek = ["-sseof", at] if at.startswith("-") else ["-ss", at]
-    subprocess.run(
-        [
-            FFMPEG_BIN,
-            "-v",
-            "error",
-            "-y",
-            *seek,
-            "-i",
-            str(video),
-            "-frames:v",
-            "1",
-            "-vf",
-            "scale=540:-1",
-            str(out),
-        ],
-        check=True,
-    )
+    """Extract one frame at `at` seconds; a negative `at` means "the true last
+    frame" (decode the tail and keep the final image), because seeking with
+    -sseof to within a frame or two of the end yields nothing at 60 fps."""
+    if at.startswith("-"):
+        args = ["-sseof", "-0.25", "-i", str(video), "-vf", "scale=540:-1", "-update", "1"]
+    else:
+        args = ["-ss", at, "-i", str(video), "-frames:v", "1", "-vf", "scale=540:-1"]
+    subprocess.run([FFMPEG_BIN, "-v", "error", "-y", *args, str(out)], check=True)
     return out
 
 
 def _loop_seam(video: Path, work: Path) -> float:
     first = Image.open(_frame(video, "0", work / "audit_first.png")).convert("L")
-    # 0.1 s before the end: -sseof closer than a few frames can yield no frame at all
-    last = Image.open(_frame(video, "-0.1", work / "audit_last.png")).convert("L")
+    last = Image.open(_frame(video, "-", work / "audit_last.png")).convert("L")
     return ImageStat.Stat(ImageChops.difference(first, last)).mean[0]
 
 

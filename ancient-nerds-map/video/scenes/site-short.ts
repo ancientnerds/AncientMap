@@ -125,13 +125,19 @@ const LIFT_PITCH = 20
 const HIGH_AT = 0.6
 const HIGH_ZOOM = 5
 
+// The return arrives at the space pose END_HOLD_S before the take ends and
+// holds it, so the last frame is exactly the pose the opening starts from.
+const END_HOLD_S = 0.1
+
 function returnPath(site: SiteInput): MapboxKeyframe[] {
   const end = orbitEndPose(site)
+  const space = spacePose(site)
   return [
     { ...end, terrain: TERRAIN_EXAGGERATION },
     { ...end, at: LIFT_AT, zoom: LIFT_ZOOM, pitch: LIFT_PITCH, terrain: null },
     { ...end, at: HIGH_AT, zoom: HIGH_ZOOM, pitch: 0, bearing: 0 },
-    { ...spacePose(site), at: 1 },
+    { ...space, at: 1 - END_HOLD_S / RETURN_S },
+    { ...space, at: 1 },
   ]
 }
 

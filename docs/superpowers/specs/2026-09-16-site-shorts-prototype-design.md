@@ -88,6 +88,27 @@ outputs.
   the Mapbox DEM source and enables terrain; `mapboxOrbit(...)` animates bearing
   with synthetic time, same pattern as `smoothZoom`.
 
+## Commands (state 2026-09-17)
+
+```
+python -m pipeline.video short --name "Machu Picchu"        # export → images → select → tts → record → render
+python -m pipeline.video short --name X --steps render       # any subset; only export needs the DB tunnel
+python -m pipeline.video audit --name X                      # 13 checks → video-assets/shorts/<slug>/audit.json
+python -m pipeline.video report                              # all audits → video-assets/shorts/AUDIT-REPORT.md
+python -m pipeline.video batch --limit 10 [--go]             # Epic+Legendary without a passing audit; --go runs,
+                                                             # pauses when MiniMax 5h < 30 % or weekly < 20 %
+```
+
+Selection (`shorts_select`): panoramas out, MiniMax VLM judges each image against
+the card text (kind, subject, people, text, quality, relevance, illustrated
+phrase, 9:16 crop), duplicates out by dhash and subject; the renderer takes the
+best N by score and shows them in narration order. Orbit zoom follows the site
+type (16 for monuments, 15 for complexes, 13.5 for cities/geoglyphs).
+
+Audio: dry voice (high-pass, 1.8:1 compressor), pre-mixed to a WAV, measured
+once (EBU R128) and lifted by a fixed gain to −14 LUFS with a true-peak limiter.
+No reverb (user decision), no `loudnorm` (3 s look-ahead cut the spoken name).
+
 ## Out of scope for the prototype
 
 Music (user picks later, YouTube Audio Library), batch ordering (rarity vs.
