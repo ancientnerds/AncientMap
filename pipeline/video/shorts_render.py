@@ -44,15 +44,23 @@ OPENING_TRIM_S = 0.1  # the opening take holds its first pose this long; the fir
 # the DOM logo is not part of the captured canvas.
 MAPBOX_CREDIT = "© Mapbox © Maxar"
 
-# Voice: high-pass, compressor for even loudness, a light room (three short
-# echo taps) so the voice stops sitting on the ear. Mix: EBU loudness
-# normalisation to YouTube's -14 LUFS.
+# Voice: 48 kHz float, gentle high-pass, a soft 1.8:1 compressor (slow, wide
+# knee) so the level evens out without pumping. The room comes from a
+# convolution with a short synthetic impulse response (see write_room_ir),
+# mixed very low; echo taps sounded metallic. Loudness is not regulated
+# dynamically: the mix is measured once and lifted by a fixed gain to
+# TARGET_LUFS with a true-peak limiter as the only safety net.
 VOICE_CHAIN = (
-    "highpass=f=90,"
-    "acompressor=threshold=-20dB:ratio=3:attack=8:release=180:makeup=4,"
-    "aecho=0.85:0.9:30|55|80:0.30|0.18|0.10"
+    "aformat=sample_fmts=fltp:sample_rates=48000:channel_layouts=mono,"
+    "highpass=f=80,"
+    "acompressor=threshold=-24dB:ratio=1.8:attack=20:release=250:makeup=2:knee=6"
 )
-MIX_CHAIN = "loudnorm=I=-14:TP=-1.5:LRA=9"
+IR_SAMPLE_RATE = 48000
+IR_RT60_S = 0.45  # small room
+IR_PREDELAY_S = 0.012
+IR_TAIL_LEVEL = 0.06  # tail amplitude relative to the direct sound (≈ -24 dB)
+TARGET_LUFS = -14.0  # YouTube
+PEAK_LIMIT = 0.84  # ≈ -1.5 dBTP
 # "Historical" look for a homogeneous film: slightly desaturated and warm,
 # lifted blacks / softened whites, vignette, fine grain. Applied once, over
 # the whole concatenated picture, so globe and photos match.
@@ -283,35 +291,118 @@ def render_stills(stills: list[Segment], out: Path) -> Path:
     return run_ffmpeg([*args, "-filter_complex", graph, "-map", "[out]", *X264], out)
 
 
-def final_graph(name_at_s: float, total_s: float) -> str:
-    """filter_complex for the final pass: graded picture, processed voice and
-    spoken name mixed and loudness-normalised.
+def write_room_ir(path: Path) -> Path:
+    """Synthetic impulse response: the direct sound plus an exponentially
+    decaying noise tail (RT60 = IR_RT60_S) at IR_TAIL_LEVEL. Deterministic."""
+    import math
+    import random
+    import struct
+    import wave
 
-    Both voices are padded to exactly `total_s` and the mix is trimmed to it:
-    an open-ended `apad` behind `loudnorm` never lets ffmpeg finish (-shortest
-    does not cut the buffered, infinite audio; the first attempt ran 23 CPU
-    minutes for a 19 s short).
-    """
+    rng = random.Random(7)
+    n = int(IR_SAMPLE_RATE * IR_RT60_S * 1.5)
+    pre = int(IR_SAMPLE_RATE * IR_PREDELAY_S)
+    decay = math.log(1000) / IR_RT60_S  # -60 dB after RT60
+    samples = [0.0] * n
+    samples[0] = 1.0
+    for i in range(pre, n):
+        t = (i - pre) / IR_SAMPLE_RATE
+        samples[i] = IR_TAIL_LEVEL * rng.uniform(-1, 1) * math.exp(-decay * t)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with wave.open(str(path), "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(IR_SAMPLE_RATE)
+        w.writeframes(b"".join(struct.pack("<h", int(max(-1, min(1, s)) * 32767)) for s in samples))
+    return path
+
+
+def mix_graph(name_at_s: float, total_s: float) -> str:
+    """filter_complex for the voice pre-mix: inputs 0 = narration, 1 = spoken
+    name, 2 = room impulse response. Both voices are processed, convolved with
+    the room, mixed, and bounded to exactly `total_s`."""
     ms = int(round(name_at_s * 1000))
+    # no IR normalisation / auto gain: the IR carries a unity direct path on purpose
+    fir = "afir=dry=1:wet=1:irnorm=-1:gtype=-1:irgain=1"
     return (
-        f"[0:v]{LOOK_FILTER}[vout];"
-        f"[1:a]{VOICE_CHAIN},apad=whole_dur={total_s:.3f}[v];"
-        f"[2:a]{VOICE_CHAIN},adelay={ms}:all=1,apad=whole_dur={total_s:.3f}[n];"
-        f"[v][n]amix=inputs=2:duration=longest:normalize=0,"
-        f"atrim=duration={total_s:.3f},{MIX_CHAIN}[a]"
+        f"[2:a]aformat=sample_fmts=fltp:sample_rates={IR_SAMPLE_RATE}:channel_layouts=mono,"
+        f"asplit=2[ir0][ir1];"
+        f"[0:a]{VOICE_CHAIN}[d0];"
+        f"[1:a]{VOICE_CHAIN},adelay={ms}:all=1[d1];"
+        f"[d0][ir0]{fir}[r0];[d1][ir1]{fir}[r1];"
+        f"[r0][r1]amix=inputs=2:duration=longest:normalize=0,"
+        f"apad=whole_dur={total_s:.3f},atrim=duration={total_s:.3f}[a]"
     )
 
 
-def concat_and_mux(
-    parts: list[Path],
-    narration: Path,
-    name_audio: Path,
-    name_at_s: float,
-    total_s: float,
-    out: Path,
+def premix(
+    narration: Path, name_audio: Path, room_ir: Path, name_at_s: float, total_s: float, out: Path
 ) -> Path:
-    """Concatenate the segments, grade the picture, and lay the narration (from
-    0) and the spoken name (at `name_at_s`) under them; the video defines the length."""
+    return run_ffmpeg(
+        [
+            "-i",
+            str(narration),
+            "-i",
+            str(name_audio),
+            "-i",
+            str(room_ir),
+            "-filter_complex",
+            mix_graph(name_at_s, total_s),
+            "-map",
+            "[a]",
+            "-c:a",
+            "pcm_s16le",
+        ],
+        out,
+    )
+
+
+def measure_lufs(audio: Path) -> float:
+    """Integrated loudness (EBU R128) of a file, from ffmpeg's ebur128 summary."""
+    import re
+    import subprocess
+
+    from pipeline.video.media import FFMPEG_BIN
+
+    proc = subprocess.run(
+        [
+            FFMPEG_BIN,
+            "-hide_banner",
+            "-nostats",
+            "-i",
+            str(audio),
+            "-af",
+            "ebur128",
+            "-f",
+            "null",
+            "-",
+        ],
+        capture_output=True,
+        text=True,
+    )
+    match = re.search(r"Integrated loudness:\s*I:\s*(-?[\d.]+) LUFS", proc.stderr)
+    if not match:
+        raise RuntimeError(f"ebur128 gave no integrated loudness for {audio}: {proc.stderr[-400:]}")
+    return float(match.group(1))
+
+
+def gain_db(measured_lufs: float, target_lufs: float = TARGET_LUFS) -> float:
+    return target_lufs - measured_lufs
+
+
+def final_graph(gain: float) -> str:
+    """filter_complex for the final pass: graded picture; pre-mixed voice lifted
+    by a fixed gain with a true-peak limiter as the only dynamic element."""
+    return (
+        f"[0:v]{LOOK_FILTER}[vout];"
+        f"[1:a]volume={gain:.2f}dB,alimiter=limit={PEAK_LIMIT}:level=false[a]"
+    )
+
+
+def concat_and_mux(parts: list[Path], mix: Path, gain: float, out: Path) -> Path:
+    """Concatenate the segments, grade the picture, and lay the pre-mixed voice
+    under them. The mix is already exactly as long as the picture, so no
+    -shortest: that flag cut the buffered tail (the spoken name) in an earlier cut."""
     list_file = out.parent / "concat.txt"
     list_file.write_text("".join(f"file '{p.as_posix()}'\n" for p in parts), encoding="utf-8")
     return run_ffmpeg(
@@ -323,11 +414,9 @@ def concat_and_mux(
             "-i",
             str(list_file),
             "-i",
-            str(narration),
-            "-i",
-            str(name_audio),
+            str(mix),
             "-filter_complex",
-            final_graph(name_at_s, total_s),
+            final_graph(gain),
             "-map",
             "[vout]",
             "-map",
@@ -346,7 +435,6 @@ def concat_and_mux(
             "aac",
             "-b:a",
             "160k",
-            "-shortest",
             "-movflags",
             "+faststart",
         ],
@@ -422,7 +510,17 @@ def render_short(site: dict, stills: list[dict], site_dir: Path, voice_id: str) 
     used = [s for s in stills if any(seg.source == s["local_path"] for seg in segments)]
     final = site_dir / f"{site['slug']}.mp4"
     total_s = sum(s.duration for s in segments)
-    concat_and_mux(parts, narration, name_audio, name_audio_at(segments), total_s, final)
+    mix = premix(
+        narration,
+        name_audio,
+        write_room_ir(work / "room_ir.wav"),
+        name_audio_at(segments),
+        total_s,
+        work / "mix.wav",
+    )
+    lufs = measure_lufs(mix)
+    logger.info("voice mix %.1f LUFS → gain %+.1f dB", lufs, gain_db(lufs))
+    concat_and_mux(parts, mix, gain_db(lufs), final)
     (site_dir / "description.txt").write_text(
         build_description(site, used, voice_id, mapbox_used=opening is not None),
         encoding="utf-8",
