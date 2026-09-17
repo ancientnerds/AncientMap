@@ -17,4 +17,8 @@ description = "Public identifiers that are not credentials"
 regexes = [
     '''932330696956063765''',  # DISCORD_GUILD_ID default (public guild ID)
     '''968657029658980432''',  # Lyra test channel ID (public)
+    # IndexNow key (pipeline/indexnow.py, ancient-nerds-map/public/<key>.txt):
+    # public by protocol design — ownership is proven by serving the key at
+    # https://ancientnerds.com/<key>.txt, so it is not a credential.
+    '''fd469cc4e21cf3949e997e570dbc7b6b''',
 ]
