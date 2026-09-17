@@ -81,7 +81,9 @@ def test_handoff_issues_the_cookie_for_a_founder(monkeypatch):
     monkeypatch.setattr(
         sa, "get_session", _fake_session(SimpleNamespace(roles=[FOUNDER], username="martin"))
     )
-    resp = asyncio.run(sa.stats_handoff(_request({"an_auth_token": jwt_auth.create_token("1", "42")})))
+    resp = asyncio.run(
+        sa.stats_handoff(_request({"an_auth_token": jwt_auth.create_token("1", "42")}))
+    )
     assert resp.status_code == 302
     assert resp.headers["location"] == "https://stats.ancientnerds.com/"
     cookie = resp.headers["set-cookie"]
@@ -94,8 +96,12 @@ def test_handoff_issues_the_cookie_for_a_founder(monkeypatch):
 
 
 def test_handoff_refuses_without_founder_role(monkeypatch):
-    monkeypatch.setattr(sa, "get_session", _fake_session(SimpleNamespace(roles=["1"], username="x")))
-    resp = asyncio.run(sa.stats_handoff(_request({"an_auth_token": jwt_auth.create_token("1", "42")})))
+    monkeypatch.setattr(
+        sa, "get_session", _fake_session(SimpleNamespace(roles=["1"], username="x"))
+    )
+    resp = asyncio.run(
+        sa.stats_handoff(_request({"an_auth_token": jwt_auth.create_token("1", "42")}))
+    )
     assert resp.status_code == 403
     assert "set-cookie" not in resp.headers
     assert "No Founder role" in resp.body.decode()
@@ -118,7 +124,10 @@ def test_login_page_is_mobile_first_and_links_only_to_our_hosts():
     html = sa.gate_html()
     assert 'name="viewport" content="width=device-width, initial-scale=1' in html
     # Absolute on purpose: the page lives on the stats host, the OAuth route on the main one.
-    assert 'href="https://ancientnerds.com/api/auth/discord?return_to=%2Fapi%2Fauth%2Fstats-handoff"' in html
+    assert (
+        'href="https://ancientnerds.com/api/auth/discord?return_to=%2Fapi%2Fauth%2Fstats-handoff"'
+        in html
+    )
     assert "Continue with Discord" in html
     assert 'name="robots" content="noindex' in html
     import re
