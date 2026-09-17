@@ -81,7 +81,7 @@ def test_router_is_mounted_under_api_stats():
     from api.main import app
 
     paths = {r.path for r in app.routes}  # type: ignore[attr-defined]
-    for name in ("overview", "map", "content", "feedback", "sources"):
+    for name in ("overview", "map", "content", "feedback", "sources", "journeys", "problems"):
         assert f"/api/stats/{name}" in paths, name
 
 
@@ -200,3 +200,44 @@ def test_sources_carry_the_family(monkeypatch):
         ("chatgpt.com", "ai", 2),
         ("direct", "direct", 9),
     ]
+
+
+def _session_rows(t: datetime) -> list[dict]:
+    """Two sessions: one story reader who opened a site, one single-page bounce."""
+    common = {"referrer_domain": "google.com", "utm_source": None, "country": "DE", "device": "mobile"}  # fmt: skip
+    return [
+        {"session_id": "a", "created_at": t, "event_type": 1, "event_name": None, "url_path": "/news-archive/x-1", "data": None, **common},
+        {"session_id": "a", "created_at": t, "event_type": 2, "event_name": "site_open", "url_path": "/news-archive/x-1", "data": {"site": "1"}, **common},
+        {"session_id": "a", "created_at": t, "event_type": 1, "event_name": None, "url_path": "/sites/peru/x-1", "data": None, **common},
+        {"session_id": "b", "created_at": t, "event_type": 1, "event_name": None, "url_path": "/news-archive/x-1", "data": None, **common},
+    ]  # fmt: skip
+
+
+def test_journeys_returns_the_chains_of_the_requested_window(monkeypatch):
+    t = datetime(2026, 9, 17, 12, 0, tzinfo=UTC)
+    fetch = Fetch(**{"ORDER BY e.session_id": _session_rows(t)})
+    monkeypatch.setattr(fr, "fetch", fetch)
+    out = asyncio.run(fr.journeys(days=14, _session=SESSION))
+    assert out == {"chains": [{"chain": "google → story → site_open → site", "sessions": 1}]}
+    assert fetch.calls[0][2] - fetch.calls[0][1] == timedelta(days=14)
+
+
+def test_problems_join_the_three_problem_queries_with_the_sessions(monkeypatch):
+    t = datetime(2026, 9, 17, 12, 0, tzinfo=UTC)
+    fetch = Fetch(
+        **{"ORDER BY e.session_id": _session_rows(t)},
+        **{"'not_found'": [{"path": "/old", "referrer": "example.org", "n": 4}]},
+        **{"'vital'": [{"page": "story", "name": "LCP", "p75": 4100.0, "samples": 3}]},
+        **{"'js_error'": [{"message": "x is not a function", "page": "globe", "n": 12}]},
+    )
+    monkeypatch.setattr(fr, "fetch", fetch)
+    out = asyncio.run(fr.problems(days=7, _session=SESSION))
+    assert [p["kind"] for p in out["problems"]] == [
+        "js_error",  # 12 hits × 3
+        "broken_link",  # 4 × 2
+        "slow_page",  # 3 samples
+        "shallow_exit",  # session b read one story and left
+    ]
+    # One window for all four queries, no query run twice.
+    windows = {(since, until) for _, since, until, _ in fetch.calls}
+    assert len(fetch.calls) == 4 and len(windows) == 1

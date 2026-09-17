@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-only
-"""The founders dashboard's data: five endpoints under /api/stats, all behind
+"""The founders dashboard's data: seven endpoints under /api/stats, all behind
 the ``an_stats`` cookie (stats_access.require_stats_session). Rows come from
 pipeline.umami_db, the founder-level shaping from api.services.founders_stats.
 
@@ -18,12 +18,15 @@ from api.routes.stats_access import require_stats_session
 from api.services import founders_stats as fs
 from pipeline.umami_db import (
     SQL_CONTENT,
+    SQL_ERRORS,
     SQL_FEEDBACK,
     SQL_HOUR_BUCKETS,
     SQL_MAP,
+    SQL_NOT_FOUND,
     SQL_OVERVIEW,
     SQL_SESSION_EVENTS,
     SQL_SOURCES,
+    SQL_VITALS,
     fetch,
 )
 
@@ -87,6 +90,35 @@ async def content(
         "stories": [r for r in rows if r["event_name"] == "story_open"][:15],
         "papers": [r for r in rows if r["event_name"] == "paper_open"][:15],
         "searches": [r for r in rows if r["event_name"] == "search"][:30],
+    }
+
+
+@router.get("/journeys")
+async def journeys(
+    days: int = Query(7, ge=1, le=90),
+    _session: dict = Depends(require_stats_session),
+) -> dict[str, Any]:
+    since, until = _window(days)
+    sessions = fs.sessions_from_rows(fetch(SQL_SESSION_EVENTS, since, until))
+    return {
+        "chains": [{"chain": chain, "sessions": n} for chain, n in fs.journeys(sessions)],
+    }
+
+
+@router.get("/problems")
+async def problems(
+    days: int = Query(7, ge=1, le=90),
+    _session: dict = Depends(require_stats_session),
+) -> dict[str, Any]:
+    since, until = _window(days)
+    sessions = fs.sessions_from_rows(fetch(SQL_SESSION_EVENTS, since, until))
+    return {
+        "problems": fs.problems(
+            sessions,
+            not_found=fetch(SQL_NOT_FOUND, since, until),
+            vitals=fetch(SQL_VITALS, since, until),
+            errors=fetch(SQL_ERRORS, since, until),
+        )
     }
 
 
