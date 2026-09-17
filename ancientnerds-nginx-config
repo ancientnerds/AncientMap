@@ -6,12 +6,6 @@ upstream an_api {
     server 127.0.0.1:8001 max_fails=1 fail_timeout=5s;
 }
 
-# SEO: Detect crawler user-agents for pre-rendered site pages (/?site={uuid})
-map $http_user_agent $is_bot {
-    default 0;
-    ~*(Googlebot|bingbot|Twitterbot|facebookexternalhit|LinkedInBot|Slackbot|Discordbot|WhatsApp|TelegramBot|Applebot|Pinterestbot|YandexBot|DuckDuckBot) 1;
-}
-
 # JS-executing scrapers that open the site pages' fan-out endpoints while
 # rendering and then abort: 106 of 738 /api/content/by-site requests ended
 # 499 on 12.–15.09.2026 (91 % of YouBot's, 30 % of meta-externalagent's),
@@ -295,14 +289,6 @@ server {
     location @home_static {
         add_header Cache-Control "no-cache" always;
         try_files /index.html =404;
-    }
-
-    # Internal: proxied pre-rendered site pages (reached via rewrite in /site.html block)
-    location /seo/site/ {
-        internal;
-        proxy_pass http://an_api/seo/site/;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
     }
 
     # Sitemap index + per-type part files — served live by the API instead

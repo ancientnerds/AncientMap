@@ -54,7 +54,6 @@ from api.routes import (
     proposals,
     radar,
     research_html,
-    seo,
     sitemap,
     sites,
     sites_html,
@@ -777,7 +776,6 @@ app.include_router(articles_html.router, tags=["articles-html"])
 app.include_router(research_html.router, tags=["research-html"])
 app.include_router(sites_html.router, tags=["sites-html"])
 app.include_router(landing_html.router, tags=["landing-html"])
-app.include_router(seo.router, tags=["seo"])
 # Funnel measurement: /goto/discord logs the click and 302s to the invite
 # (no /api/ prefix — nginx proxies the exact path)
 app.include_router(goto.router, tags=["goto"])

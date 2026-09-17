@@ -5,7 +5,6 @@ Serves the site's thumbnail image as WebP for OG previews.
 Falls back to a branded logo image for sites without thumbnails.
 """
 
-import html
 import io
 import logging
 import os
@@ -15,8 +14,7 @@ import time
 from pathlib import Path
 
 import httpx
-from fastapi import APIRouter, Depends, Request, Response
-from fastapi.responses import HTMLResponse
+from fastapi import APIRouter, Depends, Response
 from PIL import Image
 from sqlalchemy import text
 from sqlalchemy.orm import Session
@@ -126,152 +124,13 @@ async def get_homepage_og_image():
     )
 
 
-def get_site_data(site_id: str, db: Session) -> dict:
-    """Look up site metadata from the database."""
-    query = text("""
-        SELECT name, lat, lon, country, description, site_type,
-               period_start, period_end, thumbnail_url
-        FROM unified_sites
-        WHERE id::text = :site_id
-    """)
-    result = db.execute(query, {"site_id": site_id})
-    row = result.fetchone()
-
-    if not row:
-        return {
-            "found": False,
-            "name": "Site Not Found",
-            "description": "This archaeological site could not be found.",
-            "country": "",
-            "site_type": None,
-            "period": None,
-            "lat": None,
-            "lon": None,
-            "thumbnail_url": None,
-        }
-
-    description = row.description or ""
-    if len(description) > 200:
-        description = description[:197] + "..."
-
-    # Build period string
-    period = None
-    if row.period_start is not None:
-        ps = row.period_start
-        pe = row.period_end
-        suffix_s = "BC" if ps < 0 else "AD"
-        suffix_e = "BC" if (pe or ps) < 0 else "AD"
-        period = (
-            f"{abs(ps)} {suffix_s}"
-            if pe is None
-            else f"{abs(ps)} {suffix_s} - {abs(pe)} {suffix_e}"
-        )
-
-    return {
-        "found": True,
-        "name": row.name or "Unknown Site",
-        "description": description,
-        "country": row.country or "",
-        "site_type": row.site_type,
-        "period": period,
-        "lat": row.lat,
-        "lon": row.lon,
-        "thumbnail_url": row.thumbnail_url,
-    }
-
-
-@router.get("/share/{site_id}")
-async def get_share_page(
-    site_id: str,
-    request: Request,
-    db: Session = Depends(get_db),
-):
-    """Serve HTML page with OG meta tags for social media sharing."""
-    if not re.match(r"^[0-9a-fA-F-]{36}$", site_id):
-        return HTMLResponse(content="Invalid site ID", status_code=400)
-
-    base_url = str(request.base_url).rstrip("/")
-    base_url = base_url.replace("http://", "https://")
-    site = get_site_data(site_id, db)
-
-    og_image_url = f"{base_url}/api/og/{site_id}"
-    app_url = html.escape(f"/site.html?id={site_id}")
-    canonical_url = html.escape(f"{base_url}/site.html?id={site_id}")
-
-    # Title: "Site Name | Country · Category"
-    title_parts: list[str] = []
-    if site["country"]:
-        title_parts.append(site["country"])
-    if site["site_type"]:
-        title_parts.append(site["site_type"])
-    title = site["name"]
-    if title_parts:
-        title += " | " + " · ".join(title_parts)
-
-    # Description: just the site description text
-    og_desc = site["description"] or "Archaeological site on Ancient Nerds"
-
-    title_escaped = html.escape(title)
-    og_desc_escaped = html.escape(og_desc)
-
-    html_content = f"""<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{title_escaped} - Ancient Nerds</title>
-
-    <!-- Open Graph / Facebook -->
-    <meta property="og:type" content="website">
-    <meta property="og:url" content="{canonical_url}">
-    <meta property="og:title" content="{title_escaped}">
-    <meta property="og:description" content="{og_desc_escaped}">
-    <meta property="og:image" content="{og_image_url}">
-    <meta property="og:site_name" content="ANCIENT NERDS">
-
-    <!-- Twitter -->
-    <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:title" content="{title_escaped}">
-    <meta name="twitter:description" content="{og_desc_escaped}">
-    <meta name="twitter:image" content="{og_image_url}">
-    <meta name="twitter:site" content="@AncientNerdsDAO">
-
-    <!-- Redirect to app -->
-    <meta http-equiv="refresh" content="0;url={app_url}">
-
-    <style>
-        body {{
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: #0a1a1f;
-            color: white;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            height: 100vh;
-            margin: 0;
-        }}
-        .loading {{ text-align: center; }}
-        .spinner {{
-            width: 40px; height: 40px;
-            border: 3px solid #333;
-            border-top-color: #ffd700;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin: 0 auto 20px;
-        }}
-        @keyframes spin {{ to {{ transform: rotate(360deg); }} }}
-    </style>
-</head>
-<body>
-    <div class="loading">
-        <div class="spinner"></div>
-        <p>Loading {title_escaped}...</p>
-    </div>
-    <script>window.location.href = "{app_url}";</script>
-</body>
-</html>"""
-
-    return HTMLResponse(content=html_content)
+def _thumbnail_url(site_id: str, db: Session) -> str | None:
+    """The site's thumbnail URL; None when it has none or does not exist."""
+    row = db.execute(
+        text("SELECT thumbnail_url FROM unified_sites WHERE id::text = :site_id"),
+        {"site_id": site_id},
+    ).fetchone()
+    return row.thumbnail_url if row else None
 
 
 @router.get("/{site_id}")
@@ -293,11 +152,11 @@ async def get_og_image(
                 content=data, media_type=ct, headers={"Cache-Control": "public, max-age=86400"}
             )
 
-    site = get_site_data(site_id, db)
+    thumbnail_url = _thumbnail_url(site_id, db)
 
     # If site has a thumbnail, fetch and serve it as-is
-    if site.get("thumbnail_url"):
-        result = await _fetch_thumbnail(site["thumbnail_url"])
+    if thumbnail_url:
+        result = await _fetch_thumbnail(thumbnail_url)
         if result:
             data, ct = result
             _save_cached_image(site_id, data, ct)
