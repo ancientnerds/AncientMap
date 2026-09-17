@@ -180,3 +180,100 @@ def journeys(sessions: list[Session], limit: int = 10) -> list[tuple[str, int]]:
 
 def session_type_shares(sessions: list[Session]) -> dict[str, int]:
     return dict(Counter(s.kind for s in sessions if s.human))
+
+
+#: Google's "good" thresholds in milliseconds — above them a page is slow for
+#: three quarters of its visitors. CLS has no entry: it is a share, not a time.
+VITAL_LIMITS = {"LCP": 2500, "INP": 200}
+#: One dead hit is a typed typo; two are a link somebody published.
+BROKEN_LINK_MIN = 2
+#: Below a quarter of the page the visitor read the headline and left.
+SHALLOW_DEPTH = 25
+#: The page types a bounce is worth reporting for. Neither string is an event
+#: name, so a step carrying one is always the page view, never an action.
+SHALLOW_PAGES = {"story", "site"}
+
+
+def problems(
+    sessions: list[Session],
+    not_found: list[dict[str, Any]],
+    vitals: list[dict[str, Any]],
+    errors: list[dict[str, Any]],
+    limit: int = 15,
+) -> list[dict[str, Any]]:
+    """Where the platform fails its visitors, worst first.
+
+    Five kinds, each with a score that makes them comparable: a JavaScript
+    error counts triple (it breaks the page for everyone who hits it), a dead
+    link double (someone is sending people into the void), a slow page as
+    often as it was measured, a bounce and an empty search once.
+
+    `not_found`, `vitals` and `errors` are the rows of SQL_NOT_FOUND,
+    SQL_VITALS and SQL_ERRORS; the bounces and empty searches come from the
+    sessions, so no query has to be repeated.
+
+    Every `label` names the thing that is broken and nothing else — the panel
+    puts the kind in front of it, so "story lädt langsam" would say it twice.
+    """
+    found: list[dict[str, Any]] = []
+    for row in errors:
+        found.append(
+            {
+                "kind": "js_error",
+                "label": row["message"],
+                "score": row["n"] * 3,
+                "detail": f"{row['n']}× auf {row['page']}",
+            }
+        )
+    for row in vitals:
+        limit_ms = VITAL_LIMITS.get(row["name"])
+        if limit_ms is None or row["p75"] <= limit_ms:
+            continue
+        found.append(
+            {
+                "kind": "slow_page",
+                # The metric belongs in the label: a page type can be slow twice.
+                "label": f"{row['page']} · {row['name']}",
+                "score": row["samples"],
+                "detail": (
+                    f"p75 {round(row['p75'])} ms statt {limit_ms} ms, {row['samples']} Messungen"
+                ),
+            }
+        )
+    for row in not_found:
+        if row["n"] < BROKEN_LINK_MIN:
+            continue
+        found.append(
+            {
+                "kind": "broken_link",
+                "label": row["path"],
+                "score": row["n"] * 2,
+                "detail": f"{row['n']} Aufrufe ins Leere, Herkunft {row['referrer']}",
+            }
+        )
+    bounces: Counter[str] = Counter()
+    empty_searches = 0
+    for s in sessions:
+        empty_searches += s.events["search_empty"]
+        page = next((p for p in s.steps if p in SHALLOW_PAGES), None)
+        if page and s.pages == 1 and s.depth < SHALLOW_DEPTH:
+            bounces[page] += 1
+    for page, n in bounces.most_common():
+        found.append(
+            {
+                "kind": "shallow_exit",
+                "label": page,
+                "score": n,
+                "detail": f"{n} Sitzungen mit einer Seite und unter {SHALLOW_DEPTH} % Scrolltiefe",
+            }
+        )
+    if empty_searches:
+        found.append(
+            {
+                "kind": "empty_search",
+                "label": "search",
+                "score": empty_searches,
+                "detail": f"{empty_searches} Suchanfragen fanden nichts",
+            }
+        )
+    return sorted(found, key=lambda p: p["score"], reverse=True)[:limit]

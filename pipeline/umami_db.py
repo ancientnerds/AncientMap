@@ -136,6 +136,81 @@ WHERE website_id = :website_id AND event_type = 1
 GROUP BY 1 ORDER BY 2 DESC LIMIT 40
 """
 
+#: Dead links. A pageview does not carry its HTTP status, so the 404 page says
+#: so itself: one `not_found` event per view with the missing path and the
+#: referrer's host (pipeline/article_html_renderer.py, _NOT_FOUND_FEEDBACK).
+#: Two levels again — path and referrer are two event_data rows per event.
+SQL_NOT_FOUND = """
+WITH ev AS (
+    SELECT
+        e.event_id,
+        max(d.string_value) FILTER (WHERE d.data_key = 'path')     AS path,
+        max(d.string_value) FILTER (WHERE d.data_key = 'referrer') AS referrer
+    FROM website_event e
+    JOIN event_data d ON d.website_event_id = e.event_id
+    WHERE e.website_id = :website_id AND e.event_name = 'not_found'
+      AND e.created_at >= :since AND e.created_at < :until
+    GROUP BY e.event_id
+)
+SELECT path, coalesce(nullif(referrer, ''), 'direkt') AS referrer, count(*) AS n
+FROM ev
+WHERE path IS NOT NULL AND path <> ''
+GROUP BY 1, 2
+ORDER BY n DESC
+LIMIT 50
+"""
+
+#: Core Web Vitals per page type: the 75th percentile is what Google reports
+#: and what a visitor with a middling phone actually waits. `value` is a
+#: number, so it lives in number_value; the cast keeps Postgres from handing
+#: back a numeric that would serialise as a string.
+SQL_VITALS = """
+WITH ev AS (
+    SELECT
+        e.event_id,
+        max(d.string_value) FILTER (WHERE d.data_key = 'page')  AS page,
+        max(d.string_value) FILTER (WHERE d.data_key = 'name')  AS name,
+        max(d.number_value) FILTER (WHERE d.data_key = 'value') AS metric_value
+    FROM website_event e
+    JOIN event_data d ON d.website_event_id = e.event_id
+    WHERE e.website_id = :website_id AND e.event_name = 'vital'
+      AND e.created_at >= :since AND e.created_at < :until
+    GROUP BY e.event_id
+)
+SELECT
+    page,
+    name,
+    percentile_cont(0.75) WITHIN GROUP (ORDER BY metric_value::float8) AS p75,
+    count(*) AS samples
+FROM ev
+WHERE page IS NOT NULL AND name IS NOT NULL AND metric_value IS NOT NULL
+GROUP BY 1, 2
+ORDER BY samples DESC
+LIMIT 60
+"""
+
+#: Uncaught JavaScript errors, grouped by message and page (src/analytics/boot.ts
+#: already clips the message to 120 characters and the file name to 60).
+SQL_ERRORS = """
+WITH ev AS (
+    SELECT
+        e.event_id,
+        max(d.string_value) FILTER (WHERE d.data_key = 'message') AS message,
+        max(d.string_value) FILTER (WHERE d.data_key = 'page')    AS page
+    FROM website_event e
+    JOIN event_data d ON d.website_event_id = e.event_id
+    WHERE e.website_id = :website_id AND e.event_name = 'js_error'
+      AND e.created_at >= :since AND e.created_at < :until
+    GROUP BY e.event_id
+)
+SELECT message, coalesce(page, 'unbekannt') AS page, count(*) AS n
+FROM ev
+WHERE message IS NOT NULL AND message <> ''
+GROUP BY 1, 2
+ORDER BY n DESC
+LIMIT 30
+"""
+
 
 def fetch(sql: str, since: datetime, until: datetime, **params: Any) -> list[dict[str, Any]]:
     """Run one of the SQL_* texts for our website and the window [since, until)."""

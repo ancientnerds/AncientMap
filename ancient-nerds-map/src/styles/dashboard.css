@@ -13,6 +13,9 @@
   --dash-muted: #888880;
   --dash-line: rgba(0, 204, 102, 0.35);
   --dash-line-soft: rgba(0, 204, 102, 0.15);
+  /* Severity of a problem: red breaks a page, amber slows it, green-grey is a hint. */
+  --dash-amber: #ffb020;
+  --dash-dot-low: rgba(0, 204, 102, 0.55);
   --dash-mono: 'JetBrains Mono', monospace;
   --dash-display: 'Saira Extra Condensed', 'Orbitron', sans-serif;
   --dash-text: 'Inter', system-ui, sans-serif;
@@ -431,6 +434,144 @@ button {
 
 .dash-feedback-text {
   font-size: 0.95rem;
+  overflow-wrap: anywhere;
+}
+
+/* ── Journeys ───────────────────────────────────────────────────────── */
+
+.dash-journeys {
+  list-style: none;
+}
+
+.dash-journey {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px 10px;
+  align-items: baseline;
+  padding: 8px 0;
+  border-top: 1px solid var(--dash-line-soft);
+}
+
+.dash-journey:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.dash-journey-chain {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.dash-journey-arrow {
+  font-family: var(--dash-mono);
+  font-size: 0.65rem;
+  color: var(--dash-muted);
+}
+
+.dash-journey-count {
+  font-family: var(--dash-mono);
+  font-size: 0.8rem;
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* The steps reuse the feedback chip; identifiers stay lower case and
+   monospaced — uppercasing "site_open" ate a phone's whole line width. */
+.dash-chip--entry,
+.dash-chip--page,
+.dash-chip--action {
+  font-family: var(--dash-mono);
+  font-size: 0.65rem;
+  letter-spacing: 0.02em;
+  text-transform: none;
+}
+
+.dash-chip--entry {
+  color: var(--dash-red-bright);
+}
+
+.dash-chip--action {
+  color: var(--dash-green);
+}
+
+.dash-chip--page {
+  color: var(--dash-muted);
+}
+
+/* ── Problems ───────────────────────────────────────────────────────── */
+
+.dash-problems {
+  list-style: none;
+}
+
+.dash-problem {
+  display: grid;
+  grid-template-columns: 10px auto minmax(0, 1fr) auto;
+  gap: 2px 8px;
+  align-items: baseline;
+  padding: 9px 0;
+  border-top: 1px solid var(--dash-line-soft);
+}
+
+.dash-problem:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.dash-dot {
+  align-self: center;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--dash-dot-low);
+}
+
+.dash-dot--high {
+  background: var(--dash-red-bright);
+}
+
+.dash-dot--mid {
+  background: var(--dash-amber);
+}
+
+.dash-problem-kind {
+  font-family: var(--dash-mono);
+  font-size: 0.6rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--dash-green);
+  white-space: nowrap;
+}
+
+/* An error message you cannot read is useless for triage, so it wraps — but
+   never past two lines, or one stack trace pushes the rest of the list away. */
+.dash-problem-label {
+  min-width: 0;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  font-size: 0.9rem;
+  overflow-wrap: anywhere;
+}
+
+.dash-problem-score {
+  font-family: var(--dash-mono);
+  font-size: 0.8rem;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.dash-problem-detail {
+  grid-column: 2 / -1;
+  font-family: var(--dash-mono);
+  font-size: 0.7rem;
+  line-height: 1.5;
+  color: var(--dash-muted);
   overflow-wrap: anywhere;
 }
 

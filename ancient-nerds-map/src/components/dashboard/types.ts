@@ -68,6 +68,35 @@ export interface FeedbackData {
   items: FeedbackItem[]
 }
 
+export interface JourneyChain {
+  /** "google → story → site_open → site": entry source, then page types and actions. */
+  chain: string
+  sessions: number
+}
+
+/** GET /api/stats/journeys?days=N */
+export interface JourneysData {
+  chains: JourneyChain[]
+}
+
+/** The five failures api/services/founders_stats.py problems() knows. */
+export type ProblemKind = 'js_error' | 'slow_page' | 'broken_link' | 'shallow_exit' | 'empty_search'
+
+export interface Problem {
+  kind: ProblemKind
+  /** What is broken — an error message, a path, a page type. */
+  label: string
+  /** Comparable severity: hits, weighted per kind. */
+  score: number
+  /** The numbers behind the score, in one sentence. */
+  detail: string
+}
+
+/** GET /api/stats/problems?days=N */
+export interface ProblemsData {
+  problems: Problem[]
+}
+
 export interface SourceRow {
   source: string
   family: string

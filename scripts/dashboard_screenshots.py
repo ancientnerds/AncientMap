@@ -1,8 +1,9 @@
 """Screenshots of the founders dashboard (dashboard.html) at phone and desktop width.
 
-The page needs /api/stats/* behind the founder cookie and the land outline
-from public/data/, neither of which `vite preview` has, so both are answered
-from fixtures here via route interception. Run after `npm run build`:
+The page needs /api/stats/* behind the founder cookie, which `vite preview`
+has not, so every endpoint is answered from the fixtures below via route
+interception. The land outline is bundled (src/data/world_land.json), so the
+map draws itself. Run after `npm run build`:
 
     python scripts/dashboard_screenshots.py
 
@@ -28,7 +29,6 @@ from playwright.sync_api import Route, sync_playwright
 ROOT = Path(__file__).resolve().parent.parent
 FRONTEND = ROOT / "ancient-nerds-map"
 OUT = ROOT / "docs" / "reports" / "screenshots"
-LAND = ROOT / "public" / "data" / "layers" / "ne_110m_land.geojson"
 PORT = 4173
 URL = f"http://127.0.0.1:{PORT}/dashboard.html"
 
@@ -62,8 +62,28 @@ def map_points() -> list[dict]:
     ]
 
 
-def rows(event: str, key: str, pairs: list[tuple[str, int]]) -> list[dict]:
-    return [{"event_name": event, "data_key": key, "string_value": v, "n": n} for v, n in pairs]
+def rows(event: str, pairs: list[tuple[str, int]]) -> list[dict]:
+    """A content row in the shape SQL_CONTENT returns: label, country, results, n."""
+    return [
+        {"event_name": event, "label": label, "country": None, "results": None, "n": n}
+        for label, n in pairs
+    ]
+
+
+def site_rows(items: list[tuple[str, str, int]]) -> list[dict]:
+    """Sites keep their country — the panel prints "Name · Land"."""
+    return [
+        {"event_name": "site_open", "label": name, "country": country, "results": None, "n": n}
+        for name, country, n in items
+    ]
+
+
+def search_rows(items: list[tuple[str, int, int]]) -> list[dict]:
+    """Searches keep their result count; a zero is marked red in the panel."""
+    return [
+        {"event_name": "search", "label": q, "country": None, "results": hits, "n": n}
+        for q, hits, n in items
+    ]
 
 
 FIXTURES: dict[str, dict] = {
@@ -77,25 +97,22 @@ FIXTURES: dict[str, dict] = {
     },
     "map": {"points": map_points()},
     "content": {
-        "sites": rows(
-            "site_open",
-            "name",
+        "sites": site_rows(
             [
-                ("Göbekli Tepe", 41),
-                ("Stonehenge", 37),
-                ("Giza Pyramid Complex", 33),
-                ("Machu Picchu", 29),
-                ("Puma Punku", 24),
-                ("Teotihuacan", 19),
-                ("Petra", 17),
-                ("Nan Madol", 12),
-                ("Sacsayhuamán", 11),
-                ("Baalbek", 9),
-            ],
+                ("Göbekli Tepe", "Türkiye", 41),
+                ("Stonehenge", "United Kingdom", 37),
+                ("Giza Pyramid Complex", "Egypt", 33),
+                ("Machu Picchu", "Peru", 29),
+                ("Puma Punku", "Bolivia", 24),
+                ("Teotihuacan", "Mexico", 19),
+                ("Petra", "Jordan", 17),
+                ("Nan Madol", "Micronesia", 12),
+                ("Sacsayhuamán", "Peru", 11),
+                ("Baalbek", "Lebanon", 9),
+            ]
         ),
         "stories": rows(
             "story_open",
-            "story",
             [
                 ("bronze-age-shipwreck-crete-17ab", 58),
                 ("lidar-maya-cities-guatemala-93cd", 44),
@@ -105,27 +122,24 @@ FIXTURES: dict[str, dict] = {
         ),
         "papers": rows(
             "paper_open",
-            "paper",
             [
                 ("/research/goebekli-tepe-astronomy", 27),
                 ("/research/puma-punku-stone-working", 19),
                 ("/research/nan-madol-construction", 11),
             ],
         ),
-        "searches": rows(
-            "search",
-            "q",
+        "searches": search_rows(
             [
-                ("giza", 23),
-                ("stonehenge", 18),
-                ("atlantis", 15),
-                ("pyramids", 12),
-                ("göbekli tepe", 11),
-                ("ley lines", 9),
-                ("roman villa", 7),
-                ("ancient egypt", 6),
-                ("1200 bc", 4),
-            ],
+                ("giza", 14, 23),
+                ("stonehenge", 9, 18),
+                ("atlantis", 0, 15),
+                ("pyramids", 61, 12),
+                ("göbekli tepe", 3, 11),
+                ("ley lines", 0, 9),
+                ("roman villa", 7, 7),
+                ("ancient egypt", 48, 6),
+                ("1200 bc", 2, 4),
+            ]
         ),
     },  # fmt: skip
     "feedback": {
@@ -174,6 +188,60 @@ FIXTURES: dict[str, dict] = {
             },
         ]
     },  # fmt: skip
+    "journeys": {
+        "chains": [
+            {"chain": "google → story → site_open → site", "sessions": 148},
+            {"chain": "direct → globe → site_open → site", "sessions": 121},
+            {"chain": "google → site", "sessions": 96},
+            {"chain": "ai → home → globe → site_open → site", "sessions": 63},
+            {"chain": "youtube → site → share", "sessions": 41},
+            {"chain": "direct → search → search → site_open → site → site", "sessions": 34},
+            {"chain": "discord.com → stories → story → feedback", "sessions": 27},
+            {"chain": "google → papers → paper_open → paper → lyra_chat", "sessions": 19},
+            {"chain": "reddit.com → story", "sessions": 12},
+            {"chain": "search → country → site_open → site", "sessions": 8},
+        ]
+    },
+    "problems": {
+        "problems": [
+            {
+                "kind": "js_error",
+                "label": "Cannot read properties of undefined (reading 'lngLat')",
+                "score": 57,
+                "detail": "19× auf globe",
+            },
+            {
+                "kind": "slow_page",
+                "label": "story · LCP",
+                "score": 42,
+                "detail": "p75 3380 ms statt 2500 ms, 42 Messungen",
+            },
+            {
+                "kind": "shallow_exit",
+                "label": "story",
+                "score": 38,
+                "detail": "38 Sitzungen mit einer Seite und unter 25 % Scrolltiefe",
+            },
+            {
+                "kind": "broken_link",
+                "label": "/sites/turkiye/goebekli-tepe",
+                "score": 24,
+                "detail": "12 Aufrufe ins Leere, Herkunft reddit.com",
+            },
+            {
+                "kind": "empty_search",
+                "label": "search",
+                "score": 17,
+                "detail": "17 Suchanfragen fanden nichts",
+            },
+            {
+                "kind": "slow_page",
+                "label": "site · INP",
+                "score": 11,
+                "detail": "p75 264 ms statt 200 ms, 11 Messungen",
+            },
+        ]
+    },
     "sources": {
         "sources": [
             {"source": "google.com", "family": "google", "sessions": 612},
@@ -230,10 +298,6 @@ def main() -> None:
             ):
                 page = browser.new_page(viewport=viewport, device_scale_factor=scale)
                 page.route("**/api/stats/**", answer_stats)
-                page.route(
-                    "**/data/layers/ne_110m_land.geojson",
-                    lambda r: r.fulfill(path=str(LAND), content_type="application/geo+json"),
-                )
                 page.goto(URL, wait_until="networkidle")
                 page.wait_for_selector(".dash-map-dot")
                 page.evaluate("document.fonts.ready")

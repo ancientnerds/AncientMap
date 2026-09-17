@@ -17,7 +17,18 @@ import pytest
 
 from pipeline import umami_db as u
 
-QUERIES = ("overview", "map", "hour_buckets", "session_events", "content", "feedback", "sources")
+QUERIES = (
+    "overview",
+    "map",
+    "hour_buckets",
+    "session_events",
+    "content",
+    "feedback",
+    "sources",
+    "not_found",
+    "vitals",
+    "errors",
+)
 
 
 def test_queries_are_parameterised_and_scoped_to_the_website():
@@ -36,6 +47,22 @@ def test_queries_only_read():
         assert sql.lstrip().startswith(("SELECT", "WITH")), name
         for verb in ("INSERT", "UPDATE", "DELETE", "DROP", "ALTER", "TRUNCATE"):
             assert verb not in sql, (name, verb)
+
+
+def test_problem_queries_read_the_events_the_frontend_actually_sends():
+    """not_found comes from the 404 page (pipeline/article_html_renderer.py),
+    vital and js_error from src/analytics/boot.ts — the data keys below are the
+    ones those three call sites put into the event."""
+    assert "'not_found'" in u.SQL_NOT_FOUND
+    assert "'path'" in u.SQL_NOT_FOUND and "'referrer'" in u.SQL_NOT_FOUND
+    assert "'vital'" in u.SQL_VITALS
+    for key in ("'page'", "'name'", "'value'"):
+        assert key in u.SQL_VITALS, key
+    # The value is a number: Umami keeps it in number_value, not string_value.
+    assert "number_value" in u.SQL_VITALS
+    assert "percentile_cont(0.75)" in u.SQL_VITALS
+    assert "'js_error'" in u.SQL_ERRORS
+    assert "'message'" in u.SQL_ERRORS and "'page'" in u.SQL_ERRORS
 
 
 def test_import_without_password_is_fine_and_engine_is_lazy(monkeypatch):
