@@ -201,7 +201,7 @@ class TestStillsGraph:
         assert f.startswith("scale=4320:7680:force_original_aspect_ratio=increase,crop=4320:7680:")
         assert "x='min(max(iw*0.500-2160\\,0)\\,iw-4320)'" in f  # centred by default
         assert "zoompan=z='1+0.06*on/165':d=165:" in f
-        assert f.endswith("s=1080x1920:fps=60,format=yuv420p")
+        assert f.endswith("s=1080x1920:fps=60,setsar=1,format=yuv420p")  # concat needs equal SARs
 
     def test_pushin_crops_around_the_focal_point(self):
         f = pushin_filter(2.75, focus=(0.8, 0.3))
@@ -441,11 +441,13 @@ class TestSelection:
             _cand("terraces", 1600, 1035, _good("Agricultural terraces", 4), dh=0x7F << 10),
             _cand("panorama", 1598, 472, _good("valley", 5), dh=0x7F << 20),
             _cand("windows", 1600, 1200, _good("Three Windows", 3), dh=0x7F << 30),
+            _cand("tiny", 800, 533, _good("Dolmen", 5), dh=0x7F << 50),
         ]
         kept, rejected = select_stills(cands)
         assert [c.image["filename"] for c in kept] == ["intihuatana_b", "terraces", "windows"]
         reasons = {c.image["filename"]: why for c, why in rejected}
         assert reasons["map"] == "kind=map_or_document"
+        assert reasons["tiny"] == "too small (800x533)"  # Commons originals can be thumbnails
         assert reasons["panorama"] == "panorama"
         assert reasons["intihuatana_a"].startswith("duplicate")
 

@@ -43,6 +43,7 @@ T = TypeVar("T")
 TARGET_ASPECT = 9 / 16
 PANORAMA_ASPECT = 2.0
 MIN_QUALITY = 3
+MIN_SHORT_SIDE = 900  # px; below this the 1080x1920 cover scale is a visible upscale
 MIN_RELEVANCE = 2
 VLM_MAX_SIDE = 1280
 VLM_JPEG_QUALITY = 85
@@ -110,6 +111,8 @@ def reject_reason(cand: Candidate, *, require_verdict: bool) -> str | None:
     """Why a candidate cannot carry the short, or None if it can."""
     if is_panorama(cand.width, cand.height):
         return "panorama"
+    if min(cand.width, cand.height) < MIN_SHORT_SIDE:
+        return f"too small ({cand.width}x{cand.height})"
     v = cand.verdict
     if v is None:
         return "no VLM verdict" if require_verdict else None

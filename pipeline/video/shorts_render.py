@@ -388,7 +388,7 @@ def pushin_filter(
     return (
         f"scale={sw}:{sh}:force_original_aspect_ratio=increase,crop={sw}:{sh}:{window},"
         f"zoompan=z='{z}':d={frames}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':"
-        f"s={W}x{H}:fps={FPS},format=yuv420p"
+        f"s={W}x{H}:fps={FPS},setsar=1,format=yuv420p"
     )
 
 
