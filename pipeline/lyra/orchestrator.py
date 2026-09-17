@@ -200,8 +200,49 @@ STEP_GROUPS: dict[str, list[str]] = {
     "radar": ["identify", "prospect"],
 }
 
-# Tracks how many cycles have elapsed (reset on container restart is fine)
+# Cycle number for the log line only.
 _cycle_count = 0
+
+# Interval steps run on elapsed time, not on the cycle counter. Every deploy
+# recreates this container, and until 2026-09-17 the gate was
+# `_cycle_count % interval == 0` on an in-memory counter: a daily step needed
+# 24 uninterrupted hourly cycles. Log history: `library`/`backfill` last ran
+# 08-26 and 09-13, `prospect` (added 09-15) never. The timestamps live on the
+# ./logs volume, which survives the recreate; a container without the file
+# runs each interval step once, then on schedule.
+STEP_STATE_FILE = Path("/app/logs/lyra_step_state.json")
+
+# Steps the current cycle skipped because they were not due (heartbeat view).
+_skipped_steps: set[str] = set()
+
+
+def _load_step_state() -> dict[str, float]:
+    """{step: last attempt, epoch seconds}; empty when the file is missing or unreadable."""
+    try:
+        data = json.loads(STEP_STATE_FILE.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return {k: float(v) for k, v in data.items() if isinstance(v, int | float)}
+
+
+def _save_step_state(state: dict[str, float]) -> None:
+    try:
+        STEP_STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
+        STEP_STATE_FILE.write_text(json.dumps(state), encoding="utf-8")
+    except OSError as exc:
+        # Loud, not fatal: without the file the next restart re-runs the
+        # interval steps once — the pre-2026-09-17 behaviour, nothing worse.
+        logger.warning(f"Step state not persisted to {STEP_STATE_FILE}: {exc}")
+
+
+def _interval_due(step_name: str, state: dict[str, float], now: float) -> bool:
+    """True when the step has no interval, has never run, or last ran at least
+    one interval ago (60 s slack so a daily step does not slip a cycle)."""
+    interval = STEP_INTERVALS.get(step_name)
+    if interval is None:
+        return True
+    last = state.get(step_name)
+    return last is None or now - last >= interval * CYCLE_INTERVAL - 60
 
 
 def setup_logging() -> None:
@@ -326,7 +367,7 @@ def _build_step_data(
                 "status": "fail" if count < 0 else "done",
                 "error": error,
             }
-        elif name in STEP_INTERVALS and _cycle_count % STEP_INTERVALS[name] != 0:
+        elif name in _skipped_steps:
             step_data[name] = {"count": 0, "elapsed": 0, "status": "skip"}
     return step_data
 
@@ -392,12 +433,18 @@ def run_pipeline(
         _cycle_count += 1
         logger.info(f"=== Starting pipeline cycle #{_cycle_count} ===")
 
+    step_state = _load_step_state()
+    _skipped_steps.clear()
     for step_name in steps_to_run:
-        # Skip steps that have a longer interval (unless --step forces it)
-        if not only_step and step_name in STEP_INTERVALS:
-            interval = STEP_INTERVALS[step_name]
-            if _cycle_count % interval != 0:
-                continue
+        # Interval steps wait out their interval (unless --step forces them).
+        if not only_step and not _interval_due(step_name, step_state, cycle_start):
+            _skipped_steps.add(step_name)
+            continue
+        if step_name in STEP_INTERVALS:
+            # The attempt counts, success or not — a daily step that fails
+            # waits for the next day, as it did with the cycle counter.
+            step_state[step_name] = time.time()
+            _save_step_state(step_state)
 
         # Mark step as running and write incremental progress
         _write_step_heartbeat(step_results, step_name, cycle_start)
