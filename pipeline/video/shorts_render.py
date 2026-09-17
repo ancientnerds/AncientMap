@@ -419,12 +419,22 @@ def hashtags(site: dict) -> list[str]:
     return tags
 
 
+#: YouTube strips the referer on app clicks, so without the tag every visit
+#: from a Short counts as "direct" in Umami. utm_content tells the two links apart.
+YOUTUBE_UTM = "utm_source=youtube&utm_medium=short"
+
+
+def site_link(site: dict, placement: str) -> str:
+    """Absolute, tagged link to the site page for a description or comment."""
+    return f"https://ancientnerds.com{site['page_path']}?{YOUTUBE_UTM}&utm_content={placement}"
+
+
 def build_comment(site: dict) -> str:
     """Pinned comment for the upload step: a question (comments are the
     strongest signal) and the one place the site link lives."""
     return (
         f"Have you been to {site['name']}? Explore it on the interactive globe, "
-        f"with sources and photos: https://ancientnerds.com{site['page_path']}\n"
+        f"with sources and photos: {site_link(site, 'comment')}\n"
     )
 
 
@@ -437,7 +447,7 @@ def build_description(
         site["card_text"],
         "",
         f"Rarity: {site['rarity_name']} (Tier {site['rarity_tier']}) · Power {site['total_power']}",
-        f"More: https://ancientnerds.com{site['page_path']}",
+        f"More: {site_link(site, 'description')}",
         "",
         "Images (Wikimedia Commons):",
     ]
