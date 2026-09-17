@@ -15,15 +15,14 @@ from __future__ import annotations
 
 import json
 import logging
-import math
 import textwrap
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Literal
 
 from pipeline.video.media import ff_path, probe_duration, run_ffmpeg
-from pipeline.video.shorts_captions import Word, caption_words, display_text
-from pipeline.video.shorts_select import focus_of, order_by_narration
+from pipeline.video.shorts_captions import Word, caption_words, display_text, spoken_at, srt_text
+from pipeline.video.shorts_select import focus_of
 from pipeline.video.shorts_tts import specific_place
 
 logger = logging.getLogger(__name__)
@@ -32,7 +31,13 @@ W, H, FPS = 1080, 1920, 60
 
 NARRATION_TAIL_S = 0.6
 OPENING_SLACK_S = 0.5  # deficit the narration tail can absorb before we cut to stills
-STILL_MAX_S = 3.5  # faster cuts — 5 s per still reads as a slideshow
+# Stills cut on the narration: a still arrives CUT_LEAD_S before the word it
+# illustrates is spoken, but never sooner than MIN_STILL_S after the previous
+# cut — the pace must not turn into a flicker (user, 17.09.). A still pushed
+# later than CUT_MAX_LATE_S by that rule is placed as a filler instead.
+MIN_STILL_S = 2.2
+CUT_LEAD_S = 0.2
+CUT_MAX_LATE_S = 1.0
 PUSH_IN = 0.06  # every still zooms from 100 % to 106 % over its nominal duration
 DISSOLVE_S = 0.4  # cross-dissolve between stills; the timeline length is unchanged
 NAME_FADE_IN_S = 0.3
@@ -54,7 +59,6 @@ INFO_FADE_IN_S = 0.4
 INFO_FADE_OUT_S = 0.4
 INFO_BOX_ALPHA = 0.3
 INFO_BOX_PAD = 16
-ORBIT_S = 3.0  # the opening take's 3D orbit (video/scenes/site-short.ts); the coordinates leave as it starts
 FLAG_GAP = 34
 OPENING_TRIM_S = 0.1  # the opening take holds its first pose this long; the first frames after a
 # jump are not fully drawn, so cutting the hold keeps frame 0 identical to the loop's end pose
@@ -65,7 +69,11 @@ MAPBOX_CREDIT = "© Mapbox © Maxar"
 # Music bed: looped under the whole short, faded in at the start and out
 # before the loop point so the video loops cleanly; MUSIC_GAIN_DB sits it
 # under the voice (the loudness gain is measured on the full mix).
-MUSIC_GAIN_DB = -11.0  # about 10 dB under the voice; -19 was inaudible (-32 dB in the pauses)
+MUSIC_GAIN_DB = -8.0  # level in the pauses; under the voice the ducking takes it down further
+# Ducking: the music is compressed with the voice as the side-chain, so it
+# breathes up in the pauses and steps back while the narrator speaks.
+# Measured on Machu Picchu: about 8 dB under the voice, back up within a sentence gap.
+DUCK = "threshold=0.04:ratio=2:attack=40:release=500:detection=rms"
 MUSIC_FADE_IN_S = 1.0
 MUSIC_FADE_OUT_S = 1.2
 MUSIC_END_GAP_S = 0.3  # silent before the loop point (audit: silent_loop_point)
@@ -128,40 +136,98 @@ class Segment:
 # ---------------------------------------------------------------------------
 
 
+def stills_window(narration_s: float, opening_s: float | None) -> tuple[float, float]:
+    """(start, end) of the stills in video time. The narration starts at t=0 and
+    its visuals cover `narration_s + NARRATION_TAIL_S`: the opening clip first
+    (as long as it lasts), stills for whatever remains. An opening deficit of
+    up to OPENING_SLACK_S is absorbed by the tail rather than producing a
+    sub-second still (then start == end)."""
+    span = narration_s + NARRATION_TAIL_S
+    if opening_s is None:
+        return 0.0, span
+    used = min(opening_s, span)
+    if span - used <= OPENING_SLACK_S:
+        return used, used
+    return used, span
+
+
+@dataclass(frozen=True)
+class StillPick:
+    path: str
+    score: float
+    anchor: float | None = None  # when the phrase this still illustrates is spoken (video time)
+
+
+def cut_stills(start: float, end: float, picks: list[StillPick]) -> list[tuple[str, float]]:
+    """(path, duration) for the stills window [start, end); durations sum to
+    end - start. The best still that is already "due" (its phrase was spoken
+    before the window, or it has none) opens; every still whose phrase falls
+    inside the window cuts in CUT_LEAD_S before its word, never sooner than
+    MIN_STILL_S after the previous cut (a little late is accepted, later than
+    CUT_MAX_LATE_S it is skipped here); the remaining stills, best first, fill
+    any gap that holds two minimum stills — at their own word if that lies in
+    the gap, else in the middle."""
+    if not picks:
+        raise ValueError("no stills")
+    if end - start <= 0:
+        return []
+    by_score = sorted(picks, key=lambda p: -p.score)
+
+    def placeable(p: StillPick) -> bool:
+        return p.anchor is not None and p.anchor - CUT_LEAD_S >= start + MIN_STILL_S
+
+    due = [p for p in by_score if not placeable(p)]
+    first = due[0] if due else min(by_score, key=lambda p: p.anchor or 0.0)
+    cuts: list[tuple[StillPick, float]] = [(first, start)]
+    remaining = [p for p in by_score if p is not first]
+    prev = start
+    for p in sorted((p for p in remaining if placeable(p)), key=lambda p: p.anchor or 0.0):
+        at = (p.anchor or 0.0) - CUT_LEAD_S
+        if at < prev + MIN_STILL_S:
+            if prev + MIN_STILL_S - at > CUT_MAX_LATE_S:
+                continue
+            at = prev + MIN_STILL_S
+        if at > end - MIN_STILL_S:
+            continue
+        cuts.append((p, at))
+        remaining.remove(p)
+        prev = at
+    while remaining:
+        starts = [at for _, at in cuts] + [end]
+        size, i = max((starts[i + 1] - starts[i], i) for i in range(len(cuts)))
+        if size < 2 * MIN_STILL_S:
+            break
+        p = remaining.pop(0)
+        lo, hi = starts[i] + MIN_STILL_S, starts[i + 1] - MIN_STILL_S
+        own = (p.anchor or 0.0) - CUT_LEAD_S
+        at = own if p.anchor is not None and lo <= own <= hi else (starts[i] + starts[i + 1]) / 2
+        cuts.insert(i + 1, (p, at))
+    starts = [at for _, at in cuts] + [end]
+    return [(p.path, starts[i + 1] - starts[i]) for i, (p, _) in enumerate(cuts)]
+
+
 def plan_timeline(
     *,
     narration_s: float,
-    images: list[Path],
+    cuts: list[tuple[str, float]],
     opening: tuple[Path, float] | None,
     closing: tuple[Path, float] | None,
     opening_start: float = 0.0,
 ) -> list[Segment]:
-    """Lay out the segments. `images` is the selected stills in display order.
-
-    The narration starts at t=0 and its visuals cover `narration_s +
-    NARRATION_TAIL_S`: the opening clip first (as long as it lasts, after
-    `opening_start` trim), full-frame stills for whatever remains. An opening
-    deficit of up to OPENING_SLACK_S is absorbed by the tail rather than
-    producing a sub-second still. The return clip follows, unshortened,
-    because its last frame has to be the loop point.
-    """
-    if not images:
-        raise ValueError("at least one still is required")
+    """Lay out the segments: the opening clip (after `opening_start` trim) for
+    the start of the stills window, the stills as cut by `cut_stills`, then
+    the return clip, unshortened, because its last frame has to be the loop
+    point."""
+    start, end = stills_window(narration_s, opening[1] if opening else None)
     segments: list[Segment] = []
-    span = narration_s + NARRATION_TAIL_S
-    remainder = span
     if opening is not None:
-        used = min(opening[1], span)
-        remainder = span - used
-        if remainder <= OPENING_SLACK_S:
-            remainder = 0.0
-        segments.append(Segment("clip", used, str(opening[0]), start=opening_start))
-
-    if remainder > 0:
-        count = max(1, min(len(images), math.ceil(remainder / STILL_MAX_S)))
-        each = remainder / count
-        segments.extend(Segment("still", each, str(images[i])) for i in range(count))
-
+        segments.append(Segment("clip", start, str(opening[0]), start=opening_start))
+    if end > start:
+        if not cuts:
+            raise ValueError("at least one still is required")
+        if abs(sum(d for _, d in cuts) - (end - start)) > 1e-3:
+            raise ValueError("still durations do not fill the stills window")
+        segments.extend(Segment("still", d, path) for path, d in cuts)
     if closing is not None:
         segments.append(Segment("return", closing[1], str(closing[0])))
     return segments
@@ -201,13 +267,21 @@ def name_layout(name: str) -> tuple[list[str], int, int]:
     return wrap_lines(name, width), size, line_h
 
 
-def pushin_filter(nominal_s: float, focus: tuple[float, float] = (0.5, 0.5)) -> str:
+def pushin_filter(
+    nominal_s: float, focus: tuple[float, float] = (0.5, 0.5), *, out_over_s: float | None = None
+) -> str:
     """Cover-scale the still to fill 1080×1920, cut the 9:16 window around the
-    subject's focal point (clamped to the picture), then zoom linearly to
-    1+PUSH_IN over the nominal duration (continuing at the same rate through a
-    dissolve tail) around that window's centre."""
+    subject's focal point (clamped to the picture), then zoom around that
+    window's centre: in, from 100 % to 1+PUSH_IN over the nominal duration
+    (continuing at the same rate through a dissolve tail), or — when
+    `out_over_s` is given — out, from 1+PUSH_IN back to 100 % over that many
+    seconds (the whole fed length, so the picture never gets smaller than the
+    frame)."""
     fx, fy = focus
-    z = f"(1+{PUSH_IN}*t/{nominal_s:.3f})"
+    if out_over_s is None:
+        z = f"(1+{PUSH_IN}*t/{nominal_s:.3f})"
+    else:
+        z = f"(1+{PUSH_IN}*(1-t/{out_over_s:.3f}))"
     window = (
         f"x='min(max(iw*{fx:.3f}-{W / 2:.0f}\\,0)\\,iw-{W})':"
         f"y='min(max(ih*{fy:.3f}-{H / 2:.0f}\\,0)\\,ih-{H})'"
@@ -222,7 +296,8 @@ def stills_graph(
     durations: list[float], focuses: list[tuple[float, float]] | None = None
 ) -> tuple[list[float], str]:
     """Input lengths and the filter_complex for a dissolving stills sequence.
-    `focuses` (one (x, y) per still) moves each crop window onto its subject.
+    `focuses` (one (x, y) per still) moves each crop window onto its subject;
+    the stills alternate push-in and push-out for rhythm.
 
     Every still but the last is fed DISSOLVE_S longer than its slot, and each
     xfade starts at the cumulative slot boundary, so the sequence is exactly
@@ -233,7 +308,12 @@ def stills_graph(
         raise ValueError("no stills")
     lengths = [d + DISSOLVE_S for d in durations[:-1]] + [durations[-1]]
     focuses = focuses or [(0.5, 0.5)] * n
-    chains = [f"[{i}:v]{pushin_filter(durations[i], focuses[i])}[v{i}]" for i in range(n)]
+    chains = [
+        f"[{i}:v]"
+        + pushin_filter(durations[i], focuses[i], out_over_s=lengths[i] if i % 2 else None)
+        + f"[v{i}]"
+        for i in range(n)
+    ]
     if n == 1:
         return lengths, chains[0].replace("[v0]", "[out]")
     xfades = []
@@ -307,13 +387,6 @@ def clip_filter(
     return ",".join(parts)
 
 
-def coords_text(lat: float, lng: float) -> str:
-    """ "13.16° S · 72.54° W" — the approach's only caption."""
-    return (
-        f"{abs(lat):.2f}° {'N' if lat >= 0 else 'S'} · {abs(lng):.2f}° {'E' if lng >= 0 else 'W'}"
-    )
-
-
 def chip_text(site: dict) -> str:
     """Period · type over the stills. The card's civilization joins only when
     it is more than the country repeated (it is the country for every QA
@@ -364,10 +437,11 @@ def hashtags(site: dict) -> list[str]:
 
 
 def build_comment(site: dict) -> str:
-    """Pinned comment for the upload step: the one place the site link lives."""
+    """Pinned comment for the upload step: a question (comments are the
+    strongest signal) and the one place the site link lives."""
     return (
-        f"Explore {site['name']} on the interactive globe, with sources and photos: "
-        f"https://ancientnerds.com{site['page_path']}\n"
+        f"Have you been to {site['name']}? Explore it on the interactive globe, "
+        f"with sources and photos: https://ancientnerds.com{site['page_path']}\n"
     )
 
 
@@ -492,31 +566,32 @@ STEREO = "aformat=sample_fmts=fltp:sample_rates=48000:channel_layouts=stereo"
 
 def mix_graph(name_at_s: float, total_s: float, music: bool = False) -> str:
     """filter_complex for the pre-mix: inputs 0 = narration, 1 = spoken name,
-    2 = music (looped by the caller). Voices are processed, the music is
-    trimmed to the short, faded in/out (silent MUSIC_END_GAP_S before the
-    loop point) and lowered by MUSIC_GAIN_DB; everything is bounded to
-    exactly `total_s`."""
+    2 = music (looped by the caller). The voices are processed and mixed;
+    the music is trimmed to the short, faded in/out (silent MUSIC_END_GAP_S
+    before the loop point), lowered by MUSIC_GAIN_DB and ducked under the
+    voice; everything is bounded to exactly `total_s`."""
     ms = int(round(name_at_s * 1000))
+    tail = f"apad=whole_dur={total_s:.3f},atrim=duration={total_s:.3f}[a]"
     parts = [
         f"[0:a]{VOICE_CHAIN},{STEREO}[d0]",
         f"[1:a]{VOICE_CHAIN},adelay={ms}:all=1,{STEREO}[d1]",
+        "[d0][d1]amix=inputs=2:duration=longest:normalize=0[v]",
     ]
-    inputs = "[d0][d1]"
-    n = 2
-    if music:
-        fade_out_at = total_s - MUSIC_END_GAP_S - MUSIC_FADE_OUT_S
-        parts.append(
-            f"[2:a]{STEREO},atrim=duration={total_s - MUSIC_END_GAP_S:.3f},"
-            f"afade=t=in:st=0:d={MUSIC_FADE_IN_S},"
-            f"afade=t=out:st={fade_out_at:.3f}:d={MUSIC_FADE_OUT_S},"
-            f"volume={MUSIC_GAIN_DB}dB[m]"
-        )
-        inputs += "[m]"
-        n = 3
-    parts.append(
-        f"{inputs}amix=inputs={n}:duration=longest:normalize=0,"
-        f"apad=whole_dur={total_s:.3f},atrim=duration={total_s:.3f}[a]"
-    )
+    if not music:
+        parts.append(f"[v]{tail}")
+        return ";".join(parts)
+    fade_out_at = total_s - MUSIC_END_GAP_S - MUSIC_FADE_OUT_S
+    parts += [
+        # the side-chain is padded to the full length so the music is never cut
+        # short when the voice ends first
+        f"[v]apad=whole_dur={total_s:.3f},asplit[vm][vsc]",
+        f"[2:a]{STEREO},atrim=duration={total_s - MUSIC_END_GAP_S:.3f},"
+        f"afade=t=in:st=0:d={MUSIC_FADE_IN_S},"
+        f"afade=t=out:st={fade_out_at:.3f}:d={MUSIC_FADE_OUT_S},"
+        f"volume={MUSIC_GAIN_DB}dB[m]",
+        f"[m][vsc]sidechaincompress={DUCK}[md]",
+        f"[vm][md]amix=inputs=2:duration=longest:normalize=0,{tail}",
+    ]
     return ";".join(parts)
 
 
@@ -604,22 +679,15 @@ def captions_filter(words: list[Word], text_dir: Path) -> str:
 
 
 def overlays_filter(site: dict, segments: list[Segment], words: list[Word], work: Path) -> str:
-    """The final-pass text layer: coordinates during the approach (gone when the
-    orbit starts), the period/type chip over the stills (fading into the return
-    flight), and the word-by-word captions with accented keywords. Drawn after
-    the look filter so the colours stay pure."""
+    """The final-pass text layer: the period/type chip over the stills (fading
+    into the return flight) and the word-by-word captions. Drawn after the
+    look filter so the text stays clean."""
     parts: list[str] = []
     t = 0.0
     stills_start: float | None = None
     stills_end = 0.0
     for seg in segments:
-        if seg.kind == "clip":
-            coords = work / "coords.txt"
-            coords.write_text(
-                coords_text(site["lat"], site["lng"]), encoding="utf-8", newline=chr(10)
-            )
-            parts.append(info_filter(coords, FONT_BODY, t, t + seg.duration - ORBIT_S))
-        elif seg.kind == "still":
+        if seg.kind == "still":
             stills_start = t if stills_start is None else stills_start
             stills_end = t + seg.duration
         t += seg.duration
@@ -627,7 +695,7 @@ def overlays_filter(site: dict, segments: list[Segment], words: list[Word], work
     if chip and stills_start is not None:
         chip_file = work / "chip.txt"
         chip_file.write_text(chip, encoding="utf-8", newline=chr(10))
-        # FONT_BODY like the coordinates: Orbitron's latin subset has no middle dot
+        # FONT_BODY: Orbitron's latin subset has no middle dot
         parts.append(info_filter(chip_file, FONT_BODY, stills_start, stills_end + INFO_FADE_OUT_S))
     parts.append(captions_filter(words, work / "captions"))
     return ",".join(parts)
@@ -710,19 +778,30 @@ def render_short(
     closing = (closing_clip, probe_duration(closing_clip)) if closing_clip.exists() else None
 
     narration_s = probe_duration(narration)
-    plan = {"opening": opening, "closing": closing, "opening_start": OPENING_TRIM_S}
-    # First pass sizes the slots; the stills that fit (best scores first) are
-    # then shown in narration order, and the plan is rebuilt with that order.
-    draft = plan_timeline(
-        narration_s=narration_s, images=[Path(i["local_path"]) for i in stills], **plan
-    )
-    slots = sum(1 for s in draft if s.kind == "still")
-    chosen = order_by_narration(stills[:slots], site["card_text"], lambda s: s.get("verdict"))
-    segments = plan_timeline(
-        narration_s=narration_s, images=[Path(i["local_path"]) for i in chosen], **plan
-    )
     work = site_dir / "render"
     work.mkdir(parents=True, exist_ok=True)
+    words = caption_words(site["card_text"], narration)
+    (work / "captions.json").write_text(
+        json.dumps([w.__dict__ for w in words], indent=1), encoding="utf-8"
+    )
+    (site_dir / "captions.srt").write_text(srt_text(words), encoding="utf-8", newline=chr(10))
+    start, end = stills_window(narration_s, opening[1] if opening else None)
+    picks = [
+        StillPick(
+            st["local_path"],
+            st["score"],
+            spoken_at(site["card_text"], (st.get("verdict") or {}).get("illustrates") or "", words),
+        )
+        for st in stills
+    ]
+    cuts = cut_stills(start, end, picks) if end > start else []
+    segments = plan_timeline(
+        narration_s=narration_s,
+        cuts=cuts,
+        opening=opening,
+        closing=closing,
+        opening_start=OPENING_TRIM_S,
+    )
     (work / "timeline.json").write_text(
         json.dumps([asdict(s) for s in segments], indent=2), encoding="utf-8"
     )
@@ -775,10 +854,6 @@ def render_short(
     mix = premix(narration, name_audio, name_at, total_s, work / "mix.wav", music=music)
     lufs = measure_lufs(mix)
     logger.info("voice mix %.1f LUFS → gain %+.1f dB", lufs, gain_db(lufs))
-    words = caption_words(site["card_text"], narration)
-    (work / "captions.json").write_text(
-        json.dumps([w.__dict__ for w in words], indent=1), encoding="utf-8"
-    )
     concat_and_mux(parts, mix, gain_db(lufs), final, overlays_filter(site, segments, words, work))
     (site_dir / "description.txt").write_text(
         build_description(site, used, voice_id, mapbox_used=opening is not None),

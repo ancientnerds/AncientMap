@@ -6,7 +6,7 @@ import pytest
 
 from pipeline.video.media import ff_path
 from pipeline.video.shorts_audit import evaluate, passed
-from pipeline.video.shorts_captions import Word, align_words, display_text
+from pipeline.video.shorts_captions import Word, align_words, display_text, spoken_at, srt_text
 from pipeline.video.shorts_export import (
     RARITY_NAMES,
     assemble_site,
@@ -18,12 +18,13 @@ from pipeline.video.shorts_render import (
     DISSOLVE_S,
     NAME_AUDIO_DELAY_S,
     NARRATION_TAIL_S,
+    StillPick,
     build_comment,
     build_description,
     captions_filter,
     chip_text,
     clip_filter,
-    coords_text,
+    cut_stills,
     final_graph,
     flag_overlay_graph,
     gain_db,
@@ -37,6 +38,7 @@ from pipeline.video.shorts_render import (
     plan_timeline,
     pushin_filter,
     stills_graph,
+    stills_window,
     wrap_lines,
 )
 from pipeline.video.shorts_select import (
@@ -45,14 +47,13 @@ from pipeline.video.shorts_select import (
     focus_of,
     is_panorama,
     normalize_subject,
-    order_by_narration,
     reject_reason,
     score,
     select_stills,
 )
 from pipeline.video.shorts_tts import specific_place, spoken_name
 
-IMGS = [Path("a.jpg"), Path("b.jpg"), Path("c.jpg"), Path("d.jpg")]
+CUTS = [("a.jpg", 2.75), ("b.jpg", 2.75), ("c.jpg", 2.75), ("d.jpg", 2.75)]
 OPENING = (Path("short-opening.mp4"), 6.0)
 RETURN = (Path("short-return.mp4"), 3.0)
 
@@ -63,46 +64,108 @@ def _total(segments):
 
 class TestPlanTimeline:
     def test_loop_cut_opening_stills_return(self):
-        segs = plan_timeline(narration_s=16.4, images=IMGS, opening=OPENING, closing=RETURN)
+        segs = plan_timeline(narration_s=16.4, cuts=CUTS, opening=OPENING, closing=RETURN)
         kinds = [s.kind for s in segs]
-        # 17.0 s narration span: 6 s opening, 11 s over 4 stills (3.5 s max each), then the return
+        # 17.0 s narration span: 6 s opening, 11 s of stills, then the return
         assert kinds == ["clip", "still", "still", "still", "still", "return"]
         assert segs[0].duration == 6.0 and segs[0].start == 0.0
-        assert segs[1].duration == pytest.approx(11.0 / 4)
+        assert segs[1].duration == 2.75
         assert [s.source for s in segs[1:5]] == ["a.jpg", "b.jpg", "c.jpg", "d.jpg"]
         assert segs[-1].duration == 3.0  # never shortened: its last frame is the loop point
         assert _total(segs) == pytest.approx(17.0 + 3.0)
 
     def test_name_audio_starts_shortly_into_the_return_clip(self):
-        segs = plan_timeline(narration_s=16.4, images=IMGS, opening=OPENING, closing=RETURN)
+        segs = plan_timeline(narration_s=16.4, cuts=CUTS, opening=OPENING, closing=RETURN)
         assert name_audio_at(segs, name_s=1.5) == pytest.approx(17.0 + NAME_AUDIO_DELAY_S)
 
     def test_without_return_clip_name_audio_follows_the_stills(self):
-        segs = plan_timeline(narration_s=6.0, images=IMGS, opening=None, closing=None)
+        segs = plan_timeline(
+            narration_s=6.0, cuts=[("a.jpg", 3.3), ("b.jpg", 3.3)], opening=None, closing=None
+        )
         assert [s.kind for s in segs] == ["still", "still"]
         assert name_audio_at(segs, name_s=0.5) == pytest.approx(6.6 - 0.5 - 0.15)
 
+    def test_stills_window_follows_the_opening(self):
+        assert stills_window(16.4, 6.0) == (6.0, 17.0)
+        assert stills_window(6.0, None) == (0.0, 6.6)
+        assert stills_window(5.0, 9.0) == (5.6, 5.6)  # long opening capped at the span
+        assert stills_window(5.0, 5.2) == (5.2, 5.2)  # deficit within the slack absorbed
+
     def test_long_opening_is_capped_at_the_narration_span(self):
-        segs = plan_timeline(
-            narration_s=5.0, images=IMGS, opening=(Path("o.mp4"), 9.0), closing=None
-        )
+        segs = plan_timeline(narration_s=5.0, cuts=[], opening=(Path("o.mp4"), 9.0), closing=None)
         assert [s.kind for s in segs] == ["clip"]
         assert segs[0].duration == pytest.approx(5.0 + NARRATION_TAIL_S)
 
-    def test_opening_deficit_within_slack_is_absorbed(self):
-        segs = plan_timeline(
-            narration_s=5.0, images=IMGS, opening=(Path("o.mp4"), 5.2), closing=None
-        )
-        assert [s.kind for s in segs] == ["clip"]
-
-    def test_fewer_stills_than_slots_get_longer_slots(self):
-        segs = plan_timeline(narration_s=10.0, images=IMGS[:2], opening=None, closing=None)
-        assert [s.kind for s in segs] == ["still", "still"]
-        assert segs[0].duration == pytest.approx(5.3)
-
-    def test_requires_a_still(self):
+    def test_requires_stills_that_fill_the_window(self):
         with pytest.raises(ValueError):
-            plan_timeline(narration_s=5.0, images=[], opening=None, closing=None)
+            plan_timeline(narration_s=5.0, cuts=[], opening=None, closing=None)
+        with pytest.raises(ValueError):
+            plan_timeline(narration_s=5.0, cuts=[("a.jpg", 2.0)], opening=None, closing=None)
+
+
+class TestCutStills:
+    def test_opens_with_the_best_due_still_and_cuts_on_the_spoken_word(self):
+        # Machu Picchu: window 6.0–16.3; "built from polished…" spoken at 5.5,
+        # "Its Intihuatana stone" at 9.6, the first sentence at 0.0, one still unplaced
+        picks = [
+            StillPick("windows.jpg", 17.3, anchor=5.5),
+            StillPick("stone.jpg", 17.3, anchor=9.6),
+            StillPick("triumph.jpg", 16.8, anchor=0.0),
+            StillPick("old.jpg", 8.4, anchor=None),
+        ]
+        cuts = cut_stills(6.0, 16.3, picks)
+        assert [p for p, _ in cuts] == ["windows.jpg", "stone.jpg", "triumph.jpg"]
+        assert cuts[0][1] == pytest.approx(3.4)  # stone cuts in at 9.4 = 0.2 s before its word
+        assert sum(d for _, d in cuts) == pytest.approx(10.3)
+        assert min(d for _, d in cuts) >= 2.2
+
+    def test_a_still_never_cuts_in_sooner_than_the_minimum(self):
+        picks = [
+            StillPick("a.jpg", 5, anchor=3.0),
+            StillPick("b.jpg", 4, anchor=3.5),
+            StillPick("c.jpg", 3, anchor=None),
+        ]
+        cuts = cut_stills(0.0, 10.0, picks)
+        assert [p for p, _ in cuts] == ["c.jpg", "a.jpg", "b.jpg"]
+        assert cuts[0][1] == pytest.approx(2.8)  # a at its word
+        assert cuts[1][1] == pytest.approx(3.6)  # b too close to a: placed as a filler, mid-gap
+        assert min(d for _, d in cuts) >= 2.2
+
+    def test_a_little_late_is_accepted(self):
+        picks = [
+            StillPick("x.jpg", 9, anchor=None),
+            StillPick("a.jpg", 5, anchor=3.0),
+            StillPick("b.jpg", 4, anchor=4.5),
+        ]
+        cuts = cut_stills(0.0, 10.0, picks)
+        # b wants 4.3 but a cut in at 2.8: pushed 0.7 s to 5.0, within the tolerance
+        assert cuts == [
+            ("x.jpg", pytest.approx(2.8)),
+            ("a.jpg", pytest.approx(2.2)),
+            ("b.jpg", pytest.approx(5.0)),
+        ]
+
+    def test_without_due_stills_the_earliest_word_opens(self):
+        picks = [StillPick("a.jpg", 5, anchor=3.0), StillPick("b.jpg", 9, anchor=4.6)]
+        cuts = cut_stills(0.0, 10.0, picks)
+        assert cuts == [("a.jpg", pytest.approx(4.4)), ("b.jpg", pytest.approx(5.6))]
+
+    def test_a_word_too_near_the_end_becomes_a_filler(self):
+        picks = [StillPick("x.jpg", 9, anchor=None), StillPick("z.jpg", 5, anchor=9.5)]
+        cuts = cut_stills(0.0, 10.0, picks)
+        assert cuts == [("x.jpg", pytest.approx(5.0)), ("z.jpg", pytest.approx(5.0))]
+
+    def test_fillers_stop_when_no_gap_holds_two_minimum_stills(self):
+        picks = [StillPick(f"{i}.jpg", 10 - i, anchor=None) for i in range(8)]
+        cuts = cut_stills(0.0, 10.3, picks)
+        assert len(cuts) == 4  # 10.3 → 2 × 5.15 → 4 × 2.575; no gap ≥ 4.4 is left
+        assert min(d for _, d in cuts) >= 2.2
+
+    def test_single_and_empty(self):
+        assert cut_stills(0.0, 4.0, [StillPick("a.jpg", 1)]) == [("a.jpg", 4.0)]
+        assert cut_stills(5.0, 5.0, [StillPick("a.jpg", 1)]) == []
+        with pytest.raises(ValueError):
+            cut_stills(0.0, 4.0, [])
 
 
 class TestStillsGraph:
@@ -117,6 +180,12 @@ class TestStillsGraph:
         lengths, graph = stills_graph([4.0])
         assert lengths == [4.0]
         assert "xfade" not in graph and graph.endswith("[out]")
+
+    def test_stills_alternate_push_in_and_push_out(self):
+        _, graph = stills_graph([2.75, 2.75, 2.75])
+        v0, v1, v2 = (c for c in graph.split(";") if c.startswith("[") and "xfade" not in c)
+        assert "(1+0.06*t/2.750)" in v0 and "(1+0.06*t/2.750)" in v2
+        assert "(1+0.06*(1-t/3.150))" in v1  # out over the whole fed length (slot + dissolve)
 
     def test_pushin_zooms_from_100_to_106_percent(self):
         f = pushin_filter(2.75)
@@ -147,7 +216,7 @@ class TestText:
         assert wrap_lines("Machu Picchu") == ["Machu Picchu"]
 
     def test_long_spoken_name_starts_early_enough_to_end_before_the_loop_point(self):
-        segs = plan_timeline(narration_s=16.4, images=IMGS, opening=OPENING, closing=RETURN)
+        segs = plan_timeline(narration_s=16.4, cuts=CUTS, opening=OPENING, closing=RETURN)
         at = name_audio_at(segs, name_s=6.0)
         assert at == pytest.approx(20.0 - 6.0 - 0.15)
         assert at < 17.0  # starts over the last still
@@ -201,13 +270,10 @@ class TestText:
         assert specific_place("Chile, Easter Island") == "Easter Island"
         assert hashtags({"name": "Peru", "country": "Peru"}).count("#Peru") == 1
 
-    def test_comment_carries_the_site_link(self):
+    def test_comment_asks_a_question_and_carries_the_site_link(self):
         c = build_comment({"name": "Machu Picchu", "page_path": "/sites/peru/machu-picchu-1"})
+        assert c.startswith("Have you been to Machu Picchu?")
         assert "https://ancientnerds.com/sites/peru/machu-picchu-1" in c
-
-    def test_coords_text_hemispheres(self):
-        assert coords_text(-13.162974, -72.544904) == "13.16° S · 72.54° W"
-        assert coords_text(51.178, -1.826) == "51.18° N · 1.83° W"
 
     def test_chip_drops_the_country_and_empty_fields(self):
         site = {"civilization": "Peru", "country": "Peru", "period_name": "1000 - 1500 AD"}
@@ -236,6 +302,16 @@ class TestFilters:
         assert "adelay=16700:all=1," in g and "[d1]" in g
         assert g.endswith("apad=whole_dur=19.500,atrim=duration=19.500[a]")
         assert "loudnorm" not in g and "afir" not in g and "aecho" not in g
+
+    def test_music_is_ducked_under_the_voice(self):
+        g = mix_graph(16.7, 19.5, music=True)
+        assert "[v]apad=whole_dur=19.500,asplit[vm][vsc]" in g
+        assert "[m][vsc]sidechaincompress=threshold=0.04:ratio=2" in g
+        assert "volume=-8.0dB[m]" in g
+        assert g.endswith(
+            "[vm][md]amix=inputs=2:duration=longest:normalize=0,apad=whole_dur=19.500,atrim=duration=19.500[a]"
+        )
+        assert "sidechaincompress" not in mix_graph(16.7, 19.5)
 
     def test_final_graph_is_look_plus_fixed_gain(self):
         g = final_graph(gain_db(-20.5))
@@ -312,21 +388,6 @@ class TestSelection:
         assert score(tall) > score(wide)  # same verdict: portrait wins
         assert score(better_wide) > score(wide)  # quality breaks ties
         assert score(relevant_wide) > score(better_wide)  # relevance beats two quality points
-
-    def test_order_by_narration_follows_the_card_text(self):
-        text = "Built from polished dry-stone walls. Its Intihuatana stone tracks the sun."
-        # hashes ≥ 7 bits apart so nothing counts as a pixel duplicate
-        walls = _cand(
-            "walls", 1600, 1200, _good("walls", 3, illustrates="dry-stone walls"), dh=0x7F
-        )
-        stone = _cand(
-            "stone", 1600, 1200, _good("stone", 5, illustrates="Intihuatana stone"), dh=0x7F << 10
-        )
-        vista = _cand("vista", 1600, 1200, _good("vista", 4, illustrates=""), dh=0x7F << 20)
-        kept, _ = select_stills([walls, stone, vista])
-        assert [c.image["filename"] for c in kept] == ["stone", "vista", "walls"]  # score order
-        ordered = order_by_narration(kept, text, lambda c: c.verdict)
-        assert [c.image["filename"] for c in ordered] == ["walls", "stone", "vista"]
 
     def test_select_orders_by_score_and_drops_duplicates(self):
         cands = [
@@ -539,10 +600,9 @@ class TestFlagAndMusic:
 
     def test_mix_graph_with_music_loops_fades_and_stays_silent_at_the_loop_point(self):
         g = mix_graph(16.7, 19.5, music=True)
-        assert "amix=inputs=3" in g
+        assert g.count("amix=inputs=2") == 2  # voices, then voices + ducked music
         assert "atrim=duration=19.200" in g  # music stops 0.3 s before the end
         assert "afade=t=in:st=0:d=1.0" in g and "afade=t=out:st=18.000:d=1.2" in g
-        assert "volume=-11.0dB[m]" in g
         assert mix_graph(16.7, 19.5).count("amix=inputs=2") == 1
 
 
@@ -612,3 +672,33 @@ class TestCaptions:
         assert "(t-6.000)/0.4" in a and "(16.400-t)/0.4" in a
         f = info_filter(tmp_path / "chip.txt", tmp_path / "f.ttf", 6.0, 16.4)
         assert "enable='between(t\\,6.000\\,16.400)'" in f and "y=170" in f
+
+
+class TestSpokenAndSrt:
+    WORDS = [
+        Word("A", 0.0, 0.2),
+        Word("big", 0.2, 0.5),
+        Word("Inca", 0.5, 0.9),
+        Word("citadel.", 0.9, 1.4),
+        Word("Its", 1.6, 1.8),
+        Word("stone", 1.8, 2.3),
+        Word("tracks", 2.3, 2.7),
+        Word("the", 2.7, 2.8),
+        Word("sun.", 2.8, 3.2),
+    ]
+    TEXT = "A big Inca citadel. Its stone tracks the sun."
+
+    def test_spoken_at_finds_the_phrase_start(self):
+        assert spoken_at(self.TEXT, "Inca citadel", self.WORDS) == 0.5
+        assert spoken_at(self.TEXT, "its stone tracks the sun.", self.WORDS) == 1.6
+        assert spoken_at(self.TEXT, "", self.WORDS) is None
+        assert spoken_at(self.TEXT, "temple", self.WORDS) is None
+        assert spoken_at(self.TEXT, "ig Inca", self.WORDS) == 0.2  # inside a token
+
+    def test_srt_cues_break_at_sentence_ends_and_six_words(self):
+        srt = srt_text(self.WORDS)
+        blocks = srt.strip().split("\n\n")
+        assert len(blocks) == 2
+        assert blocks[0] == "1\n00:00:00,000 --> 00:00:01,400\nA big Inca citadel."
+        assert blocks[1].endswith("Its stone tracks the sun.")
+        assert srt_text([Word(str(i), i, i + 1) for i in range(7)]).count("-->") == 2

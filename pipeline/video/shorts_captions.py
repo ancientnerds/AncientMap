@@ -93,6 +93,52 @@ def display_text(token: str) -> str:
     return token.strip(EDGE_PUNCT)
 
 
+def spoken_at(card_text: str, phrase: str, words: list[Word]) -> float | None:
+    """When `phrase` (a stretch of the card text, as the VLM quotes it) starts
+    being spoken: the start of the word at the phrase's first character. None
+    when the phrase is empty or not in the text. `words` is aligned with
+    `card_text.split()`."""
+    needle = phrase.strip().lower()
+    if not needle:
+        return None
+    at = card_text.lower().find(needle)
+    if at < 0:
+        return None
+    index = len(card_text[:at].split())
+    if at > 0 and not card_text[at - 1].isspace():
+        index -= 1  # the phrase starts inside a token
+    return words[index].start if index < len(words) else None
+
+
+SRT_MAX_WORDS = 6
+
+
+def _srt_time(t: float) -> str:
+    ms = int(round(t * 1000))
+    return f"{ms // 3600000:02d}:{ms // 60000 % 60:02d}:{ms // 1000 % 60:02d},{ms % 1000:03d}"
+
+
+def srt_text(words: list[Word]) -> str:
+    """SubRip captions for the upload: short cues (at most SRT_MAX_WORDS words,
+    broken at sentence ends) with the original punctuation."""
+    cues: list[list[Word]] = []
+    for word in words:
+        if (
+            cues
+            and len(cues[-1]) < SRT_MAX_WORDS
+            and not cues[-1][-1].text.endswith((".", "!", "?"))
+        ):
+            cues[-1].append(word)
+        else:
+            cues.append([word])
+    blocks = [
+        f"{i}\n{_srt_time(cue[0].start)} --> {_srt_time(cue[-1].end)}\n"
+        + " ".join(w.text for w in cue)
+        for i, cue in enumerate(cues, start=1)
+    ]
+    return "\n\n".join(blocks) + "\n"
+
+
 def transcribe_words(audio: Path) -> list[tuple[str, float, float]]:
     """Recognised words with timestamps from faster-whisper."""
     from faster_whisper import WhisperModel

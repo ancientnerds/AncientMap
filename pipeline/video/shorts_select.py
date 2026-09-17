@@ -14,7 +14,7 @@ Three explicit stages:
 The renderer then orders the stills that fit the timeline by where their
 phrase appears in the card text, so the pictures follow the narration.
 
-`select_stills` / `order_by_narration` are pure and unit tested;
+`select_stills` is pure and unit tested;
 `hash_image` / `judge_all` do the I/O.
 """
 
@@ -175,28 +175,6 @@ def select_stills(
         else:
             kept.append(cand)
     return kept, rejected
-
-
-def order_by_narration(
-    items: list[T], card_text: str, verdict_of: Callable[[T], dict | None]
-) -> list[T]:
-    """Items in the order their `illustrates` phrase occurs in the card text;
-    items without a matching phrase keep their incoming (score) order at the
-    end. Applied by the renderer to the stills that made the cut, so ordering
-    never pushes a high-scoring still out of the available slots."""
-    text = card_text.lower()
-
-    def position(item: T) -> int:
-        phrase = ((verdict_of(item) or {}).get("illustrates") or "").strip().lower()
-        at = text.find(phrase) if phrase else -1
-        return at if at >= 0 else len(text) + 1
-
-    return sorted(items, key=position)  # sorted() is stable → score order among ties
-
-
-# ---------------------------------------------------------------------------
-# I/O
-# ---------------------------------------------------------------------------
 
 
 def hash_image(path: Path) -> int:
