@@ -21,6 +21,7 @@ import { absoluteUrl, countryPath, sitePath, storyPath } from '../../seo/meta'
 import { blurb } from '../../seo/text'
 import type { StoryRoute } from '../../types/anRoute'
 import AiFootnote from './AiFootnote'
+import FeedbackPrompt from '../FeedbackPrompt'
 import InlineVideo from './InlineVideo'
 import { splitPostText } from './postText'
 import {
@@ -279,6 +280,13 @@ export default function StoryArticle({ story, children }: StoryArticleProps) {
           ))}
         </div>
       )}
+
+      <FeedbackPrompt
+        prompt="story_end"
+        question="Was this story useful?"
+        yesNo
+        placeholder="What was missing?"
+      />
 
       {children}
 

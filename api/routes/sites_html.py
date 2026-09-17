@@ -9,6 +9,7 @@ searchable via the app but not part of the crawl surface.
 """
 
 import logging
+from urllib.parse import urlencode
 
 from fastapi import APIRouter, Depends, Response
 from fastapi.responses import RedirectResponse
@@ -146,7 +147,13 @@ async def sites_by_country(slug: str, db: Session = Depends(get_db)):
 
 
 @router.get("/site.html")
-async def legacy_site_redirect(id: str = "", db: Session = Depends(get_db)):
+async def legacy_site_redirect(
+    id: str = "",
+    utm_source: str | None = None,
+    utm_medium: str | None = None,
+    utm_campaign: str | None = None,
+    db: Session = Depends(get_db),
+):
     """
     301 the legacy /site.html?id={uuid} URL to its canonical slug URL.
 
@@ -169,15 +176,29 @@ async def legacy_site_redirect(id: str = "", db: Session = Depends(get_db)):
     """
     if not id:
         return _site_404()
+    # utm_* survives the hop: the Discord bot tags its links and Umami's UTM
+    # report attributes the visit only if the tag reaches the final page.
+    utm = urlencode(
+        {
+            k: v
+            for k, v in (
+                ("utm_source", utm_source),
+                ("utm_medium", utm_medium),
+                ("utm_campaign", utm_campaign),
+            )
+            if v
+        }
+    )
+    query = f"?{utm}" if utm else ""
     row = db.execute(_LEGACY_SITE_SQL, {"id": id}).fetchone()
     if row:
         target = encode_path(site_path(row.country, row.name, id))
-        return RedirectResponse(url=target, status_code=301)
+        return RedirectResponse(url=f"{target}{query}", status_code=301)
     exists = db.execute(
         text("SELECT 1 FROM unified_sites WHERE id::text = :id"), {"id": id}
     ).fetchone()
     if exists:
-        return RedirectResponse(url=f"/globe.html#focus={id}", status_code=301)
+        return RedirectResponse(url=f"/globe.html{query}#focus={id}", status_code=301)
     return _site_404()
 
 

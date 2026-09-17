@@ -102,3 +102,20 @@ def test_praefixsuche_nutzt_einen_uuid_bereich_keinen_ausdruck():
     assert "id >=" in sql and "id <=" in sql
     assert params["lo"] == "b7cd329f-0000-0000-0000-000000000000"
     assert params["hi"] == "b7cd329f-ffff-ffff-ffff-ffffffffffff"
+
+
+def test_utm_parameter_ueberleben_die_weiterleitung():
+    row = SimpleNamespace(name="Göbekli Tepe", country="Türkiye")
+    resp = asyncio.run(
+        sh.legacy_site_redirect(
+            id=CURATED_ID, utm_source="discord", utm_medium="bot", db=_db(row, exists=True)
+        )
+    )
+    assert resp.headers["location"] == (
+        "/sites/t%C3%BCrkiye/g%C3%B6bekli-tepe-9c8b7a65?utm_source=discord&utm_medium=bot"
+    )
+    resp = asyncio.run(
+        sh.legacy_site_redirect(id=BULK_ID, utm_source="discord", db=_db(None, exists=True))
+    )
+    assert resp.headers["location"] == f"/globe.html?utm_source=discord#focus={BULK_ID}"
+

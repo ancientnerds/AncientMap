@@ -1,0 +1,104 @@
+/* FeedbackPrompt — NERV: black panel, green label, red action. Mobile first:
+   the text line and the button stack on narrow screens, sit side by side
+   from 480px. */
+.feedback-prompt {
+  margin: 24px 0 8px;
+  padding: 14px 16px 16px;
+  border: 1px solid rgba(0, 204, 102, 0.35);
+  border-left: 3px solid #00cc66;
+  background: rgba(0, 0, 0, 0.55);
+  color: #e8e8e0;
+}
+
+.feedback-prompt--sent {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.8rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #00cc66;
+}
+
+.feedback-prompt-q {
+  margin: 0 0 12px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.8rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #00cc66;
+}
+
+.feedback-prompt-choice {
+  display: flex;
+  gap: 10px;
+}
+
+.feedback-prompt-choice button,
+.feedback-prompt-row button {
+  min-height: 44px;
+  padding: 0 18px;
+  background: #000;
+  color: #ff2a2a;
+  border: 2px solid #bb0a0a;
+  border-radius: 3px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.85rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.feedback-prompt-choice button {
+  flex: 1;
+}
+
+.feedback-prompt-choice button:hover,
+.feedback-prompt-choice button:focus-visible,
+.feedback-prompt-row button:hover:not(:disabled),
+.feedback-prompt-row button:focus-visible {
+  background: #bb0a0a;
+  color: #000;
+  outline: none;
+}
+
+.feedback-prompt-row button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.feedback-prompt-row {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.feedback-prompt-row input {
+  min-height: 44px;
+  padding: 0 12px;
+  background: #060604;
+  color: #e8e8e0;
+  border: 1px solid #333;
+  border-radius: 3px;
+  font: inherit;
+  font-size: 1rem; /* 16px keeps iOS from zooming the page on focus */
+}
+
+.feedback-prompt-row input:focus {
+  border-color: #ff2a2a;
+  outline: none;
+}
+
+@media (min-width: 480px) {
+  .feedback-prompt-row {
+    flex-direction: row;
+  }
+  .feedback-prompt-row input {
+    flex: 1;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .feedback-prompt-choice button,
+  .feedback-prompt-row button {
+    transition: background 0.15s, color 0.15s;
+  }
+}

@@ -398,6 +398,37 @@ def render_medium_copy_html(
 </html>"""
 
 
+#: Micro-feedback on the 404 page — the `feedback` event of src/analytics
+#: (prompt not_found), sent through the tracker tag when it is present.
+_NOT_FOUND_FEEDBACK = """<form class="nf-feedback" onsubmit="return anFeedback(this)">
+        <label for="nf-q">What were you looking for?</label>
+        <div class="nf-feedback-row">
+            <input id="nf-q" name="q" type="text" maxlength="100" autocomplete="off" placeholder="A site, a story, a place…">
+            <button type="submit">Send</button>
+        </div>
+    </form>
+    <style>
+        .nf-feedback { margin: 32px auto 0; max-width: 420px; text-align: left; padding: 14px 16px 16px; border: 1px solid rgba(0,204,102,0.35); border-left: 3px solid #00cc66; background: rgba(0,0,0,0.55); }
+        .nf-feedback label { display: block; margin-bottom: 10px; font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; letter-spacing: 0.08em; text-transform: uppercase; color: #00cc66; }
+        .nf-feedback-row { display: flex; flex-direction: column; gap: 10px; }
+        .nf-feedback input { min-height: 44px; padding: 0 12px; background: #060604; color: #e8e8e0; border: 1px solid #333; border-radius: 3px; font: inherit; font-size: 1rem; }
+        .nf-feedback input:focus { border-color: #ff2a2a; outline: none; }
+        .nf-feedback button { min-height: 44px; padding: 0 18px; background: #000; color: #ff2a2a; border: 2px solid #bb0a0a; border-radius: 3px; font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; letter-spacing: 0.08em; text-transform: uppercase; cursor: pointer; }
+        .nf-feedback button:hover { background: #bb0a0a; color: #000; }
+        .nf-feedback-thanks { margin-top: 32px; font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; letter-spacing: 0.06em; text-transform: uppercase; color: #00cc66; }
+        @media (min-width: 480px) { .nf-feedback-row { flex-direction: row; } .nf-feedback input { flex: 1; } }
+    </style>
+    <script>
+        function anFeedback(f) {
+            var t = (f.q.value || '').replace(/\\s+/g, ' ').trim().slice(0, 100);
+            if (t && window.umami) window.umami.track('feedback', {prompt:'not_found', text:t, page:'other'});
+            var p = document.createElement('p'); p.className = 'nf-feedback-thanks'; p.textContent = 'Thanks — noted.';
+            f.replaceWith(p);
+            return false;
+        }
+    </script>"""
+
+
 def analytics_tag() -> str:
     """The Umami tracker tag, identical to what vite.config.ts (analyticsTag)
     puts into every built entry; empty when the deploy names no website id,
@@ -422,6 +453,8 @@ def render_error_html(what: str = "Page", code: int = 404, detail: str | None = 
     what = escape(what)
     headline = "Not Found" if code == 404 else "No Longer Available"
     body = escape(detail) if detail else f"{what} not found."
+    # Only a 404 is worth a question: on a 410 we withdrew the thing on purpose.
+    feedback = _NOT_FOUND_FEEDBACK if code == 404 else ""
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -442,6 +475,7 @@ def render_error_html(what: str = "Page", code: int = 404, detail: str | None = 
         <h1 style="font-size: 3em; color: #c02023;">{code}</h1>
         <p style="font-size: 1.2em; margin: 20px 0;">{body}</p>
         <p><a href="/articles/">Browse all articles</a> &middot; <a href="/news-archive/">News archive</a> &middot; <a href="/">Home</a></p>
+        {feedback}
     </main>
     {_footer_html()}
 </body>

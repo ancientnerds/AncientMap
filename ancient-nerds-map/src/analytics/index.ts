@@ -32,6 +32,7 @@ export type EventName =
   | 'js_error' // uncaught error / rejection — message, source, page
   | 'scroll_depth' // 25/50/75/100 % of a content page — depth, page
   | 'outbound_click' // link to another host — host, page
+  | 'feedback' // micro-feedback at a dead end — prompt, answer, text (≤ 100 chars), page
 
 export type EventProps = Record<string, string | number | boolean | null | undefined>
 

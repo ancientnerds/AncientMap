@@ -4,6 +4,7 @@ import { NervLoadingBar } from '../components/NervLoadingBar'
 import { SiteCard, ViewOnGlobeLink } from '../components/SiteCard'
 import { SearchFilters } from '../components/SearchFilters'
 import { SitePopupOverlay } from '../components/SitePopupOverlay'
+import FeedbackPrompt from '../components/FeedbackPrompt'
 import { useSiteSearch, type SourceInfo } from '../hooks/useSiteSearch'
 import { extractCountry } from '../utils/searchUtils'
 import { SiteData, fetchSites, getCurrentSites, addSourceSites, getSourceColor, getDefaultEnabledSourceIds, resolvePeriod } from '../data/sites'
@@ -385,6 +386,11 @@ export default function SearchPage() {
         {search.searchQuery.trim().length >= 3 && !search.isSearching && search.searchResults.length === 0 && (
           <div className="search-prompt">
             <p>No sites found matching "{search.searchQuery}"{!searchAllSources && ' — try enabling "All sources"'}</p>
+            <FeedbackPrompt
+              prompt="search_empty"
+              question="What were you looking for?"
+              placeholder="A site, a place, a period…"
+            />
           </div>
         )}
       </div>

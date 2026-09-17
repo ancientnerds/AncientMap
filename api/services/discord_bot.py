@@ -15,6 +15,7 @@ import discord
 from discord import app_commands
 
 from api.services.rate_limiter import RateLimiter
+from pipeline.sites_html_renderer import encode_path, site_path
 
 logger = logging.getLogger(__name__)
 
@@ -45,6 +46,19 @@ def _account_age_seconds(discord_id: str) -> float:
 # ---------------------------------------------------------------------------
 
 
+#: Discord apps open links without a referer, so every visit from the bot
+#: would count as "direct". The tag lets Umami's UTM report attribute them.
+_UTM = "utm_source=discord&utm_medium=bot"
+
+
+def site_link(site_id: str, name: str = "", country: str = "") -> str:
+    """Public URL for a site the bot mentions: the canonical detail page when
+    name and country are known, else the id URL (which 301s and keeps the tag)."""
+    if name and country:
+        return f"https://ancientnerds.com{encode_path(site_path(country, name, site_id))}?{_UTM}"
+    return f"https://ancientnerds.com/site.html?id={site_id}&{_UTM}"
+
+
 def _clean_for_discord(text: str) -> str:
     """Convert internal Lyra markers to Discord-friendly format.
 
@@ -59,10 +73,10 @@ def _clean_for_discord(text: str) -> str:
         lambda m: f"[{m.group(1)}](<https://youtube.com/watch?v={m.group(2)}&t={m.group(3)}s>)",
         text,
     )
-    # [label](site:UUID) → [label](<https://ancientnerds.com/site.html?id=UUID>)
+    # [label](site:UUID) → [label](<tagged site URL>); only the id is known here
     text = re.sub(
         r"\[([^\]]+)\]\(site:([^)]+)\)",
-        lambda m: f"[{m.group(1)}](<https://ancientnerds.com/site.html?id={m.group(2)}>)",
+        lambda m: f"[{m.group(1)}](<{site_link(m.group(2))}>)",
         text,
     )
     # [label](flag:XX) / [label](coord:...) / [label](empire:...) → plain label
@@ -119,7 +133,7 @@ def _build_sites_embed(sites: list[dict]) -> discord.Embed:
         parts = [p for p in (period, country) if p]
         detail = f" ({', '.join(parts)})" if parts else ""
         if site_id:
-            lines.append(f"**[{name}](https://ancientnerds.com/site.html?id={site_id})**{detail}")
+            lines.append(f"**[{name}]({site_link(site_id, name, country)})**{detail}")
         else:
             lines.append(f"**{name}**{detail}")
     embed.description = "\n".join(lines)
