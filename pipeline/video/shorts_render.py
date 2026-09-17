@@ -38,11 +38,21 @@ NAME_FADE_OUT_S = 0.5
 NAME_END_GAP_S = 0.15  # fully gone this long before the clip ends = the loop point
 NAME_AUDIO_DELAY_S = 0.2  # spoken name starts shortly after the return clip begins
 NAME_WRAP_CHARS = 14
+FLAG_W = 180  # flag under the name (3:2 → 120 px tall)
+FLAG_GAP = 34
 OPENING_TRIM_S = 0.1  # the opening take holds its first pose this long; the first frames after a
 # jump are not fully drawn, so cutting the hold keeps frame 0 identical to the loop's end pose
 # Mapbox ToS: satellite/terrain frames need attribution in the video itself;
 # the DOM logo is not part of the captured canvas.
 MAPBOX_CREDIT = "© Mapbox © Maxar"
+
+# Music bed: looped under the whole short, faded in at the start and out
+# before the loop point so the video loops cleanly; MUSIC_GAIN_DB sits it
+# under the voice (the loudness gain is measured on the full mix).
+MUSIC_GAIN_DB = -11.0  # about 10 dB under the voice; -19 was inaudible (-32 dB in the pauses)
+MUSIC_FADE_IN_S = 1.0
+MUSIC_FADE_OUT_S = 1.2
+MUSIC_END_GAP_S = 0.3  # silent before the loop point (audit: silent_loop_point)
 
 # Voice: 48 kHz float, gentle high-pass, a soft 1.8:1 compressor (slow, wide
 # knee) so the level evens out without pumping. No reverb (user, 2026-09-16).
@@ -225,6 +235,24 @@ def name_alpha(duration: float) -> str:
     )
 
 
+def name_block_top(name_lines: int, line_h: int) -> int:
+    """Top of the name block: centred in the upper half of the frame."""
+    return (H - name_lines * line_h) // 2 - 140
+
+
+def flag_overlay_graph(duration: float, name_lines: int, line_h: int) -> str:
+    """filter_complex tail that fades the flag (input 1) in and out with the
+    name and places it centred under the name block."""
+    y = name_block_top(name_lines, line_h) + name_lines * line_h + FLAG_GAP
+    end = duration - NAME_END_GAP_S
+    return (
+        f"[1:v]format=rgba,scale={FLAG_W}:-1,"
+        f"fade=t=in:st=0:d={NAME_FADE_IN_S}:alpha=1,"
+        f"fade=t=out:st={end - NAME_FADE_OUT_S:.3f}:d={NAME_FADE_OUT_S}:alpha=1[flag];"
+        f"[base][flag]overlay=x=(W-w)/2:y={y}:shortest=1[out]"
+    )
+
+
 def clip_filter(
     duration: float,
     *,
@@ -239,7 +267,7 @@ def clip_filter(
     parts = [f"scale={W}:{H}:force_original_aspect_ratio=increase,crop={W}:{H},fps={FPS}"]
     if name_file is not None:
         size, line_h = name_size, name_line_h
-        y = (H - name_lines * line_h) // 2 - 140
+        y = name_block_top(name_lines, line_h)
         parts.append(
             f"drawtext=fontfile='{ff_path(FONT_HEADING)}':textfile='{ff_path(name_file)}':"
             f"fontcolor=white:fontsize={size}:line_spacing=16:x=(w-text_w)/2:y={y}:"
@@ -310,6 +338,53 @@ def render_clip(
     )
 
 
+def render_return(
+    src: Path,
+    duration: float,
+    out: Path,
+    *,
+    credit_file: Path,
+    name_file: Path,
+    name_lines: int,
+    name_size: int,
+    name_line_h: int,
+    flag: Path | None,
+) -> Path:
+    """The return clip: name overlay (clip_filter) plus, when the site has a
+    country flag, the flag under the name."""
+    base = clip_filter(
+        duration,
+        credit_file=credit_file,
+        name_file=name_file,
+        name_lines=name_lines,
+        name_size=name_size,
+        name_line_h=name_line_h,
+    )
+    if flag is None:
+        return run_ffmpeg(["-i", str(src), "-t", f"{duration:.3f}", "-vf", base, *X264], out)
+    graph = f"[0:v]{base}[base];{flag_overlay_graph(duration, name_lines, name_line_h)}"
+    return run_ffmpeg(
+        [
+            "-i",
+            str(src),
+            "-loop",
+            "1",
+            "-framerate",
+            str(FPS),
+            "-i",
+            str(flag),
+            "-t",
+            f"{duration:.3f}",
+            "-filter_complex",
+            graph,
+            "-map",
+            "[out]",
+            *X264,
+        ],
+        out,
+    )
+
+
 def render_stills(stills: list[Segment], out: Path) -> Path:
     """One dissolving sequence for a run of consecutive still segments."""
     lengths, graph = stills_graph([s.duration for s in stills])
@@ -319,27 +394,57 @@ def render_stills(stills: list[Segment], out: Path) -> Path:
     return run_ffmpeg([*args, "-filter_complex", graph, "-map", "[out]", *X264], out)
 
 
-def mix_graph(name_at_s: float, total_s: float) -> str:
-    """filter_complex for the voice pre-mix: inputs 0 = narration, 1 = spoken
-    name. Both voices are processed, mixed, and bounded to exactly `total_s`."""
+STEREO = "aformat=sample_fmts=fltp:sample_rates=48000:channel_layouts=stereo"
+
+
+def mix_graph(name_at_s: float, total_s: float, music: bool = False) -> str:
+    """filter_complex for the pre-mix: inputs 0 = narration, 1 = spoken name,
+    2 = music (looped by the caller). Voices are processed, the music is
+    trimmed to the short, faded in/out (silent MUSIC_END_GAP_S before the
+    loop point) and lowered by MUSIC_GAIN_DB; everything is bounded to
+    exactly `total_s`."""
     ms = int(round(name_at_s * 1000))
-    return (
-        f"[0:a]{VOICE_CHAIN}[d0];"
-        f"[1:a]{VOICE_CHAIN},adelay={ms}:all=1[d1];"
-        f"[d0][d1]amix=inputs=2:duration=longest:normalize=0,"
+    parts = [
+        f"[0:a]{VOICE_CHAIN},{STEREO}[d0]",
+        f"[1:a]{VOICE_CHAIN},adelay={ms}:all=1,{STEREO}[d1]",
+    ]
+    inputs = "[d0][d1]"
+    n = 2
+    if music:
+        fade_out_at = total_s - MUSIC_END_GAP_S - MUSIC_FADE_OUT_S
+        parts.append(
+            f"[2:a]{STEREO},atrim=duration={total_s - MUSIC_END_GAP_S:.3f},"
+            f"afade=t=in:st=0:d={MUSIC_FADE_IN_S},"
+            f"afade=t=out:st={fade_out_at:.3f}:d={MUSIC_FADE_OUT_S},"
+            f"volume={MUSIC_GAIN_DB}dB[m]"
+        )
+        inputs += "[m]"
+        n = 3
+    parts.append(
+        f"{inputs}amix=inputs={n}:duration=longest:normalize=0,"
         f"apad=whole_dur={total_s:.3f},atrim=duration={total_s:.3f}[a]"
     )
+    return ";".join(parts)
 
 
-def premix(narration: Path, name_audio: Path, name_at_s: float, total_s: float, out: Path) -> Path:
+def premix(
+    narration: Path,
+    name_audio: Path,
+    name_at_s: float,
+    total_s: float,
+    out: Path,
+    music: Path | None = None,
+) -> Path:
+    music_args = ["-stream_loop", "-1", "-i", str(music)] if music else []
     return run_ffmpeg(
         [
             "-i",
             str(narration),
             "-i",
             str(name_audio),
+            *music_args,
             "-filter_complex",
-            mix_graph(name_at_s, total_s),
+            mix_graph(name_at_s, total_s, music=music is not None),
             "-map",
             "[a]",
             "-c:a",
@@ -434,8 +539,17 @@ def concat_and_mux(parts: list[Path], mix: Path, gain: float, out: Path) -> Path
     )
 
 
-def render_short(site: dict, stills: list[dict], site_dir: Path, voice_id: str) -> Path:
-    """Assemble `<slug>.mp4` from the site dir's narration, name audio, selected stills and clips."""
+def render_short(
+    site: dict,
+    stills: list[dict],
+    site_dir: Path,
+    voice_id: str,
+    *,
+    flag: Path | None = None,
+    music: Path | None = None,
+) -> Path:
+    """Assemble `<slug>.mp4` from the site dir's narration, name audio, selected
+    stills and clips; `flag` goes under the name, `music` under everything."""
     narration = site_dir / "narration.mp3"
     name_audio = site_dir / "name.mp3"
     clips = site_dir / "clips"
@@ -488,17 +602,21 @@ def render_short(site: dict, stills: list[dict], site_dir: Path, voice_id: str) 
             n += len(run)
         else:
             logger.info("%-7s %.2fs %s", seg.kind, seg.duration, seg.source)
-            render_clip(
-                Path(seg.source or ""),
-                seg.duration,
-                out,
-                credit_file=credit_file,
-                start=seg.start,
-                name_file=name_file if seg.kind == "return" else None,
-                name_lines=len(name_lines),
-                name_size=name_size,
-                name_line_h=name_line_h,
-            )
+            src = Path(seg.source or "")
+            if seg.kind == "clip":
+                render_clip(src, seg.duration, out, credit_file=credit_file, start=seg.start)
+            else:
+                render_return(
+                    src,
+                    seg.duration,
+                    out,
+                    credit_file=credit_file,
+                    name_file=name_file,
+                    name_lines=len(name_lines),
+                    name_size=name_size,
+                    name_line_h=name_line_h,
+                    flag=flag,
+                )
             n += 1
         parts.append(out)
 
@@ -506,7 +624,7 @@ def render_short(site: dict, stills: list[dict], site_dir: Path, voice_id: str) 
     final = site_dir / f"{site['slug']}.mp4"
     total_s = sum(s.duration for s in segments)
     name_at = name_audio_at(segments, probe_duration(name_audio))
-    mix = premix(narration, name_audio, name_at, total_s, work / "mix.wav")
+    mix = premix(narration, name_audio, name_at, total_s, work / "mix.wav", music=music)
     lufs = measure_lufs(mix)
     logger.info("voice mix %.1f LUFS → gain %+.1f dB", lufs, gain_db(lufs))
     concat_and_mux(parts, mix, gain_db(lufs), final)

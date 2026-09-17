@@ -59,6 +59,11 @@ def _parse(argv: list[str]) -> argparse.Namespace:
     )
     s.add_argument("--steps", default=",".join(ALL_STEPS))
     s.add_argument(
+        "--music",
+        default=str(default_music()) if default_music() else None,
+        help="music bed (default: the single file in video-assets/music/)",
+    )
+    s.add_argument(
         "--record-scenes",
         default=RECORD_SCENES,
         help="recorder scenes for the record step (e.g. short-return only)",
@@ -164,6 +169,14 @@ def _select(site: dict, site_dir: Path, use_vlm: bool) -> None:
 
 
 RECORD_SCENES = "short-opening,short-return"
+MUSIC_DIR = Path(__file__).resolve().parents[2] / "video-assets" / "music"
+MUSIC_SUFFIXES = {".wav", ".mp3", ".m4a", ".flac"}
+
+
+def default_music() -> Path | None:
+    """The music bed when exactly one track lies in video-assets/music/."""
+    tracks = sorted(p for p in MUSIC_DIR.glob("*") if p.suffix.lower() in MUSIC_SUFFIXES)
+    return tracks[0] if len(tracks) == 1 else None
 
 
 def record_clips(site_dir: Path, scenes: str = RECORD_SCENES) -> None:
@@ -224,6 +237,11 @@ def run_short(args: argparse.Namespace) -> Path | None:
             json.dumps(landed, indent=2, ensure_ascii=False), encoding="utf-8"
         )
         logging.info("%d/%d images on disk", len(landed), min(args.images, len(site["images"])))
+        code = shorts_export.country_code_for(site.get("country"))
+        if code:
+            logging.info("flag %s: %s", code, shorts_export.ensure_flag(code))
+        else:
+            logging.warning("no country code for %r: the short gets no flag", site.get("country"))
 
     if "select" in steps:
         _select(site, site_dir, use_vlm=not args.no_vlm)
@@ -247,7 +265,16 @@ def run_short(args: argparse.Namespace) -> Path | None:
 
     if "render" in steps:
         selection = json.loads((site_dir / "selection.json").read_text(encoding="utf-8"))
-        return shorts_render.render_short(site, selection["stills"], site_dir, voice_id=args.voice)
+        # Derived from the country here (not the stored field) so older exports get a flag too.
+        code = shorts_export.country_code_for(site.get("country"))
+        return shorts_render.render_short(
+            site,
+            selection["stills"],
+            site_dir,
+            voice_id=args.voice,
+            flag=shorts_export.ensure_flag(code) if code else None,
+            music=Path(args.music) if args.music else None,
+        )
     return None
 
 
@@ -330,6 +357,7 @@ def run_batch(args: argparse.Namespace) -> int:
             images=40,
             no_vlm=False,
             record_scenes=RECORD_SCENES,
+            music=str(default_music()) if default_music() else None,
             steps=",".join(ALL_STEPS),
         )
         try:

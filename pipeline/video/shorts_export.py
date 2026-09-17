@@ -9,6 +9,7 @@ import-linter forbids pipeline -> api imports.
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Mapping
 from pathlib import Path
 
@@ -19,6 +20,72 @@ from pipeline.article_html_renderer import slugify
 from pipeline.sites_html_renderer import site_path
 
 ASSETS_ROOT = Path(__file__).resolve().parents[2] / "video-assets" / "shorts"
+FLAGS_DIR = Path(__file__).resolve().parents[2] / "video-assets" / "flags"
+# The frontend's country → ISO-3166 mapping (GameCard, FilterPanel, CountryFlag).
+COUNTRY_CODES_TS = (
+    Path(__file__).resolve().parents[2] / "ancient-nerds-map" / "src" / "utils" / "countryFlags.ts"
+)
+# Same CDN the game cards use (flagcdn.com/w40); w320 is sharp enough under the name.
+FLAG_URL = "https://flagcdn.com/w320/{code}.png"
+
+_COUNTRY_CODES: dict[str, str] | None = None
+
+
+def country_codes() -> dict[str, str]:
+    """`COUNTRY_CODES` from countryFlags.ts, parsed once ('Name': 'CC' pairs)."""
+    global _COUNTRY_CODES
+    if _COUNTRY_CODES is None:
+        src = COUNTRY_CODES_TS.read_text(encoding="utf-8")
+        start = src.index("export const COUNTRY_CODES")
+        end = src.index("\n}", start)
+        pairs = re.findall(r"'([^']+)':\s*'([A-Z]{2,6})'", src[start:end])
+        if not pairs:
+            raise RuntimeError(f"no country codes parsed from {COUNTRY_CODES_TS}")
+        _COUNTRY_CODES = dict(pairs)
+    return _COUNTRY_CODES
+
+
+def country_code_for(country: str | None) -> str | None:
+    """Mirror of the frontend's getCountryCode: exact, case-insensitive, then the
+    last comma part of a location string — plus its first part, which the
+    frontend skips ("Chile, Easter Island" → CL)."""
+    if not country:
+        return None
+    codes = country_codes()
+    lower = {name.lower(): code for name, code in codes.items()}
+    candidates = [country.strip()]
+    if "," in country:
+        parts = [p.strip() for p in country.split(",")]
+        candidates += [parts[-1], parts[0]]
+    for cand in candidates:
+        if cand in codes:
+            return codes[cand]
+        if cand.lower() in lower:
+            return lower[cand.lower()]
+    return None
+
+
+def flag_path(code: str) -> Path:
+    return FLAGS_DIR / f"{code.lower()}.png"
+
+
+def ensure_flag(code: str) -> Path:
+    """Cached 320-px flag PNG; fetched from the CDN on first use."""
+    path = flag_path(code)
+    if path.exists():
+        return path
+    import httpx
+
+    resp = httpx.get(FLAG_URL.format(code=code.lower()), timeout=30.0, follow_redirects=True)
+    if resp.status_code != 200 or not resp.content:
+        raise RuntimeError(
+            f"flag {code} not available from {FLAG_URL.format(code=code.lower())} "
+            f"(HTTP {resp.status_code}); put a PNG at {path}"
+        )
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(resp.content)
+    return path
+
 
 # Orbit zoom for the 3D flyover by site type: a stone circle needs z16 to be
 # visible, a city or a geoglyph field needs z13.5 to fit. Unlisted types get
@@ -153,6 +220,7 @@ def assemble_site(row: Mapping, images: list[Mapping]) -> dict:
         "name": row["name"],
         "slug": slugify(row["name"]),
         "country": row["country"],
+        "country_code": country_code_for(row["country"]),
         "lat": float(row["lat"]),
         "lng": float(row["lon"]),
         "site_type": row["site_type"],

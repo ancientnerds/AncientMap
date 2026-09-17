@@ -6,7 +6,12 @@ import pytest
 
 from pipeline.video.media import ff_path
 from pipeline.video.shorts_audit import evaluate, passed
-from pipeline.video.shorts_export import RARITY_NAMES, assemble_site, orbit_zoom_for
+from pipeline.video.shorts_export import (
+    RARITY_NAMES,
+    assemble_site,
+    country_code_for,
+    orbit_zoom_for,
+)
 from pipeline.video.shorts_images import local_image_name
 from pipeline.video.shorts_render import (
     DISSOLVE_S,
@@ -15,6 +20,7 @@ from pipeline.video.shorts_render import (
     build_description,
     clip_filter,
     final_graph,
+    flag_overlay_graph,
     gain_db,
     mix_graph,
     name_alpha,
@@ -181,7 +187,7 @@ class TestFilters:
     def test_mix_graph_processes_both_voices_dry_and_bounds_them(self):
         g = mix_graph(16.7, 19.5)
         assert g.count("acompressor=") == 2
-        assert "adelay=16700:all=1[d1]" in g
+        assert "adelay=16700:all=1," in g and "[d1]" in g
         assert g.endswith("apad=whole_dur=19.500,atrim=duration=19.500[a]")
         assert "loudnorm" not in g and "afir" not in g and "aecho" not in g
 
@@ -434,3 +440,51 @@ class TestSpokenName:
     def test_no_repetition_and_no_country(self):
         assert spoken_name("Temple of Egypt", "Egypt") == "Temple of Egypt."
         assert spoken_name("Atlantis", None) == "Atlantis."
+
+
+class TestFlagAndMusic:
+    def test_country_code_mirrors_the_frontend_mapping(self):
+        assert country_code_for("Peru") == "PE"
+        assert country_code_for("england") == "GB"
+        assert (
+            country_code_for("Chile, Easter Island") == "CL"
+        )  # first part; the frontend gives None
+        assert country_code_for("Atlantis") is None
+        assert country_code_for(None) is None
+
+    def test_site_json_carries_the_country_code(self):
+        row = {
+            "id": "12345678-aaaa-bbbb-cccc-1234567890ab",
+            "name": "X",
+            "country": "Peru",
+            "lat": 0.0,
+            "lon": 0.0,
+            "site_type": "Tomb",
+            "period_name": None,
+            "description": "",
+            "card_description": "c",
+            "rarity_tier": 3,
+            "rarity_score": 1,
+            "total_power": 1,
+            "antiquity": 0,
+            "fortification": 0,
+            "cultural_influence": 0,
+            "mystery": 0,
+            "legacy": 0,
+            "civilization": None,
+        }
+        assert assemble_site(row, [])["country_code"] == "PE"
+
+    def test_flag_fades_with_the_name_and_sits_under_it(self):
+        g = flag_overlay_graph(3.0, name_lines=1, line_h=100)
+        assert g.startswith("[1:v]format=rgba,scale=180:-1,fade=t=in:st=0:d=0.3:alpha=1")
+        assert "fade=t=out:st=2.350:d=0.5:alpha=1[flag]" in g
+        assert g.endswith("overlay=x=(W-w)/2:y=904:shortest=1[out]")  # (1920-100)//2-140 + 100 + 34
+
+    def test_mix_graph_with_music_loops_fades_and_stays_silent_at_the_loop_point(self):
+        g = mix_graph(16.7, 19.5, music=True)
+        assert "amix=inputs=3" in g
+        assert "atrim=duration=19.200" in g  # music stops 0.3 s before the end
+        assert "afade=t=in:st=0:d=1.0" in g and "afade=t=out:st=18.000:d=1.2" in g
+        assert "volume=-11.0dB[m]" in g
+        assert mix_graph(16.7, 19.5).count("amix=inputs=2") == 1
