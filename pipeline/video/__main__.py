@@ -41,6 +41,8 @@ RECORDER_DIR = Path(__file__).resolve().parents[2] / "ancient-nerds-map"
 RECORDER_API_TARGET = "https://ancientnerds.com"  # site dots + labels from prod, no local DB
 RECORD_ATTEMPTS = 2  # the globe-ready poll times out now and then (DNS/proxy hiccup)
 MIN_SITE_IMAGES = 6  # fewer Commons images cannot yield MIN_STILLS good stills
+QUOTA_PROBE_RETRIES = 30  # x QUOTA_PROBE_RETRY_S = half an hour of network trouble
+QUOTA_PROBE_RETRY_S = 60
 
 
 def _parse(argv: list[str]) -> argparse.Namespace:
@@ -360,8 +362,25 @@ def run_batch(args: argparse.Namespace) -> int:
         return 0
     failures = 0
     for site in plan:
+        probe_failures = 0
         while True:
-            five_h, weekly = quota_percentages()
+            try:
+                five_h, weekly = quota_percentages()
+            except (RuntimeError, OSError) as exc:
+                # transient DNS/TLS hiccups killed a 10-site run after one site (17.09.);
+                # an unattended batch waits them out, but not forever
+                probe_failures += 1
+                if probe_failures > QUOTA_PROBE_RETRIES:
+                    raise
+                logging.warning(
+                    "quota probe failed (%d/%d): %s — retrying in %d s",
+                    probe_failures,
+                    QUOTA_PROBE_RETRIES,
+                    exc,
+                    QUOTA_PROBE_RETRY_S,
+                )
+                time.sleep(QUOTA_PROBE_RETRY_S)
+                continue
             if five_h >= args.min_5h and weekly >= args.min_weekly:
                 break
             logging.warning(
