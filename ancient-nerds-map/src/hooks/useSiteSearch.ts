@@ -346,19 +346,26 @@ export function useSiteSearch(options: UseSiteSearchOptions): UseSiteSearchRetur
   // One `search` event per query the user actually settled on (1.2 s without
   // further typing), with the result count; `search_empty` on top when
   // nothing matched — the clearest "did not find it" signal we have.
+  // Refs, not deps: results and the API flag keep changing while data loads,
+  // and every change would restart the timer and swallow the event.
   const trackedQueryRef = useRef('')
+  const resultCountRef = useRef(0)
+  resultCountRef.current = searchResults.length
+  const searchingRef = useRef(false)
+  searchingRef.current = isSearching
   useEffect(() => {
     const q = debouncedQuery.trim()
-    if (q.length < 2 || isSearching || trackedQueryRef.current === q) return
-    const results = searchResults.length
+    if (q.length < 2 || trackedQueryRef.current === q) return
     const timer = setTimeout(() => {
+      if (searchingRef.current) return // API results still pending: no count to report
       trackedQueryRef.current = q
+      const results = resultCountRef.current
       const props = { chars: q.length, results, context: pageType(window.location.pathname) }
       track('search', props)
       if (results === 0) track('search_empty', props)
     }, 1200)
     return () => clearTimeout(timer)
-  }, [debouncedQuery, isSearching, searchResults.length])
+  }, [debouncedQuery])
 
   return {
     searchQuery,
