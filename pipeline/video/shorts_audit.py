@@ -21,12 +21,13 @@ from PIL import Image, ImageChops, ImageStat
 from pipeline.video.media import FFMPEG_BIN, FFPROBE_BIN, probe_duration
 from pipeline.video.shorts_render import (
     FPS,
-    NAME_AUDIO_DELAY_S,
     NARRATION_TAIL_S,
     TARGET_LUFS,
     H,
+    Segment,
     W,
-    wrap_lines,
+    name_audio_at,
+    name_layout,
 )
 
 logger = logging.getLogger(__name__)
@@ -277,9 +278,10 @@ def measure_site(site_dir: Path) -> dict:
     stream = _ffprobe_stream(video)
     duration = probe_duration(video)
     narration_s = probe_duration(site_dir / "narration.mp3")
-    before_return = sum(s["duration"] for s in timeline if s["kind"] != "return")
-    has_return = any(s["kind"] == "return" for s in timeline)
-    name_at = before_return + NAME_AUDIO_DELAY_S if has_return else before_return
+    segments = [
+        Segment(s["kind"], s["duration"], s.get("source"), s.get("start", 0.0)) for s in timeline
+    ]
+    name_at = name_audio_at(segments, probe_duration(site_dir / "name.mp3"))
     lufs, peak = _loudness(video)
     return {
         "site": site["name"],
@@ -303,7 +305,7 @@ def measure_site(site_dir: Path) -> dict:
         "stills_kept": len(selection["stills"]),
         "stills_rejected": len(selection["rejected"]),
         "stills_used": sum(1 for s in timeline if s["kind"] == "still"),
-        "name_lines": len(wrap_lines(site["name"])),
+        "name_lines": len(name_layout(site["name"])[0]),
     }
 
 

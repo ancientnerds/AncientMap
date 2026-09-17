@@ -19,6 +19,7 @@ from pipeline.video.shorts_render import (
     mix_graph,
     name_alpha,
     name_audio_at,
+    name_layout,
     plan_timeline,
     pushin_filter,
     stills_graph,
@@ -58,12 +59,12 @@ class TestPlanTimeline:
 
     def test_name_audio_starts_shortly_into_the_return_clip(self):
         segs = plan_timeline(narration_s=16.4, images=IMGS, opening=OPENING, closing=RETURN)
-        assert name_audio_at(segs) == pytest.approx(17.0 + NAME_AUDIO_DELAY_S)
+        assert name_audio_at(segs, name_s=1.5) == pytest.approx(17.0 + NAME_AUDIO_DELAY_S)
 
     def test_without_return_clip_name_audio_follows_the_stills(self):
         segs = plan_timeline(narration_s=6.0, images=IMGS, opening=None, closing=None)
         assert [s.kind for s in segs] == ["still", "still"]
-        assert name_audio_at(segs) == pytest.approx(6.0 + NARRATION_TAIL_S)
+        assert name_audio_at(segs, name_s=0.5) == pytest.approx(6.6 - 0.5 - 0.15)
 
     def test_long_opening_is_capped_at_the_narration_span(self):
         segs = plan_timeline(
@@ -116,6 +117,18 @@ class TestText:
 
     def test_wrap_lines_short_name_single_line(self):
         assert wrap_lines("Machu Picchu") == ["Machu Picchu"]
+
+    def test_long_spoken_name_starts_early_enough_to_end_before_the_loop_point(self):
+        segs = plan_timeline(narration_s=16.4, images=IMGS, opening=OPENING, closing=RETURN)
+        at = name_audio_at(segs, name_s=6.0)
+        assert at == pytest.approx(20.0 - 6.0 - 0.15)
+        assert at < 17.0  # starts over the last still
+
+    def test_name_layout_shrinks_long_names_to_three_lines_or_fewer(self):
+        lines, size, _ = name_layout("Machu Picchu")
+        assert (lines, size) == (["Machu Picchu"], 84)
+        lines, size, _ = name_layout("Gochang, Hwasun and Ganghwa Dolmen Sites")
+        assert len(lines) <= 3 and size < 84
 
     def test_description_lists_every_image_with_license(self):
         site = {

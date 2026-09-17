@@ -54,7 +54,9 @@ VOICE_CHAIN = (
     "acompressor=threshold=-24dB:ratio=1.8:attack=20:release=250:makeup=2:knee=6"
 )
 TARGET_LUFS = -14.0  # YouTube
-PEAK_LIMIT = 0.75  # ≈ -2.5 dB sample peak; AAC adds inter-sample overshoot (Giza measured -0.5 dBTP at 0.84)
+PEAK_LIMIT = (
+    0.75  # ≈ -2.5 dB sample peak; AAC adds inter-sample overshoot (Giza measured -0.5 dBTP at 0.84)
+)
 # "Historical" look for a homogeneous film: slightly desaturated and warm,
 # lifted blacks / softened whites, vignette, fine grain. Applied once, over
 # the whole concatenated picture, so globe and photos match.
@@ -139,17 +141,38 @@ def plan_timeline(
     return segments
 
 
-def name_audio_at(segments: list[Segment]) -> float:
+def name_audio_at(segments: list[Segment], name_s: float) -> float:
     """When the spoken name starts: shortly into the return clip, or at the end
-    of the stills when no return clip was recorded."""
+    of the stills when no return clip was recorded — but never so late that a
+    long name (Gochang, Hwasun and Ganghwa Dolmen Sites: 6 s) runs past the
+    loop point; then it starts early, over the last stills."""
+    total = sum(s.duration for s in segments)
     before = sum(s.duration for s in segments if s.kind != "return")
     has_return = any(s.kind == "return" for s in segments)
-    return before + NAME_AUDIO_DELAY_S if has_return else before
+    natural = before + NAME_AUDIO_DELAY_S if has_return else before
+    latest = total - name_s - NAME_END_GAP_S
+    return max(0.0, min(natural, latest))
 
 
 def wrap_lines(name: str, width: int = NAME_WRAP_CHARS) -> list[str]:
     """Wrap a site name for the heading font (no auto-wrap in drawtext)."""
     return textwrap.wrap(name, width=width, break_long_words=True) or [name]
+
+
+# (wrap width, font size, line height) from large to small; the first layout
+# that needs at most NAME_MAX_LINES lines wins, the smallest is the floor.
+NAME_LAYOUTS: tuple[tuple[int, int, int], ...] = ((14, 84, 100), (20, 64, 78), (26, 52, 64))
+NAME_MAX_LINES = 3
+
+
+def name_layout(name: str) -> tuple[list[str], int, int]:
+    """(lines, font size, line height) for the name overlay."""
+    for width, size, line_h in NAME_LAYOUTS:
+        lines = wrap_lines(name, width)
+        if len(lines) <= NAME_MAX_LINES:
+            return lines, size, line_h
+    width, size, line_h = NAME_LAYOUTS[-1]
+    return wrap_lines(name, width), size, line_h
 
 
 def pushin_filter(nominal_s: float) -> str:
@@ -208,12 +231,14 @@ def clip_filter(
     credit_file: Path,
     name_file: Path | None = None,
     name_lines: int = 1,
+    name_size: int = 84,
+    name_line_h: int = 100,
 ) -> str:
     """Portrait cover of a recorded clip with the Mapbox credit; the return clip
     also carries the site name, centred in the upper half."""
     parts = [f"scale={W}:{H}:force_original_aspect_ratio=increase,crop={W}:{H},fps={FPS}"]
     if name_file is not None:
-        size, line_h = 84, 100
+        size, line_h = name_size, name_line_h
         y = (H - name_lines * line_h) // 2 - 140
         parts.append(
             f"drawtext=fontfile='{ff_path(FONT_HEADING)}':textfile='{ff_path(name_file)}':"
@@ -269,8 +294,17 @@ def render_clip(
     start: float = 0.0,
     name_file: Path | None = None,
     name_lines: int = 1,
+    name_size: int = 84,
+    name_line_h: int = 100,
 ) -> Path:
-    vf = clip_filter(duration, credit_file=credit_file, name_file=name_file, name_lines=name_lines)
+    vf = clip_filter(
+        duration,
+        credit_file=credit_file,
+        name_file=name_file,
+        name_lines=name_lines,
+        name_size=name_size,
+        name_line_h=name_line_h,
+    )
     return run_ffmpeg(
         ["-ss", f"{start:.3f}", "-i", str(src), "-t", f"{duration:.3f}", "-vf", vf, *X264], out
     )
@@ -433,7 +467,7 @@ def render_short(site: dict, stills: list[dict], site_dir: Path, voice_id: str) 
     )
     credit_file = work / "mapbox_credit.txt"
     credit_file.write_text(MAPBOX_CREDIT, encoding="utf-8")
-    name_lines = wrap_lines(site["name"])
+    name_lines, name_size, name_line_h = name_layout(site["name"])
     name_file = work / "name.txt"
     name_file.write_text("\n".join(name_lines), encoding="utf-8")
 
@@ -461,6 +495,8 @@ def render_short(site: dict, stills: list[dict], site_dir: Path, voice_id: str) 
                 start=seg.start,
                 name_file=name_file if seg.kind == "return" else None,
                 name_lines=len(name_lines),
+                name_size=name_size,
+                name_line_h=name_line_h,
             )
             n += 1
         parts.append(out)
@@ -468,7 +504,8 @@ def render_short(site: dict, stills: list[dict], site_dir: Path, voice_id: str) 
     used = [s for s in stills if any(seg.source == s["local_path"] for seg in segments)]
     final = site_dir / f"{site['slug']}.mp4"
     total_s = sum(s.duration for s in segments)
-    mix = premix(narration, name_audio, name_audio_at(segments), total_s, work / "mix.wav")
+    name_at = name_audio_at(segments, probe_duration(name_audio))
+    mix = premix(narration, name_audio, name_at, total_s, work / "mix.wav")
     lufs = measure_lufs(mix)
     logger.info("voice mix %.1f LUFS → gain %+.1f dB", lufs, gain_db(lufs))
     concat_and_mux(parts, mix, gain_db(lufs), final)
