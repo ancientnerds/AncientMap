@@ -30,8 +30,6 @@ from pipeline.video.shorts_render import (
     flash_times,
     gain_db,
     hashtags,
-    info_alpha,
-    info_filter,
     mix_graph,
     name_alpha,
     name_audio_at,
@@ -369,6 +367,19 @@ class TestFilters:
         assert "credit.txt" in plain and "name.txt" not in plain
         assert "name.txt" in named and "fontsize=84" in named
         assert named.endswith("format=yuv420p")
+
+    def test_chip_sits_above_the_name_and_fades_with_it(self, tmp_path):
+        credit, name, chip = tmp_path / "credit.txt", tmp_path / "name.txt", tmp_path / "chip.txt"
+        f = clip_filter(3.0, credit_file=credit, name_file=name, name_lines=1, chip_file=chip)
+        chip_part, name_part = (
+            p for p in f.split(",drawtext=") if "chip.txt" in p or "name.txt" in p
+        )
+        assert "chip.txt" in chip_part and "y=692:" in chip_part  # name block at 770 for one line
+        assert "fontsize=34" in chip_part and "box=1" in chip_part
+        assert chip_part.split("alpha=")[1] == name_part.split("alpha=")[1]  # same fade
+        assert "chip.txt" not in clip_filter(
+            6.0, credit_file=credit, chip_file=chip
+        )  # no name, no chip
 
 
 def _cand(name, w, h, verdict=None, dh=0):
@@ -708,13 +719,6 @@ class TestCaptions:
         f = captions_filter(words, tmp_path)
         assert f.count("drawtext=") == 2  # the lone dash gets no caption
         assert (tmp_path / "w002.txt").read_text(encoding="utf-8") == "mortar"
-
-    def test_info_overlay_fades_in_and_out_inside_its_window(self, tmp_path):
-        a = info_alpha(6.0, 16.4)
-        assert a.startswith("if(lt(t\\,6.000)\\,0\\,")
-        assert "(t-6.000)/0.4" in a and "(16.400-t)/0.4" in a
-        f = info_filter(tmp_path / "chip.txt", tmp_path / "f.ttf", 6.0, 16.4)
-        assert "enable='between(t\\,6.000\\,16.400)'" in f and "y=170" in f
 
 
 class TestSpokenAndSrt:

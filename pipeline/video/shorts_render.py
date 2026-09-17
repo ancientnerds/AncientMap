@@ -55,14 +55,12 @@ CAPTION_SIZE = 92
 CAPTION_Y = 1230
 CAPTION_BOX_ALPHA = 0.38
 CAPTION_BOX_PAD = 22
-# Info slot at the top of the frame (inside the Shorts safe zone): the
-# coordinates during the approach, the period/type chip over the stills.
-INFO_Y = 170
-INFO_SIZE = 34
-INFO_FADE_IN_S = 0.4
-INFO_FADE_OUT_S = 0.4
-INFO_BOX_ALPHA = 0.3
-INFO_BOX_PAD = 16
+# Period · type chip above the site name in the return flight (user 17.09.:
+# "am Ende über den Site-Namen"), fading with the name.
+CHIP_SIZE = 34
+CHIP_BOX_ALPHA = 0.3
+CHIP_BOX_PAD = 16
+CHIP_GAP = 44  # from the chip's baseline box to the top of the name block
 FLAG_GAP = 34
 # Camera flash at the start of every still (user, 17.09.): white at FLASH_PEAK
 # on the first frame, gone after FLASH_S. The times go to render/flashes.json
@@ -375,17 +373,28 @@ def clip_filter(
     name_lines: int = 1,
     name_size: int = 84,
     name_line_h: int = 100,
+    chip_file: Path | None = None,
 ) -> str:
     """Portrait cover of a recorded clip with the Mapbox credit; the return clip
-    also carries the site name, centred in the upper half."""
+    also carries the site name, centred in the upper half, with the period ·
+    type chip above it (both fade together)."""
     parts = [f"scale={W}:{H}:force_original_aspect_ratio=increase,crop={W}:{H},fps={FPS}"]
     if name_file is not None:
         size, line_h = name_size, name_line_h
         y = name_block_top(name_lines, line_h)
+        alpha = name_alpha(duration)
+        if chip_file is not None:
+            # FONT_BODY: Orbitron's latin subset has no middle dot
+            parts.append(
+                f"drawtext=fontfile='{ff_path(FONT_BODY)}':textfile='{ff_path(chip_file)}':"
+                f"fontcolor=white@0.85:fontsize={CHIP_SIZE}:x=(w-text_w)/2:"
+                f"y={y - CHIP_GAP - CHIP_SIZE}:"
+                f"box=1:boxcolor=black@{CHIP_BOX_ALPHA}:boxborderw={CHIP_BOX_PAD}:alpha='{alpha}'"
+            )
         parts.append(
             f"drawtext=fontfile='{ff_path(FONT_HEADING)}':textfile='{ff_path(name_file)}':"
             f"fontcolor=white:fontsize={size}:line_spacing=16:x=(w-text_w)/2:y={y}:"
-            f"shadowcolor=black@0.6:shadowx=3:shadowy=3:alpha='{name_alpha(duration)}'"
+            f"shadowcolor=black@0.6:shadowx=3:shadowy=3:alpha='{alpha}'"
         )
     parts.append(
         f"drawtext=fontfile='{ff_path(FONT_BODY)}':textfile='{ff_path(credit_file)}':"
@@ -396,36 +405,15 @@ def clip_filter(
 
 
 def chip_text(site: dict) -> str:
-    """Period · type over the stills. The card's civilization joins only when
-    it is more than the country repeated (it is the country for every QA
-    site): the country is the reveal at the end and must not leak here."""
+    """Period · type shown above the name at the end. The card's civilization
+    joins only when it is more than the country repeated (it is the country
+    for every QA site); the flag and the spoken name carry the country."""
     parts: list[str] = []
     civ = (site.get("civilization") or "").strip()
     if civ and civ.lower() != (site.get("country") or "").strip().lower():
         parts.append(civ)
     parts += [(site.get("period_name") or "").strip(), (site.get("site_type") or "").strip()]
     return " · ".join(p for p in parts if p)
-
-
-def info_alpha(start: float, end: float) -> str:
-    """Fade in from `start`, fully gone at `end`, 0 outside."""
-    a, b = start + INFO_FADE_IN_S, end - INFO_FADE_OUT_S
-    return (
-        f"if(lt(t\\,{start:.3f})\\,0\\,"
-        f"if(lt(t\\,{a:.3f})\\,(t-{start:.3f})/{INFO_FADE_IN_S}\\,"
-        f"if(gt(t\\,{end:.3f})\\,0\\,"
-        f"if(gt(t\\,{b:.3f})\\,({end:.3f}-t)/{INFO_FADE_OUT_S}\\,1))))"
-    )
-
-
-def info_filter(text_file: Path, font: Path, start: float, end: float) -> str:
-    """Small boxed line in the top info slot, faded in and out."""
-    return (
-        f"drawtext=fontfile='{ff_path(font)}':textfile='{ff_path(text_file)}':"
-        f"fontcolor=white@0.85:fontsize={INFO_SIZE}:x=(w-text_w)/2:y={INFO_Y}:"
-        f"box=1:boxcolor=black@{INFO_BOX_ALPHA}:boxborderw={INFO_BOX_PAD}:"
-        f"enable='between(t\\,{start:.3f}\\,{end:.3f})':alpha='{info_alpha(start, end)}'"
-    )
 
 
 def hashtag(text: str) -> str:
@@ -522,9 +510,10 @@ def render_return(
     name_size: int,
     name_line_h: int,
     flag: Path | None,
+    chip_file: Path | None = None,
 ) -> Path:
-    """The return clip: name overlay (clip_filter) plus, when the site has a
-    country flag, the flag under the name."""
+    """The return clip: name overlay with the chip above (clip_filter) plus,
+    when the site has a country flag, the flag under the name."""
     base = clip_filter(
         duration,
         credit_file=credit_file,
@@ -532,6 +521,7 @@ def render_return(
         name_lines=name_lines,
         name_size=name_size,
         name_line_h=name_line_h,
+        chip_file=chip_file,
     )
     if flag is None:
         return run_ffmpeg(["-i", str(src), "-t", f"{duration:.3f}", "-vf", base, *X264], out)
@@ -714,27 +704,10 @@ def captions_filter(words: list[Word], text_dir: Path) -> str:
     return ",".join(parts)
 
 
-def overlays_filter(site: dict, segments: list[Segment], words: list[Word], work: Path) -> str:
-    """The final-pass text layer: the period/type chip over the stills (fading
-    into the return flight) and the word-by-word captions. Drawn after the
+def overlays_filter(words: list[Word], work: Path) -> str:
+    """The final-pass text layer: the word-by-word captions, drawn after the
     look filter so the text stays clean."""
-    parts: list[str] = []
-    t = 0.0
-    stills_start: float | None = None
-    stills_end = 0.0
-    for seg in segments:
-        if seg.kind == "still":
-            stills_start = t if stills_start is None else stills_start
-            stills_end = t + seg.duration
-        t += seg.duration
-    chip = chip_text(site)
-    if chip and stills_start is not None:
-        chip_file = work / "chip.txt"
-        chip_file.write_text(chip, encoding="utf-8", newline=chr(10))
-        # FONT_BODY: Orbitron's latin subset has no middle dot
-        parts.append(info_filter(chip_file, FONT_BODY, stills_start, stills_end + INFO_FADE_OUT_S))
-    parts.append(captions_filter(words, work / "captions"))
-    return ",".join(parts)
+    return captions_filter(words, work / "captions")
 
 
 def final_graph(gain: float, overlays: str = "", flashes: list[float] | None = None) -> str:
@@ -870,6 +843,10 @@ def render_short(
     name_file = work / "name.txt"
     # LF only: on Windows write_text would emit CR LF and drawtext renders the CR as an empty line
     name_file.write_text(chr(10).join(name_lines), encoding="utf-8", newline=chr(10))
+    chip = chip_text(site)
+    chip_file = work / "chip.txt" if chip else None
+    if chip_file is not None:
+        chip_file.write_text(chip, encoding="utf-8", newline=chr(10))
 
     focus_by_path = {st["local_path"]: focus_of(st.get("verdict")) for st in stills}
     parts: list[Path] = []
@@ -904,6 +881,7 @@ def render_short(
                     name_size=name_size,
                     name_line_h=name_line_h,
                     flag=flag,
+                    chip_file=chip_file,
                 )
             n += 1
         parts.append(out)
@@ -926,9 +904,7 @@ def render_short(
     )
     lufs = measure_lufs(mix)
     logger.info("voice mix %.1f LUFS → gain %+.1f dB", lufs, gain_db(lufs))
-    concat_and_mux(
-        parts, mix, gain_db(lufs), final, overlays_filter(site, segments, words, work), flashes
-    )
+    concat_and_mux(parts, mix, gain_db(lufs), final, overlays_filter(words, work), flashes)
     (site_dir / "description.txt").write_text(
         build_description(site, used, voice_id, mapbox_used=opening is not None),
         encoding="utf-8",
