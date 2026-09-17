@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 
+from pipeline.video.__main__ import music_start_default
 from pipeline.video.media import ff_path
 from pipeline.video.shorts_audit import evaluate, passed
 from pipeline.video.shorts_brand import FONT_SOURCES, FONTS, missing_glyphs
@@ -762,3 +763,10 @@ class TestBrandFonts:
         cmap = {ord(c) for c in "Karatepe-Aslnt "}
         assert missing_glyphs("Karatepe-Aslanta\u015f", cmap) == ["\u015f"]
         assert missing_glyphs("Karatepe", cmap) == []
+
+
+class TestMusicStart:
+    def test_sidecar_sets_the_offset(self, tmp_path):
+        assert music_start_default(tmp_path) == 0.0
+        (tmp_path / "music.json").write_text('{"start_s": 25}', encoding="utf-8")
+        assert music_start_default(tmp_path) == 25.0

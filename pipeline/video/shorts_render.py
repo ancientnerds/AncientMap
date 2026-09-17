@@ -603,8 +603,13 @@ def premix(
     music: Path | None = None,
     flash: Path | None = None,
     flashes: list[float] | None = None,
+    music_start: float = 0.0,
 ) -> Path:
-    music_args = ["-stream_loop", "-1", "-i", str(music)] if music else []
+    """`music_start` seeks that far into the track before the loop begins
+    (the user's pick of where the song gets going)."""
+    music_args = (
+        ["-stream_loop", "-1", "-ss", f"{music_start:.3f}", "-i", str(music)] if music else []
+    )
     flash_args = ["-i", str(flash)] if flash and flashes else []
     return run_ffmpeg(
         [
@@ -775,10 +780,12 @@ def render_short(
     flag: Path | None = None,
     music: Path | None = None,
     flash: Path | None = None,
+    music_start: float = 0.0,
 ) -> Path:
     """Assemble `<slug>.mp4` from the site dir's narration, name audio, selected
-    stills and clips; `flag` goes under the name, `music` under everything,
-    `flash` (a shutter sound) on every still start."""
+    stills and clips; `flag` goes under the name, `music` (from `music_start`
+    seconds into the track) under everything, `flash` (a shutter sound) on
+    every still start."""
     ensure_fonts()
     font = heading_font(site["name"] + " " + site["card_text"])
     narration = site_dir / "narration.mp3"
@@ -882,6 +889,7 @@ def render_short(
         music=music,
         flash=flash,
         flashes=flashes,
+        music_start=music_start,
     )
     lufs = measure_lufs(mix)
     logger.info("voice mix %.1f LUFS → gain %+.1f dB", lufs, gain_db(lufs))

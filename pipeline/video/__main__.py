@@ -67,6 +67,12 @@ def _parse(argv: list[str]) -> argparse.Namespace:
         help="music bed (default: the single file in video-assets/music/)",
     )
     s.add_argument(
+        "--music-start",
+        type=float,
+        default=music_start_default(),
+        help="seconds into the music bed to start from (default: video-assets/music/music.json)",
+    )
+    s.add_argument(
         "--flash",
         default=str(default_flash()) if default_flash() else None,
         help="shutter sound on every still start (default: the single file in video-assets/sfx/)",
@@ -200,6 +206,15 @@ def default_flash() -> Path | None:
     return single_audio(ASSETS / "sfx")
 
 
+def music_start_default(directory: Path = ASSETS / "music") -> float:
+    """Seconds into the music bed where it should start, from
+    `music.json` next to the track ({"start_s": 25}); 0 without the file."""
+    sidecar = directory / "music.json"
+    if not sidecar.exists():
+        return 0.0
+    return float(json.loads(sidecar.read_text(encoding="utf-8"))["start_s"])
+
+
 def record_clips(site_dir: Path, scenes: str = RECORD_SCENES) -> None:
     """Record the globe clips (`scenes`: comma-separated recorder scene names)
     with the Puppeteer recorder. Re-recording only `short-return` is the cheap
@@ -296,6 +311,7 @@ def run_short(args: argparse.Namespace) -> Path | None:
             flag=shorts_export.ensure_flag(code) if code else None,
             music=Path(args.music) if args.music else None,
             flash=Path(args.flash) if args.flash else None,
+            music_start=args.music_start,
         )
     return None
 
@@ -399,6 +415,7 @@ def run_batch(args: argparse.Namespace) -> int:
             no_vlm=False,
             record_scenes=RECORD_SCENES,
             music=str(default_music()) if default_music() else None,
+            music_start=music_start_default(),
             flash=str(default_flash()) if default_flash() else None,
             steps=",".join(ALL_STEPS),
         )
