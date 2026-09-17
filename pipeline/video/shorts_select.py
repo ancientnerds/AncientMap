@@ -53,7 +53,7 @@ The narration of the video is:
 "{card_text}"
 
 Return JSON only, no prose:
-{{"kind": "site_photo" | "artifact" | "map_or_document" | "people" | "other",
+{{"kind": "site_photo" | "artifact" | "map_or_document" | "painting_or_artwork" | "people" | "other",
  "subject": "<2-4 words naming what the photo shows>",
  "people_prominent": true | false,
  "text_or_overlay": true | false,
@@ -62,7 +62,7 @@ Return JSON only, no prose:
  "illustrates": "<the exact phrase of the narration this photo shows best, or an empty string>",
  "focus": {{"x": 0.0-1.0, "y": 0.0-1.0}},
  "vertical_crop_ok": true | false}}
-kind: site_photo = the site, its structures or landscape photographed on location; artifact = an object in a museum or studio; map_or_document = maps, drawings, scans, diagrams, book pages; people = a person or crowd is the subject.
+kind: site_photo = the site, its structures or landscape photographed on location; artifact = an object in a museum or studio; map_or_document = maps, drawings, scans, diagrams, book pages; painting_or_artwork = a painting, engraving, print or artistic reconstruction of the site rather than a photograph; people = a person or crowd is the subject.
 people_prominent: people are large or central (small distant figures are fine).
 text_or_overlay: captions, watermarks, signage, borders or frames inside the picture.
 quality: 5 = sharp, well exposed, striking; 3 = usable; 1 = blurry, dark, damaged or a low-resolution scan.
