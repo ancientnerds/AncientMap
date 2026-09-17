@@ -205,6 +205,9 @@ _ALLOWED_RETURN_PATHS = frozenset(
         "/news-archive/",
         "/research/",
         "/articles/",
+        # stats.ancientnerds.com: the Discord round trip ends here, where the
+        # 120 s handoff cookie becomes the founder-only stats session.
+        "/api/auth/stats-handoff",
     }
 )
 

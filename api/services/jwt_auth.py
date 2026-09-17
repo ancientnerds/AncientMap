@@ -44,7 +44,7 @@ def create_token(user_id: str, discord_id: str) -> str:
     return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
 
 
-def _decode_token(token: str) -> dict:
+def decode_token(token: str) -> dict:
     """Decode and validate a JWT. Raises HTTPException on failure."""
     if not SECRET_KEY:
         raise HTTPException(status_code=503, detail="Auth not configured")
@@ -70,7 +70,7 @@ def get_current_user(request: Request) -> DiscordUser:
     if not token:
         raise HTTPException(status_code=401, detail="Authentication required")
 
-    payload = _decode_token(token)
+    payload = decode_token(token)
     discord_id = payload.get("sub")
     if not discord_id:
         raise HTTPException(status_code=401, detail="Invalid token payload")
@@ -91,7 +91,7 @@ def get_optional_user(request: Request) -> DiscordUser | None:
         return None
 
     try:
-        payload = _decode_token(token)
+        payload = decode_token(token)
     except HTTPException:
         return None
 

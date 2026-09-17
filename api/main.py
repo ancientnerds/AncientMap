@@ -59,6 +59,7 @@ from api.routes import (
     sites_html,
     snapshots,
     sources,
+    stats_access,
     streetview,
     theo,
     vector_sync,
@@ -786,6 +787,7 @@ app.include_router(goto.router, tags=["goto"])
 
 # Include routers
 app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
+app.include_router(stats_access.router, prefix="/api/auth", tags=["stats-access"])
 app.include_router(sites.router, prefix="/api/sites", tags=["sites"])
 app.include_router(sources.router, prefix="/api/sources", tags=["sources"])
 app.include_router(app_gate.router, prefix="/api/app", tags=["app"])

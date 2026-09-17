@@ -439,3 +439,20 @@ server {
     server_name ancientnerds.com www.ancientnerds.com;
     return 404;
 }
+
+# stats.ancientnerds.com on port 80: only the ACME challenge (certbot
+# --webroot into /var/www/ancientnerds/acme) and the redirect to https. The
+# 443 server is staged in ancientnerds-stats-nginx-config until the
+# certificate exists — see the go-live steps there.
+server {
+    listen 80;
+    server_name stats.ancientnerds.com;
+
+    location /.well-known/acme-challenge/ {
+        root /var/www/ancientnerds/acme;
+    }
+
+    location / {
+        return 301 https://stats.ancientnerds.com$request_uri;
+    }
+}
