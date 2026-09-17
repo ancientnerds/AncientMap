@@ -74,15 +74,21 @@ const ALL_SCENES: SceneDefinition[] = [
  *   --portrait        1080×1920 viewport (site shorts)
  *   --input <path>    site.json for the site-short scenes (exposed as SITE_SHORT_INPUT)
  *   --out <dir>       where the MP4s go (default: public/landing/video)
+ *   --batch <path>    JSON [{input, out}, ...]: record many sites in ONE browser
+ *                     session (saves the Vite start, the Chrome launch and the
+ *                     first globe load per site, ~1 min each)
  *   --fps <n>         capture/encode rate (default 24; shorts use 60)
  */
-function parseArgs(argv: string[]): { scene?: string; portrait: boolean; input?: string; out?: string; fps: number } {
-  const result: { scene?: string; portrait: boolean; input?: string; out?: string; fps: number } = { portrait: false, fps: 24 }
+interface RecordTarget { input: string; out: string }
+
+function parseArgs(argv: string[]): { scene?: string; portrait: boolean; input?: string; out?: string; batch?: string; fps: number } {
+  const result: { scene?: string; portrait: boolean; input?: string; out?: string; batch?: string; fps: number } = { portrait: false, fps: 24 }
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i]
     if (a === '--portrait') result.portrait = true
     else if (a === '--input') result.input = argv[++i]
     else if (a === '--out') result.out = argv[++i]
+    else if (a === '--batch') result.batch = argv[++i]
     else if (a === '--fps') result.fps = Number(argv[++i])
     else if (!a.startsWith('--')) result.scene = a
   }

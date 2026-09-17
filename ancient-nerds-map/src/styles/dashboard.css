@@ -1,0 +1,527 @@
+/* Founders dashboard — NERV: black, green labels, red actions. The colours are
+   the ones feedback-prompt.css and the stats entry page (stats_access.py,
+   gate_html) already use; the panel border is the feedback prompt's. Mobile
+   first: one column, 44 px targets, nothing wider than the phone; two columns
+   from 720 px. */
+
+:root {
+  --dash-green: #00cc66;
+  --dash-red: #bb0a0a;
+  --dash-red-bright: #ff2a2a;
+  --dash-ink: #060604;
+  --dash-paper: #e8e8e0;
+  --dash-muted: #888880;
+  --dash-line: rgba(0, 204, 102, 0.35);
+  --dash-line-soft: rgba(0, 204, 102, 0.15);
+  --dash-mono: 'JetBrains Mono', monospace;
+  --dash-display: 'Saira Extra Condensed', 'Orbitron', sans-serif;
+  --dash-text: 'Inter', system-ui, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  background: var(--dash-ink);
+  color-scheme: dark;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  min-height: 100vh;
+  background: var(--dash-ink);
+  background-image:
+    linear-gradient(rgba(0, 204, 102, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 204, 102, 0.06) 1px, transparent 1px);
+  background-size: 32px 32px;
+  color: var(--dash-paper);
+  font-family: var(--dash-text);
+  line-height: 1.45;
+  overflow-x: hidden;
+}
+
+a {
+  color: var(--dash-red-bright);
+  text-decoration: none;
+}
+
+a:hover,
+a:focus-visible {
+  color: var(--dash-paper);
+  outline: none;
+}
+
+button {
+  font: inherit;
+}
+
+.dash {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: max(12px, env(safe-area-inset-top)) 12px max(24px, env(safe-area-inset-bottom));
+}
+
+/* ── Header ─────────────────────────────────────────────────────────── */
+
+.dash-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 16px;
+  margin-bottom: 14px;
+}
+
+.dash-mark {
+  font-family: 'Orbitron', var(--dash-text);
+  font-weight: 700;
+  font-size: 0.75rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--dash-green);
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+}
+
+.dash-mark b {
+  color: var(--dash-paper);
+  font-weight: 700;
+  margin-right: 0.4em;
+}
+
+.dash-mark:hover {
+  color: var(--dash-green);
+}
+
+.dash-range,
+.dash-nav {
+  display: flex;
+  gap: 8px;
+}
+
+.dash-nav {
+  margin-left: auto;
+}
+
+.dash-range button,
+.dash-nav a,
+.dash-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0 14px;
+  background: #000;
+  color: var(--dash-red-bright);
+  border: 2px solid var(--dash-red);
+  border-radius: 3px;
+  font-family: var(--dash-mono);
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.dash-range button:hover,
+.dash-range button:focus-visible,
+.dash-nav a:hover,
+.dash-nav a:focus-visible,
+.dash-toggle:hover,
+.dash-toggle:focus-visible,
+.dash-range button[aria-pressed='true'],
+.dash-toggle[aria-pressed='true'] {
+  background: var(--dash-red);
+  color: #000;
+  outline: none;
+}
+
+/* ── Grid and panels ────────────────────────────────────────────────── */
+
+.dash-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+}
+
+.dash-panel {
+  min-width: 0;
+  padding: 14px 14px 16px;
+  border: 1px solid var(--dash-line);
+  border-left: 3px solid var(--dash-green);
+  background: rgba(0, 0, 0, 0.55);
+}
+
+.dash-panel h2 {
+  margin: 0 0 12px;
+  font-family: var(--dash-mono);
+  font-weight: 500;
+  font-size: 0.8rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--dash-green);
+}
+
+.dash-panel h3 {
+  margin: 14px 0 6px;
+  font-family: var(--dash-mono);
+  font-weight: 500;
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--dash-green);
+}
+
+.dash-panel h3:first-child {
+  margin-top: 0;
+}
+
+.dash-status,
+.dash-empty,
+.dash-note {
+  font-family: var(--dash-mono);
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
+  color: var(--dash-muted);
+}
+
+.dash-status--error {
+  color: var(--dash-red-bright);
+}
+
+.dash-note {
+  margin-top: 12px;
+  line-height: 1.5;
+}
+
+/* ── Pulse tiles and the hourly strip ───────────────────────────────── */
+
+.dash-tiles {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.dash-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding: 8px 10px 10px;
+  border: 1px solid var(--dash-line-soft);
+}
+
+.dash-tile-label {
+  font-family: var(--dash-mono);
+  font-size: 0.65rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--dash-green);
+}
+
+.dash-tile-value {
+  font-family: var(--dash-display);
+  font-weight: 700;
+  font-size: clamp(2.6rem, 11vw, 4.2rem);
+  line-height: 0.95;
+  color: var(--dash-paper);
+}
+
+.dash-tile-sub {
+  font-family: var(--dash-mono);
+  font-size: 0.65rem;
+  line-height: 1.4;
+  color: var(--dash-muted);
+}
+
+.dash-delta--up {
+  color: var(--dash-green);
+}
+
+.dash-delta--down {
+  color: var(--dash-red-bright);
+}
+
+.dash-spark {
+  display: block;
+  width: 100%;
+  height: 56px;
+  margin-top: 14px;
+}
+
+.dash-spark rect {
+  fill: var(--dash-green);
+  fill-opacity: 0.85;
+}
+
+.dash-spark rect:hover {
+  fill-opacity: 1;
+}
+
+.dash-spark-axis {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 4px;
+  font-family: var(--dash-mono);
+  font-size: 0.6rem;
+  letter-spacing: 0.04em;
+  color: var(--dash-muted);
+}
+
+/* ── Bar lists ──────────────────────────────────────────────────────── */
+
+.dash-bars {
+  list-style: none;
+}
+
+.dash-bar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 3px 10px;
+  align-items: baseline;
+  padding: 6px 0;
+}
+
+.dash-bar-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.9rem;
+}
+
+.dash-bar-value {
+  font-family: var(--dash-mono);
+  font-size: 0.8rem;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.dash-bar-hint {
+  color: var(--dash-muted);
+}
+
+.dash-bar-track {
+  grid-column: 1 / -1;
+  display: block;
+  height: 6px;
+  background: var(--dash-line-soft);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.dash-bar-fill {
+  display: block;
+  height: 100%;
+  background: var(--dash-green);
+  border-radius: 3px;
+}
+
+.dash-lists {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 14px;
+}
+
+/* ── Map ────────────────────────────────────────────────────────────── */
+
+.dash-map svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  background: #000;
+  border: 1px solid var(--dash-line-soft);
+}
+
+.dash-map-land {
+  fill: rgba(0, 204, 102, 0.14);
+  stroke: rgba(0, 204, 102, 0.5);
+  stroke-width: 0.8;
+  fill-rule: evenodd;
+}
+
+.dash-map-dot {
+  fill: var(--dash-green);
+  fill-opacity: 0.85;
+  stroke: #000;
+  stroke-width: 2;
+}
+
+.dash-map-dot:hover {
+  fill-opacity: 1;
+}
+
+.dash-map-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.dash-map-controls input[type='range'] {
+  flex: 1;
+  min-width: 0;
+  height: 44px;
+  accent-color: var(--dash-red-bright);
+  cursor: pointer;
+}
+
+.dash-map-controls input[type='range']:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.dash-map-hour {
+  font-family: var(--dash-mono);
+  font-size: 0.8rem;
+  letter-spacing: 0.04em;
+  min-width: 9ch;
+  text-align: center;
+}
+
+/* ── Feedback inbox ─────────────────────────────────────────────────── */
+
+.dash-feedback {
+  list-style: none;
+}
+
+.dash-feedback li {
+  display: grid;
+  gap: 4px;
+  padding: 10px 0;
+  border-top: 1px solid var(--dash-line-soft);
+}
+
+.dash-feedback li:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.dash-feedback-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  font-family: var(--dash-mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.04em;
+  color: var(--dash-muted);
+}
+
+.dash-chip {
+  padding: 1px 6px;
+  border: 1px solid currentColor;
+  border-radius: 2px;
+  font-size: 0.6rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.dash-chip--yes {
+  color: var(--dash-green);
+}
+
+.dash-chip--no {
+  color: var(--dash-red-bright);
+}
+
+.dash-feedback-text {
+  font-size: 0.95rem;
+  overflow-wrap: anywhere;
+}
+
+/* ── Entry (expired session) and footer ─────────────────────────────── */
+
+.dash-entry p {
+  max-width: 40ch;
+  margin-bottom: 18px;
+  color: var(--dash-muted);
+}
+
+.dash-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 56px;
+  padding: 0 20px;
+  background: #000;
+  color: var(--dash-red-bright);
+  border: 2px solid var(--dash-red);
+  border-radius: 4px;
+  font-family: var(--dash-mono);
+  font-size: 0.95rem;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.dash-btn:hover,
+.dash-btn:focus-visible {
+  background: var(--dash-red);
+  color: #000;
+}
+
+.dash-footer {
+  margin-top: 20px;
+  font-family: var(--dash-mono);
+  font-size: 0.65rem;
+  letter-spacing: 0.04em;
+  line-height: 1.6;
+  color: var(--dash-muted);
+}
+
+/* ── Two columns from 720 px ────────────────────────────────────────── */
+
+@media (min-width: 720px) {
+  .dash {
+    padding-left: 20px;
+    padding-right: 20px;
+  }
+
+  .dash-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+  }
+
+  .dash-panel {
+    padding: 16px 18px 18px;
+  }
+
+  .dash-panel--wide {
+    grid-column: 1 / -1;
+  }
+
+  .dash-lists {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px 28px;
+  }
+
+  .dash-tile-value {
+    font-size: 4.2rem;
+  }
+
+  .dash-btn {
+    width: auto;
+    min-width: 300px;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .dash-range button,
+  .dash-nav a,
+  .dash-toggle,
+  .dash-btn,
+  .dash-bar-fill {
+    transition: background 0.15s, color 0.15s, width 0.3s;
+  }
+}
+
+/* A search that found nothing — the one number on this page that is a problem. */
+.dash-bar-hint--warn {
+  color: #ff2a2a;
+}

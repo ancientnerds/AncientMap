@@ -102,3 +102,36 @@
     transition: background 0.15s, color 0.15s;
   }
 }
+
+/* AnswerFeedback — thumbs under a finished Lyra answer, same NERV pair:
+   black button, red border, green "Thanks". */
+.lyra-answer-feedback {
+  display: inline-flex;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.lyra-answer-feedback button {
+  background: #000;
+  border: 1px solid #bb0a0a;
+  color: #ff2a2a;
+  border-radius: 3px;
+  min-width: 36px;
+  min-height: 32px;
+  cursor: pointer;
+}
+
+.lyra-answer-feedback button:hover,
+.lyra-answer-feedback button:focus-visible {
+  background: #bb0a0a;
+  color: #000;
+  outline: none;
+}
+
+.lyra-answer-feedback--done {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #00cc66;
+}

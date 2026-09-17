@@ -27,6 +27,7 @@ export type EventName =
   | 'share' // share button — method, site
   | 'discord_click' // Discord CTA — src (server counts it too via /goto)
   | 'globe_ready' // globe interactive — ms since navigation start
+  | 'globe_idle' // globe ready, no site/search/filter within 30 s — ms
   | 'globe_focus' // #focus= deep link resolved — site
   | 'vital' // Core Web Vital sample — name, value, rating, page
   | 'js_error' // uncaught error / rejection — message, source, page

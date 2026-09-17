@@ -497,6 +497,48 @@ server {
         proxy_set_header Host $host;
     }
 
+    # The founders dashboard (dashboard.html from the frontend build) is the
+    # root; its assets, the fonts and the map outline come from the same
+    # checkout. Umami keeps every other path, including its own /api/;
+    # /api/stats/ is ours (api/routes/founders_stats.py). Every location here
+    # sits behind the gate like the rest of the host.
+    #
+    # An add_header in a location replaces the server-level add_headers
+    # (nginx inherits them only where a location sets none), so the two
+    # locations that set Cache-Control repeat the four response headers.
+    root /var/www/ancientnerds/ancient-nerds-map/dist;
+    location = / {
+        auth_request /_gate;
+        error_page 401 = @entry;
+        add_header Cache-Control "no-cache, no-store, must-revalidate" always;
+        add_header X-Robots-Tag "noindex, nofollow" always;
+        add_header X-Frame-Options "DENY" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+        try_files /dashboard.html =404;
+    }
+    # Vite's hashed bundles, same rule as on the main host: a year, immutable.
+    location ^~ /assets/ {
+        auth_request /_gate;
+        error_page 401 = @entry;
+        add_header Cache-Control "public, max-age=31536000, immutable";
+        add_header X-Robots-Tag "noindex, nofollow" always;
+        add_header X-Frame-Options "DENY" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+    }
+    location ^~ /fonts/ {
+        auth_request /_gate;
+        error_page 401 = @entry;
+    }
+    location ^~ /api/stats/ {
+        auth_request /_gate;
+        error_page 401 = @entry;
+        proxy_pass http://an_api;
+        proxy_set_header Host $host;
+        proxy_set_header Cookie $http_cookie;
+    }
+
     location / {
         auth_request /_gate;
         error_page 401 = @entry;

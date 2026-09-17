@@ -22,6 +22,7 @@ import CitationText from '../components/CitationText'
 import Breadcrumbs from '../components/layout/Breadcrumbs'
 import CommunityCta from '../components/layout/CommunityCta'
 import PageHeader from '../components/layout/PageHeader'
+import FeedbackPrompt from '../components/FeedbackPrompt'
 import SitePopup from '../components/SitePopup/SitePopup'
 import { globeUrlForSite } from '../constants/brand'
 import { DataStore } from '../data/DataStore'
@@ -198,6 +199,12 @@ function SiteRelatedContent({ site }: { site: SiteRoute }) {
           </p>
         </section>
       )}
+      <FeedbackPrompt
+        prompt="site_page"
+        question="Missing or wrong on this site?"
+        yesNo
+        placeholder="What should we fix or add?"
+      />
       {/* Der Globus-Button zeigt hier auf DIESE Site statt auf den Globus
           allgemein — vorher hatte die Seite als einzige zwei Globus-Knöpfe
           mit verschiedenen Zielen. */}

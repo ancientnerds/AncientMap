@@ -125,6 +125,13 @@ function tuneLandingHtml() {
     transformIndexHtml: {
       order: 'post' as const,
       handler(html: string, ctx: { filename: string }) {
+        // The dashboard lives on stats.ancientnerds.com, where /sw.js would be
+        // proxied to Umami (404) and a precache would run into the gate: no worker.
+        if (ctx.filename.endsWith('dashboard.html')) {
+          return html
+            .replace('<script id="vite-plugin-pwa:register-sw" src="/registerSW.js"></script>', '')
+            .replace('<link rel="manifest" href="/manifest.webmanifest">', '')
+        }
         // Make registerSW non-render-blocking on all pages (it already waits for 'load' internally)
         html = html.replace(
           '<script id="vite-plugin-pwa:register-sw" src="/registerSW.js">',
@@ -160,14 +167,15 @@ function tuneLandingHtml() {
 // proxied by nginx to the umami container. The Python error pages emit the
 // same tag (pipeline/article_html_renderer.py analytics_tag) — the test in
 // tests/pipeline/test_analytics_tag.py keeps the two markup strings equal.
-// data-do-not-track honours the browser's DNT signal.
+// data-do-not-track honours the browser's DNT signal. dashboard.html gets no
+// tag: the founders' own visits stay out of the numbers they read.
 function analyticsTag(websiteId: string | undefined): Plugin {
   return {
     name: 'analytics-tag',
     transformIndexHtml: {
       order: 'post' as const,
-      handler(html: string) {
-        if (!websiteId) return html
+      handler(html: string, ctx: { filename: string }) {
+        if (!websiteId || ctx.filename.endsWith('dashboard.html')) return html
         return html.replace(
           '</head>',
           `  <script defer src="/pulse.js" data-website-id="${websiteId}" data-do-not-track="true"></script>\n  </head>`
@@ -208,6 +216,8 @@ export default defineConfig(({ isSsrBuild, mode }) => ({
         imprint: resolve(__dirname, 'imprint.html'),
         privacy: resolve(__dirname, 'privacy.html'),
         terms: resolve(__dirname, 'terms.html'),
+        // The founders dashboard (stats.ancientnerds.com/); untracked, see analyticsTag.
+        dashboard: resolve(__dirname, 'dashboard.html'),
       },
     },
   },
@@ -273,8 +283,8 @@ export default defineConfig(({ isSsrBuild, mode }) => ({
         navigateFallback: null,
         // Pre-cache app shell assets
         globPatterns: ['**/*.{js,css,html,svg,woff2}'],
-        // Don't pre-cache large data files
-        globIgnores: ['**/data/**'],
+        // Don't pre-cache large data files, nor the founders dashboard (other host)
+        globIgnores: ['**/data/**', 'dashboard.html'],
         // Increase file size limit for larger bundles
         maximumFileSizeToCacheInBytes: 6 * 1024 * 1024, // 6 MB
 

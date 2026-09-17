@@ -41,7 +41,7 @@ from urllib.parse import quote
 
 import httpx
 import jwt
-from fastapi import APIRouter, Request, Response
+from fastapi import APIRouter, HTTPException, Request, Response
 from fastapi.responses import HTMLResponse, RedirectResponse
 
 from api.services import jwt_auth
@@ -90,6 +90,14 @@ def stats_session(request: Request) -> dict | None:
     except Exception:
         return None
     return payload if payload.get("scope") == "stats" else None
+
+
+def require_stats_session(request: Request) -> dict:
+    """FastAPI dependency for /api/stats/*: the an_stats cookie or 401."""
+    payload = stats_session(request)
+    if not payload:
+        raise HTTPException(status_code=401, detail="Founder session required")
+    return payload
 
 
 def umami_login_token() -> str | None:

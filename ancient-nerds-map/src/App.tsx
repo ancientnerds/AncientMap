@@ -201,6 +201,15 @@ function AppContent() {
     lastActivityTime: Date.now(),
   })
   const speedIntervalRef = useRef<number | null>(null)
+  // globe_idle: armed when the layers are ready, disarmed by the first
+  // site popup, search input or source toggle. Fires once after 30 s.
+  const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const markGlobeActivity = useCallback(() => {
+    if (idleTimerRef.current) {
+      clearTimeout(idleTimerRef.current)
+      idleTimerRef.current = null
+    }
+  }, [])
 
 
   // Track download speed using PerformanceObserver with smoothing
@@ -504,6 +513,7 @@ function AppContent() {
 
   // Opens popup for a site
   const openSitePopup = useCallback((siteData: SiteData) => {
+    markGlobeActivity()
     setOpenPopups(prev => {
       const next = new Map(prev)
       if (!next.has(siteData.id)) {
@@ -515,7 +525,7 @@ function AppContent() {
       return next
     })
     setIsLoadingDetail(false)
-  }, [])
+  }, [markGlobeActivity])
 
   // Fetch site details and open popup
   const handleSiteClick = useCallback(async (site: SiteData | null) => {
@@ -1002,6 +1012,18 @@ function AppContent() {
       : null,
   })
   const { searchResults, apiSearchResults, searchQuery, setSearchQuery, debouncedQuery: debouncedSearchQuery } = siteSearch
+
+  // Typing in the filter panel's search box or toggling a source counts as
+  // globe activity (disarms globe_idle); programmatic setSearchQuery calls
+  // (focus deep link, random site) do not.
+  const handleFilterSearchChange = useCallback((q: string) => {
+    markGlobeActivity()
+    setSearchQuery(q)
+  }, [markGlobeActivity, setSearchQuery])
+  const handleSourceChange = useCallback((ids: string[]) => {
+    markGlobeActivity()
+    setSelectedSources(ids)
+  }, [markGlobeActivity])
 
   // Handle search result selection (wraps hook helper with globe-specific fly-to)
   const handleSearchResultSelect = useCallback(async (siteId: string, openPopup: boolean) => {
@@ -1798,6 +1820,7 @@ function AppContent() {
           setLoadingProgress(100)
           setLayersReady(true)
           track('globe_ready', { ms: Math.round(performance.now()) })
+          idleTimerRef.current = setTimeout(() => track('globe_idle', { ms: 30000 }), 30000)
         }}
         onContributeClick={() => setShowContributeModal(true)}
         onAIAgentClick={handleAIAgentClick}
@@ -1877,8 +1900,8 @@ function AppContent() {
         ageRange={ageRange}
         onCategoryChange={handleCategoryChange}
         onCountryChange={handleCountryChange}
-        onSourceChange={setSelectedSources}
-        onSearchChange={setSearchQuery}
+        onSourceChange={handleSourceChange}
+        onSearchChange={handleFilterSearchChange}
         onSearchAllSourcesChange={setSearchAllSources}
         applyFiltersToSearch={applyFiltersToSearch}
         onApplyFiltersToSearchChange={setApplyFiltersToSearch}

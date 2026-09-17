@@ -88,6 +88,9 @@ ignore_imports = [
     # IndexNow announcer, called right after publish/unpublish commits
     # (2026-09-17); the orchestrator step lives on the pipeline side.
     "api.** -> pipeline.indexnow",
+    # Read-only query layer on the Umami database, shared by the founders
+    # dashboard routes (/api/stats) and the orchestrator's alerts (2026-09-17).
+    "api.** -> pipeline.umami_db",
 ]
 
 # =============================================================================

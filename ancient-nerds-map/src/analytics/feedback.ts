@@ -1,14 +1,15 @@
 /**
  * Micro-feedback: the one thing analytics cannot measure is *why*, so at
- * three dead ends the site asks — an empty search, a 404, the end of a
- * story. The answer travels as a `feedback` event; the free text is
- * clipped to 100 characters and never joined with anything that identifies
- * the visitor (privacy.html §2a).
+ * the dead ends the site asks — an empty search, a 404, the end of a
+ * story, the foot of a site page, a finished Lyra answer. The answer
+ * travels as a `feedback` event; the free text is clipped to 100
+ * characters and never joined with anything that identifies the visitor
+ * (privacy.html §2a).
  */
 
 import { type EventProps, pageType } from './index'
 
-export type FeedbackPromptKind = 'search_empty' | 'story_end' | 'not_found'
+export type FeedbackPromptKind = 'search_empty' | 'story_end' | 'not_found' | 'site_page' | 'lyra_answer'
 export type FeedbackAnswer = 'yes' | 'no'
 
 export const FEEDBACK_TEXT_MAX = 100

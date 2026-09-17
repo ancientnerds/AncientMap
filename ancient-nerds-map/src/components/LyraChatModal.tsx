@@ -32,6 +32,7 @@ import type { SiteData } from '../data/sites'
 import { useFocusTrap } from '../hooks/useFocusTrap'
 import SiteChip from './lyra/SiteChip'
 import LyraWelcome from './lyra/LyraWelcome'
+import AnswerFeedback, { questionBefore } from './lyra/AnswerFeedback'
 import PipelinePanel from './lyra/PipelinePanel'
 import { applyPipelineEvent } from '../types/pipeline'
 import type { PipelineEvent } from '../types/pipeline'
@@ -1179,7 +1180,7 @@ export default function LyraChatModal({
                       disabled={isStreaming}
                     />
                   ) : (
-                    messages.map(msg => (
+                    messages.map((msg, msgIndex) => (
                       <div key={msg.id}>
                         {/* Thinking bubble — separate from answer */}
                         {msg.role === 'assistant' && msg.statusLines && msg.statusLines.length > 0 && (
@@ -1424,13 +1425,16 @@ export default function LyraChatModal({
                                   })()}
                                 </div>
                               )}
+                              {msg.role === 'assistant' && !msg.isStreaming && msg.content && (
+                                <AnswerFeedback question={questionBefore(messages, msgIndex)} />
+                              )}
                             </div>
                           </div>
                         )}
                         {/* Discovery notification */}
                         {msg.role === 'assistant' && !msg.isStreaming && msg.discoveries && msg.discoveries.newCount > 0 && (
                           <div className="lyra-discovery-bar">
-                            <span>\uD83D\uDD0D Discovered <span className="lyra-discovery-count">{msg.discoveries.newCount}</span> new site{msg.discoveries.newCount !== 1 ? 's' : ''}</span>
+                            <span>{'\u{1F50D}'} Discovered <span className="lyra-discovery-count">{msg.discoveries.newCount}</span> new site{msg.discoveries.newCount !== 1 ? 's' : ''}</span>
                             <span className="lyra-discovery-sep">|</span>
                             <span>{msg.discoveries.total} total explored</span>
                           </div>

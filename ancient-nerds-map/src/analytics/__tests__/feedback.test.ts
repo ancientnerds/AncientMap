@@ -21,4 +21,9 @@ describe('feedbackPayload', () => {
     const payload = feedbackPayload('not_found', null, 'x'.repeat(500), '/nope')
     expect((payload.text as string).length).toBe(FEEDBACK_TEXT_MAX)
   })
+
+  it('knows the site page and lyra answer prompts', () => {
+    expect(feedbackPayload('site_page', 'no', 'coordinates are off', '/sites/peru/x-1234abcd').page).toBe('site')
+    expect(feedbackPayload('lyra_answer', 'yes', '', '/lyra.html').prompt).toBe('lyra_answer')
+  })
 })
