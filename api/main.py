@@ -437,8 +437,12 @@ async def lifespan(app: FastAPI):
             for _attempt in (1, 2, 3):
                 try:
                     with engine.begin() as conn:
-                        conn.execute(_text("SET lock_timeout = '5s'"))
-                        conn.execute(_text("SET statement_timeout = '30s'"))
+                        # LOCAL: scoped to this transaction. Plain SET stuck
+                        # to the pooled session, so every later request on
+                        # that connection inherited the 5 s lock limit
+                        # (seen as 500s during the 2026-09-17 Lyra crash loop).
+                        conn.execute(_text("SET LOCAL lock_timeout = '5s'"))
+                        conn.execute(_text("SET LOCAL statement_timeout = '30s'"))
                         conn.execute(sql, params)
                     return
                 except Exception as _mig_err:
