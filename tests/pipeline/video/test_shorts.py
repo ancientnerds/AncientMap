@@ -7,6 +7,7 @@ import pytest
 from pipeline.video.media import ff_path
 from pipeline.video.shorts_audit import evaluate, passed
 from pipeline.video.shorts_brand import (
+    FONT_BADGE,
     FONT_SOURCES,
     FONTS,
     badge_specs,
@@ -862,6 +863,11 @@ class TestBrandBadges:
             ("1500+ AD", "#ffff00")
         ]
 
+    @pytest.mark.skipif(
+        not FONT_BADGE.exists(),
+        reason="video-assets/fonts is gitignored; ensure_fonts() fills it on the render "
+        "machine only — without the file this test blocked every deploy (CI 2026-09-17)",
+    )
     def test_render_badges_writes_a_transparent_png(self, tmp_path):
         out = tmp_path / "badges.png"
         w, h = render_badges([("FORTRESS/CITADEL", "#dd1111"), ("1000 - 1500 AD", "#ffdd00")], out)
