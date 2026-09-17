@@ -533,7 +533,10 @@ server {
     }
     location ^~ /api/stats/ {
         auth_request /_gate;
-        error_page 401 = @entry;
+        # No error_page here on purpose: the dashboard's fetch layer reads the
+        # 401 and offers the Discord link again. Sending it the entry page as
+        # 200 HTML (as the page locations do) would surface an expired session
+        # as a parse error instead.
         proxy_pass http://an_api;
         proxy_set_header Host $host;
         proxy_set_header Cookie $http_cookie;
