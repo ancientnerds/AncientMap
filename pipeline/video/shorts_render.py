@@ -83,7 +83,7 @@ MUSIC_GAIN_DB = -8.0  # level in the pauses; under the voice the ducking takes i
 # Measured on Machu Picchu: about 8 dB under the voice, back up within a sentence gap.
 DUCK = "threshold=0.04:ratio=2:attack=40:release=500:detection=rms"
 MUSIC_FADE_IN_S = 1.0
-MUSIC_FADE_OUT_S = 1.2
+MUSIC_FADE_OUT_S = 3.0  # a full song needs a long tail; 1.2 s sounded chopped (user, Olympia)
 MUSIC_END_GAP_S = 0.3  # silent before the loop point (audit: silent_loop_point)
 
 # Voice: 48 kHz float, gentle high-pass, a soft 1.8:1 compressor (slow, wide

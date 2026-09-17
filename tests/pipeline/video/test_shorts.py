@@ -659,7 +659,7 @@ class TestFlagAndMusic:
         g = mix_graph(16.7, 19.5, music=True)
         assert g.count("amix=inputs=2") == 2  # voices, then voices + ducked music
         assert "atrim=duration=19.200" in g  # music stops 0.3 s before the end
-        assert "afade=t=in:st=0:d=1.0" in g and "afade=t=out:st=18.000:d=1.2" in g
+        assert "afade=t=in:st=0:d=1.0" in g and "afade=t=out:st=16.200:d=3.0" in g
         assert mix_graph(16.7, 19.5).count("amix=inputs=2") == 1
 
 
