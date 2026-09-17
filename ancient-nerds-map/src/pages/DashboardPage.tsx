@@ -1,5 +1,5 @@
 /**
- * The founders dashboard at https://stats.ancientnerds.com/ — six panels,
+ * The founders dashboard at https://stats.ancientnerds.com/ — eight panels,
  * each titled with the question it answers, fed by /api/stats/* behind the
  * an_stats cookie (api/routes/stats_access.py). Mobile first: one column,
  * two from 720 px. Umami itself stays one link away.
@@ -7,11 +7,21 @@
 import { useState } from 'react'
 
 import { FeedbackInbox } from '../components/dashboard/FeedbackInbox'
+import { Journeys } from '../components/dashboard/Journeys'
+import { Problems } from '../components/dashboard/Problems'
 import { Pulse } from '../components/dashboard/Pulse'
 import { SessionTypes } from '../components/dashboard/SessionTypes'
 import { Sources } from '../components/dashboard/Sources'
 import { TopContent } from '../components/dashboard/TopContent'
-import type { ContentData, FeedbackData, MapData, Overview, SourcesData } from '../components/dashboard/types'
+import type {
+  ContentData,
+  FeedbackData,
+  JourneysData,
+  MapData,
+  Overview,
+  ProblemsData,
+  SourcesData,
+} from '../components/dashboard/types'
 import { useStats } from '../components/dashboard/useStats'
 import { VisitorMap } from '../components/dashboard/VisitorMap'
 
@@ -41,7 +51,10 @@ export default function DashboardPage() {
   const content = useStats<ContentData>(`content?days=${days}`)
   const feedback = useStats<FeedbackData>('feedback?days=30')
   const sources = useStats<SourcesData>(`sources?days=${days}`)
-  const unauthorized = [overview, map, content, feedback, sources].some(s => s.error === 'unauthorized')
+  const journeys = useStats<JourneysData>(`journeys?days=${days}`)
+  const problems = useStats<ProblemsData>(`problems?days=${days}`)
+  const panels = [overview, map, content, feedback, sources, journeys, problems]
+  const unauthorized = panels.some(s => s.error === 'unauthorized')
 
   return (
     <main className="dash">
@@ -69,6 +82,8 @@ export default function DashboardPage() {
           <VisitorMap state={map} />
           <SessionTypes state={overview} />
           <Sources state={sources} />
+          <Journeys state={journeys} />
+          <Problems state={problems} />
           <TopContent state={content} />
           <FeedbackInbox state={feedback} />
         </div>
