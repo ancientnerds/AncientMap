@@ -469,7 +469,8 @@ def render_short(site: dict, stills: list[dict], site_dir: Path, voice_id: str) 
     credit_file.write_text(MAPBOX_CREDIT, encoding="utf-8")
     name_lines, name_size, name_line_h = name_layout(site["name"])
     name_file = work / "name.txt"
-    name_file.write_text("\n".join(name_lines), encoding="utf-8")
+    # LF only: on Windows write_text would emit CR LF and drawtext renders the CR as an empty line
+    name_file.write_text(chr(10).join(name_lines), encoding="utf-8", newline=chr(10))
 
     parts: list[Path] = []
     n = 0

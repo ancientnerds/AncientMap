@@ -335,10 +335,10 @@ def write_report() -> Path:
     for audit_path in audited:
         a = json.loads(audit_path.read_text(encoding="utf-8"))
         m = a["measurements"]
-        failing = ", ".join(c["name"] for c in a["checks"] if not c["ok"]) or "—"
+        failing = ", ".join(c["name"] for c in a["checks"] if not c["ok"]) or "-"
         rows.append(
             f"| {m['site']} | {'PASS' if a['ok'] else 'FAIL'} | {failing} | {m['duration']:.1f} s | "
-            f"{m['stills_used']}/{m['stills_kept']} (−{m['stills_rejected']}) | {m['lufs']:.1f} | "
+            f"{m['stills_used']}/{m['stills_kept']} (-{m['stills_rejected']}) | {m['lufs']:.1f} | "
             f"{m['loop_seam']:.1f} | {m['opening_frames']}/{m['return_frames']} |"
         )
         sel_path = audit_path.parent / "selection.json"
@@ -347,7 +347,7 @@ def write_report() -> Path:
                 key = r["reason"].split(" (")[0].split("=")[0]
                 rejections[key] = rejections.get(key, 0) + 1
     lines = [
-        f"# Site-Shorts QA report — {len(audited)} sites",
+        f"# Site-Shorts QA report - {len(audited)} sites",
         "",
         "| Site | Audit | Failing checks | Length | Stills used/kept (rejected) | LUFS | Loop seam | Opening/return frames |",
         "|---|---|---|---|---|---|---|---|",
