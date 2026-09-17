@@ -58,7 +58,7 @@ ORBIT_ZOOM_BY_TYPE: dict[str, float] = {
             "Polygonal masonry",
             "Sacred site",
         ],
-        16.0,
+        16.6,  # a stone circle is ~100 m across; at 16.0 (Stonehenge) it stayed a small ring
     ),
     **dict.fromkeys(
         [

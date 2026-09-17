@@ -331,7 +331,7 @@ class TestExportShape:
         assert site["orbit_zoom"] == 15.0  # Fortress/citadel
 
     def test_orbit_zoom_by_site_type(self):
-        assert orbit_zoom_for("Stone circle") == 16.0
+        assert orbit_zoom_for("Stone circle") == 16.6
         assert orbit_zoom_for("Geoglyphs") == 13.5
         assert orbit_zoom_for("Something new") == 14.2
         assert orbit_zoom_for(None) == 14.2
