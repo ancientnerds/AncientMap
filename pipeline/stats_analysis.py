@@ -1,5 +1,14 @@
 # SPDX-License-Identifier: AGPL-3.0-only
-"""Founder-level answers computed from Umami rows: sessions, human filter,
+"""Founder-level answers computed from Umami rows — the analysis half of the
+pair with pipeline/umami_db.py (which fetches them).
+
+Under pipeline/, not api/services/, for two reasons: it is pure functions
+over rows with no FastAPI in sight, and the orchestrator's weekly digest
+runs inside the Lyra image, which contains no `api` tree at all.
+
+Original docstring follows.
+
+Founder-level answers computed from Umami rows: sessions, human filter,
 session types, journeys. Pure functions — the routes feed them the rows from
 pipeline.umami_db (SQL_SESSION_EVENTS); the tests feed them fixtures.
 
@@ -199,6 +208,7 @@ def problems(
     not_found: list[dict[str, Any]],
     vitals: list[dict[str, Any]],
     errors: list[dict[str, Any]],
+    searches: list[dict[str, Any]] | None = None,
     limit: int = 15,
 ) -> list[dict[str, Any]]:
     """Where the platform fails its visitors, worst first.
@@ -267,7 +277,22 @@ def problems(
                 "detail": f"{n} Sitzungen mit einer Seite und unter {SHALLOW_DEPTH} % Scrolltiefe",
             }
         )
-    if empty_searches:
+    # The term, not just the count: "atlantis findet nichts" is a content
+    # decision, "12 Suchen fanden nichts" is only a number. The per-term rows
+    # come from SQL_CONTENT; without them the session counter is all we have.
+    dead_terms = [r for r in (searches or []) if not (r.get("results") or 0) and r.get("label")]
+    if dead_terms:
+        for row in sorted(dead_terms, key=lambda r: int(r["n"] or 0), reverse=True):
+            n = int(row["n"] or 0)
+            found.append(
+                {
+                    "kind": "empty_search",
+                    "label": str(row["label"]),
+                    "score": n,
+                    "detail": f"{n}x gesucht, nichts gefunden",
+                }
+            )
+    elif empty_searches:
         found.append(
             {
                 "kind": "empty_search",

@@ -23,23 +23,19 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from pipeline.lyra.orchestrator import _load_step_state, _save_step_state
-from pipeline.umami_db import SQL_CONTENT, SQL_FEEDBACK, SQL_OVERVIEW, fetch
+from pipeline.stats_analysis import problems, sessions_from_rows
+from pipeline.umami_db import (
+    SQL_CONTENT,
+    SQL_ERRORS,
+    SQL_FEEDBACK,
+    SQL_NOT_FOUND,
+    SQL_OVERVIEW,
+    SQL_SESSION_EVENTS,
+    SQL_VITALS,
+    fetch,
+)
 
 logger = logging.getLogger(__name__)
-
-#: Teil C legt dieselbe Abfrage als ``pipeline.umami_db.SQL_ERRORS`` an. Beide
-#: Teile entstehen parallel, deshalb hier eine eigene Kopie mit identischem
-#: Text: beim Zusammenführen ersetzt ein Import aus ``pipeline.umami_db``
-#: diese Konstante ersatzlos.
-_SQL_ERRORS_LOCAL = """
-SELECT max(m.string_value) AS message, max(p.string_value) AS page, count(*) AS n
-FROM website_event e
-JOIN event_data m ON m.website_event_id = e.event_id AND m.data_key = 'message'
-JOIN event_data p ON p.website_event_id = e.event_id AND p.data_key = 'page'
-WHERE e.website_id = :website_id AND e.event_name = 'js_error'
-  AND e.created_at >= :since AND e.created_at < :until
-GROUP BY m.string_value, p.string_value ORDER BY n DESC LIMIT 30
-"""
 
 #: So viele gleiche js_error-Ereignisse in einer Stunde sind eine Spitze. Ein
 #: einzelner kaputter Browser erzeugt Handvoll-Zahlen; 10 heisst, es trifft
@@ -79,7 +75,7 @@ def _post(payload: dict[str, Any]) -> bool:
     ein Modulimport würde den Orchestrator am Starten hindern. Gleiches
     Muster wie in ``pipeline.lyra.curator``.
     """
-    from api.services.notify import send_discord_webhook
+    from pipeline.utils.notify import send_discord_webhook
 
     return send_discord_webhook(payload)
 
@@ -141,7 +137,7 @@ def check_hourly() -> int:
         return 0
     try:
         until = datetime.now(UTC)
-        rows = fetch(_SQL_ERRORS_LOCAL, until - timedelta(hours=1), until)
+        rows = fetch(SQL_ERRORS, until - timedelta(hours=1), until)
         message = error_spike_message(rows)
         if message is None:
             return 0
@@ -179,26 +175,23 @@ def _top(content: list[dict[str, Any]], event_name: str, limit: int = 3) -> list
     return sorted(rows, key=lambda r: int(r["n"] or 0), reverse=True)[:limit]
 
 
-def problem_lines(
-    errors: list[dict[str, Any]], content: list[dict[str, Any]], limit: int = 3
-) -> list[str]:
-    """Die größten Probleme der Woche, gewichtet wie im Dashboard: ein
-    JS-Fehler wiegt dreifach, eine Suche ohne Treffer einfach.
-
-    Teil C baut dieselbe Rangfolge als ``founders_stats.problems()`` mit mehr
-    Quellen (404er, Web Vitals, flache Ausstiege); beim Zusammenführen ersetzt
-    sie diese drei Zeilen.
-    """
-    scored: list[tuple[int, str]] = []
-    for r in errors:
-        n = int(r["n"] or 0)
-        scored.append((n * 3, f"JS-Fehler auf {r['page']}: `{r['message']}` ({n}x)"))
-    for r in content:
-        if r["event_name"] == "search" and not (r["results"] or 0):
-            n = int(r["n"] or 0)
-            scored.append((n, f'Suche ohne Treffer: "{r["label"]}" ({n}x)'))
-    scored.sort(key=lambda entry: entry[0], reverse=True)
-    return [line for _, line in scored[:limit]]
+def problem_lines(problem_rows: list[dict[str, Any]], limit: int = 3) -> list[str]:
+    """Die größten Probleme der Woche als Zeilen — dieselbe Rangfolge, die das
+    Dashboard zeigt (pipeline.stats_analysis.problems), damit Digest und Panel
+    nie zwei Wahrheiten erzählen."""
+    labels = {
+        "js_error": "JS-Fehler",
+        "slow_page": "Langsame Seite",
+        "broken_link": "Toter Link",
+        "shallow_exit": "Absprung",
+        "empty_search": "Suche ohne Treffer",
+    }
+    lines = []
+    for p in problem_rows[:limit]:
+        kind = labels.get(str(p.get("kind")), str(p.get("kind")))
+        detail = str(p.get("detail") or "").strip()
+        lines.append(f"{kind}: {p.get('label')}" + (f" — {detail}" if detail else ""))
+    return lines
 
 
 def _section(title: str, lines: list[str]) -> str:
@@ -210,7 +203,7 @@ def digest_message(
     this_week: dict[str, Any],
     last_week: dict[str, Any],
     content: list[dict[str, Any]],
-    errors: list[dict[str, Any]],
+    problem_rows: list[dict[str, Any]],
     feedback: list[dict[str, Any]],
 ) -> str:
     """Der ganze Digest als ein Text; das Aufteilen macht ``_split_message``."""
@@ -221,7 +214,7 @@ def digest_message(
     stories = [
         f"{i}. {r['label']} — {r['n']}x" for i, r in enumerate(_top(content, "story_open"), start=1)
     ]
-    problems = [f"{i}. {line}" for i, line in enumerate(problem_lines(errors, content), start=1)]
+    ranked = [f"{i}. {line}" for i, line in enumerate(problem_lines(problem_rows), start=1)]
     texts = [r for r in feedback if (r["text"] or "").strip()]
     voices = [
         f"- [{r['prompt']}/{r['answer']}] {r['text'].strip()} — {r['url_path']}" for r in texts
@@ -237,7 +230,7 @@ def digest_message(
             ),
             _section("Meistgeöffnete Sites", sites),
             _section("Meistgelesene Stories", stories),
-            _section("Größte Probleme", problems),
+            _section("Größte Probleme", ranked),
             _section(f"Feedback der Woche ({len(voices)})", voices),
         ]
     )
@@ -262,9 +255,16 @@ def weekly_digest(now: datetime | None = None) -> int:
         this_week = fetch(SQL_OVERVIEW, week_start, now, live=now)[0]
         last_week = fetch(SQL_OVERVIEW, week_start - WEEK, week_start, live=week_start)[0]
         content = fetch(SQL_CONTENT, week_start, now)
-        errors = fetch(_SQL_ERRORS_LOCAL, week_start, now)
         feedback = fetch(SQL_FEEDBACK, week_start, now)
-        message = digest_message(now, this_week, last_week, content, errors, feedback)
+        # Same four inputs the dashboard's Problems panel uses.
+        ranked = problems(
+            sessions_from_rows(fetch(SQL_SESSION_EVENTS, week_start, now)),
+            not_found=fetch(SQL_NOT_FOUND, week_start, now),
+            vitals=fetch(SQL_VITALS, week_start, now),
+            errors=fetch(SQL_ERRORS, week_start, now),
+            searches=[r for r in content if r["event_name"] == "search"],
+        )
+        message = digest_message(now, this_week, last_week, content, ranked, feedback)
         posted = sum(1 for chunk in _split_message(message) if _post({"content": chunk}))
         if posted:
             # Frisch laden: die Datei gehört auch den Intervallschritten.

@@ -61,6 +61,12 @@ export interface FeedbackItem {
   prompt: string | null
   answer: string | null
   text: string | null
+  /** What was rated — whichever of these the event carried. */
+  site: string | null
+  country: string | null
+  paper: string | null
+  journal: string | null
+  story: string | null
 }
 
 /** GET /api/stats/feedback?days=N */

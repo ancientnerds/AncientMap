@@ -232,15 +232,40 @@ def test_problems_join_the_three_problem_queries_with_the_sessions(monkeypatch):
         **{"'not_found'": [{"path": "/old", "referrer": "example.org", "n": 4}]},
         **{"'vital'": [{"page": "story", "name": "LCP", "p75": 4100.0, "samples": 3}]},
         **{"'js_error'": [{"message": "x is not a function", "page": "globe", "n": 12}]},
+        # The content query also feeds the ranking: a search that found nothing
+        # is only actionable with the word attached.
+        **{
+            "'site_open', 'story_open'": [
+                {
+                    "event_name": "search",
+                    "label": "atlantis",
+                    "country": None,
+                    "results": 0,
+                    "n": 5,
+                },
+                {"event_name": "search", "label": "giza", "country": None, "results": 9, "n": 4},
+                {
+                    "event_name": "site_open",
+                    "label": "Giza",
+                    "country": "Egypt",
+                    "results": None,
+                    "n": 9,
+                },
+            ]
+        },
     )
     monkeypatch.setattr(fr, "fetch", fetch)
     out = asyncio.run(fr.problems(days=7, _session=SESSION))
     assert [p["kind"] for p in out["problems"]] == [
         "js_error",  # 12 hits × 3
         "broken_link",  # 4 × 2
+        "empty_search",  # "atlantis", 5 searches
         "slow_page",  # 3 samples
         "shallow_exit",  # session b read one story and left
     ]
-    # One window for all four queries, no query run twice.
+    dead = next(p for p in out["problems"] if p["kind"] == "empty_search")
+    assert dead["label"] == "atlantis"  # the term, not just a count
+    assert not any(p["label"] == "giza" for p in out["problems"])  # that one found something
+    # One window for all five queries, no query run twice.
     windows = {(since, until) for _, since, until, _ in fetch.calls}
-    assert len(fetch.calls) == 4 and len(windows) == 1
+    assert len(fetch.calls) == 5 and len(windows) == 1

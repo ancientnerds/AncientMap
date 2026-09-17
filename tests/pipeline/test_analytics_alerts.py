@@ -16,7 +16,7 @@ import pytest
 
 import pipeline.lyra.analytics_alerts as aa
 import pipeline.lyra.orchestrator as orch
-from pipeline.umami_db import SQL_CONTENT, SQL_FEEDBACK, SQL_OVERVIEW
+from pipeline.umami_db import SQL_CONTENT, SQL_ERRORS, SQL_FEEDBACK, SQL_OVERVIEW
 
 MONDAY_6 = datetime(2026, 9, 21, 6, 10, tzinfo=UTC)
 
@@ -102,7 +102,7 @@ def _digest_fetch(**overrides: Any) -> Fetch:
             feedback_row("Koordinaten stimmen nicht"),
             feedback_row(None, url_path="/lyra.html"),
         ],
-        aa._SQL_ERRORS_LOCAL: [{"message": "x is not a function", "page": "globe", "n": 12}],
+        SQL_ERRORS: [{"message": "x is not a function", "page": "globe", "n": 12}],
     }
     rows.update(overrides)
     return Fetch(rows)
@@ -125,7 +125,7 @@ def test_no_message_below_threshold():
 
 
 def test_check_hourly_posts_the_spike_for_the_last_hour(webhook, posted, monkeypatch):
-    fetch = Fetch({aa._SQL_ERRORS_LOCAL: [{"message": "boom", "page": "globe", "n": 11}]})
+    fetch = Fetch({SQL_ERRORS: [{"message": "boom", "page": "globe", "n": 11}]})
     monkeypatch.setattr(aa, "fetch", fetch)
     assert aa.check_hourly() == 1
     assert len(posted) == 1 and "boom" in posted[0]["content"]
@@ -135,7 +135,7 @@ def test_check_hourly_posts_the_spike_for_the_last_hour(webhook, posted, monkeyp
 
 def test_check_hourly_stays_quiet_below_the_threshold(webhook, posted, monkeypatch):
     rows = [{"message": "b", "page": "g", "n": 2}]
-    monkeypatch.setattr(aa, "fetch", Fetch({aa._SQL_ERRORS_LOCAL: rows}))
+    monkeypatch.setattr(aa, "fetch", Fetch({SQL_ERRORS: rows}))
     assert aa.check_hourly() == 0
     assert posted == []
 

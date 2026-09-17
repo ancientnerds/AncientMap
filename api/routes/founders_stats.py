@@ -15,7 +15,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, Query
 
 from api.routes.stats_access import require_stats_session
-from api.services import founders_stats as fs
+from pipeline import stats_analysis as fs
 from pipeline.umami_db import (
     SQL_CONTENT,
     SQL_ERRORS,
@@ -118,6 +118,7 @@ async def problems(
             not_found=fetch(SQL_NOT_FOUND, since, until),
             vitals=fetch(SQL_VITALS, since, until),
             errors=fetch(SQL_ERRORS, since, until),
+            searches=[r for r in fetch(SQL_CONTENT, since, until) if r["event_name"] == "search"],
         )
     }
 

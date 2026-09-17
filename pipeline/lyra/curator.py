@@ -769,7 +769,7 @@ def run_curator_pass() -> None:
             details["last_paper_completed_at"] = cursor.isoformat()
         log_thinking("curator", summary, details)
         try:
-            from api.services.notify import send_discord_webhook
+            from pipeline.utils.notify import send_discord_webhook
 
             send_discord_webhook(
                 {

@@ -9,7 +9,7 @@ from datetime import UTC, datetime
 
 import pytest
 
-from api.services import founders_stats as fs
+from pipeline import stats_analysis as fs
 
 T = datetime(2026, 9, 17, 12, 0, tzinfo=UTC)
 

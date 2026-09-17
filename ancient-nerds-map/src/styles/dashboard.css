@@ -666,3 +666,35 @@ button {
 .dash-bar-hint--warn {
   color: #ff2a2a;
 }
+
+/* Feedback: the filter sits above the list, criticism is the default view. */
+.dash-feedback-filter {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.dash-feedback-filter button {
+  min-height: 36px;
+  padding: 0 12px;
+  background: #000;
+  color: #888880;
+  border: 1px solid #333;
+  border-radius: 3px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.dash-feedback-filter button.is-active {
+  color: #ff2a2a;
+  border-color: #bb0a0a;
+}
+
+.dash-feedback li.is-negative {
+  border-left: 2px solid #bb0a0a;
+  padding-left: 10px;
+}

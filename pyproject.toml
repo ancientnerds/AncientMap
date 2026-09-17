@@ -52,8 +52,6 @@ ignore_imports = [
     # Theo/Lyra research runs inside the API container and reuses its
     # service singletons (Qdrant, embeddings, Redis, Discord webhook).
     "pipeline.connectors.cache -> api.cache",
-    "pipeline.lyra.analytics_alerts -> api.services.notify",
-    "pipeline.lyra.curator -> api.services.notify",
     "pipeline.lyra.graph_full_ingest -> api.routes.public_v1",
     "pipeline.lyra.handlers.cross_pollination -> api.services.lyra_embeddings",
     "pipeline.lyra.theo_research_index -> api.services.lyra_embeddings",
@@ -89,6 +87,9 @@ ignore_imports = [
     # IndexNow announcer, called right after publish/unpublish commits
     # (2026-09-17); the orchestrator step lives on the pipeline side.
     "api.** -> pipeline.indexnow",
+    # Umami read layer and its pure analysis — both under pipeline/ so the
+    # Lyra image (which has no api/ tree) can run the digest.
+    "api.** -> pipeline.stats_analysis",
     # Read-only query layer on the Umami database, shared by the founders
     # dashboard routes (/api/stats) and the orchestrator's alerts (2026-09-17).
     "api.** -> pipeline.umami_db",

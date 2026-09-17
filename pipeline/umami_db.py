@@ -116,11 +116,20 @@ ORDER BY n DESC
 LIMIT 300
 """
 
+#: The rated thing travels in the same event (ThumbsFeedback's `extra`): a
+#: site id with its country, a story id, a paper or journal slug. Without it
+#: the inbox can only say "somewhere on a site page".
 SQL_FEEDBACK = """
 SELECT e.created_at, e.url_path,
-       max(d.string_value) FILTER (WHERE d.data_key = 'prompt') AS prompt,
-       max(d.string_value) FILTER (WHERE d.data_key = 'answer') AS answer,
-       max(d.string_value) FILTER (WHERE d.data_key = 'text')   AS text
+       max(d.string_value) FILTER (WHERE d.data_key = 'prompt')  AS prompt,
+       max(d.string_value) FILTER (WHERE d.data_key = 'answer')  AS answer,
+       max(d.string_value) FILTER (WHERE d.data_key = 'text')    AS text,
+       max(d.string_value) FILTER (WHERE d.data_key = 'site')    AS site,
+       max(d.string_value) FILTER (WHERE d.data_key = 'country') AS country,
+       max(d.string_value) FILTER (WHERE d.data_key = 'paper')   AS paper,
+       max(d.string_value) FILTER (WHERE d.data_key = 'journal') AS journal,
+       max(coalesce(d.string_value, d.number_value::text))
+           FILTER (WHERE d.data_key = 'story')                   AS story
 FROM website_event e JOIN event_data d ON d.website_event_id = e.event_id
 WHERE e.website_id = :website_id AND e.event_name = 'feedback'
   AND e.created_at >= :since AND e.created_at < :until

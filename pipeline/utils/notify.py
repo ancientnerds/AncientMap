@@ -1,5 +1,10 @@
 """Outbound notifications — currently just a Discord webhook sender.
 
+Lives under pipeline/ because Dockerfile.lyra copies only that tree: the
+orchestrator's alert and digest steps run inside the Lyra image, where
+`api` does not exist. api/services/notify.py re-exports this function, so
+every existing caller keeps its import path.
+
 Fail-soft by design: a missing or failing webhook must never crash the
 caller. The quota watchdog (theo_quota_monitor) calls
 send_discord_webhook() on every state transition; if the URL is unset or
