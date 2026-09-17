@@ -25,8 +25,11 @@ from pipeline.video.shorts_images import local_image_name
 from pipeline.video.shorts_render import (
     NAME_AUDIO_DELAY_S,
     NARRATION_TAIL_S,
+    BadgeLayer,
     Segment,
     StillPick,
+    badge_layers,
+    badge_position,
     build_comment,
     build_description,
     captions_filter,
@@ -43,6 +46,7 @@ from pipeline.video.shorts_render import (
     plan_timeline,
     pushin_filter,
     return_overlays_graph,
+    segment_starts,
     stills_graph,
     stills_window,
     wrap_lines,
@@ -542,16 +546,74 @@ def _measurements(**over):
 
 
 class TestReturnOverlays:
-    def test_flag_under_and_badges_above_the_name(self):
-        g = return_overlays_graph(3.0, name_lines=1, line_h=100, flag=True, badges_h=70)
+    def test_flag_under_the_name_or_under_the_badges_row(self):
+        g = return_overlays_graph(3.0, name_lines=1, line_h=100, badges_h=0)
         assert g.startswith("[1:v]format=rgba,scale=180:-1,fade=t=in:st=0:d=0.3:alpha=1,")
         assert "fade=t=out:st=2.350:d=0.5:alpha=1[flag]" in g
-        assert "[2:v]format=rgba,fade=t=in" in g and "[badges]" in g
-        assert "[base][flag]overlay=x=(W-w)/2:y=904:shortest=1[l0]" in g  # 770 + 100 + 34
-        assert g.endswith("[l0][badges]overlay=x=(W-w)/2:y=660:shortest=1[out]")  # 770 - 40 - 70
-        only_badges = return_overlays_graph(3.0, 1, 100, flag=False, badges_h=70)
-        assert "[1:v]format=rgba,fade" in only_badges and "[flag]" not in only_badges
-        assert only_badges.endswith("[base][badges]overlay=x=(W-w)/2:y=660:shortest=1[out]")
+        assert g.endswith("[base][flag]overlay=x=(W-w)/2:y=904:shortest=1[out]")  # 770 + 100 + 34
+        g = return_overlays_graph(3.0, name_lines=1, line_h=100, badges_h=70)
+        assert g.endswith("y=1014:shortest=1[out]")  # + 40 gap + 70 badges
+
+
+class TestBadgeMotion:
+    BADGES = [(Path("cat.png"), 400, 70), (Path("per.png"), 360, 70)]
+
+    def test_layers_park_left_and_right_then_meet_under_the_name(self):
+        cat, per = badge_layers(
+            self.BADGES,
+            stills_start=6.0,
+            return_start=16.3,
+            total_s=19.31,
+            name_lines=1,
+            line_h=100,
+        )
+        assert (cat.t_in, per.t_in) == (6.0, pytest.approx(11.15))  # period halfway to the name
+        assert (cat.x_top, per.x_top) == (48, 1080 - 48 - 360)
+        assert (cat.x_end, per.x_end) == (151, 151 + 400 + 18)  # centred row, 18 px gap
+        assert cat.y_end == per.y_end == 770 + 100 + 40
+        assert cat.t_move == per.t_move == 16.3
+        assert cat.t_fade == pytest.approx(19.31 - 0.15 - 0.5)
+
+    def test_single_badge_and_no_return(self):
+        (only,) = badge_layers(
+            self.BADGES[:1],
+            stills_start=6.0,
+            return_start=None,
+            total_s=19.31,
+            name_lines=2,
+            line_h=78,
+        )
+        assert only.x_top == 48 and only.x_end == (1080 - 400) // 2
+        assert only.t_move == 19.31  # never leaves the parked position
+        assert (
+            badge_layers(
+                [], stills_start=6.0, return_start=16.3, total_s=19.31, name_lines=1, line_h=100
+            )
+            == []
+        )
+
+    def test_position_expressions(self):
+        layer = BadgeLayer(Path("cat.png"), 400, 70, 6.0, 48, 151, 910, 16.3, 18.66)
+        x, y = badge_position(layer)
+        assert y.startswith(
+            "if(lt(t\\,16.300)\\,-70+270*(1-pow(1-clip((t-6.000)/0.5\\,0\\,1)\\,3))\\,200+710*"
+        )
+        assert x.startswith("if(lt(t\\,16.300)\\,48\\,48+103*if(lt(clip((t-16.300)/0.6")
+
+    def test_final_graph_overlays_badges_after_the_flashes(self):
+        layer = BadgeLayer(Path("cat.png"), 400, 70, 6.0, 48, 151, 910, 16.3, 18.66)
+        g = final_graph(0.0, "drawtext=x", [5.98], [layer])
+        assert "[2:v]format=rgba,fade=t=out:st=18.660:d=0.5:alpha=1[b0]" in g
+        assert "[g0][f0]overlay=eof_action=pass" in g and "[g1][b0]overlay=x='if(lt(t" in g
+        assert g.split("[vout]")[0].endswith(":shortest=1,drawtext=x")
+
+    def test_segment_starts_count_frames(self):
+        segs = [
+            Segment("clip", 5.983, "o"),
+            Segment("still", 3.44, "a"),
+            Segment("return", 3.0, "r"),
+        ]
+        assert segment_starts(segs, clip_frames=[358]) == pytest.approx([0.0, 358 / 60, 564 / 60])
 
 
 class TestAudit:
