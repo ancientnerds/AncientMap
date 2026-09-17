@@ -22,8 +22,9 @@ from pathlib import Path
 from typing import Literal
 
 from pipeline.video.media import ff_path, probe_duration, run_ffmpeg
-from pipeline.video.shorts_captions import Word, caption_words
+from pipeline.video.shorts_captions import Word, caption_words, keyword_flags
 from pipeline.video.shorts_select import focus_of, order_by_narration
+from pipeline.video.shorts_tts import specific_place
 
 logger = logging.getLogger(__name__)
 
@@ -45,6 +46,18 @@ CAPTION_SIZE = 92
 CAPTION_Y = 1230
 CAPTION_BOX_ALPHA = 0.38
 CAPTION_BOX_PAD = 22
+# Brand accent for numbers and proper nouns in the captions
+# (mirrors --_palette-green-bright in ancient-nerds-map/src/styles/tokens.css).
+ACCENT = "#00cc66"
+# Info slot at the top of the frame (inside the Shorts safe zone): the
+# coordinates during the approach, the period/type chip over the stills.
+INFO_Y = 170
+INFO_SIZE = 34
+INFO_FADE_IN_S = 0.4
+INFO_FADE_OUT_S = 0.4
+INFO_BOX_ALPHA = 0.3
+INFO_BOX_PAD = 16
+ORBIT_S = 3.0  # the opening take's 3D orbit (video/scenes/site-short.ts); the coordinates leave as it starts
 FLAG_GAP = 34
 OPENING_TRIM_S = 0.1  # the opening take holds its first pose this long; the first frames after a
 # jump are not fully drawn, so cutting the hold keeps frame 0 identical to the loop's end pose
@@ -297,6 +310,70 @@ def clip_filter(
     return ",".join(parts)
 
 
+def coords_text(lat: float, lng: float) -> str:
+    """ "13.16° S · 72.54° W" — the approach's only caption."""
+    return (
+        f"{abs(lat):.2f}° {'N' if lat >= 0 else 'S'} · {abs(lng):.2f}° {'E' if lng >= 0 else 'W'}"
+    )
+
+
+def chip_text(site: dict) -> str:
+    """Period · type over the stills. The card's civilization joins only when
+    it is more than the country repeated (it is the country for every QA
+    site): the country is the reveal at the end and must not leak here."""
+    parts: list[str] = []
+    civ = (site.get("civilization") or "").strip()
+    if civ and civ.lower() != (site.get("country") or "").strip().lower():
+        parts.append(civ)
+    parts += [(site.get("period_name") or "").strip(), (site.get("site_type") or "").strip()]
+    return " · ".join(p for p in parts if p)
+
+
+def info_alpha(start: float, end: float) -> str:
+    """Fade in from `start`, fully gone at `end`, 0 outside."""
+    a, b = start + INFO_FADE_IN_S, end - INFO_FADE_OUT_S
+    return (
+        f"if(lt(t\\,{start:.3f})\\,0\\,"
+        f"if(lt(t\\,{a:.3f})\\,(t-{start:.3f})/{INFO_FADE_IN_S}\\,"
+        f"if(gt(t\\,{end:.3f})\\,0\\,"
+        f"if(gt(t\\,{b:.3f})\\,({end:.3f}-t)/{INFO_FADE_OUT_S}\\,1))))"
+    )
+
+
+def info_filter(text_file: Path, font: Path, start: float, end: float) -> str:
+    """Small boxed line in the top info slot, faded in and out."""
+    return (
+        f"drawtext=fontfile='{ff_path(font)}':textfile='{ff_path(text_file)}':"
+        f"fontcolor=white@0.85:fontsize={INFO_SIZE}:x=(w-text_w)/2:y={INFO_Y}:"
+        f"box=1:boxcolor=black@{INFO_BOX_ALPHA}:boxborderw={INFO_BOX_PAD}:"
+        f"enable='between(t\\,{start:.3f}\\,{end:.3f})':alpha='{info_alpha(start, end)}'"
+    )
+
+
+def hashtag(text: str) -> str:
+    """ "Machu Picchu" → "#MachuPicchu"."""
+    return "#" + "".join(ch for ch in text.title() if ch.isalnum())
+
+
+def hashtags(site: dict) -> list[str]:
+    """Fixed channel tags first (YouTube shows the first three above the
+    title), then the place and the site."""
+    tags = ["#Shorts", "#archaeology", "#ancienthistory"]
+    for text in (specific_place(site.get("country")), site["name"]):
+        tag = hashtag(text)
+        if len(tag) > 1 and tag not in tags:
+            tags.append(tag)
+    return tags
+
+
+def build_comment(site: dict) -> str:
+    """Pinned comment for the upload step: the one place the site link lives."""
+    return (
+        f"Explore {site['name']} on the interactive globe, with sources and photos: "
+        f"https://ancientnerds.com{site['page_path']}\n"
+    )
+
+
 def build_description(
     site: dict, images_used: list[dict], voice_id: str, mapbox_used: bool = False
 ) -> str:
@@ -321,6 +398,7 @@ def build_description(
             f"Globe and terrain flyover: Mapbox Satellite Streets + Terrain DEM ({MAPBOX_CREDIT}).",
         ]
     lines += ["", f"Narration: AI-generated voice (MiniMax speech-2.8-hd, {voice_id})."]
+    lines += ["", " ".join(hashtags(site))]
     return "\n".join(lines) + "\n"
 
 
@@ -505,17 +583,20 @@ def gain_db(measured_lufs: float, target_lufs: float = TARGET_LUFS) -> float:
     return target_lufs - measured_lufs
 
 
-def captions_filter(words: list[Word], text_dir: Path) -> str:
-    """One drawtext per word, shown exactly between its start and end. Words go
-    to text files (no escaping of apostrophes, commas or percent signs)."""
+def captions_filter(words: list[Word], text_dir: Path, accents: list[bool] | None = None) -> str:
+    """One drawtext per word, shown exactly between its start and end; accented
+    words (numbers, proper nouns) in the brand green. Words go to text files
+    (no escaping of apostrophes, commas or percent signs)."""
     text_dir.mkdir(parents=True, exist_ok=True)
+    accents = accents or [False] * len(words)
     parts = []
-    for i, word in enumerate(words):
+    for i, (word, accent) in enumerate(zip(words, accents, strict=True)):
         f = text_dir / f"w{i:03d}.txt"
         f.write_text(word.text, encoding="utf-8", newline=chr(10))
         parts.append(
             f"drawtext=fontfile='{ff_path(FONT_HEADING)}':textfile='{ff_path(f)}':"
-            f"fontcolor=white:fontsize={CAPTION_SIZE}:x=(w-text_w)/2:y={CAPTION_Y}:"
+            f"fontcolor={ACCENT if accent else 'white'}:fontsize={CAPTION_SIZE}:"
+            f"x=(w-text_w)/2:y={CAPTION_Y}:"
             f"box=1:boxcolor=black@{CAPTION_BOX_ALPHA}:boxborderw={CAPTION_BOX_PAD}:"
             f"shadowcolor=black@0.5:shadowx=2:shadowy=2:"
             f"enable='between(t\\,{word.start:.3f}\\,{word.end:.3f})'"
@@ -523,15 +604,46 @@ def captions_filter(words: list[Word], text_dir: Path) -> str:
     return ",".join(parts)
 
 
-def final_graph(gain: float, captions: str = "") -> str:
-    """filter_complex for the final pass: graded picture; pre-mixed voice lifted
-    by a fixed gain with a true-peak limiter as the only dynamic element."""
-    video = f"{LOOK_FILTER},{captions}" if captions else LOOK_FILTER
+def overlays_filter(site: dict, segments: list[Segment], words: list[Word], work: Path) -> str:
+    """The final-pass text layer: coordinates during the approach (gone when the
+    orbit starts), the period/type chip over the stills (fading into the return
+    flight), and the word-by-word captions with accented keywords. Drawn after
+    the look filter so the colours stay pure."""
+    parts: list[str] = []
+    t = 0.0
+    stills_start: float | None = None
+    stills_end = 0.0
+    for seg in segments:
+        if seg.kind == "clip":
+            coords = work / "coords.txt"
+            coords.write_text(
+                coords_text(site["lat"], site["lng"]), encoding="utf-8", newline=chr(10)
+            )
+            parts.append(info_filter(coords, FONT_BODY, t, t + seg.duration - ORBIT_S))
+        elif seg.kind == "still":
+            stills_start = t if stills_start is None else stills_start
+            stills_end = t + seg.duration
+        t += seg.duration
+    chip = chip_text(site)
+    if chip and stills_start is not None:
+        chip_file = work / "chip.txt"
+        chip_file.write_text(chip, encoding="utf-8", newline=chr(10))
+        # FONT_BODY like the coordinates: Orbitron's latin subset has no middle dot
+        parts.append(info_filter(chip_file, FONT_BODY, stills_start, stills_end + INFO_FADE_OUT_S))
+    parts.append(captions_filter(words, work / "captions", keyword_flags([w.text for w in words])))
+    return ",".join(parts)
+
+
+def final_graph(gain: float, overlays: str = "") -> str:
+    """filter_complex for the final pass: graded picture with the text layer on
+    top; pre-mixed voice lifted by a fixed gain with a true-peak limiter as the
+    only dynamic element."""
+    video = f"{LOOK_FILTER},{overlays}" if overlays else LOOK_FILTER
     return f"[0:v]{video}[vout];[1:a]volume={gain:.2f}dB,alimiter=limit={PEAK_LIMIT}:level=false[a]"
 
 
 def concat_and_mux(
-    parts: list[Path], mix: Path, gain: float, out: Path, captions: str = ""
+    parts: list[Path], mix: Path, gain: float, out: Path, overlays: str = ""
 ) -> Path:
     """Concatenate the segments, grade the picture, and lay the pre-mixed voice
     under them. The mix is already exactly as long as the picture, so no
@@ -549,7 +661,7 @@ def concat_and_mux(
             "-i",
             str(mix),
             "-filter_complex",
-            final_graph(gain, captions),
+            final_graph(gain, overlays),
             "-map",
             "[vout]",
             "-map",
@@ -668,10 +780,11 @@ def render_short(
     (work / "captions.json").write_text(
         json.dumps([w.__dict__ for w in words], indent=1), encoding="utf-8"
     )
-    concat_and_mux(parts, mix, gain_db(lufs), final, captions_filter(words, work / "captions"))
+    concat_and_mux(parts, mix, gain_db(lufs), final, overlays_filter(site, segments, words, work))
     (site_dir / "description.txt").write_text(
         build_description(site, used, voice_id, mapbox_used=opening is not None),
         encoding="utf-8",
     )
+    (site_dir / "comment.txt").write_text(build_comment(site), encoding="utf-8")
     logger.info("short written: %s (%.2fs)", final, probe_duration(final))
     return final

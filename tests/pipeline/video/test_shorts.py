@@ -6,7 +6,7 @@ import pytest
 
 from pipeline.video.media import ff_path
 from pipeline.video.shorts_audit import evaluate, passed
-from pipeline.video.shorts_captions import Word, align_words
+from pipeline.video.shorts_captions import Word, align_words, keyword_flags
 from pipeline.video.shorts_export import (
     RARITY_NAMES,
     assemble_site,
@@ -18,12 +18,18 @@ from pipeline.video.shorts_render import (
     DISSOLVE_S,
     NAME_AUDIO_DELAY_S,
     NARRATION_TAIL_S,
+    build_comment,
     build_description,
     captions_filter,
+    chip_text,
     clip_filter,
+    coords_text,
     final_graph,
     flag_overlay_graph,
     gain_db,
+    hashtags,
+    info_alpha,
+    info_filter,
     mix_graph,
     name_alpha,
     name_audio_at,
@@ -44,7 +50,7 @@ from pipeline.video.shorts_select import (
     score,
     select_stills,
 )
-from pipeline.video.shorts_tts import spoken_name
+from pipeline.video.shorts_tts import specific_place, spoken_name
 
 IMGS = [Path("a.jpg"), Path("b.jpg"), Path("c.jpg"), Path("d.jpg")]
 OPENING = (Path("short-opening.mp4"), 6.0)
@@ -186,7 +192,32 @@ class TestText:
         assert "- y.jpg — Unknown (license unknown) u2" in text
         assert "© Mapbox © Maxar" in text
         assert "AI-generated voice" in text
+        assert text.rstrip().endswith("#Shorts #archaeology #ancienthistory #Peru #MachuPicchu")
         assert "Mapbox" not in build_description(site, imgs, "v")
+
+    def test_hashtags_use_the_specific_place_and_skip_duplicates(self):
+        tags = hashtags({"name": "Rano Raraku", "country": "Chile, Easter Island"})
+        assert tags[-2:] == ["#EasterIsland", "#RanoRaraku"]
+        assert specific_place("Chile, Easter Island") == "Easter Island"
+        assert hashtags({"name": "Peru", "country": "Peru"}).count("#Peru") == 1
+
+    def test_comment_carries_the_site_link(self):
+        c = build_comment({"name": "Machu Picchu", "page_path": "/sites/peru/machu-picchu-1"})
+        assert "https://ancientnerds.com/sites/peru/machu-picchu-1" in c
+
+    def test_coords_text_hemispheres(self):
+        assert coords_text(-13.162974, -72.544904) == "13.16° S · 72.54° W"
+        assert coords_text(51.178, -1.826) == "51.18° N · 1.83° W"
+
+    def test_chip_drops_the_country_and_empty_fields(self):
+        site = {"civilization": "Peru", "country": "Peru", "period_name": "1000 - 1500 AD"}
+        assert chip_text({**site, "site_type": "Fortress/citadel"}) == (
+            "1000 - 1500 AD · Fortress/citadel"
+        )
+        assert chip_text({**site, "civilization": "Inca", "site_type": None}) == (
+            "Inca · 1000 - 1500 AD"
+        )
+        assert chip_text({"country": "Peru"}) == ""
 
 
 class TestFilters:
@@ -562,3 +593,27 @@ class TestCaptions:
         assert f.count("drawtext=") == 2
         assert "enable='between(t\\,1.220\\,1.720)'" in f
         assert (tmp_path / "w001.txt").read_text(encoding="utf-8") == "citadel"
+        assert "fontcolor=#00cc66" not in f
+
+    def test_accented_words_are_green(self, tmp_path):
+        words = [Word("Inca", 1.22, 1.72), Word("citadel", 1.72, 2.16)]
+        f = captions_filter(words, tmp_path, [True, False])
+        first, second = f.split(",drawtext=")
+        assert "fontcolor=#00cc66" in first and "fontcolor=white" in second
+
+    def test_keywords_are_numbers_and_proper_nouns_not_sentence_starts(self):
+        tokens = "A 15th-century Inca citadel at 2,430 metres. Its Intihuatana stone".split()
+        flags = keyword_flags(tokens)
+        assert [t for t, k in zip(tokens, flags, strict=True) if k] == [
+            "15th-century",
+            "Inca",
+            "2,430",
+            "Intihuatana",
+        ]
+
+    def test_info_overlay_fades_in_and_out_inside_its_window(self, tmp_path):
+        a = info_alpha(6.0, 16.4)
+        assert a.startswith("if(lt(t\\,6.000)\\,0\\,")
+        assert "(t-6.000)/0.4" in a and "(16.400-t)/0.4" in a
+        f = info_filter(tmp_path / "chip.txt", tmp_path / "f.ttf", 6.0, 16.4)
+        assert "enable='between(t\\,6.000\\,16.400)'" in f and "y=170" in f

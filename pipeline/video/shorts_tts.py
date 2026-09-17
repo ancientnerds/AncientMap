@@ -18,11 +18,16 @@ DEFAULT_VOICE = "English_expressive_narrator"  # user pick 2026-09-16 (paper nar
 DEFAULT_SPEED = 0.92
 
 
+def specific_place(country: str | None) -> str:
+    """A country stored as "Chile, Easter Island" → "Easter Island"."""
+    return (country or "").split(",")[-1].strip()
+
+
 def spoken_name(name: str, country: str | None) -> str:
-    """Closing line the narrator speaks: "Machu Picchu, Peru." A country stored
-    as "Chile, Easter Island" contributes its most specific part; a country
-    already contained in the name is not repeated."""
-    place = (country or "").split(",")[-1].strip()
+    """Closing line the narrator speaks: "Machu Picchu, Peru." A country
+    contributes its most specific part; a country already contained in the
+    name is not repeated."""
+    place = specific_place(country)
     if not place or place.lower() in name.lower():
         return f"{name}."
     return f"{name}, {place}."

@@ -83,6 +83,27 @@ def align_words(display_tokens: list[str], heard: list[tuple[str, float, float]]
     return words
 
 
+SENTENCE_END = (".", "!", "?")
+QUOTES = "\"'()\u201c\u201d\u2018\u2019"
+
+
+def is_keyword(tokens: list[str], i: int) -> bool:
+    """Accent-worthy word: carries a digit, or is capitalised without being the
+    first word of a sentence (a proper noun such as "Inca", not "A" or "Its")."""
+    token = tokens[i]
+    if any(ch.isdigit() for ch in token):
+        return True
+    bare = token.strip(QUOTES)
+    if not bare or not bare[0].isupper():
+        return False
+    sentence_start = i == 0 or tokens[i - 1].rstrip(QUOTES).endswith(SENTENCE_END)
+    return not sentence_start
+
+
+def keyword_flags(tokens: list[str]) -> list[bool]:
+    return [is_keyword(tokens, i) for i in range(len(tokens))]
+
+
 def transcribe_words(audio: Path) -> list[tuple[str, float, float]]:
     """Recognised words with timestamps from faster-whisper."""
     from faster_whisper import WhisperModel
