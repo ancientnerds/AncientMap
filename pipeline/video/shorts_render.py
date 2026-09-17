@@ -110,19 +110,28 @@ LOOK_FILTER = (
 )
 
 
-X264 = [
+# The machine has an RTX 3080; h264_nvenc encodes 1080x1920@60 on the GPU while
+# the recorder's browser and the CPU stay free. p6/cq 18 is visually equal to
+# the x264 medium/crf 18 this replaced.
+NVENC = [
     "-c:v",
-    "libx264",
+    "h264_nvenc",
     "-preset",
-    "medium",
-    "-crf",
+    "p6",
+    "-tune",
+    "hq",
+    "-rc",
+    "vbr",
+    "-cq",
     "18",
+    "-b:v",
+    "0",
+    "-profile:v",
+    "high",
     "-pix_fmt",
     "yuv420p",
-    "-r",
-    str(FPS),
-    "-an",
 ]
+X264 = [*NVENC, "-r", str(FPS), "-an"]
 
 SegmentKind = Literal["clip", "still", "return"]
 
@@ -801,14 +810,7 @@ def concat_and_mux(
             "[vout]",
             "-map",
             "[a]",
-            "-c:v",
-            "libx264",
-            "-preset",
-            "medium",
-            "-crf",
-            "18",
-            "-pix_fmt",
-            "yuv420p",
+            *NVENC,
             "-r",
             str(FPS),
             "-c:a",

@@ -141,7 +141,14 @@ async function launchBrowser(portrait: boolean): Promise<{ browser: Browser; pag
     headless: false,  // Use headed mode for WebGL support on Windows
     protocolTimeout: 900_000,  // 15 minutes: globe loading + a capture chunk with tile waits
     args: [
-      '--use-angle=default',
+      '--use-angle=d3d11',
+      // Hybrid laptop: without this Chrome renders the globe on the integrated
+      // GPU while the RTX 3080 idles (checked with nvidia-smi, 17.09.).
+      '--force_high_performance_gpu',
+      '--force-high-performance-gpu',
+      '--enable-gpu-rasterization',
+      '--enable-zero-copy',
+      '--ignore-gpu-blocklist',
       '--enable-webgl',
       '--no-sandbox',
       '--disable-setuid-sandbox',

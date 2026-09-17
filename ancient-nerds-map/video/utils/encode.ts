@@ -101,7 +101,7 @@ export function encodeFrames(options: EncodeOptions): { mp4: string; fast: strin
   execSync(
     `"${ffmpegPath}" -y -i "${webmPath}" ` +
     `-vf "setpts=N/${rate}/TB" -r ${fps} ` +
-    `-c:v libx264 -preset medium -crf 22 -pix_fmt yuv420p ` +
+    `-c:v h264_nvenc -preset p6 -tune hq -rc vbr -cq 20 -b:v 0 -profile:v high -pix_fmt yuv420p ` +
     `-movflags +faststart ` +
     `-an "${mp4Output}"`,
     { stdio: 'inherit' }
@@ -112,7 +112,7 @@ export function encodeFrames(options: EncodeOptions): { mp4: string; fast: strin
   execSync(
     `"${ffmpegPath}" -y -i "${webmPath}" ` +
     `-vf "setpts=N/${rate}/TB,scale=960:540" -r ${fps} ` +
-    `-c:v libx264 -preset fast -crf 30 -pix_fmt yuv420p ` +
+    `-c:v h264_nvenc -preset p4 -rc vbr -cq 30 -b:v 0 -pix_fmt yuv420p ` +
     `-movflags +faststart ` +
     `-an "${fastOutput}"`,
     { stdio: 'inherit' }
