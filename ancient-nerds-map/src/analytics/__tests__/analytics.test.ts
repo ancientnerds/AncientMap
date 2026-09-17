@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { errorProps, newDepthSteps, outboundHost } from '../boot'
-import { _queuedForTests, _resetForTests, cleanProps, pageType, track } from '../index'
+import { _queuedForTests, _resetForTests, cleanProps, pageType, searchTerm, track } from '../index'
 
 // vitest runs in node: no DOM, so the tests install a minimal fake `window`.
 const g = globalThis as unknown as { window?: unknown }
@@ -115,3 +115,13 @@ describe('boot helpers', () => {
     expect(outboundHost('javascript:void(0)', 'ancientnerds.com')).toBeNull()
   })
 })
+
+describe('searchTerm', () => {
+  it('keeps what people look for and drops what identifies them', () => {
+    expect(searchTerm('  Göbekli   TEPE ')).toBe('göbekli tepe')
+    expect(searchTerm('mail me at max@example.com about giza')).toBe('mail me at about giza')
+    expect(searchTerm('phone 015112345678 pyramid 1200 bc')).toBe('phone pyramid 1200 bc')
+    expect(searchTerm('x'.repeat(100)).length).toBe(60)
+  })
+})
+

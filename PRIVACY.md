@@ -27,7 +27,7 @@ Since 2026-09-17 page views are measured with Umami running on our own EU server
 - Visited page, referrer, time of visit
 - Browser, operating system, device type, screen size, language
 - Approximate location (country, region, city) derived from the IP address at request time; the IP address itself is not stored
-- Feature usage as anonymous events (site card opened, search with character/result counts only, filters, media players, sharing, Discord link), page load times, script errors, scroll depth
+- Feature usage as anonymous events (site card opened, search terms shortened to 60 characters with e-mail addresses and long number sequences removed, plus result counts, filters, media players, sharing, Discord link), page load times, script errors, scroll depth
 - No cookies, no browser storage, no third party; visitors are counted with a regularly rotating salted hash; Do Not Track is honoured
 
 **We do NOT collect:**

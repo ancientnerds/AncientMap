@@ -10,7 +10,7 @@ import { haversineDistance } from '../utils/geoMath'
 import { EmpirePolygonData, isSiteInEmpirePolygons } from '../utils/geometry'
 import { config } from '../config'
 import { apiDetailToSiteData } from '../utils/siteApi'
-import { pageType, track } from '../analytics'
+import { pageType, searchTerm, track } from '../analytics'
 
 export interface SearchResult {
   id: string
@@ -360,7 +360,7 @@ export function useSiteSearch(options: UseSiteSearchOptions): UseSiteSearchRetur
       if (searchingRef.current) return // API results still pending: no count to report
       trackedQueryRef.current = q
       const results = resultCountRef.current
-      const props = { chars: q.length, results, context: pageType(window.location.pathname) }
+      const props = { q: searchTerm(q), chars: q.length, results, context: pageType(window.location.pathname) }
       track('search', props)
       if (results === 0) track('search_empty', props)
     }, 1200)

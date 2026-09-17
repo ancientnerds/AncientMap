@@ -125,6 +125,20 @@ export function track(name: EventName, props?: EventProps): void {
   if (!pollHandle) pollHandle = setTimeout(poll, POLL_MS)
 }
 
+/** A search term as the `search` event carries it: lower-case, whitespace
+ * collapsed, 60 characters, with e-mail addresses and digit runs of six or
+ * more (phone numbers, ids) removed — years like "1200 bc" stay. What people
+ * look for, never who they are (privacy §2a, owner's decision 2026-09-17). */
+export function searchTerm(query: string): string {
+  return query
+    .toLowerCase()
+    .replace(/[\w.+-]+@[\w-]+\.[\w.-]+/g, ' ')
+    .replace(/\d{6,}/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 60)
+}
+
 /** Page type from the path — the `page`/`context` value events carry. */
 export function pageType(pathname: string): string {
   if (pathname === '/' || pathname === '/index.html') return 'home'
