@@ -46,6 +46,7 @@ from pipeline.video.shorts_select import (
     Candidate,
     aspect_penalty,
     focus_of,
+    image_title,
     is_panorama,
     normalize_subject,
     reject_reason,
@@ -428,6 +429,16 @@ class TestSelection:
         assert score(tall) > score(wide)  # same verdict: portrait wins
         assert score(better_wide) > score(wide)  # quality breaks ties
         assert score(relevant_wide) > score(better_wide)  # relevance beats two quality points
+
+    def test_a_photo_of_another_site_is_rejected(self):
+        # the Puma Punku article carries Ollantaytambo and Delphi masonry as comparisons
+        foreign = _cand("ollanta", 1600, 1200, _good("Ollantaytambo wall", 5), dh=0x7F << 5)
+        foreign.verdict["other_site"] = True
+        assert reject_reason(foreign, require_verdict=True) == "other site"
+        assert image_title({"title": None, "filename": "Ollantaytambo_Monolithen.jpg"}) == (
+            "Ollantaytambo Monolithen"
+        )
+        assert image_title({"title": "Puma Punku5", "filename": "x.jpg"}) == "Puma Punku5"
 
     def test_select_orders_by_score_and_drops_duplicates(self):
         cands = [

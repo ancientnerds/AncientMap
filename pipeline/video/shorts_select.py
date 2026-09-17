@@ -51,6 +51,7 @@ VLM_JPEG_QUALITY = 85
 VLM_PROMPT = """You judge whether a photo can carry a vertical (9:16) short video about the archaeological site "{site}".
 The narration of the video is:
 "{card_text}"
+The photo's file title on Wikimedia Commons is: "{title}"
 
 Return JSON only, no prose:
 {{"kind": "site_photo" | "artifact" | "map_or_document" | "painting_or_artwork" | "people" | "other",
@@ -61,7 +62,8 @@ Return JSON only, no prose:
  "relevance": 1-5,
  "illustrates": "<the exact phrase of the narration this photo shows best, or an empty string>",
  "focus": {{"x": 0.0-1.0, "y": 0.0-1.0}},
- "vertical_crop_ok": true | false}}
+ "vertical_crop_ok": true | false,
+ "other_site": true | false}}
 kind: site_photo = the site, its structures or landscape photographed on location; artifact = an object in a museum or studio; map_or_document = maps, drawings, scans, diagrams, book pages; painting_or_artwork = a painting, engraving, print or artistic reconstruction of the site rather than a photograph; people = a person or crowd is the subject.
 people_prominent: people are large or central (small distant figures are fine).
 text_or_overlay: captions, watermarks, signage, borders or frames inside the picture.
@@ -69,7 +71,8 @@ quality: 5 = sharp, well exposed, striking; 3 = usable; 1 = blurry, dark, damage
 relevance: 5 = shows exactly what the narration describes; 3 = shows the site in general; 1 = unrelated to the narration.
 illustrates: copy the phrase verbatim from the narration; empty if relevance is below 3.
 focus: where the main subject sits in the picture, as fractions of width (x, 0 = left edge) and height (y, 0 = top); the video crops a tall 9:16 window around this point.
-vertical_crop_ok: cropping a tall 9:16 window around the focus still shows the subject."""
+vertical_crop_ok: cropping a tall 9:16 window around the focus still shows the subject.
+other_site: the file title (or the picture itself) shows a different place than "{site}" — articles carry comparison photos of other sites; a related site next door (a neighbouring complex of the same culture) does not count."""
 
 
 @dataclass
@@ -128,6 +131,8 @@ def reject_reason(cand: Candidate, *, require_verdict: bool) -> str | None:
         return f"relevance={v.get('relevance')}"
     if not v.get("vertical_crop_ok"):
         return "subject lost in 9:16 crop"
+    if v.get("other_site"):
+        return "other site"
     return None
 
 
@@ -199,7 +204,15 @@ VLM_ATTEMPTS = 3
 VLM_RETRY_WAIT_S = 8.0
 
 
-def judge_all(paths: list[Path], site_name: str, card_text: str) -> list[dict | None]:
+def image_title(image: dict) -> str:
+    """The Commons title as the VLM should read it (spaces, no extension)."""
+    raw = image.get("title") or Path(image["filename"]).stem
+    return raw.replace("_", " ").strip()
+
+
+def judge_all(
+    paths: list[Path], site_name: str, card_text: str, titles: list[str] | None = None
+) -> list[dict | None]:
     """One verdict per image. A call that returns nothing (HTTP error, SSL
     reset, unparsable JSON) is retried VLM_ATTEMPTS times with a pause; an
     image that still has no verdict stays None and is rejected downstream.
@@ -207,10 +220,11 @@ def judge_all(paths: list[Path], site_name: str, card_text: str) -> list[dict | 
     silently selecting nothing."""
     settings = _get_settings()
     client = create_minimax_client(settings.minimax_base_url, settings.minimax_api_key)
-    prompt = VLM_PROMPT.format(site=site_name, card_text=card_text)
+    titles = titles or [p.stem.replace("_", " ") for p in paths]
     verdicts: list[dict | None] = []
     try:
-        for path in paths:
+        for path, title in zip(paths, titles, strict=True):
+            prompt = VLM_PROMPT.format(site=site_name, card_text=card_text, title=title)
             verdict: dict | None = None
             for attempt in range(1, VLM_ATTEMPTS + 1):
                 raw = minimax_vlm(client, vlm_bytes(path), prompt)

@@ -166,7 +166,10 @@ def _select(site: dict, site_dir: Path, use_vlm: bool) -> None:
     ]
     if use_vlm:
         verdicts = shorts_select.judge_all(
-            [Path(i["local_path"]) for i in images], site["name"], site["card_text"]
+            [Path(i["local_path"]) for i in images],
+            site["name"],
+            site["card_text"],
+            [shorts_select.image_title(i) for i in images],
         )
         for cand, verdict in zip(cands, verdicts, strict=True):
             cand.verdict = verdict
