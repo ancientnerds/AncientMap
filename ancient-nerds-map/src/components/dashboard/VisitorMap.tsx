@@ -26,7 +26,9 @@ const LAND_RINGS: number[][][] = land
  */
 export function VisitorMap({ state }: { state: Loaded<MapData> }) {
   const landPath = useMemo(() => LAND_RINGS.map(ringPath).join(' '), [])
-  const [hour, setHour] = useState<number | null>(new Date().getUTCHours())
+  // The whole day is the honest default: opening on the current UTC hour
+  // showed two dots next to a caption that said "last 24 hours".
+  const [hour, setHour] = useState<number | null>(null)
   const weights = hourWeights(state.data?.points ?? [], hour)
   const ranked = Object.entries(weights).sort((a, b) => b[1] - a[1])
   const total = ranked.reduce((sum, [, n]) => sum + n, 0)
@@ -73,7 +75,8 @@ export function VisitorMap({ state }: { state: Loaded<MapData> }) {
       {state.data && (
         <>
           <p className="dash-note">
-            {fmtInt(total)} Sessions in {fmtInt(ranked.length)} Ländern, letzte 24 Stunden
+            {fmtInt(total)} Sessions in {fmtInt(ranked.length)} Ländern,{' '}
+            {hour === null ? 'letzte 24 Stunden' : `um ${fmtHour(hour)} UTC`}
             {unmapped.length > 0 && ` · ohne Punkt: ${unmapped.map(([code]) => countryName(code)).join(', ')}`}
           </p>
           <BarList

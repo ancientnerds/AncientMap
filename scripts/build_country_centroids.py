@@ -90,6 +90,12 @@ def land_rings(land: dict) -> list:
     return rings
 
 
+#: Natural Earth 110m drops states smaller than a pixel at that scale, so
+#: a visitor from Singapore or Bahrain had no dot on the dashboard map
+#: (seen live 2026-09-17). Hand-set capital coordinates for the ones a
+#: visitor realistically comes from.
+SUPPLEMENT: dict[str, list[float]] = {"AD": [1.52, 42.51], "AW": [-69.97, 12.52], "BB": [-59.54, 13.19], "BH": [50.55, 26.07], "BM": [-64.75, 32.31], "CW": [-68.99, 12.17], "GG": [-2.58, 49.45], "GI": [-5.35, 36.14], "GU": [144.79, 13.44], "HK": [114.17, 22.32], "IM": [-4.55, 54.24], "JE": [-2.11, 49.21], "KY": [-81.25, 19.31], "LI": [9.55, 47.17], "MC": [7.42, 43.74], "MO": [113.54, 22.2], "MT": [14.38, 35.9], "MU": [57.55, -20.35], "MV": [73.51, 3.2], "SC": [55.49, -4.68], "SG": [103.82, 1.35], "SM": [12.46, 43.94], "VA": [12.45, 41.9]}
+
 def main() -> None:
     land = httpx.get(NE + "ne_110m_land.geojson", timeout=60, follow_redirects=True).json()
     LAND_OUT.parent.mkdir(parents=True, exist_ok=True)
@@ -103,6 +109,9 @@ def main() -> None:
         code = iso2(feature["properties"])
         if code:
             out[code] = bbox_center(feature["geometry"])
+    added = {k: v for k, v in SUPPLEMENT.items() if k not in out}
+    out.update(added)
+    print(f"{len(added)} supplementary centroids: {sorted(added)}")
     CENTROIDS_OUT.write_text(json.dumps(out, sort_keys=True) + "\n", encoding="utf-8")
     print(
         f"{len(land_rings(land))} land rings -> {LAND_OUT} ({LAND_OUT.stat().st_size // 1024} KB)"
