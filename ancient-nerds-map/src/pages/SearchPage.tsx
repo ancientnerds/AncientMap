@@ -389,7 +389,7 @@ export default function SearchPage() {
             <FeedbackPrompt
               prompt="search_empty"
               question="What were you looking for?"
-              placeholder="A site, a place, a period…"
+              placeholder="A site or a place"
             />
           </div>
         )}

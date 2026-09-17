@@ -85,6 +85,9 @@ function installScrollDepth(page: string): void {
     const reached = newDepthSteps(window.scrollY, window.innerHeight, doc.scrollHeight, fired)
     for (const depth of reached) track('scroll_depth', { depth, page })
   }
+  // Only on a real scroll. Measuring at load counted a short page as "read
+  // to the end" and gave every headless fetch four depth events at once
+  // (SG/VN scraper bursts, 2026-09-17); a scroll is the visitor's own act.
   window.addEventListener(
     'scroll',
     () => {
@@ -94,8 +97,6 @@ function installScrollDepth(page: string): void {
     },
     { passive: true }
   )
-  // A short page can already be fully visible: count that too.
-  measure()
 }
 
 function installOutboundClicks(page: string): void {
