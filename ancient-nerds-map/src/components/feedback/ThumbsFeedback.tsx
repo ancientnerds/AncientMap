@@ -12,7 +12,7 @@
  * privacy.html §3. Nothing here touches the window during render, so the
  * server-rendered pages hydrate it without a mismatch.
  */
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 import { type EventProps, track } from '../../analytics'
 import {
@@ -48,8 +48,15 @@ export default function ThumbsFeedback({
   extra,
   variant = 'block',
 }: ThumbsFeedbackProps) {
-  // Lazy initial state: reads storage once, on the client, after hydration.
-  const [muted] = useState(() => ratedRecently(prompt, target))
+  // Not a lazy initial state: that runs during the FIRST client render, which
+  // is the hydration render. A visitor who had already rated hydrated `null`
+  // over the markup the server sent — React error #418, nine times on live
+  // site pages within an hour (2026-09-17). The storage check belongs in an
+  // effect, which runs after hydration has matched.
+  const [muted, setMuted] = useState(false)
+  useEffect(() => {
+    if (ratedRecently(prompt, target)) setMuted(true)
+  }, [prompt, target])
   const [stage, setStage] = useState<'ask' | 'comment' | 'done'>('ask')
   const [text, setText] = useState('')
 

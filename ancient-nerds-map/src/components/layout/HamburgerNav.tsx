@@ -30,17 +30,19 @@ interface HamburgerNavProps {
  * This avoids requiring AuthProvider on every page.
  */
 function useAuthToken(): boolean {
-  // Server render (renderToString): no localStorage — the header renders
-  // logged out; the browser evaluates this initializer itself on mount.
-  const [isLoggedIn, setIsLoggedIn] = useState(
-    () => typeof window !== 'undefined' && !!localStorage.getItem('an_auth_token'),
-  )
+  // Always logged out for the first render, on both sides: a useState
+  // initializer runs during HYDRATION, so reading the token there made the
+  // header differ from the server's markup for every signed-in visitor —
+  // React error #418, seen live on 2026-09-17. The effect below runs after
+  // hydration has matched and flips it.
+  const [isLoggedIn, setIsLoggedIn] = useState(false)
 
   useEffect(() => {
+    const read = () => setIsLoggedIn(!!localStorage.getItem('an_auth_token'))
+    read()
     // Re-check on storage events (e.g. login in another tab)
-    const handler = () => setIsLoggedIn(!!localStorage.getItem('an_auth_token'))
-    window.addEventListener('storage', handler)
-    return () => window.removeEventListener('storage', handler)
+    window.addEventListener('storage', read)
+    return () => window.removeEventListener('storage', read)
   }, [])
 
   return isLoggedIn

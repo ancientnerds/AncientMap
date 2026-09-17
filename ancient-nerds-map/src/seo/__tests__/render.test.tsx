@@ -41,6 +41,56 @@ describe('serverseitiges Rendern', () => {
   }
 })
 
+describe('Hydration: der erste Client-Render gleicht dem Server', () => {
+  /**
+   * React hydriert den ERSTEN Client-Render gegen das Server-Markup. Liest ein
+   * Bauteil dabei den Browser-Speicher, unterscheiden sich beide Seiten für
+   * jeden Besucher, bei dem dort etwas steht — React-Fehler 418, am 17.09.2026
+   * neunmal live auf Site-Seiten (der Daumen las seine 24-Stunden-Sperre, die
+   * Navigation den Login-Token).
+   *
+   * Der Test misst nicht das Markup, sondern den Zugriff: eine Attrappe zählt
+   * jedes getItem während renderToString. Null Zugriffe heißt, der erste
+   * Render kann gar nicht abweichen — unabhängig davon, was gespeichert ist.
+   */
+  function renderWithStorageSpy(route: AnRoute): string[] {
+    const reads: string[] = []
+    const store = {
+      getItem: (key: string) => {
+        reads.push(key)
+        return null
+      },
+      setItem: () => undefined,
+      removeItem: () => undefined,
+    }
+    const g = globalThis as unknown as { window?: unknown; localStorage?: unknown; sessionStorage?: unknown }
+    // Beide Schreibweisen: window.localStorage und das blanke Global.
+    g.window = { localStorage: store, sessionStorage: store, addEventListener: () => undefined }
+    g.localStorage = store
+    g.sessionStorage = store
+    try {
+      renderToString(
+        <RouteProvider value={route}>
+          <AuthProvider>
+            <SeoRoute />
+          </AuthProvider>
+        </RouteProvider>,
+      )
+    } finally {
+      delete g.window
+      delete g.localStorage
+      delete g.sessionStorage
+    }
+    return reads
+  }
+
+  for (const type of Object.keys(FIXTURES) as (keyof typeof FIXTURES)[]) {
+    it(`${type}: liest beim Rendern keinen Browser-Speicher`, () => {
+      expect(renderWithStorageSpy(FIXTURES[type])).toEqual([])
+    })
+  }
+})
+
 describe('research-Seiten (Task 12): der SSR-Body trägt den Python-Fragment-Inhalt', () => {
   const html = renderRoute(FIXTURES.research)
 
