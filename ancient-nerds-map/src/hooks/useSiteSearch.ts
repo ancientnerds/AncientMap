@@ -10,6 +10,7 @@ import { haversineDistance } from '../utils/geoMath'
 import { EmpirePolygonData, isSiteInEmpirePolygons } from '../utils/geometry'
 import { config } from '../config'
 import { apiDetailToSiteData } from '../utils/siteApi'
+import { pageType, track } from '../analytics'
 
 export interface SearchResult {
   id: string
@@ -341,6 +342,23 @@ export function useSiteSearch(options: UseSiteSearchOptions): UseSiteSearchRetur
   }
 
   const isSearching = searchAllSources && debouncedQuery.trim().length >= 3 && apiSearchResults.length === 0
+
+  // One `search` event per query the user actually settled on (1.2 s without
+  // further typing), with the result count; `search_empty` on top when
+  // nothing matched — the clearest "did not find it" signal we have.
+  const trackedQueryRef = useRef('')
+  useEffect(() => {
+    const q = debouncedQuery.trim()
+    if (q.length < 2 || isSearching || trackedQueryRef.current === q) return
+    const results = searchResults.length
+    const timer = setTimeout(() => {
+      trackedQueryRef.current = q
+      const props = { chars: q.length, results, context: pageType(window.location.pathname) }
+      track('search', props)
+      if (results === 0) track('search_empty', props)
+    }, 1200)
+    return () => clearTimeout(timer)
+  }, [debouncedQuery, isSearching, searchResults.length])
 
   return {
     searchQuery,

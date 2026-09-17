@@ -25,6 +25,7 @@
  * (only Globe, FilterPanel and SitePopup do).
  */
 
+import './analytics/boot' // vitals, errors, scroll depth, outbound clicks (once per page)
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 

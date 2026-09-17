@@ -6,6 +6,8 @@
  * what a cancelled share sheet means. They now all call this.
  */
 
+import { pageType, track } from '../analytics'
+
 export type ShareResult = 'shared' | 'copied' | 'cancelled'
 
 export interface ShareOptions {
@@ -31,14 +33,20 @@ export async function shareOrCopy(
   url: string,
   options: ShareOptions = {},
 ): Promise<ShareResult> {
+  const page = pageType(window.location.pathname)
   if (navigator.share) {
     try {
       await navigator.share({ title, url, ...(options.text ? { text: options.text } : {}) })
+      track('share', { method: 'shared', page })
       return 'shared'
     } catch (err) {
-      if ((err as Error).name === 'AbortError') return 'cancelled'
+      if ((err as Error).name === 'AbortError') {
+        track('share', { method: 'cancelled', page })
+        return 'cancelled'
+      }
     }
   }
   await navigator.clipboard.writeText(options.copyText ?? url)
+  track('share', { method: 'copied', page })
   return 'copied'
 }

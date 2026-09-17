@@ -41,7 +41,13 @@ export function SitesIndexPage() {
         </div>
         <div className="site-country-grid">
           {countries.map(c => (
-            <a key={c.path} className="site-country-card" href={c.path}>
+            <a
+              key={c.path}
+              className="site-country-card"
+              href={c.path}
+              data-umami-event="hub_click"
+              data-umami-event-country={c.name}
+            >
               <span>{c.name}</span>
               <span className="site-country-count">{c.count}</span>
             </a>

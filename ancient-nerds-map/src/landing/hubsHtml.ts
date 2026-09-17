@@ -46,6 +46,11 @@ export function pickSnapshotPath(candidates: string[], exists: (path: string) =>
 export function countryLinksHtml(countries: CountryHub[]): string {
   if (countries.length === 0) throw new Error('hubs snapshot has no countries — run scripts/export_hubs.py')
   return countries
-    .map(c => `<a href="${escapeHtml(c.path)}">${escapeHtml(c.country)} <span>${c.sites}</span></a>`)
+    // data-umami-event: the landing page has no React, so the tracker's own
+    // declarative attributes count the hub clicks (event `hub_click`).
+    .map(
+      c =>
+        `<a href="${escapeHtml(c.path)}" data-umami-event="hub_click" data-umami-event-country="${escapeHtml(c.country)}">${escapeHtml(c.country)} <span>${c.sites}</span></a>`
+    )
     .join('')
 }

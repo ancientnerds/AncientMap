@@ -5,6 +5,7 @@ import { config } from '../../config'
 import { useOffline } from '../../contexts/OfflineContext'
 import { reportAchievementEvent } from '../../utils/cardApi'
 import { shareOrCopy } from '../../utils/share'
+import { pageType, track } from '../../analytics'
 import { sitePath } from '../../seo/meta'
 
 // Unified content service for gallery items
@@ -255,6 +256,20 @@ export default function SitePopup({
   // Use localSite from admin mode or the provided site, with override taking priority
   const displaySite = overrideSite || (isEmpireMode ? dummySite : adminMode.localSite)
 
+  // One site_open per shown site — globe popup, overlay and SSR page alike.
+  // The page names the context; the popup itself only knows standalone/fullPage.
+  useEffect(() => {
+    if (isEmpireMode || !displaySite?.id) return
+    track('site_open', {
+      site: displaySite.id,
+      name: displaySite.title,
+      country: displaySite.location,
+      source: displaySite.sourceId,
+      context: fullPage ? 'site' : pageType(window.location.pathname),
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once per site id, not per re-render of its data
+  }, [displaySite?.id, isEmpireMode, fullPage])
+
   // Window management hook
   const windowHook = usePopupWindow({
     isStandalone,
@@ -436,9 +451,11 @@ export default function SitePopup({
 
     // For 3D models, open the ModelViewer
     if (galleryHook.activeGalleryTab === '3dmodels') {
+      track('media_play', { kind: '3dmodel', site: displaySite.id })
       setModelViewerIndex(index)
       return
     }
+    track('media_play', { kind: String(galleryHook.activeGalleryTab), site: displaySite.id })
 
     // Use the unified adapter to convert items to lightbox format
     const lightboxImages = toLightboxImages(items)
@@ -815,7 +832,13 @@ export default function SitePopup({
             shareSuccess={shareSuccess}
             onGoogleMapsLoad={() => setGoogleMapsLoaded(true)}
             onGoogleMapsError={() => setGoogleMapsError(true)}
-            onStreetViewToggle={() => { if (!showStreetView) reportAchievementEvent('street_view_opened'); setShowStreetView(!showStreetView) }}
+            onStreetViewToggle={() => {
+              if (!showStreetView) {
+                reportAchievementEvent('street_view_opened')
+                track('media_play', { kind: 'streetview', site: displaySite.id })
+              }
+              setShowStreetView(!showStreetView)
+            }}
             onFullscreenToggle={toggleMapFullscreen}
             onShareGoogleMaps={handleShareGoogleMaps}
             mapSectionRef={mapSectionRef}

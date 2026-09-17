@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { track } from '../../../analytics'
 import type { UnifiedGalleryItem } from '../types'
 import { WebcamCard } from './WebcamCard'
 import { WebcamStreamOverlay } from './WebcamStreamOverlay'
@@ -59,7 +60,10 @@ export function WebcamGallery({ items, isLoading, isOffline }: WebcamGalleryProp
           <WebcamCard
             key={item.id}
             item={item}
-            onStreamClick={setActiveStream}
+            onStreamClick={stream => {
+              track('media_play', { kind: 'webcam', media: stream.id })
+              setActiveStream(stream)
+            }}
           />
         ))}
       </div>

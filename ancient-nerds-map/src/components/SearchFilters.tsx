@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react'
+import { track } from '../analytics'
 import { getCategoryGroup, CATEGORY_GROUP_ORDER, type CategoryGroup, getCategoryColor } from '../constants/colors'
 import { getCountryFlatFlagUrl, getCountryContinent, CONTINENT_ORDER, type Continent } from '../utils/countryFlags'
 import type { SourceInfo } from '../hooks/useSiteSearch'
@@ -82,14 +83,17 @@ export function SearchFilters({
   }, [countries, countrySearch])
 
   const toggleSource = (id: string) => {
+    track('filter_toggle', { filter: 'source', value: id, on: !selectedSources.includes(id), context: 'search' })
     onSourceChange(selectedSources.includes(id) ? selectedSources.filter(s => s !== id) : [...selectedSources, id])
   }
   const toggleCategory = (cat: string) => {
+    track('filter_toggle', { filter: 'category', value: cat, context: 'search' })
     if (selectedCategories.length === categories.length) { onCategoryChange([cat]); return }
     if (selectedCategories.length === 1 && selectedCategories.includes(cat)) { onCategoryChange([...categories]); return }
     onCategoryChange(selectedCategories.includes(cat) ? selectedCategories.filter(c => c !== cat) : [...selectedCategories, cat])
   }
   const toggleCountry = (country: string) => {
+    track('filter_toggle', { filter: 'country', value: country, context: 'search' })
     if (selectedCountries.length === countries.length) { onCountryChange([country]); return }
     if (selectedCountries.length === 1 && selectedCountries.includes(country)) { onCountryChange([...countries]); return }
     onCountryChange(selectedCountries.includes(country) ? selectedCountries.filter(c => c !== country) : [...selectedCountries, country])

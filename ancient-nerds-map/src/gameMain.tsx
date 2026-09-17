@@ -1,3 +1,4 @@
+import './analytics/boot' // vitals, errors, scroll depth, outbound clicks (once per page)
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import GamePage from './pages/GamePage'

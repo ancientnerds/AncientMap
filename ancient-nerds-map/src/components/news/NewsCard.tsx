@@ -12,6 +12,7 @@
  */
 
 import { useState, memo } from 'react'
+import { pageType, track } from '../../analytics'
 import { config } from '../../config'
 import { absoluteUrl, storyPath } from '../../seo/meta'
 import { apiDetailToSiteData } from '../../utils/siteApi'
@@ -139,7 +140,10 @@ function NewsCard({
     <div
       className={`news-feed-item${expanded ? ' expanded' : ''}${hasMatchedSite ? ' has-site' : ''}`}
       style={significance ? getSignificanceCardStyle(significance) : undefined}
-      onClick={() => setExpanded(prev => !prev)}
+      onClick={() => {
+        if (!expanded) track('story_open', { story: storyHref ?? deepLink, method: 'expand', context: pageType(window.location.pathname) })
+        setExpanded(prev => !prev)
+      }}
       onMouseEnter={() => hasMatchedSite && onSiteHover?.(true)}
       onMouseLeave={() => hasMatchedSite && onSiteHover?.(false)}
     >
@@ -253,7 +257,10 @@ function NewsCard({
             href={storyHref}
             target="_blank"
             rel="noopener noreferrer"
-            onClick={e => e.stopPropagation()}
+            onClick={e => {
+              e.stopPropagation()
+              track('story_open', { story: storyHref, method: 'page', context: pageType(window.location.pathname) })
+            }}
             title="Open story in new tab"
             aria-label="Open story in new tab"
           >

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef, lazy, Suspense } from 'react'
+import { track } from './analytics'
 import Globe from './components/Globe'
 import FilterPanel from './components/FilterPanel'
 import { EmpirePolygonData, computeBoundingBox, isSiteInEmpirePolygons } from './utils/geometry'
@@ -10,6 +11,9 @@ class LazyErrorBoundary extends React.Component<
 > {
   state = { hasError: false }
   static getDerivedStateFromError() { return { hasError: true } }
+  componentDidCatch(error: Error) {
+    track('js_error', { message: String(error?.message ?? error).slice(0, 120), source: 'boundary', page: 'globe' })
+  }
   componentDidUpdate(prevProps: { resetKey?: string | number | boolean }) {
     // Reset error state when resetKey changes (e.g. modal reopened)
     if (this.state.hasError && prevProps.resetKey !== this.props.resetKey) {
@@ -1026,6 +1030,7 @@ function AppContent() {
     const site = sites.find(s => s.id === focusSiteId)
     if (!site) return
 
+    track('globe_focus', { site: site.id, country: site.location })
     setSearchQuery(site.title)
     setListFrozenSiteIds([site.id])
   }, [focusSiteId, sites, setSearchQuery])
@@ -1792,6 +1797,7 @@ function AppContent() {
           updateLoadingStatus('Map layers ready!')
           setLoadingProgress(100)
           setLayersReady(true)
+          track('globe_ready', { ms: Math.round(performance.now()) })
         }}
         onContributeClick={() => setShowContributeModal(true)}
         onAIAgentClick={handleAIAgentClick}

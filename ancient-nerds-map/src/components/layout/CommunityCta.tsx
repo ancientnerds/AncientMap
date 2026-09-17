@@ -62,7 +62,9 @@ export default function CommunityCta({
         {HUBS.map(([href, label], i) => (
           <span key={href}>
             {i > 0 && ' · '}
-            <a href={href}>{label}</a>
+            <a href={href} data-umami-event="hub_click" data-umami-event-country={label}>
+              {label}
+            </a>
           </span>
         ))}
       </p>

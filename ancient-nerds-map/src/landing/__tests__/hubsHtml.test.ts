@@ -16,8 +16,8 @@ describe('countryLinksHtml', () => {
       { country: 'Türkiye', path: '/sites/türkiye', sites: 218 },
     ])
     expect(html).toBe(
-      '<a href="/sites/england">England <span>1053</span></a>' +
-        '<a href="/sites/türkiye">Türkiye <span>218</span></a>',
+      '<a href="/sites/england" data-umami-event="hub_click" data-umami-event-country="England">England <span>1053</span></a>' +
+        '<a href="/sites/türkiye" data-umami-event="hub_click" data-umami-event-country="Türkiye">Türkiye <span>218</span></a>',
     )
   })
 

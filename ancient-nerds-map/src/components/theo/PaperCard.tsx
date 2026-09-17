@@ -16,6 +16,8 @@
  */
 import type { ReactNode } from 'react'
 
+import { track } from '../../analytics'
+
 import '../../styles/paper-card.css'
 
 export interface PaperCardPaper {
@@ -55,12 +57,15 @@ export default function PaperCard(props: PaperCardProps) {
   )
   if (props.href !== undefined) {
     return (
-      <a className={cls} href={props.href}>
+      <a className={cls} href={props.href} onClick={() => track('paper_open', { paper: props.href, method: 'page' })}>
         {inner}
       </a>
     )
   }
-  const open = props.onOpen
+  const open = () => {
+    track('paper_open', { paper: paper.title, method: 'overlay' })
+    props.onOpen()
+  }
   return (
     <div
       className={cls}

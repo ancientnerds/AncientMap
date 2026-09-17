@@ -10,6 +10,7 @@
  */
 
 import { useState, useEffect, type ReactNode } from 'react'
+import { track } from '../../analytics'
 
 /**
  * One card starting playback stops every other one. The event name predates
@@ -61,6 +62,7 @@ export default function InlineVideo({
   }, [playing, videoId])
 
   const play = () => {
+    track('media_play', { kind: 'video', media: videoId })
     window.dispatchEvent(new CustomEvent(PLAY_EVENT, { detail: videoId }))
     setPlaying(true)
   }

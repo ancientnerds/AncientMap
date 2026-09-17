@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, memo, useCallback } from 'react'
+import { track } from '../analytics'
 import { getCategoryColor, getCategoryGroup, CATEGORY_GROUP_ORDER, type CategoryGroup } from '../data/sites'
 import { BRAND_NAME, BRAND_SUBTITLE } from '../constants/brand'
 import { FilterMode } from '../App'
@@ -234,6 +235,7 @@ function FilterPanel({
   const isDisplayingLiveCoords = !!(isSettingProximityOnGlobe && proximityHoverCoords && !isEditingCoords)
 
   const toggleCategory = (category: string) => {
+    track('filter_toggle', { filter: 'category', value: category, context: 'globe' })
     // If all categories are active, clicking one selects only that one
     if (selectedCategories.length === categories.length) {
       onCategoryChange([category])
@@ -267,6 +269,7 @@ function FilterPanel({
     !loadingSources?.has(sourceId)
 
   const toggleSource = (sourceId: string) => {
+    track('filter_toggle', { filter: 'source', value: sourceId, on: !selectedSources.includes(sourceId), context: 'globe' })
     if (selectedSources.includes(sourceId)) {
       onSourceChange(selectedSources.filter(s => s !== sourceId))
     } else {
@@ -292,6 +295,7 @@ function FilterPanel({
   }
 
   const toggleCountry = (country: string) => {
+    track('filter_toggle', { filter: 'country', value: country, context: 'globe' })
     // If all countries are active, clicking one selects only that one
     if (selectedCountries.length === countries.length) {
       onCountryChange([country])

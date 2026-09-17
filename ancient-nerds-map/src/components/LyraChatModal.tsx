@@ -14,6 +14,7 @@
  */
 
 import { useState, useEffect, useRef, useCallback, useMemo, lazy, Suspense } from 'react'
+import { pageType, track } from '../analytics'
 import { createPortal } from 'react-dom'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -693,6 +694,9 @@ export default function LyraChatModal({
       content: '',
       timestamp: new Date(),
       isStreaming: true,
+    }
+    if (messages.length === 0) {
+      track('lyra_chat', { page: pageType(window.location.pathname), context: contextType ?? 'global' })
     }
     setMessages(prev => [...prev, userMsg, assistantMsg])
     setIsStreaming(true)

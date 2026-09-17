@@ -4,6 +4,7 @@
  */
 
 import { useState, useEffect, useCallback, useRef, useMemo, lazy, Suspense } from 'react'
+import { track } from '../analytics'
 import { config } from '../config'
 import { getCategoryColor, getPeriodColor } from '../data/sites'
 import { DataStore } from '../data/DataStore'
@@ -355,6 +356,7 @@ export default function NewsFeedPage() {
 
 
   const handleFilterToggle = (dimension: keyof ActiveFilters, value: string | null) => {
+    track('filter_toggle', { filter: String(dimension), value: value ?? 'none', context: 'news' })
     setActiveFilters(prev => ({
       ...prev,
       [dimension]: prev[dimension] === value ? null : value,
