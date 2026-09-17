@@ -224,7 +224,11 @@ class TestText:
         lines, size, _ = name_layout("Machu Picchu")
         assert (lines, size) == (["Machu Picchu"], 84)
         lines, size, _ = name_layout("Gochang, Hwasun and Ganghwa Dolmen Sites")
-        assert len(lines) <= 3 and size < 84
+        assert len(lines) == 2 and size == 64
+        lines, size, _ = name_layout("Archaeological Site of Olympia")
+        assert lines == ["Archaeological Site", "of Olympia"] and size == 64  # not a lone "Olympia"
+        lines, size, _ = name_layout("Senegambian Stone Circles")
+        assert lines == ["Senegambian", "Stone Circles"] and size == 84
 
     def test_description_lists_every_image_with_license(self):
         site = {
@@ -552,7 +556,7 @@ class TestReturnOverlays:
         g = return_overlays_graph(3.0, name_lines=1, line_h=100)
         assert g.startswith("[1:v]format=rgba,scale=180:-1,fade=t=in:st=0:d=0.3:alpha=1,")
         assert "fade=t=out:st=2.350:d=0.5:alpha=1[flag]" in g
-        assert g.endswith("[base][flag]overlay=x=(W-w)/2:y=904:shortest=1[out]")  # 770 + 100 + 34
+        assert g.endswith("[base][flag]overlay=x=(W-w)/2:y=942:shortest=1[out]")  # 770 + 100 + 72
 
 
 class TestAudit:

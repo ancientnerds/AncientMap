@@ -57,7 +57,7 @@ CAPTION_SIZE = 92
 CAPTION_Y = 1230
 CAPTION_BORDER = 5
 NAME_BORDER = 3
-FLAG_GAP = 34
+FLAG_GAP = 72  # 34 had the flag glued to the name (user, 17.09.)
 # Camera flash at the start of every still (user, 17.09.): white at FLASH_PEAK
 # on the first frame, gone after FLASH_S. The times go to render/flashes.json
 # so a shutter sound can sit exactly on them (`flash` audio, when present).
@@ -284,13 +284,17 @@ def wrap_lines(name: str, width: int = NAME_WRAP_CHARS) -> list[str]:
 # that needs at most NAME_MAX_LINES lines wins, the smallest is the floor.
 NAME_LAYOUTS: tuple[tuple[int, int, int], ...] = ((14, 84, 100), (20, 64, 78), (26, 52, 64))
 NAME_MAX_LINES = 3
+NAME_PREFERRED_LINES = 2
 
 
 def name_layout(name: str) -> tuple[list[str], int, int]:
-    """(lines, font size, line height) for the name overlay."""
+    """(lines, font size, line height) for the name overlay: the largest font
+    that fits the name in at most two lines ("Archaeological Site / of
+    Olympia", not a lone "Olympia" on a third line); three lines only when
+    even the smallest layout needs them."""
     for width, size, line_h in NAME_LAYOUTS:
         lines = wrap_lines(name, width)
-        if len(lines) <= NAME_MAX_LINES:
+        if len(lines) <= NAME_PREFERRED_LINES:
             return lines, size, line_h
     width, size, line_h = NAME_LAYOUTS[-1]
     return wrap_lines(name, width), size, line_h
