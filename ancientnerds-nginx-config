@@ -440,10 +440,68 @@ server {
     return 404;
 }
 
-# stats.ancientnerds.com on port 80: only the ACME challenge (certbot
-# --webroot into /var/www/ancientnerds/acme) and the redirect to https. The
-# 443 server is staged in ancientnerds-stats-nginx-config until the
-# certificate exists — see the go-live steps there.
+# stats.ancientnerds.com — the Umami dashboard behind the Discord/Founder
+# gate (api/routes/stats_access.py). Certificate: certbot --webroot with
+# /var/www/ancientnerds/acme (2026-09-17); renewals use the same webroot via
+# the port-80 server below.
+server {
+    listen 443 ssl http2;
+    server_name stats.ancientnerds.com;
+
+    ssl_certificate /etc/letsencrypt/live/stats.ancientnerds.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/stats.ancientnerds.com/privkey.pem;
+    include /etc/letsencrypt/options-ssl-nginx.conf;
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+
+    # Nobody indexes a dashboard.
+    add_header X-Robots-Tag "noindex, nofollow" always;
+    add_header X-Frame-Options "DENY" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+
+    # Every request is checked: the gate reads the an_stats cookie (signed,
+    # HttpOnly, Domain=.ancientnerds.com) and answers 204 or 401.
+    location = /_gate {
+        internal;
+        proxy_pass http://an_api/api/auth/stats-gate;
+        proxy_pass_request_body off;
+        proxy_set_header Content-Length "";
+        proxy_set_header Cookie $http_cookie;
+        proxy_set_header X-Original-URI $request_uri;
+    }
+
+    # 401 from the gate: show the entry page (Discord login), not a redirect
+    # loop. The named location may not carry a URI in proxy_pass, hence the
+    # rewrite. The entry page is served with the stats host in the address
+    # bar, so the browser lands back here after the Discord round trip.
+    location @entry {
+        rewrite ^ /api/auth/stats-login break;
+        proxy_pass http://an_api;
+        proxy_set_header Host $host;
+    }
+
+    # Sign-out link for the dashboard's users: clears the gate cookie.
+    location = /logout {
+        rewrite ^ /api/auth/stats-logout break;
+        proxy_pass http://an_api;
+        proxy_set_header Host $host;
+    }
+
+    location / {
+        auth_request /_gate;
+        error_page 401 = @entry;
+        proxy_pass http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+    }
+}
+
+# stats.ancientnerds.com on port 80: the ACME challenge and the redirect to https.
 server {
     listen 80;
     server_name stats.ancientnerds.com;
