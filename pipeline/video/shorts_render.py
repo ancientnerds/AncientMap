@@ -392,7 +392,7 @@ def clip_filter(
         y = name_block_top(name_lines, line_h)
         parts.append(
             f"drawtext=fontfile='{ff_path(font)}':textfile='{ff_path(name_file)}':"
-            f"fontcolor=white:fontsize={size}:line_spacing=16:x=(w-text_w)/2:y={y}:"
+            f"fontcolor=white:fontsize={size}:line_spacing=16:text_align=center:x=(w-text_w)/2:y={y}:"
             f"borderw={NAME_BORDER}:bordercolor=black:"
             f"shadowcolor=black@0.6:shadowx=3:shadowy=3:alpha='{name_alpha(duration)}'"
         )

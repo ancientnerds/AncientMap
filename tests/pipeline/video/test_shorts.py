@@ -364,6 +364,7 @@ class TestFilters:
         assert "credit.txt" in plain and "name.txt" not in plain
         assert "name.txt" in named and "fontsize=84" in named
         assert "borderw=3:bordercolor=black" in named and "box=1" not in named
+        assert "text_align=center" in named  # every line centred, not the block only
         assert named.endswith("format=yuv420p")
 
 
