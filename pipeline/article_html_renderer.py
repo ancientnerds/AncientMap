@@ -5,6 +5,7 @@ Converts NewsArticle DB records into full HTML pages with schema markup,
 proper meta tags, and styling matching the site's dark theme.
 """
 
+import os
 import re
 from datetime import datetime
 from html import escape, unescape
@@ -416,6 +417,20 @@ def render_medium_copy_html(
 </html>"""
 
 
+def analytics_tag() -> str:
+    """The Umami tracker tag, identical to what vite.config.ts (analyticsTag)
+    puts into every built entry; empty when the deploy names no website id,
+    so local runs and dev stay untracked. data-do-not-track honours the
+    browser's DNT signal."""
+    website_id = os.environ.get("VITE_UMAMI_WEBSITE_ID", "").strip()
+    if not website_id:
+        return ""
+    return (
+        f'<script defer src="/pulse.js" data-website-id="{escape(website_id)}" '
+        'data-do-not-track="true"></script>'
+    )
+
+
 def render_error_html(what: str = "Page", code: int = 404, detail: str | None = None) -> str:
     """Render a styled error page.
 
@@ -438,6 +453,7 @@ def render_error_html(what: str = "Page", code: int = 404, detail: str | None = 
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;600&family=Orbitron:wght@700&family=Inter:wght@400;500&display=swap" rel="stylesheet">
     <style>{_SHARED_CSS}</style>
+    {analytics_tag()}
 </head>
 <body>
     {_nav_html()}

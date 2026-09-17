@@ -340,6 +340,44 @@ services:
     profiles:
       - dev  # Only start with: docker compose --profile dev up
 
+  # ==========================================================================
+  # Umami — self-hosted, cookieless analytics (2026-09-17). The dashboard is
+  # bound to localhost only: open it through an SSH tunnel to :3000. Tracker
+  # script and collect endpoint reach the container via nginx as /pulse.js
+  # and /api/pulse (own names, first-party, off the ad-blocker lists that
+  # match script.js and /api/send). Own role + database inside the existing
+  # Postgres; umami runs its own migrations on start.
+  # The deploy only recreates api — start/upgrade this one by hand:
+  #   docker compose up -d umami
+  # ==========================================================================
+  umami:
+    image: ghcr.io/umami-software/umami:3.4.0
+    container_name: ancient_nerds_umami
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    ports:
+      - "127.0.0.1:${UMAMI_PORT:-3000}:3000"
+    environment:
+      DATABASE_URL: postgresql://umami:${UMAMI_DB_PASSWORD:?UMAMI_DB_PASSWORD must be set in .env}@db:5432/umami
+      APP_SECRET: ${UMAMI_APP_SECRET:?UMAMI_APP_SECRET must be set in .env}
+      TWO_FACTOR_ENCRYPTION_KEY: ${UMAMI_2FA_KEY:?UMAMI_2FA_KEY must be set in .env}
+      DISABLE_TELEMETRY: "1"
+      TRACKER_SCRIPT_NAME: pulse.js
+      COLLECT_API_ENDPOINT: /api/pulse
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:3000/api/heartbeat || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 90s
+
 volumes:
   postgres_data:
     name: ancient_map_postgres_data

@@ -1,4 +1,4 @@
-import { defineConfig, type Plugin } from 'vite'
+import { defineConfig, loadEnv, type Plugin } from 'vite'
 import { resolve, extname } from 'path'
 import { execSync } from 'child_process'
 import { createReadStream, existsSync, readFileSync, statSync } from 'fs'
@@ -150,7 +150,30 @@ function tuneLandingHtml() {
   }
 }
 
-export default defineConfig(({ isSsrBuild }) => ({
+// Umami tracker on every entry, and therefore on every server-rendered page
+// built from one (pipeline/app_shell.py keeps the shell's <head> scripts).
+// Self-hosted and cookieless; /pulse.js and /api/pulse are our own paths,
+// proxied by nginx to the umami container. The Python error pages emit the
+// same tag (pipeline/article_html_renderer.py analytics_tag) — the test in
+// tests/pipeline/test_analytics_tag.py keeps the two markup strings equal.
+// data-do-not-track honours the browser's DNT signal.
+function analyticsTag(websiteId: string | undefined): Plugin {
+  return {
+    name: 'analytics-tag',
+    transformIndexHtml: {
+      order: 'post' as const,
+      handler(html: string) {
+        if (!websiteId) return html
+        return html.replace(
+          '</head>',
+          `  <script defer src="/pulse.js" data-website-id="${websiteId}" data-do-not-track="true"></script>\n  </head>`
+        )
+      }
+    }
+  }
+}
+
+export default defineConfig(({ isSsrBuild, mode }) => ({
   envDir: '..',
   build: {
     // The SSR bundle is imported by the node sidecar, which serves no static
@@ -201,6 +224,9 @@ export default defineConfig(({ isSsrBuild }) => ({
   },
   plugins: [
     buildInfoMeta(),
+    // The deploy's .env (envDir '..') names the Umami website; local
+    // builds and dev have no id and stay untracked.
+    analyticsTag(loadEnv(mode, resolve(__dirname, '..'), 'VITE_').VITE_UMAMI_WEBSITE_ID),
     landingHubs(),
     servePublicData(),
     react(),

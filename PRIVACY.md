@@ -21,12 +21,13 @@ Ancient Nerds Map ("we", "our", or "the project") is committed to protecting you
 - **Purpose:** Core functionality of the map application
 - **Retention:** Permanent (public archaeological records)
 
-### 2. Usage Analytics (Optional)
+### 2. Usage Analytics (Umami, self-hosted, cookieless)
 
-When enabled, we may collect:
-- Page views and feature usage (anonymized)
-- Geographic region (country-level only)
-- Browser type and device category
+Since 2026-09-17 page views are measured with Umami running on our own EU server:
+- Visited page, referrer, time of visit
+- Browser, operating system, device type, screen size, language
+- Approximate location (country, region, city) derived from the IP address at request time; the IP address itself is not stored
+- No cookies, no browser storage, no third party; visitors are counted with a regularly rotating salted hash; Do Not Track is honoured
 
 **We do NOT collect:**
 - Personal identifying information
