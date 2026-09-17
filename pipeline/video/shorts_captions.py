@@ -77,10 +77,18 @@ def align_words(display_tokens: list[str], heard: list[tuple[str, float, float]]
             times[k] = (cursor, cursor + step)
             cursor += step
         i = j
-    words: list[Word] = []
-    for token, (start, end) in zip(display_tokens, times, strict=True):
-        words.append(Word(token, round(start, 3), round(max(end, start + MIN_WORD_S), 3)))
-    return words
+    spans = [(start, max(end, start + MIN_WORD_S)) for start, end in times]
+    # a word ends no later than the next one starts: two words on screen at
+    # once (the minimum duration, or whisper spans that touch) looked like a
+    # double exposure at the same spot (user, 17.09.)
+    spans = [
+        (start, min(end, spans[i + 1][0]) if i + 1 < len(spans) else end)
+        for i, (start, end) in enumerate(spans)
+    ]
+    return [
+        Word(token, round(start, 3), round(max(end, start + 0.05), 3))
+        for token, (start, end) in zip(display_tokens, spans, strict=True)
+    ]
 
 
 EDGE_PUNCT = ".,;:!?\"'()[]\u2026\u2014\u2013-\u201c\u201d\u2018\u2019"

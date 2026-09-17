@@ -700,11 +700,14 @@ class TestCaptions:
         words = align_words("built from polished".split(), heard)
         assert words[1].start == 5.8 and words[1].end == 6.1
 
-    def test_every_word_has_a_minimum_duration_and_order(self):
-        heard = [("a", 0.0, 0.05), ("b", 0.05, 0.1)]
-        words = align_words(["a", "b"], heard)
-        assert all(w.end - w.start >= 0.12 for w in words)
-        assert words[0].start <= words[1].start
+    def test_words_never_overlap_in_time(self):
+        heard = [("a", 0.0, 0.05), ("b", 0.05, 0.1), ("c", 0.4, 0.9)]
+        words = align_words(["a", "b", "c"], heard)
+        assert words[0].end <= words[1].start and words[1].end <= words[2].start
+        assert (
+            words[2].end - words[2].start >= 0.12
+        )  # the minimum still applies where there is room
+        assert words[1].end == 0.4  # a short word may run up to the next one, not past it
 
     def test_needs_recognised_words(self):
         with pytest.raises(ValueError):
@@ -713,7 +716,8 @@ class TestCaptions:
     def test_captions_filter_one_drawtext_per_word(self, tmp_path):
         f = captions_filter([Word("Inca", 1.22, 1.72), Word("citadel", 1.72, 2.16)], tmp_path)
         assert f.count("drawtext=") == 2
-        assert "enable='between(t\\,1.220\\,1.720)'" in f
+        assert "enable='gte(t\\,1.220)*lt(t\\,1.720)'" in f  # half-open: never two words at once
+        assert "y_align=baseline:y=" in f and "x=(w-text_w)/2" in f
         assert (tmp_path / "w001.txt").read_text(encoding="utf-8") == "citadel"
         assert f.count("fontcolor=white") == 2
         assert f.count("borderw=5:bordercolor=black") == 2 and "box=" not in f

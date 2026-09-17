@@ -54,7 +54,6 @@ FLAG_W = 180  # flag under the name (3:2 → 120 px tall)
 # Word-by-word captions: one word at a time, lower third. Like the site's
 # hero title: white heading font with a black outline, no box (user, 17.09.).
 CAPTION_SIZE = 92
-CAPTION_Y = 1230
 CAPTION_BORDER = 5
 NAME_BORDER = 3
 FLAG_GAP = 72  # 34 had the flag glued to the name (user, 17.09.)
@@ -695,13 +694,24 @@ def gain_db(measured_lufs: float, target_lufs: float = TARGET_LUFS) -> float:
     return target_lufs - measured_lufs
 
 
+def caption_baseline(font: Path) -> int:
+    """y of the caption baseline: capital letters centred on the frame's
+    middle (descenders hang below), the same for every word."""
+    from PIL import ImageFont
+
+    face = ImageFont.truetype(str(font), CAPTION_SIZE)
+    _, top, _, bottom = face.getbbox("H")
+    return round(H / 2 + (bottom - top) / 2)
+
+
 def captions_filter(words: list[Word], text_dir: Path, font: Path = FONT_HEADING) -> str:
-    """One drawtext per word, shown exactly between its start and end: white
-    heading font with a black outline (the site's title style), no box, no
-    edge punctuation. Words go to text files (no escaping of apostrophes,
-    commas or percent signs); a token that is punctuation only (a dash) gets
-    no caption."""
+    """One drawtext per word, shown from its start up to (not including) its
+    end, centred in the frame on a shared baseline: white heading font with a
+    black outline (the site's title style), no box, no edge punctuation.
+    Words go to text files (no escaping of apostrophes, commas or percent
+    signs); a token that is punctuation only (a dash) gets no caption."""
     text_dir.mkdir(parents=True, exist_ok=True)
+    baseline = caption_baseline(font)
     parts = []
     for i, word in enumerate(words):
         shown = display_text(word.text)
@@ -711,10 +721,11 @@ def captions_filter(words: list[Word], text_dir: Path, font: Path = FONT_HEADING
         f.write_text(shown, encoding="utf-8", newline=chr(10))
         parts.append(
             f"drawtext=fontfile='{ff_path(font)}':textfile='{ff_path(f)}':"
-            f"fontcolor=white:fontsize={CAPTION_SIZE}:x=(w-text_w)/2:y={CAPTION_Y}:"
+            f"fontcolor=white:fontsize={CAPTION_SIZE}:x=(w-text_w)/2:"
+            f"y_align=baseline:y={baseline}:"
             f"borderw={CAPTION_BORDER}:bordercolor=black:"
             f"shadowcolor=black@0.5:shadowx=2:shadowy=2:"
-            f"enable='between(t\\,{word.start:.3f}\\,{word.end:.3f})'"
+            f"enable='gte(t\\,{word.start:.3f})*lt(t\\,{word.end:.3f})'"
         )
     return ",".join(parts)
 
