@@ -41,6 +41,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 STATS_HOST = "stats.ancientnerds.com"
+MAIN_ORIGIN = "https://ancientnerds.com"
 COOKIE_NAME = "an_stats"
 COOKIE_DOMAIN = ".ancientnerds.com"
 SESSION_HOURS = 12
@@ -151,7 +152,10 @@ _DISCORD_SVG = (
 
 def gate_html(denied: bool = False) -> str:
     """Mobile-first NERV entry page: wordmark, one action, one status line."""
-    login_href = escape(f"/api/auth/discord?return_to={quote(HANDOFF_PATH, safe='')}")
+    # Absolute: the entry page is served on the stats host, where a relative
+    # /api/auth/discord would run into the gate again instead of the OAuth
+    # route on the main host (owner's first click, 2026-09-17).
+    login_href = escape(f"{MAIN_ORIGIN}/api/auth/discord?return_to={quote(HANDOFF_PATH, safe='')}")
     if denied:
         title = "No Founder role"
         heading = escape(title)

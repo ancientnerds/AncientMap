@@ -117,7 +117,8 @@ def test_handoff_path_is_an_allowed_return_target():
 def test_login_page_is_mobile_first_and_links_only_to_our_hosts():
     html = sa.gate_html()
     assert 'name="viewport" content="width=device-width, initial-scale=1' in html
-    assert 'href="/api/auth/discord?return_to=%2Fapi%2Fauth%2Fstats-handoff"' in html
+    # Absolute on purpose: the page lives on the stats host, the OAuth route on the main one.
+    assert 'href="https://ancientnerds.com/api/auth/discord?return_to=%2Fapi%2Fauth%2Fstats-handoff"' in html
     assert "Continue with Discord" in html
     assert 'name="robots" content="noindex' in html
     import re
