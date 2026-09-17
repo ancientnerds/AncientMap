@@ -102,3 +102,5 @@ redis>=5.0.0
 # SITE SHORTS (local rendering only — recorder + ffmpeg run on the dev machine)
 # =============================================================================
 faster-whisper>=1.2.0       # word timestamps for word-by-word captions (base.en, CPU)
+fonttools>=4.60.0           # brand fonts: the site's woff2 -> TTF, Orbitron 700 instance
+brotli>=1.1.0               # woff2 decoding for fonttools

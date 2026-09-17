@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Literal
 
 from pipeline.video.media import ff_path, probe_duration, probe_frames, run_ffmpeg
+from pipeline.video.shorts_brand import badge_specs, ensure_fonts, render_badges
 from pipeline.video.shorts_captions import Word, caption_words, display_text, spoken_at, srt_text
 from pipeline.video.shorts_select import focus_of
 from pipeline.video.shorts_tts import specific_place
@@ -50,17 +51,15 @@ NAME_END_GAP_S = 0.15  # fully gone this long before the clip ends = the loop po
 NAME_AUDIO_DELAY_S = 0.2  # spoken name starts shortly after the return clip begins
 NAME_WRAP_CHARS = 14
 FLAG_W = 180  # flag under the name (3:2 → 120 px tall)
-# Word-by-word captions: one word at a time, lower third, boxed for legibility.
+# Word-by-word captions: one word at a time, lower third. Like the site's
+# hero title: white heading font with a black outline, no box (user, 17.09.).
 CAPTION_SIZE = 92
 CAPTION_Y = 1230
-CAPTION_BOX_ALPHA = 0.38
-CAPTION_BOX_PAD = 22
-# Period · type chip above the site name in the return flight (user 17.09.:
-# "am Ende über den Site-Namen"), fading with the name.
-CHIP_SIZE = 34
-CHIP_BOX_ALPHA = 0.3
-CHIP_BOX_PAD = 16
-CHIP_GAP = 44  # from the chip's baseline box to the top of the name block
+CAPTION_BORDER = 5
+NAME_BORDER = 3
+# Category / period badges (the website's, see shorts_brand) above the site
+# name in the return flight, fading with the name.
+BADGES_GAP = 40  # from the badges' bottom edge to the top of the name block
 FLAG_GAP = 34
 # Camera flash at the start of every still (user, 17.09.): white at FLASH_PEAK
 # on the first frame, gone after FLASH_S. The times go to render/flashes.json
@@ -111,7 +110,9 @@ LOOK_FILTER = (
 )
 
 FONT_DIR = Path(__file__).resolve().parents[2] / "video-assets" / "fonts"
-FONT_HEADING = FONT_DIR / "orbitron-400-latin.ttf"
+# The website's fonts (shorts_brand.ensure_fonts converts them from the site's woff2):
+# Orbitron 700 = the hero title weight, JetBrains Mono = --font-body.
+FONT_HEADING = FONT_DIR / "orbitron-700.ttf"
 FONT_BODY = FONT_DIR / "jetbrains-mono-400-latin.ttf"
 
 X264 = [
@@ -352,17 +353,34 @@ def name_block_top(name_lines: int, line_h: int) -> int:
     return (H - name_lines * line_h) // 2 - 140
 
 
-def flag_overlay_graph(duration: float, name_lines: int, line_h: int) -> str:
-    """filter_complex tail that fades the flag (input 1) in and out with the
-    name and places it centred under the name block."""
-    y = name_block_top(name_lines, line_h) + name_lines * line_h + FLAG_GAP
+def return_overlays_graph(
+    duration: float, name_lines: int, line_h: int, *, flag: bool, badges_h: int
+) -> str:
+    """filter_complex tail for the return clip: the flag (next input) centred
+    under the name block and the badges (the input after it) centred above
+    it, both fading in and out with the name. `badges_h` is 0 for no badges."""
+    top = name_block_top(name_lines, line_h)
     end = duration - NAME_END_GAP_S
-    return (
-        f"[1:v]format=rgba,scale={FLAG_W}:-1,"
+    fade = (
         f"fade=t=in:st=0:d={NAME_FADE_IN_S}:alpha=1,"
-        f"fade=t=out:st={end - NAME_FADE_OUT_S:.3f}:d={NAME_FADE_OUT_S}:alpha=1[flag];"
-        f"[base][flag]overlay=x=(W-w)/2:y={y}:shortest=1[out]"
+        f"fade=t=out:st={end - NAME_FADE_OUT_S:.3f}:d={NAME_FADE_OUT_S}:alpha=1"
     )
+    parts: list[str] = []
+    layers: list[tuple[str, int]] = []  # (label, y)
+    idx = 1
+    if flag:
+        parts.append(f"[{idx}:v]format=rgba,scale={FLAG_W}:-1,{fade}[flag]")
+        layers.append(("[flag]", top + name_lines * line_h + FLAG_GAP))
+        idx += 1
+    if badges_h:
+        parts.append(f"[{idx}:v]format=rgba,{fade}[badges]")
+        layers.append(("[badges]", top - BADGES_GAP - badges_h))
+    base = "[base]"
+    for n, (label, y) in enumerate(layers):
+        out = "[out]" if n == len(layers) - 1 else f"[l{n}]"
+        parts.append(f"{base}{label}overlay=x=(W-w)/2:y={y}:shortest=1{out}")
+        base = out
+    return ";".join(parts)
 
 
 def clip_filter(
@@ -373,28 +391,19 @@ def clip_filter(
     name_lines: int = 1,
     name_size: int = 84,
     name_line_h: int = 100,
-    chip_file: Path | None = None,
 ) -> str:
     """Portrait cover of a recorded clip with the Mapbox credit; the return clip
-    also carries the site name, centred in the upper half, with the period ·
-    type chip above it (both fade together)."""
+    also carries the site name, centred in the upper half, white with a black
+    outline like the site's hero title."""
     parts = [f"scale={W}:{H}:force_original_aspect_ratio=increase,crop={W}:{H},fps={FPS}"]
     if name_file is not None:
         size, line_h = name_size, name_line_h
         y = name_block_top(name_lines, line_h)
-        alpha = name_alpha(duration)
-        if chip_file is not None:
-            # FONT_BODY: Orbitron's latin subset has no middle dot
-            parts.append(
-                f"drawtext=fontfile='{ff_path(FONT_BODY)}':textfile='{ff_path(chip_file)}':"
-                f"fontcolor=white@0.85:fontsize={CHIP_SIZE}:x=(w-text_w)/2:"
-                f"y={y - CHIP_GAP - CHIP_SIZE}:"
-                f"box=1:boxcolor=black@{CHIP_BOX_ALPHA}:boxborderw={CHIP_BOX_PAD}:alpha='{alpha}'"
-            )
         parts.append(
             f"drawtext=fontfile='{ff_path(FONT_HEADING)}':textfile='{ff_path(name_file)}':"
             f"fontcolor=white:fontsize={size}:line_spacing=16:x=(w-text_w)/2:y={y}:"
-            f"shadowcolor=black@0.6:shadowx=3:shadowy=3:alpha='{alpha}'"
+            f"borderw={NAME_BORDER}:bordercolor=black:"
+            f"shadowcolor=black@0.6:shadowx=3:shadowy=3:alpha='{name_alpha(duration)}'"
         )
     parts.append(
         f"drawtext=fontfile='{ff_path(FONT_BODY)}':textfile='{ff_path(credit_file)}':"
@@ -402,18 +411,6 @@ def clip_filter(
     )
     parts.append("format=yuv420p")
     return ",".join(parts)
-
-
-def chip_text(site: dict) -> str:
-    """Period · type shown above the name at the end. The card's civilization
-    joins only when it is more than the country repeated (it is the country
-    for every QA site); the flag and the spoken name carry the country."""
-    parts: list[str] = []
-    civ = (site.get("civilization") or "").strip()
-    if civ and civ.lower() != (site.get("country") or "").strip().lower():
-        parts.append(civ)
-    parts += [(site.get("period_name") or "").strip(), (site.get("site_type") or "").strip()]
-    return " · ".join(p for p in parts if p)
 
 
 def hashtag(text: str) -> str:
@@ -510,10 +507,10 @@ def render_return(
     name_size: int,
     name_line_h: int,
     flag: Path | None,
-    chip_file: Path | None = None,
+    badges: tuple[Path, int] | None = None,
 ) -> Path:
-    """The return clip: name overlay with the chip above (clip_filter) plus,
-    when the site has a country flag, the flag under the name."""
+    """The return clip: name overlay (clip_filter) plus the flag under the name
+    and the category/period badges (path, height) above it."""
     base = clip_filter(
         duration,
         credit_file=credit_file,
@@ -521,25 +518,27 @@ def render_return(
         name_lines=name_lines,
         name_size=name_size,
         name_line_h=name_line_h,
-        chip_file=chip_file,
     )
-    if flag is None:
+    images = [p for p in (flag, badges[0] if badges else None) if p is not None]
+    if not images:
         return run_ffmpeg(["-i", str(src), "-t", f"{duration:.3f}", "-vf", base, *X264], out)
-    graph = f"[0:v]{base}[base];{flag_overlay_graph(duration, name_lines, name_line_h)}"
+    tail = return_overlays_graph(
+        duration,
+        name_lines,
+        name_line_h,
+        flag=flag is not None,
+        badges_h=badges[1] if badges else 0,
+    )
+    args = ["-i", str(src)]
+    for image in images:
+        args += ["-loop", "1", "-framerate", str(FPS), "-i", str(image)]
     return run_ffmpeg(
         [
-            "-i",
-            str(src),
-            "-loop",
-            "1",
-            "-framerate",
-            str(FPS),
-            "-i",
-            str(flag),
+            *args,
             "-t",
             f"{duration:.3f}",
             "-filter_complex",
-            graph,
+            f"[0:v]{base}[base];{tail}",
             "-map",
             "[out]",
             *X264,
@@ -682,10 +681,11 @@ def gain_db(measured_lufs: float, target_lufs: float = TARGET_LUFS) -> float:
 
 
 def captions_filter(words: list[Word], text_dir: Path) -> str:
-    """One drawtext per word, shown exactly between its start and end, white,
-    without edge punctuation. Words go to text files (no escaping of
-    apostrophes, commas or percent signs); a token that is punctuation only
-    (a dash) gets no caption."""
+    """One drawtext per word, shown exactly between its start and end: white
+    heading font with a black outline (the site's title style), no box, no
+    edge punctuation. Words go to text files (no escaping of apostrophes,
+    commas or percent signs); a token that is punctuation only (a dash) gets
+    no caption."""
     text_dir.mkdir(parents=True, exist_ok=True)
     parts = []
     for i, word in enumerate(words):
@@ -697,7 +697,7 @@ def captions_filter(words: list[Word], text_dir: Path) -> str:
         parts.append(
             f"drawtext=fontfile='{ff_path(FONT_HEADING)}':textfile='{ff_path(f)}':"
             f"fontcolor=white:fontsize={CAPTION_SIZE}:x=(w-text_w)/2:y={CAPTION_Y}:"
-            f"box=1:boxcolor=black@{CAPTION_BOX_ALPHA}:boxborderw={CAPTION_BOX_PAD}:"
+            f"borderw={CAPTION_BORDER}:bordercolor=black:"
             f"shadowcolor=black@0.5:shadowx=2:shadowy=2:"
             f"enable='between(t\\,{word.start:.3f}\\,{word.end:.3f})'"
         )
@@ -797,6 +797,7 @@ def render_short(
     """Assemble `<slug>.mp4` from the site dir's narration, name audio, selected
     stills and clips; `flag` goes under the name, `music` under everything,
     `flash` (a shutter sound) on every still start."""
+    ensure_fonts()
     narration = site_dir / "narration.mp3"
     name_audio = site_dir / "name.mp3"
     clips = site_dir / "clips"
@@ -843,10 +844,8 @@ def render_short(
     name_file = work / "name.txt"
     # LF only: on Windows write_text would emit CR LF and drawtext renders the CR as an empty line
     name_file.write_text(chr(10).join(name_lines), encoding="utf-8", newline=chr(10))
-    chip = chip_text(site)
-    chip_file = work / "chip.txt" if chip else None
-    if chip_file is not None:
-        chip_file.write_text(chip, encoding="utf-8", newline=chr(10))
+    specs = badge_specs(site)
+    badges = (work / "badges.png", render_badges(specs, work / "badges.png")[1]) if specs else None
 
     focus_by_path = {st["local_path"]: focus_of(st.get("verdict")) for st in stills}
     parts: list[Path] = []
@@ -881,7 +880,7 @@ def render_short(
                     name_size=name_size,
                     name_line_h=name_line_h,
                     flag=flag,
-                    chip_file=chip_file,
+                    badges=badges,
                 )
             n += 1
         parts.append(out)

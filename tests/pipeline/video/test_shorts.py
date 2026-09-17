@@ -6,6 +6,14 @@ import pytest
 
 from pipeline.video.media import ff_path
 from pipeline.video.shorts_audit import evaluate, passed
+from pipeline.video.shorts_brand import (
+    FONTS,
+    SITE_FONTS,
+    badge_specs,
+    category_color,
+    period_color,
+    render_badges,
+)
 from pipeline.video.shorts_captions import Word, align_words, display_text, spoken_at, srt_text
 from pipeline.video.shorts_export import (
     RARITY_NAMES,
@@ -22,11 +30,9 @@ from pipeline.video.shorts_render import (
     build_comment,
     build_description,
     captions_filter,
-    chip_text,
     clip_filter,
     cut_stills,
     final_graph,
-    flag_overlay_graph,
     flash_times,
     gain_db,
     hashtags,
@@ -36,6 +42,7 @@ from pipeline.video.shorts_render import (
     name_layout,
     plan_timeline,
     pushin_filter,
+    return_overlays_graph,
     stills_graph,
     stills_window,
     wrap_lines,
@@ -272,16 +279,6 @@ class TestText:
         assert c.startswith("Have you been to Machu Picchu?")
         assert "https://ancientnerds.com/sites/peru/machu-picchu-1" in c
 
-    def test_chip_drops_the_country_and_empty_fields(self):
-        site = {"civilization": "Peru", "country": "Peru", "period_name": "1000 - 1500 AD"}
-        assert chip_text({**site, "site_type": "Fortress/citadel"}) == (
-            "1000 - 1500 AD · Fortress/citadel"
-        )
-        assert chip_text({**site, "civilization": "Inca", "site_type": None}) == (
-            "Inca · 1000 - 1500 AD"
-        )
-        assert chip_text({"country": "Peru"}) == ""
-
 
 class TestFilters:
     def test_ff_path_escapes_drive_colon_and_backslashes(self):
@@ -366,20 +363,8 @@ class TestFilters:
         named = clip_filter(3.0, credit_file=credit, name_file=name, name_lines=2)
         assert "credit.txt" in plain and "name.txt" not in plain
         assert "name.txt" in named and "fontsize=84" in named
+        assert "borderw=3:bordercolor=black" in named and "box=1" not in named
         assert named.endswith("format=yuv420p")
-
-    def test_chip_sits_above_the_name_and_fades_with_it(self, tmp_path):
-        credit, name, chip = tmp_path / "credit.txt", tmp_path / "name.txt", tmp_path / "chip.txt"
-        f = clip_filter(3.0, credit_file=credit, name_file=name, name_lines=1, chip_file=chip)
-        chip_part, name_part = (
-            p for p in f.split(",drawtext=") if "chip.txt" in p or "name.txt" in p
-        )
-        assert "chip.txt" in chip_part and "y=692:" in chip_part  # name block at 770 for one line
-        assert "fontsize=34" in chip_part and "box=1" in chip_part
-        assert chip_part.split("alpha=")[1] == name_part.split("alpha=")[1]  # same fade
-        assert "chip.txt" not in clip_filter(
-            6.0, credit_file=credit, chip_file=chip
-        )  # no name, no chip
 
 
 def _cand(name, w, h, verdict=None, dh=0):
@@ -556,6 +541,19 @@ def _measurements(**over):
     return m
 
 
+class TestReturnOverlays:
+    def test_flag_under_and_badges_above_the_name(self):
+        g = return_overlays_graph(3.0, name_lines=1, line_h=100, flag=True, badges_h=70)
+        assert g.startswith("[1:v]format=rgba,scale=180:-1,fade=t=in:st=0:d=0.3:alpha=1,")
+        assert "fade=t=out:st=2.350:d=0.5:alpha=1[flag]" in g
+        assert "[2:v]format=rgba,fade=t=in" in g and "[badges]" in g
+        assert "[base][flag]overlay=x=(W-w)/2:y=904:shortest=1[l0]" in g  # 770 + 100 + 34
+        assert g.endswith("[l0][badges]overlay=x=(W-w)/2:y=660:shortest=1[out]")  # 770 - 40 - 70
+        only_badges = return_overlays_graph(3.0, 1, 100, flag=False, badges_h=70)
+        assert "[1:v]format=rgba,fade" in only_badges and "[flag]" not in only_badges
+        assert only_badges.endswith("[base][badges]overlay=x=(W-w)/2:y=660:shortest=1[out]")
+
+
 class TestAudit:
     def test_captions_must_cover_every_card_word_and_end_before_the_name(self):
         assert passed(evaluate(_measurements()))
@@ -646,12 +644,6 @@ class TestFlagAndMusic:
         }
         assert assemble_site(row, [])["country_code"] == "PE"
 
-    def test_flag_fades_with_the_name_and_sits_under_it(self):
-        g = flag_overlay_graph(3.0, name_lines=1, line_h=100)
-        assert g.startswith("[1:v]format=rgba,scale=180:-1,fade=t=in:st=0:d=0.3:alpha=1")
-        assert "fade=t=out:st=2.350:d=0.5:alpha=1[flag]" in g
-        assert g.endswith("overlay=x=(W-w)/2:y=904:shortest=1[out]")  # (1920-100)//2-140 + 100 + 34
-
     def test_mix_graph_with_music_loops_fades_and_stays_silent_at_the_loop_point(self):
         g = mix_graph(16.7, 19.5, music=True)
         assert g.count("amix=inputs=2") == 2  # voices, then voices + ducked music
@@ -708,6 +700,7 @@ class TestCaptions:
         assert "enable='between(t\\,1.220\\,1.720)'" in f
         assert (tmp_path / "w001.txt").read_text(encoding="utf-8") == "citadel"
         assert f.count("fontcolor=white") == 2
+        assert f.count("borderw=5:bordercolor=black") == 2 and "box=" not in f
 
     def test_captions_drop_edge_punctuation_but_keep_inner_marks(self, tmp_path):
         assert display_text("mortar.") == "mortar"
@@ -749,3 +742,35 @@ class TestSpokenAndSrt:
         assert blocks[0] == "1\n00:00:00,000 --> 00:00:01,400\nA big Inca citadel."
         assert blocks[1].endswith("Its stone tracks the sun.")
         assert srt_text([Word(str(i), i, i + 1) for i in range(7)]).count("-->") == 2
+
+
+class TestBrandBadges:
+    def test_every_video_font_comes_from_the_site(self):
+        for woff2, _ in FONTS.values():
+            assert (SITE_FONTS / woff2).exists(), woff2
+
+    def test_colours_come_from_the_frontend_constants(self):
+        assert category_color("Fortress/citadel") == "#dd1111"
+        assert category_color("fortress/citadel") == "#dd1111"  # case-insensitive like the site
+        assert category_color("Something new") == "#777777"
+        assert category_color(None) == "#777777"
+        assert period_color("1000 - 1500 AD") == "#ffdd00"
+        assert period_color("whenever") == "#9ca3af"
+
+    def test_badge_specs_follow_the_site_badges(self):
+        site = {"site_type": "Fortress/citadel", "period_name": "1000 - 1500 AD"}
+        assert badge_specs(site) == [("FORTRESS/CITADEL", "#dd1111"), ("1000 - 1500 AD", "#ffdd00")]
+        assert badge_specs({"site_type": "Site", "period_name": "Unknown"}) == []
+        assert badge_specs({"site_type": None, "period_name": "1500+ AD"}) == [
+            ("1500+ AD", "#ffff00")
+        ]
+
+    def test_render_badges_writes_a_transparent_png(self, tmp_path):
+        out = tmp_path / "badges.png"
+        w, h = render_badges([("FORTRESS/CITADEL", "#dd1111"), ("1000 - 1500 AD", "#ffdd00")], out)
+        assert out.exists() and w > 500 and 50 < h < 90
+        from PIL import Image
+
+        with Image.open(out) as im:
+            assert im.mode == "RGBA" and im.size == (w, h)
+            assert im.getpixel((0, 0))[3] > 200  # the border pixel is opaque
