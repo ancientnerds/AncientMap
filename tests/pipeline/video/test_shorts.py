@@ -305,7 +305,7 @@ class TestFilters:
     def test_flash_sound_is_copied_to_every_still_start(self):
         g = mix_graph(16.7, 19.5, music=True, flashes=[6.0, 8.75])
         assert (
-            "[3:a]aformat=sample_fmts=fltp:sample_rates=48000:channel_layouts=stereo,volume=-6.0dB,asplit=2[s0][s1]"
+            "[3:a]aformat=sample_fmts=fltp:sample_rates=48000:channel_layouts=stereo,volume=-12.0dB,asplit=2[s0][s1]"
             in g
         )
         assert "[s0]adelay=6000:all=1[sd0]" in g and "[s1]adelay=8750:all=1[sd1]" in g
@@ -778,7 +778,7 @@ class TestWhoosh:
         g = mix_graph(16.7, 19.5, music=True, flashes=[6.0], whooshes=[1.0, 17.0])
         assert "[3:a]aformat" in g
         assert (
-            "[4:a]aformat=sample_fmts=fltp:sample_rates=48000:channel_layouts=stereo,volume=-8.0dB,asplit=2[w0][w1]"
+            "[4:a]aformat=sample_fmts=fltp:sample_rates=48000:channel_layouts=stereo,volume=-14.0dB,asplit=2[w0][w1]"
             in g
         )
         assert "[w1]adelay=17000:all=1[wd1]" in g

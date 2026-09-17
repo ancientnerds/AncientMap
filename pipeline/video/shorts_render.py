@@ -63,11 +63,11 @@ FLAG_GAP = 34
 # so a shutter sound can sit exactly on them (`flash` audio, when present).
 FLASH_S = 0.28
 FLASH_PEAK = 0.85
-FLASH_GAIN_DB = -6.0
+FLASH_GAIN_DB = -12.0  # user 17.09.: quieter
 # Whoosh at the opening's zoom-in (ROTATE_S into the take, video/scenes/site-short.ts)
 # and at the start of the return flight.
 OPENING_ZOOM_AT_S = 1.0
-WHOOSH_GAIN_DB = -8.0
+WHOOSH_GAIN_DB = -14.0  # user 17.09.: quieter
 OPENING_TRIM_S = 0.1  # the opening take holds its first pose this long; the first frames after a
 # jump are not fully drawn, so cutting the hold keeps frame 0 identical to the loop's end pose
 # Mapbox ToS: satellite/terrain frames need attribution in the video itself;
