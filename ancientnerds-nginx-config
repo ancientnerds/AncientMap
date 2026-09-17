@@ -343,8 +343,21 @@ server {
         add_header Cache-Control "public, max-age=604800";
     }
 
+    # Anything no other location serves: a real 404 from the API's error
+    # shell (GET /not-found, render_error_html). Until 2026-09-17 this fell
+    # back to index.html, so every mistyped or retired URL answered 200 with
+    # the homepage — a soft 404 each (/seo/site/…, /seo/, /definitely-not-a-page
+    # all returned 50 KB of landing shell). Named location: proxy_pass may not
+    # carry a URI there, so the rewrite sets the upstream path.
     location / {
-        try_files $uri $uri/ /index.html;
+        try_files $uri $uri/ @not_found;
+    }
+
+    location @not_found {
+        rewrite ^ /not-found break;
+        proxy_pass http://an_api;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
     }
 
     # www served the complete site with 200 alongside the apex — two hostnames

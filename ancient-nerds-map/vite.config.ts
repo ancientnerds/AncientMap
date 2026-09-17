@@ -231,27 +231,15 @@ export default defineConfig(({ isSsrBuild }) => ({
         // NavigationRoute (and its denylist) is ever consulted. Every SPA page
         // here is an explicit .html URL — nothing needs a directory index.
         directoryIndex: null,
-        // Don't serve index.html for backend routes or server-rendered SEO pages
-        // (/articles/, /news-archive/, /research/, /sites/ are HTML from the API,
-        // not SPA pages — the SW must let them hit the network)
-        navigateFallbackDenylist: [
-          // "/" and "/?utm_source=…" are the server-rendered homepage: neither
-          // the directoryIndex precache hit above nor the navigation fallback
-          // may answer them. NavigationRoute matches pathname + search, hence
-          // the (\?|$) tail the .html entry below uses too.
-          /^\/(\?|$)/,
-          /^\/api\//,
-          /\.html(\?|$)/,
-          /^\/articles\//,
-          /^\/news-archive\//,
-          /^\/research\//,
-          /^\/sites\//,
-          /^\/seo\//,
-          /^\/sitemap/,
-          // Funnel redirect: the SW must not answer with the SPA shell —
-          // the whole point is that the click reaches the API log
-          /^\/goto\//,
-        ],
+        // No navigation fallback. Every SPA page is an explicit .html URL that
+        // precacheAndRoute serves on its own, and everything else — "/", the
+        // SSR trees (/sites/, /research/, /articles/, /news-archive/), /api/,
+        // /goto/, the sitemaps — is server-rendered or a backend route that
+        // must reach the network. So the fallback only ever answered unknown
+        // paths, with the app shell instead of the server's 404 (2026-09-17;
+        // nginx sends those to GET /not-found now). The denylist that kept
+        // the fallback off the routes above went with it.
+        navigateFallback: null,
         // Pre-cache app shell assets
         globPatterns: ['**/*.{js,css,html,svg,woff2}'],
         // Don't pre-cache large data files

@@ -37,6 +37,7 @@ from api.routes.news import get_news_stats
 from api.routes.theo import get_current_research
 from api.seo_shell import ssr_shell_response
 from api.services.site_stats import get_site_stats
+from pipeline.article_html_renderer import render_error_html
 from pipeline.database import get_db
 from pipeline.research_html_renderer import PUBLIC_PAPER_WHERE
 
@@ -148,3 +149,19 @@ async def home(db: Session = Depends(get_db)):
     with _cache_lock:
         _cache["home"] = (time.monotonic() + _CACHE_TTL, response.body)
     return response
+
+
+@router.api_route("/not-found", methods=["GET", "HEAD"])
+async def not_found_page() -> Response:
+    """404 for every path no other nginx location serves (location @not_found).
+
+    Until 2026-09-17 nginx fell back to index.html there, so a mistyped or
+    retired URL answered 200 with the homepage shell -- a soft 404 for each
+    of them. Same error shell and cache window as the 404s of the SSR routes.
+    """
+    return Response(
+        content=render_error_html("Page"),
+        media_type="text/html",
+        status_code=404,
+        headers={"Cache-Control": "public, max-age=300"},
+    )
