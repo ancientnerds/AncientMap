@@ -164,6 +164,99 @@ def test_session_type_shares_count_only_human_sessions():
     assert fs.session_type_shares(fs.sessions_from_rows(rows)) == {"leser": 1, "entdecker": 1}
 
 
+# ---- problems -------------------------------------------------------------
+
+#: Rows in the shape pipeline.umami_db.SQL_NOT_FOUND / SQL_VITALS / SQL_ERRORS return.
+NOT_FOUND = [{"path": "/old-story", "referrer": "example.org", "n": 3}]
+VITALS = [{"page": "story", "name": "LCP", "p75": 4100.0, "samples": 20}]
+ERRORS = [{"message": "x is not a function", "page": "globe", "n": 12}]
+
+
+def _bounce_and_search_rows():
+    """Three one-page story sessions (one of them scrolled) and one empty search."""
+    return [
+        ev("a", path="/news-archive/x-1"),
+        ev("b", path="/news-archive/x-1"),
+        ev("c", path="/news-archive/x-1"),
+        ev("c", "scroll_depth", event_type=2, data={"depth": "25"}),
+        ev("d", path="/search.html"),
+        ev("d", "search", event_type=2, data={"q": "atlantis", "results": "0"}),
+        ev("d", "search_empty", event_type=2, data={"chars": "8"}),
+    ]
+
+
+def test_problems_rank_errors_slow_pages_dead_links_bounces_and_empty_searches():
+    sessions = fs.sessions_from_rows(_bounce_and_search_rows())
+    out = fs.problems(sessions, not_found=NOT_FOUND, vitals=VITALS, errors=ERRORS)
+    by_kind = {p["kind"]: p for p in out}
+    assert set(by_kind) == {
+        "js_error",
+        "slow_page",
+        "broken_link",
+        "shallow_exit",
+        "empty_search",
+    }
+    assert by_kind["js_error"]["score"] == 36  # 12 hits, weighted three
+    assert by_kind["js_error"]["label"] == "x is not a function"
+    assert "globe" in by_kind["js_error"]["detail"]
+    assert by_kind["slow_page"]["score"] == 20  # as many samples as it has
+    assert "LCP" in by_kind["slow_page"]["detail"] and "4100" in by_kind["slow_page"]["detail"]
+    assert by_kind["broken_link"]["score"] == 6  # 3 hits, weighted two
+    assert by_kind["broken_link"]["label"] == "/old-story"
+    assert "example.org" in by_kind["broken_link"]["detail"]
+    assert by_kind["shallow_exit"]["score"] == 2  # a and b; c scrolled to 25 %
+    assert by_kind["empty_search"]["score"] == 1
+    # Worst first, and every entry carries the four keys the panel renders.
+    assert [p["score"] for p in out] == sorted((p["score"] for p in out), reverse=True)
+    assert all(set(p) == {"kind", "label", "score", "detail"} for p in out)
+
+
+def test_problems_are_empty_without_findings():
+    assert fs.problems([], not_found=[], vitals=[], errors=[]) == []
+
+
+@pytest.mark.parametrize(
+    ("name", "p75", "slow"),
+    [
+        ("LCP", 2501, True),
+        ("LCP", 2500, False),
+        ("INP", 201, True),
+        ("INP", 200, False),
+        ("CLS", 900, False),  # a share, not milliseconds — no threshold, no line
+    ],
+)
+def test_slow_page_uses_the_core_web_vitals_thresholds(name, p75, slow):
+    rows = [{"page": "site", "name": name, "p75": p75, "samples": 7}]
+    kinds = [p["kind"] for p in fs.problems([], not_found=[], vitals=rows, errors=[])]
+    assert ("slow_page" in kinds) is slow
+
+
+def test_a_single_dead_hit_is_noise_not_a_broken_link():
+    rows = [{"path": "/typo", "referrer": "direkt", "n": 1}]
+    assert fs.problems([], not_found=rows, vitals=[], errors=[]) == []
+
+
+def test_shallow_exit_counts_only_one_page_story_and_site_visits():
+    rows = [
+        ev("read", path="/news-archive/x-1"),
+        ev("read", path="/news-archive/y-2", minute=1),  # two pages: not an exit
+        ev("deep", path="/sites/peru/x-1"),
+        ev("deep", "scroll_depth", event_type=2, data={"depth": "75"}),
+        ev("gone", path="/sites/peru/x-1"),
+        ev("home", path="/"),  # home is neither story nor site
+        ev("bounce1", path="/news-archive/x-1"),
+        ev("bounce2", path="/news-archive/x-1"),
+    ]
+    out = fs.problems(fs.sessions_from_rows(rows), not_found=[], vitals=[], errors=[])
+    exits = {p["label"]: p["score"] for p in out if p["kind"] == "shallow_exit"}
+    assert exits == {"Story wird sofort verlassen": 2, "Site wird sofort verlassen": 1}
+
+
+def test_problems_are_capped():
+    errors = [{"message": f"e{i}", "page": "globe", "n": 30 - i} for i in range(20)]
+    assert len(fs.problems([], not_found=[], vitals=[], errors=errors, limit=5)) == 5
+
+
 # ---- source_family --------------------------------------------------------
 
 
