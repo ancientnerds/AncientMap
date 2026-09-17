@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session
 
 from api.routes.articles_html import public_stories_query
 from api.seo_shell import ssr_shell_response
-from pipeline.article_html_renderer import render_error_html, story_slug
+from pipeline.article_html_renderer import render_error_html
 from pipeline.database import NewsItem, get_db
 from pipeline.sites_html_renderer import (
     country_path,
@@ -28,6 +28,7 @@ from pipeline.sites_html_renderer import (
     site_path,
     site_slug,
 )
+from pipeline.utils.slugs import story_slug
 
 logger = logging.getLogger(__name__)
 router = APIRouter()

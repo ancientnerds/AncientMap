@@ -13,7 +13,9 @@ from html import escape, unescape
 import markdown  # noqa: I001 — third-party, separated intentionally
 import nh3
 
-BASE_URL = "https://ancientnerds.com"
+# Slug helpers and BASE_URL live in pipeline.utils.slugs (no third-party
+# imports) so the Lyra container can use them without markdown/nh3.
+from pipeline.utils.slugs import BASE_URL, slugify
 
 # Mirrored in ancient-nerds-map/src/constants/brand.ts — the React pages need
 # the same value and cannot import from Python. Since the react-ssr cutover
@@ -256,27 +258,6 @@ def markdown_to_html(content_md: str, *, toc: bool = True) -> str:
     md = markdown.Markdown(extensions=extensions)
     html = _sanitize_html(md.convert(content_md))
     return _heading_anchors(_figure_with_caption(external_links_new_tab(html)))
-
-
-def slugify(title: str) -> str:
-    """Generate URL-safe slug from article title."""
-    slug = title.lower().strip()
-    slug = re.sub(r"[^\w\s-]", "", slug)
-    slug = re.sub(r"[\s_]+", "-", slug)
-    slug = re.sub(r"-+", "-", slug)
-    slug = re.sub(r"^-|-$", "", slug)
-    return slug[:120]
-
-
-def story_slug(headline: str, item_id: int) -> str:
-    """Stable, unique slug for a news story: headline slug + numeric ID suffix."""
-    return f"{slugify(headline)}-{item_id}"
-
-
-def story_id_from_slug(slug: str) -> int | None:
-    """Extract the numeric NewsItem ID from a story slug, or None if malformed."""
-    tail = slug.rsplit("-", 1)[-1]
-    return int(tail) if tail.isdigit() else None
 
 
 def _nav_html() -> str:

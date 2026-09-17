@@ -18,7 +18,6 @@ ARTICLE_TIMEOUT = 600.0  # seconds
 
 from sqlalchemy import text as sa_text
 
-from pipeline.article_html_renderer import slugify
 from pipeline.database import (
     NewsArticle,
     NewsChannel,
@@ -37,6 +36,7 @@ from pipeline.lyra.config import (
     call_api,
     parse_json_response,
 )
+from pipeline.utils.slugs import slugify
 
 logger = logging.getLogger(__name__)
 

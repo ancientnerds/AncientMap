@@ -11,7 +11,7 @@ lives exactly once.
 import re
 from urllib.parse import quote
 
-from pipeline.article_html_renderer import slugify
+from pipeline.utils.slugs import slugify
 
 
 def country_slug(country: str) -> str:

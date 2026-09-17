@@ -24,9 +24,9 @@ import sys
 import time
 from pathlib import Path
 
-from pipeline.article_html_renderer import slugify
 from pipeline.database import get_session
 from pipeline.lyra.minimax_shared import probe_minimax_quota
+from pipeline.utils.slugs import slugify
 from pipeline.video import (
     shorts_audit,
     shorts_export,
@@ -40,6 +40,7 @@ ALL_STEPS = ("export", "images", "select", "tts", "record", "render")
 RECORDER_DIR = Path(__file__).resolve().parents[2] / "ancient-nerds-map"
 RECORDER_API_TARGET = "https://ancientnerds.com"  # site dots + labels from prod, no local DB
 RECORD_ATTEMPTS = 2  # the globe-ready poll times out now and then (DNS/proxy hiccup)
+MIN_SITE_IMAGES = 6  # fewer Commons images cannot yield MIN_STILLS good stills
 
 
 def _parse(argv: list[str]) -> argparse.Namespace:
@@ -156,6 +157,11 @@ def _select(site: dict, site_dir: Path, use_vlm: bool) -> None:
         for cand, verdict in zip(cands, verdicts, strict=True):
             cand.verdict = verdict
     kept, rejected = shorts_select.select_stills(cands, require_verdict=use_vlm)
+    if len(kept) < shorts_audit.MIN_STILLS:
+        # fail here, before the voice and the 15-minute recording are spent
+        raise RuntimeError(
+            f"only {len(kept)} usable still(s) for {site['name']} ({len(rejected)} rejected)"
+        )
     selection = {
         "stills": [
             {**c.image, "verdict": c.verdict, "score": round(shorts_select.score(c), 2)}
@@ -306,8 +312,8 @@ def quota_percentages() -> tuple[int, int]:
 
 
 def batch_candidates(tier_min: int, limit: int) -> list[dict]:
-    """Card-bearing sites of at least `tier_min`, best rarity first, that have no
-    passing audit yet."""
+    """Card-bearing sites of at least `tier_min` with at least MIN_SITE_IMAGES
+    Commons images, best rarity first, that have no passing audit yet."""
     from sqlalchemy import text
 
     with get_session() as session:
@@ -317,9 +323,11 @@ def batch_candidates(tier_min: int, limit: int) -> list[dict]:
                     "SELECT s.id::text AS id, s.name FROM unified_sites s "
                     "JOIN card_stats c ON c.site_id = s.id "
                     "WHERE c.rarity_tier >= :tier AND c.card_description IS NOT NULL "
+                    "AND (SELECT count(*) FROM wiki_images w "
+                    "     WHERE w.site_id = s.id AND NOT w.is_excluded) >= :min_images "
                     "ORDER BY c.rarity_score DESC NULLS LAST, s.name"
                 ),
-                {"tier": tier_min},
+                {"tier": tier_min, "min_images": MIN_SITE_IMAGES},
             )
             .mappings()
             .all()

@@ -35,10 +35,10 @@ import httpx
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from pipeline.article_html_renderer import BASE_URL, slugify, story_slug
 from pipeline.database import NewsArticle, NewsItem, get_session
 from pipeline.news_visibility import public_story_criteria
 from pipeline.sites_html_renderer import encode_path, site_path
+from pipeline.utils.slugs import BASE_URL, slugify, story_slug
 
 logger = logging.getLogger(__name__)
 

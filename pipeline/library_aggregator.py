@@ -13,7 +13,6 @@ import re
 import urllib.parse
 from datetime import UTC, datetime
 
-from pipeline.article_html_renderer import slugify, story_slug
 from pipeline.database import (
     LibrarySource,
     NewsArticle,
@@ -24,6 +23,7 @@ from pipeline.database import (
 )
 from pipeline.news_visibility import public_story_criteria
 from pipeline.sites_html_renderer import site_path
+from pipeline.utils.slugs import slugify, story_slug
 from pipeline.utils.text import PERIOD_BUCKETS
 
 logger = logging.getLogger(__name__)

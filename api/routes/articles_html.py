@@ -14,16 +14,13 @@ from sqlalchemy.orm import Session, joinedload
 
 from api.seo_shell import ssr_shell_response
 from pipeline.article_html_renderer import (
-    BASE_URL,
     markdown_to_html,
     render_error_html,
     render_medium_copy_html,
-    slugify,
-    story_id_from_slug,
-    story_slug,
 )
 from pipeline.database import NewsArticle, NewsItem, NewsVideo, get_db
 from pipeline.news_visibility import public_story_criteria
+from pipeline.utils.slugs import BASE_URL, slugify, story_id_from_slug, story_slug
 
 logger = logging.getLogger(__name__)
 router = APIRouter()

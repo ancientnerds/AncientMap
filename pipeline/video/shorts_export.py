@@ -16,8 +16,8 @@ from pathlib import Path
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from pipeline.article_html_renderer import slugify
 from pipeline.sites_html_renderer import site_path
+from pipeline.utils.slugs import slugify
 
 ASSETS_ROOT = Path(__file__).resolve().parents[2] / "video-assets" / "shorts"
 FLAGS_DIR = Path(__file__).resolve().parents[2] / "video-assets" / "flags"

@@ -24,9 +24,9 @@ from sqlalchemy import func, text
 from sqlalchemy.orm import Session
 
 from api.routes.articles_html import STORIES_PER_PAGE, public_stories_query
-from pipeline.article_html_renderer import slugify, story_slug
 from pipeline.database import NewsArticle, NewsItem, NewsVideo, get_db
 from pipeline.sites_html_renderer import country_path, encode_path, site_path
+from pipeline.utils.slugs import slugify, story_slug
 
 router = APIRouter()
 

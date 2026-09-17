@@ -17,7 +17,6 @@ from sqlalchemy.orm import Session
 from api.routes.public_v1 import PAPER_SUMMARY_COLUMNS, paper_summary_kwargs
 from api.seo_shell import ssr_shell_response
 from pipeline.article_html_renderer import (
-    BASE_URL,
     markdown_to_html,
     render_error_html,
     render_medium_copy_html,
@@ -29,6 +28,7 @@ from pipeline.research_html_renderer import (
     format_references_md,
     strip_leading_title_heading,
 )
+from pipeline.utils.slugs import BASE_URL
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
