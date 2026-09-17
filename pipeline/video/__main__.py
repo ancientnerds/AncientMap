@@ -40,6 +40,7 @@ ALL_STEPS = ("export", "images", "select", "tts", "record", "render")
 RECORDER_DIR = Path(__file__).resolve().parents[2] / "ancient-nerds-map"
 RECORDER_API_TARGET = "https://ancientnerds.com"  # site dots + labels from prod, no local DB
 RECORD_ATTEMPTS = 2  # the globe-ready poll times out now and then (DNS/proxy hiccup)
+RECORD_TIMEOUT_S = 30 * 60  # both takes normally finish in 13–20 min (a 9-s return is the longest)
 MIN_SITE_IMAGES = 6  # fewer Commons images cannot yield MIN_STILLS good stills
 QUOTA_PROBE_RETRIES = 30  # x QUOTA_PROBE_RETRY_S = half an hour of network trouble
 QUOTA_PROBE_RETRY_S = 60
@@ -257,10 +258,25 @@ def record_clips(site_dir: Path, scenes: str = RECORD_SCENES) -> None:
         for clip in clips:
             clip.unlink(missing_ok=True)
         logging.info("recording clips (attempt %d/%d)…", attempt, RECORD_ATTEMPTS)
-        proc = subprocess.run(cmd, cwd=RECORDER_DIR, env=env, capture_output=True, text=True)
+        proc = subprocess.Popen(
+            cmd,
+            cwd=RECORDER_DIR,
+            env=env,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+        )
+        try:
+            stdout, _ = proc.communicate(timeout=RECORD_TIMEOUT_S)
+        except subprocess.TimeoutExpired:
+            # a take that waits on tiles forever (DNS blip at the wrong moment) sat for
+            # 41 min without a clip on 17.09.; kill the whole tree (npm → node → Chrome)
+            subprocess.run(["taskkill", "/PID", str(proc.pid), "/T", "/F"], capture_output=True)
+            stdout, _ = proc.communicate()
+            logging.warning("recorder killed after %d s without finishing", RECORD_TIMEOUT_S)
         if all(c.exists() for c in clips):
             return
-        tail = "\n".join(proc.stdout.splitlines()[-6:])
+        tail = "\n".join((stdout or "").splitlines()[-6:])
         logging.warning("recorder did not produce both clips (rc=%s):\n%s", proc.returncode, tail)
     raise RuntimeError(f"recording failed after {RECORD_ATTEMPTS} attempts for {site_dir.name}")
 
