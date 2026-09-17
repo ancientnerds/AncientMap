@@ -24,6 +24,8 @@ from api.services.theo_config import (
     THEO_RESEARCH_COST,
 )
 from pipeline.database import get_session
+from pipeline.indexnow import page_url as indexnow_url
+from pipeline.indexnow import submit as indexnow_submit
 
 logger = logging.getLogger(__name__)
 
@@ -882,6 +884,7 @@ def _auto_publish(request_id: str) -> None:
             author_discord_id = row.user_id
 
         logger.info("[THEO] Auto-published %s as %r", request_id, slug)
+        indexnow_submit([indexnow_url(f"/research/{slug}"), indexnow_url("/research/")])
         try:
             from pipeline.lyra.theo_research_index import index_paper
 

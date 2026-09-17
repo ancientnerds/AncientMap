@@ -18,6 +18,7 @@ ARTICLE_TIMEOUT = 600.0  # seconds
 
 from sqlalchemy import text as sa_text
 
+from pipeline.article_html_renderer import slugify
 from pipeline.database import (
     NewsArticle,
     NewsChannel,
@@ -28,6 +29,8 @@ from pipeline.database import (
 from pipeline.database import (
     engine as db_engine,
 )
+from pipeline.indexnow import page_url as indexnow_url
+from pipeline.indexnow import submit as indexnow_submit
 from pipeline.lyra.config import (
     LyraAPIError,
     LyraSettings,
@@ -1435,6 +1438,10 @@ def generate_weekly_article(
     # Store in a fresh session (don't hold DB connection during the full pipeline)
     with get_session() as session:
         session.add(article)
+
+    # The journal is public the moment the row exists (sitemap-articles
+    # lists every NewsArticle) — announce it to Bing right away.
+    indexnow_submit([indexnow_url(f"/articles/{slugify(headline)}"), indexnow_url("/articles/")])
 
     _write_final_heartbeat(step_data, t0_total)
     logger.info("Generated weekly article: %s", headline)

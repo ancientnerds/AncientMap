@@ -48,6 +48,8 @@ from api.services.theo_config import (
 )
 from api.services.theo_worker import get_live_events, release_reservation_in_session
 from pipeline.database import DiscordUser, ResearchRequest, TtsRequest, get_session
+from pipeline.indexnow import page_url as indexnow_url
+from pipeline.indexnow import submit as indexnow_submit
 
 DISCORD_GUILD_ID = os.getenv("DISCORD_GUILD_ID", "932330696956063765")
 DISCORD_BOT_TOKEN = os.getenv("DISCORD_BOT_TOKEN", "")
@@ -1453,6 +1455,10 @@ async def publish_research(
         )
         session.commit()
 
+        # Bing (ChatGPT search, Copilot) learns about the paper now, not at
+        # the next crawl. Fail-soft: a rejected ping is logged, never raised.
+        indexnow_submit([indexnow_url(f"/research/{slug}"), indexnow_url("/research/")])
+
         try:
             from api.cardgame.achievements import check_achievements
 
@@ -1504,7 +1510,7 @@ async def unpublish_research(
 
     with get_session() as session:
         row = session.execute(
-            text("SELECT user_id, is_public FROM research_requests WHERE id = :id"),
+            text("SELECT user_id, is_public, slug FROM research_requests WHERE id = :id"),
             {"id": request_id},
         ).fetchone()
 
@@ -1524,6 +1530,10 @@ async def unpublish_research(
             {"id": request_id},
         )
         session.commit()
+
+    # IndexNow takes removals too: Bing re-fetches, sees the 404 and drops it.
+    if row.slug:
+        indexnow_submit([indexnow_url(f"/research/{row.slug}"), indexnow_url("/research/")])
 
     # Remove from Qdrant
     try:

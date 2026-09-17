@@ -147,6 +147,12 @@ STEPS = {
         True,
         "Generated audio for {n} papers",
     ),
+    "indexnow": (
+        "pipeline.indexnow",
+        "submit_recent",
+        False,
+        "IndexNow: announced {n} new/changed URLs to Bing",
+    ),
 }
 
 # Ordered step list matching the full pipeline sequence
@@ -165,6 +171,7 @@ STEP_ORDER = [
     "prospect",
     "library",
     "tts",
+    "indexnow",  # last: announces what this cycle made public
 ]
 
 # Steps that run less often than every cycle. Value = run every N cycles.
