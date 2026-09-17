@@ -7,7 +7,7 @@ import pytest
 from pipeline.video.__main__ import music_start_default, sfx
 from pipeline.video.media import ff_path
 from pipeline.video.shorts_audit import evaluate, passed
-from pipeline.video.shorts_brand import FONT_SOURCES, FONTS, missing_glyphs
+from pipeline.video.shorts_brand import FONT_HEADING, FONT_SOURCES, FONTS, missing_glyphs
 from pipeline.video.shorts_captions import Word, align_words, display_text, spoken_at, srt_text
 from pipeline.video.shorts_export import (
     RARITY_NAMES,
@@ -726,6 +726,12 @@ class TestCaptions:
         with pytest.raises(ValueError):
             align_words(["a"], [])
 
+    @pytest.mark.skipif(
+        not FONT_HEADING.exists(),
+        reason="video-assets/fonts is gitignored; ensure_fonts() fills it on the render "
+        "machine only. captions_filter measures the glyphs, so without the file these "
+        "two blocked every deploy (CI 2026-09-17)",
+    )
     def test_captions_filter_one_drawtext_per_word(self, tmp_path):
         f = captions_filter([Word("Inca", 1.22, 1.72), Word("citadel", 1.72, 2.16)], tmp_path)
         assert f.count("drawtext=") == 2
@@ -735,6 +741,12 @@ class TestCaptions:
         assert f.count("fontcolor=white") == 2
         assert f.count("borderw=5:bordercolor=black") == 2 and "box=" not in f
 
+    @pytest.mark.skipif(
+        not FONT_HEADING.exists(),
+        reason="video-assets/fonts is gitignored; ensure_fonts() fills it on the render "
+        "machine only. captions_filter measures the glyphs, so without the file these "
+        "two blocked every deploy (CI 2026-09-17)",
+    )
     def test_captions_drop_edge_punctuation_but_keep_inner_marks(self, tmp_path):
         assert display_text("mortar.") == "mortar"
         assert display_text("metres,") == "metres"

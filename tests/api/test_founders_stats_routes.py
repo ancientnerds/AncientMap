@@ -80,7 +80,9 @@ def test_every_stats_route_depends_on_the_founder_session():
 def test_router_is_mounted_under_api_stats():
     from api.main import app
 
-    paths = {r.path for r in app.routes}  # type: ignore[attr-defined]
+    # getattr, not r.path: with the FastAPI version on the CI runner an
+    # included router shows up as a _IncludedRouter without that attribute.
+    paths = {getattr(r, "path", "") for r in app.routes}
     for name in ("overview", "map", "content", "feedback", "sources"):
         assert f"/api/stats/{name}" in paths, name
 
