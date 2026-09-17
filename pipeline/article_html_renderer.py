@@ -398,8 +398,10 @@ def render_medium_copy_html(
 </html>"""
 
 
-#: Micro-feedback on the 404 page — the `feedback` event of src/analytics
-#: (prompt not_found), sent through the tracker tag when it is present.
+#: The 404 page's two signals, both through the tracker tag when it is present:
+#: a `not_found` event on every view (path + referrer host — the dashboard's
+#: "Toter Link" list, pipeline.umami_db.SQL_NOT_FOUND) and the micro-feedback
+#: `feedback` event of src/analytics (prompt not_found) when someone types.
 _NOT_FOUND_FEEDBACK = """<form class="nf-feedback" onsubmit="return anFeedback(this)">
         <label for="nf-q">What were you looking for?</label>
         <div class="nf-feedback-row">
@@ -419,6 +421,9 @@ _NOT_FOUND_FEEDBACK = """<form class="nf-feedback" onsubmit="return anFeedback(t
         @media (min-width: 480px) { .nf-feedback-row { flex-direction: row; } .nf-feedback input { flex: 1; } }
     </style>
     <script>
+        window.addEventListener('load', function () {
+            if (window.umami) window.umami.track('not_found', {path: location.pathname, referrer: document.referrer.split('/')[2] || ''});
+        });
         function anFeedback(f) {
             var t = (f.q.value || '').replace(/\\s+/g, ' ').trim().slice(0, 100);
             if (t && window.umami) window.umami.track('feedback', {prompt:'not_found', text:t, page:'other'});
