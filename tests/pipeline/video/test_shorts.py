@@ -6,7 +6,7 @@ import pytest
 
 from pipeline.video.__main__ import music_start_default, sfx
 from pipeline.video.media import ff_path
-from pipeline.video.shorts_audit import evaluate, passed
+from pipeline.video.shorts_audit import evaluate, longest_frozen_run, passed
 from pipeline.video.shorts_brand import FONT_HEADING, FONT_SOURCES, FONTS, missing_glyphs
 from pipeline.video.shorts_captions import Word, align_words, display_text, spoken_at, srt_text
 from pipeline.video.shorts_export import (
@@ -555,6 +555,7 @@ def _measurements(**over):
         "missing_glyphs": [],
         "return_needed_s": 2.55,
         "min_still_s": 3.44,
+        "frozen_run": 6,
         "card_words": 27,
         "caption_words": 27,
         "captions_end": 15.1,
@@ -581,6 +582,13 @@ class TestAudit:
         assert not passed(evaluate(_measurements(missing_glyphs=["\u015f"])))
         assert not passed(evaluate(_measurements(return_s=3.0, return_needed_s=3.4)))
         assert not passed(evaluate(_measurements(min_still_s=1.9)))
+        assert not passed(evaluate(_measurements(frozen_run=24)))  # recorder stalled
+
+    def test_longest_frozen_run(self):
+        assert longest_frozen_run([1.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0]) == 3
+        assert longest_frozen_run([0.0] * 5 + [2.0]) == 5
+        assert longest_frozen_run([0.5, 0.6, 0.7]) == 0
+        assert longest_frozen_run([]) == 0
 
     def test_captions_must_cover_every_card_word_and_end_before_the_name(self):
         assert passed(evaluate(_measurements()))

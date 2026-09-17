@@ -48,6 +48,8 @@ LOUDNESS_TOL = 1.0
 PEAK_MAX_DBFS = -1.0
 VOICE_MIN_DB = -20.0  # a voice window must peak above this
 SILENCE_MAX_DB = -45.0  # the loop point must be below this
+FROZEN_DIFF = 0.05  # mean abs luma difference below which two frames count as identical
+MAX_FROZEN_FRAMES = 10  # the return flight holds its end pose ~6 frames; more is a stall
 MIN_STILLS = 2
 MAX_NAME_LINES = 3
 CAPTION_MARGIN = 40  # a caption word must stay this far from both frame edges
@@ -108,6 +110,13 @@ def evaluate(m: dict) -> list[Check]:
     )
     checks.append(
         Check("loop_seam", m["loop_seam"] <= LOOP_SEAM_MAX, f"{m['loop_seam']:.2f} mean luma diff")
+    )
+    checks.append(
+        Check(
+            "no_frozen_frames",
+            m["frozen_run"] <= MAX_FROZEN_FRAMES,
+            f"longest run of identical frames: {m['frozen_run']} ({m['frozen_run'] / FPS:.2f}s)",
+        )
     )
     checks.append(
         Check("loudness", abs(m["lufs"] - TARGET_LUFS) <= LOUDNESS_TOL, f"{m['lufs']:.1f} LUFS")
@@ -266,6 +275,43 @@ def _luma_samples(video: Path, step_s: float = 0.25) -> list[tuple[float, float]
     return [(round(float(t), 2), float(y)) for t, y in zip(times, yavgs, strict=False)]
 
 
+def longest_frozen_run(diffs: list[float], threshold: float = FROZEN_DIFF) -> int:
+    """Longest run of consecutive frames that do not differ from their
+    predecessor. A stalled recorder (throttled Chrome, a hung tile wait) writes
+    the same picture over and over; brightness, loudness and the loop seam all
+    stay fine, so nothing else notices."""
+    longest = run = 0
+    for diff in diffs:
+        run = run + 1 if diff < threshold else 0
+        longest = max(longest, run)
+    return longest
+
+
+def _frame_diffs(video: Path) -> list[float]:
+    """Mean absolute luma difference between consecutive frames, on a small
+    grayscale copy (the whole short is a few MB at this size)."""
+    import numpy as np
+
+    width, height = 54, 96
+    raw = subprocess.run(
+        [
+            FFMPEG_BIN,
+            "-loglevel",
+            "error",
+            "-i",
+            str(video),
+            "-vf",
+            f"scale={width}:{height},format=gray",
+            "-f",
+            "rawvideo",
+            "-",
+        ],
+        capture_output=True,
+    ).stdout
+    frames = np.frombuffer(raw, np.uint8).reshape(-1, height, width).astype(np.int16)
+    return [float(np.abs(frames[i + 1] - frames[i]).mean()) for i in range(len(frames) - 1)]
+
+
 def _frame(video: Path, at: str, out: Path) -> Path:
     """Extract one frame at `at` seconds; a negative `at` means "the true last
     frame" (decode the tail and keep the final image), because seeking with
@@ -363,6 +409,7 @@ def measure_site(site_dir: Path) -> dict:
         "return_frames": _frames(site_dir / "clips" / "short-return.mp4"),
         "return_s": _seconds(site_dir / "clips" / "short-return.mp4"),
         "luma_samples": _luma_samples(video),
+        "frozen_run": longest_frozen_run(_frame_diffs(video)),
         "loop_seam": _loop_seam(video, site_dir / "render"),
         "lufs": lufs,
         "peak_dbfs": peak,
