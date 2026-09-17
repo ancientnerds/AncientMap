@@ -16,11 +16,21 @@ import subprocess
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
-from PIL import Image, ImageChops, ImageStat
+from PIL import Image, ImageChops, ImageFont, ImageStat
 
 from pipeline.video.media import FFMPEG_BIN, FFPROBE_BIN, probe_duration
+from pipeline.video.shorts_brand import BADGE_GAP
+from pipeline.video.shorts_captions import display_text
+from pipeline.video.shorts_export import country_code_for, flag_path
 from pipeline.video.shorts_render import (
+    BADGE_TOP_MARGIN,
+    CAPTION_BORDER,
+    CAPTION_SIZE,
+    FONT_HEADING,
     FPS,
+    MIN_STILL_S,
+    NAME_AUDIO_DELAY_S,
+    NAME_END_GAP_S,
     NARRATION_TAIL_S,
     TARGET_LUFS,
     H,
@@ -42,6 +52,8 @@ VOICE_MIN_DB = -20.0  # a voice window must peak above this
 SILENCE_MAX_DB = -45.0  # the loop point must be below this
 MIN_STILLS = 2
 MAX_NAME_LINES = 3
+CAPTION_MARGIN = 40  # a caption word must stay this far from both frame edges
+BADGE_ROW_MARGIN = 24  # the badge row under the name, from the frame edges
 
 
 @dataclass(frozen=True)
@@ -137,6 +149,37 @@ def evaluate(m: dict) -> list[Check]:
     )
     checks.append(
         Check(
+            "captions_fit",
+            m["max_caption_w"] <= W - 2 * CAPTION_MARGIN,
+            f"widest word {m['max_caption_w']} px ({m['widest_caption']!r})",
+        )
+    )
+    parked = 2 * BADGE_TOP_MARGIN + sum(m["badge_ws"]) + BADGE_GAP * max(len(m["badge_ws"]) - 1, 0)
+    row = sum(m["badge_ws"]) + BADGE_GAP * max(len(m["badge_ws"]) - 1, 0)
+    checks.append(
+        Check(
+            "badges_fit",
+            parked <= W and row <= W - 2 * BADGE_ROW_MARGIN,
+            f"{len(m['badge_ws'])} badge(s), widths {m['badge_ws']}",
+        )
+    )
+    checks.append(Check("flag_present", m["flag_exists"], m["flag"] or "no country code"))
+    checks.append(
+        Check(
+            "return_covers_name",
+            m["return_s"] >= m["return_needed_s"],
+            f"return {m['return_s']:.2f} s, spoken name needs {m['return_needed_s']:.2f} s",
+        )
+    )
+    checks.append(
+        Check(
+            "stills_pace",
+            m["min_still_s"] >= MIN_STILL_S - 0.01,
+            f"shortest still {m['min_still_s']:.2f} s",
+        )
+    )
+    checks.append(
+        Check(
             "captions_timed",
             m["caption_words"] == m["card_words"] and m["captions_end"] <= m["name_at"],
             f"{m['caption_words']}/{m['card_words']} words, last ends {m['captions_end']:.2f}s",
@@ -181,6 +224,19 @@ def _ffprobe_stream(path: Path) -> dict:
         "fps": round(int(num) / int(den)),
         "frames": int(s["nb_read_frames"]),
     }
+
+
+def _widest_caption(captions: list[dict]) -> tuple[str, int]:
+    """The caption word that renders widest (as shown: edge punctuation off,
+    outline included) and its width in pixels."""
+    font = ImageFont.truetype(str(FONT_HEADING), CAPTION_SIZE)
+    widest, max_w = "", 0
+    for word in captions:
+        shown = display_text(word["text"])
+        w = int(font.getlength(shown)) + 2 * CAPTION_BORDER if shown else 0
+        if w > max_w:
+            widest, max_w = shown, w
+    return widest, max_w
 
 
 def _frames(path: Path) -> int:
@@ -291,8 +347,12 @@ def measure_site(site_dir: Path) -> dict:
     segments = [
         Segment(s["kind"], s["duration"], s.get("source"), s.get("start", 0.0)) for s in timeline
     ]
-    name_at = name_audio_at(segments, probe_duration(site_dir / "name.mp3"))
+    name_s = probe_duration(site_dir / "name.mp3")
+    name_at = name_audio_at(segments, name_s)
     captions = json.loads((site_dir / "render" / "captions.json").read_text(encoding="utf-8"))
+    widest, max_w = _widest_caption(captions)
+    badge_ws = [Image.open(p).size[0] for p in sorted((site_dir / "render").glob("badge_*.png"))]
+    code = country_code_for(site.get("country"))
     lufs, peak = _loudness(video)
     return {
         "site": site["name"],
@@ -318,6 +378,13 @@ def measure_site(site_dir: Path) -> dict:
         "stills_rejected": len(selection["rejected"]),
         "stills_used": sum(1 for s in timeline if s["kind"] == "still"),
         "name_lines": len(name_layout(site["name"])[0]),
+        "widest_caption": widest,
+        "max_caption_w": max_w,
+        "badge_ws": badge_ws,
+        "flag": code,
+        "flag_exists": bool(code) and flag_path(code).exists(),
+        "return_needed_s": name_s + NAME_AUDIO_DELAY_S + NAME_END_GAP_S,
+        "min_still_s": min((s["duration"] for s in timeline if s["kind"] == "still"), default=0.0),
         "card_words": len(site["card_text"].split()),
         "caption_words": len(captions),
         "captions_end": max((w["end"] for w in captions), default=0.0),

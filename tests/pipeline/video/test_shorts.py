@@ -537,6 +537,13 @@ def _measurements(**over):
         "stills_rejected": 4,
         "stills_used": 3,
         "name_lines": 1,
+        "widest_caption": "Intihuatana",
+        "max_caption_w": 640,
+        "badge_ws": [400, 360],
+        "flag": "pe",
+        "flag_exists": True,
+        "return_needed_s": 2.55,
+        "min_still_s": 3.44,
         "card_words": 27,
         "caption_words": 27,
         "captions_end": 15.1,
@@ -617,6 +624,23 @@ class TestBadgeMotion:
 
 
 class TestAudit:
+    def test_new_elements_have_checks(self):
+        names = {c.name for c in evaluate(_measurements())}
+        assert {
+            "captions_fit",
+            "badges_fit",
+            "flag_present",
+            "return_covers_name",
+            "stills_pace",
+        } <= names
+        assert passed(evaluate(_measurements()))
+        assert not passed(evaluate(_measurements(max_caption_w=1010)))
+        assert not passed(evaluate(_measurements(badge_ws=[600, 520])))  # 48+600+18+520+48 > 1080
+        assert not passed(evaluate(_measurements(flag_exists=False)))
+        assert not passed(evaluate(_measurements(return_s=3.0, return_needed_s=3.4)))
+        assert not passed(evaluate(_measurements(min_still_s=1.9)))
+        assert passed(evaluate(_measurements(badge_ws=[])))  # no badges is allowed
+
     def test_captions_must_cover_every_card_word_and_end_before_the_name(self):
         assert passed(evaluate(_measurements()))
         short = {c.name: c.ok for c in evaluate(_measurements(caption_words=26))}
