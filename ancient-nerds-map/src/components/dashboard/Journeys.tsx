@@ -37,31 +37,36 @@ export function Journeys({ state }: { state: Loaded<JourneysData> }) {
   return (
     <Panel question="Wie bewegen sie sich?" wide>
       <Status state={state} />
-      {j && j.chains.length === 0 && <p className="dash-empty">Keine Wege in diesem Zeitraum.</p>}
-      {j && j.chains.length > 0 && (
-        <ol className="dash-journeys">
-          {j.chains.map(c => (
-            <li key={c.chain} className="dash-journey">
-              <span className="dash-journey-chain">
-                {chainChips(c.chain).map((chip, i) => (
-                  <Fragment key={`${i}-${chip.label}`}>
-                    {i > 0 && (
-                      <span className="dash-journey-arrow" aria-hidden="true">
-                        →
-                      </span>
-                    )}
-                    <span className={`dash-chip dash-chip--${chip.tone}`}>{chip.label}</span>
-                  </Fragment>
-                ))}
-              </span>
-              <span className="dash-journey-count">{fmtInt(c.sessions)}</span>
-            </li>
-          ))}
-        </ol>
+      {j && (
+        <>
+          {j.chains.length === 0 ? (
+            <p className="dash-empty">Keine Wege in diesem Zeitraum.</p>
+          ) : (
+            <ol className="dash-journeys">
+              {j.chains.map(c => (
+                <li key={c.chain} className="dash-journey">
+                  <span className="dash-journey-chain">
+                    {chainChips(c.chain).map((chip, i) => (
+                      <Fragment key={`${i}-${chip.label}`}>
+                        {i > 0 && (
+                          <span className="dash-journey-arrow" aria-hidden="true">
+                            →
+                          </span>
+                        )}
+                        <span className={`dash-chip dash-chip--${chip.tone}`}>{chip.label}</span>
+                      </Fragment>
+                    ))}
+                  </span>
+                  <span className="dash-journey-count">{fmtInt(c.sessions)}</span>
+                </li>
+              ))}
+            </ol>
+          )}
+          <p className="dash-note">
+            Nur bestätigt menschliche Sitzungen, höchstens sechs Schritte je Kette. Der erste Chip ist die Quelle.
+          </p>
+        </>
       )}
-      <p className="dash-note">
-        Nur bestätigt menschliche Sitzungen, höchstens sechs Schritte je Kette. Der erste Chip ist die Quelle.
-      </p>
     </Panel>
   )
 }
