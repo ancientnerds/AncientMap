@@ -19,11 +19,10 @@ from pathlib import Path
 from PIL import Image, ImageChops, ImageFont, ImageStat
 
 from pipeline.video.media import FFMPEG_BIN, FFPROBE_BIN, probe_duration
-from pipeline.video.shorts_brand import BADGE_GAP, font_cmap, heading_font, missing_glyphs
+from pipeline.video.shorts_brand import font_cmap, heading_font, missing_glyphs
 from pipeline.video.shorts_captions import display_text
 from pipeline.video.shorts_export import country_code_for, flag_path
 from pipeline.video.shorts_render import (
-    BADGE_TOP_MARGIN,
     CAPTION_BORDER,
     CAPTION_SIZE,
     FPS,
@@ -52,7 +51,6 @@ SILENCE_MAX_DB = -45.0  # the loop point must be below this
 MIN_STILLS = 2
 MAX_NAME_LINES = 3
 CAPTION_MARGIN = 40  # a caption word must stay this far from both frame edges
-BADGE_ROW_MARGIN = 24  # the badge row under the name, from the frame edges
 
 
 @dataclass(frozen=True)
@@ -151,15 +149,6 @@ def evaluate(m: dict) -> list[Check]:
             "captions_fit",
             m["max_caption_w"] <= W - 2 * CAPTION_MARGIN,
             f"widest word {m['max_caption_w']} px ({m['widest_caption']!r})",
-        )
-    )
-    parked = 2 * BADGE_TOP_MARGIN + sum(m["badge_ws"]) + BADGE_GAP * max(len(m["badge_ws"]) - 1, 0)
-    row = sum(m["badge_ws"]) + BADGE_GAP * max(len(m["badge_ws"]) - 1, 0)
-    checks.append(
-        Check(
-            "badges_fit",
-            parked <= W and row <= W - 2 * BADGE_ROW_MARGIN,
-            f"{len(m['badge_ws'])} badge(s), widths {m['badge_ws']}",
         )
     )
     checks.append(Check("flag_present", m["flag_exists"], m["flag"] or "no country code"))
@@ -359,7 +348,6 @@ def measure_site(site_dir: Path) -> dict:
     name_at = name_audio_at(segments, name_s)
     captions = json.loads((site_dir / "render" / "captions.json").read_text(encoding="utf-8"))
     widest, max_w = _widest_caption(captions, heading_font(site["name"] + " " + site["card_text"]))
-    badge_ws = [Image.open(p).size[0] for p in sorted((site_dir / "render").glob("badge_*.png"))]
     code = country_code_for(site.get("country"))
     lufs, peak = _loudness(video)
     return {
@@ -388,7 +376,6 @@ def measure_site(site_dir: Path) -> dict:
         "name_lines": len(name_layout(site["name"])[0]),
         "widest_caption": widest,
         "max_caption_w": max_w,
-        "badge_ws": badge_ws,
         "flag": code,
         "flag_exists": bool(code) and flag_path(code).exists(),
         "heading_font": heading_font(site["name"] + " " + site["card_text"]).name,

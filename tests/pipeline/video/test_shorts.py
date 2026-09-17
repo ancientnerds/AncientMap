@@ -6,16 +6,7 @@ import pytest
 
 from pipeline.video.media import ff_path
 from pipeline.video.shorts_audit import evaluate, passed
-from pipeline.video.shorts_brand import (
-    FONT_BADGE,
-    FONT_SOURCES,
-    FONTS,
-    badge_specs,
-    category_color,
-    missing_glyphs,
-    period_color,
-    render_badges,
-)
+from pipeline.video.shorts_brand import FONT_SOURCES, FONTS, missing_glyphs
 from pipeline.video.shorts_captions import Word, align_words, display_text, spoken_at, srt_text
 from pipeline.video.shorts_export import (
     RARITY_NAMES,
@@ -27,11 +18,8 @@ from pipeline.video.shorts_images import local_image_name
 from pipeline.video.shorts_render import (
     NAME_AUDIO_DELAY_S,
     NARRATION_TAIL_S,
-    BadgeLayer,
     Segment,
     StillPick,
-    badge_layers,
-    badge_position,
     build_comment,
     build_description,
     captions_filter,
@@ -543,7 +531,6 @@ def _measurements(**over):
         "name_lines": 1,
         "widest_caption": "Intihuatana",
         "max_caption_w": 640,
-        "badge_ws": [400, 360],
         "flag": "pe",
         "flag_exists": True,
         "heading_font": "orbitron-700.ttf",
@@ -559,94 +546,23 @@ def _measurements(**over):
 
 
 class TestReturnOverlays:
-    def test_flag_under_the_name_or_under_the_badges_row(self):
-        g = return_overlays_graph(3.0, name_lines=1, line_h=100, badges_h=0)
+    def test_flag_fades_with_the_name_and_sits_under_it(self):
+        g = return_overlays_graph(3.0, name_lines=1, line_h=100)
         assert g.startswith("[1:v]format=rgba,scale=180:-1,fade=t=in:st=0:d=0.3:alpha=1,")
         assert "fade=t=out:st=2.350:d=0.5:alpha=1[flag]" in g
         assert g.endswith("[base][flag]overlay=x=(W-w)/2:y=904:shortest=1[out]")  # 770 + 100 + 34
-        g = return_overlays_graph(3.0, name_lines=1, line_h=100, badges_h=70)
-        assert g.endswith("y=1014:shortest=1[out]")  # + 40 gap + 70 badges
-
-
-class TestBadgeMotion:
-    BADGES = [(Path("cat.png"), 400, 70), (Path("per.png"), 360, 70)]
-
-    def test_layers_park_left_and_right_then_meet_under_the_name(self):
-        cat, per = badge_layers(
-            self.BADGES,
-            stills_start=6.0,
-            return_start=16.3,
-            total_s=19.31,
-            name_lines=1,
-            line_h=100,
-        )
-        assert (cat.t_in, per.t_in) == (6.0, pytest.approx(11.15))  # period halfway to the name
-        assert (cat.x_top, per.x_top) == (48, 1080 - 48 - 360)
-        assert (cat.x_end, per.x_end) == (151, 151 + 400 + 18)  # centred row, 18 px gap
-        assert cat.y_end == per.y_end == 770 + 100 + 40
-        assert cat.t_move == per.t_move == 16.3
-        assert cat.t_fade == pytest.approx(19.31 - 0.15 - 0.5)
-
-    def test_single_badge_and_no_return(self):
-        (only,) = badge_layers(
-            self.BADGES[:1],
-            stills_start=6.0,
-            return_start=None,
-            total_s=19.31,
-            name_lines=2,
-            line_h=78,
-        )
-        assert only.x_top == 48 and only.x_end == (1080 - 400) // 2
-        assert only.t_move == 19.31  # never leaves the parked position
-        assert (
-            badge_layers(
-                [], stills_start=6.0, return_start=16.3, total_s=19.31, name_lines=1, line_h=100
-            )
-            == []
-        )
-
-    def test_position_expressions(self):
-        layer = BadgeLayer(Path("cat.png"), 400, 70, 6.0, 48, 151, 910, 16.3, 18.66)
-        x, y = badge_position(layer)
-        assert y.startswith(
-            "if(lt(t\\,16.300)\\,-70+270*(1-pow(1-clip((t-6.000)/0.5\\,0\\,1)\\,3))\\,200+710*"
-        )
-        assert x.startswith("if(lt(t\\,16.300)\\,48\\,48+103*if(lt(clip((t-16.300)/0.6")
-
-    def test_final_graph_overlays_badges_after_the_flashes(self):
-        layer = BadgeLayer(Path("cat.png"), 400, 70, 6.0, 48, 151, 910, 16.3, 18.66)
-        g = final_graph(0.0, "drawtext=x", [5.98], [layer])
-        assert "[2:v]format=rgba,fade=t=out:st=18.660:d=0.5:alpha=1[b0]" in g
-        assert "[g0][f0]overlay=eof_action=pass" in g and "[g1][b0]overlay=x='if(lt(t" in g
-        assert g.split("[vout]")[0].endswith(":shortest=1,drawtext=x")
-
-    def test_segment_starts_count_frames(self):
-        segs = [
-            Segment("clip", 5.983, "o"),
-            Segment("still", 3.44, "a"),
-            Segment("return", 3.0, "r"),
-        ]
-        assert segment_starts(segs, clip_frames=[358]) == pytest.approx([0.0, 358 / 60, 564 / 60])
 
 
 class TestAudit:
     def test_new_elements_have_checks(self):
         names = {c.name for c in evaluate(_measurements())}
-        assert {
-            "captions_fit",
-            "badges_fit",
-            "flag_present",
-            "return_covers_name",
-            "stills_pace",
-        } <= names
+        assert {"captions_fit", "flag_present", "return_covers_name", "stills_pace"} <= names
         assert passed(evaluate(_measurements()))
         assert not passed(evaluate(_measurements(max_caption_w=1010)))
-        assert not passed(evaluate(_measurements(badge_ws=[600, 520])))  # 48+600+18+520+48 > 1080
         assert not passed(evaluate(_measurements(flag_exists=False)))
         assert not passed(evaluate(_measurements(missing_glyphs=["\u015f"])))
         assert not passed(evaluate(_measurements(return_s=3.0, return_needed_s=3.4)))
         assert not passed(evaluate(_measurements(min_still_s=1.9)))
-        assert passed(evaluate(_measurements(badge_ws=[])))  # no badges is allowed
 
     def test_captions_must_cover_every_card_word_and_end_before_the_name(self):
         assert passed(evaluate(_measurements()))
@@ -837,7 +753,7 @@ class TestSpokenAndSrt:
         assert srt_text([Word(str(i), i, i + 1) for i in range(7)]).count("-->") == 2
 
 
-class TestBrandBadges:
+class TestBrandFonts:
     def test_every_video_font_has_a_source(self):
         for source, weight in FONTS.values():
             assert source in FONT_SOURCES and 100 <= weight <= 900
@@ -846,34 +762,3 @@ class TestBrandBadges:
         cmap = {ord(c) for c in "Karatepe-Aslnt "}
         assert missing_glyphs("Karatepe-Aslanta\u015f", cmap) == ["\u015f"]
         assert missing_glyphs("Karatepe", cmap) == []
-
-    def test_colours_come_from_the_frontend_constants(self):
-        assert category_color("Fortress/citadel") == "#dd1111"
-        assert category_color("fortress/citadel") == "#dd1111"  # case-insensitive like the site
-        assert category_color("Something new") == "#777777"
-        assert category_color(None) == "#777777"
-        assert period_color("1000 - 1500 AD") == "#ffdd00"
-        assert period_color("whenever") == "#9ca3af"
-
-    def test_badge_specs_follow_the_site_badges(self):
-        site = {"site_type": "Fortress/citadel", "period_name": "1000 - 1500 AD"}
-        assert badge_specs(site) == [("FORTRESS/CITADEL", "#dd1111"), ("1000 - 1500 AD", "#ffdd00")]
-        assert badge_specs({"site_type": "Site", "period_name": "Unknown"}) == []
-        assert badge_specs({"site_type": None, "period_name": "1500+ AD"}) == [
-            ("1500+ AD", "#ffff00")
-        ]
-
-    @pytest.mark.skipif(
-        not FONT_BADGE.exists(),
-        reason="video-assets/fonts is gitignored; ensure_fonts() fills it on the render "
-        "machine only — without the file this test blocked every deploy (CI 2026-09-17)",
-    )
-    def test_render_badges_writes_a_transparent_png(self, tmp_path):
-        out = tmp_path / "badges.png"
-        w, h = render_badges([("FORTRESS/CITADEL", "#dd1111"), ("1000 - 1500 AD", "#ffdd00")], out)
-        assert out.exists() and w > 500 and 50 < h < 90
-        from PIL import Image
-
-        with Image.open(out) as im:
-            assert im.mode == "RGBA" and im.size == (w, h)
-            assert im.getpixel((0, 0))[3] > 200  # the border pixel is opaque

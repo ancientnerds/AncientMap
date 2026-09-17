@@ -21,15 +21,7 @@ from pathlib import Path
 from typing import Literal
 
 from pipeline.video.media import ff_path, probe_duration, probe_frames, run_ffmpeg
-from pipeline.video.shorts_brand import (
-    BADGE_GAP,
-    FONT_BODY,
-    FONT_HEADING,
-    badge_specs,
-    ensure_fonts,
-    heading_font,
-    render_badges,
-)
+from pipeline.video.shorts_brand import FONT_BODY, FONT_HEADING, ensure_fonts, heading_font
 from pipeline.video.shorts_captions import Word, caption_words, display_text, spoken_at, srt_text
 from pipeline.video.shorts_select import focus_of
 from pipeline.video.shorts_tts import specific_place
@@ -65,15 +57,6 @@ CAPTION_SIZE = 92
 CAPTION_Y = 1230
 CAPTION_BORDER = 5
 NAME_BORDER = 3
-# Category / period badges (the website's, see shorts_brand). The category
-# slides in from the top at the first still, the period halfway to the name;
-# both park at the top, clear of the Shorts UI, and glide under the site name
-# in the return flight — where the site page shows them — fading with it.
-BADGES_GAP = 40  # from the name block's bottom edge to the badges row
-BADGE_TOP_Y = 200  # parked position: below the Shorts player's top icons
-BADGE_TOP_MARGIN = 48  # from the frame edges while parked
-BADGE_SLIDE_S = 0.5
-BADGE_MOVE_S = 0.6
 FLAG_GAP = 34
 # Camera flash at the start of every still (user, 17.09.): white at FLASH_PEAK
 # on the first frame, gone after FLASH_S. The times go to render/flashes.json
@@ -275,66 +258,6 @@ def flash_times(segments: list[Segment], clip_frames: list[int] | None = None) -
     return [t for seg, t in zip(segments, starts, strict=True) if seg.kind == "still"]
 
 
-@dataclass(frozen=True)
-class BadgeLayer:
-    path: Path
-    w: int
-    h: int
-    t_in: float  # slides in from above the frame
-    x_top: int  # parked position
-    x_end: int  # under the name
-    y_end: int
-    t_move: float  # glides from the parked position to the name
-    t_fade: float  # starts fading out (with the name)
-
-
-def badge_layers(
-    badges: list[tuple[Path, int, int]],
-    *,
-    stills_start: float,
-    return_start: float | None,
-    total_s: float,
-    name_lines: int,
-    line_h: int,
-) -> list[BadgeLayer]:
-    """Timing and positions for up to two badges (path, w, h): the first slides
-    in at the first still and parks top-left, the second halfway to the name
-    and parks top-right; at the return they glide into a centred row under
-    the name (`BADGES_GAP` below the name block) and fade out with it."""
-    if not badges:
-        return []
-    move = return_start if return_start is not None else total_s
-    total_w = sum(w for _, w, _ in badges) + BADGE_GAP * (len(badges) - 1)
-    x_end = (W - total_w) // 2
-    y_end = name_block_top(name_lines, line_h) + name_lines * line_h + BADGES_GAP
-    t_fade = total_s - NAME_END_GAP_S - NAME_FADE_OUT_S
-    layers: list[BadgeLayer] = []
-    for k, (path, w, h) in enumerate(badges):
-        t_in = stills_start if k == 0 else (stills_start + move) / 2
-        x_top = BADGE_TOP_MARGIN if k == 0 else W - BADGE_TOP_MARGIN - w
-        layers.append(BadgeLayer(path, w, h, t_in, x_top, x_end, y_end, move, t_fade))
-        x_end += w + BADGE_GAP
-    return layers
-
-
-def badge_position(layer: BadgeLayer) -> tuple[str, str]:
-    """overlay x/y expressions: off-screen above until `t_in`, eased slide down
-    to the parked position, then an eased glide to the end position."""
-    p_in = rf"clip((t-{layer.t_in:.3f})/{BADGE_SLIDE_S}\,0\,1)"
-    e_in = rf"(1-pow(1-{p_in}\,3))"
-    p_mv = rf"clip((t-{layer.t_move:.3f})/{BADGE_MOVE_S}\,0\,1)"
-    e_mv = rf"if(lt({p_mv}\,0.5)\,4*pow({p_mv}\,3)\,1-pow(-2*{p_mv}+2\,3)/2)"
-    y = (
-        rf"if(lt(t\,{layer.t_move:.3f})\,{-layer.h}+{BADGE_TOP_Y + layer.h}*{e_in}\,"
-        f"{BADGE_TOP_Y}+{layer.y_end - BADGE_TOP_Y}*{e_mv})"
-    )
-    x = (
-        rf"if(lt(t\,{layer.t_move:.3f})\,{layer.x_top}\,"
-        f"{layer.x_top}+{layer.x_end - layer.x_top}*{e_mv})"
-    )
-    return x, y
-
-
 def name_audio_at(segments: list[Segment], name_s: float) -> float:
     """When the spoken name starts: shortly into the return clip, or at the end
     of the stills when no return clip was recorded — but never so late that a
@@ -428,13 +351,12 @@ def name_block_top(name_lines: int, line_h: int) -> int:
     return (H - name_lines * line_h) // 2 - 140
 
 
-def return_overlays_graph(duration: float, name_lines: int, line_h: int, *, badges_h: int) -> str:
+def return_overlays_graph(duration: float, name_lines: int, line_h: int) -> str:
     """filter_complex tail for the return clip: the flag (input 1) centred under
-    the name block — under the badges row when there is one (`badges_h`) —
-    fading in and out with the name."""
+    the name block, fading in and out with the name."""
     top = name_block_top(name_lines, line_h)
     end = duration - NAME_END_GAP_S
-    y = top + name_lines * line_h + FLAG_GAP + (BADGES_GAP + badges_h if badges_h else 0)
+    y = top + name_lines * line_h + FLAG_GAP
     return (
         f"[1:v]format=rgba,scale={FLAG_W}:-1,"
         f"fade=t=in:st=0:d={NAME_FADE_IN_S}:alpha=1,"
@@ -568,11 +490,9 @@ def render_return(
     name_size: int,
     name_line_h: int,
     flag: Path | None,
-    badges_h: int = 0,
     font: Path = FONT_HEADING,
 ) -> Path:
-    """The return clip: name overlay (clip_filter) plus the flag under the
-    name, leaving room for the badges row (`badges_h`) the final pass adds."""
+    """The return clip: name overlay (clip_filter) plus the flag under the name."""
     base = clip_filter(
         duration,
         credit_file=credit_file,
@@ -584,7 +504,7 @@ def render_return(
     )
     if flag is None:
         return run_ffmpeg(["-i", str(src), "-t", f"{duration:.3f}", "-vf", base, *X264], out)
-    tail = return_overlays_graph(duration, name_lines, name_line_h, badges_h=badges_h)
+    tail = return_overlays_graph(duration, name_lines, name_line_h)
     return run_ffmpeg(
         [
             "-i",
@@ -770,16 +690,11 @@ def overlays_filter(words: list[Word], work: Path, font: Path = FONT_HEADING) ->
     return captions_filter(words, work / "captions", font)
 
 
-def final_graph(
-    gain: float,
-    overlays: str = "",
-    flashes: list[float] | None = None,
-    badges: list[BadgeLayer] | None = None,
-) -> str:
+def final_graph(gain: float, overlays: str = "", flashes: list[float] | None = None) -> str:
     """filter_complex for the final pass: graded picture, a camera flash at
-    every still start (a white layer that decays over FLASH_S), the animated
-    badges (inputs 2…), the text layer on top; pre-mixed voice lifted by a
-    fixed gain with a true-peak limiter as the only dynamic element."""
+    every still start (a white layer that decays over FLASH_S), the text layer
+    on top; pre-mixed voice lifted by a fixed gain with a true-peak limiter as
+    the only dynamic element."""
     parts: list[str] = []
     src, stage = "[0:v]", LOOK_FILTER
     n = 0
@@ -793,16 +708,6 @@ def final_graph(
         # half a frame early so the boundary frame itself is inside the window
         t0 = t - 0.5 / FPS
         stage = rf"overlay=eof_action=pass:enable='between(t\,{t0:.3f}\,{t0 + FLASH_S:.3f})'"
-        n += 1
-    for k, layer in enumerate(badges or []):
-        parts.append(f"{src}{stage}[g{n}]")
-        parts.append(
-            f"[{2 + k}:v]format=rgba,"
-            f"fade=t=out:st={layer.t_fade:.3f}:d={NAME_FADE_OUT_S}:alpha=1[b{k}]"
-        )
-        x, y = badge_position(layer)
-        src = f"[g{n}][b{k}]"
-        stage = f"overlay=x='{x}':y='{y}':shortest=1"
         n += 1
     if overlays:
         stage = f"{stage},{overlays}"
@@ -818,16 +723,12 @@ def concat_and_mux(
     out: Path,
     overlays: str = "",
     flashes: list[float] | None = None,
-    badges: list[BadgeLayer] | None = None,
 ) -> Path:
     """Concatenate the segments, grade the picture, and lay the pre-mixed voice
     under them. The mix is already exactly as long as the picture, so no
     -shortest: that flag cut the buffered tail (the spoken name) in an earlier cut."""
     list_file = out.parent / "concat.txt"
     list_file.write_text("".join(f"file '{p.as_posix()}'\n" for p in parts), encoding="utf-8")
-    badge_args: list[str] = []
-    for layer in badges or []:
-        badge_args += ["-loop", "1", "-framerate", str(FPS), "-i", str(layer.path)]
     return run_ffmpeg(
         [
             "-f",
@@ -838,9 +739,8 @@ def concat_and_mux(
             str(list_file),
             "-i",
             str(mix),
-            *badge_args,
             "-filter_complex",
-            final_graph(gain, overlays, flashes, badges),
+            final_graph(gain, overlays, flashes),
             "-map",
             "[vout]",
             "-map",
@@ -927,11 +827,6 @@ def render_short(
     name_file = work / "name.txt"
     # LF only: on Windows write_text would emit CR LF and drawtext renders the CR as an empty line
     name_file.write_text(chr(10).join(name_lines), encoding="utf-8", newline=chr(10))
-    badge_images = [
-        (work / f"badge_{k}.png", *render_badges([spec], work / f"badge_{k}.png"))
-        for k, spec in enumerate(badge_specs(site))
-    ]
-    badges_h = max((h for _, _, h in badge_images), default=0)
 
     focus_by_path = {st["local_path"]: focus_of(st.get("verdict")) for st in stills}
     parts: list[Path] = []
@@ -966,7 +861,6 @@ def render_short(
                     name_size=name_size,
                     name_line_h=name_line_h,
                     flag=flag,
-                    badges_h=badges_h,
                     font=font,
                 )
             n += 1
@@ -978,17 +872,6 @@ def render_short(
     name_at = name_audio_at(segments, probe_duration(name_audio))
     starts = segment_starts(segments, clip_frames)
     flashes = [t for seg, t in zip(segments, starts, strict=True) if seg.kind == "still"]
-    return_start = next(
-        (t for seg, t in zip(segments, starts, strict=True) if seg.kind == "return"), None
-    )
-    layers = badge_layers(
-        badge_images,
-        stills_start=flashes[0] if flashes else 0.0,
-        return_start=return_start,
-        total_s=sum(s.duration for s in segments),
-        name_lines=len(name_lines),
-        line_h=name_line_h,
-    )
     (work / "flashes.json").write_text(json.dumps(flashes), encoding="utf-8")
     mix = premix(
         narration,
@@ -1002,9 +885,7 @@ def render_short(
     )
     lufs = measure_lufs(mix)
     logger.info("voice mix %.1f LUFS → gain %+.1f dB", lufs, gain_db(lufs))
-    concat_and_mux(
-        parts, mix, gain_db(lufs), final, overlays_filter(words, work, font), flashes, layers
-    )
+    concat_and_mux(parts, mix, gain_db(lufs), final, overlays_filter(words, work, font), flashes)
     (site_dir / "description.txt").write_text(
         build_description(site, used, voice_id, mapbox_used=opening is not None),
         encoding="utf-8",
