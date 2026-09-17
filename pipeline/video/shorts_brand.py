@@ -16,16 +16,24 @@ from PIL import Image, ImageDraw, ImageFont
 
 FRONTEND = Path(__file__).resolve().parents[2] / "ancient-nerds-map"
 COLORS_TS = FRONTEND / "src" / "constants" / "colors.ts"
-SITE_FONTS = FRONTEND / "public" / "fonts"
 FONT_DIR = Path(__file__).resolve().parents[2] / "video-assets" / "fonts"
-# The video's fonts are the website's self-hosted woff2 files, converted to
-# TTF for ffmpeg/Pillow (`ensure_fonts`). orbitron-700.woff2 on the site is
-# the variable font (default weight 400), so the 700 instance is generated.
-FONTS: dict[str, tuple[str, int | None]] = {
-    "orbitron-700.ttf": ("orbitron-700.woff2", 700),
-    "jetbrains-mono-500.ttf": ("jetbrains-mono-500.woff2", None),
-    "jetbrains-mono-400-latin.ttf": ("jetbrains-mono-400-latin.woff2", None),
+# The video's fonts are the families the website uses (--font-heading Orbitron,
+# --font-body JetBrains Mono). The site hosts latin-only woff2 subsets, so the
+# static instances are cut from the full variable fonts of the google/fonts
+# repo (`ensure_fonts`: download once into FONT_DIR/src, instantiate weights).
+FONT_SOURCES: dict[str, str] = {
+    "Orbitron[wght].ttf": "https://raw.githubusercontent.com/google/fonts/main/ofl/orbitron/Orbitron%5Bwght%5D.ttf",
+    "JetBrainsMono[wght].ttf": "https://raw.githubusercontent.com/google/fonts/main/ofl/jetbrainsmono/JetBrainsMono%5Bwght%5D.ttf",
 }
+FONTS: dict[str, tuple[str, int]] = {
+    "orbitron-700.ttf": ("Orbitron[wght].ttf", 700),
+    "jetbrains-mono-400.ttf": ("JetBrainsMono[wght].ttf", 400),
+    "jetbrains-mono-500.ttf": ("JetBrainsMono[wght].ttf", 500),
+    "jetbrains-mono-700.ttf": ("JetBrainsMono[wght].ttf", 700),
+}
+FONT_HEADING = FONT_DIR / "orbitron-700.ttf"  # the site's hero title weight
+FONT_HEADING_EXT = FONT_DIR / "jetbrains-mono-700.ttf"  # Orbitron has no Latin Extended-A
+FONT_BODY = FONT_DIR / "jetbrains-mono-400.ttf"
 FONT_BADGE = FONT_DIR / "jetbrains-mono-500.ttf"
 
 # .meta-badge-lg over a hero image, scaled ×3 for the 1080-px frame
@@ -43,21 +51,52 @@ _MAPS: dict[str, dict[str, str]] = {}
 
 
 def ensure_fonts() -> None:
-    """Create the TTFs in FONTS from the site's woff2 files when missing; a
-    variable font is instantiated at the requested weight."""
+    """Fetch the variable source fonts once and cut the static instances in
+    FONTS when they are missing."""
     from fontTools.ttLib import TTFont
     from fontTools.varLib.instancer import instantiateVariableFont
 
-    FONT_DIR.mkdir(parents=True, exist_ok=True)
-    for ttf_name, (woff2_name, weight) in FONTS.items():
+    src_dir = FONT_DIR / "src"
+    src_dir.mkdir(parents=True, exist_ok=True)
+    for ttf_name, (source, weight) in FONTS.items():
         out = FONT_DIR / ttf_name
         if out.exists():
             continue
-        font = TTFont(SITE_FONTS / woff2_name)
-        if weight is not None:
-            font = instantiateVariableFont(font, {"wght": weight})
+        src = src_dir / source
+        if not src.exists():
+            import httpx
+
+            src.write_bytes(
+                httpx.get(FONT_SOURCES[source], follow_redirects=True, timeout=60)
+                .raise_for_status()
+                .content
+            )
+        font = instantiateVariableFont(TTFont(src), {"wght": weight})
         font.flavor = None
         font.save(out)
+
+
+_CMAPS: dict[Path, set[int]] = {}
+
+
+def font_cmap(font: Path) -> set[int]:
+    from fontTools.ttLib import TTFont
+
+    if font not in _CMAPS:
+        ensure_fonts()
+        _CMAPS[font] = set(TTFont(font).getBestCmap())
+    return _CMAPS[font]
+
+
+def missing_glyphs(text: str, cmap: set[int]) -> list[str]:
+    """Characters of `text` the font cannot draw (drawtext would show boxes)."""
+    return sorted({ch for ch in text if not ch.isspace() and ord(ch) not in cmap})
+
+
+def heading_font(text: str) -> Path:
+    """Orbitron 700 when it can draw every character of `text`, else JetBrains
+    Mono 700 — the next font in the site's --font-heading stack."""
+    return FONT_HEADING if not missing_glyphs(text, font_cmap(FONT_HEADING)) else FONT_HEADING_EXT
 
 
 def _color_map(name: str) -> dict[str, str]:

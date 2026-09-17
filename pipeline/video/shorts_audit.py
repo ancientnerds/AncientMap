@@ -19,14 +19,13 @@ from pathlib import Path
 from PIL import Image, ImageChops, ImageFont, ImageStat
 
 from pipeline.video.media import FFMPEG_BIN, FFPROBE_BIN, probe_duration
-from pipeline.video.shorts_brand import BADGE_GAP
+from pipeline.video.shorts_brand import BADGE_GAP, font_cmap, heading_font, missing_glyphs
 from pipeline.video.shorts_captions import display_text
 from pipeline.video.shorts_export import country_code_for, flag_path
 from pipeline.video.shorts_render import (
     BADGE_TOP_MARGIN,
     CAPTION_BORDER,
     CAPTION_SIZE,
-    FONT_HEADING,
     FPS,
     MIN_STILL_S,
     NAME_AUDIO_DELAY_S,
@@ -166,6 +165,15 @@ def evaluate(m: dict) -> list[Check]:
     checks.append(Check("flag_present", m["flag_exists"], m["flag"] or "no country code"))
     checks.append(
         Check(
+            "glyphs_covered",
+            not m["missing_glyphs"],
+            f"all characters in {m['heading_font']}"
+            if not m["missing_glyphs"]
+            else "missing " + " ".join(f"U+{ord(c):04X}" for c in m["missing_glyphs"]),
+        )
+    )
+    checks.append(
+        Check(
             "return_covers_name",
             m["return_s"] >= m["return_needed_s"],
             f"return {m['return_s']:.2f} s, spoken name needs {m['return_needed_s']:.2f} s",
@@ -226,10 +234,10 @@ def _ffprobe_stream(path: Path) -> dict:
     }
 
 
-def _widest_caption(captions: list[dict]) -> tuple[str, int]:
+def _widest_caption(captions: list[dict], font_path: Path) -> tuple[str, int]:
     """The caption word that renders widest (as shown: edge punctuation off,
     outline included) and its width in pixels."""
-    font = ImageFont.truetype(str(FONT_HEADING), CAPTION_SIZE)
+    font = ImageFont.truetype(str(font_path), CAPTION_SIZE)
     widest, max_w = "", 0
     for word in captions:
         shown = display_text(word["text"])
@@ -350,7 +358,7 @@ def measure_site(site_dir: Path) -> dict:
     name_s = probe_duration(site_dir / "name.mp3")
     name_at = name_audio_at(segments, name_s)
     captions = json.loads((site_dir / "render" / "captions.json").read_text(encoding="utf-8"))
-    widest, max_w = _widest_caption(captions)
+    widest, max_w = _widest_caption(captions, heading_font(site["name"] + " " + site["card_text"]))
     badge_ws = [Image.open(p).size[0] for p in sorted((site_dir / "render").glob("badge_*.png"))]
     code = country_code_for(site.get("country"))
     lufs, peak = _loudness(video)
@@ -383,6 +391,11 @@ def measure_site(site_dir: Path) -> dict:
         "badge_ws": badge_ws,
         "flag": code,
         "flag_exists": bool(code) and flag_path(code).exists(),
+        "heading_font": heading_font(site["name"] + " " + site["card_text"]).name,
+        "missing_glyphs": missing_glyphs(
+            site["name"] + " " + site["card_text"],
+            font_cmap(heading_font(site["name"] + " " + site["card_text"])),
+        ),
         "return_needed_s": name_s + NAME_AUDIO_DELAY_S + NAME_END_GAP_S,
         "min_still_s": min((s["duration"] for s in timeline if s["kind"] == "still"), default=0.0),
         "card_words": len(site["card_text"].split()),

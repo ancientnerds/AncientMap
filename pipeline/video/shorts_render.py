@@ -21,7 +21,15 @@ from pathlib import Path
 from typing import Literal
 
 from pipeline.video.media import ff_path, probe_duration, probe_frames, run_ffmpeg
-from pipeline.video.shorts_brand import BADGE_GAP, badge_specs, ensure_fonts, render_badges
+from pipeline.video.shorts_brand import (
+    BADGE_GAP,
+    FONT_BODY,
+    FONT_HEADING,
+    badge_specs,
+    ensure_fonts,
+    heading_font,
+    render_badges,
+)
 from pipeline.video.shorts_captions import Word, caption_words, display_text, spoken_at, srt_text
 from pipeline.video.shorts_select import focus_of
 from pipeline.video.shorts_tts import specific_place
@@ -115,11 +123,6 @@ LOOK_FILTER = (
     "noise=alls=4:allf=t+u"
 )
 
-FONT_DIR = Path(__file__).resolve().parents[2] / "video-assets" / "fonts"
-# The website's fonts (shorts_brand.ensure_fonts converts them from the site's woff2):
-# Orbitron 700 = the hero title weight, JetBrains Mono = --font-body.
-FONT_HEADING = FONT_DIR / "orbitron-700.ttf"
-FONT_BODY = FONT_DIR / "jetbrains-mono-400-latin.ttf"
 
 X264 = [
     "-c:v",
@@ -448,6 +451,7 @@ def clip_filter(
     name_lines: int = 1,
     name_size: int = 84,
     name_line_h: int = 100,
+    font: Path = FONT_HEADING,
 ) -> str:
     """Portrait cover of a recorded clip with the Mapbox credit; the return clip
     also carries the site name, centred in the upper half, white with a black
@@ -457,7 +461,7 @@ def clip_filter(
         size, line_h = name_size, name_line_h
         y = name_block_top(name_lines, line_h)
         parts.append(
-            f"drawtext=fontfile='{ff_path(FONT_HEADING)}':textfile='{ff_path(name_file)}':"
+            f"drawtext=fontfile='{ff_path(font)}':textfile='{ff_path(name_file)}':"
             f"fontcolor=white:fontsize={size}:line_spacing=16:x=(w-text_w)/2:y={y}:"
             f"borderw={NAME_BORDER}:bordercolor=black:"
             f"shadowcolor=black@0.6:shadowx=3:shadowy=3:alpha='{name_alpha(duration)}'"
@@ -565,6 +569,7 @@ def render_return(
     name_line_h: int,
     flag: Path | None,
     badges_h: int = 0,
+    font: Path = FONT_HEADING,
 ) -> Path:
     """The return clip: name overlay (clip_filter) plus the flag under the
     name, leaving room for the badges row (`badges_h`) the final pass adds."""
@@ -575,6 +580,7 @@ def render_return(
         name_lines=name_lines,
         name_size=name_size,
         name_line_h=name_line_h,
+        font=font,
     )
     if flag is None:
         return run_ffmpeg(["-i", str(src), "-t", f"{duration:.3f}", "-vf", base, *X264], out)
@@ -734,7 +740,7 @@ def gain_db(measured_lufs: float, target_lufs: float = TARGET_LUFS) -> float:
     return target_lufs - measured_lufs
 
 
-def captions_filter(words: list[Word], text_dir: Path) -> str:
+def captions_filter(words: list[Word], text_dir: Path, font: Path = FONT_HEADING) -> str:
     """One drawtext per word, shown exactly between its start and end: white
     heading font with a black outline (the site's title style), no box, no
     edge punctuation. Words go to text files (no escaping of apostrophes,
@@ -749,7 +755,7 @@ def captions_filter(words: list[Word], text_dir: Path) -> str:
         f = text_dir / f"w{i:03d}.txt"
         f.write_text(shown, encoding="utf-8", newline=chr(10))
         parts.append(
-            f"drawtext=fontfile='{ff_path(FONT_HEADING)}':textfile='{ff_path(f)}':"
+            f"drawtext=fontfile='{ff_path(font)}':textfile='{ff_path(f)}':"
             f"fontcolor=white:fontsize={CAPTION_SIZE}:x=(w-text_w)/2:y={CAPTION_Y}:"
             f"borderw={CAPTION_BORDER}:bordercolor=black:"
             f"shadowcolor=black@0.5:shadowx=2:shadowy=2:"
@@ -758,10 +764,10 @@ def captions_filter(words: list[Word], text_dir: Path) -> str:
     return ",".join(parts)
 
 
-def overlays_filter(words: list[Word], work: Path) -> str:
+def overlays_filter(words: list[Word], work: Path, font: Path = FONT_HEADING) -> str:
     """The final-pass text layer: the word-by-word captions, drawn after the
     look filter so the text stays clean."""
-    return captions_filter(words, work / "captions")
+    return captions_filter(words, work / "captions", font)
 
 
 def final_graph(
@@ -874,6 +880,7 @@ def render_short(
     stills and clips; `flag` goes under the name, `music` under everything,
     `flash` (a shutter sound) on every still start."""
     ensure_fonts()
+    font = heading_font(site["name"] + " " + site["card_text"])
     narration = site_dir / "narration.mp3"
     name_audio = site_dir / "name.mp3"
     clips = site_dir / "clips"
@@ -960,6 +967,7 @@ def render_short(
                     name_line_h=name_line_h,
                     flag=flag,
                     badges_h=badges_h,
+                    font=font,
                 )
             n += 1
         parts.append(out)
@@ -994,7 +1002,9 @@ def render_short(
     )
     lufs = measure_lufs(mix)
     logger.info("voice mix %.1f LUFS → gain %+.1f dB", lufs, gain_db(lufs))
-    concat_and_mux(parts, mix, gain_db(lufs), final, overlays_filter(words, work), flashes, layers)
+    concat_and_mux(
+        parts, mix, gain_db(lufs), final, overlays_filter(words, work, font), flashes, layers
+    )
     (site_dir / "description.txt").write_text(
         build_description(site, used, voice_id, mapbox_used=opening is not None),
         encoding="utf-8",

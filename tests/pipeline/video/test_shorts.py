@@ -7,10 +7,11 @@ import pytest
 from pipeline.video.media import ff_path
 from pipeline.video.shorts_audit import evaluate, passed
 from pipeline.video.shorts_brand import (
+    FONT_SOURCES,
     FONTS,
-    SITE_FONTS,
     badge_specs,
     category_color,
+    missing_glyphs,
     period_color,
     render_badges,
 )
@@ -542,6 +543,8 @@ def _measurements(**over):
         "badge_ws": [400, 360],
         "flag": "pe",
         "flag_exists": True,
+        "heading_font": "orbitron-700.ttf",
+        "missing_glyphs": [],
         "return_needed_s": 2.55,
         "min_still_s": 3.44,
         "card_words": 27,
@@ -637,6 +640,7 @@ class TestAudit:
         assert not passed(evaluate(_measurements(max_caption_w=1010)))
         assert not passed(evaluate(_measurements(badge_ws=[600, 520])))  # 48+600+18+520+48 > 1080
         assert not passed(evaluate(_measurements(flag_exists=False)))
+        assert not passed(evaluate(_measurements(missing_glyphs=["\u015f"])))
         assert not passed(evaluate(_measurements(return_s=3.0, return_needed_s=3.4)))
         assert not passed(evaluate(_measurements(min_still_s=1.9)))
         assert passed(evaluate(_measurements(badge_ws=[])))  # no badges is allowed
@@ -831,9 +835,14 @@ class TestSpokenAndSrt:
 
 
 class TestBrandBadges:
-    def test_every_video_font_comes_from_the_site(self):
-        for woff2, _ in FONTS.values():
-            assert (SITE_FONTS / woff2).exists(), woff2
+    def test_every_video_font_has_a_source(self):
+        for source, weight in FONTS.values():
+            assert source in FONT_SOURCES and 100 <= weight <= 900
+
+    def test_missing_glyphs_lists_what_the_font_cannot_draw(self):
+        cmap = {ord(c) for c in "Karatepe-Aslnt "}
+        assert missing_glyphs("Karatepe-Aslanta\u015f", cmap) == ["\u015f"]
+        assert missing_glyphs("Karatepe", cmap) == []
 
     def test_colours_come_from_the_frontend_constants(self):
         assert category_color("Fortress/citadel") == "#dd1111"
