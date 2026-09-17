@@ -707,7 +707,9 @@ class TestCaptions:
         assert (
             words[2].end - words[2].start >= 0.12
         )  # the minimum still applies where there is room
-        assert words[1].end == 0.4  # a short word may run up to the next one, not past it
+        assert words[1].end == 0.17  # min duration, but never past the next start
+        same = align_words(["century", "BC."], [("century", 5.92, 6.04), ("BC.", 5.92, 6.18)])
+        assert same[0].start < same[0].end <= same[1].start  # identical whisper starts pulled apart
 
     def test_needs_recognised_words(self):
         with pytest.raises(ValueError):

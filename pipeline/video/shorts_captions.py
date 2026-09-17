@@ -20,7 +20,8 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 WHISPER_MODEL = "base.en"  # ~150 MB, 1 s per 15 s of speech on CPU
-MIN_WORD_S = 0.12  # a word never flashes shorter than this
+MIN_WORD_S = 0.12  # a word never flashes shorter than this (unless the next word starts sooner)
+MIN_GAP_S = 0.05  # consecutive starts are at least this far apart
 
 
 @dataclass(frozen=True)
@@ -77,18 +78,22 @@ def align_words(display_tokens: list[str], heard: list[tuple[str, float, float]]
             times[k] = (cursor, cursor + step)
             cursor += step
         i = j
-    spans = [(start, max(end, start + MIN_WORD_S)) for start, end in times]
-    # a word ends no later than the next one starts: two words on screen at
-    # once (the minimum duration, or whisper spans that touch) looked like a
-    # double exposure at the same spot (user, 17.09.)
-    spans = [
-        (start, min(end, spans[i + 1][0]) if i + 1 < len(spans) else end)
-        for i, (start, end) in enumerate(spans)
-    ]
-    return [
-        Word(token, round(start, 3), round(max(end, start + 0.05), 3))
-        for token, (start, end) in zip(display_tokens, spans, strict=True)
-    ]
+    # Strictly ordered spans: starts climb by at least MIN_GAP_S (whisper hands
+    # out identical starts now and then), and a word ends no later than the
+    # next one starts — two words on screen at once looked like a double
+    # exposure at the same spot (user, 17.09.). MIN_WORD_S applies where the
+    # next word leaves room.
+    starts = [start for start, _ in times]
+    for i in range(1, len(starts)):
+        starts[i] = max(starts[i], starts[i - 1] + MIN_GAP_S)
+    words: list[Word] = []
+    for i, (token, (_, end)) in enumerate(zip(display_tokens, times, strict=True)):
+        start = starts[i]
+        end = max(end, start + MIN_WORD_S)
+        if i + 1 < len(starts):
+            end = min(end, starts[i + 1])
+        words.append(Word(token, round(start, 3), round(end, 3)))
+    return words
 
 
 EDGE_PUNCT = ".,;:!?\"'()[]\u2026\u2014\u2013-\u201c\u201d\u2018\u2019"
