@@ -20,6 +20,10 @@ map $http_referer $external_referral {
     default 1;
     "" 0;
     ~*^https?://([a-z0-9-]+\.)*ancientnerds\.com(/|:|$) 0;
+    # Local dev and the video recorder run the frontend against the live
+    # API (VITE_DEV_API_TARGET): every /api/ call arrives with a localhost
+    # referer — 60 of the first 82 log lines on 2026-09-17. Not a referral.
+    ~*^https?://(localhost|127\.0\.0\.1)(:|/|$) 0;
 }
 
 # 0 only when the referer is ours or missing AND no utm_source is present.
