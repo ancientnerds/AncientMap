@@ -21,6 +21,7 @@ import { config } from '../config'
 import { useIsFounder } from '../hooks/useIsFounder'
 import CitationPopover from '../components/news/CitationPopover'
 import Breadcrumbs from '../components/layout/Breadcrumbs'
+import ThumbsFeedback from '../components/feedback/ThumbsFeedback'
 import CommunityCta from '../components/layout/CommunityCta'
 import PageHeader from '../components/layout/PageHeader'
 import PageStatsBar from '../components/layout/PageStatsBar'
@@ -527,6 +528,13 @@ function ArticleFromPayload({ article }: { article: ArticleRoute }) {
             }
           >
             <footer className="articles-reader-footer">
+              <ThumbsFeedback
+                prompt="journal_end"
+                target={slugify(article.title)}
+                question="Was this journal useful?"
+                placeholder="What was missing?"
+                extra={{ journal: slugify(article.title) }}
+              />
               <a className="articles-reader-back-link" href="/articles/">
                 ← All journals
               </a>

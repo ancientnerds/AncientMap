@@ -32,7 +32,8 @@ import type { SiteData } from '../data/sites'
 import { useFocusTrap } from '../hooks/useFocusTrap'
 import SiteChip from './lyra/SiteChip'
 import LyraWelcome from './lyra/LyraWelcome'
-import AnswerFeedback, { questionBefore } from './lyra/AnswerFeedback'
+import ThumbsFeedback from './feedback/ThumbsFeedback'
+import { questionBefore } from './lyra/answerQuestion'
 import PipelinePanel from './lyra/PipelinePanel'
 import { applyPipelineEvent } from '../types/pipeline'
 import type { PipelineEvent } from '../types/pipeline'
@@ -1426,7 +1427,14 @@ export default function LyraChatModal({
                                 </div>
                               )}
                               {msg.role === 'assistant' && !msg.isStreaming && msg.content && (
-                                <AnswerFeedback question={questionBefore(messages, msgIndex)} />
+                                <ThumbsFeedback
+                                prompt="lyra_answer"
+                                target={`${conversationId}:${msgIndex}`}
+                                question="Helpful?"
+                                placeholder="What was wrong?"
+                                variant="inline"
+                                extra={{ chars: questionBefore(messages, msgIndex).trim().length }}
+                              />
                               )}
                             </div>
                           </div>

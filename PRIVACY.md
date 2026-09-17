@@ -29,6 +29,7 @@ Since 2026-09-17 page views are measured with Umami running on our own EU server
 - Approximate location (country, region, city) derived from the IP address at request time; the IP address itself is not stored
 - Feature usage as anonymous events (site card opened, search terms shortened to 60 characters with e-mail addresses and long number sequences removed, plus result counts, filters, media players, sharing, Discord link), page load times, script errors, scroll depth
 - Short feedback answers you choose to type (≤ 100 characters)
+- A local marker (timestamps only) so the thumbs are offered at most once a day per page or answer
 - No cookies, no browser storage, no third party; visitors are counted with a regularly rotating salted hash; Do Not Track is honoured
 
 **We do NOT collect:**

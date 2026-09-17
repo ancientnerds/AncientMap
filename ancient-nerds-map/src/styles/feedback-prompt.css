@@ -103,35 +103,136 @@
   }
 }
 
-/* AnswerFeedback — thumbs under a finished Lyra answer, same NERV pair:
-   black button, red border, green "Thanks". */
-.lyra-answer-feedback {
-  display: inline-flex;
-  gap: 6px;
+/* ThumbsFeedback — the same control under a site, a story, a paper, a journal
+   and a Lyra answer. `block` is a panel under the content, `inline` sits in
+   the line under a chat answer. */
+.thumbs-feedback {
+  color: #e8e8e0;
+}
+
+.thumbs-feedback--block {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin: 24px 0 8px;
+  padding: 12px 16px;
+  border: 1px solid rgba(0, 204, 102, 0.35);
+  border-left: 3px solid #00cc66;
+  background: rgba(0, 0, 0, 0.55);
+}
+
+.thumbs-feedback--inline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
   margin-top: 6px;
 }
 
-.lyra-answer-feedback button {
+.thumbs-feedback-q {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.8rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #00cc66;
+}
+
+.thumbs-feedback--inline .thumbs-feedback-q {
+  font-size: 0.7rem;
+  opacity: 0.85;
+}
+
+.thumbs-feedback-buttons {
+  display: inline-flex;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.thumbs-feedback--inline .thumbs-feedback-buttons {
+  margin-left: 0;
+}
+
+.thumbs-feedback button {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 12px;
   background: #000;
-  border: 1px solid #bb0a0a;
   color: #ff2a2a;
+  border: 1px solid #bb0a0a;
   border-radius: 3px;
-  min-width: 36px;
-  min-height: 32px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 1rem;
+  line-height: 1;
   cursor: pointer;
 }
 
-.lyra-answer-feedback button:hover,
-.lyra-answer-feedback button:focus-visible {
+.thumbs-feedback--inline button {
+  min-width: 36px;
+  min-height: 32px;
+  font-size: 0.9rem;
+}
+
+.thumbs-feedback button:hover,
+.thumbs-feedback button:focus-visible {
   background: #bb0a0a;
   color: #000;
   outline: none;
 }
 
-.lyra-answer-feedback--done {
+/* The box that opens on a thumbs down: full width, 16 px input so iOS does
+   not zoom, button under the field on a phone. */
+.thumbs-feedback-row {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+}
+
+.thumbs-feedback-row input {
+  min-height: 44px;
+  padding: 0 12px;
+  background: #060604;
+  color: #e8e8e0;
+  border: 1px solid #333;
+  border-radius: 3px;
+  font: inherit;
+  font-size: 1rem;
+}
+
+.thumbs-feedback-row input:focus {
+  border-color: #ff2a2a;
+  outline: none;
+}
+
+.thumbs-feedback--done {
   font-family: 'JetBrains Mono', monospace;
-  font-size: 0.7rem;
+  font-size: 0.75rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: #00cc66;
+  margin: 24px 0 8px;
+}
+
+.thumbs-feedback--inline.thumbs-feedback--done {
+  margin: 6px 0 0;
+  font-size: 0.7rem;
+}
+
+@media (min-width: 480px) {
+  .thumbs-feedback-row {
+    flex-direction: row;
+  }
+  .thumbs-feedback-row input {
+    flex: 1;
+  }
+  .thumbs-feedback-row button {
+    flex: none;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .thumbs-feedback button {
+    transition: background 0.15s, color 0.15s;
+  }
 }

@@ -21,7 +21,7 @@ import { absoluteUrl, countryPath, sitePath, storyPath } from '../../seo/meta'
 import { blurb } from '../../seo/text'
 import type { StoryRoute } from '../../types/anRoute'
 import AiFootnote from './AiFootnote'
-import FeedbackPrompt from '../FeedbackPrompt'
+import ThumbsFeedback from '../feedback/ThumbsFeedback'
 import InlineVideo from './InlineVideo'
 import { splitPostText } from './postText'
 import {
@@ -281,11 +281,12 @@ export default function StoryArticle({ story, children }: StoryArticleProps) {
         </div>
       )}
 
-      <FeedbackPrompt
+      <ThumbsFeedback
         prompt="story_end"
+        target={String(story.id)}
         question="Was this story useful?"
-        yesNo
         placeholder="What was missing?"
+        extra={{ story: story.id, site: story.site_id || undefined }}
       />
 
       {children}

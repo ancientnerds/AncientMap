@@ -17,6 +17,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import Breadcrumbs from '../components/layout/Breadcrumbs'
 import PaperArticle from '../components/theo/PaperArticle'
 import AiNoticeBanner from '../components/layout/AiNoticeBanner'
+import ThumbsFeedback from '../components/feedback/ThumbsFeedback'
 import CommunityCta from '../components/layout/CommunityCta'
 import PageHeader from '../components/layout/PageHeader'
 import { useIsFounder } from '../hooks/useIsFounder'
@@ -185,6 +186,13 @@ export default function ResearchPaperPage() {
             ← All research papers
           </a>
         </div>
+        <ThumbsFeedback
+          prompt="paper_end"
+          target={slug}
+          question="Was this paper useful?"
+          placeholder="What was missing or wrong?"
+          extra={{ paper: slug }}
+        />
         <CommunityCta />
       </PaperArticle>
     </div>
