@@ -22,7 +22,7 @@ from pathlib import Path
 from typing import Literal
 
 from pipeline.video.media import ff_path, probe_duration, run_ffmpeg
-from pipeline.video.shorts_captions import Word, caption_words, keyword_flags
+from pipeline.video.shorts_captions import Word, caption_words, display_text
 from pipeline.video.shorts_select import focus_of, order_by_narration
 from pipeline.video.shorts_tts import specific_place
 
@@ -46,9 +46,6 @@ CAPTION_SIZE = 92
 CAPTION_Y = 1230
 CAPTION_BOX_ALPHA = 0.38
 CAPTION_BOX_PAD = 22
-# Brand accent for numbers and proper nouns in the captions
-# (mirrors --_palette-green-bright in ancient-nerds-map/src/styles/tokens.css).
-ACCENT = "#00cc66"
 # Info slot at the top of the frame (inside the Shorts safe zone): the
 # coordinates during the approach, the period/type chip over the stills.
 INFO_Y = 170
@@ -583,20 +580,22 @@ def gain_db(measured_lufs: float, target_lufs: float = TARGET_LUFS) -> float:
     return target_lufs - measured_lufs
 
 
-def captions_filter(words: list[Word], text_dir: Path, accents: list[bool] | None = None) -> str:
-    """One drawtext per word, shown exactly between its start and end; accented
-    words (numbers, proper nouns) in the brand green. Words go to text files
-    (no escaping of apostrophes, commas or percent signs)."""
+def captions_filter(words: list[Word], text_dir: Path) -> str:
+    """One drawtext per word, shown exactly between its start and end, white,
+    without edge punctuation. Words go to text files (no escaping of
+    apostrophes, commas or percent signs); a token that is punctuation only
+    (a dash) gets no caption."""
     text_dir.mkdir(parents=True, exist_ok=True)
-    accents = accents or [False] * len(words)
     parts = []
-    for i, (word, accent) in enumerate(zip(words, accents, strict=True)):
+    for i, word in enumerate(words):
+        shown = display_text(word.text)
+        if not shown:
+            continue
         f = text_dir / f"w{i:03d}.txt"
-        f.write_text(word.text, encoding="utf-8", newline=chr(10))
+        f.write_text(shown, encoding="utf-8", newline=chr(10))
         parts.append(
             f"drawtext=fontfile='{ff_path(FONT_HEADING)}':textfile='{ff_path(f)}':"
-            f"fontcolor={ACCENT if accent else 'white'}:fontsize={CAPTION_SIZE}:"
-            f"x=(w-text_w)/2:y={CAPTION_Y}:"
+            f"fontcolor=white:fontsize={CAPTION_SIZE}:x=(w-text_w)/2:y={CAPTION_Y}:"
             f"box=1:boxcolor=black@{CAPTION_BOX_ALPHA}:boxborderw={CAPTION_BOX_PAD}:"
             f"shadowcolor=black@0.5:shadowx=2:shadowy=2:"
             f"enable='between(t\\,{word.start:.3f}\\,{word.end:.3f})'"
@@ -630,7 +629,7 @@ def overlays_filter(site: dict, segments: list[Segment], words: list[Word], work
         chip_file.write_text(chip, encoding="utf-8", newline=chr(10))
         # FONT_BODY like the coordinates: Orbitron's latin subset has no middle dot
         parts.append(info_filter(chip_file, FONT_BODY, stills_start, stills_end + INFO_FADE_OUT_S))
-    parts.append(captions_filter(words, work / "captions", keyword_flags([w.text for w in words])))
+    parts.append(captions_filter(words, work / "captions"))
     return ",".join(parts)
 
 

@@ -6,7 +6,7 @@ import pytest
 
 from pipeline.video.media import ff_path
 from pipeline.video.shorts_audit import evaluate, passed
-from pipeline.video.shorts_captions import Word, align_words, keyword_flags
+from pipeline.video.shorts_captions import Word, align_words, display_text
 from pipeline.video.shorts_export import (
     RARITY_NAMES,
     assemble_site,
@@ -593,23 +593,18 @@ class TestCaptions:
         assert f.count("drawtext=") == 2
         assert "enable='between(t\\,1.220\\,1.720)'" in f
         assert (tmp_path / "w001.txt").read_text(encoding="utf-8") == "citadel"
-        assert "fontcolor=#00cc66" not in f
+        assert f.count("fontcolor=white") == 2
 
-    def test_accented_words_are_green(self, tmp_path):
-        words = [Word("Inca", 1.22, 1.72), Word("citadel", 1.72, 2.16)]
-        f = captions_filter(words, tmp_path, [True, False])
-        first, second = f.split(",drawtext=")
-        assert "fontcolor=#00cc66" in first and "fontcolor=white" in second
-
-    def test_keywords_are_numbers_and_proper_nouns_not_sentence_starts(self):
-        tokens = "A 15th-century Inca citadel at 2,430 metres. Its Intihuatana stone".split()
-        flags = keyword_flags(tokens)
-        assert [t for t, k in zip(tokens, flags, strict=True) if k] == [
-            "15th-century",
-            "Inca",
-            "2,430",
-            "Intihuatana",
-        ]
+    def test_captions_drop_edge_punctuation_but_keep_inner_marks(self, tmp_path):
+        assert display_text("mortar.") == "mortar"
+        assert display_text("metres,") == "metres"
+        assert display_text("2,430") == "2,430"
+        assert display_text("15th-century") == "15th-century"
+        assert display_text("\u201cInca\u201d") == "Inca"
+        words = [Word("walls", 0.0, 0.3), Word("\u2014", 0.3, 0.5), Word("mortar.", 0.5, 1.0)]
+        f = captions_filter(words, tmp_path)
+        assert f.count("drawtext=") == 2  # the lone dash gets no caption
+        assert (tmp_path / "w002.txt").read_text(encoding="utf-8") == "mortar"
 
     def test_info_overlay_fades_in_and_out_inside_its_window(self, tmp_path):
         a = info_alpha(6.0, 16.4)
