@@ -64,6 +64,11 @@ def _parse(argv: list[str]) -> argparse.Namespace:
         help="music bed (default: the single file in video-assets/music/)",
     )
     s.add_argument(
+        "--flash",
+        default=str(default_flash()) if default_flash() else None,
+        help="shutter sound on every still start (default: the single file in video-assets/sfx/)",
+    )
+    s.add_argument(
         "--record-scenes",
         default=RECORD_SCENES,
         help="recorder scenes for the record step (e.g. short-return only)",
@@ -169,14 +174,22 @@ def _select(site: dict, site_dir: Path, use_vlm: bool) -> None:
 
 
 RECORD_SCENES = "short-opening,short-return"
-MUSIC_DIR = Path(__file__).resolve().parents[2] / "video-assets" / "music"
-MUSIC_SUFFIXES = {".wav", ".mp3", ".m4a", ".flac"}
+ASSETS = Path(__file__).resolve().parents[2] / "video-assets"
+AUDIO_SUFFIXES = {".wav", ".mp3", ".m4a", ".flac"}
+
+
+def single_audio(directory: Path) -> Path | None:
+    """The one audio file in `directory`, None when there are none or several."""
+    tracks = sorted(p for p in directory.glob("*") if p.suffix.lower() in AUDIO_SUFFIXES)
+    return tracks[0] if len(tracks) == 1 else None
 
 
 def default_music() -> Path | None:
-    """The music bed when exactly one track lies in video-assets/music/."""
-    tracks = sorted(p for p in MUSIC_DIR.glob("*") if p.suffix.lower() in MUSIC_SUFFIXES)
-    return tracks[0] if len(tracks) == 1 else None
+    return single_audio(ASSETS / "music")
+
+
+def default_flash() -> Path | None:
+    return single_audio(ASSETS / "sfx")
 
 
 def record_clips(site_dir: Path, scenes: str = RECORD_SCENES) -> None:
@@ -274,6 +287,7 @@ def run_short(args: argparse.Namespace) -> Path | None:
             voice_id=args.voice,
             flag=shorts_export.ensure_flag(code) if code else None,
             music=Path(args.music) if args.music else None,
+            flash=Path(args.flash) if args.flash else None,
         )
     return None
 
@@ -358,6 +372,7 @@ def run_batch(args: argparse.Namespace) -> int:
             no_vlm=False,
             record_scenes=RECORD_SCENES,
             music=str(default_music()) if default_music() else None,
+            flash=str(default_flash()) if default_flash() else None,
             steps=",".join(ALL_STEPS),
         )
         try:

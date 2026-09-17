@@ -65,6 +65,12 @@ INFO_FADE_OUT_S = 0.4
 INFO_BOX_ALPHA = 0.3
 INFO_BOX_PAD = 16
 FLAG_GAP = 34
+# Camera flash at the start of every still (user, 17.09.): white at FLASH_PEAK
+# on the first frame, gone after FLASH_S. The times go to render/flashes.json
+# so a shutter sound can sit exactly on them (`flash` audio, when present).
+FLASH_S = 0.28
+FLASH_PEAK = 0.85
+FLASH_GAIN_DB = -6.0
 OPENING_TRIM_S = 0.1  # the opening take holds its first pose this long; the first frames after a
 # jump are not fully drawn, so cutting the hold keeps frame 0 identical to the loop's end pose
 # Mapbox ToS: satellite/terrain frames need attribution in the video itself;
@@ -236,6 +242,17 @@ def plan_timeline(
     if closing is not None:
         segments.append(Segment("return", closing[1], str(closing[0])))
     return segments
+
+
+def flash_times(segments: list[Segment]) -> list[float]:
+    """When each still starts — the photo is "taken" there."""
+    times: list[float] = []
+    t = 0.0
+    for seg in segments:
+        if seg.kind == "still":
+            times.append(round(t, 3))
+        t += seg.duration
+    return times
 
 
 def name_audio_at(segments: list[Segment], name_s: float) -> float:
@@ -577,12 +594,16 @@ def render_stills(
 STEREO = "aformat=sample_fmts=fltp:sample_rates=48000:channel_layouts=stereo"
 
 
-def mix_graph(name_at_s: float, total_s: float, music: bool = False) -> str:
+def mix_graph(
+    name_at_s: float, total_s: float, music: bool = False, flashes: list[float] | None = None
+) -> str:
     """filter_complex for the pre-mix: inputs 0 = narration, 1 = spoken name,
-    2 = music (looped by the caller). The voices are processed and mixed;
-    the music is trimmed to the short, faded in/out (silent MUSIC_END_GAP_S
-    before the loop point), lowered by MUSIC_GAIN_DB and ducked under the
-    voice; everything is bounded to exactly `total_s`."""
+    2 = music (looped by the caller), then the flash sound when `flashes`
+    (its times) is given. The voices are processed and mixed; the music is
+    trimmed to the short, faded in/out (silent MUSIC_END_GAP_S before the loop
+    point), lowered by MUSIC_GAIN_DB and ducked under the voice; the flash
+    sound is copied to every flash time; everything is bounded to exactly
+    `total_s`."""
     ms = int(round(name_at_s * 1000))
     tail = f"apad=whole_dur={total_s:.3f},atrim=duration={total_s:.3f}[a]"
     parts = [
@@ -590,21 +611,38 @@ def mix_graph(name_at_s: float, total_s: float, music: bool = False) -> str:
         f"[1:a]{VOICE_CHAIN},adelay={ms}:all=1,{STEREO}[d1]",
         "[d0][d1]amix=inputs=2:duration=longest:normalize=0[v]",
     ]
-    if not music:
-        parts.append(f"[v]{tail}")
-        return ";".join(parts)
-    fade_out_at = total_s - MUSIC_END_GAP_S - MUSIC_FADE_OUT_S
-    parts += [
-        # the side-chain is padded to the full length so the music is never cut
-        # short when the voice ends first
-        f"[v]apad=whole_dur={total_s:.3f},asplit[vm][vsc]",
-        f"[2:a]{STEREO},atrim=duration={total_s - MUSIC_END_GAP_S:.3f},"
-        f"afade=t=in:st=0:d={MUSIC_FADE_IN_S},"
-        f"afade=t=out:st={fade_out_at:.3f}:d={MUSIC_FADE_OUT_S},"
-        f"volume={MUSIC_GAIN_DB}dB[m]",
-        f"[m][vsc]sidechaincompress={DUCK}[md]",
-        f"[vm][md]amix=inputs=2:duration=longest:normalize=0,{tail}",
-    ]
+    voice = "[v]"
+    extras: list[str] = []
+    if music:
+        fade_out_at = total_s - MUSIC_END_GAP_S - MUSIC_FADE_OUT_S
+        parts += [
+            # the side-chain is padded to the full length so the music is never cut
+            # short when the voice ends first
+            f"[v]apad=whole_dur={total_s:.3f},asplit[vm][vsc]",
+            f"[2:a]{STEREO},atrim=duration={total_s - MUSIC_END_GAP_S:.3f},"
+            f"afade=t=in:st=0:d={MUSIC_FADE_IN_S},"
+            f"afade=t=out:st={fade_out_at:.3f}:d={MUSIC_FADE_OUT_S},"
+            f"volume={MUSIC_GAIN_DB}dB[m]",
+            f"[m][vsc]sidechaincompress={DUCK}[md]",
+        ]
+        voice, extras = "[vm]", ["[md]"]
+    if flashes:
+        src = 3 if music else 2
+        n = len(flashes)
+        parts.append(
+            f"[{src}:a]{STEREO},volume={FLASH_GAIN_DB}dB,asplit={n}"
+            + "".join(f"[s{i}]" for i in range(n))
+        )
+        for i, t in enumerate(flashes):
+            parts.append(f"[s{i}]adelay={int(round(t * 1000))}:all=1[k{i}]")
+            extras.append(f"[k{i}]")
+    if extras:
+        parts.append(
+            f"{voice}{''.join(extras)}amix=inputs={1 + len(extras)}:duration=longest:normalize=0,"
+            f"{tail}"
+        )
+    else:
+        parts.append(f"{voice}{tail}")
     return ";".join(parts)
 
 
@@ -615,8 +653,11 @@ def premix(
     total_s: float,
     out: Path,
     music: Path | None = None,
+    flash: Path | None = None,
+    flashes: list[float] | None = None,
 ) -> Path:
     music_args = ["-stream_loop", "-1", "-i", str(music)] if music else []
+    flash_args = ["-i", str(flash)] if flash and flashes else []
     return run_ffmpeg(
         [
             "-i",
@@ -624,8 +665,11 @@ def premix(
             "-i",
             str(name_audio),
             *music_args,
+            *flash_args,
             "-filter_complex",
-            mix_graph(name_at_s, total_s, music=music is not None),
+            mix_graph(
+                name_at_s, total_s, music=music is not None, flashes=flashes if flash else None
+            ),
             "-map",
             "[a]",
             "-c:a",
@@ -714,16 +758,35 @@ def overlays_filter(site: dict, segments: list[Segment], words: list[Word], work
     return ",".join(parts)
 
 
-def final_graph(gain: float, overlays: str = "") -> str:
-    """filter_complex for the final pass: graded picture with the text layer on
-    top; pre-mixed voice lifted by a fixed gain with a true-peak limiter as the
-    only dynamic element."""
-    video = f"{LOOK_FILTER},{overlays}" if overlays else LOOK_FILTER
-    return f"[0:v]{video}[vout];[1:a]volume={gain:.2f}dB,alimiter=limit={PEAK_LIMIT}:level=false[a]"
+def final_graph(gain: float, overlays: str = "", flashes: list[float] | None = None) -> str:
+    """filter_complex for the final pass: graded picture, a camera flash at
+    every still start (a white layer that decays over FLASH_S), the text layer
+    on top; pre-mixed voice lifted by a fixed gain with a true-peak limiter as
+    the only dynamic element."""
+    parts: list[str] = []
+    src, stage = "[0:v]", LOOK_FILTER
+    for i, t in enumerate(flashes or []):
+        parts.append(f"{src}{stage}[g{i}]")
+        parts.append(
+            f"color=c=white@{FLASH_PEAK}:s={W}x{H}:r={FPS}:d={FLASH_S},format=rgba,"
+            f"fade=t=out:st=0:d={FLASH_S}:alpha=1,setpts=PTS+{t:.3f}/TB[f{i}]"
+        )
+        src = f"[g{i}][f{i}]"
+        stage = f"overlay=eof_action=pass:enable='between(t\\,{t:.3f}\\,{t + FLASH_S:.3f})'"
+    if overlays:
+        stage = f"{stage},{overlays}"
+    parts.append(f"{src}{stage}[vout]")
+    parts.append(f"[1:a]volume={gain:.2f}dB,alimiter=limit={PEAK_LIMIT}:level=false[a]")
+    return ";".join(parts)
 
 
 def concat_and_mux(
-    parts: list[Path], mix: Path, gain: float, out: Path, overlays: str = ""
+    parts: list[Path],
+    mix: Path,
+    gain: float,
+    out: Path,
+    overlays: str = "",
+    flashes: list[float] | None = None,
 ) -> Path:
     """Concatenate the segments, grade the picture, and lay the pre-mixed voice
     under them. The mix is already exactly as long as the picture, so no
@@ -741,7 +804,7 @@ def concat_and_mux(
             "-i",
             str(mix),
             "-filter_complex",
-            final_graph(gain, overlays),
+            final_graph(gain, overlays, flashes),
             "-map",
             "[vout]",
             "-map",
@@ -775,9 +838,11 @@ def render_short(
     *,
     flag: Path | None = None,
     music: Path | None = None,
+    flash: Path | None = None,
 ) -> Path:
     """Assemble `<slug>.mp4` from the site dir's narration, name audio, selected
-    stills and clips; `flag` goes under the name, `music` under everything."""
+    stills and clips; `flag` goes under the name, `music` under everything,
+    `flash` (a shutter sound) on every still start."""
     narration = site_dir / "narration.mp3"
     name_audio = site_dir / "name.mp3"
     clips = site_dir / "clips"
@@ -864,10 +929,23 @@ def render_short(
     final = site_dir / f"{site['slug']}.mp4"
     total_s = sum(s.duration for s in segments)
     name_at = name_audio_at(segments, probe_duration(name_audio))
-    mix = premix(narration, name_audio, name_at, total_s, work / "mix.wav", music=music)
+    flashes = flash_times(segments)
+    (work / "flashes.json").write_text(json.dumps(flashes), encoding="utf-8")
+    mix = premix(
+        narration,
+        name_audio,
+        name_at,
+        total_s,
+        work / "mix.wav",
+        music=music,
+        flash=flash,
+        flashes=flashes,
+    )
     lufs = measure_lufs(mix)
     logger.info("voice mix %.1f LUFS → gain %+.1f dB", lufs, gain_db(lufs))
-    concat_and_mux(parts, mix, gain_db(lufs), final, overlays_filter(site, segments, words, work))
+    concat_and_mux(
+        parts, mix, gain_db(lufs), final, overlays_filter(site, segments, words, work), flashes
+    )
     (site_dir / "description.txt").write_text(
         build_description(site, used, voice_id, mapbox_used=opening is not None),
         encoding="utf-8",

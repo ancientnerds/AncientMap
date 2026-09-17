@@ -27,6 +27,7 @@ from pipeline.video.shorts_render import (
     cut_stills,
     final_graph,
     flag_overlay_graph,
+    flash_times,
     gain_db,
     hashtags,
     info_alpha,
@@ -314,6 +315,38 @@ class TestFilters:
             "[vm][md]amix=inputs=2:duration=longest:normalize=0,apad=whole_dur=19.500,atrim=duration=19.500[a]"
         )
         assert "sidechaincompress" not in mix_graph(16.7, 19.5)
+
+    def test_flash_sound_is_copied_to_every_still_start(self):
+        g = mix_graph(16.7, 19.5, music=True, flashes=[6.0, 8.75])
+        assert (
+            "[3:a]aformat=sample_fmts=fltp:sample_rates=48000:channel_layouts=stereo,volume=-6.0dB,asplit=2[s0][s1]"
+            in g
+        )
+        assert "[s0]adelay=6000:all=1[k0]" in g and "[s1]adelay=8750:all=1[k1]" in g
+        assert (
+            "[vm][md][k0][k1]amix=inputs=4:duration=longest:normalize=0,apad=whole_dur=19.500" in g
+        )
+        g = mix_graph(16.7, 19.5, flashes=[6.0])
+        assert "[2:a]" in g and g.endswith(
+            "[v][k0]amix=inputs=2:duration=longest:normalize=0,apad=whole_dur=19.500,atrim=duration=19.500[a]"
+        )
+
+    def test_flash_times_are_the_still_starts(self):
+        segs = plan_timeline(narration_s=16.4, cuts=CUTS, opening=OPENING, closing=RETURN)
+        assert flash_times(segs) == [6.0, 8.75, 11.5, 14.25]
+
+    def test_final_graph_flashes_white_at_every_still_start(self):
+        g = final_graph(0.0, "drawtext=x", [5.98, 9.42])
+        assert g.startswith("[0:v]eq=saturation=0.78")
+        assert (
+            "[g0];color=c=white@0.85:s=1080x1920:r=60:d=0.28,format=rgba,fade=t=out:st=0:d=0.28:alpha=1,setpts=PTS+5.980/TB[f0];"
+            in g
+        )
+        assert "[g0][f0]overlay=eof_action=pass:enable='between(t\\,5.980\\,6.260)'[g1];" in g
+        assert (
+            "[g1][f1]overlay=eof_action=pass:enable='between(t\\,9.420\\,9.700)',drawtext=x[vout];"
+            in g
+        )
 
     def test_final_graph_is_look_plus_fixed_gain(self):
         g = final_graph(gain_db(-20.5))
