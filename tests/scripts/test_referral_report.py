@@ -25,8 +25,14 @@ HUMAN = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/128.0 Safari/537.36"
 BOT = "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)"
 
 
-def _line(ref: str, req: str, ua: str = HUMAN, t: str = "2026-09-17T12:00:00+00:00") -> str:
-    return json.dumps({"t": t, "ref": ref, "req": req, "status": 200, "ua": ua})
+def _line(
+    ref: str,
+    req: str,
+    ua: str = HUMAN,
+    t: str = "2026-09-17T12:00:00+00:00",
+    status: int = 200,
+) -> str:
+    return json.dumps({"t": t, "ref": ref, "req": req, "status": status, "ua": ua})
 
 
 def test_ai_suche_social_und_rest_werden_nach_host_gezaehlt():
@@ -82,3 +88,12 @@ def test_since_relativ_und_absolut():
     assert rr.parse_since("7d", now) == datetime(2026, 9, 10, 12, 0, tzinfo=UTC)
     assert rr.parse_since("6h", now) == datetime(2026, 9, 17, 6, 0, tzinfo=UTC)
     assert rr.parse_since("2026-09-01T00:00:00", now) == datetime(2026, 9, 1, tzinfo=UTC)
+
+
+def test_fehlerantworten_sind_scanner_rauschen_und_zaehlen_nur_mit_all():
+    lines = [
+        _line("https://binance.com/", "GET /wp-admin/css/", status=404),
+        _line("https://binance.com/", "GET /", status=200),
+    ]
+    assert rr.aggregate(lines, SINCE)["other"]["binance.com"] == {"human": 1}
+    assert rr.aggregate(lines, SINCE, pages_only=False)["other"]["binance.com"] == {"human": 2}

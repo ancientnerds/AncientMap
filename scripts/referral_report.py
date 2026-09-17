@@ -12,7 +12,8 @@ No client IP is logged. This script groups those lines by referrer host and
 family — AI assistant, search engine, social, other — and splits humans
 from bots with the rule the Discord funnel uses (api.routes.goto.BOT_UA_RE).
 Only page views count by default: assets and API calls that carry a foreign
-referer are hotlinks, not visits.
+referer are hotlinks, not visits, and 4xx/5xx answers are scanner noise
+(fake referers on /wp-admin/ and the like).
 
 Two caveats built into the data, not the script:
 
@@ -137,7 +138,10 @@ def aggregate(
             continue
         if datetime.fromisoformat(entry["t"]) < since:
             continue
-        if pages_only and not is_page(entry["req"]):
+        # Scanners send fake referers to paths that do not exist (/wp-admin/
+        # from "binance.com", first eight lines of the log): a page view needs
+        # a page, so errors only count with --all.
+        if pages_only and (entry["status"] >= 400 or not is_page(entry["req"])):
             continue
         host = source_host(entry.get("ref", ""), entry["req"])
         if not host:
