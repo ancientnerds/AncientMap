@@ -12,7 +12,7 @@
 import { spawn, execSync, type ChildProcess } from 'child_process'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
-import { mkdirSync, unlinkSync } from 'fs'
+import { mkdirSync, readFileSync, unlinkSync } from 'fs'
 import puppeteer, { type Browser, type Page } from 'puppeteer'
 import type { CameraState, DemoAPI } from '../src/utils/demoApi'
 
@@ -320,57 +320,85 @@ async function main() {
     console.log('\nInjecting synthetic time control...')
     await injectTimeControl(page, fps)
 
-    // Record each scene
-    for (let i = 0; i < scenes.length; i++) {
-      const scene = scenes[i]
+    // One target per site: --batch records many sites without restarting Vite
+    // or Chrome, which costs about a minute per site.
+    const targets: RecordTarget[] = args.batch
+      ? (JSON.parse(readFileSync(args.batch, 'utf-8')) as RecordTarget[])
+      : [{ input: args.input ?? '', out: outputDir }]
+    const failed: string[] = []
 
-      // Reload the globe between scenes to get clean state.
-      // Without this, Chrome tab throttling + accumulated state from
-      // earlier scenes causes later clips to capture static frames.
-      if (i > 0) {
-        console.log('\nReloading globe for clean state...')
-        await loadGlobe(page)
-        await demo.hideAllUI()
-        // Re-inject time control after page reload
-        await injectTimeControl(page, fps)
+    for (let t = 0; t < targets.length; t++) {
+      const target = targets[t]
+      if (target.input) process.env.SITE_SHORT_INPUT = target.input
+      mkdirSync(target.out, { recursive: true })
+      if (targets.length > 1) {
+        console.log(`\n${'#'.repeat(60)}`)
+        console.log(`# Site ${t + 1}/${targets.length}: ${target.input}`)
+        console.log('#'.repeat(60))
       }
+      try {
+      // Record each scene
+      for (let i = 0; i < scenes.length; i++) {
+        const scene = scenes[i]
 
-      const duration = typeof scene.duration === 'function' ? scene.duration() : scene.duration
-      console.log(`\n${'='.repeat(50)}`)
-      console.log(`Recording scene: ${scene.name} (${duration}s)`)
-      console.log('='.repeat(50))
+        // Reload the globe before every scene but the very first of the run.
+        // Without this, Chrome tab throttling + accumulated state from
+        // earlier scenes causes later clips to capture static frames.
+          if (i > 0 || t > 0) {
+          console.log('\nReloading globe for clean state...')
+          await loadGlobe(page)
+          await demo.hideAllUI()
+          // Re-inject time control after page reload
+          await injectTimeControl(page, fps)
+        }
 
-      // Fresh StreamRecorder per scene; it starts on the scene's first capture()
-      // so the setup phase (tiles, poses) never leaks into frame 0.
-      const recorder = new StreamRecorder({ fps, canvasSelector: scene.canvasSelector, frameYieldMs: scene.frameYieldMs, waitForTiles: scene.waitForTiles })
+        const duration = typeof scene.duration === 'function' ? scene.duration() : scene.duration
+        console.log(`\n${'='.repeat(50)}`)
+        console.log(`Recording scene: ${scene.name} (${duration}s)`)
+        console.log('='.repeat(50))
 
-      const ctx: SceneContext = {
-        page,
-        demo,
-        fire: (code: string) => { page.evaluate(code).catch(() => {}) },
-        recorder,
-        fps,
+        // Fresh StreamRecorder per scene; it starts on the scene's first capture()
+        // so the setup phase (tiles, poses) never leaks into frame 0.
+        const recorder = new StreamRecorder({ fps, canvasSelector: scene.canvasSelector, frameYieldMs: scene.frameYieldMs, waitForTiles: scene.waitForTiles })
+
+        const ctx: SceneContext = {
+          page,
+          demo,
+          fire: (code: string) => { page.evaluate(code).catch(() => {}) },
+          recorder,
+          fps,
+        }
+
+        // Run the scene choreography + capture
+        await scene.run(ctx)
+
+        // Stop recorder and save WebM
+        const webmPath = join(webmDir, `${scene.name}.webm`)
+        await recorder.stop(page, webmPath)
+
+        // Encode WebM to MP4
+        console.log(`\nEncoding ${scene.name}...`)
+        const result = encodeScene(scene.name, webmPath, target.out, duration, fps)
+        console.log(`  MP4: ${result.mp4}`)
+        console.log(`  Fast: ${result.fast}`)
+
+        // Clean up intermediate WebM
+        try { unlinkSync(webmPath) } catch {}
       }
-
-      // Run the scene choreography + capture
-      await scene.run(ctx)
-
-      // Stop recorder and save WebM
-      const webmPath = join(webmDir, `${scene.name}.webm`)
-      await recorder.stop(page, webmPath)
-
-      // Encode WebM to MP4
-      console.log(`\nEncoding ${scene.name}...`)
-      const result = encodeScene(scene.name, webmPath, outputDir, duration, fps)
-      console.log(`  MP4: ${result.mp4}`)
-      console.log(`  Fast: ${result.fast}`)
-
-      // Clean up intermediate WebM
-      try { unlinkSync(webmPath) } catch {}
+      } catch (err) {
+        // One bad site must not cost the whole session; the caller sees which failed.
+        if (targets.length === 1) throw err
+        failed.push(target.input)
+        console.error(`\nSite failed: ${target.input}\n${String(err).slice(0, 400)}`)
+      }
     }
 
     console.log('\n\nAll scenes recorded and encoded!')
-    console.log(`Output: ${outputDir}`)
+    console.log(`Output: ${targets.length > 1 ? targets.length + ' sites' : outputDir}`)
+    if (failed.length) {
+      console.error(`Failed sites (${failed.length}): ${failed.join(', ')}`)
+      process.exitCode = 1
+    }
 
   } finally {
     if (browser) await browser.close()

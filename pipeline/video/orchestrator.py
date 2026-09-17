@@ -1,234 +1,206 @@
-"""Phase 7: Video Pipeline Orchestrator — end-to-end runner.
+"""Pipelined site-short production: the globe recorder is the only serial stage.
 
-Ties together all phases: script → voiceover → assets → timeline → render → upload.
+Measured per site (17.09.): preparation (export, images, VLM selection, voice)
+~2 min, recording ~12 min, render + audit ~1 min. Run one after another that is
+15 min per site while the recorder — the expensive resource — idles a fifth of
+the time.
 
-Usage:
-  python -m pipeline.video.orchestrator --article-id=42
-  python -m pipeline.video.orchestrator --article-id=42 --dry-run
-  python -m pipeline.video.orchestrator --article-id=42 --skip-upload
+Here the three stages overlap:
+
+    prepare (threads, network/API bound)  ─┐
+                                           ├─► record (ONE browser, serial)
+                                           └─► render + audit (threads, CPU)
+
+The recorder takes every site that is ready as one `--batch` session, so Vite
+and Chrome start once per session instead of once per site (~1 min each).
+A site that fails a stage drops out; the others keep going.
+
+`plan_sessions`, `next_batch` and `stage_steps` are pure and unit tested; the
+rest is subprocess plumbing.
 """
 
-import argparse
+from __future__ import annotations
+
 import json
 import logging
+import os
+import queue
+import shutil
 import subprocess
 import sys
+import threading
 import time
+from dataclasses import dataclass, field
 from pathlib import Path
-
-from pipeline.lyra.config import LyraSettings
 
 logger = logging.getLogger(__name__)
 
-# Base output directory for video pipeline artifacts
-OUTPUT_BASE = Path("pipeline/video/output")
+PREP_STEPS = "export,images,select,tts"
+RENDER_STEPS = "render"
+PREP_WORKERS = 3  # Commons downloads and MiniMax calls, not CPU
+RENDER_WORKERS = 2  # ffmpeg; more would starve the recorder's browser
+RECORD_MAX_SESSION = 8  # sites per browser session; a crash costs at most this many
+RECORD_GATHER_S = 20.0  # wait this long for more prepared sites before starting a session
 
-# Path to the Remotion project
-REMOTION_PROJECT = Path("video")
+_TIMEOUT = object()  # queue.get timed out: record what is already pending
 
 
-def _render_video(timeline_path: Path, output_path: Path) -> bool:
-    """Render the video using Remotion CLI.
+@dataclass
+class SiteJob:
+    name: str
+    site_dir: Path | None = None
+    failed_stage: str | None = None
+    notes: list[str] = field(default_factory=list)
 
-    Args:
-        timeline_path: Path to timeline.json (Remotion inputProps).
-        output_path: Where to write the final MP4.
+    @property
+    def ok(self) -> bool:
+        return self.failed_stage is None
 
-    Returns:
-        True if render succeeded.
-    """
+
+def stage_steps() -> tuple[str, str]:
+    """The two subprocess step lists: everything before the recorder, and after."""
+    return PREP_STEPS, RENDER_STEPS
+
+
+def plan_sessions(ready: list[str], max_per_session: int = RECORD_MAX_SESSION) -> list[list[str]]:
+    """Split sites that are ready to record into browser sessions."""
+    return [ready[i : i + max_per_session] for i in range(0, len(ready), max_per_session)]
+
+
+def next_batch(
+    pending: list[str], max_per_session: int = RECORD_MAX_SESSION
+) -> tuple[list[str], list[str]]:
+    """(sites for the next session, what stays pending)."""
+    return pending[:max_per_session], pending[max_per_session:]
+
+
+def _run_module(args: list[str], log: Path) -> bool:
+    """Run `python -m pipeline.video …` as its own process: a long-lived process
+    would keep the code it imported at start, and one crash would take the whole
+    run with it."""
+    with log.open("a", encoding="utf-8") as fh:
+        fh.write(f"\n=== {time.strftime('%H:%M:%S')} {' '.join(args)}\n")
+        fh.flush()
+        proc = subprocess.run(
+            [sys.executable, "-m", "pipeline.video", *args], stdout=fh, stderr=subprocess.STDOUT
+        )
+    return proc.returncode == 0
+
+
+def _step(name: str, steps: str, log: Path) -> bool:
+    ok = _run_module(["short", "--name", name, "--steps", steps], log)
+    logger.info("%-22s %-28s %s", steps, name[:28], "ok" if ok else "FAILED")
+    return ok
+
+
+def record_session(
+    targets: list[tuple[Path, Path]], log: Path, recorder_dir: Path, api_target: str
+) -> bool:
+    """One browser session for several sites: a manifest of {input, out} pairs
+    goes to the recorder, which keeps Vite and Chrome up across all of them."""
+    npm = shutil.which("npm")
+    if not npm:
+        raise RuntimeError("npm not found on PATH; the recorder needs Node")
+    manifest = log.parent / "record-batch.json"
+    manifest.write_text(
+        json.dumps([{"input": i.as_posix(), "out": o.as_posix()} for i, o in targets], indent=1),
+        encoding="utf-8",
+    )
     cmd = [
-        "npx",
-        "remotion",
-        "render",
-        "WeeklyVideo",
-        "--props",
-        str(timeline_path),
-        "--output",
-        str(output_path),
-        "--codec",
-        "h264",
-        "--image-format",
-        "jpeg",
-        "--log",
-        "warn",
-    ]
-
-    logger.info(f"Starting Remotion render: {' '.join(cmd)}")
-    try:
-        subprocess.run(
-            cmd,
-            cwd=str(REMOTION_PROJECT),
-            check=True,
-            capture_output=True,
-            text=True,
-            timeout=1800,  # 30 minute timeout
-        )
-        logger.info(f"Render complete: {output_path}")
-        return True
-    except subprocess.CalledProcessError as e:
-        logger.error(f"Remotion render failed:\n{e.stderr[:500]}")
-        return False
-    except subprocess.TimeoutExpired:
-        logger.error("Remotion render timed out (30 min)")
-        return False
+        npm, "run", "video:record", "--",
+        "short-opening,short-return",
+        "--portrait", "--fps", "60",
+        "--batch", manifest.as_posix(),
+    ]  # fmt: skip
+    env = {**os.environ, "VITE_DEV_API_TARGET": api_target}
+    with log.open("a", encoding="utf-8") as fh:
+        fh.write(f"\n=== {time.strftime('%H:%M:%S')} record session: {len(targets)} site(s)\n")
+        fh.flush()
+        proc = subprocess.run(cmd, cwd=recorder_dir, env=env, stdout=fh, stderr=subprocess.STDOUT)
+    logger.info("record session of %d site(s): rc=%s", len(targets), proc.returncode)
+    return proc.returncode == 0
 
 
-async def generate_weekly_video(
-    article_id: int,
-    dry_run: bool = False,
-    skip_upload: bool = False,
-    skip_render: bool = False,
-    api_base_url: str = "https://ancientnerds.com",
-) -> dict:
-    """Run the full video pipeline for an article.
+def run_pipeline(
+    names: list[str],
+    log: Path,
+    recorder_dir: Path,
+    api_target: str,
+    site_dir_for,
+    *,
+    prep_workers: int = PREP_WORKERS,
+    render_workers: int = RENDER_WORKERS,
+) -> dict[str, SiteJob]:
+    """Prepare, record and render `names` with the three stages overlapping.
+    `site_dir_for(name)` gives the site's asset directory. One SiteJob per name."""
+    jobs = {name: SiteJob(name) for name in names}
+    prep_q: queue.Queue = queue.Queue()
+    rec_q: queue.Queue = queue.Queue()
+    ren_q: queue.Queue = queue.Queue()
+    for name in names:
+        prep_q.put(name)
 
-    Args:
-        article_id: ID of the NewsArticle to turn into a video.
-        dry_run: If True, only generate the script and print it.
-        skip_upload: If True, render but don't upload to YouTube.
-        skip_render: If True, generate assets but don't render.
-        api_base_url: Base URL for the API (for screenshot downloads).
+    def prep_worker() -> None:
+        while (name := prep_q.get()) is not None:
+            if _step(name, PREP_STEPS, log):
+                jobs[name].site_dir = site_dir_for(name)
+                rec_q.put(name)
+            else:
+                jobs[name].failed_stage = "prepare"
 
-    Returns:
-        Dict with paths to all generated artifacts.
-    """
-    settings = LyraSettings()
-    output_dir = OUTPUT_BASE / f"article_{article_id}"
-    output_dir.mkdir(parents=True, exist_ok=True)
+    def record_worker() -> None:
+        pending: list[str] = []
+        producers_done = False
+        while not producers_done or pending:
+            if not producers_done:
+                try:
+                    item = rec_q.get(timeout=RECORD_GATHER_S) if pending else rec_q.get()
+                except queue.Empty:
+                    item = _TIMEOUT
+                if item is None:
+                    producers_done = True
+                elif item is not _TIMEOUT:
+                    pending.append(item)
+                    if len(pending) < RECORD_MAX_SESSION:
+                        continue
+            if not pending:
+                continue
+            batch, pending = next_batch(pending)
+            targets = [(jobs[n].site_dir / "site.json", jobs[n].site_dir / "clips") for n in batch]
+            ok = record_session(targets, log, recorder_dir, api_target)
+            for name in batch:
+                clips = jobs[name].site_dir / "clips"
+                if (clips / "short-opening.mp4").exists() and (clips / "short-return.mp4").exists():
+                    ren_q.put(name)
+                else:
+                    jobs[name].failed_stage = "record"
+                    if not ok:
+                        jobs[name].notes.append("recorder session reported an error")
+        for _ in range(render_workers):
+            ren_q.put(None)
 
-    result: dict = {"article_id": article_id, "output_dir": str(output_dir)}
-    t0 = time.time()
+    def render_worker() -> None:
+        while (name := ren_q.get()) is not None:
+            if not _step(name, RENDER_STEPS, log):
+                jobs[name].failed_stage = "render"
+            elif not _run_module(["audit", "--name", name], log):
+                jobs[name].failed_stage = "audit"
 
-    # Phase 1: Script Adapter
-    logger.info(f"=== Phase 1: Generating script for article {article_id} ===")
-    from pipeline.video.script_adapter import generate_script
-
-    script = generate_script(article_id, settings)
-
-    script_path = output_dir / "video_script.json"
-    script_path.write_text(json.dumps(script, indent=2), encoding="utf-8")
-    result["script_path"] = str(script_path)
-    logger.info(f"Script: {len(script['segments'])} segments, {len(script['sources'])} sources")
-
-    if dry_run:
-        logger.info("Dry run — stopping after script generation")
-        result["dry_run"] = True
-        print(json.dumps(script, indent=2))
-        return result
-
-    # Phase 2: Voiceover
-    logger.info("=== Phase 2: Generating voiceover ===")
-    from pipeline.video.voiceover import ElevenLabsSettings, generate_voiceover
-
-    elevenlabs_settings = ElevenLabsSettings()
-    audio_result = generate_voiceover(script, output_dir, elevenlabs_settings)
-    result["audio_files"] = audio_result["audio_files"]
-
-    # Phase 3: Asset Collection
-    logger.info("=== Phase 3: Collecting assets ===")
-    from pipeline.video.asset_collector import collect_assets
-
-    manifest = collect_assets(script, output_dir, api_base_url)
-    result["manifest"] = manifest
-
-    # Phase 4: Timeline Builder
-    logger.info("=== Phase 4: Building timeline ===")
-    from pipeline.video.timeline_builder import build_timeline
-
-    timeline_path = output_dir / "timeline.json"
-    timeline = build_timeline(script, audio_result, manifest, timeline_path)
-    result["timeline_path"] = str(timeline_path)
-    total_seconds = timeline.get("totalDurationSeconds", 0)
-    logger.info(f"Timeline: {total_seconds:.1f}s total duration")
-
-    if skip_render:
-        logger.info("Skipping render (--skip-render)")
-        result["skip_render"] = True
-        return result
-
-    # Phase 5: Remotion Render
-    logger.info("=== Phase 5: Rendering video ===")
-    video_path = output_dir / "final.mp4"
-    render_ok = _render_video(timeline_path, video_path)
-    if not render_ok:
-        result["render_failed"] = True
-        return result
-    result["video_path"] = str(video_path)
-
-    if skip_upload:
-        logger.info("Skipping upload (--skip-upload)")
-        result["skip_upload"] = True
-        elapsed = time.time() - t0
-        logger.info(f"Pipeline complete in {elapsed:.1f}s (upload skipped)")
-        return result
-
-    # Phase 6: YouTube Upload
-    logger.info("=== Phase 6: Uploading to YouTube ===")
-    from pipeline.video.distributor import upload_to_youtube
-
-    thumbnail_path = output_dir / "thumbnail.png"
-    youtube_url = upload_to_youtube(
-        video_path,
-        script,
-        timeline,
-        thumbnail_path=thumbnail_path if thumbnail_path.exists() else None,
-        privacy="private",
-    )
-    result["youtube_url"] = youtube_url
-
-    elapsed = time.time() - t0
-    logger.info(f"=== Video pipeline complete in {elapsed:.1f}s ===")
-    logger.info(f"YouTube URL: {youtube_url}")
-
-    return result
-
-
-def main() -> None:
-    """CLI entry point for the video pipeline."""
-    parser = argparse.ArgumentParser(description="Weekly video pipeline orchestrator")
-    parser.add_argument("--article-id", type=int, required=True, help="NewsArticle ID to process")
-    parser.add_argument(
-        "--dry-run", action="store_true", help="Only generate script JSON, don't render"
-    )
-    parser.add_argument(
-        "--skip-upload", action="store_true", help="Render but don't upload to YouTube"
-    )
-    parser.add_argument(
-        "--skip-render", action="store_true", help="Generate assets but don't render"
-    )
-    parser.add_argument(
-        "--api-base-url", default="https://ancientnerds.com", help="API base URL for screenshots"
-    )
-    args = parser.parse_args()
-
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s [%(name)s] %(levelname)s: %(message)s",
-        handlers=[logging.StreamHandler(sys.stdout)],
-    )
-
-    import asyncio
-
-    result = asyncio.run(
-        generate_weekly_video(
-            article_id=args.article_id,
-            dry_run=args.dry_run,
-            skip_upload=args.skip_upload,
-            skip_render=args.skip_render,
-            api_base_url=args.api_base_url,
-        )
-    )
-
-    if result.get("dry_run"):
-        return
-
-    # Print summary
-    print("\n=== Video Pipeline Result ===")
-    for key, value in result.items():
-        if key != "manifest":
-            print(f"  {key}: {value}")
-
-
-if __name__ == "__main__":
-    main()
+    preps = [threading.Thread(target=prep_worker, daemon=True) for _ in range(prep_workers)]
+    recorder = threading.Thread(target=record_worker, daemon=True)
+    renderers = [threading.Thread(target=render_worker, daemon=True) for _ in range(render_workers)]
+    for thread in (*preps, recorder, *renderers):
+        thread.start()
+    for _ in preps:
+        prep_q.put(None)
+    for thread in preps:
+        thread.join()
+    rec_q.put(None)
+    recorder.join()
+    for thread in renderers:
+        thread.join()
+    for job in jobs.values():
+        if not job.ok:
+            logger.warning("%s failed at %s %s", job.name, job.failed_stage, "; ".join(job.notes))
+    logger.info("pipeline done: %d/%d ok", sum(j.ok for j in jobs.values()), len(jobs))
+    return jobs

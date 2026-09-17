@@ -106,6 +106,15 @@ def _parse(argv: list[str]) -> argparse.Namespace:
     b.add_argument("--voice", default=shorts_tts.DEFAULT_VOICE)
     b.add_argument("--speed", type=float, default=shorts_tts.DEFAULT_SPEED)
 
+    p = sub.add_parser(
+        "pipeline",
+        help="prepare, record and render many sites with the stages overlapping",
+    )
+    who_p = p.add_mutually_exclusive_group(required=True)
+    who_p.add_argument("--names-file", help="one site name per line")
+    who_p.add_argument("--limit", type=int, help="take the next N sites like `batch` would")
+    p.add_argument("--tier-min", type=int, default=4, help="lowest rarity tier for --limit")
+
     sub.add_parser("report", help="aggregate every audit.json into a markdown report")
     return ap.parse_args(argv)
 
@@ -466,6 +475,33 @@ def run_batch(args: argparse.Namespace) -> int:
     return 1 if failures else 0
 
 
+def run_pipeline_cmd(args: argparse.Namespace) -> int:
+    """Overlapping stages (orchestrator.py): preparation and rendering run while
+    the one browser records. Sites come from a file or from the batch plan."""
+    from pipeline.video.orchestrator import run_pipeline
+
+    if args.names_file:
+        names = [
+            line.strip()
+            for line in Path(args.names_file).read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
+    else:
+        names = [site["name"] for site in batch_candidates(args.tier_min, args.limit)]
+    if not names:
+        logging.info("nothing to do")
+        return 0
+    logging.info("pipeline over %d site(s)", len(names))
+    jobs = run_pipeline(
+        names,
+        log=shorts_export.ASSETS_ROOT / "pipeline-run.log",
+        recorder_dir=RECORDER_DIR,
+        api_target=RECORDER_API_TARGET,
+        site_dir_for=lambda name: shorts_export.ASSETS_ROOT / slugify(name),
+    )
+    return 0 if all(job.ok for job in jobs.values()) else 1
+
+
 def write_report() -> Path:
     """One markdown table over every audited site plus the rejection reasons."""
     rows: list[str] = []
@@ -514,6 +550,8 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "audit":
         ok, _, _ = shorts_audit.audit_site(_exported_site_dir(args))
         return 0 if ok else 1
+    if args.command == "pipeline":
+        return run_pipeline_cmd(args)
     if args.command == "report":
         write_report()
         return 0
