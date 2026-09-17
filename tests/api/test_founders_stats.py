@@ -200,7 +200,9 @@ def test_problems_rank_errors_slow_pages_dead_links_bounces_and_empty_searches()
     assert by_kind["js_error"]["label"] == "x is not a function"
     assert "globe" in by_kind["js_error"]["detail"]
     assert by_kind["slow_page"]["score"] == 20  # as many samples as it has
-    assert "LCP" in by_kind["slow_page"]["detail"] and "4100" in by_kind["slow_page"]["detail"]
+    # The metric is part of the label: one page type can be slow on LCP and INP.
+    assert by_kind["slow_page"]["label"] == "story · LCP"
+    assert "4100" in by_kind["slow_page"]["detail"]
     assert by_kind["broken_link"]["score"] == 6  # 3 hits, weighted two
     assert by_kind["broken_link"]["label"] == "/old-story"
     assert "example.org" in by_kind["broken_link"]["detail"]
@@ -249,7 +251,7 @@ def test_shallow_exit_counts_only_one_page_story_and_site_visits():
     ]
     out = fs.problems(fs.sessions_from_rows(rows), not_found=[], vitals=[], errors=[])
     exits = {p["label"]: p["score"] for p in out if p["kind"] == "shallow_exit"}
-    assert exits == {"Story wird sofort verlassen": 2, "Site wird sofort verlassen": 1}
+    assert exits == {"story": 2, "site": 1}
 
 
 def test_problems_are_capped():

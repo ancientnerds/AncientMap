@@ -189,9 +189,9 @@ VITAL_LIMITS = {"LCP": 2500, "INP": 200}
 BROKEN_LINK_MIN = 2
 #: Below a quarter of the page the visitor read the headline and left.
 SHALLOW_DEPTH = 25
-#: The page types a bounce is worth reporting for, with their founder word.
-#: Neither string is an event name, so a step carrying one is always the page.
-SHALLOW_PAGES = {"story": "Story", "site": "Site"}
+#: The page types a bounce is worth reporting for. Neither string is an event
+#: name, so a step carrying one is always the page view, never an action.
+SHALLOW_PAGES = {"story", "site"}
 
 
 def problems(
@@ -211,6 +211,9 @@ def problems(
     `not_found`, `vitals` and `errors` are the rows of SQL_NOT_FOUND,
     SQL_VITALS and SQL_ERRORS; the bounces and empty searches come from the
     sessions, so no query has to be repeated.
+
+    Every `label` names the thing that is broken and nothing else — the panel
+    puts the kind in front of it, so "story lädt langsam" would say it twice.
     """
     found: list[dict[str, Any]] = []
     for row in errors:
@@ -219,7 +222,7 @@ def problems(
                 "kind": "js_error",
                 "label": row["message"],
                 "score": row["n"] * 3,
-                "detail": f"{row['n']}× auf Seitentyp {row['page']}",
+                "detail": f"{row['n']}× auf {row['page']}",
             }
         )
     for row in vitals:
@@ -229,11 +232,11 @@ def problems(
         found.append(
             {
                 "kind": "slow_page",
-                "label": f"{row['page']} lädt langsam",
+                # The metric belongs in the label: a page type can be slow twice.
+                "label": f"{row['page']} · {row['name']}",
                 "score": row["samples"],
                 "detail": (
-                    f"{row['name']} p75 {round(row['p75'])} ms statt {limit_ms} ms, "
-                    f"{row['samples']} Messungen"
+                    f"p75 {round(row['p75'])} ms statt {limit_ms} ms, {row['samples']} Messungen"
                 ),
             }
         )
@@ -259,7 +262,7 @@ def problems(
         found.append(
             {
                 "kind": "shallow_exit",
-                "label": f"{SHALLOW_PAGES[page]} wird sofort verlassen",
+                "label": page,
                 "score": n,
                 "detail": f"{n} Sitzungen mit einer Seite und unter {SHALLOW_DEPTH} % Scrolltiefe",
             }
@@ -268,7 +271,7 @@ def problems(
         found.append(
             {
                 "kind": "empty_search",
-                "label": "Suche ohne Treffer",
+                "label": "search",
                 "score": empty_searches,
                 "detail": f"{empty_searches} Suchanfragen fanden nichts",
             }

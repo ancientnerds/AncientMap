@@ -546,12 +546,17 @@ button {
   white-space: nowrap;
 }
 
+/* An error message you cannot read is useless for triage, so it wraps — but
+   never past two lines, or one stack trace pushes the rest of the list away. */
 .dash-problem-label {
   min-width: 0;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
   font-size: 0.9rem;
+  overflow-wrap: anywhere;
 }
 
 .dash-problem-score {
