@@ -135,6 +135,13 @@ def evaluate(m: dict) -> list[Check]:
     checks.append(
         Check("name_fits", m["name_lines"] <= MAX_NAME_LINES, f"{m['name_lines']} line(s)")
     )
+    checks.append(
+        Check(
+            "captions_timed",
+            m["caption_words"] == m["card_words"] and m["captions_end"] <= m["name_at"],
+            f"{m['caption_words']}/{m['card_words']} words, last ends {m['captions_end']:.2f}s",
+        )
+    )
     return checks
 
 
@@ -285,6 +292,7 @@ def measure_site(site_dir: Path) -> dict:
         Segment(s["kind"], s["duration"], s.get("source"), s.get("start", 0.0)) for s in timeline
     ]
     name_at = name_audio_at(segments, probe_duration(site_dir / "name.mp3"))
+    captions = json.loads((site_dir / "render" / "captions.json").read_text(encoding="utf-8"))
     lufs, peak = _loudness(video)
     return {
         "site": site["name"],
@@ -310,6 +318,9 @@ def measure_site(site_dir: Path) -> dict:
         "stills_rejected": len(selection["rejected"]),
         "stills_used": sum(1 for s in timeline if s["kind"] == "still"),
         "name_lines": len(name_layout(site["name"])[0]),
+        "card_words": len(site["card_text"].split()),
+        "caption_words": len(captions),
+        "captions_end": max((w["end"] for w in captions), default=0.0),
     }
 
 

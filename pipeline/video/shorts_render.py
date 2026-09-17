@@ -22,7 +22,8 @@ from pathlib import Path
 from typing import Literal
 
 from pipeline.video.media import ff_path, probe_duration, run_ffmpeg
-from pipeline.video.shorts_select import order_by_narration
+from pipeline.video.shorts_captions import Word, caption_words
+from pipeline.video.shorts_select import focus_of, order_by_narration
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +40,11 @@ NAME_END_GAP_S = 0.15  # fully gone this long before the clip ends = the loop po
 NAME_AUDIO_DELAY_S = 0.2  # spoken name starts shortly after the return clip begins
 NAME_WRAP_CHARS = 14
 FLAG_W = 180  # flag under the name (3:2 → 120 px tall)
+# Word-by-word captions: one word at a time, lower third, boxed for legibility.
+CAPTION_SIZE = 92
+CAPTION_Y = 1230
+CAPTION_BOX_ALPHA = 0.38
+CAPTION_BOX_PAD = 22
 FLAG_GAP = 34
 OPENING_TRIM_S = 0.1  # the opening take holds its first pose this long; the first frames after a
 # jump are not fully drawn, so cutting the hold keeps frame 0 identical to the loop's end pose
@@ -185,19 +191,28 @@ def name_layout(name: str) -> tuple[list[str], int, int]:
     return wrap_lines(name, width), size, line_h
 
 
-def pushin_filter(nominal_s: float) -> str:
-    """Cover-scale the still to fill 1080×1920, then zoom linearly to 1+PUSH_IN
-    over its nominal duration (continuing at the same rate through a dissolve
-    tail), always cropping the centre."""
+def pushin_filter(nominal_s: float, focus: tuple[float, float] = (0.5, 0.5)) -> str:
+    """Cover-scale the still to fill 1080×1920, cut the 9:16 window around the
+    subject's focal point (clamped to the picture), then zoom linearly to
+    1+PUSH_IN over the nominal duration (continuing at the same rate through a
+    dissolve tail) around that window's centre."""
+    fx, fy = focus
     z = f"(1+{PUSH_IN}*t/{nominal_s:.3f})"
+    window = (
+        f"x='min(max(iw*{fx:.3f}-{W / 2:.0f}\\,0)\\,iw-{W})':"
+        f"y='min(max(ih*{fy:.3f}-{H / 2:.0f}\\,0)\\,ih-{H})'"
+    )
     return (
-        f"scale={W}:{H}:force_original_aspect_ratio=increase,crop={W}:{H},"
+        f"scale={W}:{H}:force_original_aspect_ratio=increase,crop={W}:{H}:{window},"
         f"scale=eval=frame:w='iw*{z}':h='ih*{z}',crop={W}:{H},fps={FPS},format=yuv420p"
     )
 
 
-def stills_graph(durations: list[float]) -> tuple[list[float], str]:
+def stills_graph(
+    durations: list[float], focuses: list[tuple[float, float]] | None = None
+) -> tuple[list[float], str]:
     """Input lengths and the filter_complex for a dissolving stills sequence.
+    `focuses` (one (x, y) per still) moves each crop window onto its subject.
 
     Every still but the last is fed DISSOLVE_S longer than its slot, and each
     xfade starts at the cumulative slot boundary, so the sequence is exactly
@@ -207,7 +222,8 @@ def stills_graph(durations: list[float]) -> tuple[list[float], str]:
     if n == 0:
         raise ValueError("no stills")
     lengths = [d + DISSOLVE_S for d in durations[:-1]] + [durations[-1]]
-    chains = [f"[{i}:v]{pushin_filter(durations[i])}[v{i}]" for i in range(n)]
+    focuses = focuses or [(0.5, 0.5)] * n
+    chains = [f"[{i}:v]{pushin_filter(durations[i], focuses[i])}[v{i}]" for i in range(n)]
     if n == 1:
         return lengths, chains[0].replace("[v0]", "[out]")
     xfades = []
@@ -385,9 +401,11 @@ def render_return(
     )
 
 
-def render_stills(stills: list[Segment], out: Path) -> Path:
+def render_stills(
+    stills: list[Segment], out: Path, focuses: list[tuple[float, float]] | None = None
+) -> Path:
     """One dissolving sequence for a run of consecutive still segments."""
-    lengths, graph = stills_graph([s.duration for s in stills])
+    lengths, graph = stills_graph([s.duration for s in stills], focuses)
     args: list[str] = []
     for seg, length in zip(stills, lengths, strict=True):
         args += ["-loop", "1", "-framerate", str(FPS), "-t", f"{length:.3f}", "-i", str(seg.source)]
@@ -487,16 +505,34 @@ def gain_db(measured_lufs: float, target_lufs: float = TARGET_LUFS) -> float:
     return target_lufs - measured_lufs
 
 
-def final_graph(gain: float) -> str:
+def captions_filter(words: list[Word], text_dir: Path) -> str:
+    """One drawtext per word, shown exactly between its start and end. Words go
+    to text files (no escaping of apostrophes, commas or percent signs)."""
+    text_dir.mkdir(parents=True, exist_ok=True)
+    parts = []
+    for i, word in enumerate(words):
+        f = text_dir / f"w{i:03d}.txt"
+        f.write_text(word.text, encoding="utf-8", newline=chr(10))
+        parts.append(
+            f"drawtext=fontfile='{ff_path(FONT_HEADING)}':textfile='{ff_path(f)}':"
+            f"fontcolor=white:fontsize={CAPTION_SIZE}:x=(w-text_w)/2:y={CAPTION_Y}:"
+            f"box=1:boxcolor=black@{CAPTION_BOX_ALPHA}:boxborderw={CAPTION_BOX_PAD}:"
+            f"shadowcolor=black@0.5:shadowx=2:shadowy=2:"
+            f"enable='between(t\\,{word.start:.3f}\\,{word.end:.3f})'"
+        )
+    return ",".join(parts)
+
+
+def final_graph(gain: float, captions: str = "") -> str:
     """filter_complex for the final pass: graded picture; pre-mixed voice lifted
     by a fixed gain with a true-peak limiter as the only dynamic element."""
-    return (
-        f"[0:v]{LOOK_FILTER}[vout];"
-        f"[1:a]volume={gain:.2f}dB,alimiter=limit={PEAK_LIMIT}:level=false[a]"
-    )
+    video = f"{LOOK_FILTER},{captions}" if captions else LOOK_FILTER
+    return f"[0:v]{video}[vout];[1:a]volume={gain:.2f}dB,alimiter=limit={PEAK_LIMIT}:level=false[a]"
 
 
-def concat_and_mux(parts: list[Path], mix: Path, gain: float, out: Path) -> Path:
+def concat_and_mux(
+    parts: list[Path], mix: Path, gain: float, out: Path, captions: str = ""
+) -> Path:
     """Concatenate the segments, grade the picture, and lay the pre-mixed voice
     under them. The mix is already exactly as long as the picture, so no
     -shortest: that flag cut the buffered tail (the spoken name) in an earlier cut."""
@@ -513,7 +549,7 @@ def concat_and_mux(parts: list[Path], mix: Path, gain: float, out: Path) -> Path
             "-i",
             str(mix),
             "-filter_complex",
-            final_graph(gain),
+            final_graph(gain, captions),
             "-map",
             "[vout]",
             "-map",
@@ -586,6 +622,7 @@ def render_short(
     # LF only: on Windows write_text would emit CR LF and drawtext renders the CR as an empty line
     name_file.write_text(chr(10).join(name_lines), encoding="utf-8", newline=chr(10))
 
+    focus_by_path = {st["local_path"]: focus_of(st.get("verdict")) for st in stills}
     parts: list[Path] = []
     n = 0
     while n < len(segments):
@@ -598,7 +635,7 @@ def render_short(
             ]
             for s in run:
                 logger.info("still   %.2fs %s", s.duration, s.source)
-            render_stills(run, out)
+            render_stills(run, out, [focus_by_path.get(s.source or "", (0.5, 0.5)) for s in run])
             n += len(run)
         else:
             logger.info("%-7s %.2fs %s", seg.kind, seg.duration, seg.source)
@@ -627,7 +664,11 @@ def render_short(
     mix = premix(narration, name_audio, name_at, total_s, work / "mix.wav", music=music)
     lufs = measure_lufs(mix)
     logger.info("voice mix %.1f LUFS → gain %+.1f dB", lufs, gain_db(lufs))
-    concat_and_mux(parts, mix, gain_db(lufs), final)
+    words = caption_words(site["card_text"], narration)
+    (work / "captions.json").write_text(
+        json.dumps([w.__dict__ for w in words], indent=1), encoding="utf-8"
+    )
+    concat_and_mux(parts, mix, gain_db(lufs), final, captions_filter(words, work / "captions"))
     (site_dir / "description.txt").write_text(
         build_description(site, used, voice_id, mapbox_used=opening is not None),
         encoding="utf-8",

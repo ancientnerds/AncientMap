@@ -97,3 +97,8 @@ pyreadr>=0.5.0              # Read R data files (.rds) for peru_amazon ingester
 
 # Cache client for api.cache
 redis>=5.0.0
+
+# =============================================================================
+# SITE SHORTS (local rendering only — recorder + ffmpeg run on the dev machine)
+# =============================================================================
+faster-whisper>=1.2.0       # word timestamps for word-by-word captions (base.en, CPU)

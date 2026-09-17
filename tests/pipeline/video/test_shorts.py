@@ -6,6 +6,7 @@ import pytest
 
 from pipeline.video.media import ff_path
 from pipeline.video.shorts_audit import evaluate, passed
+from pipeline.video.shorts_captions import Word, align_words
 from pipeline.video.shorts_export import (
     RARITY_NAMES,
     assemble_site,
@@ -18,6 +19,7 @@ from pipeline.video.shorts_render import (
     NAME_AUDIO_DELAY_S,
     NARRATION_TAIL_S,
     build_description,
+    captions_filter,
     clip_filter,
     final_graph,
     flag_overlay_graph,
@@ -34,6 +36,7 @@ from pipeline.video.shorts_render import (
 from pipeline.video.shorts_select import (
     Candidate,
     aspect_penalty,
+    focus_of,
     is_panorama,
     normalize_subject,
     order_by_narration,
@@ -111,9 +114,21 @@ class TestStillsGraph:
 
     def test_pushin_zooms_from_100_to_106_percent(self):
         f = pushin_filter(2.75)
-        assert f.startswith("scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,")
+        assert f.startswith("scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920:")
+        assert "x='min(max(iw*0.500-540\\,0)\\,iw-1080)'" in f  # centred by default
         assert "scale=eval=frame:w='iw*(1+0.06*t/2.750)':h='ih*(1+0.06*t/2.750)'" in f
         assert f.endswith("crop=1080:1920,fps=60,format=yuv420p")
+
+    def test_pushin_crops_around_the_focal_point(self):
+        f = pushin_filter(2.75, focus=(0.8, 0.3))
+        assert "x='min(max(iw*0.800-540\\,0)\\,iw-1080)'" in f
+        assert "y='min(max(ih*0.300-960\\,0)\\,ih-1920)'" in f
+
+    def test_focus_of_defaults_and_clamps(self):
+        assert focus_of(None) == (0.5, 0.5)
+        assert focus_of({"focus": {"x": 1.4, "y": -0.2}}) == (1.0, 0.0)
+        assert focus_of({"focus": "left"}) == (0.5, 0.5)
+        assert focus_of({"focus": {"x": 0.25, "y": 0.75}}) == (0.25, 0.75)
 
 
 class TestText:
@@ -387,12 +402,22 @@ def _measurements(**over):
         "stills_rejected": 4,
         "stills_used": 3,
         "name_lines": 1,
+        "card_words": 27,
+        "caption_words": 27,
+        "captions_end": 15.1,
     }
     m.update(over)
     return m
 
 
 class TestAudit:
+    def test_captions_must_cover_every_card_word_and_end_before_the_name(self):
+        assert passed(evaluate(_measurements()))
+        short = {c.name: c.ok for c in evaluate(_measurements(caption_words=26))}
+        assert short["captions_timed"] is False
+        late = {c.name: c.ok for c in evaluate(_measurements(captions_end=16.2))}
+        assert late["captions_timed"] is False
+
     def test_clean_short_passes_every_check(self):
         checks = evaluate(_measurements())
         assert passed(checks)
@@ -488,3 +513,52 @@ class TestFlagAndMusic:
         assert "afade=t=in:st=0:d=1.0" in g and "afade=t=out:st=18.000:d=1.2" in g
         assert "volume=-11.0dB[m]" in g
         assert mix_graph(16.7, 19.5).count("amix=inputs=2") == 1
+
+
+class TestCaptions:
+    def test_matching_words_take_the_heard_times(self):
+        heard = [
+            ("A", 0.0, 0.26),
+            ("15th", 0.26, 0.84),
+            ("century", 0.84, 1.22),
+            ("Inca", 1.22, 1.72),
+        ]
+        words = align_words("A 15th-century Inca".split(), heard)
+        # "15th-century" is one display token but two heard words → interpolated over both
+        assert [w.text for w in words] == ["A", "15th-century", "Inca"]
+        assert words[0].start == 0.0 and words[0].end == 0.26
+        assert words[2].start == 1.22 and words[2].end == 1.72
+        assert words[1].start == 0.26 and words[1].end == 1.22
+
+    def test_numbers_and_punctuation_match_by_key(self):
+        heard = [
+            ("at", 2.16, 2.64),
+            ("2", 2.64, 2.96),
+            (",430", 2.96, 4.22),
+            ("metres,", 4.22, 5.06),
+        ]
+        words = align_words("at 2,430 metres,".split(), heard)
+        assert words[0].start == 2.16
+        assert words[1].start == 2.64 and words[1].end == 4.22  # "2" + ",430" span
+        assert words[2].start == 4.22 and words[2].end == 5.06
+
+    def test_misheard_word_with_same_count_is_paired(self):
+        heard = [("built", 5.5, 5.8), ("frum", 5.8, 6.1), ("polished", 6.1, 6.6)]
+        words = align_words("built from polished".split(), heard)
+        assert words[1].start == 5.8 and words[1].end == 6.1
+
+    def test_every_word_has_a_minimum_duration_and_order(self):
+        heard = [("a", 0.0, 0.05), ("b", 0.05, 0.1)]
+        words = align_words(["a", "b"], heard)
+        assert all(w.end - w.start >= 0.12 for w in words)
+        assert words[0].start <= words[1].start
+
+    def test_needs_recognised_words(self):
+        with pytest.raises(ValueError):
+            align_words(["a"], [])
+
+    def test_captions_filter_one_drawtext_per_word(self, tmp_path):
+        f = captions_filter([Word("Inca", 1.22, 1.72), Word("citadel", 1.72, 2.16)], tmp_path)
+        assert f.count("drawtext=") == 2
+        assert "enable='between(t\\,1.220\\,1.720)'" in f
+        assert (tmp_path / "w001.txt").read_text(encoding="utf-8") == "citadel"

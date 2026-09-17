@@ -59,6 +59,7 @@ Return JSON only, no prose:
  "quality": 1-5,
  "relevance": 1-5,
  "illustrates": "<the exact phrase of the narration this photo shows best, or an empty string>",
+ "focus": {{"x": 0.0-1.0, "y": 0.0-1.0}},
  "vertical_crop_ok": true | false}}
 kind: site_photo = the site, its structures or landscape photographed on location; artifact = an object in a museum or studio; map_or_document = maps, drawings, scans, diagrams, book pages; people = a person or crowd is the subject.
 people_prominent: people are large or central (small distant figures are fine).
@@ -66,7 +67,8 @@ text_or_overlay: captions, watermarks, signage, borders or frames inside the pic
 quality: 5 = sharp, well exposed, striking; 3 = usable; 1 = blurry, dark, damaged or a low-resolution scan.
 relevance: 5 = shows exactly what the narration describes; 3 = shows the site in general; 1 = unrelated to the narration.
 illustrates: copy the phrase verbatim from the narration; empty if relevance is below 3.
-vertical_crop_ok: cropping the centre of the picture to a tall 9:16 frame still shows the subject."""
+focus: where the main subject sits in the picture, as fractions of width (x, 0 = left edge) and height (y, 0 = top); the video crops a tall 9:16 window around this point.
+vertical_crop_ok: cropping a tall 9:16 window around the focus still shows the subject."""
 
 
 @dataclass
@@ -124,6 +126,18 @@ def reject_reason(cand: Candidate, *, require_verdict: bool) -> str | None:
     if not v.get("vertical_crop_ok"):
         return "subject lost in 9:16 crop"
     return None
+
+
+def focus_of(verdict: dict | None) -> tuple[float, float]:
+    """Focal point (x, y) in 0..1 from a verdict; the centre when absent or malformed."""
+    f = (verdict or {}).get("focus")
+    if not isinstance(f, dict):
+        return 0.5, 0.5
+    try:
+        x, y = float(f.get("x", 0.5)), float(f.get("y", 0.5))
+    except (TypeError, ValueError):
+        return 0.5, 0.5
+    return min(max(x, 0.0), 1.0), min(max(y, 0.0), 1.0)
 
 
 def score(cand: Candidate) -> float:
