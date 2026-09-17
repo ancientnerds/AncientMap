@@ -15,6 +15,10 @@ const buildTime = new Date().toISOString()
 // video recorder points it at production (VITE_DEV_API_TARGET=https://ancientnerds.com)
 // so the globe has real site dots without a local database.
 const DEV_API_TARGET = process.env.VITE_DEV_API_TARGET ?? 'http://localhost:8000'
+// The video recorder's dev server must never hot-reload: an edit anywhere in
+// src/ during a take reloads the page and kills the capture ("Execution
+// context was destroyed", 17.09. — another session was editing the frontend).
+const VIDEO_RECORD = process.env.VIDEO_RECORD === '1'
 
 function servePublicData(): Plugin {
   const dataRoot = resolve(__dirname, '..', 'public', 'data')
@@ -208,6 +212,7 @@ export default defineConfig(({ isSsrBuild, mode }) => ({
     },
   },
   server: {
+    ...(VIDEO_RECORD ? { hmr: false, watch: { ignored: ['**'] } } : {}),
     proxy: {
       '/api/': {
         target: DEV_API_TARGET,

@@ -24,17 +24,23 @@
 import { readFileSync } from 'fs'
 import type { SceneDefinition, SceneContext } from '../record'
 import type { MapboxKeyframe } from '../../src/utils/demoApi'
+import { getCountryCode } from '../../src/utils/countryFlags'
 import { settle } from '../utils/helpers.js'
 
 interface SiteInput {
   name: string
   lat: number
   lng: number
+  country?: string
   /** Orbit zoom by site type (pipeline/video/shorts_export.orbit_zoom_for); SITE_ZOOM if absent. */
   orbit_zoom?: number
   /** Length of the spoken name (written by the tts step); the return flight must outlast it. */
   name_audio_s?: number
 }
+
+// The site's country tinted on the globe (brand green, --_palette-green-bright):
+// visible in space on both takes, so the loop frames match; gone inside the country.
+const COUNTRY_HIGHLIGHT = '#00cc66'
 
 const HOLD_S = 0.1 // must match OPENING_TRIM_S in pipeline/video/shorts_render.py
 const ROTATE_S = 1
@@ -166,6 +172,13 @@ async function prepareMapbox(ctx: SceneContext, site: SiteInput): Promise<void> 
   await demo.mapboxWaitIdle(15000)
   await demo.setMapboxFog(NATURAL_FOG)
   console.log(`  hidden clutter layers: ${await demo.hideMapboxLayers(CLUTTER_LAYERS)}`)
+  const code = site.country ? getCountryCode(site.country) : null
+  if (code) {
+    await demo.setMapboxCountryHighlight(code, COUNTRY_HIGHLIGHT)
+    console.log(`  country highlight: ${code}`)
+  } else {
+    console.log(`  no country code for ${JSON.stringify(site.country)}: no highlight`)
+  }
   await demo.setMapboxRasterFade(0)
   await demo.setTerrain(TERRAIN_EXAGGERATION)
 }

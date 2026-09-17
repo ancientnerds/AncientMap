@@ -100,6 +100,8 @@ async function startDevServer(): Promise<ChildProcess> {
     cwd: join(__dirname, '..'),
     stdio: ['pipe', 'pipe', 'pipe'],
     shell: true,
+    // no HMR / file watching while recording (vite.config.ts): a reload mid-take destroys the capture
+    env: { ...process.env, VIDEO_RECORD: '1' },
   })
 
   // Wait for server to be ready
@@ -251,6 +253,7 @@ function createDemoProxy(page: Page): DemoAPI {
     setMapboxFog: (spec) => evalDemo(`window.__DEMO.setMapboxFog(${JSON.stringify(spec)})`),
     hideMapboxLayers: (pattern) => page.evaluate(`window.__DEMO.hideMapboxLayers(${JSON.stringify(pattern)})`) as Promise<number>,
     setMapboxRasterFade: (ms) => evalDemo(`window.__DEMO.setMapboxRasterFade(${ms})`),
+    setMapboxCountryHighlight: (iso2, color) => evalDemo(`window.__DEMO.setMapboxCountryHighlight(${JSON.stringify(iso2)}, ${JSON.stringify(color)})`),
     mapboxTilesLoaded: () => { throw new Error('mapboxTilesLoaded is polled inside the capture loop') },
     // UI control
     hideAllUI: () => evalDemo(`window.__DEMO.hideAllUI()`),

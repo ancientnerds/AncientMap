@@ -80,6 +80,12 @@ export interface DemoAPI {
   setMapboxRasterFade(ms: number): void
   /** True when every tile (imagery + DEM) for the current view is loaded; the recorder polls this per frame. */
   mapboxTilesLoaded(): boolean
+  /**
+   * Tint one country (ISO 3166-1 alpha-2) on the globe from Mapbox's country
+   * boundaries, below the labels; fully visible from space, faded out by z7.5
+   * so a view inside the country is not tinted. Recording-only.
+   */
+  setMapboxCountryHighlight(iso2: string, color: string): void
 
   // UI control
   hideAllUI(): void
@@ -444,6 +450,54 @@ export function registerGlobeDemoApi(refs: GlobeDemoRefs): void {
       const hit = (map.getStyle()?.layers ?? []).filter((l: { id: string }) => re.test(l.id))
       hit.forEach((l: { id: string }) => map.setLayoutProperty(l.id, 'visibility', 'none'))
       return hit.length
+    },
+    setMapboxCountryHighlight: (iso2, color) => {
+      const map = refs.mapboxServiceRef.current?.getMap()
+      if (!map) {
+        console.warn('[DemoAPI] Mapbox not initialized')
+        return
+      }
+      const SOURCE = 'country-highlight'
+      if (!map.getSource(SOURCE)) {
+        map.addSource(SOURCE, { type: 'vector', url: 'mapbox://mapbox.country-boundaries-v1' })
+      }
+      // one polygon per country in the "US"/all worldview, as Mapbox documents it
+      const filter = [
+        'all',
+        ['==', ['get', 'iso_3166_1'], iso2],
+        ['match', ['get', 'worldview'], ['all', 'US'], true, false],
+      ]
+      const fade = (peak: number) => ['interpolate', ['linear'], ['zoom'], 5.5, peak, 7.5, 0]
+      const before = (map.getStyle()?.layers ?? []).find((l: { type: string }) => l.type === 'symbol')?.id
+      for (const id of [`${SOURCE}-fill`, `${SOURCE}-line`]) {
+        if (map.getLayer(id)) map.removeLayer(id)
+      }
+      map.addLayer(
+        {
+          id: `${SOURCE}-fill`,
+          type: 'fill',
+          source: SOURCE,
+          'source-layer': 'country_boundaries',
+          filter,
+          paint: { 'fill-color': color, 'fill-opacity': fade(0.28) },
+        },
+        before,
+      )
+      map.addLayer(
+        {
+          id: `${SOURCE}-line`,
+          type: 'line',
+          source: SOURCE,
+          'source-layer': 'country_boundaries',
+          filter,
+          paint: {
+            'line-color': color,
+            'line-width': ['interpolate', ['linear'], ['zoom'], 2, 1.5, 6, 2.5],
+            'line-opacity': fade(0.9),
+          },
+        },
+        before,
+      )
     },
     setMapboxRasterFade: (ms) => {
       const map = refs.mapboxServiceRef.current?.getMap()
