@@ -39,6 +39,11 @@ MIN_STILL_S = 2.2
 CUT_LEAD_S = 0.2
 CUT_MAX_LATE_S = 1.0
 PUSH_IN = 0.06  # every still zooms from 100 % to 106 % over its nominal duration
+# The zoom is rendered by zoompan on a SUPER× supersampled still and scaled
+# down per frame: at 1080 px the integer scale sizes and even-aligned crops
+# quantised the motion to whole pixels (measured: every third frame jumped,
+# the others stood still — "ruckelt"); at 4× a step is a quarter pixel.
+SUPER = 4
 DISSOLVE_S = 0.4  # cross-dissolve between stills; the timeline length is unchanged
 NAME_FADE_IN_S = 0.3
 NAME_FADE_OUT_S = 0.5
@@ -268,27 +273,34 @@ def name_layout(name: str) -> tuple[list[str], int, int]:
 
 
 def pushin_filter(
-    nominal_s: float, focus: tuple[float, float] = (0.5, 0.5), *, out_over_s: float | None = None
+    nominal_s: float,
+    fed_s: float,
+    focus: tuple[float, float] = (0.5, 0.5),
+    *,
+    push_out: bool = False,
 ) -> str:
-    """Cover-scale the still to fill 1080×1920, cut the 9:16 window around the
-    subject's focal point (clamped to the picture), then zoom around that
-    window's centre: in, from 100 % to 1+PUSH_IN over the nominal duration
-    (continuing at the same rate through a dissolve tail), or — when
-    `out_over_s` is given — out, from 1+PUSH_IN back to 100 % over that many
-    seconds (the whole fed length, so the picture never gets smaller than the
-    frame)."""
+    """Cover-scale the still to SUPER× the frame, cut the 9:16 window around
+    the subject's focal point (clamped to the picture), then zoompan `fed_s`
+    worth of frames around the centre: in, from 100 % to 1+PUSH_IN over the
+    nominal duration (continuing at the same rate through a dissolve tail), or
+    out, from 1+PUSH_IN back to 100 % over the whole fed length (so the
+    picture never gets smaller than the frame). The still is decoded once;
+    zoompan does one downscale per frame."""
     fx, fy = focus
-    if out_over_s is None:
-        z = f"(1+{PUSH_IN}*t/{nominal_s:.3f})"
+    sw, sh = W * SUPER, H * SUPER
+    frames = round(fed_s * FPS)
+    if push_out:
+        z = f"1+{PUSH_IN}*(1-on/{frames})"
     else:
-        z = f"(1+{PUSH_IN}*(1-t/{out_over_s:.3f}))"
+        z = f"1+{PUSH_IN}*on/{round(nominal_s * FPS)}"
     window = (
-        f"x='min(max(iw*{fx:.3f}-{W / 2:.0f}\\,0)\\,iw-{W})':"
-        f"y='min(max(ih*{fy:.3f}-{H / 2:.0f}\\,0)\\,ih-{H})'"
+        f"x='min(max(iw*{fx:.3f}-{sw / 2:.0f}\\,0)\\,iw-{sw})':"
+        f"y='min(max(ih*{fy:.3f}-{sh / 2:.0f}\\,0)\\,ih-{sh})'"
     )
     return (
-        f"scale={W}:{H}:force_original_aspect_ratio=increase,crop={W}:{H}:{window},"
-        f"scale=eval=frame:w='iw*{z}':h='ih*{z}',crop={W}:{H},fps={FPS},format=yuv420p"
+        f"scale={sw}:{sh}:force_original_aspect_ratio=increase,crop={sw}:{sh}:{window},"
+        f"zoompan=z='{z}':d={frames}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':"
+        f"s={W}x{H}:fps={FPS},format=yuv420p"
     )
 
 
@@ -310,7 +322,7 @@ def stills_graph(
     focuses = focuses or [(0.5, 0.5)] * n
     chains = [
         f"[{i}:v]"
-        + pushin_filter(durations[i], focuses[i], out_over_s=lengths[i] if i % 2 else None)
+        + pushin_filter(durations[i], lengths[i], focuses[i], push_out=bool(i % 2))
         + f"[v{i}]"
         for i in range(n)
     ]
@@ -553,11 +565,12 @@ def render_return(
 def render_stills(
     stills: list[Segment], out: Path, focuses: list[tuple[float, float]] | None = None
 ) -> Path:
-    """One dissolving sequence for a run of consecutive still segments."""
-    lengths, graph = stills_graph([s.duration for s in stills], focuses)
+    """One dissolving sequence for a run of consecutive still segments. Each
+    still is a single-frame input; zoompan generates its frames."""
+    _, graph = stills_graph([s.duration for s in stills], focuses)
     args: list[str] = []
-    for seg, length in zip(stills, lengths, strict=True):
-        args += ["-loop", "1", "-framerate", str(FPS), "-t", f"{length:.3f}", "-i", str(seg.source)]
+    for seg in stills:
+        args += ["-i", str(seg.source)]
     return run_ffmpeg([*args, "-filter_complex", graph, "-map", "[out]", *X264], out)
 
 

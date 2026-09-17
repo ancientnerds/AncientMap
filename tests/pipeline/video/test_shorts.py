@@ -184,20 +184,22 @@ class TestStillsGraph:
     def test_stills_alternate_push_in_and_push_out(self):
         _, graph = stills_graph([2.75, 2.75, 2.75])
         v0, v1, v2 = (c for c in graph.split(";") if c.startswith("[") and "xfade" not in c)
-        assert "(1+0.06*t/2.750)" in v0 and "(1+0.06*t/2.750)" in v2
-        assert "(1+0.06*(1-t/3.150))" in v1  # out over the whole fed length (slot + dissolve)
+        assert "z='1+0.06*on/165':d=189" in v0 and "z='1+0.06*on/165':d=165" in v2
+        assert (
+            "z='1+0.06*(1-on/189)':d=189" in v1
+        )  # out over the whole fed length (slot + dissolve)
 
-    def test_pushin_zooms_from_100_to_106_percent(self):
-        f = pushin_filter(2.75)
-        assert f.startswith("scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920:")
-        assert "x='min(max(iw*0.500-540\\,0)\\,iw-1080)'" in f  # centred by default
-        assert "scale=eval=frame:w='iw*(1+0.06*t/2.750)':h='ih*(1+0.06*t/2.750)'" in f
-        assert f.endswith("crop=1080:1920,fps=60,format=yuv420p")
+    def test_pushin_zooms_from_100_to_106_percent_on_a_supersampled_still(self):
+        f = pushin_filter(2.75, 3.15)
+        assert f.startswith("scale=4320:7680:force_original_aspect_ratio=increase,crop=4320:7680:")
+        assert "x='min(max(iw*0.500-2160\\,0)\\,iw-4320)'" in f  # centred by default
+        assert "zoompan=z='1+0.06*on/165':d=189:" in f  # rate over the slot, fed slot + dissolve
+        assert f.endswith("s=1080x1920:fps=60,format=yuv420p")
 
     def test_pushin_crops_around_the_focal_point(self):
-        f = pushin_filter(2.75, focus=(0.8, 0.3))
-        assert "x='min(max(iw*0.800-540\\,0)\\,iw-1080)'" in f
-        assert "y='min(max(ih*0.300-960\\,0)\\,ih-1920)'" in f
+        f = pushin_filter(2.75, 3.15, focus=(0.8, 0.3))
+        assert "x='min(max(iw*0.800-2160\\,0)\\,iw-4320)'" in f
+        assert "y='min(max(ih*0.300-3840\\,0)\\,ih-7680)'" in f
 
     def test_focus_of_defaults_and_clamps(self):
         assert focus_of(None) == (0.5, 0.5)
