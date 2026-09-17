@@ -37,7 +37,7 @@ ALLOWED_SOURCES = frozenset({"seo", "landing", "app", "account", "lyra", "discla
 #: is separating "a human clicked the CTA" from "a crawler followed the
 #: link", not perfect bot taxonomy. Misclassified stragglers land in the
 #: bot bucket, which only makes the human count conservative.
-_BOT_UA_RE = re.compile(
+BOT_UA_RE = re.compile(
     r"bot|crawl|spider|slurp|scrapy|curl|wget|python-requests|python-httpx|aiohttp"
     r"|headless|phantom|lighthouse|facebookexternalhit|whatsapp|telegram|preview"
     r"|go-http-client|okhttp|java/|libwww",
@@ -54,7 +54,7 @@ async def goto_discord(request: Request, src: str | None = None) -> RedirectResp
     Caching is disabled in nginx (Cache-Control: no-store on the location)
     so every click actually arrives here.
     """
-    is_bot = int(bool(_BOT_UA_RE.search(request.headers.get("user-agent", ""))))
+    is_bot = int(bool(BOT_UA_RE.search(request.headers.get("user-agent", ""))))
     label = src if src in ALLOWED_SOURCES else "unknown"
     logger.info("goto_discord src=%s bot=%d", label, is_bot)
     return RedirectResponse(DISCORD_INVITE_URL, status_code=302)

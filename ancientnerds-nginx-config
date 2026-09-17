@@ -6,6 +6,28 @@ upstream an_api {
     server 127.0.0.1:8001 max_fails=1 fail_timeout=5s;
 }
 
+# Referral log: every request that arrives with a referer from another host
+# or with a utm_source (ChatGPT tags its links and often sends no referer),
+# as JSON lines in a file the deploy user can read (/var/log/nginx is 0640
+# www-data:adm and sudo is limited to the three deploy commands). Purpose:
+# see whether AI assistants (chatgpt.com, perplexity.ai, ...) and search
+# engines send people here — the zero-click question of 2026-09-17.
+# No client IP on purpose; logrotate does not touch the path, the volume is
+# a few hundred lines a day. Reader: scripts/referral_report.py.
+log_format referral escape=json '{"t":"$time_iso8601","ref":"$http_referer","req":"$request_method $request_uri","status":$status,"ua":"$http_user_agent"}';
+
+map $http_referer $external_referral {
+    default 1;
+    "" 0;
+    ~*^https?://([a-z0-9-]+\.)*ancientnerds\.com(/|:|$) 0;
+}
+
+# 0 only when the referer is ours or missing AND no utm_source is present.
+map "$external_referral$arg_utm_source" $log_referral {
+    default 1;
+    "0" 0;
+}
+
 # JS-executing scrapers that open the site pages' fan-out endpoints while
 # rendering and then abort: 106 of 738 /api/content/by-site requests ended
 # 499 on 12.–15.09.2026 (91 % of YouBot's, 30 % of meta-externalagent's),
@@ -21,6 +43,12 @@ server {
 
     root /var/www/ancientnerds/ancient-nerds-map/dist;
     index index.html;
+
+    # An access_log here replaces the http-level one, so the main log is
+    # repeated (same file and combined format as nginx.conf) next to the
+    # referral log.
+    access_log /var/log/nginx/access.log;
+    access_log /var/www/ancientnerds/logs/referrals.log referral if=$log_referral;
 
     # /etc/nginx/nginx.conf has `gzip on` but its gzip_types line is commented
     # out, so the default applied — text/html only. Result: 27 asset requests

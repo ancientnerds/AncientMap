@@ -7,7 +7,7 @@ Every human-facing Discord link points at /goto/discord?src={surface}
 
 This script aggregates those lines by source and bot flag and prints a
 table. The bot flag is computed by the API from the user agent at click
-time (known bot substrings, see _BOT_UA_RE in goto.py) — nothing else is
+time (known bot substrings, see BOT_UA_RE in goto.py) — nothing else is
 logged, so this is the whole dataset.
 
 The nginx access log is deliberately NOT used: naive log counting
