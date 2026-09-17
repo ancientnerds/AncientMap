@@ -75,7 +75,12 @@ def _parse(argv: list[str]) -> argparse.Namespace:
     s.add_argument(
         "--flash",
         default=str(default_flash()) if default_flash() else None,
-        help="shutter sound on every still start (default: the single file in video-assets/sfx/)",
+        help="camera click on every still start (default: video-assets/sfx/flash.*)",
+    )
+    s.add_argument(
+        "--whoosh",
+        default=str(default_whoosh()) if default_whoosh() else None,
+        help="whoosh on the zoom-in and the return flight (default: video-assets/sfx/whoosh.*)",
     )
     s.add_argument(
         "--record-scenes",
@@ -202,8 +207,18 @@ def default_music() -> Path | None:
     return single_audio(ASSETS / "music")
 
 
+def sfx(stem: str, directory: Path = ASSETS / "sfx") -> Path | None:
+    """The sound effect `<stem>.<audio suffix>` in video-assets/sfx/, if present."""
+    hits = sorted(p for p in directory.glob(f"{stem}.*") if p.suffix.lower() in AUDIO_SUFFIXES)
+    return hits[0] if hits else None
+
+
 def default_flash() -> Path | None:
-    return single_audio(ASSETS / "sfx")
+    return sfx("flash")
+
+
+def default_whoosh() -> Path | None:
+    return sfx("whoosh")
 
 
 def music_start_default(directory: Path = ASSETS / "music") -> float:
@@ -312,6 +327,7 @@ def run_short(args: argparse.Namespace) -> Path | None:
             music=Path(args.music) if args.music else None,
             flash=Path(args.flash) if args.flash else None,
             music_start=args.music_start,
+            whoosh=Path(args.whoosh) if args.whoosh else None,
         )
     return None
 
@@ -417,6 +433,7 @@ def run_batch(args: argparse.Namespace) -> int:
             music=str(default_music()) if default_music() else None,
             music_start=music_start_default(),
             flash=str(default_flash()) if default_flash() else None,
+            whoosh=str(default_whoosh()) if default_whoosh() else None,
             steps=",".join(ALL_STEPS),
         )
         try:

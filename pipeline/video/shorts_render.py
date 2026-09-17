@@ -64,6 +64,10 @@ FLAG_GAP = 34
 FLASH_S = 0.28
 FLASH_PEAK = 0.85
 FLASH_GAIN_DB = -6.0
+# Whoosh at the opening's zoom-in (ROTATE_S into the take, video/scenes/site-short.ts)
+# and at the start of the return flight.
+OPENING_ZOOM_AT_S = 1.0
+WHOOSH_GAIN_DB = -8.0
 OPENING_TRIM_S = 0.1  # the opening take holds its first pose this long; the first frames after a
 # jump are not fully drawn, so cutting the hold keeps frame 0 identical to the loop's end pose
 # Mapbox ToS: satellite/terrain frames need attribution in the video itself;
@@ -542,16 +546,34 @@ def render_stills(
 STEREO = "aformat=sample_fmts=fltp:sample_rates=48000:channel_layouts=stereo"
 
 
+def _sound_at(
+    parts: list[str], extras: list[str], src: int, tag: str, times: list[float], gain_db: float
+) -> None:
+    """Copy input `src` to every time in `times` (asplit + adelay) at `gain_db`."""
+    n = len(times)
+    parts.append(
+        f"[{src}:a]{STEREO},volume={gain_db}dB,asplit={n}"
+        + "".join(f"[{tag}{i}]" for i in range(n))
+    )
+    for i, t in enumerate(times):
+        parts.append(f"[{tag}{i}]adelay={int(round(t * 1000))}:all=1[{tag}d{i}]")
+        extras.append(f"[{tag}d{i}]")
+
+
 def mix_graph(
-    name_at_s: float, total_s: float, music: bool = False, flashes: list[float] | None = None
+    name_at_s: float,
+    total_s: float,
+    music: bool = False,
+    flashes: list[float] | None = None,
+    whooshes: list[float] | None = None,
 ) -> str:
     """filter_complex for the pre-mix: inputs 0 = narration, 1 = spoken name,
     2 = music (looped by the caller), then the flash sound when `flashes`
-    (its times) is given. The voices are processed and mixed; the music is
-    trimmed to the short, faded in/out (silent MUSIC_END_GAP_S before the loop
-    point), lowered by MUSIC_GAIN_DB and ducked under the voice; the flash
-    sound is copied to every flash time; everything is bounded to exactly
-    `total_s`."""
+    (its times) is given, then the whoosh when `whooshes` is given. The
+    voices are processed and mixed; the music is trimmed to the short, faded
+    in/out (silent MUSIC_END_GAP_S before the loop point), lowered by
+    MUSIC_GAIN_DB and ducked under the voice; each effect is copied to its
+    times; everything is bounded to exactly `total_s`."""
     ms = int(round(name_at_s * 1000))
     tail = f"apad=whole_dur={total_s:.3f},atrim=duration={total_s:.3f}[a]"
     parts = [
@@ -574,16 +596,12 @@ def mix_graph(
             f"[m][vsc]sidechaincompress={DUCK}[md]",
         ]
         voice, extras = "[vm]", ["[md]"]
+    src = 2 + int(music)
     if flashes:
-        src = 3 if music else 2
-        n = len(flashes)
-        parts.append(
-            f"[{src}:a]{STEREO},volume={FLASH_GAIN_DB}dB,asplit={n}"
-            + "".join(f"[s{i}]" for i in range(n))
-        )
-        for i, t in enumerate(flashes):
-            parts.append(f"[s{i}]adelay={int(round(t * 1000))}:all=1[k{i}]")
-            extras.append(f"[k{i}]")
+        _sound_at(parts, extras, src, "s", flashes, FLASH_GAIN_DB)
+        src += 1
+    if whooshes:
+        _sound_at(parts, extras, src, "w", whooshes, WHOOSH_GAIN_DB)
     if extras:
         parts.append(
             f"{voice}{''.join(extras)}amix=inputs={1 + len(extras)}:duration=longest:normalize=0,"
@@ -604,6 +622,8 @@ def premix(
     flash: Path | None = None,
     flashes: list[float] | None = None,
     music_start: float = 0.0,
+    whoosh: Path | None = None,
+    whooshes: list[float] | None = None,
 ) -> Path:
     """`music_start` seeks that far into the track before the loop begins
     (the user's pick of where the song gets going)."""
@@ -611,6 +631,7 @@ def premix(
         ["-stream_loop", "-1", "-ss", f"{music_start:.3f}", "-i", str(music)] if music else []
     )
     flash_args = ["-i", str(flash)] if flash and flashes else []
+    whoosh_args = ["-i", str(whoosh)] if whoosh and whooshes else []
     return run_ffmpeg(
         [
             "-i",
@@ -619,9 +640,14 @@ def premix(
             str(name_audio),
             *music_args,
             *flash_args,
+            *whoosh_args,
             "-filter_complex",
             mix_graph(
-                name_at_s, total_s, music=music is not None, flashes=flashes if flash else None
+                name_at_s,
+                total_s,
+                music=music is not None,
+                flashes=flashes if flash else None,
+                whooshes=whooshes if whoosh else None,
             ),
             "-map",
             "[a]",
@@ -781,11 +807,12 @@ def render_short(
     music: Path | None = None,
     flash: Path | None = None,
     music_start: float = 0.0,
+    whoosh: Path | None = None,
 ) -> Path:
     """Assemble `<slug>.mp4` from the site dir's narration, name audio, selected
     stills and clips; `flag` goes under the name, `music` (from `music_start`
     seconds into the track) under everything, `flash` (a shutter sound) on
-    every still start."""
+    every still start, `whoosh` on the zoom-in and the return flight."""
     ensure_fonts()
     font = heading_font(site["name"] + " " + site["card_text"])
     narration = site_dir / "narration.mp3"
@@ -879,7 +906,12 @@ def render_short(
     name_at = name_audio_at(segments, probe_duration(name_audio))
     starts = segment_starts(segments, clip_frames)
     flashes = [t for seg, t in zip(segments, starts, strict=True) if seg.kind == "still"]
-    (work / "flashes.json").write_text(json.dumps(flashes), encoding="utf-8")
+    whooshes = ([OPENING_ZOOM_AT_S] if opening is not None else []) + [
+        t for seg, t in zip(segments, starts, strict=True) if seg.kind == "return"
+    ]
+    (work / "sfx.json").write_text(
+        json.dumps({"flashes": flashes, "whooshes": whooshes}), encoding="utf-8"
+    )
     mix = premix(
         narration,
         name_audio,
@@ -890,6 +922,8 @@ def render_short(
         flash=flash,
         flashes=flashes,
         music_start=music_start,
+        whoosh=whoosh,
+        whooshes=whooshes,
     )
     lufs = measure_lufs(mix)
     logger.info("voice mix %.1f LUFS → gain %+.1f dB", lufs, gain_db(lufs))

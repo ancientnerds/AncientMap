@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from pipeline.video.__main__ import music_start_default
+from pipeline.video.__main__ import music_start_default, sfx
 from pipeline.video.media import ff_path
 from pipeline.video.shorts_audit import evaluate, passed
 from pipeline.video.shorts_brand import FONT_SOURCES, FONTS, missing_glyphs
@@ -308,13 +308,14 @@ class TestFilters:
             "[3:a]aformat=sample_fmts=fltp:sample_rates=48000:channel_layouts=stereo,volume=-6.0dB,asplit=2[s0][s1]"
             in g
         )
-        assert "[s0]adelay=6000:all=1[k0]" in g and "[s1]adelay=8750:all=1[k1]" in g
+        assert "[s0]adelay=6000:all=1[sd0]" in g and "[s1]adelay=8750:all=1[sd1]" in g
         assert (
-            "[vm][md][k0][k1]amix=inputs=4:duration=longest:normalize=0,apad=whole_dur=19.500" in g
+            "[vm][md][sd0][sd1]amix=inputs=4:duration=longest:normalize=0,apad=whole_dur=19.500"
+            in g
         )
         g = mix_graph(16.7, 19.5, flashes=[6.0])
         assert "[2:a]" in g and g.endswith(
-            "[v][k0]amix=inputs=2:duration=longest:normalize=0,apad=whole_dur=19.500,atrim=duration=19.500[a]"
+            "[v][sd0]amix=inputs=2:duration=longest:normalize=0,apad=whole_dur=19.500,atrim=duration=19.500[a]"
         )
 
     def test_flash_times_are_the_still_starts(self):
@@ -770,3 +771,27 @@ class TestMusicStart:
         assert music_start_default(tmp_path) == 0.0
         (tmp_path / "music.json").write_text('{"start_s": 25}', encoding="utf-8")
         assert music_start_default(tmp_path) == 25.0
+
+
+class TestWhoosh:
+    def test_whoosh_follows_the_flash_input(self):
+        g = mix_graph(16.7, 19.5, music=True, flashes=[6.0], whooshes=[1.0, 17.0])
+        assert "[3:a]aformat" in g
+        assert (
+            "[4:a]aformat=sample_fmts=fltp:sample_rates=48000:channel_layouts=stereo,volume=-8.0dB,asplit=2[w0][w1]"
+            in g
+        )
+        assert "[w1]adelay=17000:all=1[wd1]" in g
+        assert "[vm][md][sd0][wd0][wd1]amix=inputs=5" in g
+        g = mix_graph(16.7, 19.5, whooshes=[1.0])  # no music, no flash: the whoosh is input 2
+        assert "[2:a]aformat" in g and "[v][wd0]amix=inputs=2" in g
+
+
+class TestSfxLookup:
+    def test_named_effects_in_the_sfx_folder(self, tmp_path):
+        assert sfx("flash", tmp_path) is None
+        (tmp_path / "flash.wav").write_bytes(b"")
+        (tmp_path / "whoosh.mp3").write_bytes(b"")
+        (tmp_path / "notes.txt").write_text("x")
+        assert sfx("flash", tmp_path) == tmp_path / "flash.wav"
+        assert sfx("whoosh", tmp_path) == tmp_path / "whoosh.mp3"
