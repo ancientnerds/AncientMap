@@ -33,7 +33,6 @@ from pipeline.video.shorts_render import (
 logger = logging.getLogger(__name__)
 
 OPENING_TAKE_S = 6.1  # matches ancient-nerds-map/video/scenes/site-short.ts
-RETURN_TAKE_S = 3.0
 MIN_CLIP_FRAME_RATIO = 0.94  # MediaRecorder drops a few frames even with the yield
 BLACK_YAVG = 12.0  # 8-bit luma average below which a frame counts as black
 LOOP_SEAM_MAX = 3.0  # mean abs luma difference first vs last frame
@@ -68,7 +67,7 @@ def evaluate(m: dict) -> list[Check]:
             f"{m['width']}x{m['height']}@{m['fps']}",
         )
     )
-    expected = m["narration_s"] + NARRATION_TAIL_S + (RETURN_TAKE_S if m["return_frames"] else 0.0)
+    expected = m["narration_s"] + NARRATION_TAIL_S + m["return_s"]
     checks.append(
         Check(
             "duration",
@@ -86,8 +85,8 @@ def evaluate(m: dict) -> list[Check]:
     checks.append(
         Check(
             "return_clip",
-            m["return_frames"] >= RETURN_TAKE_S * FPS * MIN_CLIP_FRAME_RATIO,
-            f"{m['return_frames']} frames",
+            m["return_s"] > 0 and m["return_frames"] >= m["return_s"] * FPS * MIN_CLIP_FRAME_RATIO,
+            f"{m['return_frames']} frames for {m['return_s']:.1f} s",
         )
     )
     dark = [t for t, y in m["luma_samples"] if y < BLACK_YAVG]
@@ -179,6 +178,10 @@ def _ffprobe_stream(path: Path) -> dict:
 
 def _frames(path: Path) -> int:
     return _ffprobe_stream(path)["frames"] if path.exists() else 0
+
+
+def _seconds(path: Path) -> float:
+    return probe_duration(path) if path.exists() else 0.0
 
 
 def _luma_samples(video: Path, step_s: float = 0.25) -> list[tuple[float, float]]:
@@ -294,6 +297,7 @@ def measure_site(site_dir: Path) -> dict:
         "narration_s": narration_s,
         "opening_frames": _frames(site_dir / "clips" / "short-opening.mp4"),
         "return_frames": _frames(site_dir / "clips" / "short-return.mp4"),
+        "return_s": _seconds(site_dir / "clips" / "short-return.mp4"),
         "luma_samples": _luma_samples(video),
         "loop_seam": _loop_seam(video, site_dir / "render"),
         "lufs": lufs,

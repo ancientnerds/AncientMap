@@ -32,6 +32,8 @@ interface SiteInput {
   lng: number
   /** Orbit zoom by site type (pipeline/video/shorts_export.orbit_zoom_for); SITE_ZOOM if absent. */
   orbit_zoom?: number
+  /** Length of the spoken name (written by the tts step); the return flight must outlast it. */
+  name_audio_s?: number
 }
 
 const HOLD_S = 0.1 // must match OPENING_TRIM_S in pipeline/video/shorts_render.py
@@ -39,7 +41,17 @@ const ROTATE_S = 1
 const ZOOM_S = 2
 const ORBIT_S = 3
 const OPENING_TAKE_S = HOLD_S + ROTATE_S + ZOOM_S + ORBIT_S
-const RETURN_S = 3
+const RETURN_MIN_S = 3
+// Spoken name starts NAME_AUDIO_DELAY_S into the return and must be over
+// NAME_END_GAP_S before the loop point (both mirror shorts_render.py).
+const NAME_AUDIO_DELAY_S = 0.2
+const NAME_END_GAP_S = 0.15
+
+/** Return flight length: at least RETURN_MIN_S, longer for long spoken names. */
+function returnSeconds(site: SiteInput): number {
+  const needed = (site.name_audio_s ?? 0) + NAME_AUDIO_DELAY_S + NAME_END_GAP_S + 0.3
+  return Math.max(RETURN_MIN_S, Math.ceil(needed * 10) / 10)
+}
 
 const STYLE_WITH_LABELS = 'mapbox://styles/mapbox/satellite-streets-v12'
 // Mapbox's stock globe atmosphere; the app's dark fog paints the satellite globe black from space.
@@ -136,7 +148,7 @@ function returnPath(site: SiteInput): MapboxKeyframe[] {
     { ...end, terrain: TERRAIN_EXAGGERATION },
     { ...end, at: LIFT_AT, zoom: LIFT_ZOOM, pitch: LIFT_PITCH, terrain: null },
     { ...end, at: HIGH_AT, zoom: HIGH_ZOOM, pitch: 0, bearing: 0 },
-    { ...space, at: 1 - END_HOLD_S / RETURN_S },
+    { ...space, at: 1 - END_HOLD_S / returnSeconds(site) },
     { ...space, at: 1 },
   ]
 }
@@ -185,14 +197,14 @@ async function runOpening(ctx: SceneContext): Promise<void> {
 
 async function runReturn(ctx: SceneContext): Promise<void> {
   const site = loadSite()
-  console.log(`  Return: ${site.name} @ ${ctx.fps} fps`)
+  console.log(`  Return: ${site.name} @ ${ctx.fps} fps, ${returnSeconds(site)} s`)
   await prepareMapbox(ctx, site)
-  await recordPath(ctx, returnPath(site), RETURN_S)
+  await recordPath(ctx, returnPath(site), returnSeconds(site))
 }
 
 const MAPBOX_CANVAS = '.mapbox-globe-container canvas'
 
 export const siteShortScenes: SceneDefinition[] = [
   { name: 'short-opening', duration: OPENING_TAKE_S, resolution: 'short', canvasSelector: MAPBOX_CANVAS, frameYieldMs: FRAME_YIELD_MS, waitForTiles: true, run: runOpening },
-  { name: 'short-return', duration: RETURN_S, resolution: 'short', canvasSelector: MAPBOX_CANVAS, frameYieldMs: FRAME_YIELD_MS, waitForTiles: true, run: runReturn },
+  { name: 'short-return', duration: () => returnSeconds(loadSite()), resolution: 'short', canvasSelector: MAPBOX_CANVAS, frameYieldMs: FRAME_YIELD_MS, waitForTiles: true, run: runReturn },
 ]

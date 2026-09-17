@@ -367,6 +367,7 @@ def _measurements(**over):
         "narration_s": 15.12,
         "opening_frames": 358,
         "return_frames": 178,
+        "return_s": 3.0,
         "luma_samples": [(0.0, 40.0), (0.25, 42.0), (6.0, 60.0)],
         "loop_seam": 1.1,
         "lufs": -14.3,
@@ -405,9 +406,13 @@ class TestAudit:
     def test_duration_expects_narration_tail_and_return(self):
         assert passed(evaluate(_measurements(duration=15.12 + 0.6 + 3.0)))
         assert not passed(evaluate(_measurements(duration=16.0)))
+        # a longer return take (long spoken name) is expected in full
+        assert passed(
+            evaluate(_measurements(return_s=6.7, return_frames=400, duration=15.12 + 0.6 + 6.7))
+        )
         # without a return clip the duration expectation drops the 3 s (the
         # missing clip itself still fails its own check)
-        checks = evaluate(_measurements(return_frames=0, duration=15.72))
+        checks = evaluate(_measurements(return_frames=0, return_s=0.0, duration=15.72))
         assert next(c for c in checks if c.name == "duration").ok
         assert not next(c for c in checks if c.name == "return_clip").ok
 

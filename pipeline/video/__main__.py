@@ -223,9 +223,11 @@ def run_short(args: argparse.Namespace) -> Path | None:
             site["card_text"], site_dir / "narration.mp3", voice_id=args.voice, speed=args.speed
         )
         # The name is spoken on its own during the return flight; slower so it lands.
-        shorts_tts.narrate(
+        # Its length decides how long the return flight is recorded (site-short.ts).
+        site["name_audio_s"] = shorts_tts.narrate(
             site["name"], site_dir / "name.mp3", voice_id=args.voice, speed=args.speed - 0.07
         )
+        shorts_export.write_site_json(site)
 
     if "record" in steps:
         record_clips(site_dir)

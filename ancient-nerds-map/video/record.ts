@@ -44,7 +44,8 @@ export interface SceneContext {
 
 export interface SceneDefinition {
   name: string
-  duration: number  // seconds
+  /** seconds; a function when the length depends on the scene input (site shorts) */
+  duration: number | (() => number)
   resolution: 'hero' | 'section' | 'tool' | 'short'
   /** Canvas to record; defaults to the Three.js globe. Mapbox scenes pass the Mapbox canvas. */
   canvasSelector?: string
@@ -325,8 +326,9 @@ async function main() {
         await injectTimeControl(page, fps)
       }
 
+      const duration = typeof scene.duration === 'function' ? scene.duration() : scene.duration
       console.log(`\n${'='.repeat(50)}`)
-      console.log(`Recording scene: ${scene.name} (${scene.duration}s)`)
+      console.log(`Recording scene: ${scene.name} (${duration}s)`)
       console.log('='.repeat(50))
 
       // Fresh StreamRecorder per scene; it starts on the scene's first capture()
@@ -350,7 +352,7 @@ async function main() {
 
       // Encode WebM to MP4
       console.log(`\nEncoding ${scene.name}...`)
-      const result = encodeScene(scene.name, webmPath, outputDir, scene.duration, fps)
+      const result = encodeScene(scene.name, webmPath, outputDir, duration, fps)
       console.log(`  MP4: ${result.mp4}`)
       console.log(`  Fast: ${result.fast}`)
 
