@@ -174,7 +174,7 @@ class TestFilters:
     def test_final_graph_is_look_plus_fixed_gain(self):
         g = final_graph(gain_db(-20.5))
         assert g.startswith("[0:v]eq=saturation=0.78") and "[vout];" in g
-        assert g.endswith("[1:a]volume=6.50dB,alimiter=limit=0.84:level=false[a]")
+        assert g.endswith("[1:a]volume=6.50dB,alimiter=limit=0.75:level=false[a]")
 
     def test_clip_filter_adds_name_only_for_the_return(self, tmp_path):
         credit = tmp_path / "credit.txt"

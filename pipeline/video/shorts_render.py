@@ -54,7 +54,7 @@ VOICE_CHAIN = (
     "acompressor=threshold=-24dB:ratio=1.8:attack=20:release=250:makeup=2:knee=6"
 )
 TARGET_LUFS = -14.0  # YouTube
-PEAK_LIMIT = 0.84  # ≈ -1.5 dBTP
+PEAK_LIMIT = 0.75  # ≈ -2.5 dB sample peak; AAC adds inter-sample overshoot (Giza measured -0.5 dBTP at 0.84)
 # "Historical" look for a homogeneous film: slightly desaturated and warm,
 # lifted blacks / softened whites, vignette, fine grain. Applied once, over
 # the whole concatenated picture, so globe and photos match.
