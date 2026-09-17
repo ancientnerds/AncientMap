@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { isCriticism, target } from '../FeedbackInbox'
+import { collapsePairs, isCriticism, target } from '../FeedbackInbox'
 import type { FeedbackItem } from '../types'
 
 const item = (over: Partial<FeedbackItem>): FeedbackItem => ({
@@ -54,3 +54,36 @@ describe('criticism filter', () => {
     expect(isCriticism(item({ text: '   ' }))).toBe(false)
   })
 })
+
+describe('vote and comment are one complaint', () => {
+  const vote = item({ prompt: 'paper_end', answer: 'no', paper: 'p', created_at: '2026-09-17T20:00:00Z' })
+  const comment = item({
+    prompt: 'paper_end',
+    answer: 'no',
+    paper: 'p',
+    text: 'sources missing',
+    created_at: '2026-09-17T20:00:20Z',
+  })
+
+  it('keeps the sentence and drops the bare vote it belongs to', () => {
+    expect(collapsePairs([comment, vote])).toEqual([comment])
+  })
+
+  it('keeps a bare vote that nobody explained', () => {
+    const lonely = item({ prompt: 'site_page', answer: 'no', site: 'other' })
+    expect(collapsePairs([comment, vote, lonely])).toEqual([comment, lonely])
+  })
+
+  it('keeps a vote whose comment came much later — that is a second visit', () => {
+    const later = { ...comment, created_at: '2026-09-17T21:00:00Z' }
+    expect(collapsePairs([later, vote])).toEqual([later, vote])
+  })
+
+  it('does not merge across different things or different verdicts', () => {
+    const otherPaper = { ...comment, paper: 'q' }
+    const upvote = { ...vote, answer: 'yes' as const }
+    expect(collapsePairs([otherPaper, vote])).toEqual([otherPaper, vote])
+    expect(collapsePairs([comment, upvote])).toEqual([comment, upvote])
+  })
+})
+

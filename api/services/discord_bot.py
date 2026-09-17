@@ -16,6 +16,7 @@ from discord import app_commands
 
 from api.services.rate_limiter import RateLimiter
 from pipeline.sites_html_renderer import encode_path, site_path
+from pipeline.utils.notify import split_message as _split_response
 
 logger = logging.getLogger(__name__)
 
@@ -82,28 +83,6 @@ def _clean_for_discord(text: str) -> str:
     # [label](flag:XX) / [label](coord:...) / [label](empire:...) → plain label
     text = re.sub(r"\[([^\]]+)\]\((flag|coord|empire):[^\)]+\)", r"\1", text)
     return text
-
-
-def _split_response(text: str, limit: int = 1900) -> list[str]:
-    """Split text into chunks that fit Discord's message limit."""
-    if len(text) <= limit:
-        return [text]
-    chunks = []
-    while text:
-        if len(text) <= limit:
-            chunks.append(text)
-            break
-        # Find split point: prefer paragraph, then newline, then space
-        split = text.rfind("\n\n", 0, limit)
-        if split == -1:
-            split = text.rfind("\n", 0, limit)
-        if split == -1:
-            split = text.rfind(" ", 0, limit)
-        if split == -1:
-            split = limit
-        chunks.append(text[:split])
-        text = text[split:].lstrip()
-    return chunks
 
 
 async def _build_history(

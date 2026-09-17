@@ -212,8 +212,8 @@ def test_digest_asks_for_seven_days_and_the_seven_before(webhook, posted, monkey
 
 
 def test_split_message_at_the_discord_boundary():
-    assert aa._split_message("x" * aa.DISCORD_LIMIT) == ["x" * aa.DISCORD_LIMIT]
-    chunks = aa._split_message("x" * (aa.DISCORD_LIMIT + 1))
+    assert aa.split_message("x" * aa.DISCORD_LIMIT) == ["x" * aa.DISCORD_LIMIT]
+    chunks = aa.split_message("x" * (aa.DISCORD_LIMIT + 1))
     assert len(chunks) == 2 and all(len(c) <= aa.DISCORD_LIMIT for c in chunks)
     assert "".join(chunks) == "x" * (aa.DISCORD_LIMIT + 1)
 

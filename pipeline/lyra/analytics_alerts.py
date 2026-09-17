@@ -34,6 +34,7 @@ from pipeline.umami_db import (
     SQL_VITALS,
     fetch,
 )
+from pipeline.utils.notify import DISCORD_LIMIT, split_message
 
 logger = logging.getLogger(__name__)
 
@@ -42,9 +43,6 @@ logger = logging.getLogger(__name__)
 #: mehrere Besucher.
 ERROR_THRESHOLD = 10
 
-#: Discords Nachrichtenlimit ist 2000 Zeichen; 1900 lässt Luft für Anhänge am
-#: Zeilenende. Gleicher Wert wie in api/services/discord_bot.py.
-DISCORD_LIMIT = 1900
 
 WEEK = timedelta(days=7)
 #: Montag 06:xx UTC — das Journal geht montags 06:00 UTC raus, der Digest
@@ -78,34 +76,6 @@ def _post(payload: dict[str, Any]) -> bool:
     from pipeline.utils.notify import send_discord_webhook
 
     return send_discord_webhook(payload)
-
-
-def _split_message(message: str, limit: int = DISCORD_LIMIT) -> list[str]:
-    """Teilt an Absatz, sonst Zeile, sonst Leerzeichen, sonst hart — Algorithmus
-    von ``api.services.discord_bot._split_response``.
-
-    Nicht importiert, sondern nachgebaut: ``discord_bot`` importiert die
-    discord-Bibliothek beim Modulimport (und ``api/__init__`` die ganze API),
-    beides existiert im Lyra-Container nicht.
-    """
-    if len(message) <= limit:
-        return [message]
-    chunks: list[str] = []
-    rest = message
-    while rest:
-        if len(rest) <= limit:
-            chunks.append(rest)
-            break
-        split = rest.rfind("\n\n", 0, limit)
-        if split == -1:
-            split = rest.rfind("\n", 0, limit)
-        if split == -1:
-            split = rest.rfind(" ", 0, limit)
-        if split == -1:
-            split = limit
-        chunks.append(rest[:split])
-        rest = rest[split:].lstrip()
-    return chunks
 
 
 # ---------------------------------------------------------------------------
@@ -265,7 +235,7 @@ def weekly_digest(now: datetime | None = None) -> int:
             searches=[r for r in content if r["event_name"] == "search"],
         )
         message = digest_message(now, this_week, last_week, content, ranked, feedback)
-        posted = sum(1 for chunk in _split_message(message) if _post({"content": chunk}))
+        posted = sum(1 for chunk in split_message(message) if _post({"content": chunk}))
         if posted:
             # Frisch laden: die Datei gehört auch den Intervallschritten.
             state = _load_step_state()

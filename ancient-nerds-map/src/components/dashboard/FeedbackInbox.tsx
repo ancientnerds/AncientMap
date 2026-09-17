@@ -38,6 +38,30 @@ export function isCriticism(item: FeedbackItem): boolean {
   return item.answer === 'no' || Boolean(item.text && item.text.trim())
 }
 
+/** Five minutes: the window in which the sentence belongs to the vote. */
+const PAIR_WINDOW_MS = 5 * 60 * 1000
+
+/**
+ * One complaint, one row. ThumbsFeedback sends the verdict the moment it is
+ * given and the sentence a few seconds later, so an unfinished comment never
+ * costs us the vote — but the inbox would otherwise list a commented thumbs
+ * down twice and count it twice in the filter. Keep the row that carries the
+ * sentence; drop the bare vote it belongs to.
+ */
+export function collapsePairs(items: FeedbackItem[]): FeedbackItem[] {
+  const key = (i: FeedbackItem) =>
+    [i.prompt, i.answer, i.site, i.paper, i.journal, i.story, i.url_path].join('|')
+  const withText = items.filter(i => i.text && i.text.trim())
+  return items.filter(bare => {
+    if (bare.text && bare.text.trim()) return true
+    const at = Date.parse(bare.created_at)
+    return !withText.some(
+      full =>
+        key(full) === key(bare) && Math.abs(Date.parse(full.created_at) - at) <= PAIR_WINDOW_MS
+    )
+  })
+}
+
 /**
  * Every feedback answer of the last 30 days, newest first: when, what was
  * rated, the verdict and the sentence. The filter starts on the criticism,
@@ -45,7 +69,7 @@ export function isCriticism(item: FeedbackItem): boolean {
  */
 export function FeedbackInbox({ state }: { state: Loaded<FeedbackData> }) {
   const [onlyCriticism, setOnlyCriticism] = useState(true)
-  const all = state.data?.items ?? []
+  const all = collapsePairs(state.data?.items ?? [])
   const critical = all.filter(isCriticism)
   const items = onlyCriticism ? critical : all
 

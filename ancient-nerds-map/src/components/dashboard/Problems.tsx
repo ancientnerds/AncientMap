@@ -44,7 +44,7 @@ export function Problems({ state }: { state: Loaded<ProblemsData> }) {
           ) : (
             <ol className="dash-problems">
               {p.problems.map(item => (
-                <li key={`${item.kind}:${item.label}`} className="dash-problem">
+                <li key={`${item.kind}:${item.label}:${item.detail}`} className="dash-problem">
                   <span className={`dash-dot dash-dot--${severity(item.kind)}`} aria-hidden="true" />
                   <span className="dash-problem-kind">{problemLabel(item.kind)}</span>
                   <span className="dash-problem-label" title={item.label}>

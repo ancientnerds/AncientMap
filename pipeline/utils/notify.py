@@ -42,7 +42,10 @@ def send_discord_webhook(payload: dict) -> bool:
     try:
         import httpx
 
-        resp = httpx.post(url, json=payload, timeout=5.0)
+        # Visitor text reaches this payload (feedback lines in the weekly
+        # digest, error messages in the hourly alert). Without this, anyone
+        # could type "@everyone" into a 404 page and ping the channel.
+        resp = httpx.post(url, json={**payload, "allowed_mentions": {"parse": []}}, timeout=5.0)
         if resp.status_code >= 400:
             logger.warning(
                 "[notify] Discord webhook returned %s: %s",
@@ -56,3 +59,31 @@ def send_discord_webhook(payload: dict) -> bool:
         # the watchdog daemon. The error is logged for diagnostics.
         logger.warning("[notify] Discord webhook failed: %s", exc)
         return False
+
+
+#: Discord rejects a message over 2000 characters; 1900 leaves room for the
+#: trailer a caller may append. One implementation for the bot (api side) and
+#: the weekly digest (Lyra side), which is why it lives here.
+DISCORD_LIMIT = 1900
+
+
+def split_message(message: str, limit: int = DISCORD_LIMIT) -> list[str]:
+    """Split at a paragraph, else a line, else a space, else hard."""
+    if len(message) <= limit:
+        return [message]
+    chunks: list[str] = []
+    rest = message
+    while len(rest) > limit:
+        window = rest[:limit]
+        cut = window.rfind("\n\n")
+        if cut <= 0:
+            cut = window.rfind("\n")
+        if cut <= 0:
+            cut = window.rfind(" ")
+        if cut <= 0:
+            cut = limit
+        chunks.append(rest[:cut])
+        rest = rest[cut:].lstrip("\n")
+    if rest:
+        chunks.append(rest)
+    return chunks

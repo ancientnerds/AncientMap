@@ -107,7 +107,10 @@ SELECT
     event_name,
     label,
     max(country) AS country,
-    min(results) AS results,
+    -- max, not min: one zero-result run (a search fired before the site
+    -- data finished loading) would otherwise brand the most successful
+    -- term on the site as "never finds anything".
+    max(results) AS results,
     count(*) AS n
 FROM ev
 WHERE label IS NOT NULL AND label <> ''
