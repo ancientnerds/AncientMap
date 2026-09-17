@@ -2,7 +2,7 @@
 
 Loop cut (spec 2026-09-16, revised the same evening):
   narration from t=0 over: opening clip (satellite globe → zoom → 3D orbit, 6 s)
-  → full-frame stills with a slow push-in, dissolving into each other → return
+  → full-frame stills with a slow push-in, hard-cut under a camera flash → return
   clip (orbit → back to space) with the site name spoken and shown. The return
   clip's last frame is the opening's first frame, so the short loops without a
   visible cut.
@@ -20,7 +20,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Literal
 
-from pipeline.video.media import ff_path, probe_duration, run_ffmpeg
+from pipeline.video.media import ff_path, probe_duration, probe_frames, run_ffmpeg
 from pipeline.video.shorts_captions import Word, caption_words, display_text, spoken_at, srt_text
 from pipeline.video.shorts_select import focus_of
 from pipeline.video.shorts_tts import specific_place
@@ -44,7 +44,6 @@ PUSH_IN = 0.06  # every still zooms from 100 % to 106 % over its nominal duratio
 # quantised the motion to whole pixels (measured: every third frame jumped,
 # the others stood still — "ruckelt"); at 4× a step is a quarter pixel.
 SUPER = 4
-DISSOLVE_S = 0.4  # cross-dissolve between stills; the timeline length is unchanged
 NAME_FADE_IN_S = 0.3
 NAME_FADE_OUT_S = 0.5
 NAME_END_GAP_S = 0.15  # fully gone this long before the clip ends = the loop point
@@ -244,14 +243,21 @@ def plan_timeline(
     return segments
 
 
-def flash_times(segments: list[Segment]) -> list[float]:
-    """When each still starts — the photo is "taken" there."""
+def flash_times(segments: list[Segment], clip_frames: list[int] | None = None) -> list[float]:
+    """When each still starts — the photo is "taken" there. Counted in frames:
+    the concat boundary sits on a frame, not on the fractional second. Stills
+    are rendered with exactly round(duration × FPS) frames; a trimmed clip may
+    come out a frame short of that, so `clip_frames` carries the rendered
+    clip parts' real counts (in order)."""
     times: list[float] = []
-    t = 0.0
+    frames = 0
+    clips = iter(clip_frames or [])
     for seg in segments:
         if seg.kind == "still":
-            times.append(round(t, 3))
-        t += seg.duration
+            times.append(frames / FPS)
+            frames += round(seg.duration * FPS)
+        else:
+            frames += next(clips, round(seg.duration * FPS))
     return times
 
 
@@ -290,26 +296,17 @@ def name_layout(name: str) -> tuple[list[str], int, int]:
 
 
 def pushin_filter(
-    nominal_s: float,
-    fed_s: float,
-    focus: tuple[float, float] = (0.5, 0.5),
-    *,
-    push_out: bool = False,
+    duration_s: float, focus: tuple[float, float] = (0.5, 0.5), *, push_out: bool = False
 ) -> str:
     """Cover-scale the still to SUPER× the frame, cut the 9:16 window around
-    the subject's focal point (clamped to the picture), then zoompan `fed_s`
-    worth of frames around the centre: in, from 100 % to 1+PUSH_IN over the
-    nominal duration (continuing at the same rate through a dissolve tail), or
-    out, from 1+PUSH_IN back to 100 % over the whole fed length (so the
-    picture never gets smaller than the frame). The still is decoded once;
-    zoompan does one downscale per frame."""
+    the subject's focal point (clamped to the picture), then zoompan the
+    still's frames around the centre: in, from 100 % to 1+PUSH_IN, or out,
+    from 1+PUSH_IN back to 100 %, over the still's duration. The still is
+    decoded once; zoompan does one downscale per frame."""
     fx, fy = focus
     sw, sh = W * SUPER, H * SUPER
-    frames = round(fed_s * FPS)
-    if push_out:
-        z = f"1+{PUSH_IN}*(1-on/{frames})"
-    else:
-        z = f"1+{PUSH_IN}*on/{round(nominal_s * FPS)}"
+    frames = round(duration_s * FPS)
+    z = f"1+{PUSH_IN}*(1-on/{frames})" if push_out else f"1+{PUSH_IN}*on/{frames}"
     window = (
         f"x='min(max(iw*{fx:.3f}-{sw / 2:.0f}\\,0)\\,iw-{sw})':"
         f"y='min(max(ih*{fy:.3f}-{sh / 2:.0f}\\,0)\\,ih-{sh})'"
@@ -321,41 +318,23 @@ def pushin_filter(
     )
 
 
-def stills_graph(
-    durations: list[float], focuses: list[tuple[float, float]] | None = None
-) -> tuple[list[float], str]:
-    """Input lengths and the filter_complex for a dissolving stills sequence.
-    `focuses` (one (x, y) per still) moves each crop window onto its subject;
-    the stills alternate push-in and push-out for rhythm.
-
-    Every still but the last is fed DISSOLVE_S longer than its slot, and each
-    xfade starts at the cumulative slot boundary, so the sequence is exactly
-    sum(durations) long. A single still has no dissolve.
-    """
+def stills_graph(durations: list[float], focuses: list[tuple[float, float]] | None = None) -> str:
+    """filter_complex for a run of stills, hard-cut one after the other (the
+    camera flash in the final pass is the transition). `focuses` (one (x, y)
+    per still) moves each crop window onto its subject; the stills alternate
+    push-in and push-out for rhythm."""
     n = len(durations)
     if n == 0:
         raise ValueError("no stills")
-    lengths = [d + DISSOLVE_S for d in durations[:-1]] + [durations[-1]]
     focuses = focuses or [(0.5, 0.5)] * n
     chains = [
-        f"[{i}:v]"
-        + pushin_filter(durations[i], lengths[i], focuses[i], push_out=bool(i % 2))
-        + f"[v{i}]"
+        f"[{i}:v]" + pushin_filter(durations[i], focuses[i], push_out=bool(i % 2)) + f"[v{i}]"
         for i in range(n)
     ]
     if n == 1:
-        return lengths, chains[0].replace("[v0]", "[out]")
-    xfades = []
-    offset = 0.0
-    prev = "[v0]"
-    for i in range(1, n):
-        offset += durations[i - 1]
-        label = "[out]" if i == n - 1 else f"[x{i}]"
-        xfades.append(
-            f"{prev}[v{i}]xfade=transition=fade:duration={DISSOLVE_S}:offset={offset:.3f}{label}"
-        )
-        prev = label
-    return lengths, ";".join(chains + xfades)
+        return chains[0].replace("[v0]", "[out]")
+    inputs = "".join(f"[v{i}]" for i in range(n))
+    return ";".join(chains) + f";{inputs}concat=n={n}:v=1:a=0[out]"
 
 
 def name_alpha(duration: float) -> str:
@@ -584,7 +563,7 @@ def render_stills(
 ) -> Path:
     """One dissolving sequence for a run of consecutive still segments. Each
     still is a single-frame input; zoompan generates its frames."""
-    _, graph = stills_graph([s.duration for s in stills], focuses)
+    graph = stills_graph([s.duration for s in stills], focuses)
     args: list[str] = []
     for seg in stills:
         args += ["-i", str(seg.source)]
@@ -772,7 +751,9 @@ def final_graph(gain: float, overlays: str = "", flashes: list[float] | None = N
             f"fade=t=out:st=0:d={FLASH_S}:alpha=1,setpts=PTS+{t:.3f}/TB[f{i}]"
         )
         src = f"[g{i}][f{i}]"
-        stage = f"overlay=eof_action=pass:enable='between(t\\,{t:.3f}\\,{t + FLASH_S:.3f})'"
+        # half a frame early so the boundary frame itself is inside the window
+        t0 = t - 0.5 / FPS
+        stage = f"overlay=eof_action=pass:enable='between(t\\,{t0:.3f}\\,{t0 + FLASH_S:.3f})'"
     if overlays:
         stage = f"{stage},{overlays}"
     parts.append(f"{src}{stage}[vout]")
@@ -892,6 +873,7 @@ def render_short(
 
     focus_by_path = {st["local_path"]: focus_of(st.get("verdict")) for st in stills}
     parts: list[Path] = []
+    clip_frames: list[int] = []  # real frame counts of the rendered clip parts, for the flashes
     n = 0
     while n < len(segments):
         seg = segments[n]
@@ -910,6 +892,7 @@ def render_short(
             src = Path(seg.source or "")
             if seg.kind == "clip":
                 render_clip(src, seg.duration, out, credit_file=credit_file, start=seg.start)
+                clip_frames.append(probe_frames(out))
             else:
                 render_return(
                     src,
@@ -929,7 +912,7 @@ def render_short(
     final = site_dir / f"{site['slug']}.mp4"
     total_s = sum(s.duration for s in segments)
     name_at = name_audio_at(segments, probe_duration(name_audio))
-    flashes = flash_times(segments)
+    flashes = flash_times(segments, clip_frames)
     (work / "flashes.json").write_text(json.dumps(flashes), encoding="utf-8")
     mix = premix(
         narration,

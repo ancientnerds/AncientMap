@@ -33,6 +33,29 @@ def probe_duration(path: Path) -> float:
     return float(out)
 
 
+def probe_frames(path: Path) -> int:
+    """Frame count of the first video stream from the container index (exact
+    for the MP4s we write; no decoding)."""
+    out = subprocess.run(
+        [
+            FFPROBE_BIN,
+            "-v",
+            "error",
+            "-select_streams",
+            "v:0",
+            "-show_entries",
+            "stream=nb_frames",
+            "-of",
+            "csv=p=0",
+            str(path),
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    return int(out)
+
+
 def run_ffmpeg(args: list[str], out_path: Path) -> Path:
     """Run ffmpeg with `args`, overwriting `out_path`. Raises on non-zero exit."""
     out_path.parent.mkdir(parents=True, exist_ok=True)

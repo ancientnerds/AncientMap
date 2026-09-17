@@ -15,9 +15,9 @@ from pipeline.video.shorts_export import (
 )
 from pipeline.video.shorts_images import local_image_name
 from pipeline.video.shorts_render import (
-    DISSOLVE_S,
     NAME_AUDIO_DELAY_S,
     NARRATION_TAIL_S,
+    Segment,
     StillPick,
     build_comment,
     build_description,
@@ -170,35 +170,31 @@ class TestCutStills:
 
 
 class TestStillsGraph:
-    def test_dissolves_keep_the_total_length(self):
-        lengths, graph = stills_graph([2.75, 2.75, 2.75])
-        assert lengths == [2.75 + DISSOLVE_S, 2.75 + DISSOLVE_S, 2.75]
-        assert graph.count("xfade=transition=fade") == 2
-        assert "offset=2.750[x1]" in graph and "offset=5.500[out]" in graph
-        assert "[x1][v2]xfade" in graph
+    def test_stills_are_hard_cut_in_order(self):
+        graph = stills_graph([2.75, 2.75, 2.75])
+        assert graph.count("zoompan=") == 3
+        assert graph.endswith(";[v0][v1][v2]concat=n=3:v=1:a=0[out]")
+        assert "xfade" not in graph
 
-    def test_single_still_has_no_dissolve(self):
-        lengths, graph = stills_graph([4.0])
-        assert lengths == [4.0]
-        assert "xfade" not in graph and graph.endswith("[out]")
+    def test_single_still_has_no_concat(self):
+        graph = stills_graph([4.0])
+        assert "concat" not in graph and graph.endswith("[out]")
 
     def test_stills_alternate_push_in_and_push_out(self):
-        _, graph = stills_graph([2.75, 2.75, 2.75])
-        v0, v1, v2 = (c for c in graph.split(";") if c.startswith("[") and "xfade" not in c)
-        assert "z='1+0.06*on/165':d=189" in v0 and "z='1+0.06*on/165':d=165" in v2
-        assert (
-            "z='1+0.06*(1-on/189)':d=189" in v1
-        )  # out over the whole fed length (slot + dissolve)
+        graph = stills_graph([2.75, 2.75, 2.75])
+        v0, v1, v2 = graph.split(";")[:3]
+        assert "z='1+0.06*on/165':d=165" in v0 and "z='1+0.06*on/165':d=165" in v2
+        assert "z='1+0.06*(1-on/165)':d=165" in v1
 
     def test_pushin_zooms_from_100_to_106_percent_on_a_supersampled_still(self):
-        f = pushin_filter(2.75, 3.15)
+        f = pushin_filter(2.75)
         assert f.startswith("scale=4320:7680:force_original_aspect_ratio=increase,crop=4320:7680:")
         assert "x='min(max(iw*0.500-2160\\,0)\\,iw-4320)'" in f  # centred by default
-        assert "zoompan=z='1+0.06*on/165':d=189:" in f  # rate over the slot, fed slot + dissolve
+        assert "zoompan=z='1+0.06*on/165':d=165:" in f
         assert f.endswith("s=1080x1920:fps=60,format=yuv420p")
 
     def test_pushin_crops_around_the_focal_point(self):
-        f = pushin_filter(2.75, 3.15, focus=(0.8, 0.3))
+        f = pushin_filter(2.75, focus=(0.8, 0.3))
         assert "x='min(max(iw*0.800-2160\\,0)\\,iw-4320)'" in f
         assert "y='min(max(ih*0.300-3840\\,0)\\,ih-7680)'" in f
 
@@ -335,6 +331,18 @@ class TestFilters:
         segs = plan_timeline(narration_s=16.4, cuts=CUTS, opening=OPENING, closing=RETURN)
         assert flash_times(segs) == [6.0, 8.75, 11.5, 14.25]
 
+    def test_flash_times_sit_on_the_rendered_frame(self):
+        # the trimmed 5.983 s opening came out as 358 frames (not 359), a 3.44 s
+        # still is exactly 206: the second still starts at frame 564, not at 9.423 s
+        segs = [
+            Segment("clip", 5.983, "o"),
+            Segment("still", 3.44, "a"),
+            Segment("still", 3.44, "b"),
+            Segment("return", 3.0, "r"),
+        ]
+        assert flash_times(segs, clip_frames=[358]) == pytest.approx([358 / 60, 564 / 60])
+        assert flash_times(segs) == pytest.approx([359 / 60, 565 / 60])  # planned counts
+
     def test_final_graph_flashes_white_at_every_still_start(self):
         g = final_graph(0.0, "drawtext=x", [5.98, 9.42])
         assert g.startswith("[0:v]eq=saturation=0.78")
@@ -342,9 +350,9 @@ class TestFilters:
             "[g0];color=c=white@0.85:s=1080x1920:r=60:d=0.28,format=rgba,fade=t=out:st=0:d=0.28:alpha=1,setpts=PTS+5.980/TB[f0];"
             in g
         )
-        assert "[g0][f0]overlay=eof_action=pass:enable='between(t\\,5.980\\,6.260)'[g1];" in g
+        assert "[g0][f0]overlay=eof_action=pass:enable='between(t\\,5.972\\,6.252)'[g1];" in g
         assert (
-            "[g1][f1]overlay=eof_action=pass:enable='between(t\\,9.420\\,9.700)',drawtext=x[vout];"
+            "[g1][f1]overlay=eof_action=pass:enable='between(t\\,9.412\\,9.692)',drawtext=x[vout];"
             in g
         )
 
