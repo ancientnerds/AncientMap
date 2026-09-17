@@ -153,6 +153,18 @@ STEPS = {
         False,
         "IndexNow: announced {n} new/changed URLs to Bing",
     ),
+    "alerts": (
+        "pipeline.lyra.analytics_alerts",
+        "check_hourly",
+        False,
+        "Alerts: {n} posted",
+    ),
+    "digest": (
+        "pipeline.lyra.analytics_alerts",
+        "weekly_digest",
+        False,
+        "Digest: {n} posted",
+    ),
 }
 
 # Ordered step list matching the full pipeline sequence
@@ -171,7 +183,12 @@ STEP_ORDER = [
     "prospect",
     "library",
     "tts",
-    "indexnow",  # last: announces what this cycle made public
+    "indexnow",  # last of the content steps: announces what this cycle made public
+    # Reporting, after everything this cycle did: an hourly error watch and the
+    # Monday digest (which writes its own timestamp into the step-state file —
+    # it stays last so no interval step overwrites it in the same cycle).
+    "alerts",
+    "digest",
 ]
 
 # Steps that run less often than every cycle. Value = run every N cycles.

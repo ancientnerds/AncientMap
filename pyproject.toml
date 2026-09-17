@@ -52,6 +52,7 @@ ignore_imports = [
     # Theo/Lyra research runs inside the API container and reuses its
     # service singletons (Qdrant, embeddings, Redis, Discord webhook).
     "pipeline.connectors.cache -> api.cache",
+    "pipeline.lyra.analytics_alerts -> api.services.notify",
     "pipeline.lyra.curator -> api.services.notify",
     "pipeline.lyra.graph_full_ingest -> api.routes.public_v1",
     "pipeline.lyra.handlers.cross_pollination -> api.services.lyra_embeddings",
