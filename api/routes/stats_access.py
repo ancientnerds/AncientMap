@@ -16,8 +16,16 @@ single byte on the stats host (`auth_request`). The flow:
    signed HS256 token with scope "stats", twelve hours, for
    Domain=.ancientnerds.com, HttpOnly, Secure, SameSite=Lax. Then it
    redirects to https://stats.ancientnerds.com/. No Founder role → 403 page.
-4. nginx lets the request through to Umami. Umami's own login (with its
-   optional 2FA) stays as the second lock; the browser remembers it.
+4. With the cookie set, the handoff also signs the founder into Umami:
+   it logs in server-side as the shared ``founders`` account
+   (UMAMI_SSO_USERNAME / UMAMI_SSO_PASSWORD in the VPS .env, never in the
+   repo) and sends the browser to https://stats.ancientnerds.com/sso#<token>.
+   That page stores the token the way Umami's own client does
+   (localStorage "umami.auth", JSON-encoded) and opens the dashboard — no
+   second password. The fragment never reaches a server or a log, and the
+   page replaces itself in the history. If Umami or the account is
+   unavailable the founder still lands on the dashboard's own login, and the
+   API log says why.
 
 Who gets in is therefore exactly the set of Discord accounts carrying the
 Founder role — managed on the Discord server, not in this code.
@@ -26,10 +34,12 @@ Founder role — managed on the Discord server, not in this code.
 from __future__ import annotations
 
 import logging
+import os
 from datetime import UTC, datetime, timedelta
 from html import escape
 from urllib.parse import quote
 
+import httpx
 import jwt
 from fastapi import APIRouter, Request, Response
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -47,6 +57,8 @@ COOKIE_DOMAIN = ".ancientnerds.com"
 SESSION_HOURS = 12
 HANDOFF_PATH = "/api/auth/stats-handoff"
 LOGIN_PATH = "/api/auth/stats-login"
+#: Umami inside the compose network; the handoff logs in there for the founder.
+UMAMI_URL = os.getenv("UMAMI_INTERNAL_URL", "http://umami:3000")
 #: Fonts come from the main host: the stats host proxies everything else to Umami.
 _FONTS_CSS = "https://ancientnerds.com/fonts/fonts.css"
 
@@ -78,6 +90,35 @@ def stats_session(request: Request) -> dict | None:
     except Exception:
         return None
     return payload if payload.get("scope") == "stats" else None
+
+
+def umami_login_token() -> str | None:
+    """Umami session token for the shared founders account, or None when the
+    account is not configured, Umami is unreachable, or the login fails —
+    each case logged, none of them raised: the founder still gets the
+    dashboard's own login page."""
+    username = os.getenv("UMAMI_SSO_USERNAME", "").strip()
+    password = os.getenv("UMAMI_SSO_PASSWORD", "")
+    if not username or not password:
+        logger.warning("Umami SSO not configured (UMAMI_SSO_USERNAME/PASSWORD missing)")
+        return None
+    try:
+        resp = httpx.post(
+            f"{UMAMI_URL}/api/auth/login",
+            json={"username": username, "password": password},
+            timeout=5.0,
+        )
+    except Exception as exc:
+        logger.warning("Umami SSO login unreachable at %s: %s", UMAMI_URL, exc)
+        return None
+    if resp.status_code != 200:
+        logger.warning("Umami SSO login rejected: HTTP %s %s", resp.status_code, resp.text[:120])
+        return None
+    token = resp.json().get("token")
+    if not isinstance(token, str) or not token:
+        logger.warning("Umami SSO login answered without a token")
+        return None
+    return token
 
 
 @router.get("/stats-gate")
@@ -118,7 +159,9 @@ async def stats_handoff(request: Request) -> Response:
         logger.warning("stats access denied for discord_id=%s (no Founder role)", discord_id)
         return HTMLResponse(content=gate_html(denied=True), status_code=403)
 
-    response = RedirectResponse(url=f"https://{STATS_HOST}/", status_code=302)
+    umami_token = umami_login_token()
+    target = f"https://{STATS_HOST}/sso#{umami_token}" if umami_token else f"https://{STATS_HOST}/"
+    response = RedirectResponse(url=target, status_code=302)
     response.set_cookie(
         key=COOKIE_NAME,
         value=mint_stats_token(discord_id, username),
@@ -133,12 +176,38 @@ async def stats_handoff(request: Request) -> Response:
     return response
 
 
+@router.get("/stats-sso")
+async def stats_sso() -> HTMLResponse:
+    """Served as /sso on the stats host, behind the gate: stores the Umami
+    token from the URL fragment exactly like Umami's client (lib/client.ts +
+    lib/storage.ts: localStorage "umami.auth", JSON.stringify) and opens the
+    dashboard."""
+    return HTMLResponse(content=SSO_HTML, headers={"Cache-Control": "no-store"})
+
+
 @router.get("/stats-logout")
 async def stats_logout() -> Response:
     response = RedirectResponse(url=f"https://{STATS_HOST}{LOGIN_PATH}", status_code=302)
     response.delete_cookie(COOKIE_NAME, domain=COOKIE_DOMAIN, path="/")
     return response
 
+
+SSO_HTML = """<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow"><title>Signing in · Ancient Nerds Stats</title>
+<style>body{background:#060604;color:#00cc66;font-family:'JetBrains Mono',monospace;display:grid;place-items:center;height:100vh;margin:0;font-size:.8rem;letter-spacing:.1em;text-transform:uppercase}</style>
+</head><body><p>Signing in…</p>
+<script>
+(function () {
+  var token = (location.hash || '').slice(1);
+  if (token) {
+    try { localStorage.setItem('umami.auth', JSON.stringify(token)); } catch (e) {}
+  }
+  location.replace('/');
+})();
+</script>
+<noscript><p>JavaScript is needed to finish signing in. <a href="/" style="color:#ff2a2a">Continue</a></p></noscript>
+</body></html>"""
 
 _DISCORD_SVG = (
     '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.3 4.4A19.8 19.8 0 0 0 15.4 3l-.2.4a18 18 '

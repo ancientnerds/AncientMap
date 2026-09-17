@@ -480,6 +480,16 @@ server {
         proxy_set_header Host $host;
     }
 
+    # Single sign-on hop after the Discord handoff: stores the Umami token
+    # carried in the URL fragment (never sent to the server) and opens /.
+    location = /sso {
+        auth_request /_gate;
+        error_page 401 = @entry;
+        rewrite ^ /api/auth/stats-sso break;
+        proxy_pass http://an_api;
+        proxy_set_header Host $host;
+    }
+
     # Sign-out link for the dashboard's users: clears the gate cookie.
     location = /logout {
         rewrite ^ /api/auth/stats-logout break;
