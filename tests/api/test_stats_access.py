@@ -77,15 +77,16 @@ def test_gate_rejects_missing_expired_foreign_and_login_tokens():
 # ---- handoff ------------------------------------------------------------
 
 
-def test_handoff_issues_the_cookie_for_a_founder(monkeypatch):
+def test_handoff_issues_the_cookie_and_the_umami_sso_hop_for_a_founder(monkeypatch):
     monkeypatch.setattr(
         sa, "get_session", _fake_session(SimpleNamespace(roles=[FOUNDER], username="martin"))
     )
+    monkeypatch.setattr(sa, "umami_login_token", lambda: "umami-token-xyz")
     resp = asyncio.run(
         sa.stats_handoff(_request({"an_auth_token": jwt_auth.create_token("1", "42")}))
     )
     assert resp.status_code == 302
-    assert resp.headers["location"] == "https://stats.ancientnerds.com/"
+    assert resp.headers["location"] == "https://stats.ancientnerds.com/sso#umami-token-xyz"
     cookie = resp.headers["set-cookie"]
     assert cookie.startswith(f"{sa.COOKIE_NAME}=")
     for flag in ("Domain=.ancientnerds.com", "HttpOnly", "Secure", "SameSite=lax", "Path=/"):
@@ -143,3 +144,59 @@ def test_logout_clears_the_cookie():
     assert resp.status_code == 302
     assert f"{sa.COOKIE_NAME}=" in resp.headers["set-cookie"]
     assert "max-age=0" in resp.headers["set-cookie"].lower()
+
+
+def test_handoff_falls_back_to_the_dashboard_login_when_sso_is_unavailable(monkeypatch):
+    monkeypatch.setattr(
+        sa, "get_session", _fake_session(SimpleNamespace(roles=[FOUNDER], username="martin"))
+    )
+    monkeypatch.setattr(sa, "umami_login_token", lambda: None)
+    resp = asyncio.run(
+        sa.stats_handoff(_request({"an_auth_token": jwt_auth.create_token("1", "42")}))
+    )
+    assert resp.status_code == 302
+    assert resp.headers["location"] == "https://stats.ancientnerds.com/"
+    assert resp.headers["set-cookie"].startswith(f"{sa.COOKIE_NAME}=")
+
+
+def test_umami_login_token_paths(monkeypatch):
+    monkeypatch.delenv("UMAMI_SSO_USERNAME", raising=False)
+    monkeypatch.delenv("UMAMI_SSO_PASSWORD", raising=False)
+    assert sa.umami_login_token() is None  # not configured
+
+    monkeypatch.setenv("UMAMI_SSO_USERNAME", "founders")
+    monkeypatch.setenv("UMAMI_SSO_PASSWORD", "pw")
+    calls = []
+
+    class Resp:
+        def __init__(self, status, body):
+            self.status_code, self._body, self.text = status, body, str(body)
+
+        def json(self):
+            return self._body
+
+    def fake_post(url, json, timeout):
+        calls.append((url, json))
+        return Resp(200, {"token": "tok", "user": {"username": "founders"}})
+
+    monkeypatch.setattr(sa.httpx, "post", fake_post)
+    assert sa.umami_login_token() == "tok"
+    assert calls[0][0].endswith("/api/auth/login")
+    assert calls[0][1] == {"username": "founders", "password": "pw"}
+
+    monkeypatch.setattr(sa.httpx, "post", lambda *a, **k: Resp(401, {"error": "bad"}))
+    assert sa.umami_login_token() is None
+
+    def boom(*a, **k):
+        raise OSError("down")
+
+    monkeypatch.setattr(sa.httpx, "post", boom)
+    assert sa.umami_login_token() is None
+
+
+def test_sso_page_stores_the_token_like_umami_does():
+    resp = asyncio.run(sa.stats_sso())
+    html = resp.body.decode()
+    assert "localStorage.setItem('umami.auth', JSON.stringify(token))" in html
+    assert "location.hash" in html and "location.replace('/')" in html
+    assert resp.headers["cache-control"] == "no-store"
