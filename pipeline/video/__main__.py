@@ -58,6 +58,11 @@ def _parse(argv: list[str]) -> argparse.Namespace:
         help="select by aspect + hash only (no MiniMax VLM judgement)",
     )
     s.add_argument("--steps", default=",".join(ALL_STEPS))
+    s.add_argument(
+        "--record-scenes",
+        default=RECORD_SCENES,
+        help="recorder scenes for the record step (e.g. short-return only)",
+    )
 
     a = sub.add_parser("audit", help="measure a rendered short and write audit.json")
     who_a = a.add_mutually_exclusive_group(required=True)
@@ -158,8 +163,13 @@ def _select(site: dict, site_dir: Path, use_vlm: bool) -> None:
     logging.info("%d stills selected, %d rejected", len(kept), len(rejected))
 
 
-def record_clips(site_dir: Path) -> None:
-    """Record the opening and return globe clips with the Puppeteer recorder."""
+RECORD_SCENES = "short-opening,short-return"
+
+
+def record_clips(site_dir: Path, scenes: str = RECORD_SCENES) -> None:
+    """Record the globe clips (`scenes`: comma-separated recorder scene names)
+    with the Puppeteer recorder. Re-recording only `short-return` is the cheap
+    path when a longer spoken name needs a longer return flight."""
     npm = shutil.which("npm")
     if not npm:
         raise RuntimeError("npm not found on PATH; the recorder needs Node")
@@ -168,7 +178,7 @@ def record_clips(site_dir: Path) -> None:
         "run",
         "video:record",
         "--",
-        "short-opening,short-return",
+        scenes,
         "--portrait",
         "--fps",
         "60",
@@ -178,7 +188,7 @@ def record_clips(site_dir: Path) -> None:
         (site_dir / "clips").as_posix(),
     ]
     env = {**os.environ, "VITE_DEV_API_TARGET": RECORDER_API_TARGET}
-    clips = [site_dir / "clips" / "short-opening.mp4", site_dir / "clips" / "short-return.mp4"]
+    clips = [site_dir / "clips" / f"{scene.strip()}.mp4" for scene in scenes.split(",")]
     for attempt in range(1, RECORD_ATTEMPTS + 1):
         for clip in clips:
             clip.unlink(missing_ok=True)
@@ -225,12 +235,15 @@ def run_short(args: argparse.Namespace) -> Path | None:
         # The name is spoken on its own during the return flight; slower so it lands.
         # Its length decides how long the return flight is recorded (site-short.ts).
         site["name_audio_s"] = shorts_tts.narrate(
-            site["name"], site_dir / "name.mp3", voice_id=args.voice, speed=args.speed - 0.07
+            shorts_tts.spoken_name(site["name"], site["country"]),
+            site_dir / "name.mp3",
+            voice_id=args.voice,
+            speed=args.speed - 0.07,
         )
         shorts_export.write_site_json(site)
 
     if "record" in steps:
-        record_clips(site_dir)
+        record_clips(site_dir, args.record_scenes)
 
     if "render" in steps:
         selection = json.loads((site_dir / "selection.json").read_text(encoding="utf-8"))
@@ -316,6 +329,7 @@ def run_batch(args: argparse.Namespace) -> int:
             speed=args.speed,
             images=40,
             no_vlm=False,
+            record_scenes=RECORD_SCENES,
             steps=",".join(ALL_STEPS),
         )
         try:

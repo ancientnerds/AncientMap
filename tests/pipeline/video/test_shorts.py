@@ -35,6 +35,7 @@ from pipeline.video.shorts_select import (
     score,
     select_stills,
 )
+from pipeline.video.shorts_tts import spoken_name
 
 IMGS = [Path("a.jpg"), Path("b.jpg"), Path("c.jpg"), Path("d.jpg")]
 OPENING = (Path("short-opening.mp4"), 6.0)
@@ -420,3 +421,16 @@ class TestAudit:
         assert not passed(evaluate(_measurements(lufs=-17.0)))
         assert not passed(evaluate(_measurements(peak_dbfs=-0.3)))
         assert not passed(evaluate(_measurements(loop_seam=5.0)))
+
+
+class TestSpokenName:
+    def test_site_and_country(self):
+        assert spoken_name("Machu Picchu", "Peru") == "Machu Picchu, Peru."
+        assert spoken_name("Stonehenge", "England") == "Stonehenge, England."
+
+    def test_specific_part_of_a_compound_country(self):
+        assert spoken_name("Rano Raraku", "Chile, Easter Island") == "Rano Raraku, Easter Island."
+
+    def test_no_repetition_and_no_country(self):
+        assert spoken_name("Temple of Egypt", "Egypt") == "Temple of Egypt."
+        assert spoken_name("Atlantis", None) == "Atlantis."

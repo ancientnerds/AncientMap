@@ -18,6 +18,16 @@ DEFAULT_VOICE = "English_expressive_narrator"  # user pick 2026-09-16 (paper nar
 DEFAULT_SPEED = 0.92
 
 
+def spoken_name(name: str, country: str | None) -> str:
+    """Closing line the narrator speaks: "Machu Picchu, Peru." A country stored
+    as "Chile, Easter Island" contributes its most specific part; a country
+    already contained in the name is not repeated."""
+    place = (country or "").split(",")[-1].strip()
+    if not place or place.lower() in name.lower():
+        return f"{name}."
+    return f"{name}, {place}."
+
+
 def narrate(
     text: str, out_path: Path, voice_id: str = DEFAULT_VOICE, speed: float = DEFAULT_SPEED
 ) -> float:
