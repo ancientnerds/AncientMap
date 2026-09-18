@@ -5,12 +5,12 @@ import { Panel, Status } from './Panel'
 import type { JourneysData } from './types'
 import type { Loaded } from './useStats'
 
-/** The separator api/services/founders_stats.py journeys() joins the steps with. */
+/** The separator pipeline/stats_analysis.py journeys() joins the steps with. */
 const ARROW = ' → '
 
 /**
  * The event names that can appear as a step — JOURNEY_EVENTS in
- * api/services/founders_stats.py. Everything else in a chain is a page type.
+ * pipeline/stats_analysis.py. Everything else in a chain is a page type.
  * "search" is both a page and an event; a chain is a plain string, so a search
  * step always reads as an action.
  */
@@ -35,12 +35,12 @@ export function chainChips(chain: string): Chip[] {
 export function Journeys({ state }: { state: Loaded<JourneysData> }) {
   const j = state.data
   return (
-    <Panel question="Wie bewegen sie sich?" wide>
+    <Panel question="How do they move through the site?" wide>
       <Status state={state} />
       {j && (
         <>
           {j.chains.length === 0 ? (
-            <p className="dash-empty">Keine Wege in diesem Zeitraum.</p>
+            <p className="dash-empty">No journeys in this window.</p>
           ) : (
             <ol className="dash-journeys">
               {j.chains.map(c => (
@@ -63,7 +63,7 @@ export function Journeys({ state }: { state: Loaded<JourneysData> }) {
             </ol>
           )}
           <p className="dash-note">
-            Nur bestätigt menschliche Sitzungen, höchstens sechs Schritte je Kette. Der erste Chip ist die Quelle.
+            Confirmed human sessions only, at most six steps per chain. The first chip is the source.
           </p>
         </>
       )}

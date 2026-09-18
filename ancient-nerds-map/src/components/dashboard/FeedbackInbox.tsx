@@ -10,13 +10,13 @@ const MAIN_ORIGIN = 'https://ancientnerds.com'
 
 /** Labels of src/analytics/feedback.ts FeedbackPromptKind. */
 const PROMPT_LABELS: Record<string, string> = {
-  search_empty: 'Leere Suche',
+  search_empty: 'Empty search',
   story_end: 'Story',
-  not_found: 'Seite fehlt',
-  site_page: 'Site-Seite',
+  not_found: 'Missing page',
+  site_page: 'Site page',
   paper_end: 'Paper',
   journal_end: 'Journal',
-  lyra_answer: 'Lyra-Antwort',
+  lyra_answer: 'Lyra answer',
 }
 
 /** What was rated, as a label and — where we can build one — a link to it.
@@ -74,29 +74,29 @@ export function FeedbackInbox({ state }: { state: Loaded<FeedbackData> }) {
   const items = onlyCriticism ? critical : all
 
   return (
-    <Panel question="Was sagen die Besucher?" wide>
+    <Panel question="What do visitors say?" wide>
       <Status state={state} />
       {state.data && (
-        <div className="dash-feedback-filter" role="group" aria-label="Feedback filtern">
+        <div className="dash-feedback-filter" role="group" aria-label="Filter feedback">
           <button
             type="button"
             className={onlyCriticism ? 'is-active' : undefined}
             onClick={() => setOnlyCriticism(true)}
           >
-            Kritik &amp; Kommentare ({critical.length})
+            Criticism &amp; comments ({critical.length})
           </button>
           <button
             type="button"
             className={onlyCriticism ? undefined : 'is-active'}
             onClick={() => setOnlyCriticism(false)}
           >
-            Alles ({all.length})
+            Everything ({all.length})
           </button>
         </div>
       )}
       {state.data && items.length === 0 && (
         <p className="dash-empty">
-          {onlyCriticism ? 'Keine Kritik in 30 Tagen.' : 'Kein Feedback in 30 Tagen.'}
+          {onlyCriticism ? 'No criticism in 30 days.' : 'No feedback in 30 days.'}
         </p>
       )}
       {items.length > 0 && (
@@ -111,8 +111,8 @@ export function FeedbackInbox({ state }: { state: Loaded<FeedbackData> }) {
                 <span className="dash-feedback-meta">
                   <span>{fmtStamp(it.created_at)}</span>
                   <span>{PROMPT_LABELS[it.prompt ?? ''] ?? it.prompt ?? '—'}</span>
-                  {it.answer === 'yes' && <span className="dash-chip dash-chip--yes">Ja</span>}
-                  {it.answer === 'no' && <span className="dash-chip dash-chip--no">Nein</span>}
+                  {it.answer === 'yes' && <span className="dash-chip dash-chip--yes">Yes</span>}
+                  {it.answer === 'no' && <span className="dash-chip dash-chip--no">No</span>}
                   {what.href ? (
                     <a href={what.href} title={what.label}>
                       {what.label}

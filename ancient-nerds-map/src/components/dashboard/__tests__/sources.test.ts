@@ -24,12 +24,12 @@ describe('source buckets', () => {
       { source: 'reddit.com', family: 'reddit.com', sessions: 1 },
     ]
     expect(bucketTotals(rows)).toEqual([
-      ['search', 'Suche', 12],
-      ['ai', 'KI-Assistenten', 0],
+      ['search', 'Search', 12],
+      ['ai', 'AI assistants', 0],
       ['discord', 'Discord', 0],
       ['youtube', 'YouTube', 3],
-      ['direct', 'Direkt', 7],
-      ['other', 'Andere', 1],
+      ['direct', 'Direct', 7],
+      ['other', 'Other', 1],
     ])
   })
 })

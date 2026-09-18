@@ -5,7 +5,7 @@
 
 import type { MapPoint } from './mapMath'
 
-export type SessionKind = 'leser' | 'entdecker' | 'forscher' | 'sucher' | 'sonstige'
+export type SessionKind = 'reader' | 'explorer' | 'researcher' | 'searcher' | 'other'
 
 export interface DayBlock {
   views: number
@@ -85,7 +85,7 @@ export interface JourneysData {
   chains: JourneyChain[]
 }
 
-/** The five failures api/services/founders_stats.py problems() knows. */
+/** The five failures pipeline/stats_analysis.py problems() knows. */
 export type ProblemKind = 'js_error' | 'slow_page' | 'broken_link' | 'shallow_exit' | 'empty_search'
 
 export interface Problem {

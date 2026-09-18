@@ -35,8 +35,8 @@ type Days = 7 | 30
 function Entry() {
   return (
     <section className="dash-panel dash-entry">
-      <h2>Sitzung abgelaufen</h2>
-      <p>Die Founder-Sitzung gilt zwölf Stunden. Einmal neu anmelden, dann geht es hier weiter.</p>
+      <h2>Session expired</h2>
+      <p>A founder session lasts twelve hours. Sign in once more and this picks up where it left off.</p>
       <a className="dash-btn" href={ENTRY_HREF}>
         Continue with Discord
       </a>
@@ -62,16 +62,16 @@ export default function DashboardPage() {
         <a className="dash-mark" href="/">
           <b>Ancient Nerds</b> · Founders
         </a>
-        <div className="dash-range" role="group" aria-label="Zeitraum">
+        <div className="dash-range" role="group" aria-label="Time range">
           {([7, 30] as Days[]).map(d => (
             <button key={d} type="button" aria-pressed={days === d} onClick={() => setDays(d)}>
-              {d} Tage
+              {d} days
             </button>
           ))}
         </div>
-        <nav className="dash-nav" aria-label="Weitere Seiten">
+        <nav className="dash-nav" aria-label="Other pages">
           <a href={UMAMI_HREF}>Umami</a>
-          <a href="/logout">Abmelden</a>
+          <a href="/logout">Sign out</a>
         </nav>
       </header>
       {unauthorized ? (
@@ -89,7 +89,7 @@ export default function DashboardPage() {
         </div>
       )}
       <footer className="dash-footer">
-        Cookielos: Besucher werden nur innerhalb eines Kalendermonats wiedererkannt. Zeiten in UTC wie in Umami.
+        Cookieless: a visitor is only recognised again within one calendar month. Times in UTC, as in Umami.
       </footer>
     </main>
   )

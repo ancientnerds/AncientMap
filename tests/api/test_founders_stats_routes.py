@@ -135,7 +135,7 @@ def test_overview_counts_and_types_come_from_the_session_rows(monkeypatch):
     monkeypatch.setattr(fr, "fetch", fetch)
     out = asyncio.run(fr.overview(days=7, _session=SESSION))
     assert out["sessions"] == {"all": 2, "human": 1}
-    assert out["types"] == {"entdecker": 1}
+    assert out["types"] == {"explorer": 1}
     assert out["hours"] == [{"hour": t, "views": 3, "sessions": 2}]
 
 

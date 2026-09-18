@@ -35,9 +35,9 @@ export function VisitorMap({ state }: { state: Loaded<MapData> }) {
   const unmapped = ranked.filter(([code]) => !CENTROIDS[code])
 
   return (
-    <Panel question="Wo sind die Besucher?" wide>
+    <Panel question="Where are the visitors?" wide>
       <div className="dash-map">
-        <svg viewBox={`0 0 ${MAP_W} ${MAP_H}`} role="img" aria-label="Weltkarte mit Besucher-Sessions pro Land">
+        <svg viewBox={`0 0 ${MAP_W} ${MAP_H}`} role="img" aria-label="World map of visitor sessions per country">
           <path className="dash-map-land" d={landPath} />
           {ranked.map(([code, sessions]) => {
             const centre = CENTROIDS[code]
@@ -45,7 +45,7 @@ export function VisitorMap({ state }: { state: Loaded<MapData> }) {
             const [cx, cy] = project([centre[0], centre[1]])
             return (
               <circle key={code} className="dash-map-dot" cx={cx} cy={cy} r={dotRadius(sessions)}>
-                <title>{`${countryName(code)}: ${fmtInt(sessions)} Sessions`}</title>
+                <title>{`${countryName(code)}: ${fmtInt(sessions)} sessions`}</title>
               </circle>
             )
           })}
@@ -57,17 +57,17 @@ export function VisitorMap({ state }: { state: Loaded<MapData> }) {
             max={23}
             value={hour ?? 0}
             disabled={hour === null}
-            aria-label="Stunde des Tages (UTC)"
+            aria-label="Hour of the day (UTC)"
             onChange={e => setHour(Number(e.target.value))}
           />
-          <span className="dash-map-hour">{hour === null ? 'Ganzer Tag' : `${fmtHour(hour)} UTC`}</span>
+          <span className="dash-map-hour">{hour === null ? 'Whole day' : `${fmtHour(hour)} UTC`}</span>
           <button
             type="button"
             className="dash-toggle"
             aria-pressed={hour === null}
             onClick={() => setHour(hour === null ? new Date().getUTCHours() : null)}
           >
-            Alle Stunden
+            All hours
           </button>
         </div>
       </div>
@@ -75,13 +75,13 @@ export function VisitorMap({ state }: { state: Loaded<MapData> }) {
       {state.data && (
         <>
           <p className="dash-note">
-            {fmtInt(total)} Sessions in {fmtInt(ranked.length)} Ländern,{' '}
-            {hour === null ? 'letzte 24 Stunden' : `um ${fmtHour(hour)} UTC`}
-            {unmapped.length > 0 && ` · ohne Punkt: ${unmapped.map(([code]) => countryName(code)).join(', ')}`}
+            {fmtInt(total)} sessions in {fmtInt(ranked.length)} countries,{' '}
+            {hour === null ? 'last 24 hours' : `at ${fmtHour(hour)} UTC`}
+            {unmapped.length > 0 && ` · no dot for: ${unmapped.map(([code]) => countryName(code)).join(', ')}`}
           </p>
           <BarList
             items={ranked.slice(0, LIST_ROWS).map(([code, sessions]) => ({ key: code, label: countryName(code), value: sessions }))}
-            empty="Keine Sessions in dieser Stunde."
+            empty="No sessions in this hour."
           />
         </>
       )}

@@ -15,6 +15,6 @@ describe('problem severity', () => {
     for (const kind of ['js_error', 'slow_page', 'broken_link', 'shallow_exit', 'empty_search'] as const) {
       expect(problemLabel(kind)).not.toBe('')
     }
-    expect(problemLabel('js_error')).toBe('JS-Fehler')
+    expect(problemLabel('js_error')).toBe('JS error')
   })
 })

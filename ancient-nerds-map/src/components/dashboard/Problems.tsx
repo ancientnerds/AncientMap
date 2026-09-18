@@ -14,13 +14,13 @@ const SEVERITY: Record<ProblemKind, Severity> = {
   empty_search: 'low',
 }
 
-/** The kind names of api/services/founders_stats.py problems(), in founder words. */
+/** The kind names of pipeline/stats_analysis.py problems(), in founder words. */
 const KIND_LABELS: Record<ProblemKind, string> = {
-  js_error: 'JS-Fehler',
-  slow_page: 'Langsam',
-  broken_link: 'Toter Link',
-  shallow_exit: 'Absprung',
-  empty_search: 'Leere Suche',
+  js_error: 'JS error',
+  slow_page: 'Slow',
+  broken_link: 'Dead link',
+  shallow_exit: 'Bounce',
+  empty_search: 'Empty search',
 }
 
 export function severity(kind: ProblemKind): Severity {
@@ -35,12 +35,12 @@ export function problemLabel(kind: ProblemKind): string {
 export function Problems({ state }: { state: Loaded<ProblemsData> }) {
   const p = state.data
   return (
-    <Panel question="Wo scheitert die Plattform?" wide>
+    <Panel question="Where does the platform fail them?" wide>
       <Status state={state} />
       {p && (
         <>
           {p.problems.length === 0 ? (
-            <p className="dash-empty">Keine Probleme in diesem Zeitraum.</p>
+            <p className="dash-empty">No problems in this window.</p>
           ) : (
             <ol className="dash-problems">
               {p.problems.map(item => (
@@ -57,8 +57,8 @@ export function Problems({ state }: { state: Loaded<ProblemsData> }) {
             </ol>
           )}
           <p className="dash-note">
-            Punkte machen die Arten vergleichbar: ein JS-Fehler zählt dreifach, ein toter Link doppelt, eine langsame
-            Seite so oft wie gemessen.
+            The score makes the kinds comparable: a JS error counts triple, a dead link double, a slow page once
+            per measurement.
           </p>
         </>
       )}

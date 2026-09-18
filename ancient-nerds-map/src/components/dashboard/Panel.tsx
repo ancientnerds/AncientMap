@@ -23,7 +23,7 @@ export function Panel({ question, wide = false, children }: PanelProps) {
 /** Loading / failed line for a resource that has no data yet; null once data is there. */
 export function Status<T>({ state }: { state: Loaded<T> }) {
   if (state.data) return null
-  if (state.error === 'failed') return <p className="dash-status dash-status--error">Daten nicht erreichbar.</p>
-  if (state.error === 'unauthorized') return <p className="dash-status">Sitzung abgelaufen.</p>
-  return <p className="dash-status">Lade…</p>
+  if (state.error === 'failed') return <p className="dash-status dash-status--error">Data unavailable.</p>
+  if (state.error === 'unauthorized') return <p className="dash-status">Session expired.</p>
+  return <p className="dash-status">Loading…</p>
 }

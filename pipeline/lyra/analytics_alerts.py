@@ -95,8 +95,8 @@ def error_spike_message(rows: list[dict[str, Any]], threshold: int = ERROR_THRES
     )
     if not spikes:
         return None
-    lines = ["**JS-Fehler häufen sich** (letzte Stunde)"]
-    lines += [f"- {r['n']}x auf {r['page']}: `{r['message']}`" for r in spikes[:5]]
+    lines = ["**JS errors are piling up** (last hour)"]
+    lines += [f"- {r['n']}× on {r['page']}: `{r['message']}`" for r in spikes[:5]]
     return "\n".join(lines)
 
 
@@ -134,10 +134,10 @@ def digest_due(now: datetime, last_sent: datetime | None) -> bool:
 def _delta(current: int, previous: int) -> str:
     """ "+20 %" gegen die Vorwoche — ohne Vorwoche gibt es keinen Vergleich."""
     if not previous:
-        return "Vorwoche 0"
+        return "none last week"
     pct = round((current - previous) / previous * 100)
     sign = "+" if pct > 0 else ""
-    return f"Vorwoche {previous}, {sign}{pct} %"
+    return f"last week {previous}, {sign}{pct} %"
 
 
 def _top(content: list[dict[str, Any]], event_name: str, limit: int = 3) -> list[dict[str, Any]]:
@@ -150,11 +150,11 @@ def problem_lines(problem_rows: list[dict[str, Any]], limit: int = 3) -> list[st
     Dashboard zeigt (pipeline.stats_analysis.problems), damit Digest und Panel
     nie zwei Wahrheiten erzählen."""
     labels = {
-        "js_error": "JS-Fehler",
-        "slow_page": "Langsame Seite",
-        "broken_link": "Toter Link",
-        "shallow_exit": "Absprung",
-        "empty_search": "Suche ohne Treffer",
+        "js_error": "JS error",
+        "slow_page": "Slow",
+        "broken_link": "Dead link",
+        "shallow_exit": "Bounce",
+        "empty_search": "Empty search",
     }
     lines = []
     for p in problem_rows[:limit]:
@@ -165,7 +165,7 @@ def problem_lines(problem_rows: list[dict[str, Any]], limit: int = 3) -> list[st
 
 
 def _section(title: str, lines: list[str]) -> str:
-    return "\n".join([f"**{title}**", *(lines or ["(nichts)"])])
+    return "\n".join([f"**{title}**", *(lines or ["(nothing)"])])
 
 
 def digest_message(
@@ -178,11 +178,11 @@ def digest_message(
 ) -> str:
     """Der ganze Digest als ein Text; das Aufteilen macht ``_split_message``."""
     sites = [
-        f"{i}. {r['label']}" + (f" ({r['country']})" if r["country"] else "") + f" — {r['n']}x"
+        f"{i}. {r['label']}" + (f" ({r['country']})" if r["country"] else "") + f" — {r['n']}×"
         for i, r in enumerate(_top(content, "site_open"), start=1)
     ]
     stories = [
-        f"{i}. {r['label']} — {r['n']}x" for i, r in enumerate(_top(content, "story_open"), start=1)
+        f"{i}. {r['label']} — {r['n']}×" for i, r in enumerate(_top(content, "story_open"), start=1)
     ]
     ranked = [f"{i}. {line}" for i, line in enumerate(problem_lines(problem_rows), start=1)]
     texts = [r for r in feedback if (r["text"] or "").strip()]
@@ -191,17 +191,17 @@ def digest_message(
     ]
     return "\n\n".join(
         [
-            f"**Founders-Digest {now:%d.%m.%Y}** — die letzten 7 Tage",
+            f"**Founders digest {now:%d %b %Y}** — the last 7 days",
             "\n".join(
                 [
-                    f"Aufrufe: {this_week['views']} ({_delta(this_week['views'], last_week['views'])})",  # noqa: E501
+                    f"Views: {this_week['views']} ({_delta(this_week['views'], last_week['views'])})",  # noqa: E501
                     f"Sessions: {this_week['sessions']} ({_delta(this_week['sessions'], last_week['sessions'])})",  # noqa: E501
                 ]
             ),
-            _section("Meistgeöffnete Sites", sites),
-            _section("Meistgelesene Stories", stories),
-            _section("Größte Probleme", ranked),
-            _section(f"Feedback der Woche ({len(voices)})", voices),
+            _section("Most opened sites", sites),
+            _section("Most read stories", stories),
+            _section("Biggest problems", ranked),
+            _section(f"Feedback this week ({len(voices)})", voices),
         ]
     )
 

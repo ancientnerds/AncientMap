@@ -140,14 +140,14 @@ class Session:
             or "paper" in pages
             or "papers" in pages
         ):
-            return "forscher"
+            return "researcher"
         if self.events["site_open"] or ("globe" in pages and self.events["filter_toggle"]):
-            return "entdecker"
+            return "explorer"
         if self.events["search"]:
-            return "sucher"
+            return "searcher"
         if pages & {"story", "journal"}:
-            return "leser"
-        return "sonstige"
+            return "reader"
+        return "other"
 
 
 def sessions_from_rows(rows: list[dict[str, Any]]) -> list[Session]:
@@ -223,7 +223,7 @@ def problems(
     sessions, so no query has to be repeated.
 
     Every `label` names the thing that is broken and nothing else — the panel
-    puts the kind in front of it, so "story lädt langsam" would say it twice.
+    puts the kind in front of it, so "story loads slowly" would say it twice.
     """
     found: list[dict[str, Any]] = []
     for row in errors:
@@ -232,7 +232,7 @@ def problems(
                 "kind": "js_error",
                 "label": row["message"],
                 "score": row["n"] * 3,
-                "detail": f"{row['n']}× auf {row['page']}",
+                "detail": f"{row['n']}× on {row['page']}",
             }
         )
     for row in vitals:
@@ -246,7 +246,7 @@ def problems(
                 "label": f"{row['page']} · {row['name']}",
                 "score": row["samples"],
                 "detail": (
-                    f"p75 {round(row['p75'])} ms statt {limit_ms} ms, {row['samples']} Messungen"
+                    f"p75 {round(row['p75'])} ms against a {limit_ms} ms budget, {row['samples']} samples"
                 ),
             }
         )
@@ -258,7 +258,7 @@ def problems(
                 "kind": "broken_link",
                 "label": row["path"],
                 "score": row["n"] * 2,
-                "detail": f"{row['n']} Aufrufe ins Leere, Herkunft {row['referrer']}",
+                "detail": f"{row['n']} views into nothing, from {row['referrer']}",
             }
         )
     bounces: Counter[str] = Counter()
@@ -274,11 +274,11 @@ def problems(
                 "kind": "shallow_exit",
                 "label": page,
                 "score": n,
-                "detail": f"{n} Sitzungen mit einer Seite und unter {SHALLOW_DEPTH} % Scrolltiefe",
+                "detail": f"{n} sessions with one page, under {SHALLOW_DEPTH} % scrolled",
             }
         )
-    # The term, not just the count: "atlantis findet nichts" is a content
-    # decision, "12 Suchen fanden nichts" is only a number. The per-term rows
+    # The term, not just the count: "atlantis finds nothing" is a content
+    # decision, "12 searches found nothing" is only a number. The per-term rows
     # come from SQL_CONTENT; without them the session counter is all we have.
     dead_terms = [r for r in (searches or []) if not (r.get("results") or 0) and r.get("label")]
     if dead_terms:
@@ -289,7 +289,7 @@ def problems(
                     "kind": "empty_search",
                     "label": str(row["label"]),
                     "score": n,
-                    "detail": f"{n}x gesucht, nichts gefunden",
+                    "detail": f"searched {n}×, found nothing",
                 }
             )
     elif empty_searches:
@@ -298,7 +298,7 @@ def problems(
                 "kind": "empty_search",
                 "label": "search",
                 "score": empty_searches,
-                "detail": f"{empty_searches} Suchanfragen fanden nichts",
+                "detail": f"{empty_searches} searches found nothing",
             }
         )
     return sorted(found, key=lambda p: p["score"], reverse=True)[:limit]

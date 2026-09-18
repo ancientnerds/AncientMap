@@ -6,17 +6,17 @@ import type { Loaded } from './useStats'
 export type SourceBucket = 'search' | 'ai' | 'discord' | 'youtube' | 'direct' | 'other'
 
 const BUCKET_LABELS: Array<[SourceBucket, string]> = [
-  ['search', 'Suche'],
-  ['ai', 'KI-Assistenten'],
+  ['search', 'Search'],
+  ['ai', 'AI assistants'],
   ['discord', 'Discord'],
   ['youtube', 'YouTube'],
-  ['direct', 'Direkt'],
-  ['other', 'Andere'],
+  ['direct', 'Direct'],
+  ['other', 'Other'],
 ]
 
 const RAW_ROWS = 8
 
-/** The founders' six buckets over api/services/founders_stats.py source_family(). */
+/** The founders' six buckets over pipeline/stats_analysis.py source_family(). */
 export function sourceBucket(family: string): SourceBucket {
   const f = family.toLowerCase()
   if (f === 'google' || f === 'search') return 'search'
@@ -38,18 +38,18 @@ export function bucketTotals(rows: SourceRow[]): Array<[SourceBucket, string, nu
 export function Sources({ state }: { state: Loaded<SourcesData> }) {
   const s = state.data
   return (
-    <Panel question="Woher kommen sie?">
+    <Panel question="Where do they come from?">
       <Status state={state} />
       {s && (
         <>
           <BarList
             items={bucketTotals(s.sources).map(([bucket, label, n]) => ({ key: bucket, label, value: n }))}
-            empty="Keine Sessions im Zeitraum."
+            empty="No sessions in this window."
           />
-          <h3>Einzelne Quellen</h3>
+          <h3>Individual sources</h3>
           <BarList
             items={s.sources.slice(0, RAW_ROWS).map(r => ({ key: r.source, label: r.source, value: r.sessions }))}
-            empty="Keine Quellen."
+            empty="No sources."
           />
         </>
       )}

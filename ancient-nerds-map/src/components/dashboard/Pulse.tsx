@@ -1,4 +1,4 @@
-import { fmtInt, fmtShare } from './format'
+import { fmtDayHour, fmtInt, fmtShare } from './format'
 import { Panel, Status } from './Panel'
 import type { HourBucket, Overview } from './types'
 import type { Loaded } from './useStats'
@@ -8,12 +8,12 @@ const SPARK_HOURS = 48
 
 /** Sign and size of today's change against yesterday at the same time of day. */
 function delta(today: number, yesterday: number): { arrow: string; text: string; cls: string } {
-  if (yesterday === 0) return { arrow: '', text: 'gestern 0', cls: '' }
+  if (yesterday === 0) return { arrow: '', text: 'none yesterday', cls: '' }
   const pct = Math.round(((today - yesterday) / yesterday) * 100)
-  if (pct === 0) return { arrow: '=', text: 'wie gestern', cls: '' }
+  if (pct === 0) return { arrow: '=', text: 'same as yesterday', cls: '' }
   return pct > 0
-    ? { arrow: '▲', text: `${pct} % zu gestern`, cls: 'dash-delta--up' }
-    : { arrow: '▼', text: `${-pct} % zu gestern`, cls: 'dash-delta--down' }
+    ? { arrow: '▲', text: `${pct} % vs yesterday`, cls: 'dash-delta--up' }
+    : { arrow: '▼', text: `${-pct} % vs yesterday`, cls: 'dash-delta--down' }
 }
 
 function Spark({ hours }: { hours: HourBucket[] }) {
@@ -22,19 +22,19 @@ function Spark({ hours }: { hours: HourBucket[] }) {
   const max = Math.max(...recent.map(h => h.views), 1)
   const first = new Date(recent[0].hour)
   const last = new Date(recent[recent.length - 1].hour)
-  const label = (d: Date) => `${String(d.getUTCDate()).padStart(2, '0')}.${String(d.getUTCMonth() + 1).padStart(2, '0')}. ${String(d.getUTCHours()).padStart(2, '0')} Uhr`
+  const label = fmtDayHour
   return (
     <>
-      <svg className="dash-spark" viewBox={`0 0 ${recent.length} 20`} preserveAspectRatio="none" role="img" aria-label={`Seitenaufrufe pro Stunde, letzte ${recent.length} Stunden`}>
+      <svg className="dash-spark" viewBox={`0 0 ${recent.length} 20`} preserveAspectRatio="none" role="img" aria-label={`Page views per hour, last ${recent.length} hours`}>
         {recent.map((h, i) => (
           <rect key={h.hour} x={i + 0.15} width={0.7} y={20 - (h.views / max) * 20} height={(h.views / max) * 20}>
-            <title>{`${label(new Date(h.hour))} UTC: ${fmtInt(h.views)} Aufrufe, ${fmtInt(h.sessions)} Sessions`}</title>
+            <title>{`${label(new Date(h.hour))} UTC: ${fmtInt(h.views)} views, ${fmtInt(h.sessions)} sessions`}</title>
           </rect>
         ))}
       </svg>
       <div className="dash-spark-axis">
         <span>{label(first)}</span>
-        <span>Aufrufe / Stunde, UTC</span>
+        <span>Views per hour, UTC</span>
         <span>{label(last)}</span>
       </div>
     </>
@@ -46,28 +46,28 @@ export function Pulse({ state, days }: { state: Loaded<Overview>; days: number }
   const o = state.data
   const d = o ? delta(o.today.views, o.yesterday.views) : null
   return (
-    <Panel question="Wie viel ist gerade los?" wide>
+    <Panel question="How busy is it right now?" wide>
       <Status state={state} />
       {o && d && (
         <>
           <div className="dash-tiles">
             <div className="dash-tile">
-              <span className="dash-tile-label">Jetzt</span>
+              <span className="dash-tile-label">Now</span>
               <span className="dash-tile-value">{fmtInt(o.today.live)}</span>
-              <span className="dash-tile-sub">Sessions, letzte 5 min</span>
+              <span className="dash-tile-sub">sessions, last 5 min</span>
             </div>
             <div className="dash-tile">
-              <span className="dash-tile-label">Heute</span>
+              <span className="dash-tile-label">Today</span>
               <span className="dash-tile-value">{fmtInt(o.today.views)}</span>
               <span className={`dash-tile-sub ${d.cls}`}>
                 {d.arrow} {d.text}
               </span>
             </div>
             <div className="dash-tile">
-              <span className="dash-tile-label">{days} Tage</span>
+              <span className="dash-tile-label">{days} days</span>
               <span className="dash-tile-value">{fmtInt(o.sessions.human)}</span>
               <span className="dash-tile-sub">
-                menschliche Sessions, {fmtShare(o.sessions.human, o.sessions.all)} von {fmtInt(o.sessions.all)}
+                human sessions, {fmtShare(o.sessions.human, o.sessions.all)} of {fmtInt(o.sessions.all)}
               </span>
             </div>
           </div>

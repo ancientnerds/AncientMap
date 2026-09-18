@@ -19,7 +19,7 @@ describe('TopContent item', () => {
 
   it('marks a search that found nothing, and leaves a productive one alone', () => {
     const dead = item(row({ event_name: 'search', label: 'zzqq', results: 0 }))
-    expect(dead.hint).toBe('0 Treffer')
+    expect(dead.hint).toBe('no results')
     expect(dead.tone).toBe('warn')
     const alive = item(row({ event_name: 'search', label: 'giza', results: 12 }))
     expect(alive.hint).toBeUndefined()
