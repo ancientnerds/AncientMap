@@ -36,6 +36,30 @@ export interface MapData {
   points: MapPoint[]
 }
 
+export interface CountryCount {
+  /** ISO-3166 alpha-2 from Umami, or "??" when it could not place the visitor. */
+  country: string
+  sessions: number
+}
+
+/** One tile of the pulse panel: the total and the flags behind it. */
+export interface CountryWindow {
+  /** Human sessions — every session on the live tile, where nobody has acted yet. */
+  sessions: number
+  /** Every session in the window, human or not. */
+  all: number
+  /** Biggest first — the panel clips the row, so the order is what survives. */
+  countries: CountryCount[]
+}
+
+/** GET /api/stats/countries — fixed windows, not the page's range switch. */
+export interface CountriesData {
+  now: CountryWindow
+  today: CountryWindow
+  d7: CountryWindow
+  d30: CountryWindow
+}
+
 export interface ContentRow {
   event_name: string
   /** Site name, story slug, paper path or search term. */

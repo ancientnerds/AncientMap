@@ -86,7 +86,37 @@ def search_rows(items: list[tuple[str, int, int]]) -> list[dict]:
     ]
 
 
+#: Sessions per country for the pulse tiles, biggest first — the flag row is
+#: clipped, so the fixture needs more countries than fit on a phone.
+COUNTRY_WEIGHTS = [
+    ("US", 96), ("DE", 71), ("GB", 58), ("TR", 33), ("FR", 27), ("IN", 24),
+    ("CA", 19), ("IT", 17), ("BR", 14), ("NL", 11), ("AU", 9), ("MX", 7),
+    ("PE", 6), ("EG", 5), ("JP", 4), ("??", 3),
+]  # fmt: skip
+
+
+def country_window(divisor: int) -> dict:
+    """One tile's worth of countries, thinned out for the shorter windows."""
+    rows = [
+        {"country": code, "sessions": max(1, n // divisor)}
+        for code, n in COUNTRY_WEIGHTS
+        if n // divisor >= 1
+    ]
+    total = sum(r["sessions"] for r in rows)
+    return {"sessions": total, "all": round(total * 1.9), "countries": rows}
+
+
 FIXTURES: dict[str, dict] = {
+    "countries": {
+        "now": {
+            "sessions": 3,
+            "all": 3,
+            "countries": [{"country": "US", "sessions": 2}, {"country": "DE", "sessions": 1}],
+        },
+        "today": country_window(24),
+        "d7": country_window(4),
+        "d30": country_window(1),
+    },
     "overview": {
         "today": {"views": 412, "sessions": 168, "live": 3},
         "yesterday": {"views": 367, "sessions": 151, "live": 0},

@@ -69,6 +69,39 @@ async def overview(
     }
 
 
+#: The flag row's longest window. One fetch serves all four tiles — the
+#: shorter ones are slices of it, so the panel costs a single query.
+COUNTRY_DAYS = 30
+
+
+@router.get("/countries")
+async def visitor_countries(
+    _session: dict = Depends(require_stats_session),
+) -> dict[str, Any]:
+    """Who is here — sessions per country for now, today, 7 and 30 days."""
+    now = datetime.now(UTC)
+    sessions = fs.sessions_from_rows(
+        fetch(SQL_SESSION_EVENTS, now - timedelta(days=COUNTRY_DAYS), now)
+    )
+
+    def block(since: datetime | None, human_only: bool = True) -> dict[str, Any]:
+        rows = fs.countries(sessions, since=since, human_only=human_only)
+        everyone = fs.countries(sessions, since=since, human_only=False)
+        return {
+            "sessions": sum(r["sessions"] for r in rows),
+            "all": sum(r["sessions"] for r in everyone),
+            "countries": rows,
+        }
+
+    midnight = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    return {
+        "now": block(now - LIVE_WINDOW, human_only=False),
+        "today": block(midnight),
+        "d7": block(now - timedelta(days=7)),
+        "d30": block(None),
+    }
+
+
 @router.get("/map")
 async def visitor_map(
     days: int = Query(1, ge=1, le=30),

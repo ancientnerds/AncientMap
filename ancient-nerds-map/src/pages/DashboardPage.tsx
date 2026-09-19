@@ -15,6 +15,7 @@ import { Sources } from '../components/dashboard/Sources'
 import { TopContent } from '../components/dashboard/TopContent'
 import type {
   ContentData,
+  CountriesData,
   FeedbackData,
   JourneysData,
   MapData,
@@ -48,12 +49,14 @@ export default function DashboardPage() {
   const [days, setDays] = useState<Days>(7)
   const overview = useStats<Overview>(`overview?days=${days}`)
   const map = useStats<MapData>('map?days=1')
+  // Fixed windows (now / today / 7 / 30) — the range switch does not touch them.
+  const countries = useStats<CountriesData>('countries')
   const content = useStats<ContentData>(`content?days=${days}`)
   const feedback = useStats<FeedbackData>('feedback?days=30')
   const sources = useStats<SourcesData>(`sources?days=${days}`)
   const journeys = useStats<JourneysData>(`journeys?days=${days}`)
   const problems = useStats<ProblemsData>(`problems?days=${days}`)
-  const panels = [overview, map, content, feedback, sources, journeys, problems]
+  const panels = [overview, countries, map, content, feedback, sources, journeys, problems]
   const unauthorized = panels.some(s => s.error === 'unauthorized')
 
   return (
@@ -78,7 +81,7 @@ export default function DashboardPage() {
         <Entry />
       ) : (
         <div className="dash-grid">
-          <Pulse state={overview} days={days} />
+          <Pulse state={overview} countries={countries} />
           <VisitorMap state={map} />
           <SessionTypes state={overview} />
           <Sources state={sources} />

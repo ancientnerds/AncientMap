@@ -129,6 +129,10 @@ class Session:
     pages: int = 0
     events: Counter[str] = field(default_factory=Counter)
     depth: int = 0  # deepest scroll_depth seen, percent
+    #: Time of the session's last event. The flag row slices one fetch into
+    #: four windows with it — "in the last five minutes" is about the last
+    #: sign of life, not about when the visitor arrived.
+    last_seen: datetime | None = None
     #: site_open events the page fired on its own; they stay in `events` (the
     #: session type and the journey want them) but prove nothing about a human.
     auto_opens: int = 0
@@ -171,6 +175,10 @@ def sessions_from_rows(rows: list[dict[str, Any]]) -> list[Session]:
             s = by_id[r["session_id"]] = Session(
                 r["session_id"], r["created_at"], r.get("country"), r.get("device")
             )
+        # The rows arrive ordered by session and time, but a max() costs
+        # nothing and does not depend on that order holding.
+        if s.last_seen is None or r["created_at"] > s.last_seen:
+            s.last_seen = r["created_at"]
         data = r.get("data") or {}
         if r["event_type"] == 1:
             if s.entry is None:
@@ -203,6 +211,36 @@ def journeys(sessions: list[Session], limit: int = 10) -> list[tuple[str, int]]:
 
 def session_type_shares(sessions: list[Session]) -> dict[str, int]:
     return dict(Counter(s.kind for s in sessions if s.human))
+
+
+#: Stands in for a session Umami could not place — the flag row shows a globe.
+UNKNOWN_COUNTRY = "??"
+
+
+def countries(
+    sessions: list[Session],
+    since: datetime | None = None,
+    human_only: bool = True,
+) -> list[dict[str, Any]]:
+    """Sessions per country, biggest first — the flag row of the pulse panel.
+
+    `since` keeps the sessions still alive after that moment, so one fetch
+    serves every window the panel shows. `human_only` is off for the live
+    tile: a visitor who arrived thirty seconds ago has one page view and no
+    act to their name yet, and leaving them out would make "now" read zero.
+    """
+    c: Counter[str] = Counter()
+    for s in sessions:
+        if since is not None and (s.last_seen is None or s.last_seen < since):
+            continue
+        if human_only and not s.human:
+            continue
+        c[s.country or UNKNOWN_COUNTRY] += 1
+    # Alphabetical inside a tie, so a refresh does not shuffle equal counts.
+    return [
+        {"country": code, "sessions": n}
+        for code, n in sorted(c.items(), key=lambda kv: (-kv[1], kv[0]))
+    ]
 
 
 #: Google's "good" thresholds in milliseconds — above them a page is slow for

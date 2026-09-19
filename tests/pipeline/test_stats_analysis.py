@@ -183,6 +183,62 @@ def test_session_type_shares_count_only_human_sessions():
     assert fs.session_type_shares(fs.sessions_from_rows(rows)) == {"reader": 1, "explorer": 1}
 
 
+# ---- countries ------------------------------------------------------------
+
+
+def test_countries_rank_by_sessions_and_keep_only_humans():
+    rows = [
+        ev("de1", path="/news-archive/x-1"),
+        ev("de1", path="/news-archive/y-2", minute=1),
+        ev("de2", path="/globe.html"),
+        ev("de2", "search", event_type=2, data={"q": "giza", "results": "3"}),
+        ev("us", path="/news-archive/x-1"),
+        ev("us", path="/news-archive/y-2", minute=1),
+        ev("bot", path="/news-archive/x-1"),  # one page, nothing else
+    ]
+    for r in rows:
+        r["country"] = {"de1": "DE", "de2": "DE", "us": "US", "bot": "SG"}[r["session_id"]]
+    sessions = fs.sessions_from_rows(rows)
+    assert fs.countries(sessions) == [
+        {"country": "DE", "sessions": 2},
+        {"country": "US", "sessions": 1},
+    ]
+    # The live tile counts everybody: nobody has acted thirty seconds in.
+    assert fs.countries(sessions, human_only=False) == [
+        {"country": "DE", "sessions": 2},
+        {"country": "SG", "sessions": 1},
+        {"country": "US", "sessions": 1},
+    ]
+
+
+def test_countries_slice_by_the_last_sign_of_life_not_by_arrival():
+    """One fetch feeds four windows: a session that started before the cut but
+    is still clicking belongs to "now"."""
+    rows = [
+        ev("staying", path="/globe.html", minute=0),
+        ev("staying", "search", event_type=2, data={"q": "x", "results": "1"}, minute=50),
+        ev("gone", path="/globe.html", minute=0),
+        ev("gone", "search", event_type=2, data={"q": "y", "results": "1"}, minute=5),
+    ]
+    sessions = fs.sessions_from_rows(rows)
+    for s in sessions:
+        s.country = "DE"
+    recent = fs.countries(sessions, since=T.replace(minute=45))
+    assert recent == [{"country": "DE", "sessions": 1}]
+    assert fs.countries(sessions, since=None) == [{"country": "DE", "sessions": 2}]
+
+
+def test_a_country_umami_could_not_place_still_counts():
+    rows = [
+        ev("a", path="/"),
+        ev("a", path="/globe.html", minute=1),
+    ]
+    rows[0]["country"] = rows[1]["country"] = None
+    assert fs.countries(fs.sessions_from_rows(rows)) == [
+        {"country": fs.UNKNOWN_COUNTRY, "sessions": 1}
+    ]
+
+
 # ---- problems -------------------------------------------------------------
 
 #: Rows in the shape pipeline.umami_db.SQL_NOT_FOUND / SQL_VITALS / SQL_ERRORS return.

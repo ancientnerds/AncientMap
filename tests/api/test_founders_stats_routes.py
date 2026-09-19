@@ -84,7 +84,7 @@ def test_router_is_mounted_under_api_stats():
     # changed between the local and the CI version (a _IncludedRouter wrapper
     # without .path), while the schema is the documented contract either way.
     paths = set(app.openapi()["paths"])
-    for name in ("overview", "map", "content", "feedback", "sources", "journeys", "problems"):
+    for name in ("overview", "countries", "map", "content", "feedback", "sources", "journeys", "problems"):  # fmt: skip
         assert f"/api/stats/{name}" in paths, name
 
 
@@ -146,6 +146,33 @@ def test_map_returns_the_points_for_the_requested_days(monkeypatch):
     out = asyncio.run(fr.visitor_map(days=2, _session=SESSION))
     assert out == {"points": pts}
     assert fetch.calls[0][2] - fetch.calls[0][1] == timedelta(days=2)
+
+
+def test_countries_slice_one_fetch_into_four_windows(monkeypatch):
+    now = datetime.now(UTC)
+    common = {"referrer_domain": None, "utm_source": None, "device": "mobile"}  # fmt: skip
+    rows = [
+        # Still clicking: counts in every window, including "now".
+        {"session_id": "live", "created_at": now, "event_type": 1, "event_name": None, "url_path": "/globe.html", "data": None, "country": "DE", **common},
+        {"session_id": "live", "created_at": now, "event_type": 2, "event_name": "search", "url_path": "/globe.html", "data": {"q": "x"}, "country": "DE", **common},
+        # Yesterday: in 7 and 30 days, not in today or now.
+        {"session_id": "old", "created_at": now - timedelta(days=1), "event_type": 1, "event_name": None, "url_path": "/globe.html", "data": None, "country": "US", **common},
+        {"session_id": "old", "created_at": now - timedelta(days=1), "event_type": 1, "event_name": None, "url_path": "/", "data": None, "country": "US", **common},
+        # Three weeks back: only the 30-day tile.
+        {"session_id": "ancient", "created_at": now - timedelta(days=21), "event_type": 1, "event_name": None, "url_path": "/globe.html", "data": None, "country": "PE", **common},
+        {"session_id": "ancient", "created_at": now - timedelta(days=21), "event_type": 1, "event_name": None, "url_path": "/", "data": None, "country": "PE", **common},
+    ]  # fmt: skip
+    fetch = Fetch(**{"ORDER BY e.session_id": rows})
+    monkeypatch.setattr(fr, "fetch", fetch)
+    out = asyncio.run(fr.visitor_countries(_session=SESSION))
+    assert [r["country"] for r in out["now"]["countries"]] == ["DE"]
+    assert [r["country"] for r in out["today"]["countries"]] == ["DE"]
+    assert [r["country"] for r in out["d7"]["countries"]] == ["DE", "US"]
+    assert [r["country"] for r in out["d30"]["countries"]] == ["DE", "PE", "US"]
+    assert out["d30"]["sessions"] == 3 and out["d30"]["all"] == 3
+    # One query for four tiles, and it reaches back thirty days.
+    assert len(fetch.calls) == 1
+    assert fetch.calls[0][2] - fetch.calls[0][1] == timedelta(days=fr.COUNTRY_DAYS)
 
 
 def test_content_splits_the_rows_by_event_and_caps_the_lists(monkeypatch):
