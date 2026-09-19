@@ -112,6 +112,18 @@ export interface JourneysData {
 /** The five failures pipeline/stats_analysis.py problems() knows. */
 export type ProblemKind = 'js_error' | 'slow_page' | 'broken_link' | 'shallow_exit' | 'empty_search'
 
+/**
+ * Who a problem last hit. Cookieless analytics has no user: this is the
+ * session Umami recognises for one calendar month, shortened to eight
+ * characters so two rows can be read as the same visitor.
+ */
+export interface Visitor {
+  session: string
+  country: string | null
+  device: string | null
+  browser: string | null
+}
+
 export interface Problem {
   kind: ProblemKind
   /** What is broken — an error message, a path, a page type. */
@@ -120,6 +132,9 @@ export interface Problem {
   score: number
   /** The numbers behind the score, in one sentence. */
   detail: string
+  /** ISO timestamp of the last occurrence; null when the row cannot date itself. */
+  at: string | null
+  last: Visitor | null
 }
 
 /** GET /api/stats/problems?days=N */

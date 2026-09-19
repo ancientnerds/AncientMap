@@ -242,9 +242,18 @@ def test_a_country_umami_could_not_place_still_counts():
 # ---- problems -------------------------------------------------------------
 
 #: Rows in the shape pipeline.umami_db.SQL_NOT_FOUND / SQL_VITALS / SQL_ERRORS return.
-NOT_FOUND = [{"path": "/old-story", "referrer": "example.org", "n": 3}]
-VITALS = [{"page": "story", "name": "LCP", "p75": 4100.0, "samples": 20}]
-ERRORS = [{"message": "x is not a function", "page": "globe", "n": 12, "sessions": 5}]
+#: `last_*` are the columns every problem query adds so the panel can say when
+#: it happened and to whom.
+LAST = {
+    "last_at": T.replace(minute=30),
+    "last_session": "cf01aa30-7c4d-4b5b-ae73-9cf41c550e9c",
+    "last_country": "CH",
+    "last_device": "laptop",
+    "last_browser": "chrome",
+}
+NOT_FOUND = [{"path": "/old-story", "referrer": "example.org", "n": 3, **LAST}]
+VITALS = [{"page": "story", "name": "LCP", "p75": 4100.0, "samples": 20, **LAST}]
+ERRORS = [{"message": "x is not a function", "page": "globe", "n": 12, "sessions": 5, **LAST}]
 
 
 def _bounce_and_search_rows():
@@ -291,9 +300,34 @@ def test_problems_rank_errors_slow_pages_dead_links_bounces_and_empty_searches()
     assert by_kind["shallow_exit"]["score"] == 2
     assert by_kind["shallow_exit"]["detail"].startswith("2 visitors read one page")
     assert by_kind["empty_search"]["score"] == 1
-    # Worst first, and every entry carries the four keys the panel renders.
+    # Worst first, and every entry carries the six keys the panel renders.
     assert [p["score"] for p in out] == sorted((p["score"] for p in out), reverse=True)
-    assert all(set(p) == {"kind", "label", "score", "detail"} for p in out)
+    assert all(set(p) == {"kind", "label", "score", "detail", "at", "last"} for p in out)
+
+
+def test_every_problem_says_when_it_happened_and_to_whom():
+    """The founders' first two questions about any row (owner, 2026-09-19).
+    There is no user in cookieless analytics — the visitor is the session."""
+    sessions = fs.sessions_from_rows(_bounce_and_search_rows())
+    for s in sessions:
+        s.country, s.device, s.browser = "PH", "mobile", "ios"
+    out = fs.problems(sessions, not_found=NOT_FOUND, vitals=VITALS, errors=ERRORS)
+    by_kind = {p["kind"]: p for p in out}
+    for kind in ("js_error", "slow_page", "broken_link"):
+        assert by_kind[kind]["at"] == LAST["last_at"], kind
+        assert by_kind[kind]["last"] == {
+            "session": "cf01aa30",  # eight characters, not the whole id
+            "country": "CH",
+            "device": "laptop",
+            "browser": "chrome",
+        }, kind
+    # The bounce names the session it was folded from, and its last event.
+    bounce = by_kind["shallow_exit"]
+    assert bounce["last"]["country"] == "PH" and bounce["last"]["browser"] == "ios"
+    assert bounce["at"] is not None
+    # A row without the columns says so instead of inventing a visitor.
+    bare = fs.problems([], not_found=[], vitals=[], errors=[{"message": "m", "page": "p", "n": 1, "sessions": 1}])  # fmt: skip
+    assert bare[0]["at"] is None and bare[0]["last"] is None
 
 
 def test_problems_are_empty_without_findings():

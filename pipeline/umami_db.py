@@ -9,7 +9,8 @@ Umami 3 columns this relies on (verified on production, 2026-09-17):
 ``website_event`` (event_id, website_id, session_id, created_at, url_path,
 referrer_domain, utm_source, event_type, event_name), ``event_data``
 (website_event_id, data_key, string_value, number_value) and ``session``
-(session_id, country, city, device). event_type 1 = pageview, 2 = custom event.
+(session_id, country, city, device, browser). event_type 1 = pageview,
+2 = custom event.
 """
 
 from __future__ import annotations
@@ -75,7 +76,7 @@ GROUP BY 1 ORDER BY 1
 
 SQL_SESSION_EVENTS = """
 SELECT e.session_id, e.created_at, e.event_type, e.event_name, e.url_path, e.referrer_domain,
-       e.utm_source, s.country, s.device,
+       e.utm_source, s.country, s.device, s.browser,
        (SELECT jsonb_object_agg(d.data_key, coalesce(d.string_value, d.number_value::text))
           FROM event_data d WHERE d.website_event_id = e.event_id) AS data
 FROM website_event e JOIN session s ON s.session_id = e.session_id
@@ -95,13 +96,17 @@ WITH ev AS (
             WHERE d.data_key IN ('name', 'story', 'paper', 'q')
         ) AS label,
         max(d.string_value) FILTER (WHERE d.data_key = 'country') AS country,
-        max(d.number_value) FILTER (WHERE d.data_key = 'results') AS results
+        max(d.number_value) FILTER (WHERE d.data_key = 'results') AS results,
+        e.session_id, e.created_at, s.country AS visitor_country,
+        s.device, s.browser
     FROM website_event e
     JOIN event_data d ON d.website_event_id = e.event_id
+    JOIN session s ON s.session_id = e.session_id
     WHERE e.website_id = :website_id AND e.event_type = 2
       AND e.created_at >= :since AND e.created_at < :until
       AND e.event_name IN ('site_open', 'story_open', 'paper_open', 'search')
-    GROUP BY e.event_id, e.event_name
+    GROUP BY e.event_id, e.event_name, e.session_id, e.created_at,
+             s.country, s.device, s.browser
 )
 SELECT
     event_name,
@@ -111,7 +116,12 @@ SELECT
     -- data finished loading) would otherwise brand the most successful
     -- term on the site as "never finds anything".
     max(results) AS results,
-    count(*) AS n
+    count(*) AS n,
+    max(created_at) AS last_at,
+    (array_agg(session_id::text    ORDER BY created_at DESC))[1] AS last_session,
+    (array_agg(visitor_country     ORDER BY created_at DESC))[1] AS last_country,
+    (array_agg(device              ORDER BY created_at DESC))[1] AS last_device,
+    (array_agg(browser             ORDER BY created_at DESC))[1] AS last_browser
 FROM ev
 WHERE label IS NOT NULL AND label <> ''
 GROUP BY event_name, label
@@ -148,58 +158,84 @@ WHERE website_id = :website_id AND event_type = 1
 GROUP BY 1 ORDER BY 2 DESC LIMIT 40
 """
 
+#: When it last happened and to whom — the founders' first two questions about
+#: anything on the problems panel (owner, 2026-09-19). Cookieless analytics has
+#: no user: the visitor is the session Umami recognises for one calendar month,
+#: shown as its country, device, browser and the first eight characters of that
+#: id. Every problem query selects this block over an `ev` CTE that carries
+#: created_at, session_id, country, device and browser.
+_LAST_VISITOR = """       max(created_at) AS last_at,
+       (array_agg(session_id::text ORDER BY created_at DESC))[1] AS last_session,
+       (array_agg(country          ORDER BY created_at DESC))[1] AS last_country,
+       (array_agg(device           ORDER BY created_at DESC))[1] AS last_device,
+       (array_agg(browser          ORDER BY created_at DESC))[1] AS last_browser"""
+
 #: Dead links. A pageview does not carry its HTTP status, so the 404 page says
 #: so itself: one `not_found` event per view with the missing path and the
 #: referrer's host (pipeline/article_html_renderer.py, _NOT_FOUND_FEEDBACK).
 #: Two levels again — path and referrer are two event_data rows per event.
-SQL_NOT_FOUND = """
+SQL_NOT_FOUND = (
+    """
 WITH ev AS (
     SELECT
         e.event_id,
+        e.session_id, e.created_at, s.country, s.device, s.browser,
         max(d.string_value) FILTER (WHERE d.data_key = 'path')     AS path,
         max(d.string_value) FILTER (WHERE d.data_key = 'referrer') AS referrer
     FROM website_event e
     JOIN event_data d ON d.website_event_id = e.event_id
+    JOIN session s ON s.session_id = e.session_id
     WHERE e.website_id = :website_id AND e.event_name = 'not_found'
       AND e.created_at >= :since AND e.created_at < :until
-    GROUP BY e.event_id
+    GROUP BY e.event_id, e.session_id, e.created_at, s.country, s.device, s.browser
 )
-SELECT path, coalesce(nullif(referrer, ''), 'direkt') AS referrer, count(*) AS n
+SELECT path, coalesce(nullif(referrer, ''), 'direct') AS referrer, count(*) AS n,
+"""
+    + _LAST_VISITOR
+    + """
 FROM ev
 WHERE path IS NOT NULL AND path <> ''
 GROUP BY 1, 2
 ORDER BY n DESC
 LIMIT 50
 """
+)
 
 #: Core Web Vitals per page type: the 75th percentile is what Google reports
 #: and what a visitor with a middling phone actually waits. `value` is a
 #: number, so it lives in number_value; the cast keeps Postgres from handing
 #: back a numeric that would serialise as a string.
-SQL_VITALS = """
+SQL_VITALS = (
+    """
 WITH ev AS (
     SELECT
         e.event_id,
+        e.session_id, e.created_at, s.country, s.device, s.browser,
         max(d.string_value) FILTER (WHERE d.data_key = 'page')  AS page,
         max(d.string_value) FILTER (WHERE d.data_key = 'name')  AS name,
         max(d.number_value) FILTER (WHERE d.data_key = 'value') AS metric_value
     FROM website_event e
     JOIN event_data d ON d.website_event_id = e.event_id
+    JOIN session s ON s.session_id = e.session_id
     WHERE e.website_id = :website_id AND e.event_name = 'vital'
       AND e.created_at >= :since AND e.created_at < :until
-    GROUP BY e.event_id
+    GROUP BY e.event_id, e.session_id, e.created_at, s.country, s.device, s.browser
 )
 SELECT
     page,
     name,
     percentile_cont(0.75) WITHIN GROUP (ORDER BY metric_value::float8) AS p75,
-    count(*) AS samples
+    count(*) AS samples,
+"""
+    + _LAST_VISITOR
+    + """
 FROM ev
 WHERE page IS NOT NULL AND name IS NOT NULL AND metric_value IS NOT NULL
 GROUP BY 1, 2
 ORDER BY samples DESC
 LIMIT 60
 """
+)
 
 #: Uncaught JavaScript errors, grouped by message and page (src/analytics/boot.ts
 #: clips the message to the tracker's 100 characters and the file name to 60).
@@ -207,27 +243,35 @@ LIMIT 60
 #: visitors it reached. One visitor reloading a broken page three times makes
 #: nine events (boot.ts sends at most three per page view) and one session —
 #: only the second number says how big the damage is.
-SQL_ERRORS = """
+SQL_ERRORS = (
+    """
 WITH ev AS (
     SELECT
         e.event_id,
         e.session_id,
+        e.created_at,
+        s.country, s.device, s.browser,
         max(d.string_value) FILTER (WHERE d.data_key = 'message') AS message,
         max(d.string_value) FILTER (WHERE d.data_key = 'page')    AS page
     FROM website_event e
     JOIN event_data d ON d.website_event_id = e.event_id
+    JOIN session s ON s.session_id = e.session_id
     WHERE e.website_id = :website_id AND e.event_name = 'js_error'
       AND e.created_at >= :since AND e.created_at < :until
-    GROUP BY e.event_id, e.session_id
+    GROUP BY e.event_id, e.session_id, e.created_at, s.country, s.device, s.browser
 )
 SELECT message, coalesce(page, 'unknown') AS page, count(*) AS n,
-       count(DISTINCT session_id) AS sessions
+       count(DISTINCT session_id) AS sessions,
+"""
+    + _LAST_VISITOR
+    + """
 FROM ev
 WHERE message IS NOT NULL AND message <> ''
 GROUP BY 1, 2
 ORDER BY sessions DESC, n DESC
 LIMIT 30
 """
+)
 
 
 def fetch(sql: str, since: datetime, until: datetime, **params: Any) -> list[dict[str, Any]]:

@@ -287,6 +287,26 @@ FIXTURES: dict[str, dict] = {
 }
 
 
+#: Date, time and visitor on every problem row (owner, 2026-09-19). Added here
+#: instead of in each literal above, so the rows stay readable.
+PROBLEM_VISITORS = [
+    ("CH", "laptop", "chrome", "cf01aa30"),
+    ("US", "desktop", "safari", "109a462e"),
+    ("PH", "mobile", "ios", "e4eb8bb8"),
+    ("DE", "mobile", "crios", "18f6c104"),
+    (None, "laptop", "firefox", "b3150e12"),
+]
+for _i, _row in enumerate(FIXTURES["problems"]["problems"]):
+    _country, _device, _browser, _session = PROBLEM_VISITORS[_i % len(PROBLEM_VISITORS)]
+    _row["at"] = (datetime.now(UTC) - timedelta(hours=_i * 5 + 1)).isoformat()
+    _row["last"] = {
+        "session": _session,
+        "country": _country,
+        "device": _device,
+        "browser": _browser,
+    }
+
+
 def answer_stats(route: Route) -> None:
     name = route.request.url.split("/api/stats/", 1)[1].split("?", 1)[0]
     route.fulfill(json=FIXTURES[name])

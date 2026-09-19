@@ -66,6 +66,14 @@ def test_problem_queries_read_the_events_the_frontend_actually_sends():
     # How many visitors it reached, not only how often it fired: boot.ts sends
     # up to three per page view, so the event count alone overstates the damage.
     assert "count(DISTINCT session_id) AS sessions" in u.SQL_ERRORS
+    # Date, time and visitor on every kind the problems panel shows.
+    for name in ("SQL_ERRORS", "SQL_NOT_FOUND", "SQL_VITALS", "SQL_CONTENT"):
+        sql = getattr(u, name)
+        assert "max(created_at) AS last_at" in sql, name
+        for column in ("last_session", "last_country", "last_device", "last_browser"):
+            assert column in sql, (name, column)
+    # The bounce rows come from the folded sessions, which need the browser too.
+    assert "s.browser" in u.SQL_SESSION_EVENTS
 
 
 def test_import_without_password_is_fine_and_engine_is_lazy(monkeypatch):

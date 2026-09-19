@@ -1,6 +1,7 @@
-import { fmtInt } from './format'
+import { Flag } from './Flag'
+import { fmtInt, fmtStamp } from './format'
 import { Panel, Status } from './Panel'
-import type { ProblemKind, ProblemsData } from './types'
+import type { ProblemKind, ProblemsData, Visitor } from './types'
 import type { Loaded } from './useStats'
 
 export type Severity = 'high' | 'mid' | 'low'
@@ -31,6 +32,28 @@ export function problemLabel(kind: ProblemKind): string {
   return KIND_LABELS[kind]
 }
 
+/**
+ * When it last happened and to whom. There is no user in cookieless
+ * analytics: the visitor is Umami's session, which recognises the same
+ * browser for one calendar month — flag, browser, device and eight
+ * characters of that id, enough to see two rows are the same person.
+ */
+function When({ at, last }: { at: string | null; last: Visitor | null }) {
+  if (!at && !last) return null
+  return (
+    <span className="dash-problem-who">
+      {at && <time dateTime={at}>{fmtStamp(at)}</time>}
+      {last && (
+        <span className="dash-flag">
+          <Flag country={last.country} />
+        </span>
+      )}
+      {last && [last.browser, last.device].filter(Boolean).join(' · ')}
+      {last && <code>{last.session}</code>}
+    </span>
+  )
+}
+
 /** What fails the visitors, worst first: a severity dot, what broke, the numbers. */
 export function Problems({ state }: { state: Loaded<ProblemsData> }) {
   const p = state.data
@@ -52,6 +75,7 @@ export function Problems({ state }: { state: Loaded<ProblemsData> }) {
                   </span>
                   <span className="dash-problem-score">{fmtInt(item.score)}</span>
                   <span className="dash-problem-detail">{item.detail}</span>
+                  <When at={item.at} last={item.last} />
                 </li>
               ))}
             </ol>

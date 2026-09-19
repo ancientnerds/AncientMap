@@ -124,6 +124,7 @@ class Session:
     started: datetime
     country: str | None
     device: str | None
+    browser: str | None = None
     entry: str | None = None
     steps: list[str] = field(default_factory=list)  # page types and event names, in order
     pages: int = 0
@@ -173,7 +174,11 @@ def sessions_from_rows(rows: list[dict[str, Any]]) -> list[Session]:
         s = by_id.get(r["session_id"])
         if s is None:
             s = by_id[r["session_id"]] = Session(
-                r["session_id"], r["created_at"], r.get("country"), r.get("device")
+                r["session_id"],
+                r["created_at"],
+                r.get("country"),
+                r.get("device"),
+                r.get("browser"),
             )
         # The rows arrive ordered by session and time, but a max() costs
         # nothing and does not depend on that order holding.
@@ -264,6 +269,36 @@ def _visitors(n: int) -> str:
     return f"{n} visitor" if n == 1 else f"{n} visitors"
 
 
+#: How much of a session id the panel shows. Cookieless analytics has no user;
+#: Umami's id recognises the same browser for one calendar month, and eight
+#: characters are enough to see that two rows are the same visitor.
+SESSION_ID_CHARS = 8
+
+
+def _last_visitor(row: dict[str, Any]) -> dict[str, Any] | None:
+    """Who a problem row last hit, from the `last_*` columns the problem
+    queries select. None when the row carries no session."""
+    session = row.get("last_session")
+    if not session:
+        return None
+    return {
+        "session": str(session)[:SESSION_ID_CHARS],
+        "country": row.get("last_country"),
+        "device": row.get("last_device"),
+        "browser": row.get("last_browser"),
+    }
+
+
+def _session_visitor(s: Session) -> dict[str, Any]:
+    """The same shape for the problems folded out of the sessions themselves."""
+    return {
+        "session": str(s.id)[:SESSION_ID_CHARS],
+        "country": s.country,
+        "device": s.device,
+        "browser": s.browser,
+    }
+
+
 def problems(
     sessions: list[Session],
     not_found: list[dict[str, Any]],
@@ -291,6 +326,11 @@ def problems(
 
     Every `label` names the thing that is broken and nothing else — the panel
     puts the kind in front of it, so "story loads slowly" would say it twice.
+
+    Every entry also carries `at`, the last time it happened, and `last`, the
+    visitor it happened to (owner, 2026-09-19: "date, time and user"). There
+    is no user in cookieless analytics — `last` is the session Umami
+    recognises for one calendar month, with its country, device and browser.
     """
     found: list[dict[str, Any]] = []
     for row in errors:
@@ -301,6 +341,8 @@ def problems(
                 "label": row["message"],
                 "score": hit * 3,
                 "detail": f"{_visitors(hit)}, {row['n']}× on {row['page']}",
+                "at": row.get("last_at"),
+                "last": _last_visitor(row),
             }
         )
     for row in vitals:
@@ -318,6 +360,8 @@ def problems(
                 "detail": (
                     f"p75 {round(row['p75'])} ms against a {limit_ms} ms budget, {row['samples']} samples"
                 ),
+                "at": row.get("last_at"),
+                "last": _last_visitor(row),
             }
         )
     for row in not_found:
@@ -329,9 +373,13 @@ def problems(
                 "label": row["path"],
                 "score": row["n"] * 2,
                 "detail": f"{row['n']} views into nothing, from {row['referrer']}",
+                "at": row.get("last_at"),
+                "last": _last_visitor(row),
             }
         )
     bounces: Counter[str] = Counter()
+    #: The most recent bouncing session per page type — the panel names one.
+    last_bounce: dict[str, Session] = {}
     empty_searches = 0
     for s in sessions:
         empty_searches += s.events["search_empty"]
@@ -346,6 +394,9 @@ def problems(
         page = next((p for p in s.steps if p in SHALLOW_PAGES), None)
         if page and s.pages == 1 and s.depth < SHALLOW_DEPTH:
             bounces[page] += 1
+            seen = last_bounce.get(page)
+            if seen is None or (s.last_seen or s.started) > (seen.last_seen or seen.started):
+                last_bounce[page] = s
     for page, n in bounces.most_common():
         found.append(
             {
@@ -353,6 +404,8 @@ def problems(
                 "label": page,
                 "score": n,
                 "detail": f"{_visitors(n)} read one page, under {SHALLOW_DEPTH} % scrolled",
+                "at": last_bounce[page].last_seen,
+                "last": _session_visitor(last_bounce[page]),
             }
         )
     # The term, not just the count: "atlantis finds nothing" is a content
@@ -368,6 +421,8 @@ def problems(
                     "label": str(row["label"]),
                     "score": n,
                     "detail": f"searched {n}×, found nothing",
+                    "at": row.get("last_at"),
+                    "last": _last_visitor(row),
                 }
             )
     elif empty_searches:
@@ -377,6 +432,10 @@ def problems(
                 "label": "search",
                 "score": empty_searches,
                 "detail": f"{empty_searches} searches found nothing",
+                # Only the session counter got here, so there is no row to
+                # name a moment or a visitor with.
+                "at": None,
+                "last": None,
             }
         )
     return sorted(found, key=lambda p: p["score"], reverse=True)[:limit]

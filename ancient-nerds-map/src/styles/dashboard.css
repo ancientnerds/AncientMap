@@ -202,11 +202,12 @@ button {
 
 /* ── Pulse tiles and the hourly strip ───────────────────────────────── */
 
-/* Two by two on a phone, one row of four from 720 px. Four across a 390 px
-   screen would leave ~90 px per tile, too little for a number and a flag. */
+/* Mobile first: one tile per row, so the number keeps its size and the flags
+   get the whole rest of the line. Two from 560 px, four from 1024 px — at
+   720 px four tiles would be 170 px wide and the flag box would hold two. */
 .dash-tiles {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
   gap: 8px;
 }
 
@@ -235,22 +236,40 @@ button {
   color: var(--dash-paper);
 }
 
-/* One line, biggest country first, cut off where the tile ends — never wrapped
-   and never scrollable, so the strongest numbers are always the visible ones
-   (owner, 2026-09-19). The mask fades the last chip instead of slicing it. */
-.dash-flags {
+/* The number keeps its size; the flags fill whatever is left beside it. The
+   box is a flex item with no content of its own — the list inside is absolute
+   — so its height is the number's height, never the flags' (owner,
+   2026-09-19: the number must stay big). Rows wrap to use the whole box and
+   what no longer fits is cut off; the mask marks the cut. */
+.dash-tile-main {
   display: flex;
-  flex-wrap: nowrap;
-  gap: 8px;
-  margin: 6px 0 0;
-  padding: 0;
+  align-items: stretch;
+  gap: 10px;
+  min-width: 0;
+}
+
+.dash-flags-box {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.dash-flags {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  gap: 5px 10px;
+  margin: 0;
+  padding: 2px 0 0;
   list-style: none;
   overflow: hidden;
-  mask-image: linear-gradient(to right, #000 calc(100% - 18px), transparent);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 7px), transparent);
 }
 
 .dash-flag {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 4px;
   flex: 0 0 auto;
@@ -623,6 +642,28 @@ button {
   white-space: nowrap;
 }
 
+/* When it last happened and to whom — the line under the numbers. */
+.dash-problem-who {
+  grid-column: 2 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 3px 10px;
+  font-family: var(--dash-mono);
+  font-size: 0.65rem;
+  line-height: 1.5;
+  color: var(--dash-muted);
+}
+
+.dash-problem-who code {
+  font-family: inherit;
+  opacity: 0.7;
+}
+
+.dash-problem-who time {
+  color: var(--dash-paper);
+}
+
 .dash-problem-detail {
   grid-column: 2 / -1;
   font-family: var(--dash-mono);
@@ -699,10 +740,6 @@ button {
     gap: 16px 28px;
   }
 
-  .dash-tiles {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
-
   .dash-tile-value {
     font-size: clamp(2.4rem, 4vw, 3.6rem);
   }
@@ -710,6 +747,18 @@ button {
   .dash-btn {
     width: auto;
     min-width: 300px;
+  }
+}
+
+@media (min-width: 560px) {
+  .dash-tiles {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1024px) {
+  .dash-tiles {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 }
 

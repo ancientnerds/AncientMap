@@ -1,5 +1,4 @@
-import { getCountryFlatFlagUrl } from '../../utils/countryFlags'
-
+import { Flag } from './Flag'
 import { countryName, fmtDayHour, fmtInt, fmtShare } from './format'
 import { Panel, Status } from './Panel'
 import type { CountriesData, CountryCount, CountryWindow, HourBucket, Overview } from './types'
@@ -7,8 +6,6 @@ import type { Loaded } from './useStats'
 
 /** How many of the hourly buckets the strip shows: two days is readable at 390 px. */
 const SPARK_HOURS = 48
-/** The flag images live on the main host; this one only serves the dashboard. */
-const FLAG_HOST = 'https://ancientnerds.com'
 
 /** Sign and size of today's change against yesterday at the same time of day. */
 function delta(today: number, yesterday: number): { arrow: string; text: string; cls: string } {
@@ -21,31 +18,26 @@ function delta(today: number, yesterday: number): { arrow: string; text: string;
 }
 
 /**
- * One line of flags with counts, biggest country first. It never wraps and it
- * never scrolls: whatever does not fit is simply cut off (owner, 2026-09-19),
- * so a tile always shows the strongest countries and nothing competes for the
- * space. The fade on the right says there is more.
+ * The countries behind a tile's number, biggest first, in a box that fills the
+ * space to the right of it. The box is exactly as tall as the number (its
+ * wrapper is a flex item with no content of its own, the list inside is
+ * absolute), the flags wrap to use every line of it, and whatever no longer
+ * fits is cut off instead of shrinking the number (owner, 2026-09-19). The
+ * fade marks the cut.
  */
 export function Flags({ rows }: { rows: CountryCount[] }) {
   if (rows.length === 0) return null
   return (
-    <ul className="dash-flags">
-      {rows.map(r => {
-        const name = countryName(r.country)
-        const flag = getCountryFlatFlagUrl(r.country)
-        return (
-          <li className="dash-flag" key={r.country} title={`${name}: ${fmtInt(r.sessions)}`}>
-            {flag ? (
-              <img src={`${FLAG_HOST}${flag}`} alt="" width="18" height="12" loading="lazy" decoding="async" />
-            ) : (
-              <span className="dash-flag-blank" aria-hidden="true" />
-            )}
-            <span className="dash-sr">{name}</span>
+    <div className="dash-flags-box">
+      <ul className="dash-flags">
+        {rows.map(r => (
+          <li className="dash-flag" key={r.country} title={`${countryName(r.country)}: ${fmtInt(r.sessions)}`}>
+            <Flag country={r.country} />
             {fmtInt(r.sessions)}
           </li>
-        )
-      })}
-    </ul>
+        ))}
+      </ul>
+    </div>
   )
 }
 
@@ -53,9 +45,11 @@ function Tile({ label, sub, subCls, window: w }: { label: string; sub: string; s
   return (
     <div className="dash-tile">
       <span className="dash-tile-label">{label}</span>
-      <span className="dash-tile-value">{fmtInt(w.sessions)}</span>
+      <div className="dash-tile-main">
+        <span className="dash-tile-value">{fmtInt(w.sessions)}</span>
+        <Flags rows={w.countries} />
+      </div>
       <span className={subCls ? `dash-tile-sub ${subCls}` : 'dash-tile-sub'}>{sub}</span>
-      <Flags rows={w.countries} />
     </div>
   )
 }
