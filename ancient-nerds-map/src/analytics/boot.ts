@@ -10,7 +10,7 @@
 
 import { onCLS, onINP, onLCP, onTTFB, type Metric } from 'web-vitals'
 
-import { pageType, track } from './index'
+import { MAX_VALUE_CHARS, pageType, track } from './index'
 
 const SCROLL_STEPS = [25, 50, 75, 100] as const
 const CONTENT_PAGES = new Set(['story', 'site', 'paper', 'journal', 'country'])
@@ -35,11 +35,16 @@ export function newDepthSteps(
   return reached
 }
 
-/** Message + file for a js_error event: short, no query strings, no tokens. */
+/** Message + file for a js_error event: short, no query strings, no tokens.
+ *
+ *  The "Uncaught " prefix goes: Chrome puts it in front of every window error,
+ *  WebKit does not, so one React hydration bug filled two rows of the problems
+ *  panel — "Uncaught Error: Minified React error #418" from a laptop and
+ *  "Error: Minified React error #418" from an iPhone (2026-09-17/18). */
 export function errorProps(message: unknown, source?: string): { message: string; source: string } {
-  const text = String(message ?? 'error').replace(/\s+/g, ' ').trim()
+  const text = String(message ?? 'error').replace(/\s+/g, ' ').trim().replace(/^Uncaught /, '')
   const file = (source ?? '').split('?')[0].split('/').pop() ?? ''
-  return { message: text.slice(0, 120), source: file.slice(0, 60) }
+  return { message: text.slice(0, MAX_VALUE_CHARS), source: file.slice(0, 60) }
 }
 
 /** Host of an outbound link, or null when the link stays on this site. */

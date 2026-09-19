@@ -48,7 +48,10 @@ declare global {
   }
 }
 
-const MAX_VALUE_CHARS = 100
+/** Every event value is clipped to this — exported so nothing clips twice to
+ *  a different length (boot.ts used to promise 120 characters of an error
+ *  message and hand over 100, cutting the reason off a ServiceWorker error). */
+export const MAX_VALUE_CHARS = 100
 const QUEUE_LIMIT = 50
 const QUEUE_TTL_MS = 10_000
 const POLL_MS = 500

@@ -110,14 +110,28 @@ function landingHubs(): Plugin {
   }
 }
 
-// Post-build tuning of the HTML entries. On every page: registerSW deferred.
-// On the landing page only: CSS non-render-blocking (the critical CSS is
-// inlined in <style>), and no service-worker INSTALL — the precache is the
-// whole app (139 files, 5.8 MB), which a first visit to the homepage has no
-// business downloading on a phone (owner, 2026-09-10: "The landing page must
-// load super fast — and mobile first!"). The app pages register it; the
-// homepage only asks an already installed worker to update itself, so a
-// visitor with an old worker still gets the one that lets "/" through.
+// Service-worker registration, written here instead of by vite-plugin-pwa
+// (`injectRegister: null`): its registerSW.js calls register() without a
+// catch, so every browser that refuses a worker — private mode, blocked
+// storage, a datacenter crawler — left an unhandled rejection that boot.ts
+// reported as a JavaScript error with triple weight on the founders
+// dashboard, for something that costs the visitor nothing (2026-09-19).
+// Inline and ~130 bytes: no request, and the work waits for 'load' anyway.
+const SW_INSTALL =
+  'if("serviceWorker" in navigator)addEventListener("load",function(){navigator.serviceWorker.register("/sw.js",{scope:"/"}).catch(function(){})})'
+// The four SSR templates serve ~7,000 indexed landing pages; a visitor
+// arriving from Google only updates an already installed worker instead of
+// downloading the whole precache (over 6 MB), which a first visit has
+// no business doing on a phone (owner, 2026-09-10: "The landing page must
+// load super fast — and mobile first!"). getRegistration() needs the catch
+// for the same reason register() does.
+const SW_UPDATE_ONLY =
+  'if("serviceWorker" in navigator)addEventListener("load",function(){navigator.serviceWorker.getRegistration().then(function(r){if(r)r.update()}).catch(function(){})})'
+const SW_UPDATE_ONLY_PAGES = ['index.html', 'site.html', 'story.html', 'research.html', 'articles.html']
+
+// Post-build tuning of the HTML entries: the service-worker snippet on every
+// page, and on the landing page also CSS that does not block rendering (its
+// critical CSS is inlined in <style>).
 function tuneLandingHtml() {
   return {
     name: 'tune-landing-html',
@@ -128,25 +142,13 @@ function tuneLandingHtml() {
         // The dashboard lives on stats.ancientnerds.com, where /sw.js would be
         // proxied to Umami (404) and a precache would run into the gate: no worker.
         if (ctx.filename.endsWith('dashboard.html')) {
-          return html
-            .replace('<script id="vite-plugin-pwa:register-sw" src="/registerSW.js"></script>', '')
-            .replace('<link rel="manifest" href="/manifest.webmanifest">', '')
+          return html.replace('<link rel="manifest" href="/manifest.webmanifest">', '')
         }
-        // Make registerSW non-render-blocking on all pages (it already waits for 'load' internally)
-        html = html.replace(
-          '<script id="vite-plugin-pwa:register-sw" src="/registerSW.js">',
-          '<script id="vite-plugin-pwa:register-sw" src="/registerSW.js" defer>'
-        )
-        // The four SSR templates serve ~7,000 indexed landing pages; a
-        // visitor arriving from Google gets the same update-only snippet as
-        // the homepage (see comment above). The app entries still install.
-        const updateOnly = ['index.html', 'site.html', 'story.html', 'research.html', 'articles.html']
-        if (!updateOnly.some(name => ctx.filename.endsWith(name))) return html
-        html = html.replace(
-          '<script id="vite-plugin-pwa:register-sw" src="/registerSW.js" defer></script>',
-          '<script>if("serviceWorker" in navigator)addEventListener("load",function(){navigator.serviceWorker.getRegistration().then(function(r){if(r)r.update()})})</script>'
-        )
-        if (!ctx.filename.endsWith('index.html')) return html
+        const children = SW_UPDATE_ONLY_PAGES.some(name => ctx.filename.endsWith(name))
+          ? SW_UPDATE_ONLY
+          : SW_INSTALL
+        const tags = [{ tag: 'script', children, injectTo: 'head' as const }]
+        if (!ctx.filename.endsWith('index.html')) return { html, tags }
         // Make landing CSS non-render-blocking (critical CSS is inlined)
         html = html.replace(
           /<link\b([^>]*)href="(\/assets\/landing-[^"]+\.css)"([^>]*)>/g,
@@ -155,7 +157,7 @@ function tuneLandingHtml() {
             return `<link rel="stylesheet" href="${href}" media="print" onload="this.media='all'" />\n    <noscript><link rel="stylesheet" href="${href}" /></noscript>`
           }
         )
-        return html
+        return { html, tags }
       }
     }
   }
@@ -247,6 +249,8 @@ export default defineConfig(({ isSsrBuild, mode }) => ({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
+      // tuneLandingHtml() writes the registration itself — see SW_INSTALL.
+      injectRegister: null,
       includeAssets: ['favicon.svg'],
       manifest: {
         name: 'Ancient Nerds Research Platform',

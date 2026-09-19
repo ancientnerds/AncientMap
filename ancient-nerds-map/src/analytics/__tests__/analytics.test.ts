@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { errorProps, newDepthSteps, outboundHost } from '../boot'
-import { _queuedForTests, _resetForTests, cleanProps, pageType, searchTerm, track } from '../index'
+import { _queuedForTests, _resetForTests, cleanProps, MAX_VALUE_CHARS, pageType, searchTerm, track } from '../index'
 
 // vitest runs in node: no DOM, so the tests install a minimal fake `window`.
 const g = globalThis as unknown as { window?: unknown }
@@ -99,10 +99,20 @@ describe('boot helpers', () => {
 
   it('error props are short and carry only the file name', () => {
     const props = errorProps('  Uncaught   TypeError: x is not a function ' + 'y'.repeat(200), 'https://ancientnerds.com/assets/App-abc123.js?token=secret')
-    expect(props.message.length).toBe(120)
-    expect(props.message.startsWith('Uncaught TypeError: x is not a function')).toBe(true)
+    // Clipped to the tracker's own limit, not to a longer one it then cuts again.
+    expect(props.message.length).toBe(MAX_VALUE_CHARS)
+    expect(props.message.startsWith('TypeError: x is not a function')).toBe(true)
     expect(props.source).toBe('App-abc123.js')
     expect(errorProps(undefined, undefined)).toEqual({ message: 'error', source: '' })
+  })
+
+  it('drops the Uncaught prefix so one defect is one row', () => {
+    // Chrome writes it, WebKit does not — the same React hydration error filled
+    // two rows of the problems panel on 2026-09-17/18.
+    const chrome = errorProps('Uncaught Error: Minified React error #418; visit https://x', 'client.js')
+    const webkit = errorProps('Error: Minified React error #418; visit https://x', 'client.js')
+    expect(chrome.message).toBe(webkit.message)
+    expect(chrome.message.startsWith('Error: Minified React error #418')).toBe(true)
   })
 
   it('outbound host ignores own domain, subdomains, relative and non-http links', () => {
