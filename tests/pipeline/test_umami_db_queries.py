@@ -63,6 +63,9 @@ def test_problem_queries_read_the_events_the_frontend_actually_sends():
     assert "percentile_cont(0.75)" in u.SQL_VITALS
     assert "'js_error'" in u.SQL_ERRORS
     assert "'message'" in u.SQL_ERRORS and "'page'" in u.SQL_ERRORS
+    # How many visitors it reached, not only how often it fired: boot.ts sends
+    # up to three per page view, so the event count alone overstates the damage.
+    assert "count(DISTINCT session_id) AS sessions" in u.SQL_ERRORS
 
 
 def test_import_without_password_is_fine_and_engine_is_lazy(monkeypatch):

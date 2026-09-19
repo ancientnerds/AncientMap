@@ -17,6 +17,9 @@ The rules are the ones locked in the plan (2026-09-17):
 * human = at least one interaction event or at least two page views;
   everything else is "unconfirmed" (a stealth scraper or a bouncing human —
   cookieless data cannot tell them apart, so both counts are shown).
+  An interaction has to be the visitor's own act: ``site_open`` fires by
+  itself on a server-rendered site page and does not count there (2026-09-19,
+  it made thirteen of sixty-six "human" sessions human by page load alone).
 * session type = the first match in the order Forscher → Entdecker → Sucher →
   Leser → Sonstige.
 """
@@ -41,6 +44,10 @@ INTERACTIONS = {
     "feedback",
     "scroll_depth",
 }
+#: The `context` a `site_open` carries when the page opened the site by itself
+#: instead of a visitor picking it — SitePopup's effect sends the page type,
+#: and on the server-rendered detail page that is "site" (SitePopup.tsx).
+AUTO_SITE_OPEN_CONTEXT = "site"
 #: Custom events that appear as steps in a journey (page types fill the rest).
 JOURNEY_EVENTS = {
     "site_open",
@@ -122,10 +129,15 @@ class Session:
     pages: int = 0
     events: Counter[str] = field(default_factory=Counter)
     depth: int = 0  # deepest scroll_depth seen, percent
+    #: site_open events the page fired on its own; they stay in `events` (the
+    #: session type and the journey want them) but prove nothing about a human.
+    auto_opens: int = 0
 
     @property
     def human(self) -> bool:
-        return self.pages >= 2 or any(self.events[n] for n in INTERACTIONS)
+        if self.pages >= 2:
+            return True
+        return sum(self.events[n] for n in INTERACTIONS) > self.auto_opens
 
     @property
     def kind(self) -> str:
@@ -168,6 +180,8 @@ def sessions_from_rows(rows: list[dict[str, Any]]) -> list[Session]:
         else:
             name = r["event_name"] or "event"
             s.events[name] += 1
+            if name == "site_open" and data.get("context") == AUTO_SITE_OPEN_CONTEXT:
+                s.auto_opens += 1
             if name == "scroll_depth":
                 s.depth = max(s.depth, int(float(data.get("depth", 0) or 0)))
             if name in JOURNEY_EVENTS:
@@ -194,6 +208,10 @@ def session_type_shares(sessions: list[Session]) -> dict[str, int]:
 #: Google's "good" thresholds in milliseconds — above them a page is slow for
 #: three quarters of its visitors. CLS has no entry: it is a share, not a time.
 VITAL_LIMITS = {"LCP": 2500, "INP": 200}
+#: A 75th percentile out of three measurements is one visitor's phone, not a
+#: percentile. Below this many samples a page stays out of the list (radar
+#: showed "p75 4717 ms" from three loads on 2026-09-19).
+VITAL_MIN_SAMPLES = 10
 #: One dead hit is a typed typo; two are a link somebody published.
 BROKEN_LINK_MIN = 2
 #: Below a quarter of the page the visitor read the headline and left.
@@ -214,9 +232,15 @@ def problems(
     """Where the platform fails its visitors, worst first.
 
     Five kinds, each with a score that makes them comparable: a JavaScript
-    error counts triple (it breaks the page for everyone who hits it), a dead
-    link double (someone is sending people into the void), a slow page as
-    often as it was measured, a bounce and an empty search once.
+    error counts triple per *visitor it reached* (it breaks the page for
+    everyone who hits it), a dead link double, a slow page as often as it was
+    measured, a bounce and an empty search once.
+
+    Everything counts people, not events. Scoring a JavaScript error by its
+    event count made one visitor who reloads a broken page three times look
+    like nine incidents and outweigh everything else on the panel
+    (2026-09-19); boot.ts sends up to three errors per page view, so the
+    inflation is built in.
 
     `not_found`, `vitals` and `errors` are the rows of SQL_NOT_FOUND,
     SQL_VITALS and SQL_ERRORS; the bounces and empty searches come from the
@@ -227,17 +251,20 @@ def problems(
     """
     found: list[dict[str, Any]] = []
     for row in errors:
+        hit = row["sessions"]
         found.append(
             {
                 "kind": "js_error",
                 "label": row["message"],
-                "score": row["n"] * 3,
-                "detail": f"{row['n']}× on {row['page']}",
+                "score": hit * 3,
+                "detail": f"{hit} {'visitor' if hit == 1 else 'visitors'}, {row['n']}× on {row['page']}",
             }
         )
     for row in vitals:
         limit_ms = VITAL_LIMITS.get(row["name"])
         if limit_ms is None or row["p75"] <= limit_ms:
+            continue
+        if row["samples"] < VITAL_MIN_SAMPLES:
             continue
         found.append(
             {
@@ -265,6 +292,14 @@ def problems(
     empty_searches = 0
     for s in sessions:
         empty_searches += s.events["search_empty"]
+        # Only sessions we can tell from a crawler. A one-page visit without a
+        # scroll and without an act of its own is exactly the "unconfirmed"
+        # bucket the pulse already shows — listing it here as well turned
+        # twenty-two headless story fetches into the second-worst problem on
+        # the panel (2026-09-19). What is left is a visitor who did something
+        # and still left the page after the headline.
+        if not s.human:
+            continue
         page = next((p for p in s.steps if p in SHALLOW_PAGES), None)
         if page and s.pages == 1 and s.depth < SHALLOW_DEPTH:
             bounces[page] += 1
@@ -274,7 +309,7 @@ def problems(
                 "kind": "shallow_exit",
                 "label": page,
                 "score": n,
-                "detail": f"{n} sessions with one page, under {SHALLOW_DEPTH} % scrolled",
+                "detail": f"{n} visitors read one page, under {SHALLOW_DEPTH} % scrolled",
             }
         )
     # The term, not just the count: "atlantis finds nothing" is a content

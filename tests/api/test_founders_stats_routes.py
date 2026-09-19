@@ -205,6 +205,17 @@ def test_sources_carry_the_family(monkeypatch):
     ]
 
 
+def _human_bounce_rows(t: datetime) -> list[dict]:
+    """A visitor who shared the story and still left above the fold. Session b
+    of _session_rows() is a bare one-page fetch and no longer counts as a
+    bounce — nothing tells it from a crawler."""
+    common = {"referrer_domain": "google.com", "utm_source": None, "country": "DE", "device": "mobile"}  # fmt: skip
+    return [
+        {"session_id": "c", "created_at": t, "event_type": 1, "event_name": None, "url_path": "/news-archive/x-1", "data": None, **common},
+        {"session_id": "c", "created_at": t, "event_type": 2, "event_name": "share", "url_path": "/news-archive/x-1", "data": {"target": "x-1"}, **common},
+    ]  # fmt: skip
+
+
 def _session_rows(t: datetime) -> list[dict]:
     """Two sessions: one story reader who opened a site, one single-page bounce."""
     common = {"referrer_domain": "google.com", "utm_source": None, "country": "DE", "device": "mobile"}  # fmt: skip
@@ -228,10 +239,14 @@ def test_journeys_returns_the_chains_of_the_requested_window(monkeypatch):
 def test_problems_join_the_three_problem_queries_with_the_sessions(monkeypatch):
     t = datetime(2026, 9, 17, 12, 0, tzinfo=UTC)
     fetch = Fetch(
-        **{"ORDER BY e.session_id": _session_rows(t)},
+        **{"ORDER BY e.session_id": _session_rows(t) + _human_bounce_rows(t)},
         **{"'not_found'": [{"path": "/old", "referrer": "example.org", "n": 4}]},
-        **{"'vital'": [{"page": "story", "name": "LCP", "p75": 4100.0, "samples": 3}]},
-        **{"'js_error'": [{"message": "x is not a function", "page": "globe", "n": 12}]},
+        **{"'vital'": [{"page": "story", "name": "LCP", "p75": 4100.0, "samples": 12}]},
+        **{
+            "'js_error'": [
+                {"message": "x is not a function", "page": "globe", "n": 12, "sessions": 5}
+            ]
+        },  # fmt: skip
         # The content query also feeds the ranking: a search that found nothing
         # is only actionable with the word attached.
         **{
@@ -257,11 +272,11 @@ def test_problems_join_the_three_problem_queries_with_the_sessions(monkeypatch):
     monkeypatch.setattr(fr, "fetch", fetch)
     out = asyncio.run(fr.problems(days=7, _session=SESSION))
     assert [p["kind"] for p in out["problems"]] == [
-        "js_error",  # 12 hits × 3
+        "js_error",  # 5 visitors reached × 3
+        "slow_page",  # 12 samples
         "broken_link",  # 4 × 2
         "empty_search",  # "atlantis", 5 searches
-        "slow_page",  # 3 samples
-        "shallow_exit",  # session b read one story and left
+        "shallow_exit",  # session c shared the story and left after the headline
     ]
     dead = next(p for p in out["problems"] if p["kind"] == "empty_search")
     assert dead["label"] == "atlantis"  # the term, not just a count

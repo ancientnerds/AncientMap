@@ -102,7 +102,7 @@ def _digest_fetch(**overrides: Any) -> Fetch:
             feedback_row("Koordinaten stimmen nicht"),
             feedback_row(None, url_path="/lyra.html"),
         ],
-        SQL_ERRORS: [{"message": "x is not a function", "page": "globe", "n": 12}],
+        SQL_ERRORS: [{"message": "x is not a function", "page": "globe", "n": 12, "sessions": 5}],
     }
     rows.update(overrides)
     return Fetch(rows)
@@ -111,21 +111,25 @@ def _digest_fetch(**overrides: Any) -> Fetch:
 # ---- Fehlerspitze ---------------------------------------------------------
 
 
-def test_error_spike_message_names_page_and_count():
+def test_error_spike_message_names_page_and_affected_visitors():
     msg = aa.error_spike_message(
-        [{"message": "x is not a function", "page": "globe", "n": 14}], threshold=10
+        [{"message": "x is not a function", "page": "globe", "n": 14, "sessions": 4}], threshold=3
     )
     assert msg is not None
-    assert "14" in msg and "globe" in msg and "x is not a function" in msg
+    assert "4 visitors" in msg and "14" in msg and "globe" in msg
+    assert "x is not a function" in msg
 
 
 def test_no_message_below_threshold():
-    assert aa.error_spike_message([{"message": "m", "page": "p", "n": 3}], threshold=10) is None
-    assert aa.error_spike_message([], threshold=10) is None
+    """One browser reloading a broken page four times makes twelve events and
+    one session — the threshold counts sessions so that stays quiet."""
+    loud = [{"message": "m", "page": "p", "n": 12, "sessions": 1}]
+    assert aa.error_spike_message(loud, threshold=3) is None
+    assert aa.error_spike_message([], threshold=3) is None
 
 
 def test_check_hourly_posts_the_spike_for_the_last_hour(webhook, posted, monkeypatch):
-    fetch = Fetch({SQL_ERRORS: [{"message": "boom", "page": "globe", "n": 11}]})
+    fetch = Fetch({SQL_ERRORS: [{"message": "boom", "page": "globe", "n": 11, "sessions": 4}]})
     monkeypatch.setattr(aa, "fetch", fetch)
     assert aa.check_hourly() == 1
     assert len(posted) == 1 and "boom" in posted[0]["content"]
@@ -134,7 +138,7 @@ def test_check_hourly_posts_the_spike_for_the_last_hour(webhook, posted, monkeyp
 
 
 def test_check_hourly_stays_quiet_below_the_threshold(webhook, posted, monkeypatch):
-    rows = [{"message": "b", "page": "g", "n": 2}]
+    rows = [{"message": "b", "page": "g", "n": 2, "sessions": 2}]
     monkeypatch.setattr(aa, "fetch", Fetch({SQL_ERRORS: rows}))
     assert aa.check_hourly() == 0
     assert posted == []

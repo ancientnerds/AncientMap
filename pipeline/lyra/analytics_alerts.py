@@ -38,10 +38,12 @@ from pipeline.utils.notify import DISCORD_LIMIT, split_message
 
 logger = logging.getLogger(__name__)
 
-#: So viele gleiche js_error-Ereignisse in einer Stunde sind eine Spitze. Ein
-#: einzelner kaputter Browser erzeugt Handvoll-Zahlen; 10 heisst, es trifft
-#: mehrere Besucher.
-ERROR_THRESHOLD = 10
+#: So viele *verschiedene Sitzungen* mit demselben js_error in einer Stunde
+#: sind eine Spitze. Vorher zählte die Schwelle Ereignisse und stand auf 10 —
+#: bei bis zu drei Fehlern pro Seitenaufruf reichten vier Neuladungen eines
+#: einzigen kaputten Browsers für den Alarm (19.09.2026). Drei Sitzungen sind
+#: kein Zufall mehr.
+ERROR_THRESHOLD = 3
 
 
 WEEK = timedelta(days=7)
@@ -84,19 +86,23 @@ def _post(payload: dict[str, Any]) -> bool:
 
 
 def error_spike_message(rows: list[dict[str, Any]], threshold: int = ERROR_THRESHOLD) -> str | None:
-    """Discord-Text für alle Fehlergruppen ab ``threshold`` Treffern, sonst None.
+    """Discord-Text für alle Fehlergruppen ab ``threshold`` betroffenen
+    Sitzungen, sonst None.
 
-    ``rows`` sind Zeilen der js_error-Abfrage: message, page, n.
+    ``rows`` sind Zeilen der js_error-Abfrage: message, page, n, sessions.
     """
     spikes = sorted(
-        (r for r in rows if int(r["n"] or 0) >= threshold),
-        key=lambda r: int(r["n"] or 0),
+        (r for r in rows if int(r["sessions"] or 0) >= threshold),
+        key=lambda r: int(r["sessions"] or 0),
         reverse=True,
     )
     if not spikes:
         return None
     lines = ["**JS errors are piling up** (last hour)"]
-    lines += [f"- {r['n']}× on {r['page']}: `{r['message']}`" for r in spikes[:5]]
+    lines += [
+        f"- {r['sessions']} visitors, {r['n']}× on {r['page']}: `{r['message']}`"
+        for r in spikes[:5]
+    ]
     return "\n".join(lines)
 
 

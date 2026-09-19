@@ -57,8 +57,8 @@ export function Problems({ state }: { state: Loaded<ProblemsData> }) {
             </ol>
           )}
           <p className="dash-note">
-            The score makes the kinds comparable: a JS error counts triple, a dead link double, a slow page once
-            per measurement.
+            Everything counts people, not events. The score makes the kinds comparable: a JS error counts triple
+            per visitor it reached, a dead link double, a slow page once per measurement.
           </p>
         </>
       )}

@@ -202,24 +202,30 @@ LIMIT 60
 """
 
 #: Uncaught JavaScript errors, grouped by message and page (src/analytics/boot.ts
-#: already clips the message to 120 characters and the file name to 60).
+#: clips the message to the tracker's 100 characters and the file name to 60).
+#: Both counts travel: ``n`` is how often it fired, ``sessions`` how many
+#: visitors it reached. One visitor reloading a broken page three times makes
+#: nine events (boot.ts sends at most three per page view) and one session —
+#: only the second number says how big the damage is.
 SQL_ERRORS = """
 WITH ev AS (
     SELECT
         e.event_id,
+        e.session_id,
         max(d.string_value) FILTER (WHERE d.data_key = 'message') AS message,
         max(d.string_value) FILTER (WHERE d.data_key = 'page')    AS page
     FROM website_event e
     JOIN event_data d ON d.website_event_id = e.event_id
     WHERE e.website_id = :website_id AND e.event_name = 'js_error'
       AND e.created_at >= :since AND e.created_at < :until
-    GROUP BY e.event_id
+    GROUP BY e.event_id, e.session_id
 )
-SELECT message, coalesce(page, 'unbekannt') AS page, count(*) AS n
+SELECT message, coalesce(page, 'unknown') AS page, count(*) AS n,
+       count(DISTINCT session_id) AS sessions
 FROM ev
 WHERE message IS NOT NULL AND message <> ''
 GROUP BY 1, 2
-ORDER BY n DESC
+ORDER BY sessions DESC, n DESC
 LIMIT 30
 """
 
