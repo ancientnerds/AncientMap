@@ -22,7 +22,7 @@ import type { DetailLevel } from '../../config/globeConstants'
  * Usage:
  * ```typescript
  * const refs = useGlobeRefs()
- * // Pass refs to hooks: useGlobeScene(refs), useGlobeAnimation(refs), etc.
+ * // Pass refs to hooks: useGlobeAnimation(refs), useGeoLabels(refs), etc.
  * ```
  */
 export function useGlobeRefs(): GlobeRefs {

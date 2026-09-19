@@ -40,8 +40,6 @@ export { useLayersReady } from './useLayersReady'
 export { useTooltipHandlers } from './useTooltipHandlers'
 
 // Complex hooks (Group 4)
-export { useGlobeScene } from './useGlobeScene'
-export type { SceneRefs } from './useGlobeScene'
 export { useEmpireBorders } from './useEmpireBorders'
 export { useWindowDragResize, type WindowDragResizeOptions, type WindowDragResizeHandlers } from './useWindowDragResize'
 export { useGlobeAnimation } from './useGlobeAnimation'
