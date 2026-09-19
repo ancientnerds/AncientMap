@@ -233,6 +233,7 @@ def test_problems_rank_errors_slow_pages_dead_links_bounces_and_empty_searches()
     assert "example.org" in by_kind["broken_link"]["detail"]
     # a and b; c scrolled to 25 %, and the bare fetch is not a visitor we know.
     assert by_kind["shallow_exit"]["score"] == 2
+    assert by_kind["shallow_exit"]["detail"].startswith("2 visitors read one page")
     assert by_kind["empty_search"]["score"] == 1
     # Worst first, and every entry carries the four keys the panel renders.
     assert [p["score"] for p in out] == sorted((p["score"] for p in out), reverse=True)
@@ -296,6 +297,8 @@ def test_shallow_exit_counts_only_visitors_we_can_tell_from_a_crawler():
     out = fs.problems(fs.sessions_from_rows(rows), not_found=[], vitals=[], errors=[])
     exits = {p["label"]: p["score"] for p in out if p["kind"] == "shallow_exit"}
     assert exits == {"story": 1, "site": 1}
+    # Singular where it is one — the panel prints these details verbatim.
+    assert all("1 visitor read" in p["detail"] for p in out if p["kind"] == "shallow_exit")
 
 
 def test_problems_are_capped():

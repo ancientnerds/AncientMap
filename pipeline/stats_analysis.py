@@ -221,6 +221,11 @@ SHALLOW_DEPTH = 25
 SHALLOW_PAGES = {"story", "site"}
 
 
+def _visitors(n: int) -> str:
+    """ "1 visitor" / "4 visitors" — the panel prints these details verbatim."""
+    return f"{n} visitor" if n == 1 else f"{n} visitors"
+
+
 def problems(
     sessions: list[Session],
     not_found: list[dict[str, Any]],
@@ -257,7 +262,7 @@ def problems(
                 "kind": "js_error",
                 "label": row["message"],
                 "score": hit * 3,
-                "detail": f"{hit} {'visitor' if hit == 1 else 'visitors'}, {row['n']}× on {row['page']}",
+                "detail": f"{_visitors(hit)}, {row['n']}× on {row['page']}",
             }
         )
     for row in vitals:
@@ -309,7 +314,7 @@ def problems(
                 "kind": "shallow_exit",
                 "label": page,
                 "score": n,
-                "detail": f"{n} visitors read one page, under {SHALLOW_DEPTH} % scrolled",
+                "detail": f"{_visitors(n)} read one page, under {SHALLOW_DEPTH} % scrolled",
             }
         )
     # The term, not just the count: "atlantis finds nothing" is a content
