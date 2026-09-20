@@ -1967,3 +1967,24 @@ What the tail does still establish, and it is worth having:
 * The pass count rose by exactly 4 between the two runs (2093 -> 2097), which is the size of the
   `tests/remediation/` files a live lane was writing at the time. That is consistent with the transient
   failures, but it remains a **hypothesis, not a finding**: the mechanism was never observed directly.
+
+## The exit-0 family, now with its mechanism measured: the task log held 7 bytes
+
+Same run, two artefacts, and the difference is the whole lesson:
+
+| artefact | size | content |
+|---|---|---|
+| `.pi/tasks/.../b46d66773.output` (what `bg_run` kept) | **7 bytes, 1 line** | `EXIT=0` |
+| `output/remediation/logs/gate_after_0019.txt` (the redirect) | 21,221 bytes, 257 lines | the full pytest output, `= 2097 passed, 3 skipped, 57 deselected, 32 warnings =`, 0 FAILED, 0 ERROR |
+
+So the bounded log did not merely truncate the run - it contained **nothing about the run at all**.
+`EXIT=0` was the entire claim, and on the earlier gate run (`b9e48fab7`) that exact artefact shape
+accompanied a verdict reading `2 failed`. Two conclusions, both now measured rather than argued:
+
+1. **A task log reading `EXIT=0` proves nothing about pass/fail, and may not even be evidence that the
+   suite ran.** The verdict must come from a captured artefact. This is why the gate runs redirect to
+   `output/remediation/logs/`.
+2. **The redirect is not an optimisation, it is the instrument.** Where a fleet lane's deliverable is
+   the output rather than a file it wrote, that output does not survive; the lanes in this remediation
+   are therefore required to write deliverables to disk, and are audited from those files - never from
+   a task-log preview.
