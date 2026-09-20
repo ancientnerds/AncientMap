@@ -577,6 +577,113 @@ tool call is a prompt to diagnose the CONTENT of the failure, not merely to wait
 here would have produced a lane that spent its whole budget re-asking a rate limiter for
 permission it had already been denied, while its own cache sat full of usable answers.
 
+## Wave 2: T10 done, overwriters locked down, and the gold standard measured after all
+
+All three lanes ran on `deepseek-v4.1-flash`, none wrote to production, and none could collide with
+the running T07 sweep. Gates after all of it: **1954 passed, 3 skipped, 57 deselected** in 144 s.
+
+### The GOLD lane: the deliverable said "2 of 36" and had actually finished 36 of 36
+
+The report's own header read *"Status: partial run. 2 of 36 sampled sites were completed before the
+run was cut short"* and pointed at a §"Not measured" section. **Both statements were false.**
+`sites.json` held `sites_completed = 36` with 36 records, every record carried **15 field verdicts**
+(540 = 36 x 15: 449 CORRECT, 40 WRONG, 51 UNVERIFIABLE), and no "Not measured" section existed.
+
+The header had been written early and never re-rendered. This is worth recording as a failure mode
+of its own: **the prose lagged the data, and the prose is what a reader believes.** Had the header
+been trusted, a finished Phase-0 measurement would have been re-run from scratch.
+
+What genuinely did not happen was the **comparison**, so it was computed here, in
+`output/remediation/gold_standard/compare_fnr.py`.
+
+### The false-negative rate, and why it had to be field-level
+
+A site-level comparison would have measured nothing and flattered the census: **T10 alone flags
+4,010 of the 5,004 sites** and **T09 flags all 5,004**, so "some check mentioned this site" is true of
+almost everything. A blinded error counts as caught only when a finding names the **same site and the
+same field**.
+
+    FALSE-NEGATIVE RATE = 24/40 = 60.0 %     95 % Clopper-Pearson [43.3 %, 75.1 %]
+    weighted (N_h/n_h)  = 62.4 %
+
+By field: hero_image 8/8 caught and gallery_images 3/3 caught - all 11 image-tier errors were found.
+The misses are description 8, card_description 5, period_start 4, site_type 4, scope 3.
+
+**The decomposition is the usable part of that number**, and it sums exactly to 24:
+
+- **3 - no check exists.** Every one is the E3 scope window (Midford Castle, a folly of 1775;
+  Ksar el Barka, 1690). Nothing in the ten checks examines the cutoff, and it is a pure comparison of
+  stored values needing no network. The cheapest real win available.
+- **13 - a check exists and under-fires.** Nine are dates in prose, T03's own target, where it caught
+  one: Ahu Tongariki ("constructed between 1-500 AD" against a source saying 1250-1500), The Gop
+  ("5th-4th millennium BC" for a cairn starting c. 4000 BC), The Merry Maidens (self-contradictory in
+  a single sentence), Ocriticum (a century out), Font dels Coms (a *fabricated* -3500). Four are
+  `site_type`, where **T04 ran to completion and flagged 0 of 5,004 sites** while a 36-site sample
+  holds four wrong types. A check that flags nothing while its targets sit in the sample is
+  under-firing, not clean.
+- **8 - beyond a deterministic census.** Wrong subject (a description paraphrasing the article about
+  the god Dedun), fabricated attribution, measurements inflated against two sources, an SSSI area
+  given as the site's, a misspelling. These need the semantic/VLM pass; no string check decides them.
+
+So "60 % false negatives" does **not** license "the census is untrustworthy". It says the census is
+strong exactly where it was built to be (URL shape, image dimensions, hero/gallery triage, citation
+integrity) and has three specific gaps, two of which are mechanically closable.
+
+### A bug in my own comparison, caught because the number was impossible
+
+The first run printed the Clopper-Pearson interval as **`[100.0 %, 0.0 %]`**. An interval outside
+[0,1] that excludes its own point estimate cannot be a result, so it was treated as a defect in the
+checker rather than reported. Both bisection branches had their monotonicity inverted - `P(X >= k|p)`
+*increases* in p, `P(X <= k|p)` *decreases* - so the interval had collapsed. Fixed, and the function
+now asserts that the interval contains `k/n` and lies in [0,1], which makes the same class of bug
+impossible to emit again. Corrected interval: [43.3 %, 75.1 %] around 60.0 %.
+
+The general rule, and it has now paid twice in this session: **a number that cannot be true is a bug
+in the instrument, not a finding about the world.**
+
+### OVERWRITER: the Phase-2 question answered, and one blast radius avoided by measurement
+
+The decisive answer for Phase 2: **`wiki_images.is_hero` has no restart writer at all** - only API
+routes (`api/routes/sites.py:1867`, `api/routes/wiki_images.py:127,140,153,236,246`) and manual
+scripts; `api/services/snapshots.py:660`, `api/routes/public_v1.py:1727` and
+`pipeline/video/shorts_export.py:252` only read it. Independently re-verified here by grepping every
+assignment in `api/`, `pipeline/` and `scripts/`. **The hero moves of Phase 2 therefore survive a
+restart**, which was the precondition for making them at all.
+
+On `name_normalized` the lane did the thing this audit keeps asking for: it **measured the unscoped
+version** - 80,083 rows across 28 external sources disagree, `topostext` 8,046 of 8,068 - and scoped
+the repair to the curated sources because rewriting the rest would have been the §10.2
+blast-radius mistake in a new place. It repaired 2 rows. The statement compares against the producer
+rather than against itself, which is what made the old guard blind to a well-formed-but-stale key.
+
+`restore_snapshot()` now carries `raw_data` in both branches (10.3), verified against all 28,322
+snapshot rows carrying the key, so it cannot clear a column for a missing key. Teeth: 6 tests red
+**before** the change on the HEAD blobs, 14 green after.
+
+### T10: two real bugs found by its own tests, and a harness gap it refused to paper over
+
+Both bugs were found by running, not by reading: an **inverted P polarity** (in-category rows went to
+tier C, outside to D - backwards), and the parent-category hop asking **normalised** Commons titles
+instead of raw ones (`missing: 40933` vs `missing: 351` after the fix; measured live 26/26 raw against
+5/26 normalised). Signal D was also firing on generic tokens ("from", "roman", "temple") in 18,670
+rows and was cut to the plan's 4,396-token size by document frequency.
+
+It then reported a flaw in the **harness**: with `run()` sabotaged to `return []`, `run.py` reports
+`errors 0 / flagged 0 / 0 findings` - the runner cannot distinguish "correctly found nothing" from
+"the implementation is empty". It refused to fix that because `run.py`/`model.py` were out of scope,
+and reported it instead. That is the right call, and it is a **systemic** limitation: for all ten
+checks, `census.jsonl` alone cannot prove a check ever ran. The mutation teeth in each check's test
+file are the only proof, which is why every one of them was mutation-proven in this audit.
+
+### T07: the sweep ended at 22:44 and the watcher is now re-probing a 503-ing host
+
+The original sweep process is gone and its log stopped at **22:44:40**, so `run_t07` (written 22:44,
+5,071 findings over 2,806 sites) is a **complete** T07 run rather than an interrupted one. The
+replacement watcher is alive and re-probing the non-final records for the same reason the cache is
+resumable at all. Worth flagging for the audit that follows: `megalithic.co.uk` is answering **503**
+in bulk right now, and a mass of transient 5xx from one host is a property of that host, **not** a
+statement that the database's links are broken. T07 stays uncommitted until that run is audited.
+
 ### Safety check after the probe
 
 The real backups directory was intact: `2026-09-19_pre-audit` and `2026-09-20_remediation` both
