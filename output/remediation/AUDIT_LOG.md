@@ -417,6 +417,27 @@ output/remediation/AUDIT_LOG.md
 and the bulk paths (`cache/`, `census.jsonl`, `t07_sweep.log`, `run_t09/`) all still classified as
 ignored. The evidence trail now lives in version control.
 
+**But that alone is not offsite, and saying otherwise would be the exact kind of claim this
+project keeps catching.** The git repository is also on this one machine, and pushing is a stop
+case for me - a push to `main` is a live deploy, and that decision is Martin's. Version control
+protects the log against my own mistakes, not against losing the workstation.
+
+So the log is now also on the VPS, which is a genuinely different machine:
+
+```bash
+ssh ancientnerds "mkdir -p /var/www/ancientnerds/backups/remediation-evidence"
+scp output/remediation/AUDIT_LOG.md ancientnerds:/var/www/ancientnerds/backups/remediation-evidence/
+```
+
+Verified by matching sha256 on both sides (`7e4b3d6d3cdd1e639facb4c1bdb94d16626ef015a10105027587e657fd1a75b1`),
+and the file was scanned for credential-shaped content before it left the machine - the only
+matches were prose (the word "password" inside a sentence about sudo, "token" inside
+"4,396-token"). Two machines now hold the evidence trail; the same copy must be repeated as
+each wave adds to it. The remaining gap is a **push**, which only Martin can decide.
+
+The db backup cron cannot do this itself: it runs *on* the VPS, so it can only copy files that
+are already there. Evidence that lives on the workstation needs the workstation to send it.
+
 ### The five "unformatted" worker files block nothing (measured, not assumed)
 
 pi-lens reports `ruff format` debt on five files. Checked what actually gates the project rather
