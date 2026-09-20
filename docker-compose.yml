@@ -66,6 +66,11 @@ services:
         max-file: "3"
     environment:
       QDRANT__TELEMETRY_DISABLED: "true"
+      # Qdrant logs every HTTP request at INFO. Our own collection polling made
+      # that 26.6M lines and 4.5 GB in logs/ancient_nerds_qdrant.log by
+      # 2026-09-19 — the single biggest file on the box. Warnings and errors
+      # still arrive; the per-request access log does not.
+      QDRANT__LOG_LEVEL: "WARN"
     ports:
       - "127.0.0.1:${QDRANT_PORT:-6333}:6333"
     ulimits:
