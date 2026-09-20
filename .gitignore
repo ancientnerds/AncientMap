@@ -218,3 +218,6 @@ card-mockup.html
 
 # Site-shorts / paper-video working assets (local renders, never served)
 video-assets/
+
+# Vitest cache (created by vitest run)
+.vitest/
