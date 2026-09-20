@@ -2113,3 +2113,51 @@ Also re-proved after the fact: `scripts/merge_rewrites.py` and its fails-closed 
 uncommitted `ruff format` pass in the tree (quote style plus three line-wraps, no semantic change).
 Per the standing rule a formatter invalidates prior verification, so it was re-proved rather than
 committed on inspection: ruff format --check clean, ruff check clean, mypy clean, 13 tests passed.
+
+## The credential finding, measured by the real tool - and why I did NOT allowlist it
+
+The DEPLOY lens predicted three keys from a static read. The actual scanner disagrees, which is the
+point of running it: `gitleaks git . --config .gitleaks.toml --gitleaks-ignore-path .gitleaksignore`
+scanned **3,468 commits / 4.89 GB in 2m44s** and reported **7 findings, not 3**, every one of them
+`generic-api-key`, and every one of them in `output/remediation/phase3_pilot/evidence/`:
+
+| file | line | what it is |
+|---|---|---|
+| `Didnauri%2Fmapcarta.txt` | 40 | Mapbox public token (`pk.eyJ...`) |
+| `Petroglyph%2Fasp_guess2.txt` | 120 | `B522BF96E81C10...` |
+| `Petroglyph%2Fak_state_parks.txt` | 120 | `B522BF96E81C10...` |
+| `Petroglyph%2Fak_state_parks_wrang.txt` | 81 | `B522BF96E81C10...` |
+| `Satsurblia%2Fnationalparks.txt` | 853 | `6CjuR6EIMWDdRq...` |
+| `Satsurblia%2Fnationalparks.txt` | 1022 | `6CjuR6EIMWDdRq...` |
+| `Satsurblia%2Fgeorgia_to.txt` | 1451 | Carto key (`cb1_...`) |
+
+Two lessons from the difference. First, the Google Maps key the lens highlighted did **not** fire - a
+careful static read is still not the tool. Second, three of the seven hits are a key neither the lens
+nor my own grep had named, because I searched for the patterns I expected rather than letting the
+scanner tell me. And every one of the seven comes from a single commit: **`b2dc450e9af7fed5d1ff1cc46bfb2dcb6bc546fc`**,
+my own G0 commit that staged the pilot tree - so this is my mistake, in one place, and still unpushed.
+
+**I did not add `.gitleaksignore` entries, and that is the substantive decision.** The file states its
+own rule in its header: *"Format: commit:file:rule:line - never add an entry for a live credential."*
+These seven are third-party **live** keys in verbatim public HTML. We cannot rotate them because they
+are not ours; they are also not expired and not dead, unlike every existing entry in that file, which
+records a rotated or expired key. Allowlisting them would turn the gate green by teaching it to ignore
+live credentials - the one thing that file forbids, and one of the stop conditions: a check that is
+green only because it was weakened.
+
+**The remedy its own rule implies is removal, not exemption.** Plan, to execute only when the fleet is
+quiescent and after a `git bundle` backup, because a live VLM lane is still reading that tree:
+
+1. Stop versioning raw third-party response bodies at all. `fetch_log.jsonl` keeps url plus sha256 plus
+   retrieval time; the *extracted* evidence already lives in `PILOT.jsonl`, which the SQL lens confirms
+   is the artefact actually consumed. The bodies are third-party copyright and a credential carrier
+   both, so they should never have been committed.
+2. Rewrite the single unpushed commit that introduced them so the blobs leave history, then re-run
+   gitleaks to prove the count is 0 - the only way this gate goes green honestly.
+3. Record the old-to-new commit hash mapping here, because the audit log cites commit hashes and a
+   rewrite would otherwise leave the whole evidence trail dangling.
+
+**This is a Martin decision point, and it is on his open list:** the keys are in history but unpushed,
+so nothing has been published. Either the rewrite happens before the first push, or the first push
+publishes seven live third-party keys to GitHub and the deploy stays blocked by the sast gate. Both
+are defensible; choosing between them is his, because a push is the outward action.
