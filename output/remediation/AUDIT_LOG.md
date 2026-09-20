@@ -776,6 +776,54 @@ times: **exit 0 is a claim, not proof.** The bootstrap `cp` documented in `FIELD
 this path *reachable*, so the warning travels with it: assert `Applied N rewrites` with N > 0 and
 confirm the public file changed.
 
+## T07 code audit: sound, and it pre-empts the objection I was forming
+
+Read-only audit of `scripts/remediation/census/tests/t07_link_sweep.py` while its sweep still runs.
+The run-level audit (offline re-run twice, byte-comparison, mutation teeth) must wait for the
+watcher to stop writing the cache, but the code can be judged now, and it is the strongest module in
+the set.
+
+**Contract.** `TEST_ID`/`NAME`/`DIMENSION`, `applies_to()` (only sites whose link row actually carries
+a URL - 3,575 of 5,004; 1,429 legitimately do not apply), `collect()` as the only network half,
+`run()` pure over snapshot plus records. So the frozen contract holds.
+
+**It cannot silently produce an empty answer**, which is the failure mode the whole census fears, and
+it reaches that three different ways:
+
+- `_cited_markers()` **raises** when `raw_data` is not an object or `description_citations` is not a
+  list - with the reason in the message ("guessing would silently drop every citation").
+- `collect()` carries two **fail-closed** guards: if every probe of a real sweep (>= `MIN_SWEEP`)
+  returns no HTTP status, or if more than half do, it raises instead of writing. The comment gives the
+  reason exactly: a local network outage must not be recorded as thousands of unreachable links,
+  "because a cached wrong answer outlives the outage".
+- `run()` **raises** when a probe record is missing ("the collector did not run for this URL"), so a
+  forgotten collect cannot read as a clean sweep.
+
+**The verdict table is honest, and it pre-empts the objection I was about to raise.** A 403 from
+`www.megalithic.co.uk` (577 links) or any WAF-refused 400/405/406/501 is *refused*, **never dead** -
+with the reason stated: such hosts turn away HEAD and the GET fallback while serving a browser
+normally, so the only honest verdict is "could not verify". Those four "we do not know" verdicts are
+reported at `Severity.COSMETIC` rather than omitted, and the docstring names why: omitting them would
+mark a bot-walled site as `pass`, i.e. **"turn 'could not check' into 'checked and clean' - the
+inversion this census exists to prevent"**. Severity is then split by consequence, not by colour: an
+uncited dead link is `COSMETIC`/`CLEAR` (readers filter `content_url IS NOT NULL`, so clearing simply
+stops rendering the dead button, and the journal keeps the old URL), while a *cited* one is
+`MODERATE`/`REVIEW` because clearing the row would not touch the footnote.
+
+**One boundary worth writing down, which is not a defect.** The test answers whether the URL *answers*
+- its own title says so - not whether the page still holds the content the citation claimed. A host
+that serves a 200 for a missing page is therefore `reachable`, and no HEAD sweep can tell otherwise.
+Correctly out of scope here; it becomes a real question in Phase 4, where link *content* is used, so
+it is recorded rather than fixed.
+
+**Justified deviation from the plan.** The plan's "~45 min at 24 parallel" is described in the
+module as "a wall-clock estimate, not a licence to hammer them"; it keeps the shared Fetcher's own
+worker count because the sweep talks to 4,939 third-party hosts. Slower, and the right call.
+
+**Still to prove (labelled unverified):** the run-level properties - that two offline runs over a
+quiescent cache are byte-identical, that the mutation teeth bite, and that the reported counts
+(5,071 findings over 2,806 sites) reproduce. Those are blocked on the watcher.
+
 ### Safety check after the probe
 
 The real backups directory was intact: `2026-09-19_pre-audit` and `2026-09-20_remediation` both
