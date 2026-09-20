@@ -1942,3 +1942,28 @@ useless instrument for the re-proof: `APPLY.sql` is gitignored by design, so it 
   even, so a parity check would have missed it - only the real parser found it. That is the second
   genuine defect the plugin caught in this session that my own tools did not, and it is why a
   finding gets adjudicated by running the tool rather than by pattern.
+
+## Closed: the `b9e48fab7` gate run with two failures (undiagnosed, and now shown to be unrecoverable)
+
+A background gate run exited 0 while its verdict text read `2 failed, 2093 passed`. I never captured
+those two names, so the record said "undiagnosed". Its output file has now arrived, and it settles the
+question the other way: the file is **2,353 bytes / 25 lines** and contains only the tail - the PyJWT
+warnings, the three `-rs` skips and the summary line. The `FAILED` lines and the short summary sat
+*above* the trim point, so the names are **unrecoverable from this artefact**. That is the recorded
+bounded-`bg_run` trap, confirmed on the very case that motivated the rule: a failing gate must be
+captured to a file, which is why the next one (`b46d66773`) was and read green at
+`2097 passed, 3 skipped, 57 deselected`.
+
+What the tail does still establish, and it is worth having:
+
+* The three skips are **named**, and they are the three known pre-existing ones:
+  `test_article_verifier_citations.py:13` and `test_article_writer_citations.py:12` (both refactored
+  out of `article_generator`) and `test_shining_ones_regen.py:50` (needs `THEO_REGEN_TEST=1`). So the
+  skip count was never hiding a fourth.
+* The **32 warnings** are all `InsecureKeyLengthWarning` from PyJWT, raised on **test-local** keys of
+  8, 11, 16 and 30 bytes. Test-only, not a production secret defect - recorded because a future reader
+  seeing "HMAC key below the recommended length" in a security-adjacent log should know it is the test
+  fixtures, not a live key.
+* The pass count rose by exactly 4 between the two runs (2093 -> 2097), which is the size of the
+  `tests/remediation/` files a live lane was writing at the time. That is consistent with the transient
+  failures, but it remains a **hypothesis, not a finding**: the mechanism was never observed directly.
