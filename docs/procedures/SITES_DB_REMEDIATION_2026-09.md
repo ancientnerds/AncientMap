@@ -199,6 +199,31 @@ read aloud, and exactly where no deterministic test can reach.
 5. **Never downgrade specificity.** If Wikidata P31 says "archaeological site" and the database says "Temple",
    it stays "Temple".
 6. **Same-name different site.** Before any verdict, confirm that name **and** coordinate refer to the same place.
+7. **The card's only dated claim is the terminus.** Pannonian's card ends "…to the 5th century AD" while its
+   bucket `500 BC - 1 AD` covers the *beginning* (Augustus, 31 BC). T03 compares the text's latest year with
+   the bucket and calls it `all-outside`/severe. One of the two T03 false alarms in the five-site pilot.
+8. **The date belongs to a person, not the site.** Karpasia: 334 BC is Zeno of Citium's birth year, the site
+   is 7th-century BC. A date attached to a named person (or to a "most famous resident") is not a dating of
+   the site.
+9. **Wikidata `P625` is the parent city's or state's coordinate — and it is wrong on Wikipedia itself.**
+   Petroglyph Beach: both Wikidata (58.301061/−134.413121) and the Wikipedia article's own `{{Coord}}`
+   template carry downtown **Juneau**, 235 km from the beach in Wrangell, and GeoNames reproduces the same
+   point, so the error propagates and *looks* corroborated. T01's 235.60 km lead was right about the
+   *distance* and wrong about which side was broken.
+10. **The item's own precision is an alibi.** Satsurblia: `P625` precision `0.01216°` = 1.35 km, larger than
+    the 1.28 km difference T01 flagged. Any distance threshold below the item's own precision is
+    unfalsifiable — and nothing in the census output exposes that precision, so a finder cannot apply the
+    "do not refute on a sub-precision difference" rule without fetching Wikidata itself.
+11. **Natural Earth draws de-facto borders and drops small islands.** Measured over the 117 T02 findings:
+    45 open water (real coastline generalisation — Petroglyph's 1.1 km), 22 United Kingdom (points in
+    Northern Ireland against the value `Ireland`), 9 Russia (Crimea), 7 Northern Cyprus, 4 "'Northern
+    Ireland' matches no Natural Earth admin-0 feature", 2 Akrotiri Sovereign Base Area, 2 Kosovo,
+    1 Palestine, 1 Baltic Sea, 17 singles. Pattern 2 explains England/Scotland/Wales (a deliberate
+    sub-national vocabulary) but says nothing about `Ireland` vs `Northern Ireland`, the second-largest T02
+    class. All three T02 findings in the pilot batch were refuted as data errors.
+
+Patterns 7–11 were measured in the five-site Phase-3 pilot and ratified as part of the Phase-3 decisions of
+2026-09-21; the underlying measurements are listed in `output/remediation/phase3_pilot/BRIEF_GAPS.md` §7.
 
 ---
 

@@ -1,8 +1,23 @@
-# Mechanically settable factual findings (27 sites)
+# Mechanically settable factual findings (27 sites) — **superseded: the write is done**
+
+**Status 2026-09-21: written and audited.** These 27 rows **plus the 8 overlap sites**
+(Satsurblia Cave, Didnauri, Armazi, Tsutskhvati Cave NM, Tsona Cave, Kutaisi, Dmanisi, Easter
+Island) that Phase 3 also works were written in **one batch of 35 rows** — run stamp
+`2026-09-21_mechanical-country`, journal 5,438 → **5,473** rows, landed pairs
+`Georgia (country)` → `Georgia` **27** and `Chile, Easter Island` → `Chile` **8**,
+`remaining_old_values=0` (`../AUDIT_LOG.md`, “Wave 4 MECHANICAL — the 35-row production write”).
+
+**The 27-vs-35 split is superseded as a plan (ratified decision 1). Reason:** 35 = 27 + 8, and at
+27 rows the `Georgia (country)` hub would have kept 7 sites, i.e. the split-hub defect would have
+survived (`AUDIT_LOG.md`, “Condition (c) - the hub split”). The list below is kept as the input
+record; **the country value in every row is already the new one**, so a census finding that still
+flags one of them is comparing against the OLD value and must be reported as already-fixed, never
+re-proposed. One row, one writer.
 
 These T05 sites carry only `proposal=set` / `confidence=authoritative` findings
-(`applicable=true`). A script applies them with a conditional `WHERE country = '<old>'`
-and a journal entry. **Not Phase 3, not LLM work.**
+(`applicable=true`). The script applies them with a conditional `WHERE country = '<old>'`
+and a journal entry. **Not Phase 3, not LLM work** (for the 8 overlap sites the country write is
+done too — Phase 3 owns them for their *other* findings).
 
 | Site | site_id | change |
 |---|---|---|
