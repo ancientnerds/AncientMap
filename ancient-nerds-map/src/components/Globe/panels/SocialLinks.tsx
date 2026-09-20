@@ -5,6 +5,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { config } from '../../../config'
 import { discordCtaUrl } from '../../../constants/brand'
+import { getAuthToken, subscribeAuthToken } from '../../../contexts/authToken'
 
 interface SocialLinksProps {
   onContributeClick?: () => void
@@ -18,12 +19,18 @@ interface SocialLinksProps {
  * Check auth state from localStorage (avoids requiring AuthProvider on the globe).
  */
 function useAuthState() {
-  const [token, setToken] = useState(() => localStorage.getItem('an_auth_token'))
+  const [token, setToken] = useState(() => getAuthToken())
 
   useEffect(() => {
-    const handler = () => setToken(localStorage.getItem('an_auth_token'))
-    window.addEventListener('storage', handler)
-    return () => window.removeEventListener('storage', handler)
+    const read = () => setToken(getAuthToken())
+    // 'storage' reaches the other tabs; the announcement covers this one,
+    // which the browser never notifies about its own writes.
+    window.addEventListener('storage', read)
+    const unsubscribe = subscribeAuthToken(setToken)
+    return () => {
+      window.removeEventListener('storage', read)
+      unsubscribe()
+    }
   }, [])
 
   return { isLoggedIn: !!token }
@@ -165,6 +172,7 @@ export function SocialLinks({
                   className="signin-discord-btn"
                   onClick={() => {
                     setShowLogin(false)
+                    // pi-lens-ignore: no-open-redirect
                     window.location.href = `${config.api.baseUrl}/auth/discord?return_to=${encodeURIComponent(window.location.pathname + window.location.search)}`
                   }}
                 >

@@ -201,6 +201,11 @@ _ALLOWED_RETURN_PATHS = frozenset(
         "/search.html",
         "/library.html",
         "/knowledge.html",
+        # Lyra's chat page is a build input of the same Vite app: same dist,
+        # same vhost (ancientnerds-nginx-config), and /api/ is proxied on that
+        # vhost too — same origin as every other entry. Without it, the chat
+        # page's own login bounced the returner to /account.html.
+        "/lyra.html",
         "/sites/",
         "/news-archive/",
         "/research/",
@@ -220,22 +225,46 @@ _ALLOWED_RETURN_PREFIXES = ("/sites/", "/news-archive/", "/research/", "/article
 def _is_allowed_return(return_to: object) -> TypeGuard[str]:
     """Whether return_to is a safe same-origin path to redirect to.
 
+    The PATH decides, and only the path: everything before the first "?" is
+    looked up in the allowlist. A query string rides along because the returner
+    needs its context back (/lyra.html?site=<uuid>, /globe.html?site=<uuid>).
+    It is NOT byte-identical through the round trip: the response layer
+    re-encodes it (measured 2026-09-20: "/globe.html?site=a b" becomes
+    "site=a%20b", "türkiye" becomes "%C3%BC"). Nothing decodes it a second
+    time. A query is not a redirect target and cannot change the origin, so it
+    must never widen a check: every rejection below runs on the FULL string,
+    before the allowlist lookup can short-circuit to True.
+
     Explicit checks, not a sanitiser: anything not recognised is rejected.
     "//evil.com" and "/\\evil.com" are protocol-relative URLs that browsers
-    resolve to a different origin, and CR/LF would split the Location header.
+    resolve to a different origin, and CR/LF would split the Location header
+    even when they sit after the "?".
+
+    These CR/LF rules are DEFENCE IN DEPTH, not the only wall: measured
+    2026-09-20, a raw "\r\n" never reaches the wire anyway — RedirectResponse
+    percent-encodes control characters, and both candidate HTTP layers reject
+    them (h11 raises for CR/LF/VT/FF/NUL, httptools' HEADER_VALUE_RE covers
+    [\x00-\x08\n-\x1f\x7f]). Characters outside that list (\x00, \x0b, \x0c,
+    \x1b, \x7f) DO pass this function today and are stopped only by those
+    layers. Keep the checks: the response layer is another project's code, and
+    a future version that writes the header itself would lose them.
     """
     if not isinstance(return_to, str) or not return_to:
         return False
-    if return_to in _ALLOWED_RETURN_PATHS:
-        return True
-    if not return_to.startswith("/") or return_to.startswith("//"):
-        return False
+    # Reject on the full string first: a backslash or CR/LF (literal or
+    # percent-encoded) in the QUERY would otherwise never be looked at again.
     if "\\" in return_to or any(c in return_to for c in "\r\n\t"):
         return False
     lowered = return_to.lower()
     if "%0d" in lowered or "%0a" in lowered:
         return False
-    return return_to.startswith(_ALLOWED_RETURN_PREFIXES)
+    if not return_to.startswith("/") or return_to.startswith("//"):
+        return False
+    # The first "?" ends the path; later ones stay part of the query.
+    path = return_to.split("?", 1)[0]
+    if path in _ALLOWED_RETURN_PATHS:
+        return True
+    return path.startswith(_ALLOWED_RETURN_PREFIXES)
 
 
 def _create_oauth_state(return_to: str, nonce: str) -> str:

@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { config } from '../../config'
+import { getAuthToken, subscribeAuthToken } from '../../contexts/authToken'
 
 const NAV_ITEMS = [
   { page: 'globe', label: 'Globe', href: '/globe.html', icon: 'M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zM2 12h20M12 2a15 15 0 0 1 4 10 15 15 0 0 1-4 10 15 15 0 0 1-4-10A15 15 0 0 1 12 2z' },
@@ -38,11 +39,16 @@ function useAuthToken(): boolean {
   const [isLoggedIn, setIsLoggedIn] = useState(false)
 
   useEffect(() => {
-    const read = () => setIsLoggedIn(!!localStorage.getItem('an_auth_token'))
+    const read = () => setIsLoggedIn(!!getAuthToken())
     read()
-    // Re-check on storage events (e.g. login in another tab)
+    // 'storage' reaches the other tabs; the announcement covers this one,
+    // which the browser never notifies about its own writes.
     window.addEventListener('storage', read)
-    return () => window.removeEventListener('storage', read)
+    const unsubscribe = subscribeAuthToken(token => setIsLoggedIn(!!token))
+    return () => {
+      window.removeEventListener('storage', read)
+      unsubscribe()
+    }
   }, [])
 
   return isLoggedIn

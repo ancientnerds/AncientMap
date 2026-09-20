@@ -61,6 +61,12 @@ class TestCreateAndConsume:
             state = oauth_module._create_oauth_state(path, NONCE)
             assert oauth_module._consume_oauth_state(state, NONCE) == path
 
+    def test_round_trip_keeps_the_query_string(self, oauth_module):
+        """The Lyra/globe return legs carry their site context through the state."""
+        target = "/lyra.html?site=1f2e3d4c-5b6a-4789-8abc-ef0123456789"
+        state = oauth_module._create_oauth_state(target, NONCE)
+        assert oauth_module._consume_oauth_state(state, NONCE) == target
+
 
 class TestNonceBinding:
     def test_missing_nonce_cookie_rejected(self, oauth_module):

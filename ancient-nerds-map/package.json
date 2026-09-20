@@ -47,6 +47,7 @@
     "@types/three": "^0.182.0",
     "@vitejs/plugin-react": "^4.3.1",
     "ffmpeg-static": "^5.2.0",
+    "jsdom": "^30.1.0",
     "knip": "^6.31.0",
     "puppeteer": "^24.34.0",
     "size-limit": "^12.1.0",

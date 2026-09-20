@@ -92,12 +92,14 @@ pi-lens can put a foreign venv without pytest in front of PATH.
 ```bash
 # Backend: the suite the pre-push hook runs (CI adds `and not slow`, which labels 0 tests)
 ./.venv/Scripts/python.exe -m pytest -q -rs --timeout 90 -m "not integration and not live_llm"
-#   2026-09-20: 1631 passed, 3 skipped, 57 deselected in 85.68s
+#   2026-09-20: 1648 passed, 3 skipped, 57 deselected in 47.71s
+#   (+16 seit dem Lyra-Funnel: Allowlist-Tests fuer /lyra.html und Query-Strings)
 #   -rs is mandatory: 3 skips are silent otherwise.
 
 # Frontend
 cd ancient-nerds-map && npm run type-check && npm run test
-#   2026-09-20: type-check clean, 394 tests in 36 files passed
+#   2026-09-20: type-check clean, 432 tests in 40 files passed
+#   (394/36 war der Stand vom Vormittag; die Linsen-Tests kamen danach dazu)
 ```
 
 Local equivalents of the CI gates: `ruff check api/ pipeline/`, `lint-imports`,

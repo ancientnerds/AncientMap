@@ -24,6 +24,9 @@ export type EventName =
   | 'paper_open' // research paper opened — paper, context
   | 'media_play' // webcam, video, 3D model, street view, gallery — kind, site
   | 'lyra_chat' // first message of a Lyra chat — page
+  | 'lyra_login_click' // Discord button of the Lyra sign-in gate — page, context
+  | 'lyra_login_success' // Lyra login came back with a token the server confirmed — src
+  | 'lyra_login_aborted' // Lyra login failed in the OAuth callback instead — src, reason
   | 'share' // share button — method, site
   | 'discord_click' // Discord CTA — src (server counts it too via /goto)
   | 'globe_ready' // globe interactive — ms since navigation start

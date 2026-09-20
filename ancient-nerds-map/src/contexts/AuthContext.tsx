@@ -3,10 +3,16 @@
  *
  * Stores JWT in localStorage. On mount, validates token via /api/auth/me.
  * Provides user profile, credits, and login/logout actions.
+ *
+ * The stored token itself lives in ./authToken: that module also announces
+ * every change in this tab, which is how a mounted LyraChatModal notices the
+ * post-OAuth cookie being promoted (see the comment there).
  */
 
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react'
 import { config } from '../config'
+import { getAuthToken, storeAuthToken } from './authToken'
+import { reportLyraLoginSuccess } from '../analytics/loginFunnel'
 
 export interface AuthUser {
   id: string
@@ -36,12 +42,19 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null)
 
-const TOKEN_KEY = 'an_auth_token'
 const COOKIE_NAME = 'an_auth_token'
 
 function readCookie(name: string): string | null {
   const match = document.cookie.match(new RegExp(`(?:^|; )${name}=([^;]*)`))
-  return match ? decodeURIComponent(match[1]) : null
+  if (!match) return null
+  try {
+    return decodeURIComponent(match[1])
+  } catch {
+    // A value with a broken percent escape (`an_auth_token=%`): not a token we
+    // can use, and an exception here would take the React root down — treated
+    // like no cookie at all.
+    return null
+  }
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -58,25 +71,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true)
 
   const clearAuth = useCallback(() => {
-    localStorage.removeItem(TOKEN_KEY)
+    storeAuthToken(null)
     setToken(null)
     setUser(null)
     setIsLoading(false)
   }, [])
 
-  const validateToken = useCallback(async (jwt: string) => {
+  const validateToken = useCallback(async (jwt: string): Promise<boolean> => {
     try {
       const resp = await fetch(`${config.api.baseUrl}/auth/me`, {
         headers: { 'Authorization': `Bearer ${jwt}` },
       })
-      if (!resp.ok) {
+      if (resp.status === 401 || resp.status === 403) {
+        // The server judged the token: it is dead or revoked, drop it.
         clearAuth()
-        return
+        return false
+      }
+      if (!resp.ok) {
+        // No verdict. A deploy answers 503 for ~110 s, a missing key does too,
+        // and an offline moment looks the same — none of that expires a login.
+        // Keep the token, end the check, leave the state unconfirmed: the next
+        // mount validates again. Deleting here would sign every visitor out on
+        // every deploy, and deleting revoked nothing — the JWT stays valid on
+        // the server, which is where authorization lives anyway.
+        return false
       }
       const data: AuthUser = await resp.json()
       setUser(data)
+      return true
     } catch {
-      clearAuth()
+      // Network error — the same "no verdict" as a 5xx.
+      return false
     } finally {
       setIsLoading(false)
     }
@@ -93,19 +118,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const cookieToken = readCookie(COOKIE_NAME)
     if (cookieToken) {
-      localStorage.setItem(TOKEN_KEY, cookieToken)
+      // Store it and announce it in this tab: a Lyra sign-in gate that is
+      // already mounted opens on the announcement (contexts/authToken.ts).
+      storeAuthToken(cookieToken)
     }
-    const stored = cookieToken ?? localStorage.getItem(TOKEN_KEY)
+    const stored = cookieToken ?? getAuthToken()
     if (stored) {
       setToken(stored)
-      validateToken(stored)
+      // The Lyra login funnel (analytics/loginFunnel.ts) counts a success only
+      // when the server confirmed the token: /auth/me returning the user is
+      // that confirmation, a 401 or a failed request is not.
+      validateToken(stored).then(confirmed => {
+        // …and only for the token that just came out of the handoff cookie,
+        // i.e. the return leg of an OAuth round trip. A token that was already
+        // in storage is an ordinary page load: it must not consume a marker a
+        // failed attempt left behind and count a foreign login as a Lyra one.
+        if (cookieToken) reportLyraLoginSuccess(confirmed)
+      })
     } else {
       setIsLoading(false)
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const login = useCallback((newToken: string) => {
-    localStorage.setItem(TOKEN_KEY, newToken)
+    storeAuthToken(newToken)
     setToken(newToken)
     setIsLoading(true)
     validateToken(newToken)

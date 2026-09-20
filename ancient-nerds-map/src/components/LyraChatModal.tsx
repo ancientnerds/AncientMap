@@ -15,6 +15,8 @@
 
 import { useState, useEffect, useRef, useCallback, useMemo, lazy, Suspense } from 'react'
 import { pageType, track } from '../analytics'
+import { lyraLoginClick } from '../analytics/loginFunnel'
+import { getAuthToken, storeAuthToken, subscribeAuthToken } from '../contexts/authToken'
 import { createPortal } from 'react-dom'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -307,16 +309,34 @@ export default function LyraChatModal({
   const [pipelineOpen, setPipelineOpen] = useState(() => localStorage.getItem('lyra_pipeline_open') !== 'false')
   const [viewingPipelineFor, setViewingPipelineFor] = useState<string | null>(null)
 
-  // Auth state — Discord OAuth token from localStorage
-  const [authToken, setAuthToken] = useState<string | null>(() =>
-    localStorage.getItem('an_auth_token')
-  )
+  // Auth state — Discord OAuth token from localStorage.
+  //
+  // The initial read only covers a token that was already stored; the
+  // post-OAuth one is promoted from the 120 s cookie by AuthProvider's mount
+  // effect, which runs AFTER this component's effects. That is why the
+  // subscription sits here: without it the gate stayed shut for a visitor who
+  // had just come back from Discord (the /lyra.html login bug), because this
+  // state is read once and never re-read.
+  const [authToken, setAuthToken] = useState<string | null>(() => getAuthToken())
   const [userCredits, setUserCredits] = useState<number | null>(null)
   const [isUnlimited, setIsUnlimited] = useState(false)
   const [totalDiscoveries, setTotalDiscoveries] = useState(() => getDiscoveryCount())
   const [chatStreak, setChatStreak] = useState<number>(0)
   const [webSearchEnabled, setWebSearchEnabled] = useState(false)
   const isAuthenticated = !!authToken
+  // The subscription the note above explains. Runs before AuthProvider's
+  // mount effect, so the promotion reaches it. 'storage' covers the other
+  // tabs, where the browser never runs this tab's listeners — same pair as
+  // HamburgerNav and SocialLinks use.
+  useEffect(() => {
+    const read = () => setAuthToken(getAuthToken())
+    window.addEventListener('storage', read)
+    const unsubscribe = subscribeAuthToken(setAuthToken)
+    return () => {
+      window.removeEventListener('storage', read)
+      unsubscribe()
+    }
+  }, [])
 
   const focusTrapRef = useFocusTrap(isOpen && mode === 'modal')
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -531,14 +551,20 @@ export default function LyraChatModal({
     fetch(`${config.api.baseUrl}/auth/me`, {
       headers: { 'Authorization': `Bearer ${authToken}` },
     })
-      .then(r => r.ok ? r.json() : null)
-      .then(data => {
-        if (data) { setUserCredits(data.credits); setIsUnlimited(!!data.is_unlimited) }
-        else {
-          // Token expired/invalid — clear it
-          localStorage.removeItem('an_auth_token')
+      .then(r => {
+        if (r.ok) return r.json()
+        // Only 401/403 are a verdict on the token. A 5xx (deploy, missing key)
+        // or an offline moment says nothing: keep the token and let the next
+        // visit check again — dropping it here logged the visitor out of Lyra
+        // on every deploy.
+        if (r.status === 401 || r.status === 403) {
+          storeAuthToken(null)
           setAuthToken(null)
         }
+        return null
+      })
+      .then(data => {
+        if (data) { setUserCredits(data.credits); setIsUnlimited(!!data.is_unlimited) }
       })
       .catch(() => {})
   }, [authToken])
@@ -618,7 +644,7 @@ export default function LyraChatModal({
   }, [isOpen, isStreaming, searchOpen, pipelineOpen, onClose, mode])
 
   const clearAuth = useCallback(() => {
-    localStorage.removeItem('an_auth_token')
+    storeAuthToken(null)
     setAuthToken(null)
     setUserCredits(null)
     setIsUnlimited(false)
@@ -1157,7 +1183,12 @@ export default function LyraChatModal({
               <div className="lyra-auth-gate-subtitle">Sign in to chat</div>
               <button
                 className="lyra-auth-discord-btn"
-                onClick={() => { window.location.href = `${config.api.baseUrl}/auth/discord?return_to=${encodeURIComponent(window.location.pathname + window.location.search)}` }}
+                onClick={() => {
+                  // Before the navigation: the event, and the marker that the
+                  // return leg (success or abort) consumes.
+                  lyraLoginClick(window.location.pathname, contextType ?? 'global')
+                  window.location.href = `${config.api.baseUrl}/auth/discord?return_to=${encodeURIComponent(window.location.pathname + window.location.search)}`
+                }}
               >
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028c.36-.698.772-1.362 1.225-1.993a.076.076 0 0 0-.041-.107 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128c.12-.094.246-.194.373-.292a.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z"/>

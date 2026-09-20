@@ -18,6 +18,7 @@ import DeckBuilder from '../components/cards/DeckBuilder'
 import PageHeader from '../components/layout/PageHeader'
 import '../styles/account.css'
 import { discordCtaUrl } from '../constants/brand'
+import { reportLyraLoginAborted } from '../analytics/loginFunnel'
 
 interface UsageEntry {
   input_tokens: number
@@ -468,6 +469,10 @@ export default function AccountPage() {
     const urlError = params.get('error')
 
     if (urlError) {
+      // A login that started at the Lyra gate comes back here instead of the
+      // page that sent the visitor away: report the funnel's dead end and
+      // consume the marker (analytics/loginFunnel.ts).
+      reportLyraLoginAborted(urlError)
       if (urlError === 'not_in_guild') {
         setError('guild_required')
       } else {
@@ -589,7 +594,10 @@ export default function AccountPage() {
         else if (r.type === 'pack') parts.push(`Streak bonus: ${r.value.charAt(0).toUpperCase() + r.value.slice(1)} Pack!`)
       }
       setActionResult(parts.join(' | '))
-      handleAchievementResponse(data as unknown as Record<string, unknown>)
+      // SAFETY: the /cards/daily JSON as typed above; the helper reads its
+      // optional `achievements_unlocked` field and stays silent without it. No
+      // cast needed — an inline object type is assignable to Record<string, unknown>.
+      handleAchievementResponse(data)
       loadPlayerStats()
     } catch (e) {
       setActionResult(e instanceof Error ? e.message : 'Failed')
@@ -607,7 +615,10 @@ export default function AccountPage() {
       const starterData = await apiFetch<{ cards: CardData[]; count: number }>(
         '/cards/starter', token, { method: 'POST' }
       )
-      handleAchievementResponse(starterData as unknown as Record<string, unknown>)
+      // SAFETY: the /cards/starter JSON as typed above; the helper reads its
+      // optional `achievements_unlocked` field and stays silent without it. No
+      // cast needed — an inline object type is assignable to Record<string, unknown>.
+      handleAchievementResponse(starterData)
       loadPlayerStats()
       if (starterData.count === 0) {
         // An empty deck means no card has computed stats yet. Switching to a
