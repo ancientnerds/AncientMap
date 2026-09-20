@@ -66,7 +66,7 @@ FLAGS = OUTPUT / "verification_flags.json"
 
 NUM_BATCHES = 10
 MAX_LEN = 200  # card_stats.card_description is varchar(200); see docs/procedures/FIELD_CONTRACT.md
-SENTENCE_ENDINGS = '.!?\'"'
+SENTENCE_ENDINGS = ".!?'\""
 VERIFY = ROOT / "scripts" / "verify_descriptions.py"
 
 EXIT_INPUT = 1

@@ -84,7 +84,10 @@ def build_sandbox(
         ],
     )
     # The deploy-relevant file, pre-existing, which a failed run must leave alone.
-    _write(root / "public" / "data" / "card_descriptions.json", {"descriptions": {"sentinel": "untouched"}})
+    _write(
+        root / "public" / "data" / "card_descriptions.json",
+        {"descriptions": {"sentinel": "untouched"}},
+    )
 
     for index, payload in (batches or {}).items():
         _write(root / "output" / f"rewrite_output_{index:02d}.json", payload)
@@ -103,7 +106,9 @@ def run_merge(root: Path) -> subprocess.CompletedProcess[str]:
 
 
 def public_payload(root: Path) -> dict[str, Any]:
-    return json.loads((root / "public" / "data" / "card_descriptions.json").read_text(encoding="utf-8"))
+    return json.loads(
+        (root / "public" / "data" / "card_descriptions.json").read_text(encoding="utf-8")
+    )
 
 
 def output_payload(root: Path) -> dict[str, Any]:
@@ -330,8 +335,10 @@ def test_complete_valid_merge_is_published(tmp_path):
     an untouched site keeps its original text (batches 5..9 are present but empty, which is not the
     same as the all-empty case that must fail).
     """
-    batches = {i: {"rewrites": {f"site-{i}": f"Sentence number {i} about the place sits here."}}
-               for i in range(5)}
+    batches = {
+        i: {"rewrites": {f"site-{i}": f"Sentence number {i} about the place sits here."}}
+        for i in range(5)
+    }
     for i in range(5, NUM_BATCHES):
         batches[i] = {"rewrites": {}}
     root = build_sandbox(tmp_path, batches=batches)

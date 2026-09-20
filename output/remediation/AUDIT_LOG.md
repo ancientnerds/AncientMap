@@ -2081,3 +2081,35 @@ the file's own comment or by a vacuous predicate - the family that keeps produci
 **Sequencing, deliberately:** SQL, BACKEND and GEGENPRUEFER are still reading these trees, so no file
 under review is touched until they finish. The `-rs` gap (H) is itself the reason to trust the skip
 counts I have been reading by hand.
+
+## Wave 6a landed (brief amendment), and an honest producer gap it found
+
+The brief worker folded the twelve ratified decisions into both Phase-3 briefs, corrected the
+superseded figures in BATCH_PLAN.md and MECHANICAL.md, and wrote the five new false-alarm families as
+items 7-11 of the plan's own section 4.3. Gate after its work: **2137 passed, 3 skipped, 57
+deselected** - up from 2097, the difference being the lanes' new tests. It changed documentation
+only: no code, no database, no commit.
+
+Two corrections it forced on me, both upheld:
+
+* My instruction named the wrong file for section 4.3. `ENRICHMENT_AUDIT.md` has no section 4.3 and no
+  false-alarm list at all; the list is `SITES_DB_REMEDIATION_2026-09.md:191`. BRIEF_GAPS.md mislabelled
+  it, I repeated the mislabel, and the worker refused to create a second, unreferenced copy.
+* Decision 5 was over-broad. The rule stands - no `set` on either prose field in Phase 3 - but
+  `card_description` is reverted by the boot import while `unified_sites.description` has **no** boot
+  overwriter (I verified this myself: its only writers are two call sites in api/routes/sites.py and
+  `restore_snapshot`). The briefs now give the two reasons separately and ground the prose-field rule
+  in the Phase-5 split rather than a restart.
+
+**Producer gap, recorded because it must not be lost.** Decisions 2 and 11 introduce a required
+`defect` flag and a `true_but_no_correction` verdict. Neither has a producer: grep finds no `defect`
+key and no such verdict value anywhere in `scripts/remediation/`, and `census/model.py`'s
+`Proposal` enum has exactly SET, CLEAR and REVIEW. They are therefore words in two briefs, not
+machine fields - **whoever builds the Phase-3 runner must emit both**, or the two decisions are
+decoration. This is the same failure class as the vacuous assertions: a stated guarantee with nothing
+behind it.
+
+Also re-proved after the fact: `scripts/merge_rewrites.py` and its fails-closed test had an
+uncommitted `ruff format` pass in the tree (quote style plus three line-wraps, no semantic change).
+Per the standing rule a formatter invalidates prior verification, so it was re-proved rather than
+committed on inspection: ruff format --check clean, ruff check clean, mypy clean, 13 tests passed.
