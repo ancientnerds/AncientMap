@@ -824,6 +824,78 @@ worker count because the sweep talks to 4,939 third-party hosts. Slower, and the
 quiescent cache are byte-identical, that the mutation teeth bite, and that the reported counts
 (5,071 findings over 2,806 sites) reproduce. Those are blocked on the watcher.
 
+## Migration 0018: my own 0017 could not write a boolean column
+
+Found by the HERO lane of wave 3, which refused to work around it and reported instead - the right
+call, and the third time this session that a lane caught something I shipped.
+
+**The defect, reproduced by me before touching anything** (production, inside `BEGIN; ... ROLLBACK;`,
+so nothing could be written):
+
+```
+ERROR:  operator does not exist: boolean = text
+QUERY:  UPDATE wiki_images SET is_hero = $1 WHERE id::text = $2 AND is_hero IS NOT DISTINCT FROM $3
+CONTEXT:  PL/pgSQL function apply_remediation_change(...) line 24 at EXECUTE
+```
+
+`apply_remediation_change()` built its statement with text parameters. That is only valid for text
+columns. It dies while *planning* - a primary key that cannot exist (`id = -1`) fails identically -
+and fixing only the WHERE is not enough: the SET then fails with 42804 ("column is of type boolean but
+expression is of type text"). `wiki_images.is_hero`, `is_lead` and `is_excluded` are all boolean, so
+**the entire image half of the remediation was blocked by my own primitive.**
+
+**Why it shipped:** `0017_migration_selftest.sql` exercised a TEXT column only. The self-test could
+not see boolean, and neither could I, because I wrote the test around the case I already knew worked.
+That is the same shape as the T07 `final`-key bug and the malformed Clopper-Pearson interval: the
+instrument agreeing with itself.
+
+**Fix: `migrations/0018_remediation_change_log_boolean.sql`** - `CREATE OR REPLACE`, forward-only,
+0017 untouched. It resolves the column's type from `pg_attribute` and casts both operands, so it works
+for every column type rather than for the one I happened to test.
+
+**A second defect found while fixing it: my first truncation guard was a check that could not fail.**
+I added a round-trip check so the journal cannot record a value the row does not hold (a varchar(200)
+column silently truncates a longer value, and a reversal read from the journal would then write back
+something that never existed). My first version compared the stored value against
+`$1::<full column type>` - and a cast to `character varying(200)` truncates just as silently as the
+assignment does. **Both sides were truncated, so they always matched**, and the guard accepted a
+250-character value into a varchar(200) column. Observed as `C6 FAILED a 250-char value into
+varchar(200) was accepted`. The check now compares in the column's base type
+(`format_type(atttypid, NULL)`), which cannot truncate, and therefore catches the case while still
+allowing a value-preserving coercion.
+
+**Teeth proven, not asserted.** On a temp table, so the live function was never broken while HERO was
+writing:
+
+```
+TEETH C1: old form FAILS as claimed -> operator does not exist: boolean = text
+TEETH C1: new form WORKS (boolean flips)
+TEETH C6: full-type comparison is BLIND to truncation (why the first guard passed)
+TEETH C6: base-type comparison SEES it (this is the fix)
+```
+
+**`0018_migration_selftest.sql` now passes 10 of 10** (`selftest done: 10 ok, 0 failed`), covering
+boolean, text and integer writes, NULL-clearing, the truncation guard, the wrong-old-value refusal,
+the nonexistent-PK refusal, the table allowlist and the unknown-column refusal - and
+`change_log_rows_must_be_0 = 0` after the rollback. C6's teeth were demonstrated by the accident
+above; C1's by the temp-table probe.
+
+**Third thing fixed in passing: 0017's refusal messages were garbled.** PostgreSQL's `RAISE` uses a
+**bare `%`** placeholder - `%s`, `%I` and `%L` are not specifiers there, each prints its argument
+followed by the literal letter. Measured: `RAISE NOTICE '%L', '<NULL>'` prints `<NULL>L`, and `%I`
+consumes an argument (so a spec without one raises "too few parameters for RAISE"). Production was
+printing `card_statsI.card_descriptionI` and `<NULL>L`. 0018 uses bare `%` throughout; the message
+now reads `... for site_id=5cc613ff-... expected 1 row, matched 0 - the old value is A Roman bridge
+still in use today ...`, which matters because a human has to triage these refusals during a write.
+
+**Two of my own test bugs, both caught by running it:** `card_stats` has no `id` column (its key is
+`site_id`), and `sort_order` is NOT NULL so it cannot serve the NULL-clearing case (used `thumb_width`,
+which is nullable). Also: C6 initially reused a value that C3 had already overwritten in the same
+transaction, so the expected old value was stale.
+
+**Applied to production** (DDL only, `CREATE OR REPLACE`; `BEGIN / CREATE FUNCTION / COMMENT / COMMIT`).
+Not recorded in `applied_migrations`, so the deploy job re-applies the identical, idempotent body.
+
 ### Safety check after the probe
 
 The real backups directory was intact: `2026-09-19_pre-audit` and `2026-09-20_remediation` both
