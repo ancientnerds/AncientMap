@@ -1122,6 +1122,61 @@ hero", not data loss, and it is one statement to undo. **Residual risk, not reso
 heroes have not been visually reviewed. The plan's own gallery-audit stage is where that happens, and
 it has not run yet. I am recording this rather than calling the write fully vindicated.
 
+### Re-proved after the formatter, and my fifth instrument error
+
+pi-lens reformatted `hero_repair/plan.py` after the lane finished, which by my own rule invalidates
+its verification until re-proved. Re-emitted from the reformatted code with `apply.py --emit`:
+
+* **`APPLY.sql` byte-identical, sha256 `33cbab582f830378` - the same value the applied file carries.**
+  So the reformat changed no behaviour and the applied statement is still the rehearsed one,
+* `ROLLBACK.sql`, `PLAN.jsonl`, `SKIPPED.jsonl` byte-identical from `plan.py --write`,
+* `tests/remediation/test_hero_repair.py` -> **42 passed**,
+* HERO's `--verify` predicate, run verbatim by me, prints **1,139** and **1,041** - both reproduce.
+
+That last one cost me five wrong answers. HERO reported "shorter than 900 px 3,671 -> **1,041**"; I
+measured **1,033** and could not close the 8. I guessed three definitions in SQL (NULL handling,
+`is_excluded`, `<=900`, `thumb_width`), then guessed that HERO had lost its source filter - and
+"proved" that by measuring table-wide heroes, which are the same 3,858 because **no hero exists
+outside `ancient_nerds`**. All five were wrong.
+
+Reading the code settled it. `apply.py:107-119` counts **sites**, not rows, using the SSR's own pick
+order: `ORDER BY is_hero DESC, is_lead DESC, sort_order LIMIT 1`. So a site with no hero still serves
+an image, and eight of those serve one under 900 px. **HERO's number was right and mine was the wrong
+unit** - my probe, for the fifth time this session (the Clopper-Pearson interval, the `by_field`
+annotation, T07's missing `final` key, the sharded cache). Same lesson every time: **when my probe
+contradicts the artifact, suspect the probe.** Twice today the wrong guess looked like a finding.
+
+I also wasted one attempt on my own syntax: `plan.py` calls `relative_to(ROOT)` on `--out`, so a
+relative path raises `ValueError` and **no file is written** - and my "DIFFERS" lines then reported a
+missing file as a difference. A comparison that cannot distinguish "absent" from "changed" is not a
+comparison.
+
+### The split I asked for, answered in full
+
+HERO's `PLAN.md` answers both report items I demanded. **The 3,264 is split, not refuted:**
+**2,719 repaired + 545 rejected = 3,264** exactly. The 545 decomposes into **276** sites where the
+stored `wiki_images.width` would have been the *sole* witness (and Commons contradicts it) + **269**
+refused on T10's own suspect tier, with 594 sites having no candidate under either rule. Both rules do
+read the stored column - the point is that where it stood alone, the plan **refused** rather than
+trusted it, which is exactly the discipline I required given T09 measured that column wrong on 11,653
+rows. The upscale guard fired on **0** rows and is documented as firing on 0 rather than quietly
+dropped.
+
+The **152** hero-less sites are explained and were left alone deliberately: `is_lead` is true for
+exactly the 3,858 hero rows, so those 152 already serve their lowest-`sort_order` gallery file - a
+1600 px local file - and "planting a flag there would change which image the site serves without a size
+defect to justify it". That is the same fact that explains my 1,041. A refusal with a reason, not a gap.
+
+**Atomicity, evidenced rather than asserted:** the failed first attempt raised inside the transaction
+and left `journal 0 / heroes 3,858` - the one-transaction design demonstrably swallows a mid-way
+failure. `--rehearse` on the identical byte-identical file reported `5438 row(s) changed and
+journalled`, then rolled back to `journal 0, >1 hero 0`.
+
+**Verdict: HERO's lane is sound.** Journal, rollback, invariant, scope, accounting and the reformat
+re-proof all hold, and its two headline numbers reproduce from its own query. The residual that
+remains is the one already recorded above - the tier system underneath the selection has four of eight
+signals rebuilt - and it is a review gap, not a correctness failure I can demonstrate.
+
 ### Safety check after the probe
 
 The real backups directory was intact: `2026-09-19_pre-audit` and `2026-09-20_remediation` both

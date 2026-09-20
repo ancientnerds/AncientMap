@@ -238,3 +238,14 @@ video-assets/
 
 # Vitest cache (created by vitest run)
 .vitest/
+
+# Hero repair (Phase 2 step 1): bulk regenerable artifacts. `apply.py --emit` reproduces APPLY.sql
+# byte-identically (sha256 33cbab582f830378, re-proved after the formatter) and `plan.py --write`
+# reproduces PLAN.jsonl; the applied statement's effect is in the database and in
+# remediation_change_log. ROLLBACK.sql IS versioned even though it regenerates too, because it
+# describes an action not yet taken - the undo. APPLIED.md is the evidence record.
+# The directory must be re-included first: git does not descend into an excluded directory.
+!output/remediation/hero_repair/
+output/remediation/hero_repair/APPLY.sql
+output/remediation/hero_repair/REHEARSAL.sql
+output/remediation/hero_repair/PLAN.jsonl
