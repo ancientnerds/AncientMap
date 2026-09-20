@@ -544,6 +544,24 @@ already moved by the time I read it (L354 was a `def` in one read and `self._tre
 the next), because T02's worker is still editing the file - so the position was unreliable on
 top of the match being spurious.
 
+**Confirmed a last time now that the file is stable and its worker has finished.** L354 is
+inside `containing(self, lon, lat)` and is a set comprehension over a Shapely R-tree:
+
+```python
+return sorted(
+    {
+        self.features[int(i)].admin
+        for i in self._tree.query(pt)
+        if self.features[int(i)].geom.covers(pt)
+    }
+)
+```
+
+There is no SQL anywhere near it - `Point(...)`, `self._tree.query(...)` and `geom.covers(...)`
+are in-memory geometry. Every f-string in the file is a human-readable `FetchError` or a finding
+`note`. The advisory is misclassifying a set comprehension over geometry as query construction,
+exactly the class of finding this project's rules say to triage and decide on rather than obey.
+
 ## Audit of the three finished lanes (T01, T05, T08) — sound
 
 Audited by re-running everything myself, not by reading the workers' summaries.
