@@ -208,7 +208,13 @@ ancient-nerds-map/video/output/
 ancient-nerds-map/previews-out/
 
 # Working directory for card description generation
-output/
+output/*
+# Everything under output/ is bulk intermediate data and stays ignored - but the audit's
+# evidence record is hand-written and cannot be regenerated, so it is versioned. Without this
+# the whole remediation's proof trail would exist on exactly one machine.
+!output/remediation/
+output/remediation/*
+!output/remediation/AUDIT_LOG.md
 
 # Dev artifacts
 *.stackdump
