@@ -185,6 +185,7 @@ function AppContent() {
   const [layersReady, setLayersReady] = useState(false) // Wait for coastlines/borders to load
   const [overlayFading, setOverlayFading] = useState(false) // Controls fade-out animation
   const [overlayRendered, setOverlayRendered] = useState(true) // Controls DOM presence after fade
+  const [webglLost, setWebglLost] = useState(false) // GPU context died - the globe is frozen until reload
   const [loadingStatus, setLoadingStatus] = useState('Initializing...') // Dynamic loading message
   const [loadingProgress, setLoadingProgress] = useState(5) // 0-100 for progress bar
   const [downloadSpeed, setDownloadSpeed] = useState<string>('') // Download speed display
@@ -1732,7 +1733,7 @@ function AppContent() {
             <div className="loading-ct" /><div className="loading-ctr" />
             <div className="loading-cbl" /><div className="loading-cbr" />
             <div className="loading-bar-header">
-              <span className="loading-bar-stamp">{layersReady ? 'READY' : 'LOADING'}</span>
+              <span className="loading-bar-stamp">{webglLost ? 'GPU LOST' : layersReady ? 'READY' : 'LOADING'}</span>
               {downloadedMB > 0.1 && <span className="loading-bar-counter">{downloadedMB.toFixed(1)} MB</span>}
               {downloadSpeed && <span className="loading-bar-speed">{downloadSpeed}</span>}
             </div>
@@ -1744,9 +1745,24 @@ function AppContent() {
                 <div key={i} className={`loading-bar-led led-${i}`} />
               ))}
             </div>
-            <div className="loading-text">{layersReady ? 'ALL SYSTEMS NOMINAL' : loadingStatus.toUpperCase()}</div>
-            <div className="loading-hint">For best performance, enable hardware acceleration in your browser</div>
+            <div className="loading-text">{webglLost ? 'GRAPHICS CONTEXT LOST' : layersReady ? 'ALL SYSTEMS NOMINAL' : loadingStatus.toUpperCase()}</div>
+            {/* The button takes the hint's place rather than joining it: the bar
+                keeps its height, and the visitor gets the one action left. */}
+            {webglLost ? (
+              <button className="loading-retry" onClick={() => window.location.reload()}>Reload the globe</button>
+            ) : (
+              <div className="loading-hint">For best performance, enable hardware acceleration in your browser</div>
+            )}
           </div>
+        </div>
+      )}
+      {/* Once the overlay is gone the globe is the page, so the loss needs its
+          own notice - a frozen globe with no explanation is what the one real
+          visitor sat through on 2026-09-18. */}
+      {!overlayRendered && webglLost && (
+        <div className="webgl-lost-bar" role="alert">
+          <span>The 3D globe lost its graphics context and stopped.</span>
+          <button className="webgl-lost-btn" onClick={() => window.location.reload()}>Reload the globe</button>
         </div>
       )}
       {/* Loading cursor overlay for site detail loading */}
@@ -1822,6 +1838,8 @@ function AppContent() {
           track('globe_ready', { ms: Math.round(performance.now()) })
           idleTimerRef.current = setTimeout(() => track('globe_idle', { ms: 30000 }), 30000)
         }}
+        onWebglLost={() => setWebglLost(true)}
+        onWebglRestored={() => setWebglLost(false)}
         onContributeClick={() => setShowContributeModal(true)}
         onAIAgentClick={handleAIAgentClick}
         onDisclaimerClick={() => setShowDisclaimerModal(true)}

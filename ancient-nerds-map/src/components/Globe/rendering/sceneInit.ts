@@ -30,6 +30,10 @@ export interface SceneInitOptions {
   setGpuName: (name: string) => void
   setSoftwareRendering: (value: boolean) => void
   setSceneReady: (value: boolean) => void
+  /** The canvas lost its WebGL context. */
+  onContextLost: (reason: string) => void
+  /** …and got it back. */
+  onContextRestored: () => void
 }
 
 /**
@@ -69,7 +73,15 @@ export function initializeScene(
   container: HTMLElement,
   options: SceneInitOptions
 ): SceneResult {
-  const { initialPosition, refs, setGpuName, setSoftwareRendering, setSceneReady } = options
+  const {
+    initialPosition,
+    refs,
+    setGpuName,
+    setSoftwareRendering,
+    setSceneReady,
+    onContextLost,
+    onContextRestored,
+  } = options
 
   // Cleanup flag to prevent stale async callbacks (logo loading, texture loading, etc.)
   // from running after this effect instance is cleaned up (React strict mode, remounts)
@@ -103,12 +115,18 @@ export function initializeScene(
   canvas.addEventListener('webglcontextlost', (e) => {
     e.preventDefault()
     refs.webglContextLostRef.current = true
-    console.warn('[Globe] WebGL context lost - will recover when restored')
+    onContextLost('context_lost')
   })
   canvas.addEventListener('webglcontextrestored', () => {
     refs.webglContextLostRef.current = false
-    // Labels need to be reloaded as their textures were lost
+    // The textures died with the context. Dispatch here, not only from the
+    // visibility handler: a context restored while the tab is in FRONT used to
+    // leave every label blank until the visitor switched away and back. The
+    // flag stays set because handleLabelReload (geoLabelSystem.ts) reads it as
+    // its own guard and clears it once it has disposed and requeued the labels.
     refs.needsLabelReloadRef.current = true
+    window.dispatchEvent(new CustomEvent('webgl-labels-need-reload'))
+    onContextRestored()
   })
 
   // Scene and Camera
@@ -124,6 +142,8 @@ export function initializeScene(
     const wasHidden = !refs.isPageVisibleRef.current
     refs.isPageVisibleRef.current = !document.hidden
     if (wasHidden && refs.isPageVisibleRef.current) {
+      // A lost context makes this render throw out of an event listener.
+      if (refs.webglContextLostRef.current) return
       // Force a render to refresh the display
       renderer.render(scene, camera)
       // Check if labels need recovery (context was lost while hidden)

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { item } from '../TopContent'
+import { emptyNote, item } from '../TopContent'
 import type { ContentRow } from '../types'
 
 const row = (over: Partial<ContentRow>): ContentRow => ({
@@ -35,5 +35,27 @@ describe('TopContent item', () => {
 
   it('survives a row without a label', () => {
     expect(item(row({ label: '' })).label).toBe('—')
+  })
+})
+
+describe('TopContent note', () => {
+  it('names only the lists that are actually empty', () => {
+    const note = emptyNote(['Stories', 'Papers'])
+    expect(note).toContain('story_open has never fired')
+    expect(note).toContain('paper_open has never fired')
+    expect(note).not.toContain('useSiteSearch')
+  })
+
+  it('says nothing about an event whose list has rows', () => {
+    // The sentence used to be a constant: "story_open, paper_open and search
+    // have never fired, not once" rendered directly under the ranked lists of
+    // those very events — the state the repo's own screenshot fixture draws.
+    const note = emptyNote([])
+    expect(note).toBe('Only what the site actually reports is listed.')
+    expect(note).not.toContain('never fired')
+  })
+
+  it('keeps naming the search bug while the search list is empty', () => {
+    expect(emptyNote(['Search terms'])).toContain('ticket T2')
   })
 })

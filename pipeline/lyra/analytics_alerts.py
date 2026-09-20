@@ -32,6 +32,7 @@ from pipeline.umami_db import (
     SQL_OVERVIEW,
     SQL_SESSION_EVENTS,
     SQL_VITALS,
+    SQL_WEBGL_LOST,
     fetch,
 )
 from pipeline.utils.notify import DISCORD_LIMIT, split_message
@@ -161,6 +162,7 @@ def problem_lines(problem_rows: list[dict[str, Any]], limit: int = 3) -> list[st
         "broken_link": "Dead link",
         "shallow_exit": "Bounce",
         "empty_search": "Empty search",
+        "webgl_lost": "WebGL lost",
     }
     lines = []
     for p in problem_rows[:limit]:
@@ -232,13 +234,15 @@ def weekly_digest(now: datetime | None = None) -> int:
         last_week = fetch(SQL_OVERVIEW, week_start - WEEK, week_start, live=week_start)[0]
         content = fetch(SQL_CONTENT, week_start, now)
         feedback = fetch(SQL_FEEDBACK, week_start, now)
-        # Same four inputs the dashboard's Problems panel uses.
+        # The same inputs the dashboard's Problems panel uses, so digest and
+        # panel never tell two truths.
         ranked = problems(
             sessions_from_rows(fetch(SQL_SESSION_EVENTS, week_start, now)),
             not_found=fetch(SQL_NOT_FOUND, week_start, now),
             vitals=fetch(SQL_VITALS, week_start, now),
             errors=fetch(SQL_ERRORS, week_start, now),
             searches=[r for r in content if r["event_name"] == "search"],
+            webgl=fetch(SQL_WEBGL_LOST, week_start, now),
         )
         message = digest_message(now, this_week, last_week, content, ranked, feedback)
         posted = sum(1 for chunk in split_message(message) if _post({"content": chunk}))

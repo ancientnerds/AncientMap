@@ -5213,6 +5213,73 @@ body.screenshot-mode .screenshot-mode-buttons {
   opacity: 0.5;
 }
 
+/* Takes .loading-hint's place when the GPU context dies while the overlay is
+   still up. Same box height as the hint - 12px line box plus its 4px/12px
+   padding, here split into the button's own padding and margin - so the info
+   bar does not change size at the moment the globe fails. */
+.loading-retry {
+  display: block;
+  margin: 3px auto;
+  padding: 4px 14px;
+  font-family: var(--font-stamp);
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 12px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: #fff;
+  background: var(--btn-primary-bg);
+  border: 1px solid var(--btn-primary-bg);
+  cursor: pointer;
+  position: relative;
+  z-index: 2;
+}
+
+.loading-retry:hover {
+  background: var(--btn-primary-bg-hover);
+}
+
+/* Same failure after the overlay has gone: the globe is the page by then, so
+   the notice has to carry itself. Wraps on a narrow screen. */
+.webgl-lost-bar {
+  position: fixed;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  max-width: calc(100vw - 24px);
+  padding: 10px 16px;
+  background: var(--surface-modal);
+  border: 1px solid var(--brand-primary);
+  box-shadow: 0 0 16px rgba(192, 32, 35, 0.35);
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  font-size: 13px;
+}
+
+.webgl-lost-btn {
+  padding: 6px 12px;
+  background: var(--btn-primary-bg);
+  border: 1px solid var(--btn-primary-bg);
+  color: #fff;
+  font-family: var(--font-stamp);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.webgl-lost-btn:hover {
+  background: var(--btn-primary-bg-hover);
+}
+
 /* Fade in animation for loading screen elements */
 @keyframes loading-fade-in {
   from { opacity: 0; }

@@ -31,15 +31,15 @@ export function BarList({ items, empty }: BarListProps) {
           <span className="dash-bar-label" title={item.label}>
             {item.href ? <a href={item.href}>{item.label}</a> : item.label}
           </span>
-          <span className="dash-bar-value">
-            {fmtInt(item.value)}
-            {item.hint && (
-              <span className={`dash-bar-hint${item.tone === 'warn' ? ' dash-bar-hint--warn' : ''}`}>
-                {' '}
-                {item.hint}
-              </span>
-            )}
-          </span>
+          <span className="dash-bar-value">{fmtInt(item.value)}</span>
+          {/* A sibling of the value, not a child of it: the hint is the longest
+              text in most rows, and inside the auto-sized value column it ate
+              the label's width (dashboard.css, .dash-bar-hint). */}
+          {item.hint && (
+            <span className={`dash-bar-hint${item.tone === 'warn' ? ' dash-bar-hint--warn' : ''}`}>
+              {item.hint}
+            </span>
+          )}
           <span className="dash-bar-track" aria-hidden="true">
             <span className="dash-bar-fill" style={{ width: `${(item.value / max) * 100}%` }} />
           </span>

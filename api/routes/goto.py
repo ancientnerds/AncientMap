@@ -8,21 +8,23 @@ itself the measurement: every human-facing Discord link points at
 ``/goto/discord?src={surface}``, which logs one structured line and 302s to
 the real invite.
 
-Privacy: the log line carries ONLY the allowlisted source label and a
-bot/human flag derived from the user agent. No IP, no referer, no cookie,
-no free text — an unknown ``src`` is counted as ``unknown``, never echoed.
+Privacy: the log line carries ONLY the allowlisted source label, a
+bot/human flag derived from the user agent, and the moment of the click in
+UTC. No IP, no referer, no cookie, no free text — an unknown ``src`` is
+counted as ``unknown``, never echoed.
 
 Read the numbers with scripts/funnel_report.py (docker logs of both API
 containers).
 """
 
 import logging
-import re
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Request
 from fastapi.responses import RedirectResponse
 
 from pipeline.article_html_renderer import DISCORD_INVITE_URL
+from pipeline.referral_log import BOT_UA_RE
 
 logger = logging.getLogger(__name__)
 
@@ -32,17 +34,6 @@ router = APIRouter()
 #: ancient-nerds-map/src/constants/brand.ts (DiscordCtaSource) — the sync
 #: test in tests/api/test_goto_discord.py fails if the two lists drift.
 ALLOWED_SOURCES = frozenset({"seo", "landing", "app", "account", "lyra", "disclaimer"})
-
-#: UA substrings that mark automated clients. Deliberately broad: the point
-#: is separating "a human clicked the CTA" from "a crawler followed the
-#: link", not perfect bot taxonomy. Misclassified stragglers land in the
-#: bot bucket, which only makes the human count conservative.
-BOT_UA_RE = re.compile(
-    r"bot|crawl|spider|slurp|scrapy|curl|wget|python-requests|python-httpx|aiohttp"
-    r"|headless|phantom|lighthouse|facebookexternalhit|whatsapp|telegram|preview"
-    r"|go-http-client|okhttp|java/|libwww",
-    re.IGNORECASE,
-)
 
 
 @router.get("/goto/discord")
@@ -56,5 +47,13 @@ async def goto_discord(request: Request, src: str | None = None) -> RedirectResp
     """
     is_bot = int(bool(BOT_UA_RE.search(request.headers.get("user-agent", ""))))
     label = src if src in ALLOWED_SOURCES else "unknown"
-    logger.info("goto_discord src=%s bot=%d", label, is_bot)
+    # The stamp is part of the message, not of the log format: api/main.py
+    # formats every line as "LEVEL | logger | message" with no asctime, so
+    # until 2026-09-19 this line read "goto_discord src=seo bot=1" and could
+    # not be placed in time at all — `docker logs --since` was the only
+    # window, and the mounted ancient_nerds_api.log had none. Explicit UTC so
+    # the stamp does not depend on the container's timezone, whole seconds
+    # because a click needs no millisecond.
+    clicked_at = datetime.now(UTC).isoformat(timespec="seconds")
+    logger.info("goto_discord src=%s bot=%d at=%s", label, is_bot, clicked_at)
     return RedirectResponse(DISCORD_INVITE_URL, status_code=302)

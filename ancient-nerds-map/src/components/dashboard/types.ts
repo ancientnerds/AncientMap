@@ -7,26 +7,23 @@ import type { MapPoint } from './mapMath'
 
 export type SessionKind = 'reader' | 'explorer' | 'researcher' | 'searcher' | 'other'
 
-export interface DayBlock {
-  views: number
-  sessions: number
-  /** Sessions with an event in the last five minutes. */
-  live: number
-}
-
 export interface HourBucket {
-  /** ISO timestamp of the hour (date_trunc), UTC. */
+  /** Start of the hour, UTC. Always 48 buckets, including the empty ones. */
   hour: string
-  views: number
+  /** Sessions with any event in this hour. */
   sessions: number
+  /** Of those, the confirmed-human ones — the strip's lower segment. */
+  human: number
+  /** Of those, the ones an AI assistant sent. Overlaps `human`; never added
+   *  to it. Too rare to draw (13 in 7 days), so it lives in the legend. */
+  ai: number
 }
 
 /** GET /api/stats/overview?days=N */
 export interface Overview {
-  today: DayBlock
-  yesterday: DayBlock
   days: number
-  sessions: { all: number; human: number }
+  /** `human` and `ai` are both subsets of `all` and overlap each other. */
+  sessions: { all: number; human: number; ai: number }
   types: Partial<Record<SessionKind, number>>
   hours: HourBucket[]
 }
@@ -104,13 +101,75 @@ export interface JourneyChain {
   sessions: number
 }
 
+export interface EntryPage {
+  page: string
+  sessions: number
+  /** Of those, how many went no further. */
+  stopped: number
+}
+export interface ExitPage {
+  page: string
+  sessions: number
+  /** Views of this page type across all human sessions — the row prints
+   *  "12 of 20", never a percentage: 46 human sessions is too few for one. */
+  views: number
+}
+export interface PageEnds {
+  sessions: number
+  /** Human sessions with exactly one page view. There is no `no_page` key:
+   *  a session without a page view is not `human` (stats_analysis.py 9d), so
+   *  that number would be 0 forever. */
+  one_page: number
+  moving: number
+  entries: EntryPage[]
+  exits: ExitPage[]
+}
+export interface OutboundLink {
+  host: string
+  clicks: number
+  visitors: number
+}
+
+export interface ReadingPage {
+  page: string
+  /** One count per mark of `ReadingFunnel.steps`, in that order — sessions
+   *  that reached it. Parallel arrays, so a row is read against `steps`. */
+  sessions: number[]
+}
+/**
+ * How far visitors read, folded out of the same rows as the chains above
+ * (stats_analysis.py reading_funnel). Counts only, never a share: story
+ * 17/15/13/10, country 2/2/2/2, site 1/1/1/1 over the seven days to
+ * 2026-09-19, and twenty readers cannot carry a percentage — a percentage is
+ * what a founder would read one as.
+ */
+export interface ReadingFunnel {
+  /** The percent marks src/analytics/boot.ts fires: 25, 50, 75, 100. */
+  steps: number[]
+  /** Sessions that scrolled at all — the sample size the panel's note has to
+   *  name. boot.ts only fires on a real scroll event, so this is never the
+   *  number of page views. */
+  readers: number
+  pages: ReadingPage[]
+}
+
 /** GET /api/stats/journeys?days=N */
 export interface JourneysData {
   chains: JourneyChain[]
+  pages: PageEnds
+  outbound: OutboundLink[]
+  reading: ReadingFunnel
 }
 
-/** The five failures pipeline/stats_analysis.py problems() knows. */
-export type ProblemKind = 'js_error' | 'slow_page' | 'broken_link' | 'shallow_exit' | 'empty_search'
+/** The six failures pipeline/stats_analysis.py problems() knows. */
+export type ProblemKind =
+  | 'js_error'
+  | 'slow_page'
+  | 'broken_link'
+  | 'shallow_exit'
+  | 'empty_search'
+  /** The globe's WebGL context died — the page is over for that visitor. */
+  | 'webgl_lost'
 
 /**
  * Who a problem last hit. Cookieless analytics has no user: this is the
@@ -146,9 +205,134 @@ export interface SourceRow {
   source: string
   family: string
   sessions: number
+  /** Page views, so the panel can put this next to nginx's request count. */
+  views: number
+}
+
+export interface LogFamily {
+  family: string
+  visits: number
+  bots: number
+}
+export interface LogHost {
+  host: string
+  visits: number
+}
+export interface LogStatus {
+  status: number
+  visits: number
+}
+/** What nginx saw in the same window — human page requests only. */
+export interface LogCoverage {
+  covered_from: string
+  covered_days: number
+  lines: number
+  /** Arrivals from a host in no known family that was seen only once in the
+   *  window — referrer spam, and counted out of `families` and `hosts`
+   *  (pipeline/referral_log.py UNKNOWN_HOST_MIN). */
+  unverified: number
+  families: LogFamily[]
+  hosts: LogHost[]
+  statuses: LogStatus[]
 }
 
 /** GET /api/stats/sources?days=N */
 export interface SourcesData {
   sources: SourceRow[]
+  /** null when /app/logs/referrals.log is not mounted — every dev box. */
+  log: LogCoverage | null
+  /** An English sentence naming the path and the bind, when `log` is null. */
+  log_reason: string | null
+}
+
+/** GET /api/stats/globe?days=N — the denominator is page loads, not sessions. */
+export interface GlobeData {
+  loads: number
+  reached: number
+  gave_up: number
+  sessions: { all: number; reached: number }
+  /** `median` is null below five samples; `min`/`max` are null with none. */
+  ready_ms: { min: number | null; median: number | null; max: number | null; samples: number }
+}
+
+export interface Cluster {
+  screen: string | null
+  browser: string | null
+  os: string | null
+  sessions: number
+}
+/** GET /api/stats/clusters?days=N */
+export interface ClustersData {
+  /** How many session ids had to share one path inside one clock minute to
+   *  count. Every event, not only page views: these clients fire events
+   *  without ever sending one (umami_db.py SQL_CLUSTERS). */
+  min_ids: number
+  flagged: number
+  clusters: Cluster[]
+}
+
+/** A visitor who is here now, and what they have open. Extends Visitor. */
+export interface LiveVisitor extends Visitor {
+  page: string
+  title: string
+  /** Seconds since this page view started. */
+  here: number
+  last_seen: string
+}
+/** GET /api/stats/live — fixed windows, not the page's range switch. */
+export interface LiveData {
+  window_minutes: number
+  lookback_hours: number
+  /** Visitors in the window. `shown` is how many of them the list prints. */
+  total: number
+  shown: number
+  visitors: LiveVisitor[]
+  /** Only when `total` is 0: the most recent visitor of the lookback. */
+  last: LiveVisitor | null
+}
+
+export interface MemberAct {
+  act: string
+  n: number
+  /** Distinct actors on this one table. Not comparable across acts: three of
+   *  the four key on discord_users.id, research_requests on a snowflake. */
+  by: number
+  at: string | null
+}
+/** GET /api/stats/members — all-time counts, never a window. */
+export interface MembersData {
+  members: number
+  founders: number
+  newest_signup: string | null
+  /** The newest login of a FOUNDER, matching the tile it sits under. */
+  last_login: string | null
+  acts: MemberAct[]
+}
+
+export interface DeviceCount {
+  /** desktop / mobile / tablet, plus "unknown" when Umami saw no screen size.
+   *  Umami's own "laptop" is a desktop machine under 1920 px and is folded
+   *  into desktop (stats_analysis.py DEVICE_GROUPS); anything Umami invents
+   *  later arrives verbatim, so the string is not a union. */
+  device: string
+  sessions: number
+}
+export interface LanguageCount {
+  /** The full tag ("en-US") in `languages`, the primary subtag ("en") in
+   *  `language_groups` — the same sessions, read at two resolutions. */
+  language: string
+  sessions: number
+}
+/** GET /api/stats/devices?days=N — counts only. */
+export interface DevicesData {
+  /** The denominator: every session in the window. At this size a share has
+   *  to be printed with the count it came from (laptop 117, mobile 45,
+   *  desktop 6 of 168 sessions = about 27 % phones, not 88 %). */
+  sessions: number
+  devices: DeviceCount[]
+  /** The tag the browser asked for, which is what a row is titled with. */
+  languages: LanguageCount[]
+  /** Folded onto the primary subtag: en-US and en-GB are one audience, and
+   *  "en 114 of 168" is the only headline five small rows carry. */
+  language_groups: LanguageCount[]
 }

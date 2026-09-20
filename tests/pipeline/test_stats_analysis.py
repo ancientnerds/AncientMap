@@ -1,11 +1,13 @@
 # SPDX-License-Identifier: AGPL-3.0-only
-"""api.services.founders_stats — Sessions, Mensch-Filter, Sitzungstypen und
+"""pipeline.stats_analysis — Sessions, Mensch-Filter, Sitzungstypen und
 Journeys aus Umami-Zeilen. Reine Funktionen, hier mit Fixture-Zeilen in der
 Form, die pipeline.umami_db.SQL_SESSION_EVENTS liefert."""
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+import re
+from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 import pytest
 
@@ -251,21 +253,27 @@ LAST = {
     "last_device": "laptop",
     "last_browser": "chrome",
 }
-NOT_FOUND = [{"path": "/old-story", "referrer": "example.org", "n": 3, **LAST}]
-VITALS = [{"page": "story", "name": "LCP", "p75": 4100.0, "samples": 20, **LAST}]
+NOT_FOUND = [{"path": "/old-story", "referrer": "example.org", "n": 3, "sessions": 2, **LAST}]
+VITALS = [
+    {"page": "story", "name": "LCP", "p75": 4100.0, "samples": 20, "sessions": 16, **LAST}
+]
 ERRORS = [{"message": "x is not a function", "page": "globe", "n": 12, "sessions": 5, **LAST}]
 
 
 def _bounce_and_search_rows():
     """Three one-page story sessions that did something of their own (one of
-    them scrolled), one crawler-shaped fetch, and one empty search."""
+    them scrolled), one crawler-shaped fetch, and one empty search.
+
+    The act is `filter_toggle` and not `share`: sharing a page is engagement,
+    and a session that shows engagement is not counted as a bounce (see
+    fs.ENGAGEMENTS and the test below it)."""
     return [
         ev("a", path="/news-archive/x-1"),
-        ev("a", "share", event_type=2, data={"target": "x-1"}),
+        ev("a", "filter_toggle", event_type=2, data={"filter": "type"}),
         ev("b", path="/news-archive/x-1"),
-        ev("b", "lyra_chat", event_type=2, data={"page": "story"}),
+        ev("b", "search", event_type=2, data={"q": "giza", "results": "3"}),
         ev("c", path="/news-archive/x-1"),
-        ev("c", "share", event_type=2, data={"target": "x-1"}),
+        ev("c", "filter_toggle", event_type=2, data={"filter": "type"}),
         ev("c", "scroll_depth", event_type=2, data={"depth": "25"}),
         ev("bot", path="/news-archive/x-1"),  # one page, nothing else
         ev("d", path="/search.html"),
@@ -289,11 +297,13 @@ def test_problems_rank_errors_slow_pages_dead_links_bounces_and_empty_searches()
     assert by_kind["js_error"]["score"] == 15
     assert by_kind["js_error"]["label"] == "x is not a function"
     assert by_kind["js_error"]["detail"] == "5 visitors, 12× on globe"
-    assert by_kind["slow_page"]["score"] == 20  # as many samples as it has
+    # 16 visitors × 4100 ms against the 2500 ms budget: the visitors it reached,
+    # weighted by how far past the budget the page is.
+    assert by_kind["slow_page"]["score"] == 26
     # The metric is part of the label: one page type can be slow on LCP and INP.
     assert by_kind["slow_page"]["label"] == "story · LCP"
     assert "4100" in by_kind["slow_page"]["detail"]
-    assert by_kind["broken_link"]["score"] == 6  # 3 hits, weighted two
+    assert by_kind["broken_link"]["score"] == 4  # 2 visitors, weighted two
     assert by_kind["broken_link"]["label"] == "/old-story"
     assert "example.org" in by_kind["broken_link"]["detail"]
     # a and b; c scrolled to 25 %, and the bare fetch is not a visitor we know.
@@ -345,17 +355,46 @@ def test_problems_are_empty_without_findings():
     ],
 )
 def test_slow_page_uses_the_core_web_vitals_thresholds(name, p75, slow):
-    rows = [{"page": "site", "name": name, "p75": p75, "samples": 12}]
+    rows = [{"page": "site", "name": name, "p75": p75, "samples": 12, "sessions": 10}]
     kinds = [p["kind"] for p in fs.problems([], not_found=[], vitals=rows, errors=[])]
     assert ("slow_page" in kinds) is slow
 
 
+def test_a_page_barely_over_budget_never_outranks_a_worse_one_with_more_traffic():
+    """The live seven-day window on 2026-09-19, straight out of SQL_VITALS.
+
+    story · LCP misses the 2500 ms budget by 24 ms (0.96 %) and is the
+    most-visited page type; globe · INP is 4.6× its budget. Scored by the
+    measurement count, story took the top row of the panel and of the weekly
+    digest, globe came second, and a WebGL failure that ended somebody's visit
+    came seventh."""
+    vitals = [
+        {"page": "story", "name": "LCP", "p75": 2524.0, "samples": 35, "sessions": 28},
+        {"page": "globe", "name": "INP", "p75": 800.0, "samples": 19, "sessions": 13},
+        {"page": "country", "name": "LCP", "p75": 2760.0, "samples": 17, "sessions": 17},
+    ]
+    out = fs.problems([], not_found=[], vitals=vitals, errors=[])
+    assert [p["label"] for p in out] == ["globe · INP", "story · LCP", "country · LCP"]
+    assert [p["score"] for p in out] == [52, 28, 19]
+
+
+def test_one_visitor_reloading_a_dead_link_is_one_broken_link():
+    """The score is people, like every other kind on the panel — `n` stays in
+    the sentence the panel prints, because that is a view count."""
+    rows = [{"path": "/old", "referrer": "reddit.com", "n": 10, "sessions": 1}]
+    out = fs.problems([], not_found=rows, vitals=[], errors=[])
+    assert out[0]["score"] == 2
+    assert out[0]["detail"] == "10 views into nothing, from reddit.com"
+
+
 def test_a_percentile_out_of_a_handful_of_loads_is_not_a_slow_page():
     """radar showed "p75 4717 ms" from three measurements on 2026-09-19 — one
-    visitor's phone, ranked above real defects."""
-    over = {"page": "radar", "name": "LCP", "p75": 4717.0}
-    few = [{**over, "samples": fs.VITAL_MIN_SAMPLES - 1}]
-    enough = [{**over, "samples": fs.VITAL_MIN_SAMPLES}]
+    visitor's phone, ranked above real defects. The gate reads the number of
+    measurements, not the number of visitors: a percentile needs samples."""
+    over = {"page": "radar", "name": "LCP", "p75": 4717.0, "sessions": 3}
+    few = [{**over, "samples": 3}]
+    enough = [{**over, "samples": 12}]
+    assert fs.VITAL_MIN_SAMPLES == 10
     assert fs.problems([], not_found=[], vitals=few, errors=[]) == []
     assert [p["kind"] for p in fs.problems([], not_found=[], vitals=enough, errors=[])] == [
         "slow_page"
@@ -363,7 +402,7 @@ def test_a_percentile_out_of_a_handful_of_loads_is_not_a_slow_page():
 
 
 def test_a_single_dead_hit_is_noise_not_a_broken_link():
-    rows = [{"path": "/typo", "referrer": "direkt", "n": 1}]
+    rows = [{"path": "/typo", "referrer": "direkt", "n": 1, "sessions": 1}]
     assert fs.problems([], not_found=rows, vitals=[], errors=[]) == []
 
 
@@ -375,11 +414,11 @@ def test_shallow_exit_counts_only_visitors_we_can_tell_from_a_crawler():
         ev("deep", "site_open", event_type=2, data={"context": "globe"}),
         ev("deep", "scroll_depth", event_type=2, data={"depth": "75"}),
         ev("gone", path="/sites/peru/x-1"),
-        ev("gone", "share", event_type=2, data={"target": "x-1"}),
+        ev("gone", "filter_toggle", event_type=2, data={"filter": "type"}),
         ev("home", path="/"),  # home is neither story nor site
         ev("home", "search", event_type=2, data={"q": "giza", "results": "3"}),
         ev("bounce1", path="/news-archive/x-1"),
-        ev("bounce1", "share", event_type=2, data={"target": "x-1"}),
+        ev("bounce1", "filter_toggle", event_type=2, data={"filter": "type"}),
         ev("bounce2", path="/news-archive/x-1"),  # nothing but the fetch
         ev("seo", path="/sites/peru/x-1"),
         ev("seo", "site_open", event_type=2, data={"context": "site"}),  # the page itself
@@ -389,6 +428,50 @@ def test_shallow_exit_counts_only_visitors_we_can_tell_from_a_crawler():
     assert exits == {"story": 1, "site": 1}
     # Singular where it is one — the panel prints these details verbatim.
     assert all("1 visitor read" in p["detail"] for p in out if p["kind"] == "shallow_exit")
+
+
+def test_a_visitor_who_played_the_video_or_clicked_out_is_not_a_bounce():
+    """The five sessions this test caught on 2026-09-19 were the week's most
+    engaged: all five played the embedded video, four of them then clicked
+    through to youtube.com — and the panel called them "read one page, under
+    25 % scrolled" while the Paths panel counted the same clicks as links out
+    of the site. A scroll mark is not the only sign that a page was used."""
+    rows = [
+        ev("watched", path="/news-archive/x-1"),
+        ev("watched", "media_play", event_type=2, data={"id": "yt-1"}),
+        ev("watched", "outbound_click", event_type=2, data={"host": "youtube.com"}),
+        ev("shared", path="/sites/peru/x-1"),
+        ev("shared", "share", event_type=2, data={"target": "x-1"}),
+        ev("rated", path="/news-archive/y-2"),
+        ev("rated", "feedback", event_type=2, data={"answer": "yes"}),
+        ev("asked", path="/news-archive/z-3"),
+        ev("asked", "lyra_chat", event_type=2, data={"page": "story"}),
+        # The one shape that is still a bounce: a human act that says nothing
+        # about the page they were on, and no scroll.
+        ev("left", path="/news-archive/x-1"),
+        ev("left", "filter_toggle", event_type=2, data={"filter": "type"}),
+    ]
+    out = fs.problems(fs.sessions_from_rows(rows), not_found=[], vitals=[], errors=[])
+    exits = {p["label"]: p["score"] for p in out if p["kind"] == "shallow_exit"}
+    assert exits == {"story": 1}
+    assert exits["story"] == 1  # only "left", none of the four engaged ones
+
+
+def test_a_click_off_the_site_is_a_person():
+    """boot.ts fires outbound_click and discord_click from a click handler and
+    from nowhere else. Left out of INTERACTIONS, the one live session that
+    opened a story and followed a link off the site (2026-09-19) counted as
+    "may be a bot" on the pulse strip, in the country tiles and in every
+    human total on the page."""
+    rows = [
+        ev("out", path="/news-archive/x-1"),
+        ev("out", "outbound_click", event_type=2, data={"host": "youtube.com"}),
+        ev("dc", path="/"),
+        ev("dc", "discord_click", event_type=2, data={"src": "landing"}),
+    ]
+    assert {s.id: s.human for s in fs.sessions_from_rows(rows)} == {"out": True, "dc": True}
+    # Every engagement is an interaction; the reverse does not hold.
+    assert set(fs.ENGAGEMENTS) <= fs.INTERACTIONS
 
 
 def test_problems_are_capped():
@@ -417,3 +500,412 @@ def test_problems_are_capped():
 )
 def test_source_family(referrer, utm, expected):
     assert fs.source_family(referrer, utm) == expected
+
+
+# ---- is_ai_entry ----------------------------------------------------------
+
+
+def test_is_ai_entry_reads_both_columns_and_both_vocabularies():
+    """Die beiden Spalten sprechen zwei Vokabulare: der Referrer einen Host,
+    das utm einen Host ODER ein nacktes Label. Eine Regel nur gegen AI_HOSTS
+    findet eine der dreizehn Live-Sessions."""
+    assert fs.is_ai_entry(None, "chatgpt.com")
+    assert fs.is_ai_entry(None, "perplexity")
+    assert fs.is_ai_entry("gemini.google.com")
+    assert not fs.is_ai_entry(None, "youtube")
+    assert not fs.is_ai_entry("google.com")
+
+
+def test_source_family_buckets_a_bare_utm_label_as_ai():
+    # Ein Argument, positional: so ruft /sources die Funktion auf.
+    assert fs.source_family("perplexity") == "ai"
+    assert fs.source_family(None, "chatgpt.com") == "ai"
+    assert fs.source_family(None, "youtube") == "youtube"
+    assert fs.source_family("google.com") == "google"
+
+
+# ---- pages, page_steps, human ---------------------------------------------
+
+
+def test_a_session_without_a_page_view_is_not_human():
+    """Acht Live-Sessions am 2026-09-19 hatten genau ein scroll_depth und
+    keinen einzigen Seitenaufruf - alle acht in den zwei Fingerabdruecken, die
+    /clusters als eine Maschine ausweist."""
+    ghost = fs.sessions_from_rows([ev("g", "scroll_depth", event_type=2, data={"depth": "50"})])
+    assert ghost[0].human is False
+    with_page = fs.sessions_from_rows(
+        [
+            ev("g", path="/news-archive/x-1"),
+            ev("g", "scroll_depth", event_type=2, data={"depth": "50"}),
+        ]
+    )
+    assert with_page[0].human is True
+
+
+def test_pages_is_the_length_of_page_steps():
+    rows = [
+        ev("a", path="/news-archive/x-1"),
+        ev("a", path="/sites/peru/x-1", minute=1),
+    ]
+    s = fs.sessions_from_rows(rows)[0]
+    assert s.pages == 2 == len(s.page_steps)
+    assert s.page_steps == ["story", "site"]
+    with pytest.raises(AttributeError):
+        s.pages = 3
+
+
+def test_page_steps_keep_only_pages_while_steps_interleave_events():
+    """Deshalb gibt es beide Listen: "search" ist ein Ereignisname UND der
+    Seitentyp von /search.html."""
+    rows = [
+        ev("s", path="/search.html"),
+        ev("s", "search", event_type=2, data={"q": "giza", "results": "3"}),
+    ]
+    s = fs.sessions_from_rows(rows)[0]
+    assert s.page_steps == ["search"]
+    assert s.steps == ["search", "search"]
+
+
+# ---- hourly_sessions ------------------------------------------------------
+
+
+def test_hourly_sessions_draws_every_hour_even_the_empty_ones():
+    until = T.replace(hour=12, minute=30)
+    rows = [
+        ev("a", path="/", minute=0),
+        {**ev("b", path="/"), "created_at": T.replace(hour=10)},
+    ]
+    out = fs.hourly_sessions(rows, fs.sessions_from_rows(rows), until, hours=3)
+    assert len(out) == 3
+    assert [r["hour"] for r in out] == [
+        T.replace(hour=10, minute=0),
+        T.replace(hour=11, minute=0),
+        T.replace(hour=12, minute=0),
+    ]
+    assert out[1] == {"hour": T.replace(hour=11, minute=0), "sessions": 0, "human": 0, "ai": 0}
+    assert out[2]["sessions"] == 1
+
+
+def test_hourly_sessions_splits_human_from_the_rest_and_counts_ai_separately():
+    rows = [
+        ev("human", path="/news-archive/x-1"),
+        ev("human", path="/news-archive/y-2", minute=1),
+        ev("quiet", path="/news-archive/z-3"),
+        ev("ai", path="/news-archive/x-1", utm_source="chatgpt.com"),
+        ev("ai", path="/news-archive/y-2", minute=1, utm_source="chatgpt.com"),
+    ]
+    out = fs.hourly_sessions(rows, fs.sessions_from_rows(rows), T.replace(minute=59), hours=1)
+    assert out == [{"hour": T.replace(minute=0), "sessions": 3, "human": 2, "ai": 1}]
+
+
+def test_hourly_sessions_ignores_rows_outside_the_strip():
+    rows = [ev("a", path="/")]
+    old = {**ev("old", path="/"), "created_at": T.replace(hour=0) - timedelta(hours=100)}
+    sessions = fs.sessions_from_rows(rows + [old])
+    out = fs.hourly_sessions(rows + [old], sessions, T.replace(minute=59), hours=2)
+    assert sum(r["sessions"] for r in out) == 1
+
+
+# ---- globe ----------------------------------------------------------------
+
+
+def _globe_row(session="a", views=1, ready=0, ready_ms=()):
+    return {"session_id": session, "views": views, "ready": ready, "ready_ms": list(ready_ms)}
+
+
+def test_globe_funnel_counts_loads_and_reaches():
+    out = fs.globe_funnel(
+        [
+            _globe_row("a", views=3, ready=1, ready_ms=[9450.0]),
+            _globe_row("b", views=1, ready=0),
+            _globe_row("empty", views=0, ready=0),
+        ]
+    )
+    assert (out["loads"], out["reached"], out["gave_up"]) == (4, 1, 3)
+    assert out["sessions"] == {"all": 2, "reached": 1}
+    # Ein globe_ready kann nach dem Fensterrand ankommen: nie mehr Erfolge
+    # als Aufrufe.
+    capped = fs.globe_funnel([_globe_row("c", views=1, ready=2, ready_ms=[10.0, 20.0])])
+    assert capped["reached"] == 1 and capped["loads"] == 1
+
+
+def test_globe_funnel_hides_the_middle_below_the_sample_floor():
+    few = [_globe_row(ready_ms=[float(i) for i in range(fs.GLOBE_MIN_SAMPLES - 1)], ready=4)]
+    out = fs.globe_funnel(few)
+    assert out["ready_ms"]["median"] is None
+    assert out["ready_ms"]["min"] == 0.0 and out["ready_ms"]["max"] == 3.0
+    assert out["ready_ms"]["samples"] == fs.GLOBE_MIN_SAMPLES - 1
+    enough = [_globe_row(ready_ms=[float(i) for i in range(fs.GLOBE_MIN_SAMPLES)], ready=5)]
+    assert fs.globe_funnel(enough)["ready_ms"]["median"] == 2.0
+
+
+# ---- clusters -------------------------------------------------------------
+
+
+def test_clusters_report_the_flagged_total_and_the_fingerprints():
+    """Gemessen am 2026-09-19: 1366x1366 chrome Mac OS 22 und 1280x1200
+    chrome Windows 10 16 - zusammen 38 von 163 Sessions."""
+    rows = [
+        {"screen": "1366x1366", "browser": "chrome", "os": "Mac OS", "sessions": 22},
+        {"screen": "1280x1200", "browser": "chrome", "os": "Windows 10", "sessions": 16},
+    ]
+    out = fs.clusters(rows, min_ids=3)
+    assert out["flagged"] == 38 and out["min_ids"] == 3
+    assert out["clusters"][0] == rows[0]
+    # Keine Sitzungssumme: die holt das Panel aus /overview.
+    assert set(out) == {"min_ids", "flagged", "clusters"}
+
+
+# ---- entries, exits, outbound ---------------------------------------------
+
+
+def test_entry_exit_pages_count_landings_stops_and_one_page_sessions():
+    rows = [
+        ev("moves", path="/news-archive/x-1"),
+        ev("moves", path="/sites/peru/x-1", minute=1),
+        ev("stops", path="/news-archive/y-2"),
+        ev("stops", "share", event_type=2, data={"target": "y-2"}),
+    ]
+    out = fs.entry_exit_pages(fs.sessions_from_rows(rows))
+    assert (out["sessions"], out["one_page"], out["moving"]) == (2, 1, 1)
+    assert out["entries"][0] == {"page": "story", "sessions": 2, "stopped": 1}
+    assert out["exits"][0] == {"page": "site", "sessions": 1, "views": 1}
+    # Nur Seitentypen, keine Ereignisnamen - dafuer gibt es page_steps.
+    assert [r["page"] for r in out["exits"]] == ["site", "story"]
+    # Kein `no_page`: seit 9d ist eine Session ohne Seitenaufruf nicht human,
+    # die Zahl waere fuer immer 0 von 46.
+    assert "no_page" not in out
+
+
+def test_entry_exit_pages_ignore_sessions_that_are_not_human():
+    rows = [
+        ev("real", path="/news-archive/x-1"),
+        ev("real", path="/news-archive/y-2", minute=1),
+        ev("bare", path="/news-archive/z-3"),
+        ev("ghost", "scroll_depth", event_type=2, data={"depth": "100"}),
+    ]
+    out = fs.entry_exit_pages(fs.sessions_from_rows(rows))
+    assert out["sessions"] == 1
+    assert [r["page"] for r in out["entries"]] == ["story"]
+
+
+def test_outbound_links_fold_from_the_session_rows():
+    rows = [
+        ev("a", "outbound_click", event_type=2, data={"host": "youtube.com"}),
+        ev("a", "outbound_click", event_type=2, data={"host": "youtube.com"}, minute=1),
+        ev("b", "outbound_click", event_type=2, data={"host": "youtube.com"}),
+    ]
+    assert fs.outbound_links(rows) == [{"host": "youtube.com", "clicks": 3, "visitors": 2}]
+
+
+def test_outbound_links_fail_loudly_on_drift():
+    """boot.ts feuert das Ereignis erst, wenn outboundHost() einen Host
+    geliefert hat - eine Zeile ohne Host ist SQL-Drift und darf nicht still
+    verschwinden."""
+    no_data = [{**ev("a", "outbound_click", event_type=2), "data": None}]
+    with pytest.raises(TypeError):
+        fs.outbound_links(no_data)
+    with pytest.raises(KeyError):
+        fs.outbound_links([ev("a", "outbound_click", event_type=2, data={})])
+
+
+# ---- the live panel's row -------------------------------------------------
+
+
+def test_without_brand_keeps_a_title_that_carries_no_brand():
+    assert fs.without_brand("Goebekli Tepe | Ancient Nerds") == "Goebekli Tepe"
+    # Eine von zwei Live-Ueberschriften, die nicht auf die Marke enden.
+    assert fs.without_brand("Database - Ancient Nerds") == "Database - Ancient Nerds"
+    assert fs.without_brand("Sun | Moon | Ancient Nerds") == "Sun | Moon"
+
+
+def test_live_row_uses_the_same_visitor_shape_and_id_rule():
+    now = T.replace(minute=30)
+    row = {
+        "session": "cf01aa30-7c4d-4b5b-ae73-9cf41c550e9c",
+        "last_seen": T.replace(minute=29),
+        "page_since": T.replace(minute=20),
+        "url_path": "/sites/peru/x-1",
+        "title": "Machu Picchu | Ancient Nerds",
+        "country": "CH",
+        "device": "laptop",
+        "browser": "chrome",
+    }
+    out = fs.live_row(row, now)
+    same = fs._last_visitor(
+        {
+            "last_session": row["session"],
+            "last_country": row["country"],
+            "last_device": row["device"],
+            "last_browser": row["browser"],
+        }
+    )
+    assert {k: out[k] for k in ("session", "country", "device", "browser")} == same
+    assert out["session"] == "cf01aa30"
+    assert out["page"] == "site" and out["title"] == "Machu Picchu"
+    assert out["here"] == 600
+    assert out["last_seen"] == row["last_seen"].isoformat()
+
+
+# ---- devices and languages ------------------------------------------------
+
+
+def test_laptop_and_desktop_are_one_machine():
+    """Umami schreibt "laptop" fuer einen Desktop unter 1920 px - das ist eine
+    Bildschirmgroesse, kein anderes Geraet. Live am 2026-09-19: laptop 117,
+    mobile 45, desktop 6 von 168 Sessions, also rund 27 % Telefone."""
+    rows = [
+        {"device": "laptop", "language": "en-US", "sessions": 117},
+        {"device": "mobile", "language": "en-US", "sessions": 45},
+        {"device": "desktop", "language": "de-DE", "sessions": 6},
+    ]
+    out = fs.devices_and_languages(rows)
+    assert out["sessions"] == 168
+    assert out["devices"] == [
+        {"device": "desktop", "sessions": 123},
+        {"device": "mobile", "sessions": 45},
+    ]
+
+
+def test_a_session_umami_could_not_place_keeps_its_own_row():
+    """Die Zahlen neben den Anteilen muessen die Sessions ergeben, die die
+    Seite behauptet - also wird nichts weggelassen."""
+    out = fs.devices_and_languages(
+        [
+            {"device": None, "language": None, "sessions": 2},
+            {"device": "smarttv", "language": "en-GB", "sessions": 1},
+        ]
+    )
+    assert out["sessions"] == 3
+    assert {r["device"]: r["sessions"] for r in out["devices"]} == {"unknown": 2, "smarttv": 1}
+    # Ohne Sprache keine Sprachzeile: eine leere Angabe ist keine Sprache.
+    assert out["languages"] == [{"language": "en-GB", "sessions": 1}]
+
+
+def test_languages_keep_the_full_tag_and_group_by_the_primary_subtag():
+    rows = [
+        {"device": "laptop", "language": "en-US", "sessions": 93},
+        {"device": "mobile", "language": "en-GB", "sessions": 21},
+        {"device": "mobile", "language": "zh-CN", "sessions": 11},
+        {"device": "laptop", "language": "de-DE", "sessions": 7},
+    ]
+    out = fs.devices_and_languages(rows)
+    assert out["languages"][:2] == [
+        {"language": "en-US", "sessions": 93},
+        {"language": "en-GB", "sessions": 21},
+    ]
+    assert out["language_groups"][0] == {"language": "en", "sessions": 114}
+    assert [r["language"] for r in out["language_groups"]] == ["en", "zh", "de"]
+
+
+# ---- the reading funnel ---------------------------------------------------
+
+
+def _scroll(session, page, depth, minute=0):
+    return ev(
+        session,
+        "scroll_depth",
+        event_type=2,
+        data={"page": page, "depth": str(depth)},
+        minute=minute,
+    )
+
+
+def test_reading_funnel_counts_visitors_per_step_and_never_a_share():
+    """boot.ts feuert jede Marke einmal pro Seitenaufruf - wer bei einer Marke
+    auftaucht, hat sie erreicht. Live am 2026-09-19 liefert die Funktion
+    story 17/15/13/10 bei 20 Lesern."""
+    rows = [
+        _scroll("a", "story", 25),
+        _scroll("a", "story", 50, minute=1),
+        _scroll("a", "story", 75, minute=2),
+        _scroll("a", "story", 100, minute=3),
+        _scroll("b", "story", 25),
+        _scroll("b", "story", 50, minute=1),
+        _scroll("c", "country", 25),
+    ]
+    out = fs.reading_funnel(rows)
+    assert out["steps"] == [25, 50, 75, 100]
+    assert out["readers"] == 3
+    assert out["pages"] == [
+        {"page": "story", "sessions": [2, 2, 1, 1]},
+        {"page": "country", "sessions": [1, 0, 0, 0]},
+    ]
+    # Keine Prozente, nirgends: zwanzig Lesevorgaenge tragen keine Quote.
+    assert "share" not in out and all("share" not in p for p in out["pages"])
+
+
+def test_reading_funnel_counts_a_visitor_once_per_step():
+    rows = [_scroll("a", "story", 100), _scroll("a", "story", 100, minute=5)]
+    assert fs.reading_funnel(rows)["pages"] == [{"page": "story", "sessions": [1, 1, 1, 1]}]
+
+
+def test_reading_funnel_credits_a_deep_mark_that_arrived_alone():
+    """Sechs der siebzehn story-Sessions vom 2026-09-19 tragen genau eine tiefe
+    Marke und keine flachere - die vier Sendungen aus einem Frame kommen nicht
+    alle an. Wer 100 meldet, hat 25 passiert, also zaehlt er auf jeder Stufe;
+    sonst waere der Trichterkopf kleiner als seine eigene Mitte."""
+    out = fs.reading_funnel([_scroll("a", "story", 100), _scroll("b", "story", 50)])
+    assert out["pages"] == [{"page": "story", "sessions": [2, 2, 1, 1]}]
+    assert out["readers"] == 2
+
+
+def test_reading_funnel_fails_loudly_on_drift():
+    """boot.ts schickt depth und page zusammen. Eine scroll_depth-Zeile ohne
+    die beiden ist SQL- oder Tracker-Drift und darf nicht still als
+    "niemand hat gelesen" durchgehen."""
+    with pytest.raises(KeyError):
+        fs.reading_funnel([ev("a", "scroll_depth", event_type=2, data={"depth": "50"})])
+    with pytest.raises(TypeError):
+        fs.reading_funnel([{**ev("a", "scroll_depth", event_type=2), "data": None}])
+
+
+def test_reading_funnel_ignores_everything_that_is_not_a_scroll():
+    rows = [
+        ev("a", path="/news-archive/x-1"),
+        ev("a", "share", event_type=2, data={"target": "x-1"}),
+    ]
+    assert fs.reading_funnel(rows) == {"steps": [25, 50, 75, 100], "readers": 0, "pages": []}
+
+
+# ---- problems: the sixth kind ---------------------------------------------
+
+
+def test_problems_rank_a_lost_webgl_context_by_the_visitors_it_reached():
+    webgl = [{"phase": "loading", "reason": "no_shader", "n": 19, "sessions": 16, **LAST}]
+    out = fs.problems([], not_found=[], vitals=[], errors=[], webgl=webgl)
+    assert out[0]["kind"] == "webgl_lost"
+    assert out[0]["score"] == 48
+    assert out[0]["label"] == "globe never started"
+    assert out[0]["detail"] == "16 visitors, 19× — no_shader"
+    # Eine unbekannte Phase fliegt auf, statt still ein falsches Label zu tragen.
+    with pytest.raises(KeyError):
+        fs.problems([], not_found=[], vitals=[], errors=[], webgl=[{**webgl[0], "phase": "x"}])
+
+
+def test_the_webgl_phases_are_the_ones_the_globe_sends():
+    """WEBGL_PHASES has no default (the test above pins the KeyError), and the
+    vocabulary is written in another language in another repo tree: Globe.tsx
+    computes `layersReadyCalledRef.current ? 'live' : 'loading'` and sends that
+    string. A third phase there would turn every /api/stats/problems call into
+    a 500 and every founder's Problems panel into "Data unavailable." Same
+    guard as tests/api/test_goto_discord.py::TestAllowlistSync."""
+    globe_tsx = (
+        Path(__file__).resolve().parents[2]
+        / "ancient-nerds-map"
+        / "src"
+        / "components"
+        / "Globe.tsx"
+    ).read_text(encoding="utf-8")
+    m = re.search(r"const phase = \w+\.current \? '(\w+)' : '(\w+)'", globe_tsx)
+    assert m, "the webgl_lost phase ternary is not in Globe.tsx any more"
+    assert set(m.groups()) == set(fs.WEBGL_PHASES)
+    assert "track('webgl_lost', { reason, phase })" in globe_tsx
+
+
+def test_problems_list_eight_rows_by_default():
+    errors = [
+        {"message": f"e{i}", "page": "globe", "n": 30 - i, "sessions": 30 - i} for i in range(12)
+    ]
+    assert len(fs.problems([], not_found=[], vitals=[], errors=errors)) == 8
+    assert len(fs.problems([], not_found=[], vitals=[], errors=errors, limit=5)) == 5

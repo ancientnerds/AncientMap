@@ -9,12 +9,24 @@ describe('problem severity', () => {
     expect(severity('slow_page')).toBe('mid')
     expect(severity('shallow_exit')).toBe('low')
     expect(severity('empty_search')).toBe('low')
+    // A dead graphics context is the globe not existing, which is the same
+    // class of failure as a thrown exception — stats_analysis.problems()
+    // scores both at three per visitor.
+    expect(severity('webgl_lost')).toBe('high')
   })
 
   it('names every kind the API can send', () => {
-    for (const kind of ['js_error', 'slow_page', 'broken_link', 'shallow_exit', 'empty_search'] as const) {
+    for (const kind of [
+      'js_error',
+      'slow_page',
+      'broken_link',
+      'shallow_exit',
+      'empty_search',
+      'webgl_lost',
+    ] as const) {
       expect(problemLabel(kind)).not.toBe('')
     }
     expect(problemLabel('js_error')).toBe('JS error')
+    expect(problemLabel('webgl_lost')).toBe('WebGL lost')
   })
 })

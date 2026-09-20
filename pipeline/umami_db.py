@@ -9,8 +9,8 @@ Umami 3 columns this relies on (verified on production, 2026-09-17):
 ``website_event`` (event_id, website_id, session_id, created_at, url_path,
 referrer_domain, utm_source, event_type, event_name), ``event_data``
 (website_event_id, data_key, string_value, number_value) and ``session``
-(session_id, country, city, device, browser). event_type 1 = pageview,
-2 = custom event.
+(session_id, country, city, device, browser, screen, os, language).
+event_type 1 = pageview, 2 = custom event.
 """
 
 from __future__ import annotations
@@ -64,14 +64,6 @@ FROM website_event e JOIN session s ON s.session_id = e.session_id
 WHERE e.website_id = :website_id AND e.event_type = 1
   AND e.created_at >= :since AND e.created_at < :until
 GROUP BY 1, 2, 3
-"""
-
-SQL_HOUR_BUCKETS = """
-SELECT date_trunc('hour', created_at) AS hour, count(*) FILTER (WHERE event_type = 1) AS views,
-       count(DISTINCT session_id) AS sessions
-FROM website_event
-WHERE website_id = :website_id AND created_at >= :since AND created_at < :until
-GROUP BY 1 ORDER BY 1
 """
 
 SQL_SESSION_EVENTS = """
@@ -151,7 +143,13 @@ GROUP BY e.event_id, e.created_at, e.url_path ORDER BY e.created_at DESC LIMIT 2
 
 SQL_SOURCES = """
 SELECT coalesce(nullif(utm_source, ''), nullif(referrer_domain, ''), 'direct') AS source,
-       count(DISTINCT session_id) AS sessions
+       count(DISTINCT session_id) AS sessions,
+       -- Page views as well as sessions, so the panel can put Umami's number
+       -- next to nginx's, which counts requests. Measured 2026-09-19 over the
+       -- same window: nginx answered 189 Google page arrivals (168 with a 200,
+       -- 21 with a 410) while Umami recorded 62 views from 51 sessions. The
+       -- gap is the panel's whole point.
+       count(*) AS views
 FROM website_event
 WHERE website_id = :website_id AND event_type = 1
   AND created_at >= :since AND created_at < :until
@@ -174,6 +172,10 @@ _LAST_VISITOR = """       max(created_at) AS last_at,
 #: so itself: one `not_found` event per view with the missing path and the
 #: referrer's host (pipeline/article_html_renderer.py, _NOT_FOUND_FEEDBACK).
 #: Two levels again — path and referrer are two event_data rows per event.
+#: Both counts travel, exactly as in SQL_ERRORS: ``n`` is how often the dead
+#: link was hit and is what the panel prints, ``sessions`` how many visitors
+#: hit it and is what the score weighs — one person reloading a dead link ten
+#: times is one broken link, not ten.
 SQL_NOT_FOUND = (
     """
 WITH ev AS (
@@ -190,6 +192,7 @@ WITH ev AS (
     GROUP BY e.event_id, e.session_id, e.created_at, s.country, s.device, s.browser
 )
 SELECT path, coalesce(nullif(referrer, ''), 'direct') AS referrer, count(*) AS n,
+       count(DISTINCT session_id) AS sessions,
 """
     + _LAST_VISITOR
     + """
@@ -205,6 +208,10 @@ LIMIT 50
 #: and what a visitor with a middling phone actually waits. `value` is a
 #: number, so it lives in number_value; the cast keeps Postgres from handing
 #: back a numeric that would serialise as a string.
+#: `samples` and `sessions` are both needed and mean different things:
+#: a percentile is only a percentile over enough *measurements*
+#: (stats_analysis.VITAL_MIN_SAMPLES), while the panel's score weighs the
+#: *visitors* it reached, like every other kind on that panel.
 SQL_VITALS = (
     """
 WITH ev AS (
@@ -226,6 +233,7 @@ SELECT
     name,
     percentile_cont(0.75) WITHIN GROUP (ORDER BY metric_value::float8) AS p75,
     count(*) AS samples,
+    count(DISTINCT session_id) AS sessions,
 """
     + _LAST_VISITOR
     + """
@@ -272,6 +280,201 @@ ORDER BY sessions DESC, n DESC
 LIMIT 30
 """
 )
+
+
+#: The one path that hosts the globe. Verified 2026-09-19: exactly one
+#: url_path contains "globe", all eight globe_ready events ever recorded fired
+#: there, and no url_path carries a query string, so equality is exact.
+GLOBE_PATH = "/globe.html"
+
+#: How often the globe actually comes up, and how long it took when it did.
+#: One row per session:
+#:   views    - page views, one per document load. App.tsx never calls
+#:              pushState (only AccountPage and ArticlesPage do), so Umami
+#:              cannot manufacture a virtual view here and views and
+#:              globe_ready are the same granularity.
+#:   ready    - globe_ready, fired once per load from onLayersReady.
+#:   ready_ms - the milliseconds each globe_ready carried, so the funnel and
+#:              the times come from ONE scan.
+#: The LEFT JOIN is load-bearing: a page view has no event_data row.
+#: There is deliberately no "did the bundle boot" column. web-vitals' onTTFB
+#: waits for document.readyState === 'complete', so a visitor who leaves
+#: during a sixteen-second loading overlay reports no vital at all - counting
+#: those loads out of the denominator would remove exactly the abandoners
+#: this query exists to find (measured 2026-09-19: 6 of 33 loads).
+#: globe_idle is not read either: markGlobeActivity() is called from three
+#: places only, so a camera drag leaves the timer armed. Both live globe_idle
+#: events carry the literal ms=30000 and both belong to a visitor who was
+#: toggling a country filter at that moment. Precision 0/2.
+SQL_GLOBE = """
+WITH ev AS (
+    SELECT e.event_id, e.session_id, e.created_at, e.event_type, e.event_name,
+           (max(d.number_value) FILTER (WHERE d.data_key = 'ms'))::float8 AS ms
+    FROM website_event e
+    LEFT JOIN event_data d ON d.website_event_id = e.event_id
+    WHERE e.website_id = :website_id AND e.url_path = :path
+      AND e.created_at >= :since AND e.created_at < :until
+    GROUP BY e.event_id, e.session_id, e.created_at, e.event_type, e.event_name
+)
+SELECT session_id,
+       count(*) FILTER (WHERE event_type = 1)             AS views,
+       count(*) FILTER (WHERE event_name = 'globe_ready') AS ready,
+       coalesce(
+           array_remove(
+               array_agg(ms ORDER BY created_at) FILTER (WHERE event_name = 'globe_ready'),
+               NULL),
+           ARRAY[]::float8[]) AS ready_ms
+FROM ev
+GROUP BY session_id
+"""
+
+#: How many session ids have to share one path-minute before it is a machine
+#: rather than a coincidence. Verified on production 2026-09-19: at three
+#: there are exactly two fingerprints and no false positive; at two the result
+#: is six rows and 52 sessions, because one real visitor whose browser reports
+#: itself as both "safari" and "ios-webview" and one Android phone counted
+#: under two operating system strings each split into two rows.
+CLUSTER_MIN_IDS = 3
+
+#: Cookieless analytics gives every request a fresh session id when the
+#: client keeps no state. A headless fetcher that touches one path with three
+#: ids inside the same clock minute is therefore visible as exactly that: one
+#: path, one minute, several ids. Measured 2026-09-19 over seven days: 38 of
+#: 163 sessions sit inside such a group, in two fingerprints - 1366x1366
+#: chrome Mac OS (22) and 1280x1200 chrome Windows 10 (16). Every other
+#: fingerprint peaks at one id.
+#: The grouping is over EVERY event, not over page views, and that is
+#: load-bearing, not an oversight: these clients fire events without ever
+#: sending a page view (34 of the 163 sessions have zero page views, all of
+#: them inside these two fingerprints). Adding `AND event_type = 1` was
+#: proposed and measured on 2026-09-19: the maximum number of ids on one page
+#: view in one minute is 2, so the query then returns ZERO rows at this
+#: threshold and the detection disappears entirely. Do not add it.
+#: Deliberately no path sample and no per-cluster heuristics: the output is
+#: bounded to twenty fingerprint rows, and the 40-path array the first draft
+#: carried was the only unbounded part of the query.
+SQL_CLUSTERS = """
+WITH path_minutes AS (
+    SELECT url_path, date_trunc('minute', created_at) AS minute,
+           array_agg(DISTINCT session_id) AS ids
+    FROM website_event
+    WHERE website_id = :website_id
+      AND created_at >= :since AND created_at < :until
+    GROUP BY 1, 2
+    HAVING count(DISTINCT session_id) >= :min_ids
+),
+shared AS (
+    SELECT DISTINCT unnest(ids) AS session_id FROM path_minutes
+)
+SELECT s.screen, s.browser, s.os, count(*) AS sessions
+FROM shared
+JOIN session s ON s.session_id = shared.session_id
+GROUP BY 1, 2, 3
+ORDER BY sessions DESC
+LIMIT 20
+"""
+
+#: What the visitors browse with and which language their browser asks for.
+#: One row per (device, language) pair, counting sessions - the panel folds
+#: the two dimensions apart, because the cross product is what makes both
+#: available from a single scan (four devices and eight languages live, so
+#: the result is a handful of rows either way).
+#: The inner DISTINCT is the window: `session` holds every session Umami ever
+#: saw, so without it this would count all of history. Every session with any
+#: event counts, which is the same population /overview calls `sessions.all`
+#: - measured 2026-09-19 over seven days: 168 sessions.
+#: `device` arrives as Umami wrote it (laptop / desktop / mobile / tablet, or
+#: NULL when the client sent no screen size); the laptop-versus-desktop fold
+#: belongs in pipeline/stats_analysis.py, where it can be tested and where its
+#: reason is written down.
+#: Deliberately no LIMIT: the panel prints a share, so the row count IS the
+#: denominator, and a truncated tail would make it quietly too small. (It is
+#: not the only unbounded query here - SQL_OVERVIEW, SQL_MAP, SQL_GLOBE and
+#: SQL_SESSION_EVENTS carry none either, and the last of those is the one that
+#: grows with traffic.) The
+#: result is bounded anyway - one row per distinct (device, language) pair,
+#: never more than the sessions in the window, which is four devices against
+#: the handful of browser locales that reach us.
+SQL_DEVICES = """
+WITH seen AS (
+    SELECT DISTINCT session_id
+    FROM website_event
+    WHERE website_id = :website_id AND created_at >= :since AND created_at < :until
+)
+SELECT s.device, s.language, count(*) AS sessions
+FROM seen
+JOIN session s ON s.session_id = seen.session_id
+GROUP BY 1, 2
+ORDER BY sessions DESC
+"""
+
+#: A globe that lost its WebGL context. src/components/Globe.tsx sends this
+#: once per page view with `reason` (why the loop stopped) and `phase`
+#: ("loading" before onLayersReady, "live" after), so the panel can say
+#: whether the visitor ever saw a globe at all.
+SQL_WEBGL_LOST = (
+    """
+WITH ev AS (
+    SELECT
+        e.event_id,
+        e.session_id, e.created_at, s.country, s.device, s.browser,
+        max(d.string_value) FILTER (WHERE d.data_key = 'reason') AS reason,
+        max(d.string_value) FILTER (WHERE d.data_key = 'phase')  AS phase
+    FROM website_event e
+    JOIN event_data d ON d.website_event_id = e.event_id
+    JOIN session s ON s.session_id = e.session_id
+    WHERE e.website_id = :website_id AND e.event_name = 'webgl_lost'
+      AND e.created_at >= :since AND e.created_at < :until
+    GROUP BY e.event_id, e.session_id, e.created_at, s.country, s.device, s.browser
+)
+SELECT phase, reason, count(*) AS n, count(DISTINCT session_id) AS sessions,
+"""
+    + _LAST_VISITOR
+    + """
+FROM ev
+WHERE phase IS NOT NULL AND reason IS NOT NULL
+GROUP BY 1, 2
+ORDER BY sessions DESC, n DESC
+LIMIT 20
+"""
+)
+
+#: What each visitor who is still here has open. One row per session: last
+#: sign of life, the last page view of that session, and that page's <title>.
+#: `page_title` is a plain column on website_event, filled on every page view
+#: measured (2026-09-19) - a headline beats a 139-character slug and costs no
+#: event_data join. The LATERAL is INNER on purpose: ten of sixty-nine
+#: sessions in a day fire only `vital`/`js_error` and never a page view. They
+#: have no page to name, so they have no row - the panel says so rather than
+#: inventing one. The window is the 24-hour lookback; Python cuts the live
+#: half out of it, so "who is here" and "who was here last" cost one query.
+SQL_LIVE = """
+WITH seen AS (
+    SELECT session_id, max(created_at) AS last_seen
+    FROM website_event
+    WHERE website_id = :website_id AND created_at >= :since AND created_at < :until
+    GROUP BY session_id
+)
+SELECT seen.session_id::text AS session,
+       seen.last_seen,
+       page.created_at AS page_since,
+       page.url_path,
+       coalesce(nullif(page.page_title, ''), page.url_path) AS title,
+       s.country, s.device, s.browser
+FROM seen
+JOIN session s ON s.session_id = seen.session_id
+JOIN LATERAL (
+    SELECT e.created_at, e.url_path, e.page_title
+    FROM website_event e
+    WHERE e.website_id = :website_id AND e.session_id = seen.session_id
+      AND e.event_type = 1
+      AND e.created_at >= :since AND e.created_at < :until
+    ORDER BY e.created_at DESC
+    LIMIT 1
+) page ON true
+ORDER BY seen.last_seen DESC
+LIMIT 60
+"""
 
 
 def fetch(sql: str, since: datetime, until: datetime, **params: Any) -> list[dict[str, Any]]:

@@ -3,12 +3,19 @@
 Every human-facing Discord link points at /goto/discord?src={surface}
 (api/routes/goto.py), which logs exactly one line per click:
 
-    INFO | api.routes.goto | goto_discord src=seo bot=0
+    INFO | api.routes.goto | goto_discord src=seo bot=0 at=2026-09-19T08:12:33+00:00
 
 This script aggregates those lines by source and bot flag and prints a
-table. The bot flag is computed by the API from the user agent at click
-time (known bot substrings, see BOT_UA_RE in goto.py) — nothing else is
-logged, so this is the whole dataset.
+table, with the span the lines actually cover. The bot flag is computed by
+the API from the user agent at click time (known bot substrings, see
+BOT_UA_RE in pipeline/referral_log.py) — nothing else is logged, so this is
+the whole dataset.
+
+``at`` is the click in UTC and arrived on 2026-09-19. Every line written
+before that carries no time at all — api/main.py's log format has no
+asctime — so it cannot be placed in a window and is not counted. 29 such
+lines sit in ancient_nerds_api.log; a table that counted them into "the
+last 24 h" would be stating something it cannot know.
 
 The nginx access log is deliberately NOT used: naive log counting
 overstates clicks by ~3x because crawlers follow the link too. The API
@@ -40,27 +47,38 @@ import subprocess
 import sys
 from collections import Counter
 from collections.abc import Iterable
+from dataclasses import dataclass
+from datetime import datetime
 
 #: Both API containers behind the an_api nginx upstream (8000 + 8001).
 CONTAINERS = ("ancient_nerds_api", "ancient_nerds_api2")
 
 #: The structured line goto_discord() writes — src is allowlisted by the
-#: API, so this never matches free text.
-_LINE_RE = re.compile(r"goto_discord src=(?P<src>[a-z]+) bot=(?P<bot>[01])")
+#: API, so this never matches free text. ``at`` is required: a click without
+#: a timestamp cannot be placed in the window the report claims to cover,
+#: and saying "24 h" over lines of unknown age is the bug this replaces.
+_LINE_RE = re.compile(r"goto_discord src=(?P<src>[a-z]+) bot=(?P<bot>[01]) at=(?P<at>\S+)")
 
 #: Row order for the table; matches ALLOWED_SOURCES in api/routes/goto.py
 #: plus the catch-all bucket.
 SOURCES = ("seo", "landing", "app", "account", "lyra", "disclaimer", "unknown")
 
 
-def parse_lines(lines: Iterable[str]) -> Counter:
-    """Count (src, is_bot) pairs from raw log lines.
+@dataclass(frozen=True, slots=True)
+class Click:
+    src: str
+    bot: bool
+    at: datetime
+
+
+def parse_clicks(lines: Iterable[str]) -> list[Click]:
+    """Every /goto/discord click in the given log lines, in log order.
 
     Accepts both `docker logs` output (plain text) and raw json-file driver
     lines ({"log": "...", ...}) — the latter appear when reading
     /var/lib/docker/containers/*/*-json.log directly.
     """
-    counts: Counter = Counter()
+    clicks: list[Click] = []
     for line in lines:
         if line.startswith("{"):
             try:
@@ -69,8 +87,10 @@ def parse_lines(lines: Iterable[str]) -> Counter:
                 pass
         m = _LINE_RE.search(line)
         if m:
-            counts[(m.group("src"), m.group("bot") == "1")] += 1
-    return counts
+            clicks.append(
+                Click(m.group("src"), m.group("bot") == "1", datetime.fromisoformat(m.group("at")))
+            )
+    return clicks
 
 
 def docker_lines(since: str) -> Iterable[str]:
@@ -91,10 +111,17 @@ def docker_lines(since: str) -> Iterable[str]:
         yield from proc.stderr.splitlines()
 
 
-def print_table(counts: Counter) -> None:
+def print_table(clicks: list[Click]) -> None:
+    counts: Counter = Counter((c.src, c.bot) for c in clicks)
     total_humans = sum(n for (_, bot), n in counts.items() if not bot)
     total_bots = sum(n for (_, bot), n in counts.items() if bot)
 
+    if clicks:
+        # The window the lines really cover, not the one that was asked for:
+        # `docker logs --since` cuts by the container's own clock and a piped
+        # file carries whatever it carries.
+        span = sorted(c.at for c in clicks)
+        print(f"clicks from {span[0].isoformat()} to {span[-1].isoformat()}\n")
     print(f"{'source':<12} {'humans':>7} {'bots':>7} {'total':>7}")
     print("-" * 36)
     for src in SOURCES:
@@ -105,7 +132,7 @@ def print_table(counts: Counter) -> None:
     print("-" * 36)
     print(f"{'total':<12} {total_humans:>7} {total_bots:>7} {total_humans + total_bots:>7}")
 
-    if not counts:
+    if not clicks:
         print("(no goto_discord entries in the given window)")
 
 
@@ -124,7 +151,7 @@ def main() -> None:
     args = parser.parse_args()
 
     lines = sys.stdin if args.stdin else docker_lines(args.since)
-    print_table(parse_lines(lines))
+    print_table(parse_clicks(lines))
 
 
 if __name__ == "__main__":

@@ -1,8 +1,9 @@
 import { Fragment } from 'react'
 
+import { BarList, type BarItem } from './BarList'
 import { fmtInt } from './format'
 import { Panel, Status } from './Panel'
-import type { JourneysData } from './types'
+import type { EntryPage, ExitPage, JourneysData, OutboundLink } from './types'
 import type { Loaded } from './useStats'
 
 /** The separator pipeline/stats_analysis.py journeys() joins the steps with. */
@@ -31,14 +32,56 @@ export function chainChips(chain: string): Chip[] {
   }))
 }
 
-/** The ten most walked paths through the site, as chip chains with their count. */
-export function Journeys({ state }: { state: Loaded<JourneysData> }) {
+/** "story · 248, 151 of them went no further" — counts, never a bounce rate. */
+export function entryItem(e: EntryPage): BarItem {
+  return {
+    key: `entry:${e.page}`,
+    label: e.page,
+    value: e.sessions,
+    hint: e.stopped ? `${fmtInt(e.stopped)} went no further` : undefined,
+    tone: e.stopped && e.stopped === e.sessions ? 'warn' : undefined,
+  }
+}
+
+/** The last page a session was on, against how often that type was seen. */
+export function exitItem(x: ExitPage): BarItem {
+  return {
+    key: `exit:${x.page}`,
+    label: x.page,
+    value: x.sessions,
+    hint: `of ${fmtInt(x.views)} views`,
+  }
+}
+
+/** A link out of the site. There is no Discord row: see the panel's note. */
+export function outboundItem(o: OutboundLink): BarItem {
+  return {
+    key: `out:${o.host}`,
+    label: o.host,
+    value: o.clicks,
+    hint: `${fmtInt(o.visitors)} ${o.visitors === 1 ? 'visitor' : 'visitors'}`,
+  }
+}
+
+/** Where they land, where they stop, the whole chain, and where they leave to. */
+export function Paths({ state }: { state: Loaded<JourneysData> }) {
   const j = state.data
   return (
-    <Panel question="How do they move through the site?" wide>
+    <Panel question="How do they move through the site, and where do they leave?" wide>
       <Status state={state} />
       {j && (
         <>
+          <div className="dash-lists">
+            <div>
+              <h3>They land on</h3>
+              <BarList items={j.pages.entries.map(entryItem)} empty="No human session opened a page." />
+            </div>
+            <div>
+              <h3>They stop on</h3>
+              <BarList items={j.pages.exits.map(exitItem)} empty="No human session opened a page." />
+            </div>
+          </div>
+          <h3>Most walked paths</h3>
           {j.chains.length === 0 ? (
             <p className="dash-empty">No journeys in this window.</p>
           ) : (
@@ -62,8 +105,15 @@ export function Journeys({ state }: { state: Loaded<JourneysData> }) {
               ))}
             </ol>
           )}
+          <h3>Links out of the site</h3>
+          <BarList items={j.outbound.map(outboundItem)} empty="No outbound click in this window." />
           <p className="dash-note">
-            Confirmed human sessions only, at most six steps per chain. The first chip is the source.
+            Confirmed human sessions only, at most six steps per chain; the first chip is the source. Of{' '}
+            {fmtInt(j.pages.sessions)} human sessions, {fmtInt(j.pages.one_page)} loaded exactly one page
+            and {fmtInt(j.pages.moving)} moved. A session with no page view at all is not counted as
+            human and is not in here — the Scrapers panel above is where those go. Discord clicks are
+            missing from the outbound list: the CTA on the landing page, which the server log says gets
+            most of them, runs no analytics module — read those with scripts/funnel_report.py.
           </p>
         </>
       )}

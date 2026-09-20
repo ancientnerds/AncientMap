@@ -1,57 +1,31 @@
-import { Flag } from './Flag'
-import { countryName, fmtDayHour, fmtInt, fmtShare } from './format'
+import { fmtDayHour, fmtInt, fmtShare } from './format'
 import { Panel, Status } from './Panel'
-import type { CountriesData, CountryCount, CountryWindow, HourBucket, Overview } from './types'
+import { Tile } from './Tile'
+import type { CountriesData, CountryWindow, HourBucket, Overview } from './types'
 import type { Loaded } from './useStats'
 
-/** How many of the hourly buckets the strip shows: two days is readable at 390 px. */
-const SPARK_HOURS = 48
+/** Height of the strip's viewBox; the CSS scales it to the panel's width. */
+const STRIP_HEIGHT = 20
 
-/** Sign and size of today's change against yesterday at the same time of day. */
-function delta(today: number, yesterday: number): { arrow: string; text: string; cls: string } {
-  if (yesterday === 0) return { arrow: '', text: 'none yesterday', cls: '' }
-  const pct = Math.round(((today - yesterday) / yesterday) * 100)
-  if (pct === 0) return { arrow: '=', text: 'same as yesterday', cls: '' }
-  return pct > 0
-    ? { arrow: '▲', text: `${pct} % vs yesterday`, cls: 'dash-delta--up' }
-    : { arrow: '▼', text: `${-pct} % vs yesterday`, cls: 'dash-delta--down' }
+export interface HourStack {
+  humanY: number
+  humanH: number
+  restY: number
+  restH: number
 }
 
 /**
- * The countries behind a tile's number, biggest first, in a box that fills the
- * space to the right of it. The box is exactly as tall as the number (its
- * wrapper is a flex item with no content of its own, the list inside is
- * absolute), the flags wrap to use every line of it, and whatever no longer
- * fits is cut off instead of shrinking the number (owner, 2026-09-19). The
- * fade marks the cut.
+ * One hour as two stacked rects: confirmed humans on the baseline, everything
+ * else above them. Two segments, not three — at 390 px a bar is 4.9 px wide
+ * and one session at the 48-hour peak is 6 px tall, below the size at which
+ * any colour difference survives. The AI count is a number in the legend and
+ * in the tooltip instead.
  */
-export function Flags({ rows }: { rows: CountryCount[] }) {
-  if (rows.length === 0) return null
-  return (
-    <div className="dash-flags-box">
-      <ul className="dash-flags">
-        {rows.map(r => (
-          <li className="dash-flag" key={r.country} title={`${countryName(r.country)}: ${fmtInt(r.sessions)}`}>
-            <Flag country={r.country} />
-            {fmtInt(r.sessions)}
-          </li>
-        ))}
-      </ul>
-    </div>
-  )
-}
-
-function Tile({ label, sub, subCls, window: w }: { label: string; sub: string; subCls?: string; window: CountryWindow }) {
-  return (
-    <div className="dash-tile">
-      <span className="dash-tile-label">{label}</span>
-      <div className="dash-tile-main">
-        <span className="dash-tile-value">{fmtInt(w.sessions)}</span>
-        <Flags rows={w.countries} />
-      </div>
-      <span className={subCls ? `dash-tile-sub ${subCls}` : 'dash-tile-sub'}>{sub}</span>
-    </div>
-  )
+export function stackHour(h: HourBucket, max: number, height = STRIP_HEIGHT): HourStack {
+  const unit = height / Math.max(max, 1)
+  const humanH = h.human * unit
+  const restH = (h.sessions - h.human) * unit
+  return { humanY: height - humanH, humanH, restY: height - humanH - restH, restH }
 }
 
 /** "human sessions, 34 % of 154" — the same sentence for every closed window. */
@@ -59,27 +33,46 @@ function humanSub(w: CountryWindow): string {
   return `human sessions, ${fmtShare(w.sessions, w.all)} of ${fmtInt(w.all)}`
 }
 
-function Spark({ hours }: { hours: HourBucket[] }) {
-  const recent = hours.slice(-SPARK_HOURS)
-  if (recent.length < 2) return null
-  const max = Math.max(...recent.map(h => h.views), 1)
-  const first = new Date(recent[0].hour)
-  const last = new Date(recent[recent.length - 1].hour)
-  const label = fmtDayHour
+function Strip({ o }: { o: Overview }) {
+  const hours = o.hours
+  if (hours.length < 2) return null
+  const max = Math.max(...hours.map(h => h.sessions), 1)
+  const first = new Date(hours[0].hour)
+  const last = new Date(hours[hours.length - 1].hour)
   return (
     <>
-      <svg className="dash-spark" viewBox={`0 0 ${recent.length} 20`} preserveAspectRatio="none" role="img" aria-label={`Page views per hour, last ${recent.length} hours`}>
-        {recent.map((h, i) => (
-          <rect key={h.hour} x={i + 0.15} width={0.7} y={20 - (h.views / max) * 20} height={(h.views / max) * 20}>
-            <title>{`${label(new Date(h.hour))} UTC: ${fmtInt(h.views)} views, ${fmtInt(h.sessions)} sessions`}</title>
-          </rect>
-        ))}
+      <svg
+        className="dash-spark"
+        viewBox={`0 0 ${hours.length} ${STRIP_HEIGHT}`}
+        preserveAspectRatio="none"
+        role="img"
+        aria-label={`Sessions per hour, last ${hours.length} hours`}
+      >
+        {hours.map((h, i) => {
+          const s = stackHour(h, max)
+          const title = `${fmtDayHour(new Date(h.hour))} UTC: ${fmtInt(h.sessions)} sessions, ${fmtInt(h.human)} human, ${fmtInt(h.ai)} from AI`
+          return (
+            <g key={h.hour}>
+              <rect x={i + 0.15} width={0.7} y={s.restY} height={s.restH}>
+                <title>{title}</title>
+              </rect>
+              <rect className="dash-spark-human" x={i + 0.15} width={0.7} y={s.humanY} height={s.humanH}>
+                <title>{title}</title>
+              </rect>
+            </g>
+          )
+        })}
       </svg>
       <div className="dash-spark-axis">
-        <span>{label(first)}</span>
-        <span>Views per hour, UTC</span>
-        <span>{label(last)}</span>
+        <span>{fmtDayHour(first)}</span>
+        <span>Sessions per hour, UTC</span>
+        <span>{fmtDayHour(last)}</span>
       </div>
+      <p className="dash-note">
+        Bright green is a confirmed human — an interaction or a second page. The rest may be a bot, or a
+        person who read the headline and left; cookieless data cannot tell them apart. AI assistants sent{' '}
+        {fmtInt(o.sessions.ai)} of {fmtInt(o.sessions.all)} sessions in this window.
+      </p>
     </>
   )
 }
@@ -92,19 +85,21 @@ function Spark({ hours }: { hours: HourBucket[] }) {
 export function Pulse({ state, countries }: { state: Loaded<Overview>; countries: Loaded<CountriesData> }) {
   const o = state.data
   const c = countries.data
-  const d = o ? delta(o.today.sessions, o.yesterday.sessions) : null
   return (
     <Panel question="Who is here right now?" wide>
       <Status state={countries} />
       {c && (
         <div className="dash-tiles">
-          <Tile label="Now" sub="sessions, last 5 min" window={c.now} />
-          <Tile label="Today" sub={d ? `${d.arrow} ${d.text}` : humanSub(c.today)} subCls={d?.cls} window={c.today} />
-          <Tile label="7 days" sub={humanSub(c.d7)} window={c.d7} />
-          <Tile label="30 days" sub={humanSub(c.d30)} window={c.d30} />
+          <Tile label="Now" value={c.now.sessions} sub="sessions, last 5 min" countries={c.now.countries} />
+          <Tile label="Today" value={c.today.sessions} sub={humanSub(c.today)} countries={c.today.countries} />
+          <Tile label="7 days" value={c.d7.sessions} sub={humanSub(c.d7)} countries={c.d7.countries} />
+          <Tile label="30 days" value={c.d30.sessions} sub={humanSub(c.d30)} countries={c.d30.countries} />
         </div>
       )}
-      {o && <Spark hours={o.hours} />}
+      {/* Two resources, two statuses. /overview is the heaviest query on the
+          page and fails on its own; without this line the panel keeps its four
+          tiles and quietly loses the 48-hour strip and the AI sentence. */}
+      {o ? <Strip o={o} /> : <Status state={state} />}
     </Panel>
   )
 }

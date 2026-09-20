@@ -74,6 +74,10 @@ export interface AnimationLoopContext {
   // --- Refs (React useRef objects or equivalent { current: T }) ---
   isPageVisibleRef: { current: boolean }
   webglContextLostRef: { current: boolean }
+  /** Called once when the loop stops because the context is gone. `reason` is
+   *  'context_lost' when the canvas told us, 'no_shader' when three.js found
+   *  out first. Globe.tsx reports it and shows the visitor a reload button. */
+  onContextLost: (reason: string) => void
   fpsRef: { current: HTMLDivElement | null }
   lowFpsStartTimeRef: { current: number | null }
   setLowFps: (v: boolean) => void
@@ -204,11 +208,26 @@ export function runAnimationLoop(ctx: AnimationLoopContext): void {
   } = ctx
 
   const animate = () => {
+    // The context checks come BEFORE the reschedule. three.js compiles its
+    // programs inside renderer.render(), so on a dead context gl.createShader()
+    // returns null and shaderSource throws out of this callback - with the next
+    // frame already booked. Stopping is the only way out; Globe.tsx restarts the
+    // loop from webglcontextrestored.
+    if (ctx.webglContextLostRef.current) {
+      ctx.onContextLost('context_lost')
+      return
+    }
+    if (renderer.getContext().isContextLost()) {
+      ctx.webglContextLostRef.current = true
+      ctx.onContextLost('no_shader')
+      return
+    }
+
     animationId.value = requestAnimationFrame(animate)
 
-    // Skip rendering when tab is hidden or WebGL context is lost
-    // This prevents wasted GPU cycles and state corruption
-    if (!ctx.isPageVisibleRef.current || ctx.webglContextLostRef.current) {
+    // Skip rendering when the tab is hidden; the loop keeps running so a
+    // backgrounded tab resumes on its own.
+    if (!ctx.isPageVisibleRef.current) {
       return
     }
 

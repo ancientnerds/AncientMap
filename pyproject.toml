@@ -93,6 +93,13 @@ ignore_imports = [
     # Read-only query layer on the Umami database, shared by the founders
     # dashboard routes (/api/stats) and the orchestrator's alerts (2026-09-17).
     "api.** -> pipeline.umami_db",
+    # nginx's referral log. The /sources coverage block and the Discord funnel
+    # redirect share one BOT_UA_RE; stdlib only, under pipeline/ because the
+    # Lyra image ships no api/ tree (2026-09-19).
+    "api.** -> pipeline.referral_log",
+    # All-time member counts off our own database for the dashboard's members
+    # panel; under pipeline/ for the same reason (2026-09-19).
+    "api.** -> pipeline.members_stats",
 ]
 
 # =============================================================================

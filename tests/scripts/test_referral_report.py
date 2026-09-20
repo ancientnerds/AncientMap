@@ -2,6 +2,8 @@
 """scripts/referral_report.py — Referrer-Log nach Familie, Host und Mensch/Bot.
 
 Die Zeilen sind das JSON, das nginx per log_format ``referral`` schreibt.
+Geparst wird in pipeline/referral_log.py (eine Definition für CLI und
+/sources-Panel); dieses Skript ist nur noch die Tabelle darüber.
 """
 
 from __future__ import annotations
@@ -10,6 +12,8 @@ import importlib.util
 import json
 from datetime import UTC, datetime
 from pathlib import Path
+
+from pipeline import referral_log as rl
 
 # By file: a dependency installs a top-level package named `scripts` into
 # site-packages, which shadows our scripts/ directory for a plain import.
@@ -44,7 +48,7 @@ def test_ai_suche_social_und_rest_werden_nach_host_gezaehlt():
         _line("https://discord.com/channels/1/2", "GET /news-archive/"),
         _line("https://example.org/blog", "GET /"),
     ]
-    result = rr.aggregate(lines, SINCE)
+    result = rr.aggregate(rl.parse_lines(lines), SINCE)
     assert result["ai"]["chatgpt.com"] == {"human": 2}
     assert result["search"]["google.com"] == {"bot": 1}
     assert result["search"]["google.de"] == {"human": 1}
@@ -52,14 +56,16 @@ def test_ai_suche_social_und_rest_werden_nach_host_gezaehlt():
     assert result["other"]["example.org"] == {"human": 1}
 
 
-def test_utm_source_ersetzt_fehlenden_referer_nur_fuer_bekannte_hosts():
+def test_utm_source_ersetzt_fehlenden_referer():
     lines = [
         _line("", "GET /sites/peru?utm_source=chatgpt.com"),
         _line("", "GET /sites/peru?utm_source=newsletter"),
     ]
-    result = rr.aggregate(lines, SINCE)
+    result = rr.aggregate(rl.parse_lines(lines), SINCE)
     assert result["ai"]["chatgpt.com"] == {"human": 1}
-    assert "other" not in result
+    # Ein unbekanntes utm-Label wird nicht mehr verworfen, sondern landet als
+    # es selbst unter "other" - sonst ist eine eigene Kampagne unsichtbar.
+    assert result["other"]["newsletter"] == {"human": 1}
 
 
 def test_assets_und_api_zaehlen_nur_mit_all():
@@ -69,8 +75,10 @@ def test_assets_und_api_zaehlen_nur_mit_all():
         _line("https://example.org/", "GET /assets/main-abc.js"),
         _line("https://example.org/", "GET /sites/egypt"),
     ]
-    assert rr.aggregate(lines, SINCE)["other"]["example.org"] == {"human": 1}
-    assert rr.aggregate(lines, SINCE, pages_only=False)["other"]["example.org"] == {"human": 4}
+    assert rr.aggregate(rl.parse_lines(lines), SINCE)["other"]["example.org"] == {"human": 1}
+    assert rr.aggregate(rl.parse_lines(lines), SINCE, pages_only=False)["other"]["example.org"] == {
+        "human": 4
+    }
 
 
 def test_aeltere_zeilen_und_muell_werden_ignoriert():
@@ -80,7 +88,7 @@ def test_aeltere_zeilen_und_muell_werden_ignoriert():
         '{"t":"2026-09-17T01:00:00+00:00","ref":"https://example.org/","req":"GET /",',
         _line("https://example.org/", "GET /"),
     ]
-    assert rr.aggregate(lines, SINCE)["other"]["example.org"] == {"human": 1}
+    assert rr.aggregate(rl.parse_lines(lines), SINCE)["other"]["example.org"] == {"human": 1}
 
 
 def test_since_relativ_und_absolut():
@@ -95,5 +103,7 @@ def test_fehlerantworten_sind_scanner_rauschen_und_zaehlen_nur_mit_all():
         _line("https://binance.com/", "GET /wp-admin/css/", status=404),
         _line("https://binance.com/", "GET /", status=200),
     ]
-    assert rr.aggregate(lines, SINCE)["other"]["binance.com"] == {"human": 1}
-    assert rr.aggregate(lines, SINCE, pages_only=False)["other"]["binance.com"] == {"human": 2}
+    assert rr.aggregate(rl.parse_lines(lines), SINCE)["other"]["binance.com"] == {"human": 1}
+    assert rr.aggregate(rl.parse_lines(lines), SINCE, pages_only=False)["other"]["binance.com"] == {
+        "human": 2
+    }

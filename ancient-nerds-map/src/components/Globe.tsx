@@ -4,6 +4,7 @@ import { SiteData, getDataSource } from '../data/sites'
 import { FilterMode } from '../App'
 import { offlineFetch, OfflineFetch } from '../services/OfflineFetch'
 import { useOffline } from '../contexts/OfflineContext'
+import { track } from '../analytics'
 import { EMPIRES } from '../config/empireData'
 import { AWMC_ROADS_CONFIG, getRouteById } from '../config/routeData'
 import { LAYER_CONFIG, getLayerUrl, type VectorLayerKey, type VectorLayerVisibility } from '../config/vectorLayers'
@@ -117,6 +118,8 @@ interface GlobeProps {
   onProximityHover?: (coords: [number, number] | null) => void  // Callback when hovering in proximity mode
   initialPosition?: [number, number] | null  // [lng, lat] initial camera position (user location)
   onLayersReady?: () => void  // Callback when essential layers (coastlines, borders) are loaded
+  onWebglLost?: (reason: string, phase: string) => void  // WebGL context died - the globe is frozen until the page reloads
+  onWebglRestored?: () => void  // Context came back and the animation loop was restarted
   // Contribute feature
   onContributeClick?: () => void  // Callback when contribute button is clicked
   // AI Agent feature
@@ -164,7 +167,7 @@ interface GlobeProps {
   isOffline?: boolean  // Whether currently offline (no network)
 }
 
-export default function Globe({ sites, filterMode, sourceColors, countryColors, highlightedSiteId, isHoveringList, listFrozenSiteIds = [], openPopupIds: _openPopupIds = [], onSiteClick, onTooltipClick, onSiteSelect, onEmpireClick, flyTo, isLoading, splashDone, proximity, onProximitySet, onProximityHover, initialPosition, onLayersReady, onContributeClick, onAIAgentClick, onDisclaimerClick, isContributeMapPickerActive, onContributeMapHover, onContributeMapConfirm, onContributeMapCancel, canUndoSelection, onUndoSelection, canRedoSelection, onRedoSelection, measureMode, measurements = [], currentMeasurePoints = [], selectedMeasurementId, measureSnapEnabled, measureUnit = 'km', currentMeasurementColor = '#FFCC00', onMeasurePointAdd, onMeasurementComplete, onMeasurementSelect: _onMeasurementSelect, onMeasurementDelete: _onMeasurementDelete, randomModeActive, searchWithinProximity, onAgeRangeSync, onVisibleEmpiresChange, onEmpireYearsChange, onEmpirePolygonsLoaded, externalEmpireYearRequest, onExternalEmpireYearRequestHandled, onOfflineClick, isOffline, onNewsFeedClick, isNewsFeedOpen }: GlobeProps) {
+export default function Globe({ sites, filterMode, sourceColors, countryColors, highlightedSiteId, isHoveringList, listFrozenSiteIds = [], openPopupIds: _openPopupIds = [], onSiteClick, onTooltipClick, onSiteSelect, onEmpireClick, flyTo, isLoading, splashDone, proximity, onProximitySet, onProximityHover, initialPosition, onLayersReady, onWebglLost, onWebglRestored, onContributeClick, onAIAgentClick, onDisclaimerClick, isContributeMapPickerActive, onContributeMapHover, onContributeMapConfirm, onContributeMapCancel, canUndoSelection, onUndoSelection, canRedoSelection, onRedoSelection, measureMode, measurements = [], currentMeasurePoints = [], selectedMeasurementId, measureSnapEnabled, measureUnit = 'km', currentMeasurementColor = '#FFCC00', onMeasurePointAdd, onMeasurementComplete, onMeasurementSelect: _onMeasurementSelect, onMeasurementDelete: _onMeasurementDelete, randomModeActive, searchWithinProximity, onAgeRangeSync, onVisibleEmpiresChange, onEmpireYearsChange, onEmpirePolygonsLoaded, externalEmpireYearRequest, onExternalEmpireYearRequestHandled, onOfflineClick, isOffline, onNewsFeedClick, isNewsFeedOpen }: GlobeProps) {
   const refs = useGlobeRefs()
 
   // Batch destructure refs
@@ -601,6 +604,40 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
     if (backColorAttr) backColorAttr.needsUpdate = true
   }, [])
 
+  // WebGL context loss. The scene effect runs once with [] deps, so the two
+  // callbacks it hands to the canvas and to the animation loop must read the
+  // current props through refs instead of closing over them.
+  const onWebglLostRef = useRef(onWebglLost)
+  const onWebglRestoredRef = useRef(onWebglRestored)
+  onWebglLostRef.current = onWebglLost
+  onWebglRestoredRef.current = onWebglRestored
+  // One report per page view: the canvas event and the animation loop both
+  // reach handleContextLost, and a browser can fire the event twice.
+  const webglLostReportedRef = useRef(false)
+  // Kept so the restore handler can restart the loop that stopped itself.
+  const animationCtxRef = useRef<AnimationLoopContext | null>(null)
+
+  const handleContextLost = useCallback((reason: string) => {
+    if (webglLostReportedRef.current) return
+    webglLostReportedRef.current = true
+    // 'loading' means the visitor never saw a globe at all - the dashboard
+    // ranks that harder than a globe that froze after it had started.
+    const phase = layersReadyCalledRef.current ? 'live' : 'loading'
+    track('webgl_lost', { reason, phase })
+    onWebglLostRef.current?.(reason, phase)
+  }, [])
+
+  const handleContextRestored = useCallback(() => {
+    webglLostReportedRef.current = false
+    onWebglRestoredRef.current?.()
+    if (!animationCtxRef.current) return
+    // Lose and restore can land inside one frame, in which case the loop never
+    // reached its stop branch and is still booked. Cancel first, then start:
+    // two live loops would double every animation on the globe.
+    cancelAnimationFrame(animationIdRef.current.value)
+    runAnimationLoop(animationCtxRef.current)
+  }, [])
+
   // ===========================================================================
   // MAIN THREE.JS EFFECT - Scene Setup, Animation Loop, and Event Handlers
   // This effect manages the entire Three.js lifecycle:
@@ -636,6 +673,8 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
       setGpuName,
       setSoftwareRendering,
       setSceneReady,
+      onContextLost: handleContextLost,
+      onContextRestored: handleContextRestored,
     }
 
     const sceneResult = initializeScene(containerRef.current, sceneOptions)
@@ -678,7 +717,8 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
       _p1Screen: new THREE.Vector3(),
       _p2Screen: new THREE.Vector3(),
 
-      isPageVisibleRef, webglContextLostRef, fpsRef, lowFpsStartTimeRef,
+      isPageVisibleRef, webglContextLostRef, onContextLost: handleContextLost,
+      fpsRef, lowFpsStartTimeRef,
       warpProgressRef, warpLinearProgressRef, warpStartTimeRef,
       warpCompleteForLabelsRef, warpInitialCameraPosRef, warpTargetCameraPosRef,
       layersReadyCalledRef, dotsAnimationCompleteRef, logoAnimationStartedRef,
@@ -702,6 +742,9 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
       setLowFps, setZoom, setScaleBar, setListHighlightedPositions,
       setTooltipSiteOnFront, setTooltipPos, setHoveredSite, setIsFrozen, setFrozenSite,
     }
+    // Store before starting: a context lost during the first frame already
+    // needs this to restart the loop.
+    animationCtxRef.current = animationCtx
     runAnimationLoop(animationCtx)
 
     // Event handlers
@@ -756,6 +799,9 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
       })
       renderer.dispose()
       containerRef.current?.removeChild(renderer.domElement)
+      // Drops the whole scene graph the loop context holds, and stops a late
+      // webglcontextrestored from reviving a loop on a disposed renderer.
+      animationCtxRef.current = null
       logoSpriteRef.current = null
       logoMaterialRef.current = null
       logoAnimationStartedRef.current = false

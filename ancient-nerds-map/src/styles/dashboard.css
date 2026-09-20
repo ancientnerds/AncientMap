@@ -1,8 +1,11 @@
 /* Founders dashboard — NERV: black, green labels, red actions. The colours are
    the ones feedback-prompt.css and the stats entry page (stats_access.py,
    gate_html) already use; the panel border is the feedback prompt's. Mobile
-   first: one column, 44 px targets, nothing wider than the phone; two columns
-   from 720 px. */
+   first: one column, every button and nav link 44 px tall, nothing wider than
+   the phone; two columns from 720 px. Links inside a line of text (a paper in
+   a bar row, the context link on a feedback row) are text-sized and are not
+   44 px — padding them out would either move the rows apart or overlap the
+   neighbouring row's hit area. */
 
 :root {
   --dash-green: #00cc66;
@@ -137,7 +140,11 @@ button {
 .dash-toggle:focus-visible,
 .dash-range button[aria-pressed='true'],
 .dash-toggle[aria-pressed='true'] {
-  background: var(--dash-red);
+  /* The bright red, not --dash-red: black on #bb0a0a is 3.16:1 and fails
+     WCAG AA, and this is the state that says which range every number on the
+     page belongs to — and the keyboard focus ring. Black on #ff2a2a is 5.6:1
+     and keeps the palette black/red. */
+  background: var(--dash-red-bright);
   color: #000;
   outline: none;
 }
@@ -324,20 +331,29 @@ button {
   color: var(--dash-red-bright);
 }
 
+/* The strip stacks two classes per hour: confirmed-human sessions on the
+   baseline in the panel's green, everything else above them in the same green
+   at the strength the low-severity dot already uses. Two segments, not three
+   — at 390 px a bar is 4.9 px wide and one session at the 48-hour peak is
+   6 px tall, below the size at which a colour difference survives. The AI
+   count travels as a number in the legend and in each bar's tooltip. */
 .dash-spark {
   display: block;
   width: 100%;
-  height: 56px;
+  height: 72px;
   margin-top: 14px;
 }
 
 .dash-spark rect {
+  fill: var(--dash-dot-low);
+}
+
+.dash-spark rect.dash-spark-human {
   fill: var(--dash-green);
-  fill-opacity: 0.85;
 }
 
 .dash-spark rect:hover {
-  fill-opacity: 1;
+  fill: var(--dash-paper);
 }
 
 .dash-spark-axis {
@@ -380,8 +396,17 @@ button {
   white-space: nowrap;
 }
 
+/* The hint gets a line of its own — the same mechanism .dash-problem and
+   .dash-live-row use to survive 390 px. Inside the value column it set that
+   column's min-content width (it is nowrap text), and the label column, which
+   is the flexible one, paid for it: Members' "by 71 accounts, last 18 Sep
+   19:20" left its labels 40 px at 390 px and 0 px at 360 px, so four rows of
+   the members panel had no name on a Pixel at all. */
 .dash-bar-hint {
+  grid-column: 1 / -1;
   color: var(--dash-muted);
+  font-family: var(--dash-mono);
+  font-size: 0.7rem;
 }
 
 .dash-bar-track {
@@ -756,8 +781,13 @@ button {
   }
 }
 
+/* Four across only in the wide panel. Pulse is the one panel with four tiles;
+   GlobeReach and Members have two and sit in a half-width cell, where a
+   four-track row would stand half empty and cut each tile's box to 124 px —
+   narrow enough to wrap "Reached the globe" onto two lines. They keep the two
+   columns the 560 px rule already gives them. */
 @media (min-width: 1024px) {
-  .dash-tiles {
+  .dash-panel--wide .dash-tiles {
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 }
@@ -786,7 +816,8 @@ button {
 }
 
 .dash-feedback-filter button {
-  min-height: 36px;
+  /* 44, like every other button on the page: this one is on a phone too. */
+  min-height: 44px;
   padding: 0 12px;
   background: #000;
   color: #888880;
@@ -807,4 +838,74 @@ button {
 .dash-feedback li.is-negative {
   border-left: 2px solid #bb0a0a;
   padding-left: 10px;
+}
+
+/* ── Live visitors ──────────────────────────────────────────────────── */
+
+.dash-live {
+  list-style: none;
+}
+
+/* Four tracks on the first line, the headline on a line of its own — exactly
+   the mechanism that makes .dash-problem survive 390 px. A live page_title is
+   72 characters on average and 138 at worst; on one line it would get under
+   110 px of the 334 px content box, and 292 px at the 720 px breakpoint. */
+.dash-live-row {
+  display: grid;
+  grid-template-columns: 10px 18px minmax(0, 1fr) auto;
+  gap: 2px 8px;
+  align-items: baseline;
+  padding: 9px 0;
+  border-top: 1px solid var(--dash-line-soft);
+}
+
+.dash-live-row:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.dash-dot--live {
+  background: var(--dash-green);
+}
+
+.dash-live-who {
+  font-family: var(--dash-mono);
+  font-size: 0.65rem;
+  color: var(--dash-muted);
+}
+
+.dash-live-here {
+  font-family: var(--dash-mono);
+  font-size: 0.8rem;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.dash-live-page {
+  grid-column: 3 / -1;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  font-size: 0.9rem;
+  overflow-wrap: anywhere;
+}
+
+/* The noun in an empty sentence: "Last seen 12 min ago on <headline>." */
+.dash-empty b {
+  color: var(--dash-paper);
+  font-weight: 500;
+}
+
+/* A tile row followed by a list needs the air an h3 would have given it. */
+.dash-tiles + .dash-bars {
+  margin-top: 14px;
+}
+
+/* Sources stacks two of these grids — Umami's half, then nginx's. The second
+   grid's first h3 is a :first-child and so has no margin of its own, which
+   would make the nginx half read as the tail of the Umami list above it. */
+.dash-lists + .dash-lists {
+  margin-top: 14px;
 }

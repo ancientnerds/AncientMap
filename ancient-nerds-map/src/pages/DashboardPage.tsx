@@ -1,24 +1,35 @@
 /**
- * The founders dashboard at https://stats.ancientnerds.com/ — eight panels,
+ * The founders dashboard at https://stats.ancientnerds.com/ — fourteen panels,
  * each titled with the question it answers, fed by /api/stats/* behind the
  * an_stats cookie (api/routes/stats_access.py). Mobile first: one column,
  * two from 720 px. Umami itself stays one link away.
  */
 import { useState } from 'react'
 
+import { Devices } from '../components/dashboard/Devices'
 import { FeedbackInbox } from '../components/dashboard/FeedbackInbox'
-import { Journeys } from '../components/dashboard/Journeys'
+import { GlobeReach } from '../components/dashboard/GlobeReach'
+import { LiveNow } from '../components/dashboard/LiveNow'
+import { Members } from '../components/dashboard/Members'
+import { Paths } from '../components/dashboard/Paths'
 import { Problems } from '../components/dashboard/Problems'
 import { Pulse } from '../components/dashboard/Pulse'
+import { Reading } from '../components/dashboard/Reading'
+import { Scrapers } from '../components/dashboard/Scrapers'
 import { SessionTypes } from '../components/dashboard/SessionTypes'
 import { Sources } from '../components/dashboard/Sources'
 import { TopContent } from '../components/dashboard/TopContent'
 import type {
+  ClustersData,
   ContentData,
   CountriesData,
+  DevicesData,
   FeedbackData,
+  GlobeData,
   JourneysData,
+  LiveData,
   MapData,
+  MembersData,
   Overview,
   ProblemsData,
   SourcesData,
@@ -51,12 +62,29 @@ export default function DashboardPage() {
   const map = useStats<MapData>('map?days=1')
   // Fixed windows (now / today / 7 / 30) — the range switch does not touch them.
   const countries = useStats<CountriesData>('countries')
+  // Fixed 30-minute window, same 60 s cadence as everything else on the page.
+  const live = useStats<LiveData>('live')
+  const globe = useStats<GlobeData>(`globe?days=${days}`)
+  // Five minutes: a scraper fingerprint does not change from minute to minute,
+  // and this is the one query that has to sort every event in the window.
+  const clusters = useStats<ClustersData>(`clusters?days=${days}`, 300_000)
   const content = useStats<ContentData>(`content?days=${days}`)
   const feedback = useStats<FeedbackData>('feedback?days=30')
   const sources = useStats<SourcesData>(`sources?days=${days}`)
+  // One request for two panels: the scroll ladder travels inside /journeys, so
+  // Paths and Reading share this state and Reading costs no query of its own.
   const journeys = useStats<JourneysData>(`journeys?days=${days}`)
   const problems = useStats<ProblemsData>(`problems?days=${days}`)
-  const panels = [overview, countries, map, content, feedback, sources, journeys, problems]
+  const devices = useStats<DevicesData>(`devices?days=${days}`)
+  // Five minutes, all-time counts: five members do not move in sixty seconds.
+  const members = useStats<MembersData>('members', 300_000)
+  // `members` is deliberately not in this array. It is the only route on a
+  // different database behind a different dependency, and one hiccup there must
+  // not replace the other thirteen panels with "Session expired".
+  const panels = [
+    overview, countries, map, live, globe, clusters,
+    content, feedback, sources, journeys, problems, devices,
+  ]
   const unauthorized = panels.some(s => s.error === 'unauthorized')
 
   return (
@@ -77,16 +105,33 @@ export default function DashboardPage() {
           <a href="/logout">Sign out</a>
         </nav>
       </header>
+      {/* Under the switch, because that is where it is read: the switch is
+          inert for five of the fourteen panels and, until 2026-10-17, returns
+          identical numbers for the other nine. Without this line a founder
+          concludes the switch is broken, which is the correct conclusion from
+          the evidence on screen. */}
+      <p className="dash-note">
+        The range drives nine panels. Live now, Where are the visitors, Members and Feedback have windows
+        of their own, and Who is here has four — only its last sentence follows the range. Until 17
+        October both settings return the same numbers everywhere: the tracker's first event is 17
+        September.
+      </p>
       {unauthorized ? (
         <Entry />
       ) : (
         <div className="dash-grid">
           <Pulse state={overview} countries={countries} />
-          <VisitorMap state={map} />
-          <SessionTypes state={overview} />
-          <Sources state={sources} />
-          <Journeys state={journeys} />
+          <LiveNow state={live} />
+          <GlobeReach state={globe} />
+          <Scrapers state={clusters} overview={overview} />
           <Problems state={problems} />
+          <VisitorMap state={map} />
+          <Sources state={sources} />
+          <SessionTypes state={overview} />
+          <Members state={members} />
+          <Paths state={journeys} />
+          <Reading state={journeys} />
+          <Devices state={devices} />
           <TopContent state={content} />
           <FeedbackInbox state={feedback} />
         </div>

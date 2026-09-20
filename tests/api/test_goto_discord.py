@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import logging
 import re
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -82,12 +83,26 @@ class TestLogging:
         )
         assert "goto_discord src=seo bot=1" in self.caplog.text
 
+    def test_the_click_carries_its_moment_in_utc(self):
+        """Ohne Zeitstempel ist die Zeile für kein Zeitfenster zu gebrauchen:
+        api/main.py formatiert ohne asctime, also stand bis 2026-09-19 nur
+        "goto_discord src=seo bot=1" im Log. scripts/funnel_report.py liest
+        genau dieses Feld."""
+        before = datetime.now(UTC).replace(microsecond=0)
+        _get("/goto/discord?src=seo")
+        m = re.search(r"goto_discord src=seo bot=0 at=(\S+)", self.caplog.text)
+        assert m, self.caplog.text
+        clicked = datetime.fromisoformat(m.group(1))
+        assert clicked.tzinfo == UTC
+        assert before <= clicked <= datetime.now(UTC)
+
     def test_no_ip_or_referer_in_the_log(self):
-        """DSGVO-Zusage der Route: nur src + Bot-Flag, sonst nichts."""
+        """DSGVO-Zusage der Route: nur src, Bot-Flag und Zeitpunkt, sonst nichts."""
         response = _get("/goto/discord?src=seo")
         assert response.status_code == 302
         record = self.caplog.records[-1]
-        assert record.getMessage() == "goto_discord src=seo bot=0"
+        message = record.getMessage()
+        assert re.fullmatch(r"goto_discord src=seo bot=0 at=\S+", message), message
 
 
 class TestAllowlistSync:

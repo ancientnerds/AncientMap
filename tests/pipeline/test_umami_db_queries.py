@@ -20,7 +20,6 @@ from pipeline import umami_db as u
 QUERIES = (
     "overview",
     "map",
-    "hour_buckets",
     "session_events",
     "content",
     "feedback",
@@ -28,6 +27,11 @@ QUERIES = (
     "not_found",
     "vitals",
     "errors",
+    "globe",
+    "clusters",
+    "devices",
+    "webgl_lost",
+    "live",
 )
 
 
@@ -65,15 +69,50 @@ def test_problem_queries_read_the_events_the_frontend_actually_sends():
     assert "'message'" in u.SQL_ERRORS and "'page'" in u.SQL_ERRORS
     # How many visitors it reached, not only how often it fired: boot.ts sends
     # up to three per page view, so the event count alone overstates the damage.
-    assert "count(DISTINCT session_id) AS sessions" in u.SQL_ERRORS
+    # The same for the other two kinds the panel scores by people: one visitor
+    # reloading a dead link is one broken link, and a slow page is weighed by
+    # the visitors it reached (the samples stay, because a percentile needs
+    # measurements — stats_analysis.VITAL_MIN_SAMPLES).
+    for name in ("SQL_ERRORS", "SQL_NOT_FOUND", "SQL_VITALS"):
+        assert "count(DISTINCT session_id) AS sessions" in getattr(u, name), name
+    assert "count(*) AS samples" in u.SQL_VITALS
     # Date, time and visitor on every kind the problems panel shows.
-    for name in ("SQL_ERRORS", "SQL_NOT_FOUND", "SQL_VITALS", "SQL_CONTENT"):
+    for name in ("SQL_ERRORS", "SQL_NOT_FOUND", "SQL_VITALS", "SQL_CONTENT", "SQL_WEBGL_LOST"):
         sql = getattr(u, name)
         assert "max(created_at) AS last_at" in sql, name
         for column in ("last_session", "last_country", "last_device", "last_browser"):
             assert column in sql, (name, column)
     # The bounce rows come from the folded sessions, which need the browser too.
     assert "s.browser" in u.SQL_SESSION_EVENTS
+    # The globe funnel and its times come from one scan, and it never asks
+    # whether a Core Web Vital arrived (see the constant's own comment).
+    assert "'globe_ready'" in u.SQL_GLOBE and ":path" in u.SQL_GLOBE
+    assert "'vital'" not in u.SQL_GLOBE
+    # The cluster rule is one rule: a path several session ids share in a minute.
+    assert ":min_ids" in u.SQL_CLUSTERS and "date_trunc('minute'" in u.SQL_CLUSTERS
+    assert "'webgl_lost'" in u.SQL_WEBGL_LOST
+    for key in ("'reason'", "'phase'"):
+        assert key in u.SQL_WEBGL_LOST, key
+    # The live list names the page, which is a plain column, not event_data.
+    assert "page_title" in u.SQL_LIVE
+    # Devices and languages are two plain session columns, one scan.
+    assert "s.device" in u.SQL_DEVICES and "s.language" in u.SQL_DEVICES
+
+
+def test_the_scroll_depth_funnel_needs_no_query_of_its_own():
+    """boot.ts sends scroll_depth with its own `page` and `depth`, and those
+    events already travel inside SQL_SESSION_EVENTS' `data` column — the
+    reading funnel folds from the rows /journeys fetches anyway."""
+    assert "scroll_depth" not in "".join(getattr(u, f"SQL_{name.upper()}") for name in QUERIES)
+    assert "jsonb_object_agg" in u.SQL_SESSION_EVENTS
+
+
+def test_the_hour_bucket_query_is_gone():
+    """The strip folds its 48 fixed buckets out of the session rows /overview
+    already fetches. SQL_HOUR_BUCKETS returned one row per hour that had
+    events - 45 for a 48-hour window on 2026-09-19 - and every gap shifted
+    the bars left of it."""
+    assert not hasattr(u, "SQL_HOUR_BUCKETS")
 
 
 def test_import_without_password_is_fine_and_engine_is_lazy(monkeypatch):

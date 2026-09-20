@@ -10,6 +10,7 @@ export type Severity = 'high' | 'mid' | 'low'
 const SEVERITY: Record<ProblemKind, Severity> = {
   js_error: 'high',
   broken_link: 'high',
+  webgl_lost: 'high',
   slow_page: 'mid',
   shallow_exit: 'low',
   empty_search: 'low',
@@ -22,6 +23,7 @@ const KIND_LABELS: Record<ProblemKind, string> = {
   broken_link: 'Dead link',
   shallow_exit: 'Bounce',
   empty_search: 'Empty search',
+  webgl_lost: 'WebGL lost',
 }
 
 export function severity(kind: ProblemKind): Severity {
@@ -68,7 +70,15 @@ export function Problems({ state }: { state: Loaded<ProblemsData> }) {
             <ol className="dash-problems">
               {p.problems.map(item => (
                 <li key={`${item.kind}:${item.label}:${item.detail}`} className="dash-problem">
-                  <span className={`dash-dot dash-dot--${severity(item.kind)}`} aria-hidden="true" />
+                  {/* Not aria-hidden: the dot is the only thing on the row
+                      that carries severity, and the list is sorted by score,
+                      so hue alone decides whether "Dead link · 24" outranks
+                      "Bounce · 38" for the reader. */}
+                  <span
+                    className={`dash-dot dash-dot--${severity(item.kind)}`}
+                    role="img"
+                    aria-label={severity(item.kind)}
+                  />
                   <span className="dash-problem-kind">{problemLabel(item.kind)}</span>
                   <span className="dash-problem-label" title={item.label}>
                     {item.label}
@@ -81,8 +91,13 @@ export function Problems({ state }: { state: Loaded<ProblemsData> }) {
             </ol>
           )}
           <p className="dash-note">
-            Everything counts people, not events. The score makes the kinds comparable: a JS error counts triple
-            per visitor it reached, a dead link double, a slow page once per measurement.
+            Everything counts people, not events. The score makes the kinds comparable: a JS error and a lost
+            WebGL context count triple per visitor they reached, a dead link double, a bounce and an empty
+            search once; a slow page counts its visitors times how far past its budget it is, so a page that
+            misses the threshold by a millisecond cannot outrank a crash. A red dot breaks a page, amber slows
+            it, green is a hint and not a defect. The eight worst are listed. A story we withdrew on purpose
+            answers 410 and raises no event, so retired links never appear here — the Sources panel counts
+            those.
           </p>
         </>
       )}
