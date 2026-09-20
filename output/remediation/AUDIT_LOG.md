@@ -1725,3 +1725,51 @@ plain English names are the correct stored form. `country_slug('Georgia') = 'geo
 
 **Nothing depends on the old literals:** a repo-wide grep for `Georgia (country)` and
 `Chile, Easter Island` across `.py/.ts/.tsx/.json/.sql/.md` returns no code or config hit.
+
+### CORRECTION to the entry above, and MECHANICAL's rollback audited
+
+**A claim I committed in `6e74238` is wrong and is corrected here.** I wrote: *"No display
+canonicalizer for `country` exists, so the plain English names are the correct stored form."*
+There **is** one: `pipeline/utils/country_lookup.py:572 canonicalize_country_display_name`.
+
+What is actually true, verified executably: its map `_DISPLAY_CANONICAL` holds **only** official-rename
+entries (`turkey`/`türkiye` -> `Türkiye`) and returns every other input unchanged. So it left both
+`Georgia` and `Georgia (country)` untouched - it neither created the split nor could have fixed it.
+That is the correct reason the write needed its own evidence chain, and it makes the write's
+justification *better*, not worse: `canonicalize_country_display_name('Georgia') == 'Georgia'` and
+`== 'Chile'` for `Chile`, so **the written values are fixed points of the project's own display
+canonicalizer** - an additional verification of condition (b) that I had not performed when I made the
+claim.
+
+How I got it wrong is the same failure I have recorded repeatedly: I grepped for
+`def normalize_country|def country_slug|COUNTRIES`, got nothing for a display canonicalizer, and
+concluded from an empty result. **An empty result from my own probe is a statement about my probe.**
+The function's name was simply not in my pattern.
+
+**MECHANICAL's `ROLLBACK.sql` audited** - and it is stronger than HERO's. It contains no raw UPDATE at
+all (`UPDATE` appears only in comments); the write is a loop calling `apply_remediation_change(...)`,
+i.e. the journalled primitive, and it refuses to proceed unless exactly the expected number of rows
+moved. It carries three scope guards and two invariants, the second of which verifies that **the
+journal and the data agree row for row in both directions**.
+
+Against the live journal (compared in Python, keyed on `row_pk`, no cross-toolchain sort):
+
+| check | result |
+|---|---|
+| tuples parsed / distinct | **35 / 35** |
+| journal PKs absent from the rollback | **0** |
+| rollback PKs absent from the journal | **0** |
+| rows that are not the exact inverse | **0** |
+| reasons present | **35** |
+| JSONB evidence arrays present | **35** (34 with 6 sources, 1 with 5 - a site with no Wikidata QID) |
+
+The inverse is exact, not approximate: `rollback.old` (what is in the table now) = {Georgia 27,
+Chile 8} and `rollback.new` (what would be written back) = {Georgia (country) 27, Chile, Easter
+Island 8}, which is precisely `journal.old`.
+
+**Three instrument errors of mine on this one check, all previously recorded classes, none the
+artifact's fault.** An anchored `grep -c "^UPDATE"` returned 0 because the file indents its SQL (and
+the command chain then aborted on grep's exit 1, hiding the tail); I wrote a temp file to `/tmp`,
+which Git Bash and native Windows Python do not agree on; and `-F'	'` reached psql as the literal
+letter `t`, so the "TSV" had no tabs. Each time the file was fine and my probe was not - the same
+lesson as the offsite count and HERO's 1,041, now for the fourth time this session.
