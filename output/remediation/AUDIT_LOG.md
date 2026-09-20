@@ -1088,6 +1088,40 @@ my probe contradicts the artifact, suspect the probe first.**
 **Gate suite, run by me rather than accepted:** `2023 passed, 3 skipped, 57 deselected, 32 warnings in
 150.94s` - the 3 skips are the two known refactors plus `THEO_REGEN_TEST`.
 
+## T10 independently re-run - and the caveat that sits underneath the hero write
+
+Two offline runs are **byte-identical** (`findings.jsonl` `c75583da5430e3d23fe8d457…`) and both match
+`run_t10` exactly. **49,691 findings over 4,010 sites**, tiers: A **3,858**, B 9,559, C 25,569,
+D 10,705 - **sum 49,691**, the whole scoped gallery, with no image unclassified. Tier A's count equals
+the hero count exactly, which is what makes "A = the current hero" a cross-check rather than a claim.
+
+**The caveat, and it is material because HERO's promotions lean on it.** Every T10 run prints its own
+signal fidelity:
+
+> S faithful, F faithful, P faithful (fetched), D reconstructed from the 5,004 curated site names and cut
+to the plan's 4,396-token size by corpus frequency, E partial (6 of the plan's 67 non-photo terms),
+A narrow reconstruction, B unavailable: the plan's 41-city list with coordinates is not in this
+repository
+
+So **four of the eight signals are reconstructions or absent**, exactly as §6.4's loss of the curated
+lists predicted. It is reported on every run rather than buried - which is the requirement I set when
+I saw the lists were gone - but reporting it does not remove it.
+
+Why that touches the write I approved: tier D is defined as *in the site's own P373 category, no
+off-topic word signal, the site's name in the filename*, and HERO promoted **1,344 images from tier D
+and 1,375 from tier C**. The P373 half of that is sound (**P is faithful, fetched**), and so is the
+filename half. But the *off-topic word* half runs through E (6 of 67 terms) and A/B/D - the rebuilt
+signals. A weakened off-topic filter makes tier D **more permissive** than the plan intended, so a
+promoted hero could in principle be off-topic in a way the full signal set would have caught.
+
+**What limits the exposure, stated as limits and not as reassurance:** HERO never promoted from the
+suspect tiers A (the old hero) or B (museum-word / museum-city >150 km), the candidate's true Commons
+original had to be genuinely >= 1600x900, and the whole change is journalled and reversible - I verified
+`ROLLBACK.sql` restores all 5,438 rows. So the failure mode is "a wrong-but-real 1600 px image is the
+hero", not data loss, and it is one statement to undo. **Residual risk, not resolved:** the 2,719 new
+heroes have not been visually reviewed. The plan's own gallery-audit stage is where that happens, and
+it has not run yet. I am recording this rather than calling the write fully vindicated.
+
 ### Safety check after the probe
 
 The real backups directory was intact: `2026-09-19_pre-audit` and `2026-09-20_remediation` both
