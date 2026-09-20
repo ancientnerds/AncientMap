@@ -498,6 +498,45 @@ Blast radius stated to the lane and worth repeating: `restore_snapshot` is live 
 `api/routes/sites.py:955` -> `:963`, so this is a real behaviour change on a live endpoint, and
 it must be reported as one.
 
+## The T07 watcher was under-budgeted - caught by arithmetic, not by a timeout
+
+A watcher that expires *before* the work it watches is worse than no watcher: the sweep would
+finish at ~06:30 with nobody awake to notice. Checked the numbers instead of trusting the
+launch.
+
+**Rate, measured:** 11,290 final records at ~21:5x → 11,444 at 22:17 ⇒ **~460 URLs/hour**, with
+3,786 still open. That is **~8 hours**, finishing around 06:30. The watcher was launched with
+`timeoutSeconds: 14400` (4 h) and would have expired around **01:10** - five hours early.
+
+### Proving the kill was safe *before* killing
+
+`bg_kill` on a task can take a whole process tree with it, and the sweep holds ~11,400 URLs of
+network work. So the tree was read first rather than assumed:
+
+```
+32648  parent=10332  python -u scripts/remediation/census/run.py --tests T07 ...   <- the sweep
+10332  parent=14708  nohup.exe ./.venv/Scripts/python.exe -u scripts/.../run.py     <- detached
+33956  parent=3276   bash.exe -c "cd /c/PythonProjects/AncientMap && bash output/.../t07_finish.sh"
+```
+
+Two independent trees. The sweep is under **`nohup`**, which is precisely why it outlived its own
+worker's 70-minute timeout in the first place; the watcher is a separate bash. Killing the watcher
+could not reach it.
+
+**And that was then confirmed by measurement rather than left as a conclusion:** after the kill,
+the watcher was `GONE` while both `32648` and its `nohup` parent were `ALIVE`, with the sweep log
+written **4 seconds** before the check. The kill was surgical.
+
+Replaced by `bf568f766` with `timeoutSeconds: 43200` (12 h), which spans the measured finish time
+with margin. The sweep itself was never restarted - restarting it would have discarded nothing
+(the cache is resumable) but would have thrown away the ~460/hour of live progress for no reason.
+
+Worth naming the general shape: **the sweep is guarded against a stall by design.** If the log
+goes quiet for 600 s the watcher proceeds anyway and finishes with whatever it has, and
+`MIN_SWEEP` refuses a partial sweep that would look like thousands of dead links. So a hung sweep
+degrades to a documented partial result instead of hanging forever - which is why a long budget
+is safe rather than a way to wait indefinitely.
+
 ### Safety check after the probe
 
 The real backups directory was intact: `2026-09-19_pre-audit` and `2026-09-20_remediation` both
