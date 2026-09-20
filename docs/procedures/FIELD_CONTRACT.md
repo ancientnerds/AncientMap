@@ -190,6 +190,37 @@ Running the script is what updates the database *without* waiting for a restart,
 directly also works, since that is the file the startup import reads - but then the DB follows only
 at the next boot, and the copy step is skipped.
 
+#### The generator that feeds this chain cannot fail, and cannot notice that it did nothing
+
+Measured 2026-09-20 by **running** `scripts/merge_rewrites.py` in a faithful sandbox - its paths
+derive from `__file__`, so a whole tree was recreated around a copy of it, with a stub verifier that
+exits 3:
+
+| scenario | exit code | what it actually did |
+|---|---|---|
+| all 10 `rewrite_output_*.json` missing (**today's state**) | **0** | printed `WARNING: Missing batch files: [0..9]`, applied 0, and **still wrote `public/data/card_descriptions.json`** |
+| a batch present but every rewrite invalid | **0** | printed `Validation errors (3)`, applied 1, skipped 1 |
+
+Four defects of one kind - a command that reports success without having succeeded:
+
+1. **It cannot fail.** `sys.exit` appears **0 times** in the file, and the verifier's exit code is
+   never read (`returncode` appears **0 times**). The subprocess may fail completely and the script
+   still exits 0.
+2. **Missing batch files are a `WARNING`, not a failure.** A Phase-5 run that forgot to generate its
+   batches is indistinguishable from a successful one.
+3. **Validation errors are printed and then ignored.** The apply loop's only condition is
+   `sid in descs and len(new_desc) <= 200` (`:78`); it never consults the `errors` list. A rewrite
+   rejected as `BAD ENDING` is applied anyway. Only the >200 case is filtered, and only by accident.
+4. **Even the do-nothing run overwrites** the git-LFS-tracked, deploy-relevant
+   `public/data/card_descriptions.json`.
+
+**Consequence for the bootstrap above:** copying the public file back makes
+`import_card_descriptions.py` usable, and it also makes `merge_rewrites.py` runnable - which is what
+makes its silent no-op reachable. **Do not trust its exit code.** Before Phase 5, assert
+`Applied N rewrites` with N > 0 and confirm the public file actually changed. `verify_descriptions.py`
+contains no `sys.exit` either, which independently supports the plan's decision to retire it as a
+gate.
+
 **Rejected alternatives, recorded so they are not re-litigated.** Writing only into a NULL or
 empty target kills this chain — an edited file could never reach a row that already holds text.
 Guarding the import against site_ids recorded in migration 0017's `remediation_change_log` would

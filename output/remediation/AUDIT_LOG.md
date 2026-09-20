@@ -747,6 +747,35 @@ code rather than a fact about the world (the Clopper-Pearson interval, `by_field
 annotation, and this). The rule stands and is worth keeping: **check the instrument before
 believing the number** - and when the instrument was yours, say so in the record.
 
+## The Phase-5 generator cannot fail - and would have been trusted
+
+While an earlier note claimed the card-description workflow was "broken at step 1", checking that
+claim executably produced a worse finding about the step *after* it. `scripts/merge_rewrites.py` is
+the generator that Phase 5 depends on, and it **cannot fail**: `sys.exit` appears 0 times in the file
+and the verifier's exit code is never read (`returncode` appears 0 times).
+
+Proven by running it in a faithful sandbox - its paths derive from `__file__`, so a whole tree was
+recreated around a copy of it, with a stub verifier that exits 3:
+
+| scenario | exit | what it did |
+|---|---|---|
+| all 10 `rewrite_output_*.json` missing (**today's state**) | **0** | `WARNING: Missing batch files: [0..9]`, applied 0, **still wrote the deploy-relevant `public/data/card_descriptions.json`** |
+| a batch present, every rewrite invalid | **0** | printed `Validation errors (3)`, applied 1, skipped 1 |
+
+The second row was the surprise, and it was not what I set out to test: **validation errors are
+printed and then ignored.** The apply loop's only condition is
+`sid in descs and len(new_desc) <= 200` (`:78`) - it never consults the `errors` list, so a rewrite
+rejected as `BAD ENDING` is written into the public file anyway. Only the >200 case is filtered, and
+only because the length test was duplicated there by accident.
+
+Why this matters beyond one script. Phase 5 regenerates the card texts, and the plan already wants
+`scripts/verify_descriptions.py` retired as a gate - it too contains no `sys.exit`, which now
+independently supports that decision. A generator that exits 0 after doing nothing, while silently
+rewriting the file the API boots from, is the same failure shape this audit has now caught four
+times: **exit 0 is a claim, not proof.** The bootstrap `cp` documented in `FIELD_CONTRACT.md` makes
+this path *reachable*, so the warning travels with it: assert `Applied N rewrites` with N > 0 and
+confirm the public file changed.
+
 ### Safety check after the probe
 
 The real backups directory was intact: `2026-09-19_pre-audit` and `2026-09-20_remediation` both
