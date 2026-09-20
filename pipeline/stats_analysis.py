@@ -781,6 +781,9 @@ def live_row(row: dict[str, Any], now: datetime) -> dict[str, Any]:
         "browser": row.get("browser"),
         "page": page_type(row["url_path"] or "/"),
         "title": without_brand(row["title"] or row["url_path"] or "/"),
+        # The path is what the row links to, so it travels next to the title:
+        # the dashboard is served from its own host and cannot resolve it.
+        "path": row["url_path"] or "/",
         "here": int((now - row["page_since"]).total_seconds()),
         "last_seen": row["last_seen"].isoformat(),
     }

@@ -4,6 +4,17 @@ import { Panel, Status } from './Panel'
 import type { LiveData, LiveVisitor } from './types'
 import type { Loaded } from './useStats'
 
+/** The dashboard is served from its own host while the pages it names live on the main one,
+ *  so a row's link has to be absolute - a relative path would point back at the dashboard. */
+export const MAIN_ORIGIN = 'https://ancientnerds.com'
+
+/** The main-host URL for a visitor's page. A path that arrived without its leading slash
+ *  (or empty) still has to land on a real page, never on "ancientnerds.comsites/...". */
+export function pageUrl(path: string): string {
+  if (!path) return MAIN_ORIGIN + '/'
+  return MAIN_ORIGIN + (path.startsWith('/') ? path : '/' + path)
+}
+
 /** "< 1 min" / "6 min" / "2 h 11 min" — how long they have had this page open.
  *  formatDuration() in utils/formatters.ts is clock style ("6:52") and
  *  timeAgo() needs a timestamp, so neither answers this question. */
@@ -31,7 +42,11 @@ function Row({ v }: { v: LiveVisitor }) {
       </span>
       <span className="dash-live-who">{[v.browser, v.device].filter(Boolean).join(' · ')}</span>
       <span className="dash-live-here">{fmtSpan(v.here)}</span>
-      <span className="dash-live-page">{v.title}</span>
+      <span className="dash-live-page">
+        <a href={pageUrl(v.path)} target="_blank" rel="noopener noreferrer">
+          {v.title}
+        </a>
+      </span>
     </li>
   )
 }
@@ -70,8 +85,8 @@ export function LiveNow({ state }: { state: Loaded<LiveData> }) {
             {fmtInt(l.total)} in the last {l.window_minutes} minutes, {fmtInt(l.shown)} shown. The Now
             tile above counts five minutes, so this list is the longer window. A visitor who fired only a
             Core Web Vital has no page to name and no row — ten of sixty-nine sessions in a day
-            (2026-09-19). The headline is the page's own title, so it is in the visitor's language, not
-            ours. This is the one panel on the page that can point at a single person: at one visitor it
+            (2026-09-19). The headline is the page's own title and links to that page on the main
+            site, so it is in the visitor's language, not ours. This is the one panel on the page that can point at a single person: at one visitor it
             names their country, device, browser and the page they have open right now. It is cookieless
             and no id here survives the monthly salt rotation, but it is not anonymous in the moment — do
             not screenshot it into a public channel.

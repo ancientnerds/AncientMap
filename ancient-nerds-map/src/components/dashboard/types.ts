@@ -275,6 +275,8 @@ export interface ClustersData {
 export interface LiveVisitor extends Visitor {
   page: string
   title: string
+  /** Path of the page they have open. The row links to it on the main host. */
+  path: string
   /** Seconds since this page view started. */
   here: number
   last_seen: string
