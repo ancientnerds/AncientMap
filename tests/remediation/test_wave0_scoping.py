@@ -46,7 +46,9 @@ class _Result:
 class _Conn:
     """Records every statement and returns canned rows for matching fragments."""
 
-    def __init__(self, log: list[tuple[str, dict[str, Any]]], rows_for: dict[str, list[Any]]) -> None:
+    def __init__(
+        self, log: list[tuple[str, dict[str, Any]]], rows_for: dict[str, list[Any]]
+    ) -> None:
         self.log = log
         self.rows_for = rows_for
 
@@ -76,7 +78,9 @@ class _Conn:
 
 
 class _Engine:
-    def __init__(self, log: list[tuple[str, dict[str, Any]]], rows_for: dict[str, list[Any]]) -> None:
+    def __init__(
+        self, log: list[tuple[str, dict[str, Any]]], rows_for: dict[str, list[Any]]
+    ) -> None:
         self.log = log
         self.rows_for = rows_for
 
@@ -112,8 +116,10 @@ def test_empty_candidate_list_runs_no_statement(monkeypatch: pytest.MonkeyPatch)
 
 def test_every_statement_reaching_unified_sites_is_scoped(monkeypatch: pytest.MonkeyPatch) -> None:
     """No statement may offer to touch more rows than the candidate list allows."""
-    sites = [{"site_id": "11111111-1111-1111-1111-111111111111"},
-             {"site_id": "22222222-2222-2222-2222-222222222222"}]
+    sites = [
+        {"site_id": "11111111-1111-1111-1111-111111111111"},
+        {"site_id": "22222222-2222-2222-2222-222222222222"},
+    ]
     # Make every branch produce work, so no scoped statement is merely absent from the log.
     rows_for: dict[str, list[Any]] = {
         "SELECT id::text, name, site_type": [
@@ -125,8 +131,11 @@ def test_every_statement_reaching_unified_sites_is_scoped(monkeypatch: pytest.Mo
         ],
         "SELECT DISTINCT site_type": [("dolmen",)],
         "SELECT id::text AS site_id, period_start, period_name": [
-            SimpleNamespace(site_id="11111111-1111-1111-1111-111111111111",
-                            period_start=-3000, period_name="Neolithic")
+            SimpleNamespace(
+                site_id="11111111-1111-1111-1111-111111111111",
+                period_start=-3000,
+                period_name="Neolithic",
+            )
         ],
         "SELECT id::text AS site_id, lat, lon": [
             SimpleNamespace(site_id="22222222-2222-2222-2222-222222222222", lat=1.0, lon=2.0)

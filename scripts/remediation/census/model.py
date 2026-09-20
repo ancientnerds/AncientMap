@@ -54,17 +54,17 @@ class Confidence(StrEnum):
 
 
 class Proposal(StrEnum):
-    SET = "set"      #: write the value in `proposed_value`
+    SET = "set"  #: write the value in `proposed_value`
     CLEAR = "clear"  #: set the field to NULL - "an empty field beats a wrong one"
     REVIEW = "review"  #: a human or Phase 3 must decide; carries no value
-    NONE = "none"    #: recorded for the record, nothing to change
+    NONE = "none"  #: recorded for the record, nothing to change
 
 
 @dataclass(frozen=True)
 class Evidence:
     """One source that bears on one claim. `quote` is what makes it reviewable later."""
 
-    source: str          #: short label, e.g. "wikidata:P625", "commons:imageinfo"
+    source: str  #: short label, e.g. "wikidata:P625", "commons:imageinfo"
     url: str | None = None
     quote: str | None = None
     retrieved_at: str | None = None
@@ -82,10 +82,10 @@ class Finding:
     """One proposed change to one field of one site."""
 
     site_id: str
-    test_id: str                                    #: e.g. "T04/site_type-synonym"
-    field: str                                      #: unified_sites column, or "wiki_images:<id>"
+    test_id: str  #: e.g. "T04/site_type-synonym"
+    field: str  #: unified_sites column, or "wiki_images:<id>"
     severity: Severity
-    dimension: str                                  #: D1..D8, IMG, SCOPE, SHORTS
+    dimension: str  #: D1..D8, IMG, SCOPE, SHORTS
     current_value: Any = None
     proposed_value: Any = None
     proposal: Proposal = Proposal.REVIEW
@@ -132,9 +132,15 @@ class Finding:
         deduplicated; two with different keys must both survive.
         """
         blob = json.dumps(
-            [self.site_id, self.field, _default(self.current_value), _default(self.proposed_value),
-             self.proposal.value],
-            ensure_ascii=False, sort_keys=True,
+            [
+                self.site_id,
+                self.field,
+                _default(self.current_value),
+                _default(self.proposed_value),
+                self.proposal.value,
+            ],
+            ensure_ascii=False,
+            sort_keys=True,
         )
         return hashlib.sha256(blob.encode()).hexdigest()[:16]
 

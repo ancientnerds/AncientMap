@@ -123,7 +123,8 @@ class Snapshot:
     def ext_ids(self, site_id: str, kind: str | None = None) -> list[str]:
         """External-id values for a site, optionally filtered by `kind`."""
         out = [
-            r["value"] for r in self.by("site_external_ids").get(site_id, [])
+            r["value"]
+            for r in self.by("site_external_ids").get(site_id, [])
             if kind is None or r.get("kind") == kind
         ]
         return out

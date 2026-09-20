@@ -90,8 +90,11 @@ class TestT04SiteType:
         """Whatever synonym this is, the proposal must be a value the pipeline keeps."""
         canonical, normalize = t04._canonical()
         # Build a synonym on the fly rather than hard-coding one the lookup may drop.
-        synonyms = [v for v in canonical if v.lower().replace(" ", "_") in
-                    {c.lower().replace(" ", "_") for c in canonical}]
+        synonyms = [
+            v
+            for v in canonical
+            if v.lower().replace(" ", "_") in {c.lower().replace(" ", "_") for c in canonical}
+        ]
         assert synonyms, "sanity: canonical list is not empty"
         got = t04.run(_ctx([_site("a", site_type=synonyms[0].upper())]))
         for f in got:

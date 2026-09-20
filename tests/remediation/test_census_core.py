@@ -28,8 +28,11 @@ class TestFindingContract:
         """An unfilled proposal invents data - refuse it at construction."""
         with pytest.raises(ValueError, match="needs a proposed_value"):
             M.Finding(
-                site_id="s1", test_id="T/x", field="country",
-                severity=M.Severity.MODERATE, dimension="D3",
+                site_id="s1",
+                test_id="T/x",
+                field="country",
+                severity=M.Severity.MODERATE,
+                dimension="D3",
                 proposal=M.Proposal.SET,
             )
 
@@ -37,25 +40,36 @@ class TestFindingContract:
         """REVIEW means 'a human decides'; smuggling a value in would let it be applied."""
         with pytest.raises(ValueError, match="must not carry a value"):
             M.Finding(
-                site_id="s1", test_id="T/x", field="country",
-                severity=M.Severity.MODERATE, dimension="D3",
-                proposal=M.Proposal.REVIEW, proposed_value="Greece",
+                site_id="s1",
+                test_id="T/x",
+                field="country",
+                severity=M.Severity.MODERATE,
+                dimension="D3",
+                proposal=M.Proposal.REVIEW,
+                proposed_value="Greece",
             )
 
     def test_clear_is_allowed_without_a_value(self):
         """'An empty field beats a wrong one' - clearing must be expressible."""
         f = M.Finding(
-            site_id="s1", test_id="T/x", field="period_start",
-            severity=M.Severity.SEVERE, dimension="D1",
+            site_id="s1",
+            test_id="T/x",
+            field="period_start",
+            severity=M.Severity.SEVERE,
+            dimension="D1",
             proposal=M.Proposal.CLEAR,
         )
         assert f.proposed_value is None
 
     def test_unevidenced_finding_is_never_applicable(self):
         f = M.Finding(
-            site_id="s1", test_id="T/x", field="country",
-            severity=M.Severity.MODERATE, dimension="D3",
-            proposal=M.Proposal.SET, proposed_value="Greece",
+            site_id="s1",
+            test_id="T/x",
+            field="country",
+            severity=M.Severity.MODERATE,
+            dimension="D3",
+            proposal=M.Proposal.SET,
+            proposed_value="Greece",
             confidence=M.Confidence.TWO_SOURCE,
         )
         assert f.applicable is False
@@ -63,9 +77,13 @@ class TestFindingContract:
     def test_two_sources_from_one_host_count_as_one(self):
         """Anti-pattern 6: two pages of one wiki are not two independent sources."""
         f = M.Finding(
-            site_id="s1", test_id="T/x", field="country",
-            severity=M.Severity.MODERATE, dimension="D3",
-            proposal=M.Proposal.SET, proposed_value="Greece",
+            site_id="s1",
+            test_id="T/x",
+            field="country",
+            severity=M.Severity.MODERATE,
+            dimension="D3",
+            proposal=M.Proposal.SET,
+            proposed_value="Greece",
             confidence=M.Confidence.TWO_SOURCE,
             evidence=[
                 M.Evidence("a", "https://www.wikidata.org/wiki/Q1"),
@@ -78,9 +96,13 @@ class TestFindingContract:
 
     def test_weak_confidence_is_not_applicable(self):
         f = M.Finding(
-            site_id="s1", test_id="T/x", field="country",
-            severity=M.Severity.MODERATE, dimension="D3",
-            proposal=M.Proposal.SET, proposed_value="Greece",
+            site_id="s1",
+            test_id="T/x",
+            field="country",
+            severity=M.Severity.MODERATE,
+            dimension="D3",
+            proposal=M.Proposal.SET,
+            proposed_value="Greece",
             confidence=M.Confidence.WEAK,
             evidence=[M.Evidence("a", "https://x.org")],
         )
@@ -89,9 +111,14 @@ class TestFindingContract:
     def test_change_key_is_stable_and_transition_specific(self):
         def mk(cur, new):
             return M.Finding(
-                site_id="s1", test_id="T/x", field="country",
-                severity=M.Severity.MODERATE, dimension="D3",
-                current_value=cur, proposal=M.Proposal.SET, proposed_value=new,
+                site_id="s1",
+                test_id="T/x",
+                field="country",
+                severity=M.Severity.MODERATE,
+                dimension="D3",
+                current_value=cur,
+                proposal=M.Proposal.SET,
+                proposed_value=new,
             ).change_key
 
         assert mk("Turkey", "Türkiye") == mk("Turkey", "Türkiye")
@@ -102,10 +129,14 @@ class TestFindingContract:
         import json
 
         f = M.Finding(
-            site_id="s1", test_id="T/x", field="country",
-            severity=M.Severity.MODERATE, dimension="D3",
+            site_id="s1",
+            test_id="T/x",
+            field="country",
+            severity=M.Severity.MODERATE,
+            dimension="D3",
             current_value="Georgia (country)",
-            proposal=M.Proposal.SET, proposed_value="Georgia",
+            proposal=M.Proposal.SET,
+            proposed_value="Georgia",
             confidence=M.Confidence.AUTHORITATIVE,
             evidence=[M.Evidence("iso3166", "https://example.org/iso")],
         )
@@ -196,8 +227,9 @@ class TestFetcher:
                 fet.get_json("https://example.org/down")
 
     def test_non_404_error_raises(self, tmp_path):
-        with F.Fetcher(root=tmp_path, transport=_transport(
-                {"https://example.org/forbidden": (403, "", {})})) as fet:
+        with F.Fetcher(
+            root=tmp_path, transport=_transport({"https://example.org/forbidden": (403, "", {})})
+        ) as fet:
             with pytest.raises(F.FetchError):
                 fet.get_json("https://example.org/forbidden")
 
@@ -245,8 +277,9 @@ class TestFetcher:
         assert p["status"] == 200
 
     def test_get_text_raises_on_forbidden(self, tmp_path):
-        with F.Fetcher(root=tmp_path, transport=_transport(
-                {"https://example.org/denied": (403, "", {})})) as fet:
+        with F.Fetcher(
+            root=tmp_path, transport=_transport({"https://example.org/denied": (403, "", {})})
+        ) as fet:
             with pytest.raises(F.FetchError):
                 fet.get_text("https://example.org/denied")
 
@@ -255,8 +288,9 @@ class TestFetcher:
             assert fet.get_text("https://example.org/gone")["status"] == 404
 
     def test_unreadable_cache_entry_is_refetched_not_crashed(self, tmp_path):
-        with F.Fetcher(root=tmp_path, transport=_transport(
-                {"https://example.org/a": (200, "{}", {})})) as fet:
+        with F.Fetcher(
+            root=tmp_path, transport=_transport({"https://example.org/a": (200, "{}", {})})
+        ) as fet:
             fet.get_json("https://example.org/a")
             key = F.Fetcher._key("GET", "https://example.org/a", None)
             (tmp_path / "json" / key[:2] / f"{key}.json").write_text("{not json", encoding="utf-8")

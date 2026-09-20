@@ -60,6 +60,7 @@ def _retry_after_seconds(header: str | None) -> float | None:
         return None
     return value if 0 <= value <= 300 else None
 
+
 USER_AGENT = (
     "AncientNerdsSiteAudit/1.0 "
     "(https://ancientnerds.com; database audit; ancient.nerds@protonmail.com)"
@@ -126,8 +127,9 @@ class Fetcher:
         tmp.replace(p)  # atomic: a killed run leaves no half entry
 
     # -------------------------------------------------------------- transport
-    def _request(self, method: str, url: str, params: dict[str, Any] | None,
-                 ns: str, force: bool = False) -> dict[str, Any]:
+    def _request(
+        self, method: str, url: str, params: dict[str, Any] | None, ns: str, force: bool = False
+    ) -> dict[str, Any]:
         key = self._key(method, url, params)
         if not force:
             cached = self._load(ns, key)
@@ -142,13 +144,13 @@ class Fetcher:
                 r = self._client.request(method, url, params=params)
             except Exception as exc:  # httpx.TransportError and friends
                 last = exc
-                time.sleep(min(2 ** attempt, 12) + _jitter(url, attempt))
+                time.sleep(min(2**attempt, 12) + _jitter(url, attempt))
                 continue
 
             if r.status_code in (429, 500, 502, 503, 504):
                 delay = _retry_after_seconds(r.headers.get("retry-after"))
                 if delay is None:
-                    delay = min(2 ** attempt, 20)
+                    delay = min(2**attempt, 20)
                 last = FetchError(f"HTTP {r.status_code} from {url}")
                 if attempt < self.max_retries - 1:
                     time.sleep(delay + _jitter(url, attempt))
@@ -157,8 +159,11 @@ class Fetcher:
                 "method": method,
                 "url": str(r.url),
                 "status": r.status_code,
-                "headers": {k: v for k, v in r.headers.items()
-                            if k.lower() in ("content-type", "retry-after", "location")},
+                "headers": {
+                    k: v
+                    for k, v in r.headers.items()
+                    if k.lower() in ("content-type", "retry-after", "location")
+                },
                 "text": r.text if r.status_code < 400 else "",
                 "error": None if r.status_code < 400 else f"HTTP {r.status_code}",
                 "fetched_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
@@ -172,8 +177,9 @@ class Fetcher:
         raise FetchError(f"{method} {url} failed after {self.max_retries} attempts: {last}")
 
     # -------------------------------------------------------------- public API
-    def get_json(self, url: str, params: dict[str, Any] | None = None,
-                 ns: str = "json", force: bool = False) -> dict[str, Any]:
+    def get_json(
+        self, url: str, params: dict[str, Any] | None = None, ns: str = "json", force: bool = False
+    ) -> dict[str, Any]:
         """GET and parse JSON. Raises FetchError unless the answer is a real answer.
 
         Only a 404 is passed through as a value: "this does not exist" is something a
@@ -192,8 +198,9 @@ class Fetcher:
             raise FetchError(f"{p.get('url')}: response was not JSON ({exc})") from exc
         return p
 
-    def get_text(self, url: str, params: dict[str, Any] | None = None,
-                 ns: str = "text") -> dict[str, Any]:
+    def get_text(
+        self, url: str, params: dict[str, Any] | None = None, ns: str = "text"
+    ) -> dict[str, Any]:
         """Raw body as text. Same 404-is-a-value rule as `get_json`."""
         p = self._request("GET", url, params, ns)
         if p.get("error") and p["status"] != 404:
@@ -215,8 +222,13 @@ class Fetcher:
             return self._request("GET", url, None, ns)
         return p
 
-    def map(self, fn: Callable[[Any], Any], items: Sequence[Any], workers: int | None = None,
-            desc: str = "") -> list[Any]:
+    def map(
+        self,
+        fn: Callable[[Any], Any],
+        items: Sequence[Any],
+        workers: int | None = None,
+        desc: str = "",
+    ) -> list[Any]:
         """Run `fn(item)` over `items` with bounded concurrency, order-preserving."""
         items = list(items)
         out: list[Any] = [None] * len(items)
@@ -253,4 +265,4 @@ class Fetcher:
 
 def chunked(seq: Iterable[Any], n: int) -> list[list[Any]]:
     seq = list(seq)
-    return [seq[i:i + n] for i in range(0, len(seq), n)]
+    return [seq[i : i + n] for i in range(0, len(seq), n)]

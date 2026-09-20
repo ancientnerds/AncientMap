@@ -94,19 +94,29 @@ def run(ctx: Context) -> list[Finding]:
             # Known-good, but check the other half of anti-pattern 15: a canonical value
             # the frontend cannot colour renders as a fallback on the globe.
             if value in missing_color:
-                findings.append(Finding(
-                    site_id=sid, test_id=f"{TEST_ID}/no-frontend-colour", field="site_type",
-                    severity=Severity.COSMETIC, dimension=DIMENSION,
-                    current_value=value, proposal=Proposal.REVIEW,
-                    confidence=Confidence.AUTHORITATIVE,
-                    note=f"{value!r} has no entry in CATEGORY_COLORS - dot uses the default colour",
-                    evidence=[
-                        Evidence(source="pipeline/normalizers/site_type.py:CANONICAL_TYPES",
-                                 quote=f"{value!r} is canonical"),
-                        Evidence(source="ancient-nerds-map/src/constants/colors.ts:CATEGORY_COLORS",
-                                 quote=f"{value!r} is absent"),
-                    ],
-                ))
+                findings.append(
+                    Finding(
+                        site_id=sid,
+                        test_id=f"{TEST_ID}/no-frontend-colour",
+                        field="site_type",
+                        severity=Severity.COSMETIC,
+                        dimension=DIMENSION,
+                        current_value=value,
+                        proposal=Proposal.REVIEW,
+                        confidence=Confidence.AUTHORITATIVE,
+                        note=f"{value!r} has no entry in CATEGORY_COLORS - dot uses the default colour",
+                        evidence=[
+                            Evidence(
+                                source="pipeline/normalizers/site_type.py:CANONICAL_TYPES",
+                                quote=f"{value!r} is canonical",
+                            ),
+                            Evidence(
+                                source="ancient-nerds-map/src/constants/colors.ts:CATEGORY_COLORS",
+                                quote=f"{value!r} is absent",
+                            ),
+                        ],
+                    )
+                )
             continue
 
         if value == SUSPECT_MODERN:
@@ -115,16 +125,26 @@ def run(ctx: Context) -> list[Finding]:
         if not value:
             # normalize_site_type("") == "Unknown" - upstream's own answer, so proposing it
             # is quoting the pipeline rather than guessing a category.
-            findings.append(Finding(
-                site_id=sid, test_id=f"{TEST_ID}/empty", field="site_type",
-                severity=Severity.MODERATE, dimension=DIMENSION,
-                current_value=raw, proposal=Proposal.SET, proposed_value="Unknown",
-                confidence=Confidence.AUTHORITATIVE,
-                note="empty site_type; normalize_site_type() maps it to 'Unknown'",
-                evidence=[Evidence(
-                    source="pipeline/normalizers/site_type.py:186-188",
-                    quote="if not site_type or not site_type.strip(): return 'Unknown'")],
-            ))
+            findings.append(
+                Finding(
+                    site_id=sid,
+                    test_id=f"{TEST_ID}/empty",
+                    field="site_type",
+                    severity=Severity.MODERATE,
+                    dimension=DIMENSION,
+                    current_value=raw,
+                    proposal=Proposal.SET,
+                    proposed_value="Unknown",
+                    confidence=Confidence.AUTHORITATIVE,
+                    note="empty site_type; normalize_site_type() maps it to 'Unknown'",
+                    evidence=[
+                        Evidence(
+                            source="pipeline/normalizers/site_type.py:186-188",
+                            quote="if not site_type or not site_type.strip(): return 'Unknown'",
+                        )
+                    ],
+                )
+            )
             continue
 
         mapped = normalize(value)
@@ -133,34 +153,56 @@ def run(ctx: Context) -> list[Finding]:
             # the restart cannot undo it, then propose the canonical form.
             if normalize(mapped) != mapped:
                 raise AssertionError(f"{mapped!r} is not a fixed point; refusing to propose it")
-            findings.append(Finding(
-                site_id=sid, test_id=f"{TEST_ID}/synonym", field="site_type",
-                severity=Severity.COSMETIC if value.lower() == mapped.lower() else Severity.MODERATE,
-                dimension=DIMENSION,
-                current_value=value, proposal=Proposal.SET, proposed_value=mapped,
-                confidence=Confidence.AUTHORITATIVE,
-                note=f"synonym of {mapped!r} according to normalize_site_type()",
-                evidence=[
-                    Evidence(source="pipeline/normalizers/site_type.py:_SYNONYM_LOOKUP",
-                             quote=f"normalize_site_type({value!r}) == {mapped!r}"),
-                    Evidence(source="pipeline/normalizers/site_type.py:CANONICAL_TYPES",
-                             quote=f"CANONICAL_TYPES contains {mapped!r}"),
-                ],
-            ))
+            findings.append(
+                Finding(
+                    site_id=sid,
+                    test_id=f"{TEST_ID}/synonym",
+                    field="site_type",
+                    severity=Severity.COSMETIC
+                    if value.lower() == mapped.lower()
+                    else Severity.MODERATE,
+                    dimension=DIMENSION,
+                    current_value=value,
+                    proposal=Proposal.SET,
+                    proposed_value=mapped,
+                    confidence=Confidence.AUTHORITATIVE,
+                    note=f"synonym of {mapped!r} according to normalize_site_type()",
+                    evidence=[
+                        Evidence(
+                            source="pipeline/normalizers/site_type.py:_SYNONYM_LOOKUP",
+                            quote=f"normalize_site_type({value!r}) == {mapped!r}",
+                        ),
+                        Evidence(
+                            source="pipeline/normalizers/site_type.py:CANONICAL_TYPES",
+                            quote=f"CANONICAL_TYPES contains {mapped!r}",
+                        ),
+                    ],
+                )
+            )
             continue
 
         # Unknown to the pipeline. Do NOT guess a category: classification is a judgement
         # about the site, and a wrong category is worse than an odd one
         # (ENRICHMENT_AUDIT.md: an empty field beats a wrong one).
-        findings.append(Finding(
-            site_id=sid, test_id=f"{TEST_ID}/unknown", field="site_type",
-            severity=Severity.MODERATE, dimension=DIMENSION,
-            current_value=value, proposal=Proposal.REVIEW,
-            confidence=Confidence.UNVERIFIABLE,
-            note=f"{value!r} is neither canonical nor a known synonym; "
-                 "normalize_site_type() passes it through unchanged",
-            evidence=[Evidence(source="pipeline/normalizers/site_type.py:213",
-                               quote="return cleaned  # pass-through for unknown values")],
-        ))
+        findings.append(
+            Finding(
+                site_id=sid,
+                test_id=f"{TEST_ID}/unknown",
+                field="site_type",
+                severity=Severity.MODERATE,
+                dimension=DIMENSION,
+                current_value=value,
+                proposal=Proposal.REVIEW,
+                confidence=Confidence.UNVERIFIABLE,
+                note=f"{value!r} is neither canonical nor a known synonym; "
+                "normalize_site_type() passes it through unchanged",
+                evidence=[
+                    Evidence(
+                        source="pipeline/normalizers/site_type.py:213",
+                        quote="return cleaned  # pass-through for unknown values",
+                    )
+                ],
+            )
+        )
 
     return findings

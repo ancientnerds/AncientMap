@@ -97,8 +97,9 @@ def _load(test_id: str) -> TestModule:
     return mod  # type: ignore[return-value]
 
 
-def _aggregate(tid: str, mod: TestModule, findings: list[M.Finding],
-               ctx: Context, error: str | None = None) -> list[M.TestResult]:
+def _aggregate(
+    tid: str, mod: TestModule, findings: list[M.Finding], ctx: Context, error: str | None = None
+) -> list[M.TestResult]:
     """Build the per-site outcome rows for one test, with no gaps."""
     applies = getattr(mod, "applies_to", None)
     by_site: dict[str, list[M.Finding]] = {}
@@ -119,8 +120,15 @@ def _aggregate(tid: str, mod: TestModule, findings: list[M.Finding],
             rows.append(M.TestResult(site_id=sid, test_id=tid, status="pass"))
         else:
             detail = "; ".join(f"{h.field}:{h.proposal.value}" for h in hits[:5])
-            rows.append(M.TestResult(site_id=sid, test_id=tid, status="flagged",
-                                     detail=detail[:500], checked=len(hits)))
+            rows.append(
+                M.TestResult(
+                    site_id=sid,
+                    test_id=tid,
+                    status="flagged",
+                    detail=detail[:500],
+                    checked=len(hits),
+                )
+            )
     return rows
 
 
@@ -129,19 +137,29 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--snapshot", default="output/remediation/snapshot")
     ap.add_argument("--cache", default="output/remediation/cache")
     ap.add_argument("--out", default="output/remediation")
-    ap.add_argument("--tests", default=",".join(REGISTRY),
-                    help="comma-separated test ids, e.g. T01,T04")
-    ap.add_argument("--collect-only", action="store_true",
-                    help="fill the network cache and stop (resumable)")
-    ap.add_argument("--no-collect", action="store_true",
-                    help="do not fetch - for a fully offline re-run against a warm cache")
-    ap.add_argument("--skip-verify", action="store_true",
-                    help="do not re-check sha256 (only for a quick local iteration)")
+    ap.add_argument(
+        "--tests", default=",".join(REGISTRY), help="comma-separated test ids, e.g. T01,T04"
+    )
+    ap.add_argument(
+        "--collect-only", action="store_true", help="fill the network cache and stop (resumable)"
+    )
+    ap.add_argument(
+        "--no-collect",
+        action="store_true",
+        help="do not fetch - for a fully offline re-run against a warm cache",
+    )
+    ap.add_argument(
+        "--skip-verify",
+        action="store_true",
+        help="do not re-check sha256 (only for a quick local iteration)",
+    )
     ap.add_argument("-v", "--verbose", action="store_true")
     args = ap.parse_args(argv)
 
-    logging.basicConfig(level=logging.INFO if args.verbose else logging.WARNING,
-                        format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+    logging.basicConfig(
+        level=logging.INFO if args.verbose else logging.WARNING,
+        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+    )
 
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
@@ -207,32 +225,48 @@ def main(argv: list[str] | None = None) -> int:
         findings.extend(got)
         test_rows = _aggregate(tid, mod, got, ctx, error)
         rows.extend(test_rows)
-        tally = {s: sum(1 for r in test_rows if r.status == s)
-                 for s in ("pass", "flagged", "not_applicable", "error")}
+        tally = {
+            s: sum(1 for r in test_rows if r.status == s)
+            for s in ("pass", "flagged", "not_applicable", "error")
+        }
         if sum(tally.values()) != n_sites:
             # A hole in the matrix is a bug in _aggregate, not a data problem.
             raise AssertionError(
-                f"{tid}: statuses sum to {sum(tally.values())}, expected {n_sites}")
-        summary.append({
-            "test_id": tid, "name": getattr(mod, "NAME", REGISTRY[tid]),
-            "dimension": getattr(mod, "DIMENSION", ""), "sites": n_sites,
-            "findings": len(got), "applicable": tally["pass"] + tally["flagged"],
-            "flagged": tally["flagged"], "not_applicable": tally["not_applicable"],
-            "errors": tally["error"], "elapsed_s": round(time.time() - t0, 2),
-            "applicable_findings": sum(1 for f in got if f.applicable),
-        })
-        log.info("%s: %d findings (%d applicable), %d/%d sites flagged, %.1fs",
-                 tid, len(got), sum(1 for f in got if f.applicable),
-                 tally["flagged"], n_sites, time.time() - t0)
+                f"{tid}: statuses sum to {sum(tally.values())}, expected {n_sites}"
+            )
+        summary.append(
+            {
+                "test_id": tid,
+                "name": getattr(mod, "NAME", REGISTRY[tid]),
+                "dimension": getattr(mod, "DIMENSION", ""),
+                "sites": n_sites,
+                "findings": len(got),
+                "applicable": tally["pass"] + tally["flagged"],
+                "flagged": tally["flagged"],
+                "not_applicable": tally["not_applicable"],
+                "errors": tally["error"],
+                "elapsed_s": round(time.time() - t0, 2),
+                "applicable_findings": sum(1 for f in got if f.applicable),
+            }
+        )
+        log.info(
+            "%s: %d findings (%d applicable), %d/%d sites flagged, %.1fs",
+            tid,
+            len(got),
+            sum(1 for f in got if f.applicable),
+            tally["flagged"],
+            n_sites,
+            time.time() - t0,
+        )
 
     if fetcher is not None:
         fetcher.close()
 
     # ---------------------------------------------------------------- output
     (out / "findings.jsonl").write_text(
-        "".join(f.to_json() + "\n" for f in findings), encoding="utf-8")
-    (out / "census.jsonl").write_text(
-        "".join(r.to_json() + "\n" for r in rows), encoding="utf-8")
+        "".join(f.to_json() + "\n" for f in findings), encoding="utf-8"
+    )
+    (out / "census.jsonl").write_text("".join(r.to_json() + "\n" for r in rows), encoding="utf-8")
     (out / "CENSUS.md").write_text(_report(summary, findings, snap), encoding="utf-8")
 
     bad = [s["test_id"] for s in summary if s["errors"]]
@@ -270,7 +304,8 @@ def _report(summary: list[dict[str, Any]], findings: list[M.Finding], snap: Snap
         lines.append(
             f"| {s['test_id']} {s['name']} | {s['dimension']} | {s['sites']} "
             f"| {s['applicable']} | {s['flagged']} | {s['not_applicable']} | {s['errors']} "
-            f"| {s['findings']} | {s['applicable_findings']} | {s['elapsed_s']} |")
+            f"| {s['findings']} | {s['applicable_findings']} | {s['elapsed_s']} |"
+        )
 
     # The column was headed `s`, which reads like a score. It is wall-clock seconds, so it
     # changes between runs (whichever test runs first pays the snapshot-load cost). Say so,
@@ -282,9 +317,13 @@ def _report(summary: list[dict[str, Any]], findings: list[M.Finding], snap: Snap
         " `findings.jsonl` are the byte-reproducible artifacts.",
     ]
 
-    lines += ["", "## Findings by severity, field and proposal", "",
-              "| severity | field | proposal | count |",
-              "|---|---|---|---|"]
+    lines += [
+        "",
+        "## Findings by severity, field and proposal",
+        "",
+        "| severity | field | proposal | count |",
+        "|---|---|---|---|",
+    ]
     tally: dict[tuple[str, str, str], int] = {}
     for f in findings:
         k = (f.severity.value, f.field, f.proposal.value)
@@ -292,10 +331,15 @@ def _report(summary: list[dict[str, Any]], findings: list[M.Finding], snap: Snap
     for (sev, fld, prop), n in sorted(tally.items(), key=lambda kv: (-kv[1], kv[0])):
         lines.append(f"| {sev} | {fld} | {prop} | {n} |")
 
-    lines += ["", "## Provenance", "",
-              "Reproducible from the snapshot plus the HTTP cache; no test reads the",
-              "database. `applicable findings` carry the evidence their confidence",
-              "demands - the rest are proposals for human review.", ""]
+    lines += [
+        "",
+        "## Provenance",
+        "",
+        "Reproducible from the snapshot plus the HTTP cache; no test reads the",
+        "database. `applicable findings` carry the evidence their confidence",
+        "demands - the rest are proposals for human review.",
+        "",
+    ]
     return "\n".join(lines)
 
 
