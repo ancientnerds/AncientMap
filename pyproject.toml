@@ -208,7 +208,11 @@ known-first-party = ["api", "pipeline"]
 # Without this extraPath the type checker cannot resolve `from census import model`,
 # even though the import is correct at runtime. It only widens the search path; it
 # does not change which files are checked.
-extraPaths = ["scripts/remediation"]
+#
+# `scripts` is needed as well because tests/remediation/test_wave0_scoping.py imports the
+# top-level module `audit_enrich`, which sits directly in scripts/. No CI job type-checks
+# scripts/ or tests/ - the gate is `mypy api/` - so this only affects local tooling.
+extraPaths = ["scripts/remediation", "scripts"]
 
 # =============================================================================
 # Pytest Configuration

@@ -46,7 +46,7 @@ import json
 import re
 import subprocess
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime, timezone
 from pathlib import Path
 
 import httpx
@@ -401,8 +401,18 @@ def run_mechanical_fixes(sites: list[dict]) -> dict:
     """Apply deterministic fixes: site_type normalization, period recomputation,
     raw_year parsing, compound capitalization.
 
+    SCOPE CONTRACT: every statement below is restricted to the candidate ids in `sites`, and an
+    empty `sites` is a NO-OP. This function used to read `sites` only to report
+    `stats['total_sites']` and then run unguarded statements over the whole `unified_sites`
+    table - 1,759,676 rows across 28 sources, of which only 5,004 are the curated
+    `ancient_nerds` set. The site_type branch was the worst of them: it did
+    `UPDATE unified_sites SET site_type = :canonical WHERE site_type = :raw`, which rewrites
+    every row in the table sharing that raw value, in every source. `--source` on the command
+    line therefore filtered the candidate list and nothing else.
+
     Returns stats dict.
     """
+    site_ids = [s["site_id"] for s in sites]
     # Phrases that indicate a purely modern institution with no archaeological value.
     # These use word-boundary matching (\m...\M) to avoid false positives like
     # "Huijazoo", "Zootzen", "Zook". Only sites with type Unknown/NULL/site are
@@ -426,6 +436,11 @@ def run_mechanical_fixes(sites: list[dict]) -> dict:
         "country_filled": 0,
         "total_sites": len(sites),
     }
+    if not site_ids:
+        # Must come before any statement is built: an empty candidate list has to mean "nothing
+        # to do", never "no filter, so do everything".
+        print("[WAVE 0] No candidate sites - nothing to do. No statement was run.", flush=True)
+        return stats
     sql_statements = []
 
     def _sql_str(v: str) -> str:
@@ -448,8 +463,9 @@ def run_mechanical_fixes(sites: list[dict]) -> dict:
                 WHERE name ~* :pattern
                   AND site_type != 'suspect_modern'
                   AND (site_type IS NULL OR site_type IN ('Unknown', 'site'))
+                  AND id = ANY(CAST(:site_ids AS uuid[]))
             """),
-            {"pattern": regex_pattern},
+            {"pattern": regex_pattern, "site_ids": site_ids},
         ).fetchall()
 
         for row in suspects:
@@ -473,22 +489,31 @@ def run_mechanical_fixes(sites: list[dict]) -> dict:
                 print(f"    - {row.name} (was: {row.site_type})", flush=True)
 
         # --- Site type normalization ---
-        # Fetch distinct raw site_types across all sources
+        # Fetch the distinct raw site_types of the CANDIDATE sites only.
         raw_types = conn.execute(
-            text("SELECT DISTINCT site_type FROM unified_sites WHERE site_type IS NOT NULL")
+            text(
+                "SELECT DISTINCT site_type FROM unified_sites "
+                "WHERE site_type IS NOT NULL AND id = ANY(CAST(:site_ids AS uuid[]))"
+            ),
+            {"site_ids": site_ids},
         ).fetchall()
 
         for (raw,) in raw_types:
             canonical = normalize_site_type(raw)
             if canonical != raw:
                 stmt = (
+                    "-- SCOPED to the candidate ids passed to run_mechanical_fixes; without\n"
+                    "-- this filter the statement rewrote every source's rows with this value.\n"
                     f"UPDATE unified_sites SET site_type = {_sql_str(canonical)} "
-                    f"WHERE site_type = {_sql_str(raw)};"
+                    f"WHERE site_type = {_sql_str(raw)} AND id = ANY(:candidate_ids);"
                 )
                 sql_statements.append(stmt)
                 result = conn.execute(
-                    text("UPDATE unified_sites SET site_type = :canonical WHERE site_type = :raw"),
-                    {"canonical": canonical, "raw": raw},
+                    text(
+                        "UPDATE unified_sites SET site_type = :canonical "
+                        "WHERE site_type = :raw AND id = ANY(CAST(:site_ids AS uuid[]))"
+                    ),
+                    {"canonical": canonical, "raw": raw, "site_ids": site_ids},
                 )
                 stats["site_type_normalized"] += result.rowcount
 
@@ -499,7 +524,9 @@ def run_mechanical_fixes(sites: list[dict]) -> dict:
             SELECT id::text AS site_id, period_start, period_name
             FROM unified_sites
             WHERE period_start IS NOT NULL
-        """)
+              AND id = ANY(CAST(:site_ids AS uuid[]))
+        """),
+            {"site_ids": site_ids},
         ).fetchall()
 
         for row in rows:
@@ -531,7 +558,9 @@ def run_mechanical_fixes(sites: list[dict]) -> dict:
             SELECT id::text AS site_id, lat, lon
             FROM unified_sites
             WHERE country IS NULL AND lat IS NOT NULL AND lon IS NOT NULL
-        """)
+              AND id = ANY(CAST(:site_ids AS uuid[]))
+        """),
+            {"site_ids": site_ids},
         ).fetchall()
 
         if rows:
@@ -557,12 +586,12 @@ def run_mechanical_fixes(sites: list[dict]) -> dict:
         sql_path = OUTPUT_DIR / "audit_mechanical_fixes.sql"
         with open(sql_path, "w", encoding="utf-8") as f:
             f.write("-- Mechanical audit fixes generated by audit_enrich.py\n")
-            f.write(f"-- Generated: {datetime.now(timezone.utc).isoformat()}\n\n")
+            f.write(f"-- Generated: {datetime.now(UTC).isoformat()}\n\n")
             for stmt in sql_statements:
                 f.write(stmt + "\n")
         print(f"  SQL log: {sql_path} ({len(sql_statements)} statements)", flush=True)
 
-    print(f"[WAVE 0] Mechanical fixes complete:", flush=True)
+    print("[WAVE 0] Mechanical fixes complete:", flush=True)
     for key, val in stats.items():
         if key != "total_sites":
             print(f"  {key}: {val}", flush=True)
@@ -656,7 +685,7 @@ def run_enrichment_pipeline(card_sites: list[dict] | None = None) -> dict:
             if "stats" in data:
                 stats[fname] = data["stats"]
 
-    print(f"\n[WAVE 1] Enrichment pipeline complete", flush=True)
+    print("\n[WAVE 1] Enrichment pipeline complete", flush=True)
     return stats
 
 
@@ -706,7 +735,7 @@ def apply_enrichment(overwrite: bool = False) -> dict:
     print(f"[APPLY] {len(hc_site_ids)} sites with confidence >= {MIN_CONFIDENCE}", flush=True)
 
     if overwrite:
-        print(f"[APPLY] Overwrite mode: will verify + correct existing values", flush=True)
+        print("[APPLY] Overwrite mode: will verify + correct existing values", flush=True)
 
     stats = {
         "period_start_filled": 0,
@@ -896,7 +925,7 @@ def apply_enrichment(overwrite: bool = False) -> dict:
     # Write change log
     log_path = OUTPUT_DIR / "audit_apply_log.json"
     log_data = {
-        "applied_at": datetime.now(timezone.utc).isoformat(),
+        "applied_at": datetime.now(UTC).isoformat(),
         "min_confidence": MIN_CONFIDENCE,
         "overwrite": overwrite,
         "stats": stats,
@@ -905,7 +934,7 @@ def apply_enrichment(overwrite: bool = False) -> dict:
     with open(log_path, "w", encoding="utf-8") as f:
         json.dump(log_data, f, indent=2, ensure_ascii=False)
 
-    print(f"[APPLY] Enrichment applied:", flush=True)
+    print("[APPLY] Enrichment applied:", flush=True)
     for key, val in stats.items():
         if val > 0:
             print(f"  {key}: {val}", flush=True)
@@ -1048,7 +1077,7 @@ def prepare_agent_batches(sites: list[dict]) -> dict:
 
     # Write manifest
     manifest = {
-        "created": datetime.now(timezone.utc).isoformat(),
+        "created": datetime.now(UTC).isoformat(),
         "total_sites": len(needs_research),
         "batch_count": len(batches),
         "batch_size": batch_size,
@@ -1070,7 +1099,7 @@ def prepare_agent_batches(sites: list[dict]) -> dict:
     print(f"  Batch files: {BATCH_DIR}/batch_NNN_input.json", flush=True)
     print(f"  Manifest: {manifest_path}", flush=True)
     print(
-        f"\n  Next: Launch agents to process each batch (see AUDIT_ENRICHMENT.md Step 3)",
+        "\n  Next: Launch agents to process each batch (see AUDIT_ENRICHMENT.md Step 3)",
         flush=True,
     )
 
@@ -1138,13 +1167,13 @@ def show_agent_status() -> None:
             if remaining > 0:
                 print(f"  {remaining} batch(es) still need agent research.", flush=True)
 
-        print(f"\n  To run agent research, tell Claude Code:", flush=True)
-        print(f'    "run Wave 2 agent research"', flush=True)
-        print(f"\n  After agents complete, run:", flush=True)
-        print(f"    python scripts/audit_enrich.py --phase merge --dry-run", flush=True)
-        print(f"    python scripts/audit_enrich.py --phase merge", flush=True)
+        print("\n  To run agent research, tell Claude Code:", flush=True)
+        print('    "run Wave 2 agent research"', flush=True)
+        print("\n  After agents complete, run:", flush=True)
+        print("    python scripts/audit_enrich.py --phase merge --dry-run", flush=True)
+        print("    python scripts/audit_enrich.py --phase merge", flush=True)
     else:
-        print(f"\n  All batches merged. Nothing to do.", flush=True)
+        print("\n  All batches merged. Nothing to do.", flush=True)
 
 
 # =============================================================================
@@ -1551,7 +1580,7 @@ def package_for_upload(source_ids: list[str], candidate_site_ids: set[str] | Non
             geojson = {
                 "type": "FeatureCollection",
                 "metadata": {
-                    "exported_at": datetime.now(timezone.utc).isoformat(),
+                    "exported_at": datetime.now(UTC).isoformat(),
                     "source_id": source_id,
                     "count": len(features),
                 },
@@ -1565,7 +1594,7 @@ def package_for_upload(source_ids: list[str], candidate_site_ids: set[str] | Non
             stats[source_id] = len(features)
             print(f"  {source_id}: {len(features)} sites -> {out_path}", flush=True)
 
-    print(f"\n[PACKAGE] Complete. Upload these files via db.html:", flush=True)
+    print("\n[PACKAGE] Complete. Upload these files via db.html:", flush=True)
     for source_id in source_ids:
         out_path = OUTPUT_DIR / f"audit_upload_{source_id}.geojson"
         print(f"  {out_path}", flush=True)
@@ -1726,7 +1755,7 @@ def prepare_weblinks_batches(batch_size: int = 10, limit: int | None = None) -> 
 
     # Write manifest
     manifest = {
-        "created": datetime.now(timezone.utc).isoformat(),
+        "created": datetime.now(UTC).isoformat(),
         "total_sites": len(sites),
         "batch_count": len(batches),
         "batch_size": batch_size,
@@ -1741,10 +1770,10 @@ def prepare_weblinks_batches(batch_size: int = 10, limit: int | None = None) -> 
     print(f"[WEB-LINKS] Prepared {len(batches)} batches ({len(sites)} sites)", flush=True)
     print(f"  Batch files: {WEBLINK_DIR}/batch_NNN_input.json", flush=True)
     print(f"  Manifest: {manifest_path}", flush=True)
-    print(f"\n  Next steps:", flush=True)
-    print(f"    1. Launch agents to process each batch with WebSearch", flush=True)
-    print(f"    2. Save results as batch_NNN_results.json", flush=True)
-    print(f"    3. Run: python scripts/audit_enrich.py --phase web-links-merge", flush=True)
+    print("\n  Next steps:", flush=True)
+    print("    1. Launch agents to process each batch with WebSearch", flush=True)
+    print("    2. Save results as batch_NNN_results.json", flush=True)
+    print("    3. Run: python scripts/audit_enrich.py --phase web-links-merge", flush=True)
 
     return {"total_sites": len(sites), "batches": len(batches), "batch_size": batch_size}
 
@@ -2209,7 +2238,7 @@ def prepare_cited_description_batches(batch_size: int = 10, limit: int | None = 
 
     # Write manifest
     manifest = {
-        "created": datetime.now(timezone.utc).isoformat(),
+        "created": datetime.now(UTC).isoformat(),
         "total_sites": len(sites),
         "batch_count": len(batches),
         "batch_size": batch_size,
@@ -2232,10 +2261,10 @@ def prepare_cited_description_batches(batch_size: int = 10, limit: int | None = 
     print(f"  Sites with DB source excerpts: {sites_with_excerpts} ({total_excerpts} URLs pre-fetched)", flush=True)
     print(f"  Batch files: {CITED_DESC_DIR}/batch_NNN_input.json", flush=True)
     print(f"  Manifest: {manifest_path}", flush=True)
-    print(f"\n  Next steps:", flush=True)
-    print(f"    1. Launch agents to process each batch (10 per wave)", flush=True)
-    print(f"    2. Agent writes batch_NNN_results.json", flush=True)
-    print(f"    3. Run: python scripts/audit_enrich.py --phase cited-description-merge", flush=True)
+    print("\n  Next steps:", flush=True)
+    print("    1. Launch agents to process each batch (10 per wave)", flush=True)
+    print("    2. Agent writes batch_NNN_results.json", flush=True)
+    print("    3. Run: python scripts/audit_enrich.py --phase cited-description-merge", flush=True)
 
     return {"total_sites": len(sites), "batches": len(batches), "batch_size": batch_size}
 
@@ -2584,8 +2613,8 @@ def prepare_verification_batches(batch_size: int = 10, limit: int | None = None)
 
     total_sites = existing_manifest.get("total_sites", 0) + len(verification_sites)
     manifest = {
-        "created": existing_manifest.get("created", datetime.now(timezone.utc).isoformat()),
-        "updated": datetime.now(timezone.utc).isoformat(),
+        "created": existing_manifest.get("created", datetime.now(UTC).isoformat()),
+        "updated": datetime.now(UTC).isoformat(),
         "total_sites": total_sites,
         "batch_count": len(all_batches),
         "batch_size": batch_size,
@@ -2601,10 +2630,10 @@ def prepare_verification_batches(batch_size: int = 10, limit: int | None = None)
     print(f"  New batch range: {new_batches[0]}–{new_batches[-1]}", flush=True)
     print(f"  Batch files: {VERIFICATION_DIR}/batch_NNN_input.json", flush=True)
     print(f"  Manifest: {manifest_path}", flush=True)
-    print(f"\n  Next steps:", flush=True)
-    print(f"    1. Launch verification agents (10 per wave)", flush=True)
-    print(f"    2. Agent writes batch_NNN_results.json", flush=True)
-    print(f"    3. Run: python scripts/audit_enrich.py --phase verify-citations-merge", flush=True)
+    print("\n  Next steps:", flush=True)
+    print("    1. Launch verification agents (10 per wave)", flush=True)
+    print("    2. Agent writes batch_NNN_results.json", flush=True)
+    print("    3. Run: python scripts/audit_enrich.py --phase verify-citations-merge", flush=True)
 
     return {
         "total_sites": len(verification_sites),
@@ -2921,7 +2950,7 @@ def main() -> None:
     if limit:
         print(f"  Limit: {limit} random sites (test mode)", flush=True)
     if args.overwrite:
-        print(f"  Overwrite: yes (verify + correct existing values)", flush=True)
+        print("  Overwrite: yes (verify + correct existing values)", flush=True)
     print("=" * 60, flush=True)
 
     # --limit mode: sync first, then run enrichment + apply + package on N random sites
