@@ -645,20 +645,22 @@ The sites index is incrementally refreshed nightly at 03:00 UTC (content-hash ba
 
 ## 12. Remediation plan
 
-### Phase 0 — Safeguards *(partially complete)*
+### Phase 0 — Safeguards *(complete 2026-09-20, residuals named per row)*
 
 | Step | Status |
 |---|---|
 | Targeted backup of the six affected tables | ✅ **done 2026-09-19 11:22** — `/var/www/ancientnerds/backups/2026-09-19_pre-audit/` (VPS) and `output/backups/2026-09-19_pre-audit/` (local), 8.1 MB gzip, CSV each filtered to `source_id='ancient_nerds'`. Produced by `scripts/_backup_curated.sh` |
-| Full `pg_dump` + **tested restore drill** | open — `scripts/vps_backup.sh` is functional, the deploy user has `pg_dump 16.15` on the host, port 5432 published on 127.0.0.1. **8 relevant tables = 338 MB in 33 seconds**, 92 GB free |
-| Arm the backup cron / systemd timer | open — to this day there is **no** cron and **no** dump |
-| Offsite copy of the 20 GB of images under `public/data/images` | open — exists **only** on the VPS, gitignored, not in LFS |
-| Offsite copy of `video-assets/` | open — rendered mp4s **and all already-paid-for VLM verdicts**, gitignored, local only |
-| Define the change journal file format | open |
-| Gold standard: 30–40 double-blind sites for the false-negative rate | open |
-| Field contract (data dictionary with acceptance criteria per field) | open — the 53 `civilization` false alarms arose precisely from its absence |
-| Fix the `source_id` filter in Wave 0 (10.2) | open |
-| Lock down the restart overwriters (10.1) | open |
+| Full `pg_dump` + **tested restore drill** | ✅ **done 2026-09-20** — `scripts/remediation/00_backup_and_drill.sh`, deployed to `/var/www/ancientnerds/scripts/remediation/` and on cron. Dump **654,604,671 B** into `backups/2026-09-20_remediation/` (a later cron run: 654,621,587 B). Drill **PASSED**: `pg_restore exit=0`, 1 m 36 s, six tables verified row-for-row, against `DRILL_REPORT.txt`. **Two false greens were found and root-caused on the way** (see below) |
+| Arm the backup cron / systemd timer | ✅ **done 2026-09-20** — crontab installed: Mon–Sat **03:15** `DO_DRILL=0`, Sun **04:15** `DO_DRILL=1`. Propagation **proven end-to-end** with a stub drill that always exits 1: `DO_DRILL=1` → exit 1; `DO_DRILL=0` → exit 0 **and** prints `drill SKIPPED (DO_DRILL=0). The dump is NOT verified by this run.` Retention is step 4: only `<date>_remediation` dirs are ever pruned, never `2026-09-19_pre-audit`. Residual: no `MAILTO`, so a failure is silent unless the exit code is watched |
+| Offsite copy of the 20 GB of images under `public/data/images` | ✅ **done 2026-09-20** — VPS **49,790** files; local **49,787** + **3** in `AncientMap-Offsite/images-case-collisions/` = **49,790**, all three sha256-identical. Root cause of the count gap: **Windows' case-insensitive filesystem** cannot hold case-only-differing filenames that Linux can, and those were genuinely different images. The sidecar README carries the mapping; the Linux VPS stays authoritative. Residual: two filesystems, no third party |
+| Offsite copy of `video-assets/` | ✅ **done 2026-09-20** — VPS **4.6 G / 1,415 files / 0 `*.env`**; local **1,416** = 1,415 + the deliberately excluded `prod-db.env`. Offsite is **cross-machine, not third-party**: the repo and its copies are on machines Martin controls. Residual named, not hidden |
+| Define the change journal file format | ✅ **done 2026-09-20, with one deliberate deviation** — `migrations/0017_remediation_change_log.sql`, **applied to production**. E1 asked for "the change journal as a **file**"; it is a **table**, because `apply_remediation_change()` performs the conditional UPDATE and the journal INSERT *in one statement*, so a rolled-back change cannot leave a journal entry behind. A file cannot give that guarantee. Self-test `scripts/remediation/0017_migration_selftest.sql`; production `change_log rows (must be 0): 0` |
+| Gold standard: 30–40 double-blind sites for the false-negative rate | ✅ **done 2026-09-20** — **36 sites**, **540 field verdicts**: 449 CORRECT / 40 WRONG / 51 UNVERIFIABLE. Field-level, not site-level, because T10 flags 4,010 sites and T09 all 5,004 — a site-level match would read near-100 % and measure nothing. **FNR 24/40 = 60.0 %**, Clopper-Pearson [43.3 %, 75.1 %], inverse-probability weighted **62.4 %**. Deliverables + the comparison script: `output/remediation/gold_standard/`. The rate is only useful decomposed: **3** errors have no check at all (all E3 scope), **13** have a check that under-fires, **8** need the semantic/VLM pass |
+| Field contract (data dictionary with acceptance criteria per field) | ✅ **done 2026-09-20** — `docs/procedures/FIELD_CONTRACT.md`, committed `9789048` and extended since. Its card-description chain was **corrected twice, both times by checking instead of reasoning**: the section first claimed a workflow that is broken at step 1 (the file does not exist by default), and the generator behind it turned out to be unable to fail at all |
+| Fix the `source_id` filter in Wave 0 (10.2) | ✅ **done 2026-09-20** — `scripts/audit_enrich.py`, 6 edits, guarded by `tests/remediation/test_wave0_scoping.py` (3 tests, mutation-proven). Commits `5d0d7e9` and `96b365d`; the full gate suite was green at 1,879 passed / 3 skipped |
+| Lock down the restart overwriters (10.1) | ✅ **done 2026-09-20** — `api/services/card_descriptions.py` (startup import extracted; the values it discards are now logged instead of vanishing), `pipeline/lyra/orchestrator.py:1705-1734` (reconciles curated sites' `name_normalized` against its producer, **scoped** after measuring **80,083 divergent rows across 28 external sources**), `pipeline/lyra/site_key.py:1-14` (docstring), `api/services/snapshots.py:351-358` (`restore_snapshot()`'s UPDATE branch now restores `raw_data`). `tests/remediation/test_restart_overwriters.py`, 14 tests, **6 fail before → 14 pass after**. Decisive result for Phase 2: **`wiki_images.is_hero` has no restart writer**, so hero repairs survive a restart. Residual: `restore_snapshot()` still omits `parent_site_id` / `source_record_id`, and §10.3's two `audit_enrich.py` defects are report-only |
+
+**The two false greens, recorded because the lesson is the point.** Two earlier drill tasks reported exit 0 on a *failed* restore. Both were root-caused, not excused: `pg_restore` on the **host** fails with `fe_sendauth: no password supplied`, because the host-side client arrives as **`172.18.0.1/32`** (the Docker gateway), which misses the `trust` lines scoped to local/127.0.0.1/::1 and falls through to the `scram-sha-256` catch-all. The fix is to copy the dump **into** the container and restore from there with a file argument. Every prior exit-0 claim in the session was then re-read: **2 false, 3 sound.** The rule now applied everywhere: **trust the printed verdict, not the exit code** — a self-verifying task can print its own `VERDICT: … MISMATCH` and still exit 0, because the final `echo` returns 0.
 
 > **Backup-script pitfall:** `docker exec -i` consumes a shell script piped in via stdin.
 > Drop `-i` and append `</dev/null` to the container call.
@@ -685,6 +687,12 @@ Across all 5,004 sites and all 49,032 live images:
    that is never cited.
 9. True Commons original dimensions per image (981 `imageinfo` batches).
 10. Compute gallery signals S/A/B/D/E/P/F → tier assignment per image.
+11. **E3 scope window** *(added 2026-09-20, after the gold standard exposed the gap)* — §1.3 lists
+    in-scope-or-flagged as a condition of "clean" and §7 gate S12 already measures it (4,920 pass /
+    84 fail), but **no census check covered it**, so the census could not certify a site clean by its
+    own acceptance rule. Two of the three blinded E3 errors in the gold-standard sample are pure
+    comparisons of stored values and need no network. Also open: the plan's **84** versus an earlier
+    baseline's **69** — to be settled by running both rules over the snapshot, not by splitting.
 
 **Output:** the flag list that steers the entire expensive phase. Covers roughly **18 of the 54** measured
 error classes.
