@@ -684,6 +684,69 @@ resumable at all. Worth flagging for the audit that follows: `megalithic.co.uk` 
 in bulk right now, and a mass of transient 5xx from one host is a property of that host, **not** a
 statement that the database's links are broken. T07 stays uncommitted until that run is audited.
 
+## The gold standard found a hole in the census itself: the E3 scope window
+
+The measurement's most useful output was not a rate but a **missing check**. Nothing in
+T01-T10 examines the E3 cutoff, and the plan requires it in three separate places:
+
+- **§1.3, "Definition of clean"** lists it as a condition: *"The site is in scope (E3), or flagged
+  as out of scope and hidden."*
+- **§1.2 E4** says how: *"Flag it AND hide it platform-wide. A new column for this is approved - but
+  only during implementation."*
+- **§7 gate S12** already measures it: **4,920 pass / 84 fail**.
+
+So the census cannot certify a site clean by its own acceptance rule, and the Phase-1 acceptance
+criterion ("each of the 5,004 sites has a record holding the result of all ten tests") is not
+reachable without an eleventh. Two of the three blinded E3 errors are pure comparisons of stored
+values and need no network at all.
+
+The plan is candid about this class of gap elsewhere - §Phase 1 states its census "covers roughly
+**18 of the 54** measured error classes" - so a large false-negative rate was expected rather than
+surprising. An earlier baseline recorded **69** scope violations against the plan's **84**; that
+discrepancy is itself unresolved and has been handed to the SCOPE lane to settle by running both
+rules over the snapshot rather than by splitting the difference.
+
+## Wave 3: the first real repair, the missing check, and the worklist for the expensive phase
+
+Three lanes, all `opencode-go/deepseek-v4.1-flash`, all fresh context, `usageBudget` 6M tokens hard:
+
+| lane | agent | product |
+|---|---|---|
+| **HERO** | worker | Phase 2 step 1: the mechanical hero repair, with the production write authorised (E1) |
+| **SCOPE** | worker | the E3 window as census check T11, and the 69-vs-84 reconciliation |
+| **FACTS** | scout | read-only: the Phase-3 worklist and a costed batching plan |
+
+**Why these three.** HERO is the largest user-visible defect that is mechanical and costs nothing
+(3,858 heroes sitting at 800 px because `HERO_WIDTH = 800` equals `THUMB_WIDTH = 800`), and it is
+only now possible: wave 2 proved `is_hero` has no restart writer. SCOPE closes the hole above.
+FACTS exists because Phase 3 is the expensive phase (~40,000 tokens per site) and the naive
+worklist is worthless - the census "flags" 4,010 sites in T10 and all 5,004 in T09, so "has a
+finding" means nearly everything. Its brief requires the factual dimensions to be counted
+separately from the image and URL checks, and the split between sites a script can settle and sites
+only judgement can settle, because conflating those two is how a budget doubles.
+
+Two design decisions worth naming. HERO must **not** select candidates by `wiki_images.width` -
+T09 measured that column wrong for 11,653 rows - so it selects on the cached true Commons
+dimensions instead, and prefers T10's tier D ("clear": in the site's own P373 category, no off-topic
+word signal, the site's name in the filename), which makes a new hero **audit-resistant** rather
+than needing rework after the gallery audit. And the lanes are deliberately split so that only one
+of them may touch the database, while the census lane keeps its single `run.py` edit to the very
+last step because a detached sweep may invoke `run.py` at any moment.
+
+## A third instrument bug, and the rule it confirms
+
+T07's cache probe reported **`final records = 0` of 15,230** - i.e. the resumability was broken and
+the watcher was re-probing the whole sweep. It was not. The record simply has no `final` key
+(`['error','fetched_at','final_url','method','status','url']`); the real criterion is
+`_is_final()` = `rec.get("status") is not None` (`t07_link_sweep.py:158`), deliberately re-probing
+only **transport** failures (516 of them) so that a sweep which ran while the connection was down
+heals instead of hardening. The module is right and the probe was wrong.
+
+That is the third time in this session that an impossible-looking number was a bug in the measuring
+code rather than a fact about the world (the Clopper-Pearson interval, `by_field`'s missing
+annotation, and this). The rule stands and is worth keeping: **check the instrument before
+believing the number** - and when the instrument was yours, say so in the record.
+
 ### Safety check after the probe
 
 The real backups directory was intact: `2026-09-19_pre-audit` and `2026-09-20_remediation` both
