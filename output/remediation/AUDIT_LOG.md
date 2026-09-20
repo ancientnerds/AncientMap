@@ -537,6 +537,46 @@ goes quiet for 600 s the watcher proceeds anyway and finishes with whatever it h
 degrades to a documented partial result instead of hanging forever - which is why a long budget
 is safe rather than a way to wait indefinitely.
 
+## The GOLD lane's "600 s bash call": a retry storm, found by reading its scratch
+
+A worker holding one tool call for 600 s raises the stall signal. The rule is to check cheaply
+before steering, and the check paid off - the lane was neither hung nor productively busy.
+
+**What the inspection showed:** `gold_scratch/failed.txt` listed **27 FAILs out of 33 sampled
+sites**, with `retry2.txt` re-running 26 of the same ones. The reason was in the evidence files:
+`retry 1/2/3 for wd_Q11120743: HTTP Error 429: Too Many Requests` - a **rate-limit retry storm**.
+Retrying an immediate 429 is self-defeating: it deepens the throttle and burns the budget.
+
+**And the lane already held what it needed.** `xcaret` had enwiki + dewiki + eswiki cached, each
+with coordinates and an extract; `metsamor` had enwiki + eswiki; `priene` had commons + dewiki +
+dawiki. It had marked all three FAIL because **one** secondary fetch (the Wikidata call) was 429'd,
+while the gold standard's own requirement - two independent sources - was already satisfied on disk.
+
+**A real bug in its own reader surfaced at the same moment:** `dewiki_Priene.json` and
+`dawiki_Priene.json` came back "unreadable 'charmap' codec can't encode character '\u03a0'" - JSON
+opened with the Windows default codepage instead of UTF-8. That silently discards every non-ASCII
+source and then mislabels the site a failure.
+
+**Course set, without killing the lane** (it was demonstrably alive and had produced genuine work):
+fix the UTF-8 reader; stop the retry loop and use a real politeness delay with at most one retry;
+re-process the FAIL list **from cache** instead of re-fetching; and record `UNVERIFIABLE` with its
+reason for anything still short after one polite pass.
+
+Two points worth carrying forward:
+
+- **`UNVERIFIABLE` is an outcome of this measurement, not a lane failure.** It is one of the things
+a false-negative rate measures, so it belongs in the denominator instead of being chased until the
+budget runs out.
+- **Language editions of Wikipedia are not independent sources.** enwiki + dewiki + eswiki mirror
+each other and share Wikidata-derived infoboxes, so counting them as two independent sources would
+manufacture confidence. The lane must pair Wikipedia with a non-Wikipedia source (heritage register,
+excavation report, official site) where one exists, and say so plainly where none does.
+
+The general lesson, and the reason the 600 s signal is worth heeding rather than muting: **a long
+tool call is a prompt to diagnose the CONTENT of the failure, not merely to wait it out.** Waiting
+here would have produced a lane that spent its whole budget re-asking a rate limiter for
+permission it had already been denied, while its own cache sat full of usable answers.
+
 ### Safety check after the probe
 
 The real backups directory was intact: `2026-09-19_pre-audit` and `2026-09-20_remediation` both
