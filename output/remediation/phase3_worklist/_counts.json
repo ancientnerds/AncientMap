@@ -1,0 +1,107 @@
+{
+  "generated_at": "2026-09-20T21:30:29+00:00",
+  "integrity": [
+    "T01: census_rows=5004 findings=1175 sites=1063",
+    "T02: census_rows=5004 findings=117 sites=117",
+    "T03: census_rows=5004 findings=875 sites=875",
+    "T04: census_rows=5004 findings=0 sites=0",
+    "T05: census_rows=5004 findings=70 sites=70",
+    "T06: census_rows=5004 findings=13020 sites=3010",
+    "T07: census_rows=5004 findings=5071 sites=2806",
+    "T08: census_rows=5004 findings=99 sites=94",
+    "T09: census_rows=5004 findings=17315 sites=5004",
+    "T10: census_rows=5004 findings=49691 sites=4010"
+  ],
+  "per_test_sites": {
+    "T01": 1063,
+    "T02": 117,
+    "T03": 875,
+    "T04": 0,
+    "T05": 70,
+    "T06": 3010,
+    "T07": 2806,
+    "T08": 94,
+    "T09": 5004,
+    "T10": 4010
+  },
+  "per_test_findings": {
+    "T01": 1175,
+    "T02": 117,
+    "T03": 875,
+    "T04": 0,
+    "T05": 70,
+    "T06": 13020,
+    "T07": 5071,
+    "T08": 99,
+    "T09": 17315,
+    "T10": 49691
+  },
+  "factual_tests": [
+    "T01",
+    "T02",
+    "T03",
+    "T05"
+  ],
+  "excluded_mechanical_tests": [
+    "T04",
+    "T06",
+    "T07",
+    "T08",
+    "T09",
+    "T10"
+  ],
+  "factual_union_sites": 1840,
+  "phase3_sites": 1813,
+  "mechanically_settable_sites": 27,
+  "dimension_counts": [
+    [
+      "D3-LOCATION / D4-NAME",
+      1175
+    ],
+    [
+      "period / description text",
+      875
+    ],
+    [
+      "D3-LOCATION",
+      117
+    ],
+    [
+      "classification / country",
+      70
+    ]
+  ],
+  "severity_counts": [
+    [
+      "moderate",
+      1181
+    ],
+    [
+      "severe",
+      488
+    ],
+    [
+      "cosmetic",
+      171
+    ]
+  ],
+  "pairwise_factual_intersections": {
+    "T01&T02": 52,
+    "T01&T03": 203,
+    "T01&T05": 15,
+    "T02&T03": 12,
+    "T02&T05": 7,
+    "T03&T05": 7
+  },
+  "triple_T01_T02_T03": 5,
+  "all_four_factual": 0,
+  "mechanical_excluded_sites": {
+    "T04": 0,
+    "T06": 3010,
+    "T07": 2806,
+    "T08": 94,
+    "T09": 5004,
+    "T10": 4010
+  },
+  "mechanical_excluded_union": 5004
+}

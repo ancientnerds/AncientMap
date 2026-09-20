@@ -1177,6 +1177,89 @@ re-proof all hold, and its two headline numbers reproduce from its own query. Th
 remains is the one already recorded above - the tier system underneath the selection has four of eight
 signals rebuilt - and it is a review gap, not a correctness failure I can demonstrate.
 
+## Wave 4 audit — GALLERY lane, and a correction to my own offsite record
+
+Date: 2026-09-21. Wave 4 workflow `ce8c7bcc-6148-48c2-bda5-29e43d4beb6e`.
+
+### GALLERY — accepted, with one premise corrected
+
+`output/remediation/gallery_design/{DESIGN.md,COST.md}`. The lane answered the question it was
+actually asked, and answered it by measuring rather than assuming:
+
+  * **A vision model IS reachable.** It live-probed `deepseek-v4-flash-vision-exp` (registry entry
+    `"input": ["text","image"]`) with three real requests and got correct answers - and it found the
+    non-obvious requirement that the gateway rejects the call with `MissingSessionID` unless an
+    `x-opencode-session` header is sent. It also identified a second transport already in the project
+    (`pipeline/lyra/minimax_shared.py:537-559`), and located the known defect there (`base_resp` is
+    never checked, so quota errors are recorded as rejections).
+  * **It labelled the limit of its own proof.** Capability was measured; *competence* was not, and it
+    says so in the first paragraph and again as open risk 1. That is the correct distinction and the
+    reason its recommendation starts with a 200-image pilot.
+  * **Cost model is measured, not asserted:** 403 input tokens at 800x600 and 774 at 1280x960 (real
+    probe usage), list prices from `models-store.json`. Total for G2-G4 (about 23,100 calls):
+    **$4-8**, or ~$0 under the MiniMax flat plan. This independently corroborates the FACTS lane's
+    finding that the plan's own cost anchors do not add up.
+
+**The one thing I did not accept.** DESIGN.md section 2 and section 6 state that the image bytes are
+only on the VPS and that the workstation "cannot reach the images without re-downloading ~50k files
+from Commons". The lane read `public/data/images` and found 2 files (both `index.json`) - correct -
+and concluded the corpus is not on this machine. It missed the offsite copy:
+
+    C:/PythonProjects/AncientMap-Offsite   49,788 .webp   20.4 GB   4,017 shard dirs
+
+I proved it is complete per shard rather than by a total, because my own earlier count was wrong (see
+below). Corrected in place, since this design will drive Phase 2 work. What actually changes is
+small but load-bearing: the execution site becomes a **transport** decision, not an image-availability
+one - and the stated reason inverts, because the workstation has a vision transport this lane proved
+works, while **VPS reachability of either model was never tested by this lane at all**. The surviving
+argument for the VPS is throughput, not reachability.
+
+### My own offsite number was wrong, in the same way HERO's was
+
+Recorded earlier in this remediation: `vps=49790 local=49787 diff=3 ... 49,787 + 3 = 49,790`. The
+conclusion (the offsite copy is complete) was right; **two of the numbers were not**:
+
+  * `49,787` was a count of **files** in `images/`, which includes `index.json` and `index.json.gz`.
+    The true image count there is **49,785**.
+  * `49,790` was therefore never the VPS's image count either. The VPS holds **49,788**.
+
+So the gap was 2 smaller than the arithmetic implied, and the arithmetic only looked closed because
+a file count was standing in for an image count. This is the **sixth** time this session that a
+number looked impossible or too tidy because the *measuring code* was wrong, and the second time in
+exactly this shape - HERO's 1,041-vs-1,033 was also a rows-vs-sites unit error. Both times the
+artifact was right and my instrument was not.
+
+Re-measured with an instrument that cannot make that mistake: per-shard counts keyed on hex shard
+names, so no cross-platform `sort` collation is involved and a single missing file would name its own
+shard. Result:
+
+    vps shards=4017  files=49788        shards only on VPS          : 0
+    loc shards=4017  files=49788        shards only locally         : 0
+                                        shards with differing counts: 0
+
+The offsite copy is complete, and it is now proven bijectively rather than by a matching total.
+
+### MECHANICAL — blockers triaged, not obeyed
+
+Two static-analysis blockers landed on the live lane's files. The lane is running (159 turns, last
+activity 3s), so under the one-writer-per-tree rule I did not touch its tree; I steered the **owner**
+to fix what is real, and explicitly told it not to "fix" what is not:
+
+  * `scripts/remediation/mechanical/plan.py:1102` - **real**: `ChangeRecord(evidence=[...])` passes a
+    `list[dict[str, Any]]` where the field is declared `tuple[dict[str, Any], ...]`. A journalled
+    record is the wrong place to leave a declared contract and an actual value disagreeing. Owner to
+    reconcile at the source; **no `# type: ignore`**.
+  * `scripts/remediation/mechanical/apply.py:95,455` - "Call without try/except" - **false positive**,
+    same adjudicated rule as the seven earlier hits: CLAUDE.md's "NO FALLBACK CODE" forbids the pattern,
+    and an unhandled traceback is an acceptable failure while a swallowed exception is not. Told the
+    owner that leaving them unwrapped is the correct choice and needs no justification, and that if it
+    does handle them the failure must be loud, non-zero and name the file - never a default, never an
+    empty result, never a bare `continue`.
+
+Also confirmed the new `scripts/merge_rewrites.py` path-traversal advisories are unreachable: the
+script has **no** input surface (no `argv`, `argparse`, `os.environ` or prompt - grep returns 0), so
+every path is a compile-time constant derived from `ROOT`.
+
 ## Wave 4 launched - and a lane's correct finding that my re-check nearly reversed
 
 Wave 4 (`ce8c7bcc-6148-48c2-bda5-29e43d4beb6e`, launcher `scripts/remediation/fleet_wave4.js`) runs
