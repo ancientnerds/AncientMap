@@ -354,8 +354,11 @@ def reduce_value(
         parts = [p.strip() for p in stored.split(",")]
         if any(not p for p in parts):
             return None
-        known = [p for p in (_plain(part) for part in parts)
-                 if _display_name(p, dict(codes)) and _iso(p, normalize)]
+        known = [
+            p
+            for p in (_plain(part) for part in parts)
+            if _display_name(p, dict(codes)) and _iso(p, normalize)
+        ]
         if len(set(known)) == 1 and known:
             return known[0], "compound-label"
         if len({_iso(p, normalize) for p in known}) == 1 and known:
@@ -416,7 +419,7 @@ def _geography(
             f"point ({lat:.5f}, {lon:.5f}) inside the {country!r} polygon"
             if inside
             else f"point ({lat:.5f}, {lon:.5f}) {metres:.0f} m from the nearest {country!r} "
-                 f"boundary - inside the {TOLERANCE_M:.0f} m this project calls 'the same place'"
+            f"boundary - inside the {TOLERANCE_M:.0f} m this project calls 'the same place'"
         ),
     }
     return True, "", evidence
@@ -442,7 +445,11 @@ def check_wikidata(
     contradicts and is recorded as it stands.
     """
     if anchor is None:
-        return None, "no Wikidata entity: none in site_external_ids and none resolvable by label + coordinate", None
+        return (
+            None,
+            "no Wikidata entity: none in site_external_ids and none resolvable by label + coordinate",
+            None,
+        )
     if witness is None:
         return None, f"{anchor.qid} not in the witness cache - re-collect it", None
     claims = [c for c in (witness.get("p17") or []) if isinstance(c, Mapping)]
@@ -462,13 +469,20 @@ def check_wikidata(
             span = f", {claim.get('start') or '?'}..{claim.get('end') or '?'}"
         return f"{qid} {entry.get('label') or '?'} ({code}{span})"
 
-    resolved = {str(c.get("id")): (countries.get(str(c.get("id"))) or {}).get("p297")
-                for c in decisive}
+    resolved = {
+        str(c.get("id")): (countries.get(str(c.get("id"))) or {}).get("p297") for c in decisive
+    }
     contradicting = {q: c for q, c in resolved.items() if c and c.upper() != iso}
     rank_word = "preferred" if preferred else "only"
-    quote = (f"{anchor.qid} P17 {rank_word}: " + "; ".join(describe(c) for c in decisive)
-             + (" | history (normal rank): " + "; ".join(describe(c) for c in history)
-                if history else ""))
+    quote = (
+        f"{anchor.qid} P17 {rank_word}: "
+        + "; ".join(describe(c) for c in decisive)
+        + (
+            " | history (normal rank): " + "; ".join(describe(c) for c in history)
+            if history
+            else ""
+        )
+    )
     if contradicting:
         labels = {q: (countries.get(q) or {}).get("label") for q in contradicting}
         return (
@@ -529,7 +543,7 @@ def classify(
             "source": f"census:{finding.test_id} (candidate origin, not the value's source)",
             "url": "output/remediation/run_t05/findings.jsonl",
             "quote": f"applicable={finding.applicable} proposal={finding.proposed_value!r} "
-                     f"confidence={finding.confidence} severity={finding.severity}: {finding.note}",
+            f"confidence={finding.confidence} severity={finding.severity}: {finding.note}",
         },
     )
 
@@ -606,8 +620,8 @@ def classify(
         "source": "ancient-nerds-map/src/utils/countryFlags.ts:COUNTRY_CODES",
         "url": "ancient-nerds-map/src/utils/countryFlags.ts",
         "quote": f"COUNTRY_CODES[{value!r}] = {codes.get(value)!r}; "
-                 f"getCountryCode({stored!r}) = {_flag_code(stored, dict(codes))!r} "
-                 f"(the old value's flag, recorded, not required to match)",
+        f"getCountryCode({stored!r}) = {_flag_code(stored, dict(codes))!r} "
+        f"(the old value's flag, recorded, not required to match)",
     }
     if value not in codes or codes[value] != new_iso:
         return refuse(
@@ -620,7 +634,7 @@ def classify(
         "source": "pipeline/utils/country_lookup.py:NAME_TO_ISO / normalize_country",
         "url": "pipeline/utils/country_lookup.py",
         "quote": f"normalize_country({stored!r}) = {old_iso!r} = normalize_country({value!r}); "
-                 f"canonicalize_country_display_name({plain!r}) = {canonical!r}",
+        f"canonicalize_country_display_name({plain!r}) = {canonical!r}",
     }
     ok, note, geo_evidence = _geography(atlas, value, site.lat, site.lon, retrieved_at)
     if not ok:
@@ -651,8 +665,8 @@ def classify(
             "source": "docs/procedures/SITES_DB_REMEDIATION_2026-09.md:682",
             "url": "docs/procedures/SITES_DB_REMEDIATION_2026-09.md",
             "quote": "Phase 1 item 5: country values `Georgia (country)` 27, "
-                     "`Chile, Easter Island` 8, `Baltic Sea` 1 - the first two are the "
-                     "mechanical set, the third is not a country",
+            "`Chile, Easter Island` 8, `Baltic Sea` 1 - the first two are the "
+            "mechanical set, the third is not a country",
         }
     )
     note = f"{stored!r} -> {value!r} (ISO {new_iso})"
@@ -782,9 +796,7 @@ def load_sites(site_ids: Iterable[str], *, reader: Any, strict: bool = True) -> 
     sql = (
         "SELECT id, name, coalesce(country, '<NULL>'), "
         "coalesce(lat::text, ''), coalesce(lon::text, ''), source_id "
-        "FROM unified_sites WHERE id IN ("
-        + ", ".join(f"'{sid}'::uuid" for sid in ids)
-        + ")"
+        "FROM unified_sites WHERE id IN (" + ", ".join(f"'{sid}'::uuid" for sid in ids) + ")"
     )
     out: dict[str, Site] = {}
     for row in reader(sql):
@@ -800,13 +812,19 @@ def load_sites(site_ids: Iterable[str], *, reader: Any, strict: bool = True) -> 
     if strict:
         missing = sorted(set(ids) - set(out))
         if missing:
-            raise PlanError(f"{len(missing)} planned site(s) are not in the database: {missing[:3]}")
+            raise PlanError(
+                f"{len(missing)} planned site(s) are not in the database: {missing[:3]}"
+            )
     return out
 
 
 # ------------------------------------------------------------------------------- the witnesses
 def _wikidata(params: Mapping[str, str], *, timeout: int = 60) -> dict[str, Any]:
-    url = WIKIDATA_API + "?" + urllib.parse.urlencode({**params, "format": "json", "formatversion": "2"})
+    url = (
+        WIKIDATA_API
+        + "?"
+        + urllib.parse.urlencode({**params, "format": "json", "formatversion": "2"})
+    )
     request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
     try:
         with urllib.request.urlopen(request, timeout=timeout) as response:
@@ -858,9 +876,7 @@ def _coordinate(entity: Mapping[str, Any]) -> tuple[float, float] | None:
     return None
 
 
-def resolve_anchors(
-    sites: Mapping[str, Site], known_qids: Mapping[str, str]
-) -> dict[str, Anchor]:
+def resolve_anchors(sites: Mapping[str, Site], known_qids: Mapping[str, str]) -> dict[str, Anchor]:
     """An entity per site: the stored qid, or one proved by label **and** coordinate.
 
     The second path exists for the two ahu that have no `site_external_ids` row. It is a
@@ -875,16 +891,28 @@ def resolve_anchors(
     todo = sorted(set(sites) - set(anchors))
     for sid in todo:
         site = sites[sid]
-        found = _wikidata(
-            {"action": "wbsearchentities", "search": site.name, "language": "en", "limit": "5"}
-        ).get("search") or []
-        hits = [str(h["id"]) for h in found if str(h.get("label") or "").strip().casefold()
-                == site.name.strip().casefold()]
+        found = (
+            _wikidata(
+                {"action": "wbsearchentities", "search": site.name, "language": "en", "limit": "5"}
+            ).get("search")
+            or []
+        )
+        hits = [
+            str(h["id"])
+            for h in found
+            if str(h.get("label") or "").strip().casefold() == site.name.strip().casefold()
+        ]
         if len(hits) != 1:
-            log.warning("no unique Wikidata entity for %r (%d label match(es))", site.name, len(hits))
+            log.warning(
+                "no unique Wikidata entity for %r (%d label match(es))", site.name, len(hits)
+            )
             continue
-        entity = (_wikidata({"action": "wbgetentities", "ids": hits[0], "props": "claims"})
-                  .get("entities") or {}).get(hits[0]) or {}
+        entity = (
+            _wikidata({"action": "wbgetentities", "ids": hits[0], "props": "claims"}).get(
+                "entities"
+            )
+            or {}
+        ).get(hits[0]) or {}
         point = _coordinate(entity)
         if point is None or site.lat is None or site.lon is None:
             log.warning("%s: no P625 to check the identity against", hits[0])
@@ -893,8 +921,12 @@ def resolve_anchors(
 
         metres = Geod(ellps="WGS84").inv(site.lon, site.lat, point[1], point[0])[2]
         if metres > TOLERANCE_M:
-            log.warning("%s: %s is %.0f m from the row's point - not the same place",
-                        site.name, hits[0], metres)
+            log.warning(
+                "%s: %s is %.0f m from the row's point - not the same place",
+                site.name,
+                hits[0],
+                metres,
+            )
             continue
         anchors[sid] = Anchor(hits[0], f"wikidata:label+coordinate ({metres:.0f} m)")
     return anchors
@@ -909,9 +941,12 @@ def collect_witnesses(
         raise PlanError("no Wikidata entity for any candidate - the external witness is empty")
     site_claims: dict[str, Any] = {}
     for chunk in [qids[i : i + 40] for i in range(0, len(qids), 40)]:
-        got = _wikidata(
-            {"action": "wbgetentities", "ids": "|".join(chunk), "props": "claims"}
-        ).get("entities") or {}
+        got = (
+            _wikidata({"action": "wbgetentities", "ids": "|".join(chunk), "props": "claims"}).get(
+                "entities"
+            )
+            or {}
+        )
         for qid, entity in got.items():
             if entity.get("missing"):
                 raise PlanError(f"{qid} is missing on Wikidata")
@@ -919,14 +954,17 @@ def collect_witnesses(
     countries = sorted({str(c["id"]) for claims in site_claims.values() for c in claims})
     country_claims: dict[str, Any] = {}
     for chunk in [countries[i : i + 40] for i in range(0, len(countries), 40)]:
-        got = _wikidata(
-            {
-                "action": "wbgetentities",
-                "ids": "|".join(chunk),
-                "props": "claims|labels",
-                "languages": "en",
-            }
-        ).get("entities") or {}
+        got = (
+            _wikidata(
+                {
+                    "action": "wbgetentities",
+                    "ids": "|".join(chunk),
+                    "props": "claims|labels",
+                    "languages": "en",
+                }
+            ).get("entities")
+            or {}
+        )
         for qid, entity in got.items():
             country_claims[qid] = {
                 "label": ((entity.get("labels") or {}).get("en") or {}).get("value"),
@@ -988,7 +1026,7 @@ def write_plan_jsonl(plan: Plan, path: Path) -> int:
                         "new_value": change.new_value,
                         "rule": change.rule,
                         "condition": f"id = {change.site_id} AND country IS NOT DISTINCT FROM "
-                                     f"{_quoted(change.old_value)}",
+                        f"{_quoted(change.old_value)}",
                         "reason": f"country-canonical ({change.rule}): {change.note}",
                         "change_key": change.change_key,
                         "test_id": plan.test_id,
@@ -1043,13 +1081,17 @@ def write_plan_md(plan: Plan, path: Path, extra: Mapping[str, Any]) -> None:
     add = lines.append
     add("# Mechanical country repair - plan")
     add("")
-    add(f"Built {plan.built_at} by `scripts/remediation/mechanical/plan.py`. "
+    add(
+        f"Built {plan.built_at} by `scripts/remediation/mechanical/plan.py`. "
         f"Run stamp `{plan.run_stamp}`, journal test id `{plan.test_id}`, "
-        f"source `{plan.source_id}`.")
+        f"source `{plan.source_id}`."
+    )
     add("")
-    add(f"**{len(plan.changes)} row(s) will be written, {len(plan.skipped)} candidate(s) refused.** "
+    add(
+        f"**{len(plan.changes)} row(s) will be written, {len(plan.skipped)} candidate(s) refused.** "
         f"{plan.counters.get('changes_on_phase3_sites', 0)} of the written rows are sites the Phase 3 "
-        "worklist also holds - their T01/T03 findings stay Phase 3's; only `country` is written here.")
+        "worklist also holds - their T01/T03 findings stay Phase 3's; only `country` is written here."
+    )
     add("")
     add("## The set: 35, not the worklist's 27")
     add("")
@@ -1081,8 +1123,10 @@ def write_plan_md(plan: Plan, path: Path, extra: Mapping[str, Any]) -> None:
         if count:
             add(f"| `{reason}` | {count} | {meaning} |")
     add("")
-    add(f"All {len(plan.skipped)} refusals are in `SKIPPED.jsonl` with the measurement that "
-        "produced them. None of them is deleted, and none of them is written.")
+    add(
+        f"All {len(plan.skipped)} refusals are in `SKIPPED.jsonl` with the measurement that "
+        "produced them. None of them is deleted, and none of them is written."
+    )
     add("")
     add("## What a restart does to this column")
     add("")
@@ -1132,7 +1176,9 @@ def _atlas() -> tuple[_Atlas, str | None]:
     if not shapefile.exists():
         raise PlanError(f"{shapefile} is missing - the census collects it (T02 collect)")
     state = dataset / "source.json"
-    retrieved = json.loads(state.read_text(encoding="utf-8")).get("fetched_at") if state.exists() else None
+    retrieved = (
+        json.loads(state.read_text(encoding="utf-8")).get("fetched_at") if state.exists() else None
+    )
     return _Atlas(_load_features(shapefile)), retrieved
 
 
@@ -1163,10 +1209,16 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--external-ids", type=Path, default=DEFAULT_EXTERNAL_IDS)
     ap.add_argument("--witnesses", type=Path, default=DEFAULT_WITNESSES)
     ap.add_argument("--out", type=Path, default=DEFAULT_OUT)
-    ap.add_argument("--collect", action="store_true",
-                    help="ask Wikidata for the P17/P297 witnesses and cache them (network)")
-    ap.add_argument("--write", action="store_true",
-                    help="write PLAN.jsonl, PLAN.md, SKIPPED.jsonl, ROLLBACK.sql (reads prod)")
+    ap.add_argument(
+        "--collect",
+        action="store_true",
+        help="ask Wikidata for the P17/P297 witnesses and cache them (network)",
+    )
+    ap.add_argument(
+        "--write",
+        action="store_true",
+        help="write PLAN.jsonl, PLAN.md, SKIPPED.jsonl, ROLLBACK.sql (reads prod)",
+    )
     args = ap.parse_args(argv)
 
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
@@ -1186,10 +1238,15 @@ def main(argv: list[str] | None = None) -> int:
         log.info("anchors: %d of %d candidate(s)", len(anchors), len(sites))
         payload = collect_witnesses(sites, anchors, fetched_at=_now())
         args.witnesses.parent.mkdir(parents=True, exist_ok=True)
-        args.witnesses.write_text(json.dumps(payload, indent=1, ensure_ascii=False) + "\n",
-                                  encoding="utf-8", newline="\n")
-        log.info("wrote %s (%d site(s), %d country entity/ies)",
-                 args.witnesses, len(payload["sites"]), len(payload["countries"]))
+        args.witnesses.write_text(
+            json.dumps(payload, indent=1, ensure_ascii=False) + "\n", encoding="utf-8", newline="\n"
+        )
+        log.info(
+            "wrote %s (%d site(s), %d country entity/ies)",
+            args.witnesses,
+            len(payload["sites"]),
+            len(payload["countries"]),
+        )
         return 0
 
     if not args.write:
@@ -1208,8 +1265,11 @@ def main(argv: list[str] | None = None) -> int:
     }
     countries = witnesses.get("countries") or {}
     witness_by_site = {
-        sid: {"p17": entry.get("p17") or [], "countries": countries,
-              "fetched_at": entry.get("fetched_at")}
+        sid: {
+            "p17": entry.get("p17") or [],
+            "countries": countries,
+            "fetched_at": entry.get("fetched_at"),
+        }
         for sid, entry in (witnesses.get("sites") or {}).items()
     }
     plan = build_plan(
@@ -1266,13 +1326,19 @@ def _report_inputs(
         + ". The hub split is measured against the database before and after the write "
         "(`apply.py --interests`); the measured table is in `APPLIED.md`."
     )
-    with_witness = sum(1 for c in plan.changes
-                       if any(str(e["source"]).startswith("wikidata:") for e in c.evidence))
-    by_anchor = Counter(a.via.split(" (")[0] for sid, a in anchors.items()
-                        if sid in {c.site_id for c in plan.changes})
-    without_witness = [c.site_name for c in plan.changes
-                       if not any(str(e["source"]).startswith("wikidata:")
-                                  for e in c.evidence)]
+    with_witness = sum(
+        1 for c in plan.changes if any(str(e["source"]).startswith("wikidata:") for e in c.evidence)
+    )
+    by_anchor = Counter(
+        a.via.split(" (")[0]
+        for sid, a in anchors.items()
+        if sid in {c.site_id for c in plan.changes}
+    )
+    without_witness = [
+        c.site_name
+        for c in plan.changes
+        if not any(str(e["source"]).startswith("wikidata:") for e in c.evidence)
+    ]
     coverage = (
         f"{len(plan.changes)} written row(s); {with_witness} carry a Wikidata `P17 -> P297` "
         f"witness. The {len(without_witness)} without one are "
@@ -1283,25 +1349,59 @@ def _report_inputs(
         f"only optional one. Anchors: {dict(by_anchor)}."
     )
     checks = [
-        ("reduction", "the stored string", "a hint or a single resolvable comma part; two candidates refuse"),
-        ("canonical form", "pipeline/utils/country_lookup.py:canonicalize_country_display_name",
-         "the written value is the project's own canonical string and equals the proposal"),
-        ("vocabulary 1", "pipeline/utils/country_lookup.py:normalize_country",
-         "old and new map to the same ISO-3166-1 alpha-2 code"),
-        ("vocabulary 2", "ancient-nerds-map/src/utils/countryFlags.ts:COUNTRY_CODES",
-         "the new value is a key carrying that code, so the flag renders"),
-        ("geography", "naturalearth:ne_10m_admin_0_countries (10m, cached, sha256 ce1ac703)",
-         "the row's own point is inside the named country's polygon (T02's 1000 m tolerance)"),
-        ("external", "wikidata:P17 -> P297",
-         "an independent authority states the same ISO code; a contradicting P17 refuses the row"),
-        ("fixed point", "census T05 predicate",
-         "the census would not flag the written value again"),
+        (
+            "reduction",
+            "the stored string",
+            "a hint or a single resolvable comma part; two candidates refuse",
+        ),
+        (
+            "canonical form",
+            "pipeline/utils/country_lookup.py:canonicalize_country_display_name",
+            "the written value is the project's own canonical string and equals the proposal",
+        ),
+        (
+            "vocabulary 1",
+            "pipeline/utils/country_lookup.py:normalize_country",
+            "old and new map to the same ISO-3166-1 alpha-2 code",
+        ),
+        (
+            "vocabulary 2",
+            "ancient-nerds-map/src/utils/countryFlags.ts:COUNTRY_CODES",
+            "the new value is a key carrying that code, so the flag renders",
+        ),
+        (
+            "geography",
+            "naturalearth:ne_10m_admin_0_countries (10m, cached, sha256 ce1ac703)",
+            "the row's own point is inside the named country's polygon (T02's 1000 m tolerance)",
+        ),
+        (
+            "external",
+            "wikidata:P17 -> P297",
+            "an independent authority states the same ISO code; a contradicting P17 refuses the row",
+        ),
+        (
+            "fixed point",
+            "census T05 predicate",
+            "the census would not flag the written value again",
+        ),
     ]
     refusal_meaning = [
-        ("finding-not-applicable", "T05 named a defect no snapshot can settle (spelling split, vocabulary gap, not a country)"),
-        ("no-reduction-rule", "the value does not reduce to exactly one country both vocabularies know"),
-        ("canonicalisation-differs-from-proposal", "the project's canonical form disagrees with the census proposal"),
-        ("not-a-country-code", "the value is not a COUNTRY_CODES key with that code - no flag would render"),
+        (
+            "finding-not-applicable",
+            "T05 named a defect no snapshot can settle (spelling split, vocabulary gap, not a country)",
+        ),
+        (
+            "no-reduction-rule",
+            "the value does not reduce to exactly one country both vocabularies know",
+        ),
+        (
+            "canonicalisation-differs-from-proposal",
+            "the project's canonical form disagrees with the census proposal",
+        ),
+        (
+            "not-a-country-code",
+            "the value is not a COUNTRY_CODES key with that code - no flag would render",
+        ),
         ("iso-unchanged-check-failed", "the write would change which country the project reads"),
         ("geography-contradicts", "the row's point is outside the named country's polygon"),
         ("wikidata-contradicts", "Wikidata's P17 names a different ISO code"),
@@ -1309,10 +1409,16 @@ def _report_inputs(
         ("snapshot-live-mismatch", "the census read a value the database no longer holds"),
         ("finding-stale", "the finding's current_value is not the row's value"),
         ("row-missing", "the site is not in the curated set any more"),
-        ("row-not-in-curated-source", "the row belongs to another source and this lane writes curated rows only"),
+        (
+            "row-not-in-curated-source",
+            "the row belongs to another source and this lane writes curated rows only",
+        ),
         ("no-country-value", "there is no country to repair"),
         ("already-the-value", "the row already holds the canonical value"),
-        ("value-unwritable", "the value is not NFC, too long, or carries whitespace/control characters"),
+        (
+            "value-unwritable",
+            "the value is not NFC, too long, or carries whitespace/control characters",
+        ),
     ]
     restart = (
         "`unified_sites.country` has no boot-time producer for a curated row: the only writer that "

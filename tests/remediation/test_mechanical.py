@@ -39,7 +39,9 @@ SITE_CHILE = "2dab79e8-1ece-4f9b-beb3-a91573d545c3"  # Ahu Akivi, Easter Island
 GEORGIA_POINT = (41.97197497123162, 45.76774281018119)
 CHILE_POINT = (-27.114327221940712, -109.39286467595336)
 
-NE_SHAPEFILE = REPO / "output" / "remediation" / "cache" / "naturalearth" / "ne_10m_admin_0_countries.shp"
+NE_SHAPEFILE = (
+    REPO / "output" / "remediation" / "cache" / "naturalearth" / "ne_10m_admin_0_countries.shp"
+)
 DELIVERED_PLAN = REPO / "output" / "remediation" / "mechanical" / "PLAN.jsonl"
 
 needs_dataset = pytest.mark.skipif(
@@ -225,7 +227,6 @@ class _StubAtlas:
     features: list[Any] = []
 
 
-
 # ---------------------------------------------------------------------------- single witnesses
 class TestWikidataWitness:
     def test_a_preferred_value_that_contradicts_refuses(
@@ -295,7 +296,9 @@ class TestWikidataWitness:
 @needs_dataset
 class TestClassify:
     def test_the_happy_path_writes_the_canonical_value(
-        self, vocabulary: tuple[dict[str, str], Any], atlas: Any,
+        self,
+        vocabulary: tuple[dict[str, str], Any],
+        atlas: Any,
         witness_countries: dict[str, dict[str, Any]],
     ) -> None:
         verdict = decide(
@@ -400,14 +403,20 @@ class TestClassify:
         verdict = decide(
             vocabulary,
             atlas,
-            find=finding("Chile, Easter Island", "Chile", site_id=SITE_CHILE, test_id="T05/compound"),
-            row=site("Chile, Easter Island", site_id=SITE_CHILE, name="Ahu Akivi", point=CHILE_POINT),
+            find=finding(
+                "Chile, Easter Island", "Chile", site_id=SITE_CHILE, test_id="T05/compound"
+            ),
+            row=site(
+                "Chile, Easter Island", site_id=SITE_CHILE, name="Ahu Akivi", point=CHILE_POINT
+            ),
         )
         assert verdict.ok and verdict.new_value == "Chile"
         assert verdict.rule == "compound-label-country-part"
 
     def test_an_external_contradiction_refuses(
-        self, vocabulary: tuple[dict[str, str], Any], atlas: Any,
+        self,
+        vocabulary: tuple[dict[str, str], Any],
+        atlas: Any,
         witness_countries: dict[str, dict[str, Any]],
     ) -> None:
         verdict = decide(
@@ -448,7 +457,9 @@ class TestClassify:
     ) -> None:
         """A rule that returns the value already stored is not a repair."""
         monkeypatch.setattr(P, "reduce_value", lambda *a, **k: ("Georgia (country)", "no-op"))
-        monkeypatch.setattr(P, "canonicalize_country_display_name", lambda name: "Georgia (country)")
+        monkeypatch.setattr(
+            P, "canonicalize_country_display_name", lambda name: "Georgia (country)"
+        )
         verdict = decide(vocabulary, atlas, find=finding("Georgia (country)", "Georgia (country)"))
         assert not verdict.ok and verdict.reason == "already-the-value"
 
@@ -478,8 +489,13 @@ class TestBuildPlan:
         findings = [
             finding(),
             finding("Chile, Easter Island", "Chile", site_id=SITE_CHILE, test_id="T05/compound"),
-            finding("USA", "", site_id="33333333-3333-3333-3333-333333333333",
-                    applicable=False, test_id="T05/spelling"),
+            finding(
+                "USA",
+                "",
+                site_id="33333333-3333-3333-3333-333333333333",
+                applicable=False,
+                test_id="T05/spelling",
+            ),
         ]
         rows = {
             SITE_GEORGIA: site(),
@@ -488,14 +504,18 @@ class TestBuildPlan:
         plan = P.build_plan(
             findings,
             rows,
-            snapshot_countries={SITE_GEORGIA: "Georgia (country)",
-                                SITE_CHILE: "Chile, Easter Island"},
+            snapshot_countries={
+                SITE_GEORGIA: "Georgia (country)",
+                SITE_CHILE: "Chile, Easter Island",
+            },
             phase3_sites={SITE_CHILE},
             codes=codes,
             normalize=normalize,
             atlas=atlas,
             anchors={SITE_GEORGIA: P.Anchor("Q995736", "test")},
-            witnesses={SITE_GEORGIA: witness([claim("Q230")], {"Q230": {"label": "Georgia", "p297": "GE"}})},
+            witnesses={
+                SITE_GEORGIA: witness([claim("Q230")], {"Q230": {"label": "Georgia", "p297": "GE"}})
+            },
             retrieved_at=None,
             built_at="2026-09-21T00:00:00+00:00",
         )
@@ -639,8 +659,9 @@ class TestRenderTransaction:
 
     def test_the_rollback_swaps_the_values_and_its_run_stamp(self) -> None:
         rollback = [replace(record(), old_value="Georgia", new_value="Georgia (country)")]
-        sql = A.render_transaction(rollback, run_stamp=P.ROLLBACK_RUN_STAMP,
-                                   site_ids={SITE_GEORGIA})
+        sql = A.render_transaction(
+            rollback, run_stamp=P.ROLLBACK_RUN_STAMP, site_ids={SITE_GEORGIA}
+        )
         assert "'Georgia'" in sql and "'Georgia (country)'" in sql
         assert P.ROLLBACK_RUN_STAMP in sql and f"'{P.RUN_STAMP}'" not in sql
 
@@ -652,8 +673,10 @@ class TestRenderTransaction:
     def test_emit_writes_the_apply_next_to_an_existing_rollback(self, tmp_path: Path) -> None:
         (tmp_path / "ROLLBACK.sql").write_text("-- reversal\n", encoding="utf-8")
         A.emit([record()], tmp_path)
-        assert (tmp_path / "APPLY.sql").read_text(encoding="utf-8").startswith(
-            "-- Generated by scripts/remediation/mechanical/apply.py"
+        assert (
+            (tmp_path / "APPLY.sql")
+            .read_text(encoding="utf-8")
+            .startswith("-- Generated by scripts/remediation/mechanical/apply.py")
         )
 
 
@@ -691,9 +714,7 @@ class TestReadBackStatements:
 
 
 class TestRecordRoundTrip:
-    def test_load_records_reads_what_write_plan_jsonl_wrote(
-        self, tmp_path: Path
-    ) -> None:
+    def test_load_records_reads_what_write_plan_jsonl_wrote(self, tmp_path: Path) -> None:
         change = P.Verdict(
             site_id=SITE_GEORGIA,
             site_name="Nekresi",

@@ -1900,3 +1900,45 @@ vision model is *reachable* and correctly labels colour, but its semantic **comp
 archaeological imagery is unverified. These 105 rows are a first reviewable batch, not a validated
 classifier, and only `site_photo` is treated as clean - the other 49,586 curated images are still
 NULL, i.e. never judged. The 30 kind-labelled rejections remain a recorded follow-up.
+
+## Wave 4 closed: the two production writes and the pilot, plus a formatter sweep with re-proof
+
+All three wave-4 lanes finished. Their reports are lane self-reports, which this project does not
+treat as reviews; the review is wave 5 (five read-only lenses, each with one question, plus a
+`gegenpruefer` that measures).
+
+**Mechanical lane, re-proven after I reformatted its files.** `ruff format --check` flagged all
+three mechanical files. My own rule is that a formatter touching already-verified files invalidates
+their verification, so the claim was re-established rather than assumed:
+
+| check | result |
+|---|---|
+| `apply.py --emit` with the reformatted code | `APPLY.sql` sha256 `0e2cb32716c0c2a1…`, `ROLLBACK.sql` sha256 `df1bf7b0c18e73b2…` |
+| published values from the lane's own `evidence/11_fingerprints.txt` | the same two hashes -> **byte-identical** |
+| `tests/remediation/test_mechanical.py` | 63 passed |
+| `ruff check`, `ruff format --check`, `mypy` on the lane and its tests | clean; mypy "Success: no issues found in 5 source files" |
+| the lane's own mutation sweep | 30 cases, 30 fired, 0 survived |
+
+Two honesty notes on that table. First, the sweep's attribution is weaker than its headline:
+**13** of the 30 mutations were caught by the *named* test, **17** only as a suite-level failure
+(the suite went red but not through the test the sweep names), and 1 was skipped because its needle
+appears twice. So the sweep proves the *suite* has teeth for 30 mutations, and proves the *named
+test* has teeth for 13. The sharper question - which assertions would survive the deletion of the
+behaviour they guard - is asked of the wave-5 TESTS lens independently. Second, `git diff` was a
+useless instrument for the re-proof: `APPLY.sql` is gitignored by design, so it is untracked and
+`git diff` can say nothing about it. The sha256 comparison is what carries the claim;
+`ROLLBACK.sql`, which is tracked, was confirmed by both.
+
+**Also measured this stretch, both by running the real tool rather than trusting a snapshot:**
+
+* `scripts/remediation/mechanical/plan.py` **parses cleanly** (`ast.parse` OK, `py_compile` OK,
+  `ruff check` clean, `mypy` clean, 1,353 lines) - so the plugin's 73 findings against it,
+  including "return outside function" at L585-592, are a stale false positive, now confirmed
+  executably rather than waved away.
+* **The plugin was right about a real bug of mine.** `scripts/remediation/fleet_wave5.js` did not
+  parse: I had put backticks around `apply_remediation_change` *inside* a backtick template, which
+  terminated the template. `new AsyncFunction('runs','emit', src)` reproduced it exactly
+  (`Unexpected identifier 'apply_remediation_change'`). Note the backtick count in the file was
+  even, so a parity check would have missed it - only the real parser found it. That is the second
+  genuine defect the plugin caught in this session that my own tools did not, and it is why a
+  finding gets adjudicated by running the tool rather than by pattern.
