@@ -1773,3 +1773,62 @@ the command chain then aborted on grep's exit 1, hiding the tail); I wrote a tem
 which Git Bash and native Windows Python do not agree on; and `-F'	'` reached psql as the literal
 letter `t`, so the "TSV" had no tabs. Each time the file was fine and my probe was not - the same
 lesson as the offsite count and HERO's 1,041, now for the fourth time this session.
+
+### Phase 2 / G0 measured: what the 280 stored verdicts actually are
+
+GALLERY's recommendation 1 ("persist the verdicts already computed") is now unblocked by
+`image_kind`. Before writing any persister I measured the artifact, and the headline number is
+misleading in the usual direction.
+
+The 16 `video-assets/shorts/<slug>/selection.json` files hold **280 entries in two different shapes**:
+
+| bucket | count | keys | carries a kind? |
+|---|---|---|---|
+| `stills` | **105** | full record incl. **`id`** (the `wiki_images.id`), `filename`, `original_url`, `is_hero`, `width`, `height`, `local_path`, **`verdict`** | **yes** - all 105 are `site_photo` |
+| `rejected` | **175** | **only `filename` + `reason`** | no `verdict`, no `id` |
+
+**So G0's honest scope is 105 rows, not 280** - and every one of them is `site_photo`, i.e. the first
+105 rows this project can call clean.
+
+The `rejected` reasons are mostly *composition or quality* judgements, which are **not** image kinds and
+must not be invented into one: `too small (<WxH>)` ~45, `duplicate (subject: ...)` ~35, `panorama` 15,
+`text or overlay` 11, `people prominent` 2, `quality=2` 3, `relevance=1` 1, `subject lost in 9:16 crop`
+1, `other site` 1.
+
+Two exceptions worth naming, because they are decisive and they are *not* what I expected:
+
+- **30 entries state a kind verbatim** in the reason: `kind=artifact` 17, `kind=map_or_document` 9,
+  `kind=painting_or_artwork` 3, `kind=other` 1. Here the pipeline itself recorded the kind, so this is
+  a real prior judgement rather than my inference.
+- **32 entries say `no VLM verdict`** - the pipeline is honest about where it never judged. Those 32
+  must stay NULL under 0019's rule that NULL means "never judged", and they must NOT be back-filled.
+
+**Decision.** G0 persists the **105 id-anchored** verdicts now (no inference anywhere: `stills[].id` is
+literally `wiki_images.id`, and `stills[].verdict.kind` is literally the column's vocabulary). The 30
+kind-labelled rejections are recorded as an explicit follow-up, not as part of G0, because they carry
+**no id** - only a filename - so persisting them needs a proven slug->site_id and filename->row match
+first. Writing a kind on a filename guess would be precisely the kind of invented data this project
+forbids, and a wrong row is worse than a NULL row.
+
+### Two advisories adjudicated executably - both false positives
+
+pi-lens flagged **29 issues in `scripts/remediation/mechanical/plan.py`** (e.g. L542/549/551/558 "`yield`
+and `return` should not be used outside functions") on a file that has just performed a production
+write. Ground truth, run directly: `py_compile` **OK** on both lane files, `ruff check` **All checks
+passed!**, `mypy` **Success: no issues found in 4 source files**. L542-551 are ordinary
+`return refuse(...)` calls inside a function; the file is 1,349 lines. The snapshot is stale.
+
+The `mypy` success also settles a loose end from the wave-3 audit: the typing error at `plan.py:1102`
+that I steered to the file's owner is **fixed** - the file is now clean rather than carrying the 93
+pre-existing errors its sibling reported.
+
+`scripts/remediation/census/tests/t02_admin_country.py` was flagged for SQL injection. Adjudicated:
+`grep -c 'execute('` = **0**, `grep -c 'cursor'` = **0**, and the file reaches the network only through
+`httpx.stream` for the Natural Earth archive in `collect()` - `run()` is offline and the module talks to
+no database at all. There is no SQL in it to inject into.
+
+**The pattern, now roughly the twentieth occurrence:** the pi-lens snapshot produces alarming counts
+that do not survive one direct tool run. Ground truth is `py_compile`/`ruff`/`mypy`/`pytest`, never the
+widget. I record it again because the failure mode is persuasive - 29 syntax errors in a file that
+just wrote to production is exactly the kind of claim that deserves to be checked rather than
+believed.
