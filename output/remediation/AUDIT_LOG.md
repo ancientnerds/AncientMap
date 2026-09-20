@@ -447,6 +447,57 @@ pipeline/` (`.githooks/pre-push:155`, whose own comment at `:18` records that `r
 is CI-only). **No gate covers `scripts/remediation/` or `tests/remediation/` at all.** The debt is
 cosmetic; it is tidied after the wave, not treated as a blocker, and it is not reported as one.
 
+## Two architecture decisions taken with the OVERWRITER lane (10.1 / 10.3)
+
+The lane finished its read-only assessment and hit a genuine conflict with the example fix in its
+brief, then asked instead of guessing. Both answers were decided on evidence from the repo.
+
+### Q1 - `card_stats.card_description`: keep the file authoritative, log the discards
+
+New measurement (in the api container): production's **4,996 card texts are byte-identical to
+`public/data/card_descriptions.json`** - 4,996 entries, 4,996 rows, 4,996 identical,
+`would_be_overwritten 0`. There is no drift today, and the reason is that the startup import is
+the step that carries the file into the rows.
+
+The chain is already wired end to end: `output/card_descriptions.json` ->
+`scripts/import_card_descriptions.py` (reads `:25`, writes `public/data/...` `:58`) -> commit and
+deploy -> `api/main.py:496` startup import. `scripts/merge_rewrites.py:2` is the other half.
+
+So the plan's §10.1 alarm is right that this overwrites, and wrong to call it a defect **for this
+field**: it is the propagation mechanism. Decisions:
+
+- **Rejected "write only into an empty target"** - it kills the chain, so an edited file could
+  never reach a row that already holds text.
+- **Rejected guarding the import against `remediation_change_log`** - that would give production
+  API boot code a permanent dependency on a table that exists for one audit; a `to_regclass`
+  guard is a band-aid over the coupling, not a fix.
+- **Taken: keep the semantics, log every discarded non-empty value** (site_id and both values) so
+  a reverted write is loud at boot instead of silent - plus the contract rule, now recorded in
+  `FIELD_CONTRACT.md` §2.3, that Phase 5 writes the JSON and lets the import carry it.
+
+The remediation is then correct **by construction** rather than by a guard. The lane was also told
+to assess the second 10.1 entry (`orchestrator.py:1621-1627`) per column, and specifically that
+`name_normalized`'s survival condition makes a well-formed but **wrong** value durable.
+
+### Q2 - `restore_snapshot()`'s missing `raw_data`: fixed, not merely reported
+
+The plan names it a defect in §10.3; it is one line and inside the lane's writable area. Writing a
+report *about* a known data-integrity bug rather than fixing it is the failure mode this whole
+effort exists to avoid, so it is fixed in-lane under two conditions: the restored row must end up
+**consistent** (description and `raw_data` from the same snapshot, or neither), and a teeth test
+must fail before the change and pass after.
+
+Checked the snapshot really can supply it: `unified_sites.jsonl.gz` holds 5,004 sites, 2,787 with
+empty-or-missing `raw_data`, and **2,217 carrying `description_citations`** - which lines up with
+the 2,216 production citations §10.3 complains about after a restore. The lane must also report
+the discrepancy that `api/routes/sites.py:988` documents restoring `raw_data`,
+`parent_site_id` and `source_record_id` while the implementation does not - the same
+phantom-documentation class as §10.3's "raw year parsing".
+
+Blast radius stated to the lane and worth repeating: `restore_snapshot` is live through
+`api/routes/sites.py:955` -> `:963`, so this is a real behaviour change on a live endpoint, and
+it must be reported as one.
+
 ### Safety check after the probe
 
 The real backups directory was intact: `2026-09-19_pre-audit` and `2026-09-20_remediation` both

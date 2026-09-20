@@ -148,6 +148,37 @@ For contrast, `api/routes/sites.py:1743-1751` deliberately does **not** overwrit
 `card_description = COALESCE(EXCLUDED.card_description, card_stats.card_description)`. Two write
 paths, opposite semantics; only the startup one is authoritative.
 
+#### The carrier chain, and the decision not to change the importer
+
+Measured 2026-09-20 in the api container: production's **4,996 card texts are byte-identical to
+`public/data/card_descriptions.json`** (4,996 entries, 4,996 rows found, 4,996 identical,
+`would_be_overwritten 0`). There is **no drift today**, and the reason is that the startup import
+is the step which carries the file into the rows. It is a propagation mechanism, not an
+overwriter — and §10.1 of the plan names it as a landmine for exactly that reason.
+
+The chain is already wired end to end, which is why the importer's semantics stay as they are:
+
+```
+generation -> output/card_descriptions.json
+           -> scripts/import_card_descriptions.py   (reads :25, writes public/data/... :58)
+           -> commit + deploy
+           -> api/main.py startup import            (the only path to an existing row)
+```
+
+`scripts/merge_rewrites.py:2` ("Merge rewrite outputs into card_descriptions.json, then
+re-validate") is the other half of the same workflow.
+
+**Rejected alternatives, recorded so they are not re-litigated.** Writing only into a NULL or
+empty target kills this chain — an edited file could never reach a row that already holds text.
+Guarding the import against site_ids recorded in migration 0017's `remediation_change_log` would
+give production API boot code a permanent dependency on a table that exists for one audit; a
+`to_regclass` guard is a band-aid over that coupling, not a fix.
+
+**What was done instead:** the import keeps file-authoritative semantics and gains logging of
+every discarded non-empty value (site_id and both values), so a reverted remediation write is
+visible at boot rather than silent. The remediation is then made correct **by construction**
+rather than by a guard — which is what the rule above already demanded.
+
 ---
 
 ## 3. Column shape: what a proposed value must fit
