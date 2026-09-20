@@ -1988,3 +1988,26 @@ accompanied a verdict reading `2 failed`. Two conclusions, both now measured rat
    the output rather than a file it wrote, that output does not survive; the lanes in this remediation
    are therefore required to write deliverables to disk, and are audited from those files - never from
    a task-log preview.
+
+## Final adjudication: the t02 "SQL injection" advisory is a spatial-index false positive
+
+Third appearance, so it gets a named mechanism rather than another re-check. The advisory points at
+`scripts/remediation/census/tests/t02_admin_country.py:354`, which is not an import and not SQL:
+
+```python
+def containing(self, lon: float, lat: float) -> list[str]:
+    pt = Point(lon, lat)
+    return sorted({self.features[int(i)].admin for i in self._tree.query(pt) ...})
+```
+
+`self._tree` is a **Shapely `STRtree`** - an R-tree spatial index - so `.query(pt)` is a geometry
+lookup. The scanner's SQL-sink pattern matched the token `.query(`. The decisive check (a file with
+no database surface cannot inject into one): `execute(` **0**, `executemany` **0**, `cursor` **0**,
+`psycopg` **0**, `sqlalchemy` **0**, `sql.SQL` **0**, `conn.` **0**, `session` **0**, `subprocess`
+**0**, `eval(` **0**, `os.system` **0**. The file reaches the network only through its `collect()`
+(`httpx`); `run()` is offline.
+
+That is the third distinct instrument-mismatch family in this session, and worth naming as a family:
+(1) a probe matching the file's own explanatory **comment**; (2) a probe matching a legitimate SQL
+**literal** in a `WHERE` clause; (3) a scanner matching `.query(` on a **spatial index**. Each looked
+like a finding and each was the question being asked of the wrong object.
