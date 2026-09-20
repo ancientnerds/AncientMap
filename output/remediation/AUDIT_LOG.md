@@ -1637,3 +1637,91 @@ strengthens it rather than silencing the checker.
 The widget reports `UPLOAD_PATH_RE is not defined` at line 226, but flagged it as historical on
 a file that has changed since, so it may already be resolved. T06 is still writing. Re-run ruff
 and mypy on the finished file before judging; if real it is a `NameError` at scan time.
+
+## Phase 2 opened — migration 0019, and wave 4's production write audited
+
+Date: 2026-09-21. Authorised by owner decision E1 (DB writes within the remediation scope).
+
+### Migration 0019 — `wiki_images.image_kind`
+
+Written and applied because Phase 2 item 3 needs it and GALLERY's recommendation 1 (persist the 280
+verdicts that already exist) is blocked without it. Additive, idempotent, forward-only.
+
+The vocabulary is the one the project's existing VLM prompt already emits
+(`pipeline/video/shorts_select.py:51-75`): `site_photo | artifact | map_or_document |
+painting_or_artwork | people | other | unknown`.
+
+**The design decision that matters: NULL is not `unknown`.** NULL means *no verdict has ever been
+recorded* (initially all 49,691 rows); `unknown` means *a vision model looked and could not decide*.
+Back-filling the existing rows to `unknown` would assert a judgement that never happened - precisely
+the failure this project forbids ("could not check" must never read as "checked and clean"). Only
+`image_kind = 'site_photo'` may ever count as clean, so NULL and `unknown` are both not-clean.
+
+The vocabulary is enforced by a CHECK constraint rather than by convention: a typo like `site_photos`
+would otherwise read as "not site_photo" and silently drop a good image out of every downstream
+query.
+
+**No allowlist change was needed** - checked, not assumed: the allowlist in 0017 is a list of TABLE
+names (`0017_remediation_change_log.sql:85`), not of table/column pairs, so `wiki_images` already
+permitted any column. Confirmed against production first (`wiki_images` PK is `id`; 20 columns before,
+21 after).
+
+**Teeth, two layers.** The migration carries an inline check that writes an invalid value to a real
+row inside a subtransaction; if the constraint were absent the UPDATE would succeed, the following
+RAISE would escape its `check_violation` handler, and the whole migration would abort. The re-runnable
+self-test (`scripts/remediation/0019_migration_selftest.sql`) then reported **15 ok, 0 failed**,
+including C5 "refuses a typo (`site_photos`)" and C9 "old_value is NULL, not the text NULL". Everything
+that writes ran inside BEGIN...ROLLBACK, and the post-rollback proof confirmed nothing survived:
+journal unchanged, 0 non-NULL `image_kind`, 0 journal rows for the column.
+
+**Idempotency proven by re-running it** (what CI does on every deploy, since 0019 is deliberately
+absent from `applied_migrations` like 0018):
+
+    NOTICE:  column "image_kind" of relation "wiki_images" already exists, skipping
+    image_kind_columns=1   vocab_constraints=1   wiki_images_cols=21   applied_migrations_0019=0
+
+**Two errors of my own on the way, both caught before they could matter.** The self-test's first draft
+addressed the journal primary key as `pk_value`; production says the column is **`row_pk`**, so every
+journal assertion would have failed spuriously - found by reading the real schema before running it.
+And the migration's first "teeth" block was a check that could not fail: it wrote `WHERE false`, which
+touches zero rows, so the constraint was never evaluated, and the `RAISE EXCEPTION` that followed is a
+`raise_exception` the `WHEN check_violation` handler does not catch - it would have aborted the
+migration every time. Writing to one real row inside a subtransaction is what gives it teeth.
+
+(`docker exec` without `-i` silently fed psql an empty stdin again on the first attempt. My own
+recorded regression, sixth occurrence of the same shape: the command "succeeded" and printed nothing.)
+
+### Wave 4 MECHANICAL — the 35-row production write, audited
+
+The journal went from 5,438 rows to **5,473**, i.e. exactly the 35 I authorised in the supervisor
+decision. Read back from production:
+
+| check | result |
+|---|---|
+| rows | **35**, on **35 distinct PKs**, 0 PKs with more than one entry |
+| identity | `unified_sites.country` / `T05/country-canonical` / `authoritative` / `2026-09-21_mechanical-country` |
+| the pairs | `Georgia (country)` -> `Georgia` **27**, `Chile, Easter Island` -> `Chile` **8** |
+| hygiene | NULLs in old/new `0`, NULL `site_id_ref` `0`, empty evidence `0` |
+| scope | rows outside `source_id='ancient_nerds'` **0** |
+| landed | live values are now Georgia 27 / Chile 8; **`remaining_old_values=0`** |
+
+**Condition (c) - the hub split - is answered and closes the question.** Before, one country had two
+indexed hubs. After writing all 35: `Georgia` 30 and `Chile` 11, with **nothing left under either old
+value**. That retroactively settles the 27-vs-35 decision: at 27 rows, `Georgia (country)` would have
+kept 7 sites, i.e. the defect I was trying to remove would have survived. The plan itself names the
+symptom at line 854 - *"Archaeological Sites in Georgia (country) (27)"* is a live hub page today.
+
+**Restart safety, proven rather than assumed.** `pipeline/lyra/data_patches.py:54` does write
+`unified_sites.country`, and it runs on every boot (`orchestrator.py:1063-1065` calls
+`run_data_patches`). It is harmless here for **two independent reasons**: its WHERE carries both
+`source_id = 'lyra'` and `country IS NULL`, and the 35 rows are `ancient_nerds` with non-NULL country.
+Either guard alone suffices. No other boot path writes `country`.
+
+**Canonical form checked executably.** `pipeline/utils/country_lookup.py:542` `normalize_country`
+returns ISO codes *for comparison* (its docstring says so), and it maps both old and new variants to
+the same key - `Georgia` and `Georgia (country)` both to `GE`, `Chile, Easter Island` to `CL` - so
+consolidating them cannot change any comparison. No display canonicalizer for `country` exists, so the
+plain English names are the correct stored form. `country_slug('Georgia') = 'georgia'`.
+
+**Nothing depends on the old literals:** a repo-wide grep for `Georgia (country)` and
+`Chile, Easter Island` across `.py/.ts/.tsx/.json/.sql/.md` returns no code or config hit.
