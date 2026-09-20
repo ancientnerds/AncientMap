@@ -1,0 +1,21 @@
+#!/bin/bash
+# Pre-commit hook: block private keys and secrets from being committed
+
+BLOCKED=0
+
+# Check staged files for private key content
+while IFS= read -r -d '' file; do
+  # Diese Hooks enthalten die Suchmuster selbst - sich selbst nicht scannen.
+  case "$file" in .githooks/*) continue ;; esac
+  if git show ":$file" 2>/dev/null | grep -qE "PRIVATE KEY|OPENSSH PRIVATE"; then
+    echo "BLOCKED: $file contains a private key!"
+    BLOCKED=1
+  fi
+done < <(git diff --cached --name-only -z)
+
+if [ "$BLOCKED" -eq 1 ]; then
+  echo ""
+  echo "Commit rejected: private key detected in staged files."
+  echo "Remove the file from staging with: git reset HEAD <file>"
+  exit 1
+fi

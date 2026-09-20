@@ -1,0 +1,171 @@
+#!/bin/sh
+# Pre-push hook.
+#
+# A push to refs/heads/main is a live deploy: .github/workflows/ci.yml runs its deploy
+# job only for github.ref == refs/heads/main (CI -> SSH to the VPS -> migrations,
+# container rebuild). This hook therefore blocks such a push unless
+#
+#   1. the working tree matches the commit that would be pushed - the gates test the
+#      working tree, the push deploys the commit, and only both together prove what
+#      actually goes live - and
+#   2. every local gate is green.
+#
+# Pushes to any other branch skip the gates. Every check is fail-closed: a gate that
+# cannot be executed blocks the push instead of waving it through.
+#
+# This hook is not a replacement for CI. It runs the fast, meaningful gates and
+# deliberately does not run semgrep, gitleaks, pip-audit, trivy, mypy,
+# `ruff format --check` or `npm run build`/`build:ssr`.
+#
+# git-lfs pre-push runs last and receives this hook's stdin unchanged, so an LFS push
+# is not broken by the gates in front of it. A missing git-lfs therefore still blocks
+# the push with exit 2 (standard git-lfs semantics).
+#
+# Deliberate trade-offs:
+#   - The working-tree check covers tracked files only: untracked files are not part of
+#     the pushed commit, but they can still change what the gates see (a new test file
+#     gets collected), so a green run can prove more than this push deploys.
+#   - 'git push --dry-run' runs the gates too - git gives a pre-push hook no way to tell.
+#   - A mixed push (main plus other refs) aborts as a whole when a gate is red.
+#   - Any remote pointing at the GitHub repository can trigger the deploy, so the hook
+#     does not guess which remote is 'the' deploy remote.
+#   - '--no-verify' and '-c core.hooksPath=' bypass every local hook; server-side
+#     protection for main is the only real backstop.
+#   - Committing this file needs the executable bit in the index (core.filemode is false
+#     on Windows): 'git add --chmod=+x .githooks/pre-push'.
+
+ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
+if [ -z "$ROOT" ]; then
+  echo "pre-push: BLOCKED - cannot determine the repository root (git rev-parse --show-toplevel failed)." >&2
+  exit 1
+fi
+cd "$ROOT" || { echo "pre-push: BLOCKED - cannot change into the repository root '$ROOT'." >&2; exit 1; }
+
+REFS_FILE=$(mktemp) || { echo "pre-push: BLOCKED - mktemp failed, cannot buffer the pushed refs." >&2; exit 1; }
+GATE_LOG_DIR=$(mktemp -d) || { echo "pre-push: BLOCKED - mktemp -d failed, cannot buffer the gate output." >&2; rm -f "$REFS_FILE"; exit 1; }
+trap 'rm -f "$REFS_FILE"; rm -rf "$GATE_LOG_DIR"' EXIT
+
+cat > "$REFS_FILE"
+
+PUSHES_MAIN=0
+MAIN_LOCAL_SHA=
+while read -r LOCAL_REF LOCAL_SHA REMOTE_REF REMOTE_SHA; do
+  if [ "$REMOTE_REF" = "refs/heads/main" ]; then
+    PUSHES_MAIN=1
+    MAIN_LOCAL_SHA="$LOCAL_SHA"
+  fi
+done < "$REFS_FILE"
+
+# Runs one gate. Green: return 0. Red: keep the gate output, print its last lines with
+# the gate name in front of every line, and abort the push with exit 1.
+run_gate() {
+  GATE_NAME=$1
+  shift
+  GATE_CMD=""
+  for GATE_ARG in "$@"; do
+    case "$GATE_ARG" in
+      *" "*) GATE_CMD="$GATE_CMD '$GATE_ARG'" ;;
+      *) GATE_CMD="$GATE_CMD $GATE_ARG" ;;
+    esac
+  done
+  GATE_LOG="$GATE_LOG_DIR/$GATE_NAME.log"
+  echo "pre-push: gate '$GATE_NAME': running:$GATE_CMD"
+  "$@" > "$GATE_LOG" 2>&1
+  GATE_STATUS=$?
+  if [ "$GATE_STATUS" -eq 0 ]; then
+    echo "pre-push: gate '$GATE_NAME': PASSED"
+    return 0
+  fi
+  KEPT_LOG="${TMPDIR:-/tmp}/am-prepush-$GATE_NAME.log"
+  cp "$GATE_LOG" "$KEPT_LOG" 2>/dev/null
+  echo "" >&2
+  echo "pre-push: BLOCKED - gate '$GATE_NAME' is RED (exit $GATE_STATUS)." >&2
+  echo "pre-push: failing command:$GATE_CMD" >&2
+  echo "pre-push: last output lines, each prefixed with the gate it came from:" >&2
+  tail -n 40 "$GATE_LOG" | sed "s/^/[$GATE_NAME] /" >&2
+  echo "pre-push: full gate output kept at $KEPT_LOG" >&2
+  echo "pre-push: push aborted - the gate must be green before refs/heads/main is pushed." >&2
+  exit 1
+}
+
+if [ "$PUSHES_MAIN" -eq 1 ]; then
+  echo "pre-push: push targets refs/heads/main (= live deploy) - checking the working tree and running the local gates."
+
+  if [ "$MAIN_LOCAL_SHA" = "0000000000000000000000000000000000000000" ]; then
+    echo "pre-push: BLOCKED - this push deletes refs/heads/main; nothing can be checked for a deleted ref." >&2
+    exit 1
+  fi
+  if ! git rev-parse --verify --quiet "$MAIN_LOCAL_SHA^{commit}" >/dev/null; then
+    echo "pre-push: BLOCKED - the pushed object '$MAIN_LOCAL_SHA' is not a commit in this repository." >&2
+    exit 1
+  fi
+
+  # The gates below test the working tree, this push deploys the commit. If the two
+  # differ, a green run proves nothing about what goes live.
+  git diff --quiet "$MAIN_LOCAL_SHA" -- .
+  DIRTY_STATUS=$?
+  if [ "$DIRTY_STATUS" -eq 1 ]; then
+    echo "pre-push: BLOCKED - the working tree differs from the commit $MAIN_LOCAL_SHA that this push would deploy." >&2
+    echo "pre-push: tracked files that differ: $(git diff --name-only "$MAIN_LOCAL_SHA" -- . | wc -l)" >&2
+    echo "pre-push: the gates test the working tree and cannot prove what this push deploys. Commit your work first, then push." >&2
+    exit 1
+  fi
+  if [ "$DIRTY_STATUS" -ne 0 ]; then
+    echo "pre-push: BLOCKED - 'git diff --quiet $MAIN_LOCAL_SHA -- .' failed (exit $DIRTY_STATUS); cannot tell whether the working tree matches the pushed commit." >&2
+    exit 1
+  fi
+  echo "pre-push: working tree matches $MAIN_LOCAL_SHA."
+
+  FRONTEND="$ROOT/ancient-nerds-map"
+  if [ -x "$ROOT/.venv/Scripts/python.exe" ]; then
+    PYTHON="$ROOT/.venv/Scripts/python.exe"
+    LINT_IMPORTS="$ROOT/.venv/Scripts/lint-imports.exe"
+  elif [ -x "$ROOT/.venv/bin/python" ]; then
+    PYTHON="$ROOT/.venv/bin/python"
+    LINT_IMPORTS="$ROOT/.venv/bin/lint-imports"
+  else
+    echo "pre-push: BLOCKED - no repository interpreter: neither '$ROOT/.venv/Scripts/python.exe' nor '$ROOT/.venv/bin/python' exists." >&2
+    echo "pre-push: create the repository venv (CLAUDE.md, section 'Local verification'), then push again." >&2
+    exit 1
+  fi
+
+  if ! VENV_PROBE=$("$PYTHON" -c "import pytest, ruff, vulture" 2>&1); then
+    echo "pre-push: BLOCKED - the repository venv cannot provide the gate tools:" >&2
+    echo "[venv] $VENV_PROBE" >&2
+    exit 1
+  fi
+  if [ ! -x "$LINT_IMPORTS" ]; then
+    echo "pre-push: BLOCKED - lint-imports is not executable at '$LINT_IMPORTS'." >&2
+    exit 1
+  fi
+  if ! command -v npm >/dev/null 2>&1 || ! command -v npx >/dev/null 2>&1; then
+    echo "pre-push: BLOCKED - npm/npx was not found on PATH; the frontend gates cannot run." >&2
+    exit 1
+  fi
+  if [ ! -d "$FRONTEND" ]; then
+    echo "pre-push: BLOCKED - '$FRONTEND' is missing; the frontend gates cannot run." >&2
+    exit 1
+  fi
+  if [ ! -x "$FRONTEND/node_modules/.bin/knip" ]; then
+    echo "pre-push: BLOCKED - knip is not installed at '$FRONTEND/node_modules/.bin/knip'; the frontend gates cannot run (npm ci)." >&2
+    exit 1
+  fi
+
+  run_gate pytest "$PYTHON" -m pytest -q -rs --timeout 90 -m "not integration and not live_llm"
+  run_gate ruff "$PYTHON" -m ruff check api/ pipeline/
+  run_gate lint-imports "$LINT_IMPORTS"
+  run_gate vulture "$PYTHON" -m vulture api/ pipeline/ .vulture_whitelist.py --min-confidence 80
+
+  cd "$FRONTEND" || { echo "pre-push: BLOCKED - cannot change into '$FRONTEND'." >&2; exit 1; }
+  run_gate npm-type-check npm run type-check
+  run_gate npm-test npm run test
+  run_gate knip npx knip --no-progress --include files,dependencies,devDependencies
+  cd "$ROOT" || { echo "pre-push: BLOCKED - cannot change back into '$ROOT'." >&2; exit 1; }
+
+  echo "pre-push: all main gates are green."
+else
+  echo "pre-push: no push to refs/heads/main - skipping the gates."
+fi
+
+command -v git-lfs >/dev/null 2>&1 || { echo >&2 "\nThis repository is configured for Git LFS but 'git-lfs' was not found on your path. If you no longer wish to use Git LFS, remove this hook by deleting the 'pre-push' file in the hooks directory (set by 'core.hookspath'; usually '.git/hooks').\n"; exit 2; }
+git lfs pre-push "$@" < "$REFS_FILE"

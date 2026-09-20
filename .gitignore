@@ -139,11 +139,14 @@ nul
 desktop.ini
 
 # =============================================================================
-# CLAUDE CODE
+# CLAUDE CODE / PI CODING AGENT
 # =============================================================================
 .claude/
 .worktrees/
 .superpowers/
+# Pi runtime scratch only — .pi/settings.json, .pi/prompts/, .pi/agents/ and
+# .pi/skills/ are shareable project configuration and stay tracked.
+.pi/tasks/
 
 # =============================================================================
 # LINTER / TYPE-CHECKER CACHES
