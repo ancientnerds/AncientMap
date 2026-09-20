@@ -1,0 +1,178 @@
+{
+ "sample_index": 20,
+ "site_id": "57828dbd-9f7f-49e7-92bc-0f4eebae4829",
+ "site_name": "Cueva de los Murciélagos",
+ "rarity_tier": 3,
+ "sample_size": 36,
+ "db_fields": {
+  "name": "Cueva de los Murciélagos",
+  "country": "Spain",
+  "coordinates": "37.54217405999256, -4.3042847207230714",
+  "period_start": 1,
+  "period_name": "1 - 500 AD",
+  "site_type": "Rock art",
+  "description": "Cueva de los Murcielagos is a cave system in the Sierras Subbeticas near Zuheros, Cordoba, Spain. Evidence of human occupation reaches back 35,000 years to the Middle Palaeolithic. Neolithic deposits dated 4300-3900 BC yielded decorated ceramics, stone and bone tools, and ornaments made from seashells. The cave contains schematic rock art including the striking Frieze of the Ibex, with over thirty quadrupeds identified as ibex shown in dynamic positions. A second art zone features anthropomorphic figures and an idol motif. The cave hosts one of the largest bat colonies in Andalusia.",
+  "card_description": "A karst cave system at 980 meters in the Sierras Subbeticas, with rock art spanning Paleolithic to Neolithic periods. It hosts one of Andalusia's largest bat colonies in the same chambers.",
+  "civilization": "Spain",
+  "heritage_designation": null,
+  "hero_image": "hero.webp (800x530, Commons File:Alrededores de la Cueva de los Murciélagos 1.jpg - 'surroundings of the cave')",
+  "gallery_images": "7 further images",
+  "thumbnail_url": "/data/images/wiki/57828dbd/hero.webp",
+  "source_url": "https://en.wikipedia.org/wiki/Cueva_de_los_Murci%C3%A9lagos",
+  "scope": "Europe (lat 37.54, lon -4.30), period_start 1 <= 500 AD -> in scope"
+ },
+ "verdicts": [
+  {
+   "field": "name",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Cueva_de_los_Murci%C3%A9lagos",
+    "https://de.wikipedia.org/wiki/Cueva_de_los_Murci%C3%A9lagos"
+   ],
+   "note": "enwiki, dewiki, eswiki and itwiki all use 'Cueva de los Murciélagos'; the record drops the accent (the description has the accent, the name field does not) - a diacritic inconsistency inside the record, not a wrong name."
+  },
+  {
+   "field": "country",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://www.wikidata.org/wiki/Q5192373"
+   ],
+   "note": "Wikidata P17 = Q29 (Spain); enwiki 'the southern province of Cordoba in Spain'."
+  },
+  {
+   "field": "coordinates",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Cueva_de_los_Murci%C3%A9lagos",
+    "https://www.wikidata.org/wiki/Q5192373"
+   ],
+   "note": "Database 37.54217406, -4.30428472; enwiki 37.54194444, -4.30416667; Wikidata P625 37.54204909, -4.30439199. Within ~20 m."
+  },
+  {
+   "field": "period_start",
+   "verdict": "WRONG",
+   "correct_value": "-4300 (bucket 4500 - 3000 BC) for the art and the Neolithic deposits",
+   "sources": [
+    "https://en.wikipedia.org/wiki/Cueva_de_los_Murci%C3%A9lagos",
+    "https://de.wikipedia.org/wiki/Cueva_de_los_Murci%C3%A9lagos",
+    "https://es.wikipedia.org/wiki/Cueva_de_los_Murci%C3%A9lagos"
+   ],
+   "note": "SEVERE and self-contradictory: the record dates the cave to 1-500 AD (Roman period) while its own description says human occupation reaches back 35,000 years and that the deposits with decorated ceramics are 4300-3900 BC. The sources: eswiki 'La cueva de los Murcielagos es una cueva prehistorica de Andalucia'; dewiki 'Es gilt aufgrund der einzigartigen Felsmalereien und signifikanten archaologischen Funde aus der Jungsteinzeit als die bedeutendste unter den rund 60 Hohlen im Parque Natural de Sierra...'. Neolithic rock art in a cave, sorted as Roman. Four buckets wrong for the Neolithic phase, seven for the Palaeolithic occupation."
+  },
+  {
+   "field": "period_name",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "docs/procedures/ENRICHMENT_AUDIT.md"
+   ],
+   "note": "categorize_period(1) = '1 - 500 AD'. Internally consistent with the wrong sort key."
+  },
+  {
+   "field": "site_type",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://www.wikidata.org/wiki/Q5192373",
+    "pipeline/normalizers/site_type.py"
+   ],
+   "note": "Wikidata P31 includes rock art (Q1211146) with a qualifier; 'Rock art' is canonical. Wikidata also lists 'human settlement' eight times, which is a Wikidata data-quality artefact, not a reason to change the type."
+  },
+  {
+   "field": "description",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Cueva_de_los_Murci%C3%A9lagos",
+    "https://de.wikipedia.org/wiki/Cueva_de_los_Murci%C3%A9lagos"
+   ],
+   "note": "The enwiki article is a stub and carries only the cave-system sentence, the 1868 discovery, the 1938 study and the bat colony; the Sierras Subbeticas location, the 4 km from Zuheros and the bat colony are confirmed word for word, and dewiki confirms the Neolithic finds and the rock paintings. The specific archaeological claims (35,000 years, 4300-3900 BC, the Frieze of the Ibex with thirty quadrupeds, the second art zone) are NOT in the sources read and are recorded as unsupported rather than wrong - they are consistent with the specialised literature on Zuheros. The record's dating of the site is the error, and it is counted on period_start."
+  },
+  {
+   "field": "card_description",
+   "verdict": "UNVERIFIABLE",
+   "correct_value": null,
+   "sources": [
+    "https://de.wikipedia.org/wiki/Cueva_de_los_Murci%C3%A9lagos"
+   ],
+   "note": "'980 meters' cannot be checked against any source read. 'Rock art spanning Paleolithic to Neolithic periods' is doubtful: dewiki attributes the rock paintings to the Neolithic (Jungsteinzeit) and no source read places Palaeolithic art in this cave, though the occupation does reach the Palaeolithic. Recorded as unverifiable, not as an error - the wording conflates the occupation span with the art span, and this audit found no source that states the art is Palaeolithic."
+  },
+  {
+   "field": "civilization",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.3.4"
+   ],
+   "note": "Denormalised country copy by design."
+  },
+  {
+   "field": "heritage_designation",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://www.wikidata.org/wiki/Q5192373",
+    "https://it.wikipedia.org/wiki/Cueva_de_los_Murci%C3%A9lagos"
+   ],
+   "note": "NULL permitted; empty on all 36 sampled sites. Fillable: Wikidata P1435 = bien de interes cultural (Q23712), itwiki dates the designation 23 November 2001, and enwiki's categories include 'Bien de Interes Cultural landmarks in the Province of Cordoba'."
+  },
+  {
+   "field": "hero_image",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://commons.wikimedia.org/wiki/File:Alrededores_de_la_Cueva_de_los_Murci%C3%A9lagos_1.jpg"
+   ],
+   "note": "Metadata-level verdict. 800x530, 'Alrededores de la Cueva de los Murcielagos' - the surroundings of the cave, correct site, no strip. Class note: the hero shows the landscape, not the cave or its art. Wikidata's P18 for this item is 'Auge des Mauren01.jpg', a different image; the exporter did not use it."
+  },
+  {
+   "field": "gallery_images",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "output/remediation/snapshot/wiki_images.jsonl.gz"
+   ],
+   "note": "Metadata-level verdict: 7 further rows, all from the cave's own Commons category 'Cueva de los Murcielagos' (the category fetch for the digest failed, so the per-file metadata is thinner here than for other sites). GAP, not an error: 8 images in total, above the plan's 6-image floor."
+  },
+  {
+   "field": "thumbnail_url",
+   "verdict": "UNVERIFIABLE",
+   "correct_value": null,
+   "sources": [
+    "output/remediation/snapshot/wiki_images.jsonl.gz"
+   ],
+   "note": "Local export path; no public/data/images copy in this checkout."
+  },
+  {
+   "field": "source_url",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Cueva_de_los_Murci%C3%A9lagos"
+   ],
+   "note": "HTTP 200, dedicated article - but a three-sentence stub that cannot support the archaeological description."
+  },
+  {
+   "field": "scope",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.1 E3"
+   ],
+   "note": "Europe; in scope with the shipped date and with the corrected Neolithic one."
+  }
+ ],
+ "errors_found": [
+  {
+   "id": "CM-1",
+   "field": "period_start",
+   "severity": "severe",
+   "claim": "Neolithic rock-art cave (and Palaeolithic occupation) sorted into the Roman bucket 1 - 500 AD, contradicting the record's own description"
+  }
+ ],
+ "notes": "The second severe dating error, and the clearest case of an internal contradiction: the same record says '35,000 years' and '4300-3900 BC' in its prose and '1 - 500 AD' in its sort key. A deterministic check for 'does the description's earliest date agree with period_name's bucket' would catch this one for free.",
+ "checked_at": "2026-09-20T23:09:47+02:00"
+}

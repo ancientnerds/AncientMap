@@ -1,0 +1,165 @@
+{
+ "sample_index": 26,
+ "site_id": "60722e7e-587a-46fb-b09c-e6e82f1b74f7",
+ "site_name": "Stanydale Temple",
+ "rarity_tier": 2,
+ "sample_size": 36,
+ "db_fields": {
+  "name": "Stanydale Temple",
+  "country": "Scotland",
+  "coordinates": "60.23557717245231, -1.4865578157177015",
+  "period_start": -3000,
+  "period_name": "3000 - 1500 BC",
+  "site_type": "Temple complex",
+  "description": "Stanydale Temple is a Neolithic site on Mainland, Shetland, Scotland. Located in a field south of Stanydale village, approximately 34 km (21 mi) by road northwest of Lerwick, the site originally functioned as a roofed building. Today, only a large walled enclosure remains. Despite uncertainty about its exact purpose, the structure's unusual size suggests it served a communal function or was the residence of a person of significance. [1]",
+  "card_description": "A Neolithic building on Shetland so unusually large it was likely communal or belonged to someone important. Only the massive walled enclosure survives.",
+  "civilization": "Scotland",
+  "heritage_designation": null,
+  "hero_image": "hero.webp (800x520, Commons File:Megawal1o.jpg, Category:Stanydale Temple, description 'Stanydale House (schematisch)')",
+  "gallery_images": "19 further images of the temple",
+  "thumbnail_url": "/data/images/wiki/60722e7e/hero.webp",
+  "source_url": "https://en.wikipedia.org/wiki/Stanydale_Temple",
+  "scope": "Europe (lat 60.24, lon -1.49), period_start -3000 <= 500 AD -> in scope"
+ },
+ "verdicts": [
+  {
+   "field": "name",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Stanydale_Temple"
+   ],
+   "note": "enwiki 'Stanydale Temple' (also Staneydale)."
+  },
+  {
+   "field": "country",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.3.2"
+   ],
+   "note": "'Scotland' rather than 'United Kingdom' is deliberate project design; enwiki says Mainland, Shetland."
+  },
+  {
+   "field": "coordinates",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Stanydale_Temple"
+   ],
+   "note": "60.2356, -1.4866 lies in the Stanydale area of Mainland, Shetland, consistent with the article's location (south of the village, northeast of Gruting, 34 km by road from Lerwick). No article coordinate or Wikidata P625 to compare numerically."
+  },
+  {
+   "field": "period_start",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Stanydale_Temple"
+   ],
+   "note": "Bucket sort key. The article: 'The settlement may well have been established in 2500-2000 BC'; -3000 is the floor of the bucket 3000 - 1500 BC, which contains -2500. Bucket correct (plan 4.3.1)."
+  },
+  {
+   "field": "period_name",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "docs/procedures/ENRICHMENT_AUDIT.md"
+   ],
+   "note": "categorize_period(-3000) = '3000 - 1500 BC'."
+  },
+  {
+   "field": "site_type",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Stanydale_Temple",
+    "pipeline/normalizers/site_type.py"
+   ],
+   "note": "'Temple complex' is canonical. The building is conventionally called a 'temple' (hence the record's name) and the article treats it as a unique large Neolithic structure; the value is the conventional one, not an overclaim by the record."
+  },
+  {
+   "field": "description",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Stanydale_Temple"
+   ],
+   "note": "Almost verbatim from the article: 'Stanydale Temple is a Neolithic site on Mainland, Shetland, Scotland. It is located in a field to the south of the modern village of Stanydale, roughly 21 miles (34 km) by road northwest of Lerwick', 'Once a roofed building, all that remains is a large, walled enclosure', 'There is uncertainty about the original purpose of the building, but its unusual size indicates some communal purpose, or that it was possibly the home of an important person'. The trailing ' [1]' after the full stop is a formatting slip, not a claim."
+  },
+  {
+   "field": "card_description",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Stanydale_Temple"
+   ],
+   "note": "Neolithic, Shetland, the unusual size, the communal-or-important-person reading and the surviving walled enclosure all match the article."
+  },
+  {
+   "field": "civilization",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.3.4"
+   ],
+   "note": "Denormalised country copy by design."
+  },
+  {
+   "field": "heritage_designation",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Stanydale_Temple"
+   ],
+   "note": "NULL permitted; empty on all 36 sampled sites. Fillable: 'It is designated a scheduled monument'."
+  },
+  {
+   "field": "hero_image",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://commons.wikimedia.org/wiki/File:Megawal1o.jpg"
+   ],
+   "note": "Metadata-level verdict with a class note: 800x520 and correctly categorised 'Stanydale Temple', but the file's own description is 'Stanydale House (schematisch)' - it is a schematic drawing of the building, not a photograph. Correct site, no strip; recorded as a class note (illustration as hero), the same class as Langdale's book scan."
+  },
+  {
+   "field": "gallery_images",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://commons.wikimedia.org/wiki/Category:Stanydale_Temple"
+   ],
+   "note": "Metadata-level verdict. The 19 further rows are photographs of the enclosure interior, the entrance and the wells, all in Category:Stanydale Temple (including a Geograph image 'Well in Staneydale Temple' whose description reads 'One of two apparent wells within the walls of the so-called Staneydale Temple'). No wrong-site row."
+  },
+  {
+   "field": "thumbnail_url",
+   "verdict": "UNVERIFIABLE",
+   "correct_value": null,
+   "sources": [
+    "output/remediation/snapshot/wiki_images.jsonl.gz"
+   ],
+   "note": "Local export path; no public/data/images copy in this checkout."
+  },
+  {
+   "field": "source_url",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Stanydale_Temple"
+   ],
+   "note": "HTTP 200, dedicated article (3,079 characters)."
+  },
+  {
+   "field": "scope",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.1 E3"
+   ],
+   "note": "Europe, Neolithic -> in scope."
+  }
+ ],
+ "errors_found": [],
+ "notes": "Clean. The only imperfection is that the hero is a schematic drawing rather than a photograph, in a record that ships 19 photographs of the same monument - a selection quirk worth noting for the image pipeline, not a wrong-site error.",
+ "checked_at": "2026-09-20T23:09:47+02:00"
+}

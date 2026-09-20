@@ -348,6 +348,14 @@ def restore_snapshot(db: Session, snapshot_id: str, restored_by: str = "system")
                 thumbnail_url = EXCLUDED.thumbnail_url,
                 source_url = EXCLUDED.source_url,
                 edited_by = EXCLUDED.edited_by,
+                -- raw_data holds description_citations: the [N] markers of the
+                -- description. Restoring the description without restoring
+                -- them leaves a row whose citations point at text that is no
+                -- longer there (plan §10.3, 2026-09). Both branches therefore
+                -- read the same snapshot value; a snapshot that predates
+                -- raw_data clears the column instead of keeping the newer
+                -- citations.
+                raw_data = EXCLUDED.raw_data,
                 updated_at = NOW()
         """),
         {"sid": snapshot_id},

@@ -1,0 +1,178 @@
+{
+ "sample_index": 32,
+ "site_id": "972ded7c-665e-4ca6-98cc-af4dff9ac8f3",
+ "site_name": "Priene Ruins",
+ "rarity_tier": 2,
+ "sample_size": 36,
+ "db_fields": {
+  "name": "Priene Ruins",
+  "country": "Türkiye",
+  "coordinates": "37.659971289454205, 27.30144810249858",
+  "period_start": 1,
+  "period_name": "1 - 500 AD",
+  "site_type": "Temple complex",
+  "description": "Priene was an ancient Greek city of Ionia located at the base of an escarpment of Mycale, about 6 kilometres north of the Maeander River[1]. The city was built on the sea coast, overlooking the former Latmian Gulf of the Aegean, and was developed on steep slopes and terraces extending from sea level to a height of 380 metres above sea level[1]. Due to siltation from the river filling the bay over several centuries, the city is now an inland site[1].",
+  "card_description": "Rebuilt in the 4th century BC on a new site, Priene was laid out on a strict grid across steep Ionian terraces. Its orthogonal streets are an early and clear expression of systematic urban design.",
+  "civilization": "Türkiye",
+  "heritage_designation": null,
+  "hero_image": "hero.webp (800x495, Commons File:Priene 2013-03-24n.jpg, 'ancient Greek city of Priene')",
+  "gallery_images": "19 further images",
+  "thumbnail_url": "/data/images/wiki/972ded7c/hero.webp",
+  "source_url": "https://en.wikipedia.org/wiki/Priene",
+  "scope": "Rest of world (lat 37.66, lon 27.30), period_start 1 <= 500 AD -> in scope"
+ },
+ "verdicts": [
+  {
+   "field": "name",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Priene"
+   ],
+   "note": "enwiki 'Priene'; the record adds 'Ruins', which matches the site's present state."
+  },
+  {
+   "field": "country",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Priene"
+   ],
+   "note": "The site is in modern Turkey (Turkish 'Prien'); 'Turkiye' is the country's own UN name, used consistently in this database."
+  },
+  {
+   "field": "coordinates",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Priene"
+   ],
+   "note": "37.6600, 27.3014 is the Priene escarpment above the Maeander plain, as described. No article coordinate or Wikidata P625 to compare numerically."
+  },
+  {
+   "field": "period_start",
+   "verdict": "WRONG",
+   "correct_value": "-350 (bucket 500 BC - 1 AD)",
+   "sources": [
+    "https://en.wikipedia.org/wiki/Priene"
+   ],
+   "note": "Bucket sort key, wrong by four buckets. The article: 'The city visible on the slopes and escarpment of Mycale was constructed according to plan entirely during the 4th century BCE' and 'At about 350 BCE the Persian-empire satrap, Mausolus ... planned a magnificent new city'. The record's own card also says 'Rebuilt in the 4th century BC'. Even taking the article's earliest settlement ('founded by a colony from the ancient Greek city of Thebes ... at about 1000 BCE') the bucket would be 1500 - 500 BC. Sorting a Hellenistic Greek city as 1 - 500 AD is wrong under any reading, and it contradicts the card shipped with the same record."
+  },
+  {
+   "field": "period_name",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "docs/procedures/ENRICHMENT_AUDIT.md"
+   ],
+   "note": "categorize_period(1) = '1 - 500 AD'. Internally consistent with the wrong sort key."
+  },
+  {
+   "field": "site_type",
+   "verdict": "WRONG",
+   "correct_value": "City/town/settlement",
+   "sources": [
+    "https://en.wikipedia.org/wiki/Priene",
+    "pipeline/normalizers/site_type.py"
+   ],
+   "note": "'Temple complex' narrows a whole city to one building type. The article: 'Priene ... was an ancient Greek city of Ionia (and member of the Ionian League)', 'Priene was a small city-state of 6000 persons living in a constrained space of only 15 hectares', with a grid of about 80 insulae, a theatre, an agora and the Temple of Athena among other monuments. The record's own description opens 'Priene was an ancient Greek city of Ionia'. 'City/town/settlement' is canonical and is the class the site needs."
+  },
+  {
+   "field": "description",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Priene"
+   ],
+   "note": "Every claim is in the article: 'an ancient Greek city of Ionia ... located at the base of an escarpment of Mycale, about 6 kilometres (3.7 mi) north of what was then the course of the Maeander River'; 'The city was built on the sea coast, overlooking the former Latmian Gulf of the Aegean'; 'It was developed on steep slopes and terraces extending from sea level to a height of 380 metres (1,250 ft) above sea level at the top of the escarpment'; and the siltation account ('according to recent geoarchaeological research, Priene had already lost the port and open connection to the sea in about the 1st century BCE'). The description contains no date at all, which is why the wrong sort key survives inside it unremarked."
+  },
+  {
+   "field": "card_description",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Priene"
+   ],
+   "note": "Supported: 'The city, as developed at this site that was new in the 4th century, was found to have been laid out on a rectangular scheme'; 'The town had six main streets, about 6 metres (20 ft) wide, running east and west, and fifteen streets about 3 metres (9.8 ft) wide crossing at right angles, all being evenly spaced. It was thus divided into about 80 insulae.' The card is the only part of this record that carries the site's actual date."
+  },
+  {
+   "field": "civilization",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.3.4"
+   ],
+   "note": "Denormalised country copy by design."
+  },
+  {
+   "field": "heritage_designation",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Priene"
+   ],
+   "note": "NULL permitted; empty on all 36 sampled sites. Priene is on Turkey's tentative World Heritage list, so the gap is fillable."
+  },
+  {
+   "field": "hero_image",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://commons.wikimedia.org/wiki/File:Priene_2013-03-24n.jpg"
+   ],
+   "note": "Metadata-level verdict. 800x495, described as 'Turkey: ancient Greek city of Priene' - the site itself. No strip."
+  },
+  {
+   "field": "gallery_images",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "output/remediation/snapshot/wiki_images.jsonl.gz"
+   ],
+   "note": "Metadata-level verdict: 19 further rows of the city's ruins (including a French-language image of the egg-and-dart mouldings, categorised 'Priene'). 20 images in total."
+  },
+  {
+   "field": "thumbnail_url",
+   "verdict": "UNVERIFIABLE",
+   "correct_value": null,
+   "sources": [
+    "output/remediation/snapshot/wiki_images.jsonl.gz"
+   ],
+   "note": "Local export path; no public/data/images copy in this checkout."
+  },
+  {
+   "field": "source_url",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Priene"
+   ],
+   "note": "HTTP 200, dedicated article (18,334 characters) - the richest source in the sample."
+  },
+  {
+   "field": "scope",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.1 E3"
+   ],
+   "note": "Rest of world; in scope both with the shipped Roman date and with the correct Hellenistic one."
+  }
+ ],
+ "errors_found": [
+  {
+   "id": "PR-1",
+   "field": "period_start",
+   "severity": "severe",
+   "claim": "4th-century-BC Greek city sorted into the bucket 1 - 500 AD, contradicting the record's own card"
+  },
+  {
+   "id": "PR-2",
+   "field": "site_type",
+   "severity": "moderate",
+   "claim": "'Temple complex' for an entire Greek city-state (about 80 insulae, theatre, agora) whose own description calls it a city"
+  }
+ ],
+ "notes": "Two independent errors in one record, both contradicting text shipped in the same record: the card says 4th century BC while the sort key says Roman, and the description says 'city' while the type says 'temple complex'. The source article here is excellent (18k characters, well dated), which rules out 'thin source' as the cause - the enrichment's field-level steps appear to run independently of each other, so a record can contradict itself.",
+ "checked_at": "2026-09-20T23:09:47+02:00"
+}

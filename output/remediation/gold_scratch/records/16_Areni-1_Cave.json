@@ -1,0 +1,173 @@
+{
+ "sample_index": 16,
+ "site_id": "1ef25b31-5c42-4ee6-aae1-1bd9c2640bff",
+ "site_name": "Areni-1 Cave",
+ "rarity_tier": 3,
+ "sample_size": 36,
+ "db_fields": {
+  "name": "Areni-1 Cave",
+  "country": "Armenia",
+  "coordinates": "39.731725247974566, 45.20280717090193",
+  "period_start": -4500,
+  "period_name": "4500 - 3000 BC",
+  "site_type": "Cave Structures",
+  "description": "Areni-1 cave is a Chalcolithic to Bronze Age multicomponent site located along the Arpa River near Areni village in southern Armenia[1][2]. Known locally as \"Birds' Cave\" (Trchuneri), the cave gained international prominence for yielding the world's oldest known leather shoe and an ancient wine press[1][2][3].",
+  "card_description": "A cave complex from 4300-3500 BC that yielded the world's oldest known leather shoe and the oldest known winery. Both were preserved by dry cave conditions.",
+  "civilization": "Armenia",
+  "heritage_designation": null,
+  "hero_image": "hero.webp (800x114, Commons File:Areni cave (Southern Armenia) banner.jpg, Category:Wikivoyage banners of Armenia)",
+  "gallery_images": "19 further images of the cave and its excavation",
+  "thumbnail_url": "/data/images/wiki/1ef25b31/hero.webp",
+  "source_url": "https://en.wikipedia.org/wiki/Areni-1_cave",
+  "scope": "Rest of world (lat 39.73, lon 45.20), period_start -4500 <= 500 AD -> in scope"
+ },
+ "verdicts": [
+  {
+   "field": "name",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Areni-1_cave",
+    "https://www.wikidata.org/wiki/Q4069217"
+   ],
+   "note": "enwiki 'Areni-1 cave', Wikidata 'Areni-1 cave'; the record adds the capital C."
+  },
+  {
+   "field": "country",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://www.wikidata.org/wiki/Q4069217"
+   ],
+   "note": "Wikidata P17 = Q399 (Armenia); enwiki 'near the town of Areni, Vayots Dzor Province, Armenia'."
+  },
+  {
+   "field": "coordinates",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Areni-1_cave"
+   ],
+   "note": "Database 39.73172525, 45.20280717; enwiki 39.73083333, 45.20388889. Within ~150 m."
+  },
+  {
+   "field": "period_start",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Areni-1_cave"
+   ],
+   "note": "Bucket sort key. enwiki: 'a Chalcolithic to Bronze Age multicomponent site'; the record's own card says 4300-3500 BC. -4500 is the floor of the bucket 4500 - 3000 BC, which contains -4300. Bucket correct (plan 4.3.1); the card's 4300-3500 BC and the sort key agree."
+  },
+  {
+   "field": "period_name",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "docs/procedures/ENRICHMENT_AUDIT.md"
+   ],
+   "note": "categorize_period(-4500) = '4500 - 3000 BC'."
+  },
+  {
+   "field": "site_type",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "pipeline/normalizers/site_type.py"
+   ],
+   "note": "'Cave Structures' is canonical and exact for a cave site."
+  },
+  {
+   "field": "description",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Areni-1_cave"
+   ],
+   "note": "Every claim traces to the cited article: 'Areni-1 cave (Armenian: Areni-1 kayr) is a cave and archaeological site located near the Areni village, Vayots Dzor Province, Armenia', 'multicomponent site ... along the Arpa River', 'locally known as Trchuneri (Bird's cave)', 'the world's oldest known leather shoe' and the winery/wine press. The record's wording 'an ancient wine press' is more cautious than the source, which calls it the oldest known winery."
+  },
+  {
+   "field": "card_description",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Areni-1_cave"
+   ],
+   "note": "4300-3500 BC is the Chalcolithic occupation the article describes; 'world's oldest known leather shoe' and 'oldest known winery' are the article's own claims; the dry cave conditions are the reason the article gives for the preservation of the organic finds. No contradiction found."
+  },
+  {
+   "field": "civilization",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.3.4"
+   ],
+   "note": "Denormalised country copy by design."
+  },
+  {
+   "field": "heritage_designation",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://www.wikidata.org/wiki/Q4069217"
+   ],
+   "note": "NULL permitted; empty on all 36 sampled sites."
+  },
+  {
+   "field": "hero_image",
+   "verdict": "WRONG",
+   "correct_value": "one of the 19 gallery photographs of the cave promoted to hero",
+   "sources": [
+    "https://commons.wikimedia.org/wiki/File:Areni_cave_(Southern_Armenia)_banner.jpg",
+    "docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 6.3"
+   ],
+   "note": "STRUCTURAL error, not a wrong-site error: 800x114, height < 400, the plan's own strip definition (plan line 293), and the file is categorised 'Wikivoyage banners of Armenia' and 'Derivative versions' - a banner crop of a panorama. The site is correct: 'Panorama of the Areni-1 cave site along the Arpa River in southern Armenia near the town of Areni. The cave is the location of the world's oldest known winery and where the world's oldest known shoe has been found.'"
+  },
+  {
+   "field": "gallery_images",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://commons.wikimedia.org/wiki/Category:Areni-1"
+   ],
+   "note": "Metadata-level verdict. The 19 non-hero rows show the cave (including a Russian-titled series 'Пещера Арени' - Cave of Areni) and the excavation; the hero file itself sits in Category:Areni-1. No wrong-site row."
+  },
+  {
+   "field": "thumbnail_url",
+   "verdict": "UNVERIFIABLE",
+   "correct_value": null,
+   "sources": [
+    "output/remediation/snapshot/wiki_images.jsonl.gz"
+   ],
+   "note": "Local export path; no public/data/images copy in this checkout."
+  },
+  {
+   "field": "source_url",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Areni-1_cave"
+   ],
+   "note": "HTTP 200, dedicated article."
+  },
+  {
+   "field": "scope",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.1 E3"
+   ],
+   "note": "Rest of world, Chalcolithic -> in scope."
+  }
+ ],
+ "errors_found": [
+  {
+   "id": "AR-1",
+   "field": "hero_image",
+   "severity": "cosmetic",
+   "claim": "hero is an 800x114 Wikivoyage banner - strip by the plan's own threshold (height < 400)"
+  }
+ ],
+ "notes": "Third banner-strip hero in the sample (Lake Mungo 97 px, Ahu Tongariki 135 px, Areni-1 114 px, Merry Maidens 167 px). All four are Wikivoyage banner crops. This is now a pattern, not an anecdote: the exporter appears to prefer a Wikimedia 'banner' derivative when one exists.",
+ "checked_at": "2026-09-20T23:09:47+02:00"
+}

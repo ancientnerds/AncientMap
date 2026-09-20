@@ -1,0 +1,185 @@
+{
+ "sample_index": 17,
+ "site_id": "58a2be59-ec1e-4667-96b9-3313ce406bc1",
+ "site_name": "Font dels Coms",
+ "rarity_tier": 3,
+ "sample_size": 36,
+ "db_fields": {
+  "name": "Font dels Coms",
+  "country": "Andorra",
+  "coordinates": "42.450537483241, 1.4511586765707098",
+  "period_start": -3500,
+  "period_name": "4500 - 3000 BC",
+  "site_type": "Geological interest",
+  "description": "Font dels Coms is a spring in Andorra la Vella [1]. The name derives from the Pyrenean Catalan word \"cóm\" (feeding trough), reflecting its use as a watering place for horses and muleteers traveling the ancient route from Seu d'Urgell to Andorra la Vella [1]. Located on carrer Doctor Palau, formerly called Carrer dels Cavallers (Knight's Street), this spring was on the main road between Seu d'Urgell and Andorra la Vella [1].",
+  "card_description": "Ancient Pyrenean spring used by horses, villagers, and muleteers on the main road between Seu d'Urgell and the capital. The street it sits on was once called Knights' Street.",
+  "civilization": "Andorra",
+  "heritage_designation": null,
+  "hero_image": null,
+  "gallery_images": "none - 0 wiki_images rows",
+  "thumbnail_url": null,
+  "source_url": "https://visitandorra.com/en/culture/font-dels-coms-spring/",
+  "scope": "Europe (lat 42.45, lon 1.45), period_start -3500 <= 500 AD -> in scope"
+ },
+ "verdicts": [
+  {
+   "field": "name",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://visitandorra.com/en/culture/font-dels-coms-spring/"
+   ],
+   "note": "The record's own source uses both spellings: the page title is 'Font dels Coms spring' while the body writes 'Font dels Coms' and 'Font del Coms'. The record's form is one of them. No independent source exists to prefer another (see source coverage note below)."
+  },
+  {
+   "field": "country",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://visitandorra.com/en/culture/font-dels-coms-spring/"
+   ],
+   "note": "Andorra - the source is the national tourist board and gives the address 'C/ Doctor Palau, s/n - Sant Julia de Loria'."
+  },
+  {
+   "field": "coordinates",
+   "verdict": "UNVERIFIABLE",
+   "correct_value": null,
+   "sources": [
+    "https://visitandorra.com/en/culture/font-dels-coms-spring/"
+   ],
+   "note": "No source carries a coordinate. 42.4505, 1.4512 lies in the parish of Sant Julia de Loria near the Spanish border, which is consistent with the source's address and inconsistent with the description's claim of Andorra la Vella (about 8 km to the northeast). Nothing confirms the exact spot."
+  },
+  {
+   "field": "period_start",
+   "verdict": "WRONG",
+   "correct_value": "no archaeological dating; the record's own source calls the spring 'centenary'",
+   "sources": [
+    "https://visitandorra.com/en/culture/font-dels-coms-spring/"
+   ],
+   "note": "FABRICATED VALUE. The only source for this record describes the object in full: 'The Font dels Coms spring is a centenary spring made with a wheel from a flour mill, located on street carrer Doctor Palau in Sant Julia.' A centenary spring is about a hundred years old; the source gives no prehistoric date at all. -3500 is not a rounding of a sourced value, it is a value with no source whatsoever, and it is what places the record in the bucket 4500 - 3000 BC and inside the E3 scope."
+  },
+  {
+   "field": "period_name",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "docs/procedures/ENRICHMENT_AUDIT.md"
+   ],
+   "note": "categorize_period(-3500) = '4500 - 3000 BC'. Internally consistent with the fabricated sort key."
+  },
+  {
+   "field": "site_type",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "pipeline/normalizers/site_type.py",
+    "https://visitandorra.com/en/culture/font-dels-coms-spring/"
+   ],
+   "note": "'Geological interest' is canonical and is the honest class for a water source with no archaeological remains - the record does not overstate it. Note that no other sampled site carries this value, so the class is rare."
+  },
+  {
+   "field": "description",
+   "verdict": "WRONG",
+   "correct_value": "a spring in Sant Julia de Loria (not Andorra la Vella)",
+   "sources": [
+    "https://visitandorra.com/en/culture/font-dels-coms-spring/"
+   ],
+   "note": "The record places the spring 'in Andorra la Vella' three times, while its own cited source gives the address as Sant Julia de Loria ('C/ Doctor Palau, s/n - Sant Julia de Loria'; 'located on street carrer Doctor Palau in Sant Julia'). Sant Julia de Loria is a different parish, about 8 km from the capital. The rest of the field matches the source almost word for word: 'in Pyrenean Catalan, \"com\" is a feeding trough and, in fact, this spring was often used by the horses of the village and muleteers who passed by such as the arrieros'; 'The road where the spring is located, carrer Doctor Palau, was formerly called the Carrer dels Cavallers [knight's street]'. The claim about the route from La Seu d'Urgell is NOT in the visible source text - recorded as unsupported, not as an error, since Sant Julia de Loria does lie on that road."
+  },
+  {
+   "field": "card_description",
+   "verdict": "UNVERIFIABLE",
+   "correct_value": null,
+   "sources": [
+    "https://visitandorra.com/en/culture/font-dels-coms-spring/"
+   ],
+   "note": "'Ancient Pyrenean spring' is not supported: the only source calls it 'centenary', i.e. about a hundred years old, and 'made with a wheel from a flour mill' - a modern structure, not an ancient one. The rest (horses, villagers, muleteers, Knights' Street, the road to the capital) matches the source, and the card is more careful than the description in that it does not place the spring inside the capital. Recorded as unverifiable rather than wrong because 'ancient' is a word without a date behind it, and the dating error is already counted on period_start."
+  },
+  {
+   "field": "civilization",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.3.4"
+   ],
+   "note": "Denormalised country copy by design."
+  },
+  {
+   "field": "heritage_designation",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://visitandorra.com/en/culture/font-dels-coms-spring/"
+   ],
+   "note": "NULL permitted; empty on all 36 sampled sites. Nothing indicates a designation for a village spring."
+  },
+  {
+   "field": "hero_image",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "output/remediation/snapshot/wiki_images.jsonl.gz"
+   ],
+   "note": "Empty (NULL), which plan 1.3 permits, and consistent: the site has no Wikipedia article, no Wikidata item and no Commons category, so no image could be sourced. GAP, not an error."
+  },
+  {
+   "field": "gallery_images",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "output/remediation/snapshot/wiki_images.jsonl.gz"
+   ],
+   "note": "Empty - 0 rows in the snapshot. Permitted; gap (see hero_image)."
+  },
+  {
+   "field": "thumbnail_url",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "output/remediation/snapshot/wiki_images.jsonl.gz"
+   ],
+   "note": "NULL, consistent with having no images."
+  },
+  {
+   "field": "source_url",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://visitandorra.com/en/culture/font-dels-coms-spring/"
+   ],
+   "note": "The URL resolves (HTTP 301 to the canonical https://visitandorra.com/en/culture/font-dels-coms-spring, then 200) and the page carries the content the description quotes. It is, however, a tourist-board page: promotional, undated and not independent of the subject."
+  },
+  {
+   "field": "scope",
+   "verdict": "WRONG",
+   "correct_value": "not an ancient site; the record's own source dates the spring to the last century",
+   "sources": [
+    "docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.1 E3",
+    "https://visitandorra.com/en/culture/font-dels-coms-spring/"
+   ],
+   "note": "Consequence of the fabricated period_start, not an independent error: with -3500 the record passes the E3 window automatically. On the source's evidence (a centenary spring with a flour-mill wheel, no archaeological remains, no dating) the record does not belong in a database of ancient sites at all. Counted once, on period_start."
+  }
+ ],
+ "errors_found": [
+  {
+   "id": "FC-1",
+   "field": "period_start",
+   "severity": "severe",
+   "claim": "period_start -3500 has no source of any kind; the record's only source calls the spring 'centenary' (about 100 years old) and describes a flour-mill wheel"
+  },
+  {
+   "id": "FC-2",
+   "field": "description",
+   "severity": "moderate",
+   "claim": "the spring is placed in Andorra la Vella; its own cited source gives Sant Julia de Loria, a different parish 8 km away"
+  },
+  {
+   "id": "FC-3",
+   "field": "source coverage",
+   "severity": "structural",
+   "claim": "no Wikipedia article, no Wikidata item, no Commons category - one non-independent promotional source for the whole record"
+  }
+ ],
+ "notes": "This is the site the supervisor's instruction was written for: without two usable sources the honest verdict is UNVERIFIABLE, and it stays in the denominator. Here one source exists and it contradicts the record twice, so those two contradictions are reported as errors and everything else is marked unverifiable. Note the mechanism: a fabricated -3500 is enough to make a village spring look like a Neolithic site to every automated check the plan has, including its own E3 scope rule.",
+ "checked_at": "2026-09-20T23:09:47+02:00"
+}

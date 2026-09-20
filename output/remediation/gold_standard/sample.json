@@ -1,0 +1,164 @@
+{
+  "seed": 20260920,
+  "allocation": {
+    "1": 3,
+    "2": 10,
+    "3": 14,
+    "4": 7,
+    "5": 2
+  },
+  "population_by_tier": {
+    "1": 525,
+    "2": 1796,
+    "3": 2310,
+    "4": 353,
+    "5": 20
+  },
+  "population_total": 5004,
+  "sample": [
+    {
+      "site_id": "f12d3b76-a0e0-44e6-94cb-5dedd8203b90",
+      "rarity_tier": 5
+    },
+    {
+      "site_id": "68677772-b461-49a3-bf2b-376e2b0e970b",
+      "rarity_tier": 5
+    },
+    {
+      "site_id": "32429f3c-6e14-4015-900a-a9cd9fbb81eb",
+      "rarity_tier": 4
+    },
+    {
+      "site_id": "a5d9e9a7-9fd2-4a0f-a3ae-7dd78fba429b",
+      "rarity_tier": 4
+    },
+    {
+      "site_id": "94776f9f-ea10-4b05-87bd-fd30c2cbdf6f",
+      "rarity_tier": 4
+    },
+    {
+      "site_id": "82f23c96-d8b2-41f0-a3e5-59ae9b89880c",
+      "rarity_tier": 4
+    },
+    {
+      "site_id": "590d3dff-ec5a-4328-a0d9-5baf03686be0",
+      "rarity_tier": 4
+    },
+    {
+      "site_id": "9ed175c7-a706-4a71-b10a-f93a68734afc",
+      "rarity_tier": 4
+    },
+    {
+      "site_id": "0529af31-7573-467e-88ff-12dbca48f94d",
+      "rarity_tier": 4
+    },
+    {
+      "site_id": "3bcf804a-ff18-4066-89bd-cfaa8a3b5a46",
+      "rarity_tier": 3
+    },
+    {
+      "site_id": "872b05b1-618b-4618-b3ae-6c69f3177911",
+      "rarity_tier": 3
+    },
+    {
+      "site_id": "e8764512-a557-49a6-b4ca-1ec9452e9563",
+      "rarity_tier": 3
+    },
+    {
+      "site_id": "d799bb0f-8ffd-4a29-a516-ffd445f6b699",
+      "rarity_tier": 3
+    },
+    {
+      "site_id": "b6af84c5-21f1-4c8a-94d1-2d925bd04725",
+      "rarity_tier": 3
+    },
+    {
+      "site_id": "3a28b216-d9f2-410d-a12e-050fc4759a98",
+      "rarity_tier": 3
+    },
+    {
+      "site_id": "1ef25b31-5c42-4ee6-aae1-1bd9c2640bff",
+      "rarity_tier": 3
+    },
+    {
+      "site_id": "58a2be59-ec1e-4667-96b9-3313ce406bc1",
+      "rarity_tier": 3
+    },
+    {
+      "site_id": "758dd394-0b33-4f82-821d-5b6de5058afe",
+      "rarity_tier": 3
+    },
+    {
+      "site_id": "c63b0df7-79e5-4734-bb99-b17ccd8f54eb",
+      "rarity_tier": 3
+    },
+    {
+      "site_id": "57828dbd-9f7f-49e7-92bc-0f4eebae4829",
+      "rarity_tier": 3
+    },
+    {
+      "site_id": "afb20664-90a8-4e20-bc76-d6c524f5ede0",
+      "rarity_tier": 3
+    },
+    {
+      "site_id": "e19f7af0-539c-474c-9404-b11f22f48846",
+      "rarity_tier": 3
+    },
+    {
+      "site_id": "da62b3af-331d-461c-a715-d64e35870466",
+      "rarity_tier": 3
+    },
+    {
+      "site_id": "a90e4406-25e6-4646-ae73-0730696a22d4",
+      "rarity_tier": 2
+    },
+    {
+      "site_id": "3f27e34a-1817-4b2b-bc19-c3c17a7e6374",
+      "rarity_tier": 2
+    },
+    {
+      "site_id": "60722e7e-587a-46fb-b09c-e6e82f1b74f7",
+      "rarity_tier": 2
+    },
+    {
+      "site_id": "ca92ce8c-e9ce-4fe8-9120-98aaae243224",
+      "rarity_tier": 2
+    },
+    {
+      "site_id": "c17927cb-4b63-4fa0-9c64-b72a65decaaa",
+      "rarity_tier": 2
+    },
+    {
+      "site_id": "e77b33be-0bb1-48e2-9da7-4d2503f28134",
+      "rarity_tier": 2
+    },
+    {
+      "site_id": "9dcc1c87-49c7-44f9-9d09-13b9b2b6671f",
+      "rarity_tier": 2
+    },
+    {
+      "site_id": "eed2d08c-3d09-4d93-885a-0b0b2eb7126d",
+      "rarity_tier": 2
+    },
+    {
+      "site_id": "972ded7c-665e-4ca6-98cc-af4dff9ac8f3",
+      "rarity_tier": 2
+    },
+    {
+      "site_id": "6a20e653-5320-440d-ac6c-2e86bb56e09e",
+      "rarity_tier": 2
+    },
+    {
+      "site_id": "e7ee7c00-1b94-4ff8-832e-7af0323bd3aa",
+      "rarity_tier": 1
+    },
+    {
+      "site_id": "6c4d8b74-697a-46f7-a000-bf92b702f87a",
+      "rarity_tier": 1
+    },
+    {
+      "site_id": "cad0ee78-1954-4ca9-b8e4-dde794c99117",
+      "rarity_tier": 1
+    }
+  ]
+}

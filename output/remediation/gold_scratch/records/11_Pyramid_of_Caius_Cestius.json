@@ -1,0 +1,183 @@
+{
+ "sample_index": 11,
+ "site_id": "872b05b1-618b-4618-b3ae-6c69f3177911",
+ "site_name": "Pyramid of Caius Cestius",
+ "rarity_tier": 3,
+ "sample_size": 36,
+ "checked_at": "2026-09-20T23:09:47+02:00",
+ "db_fields": {
+  "name": "Pyramid of Caius Cestius",
+  "country": "Italy",
+  "coordinates": "41.87666474754758, 12.48136460434763",
+  "period_start": -500,
+  "period_name": "500 BC - 1 AD",
+  "site_type": "Pyramid complex",
+  "description": "(18-12 BC) A Roman pyramid tomb built for Gaius Cestius, a member of the Epulones religious corporation. Built in the Nubian pyramid style, it stands at a fork between the Via Ostiensis and the road to the Tiber. Due to its incorporation into Rome's later fortifications, it remains one of the best-preserved ancient structures in the city.[1]",
+  "card_description": "A marble-clad pyramid tomb built in Rome around 18 BC. At 36 m tall, it copied Egyptian style during Rome's obsession with all things pharaonic.",
+  "civilization": "Italy",
+  "heritage_designation": null,
+  "hero_image": "hero.webp (800x397, Commons File:Testaccio - Piramide e Porta San Paolo.jpg)",
+  "gallery_images": "19 further images: pyramid photographs, Piranesi etching, World Pride 2000 parade photograph",
+  "thumbnail_url": "/data/images/wiki/872b05b1/hero.webp",
+  "source_url": "https://en.wikipedia.org/wiki/Pyramid_of_Cestius",
+  "scope": "Europe (lat 41.88, lon 12.48), period_start -500 <= 500 AD -> in scope"
+ },
+ "verdicts": [
+  {
+   "field": "name",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Pyramid_of_Cestius",
+    "https://it.wikipedia.org/wiki/Piramide_di_Caio_Cestio",
+    "https://www.wikidata.org/wiki/Q725404"
+   ],
+   "note": "enwiki uses 'Pyramid of Cestius', itwiki 'Piramide di Caio Cestio'; the record's 'Pyramid of Caius Cestius' is the same name in its Latinised form, and it is the form Wikidata's Commons category uses ('Pyramid of Caius Cestius (Rome)'). Not a discrepancy."
+  },
+  {
+   "field": "country",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://www.wikidata.org/wiki/Q725404"
+   ],
+   "note": "Wikidata P17 = Q38 (Italy); enwiki 'an ancient Roman pyramid in Rome, Italy'."
+  },
+  {
+   "field": "coordinates",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Pyramid_of_Cestius",
+    "https://www.wikidata.org/wiki/Q725404"
+   ],
+   "note": "Database 41.87666475, 12.48136460; enwiki 41.87638889, 12.48083333 (~45 m); Wikidata P625 41.876489, 12.480898. Same building."
+  },
+  {
+   "field": "period_start",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Pyramid_of_Cestius",
+    "https://www.wikidata.org/wiki/Q725404"
+   ],
+   "note": "Bucket sort key. enwiki 'built about 18-12 BC', Wikidata P571 = -12; -500 is the floor of the bucket 500 BC - 1 AD, which contains -18. Bucket correct, so the round value is not reported (plan 4.3.1)."
+  },
+  {
+   "field": "period_name",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "docs/procedures/ENRICHMENT_AUDIT.md"
+   ],
+   "note": "categorize_period(-500) = '500 BC - 1 AD'."
+  },
+  {
+   "field": "site_type",
+   "verdict": "UNVERIFIABLE",
+   "correct_value": null,
+   "sources": [
+    "https://www.wikidata.org/wiki/Q725404",
+    "pipeline/normalizers/site_type.py"
+   ],
+   "note": "'Pyramid complex' is a canonical value (pipeline/normalizers/site_type.py line 110), so this is not an S9 violation, but it is a loose fit: Wikidata P31 lists pyramid (Q12516), mausoleum (Q162875), archaeological site and two museum classes, and the monument is a single tomb, not a complex. No source calls it a complex and none calls it a tomb in the type vocabulary the record would need, so the value is neither confirmed nor refuted. NOT counted as an error, and deliberately not 'corrected' - plan 4.3.5 forbids trading a specific value for a vaguer one on a hunch."
+  },
+  {
+   "field": "description",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Pyramid_of_Cestius"
+   ],
+   "note": "All claims trace to the cited article: 'built about 18-12 BC as a tomb for Gaius Cestius, a magistrate and member of one of the four great religious corporations in Rome, the Septemviri Epulonum', 'built in the style of the Nubian pyramids', 'It stands at a fork between two ancient roads, the Via Ostiensis and another road that ran west to the Tiber', 'Due to its incorporation into the city's fortifications, it is today one of the best-preserved ancient buildings in Rome'."
+  },
+  {
+   "field": "card_description",
+   "verdict": "WRONG",
+   "correct_value": "built in the Nubian pyramid style (the article's own words); 'Egyptian' conflates Nubia with Egypt",
+   "sources": [
+    "https://en.wikipedia.org/wiki/Pyramid_of_Cestius"
+   ],
+   "note": "MINOR/COSMETIC, but a real contradiction with the cited source and with the record's own description: the article says the pyramid was 'built in the style of the Nubian pyramids' and that 'the sharply pointed shape of the pyramid is strongly reminiscent of the pyramids of Nubia, in particular of the kingdom of Meroe', while adding that 'the relatively shallow Giza-type pyramids were not exclusively used by the Egyptians'. The card's 'it copied Egyptian style during Rome's obsession with all things pharaonic' is the other tradition, and 'obsession with all things pharaonic' appears nowhere. The rest of the card is right: 18 BC, marble-clad (the article describes the marble cladding and its restoration), and 36 m is within rounding of the article's 125 Roman feet / 37 m."
+  },
+  {
+   "field": "civilization",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.3.4"
+   ],
+   "note": "Denormalised country copy by design; the real culture value (Wikidata P2596 = Ancient Rome) is unused by design."
+  },
+  {
+   "field": "heritage_designation",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://www.wikidata.org/wiki/Q725404"
+   ],
+   "note": "NULL permitted; empty on all 36 sampled sites. Wikidata P1435 = Italian national heritage (Q26971668)."
+  },
+  {
+   "field": "hero_image",
+   "verdict": "WRONG",
+   "correct_value": "a portrait-orientation photograph of the pyramid (the record ships several, e.g. File:Roma-Piramide cestia01.jpg)",
+   "sources": [
+    "https://commons.wikimedia.org/wiki/File:Testaccio_-_Piramide_e_Porta_San_Paolo.jpg",
+    "docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 6.3"
+   ],
+   "note": "STRUCTURAL error, not a wrong-site error: 800x397, i.e. height < 400, which is exactly the plan's strip definition (plan line 293: count(*) FILTER (WHERE height < 400) AS strips). The file is correctly of this site (Category:Pyramid of Caius Cestius (Rome))."
+  },
+  {
+   "field": "gallery_images",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://commons.wikimedia.org/wiki/Category:Pyramid_of_Caius_Cestius_(Rome)"
+   ],
+   "note": "Metadata-level verdict. The rows show the pyramid from several angles, plus a Piranesi etching of it. Two class notes, neither a wrong-site error: (1) 'RomePyramid.webp' maps to 'File:World Pride 2000 (Roma) - Piazzale ostiense - Foto Giovanni Dall'Orto, 8-7-2000 - 61.jpg', a photograph of a 2000 parade at Piazzale Ostiense - the pyramid is context, not subject; (2) the Piranesi etching is an 18th-century artwork rather than a photograph."
+  },
+  {
+   "field": "thumbnail_url",
+   "verdict": "UNVERIFIABLE",
+   "correct_value": null,
+   "sources": [
+    "output/remediation/snapshot/wiki_images.jsonl.gz"
+   ],
+   "note": "Local export path; no public/data/images copy in this checkout."
+  },
+  {
+   "field": "source_url",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Pyramid_of_Cestius"
+   ],
+   "note": "HTTP 200, dedicated article (9,016 characters)."
+  },
+  {
+   "field": "scope",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.1 E3"
+   ],
+   "note": "Europe, 18 BC -> in scope."
+  }
+ ],
+ "errors_found": [
+  {
+   "id": "PC-1",
+   "field": "card_description",
+   "severity": "cosmetic",
+   "claim": "card says the pyramid 'copied Egyptian style'; the cited source and the record's own description say Nubian"
+  },
+  {
+   "id": "PC-2",
+   "field": "hero_image",
+   "severity": "cosmetic",
+   "claim": "hero is 800x397 - a strip by the plan's own threshold (height < 400)"
+  }
+ ],
+ "notes": "The 397 px hero is worth flagging precisely because it sits one pixel inside the plan's strip definition: a census that used 'height < 350' or 'aspect > 3' would miss it, while the plan's own SQL catches it. Useful cross-check on the census when the blind is lifted."
+}

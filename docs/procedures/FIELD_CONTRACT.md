@@ -159,14 +159,36 @@ overwriter — and §10.1 of the plan names it as a landmine for exactly that re
 The chain is already wired end to end, which is why the importer's semantics stay as they are:
 
 ```
-generation -> output/card_descriptions.json
-           -> scripts/import_card_descriptions.py   (reads :25, writes public/data/... :58)
+generation -> output/card_descriptions.json          <- gitignored, DOES NOT EXIST until generated
+           -> scripts/import_card_descriptions.py    (reads :25, UPDATEs card_stats, copy2 -> public/ :58)
            -> commit + deploy
-           -> api/main.py startup import            (the only path to an existing row)
+           -> api/main.py startup import             (the only path to an existing row)
 ```
 
 `scripts/merge_rewrites.py:2` ("Merge rewrite outputs into card_descriptions.json, then
 re-validate") is the other half of the same workflow.
+
+#### Step 1 does not exist by default - bootstrap it before Phase 5
+
+Measured 2026-09-20: **`output/card_descriptions.json` is absent**; only the deployed
+`public/data/card_descriptions.json` (1,098,379 B) exists. `scripts/import_card_descriptions.py:29-31`
+fails closed on that, printing `Error: ... not found. Run card description generation first.` and
+`sys.exit(1)`. So the workflow above is **broken at step 1** until the file is created - this was
+found by the OVERWRITER lane after this section was first written, and the section was wrong.
+
+The two files have the same shape, so the bootstrap is a copy. Verified contents of the deployed
+file: exactly one top-level key `descriptions`, **4,996 entries**, UUID site_ids as keys, and a
+**maximum value length of 200** - matching `varchar(200)` and the truncation at `api/main.py:533`.
+
+```bash
+cp public/data/card_descriptions.json output/card_descriptions.json   # then edit output/ and run:
+./.venv/Scripts/python.exe scripts/import_card_descriptions.py
+```
+
+Running the script is what updates the database *without* waiting for a restart, and its
+`shutil.copy2` is what refreshes the file the API loads. Editing `public/data/card_descriptions.json`
+directly also works, since that is the file the startup import reads - but then the DB follows only
+at the next boot, and the copy step is skipped.
 
 **Rejected alternatives, recorded so they are not re-litigated.** Writing only into a NULL or
 empty target kills this chain — an edited file could never reach a row that already holds text.

@@ -1,0 +1,166 @@
+{
+ "sample_index": 12,
+ "site_id": "e8764512-a557-49a6-b4ca-1ec9452e9563",
+ "site_name": "Metsamor Historical-Archaeological Museum-Reserve",
+ "rarity_tier": 3,
+ "sample_size": 36,
+ "checked_at": "2026-09-20T23:09:47+02:00",
+ "db_fields": {
+  "name": "Metsamor Historical-Archaeological Museum-Reserve",
+  "country": "Armenia",
+  "coordinates": "40.12650876057409, 44.186856470913774",
+  "period_start": -4000,
+  "period_name": "4500 - 3000 BC",
+  "site_type": "Fortress/citadel",
+  "description": "Metsamor is a fortified settlement 32 km west of Yerevan, Armenia, occupied from the 4th millennium BC through the 17th century AD. The site is renowned as one of the earliest known metallurgical centres, with smelting furnaces predating those of Palestine, and evidence of copper, bronze, and iron processing. The complex includes Cyclopean fortification walls, temple structures, a ziggurat-observatory, and a necropolis. The on-site museum, opened in 1968, houses over 22,000 artefacts, including an agate weight of Babylonian king Ulam Burariash from the 16th century BC.",
+  "card_description": "A fortress site with evidence of metal smelting dating to the 4th millennium BC - among the oldest metallurgy in the world. It was destroyed not by the Urartians, but likely by Scythian nomads.",
+  "civilization": "Armenia",
+  "heritage_designation": null,
+  "hero_image": "hero.webp (800x450, Commons File:Armenian Metsamor foundry - panoramio (1).jpg)",
+  "gallery_images": "19 further images: the site, the citadel, the museum, a vishapakar stone",
+  "thumbnail_url": "/data/images/wiki/e8764512/hero.webp",
+  "source_url": "https://en.wikipedia.org/wiki/Metsamor_site",
+  "scope": "Europe/Asia (lat 40.13, lon 44.19), period_start -4000 <= 500 AD -> in scope"
+ },
+ "verdicts": [
+  {
+   "field": "name",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Metsamor_site",
+    "https://www.wikidata.org/wiki/Q11120743"
+   ],
+   "note": "The record carries the official designation of the institution that administers the site ('Metsamor Historical-Archaeological Museum-Reserve'), while the cited article is titled 'Metsamor site' and Wikidata's label is 'Metsamor site'. Both name the same place; the record's form is the more formal one and is not contradicted. Worth knowing for name de-duplication, not an error."
+  },
+  {
+   "field": "country",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://www.wikidata.org/wiki/Q11120743"
+   ],
+   "note": "Wikidata P17 = Q399 (Armenia); enwiki 'the Ararat Plain region of Armenia'."
+  },
+  {
+   "field": "coordinates",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Metsamor_site"
+   ],
+   "note": "Database 40.12650876, 44.18685647; enwiki 40.126275, 44.18679444. Within ~28 m."
+  },
+  {
+   "field": "period_start",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Metsamor_site"
+   ],
+   "note": "Bucket sort key. enwiki: 'The oldest traces of settlement date to the turn of the 4th millennium BC, in the Bronze Age or Chalcolithic'; -4000 is the floor of the bucket 4500 - 3000 BC, which contains -4000. Bucket correct (plan 4.3.1)."
+  },
+  {
+   "field": "period_name",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "docs/procedures/ENRICHMENT_AUDIT.md"
+   ],
+   "note": "categorize_period(-4000) = '4500 - 3000 BC'."
+  },
+  {
+   "field": "site_type",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Metsamor_site",
+    "https://www.wikidata.org/wiki/Q11120743"
+   ],
+   "note": "enwiki: 'Archaeologists have excavated the fortified citadel, the area known as the \"lower town\" below the citadel, and the cemetery to the east'; Wikidata P31 = archaeological site. 'Fortress/citadel' is canonical and matches the excavated citadel."
+  },
+  {
+   "field": "description",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Metsamor_site"
+   ],
+   "note": "Confirmed by the cited article: 'occupied from the 4th millennium BC through the 17th century AD' ('the youngest date to the 17th century CE'), 'fortified settlement' with 'the fortified citadel' and 'Cyclopean' walls implied by the citadel excavation, temple structures ('a large religious complex consisting of five small temples with clay cascading altars'), 'the cemetery to the east', the on-site museum ('The Museum of History and Archeology at Metsamor Site was opened in 1968'), 'more than 22,000 items'. FOUR claims are NOT in the cited article and were not verified elsewhere, so they are recorded as unresolved rather than as errors: '32 km west of Yerevan'; 'one of the earliest known metallurgical centres, with smelting furnaces predating those of Palestine'; 'a ziggurat-observatory'; 'an agate weight of Babylonian king Ulam Burariash from the 16th century BC'. All four are recurring claims in the Armenian excavation literature and none of them looks invented, but this audit did not confirm them."
+  },
+  {
+   "field": "card_description",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Metsamor_site"
+   ],
+   "note": "The destruction claim is exactly what the article says: 'According to tradition, Metsamor was destroyed in the Iron Age by the Urartians; researchers now believe it was destroyed by Scythian or Cimmerian nomads.' The 4th-millennium smelting date is consistent with the description's claim and with the site's reputation, but note that the article places the developed metallurgical production in the Late Bronze and Early Iron Ages (15th-8th century BC) - the 4th-millennium date refers to the earliest traces, not to the peak. Not counted as an error; recorded because it is the kind of slippage that becomes an error in a shorter sentence."
+  },
+  {
+   "field": "civilization",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.3.4"
+   ],
+   "note": "Denormalised country copy by design."
+  },
+  {
+   "field": "heritage_designation",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Metsamor_site"
+   ],
+   "note": "NULL permitted; empty on all 36 sampled sites. The record's own description names the state institution ('Service for the Protection of Historical and Cultural Environment and Museum Reservation' appears in the cited article), so a designation exists."
+  },
+  {
+   "field": "hero_image",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://commons.wikimedia.org/wiki/File:Armenian_Metsamor_foundry_-_panoramio_(1).jpg"
+   ],
+   "note": "Metadata-level verdict. 800x450, description 'Armenian Metsamor foundry' - the site's metallurgical remains, which is exactly the record's headline claim. No strip."
+  },
+  {
+   "field": "gallery_images",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://commons.wikimedia.org/wiki/File:%D5%8E%D5%AB%D5%B7%D5%A1%D5%BA%D5%A1%D6%84%D5%A1%D6%80.JPG"
+   ],
+   "note": "Metadata-level verdict. The 19 rows show the site, citadel and museum. One row is recorded as unresolved rather than as an error: 'Վիշապաքար.JPG' is a vishapakar (dragon stone) photographed for Wiki Loves Monuments with a monument ID; the file's description does not name Metsamor, and this audit did not confirm that the stone stands at this site."
+  },
+  {
+   "field": "thumbnail_url",
+   "verdict": "UNVERIFIABLE",
+   "correct_value": null,
+   "sources": [
+    "output/remediation/snapshot/wiki_images.jsonl.gz"
+   ],
+   "note": "Local export path; no public/data/images copy in this checkout."
+  },
+  {
+   "field": "source_url",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Metsamor_site"
+   ],
+   "note": "HTTP 200, dedicated article (4,816 characters; its tail repeats two references verbatim, a source-side defect that does not affect the record)."
+  },
+  {
+   "field": "scope",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.1 E3"
+   ],
+   "note": "Rest of world, -4000 -> in scope."
+  }
+ ],
+ "errors_found": [],
+ "notes": "No error found. The value of this record for the audit is the list of four claims that the cited source does not carry: they are the exact class the plan expects an enrichment pass to invent, and here they appear to be true but unsourced. The measurement cannot count them, and should say so."
+}

@@ -215,6 +215,17 @@ output/*
 !output/remediation/
 output/remediation/*
 !output/remediation/AUDIT_LOG.md
+# The gold standard is web research: 36 sites judged field by field against live sources. Nothing in
+# the repo can regenerate it, so it is versioned for the same reason as the log - and its
+# comparison script with it, so the false-negative rate is recomputable rather than asserted.
+!output/remediation/gold_standard/
+# The per-site verdict records behind that report are the primary evidence for every number in it.
+# Small in total (~300 KB) and equally irreproducible; the bulk caches next to them stay ignored.
+# Each intermediate directory has to be re-included in turn: git does not descend into an excluded
+# directory, so negating a file two levels down silently does nothing.
+!output/remediation/gold_scratch/
+output/remediation/gold_scratch/*
+!output/remediation/gold_scratch/records/
 
 # Dev artifacts
 *.stackdump

@@ -1,0 +1,167 @@
+{
+ "sample_index": 21,
+ "site_id": "afb20664-90a8-4e20-bc76-d6c524f5ede0",
+ "site_name": "Nina Kiru",
+ "rarity_tier": 3,
+ "sample_size": 36,
+ "db_fields": {
+  "name": "Nina Kiru",
+  "country": "Peru",
+  "coordinates": "-14.69367094880227, -74.12412378895188",
+  "period_start": 1000,
+  "period_name": "1000 - 1500 AD",
+  "site_type": "Necropolis/tombs complex",
+  "description": "Nina Kiru (Quechua for \"fire tooth\") is an archaeological site featuring stone burial towers known as chullpas, located in the Carmen Salcedo District, Lucanas Province, Ayacucho Region of Peru, near the village of Andamarca. The chullpa funerary towers are characteristic of pre-Inca Andean burial traditions found across the highlands. The site was declared a National Cultural Heritage of Peru by Resolution RDN No. 496 on May 31, 2002.",
+  "card_description": "Stone chullpa tomb complex in Lucanas Province, declared National Cultural Heritage in 2002. Funerary towers mark the high-altitude burial landscape of pre-Inca communities across the Ayacucho region.",
+  "civilization": "Peru",
+  "heritage_designation": null,
+  "hero_image": null,
+  "gallery_images": "none - 0 wiki_images rows",
+  "thumbnail_url": null,
+  "source_url": "https://en.wikipedia.org/wiki/Nina_Kiru",
+  "scope": "Americas (lat -14.69, lon -74.12), period_start 1000 <= 1500 AD -> in scope"
+ },
+ "verdicts": [
+  {
+   "field": "name",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Nina_Kiru",
+    "https://www.wikidata.org/wiki/Q13114673"
+   ],
+   "note": "enwiki and Wikidata both 'Nina Kiru' (also Nina Kiro, Ninaquero)."
+  },
+  {
+   "field": "country",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://www.wikidata.org/wiki/Q13114673"
+   ],
+   "note": "Wikidata P17 = Q419 (Peru); enwiki 'the Ayacucho Region, Lucanas Province'."
+  },
+  {
+   "field": "coordinates",
+   "verdict": "UNVERIFIABLE",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Nina_Kiru",
+    "https://www.wikidata.org/wiki/Q13114673"
+   ],
+   "note": "No source coordinate exists: the enwiki article is in Category:All articles needing coordinates and Category:Articles missing coordinates without coordinates on Wikidata, and the Wikidata item has no P625. The value -14.6937, -74.1241 lies in the Lucanas highlands near the Andamarca area, which is consistent with the described location, but nothing confirms the point. Recorded as unverifiable."
+  },
+  {
+   "field": "period_start",
+   "verdict": "UNVERIFIABLE",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Nina_Kiru"
+   ],
+   "note": "No source read dates the chullpas: the cited article says only 'an archaeological site with stone tombs (chullpa)'. 1000-1500 AD is a plausible window for highland chullpa cemeteries of the Late Intermediate Period and the record's card calls them 'pre-Inca', but plausible is not sourced. Not counted as an error."
+  },
+  {
+   "field": "period_name",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "docs/procedures/ENRICHMENT_AUDIT.md"
+   ],
+   "note": "categorize_period(1000) = '1000 - 1500 AD'."
+  },
+  {
+   "field": "site_type",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://www.wikidata.org/wiki/Q13114673",
+    "pipeline/normalizers/site_type.py"
+   ],
+   "note": "Wikidata P31 = archaeological site; the source describes stone chullpa tombs. 'Necropolis/tombs complex' is canonical and fits."
+  },
+  {
+   "field": "description",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Nina_Kiru"
+   ],
+   "note": "Nearly all of the field is verbatim from the cited article: 'Nina Kiru (Quechua nina fire, kiru tooth, \"fire tooth\", also spelled Nina Kiro, Ninaquero) is an archaeological site with stone tombs (chullpa) in Peru. It was declared a National Cultural Heritage by RDN No. 496 of May 31, 2002. Nina Kiru lies in the Ayacucho Region, Lucanas Province, Carmen Salcedo District, near Antamarka (Andamarca).' The one added sentence ('characteristic of pre-Inca Andean burial traditions found across the highlands') is a generalisation not in the source - recorded as unsupported, not wrong; the article itself calls the site pre-Inca only implicitly, by the absence of any Inca attribution."
+  },
+  {
+   "field": "card_description",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Nina_Kiru"
+   ],
+   "note": "Lucanas Province, the 2002 National Cultural Heritage declaration and the chullpa towers all match the article."
+  },
+  {
+   "field": "civilization",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.3.4"
+   ],
+   "note": "Denormalised country copy by design."
+  },
+  {
+   "field": "heritage_designation",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Nina_Kiru"
+   ],
+   "note": "NULL permitted; empty on all 36 sampled sites. This is the sharpest instance of the gap: the record's own description quotes the designation ('RDN No. 496 of May 31, 2002') while the column is empty."
+  },
+  {
+   "field": "hero_image",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "output/remediation/snapshot/wiki_images.jsonl.gz"
+   ],
+   "note": "Empty (NULL), permitted. GAP: 0 images, so a record with a national heritage designation cannot be shown at all."
+  },
+  {
+   "field": "gallery_images",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "output/remediation/snapshot/wiki_images.jsonl.gz"
+   ],
+   "note": "Empty - 0 rows. Permitted; gap."
+  },
+  {
+   "field": "thumbnail_url",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "output/remediation/snapshot/wiki_images.jsonl.gz"
+   ],
+   "note": "NULL, consistent with having no images."
+  },
+  {
+   "field": "source_url",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Nina_Kiru"
+   ],
+   "note": "HTTP 200, dedicated article. It is a stub: no coordinates, no dating, no image, one reference. The description is essentially the article with the same content in the same order."
+  },
+  {
+   "field": "scope",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.1 E3"
+   ],
+   "note": "Americas, 1000-1500 AD -> in scope."
+  }
+ ],
+ "errors_found": [],
+ "notes": "Clean but thin: a stub article produced a thin record, and the record copied the stub faithfully. The valuable observation is structural - the heritage declaration is quoted in the prose and missing from the column, and the article's own missing-coordinate maintenance categories tell the audit that this record's coordinate has no source anywhere on Wikipedia. One source only (enwiki), so most non-text fields are unverifiable rather than verified.",
+ "checked_at": "2026-09-20T23:09:47+02:00"
+}

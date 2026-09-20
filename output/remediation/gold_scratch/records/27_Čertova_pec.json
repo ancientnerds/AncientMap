@@ -1,0 +1,165 @@
+{
+ "sample_index": 27,
+ "site_id": "ca92ce8c-e9ce-4fe8-9120-98aaae243224",
+ "site_name": "Čertova pec",
+ "rarity_tier": 2,
+ "sample_size": 36,
+ "db_fields": {
+  "name": "Čertova pec",
+  "country": "Slovakia",
+  "coordinates": "48.56041268411261, 17.915224152868376",
+  "period_start": -37000,
+  "period_name": "< 4500 BC",
+  "site_type": "Cave Structures",
+  "description": "Certova pec (\"Devil's Oven\") is a small karst cave in the Povazsky Inovec mountains near Radosina, western Slovakia. The cave extends roughly 27 metres into dolomite limestone and contains evidence of human habitation dating back approximately 38,400 years during the Paleolithic period. Multiple occupation layers demonstrate a long history of human presence, with Szeletian and Mousterian archaeological evidence indicating Neanderthal activity at the site. Stone tools and gastropod shell remains suggest connections between the cave's prehistoric inhabitants and populations from the Black Sea region. The cave is a protected natural monument due to its paleontological significance and is freely accessible year-round via three marked hiking trails.",
+  "card_description": "A 27-meter karst cave occupied since 37,000 BC. Stone Age tools trace repeated human visits across tens of thousands of years to the same tiny shelter.",
+  "civilization": "Slovakia",
+  "heritage_designation": null,
+  "hero_image": "hero.webp (800x600, Commons File:Čertova pec (2004).jpg, Slovak protected monument 406-239)",
+  "gallery_images": "6 further images",
+  "thumbnail_url": "/data/images/wiki/ca92ce8c/hero.webp",
+  "source_url": "https://en.wikipedia.org/wiki/%C4%8Certova_pec",
+  "scope": "Europe (lat 48.56, lon 17.92), period_start -37000 <= 500 AD -> in scope"
+ },
+ "verdicts": [
+  {
+   "field": "name",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/%C4%8Certova_pec"
+   ],
+   "note": "enwiki 'Certova pec' with the hacek; the name field carries the diacritic. Note that the description drops it ('Certova pec'), the same inconsistency the Cueva de los Murcielagos record shows in the opposite direction."
+  },
+  {
+   "field": "country",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/%C4%8Certova_pec"
+   ],
+   "note": "Slovakia; the article places it 'in the Nitra Region'."
+  },
+  {
+   "field": "coordinates",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/%C4%8Certova_pec"
+   ],
+   "note": "48.5604, 17.9152 lies in the Povazsky Inovec near Radosina, as the article describes. No article coordinate or Wikidata P625 to compare numerically."
+  },
+  {
+   "field": "period_start",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/%C4%8Certova_pec"
+   ],
+   "note": "Bucket sort key. The article: 'A radiocarbon date of Szeletian cultural artifacts suggests prehistoric human presence in the cave at around 38,400 years ago', i.e. about 36,400 BC; -37000 is in the bucket '< 4500 BC', which contains it. Bucket correct (plan 4.3.1), and the card's '37,000 BC' agrees with the sort key."
+  },
+  {
+   "field": "period_name",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "docs/procedures/ENRICHMENT_AUDIT.md"
+   ],
+   "note": "categorize_period(-37000) = '< 4500 BC'."
+  },
+  {
+   "field": "site_type",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/%C4%8Certova_pec",
+    "pipeline/normalizers/site_type.py"
+   ],
+   "note": "'Cave Structures' is canonical and exact."
+  },
+  {
+   "field": "description",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/%C4%8Certova_pec"
+   ],
+   "note": "The core is confirmed: 'a small karst cave in the Povazsky Inovec mountains of Slovakia', 'located near Radosina', 'The cave with total length of 27 m (89 ft)', 'a protected natural monument due to its paleontological significance', the 38,400-year radiocarbon date for Szeletian artifacts, multiple habitation phases, and 'There are three hiking trails in the vicinity'. Three details are NOT in the cited article and are recorded as unsupported rather than wrong: 'into dolomite limestone', 'Mousterian ... Neanderthal activity', and the gastropod shells pointing to Black Sea populations. All three are plausible from the Slovak literature on the site, none was verified in this audit."
+  },
+  {
+   "field": "card_description",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/%C4%8Certova_pec"
+   ],
+   "note": "27-metre karst cave, occupation around 37,000-38,400 years ago, repeated Stone Age visits: all supported by the article."
+  },
+  {
+   "field": "civilization",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.3.4"
+   ],
+   "note": "Denormalised country copy by design."
+  },
+  {
+   "field": "heritage_designation",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://commons.wikimedia.org/wiki/File:%C4%8Certova_pec_(2004).jpg"
+   ],
+   "note": "NULL permitted; empty on all 36 sampled sites. Fillable with an exact identifier: the record's own hero image documents 'the protected monument with the number 406-239/0 CHMSK/406-239' in the Slovak Republic, and the article says the cave is a protected natural monument."
+  },
+  {
+   "field": "hero_image",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://commons.wikimedia.org/wiki/File:%C4%8Certova_pec_(2004).jpg"
+   ],
+   "note": "Metadata-level verdict. 800x600, Category:Certova pec, and the file carries the Slovak protected-monument number 406-239 - the cave itself. No strip."
+  },
+  {
+   "field": "gallery_images",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://commons.wikimedia.org/wiki/Category:%C4%8Certova_pec"
+   ],
+   "note": "Metadata-level verdict. The 6 further rows are in Category:Certova pec, including 'File:Prírodná pamiatka - panoramio.jpg' and 'File:Radošina, Sídlisko jaskynné.jpg', the latter also carrying protected-monument number 406-239 (the same site, seen from the Radosina side). No wrong-site row."
+  },
+  {
+   "field": "thumbnail_url",
+   "verdict": "UNVERIFIABLE",
+   "correct_value": null,
+   "sources": [
+    "output/remediation/snapshot/wiki_images.jsonl.gz"
+   ],
+   "note": "Local export path; no public/data/images copy in this checkout."
+  },
+  {
+   "field": "source_url",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/%C4%8Certova_pec"
+   ],
+   "note": "HTTP 200, dedicated article (1,233 characters)."
+  },
+  {
+   "field": "scope",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.1 E3"
+   ],
+   "note": "Europe, Palaeolithic -> in scope."
+  }
+ ],
+ "errors_found": [],
+ "notes": "Clean, and a useful counter-example to the two severe dating errors: a Palaeolithic cave whose sort key, card and description all agree. The pattern so far is that dating goes wrong when the enrichment has no date in the source and invents one (Ahu Tongariki, Cueva de los Murcielagos, Font dels Coms), not when the source carries a date.",
+ "checked_at": "2026-09-20T23:09:47+02:00"
+}

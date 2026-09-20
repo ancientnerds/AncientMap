@@ -1,0 +1,190 @@
+{
+ "sample_index": 8,
+ "site_id": "9ed175c7-a706-4a71-b10a-f93a68734afc",
+ "site_name": "The Gop",
+ "rarity_tier": 4,
+ "sample_size": 36,
+ "checked_at": "2026-09-20T23:09:47+02:00",
+ "db_fields": {
+  "name": "The Gop",
+  "country": "Wales",
+  "coordinates": "53.310566638728986, -3.3722000026694463",
+  "period_start": -5000,
+  "period_name": "< 4500 BC",
+  "site_type": "Fortress/citadel",
+  "description": "A massive Neolithic cairn on Gop Hill in Flintshire, Wales, and the second-largest ancient human-made mound in Britain after Silbury Hill. The oval monument stands 14 m high with a maximum diameter of 101 m, constructed of limestone blocks with drystone walling. Boyd Dawkins excavated in 1886-87 using tunnels and a shaft but found no burial chamber, leaving its function uncertain. The Gop Cave beneath yielded fourteen human skeletons, a stone axe, and Peterborough pottery indicating Neolithic activity. Whether it served as a passage grave, ceremonial platform, or hillfort remains debated.",
+  "card_description": "5th-4th millennium BC Neolithic cairn in the Clwydian Range, Flintshire - the second-largest Neolithic mound in Britain after Silbury Hill.",
+  "civilization": "Wales",
+  "heritage_designation": null,
+  "hero_image": "hero.webp (800x600, Commons File:Gop hill clwydian range.jpg, Category:Cairns in Flintshire)",
+  "gallery_images": "1 further image: File:Y Gop (Bryn y Saethau)... Wales 38.png, an aerial photograph",
+  "thumbnail_url": "/data/images/wiki/9ed175c7/hero.webp",
+  "source_url": "https://en.wikipedia.org/wiki/The_Gop",
+  "scope": "Europe (lat 53.31, lon -3.37), period_start -5000 <= 500 AD -> in scope"
+ },
+ "verdicts": [
+  {
+   "field": "name",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/The_Gop",
+    "https://coflein.gov.uk/en/sites/306725",
+    "https://www.wikidata.org/wiki/Q1537771"
+   ],
+   "note": "All sources use 'The Gop' (Welsh: Coparleni; also Gop Cairn, Gop-y-Goleuni, Y Gop)."
+  },
+  {
+   "field": "country",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.3.2"
+   ],
+   "note": "'Wales' rather than 'United Kingdom' is deliberate project design (Wikidata P17 is Q145)."
+  },
+  {
+   "field": "coordinates",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://www.wikidata.org/wiki/Q1537771",
+    "https://en.wikipedia.org/wiki/The_Gop"
+   ],
+   "note": "Database 53.31056664, -3.37220000; enwiki and Wikidata P625 both 53.3104, -3.3722. Within ~20 m."
+  },
+  {
+   "field": "period_start",
+   "verdict": "WRONG",
+   "correct_value": "-4000 to -3000 (bucket 4500 - 3000 BC; '3000 - 1500 BC' if the latest phase is meant)",
+   "sources": [
+    "https://coflein.gov.uk/en/sites/306725",
+    "https://en.wikipedia.org/wiki/The_Gop"
+   ],
+   "note": "Coflein, the RCAHMW national database, records 'Period Neolithic, Bronze Age' and calls the monument a cairn. The British Neolithic begins c. 4000 BC, so -5000 (bucket '< 4500 BC') is a bucket early: the record's own card text says '5th-4th millennium BC' while the sources support the 4th-3rd. Bucket mismatch, which is the condition plan 4.3.1 sets for reporting a round sort key."
+  },
+  {
+   "field": "period_name",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "docs/procedures/ENRICHMENT_AUDIT.md"
+   ],
+   "note": "categorize_period(-5000) = '< 4500 BC'. Internally consistent with the (wrong) sort key."
+  },
+  {
+   "field": "site_type",
+   "verdict": "WRONG",
+   "correct_value": "Megalithic structures (cairn) or Tomb - not Fortress/citadel",
+   "sources": [
+    "https://coflein.gov.uk/en/sites/306725",
+    "https://en.wikipedia.org/wiki/The_Gop"
+   ],
+   "note": "Coflein's 'Type Of Site' field reads CAIRN; enwiki 'a Neolithic monument ... it is the second-largest Neolithic mound in Britain' and 'the cairn mound is 75-80m in diameter and 12m high'. The hillfort reading is one hypothesis ('excavations have not uncovered a burial chamber ... which may indicate that it was used as a look-out or hill fort'), not the identification, and the record's own description says the function 'remains debated'. Wikidata P31 is summit and hill, which supports neither. Claiming a fortress asserts what the sources leave open."
+  },
+  {
+   "field": "description",
+   "verdict": "WRONG",
+   "correct_value": "12 m high, 75-80 m in diameter",
+   "sources": [
+    "https://coflein.gov.uk/en/sites/306725",
+    "https://en.wikipedia.org/wiki/The_Gop"
+   ],
+   "note": "Measurements contradicted by both sources: Coflein 'Gop Cairn is a titanic cairn, 75-80m in diameter and 12m high'; enwiki 'the cairn mound is 75-80m in diameter and 12m high'. The database says '14 m high with a maximum diameter of 101 m' - both numbers inflated, and a third site (stone-circles.org.uk) also gives '12 metres in height'. Correct in the same field: the Neolithic cairn identification, Gop Hill, second-largest mound after Silbury Hill (enwiki; Coflein adds the Marlborough Mount as a third larger mound), the 1886-87 excavation by shaft and drifts with no burial chamber found (Coflein: 'explored in 1886-7 by a central shaft and drifts and faunal remains only were encountered'), and the cave's human remains (Coflein: 'The Gop Cave ... has produced human skeletons, prehistoric flints and pottery'). NOT verifiable in the sources read, so not counted: the excavator's name (Dawkins), the count of fourteen skeletons, the stone axe, and Peterborough pottery."
+  },
+  {
+   "field": "card_description",
+   "verdict": "WRONG",
+   "correct_value": "4th-3rd millennium BC Neolithic cairn",
+   "sources": [
+    "https://coflein.gov.uk/en/sites/306725",
+    "https://en.wikipedia.org/wiki/The_Gop"
+   ],
+   "note": "The card's dating is the same error in the spoken text: '5th-4th millennium BC'. The British Neolithic begins c. 4000 BC, so the 5th millennium is too early for a Neolithic cairn. The rest of the card ('second-largest Neolithic mound in Britain after Silbury Hill', Clwydian Range, Flintshire) matches the sources."
+  },
+  {
+   "field": "civilization",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.3.4"
+   ],
+   "note": "Denormalised country copy by design."
+  },
+  {
+   "field": "heritage_designation",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://coflein.gov.uk/en/sites/306725"
+   ],
+   "note": "NULL permitted; empty on all 36 sampled sites. The monument is in the RCAHMW national record (NPRN 306725, 'Cairns in Flintshire' category on Commons), so the gap is fillable."
+  },
+  {
+   "field": "hero_image",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://commons.wikimedia.org/wiki/File:Gop_hill_clwydian_range.jpg"
+   ],
+   "note": "Metadata-level verdict. 800x600, Category:Cairns in Flintshire, description 'The Gop from River Clwyd' - this monument, not a strip."
+  },
+  {
+   "field": "gallery_images",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://commons.wikimedia.org/wiki/File:Y_Gop_(Bryn_y_Saethau),_Trelawnyd,_Bryniau_Clwyd,_Sir_y_Fflint_-_Gop_Hill,_Trelawnyd,_Flintshire,_Moelydd_Clwyd_(Clwydian_Hills),_Wales_38.png"
+   ],
+   "note": "Metadata-level verdict. The single gallery row is an aerial photograph of Y Gop (Wiki Loves Earth 2023), description 'A neolithic monument lying within Bryniau Clwyd ... the second-largest Celtic, neolithic mound in Britain after Silbury Hill'. Correct site. Only two images exist in the whole record."
+  },
+  {
+   "field": "thumbnail_url",
+   "verdict": "UNVERIFIABLE",
+   "correct_value": null,
+   "sources": [
+    "output/remediation/snapshot/wiki_images.jsonl.gz"
+   ],
+   "note": "Local export path; no public/data/images copy in this checkout."
+  },
+  {
+   "field": "source_url",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/The_Gop"
+   ],
+   "note": "HTTP 200, dedicated article - but only 1,080 characters, and it does not contain the excavation history, the cave's finds or the 101 m/14 m figures the description uses."
+  },
+  {
+   "field": "scope",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.1 E3"
+   ],
+   "note": "Europe, Neolithic -> in scope."
+  }
+ ],
+ "errors_found": [
+  {
+   "id": "GP-1",
+   "field": "description",
+   "severity": "moderate",
+   "claim": "dimensions wrong: '14 m high, 101 m diameter' against 12 m and 75-80 m in Coflein and enwiki"
+  },
+  {
+   "id": "GP-2",
+   "field": "site_type",
+   "severity": "moderate",
+   "claim": "'Fortress/citadel' asserts a function the sources leave open; Coflein's type of site is CAIRN"
+  },
+  {
+   "id": "GP-3",
+   "field": "period_start + card_description",
+   "severity": "moderate",
+   "claim": "5th-millennium BC dating for a Neolithic monument (bucket '< 4500 BC' instead of 4500-3000 BC)"
+  }
+ ],
+ "notes": "This is the first site where a national heritage database (Coflein/RCAHMW) settled a question Wikipedia left vague - and it contradicted the record twice (dimensions, type). The record's own description is internally inconsistent: it calls the mound a cairn, says the function is debated, and then ships the type 'Fortress/citadel'."
+}

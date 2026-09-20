@@ -1,0 +1,185 @@
+{
+ "sample_index": 7,
+ "site_id": "590d3dff-ec5a-4328-a0d9-5baf03686be0",
+ "site_name": "Ahu Tongariki",
+ "rarity_tier": 4,
+ "sample_size": 36,
+ "checked_at": "2026-09-20T23:09:47+02:00",
+ "db_fields": {
+  "name": "Ahu Tongariki",
+  "country": "Chile, Easter Island",
+  "coordinates": "-27.12560965412483, -109.27631202903761",
+  "period_start": 1,
+  "period_name": "1 - 500 AD",
+  "site_type": "Megalithic statues",
+  "description": "The largest ahu on Rapa Nui, Ahu Tongariki was constructed between 1-500 AD [1]. Its fifteen moai were toppled during the island's civil wars and in the 20th century the ahu was swept inland by a tsunami [1]. Following restoration, it features the heaviest moai ever erected on the island at 86 tonnes [1]. Located one kilometer from Rano Raraku and Poike in the Hotu-iti area of Rapa Nui National Park, all statues face sunset during the winter solstice [1].",
+  "card_description": "Fifteen moai stand on Rapa Nui's largest ahu, including an 86-tonne giant - the heaviest ever erected on the island. A 1960 tsunami swept them all inland before restoration re-erected them.",
+  "civilization": "Chile, Easter Island",
+  "heritage_designation": null,
+  "hero_image": "hero.webp (800x135, Commons File:CHI-rapanui-tongariki-banner.jpg, a derived Wikivoyage banner)",
+  "gallery_images": "19 further images, all of Ahu Tongariki (several explicitly in Category:Ahu Tongariki)",
+  "thumbnail_url": "/data/images/wiki/590d3dff/hero.webp",
+  "source_url": "https://en.wikipedia.org/wiki/Ahu_Tongariki",
+  "scope": "Americas (lat -27.13, lon -109.28), period_start 1 <= 1500 AD -> in scope"
+ },
+ "verdicts": [
+  {
+   "field": "name",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Ahu_Tongariki",
+    "https://www.wikidata.org/wiki/Q3448354"
+   ],
+   "note": "enwiki title and Wikidata label both 'Ahu Tongariki'."
+  },
+  {
+   "field": "country",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://www.wikidata.org/wiki/Q3448354"
+   ],
+   "note": "Compound value 'Chile, Easter Island'; Wikidata P17 = Q298 (Chile). A compound country value is a documented project pattern (FIELD_CONTRACT.md item 5 names 'Chile, Easter Island' as the example), not an error."
+  },
+  {
+   "field": "coordinates",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://www.wikidata.org/wiki/Q3448354",
+    "https://en.wikipedia.org/wiki/Ahu_Tongariki"
+   ],
+   "note": "Database -27.12560965, -109.27631203; enwiki -27.12583333, -109.27694444; Wikidata P625 identical to enwiki. Within ~70 m."
+  },
+  {
+   "field": "period_start",
+   "verdict": "WRONG",
+   "correct_value": "-1250 (bucket 1000 - 1500 AD)",
+   "sources": [
+    "https://en.wikipedia.org/wiki/Moai",
+    "https://culturalheritageonline.com/places/ahu-tongariki/",
+    "https://en.wikipedia.org/wiki/Ahu_Tongariki"
+   ],
+   "note": "SEVERE. The moai are dated 1250-1500: enwiki 'Moai': 'monolithic human figures carved from stone by the Rapa Nui people, on Rapa Nui ... between the years 1250 and 1500' and 'The statues were carved ... mostly between 1250 and 1500'. A non-Wikipedia source states it for this ahu directly: culturalheritageonline.com, 'The construction of Ahu Tongariki and the erection of its fifteen moai are estimated to date from approximately 1250-1500 AD'. The database's 1-500 AD is a different bucket and roughly a millennium early. The cited enwiki article contains no construction date at all, so the '[1]' marker behind the date points at a source that does not support it."
+  },
+  {
+   "field": "period_name",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "docs/procedures/ENRICHMENT_AUDIT.md"
+   ],
+   "note": "categorize_period(1) = '1 - 500 AD'. Internally consistent with the (wrong) sort key."
+  },
+  {
+   "field": "site_type",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://www.wikidata.org/wiki/Q3448354",
+    "pipeline/normalizers/site_type.py"
+   ],
+   "note": "Wikidata P31 = ahu (Q402996); the canonical list has no 'ahu' value, and 'Megalithic statues' is the value the record's subject (the fifteen moai) warrants. Canonical value, so not an S9 violation."
+  },
+  {
+   "field": "description",
+   "verdict": "WRONG",
+   "correct_value": "constructed c. 1250-1500 AD",
+   "sources": [
+    "https://en.wikipedia.org/wiki/Ahu_Tongariki",
+    "https://en.wikipedia.org/wiki/Moai"
+   ],
+   "note": "Same finding as period_start, in the prose: 'Ahu Tongariki was constructed between 1-500 AD [1]'. Every other sentence is verbatim from the cited article and correct: largest ahu, fifteen moai toppled in the civil wars, the 1960 tsunami ('In 1960, a tsunami caused by an earthquake off the coast of Chile swept the ahu inland'), the 86-tonne heaviest moai ('The heaviest moai erected was a shorter but squatter moai at Ahu Tongariki, weighing 86 tonnes'), one kilometre from Rano Raraku and Poike, winter-solstice alignment. The false part is exactly the part carrying a citation marker."
+  },
+  {
+   "field": "card_description",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Ahu_Tongariki",
+    "https://en.wikipedia.org/wiki/Moai"
+   ],
+   "note": "15 moai, 86 tonnes heaviest, 1960 tsunami, restoration: all supported. The card carries no construction date, so the severe dating error does not reach the spoken text."
+  },
+  {
+   "field": "civilization",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.3.4"
+   ],
+   "note": "Denormalised country copy by design (including the compound form)."
+  },
+  {
+   "field": "heritage_designation",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://www.wikidata.org/wiki/Q3448354"
+   ],
+   "note": "NULL permitted; empty on all 36 sampled sites. Wikidata P1435 = Historical Monument of Chile (Q35863415), so the value is available."
+  },
+  {
+   "field": "hero_image",
+   "verdict": "WRONG",
+   "correct_value": "any of the 19 gallery photographs (e.g. File:Los 15 Moais.JPG) promoted to hero",
+   "sources": [
+    "https://commons.wikimedia.org/wiki/File:CHI-rapanui-tongariki-banner.jpg",
+    "docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 6.3"
+   ],
+   "note": "STRUCTURAL error, not a wrong-site error: 800x135, i.e. height < 400, which is the plan's own strip definition (SQL at plan line 293: count(*) FILTER (WHERE height < 400) AS strips). The file is additionally a derived banner ('Banner abgeleitet von CHI-rapanui-tongariki-02'), not a photograph. The site itself is correct."
+  },
+  {
+   "field": "gallery_images",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://commons.wikimedia.org/wiki/Category:Ahu_Tongariki"
+   ],
+   "note": "Metadata-level verdict. All 19 non-hero rows show this ahu; five carry Category:Ahu Tongariki explicitly and one is a Wiki Loves Monuments photograph of the Chilean national monument. No wrong-site row."
+  },
+  {
+   "field": "thumbnail_url",
+   "verdict": "UNVERIFIABLE",
+   "correct_value": null,
+   "sources": [
+    "output/remediation/snapshot/wiki_images.jsonl.gz"
+   ],
+   "note": "Local export path; no public/data/images copy in this checkout."
+  },
+  {
+   "field": "source_url",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Ahu_Tongariki"
+   ],
+   "note": "HTTP 200, dedicated article."
+  },
+  {
+   "field": "scope",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.1 E3"
+   ],
+   "note": "Americas, cutoff 1500 AD; in scope both with the shipped date and with the corrected one (1250)."
+  }
+ ],
+ "errors_found": [
+  {
+   "id": "AT-1",
+   "field": "period_start + description",
+   "severity": "severe",
+   "claim": "ahu dated 1-500 AD; moai chronology is 1250-1500 AD (different bucket), and the '[1]' citation behind the date points at an article that contains no date"
+  },
+  {
+   "id": "AT-2",
+   "field": "hero_image",
+   "severity": "cosmetic",
+   "claim": "hero is an 800x135 derived Wikivoyage banner - strip by the plan's own definition (height < 400)"
+  }
+ ],
+ "notes": "The dating error is the first severe content error in the sample. It is invisible to any check that reads only the database: the value is plausible-looking, internally consistent with period_name, and carries a citation marker that a reader would trust. Only the cited source shows it up."
+}

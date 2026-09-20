@@ -1,0 +1,172 @@
+{
+ "sample_index": 34,
+ "site_id": "e7ee7c00-1b94-4ff8-832e-7af0323bd3aa",
+ "site_name": "Ocriticum",
+ "rarity_tier": 1,
+ "sample_size": 36,
+ "db_fields": {
+  "name": "Ocriticum",
+  "country": "Italy",
+  "coordinates": "42.003081643612724, 13.990221725526288",
+  "period_start": -500,
+  "period_name": "500 BC - 1 AD",
+  "site_type": "City/town/settlement",
+  "description": "Ocriticum was an Italic and Roman sacred site near modern Cansano in the Abruzzo region of Italy, flourishing from the late 4th century BC to the 2nd century AD. The site contains three temples across two levels: an Italic-era temple to Hercules (4th c. BC), a Roman temple to Jupiter (1st c. AD), and a sacellum of Ceres and Venus (2nd c. BC). Excavations yielded votive offerings, terracotta figurines including the \"Goddess of Cansano,\" and bronze Hercules statues. The nearby mansio Jovis Larene, marked on the Tabula Peutingeriana, served as a way station for pilgrims and travelers.",
+  "card_description": "An Italic-Roman settlement with temples to Jupiter, Hercules, and a shrine to Ceres and Venus. Pilgrims, traders, and shepherds all stopped here to worship.",
+  "civilization": "Italy",
+  "heritage_designation": null,
+  "hero_image": "hero.webp (800x600, Commons File:Ocriticum04.JPG)",
+  "gallery_images": "11 further images",
+  "thumbnail_url": "/data/images/wiki/e7ee7c00/hero.webp",
+  "source_url": "https://en.wikipedia.org/wiki/Ocriticum",
+  "scope": "Europe (lat 42.00, lon 13.99), period_start -500 <= 500 AD -> in scope"
+ },
+ "verdicts": [
+  {
+   "field": "name",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Ocriticum"
+   ],
+   "note": "enwiki 'Ocriticum'."
+  },
+  {
+   "field": "country",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Ocriticum"
+   ],
+   "note": "Italy; 'the comune of Cansano, in the province of L'Aquila in the Abruzzo region of Italy'."
+  },
+  {
+   "field": "coordinates",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Ocriticum"
+   ],
+   "note": "42.0031, 13.9902 is at Cansano in the L'Aquila province. No article coordinate or Wikidata P625 to compare numerically."
+  },
+  {
+   "field": "period_start",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Ocriticum"
+   ],
+   "note": "Bucket sort key. The article: 'The first temple built in the area dates to the end of the 4th century BC'; -500 is the floor of the bucket 500 BC - 1 AD, which contains -300. Bucket correct (plan 4.3.1), and it agrees with the record's own 'flourishing from the late 4th century BC'."
+  },
+  {
+   "field": "period_name",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "docs/procedures/ENRICHMENT_AUDIT.md"
+   ],
+   "note": "categorize_period(-500) = '500 BC - 1 AD'."
+  },
+  {
+   "field": "site_type",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Ocriticum",
+    "pipeline/normalizers/site_type.py"
+   ],
+   "note": "The article's first sentence: 'Ocriticum was an Italic and Roman town, the ruins of which are located in the comune of Cansano ... as well as remains of the ancient settlement'. 'City/town/settlement' is canonical and matches, though the site's published weight is on the sanctuary rather than the settlement."
+  },
+  {
+   "field": "description",
+   "verdict": "WRONG",
+   "correct_value": "the Roman temple was built around the beginning of the 1st century BC, not the 1st century AD",
+   "sources": [
+    "https://en.wikipedia.org/wiki/Ocriticum"
+   ],
+   "note": "One date is wrong by a century: the record says 'a Roman temple to Jupiter (1st c. AD)' while the article says 'Around the beginning of the 1st century BC (and therefore now under the dominion of the Romans), there was a further expansion of the sacred area, in which, on a terrace higher than the Italic temple but perfectly aligned with it, another temple building, larger and architecturally sophisticated'. Everything else checks out: the Italic and Roman sacred site at Cansano, the temple to Hercules, the sacellum of Ceres and Venus ('probably built between the 3rd and 2nd century BC', matching the record's 2nd c. BC), the votive deposit with around 600 offerings and a bronze statuette of Hercules, and the mansio Jovis Larene on the Tabula Peutingeriana. The record's 'two levels' is right in substance (the article describes a terrace higher than the Italic temple), and 'three temples' is the record's count of two temples plus the sacellum. 'The Goddess of Cansano' is not in the article read - unsupported, not counted."
+  },
+  {
+   "field": "card_description",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Ocriticum"
+   ],
+   "note": "The three cults (Jupiter, Hercules, Ceres and Venus) are exact, and 'Pilgrims, traders, and shepherds all stopped here to worship' paraphrases the article's 'pilgrims, wayfarers, traders, shepherds stopped there to venerate the divinities' - one of the closest card-to-source matches in the sample. The card avoids the century that the description gets wrong."
+  },
+  {
+   "field": "civilization",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.3.4"
+   ],
+   "note": "Denormalised country copy by design."
+  },
+  {
+   "field": "heritage_designation",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Ocriticum"
+   ],
+   "note": "NULL permitted; empty on all 36 sampled sites."
+  },
+  {
+   "field": "hero_image",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://commons.wikimedia.org/wiki/File:Ocriticum04.JPG"
+   ],
+   "note": "Metadata-level verdict. 800x600, a photograph of the Ocriticum excavations. No strip."
+  },
+  {
+   "field": "gallery_images",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "output/remediation/snapshot/wiki_images.jsonl.gz"
+   ],
+   "note": "Metadata-level verdict: 11 further rows of the site. 12 images in total, above the plan's floor."
+  },
+  {
+   "field": "thumbnail_url",
+   "verdict": "UNVERIFIABLE",
+   "correct_value": null,
+   "sources": [
+    "output/remediation/snapshot/wiki_images.jsonl.gz"
+   ],
+   "note": "Local export path; no public/data/images copy in this checkout."
+  },
+  {
+   "field": "source_url",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Ocriticum"
+   ],
+   "note": "HTTP 200, dedicated article (6,288 characters)."
+  },
+  {
+   "field": "scope",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.1 E3"
+   ],
+   "note": "Europe, 4th century BC -> in scope."
+  }
+ ],
+ "errors_found": [
+  {
+   "id": "OC-1",
+   "field": "description",
+   "severity": "moderate",
+   "claim": "Roman temple dated '1st c. AD' where the cited article says 'around the beginning of the 1st century BC'"
+  }
+ ],
+ "notes": "A tier-1 record (the rarest class in the sample) and a good one: it names three cults, the votive deposit and the mansio with its Roman road map, and the card is nearly a quotation. The single error is a BC/AD slip of exactly the kind a reader cannot detect without the source - and one the census's own checks are unlikely to find.",
+ "checked_at": "2026-09-20T23:09:47+02:00"
+}

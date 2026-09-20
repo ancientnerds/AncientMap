@@ -1,0 +1,165 @@
+{
+ "sample_index": 35,
+ "site_id": "6c4d8b74-697a-46f7-a000-bf92b702f87a",
+ "site_name": "Windbury Head",
+ "rarity_tier": 1,
+ "sample_size": 36,
+ "db_fields": {
+  "name": "Windbury Head",
+  "country": "England",
+  "coordinates": "51.01303497146373, -4.444167816301008",
+  "period_start": -1000,
+  "period_name": "1500 - 500 BC",
+  "site_type": "Fortress/citadel",
+  "description": "Windbury Head is the site of an Iron Age hill fort on the Hartland Peninsula in North Devon, England[1]. Most of the site has been lost to coastal erosion over centuries[1]. Only the southern ramparts survive today, standing at approximately 100 metres (330 ft) above sea level[1].",
+  "card_description": "A headland fort on the Hartland Peninsula, now reduced by coastal erosion. Only the southern ramparts remain at ~100 meters above sea level - the seaward defenses long since collapsed into the sea.",
+  "civilization": "England",
+  "heritage_designation": null,
+  "hero_image": null,
+  "gallery_images": "none - 0 wiki_images rows",
+  "thumbnail_url": null,
+  "source_url": "https://en.wikipedia.org/wiki/Windbury_Head",
+  "scope": "Europe (lat 51.01, lon -4.44), period_start -1000 <= 500 AD -> in scope"
+ },
+ "verdicts": [
+  {
+   "field": "name",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Windbury_Head"
+   ],
+   "note": "enwiki 'Windbury Head'."
+  },
+  {
+   "field": "country",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.3.2"
+   ],
+   "note": "'England' rather than 'United Kingdom' is deliberate project design; enwiki says North Devon."
+  },
+  {
+   "field": "coordinates",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Windbury_Head"
+   ],
+   "note": "51.0130, -4.4442 is the Hartland Peninsula coast just north of Clovelly, as the article describes. No article coordinate or Wikidata P625 to compare numerically."
+  },
+  {
+   "field": "period_start",
+   "verdict": "UNVERIFIABLE",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Windbury_Head"
+   ],
+   "note": "The article (287 characters, two sentences) dates the fort only as 'Iron Age'. -1000 is the floor of the bucket 1500 - 500 BC, which contains the early British Iron Age (from c. 800 BC), so the bucket is defensible and cannot be called wrong under plan 4.3.1. Not counted as an error."
+  },
+  {
+   "field": "period_name",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "docs/procedures/ENRICHMENT_AUDIT.md"
+   ],
+   "note": "categorize_period(-1000) = '1500 - 500 BC'."
+  },
+  {
+   "field": "site_type",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Windbury_Head",
+    "pipeline/normalizers/site_type.py"
+   ],
+   "note": "'Fortress/citadel' is canonical and matches 'Iron Age hill fort'."
+  },
+  {
+   "field": "description",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Windbury_Head"
+   ],
+   "note": "The whole source article is: 'Windbury Head is the site of an Iron Age hill fort on the Hartland Peninsula, just north of Clovelly in North Devon, England. Most of the fort has been lost to coastal erosion, but the southern ramparts still exist at approximately 100 metres (330 ft) above sea level.' The record reproduces every claim; the only change is 'over centuries', which the article implies but does not state, and the omission of 'just north of Clovelly'."
+  },
+  {
+   "field": "card_description",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Windbury_Head"
+   ],
+   "note": "Faithful to the article, plus one inference that the article supports without stating: 'the seaward defenses long since collapsed into the sea' follows from 'Most of the fort has been lost to coastal erosion' on a headland. Recorded as inference, not error."
+  },
+  {
+   "field": "civilization",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.3.4"
+   ],
+   "note": "Denormalised country copy by design."
+  },
+  {
+   "field": "heritage_designation",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Windbury_Head"
+   ],
+   "note": "NULL permitted; empty on all 36 sampled sites."
+  },
+  {
+   "field": "hero_image",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "output/remediation/snapshot/wiki_images.jsonl.gz"
+   ],
+   "note": "Empty (NULL), permitted. GAP: 0 images, so this tier-1 record has no picture at all - the same gap as Nina Kiru."
+  },
+  {
+   "field": "gallery_images",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "output/remediation/snapshot/wiki_images.jsonl.gz"
+   ],
+   "note": "Empty - 0 rows. Permitted; gap."
+  },
+  {
+   "field": "thumbnail_url",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "output/remediation/snapshot/wiki_images.jsonl.gz"
+   ],
+   "note": "NULL, consistent with having no images."
+  },
+  {
+   "field": "source_url",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Windbury_Head"
+   ],
+   "note": "HTTP 200, dedicated article - but only 287 characters, the shortest source in the sample. The record is a faithful copy of it, which means the record cannot be richer than those two sentences."
+  },
+  {
+   "field": "scope",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.1 E3"
+   ],
+   "note": "Europe, Iron Age -> in scope."
+  }
+ ],
+ "errors_found": [],
+ "notes": "Clean, and a clean illustration of the source-length ceiling: a 287-character article produced a 4-sentence record with no date, no images and no heritage designation, all of which are faithfully absent rather than wrong. For the false-negative measurement this is a site where the census and this audit can only agree, because there is almost nothing to get wrong.",
+ "checked_at": "2026-09-20T23:09:47+02:00"
+}

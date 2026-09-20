@@ -1,0 +1,165 @@
+{
+ "sample_index": 24,
+ "site_id": "a90e4406-25e6-4646-ae73-0730696a22d4",
+ "site_name": "Bury Hill",
+ "rarity_tier": 2,
+ "sample_size": 36,
+ "db_fields": {
+  "name": "Bury Hill",
+  "country": "England",
+  "coordinates": "51.19011583442974, -1.506811273962164",
+  "period_start": -1000,
+  "period_name": "1500 - 500 BC",
+  "site_type": "Fortress/citadel",
+  "description": "Bury Hill is an Iron Age hillfort in Hampshire, England, located 2.4 km (1.5 mi) southwest of Andover. The 8.9-hectare (22-acre) enclosure shows two construction phases: an earlier low single rampart to the north and west, later reinforced with a stronger double rampart and ditch that partially overlies the earlier earthworks [1]. The ramparts and ditch remain in good condition, though heavily wooded [1].",
+  "card_description": "Two-phase fort enclosing 8.9 hectares near Andover: an earlier single rampart, then a stronger double rampart overlaid to the south and east. Both phases remain visible in the earthwork profile.",
+  "civilization": "England",
+  "heritage_designation": null,
+  "hero_image": "hero.webp (800x600, Commons File:Bury Hill Andover Geograph-1899772-by-Chris-Talbot.jpg)",
+  "gallery_images": "none - 1 image in total",
+  "thumbnail_url": "/data/images/wiki/a90e4406/hero.webp",
+  "source_url": "https://en.wikipedia.org/wiki/Bury_Hill",
+  "scope": "Europe (lat 51.19, lon -1.51), period_start -1000 <= 500 AD -> in scope"
+ },
+ "verdicts": [
+  {
+   "field": "name",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Bury_Hill"
+   ],
+   "note": "enwiki 'Bury Hill'."
+  },
+  {
+   "field": "country",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.3.2"
+   ],
+   "note": "'England' rather than 'United Kingdom' is deliberate project design; enwiki says Hampshire."
+  },
+  {
+   "field": "coordinates",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Bury_Hill"
+   ],
+   "note": "The record's 51.1901, -1.5068 sits 2.4 km southwest of Andover town centre (51.2086, -1.4903) - the distance and bearing the article states. No article coordinate or Wikidata P625 to compare numerically."
+  },
+  {
+   "field": "period_start",
+   "verdict": "UNVERIFIABLE",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Bury_Hill"
+   ],
+   "note": "The article dates the fort only as 'Iron Age' and gives no construction date. -1000 is 1000 BC, about two centuries before the British Iron Age begins (c. 800 BC), but it is the floor of the bucket 1500 - 500 BC, which does contain the early Iron Age; so the bucket is defensible and cannot be called wrong under plan 4.3.1. If the fort is late Iron Age the bucket would be the next one. Not counted as an error."
+  },
+  {
+   "field": "period_name",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "docs/procedures/ENRICHMENT_AUDIT.md"
+   ],
+   "note": "categorize_period(-1000) = '1500 - 500 BC'."
+  },
+  {
+   "field": "site_type",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Bury_Hill",
+    "pipeline/normalizers/site_type.py"
+   ],
+   "note": "'Fortress/citadel' is canonical; the article calls it 'a former Iron Age hillfort', and hillfort is the value the normalizer maps to this class."
+  },
+  {
+   "field": "description",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Bury_Hill"
+   ],
+   "note": "Nearly verbatim from the article: 'the site of a former Iron Age hillfort about 1.5 miles (2.4 km) southwest of the centre of Andover, Hampshire', 'The site encloses about 22 acres (8.9 ha)', 'the first is a low single rampart and ditch, to the north and west of the second, stronger double rampart and ditch earthworks, part of which overlies the earlier work', 'The banks and the ditch are apparently in good condition, although fairly heavily wooded'. Omissions, not errors: the article also records Roman-era use and King Cnut's camp of 1016."
+  },
+  {
+   "field": "card_description",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Bury_Hill"
+   ],
+   "note": "The card's 'overlaid to the south and east' is the correct reading of the article's 'to the north and west OF the second, stronger double rampart' - i.e. the earlier work lies north and west, so the later double rampart is to its south and east. The two shipped texts agree; 8.9 hectares and the two phases are right."
+  },
+  {
+   "field": "civilization",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.3.4"
+   ],
+   "note": "Denormalised country copy by design."
+  },
+  {
+   "field": "heritage_designation",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Bury_Hill"
+   ],
+   "note": "NULL permitted; empty on all 36 sampled sites. Fillable: 'The site has been designated as a scheduled monument since 1925'."
+  },
+  {
+   "field": "hero_image",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://commons.wikimedia.org/wiki/File:Bury_Hill_Andover_Geograph-1899772-by-Chris-Talbot.jpg"
+   ],
+   "note": "Metadata-level verdict. 800x600, a Geograph photograph titled for this hillfort near Andover. No strip."
+  },
+  {
+   "field": "gallery_images",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "output/remediation/snapshot/wiki_images.jsonl.gz"
+   ],
+   "note": "Empty - this record has exactly 1 image. Permitted; GAP: far below the plan's 6-image floor (S10)."
+  },
+  {
+   "field": "thumbnail_url",
+   "verdict": "UNVERIFIABLE",
+   "correct_value": null,
+   "sources": [
+    "output/remediation/snapshot/wiki_images.jsonl.gz"
+   ],
+   "note": "Local export path; no public/data/images copy in this checkout."
+  },
+  {
+   "field": "source_url",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Bury_Hill"
+   ],
+   "note": "HTTP 200, dedicated article (1,282 characters)."
+  },
+  {
+   "field": "scope",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.1 E3"
+   ],
+   "note": "Europe, Iron Age -> in scope."
+  }
+ ],
+ "errors_found": [],
+ "notes": "Clean. The description is a faithful compression of a short article, and the card's spatial reading ('overlaid to the south and east') is correct where a careless rewrite would have inverted it. No error to compare against the census here.",
+ "checked_at": "2026-09-20T23:09:47+02:00"
+}

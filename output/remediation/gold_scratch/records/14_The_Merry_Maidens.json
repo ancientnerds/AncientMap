@@ -1,0 +1,184 @@
+{
+ "sample_index": 14,
+ "site_id": "b6af84c5-21f1-4c8a-94d1-2d925bd04725",
+ "site_name": "The Merry Maidens",
+ "rarity_tier": 3,
+ "sample_size": 36,
+ "checked_at": "2026-09-20T23:09:47+02:00",
+ "db_fields": {
+  "name": "The Merry Maidens",
+  "country": "England",
+  "coordinates": "50.06515705086585, -5.589783647044101",
+  "period_start": -4000,
+  "period_name": "4500 - 3000 BC",
+  "site_type": "Stone circle",
+  "description": "The Merry Maidens (also known as Dawn's Men) is a Late Neolithic stone circle in Cornwall, England, dating to 4500-3000 BC. Located 3 km south of St Buryan, the complete circle comprises 19 granite megaliths. A pair of standing stones known as The Pipers lies nearby and is connected through local legend. [1][2]",
+  "card_description": "Late Neolithic, 24 metres across. Nineteen granite megaliths graded in height, tallest to the southwest. The two Pipers stones nearby reach 4.6 metres - the tallest standing stones in Cornwall.",
+  "civilization": "England",
+  "heritage_designation": null,
+  "hero_image": "hero.webp (800x167, Commons File:Merry Maidens stone circle - composite panoramic view.jpg)",
+  "gallery_images": "19 further images of the circle and The Pipers",
+  "thumbnail_url": "/data/images/wiki/b6af84c5/hero.webp",
+  "source_url": "https://en.wikipedia.org/wiki/The_Merry_Maidens",
+  "scope": "Europe (lat 50.07, lon -5.59), period_start -4000 <= 500 AD -> in scope"
+ },
+ "verdicts": [
+  {
+   "field": "name",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/The_Merry_Maidens",
+    "https://www.wikidata.org/wiki/Q1922063"
+   ],
+   "note": "enwiki title, Wikidata label and the record all 'The Merry Maidens' (also Dawn's Men / Dons Men)."
+  },
+  {
+   "field": "country",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.3.2"
+   ],
+   "note": "'England' rather than 'United Kingdom' is deliberate project design; enwiki says Cornwall."
+  },
+  {
+   "field": "coordinates",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/The_Merry_Maidens"
+   ],
+   "note": "Database 50.06515705, -5.58978365. The cited article gives the OS grid reference SW432245, which resolves to approximately 50.0653 N, 5.5898 W - a match within ~15 m. No Wikidata P625 for this item."
+  },
+  {
+   "field": "period_start",
+   "verdict": "WRONG",
+   "correct_value": "-2500 (bucket 3000 - 1500 BC)",
+   "sources": [
+    "https://en.wikipedia.org/wiki/The_Merry_Maidens",
+    "https://cornishancientsites.com/ancient-sites/merry-maidens-stone-circle/",
+    "https://sennen-cove-cornwall.uk/merry-maidens-stone-circle/"
+   ],
+   "note": "Bucket error. The cited article calls it 'a Late Neolithic stone circle', and two non-Wikipedia sources give the range: the Cornish Ancient Sites Protection Network, 'The site dates from the late Neolithic-early Bronze Age (approx. 2500-1500 BC)', and sennen-cove-cornwall.uk, 'believed to date from the late Neolithic or early Bronze Age, around 2400 to 1500 BC'. The database's -4000 falls in the bucket 4500 - 3000 BC, one bucket earlier than the true start; the British Late Neolithic begins c. 3000 BC, so -4000 also contradicts the record's own description."
+  },
+  {
+   "field": "period_name",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "docs/procedures/ENRICHMENT_AUDIT.md"
+   ],
+   "note": "categorize_period(-4000) = '4500 - 3000 BC'. Internally consistent with the (wrong) sort key."
+  },
+  {
+   "field": "site_type",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/The_Merry_Maidens",
+    "pipeline/normalizers/site_type.py"
+   ],
+   "note": "'Stone circle' is canonical and exact (the normalizer maps 'stone circle' to it)."
+  },
+  {
+   "field": "description",
+   "verdict": "WRONG",
+   "correct_value": "Late Neolithic to early Bronze Age, c. 2500-1500 BC",
+   "sources": [
+    "https://en.wikipedia.org/wiki/The_Merry_Maidens",
+    "https://cornishancientsites.com/ancient-sites/merry-maidens-stone-circle/"
+   ],
+   "note": "The dating is wrong in the same way as period_start, and self-contradictory: the sentence calls the circle 'Late Neolithic' and then dates it '4500-3000 BC', while the British Late Neolithic begins c. 3000 BC. The rest is confirmed by the cited article: 'Dawn's Men', 'a Late Neolithic stone circle located 2 miles (3 km) to the south of the village of St Buryan, in Cornwall', 'The circle, which is thought to be complete, comprises 19 granite megaliths', and The Pipers 'associated both geographically and in legend'."
+  },
+  {
+   "field": "card_description",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/The_Merry_Maidens",
+    "https://en.wikipedia.org/wiki/The_Pipers,_St_Buryan"
+   ],
+   "note": "'Late Neolithic' is right and '24 metres across' matches the article ('The circle is around 24 metres in diameter'); 'nineteen granite megaliths' matches. Two details could not be settled, and are NOT counted as errors: (1) '4.6 metres' for The Pipers - Wikipedia contradicts itself, with the Merry Maidens article saying 'two 3-metre-high standing stones' and the dedicated Pipers article saying 'The southwest stone is the taller of the two, measuring 4.7 metres high' and 'The northeast stone is 4.2 metres'; (2) 'graded in height, tallest to the southwest' is not in either article (the 'southwest is taller' statement belongs to The Pipers, not to the circle) - this may be a transfer of the Pipers' geometry onto the circle, but no source was found that refutes it either way. 'The tallest standing stones in Cornwall' is supported: the Merry Maidens article calls The Pipers 'largest surviving standing stones in Cornwall and probably the best known'."
+  },
+  {
+   "field": "civilization",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.3.4"
+   ],
+   "note": "Denormalised country copy by design."
+  },
+  {
+   "field": "heritage_designation",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://historicengland.org.uk/listing/the-list/list-entry/1006731"
+   ],
+   "note": "NULL permitted; empty on all 36 sampled sites. Fillable with an exact reference: Historic England list entry 1006731, 'The Merry Maidens (or Dawns Men) stone circle', scheduled monument. (The Historic England page body could not be read - it is JavaScript-gated and returned 'Just a moment... Enable JavaScript and cookies to continue' - so the entry number comes from the search result title/URL, not from the page text.)"
+  },
+  {
+   "field": "hero_image",
+   "verdict": "WRONG",
+   "correct_value": "a non-panoramic photograph of the circle (the record ships 19 of them)",
+   "sources": [
+    "https://commons.wikimedia.org/wiki/File:Merry_Maidens_stone_circle_-_composite_panoramic_view.jpg",
+    "docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 6.3"
+   ],
+   "note": "STRUCTURAL error, not a wrong-site error: 800x167, height < 400, the plan's own strip definition, and on top of that a 'composite panoramic view' rather than a photograph. The file is of this circle."
+  },
+  {
+   "field": "gallery_images",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://commons.wikimedia.org/wiki/Category:The_Merry_Maidens"
+   ],
+   "note": "Metadata-level verdict. All 19 non-hero rows name the Merry Maidens (or The Pipers, which the record's description explicitly covers). No wrong-site row found."
+  },
+  {
+   "field": "thumbnail_url",
+   "verdict": "UNVERIFIABLE",
+   "correct_value": null,
+   "sources": [
+    "output/remediation/snapshot/wiki_images.jsonl.gz"
+   ],
+   "note": "Local export path; no public/data/images copy in this checkout."
+  },
+  {
+   "field": "source_url",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/The_Merry_Maidens"
+   ],
+   "note": "HTTP 200, dedicated article."
+  },
+  {
+   "field": "scope",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.1 E3"
+   ],
+   "note": "Europe, -4000 -> in scope (and still in scope after the correction to -2500)."
+  }
+ ],
+ "errors_found": [
+  {
+   "id": "MM-1",
+   "field": "period_start + description",
+   "severity": "moderate",
+   "claim": "circle dated 4500-3000 BC; sources give late Neolithic-early Bronze Age c. 2500-1500 BC, one bucket later, and the record contradicts its own 'Late Neolithic' label"
+  },
+  {
+   "id": "MM-2",
+   "field": "hero_image",
+   "severity": "cosmetic",
+   "claim": "hero is an 800x167 composite panorama - strip by the plan's own threshold"
+  }
+ ],
+ "notes": "Second site in a row where the card is better than the description: the card says 'Late Neolithic' (right) while the description says '4500-3000 BC' (wrong). The two shipped texts disagree with each other, which is a cheap deterministic cross-check the plan's section 5 does not currently use."
+}

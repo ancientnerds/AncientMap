@@ -1,0 +1,182 @@
+{
+ "sample_index": 1,
+ "site_id": "f12d3b76-a0e0-44e6-94cb-5dedd8203b90",
+ "site_name": "Las Labradas",
+ "rarity_tier": 5,
+ "sample_size": 36,
+ "checked_at": "2026-09-20T23:09:47+02:00",
+ "db_fields": {
+  "name": "Las Labradas",
+  "country": "Mexico",
+  "coordinates": "23.620236, -106.767936",
+  "period_start": 500,
+  "period_name": "500 - 1000 AD",
+  "site_type": "Rock art",
+  "description": "Las Labradas is an archaeological site on the coast of San Ignacio municipality in southern Sinaloa, Mexico, containing the largest concentration of petroglyphs in the country with over 600 engravings inventoried. ... Dating from the late Archaic to Middle Formative period (c. 1000 BC-300 AD), the site was declared a zone of archaeological monuments and placed on the UNESCO Tentative List in 2012.",
+  "card_description": "A set of petroglyphs carved into beach rocks by the Pacific shore, dating to the 9th-10th century AD. Waves have eroded some, making each visit slightly different from the last.",
+  "civilization": "Mexico",
+  "heritage_designation": null,
+  "hero_image": "hero.webp (800x533, Commons File:Las Labradas México.jpg, author Gzzz, CC BY-SA 4.0)",
+  "gallery_images": "17 further images, all Commons files titled 'Petroglifos de Las Labradas NN' / 'Las labradas petroglyphs 1' / 'Playa de las Labradas' / 'Petroglyphs transfer'",
+  "thumbnail_url": "/data/images/wiki/f12d3b76/hero.webp",
+  "source_url": "https://en.wikipedia.org/wiki/Las_Labradas_(Sinaloa)",
+  "scope": "Americas, period_start 500 <= 1500 -> in scope"
+ },
+ "verdicts": [
+  {
+   "field": "name",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Las_Labradas_(Sinaloa)",
+    "https://www.wikidata.org/wiki/Q5402637",
+    "https://whc.unesco.org/en/statesparties/mx"
+   ],
+   "note": "enwiki title 'Las Labradas (Sinaloa)' (the parenthetical is Wikipedia's disambiguator), Wikidata label 'Las Labradas', UNESCO tentative list 'Las Labradas, Sinaloa archaeological site'."
+  },
+  {
+   "field": "country",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://www.wikidata.org/wiki/Q5402637",
+    "https://en.wikipedia.org/wiki/Las_Labradas_(Sinaloa)",
+    "https://whc.unesco.org/en/statesparties/mx"
+   ],
+   "note": "Wikidata P17 = Q96 (Mexico); enwiki category 'Archaeological sites in Mexico'; UNESCO lists it under Mexico."
+  },
+  {
+   "field": "coordinates",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://www.wikidata.org/wiki/Q5402637",
+    "https://en.wikipedia.org/wiki/Las_Labradas_(Sinaloa)"
+   ],
+   "note": "Wikidata P625 = 23.620556, -106.766667; database 23.620236, -106.767936. Difference ~0.0003 deg lat, 0.0013 deg lon = about 135 m, well inside the site's beach extent (enwiki: petroglyphs on one beach at Barras de Piaxtla)."
+  },
+  {
+   "field": "period_start",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Las_Labradas_(Sinaloa)",
+    "https://es.wikipedia.org/wiki/Las_Labradas_(Sinaloa)"
+   ],
+   "note": "Value 500 is a bucket sort key, not a date (plan 4.3.1). enwiki and eswiki both say the petroglyphs 'date back to the ninth and tenth centuries' (AD) -> bucket 500-1000 AD, the same bucket as 500. No bucket error. The value is not a date and should not be read as one."
+  },
+  {
+   "field": "period_name",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "docs/procedures/ENRICHMENT_AUDIT.md (period bucket table)"
+   ],
+   "note": "categorize_period(500) = '500 - 1000 AD' per the bucket table; consistent with period_start."
+  },
+  {
+   "field": "site_type",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://www.wikidata.org/wiki/Q5402637",
+    "https://en.wikipedia.org/wiki/Las_Labradas_(Sinaloa)"
+   ],
+   "note": "Wikidata P31 = Q65007262 (petroglyphic site) + Q839954 (archaeological site); enwiki category 'Petroglyphs in Mexico'. 'Rock art' is a canonical type and more specific than 'archaeological site' - no downgrade."
+  },
+  {
+   "field": "description",
+   "verdict": "WRONG",
+   "correct_value": "the petroglyphs are dated to the 9th-10th century AD by the cited source; the description's 'late Archaic to Middle Formative (c. 1000 BC-300 AD)' is not supported by it",
+   "sources": [
+    "https://en.wikipedia.org/wiki/Las_Labradas_(Sinaloa)",
+    "https://es.wikipedia.org/wiki/Las_Labradas_(Sinaloa)",
+    "https://www.archaeologysouthwest.org/2013/01/06/the-petroglyphs-of-las-labradas-more-information-about-the-research-on-the-late-archaic-of-northwest-mexico/"
+   ],
+   "note": "Two defects in one sentence. (a) The dating contradicts the description's own only citation (enwiki: 9th-10th century AD) and the shipped card text. (b) The 'late Archaic' wording traces to a 2013 news item about *nearby* Archaic-period settlements (2500-1000 BCE) that 'may provide clues to the creators' of the petroglyphs - it does not date the petroglyphs themselves. The rest of the description (600+ engravings, tidal volcanic-rock shore, zone of archaeological monuments) checks out; the UNESCO tentative-list year 2012 is confirmed by the UNESCO Mexico tentative list."
+  },
+  {
+   "field": "card_description",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Las_Labradas_(Sinaloa)",
+    "https://es.wikipedia.org/wiki/Las_Labradas_(Sinaloa)"
+   ],
+   "note": "'9th-10th century AD' matches the cited article. The closing sentence ('waves have eroded some, making each visit slightly different') is uncheckable rhetoric, not a factual claim."
+  },
+  {
+   "field": "civilization",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 3.3 and 4.3.4"
+   ],
+   "note": "By design a denormalised copy of country on all 5,004 rows; not an audit target (plan 4.3.4)."
+  },
+  {
+   "field": "heritage_designation",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://whc.unesco.org/en/statesparties/mx",
+    "https://www.wikidata.org/wiki/Q5402637"
+   ],
+   "note": "NULL is permitted by the plan's definition of clean (sec. 1.3: every field sourced or empty). Not an error - but the column is empty on all 5,004 rows while Wikidata P1435 = Q1459900 (Tentative World Heritage Site) exists for this site, so this is an enrichment opportunity, not a defect. The description's 'placed on the UNESCO Tentative List in 2012' is confirmed."
+  },
+  {
+   "field": "hero_image",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://commons.wikimedia.org/wiki/File:Las_Labradas_M%C3%A9xico.jpg"
+   ],
+   "note": "Metadata-level verdict (no vision tool in this run). Commons description: 'The boulders of the Pacific ocean's coast at Las Labradas (Sinaloa, Mexico)'. Author Gzzz, CC BY-SA 4.0 - the row's author/licence fields match the Commons file page. 800x533 is the 800 px cap documented in plan 6.3 (SEO/LCP defect, not a wrong-site defect)."
+  },
+  {
+   "field": "gallery_images",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://commons.wikimedia.org/wiki/Category:Las_Labradas"
+   ],
+   "note": "Metadata-level verdict. All 17 non-hero rows resolve to Commons files either in Category:Las Labradas or with a description naming the Las Labradas archaeological site. One class caveat, not a relevance error: 'Petroglyphs transfer.jpg' is a photo of a cloth-and-beet rubbing taken from the site, not a photograph of the site."
+  },
+  {
+   "field": "thumbnail_url",
+   "verdict": "UNVERIFIABLE",
+   "correct_value": null,
+   "sources": [
+    "output/remediation/snapshot/wiki_images.jsonl.gz (row original_url)"
+   ],
+   "note": "The value is a local export path (/data/images/wiki/f12d3b76/hero.webp). This checkout has no copy of public/data/images (0 directories under public/data/images/wiki), so the file cannot be stat'ed or opened here. The row's original_url (https://upload.wikimedia.org/wikipedia/commons/c/cc/Las_Labradas_M%C3%A9xico.jpg) does resolve on Commons. Not counted as an error."
+  },
+  {
+   "field": "source_url",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Las_Labradas_(Sinaloa)"
+   ],
+   "note": "HTTP 200, dedicated article about this site (not a fragment or a list)."
+  },
+  {
+   "field": "scope",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 8.1"
+   ],
+   "note": "Americas, period_start 500 <= 1500 AD cutoff -> in scope."
+  }
+ ],
+ "errors_found": [
+  {
+   "id": "LS-1",
+   "field": "description",
+   "severity": "moderate",
+   "claim": "description dates the petroglyphs to 'late Archaic to Middle Formative (c. 1000 BC-300 AD)', contradicting its own citation (enwiki: 9th-10th c. AD) and the shipped card text; the Archaic reference belongs to nearby settlements, not the petroglyphs"
+  }
+ ],
+ "notes": "Also worth a human look, not counted as a data error: the hero image is 800x533 (the global 800 px cap of plan 6.3) and the site's best gallery images are 1600 px, so this site is one of the 3,264 where the is_hero flag can simply be moved."
+}

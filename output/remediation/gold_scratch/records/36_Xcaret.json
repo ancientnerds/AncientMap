@@ -1,0 +1,178 @@
+{
+ "sample_index": 36,
+ "site_id": "cad0ee78-1954-4ca9-b8e4-dde794c99117",
+ "site_name": "Xcaret",
+ "rarity_tier": 1,
+ "sample_size": 36,
+ "db_fields": {
+  "name": "Xcaret",
+  "country": "Mexico",
+  "coordinates": "20.5809811273035, -87.12078437717365",
+  "period_start": 1,
+  "period_name": "1 - 500 AD",
+  "site_type": "City/town/settlement",
+  "description": "Xcaret is a Maya civilization archaeological site on the Caribbean coastline of the Yucatan Peninsula in Quintana Roo, Mexico [1]. The site was occupied by the pre-Columbian Maya and functioned as a port for navigation and an important Maya trading center [1]. Some original structures are now contained within the modern privately-owned Xcaret Park tourism development [1].",
+  "card_description": "A Maya port city occupied from 200 to 1500 AD. Most of its visible buildings date to the period from 1200 to 1550 AD and include a small temple and residential compounds.",
+  "civilization": "Mexico",
+  "heritage_designation": null,
+  "hero_image": "hero.webp (800x532, Commons File:Ofrenda De Muertos QR 2011.jpg - 'Ofrenda De Muertos QR 2011')",
+  "gallery_images": "19 further images, including zoo animals, orchids and a chapel in the theme park",
+  "thumbnail_url": "/data/images/wiki/cad0ee78/hero.webp",
+  "source_url": "https://en.wikipedia.org/wiki/Xcaret",
+  "scope": "Americas (lat 20.58, lon -87.12), period_start 1 <= 500 AD -> in scope"
+ },
+ "verdicts": [
+  {
+   "field": "name",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Xcaret"
+   ],
+   "note": "enwiki 'Xcaret'; the article's toponymy section gives the Mayan meaning 'small inlet' and the original name p'ole'."
+  },
+  {
+   "field": "country",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Xcaret"
+   ],
+   "note": "Mexico; 'in the state of Quintana Roo in Mexico'."
+  },
+  {
+   "field": "coordinates",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Xcaret"
+   ],
+   "note": "20.5810, -87.1208 is the Caribbean coast of Quintana Roo at Xcaret (south of Playa del Carmen). No article coordinate or Wikidata P625 to compare numerically."
+  },
+  {
+   "field": "period_start",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Xcaret"
+   ],
+   "note": "Bucket sort key. The article: 'According to the research by the National Institute of Anthropology and History (INAH), the first buildings of the site can be dated to 200 to 600 A.D.'; 1 is the floor of the bucket 1 - 500 AD, which contains 200. Bucket correct (plan 4.3.1)."
+  },
+  {
+   "field": "period_name",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "docs/procedures/ENRICHMENT_AUDIT.md"
+   ],
+   "note": "categorize_period(1) = '1 - 500 AD'."
+  },
+  {
+   "field": "site_type",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Xcaret",
+    "pipeline/normalizers/site_type.py"
+   ],
+   "note": "'City/town/settlement' is canonical; the article describes a Maya settlement and port. The record does not use a port-specific class, which the canonical list does not offer."
+  },
+  {
+   "field": "description",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Xcaret"
+   ],
+   "note": "Almost verbatim from the article's lead: 'Xcaret ... is a Maya civilization archaeological site located on the Caribbean coastline of the Yucatan Peninsula, in the state of Quintana Roo in Mexico. The site was occupied by the pre-Columbian Maya and functioned as a port for navigation and an important Maya trading center. Some of the site's original structures are contained within a modern-day tourism development, the privately owned Xcaret Park.' The trailing ' [1]' markers are formatting, not claims."
+  },
+  {
+   "field": "card_description",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Xcaret"
+   ],
+   "note": "The article: 'the first buildings of the site can be dated to 200 to 600 A.D., but the majority of them are from the period from 1200 to 1550 A.D.' The card's 'occupied from 200 to 1500 AD' and 'Most of its visible buildings date to the period from 1200 to 1550 AD' both follow that sentence (the 1500 vs 1550 in the first clause is rounding, while the second clause keeps the source's exact range). The small temple and residential compounds are described in the article's archaeology section."
+  },
+  {
+   "field": "civilization",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.3.4"
+   ],
+   "note": "Denormalised country copy by design."
+  },
+  {
+   "field": "heritage_designation",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Xcaret"
+   ],
+   "note": "NULL permitted; empty on all 36 sampled sites. The site is an INAH-protected archaeological zone, so the gap is fillable."
+  },
+  {
+   "field": "hero_image",
+   "verdict": "WRONG",
+   "correct_value": "a photograph of the Maya ruins at Xcaret",
+   "sources": [
+    "https://commons.wikimedia.org/wiki/File:Ofrenda_De_Muertos_QR_2011.jpg"
+   ],
+   "note": "WRONG SUBJECT: the hero is 'Ofrenda De Muertos QR 2011' - a Day of the Dead offering, i.e. a modern festival installation, not the archaeological site. It carries no Commons category and no description beyond the title, so it is not even tied to Xcaret by its own metadata; it was presumably matched on the place name Quintana Roo. For a record about a Maya port, the first image a visitor sees is a modern altar."
+  },
+  {
+   "field": "gallery_images",
+   "verdict": "WRONG",
+   "correct_value": "images of the archaeological site",
+   "sources": [
+    "https://commons.wikimedia.org/wiki/Category:Xcaret_archaeological_site"
+   ],
+   "note": "CLUSTER OF OFF-TOPIC IMAGES. Of the 19 further rows, several are not the archaeological site at all: 'File:Bigcats (17892303602).jpg' (zoo animals), 'File:Orchids (17895315075).jpg' (flowers), and 'Our Lady of Guadalupe, Xcaret Eco Park' (a chapel in the theme park). The rows that ARE the site carry the Commons category 'Xcaret archaeological site' ('File:Cabin Ruins - panoramio.jpg', 'File:Parque arqueologico.jpg' - 'Cuenta con una interesante zona arqueologica que aun se conserva'). Mechanism: the image selection followed the NAME 'Xcaret' (the eco-park resort is far more photographed than the ruins) instead of the archaeological site. One row could not be resolved on Commons at all ('_ Our Lady of Guadalupe, Xcaret Eco Park _' -> NOT FOUND), which is itself worth noting for the image pipeline."
+  },
+  {
+   "field": "thumbnail_url",
+   "verdict": "UNVERIFIABLE",
+   "correct_value": null,
+   "sources": [
+    "output/remediation/snapshot/wiki_images.jsonl.gz"
+   ],
+   "note": "Local export path; no public/data/images copy in this checkout."
+  },
+  {
+   "field": "source_url",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Xcaret"
+   ],
+   "note": "HTTP 200, dedicated article (3,105 characters)."
+  },
+  {
+   "field": "scope",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.1 E3"
+   ],
+   "note": "Americas, 200 AD onwards -> in scope."
+  }
+ ],
+ "errors_found": [
+  {
+   "id": "XC-1",
+   "field": "hero_image",
+   "severity": "moderate",
+   "claim": "hero is a modern Day-of-the-Dead offering (Ofrenda de Muertos), not the Maya site"
+  },
+  {
+   "id": "XC-2",
+   "field": "gallery_images",
+   "severity": "severe",
+   "claim": "gallery follows the name 'Xcaret' into the theme park: zoo animals, orchids and an eco-park chapel among the images of a Maya archaeological site"
+  }
+ ],
+ "notes": "The text is clean and the images are the worst in the sample together with Langdale. Both cases share one mechanism: image selection matches on a name or keyword that is ambiguous in the wider world (an eco-park called Xcaret, an axe called Neolithic), and nothing downstream checks that the photograph shows the site. This is the strongest argument in the sample for a location check on gallery images.",
+ "checked_at": "2026-09-20T23:09:47+02:00"
+}

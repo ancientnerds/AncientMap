@@ -1,0 +1,179 @@
+{
+ "sample_index": 13,
+ "site_id": "d799bb0f-8ffd-4a29-a516-ffd445f6b699",
+ "site_name": "Overstone Anglo-Saxon Cemetery",
+ "rarity_tier": 3,
+ "sample_size": 36,
+ "checked_at": "2026-09-20T23:09:47+02:00",
+ "db_fields": {
+  "name": "Overstone Anglo-Saxon Cemetery",
+  "country": "England",
+  "coordinates": "52.29076559546375, -0.8211678162240994",
+  "period_start": 450,
+  "period_name": "1 - 500 AD",
+  "site_type": "Cemetery",
+  "description": "Anglo-Saxon burial site discovered in 2019 near Overstone, Northamptonshire, England. The 15 hectare cemetery is the largest Anglo-Saxon burial ground found in Northamptonshire [1]. Excavation by the Museum of London Archaeology yielded 154 graves containing 3,000 artefacts [1].",
+  "card_description": "Largest Anglo-Saxon cemetery in Northamptonshire -- 15 hectares excavated in 2019. Over 160 skeletons and 70 square barrows of the Arras culture, with a range of grave goods.",
+  "civilization": "England",
+  "heritage_designation": null,
+  "hero_image": null,
+  "gallery_images": "none - the record has 0 wiki_images rows",
+  "thumbnail_url": null,
+  "source_url": "https://en.wikipedia.org/wiki/Overstone_Anglo-Saxon_cemetery",
+  "scope": "Europe (lat 52.29, lon -0.82), period_start 450 <= 500 AD -> in scope"
+ },
+ "verdicts": [
+  {
+   "field": "name",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Overstone_Anglo-Saxon_cemetery",
+    "https://www.wikidata.org/wiki/Q106907918"
+   ],
+   "note": "enwiki title and Wikidata label both 'Overstone Anglo-Saxon cemetery'; the record capitalises Cemetery."
+  },
+  {
+   "field": "country",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.3.2"
+   ],
+   "note": "'England' rather than 'United Kingdom' is deliberate project design (Wikidata P17 = Q145)."
+  },
+  {
+   "field": "coordinates",
+   "verdict": "UNVERIFIABLE",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Overstone_Anglo-Saxon_cemetery",
+    "https://www.wikidata.org/wiki/Q106907918"
+   ],
+   "note": "Neither the cited article (no coordinates in the page) nor the Wikidata item (no P625) carries a coordinate to compare against. The value 52.2908, -0.8212 sits at Overstone, Northamptonshire, which matches the article's 'near the village of Overstone, Northamptonshire', so nothing contradicts it - but there is no source to confirm it either. Recorded as unverifiable rather than correct."
+  },
+  {
+   "field": "period_start",
+   "verdict": "UNVERIFIABLE",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Overstone_Anglo-Saxon_cemetery"
+   ],
+   "note": "The cited article gives NO date for the burials at all - it says only 'Anglo-Saxon place of burial discovered ... in 2019'. 450 is plausible for an early Anglo-Saxon cemetery and it is the value that puts the site in the 1-500 AD bucket, but with no dating source I cannot confirm it, and if the graves are 6th-7th century the bucket would be 500-1000 AD. Not counted as an error and not called correct."
+  },
+  {
+   "field": "period_name",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "docs/procedures/ENRICHMENT_AUDIT.md"
+   ],
+   "note": "categorize_period(450) = '1 - 500 AD'."
+  },
+  {
+   "field": "site_type",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://www.wikidata.org/wiki/Q106907918"
+   ],
+   "note": "Wikidata P31 = cemetery (Q39614) and archaeological site (Q839954); enwiki 'an Anglo-Saxon place of burial'. 'Cemetery' is canonical and exact."
+  },
+  {
+   "field": "description",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Overstone_Anglo-Saxon_cemetery"
+   ],
+   "note": "Every claim is verbatim from the cited article: 'discovered at the Overstone Leys housing development site near the village of Overstone, Northamptonshire', 'found during an archaeological investigation in 2019', 'It is the biggest Anglo-Saxon cemetery ever found in Northamptonshire', 'The 15 hectare site was excavated in 2019 by the Museum of London Archaeology over a 12 month period', 'Uncovered during the excavation were 154 individual graves and 3000 artefacts'. This is the only field of the record that is both complete and accurate."
+  },
+  {
+   "field": "card_description",
+   "verdict": "WRONG",
+   "correct_value": "154 graves and 3,000 artefacts; no square barrows and no Arras culture are mentioned by any source consulted",
+   "sources": [
+    "https://en.wikipedia.org/wiki/Overstone_Anglo-Saxon_cemetery"
+   ],
+   "note": "SEVERE - the spoken text is fabricated in two places. (1) 'Over 160 skeletons': the excavation found 154 individual graves, and the article reports 154, not 'over 160'. (2) '70 square barrows of the Arras culture': the Arras culture is an IRON AGE culture of East Yorkshire, unrelated to a Northamptonshire Anglo-Saxon cemetery; the cited article mentions no barrows at all (it does mention 'Three Bronze Age round barrows' elsewhere on the site - round, not square, and Bronze Age, not Arras). The phrase looks like a paste from a different record's template. The card's first sentence is correct."
+  },
+  {
+   "field": "civilization",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.3.4"
+   ],
+   "note": "Denormalised country copy by design."
+  },
+  {
+   "field": "heritage_designation",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://www.wikidata.org/wiki/Q106907918"
+   ],
+   "note": "NULL permitted; empty on all 36 sampled sites. Nothing in the sources indicates a designation for a 2019 rescue excavation."
+  },
+  {
+   "field": "hero_image",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "output/remediation/snapshot/wiki_images.jsonl.gz"
+   ],
+   "note": "Empty (NULL), which plan 1.3 permits. Recorded as a GAP, not an error: the record has no images at all, so it cannot appear on any image-dependent surface. This is the plan's S10 class (< 6 images, 2,296 sites) in its extreme form (0 images)."
+  },
+  {
+   "field": "gallery_images",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "output/remediation/snapshot/wiki_images.jsonl.gz"
+   ],
+   "note": "Empty - 0 wiki_images rows for this site in the snapshot. Permitted, and a gap (see hero_image)."
+  },
+  {
+   "field": "thumbnail_url",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "output/remediation/snapshot/wiki_images.jsonl.gz"
+   ],
+   "note": "NULL, consistent with having no images."
+  },
+  {
+   "field": "source_url",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Overstone_Anglo-Saxon_cemetery"
+   ],
+   "note": "HTTP 200, dedicated article (1,647 characters)."
+  },
+  {
+   "field": "scope",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.1 E3"
+   ],
+   "note": "Europe, 450 AD -> in scope (the early Anglo-Saxon period is inside the 500 AD cutoff)."
+  }
+ ],
+ "errors_found": [
+  {
+   "id": "OV-1",
+   "field": "card_description",
+   "severity": "severe",
+   "claim": "spoken text invents '70 square barrows of the Arras culture' (an Iron Age East Yorkshire culture, absent from all sources) and inflates 154 graves to 'over 160 skeletons'"
+  },
+  {
+   "id": "OV-2",
+   "field": "period_start",
+   "severity": "unknown",
+   "claim": "450 AD has no source: the cited article dates the cemetery not at all; recorded as UNVERIFIABLE, not as an error"
+  }
+ ],
+ "notes": "The most valuable single record so far. The description is perfect and the card text is fabricated, which means the error lives only in the text that is spoken aloud in the short - the surface a reader of the website would never see. Any audit that checks the description and not the card would score this site clean."
+}

@@ -489,63 +489,34 @@ async def lifespan(app: FastAPI):
         logger.error(f"[STARTUP] Table creation/migration failed: {e}")
         raise
 
-    # Import card descriptions from JSON (idempotent — runs every startup)
+    # Import card descriptions from JSON (idempotent — runs every startup). The
+    # file is the authoritative copy of the field and this import is how a
+    # committed file reaches an existing row; what it reports when it discards a
+    # database value lives in api/services/card_descriptions.py (plan §10.1).
     try:
+        from api.services.card_descriptions import (
+            import_card_descriptions,
+            load_card_descriptions,
+        )
         from pipeline.database import get_session
 
-        desc_path = Path("public/data/card_descriptions.json")
-        if desc_path.exists():
-            import json as _json
+        descriptions = load_card_descriptions()
+        if descriptions:
+            with get_session() as _s:
+                imported = import_card_descriptions(_s, descriptions)
+                _s.commit()
+                if imported["imported"]:
+                    # Flush sites cache so fresh queries include cd
+                    from api.cache import cache_delete_pattern as _cdp
 
-            with open(desc_path, encoding="utf-8") as _f:
-                _desc_data = _json.load(_f)
-            descriptions = _desc_data.get("descriptions", {})
-            if descriptions:
-                from sqlalchemy import text as _t
-
-                with get_session() as _s:
-                    # Descriptions may reference sites deleted since the JSON was
-                    # generated — one stale id would FK-abort the whole import
-                    stale_rows = _s.execute(
-                        _t(
-                            "SELECT unnest(CAST(:ids AS uuid[])) EXCEPT SELECT id FROM unified_sites"
-                        ),
-                        {"ids": list(descriptions.keys())},
-                    ).fetchall()
-                    stale_ids = {str(row[0]) for row in stale_rows}
-                    if stale_ids:
-                        logger.warning(
-                            f"[STARTUP] Skipping {len(stale_ids)} card descriptions for "
-                            f"deleted sites: {sorted(stale_ids)[:5]}"
-                        )
-                    updated = 0
-                    for _sid, _desc in descriptions.items():
-                        if _sid in stale_ids:
-                            continue
-                        r = _s.execute(
-                            _t("""
-                                INSERT INTO card_stats (site_id, card_description, antiquity, fortification,
-                                    cultural_influence, mystery, legacy, total_power, rarity_score, rarity_tier, category_group)
-                                VALUES (:id, :desc, 0, 0, 0, 0, 0, 0, 0, 0, 'unknown')
-                                ON CONFLICT (site_id) DO UPDATE SET card_description = :desc
-                                WHERE card_stats.card_description IS DISTINCT FROM :desc
-                            """),
-                            {"desc": _desc[:200], "id": _sid},
-                        )
-                        updated += r.rowcount
-                    _s.commit()
-                    if updated:
-                        # Flush sites cache so fresh queries include cd
-                        from api.cache import cache_delete_pattern as _cdp
-
-                        _cdp("sites:*")
-                        logger.info(
-                            f"[STARTUP] Imported {updated} card descriptions (cache flushed)"
-                        )
-                    else:
-                        logger.info(
-                            f"[STARTUP] Card descriptions already up to date ({len(descriptions)} checked)"
-                        )
+                    _cdp("sites:*")
+                    logger.info(
+                        f"[STARTUP] Imported {imported['imported']} card descriptions (cache flushed)"
+                    )
+                else:
+                    logger.info(
+                        f"[STARTUP] Card descriptions already up to date ({imported['checked']} checked)"
+                    )
     except Exception as e:
         logger.warning(f"[STARTUP] Card description import failed (non-fatal): {e}")
 

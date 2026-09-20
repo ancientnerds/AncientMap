@@ -1,0 +1,177 @@
+{
+ "sample_index": 5,
+ "site_id": "94776f9f-ea10-4b05-87bd-fd30c2cbdf6f",
+ "site_name": "Agri Bavnehøj",
+ "rarity_tier": 4,
+ "sample_size": 36,
+ "checked_at": "2026-09-20T23:09:47+02:00",
+ "db_fields": {
+  "name": "Agri Bavnehøj",
+  "country": "Denmark",
+  "coordinates": "56.230174, 10.536767",
+  "period_start": -3000,
+  "period_name": "3000 - 1500 BC",
+  "site_type": "Tomb",
+  "description": "A Bronze Age burial mound atop Agri Bavnehøj, the highest point of the Mols Bjerge peninsula in Djursland, Denmark, rising 137 meters above sea level. The mound, approximately 5-6 meters tall, was constructed from approximately 650,000 stacked turf blocks. A layer of metallic oxides washed from the upper turf created an airtight seal that preserved oak-log burials and grave offerings inside. It is one of four notable Bronze Age mounds in the region and offers commanding views over Aarhus Bay.",
+  "card_description": "A Bronze Age burial mound built from roughly 650,000 stacked turf blocks on Denmark's highest point in the Mols Bjerge hills, sealing its oak-log burials airtight for 3,000 years.",
+  "civilization": "Denmark",
+  "heritage_designation": null,
+  "hero_image": "hero.webp (800x533, Commons File:Agri (Syddjurs Kommune).Stabelhøi.45118.ajb.jpg)",
+  "gallery_images": "11 further images: 4 photographs of Agri Bavnehøj (mound, view, winter, postament), 3 of the neighbouring mound Stabelhøje/Stabelhøi, 1 sign",
+  "thumbnail_url": "/data/images/wiki/94776f9f/hero.webp",
+  "source_url": "https://en.wikipedia.org/wiki/Agri_Bavneh%C3%B8j",
+  "scope": "Europe (lat 56.23, lon 10.54), period_start -3000 <= 500 AD -> in scope"
+ },
+ "verdicts": [
+  {
+   "field": "name",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Agri_Bavnehøj",
+    "https://da.wikipedia.org/wiki/Agri_Bavnehøj",
+    "https://www.wikidata.org/wiki/Q396522"
+   ],
+   "note": "enwiki and dawiki both 'Agri Bavnehøj' (enwiki also allows 'Agri Bavnehoej')."
+  },
+  {
+   "field": "country",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://www.wikidata.org/wiki/Q396522"
+   ],
+   "note": "Wikidata P17 = Q35 (Denmark); enwiki 'a Danish hill'."
+  },
+  {
+   "field": "coordinates",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://www.wikidata.org/wiki/Q396522",
+    "https://en.wikipedia.org/wiki/Agri_Bavnehøj"
+   ],
+   "note": "Database 56.230174, 10.536767; enwiki 56.23008333, 10.53669444; Wikidata P625 56.2298, 10.5365. Within ~30 m."
+  },
+  {
+   "field": "period_start",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Agri_Bavnehøj",
+    "https://da.wikipedia.org/wiki/Agri_Bavnehøj"
+   ],
+   "note": "Bucket sort key. The mound is dated '1800 - 1000 years BC' (enwiki) and 'den tidlige bronzealder 1800 - 1000 år før vor tidsregning' (dawiki); -3000 is the floor of the bucket 3000 - 1500 BC, which contains the true start (-1800). Per plan 4.3.1 the round value is not an error as long as the bucket is right - it is."
+  },
+  {
+   "field": "period_name",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "docs/procedures/ENRICHMENT_AUDIT.md"
+   ],
+   "note": "categorize_period(-3000) = '3000 - 1500 BC'."
+  },
+  {
+   "field": "site_type",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Agri_Bavnehøj",
+    "https://www.wikidata.org/wiki/Q396522"
+   ],
+   "note": "enwiki 'a Danish hill and vista point with a bronze age burial mound' and Category:Tumuli in Denmark. Wikidata P31 is only hill (Q54050), but 'Tomb' is the more specific and correct archaeological description of the mound the record is about; per plan 4.3.5 specificity is not to be downgraded."
+  },
+  {
+   "field": "description",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Agri_Bavnehøj"
+   ],
+   "note": "Every number checks out against the cited article: 137 m above sea level, mound 'made from approximately 650.000 blocks of stacked turf blocks giving the mound a height of 5 - 6 meters', 'a layer of metallic oxides tended to wash out from the top turf creating a hard and air tight cap isolating the inner mound from the atmosphere', 'tribal leaders ... buried in the mounds encased in a hollowed out oak log', 'the least known of four vista points and burial mounds on southern Djursland', and the view over Arhus Bay. One nuance: the DB says 'the highest point of the Mols Bjerge peninsula' while enwiki says 'the highest (by a few meters)' among the four mounds - dewiki independently calls it 'der höchste Punkt der dänischen Halbinsel Mols', so the claim is supported."
+  },
+  {
+   "field": "card_description",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Agri_Bavnehøj"
+   ],
+   "note": "650,000 turf blocks and the airtight oak-log burial are both in the cited article. Minor overstatement, not counted as an error: 'Denmark's highest point' - the mound is the highest point of the Mols peninsula, not of Denmark (enwiki: 137 m; Denmark's highest point is Mols is far below Yding Skovhøj at 171 m)."
+  },
+  {
+   "field": "civilization",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.3.4"
+   ],
+   "note": "Denormalised country copy by design."
+  },
+  {
+   "field": "heritage_designation",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Agri_Bavnehøj"
+   ],
+   "note": "NULL is permitted and the column is empty on all 36 sampled sites. The mound is a protected ancient monument in Denmark (the shipped photo of the postament carries the Danish protection notice: 'This stone and the property around it in a 2m distance is to be protected'), so this is a fillable gap."
+  },
+  {
+   "field": "hero_image",
+   "verdict": "WRONG",
+   "correct_value": "a photograph of Agri Bavnehøj itself (the record already ships three: File:Agri baunehøj12.JPG, File:Agri Bavnehøj, Udsigt.jpg, File:Agri Bavnehøj, vinter.JPG)",
+   "sources": [
+    "https://commons.wikimedia.org/wiki/File:Agri_(Syddjurs_Kommune).Stabelh%C3%B8i.45118.ajb.jpg",
+    "https://en.wikipedia.org/wiki/Agri_Bavnehøj"
+   ],
+   "note": "WRONG SITE (adjacent monument). The hero file is named for Stabelhoi, site 45118 in the Danish Heritage Agency's Sites and Monuments database, and its Commons description reads 'in the Heritage Agency of Denmark database for Sites and Monuments'. The record's gallery contains the sibling files for Stabelhoje (45115). Stabelhoje is a DIFFERENT mound: enwiki lists it separately ('Agri Bavnehøj is less than a kilometer east of another vista point, Stabelhoje, 135 meters above sea level'). So the hero shows the neighbour's mound. Caveat stated plainly: the two mounds are 1 km apart and look alike, so this may be a labelling slip rather than a deliberate substitution - but as shipped, the hero does not depict this site, and the record has three unused photographs that do."
+  },
+  {
+   "field": "gallery_images",
+   "verdict": "WRONG",
+   "correct_value": "drop the three Stabelhoje/Stabelhoi rows; keep the four Agri Bavnehøj rows",
+   "sources": [
+    "https://commons.wikimedia.org/wiki/Category:Agri_Bauneh%C3%B8j"
+   ],
+   "note": "WRONG SITE (same adjacent monument as the hero). Three rows are of Stabelhoje/Stabelhoi, not Agri Bavnehøj: 'Agri (Syddjurs Kommune).Stabelhoje og Stabelhoi.45115.45118.ajb.jpg', 'Agri (Syddjurs Kommune).Stabelhoje.45115.ajb.jpg' and 'Stabelhoje udsigt 1.JPG' (described 'Retning Knebel Vig'). The other rows are correct: 'Agri Bavnehøj from west..jpg' (description: 'Agri Bavnehøj, highest hill of Mols Bjerge'), 'Agri baunehoj12.JPG', 'Agri baunehoj7.JPG' (the protection plate), 'Agri Bavnehøj, Udsigt.jpg', 'Agri Bavnehøj, vinter.JPG', 'Agri Bavnehøj, vinter 2.JPG', 'Postament på Agri Baunehoj.jpg', 'Skilt på postament på Agri Baunehoj.jpg'. Counting convention: hero and gallery count as two separate field verdicts but this is one finding (AB-1)."
+  },
+  {
+   "field": "thumbnail_url",
+   "verdict": "UNVERIFIABLE",
+   "correct_value": null,
+   "sources": [
+    "output/remediation/snapshot/wiki_images.jsonl.gz"
+   ],
+   "note": "Local export path; no public/data/images copy in this checkout."
+  },
+  {
+   "field": "source_url",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Agri_Bavneh%C3%B8j"
+   ],
+   "note": "HTTP 200, dedicated article."
+  },
+  {
+   "field": "scope",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.1 E3"
+   ],
+   "note": "Europe, -3000 -> in scope."
+  }
+ ],
+ "errors_found": [
+  {
+   "id": "AB-1",
+   "field": "hero_image + gallery_images",
+   "severity": "moderate",
+   "claim": "the hero and three gallery images show the neighbouring mound Stabelhoje/Stabelhoi (Danish S&M ids 45115/45118), not Agri Bavnehøj"
+  }
+ ],
+ "notes": "The one wrong-site finding of this site is invisible to any automated check that trusts filenames or Commons categories: the files carry no Commons category at all, and the only tell is the Danish site register number in the filename. Found by reading the filenames against enwiki's statement that Stabelhoje is a separate monument."
+}

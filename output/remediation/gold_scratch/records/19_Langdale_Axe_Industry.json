@@ -1,0 +1,182 @@
+{
+ "sample_index": 19,
+ "site_id": "c63b0df7-79e5-4734-bb99-b17ccd8f54eb",
+ "site_name": "Langdale Axe Industry",
+ "rarity_tier": 3,
+ "sample_size": 36,
+ "db_fields": {
+  "name": "Langdale Axe Industry",
+  "country": "England",
+  "coordinates": "54.44709978600596, -3.063957087255516",
+  "period_start": -4500,
+  "period_name": "4500 - 3000 BC",
+  "site_type": "Mine/quarry",
+  "description": "The Langdale Axe Industry was a major Neolithic stone axe production centre in the Lake District, using local greenstone volcanic rock to manufacture polished axes between 4000-3500 BC.[1] Systematic excavations by Clare Fell in the 1940s-1950s uncovered workshops and waste flakes, revealing large-scale specialized manufacturing.[1]",
+  "card_description": "A Neolithic stone tool factory from 4000-3500 BC, high in the mountains. Axes made from its volcanic tuff were traded across the entire island, hundreds of miles away.",
+  "civilization": "England",
+  "heritage_designation": null,
+  "hero_image": "hero.webp (800x1001, Commons File:Polished axe1.jpg - 'stone axe. own scan from very old book')",
+  "gallery_images": "9 further images: two of the Langdale Pikes, one of Pike of Stickle, and images of five other sites (Castlerigg, Gotland, Belfast, Ehenside Tarn, Mount William Australia)",
+  "thumbnail_url": "/data/images/wiki/c63b0df7/hero.webp",
+  "source_url": "https://en.wikipedia.org/wiki/Langdale_axe_industry",
+  "scope": "Europe (lat 54.45, lon -3.06), period_start -4500 <= 500 AD -> in scope"
+ },
+ "verdicts": [
+  {
+   "field": "name",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Langdale_axe_industry",
+    "https://www.wikidata.org/wiki/Q6485810"
+   ],
+   "note": "enwiki 'Langdale axe industry', Wikidata label 'Langdale axe industry'; the record capitalises the common nouns."
+  },
+  {
+   "field": "country",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.3.2"
+   ],
+   "note": "'England' rather than 'United Kingdom' is deliberate project design (Wikidata P17 = Q145); the article says 'Great Langdale, in the English Lake District'."
+  },
+  {
+   "field": "coordinates",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Langdale_axe_industry"
+   ],
+   "note": "Database 54.44709979, -3.06395709 is the axe-factory site at Pike of Stickle in Great Langdale; the article places the industry at 'the Langdale Pikes' and the famous working floor at Pike of Stickle. No source coordinate exists to compare (no P625 on the Wikidata item), so the check is a place-name match, not a numeric one."
+  },
+  {
+   "field": "period_start",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Langdale_axe_industry"
+   ],
+   "note": "Bucket sort key. The industry's production is dated 4000-3500 BC in the article and in the record's own card; -4500 is the floor of the bucket 4500 - 3000 BC, which contains -4000. Bucket correct (plan 4.3.1)."
+  },
+  {
+   "field": "period_name",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "docs/procedures/ENRICHMENT_AUDIT.md"
+   ],
+   "note": "categorize_period(-4500) = '4500 - 3000 BC'."
+  },
+  {
+   "field": "site_type",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Langdale_axe_industry",
+    "pipeline/normalizers/site_type.py"
+   ],
+   "note": "'Mine/quarry' is canonical and exact: the article calls it 'a major industry of the Neolithic period ... the stone axe factory' and the find spots are working floors and quarry sites."
+  },
+  {
+   "field": "description",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Langdale_axe_industry"
+   ],
+   "note": "Claims confirmed against the cited article: the Lake District location and the working of the local rock ('Great Langdale ... axes made from the volcanic tuff found in the area' - the record's 'greenstone volcanic rock' is the same material under its other common name, and the Langdale rock is a greenish volcanic tuff); the 4000-3500 BC production window; Clare Fell's excavations in the 1940s-1950s ('Clare Fell ... excavations ... in the late 1940s and 1950s'); the working floors with waste flakes; the large-scale specialised production. One wording is loose but not wrong: 'Systematic excavations ... uncovered workshops' - the article describes working floors and debitage rather than structural workshops."
+  },
+  {
+   "field": "card_description",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Langdale_axe_industry"
+   ],
+   "note": "4000-3500 BC, the mountains, the volcanic tuff, and the wide distribution (Langdale axes are found across Britain) all match the article. The card is the better text of the two: it says 'volcanic tuff', the material the source actually names."
+  },
+  {
+   "field": "civilization",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.3.4"
+   ],
+   "note": "Denormalised country copy by design."
+  },
+  {
+   "field": "heritage_designation",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Langdale_axe_industry"
+   ],
+   "note": "NULL permitted; empty on all 36 sampled sites. The Pike of Stickle working floors are a scheduled monument, so the gap is fillable."
+  },
+  {
+   "field": "hero_image",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://commons.wikimedia.org/wiki/File:Polished_axe1.jpg"
+   ],
+   "note": "Metadata-level verdict, with a class note: the hero is 800x1001 and shows a polished Neolithic axe, categorised 'Neolithic axes' and 'Westmorland' (the historic county of the Langdale fells), but its own description says 'stone axe. own scan from very old book' - it is a book illustration, not a photograph of the site or of a documented Langdale find. Recorded as a class note (illustration as hero), not as a wrong-site error: the object class and the county fit."
+  },
+  {
+   "field": "gallery_images",
+   "verdict": "WRONG",
+   "correct_value": "images of the Langdale axe factory (the Pikes, the working floors, Langdale axes)",
+   "sources": [
+    "https://commons.wikimedia.org/wiki/Category:Castlerigg_Stone_Circle",
+    "https://commons.wikimedia.org/wiki/Category:Archaeological_grooves_in_Gotland",
+    "https://commons.wikimedia.org/wiki/Category:Irish_prehistory_in_the_Ulster_Museum",
+    "https://commons.wikimedia.org/wiki/Category:Archaeological_sites_in_Victoria,_Australia"
+   ],
+   "note": "WRONG-SITE CLUSTER, the strongest image finding in the sample so far. Of the 9 non-hero rows, only three belong to this site or its immediate fells (File:Langdales, Westmorland.jpg, File:Pike O'Stickle.jpg, File:Pike of Stickle from Loft Crag.jpg). Four rows are other sites, chosen by theme rather than by location: (1) 'File:Castlerigg.jpg' - Castlerigg Stone Circle, a different Cumbrian monument (Category:Castlerigg Stone Circle); (2) 'File:Horsne dibjars i.jpg' - 'Grooves from Horsne, Gotland, Sweden' (Category:Archaeological grooves in Gotland); (3) 'File:MaloneHoard.JPG' - a Neolithic axe hoard 'found at Danesfort, on the Malone Road, in Belfast' (Category:Irish prehistory in the Ulster Museum); (4) 'File:Mount William Aboriginal stone axe quarry.jpg' - an Aboriginal axe quarry in Victoria, Australia (Category:Archaeological sites in Victoria, Australia). A fifth, 'File:Neolithic stone axe with handle ehenside tarn british museum.JPG', is a Neolithic hafted axe from Ehenside Tarn - same period, same object class, different site. One more, 'File:Scafell Pike from Broad Crag.jpg', shows a neighbouring peak rather than the quarry. Metadata-level verdict: no local image copy exists to look at, but the Commons categories and descriptions leave no doubt about where these photographs were taken."
+  },
+  {
+   "field": "thumbnail_url",
+   "verdict": "UNVERIFIABLE",
+   "correct_value": null,
+   "sources": [
+    "output/remediation/snapshot/wiki_images.jsonl.gz"
+   ],
+   "note": "Local export path; no public/data/images copy in this checkout."
+  },
+  {
+   "field": "source_url",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Langdale_axe_industry"
+   ],
+   "note": "HTTP 200, dedicated article."
+  },
+  {
+   "field": "scope",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.1 E3"
+   ],
+   "note": "Europe, Neolithic -> in scope."
+  }
+ ],
+ "errors_found": [
+  {
+   "id": "LA-1",
+   "field": "gallery_images",
+   "severity": "severe",
+   "claim": "4 of 9 gallery images are other sites (Castlerigg Stone Circle; grooves from Gotland, Sweden; a Belfast axe hoard; an Aboriginal axe quarry in Victoria, Australia), picked by theme 'stone axe' instead of by site"
+  },
+  {
+   "id": "LA-2",
+   "field": "hero_image",
+   "severity": "cosmetic",
+   "claim": "hero is a scan from an old book ('stone axe. own scan from very old book'), not a photograph of the site"
+  }
+ ],
+ "notes": "This is the site that shows the image pipeline's real failure mode: an automated picker that selects by keyword ('axe', 'quarry', 'Neolithic') and never checks where the object is. Agri Bavnehoej (record 05) was the same class but milder - neighbouring mounds. Here the record ships a Swedish rock carving and an Australian quarry as illustrations of an English Neolithic axe factory. No property-based check in the plan (S10/S11 count images, author and licence) can see this; only reading the file's Commons category does.",
+ "checked_at": "2026-09-20T23:09:47+02:00"
+}

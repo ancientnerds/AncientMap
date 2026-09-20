@@ -1,0 +1,165 @@
+{
+ "sample_index": 29,
+ "site_id": "e77b33be-0bb1-48e2-9da7-4d2503f28134",
+ "site_name": "Maesbury Castle",
+ "rarity_tier": 2,
+ "sample_size": 36,
+ "db_fields": {
+  "name": "Maesbury Castle",
+  "country": "England",
+  "coordinates": "51.22234984180613, -2.559754389303717",
+  "period_start": -1000,
+  "period_name": "1500 - 500 BC",
+  "site_type": "Fortress/citadel",
+  "description": "Maesbury Castle is an Iron Age univallate hill fort in the parish of Croscombe on the Mendip Hills, north of Shepton Mallet, Somerset, England. The enclosure covers 2.5 hectares at 292 m elevation, with a single rampart up to 6 m high and an outer ditch. Built on Old Red Sandstone from the Devonian period, the hill resisted erosion better than surrounding limestone. It is a Scheduled Ancient Monument offering panoramic views across the Somerset Levels to Glastonbury Tor.",
+  "card_description": "A Mendips hillfort that marked a post-Roman frontier between Brittonic Celts and West Saxons. The nearby Wansdyke earthwork formed the visible boundary of that contested zone.",
+  "civilization": "England",
+  "heritage_designation": null,
+  "hero_image": "hero.webp (800x579, Commons File:Maesbury Camp Somerset Map.jpg - 'Map of earthworks at Maesbury Camp')",
+  "gallery_images": "none - 1 further image",
+  "thumbnail_url": "/data/images/wiki/e77b33be/hero.webp",
+  "source_url": "https://en.wikipedia.org/wiki/Maesbury_Castle",
+  "scope": "Europe (lat 51.22, lon -2.56), period_start -1000 <= 500 AD -> in scope"
+ },
+ "verdicts": [
+  {
+   "field": "name",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Maesbury_Castle"
+   ],
+   "note": "enwiki 'Maesbury Castle'; the article also explains the name (maes = field in Brythonic Welsh, burh = fort in Old English)."
+  },
+  {
+   "field": "country",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.3.2"
+   ],
+   "note": "'England' rather than 'United Kingdom' is deliberate project design; enwiki says Somerset."
+  },
+  {
+   "field": "coordinates",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Maesbury_Castle"
+   ],
+   "note": "51.2223, -2.5598 lies on the Mendips north of Shepton Mallet in the parish of Croscombe, as described. No article coordinate or Wikidata P625 to compare numerically."
+  },
+  {
+   "field": "period_start",
+   "verdict": "UNVERIFIABLE",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Maesbury_Castle"
+   ],
+   "note": "The article calls it an Iron Age hill fort and gives no construction date. -1000 is the floor of the bucket 1500 - 500 BC, which contains the early British Iron Age (from c. 800 BC), so the bucket is defensible and cannot be called wrong under plan 4.3.1. Not counted as an error."
+  },
+  {
+   "field": "period_name",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "docs/procedures/ENRICHMENT_AUDIT.md"
+   ],
+   "note": "categorize_period(-1000) = '1500 - 500 BC'."
+  },
+  {
+   "field": "site_type",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Maesbury_Castle",
+    "pipeline/normalizers/site_type.py"
+   ],
+   "note": "'Fortress/citadel' is canonical and matches 'Iron Age hill fort'."
+  },
+  {
+   "field": "description",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Maesbury_Castle"
+   ],
+   "note": "Every claim is in the article: 'an Iron Age hill fort within the parish of Croscombe on the Mendip Hills, just north of Shepton Mallet, Somerset, England'; 'The enclosure has an area of 2.5 hectares (6.2 acres), and lies at a height of 292 m (950 ft), with views in many directions'; 'The fort has a single rampart up to 6 m high, with an outer ditch (univallate)'; 'The hill has not eroded as fast as the surrounding limestone as it is made of Old Red Sandstone deposited in the Devonian period'; 'It has been listed as a Scheduled Ancient Monument'. One addition is the record's own framing, not a contradiction: 'offering panoramic views across the Somerset Levels to Glastonbury Tor' (the article says only 'views in many directions')."
+  },
+  {
+   "field": "card_description",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Maesbury_Castle"
+   ],
+   "note": "Supported, with one attribution shift worth naming: the article says 'The area was a boundary between the Romano-British Celts and West Saxons during the period 577-652 AD, when the nearby Wansdyke fortification comprised part of the border'. The card makes the hillfort itself the frontier marker, where the source makes the area one. Not counted as an error - the earthwork is the reason the area is discussed, and the Wansdyke detail is exact."
+  },
+  {
+   "field": "civilization",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.3.4"
+   ],
+   "note": "Denormalised country copy by design."
+  },
+  {
+   "field": "heritage_designation",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Maesbury_Castle"
+   ],
+   "note": "NULL permitted; empty on all 36 sampled sites. Fillable: the record's own description already says 'It is a Scheduled Ancient Monument'."
+  },
+  {
+   "field": "hero_image",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://commons.wikimedia.org/wiki/File:Maesbury_Camp_Somerset_Map.jpg"
+   ],
+   "note": "Metadata-level verdict with a class note: 800x579, Category:Maesbury Castle, description 'Map of earthworks at Maesbury Camp, Somerset, England' - a public-domain 19th-century earthwork plan, so the correct site but not a photograph. The same class as Stanydale's schematic. No strip."
+  },
+  {
+   "field": "gallery_images",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "output/remediation/snapshot/wiki_images.jsonl.gz"
+   ],
+   "note": "Metadata-level verdict: 1 further row, the same map family. GAP: 2 images in total, far below the plan's 6-image floor."
+  },
+  {
+   "field": "thumbnail_url",
+   "verdict": "UNVERIFIABLE",
+   "correct_value": null,
+   "sources": [
+    "output/remediation/snapshot/wiki_images.jsonl.gz"
+   ],
+   "note": "Local export path; no public/data/images copy in this checkout."
+  },
+  {
+   "field": "source_url",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Maesbury_Castle"
+   ],
+   "note": "HTTP 200, dedicated article (3,123 characters)."
+  },
+  {
+   "field": "scope",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.1 E3"
+   ],
+   "note": "Europe, Iron Age -> in scope."
+  }
+ ],
+ "errors_found": [],
+ "notes": "Clean. Notable for what the card does well: it chose the one genuinely interesting fact in the article (the post-Roman boundary, 577-652 AD) rather than padding with dimensions, and got the Wansdyke detail right.",
+ "checked_at": "2026-09-20T23:09:47+02:00"
+}

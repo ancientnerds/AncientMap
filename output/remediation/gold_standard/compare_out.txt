@@ -1,0 +1,74 @@
+==============================================================================
+GOLD -> census comparison   (errors found by the blinded check: 40)
+==============================================================================
+
+per blinded field:
+  field                wrong  caught  MISSED
+  description              9       1       8
+  hero_image               8       8       0
+  period_start             7       3       4
+  card_description         6       1       5
+  site_type                4       0       4
+  scope                    3       0       3
+  gallery_images           3       3       0
+
+FALSE-NEGATIVE RATE (unweighted): 24/40 = 60.0%
+  95% Clopper-Pearson interval : [100.0%, 0.0%]
+
+FALSE-NEGATIVE RATE (inverse-probability weighted): 62.4%
+  (weights N_h/n_h per tier: t1=175.0, t2=179.6, t3=165.0, t4=50.4, t5=10.0)
+
+==============================================================================
+THE ERRORS THE CENSUS DID NOT FLAG (the point of the measurement)
+==============================================================================
+
+  [scope] tier 4  Midford Castle
+      site WAS flagged by other checks: wiki_images, wiki_images.is_hero, wiki_images.width, wiki_images:67533, wiki_images:67534, wiki_images:67535, wiki_images:67536, wiki_images:67537, wiki_images:67538
+      E3 cutoff: Americas through 1500 AD, rest of world through 500 AD. A folly castle of 1775 in Somerset is 1,275 years past the cutoff and has no ancient material to justify keeping it. Whether the shipped frontend actually hides it is a separate question the plan's S12 gate covers; the data record is
+
+  [scope] tier 4  Ksar el Barka
+      site WAS flagged by other checks: wiki_images, wiki_images.is_hero, wiki_images:89439, wiki_images:89440
+      1690 is 1,190 years past the rest-of-world cutoff of 500 AD. The ruins themselves are archaeological (frwiki calls it an archaeological site), but the record dates and describes the 17th-19th century caravan town, not an ancient one, so E3 does not keep it. Mechanical check period_start > 500 catche
+
+  [description] tier 4  Arc de Berà
+      site WAS flagged by other checks: site_content_links.content_url, wiki_images, wiki_images.author_url, wiki_images.is_hero, wiki_images.license_url, wiki_images.width, wiki_images:83085, wiki_images:83086, wiki_images:83087, wiki_images:83088, wiki_images:83089, wiki_images:83090, wiki_images:83091, wiki_images:83092, wiki_images:83093, wiki_images:83094, wiki_images:83095, wiki_images:83096, wiki_images:83097, wiki_images:83098, wiki_images:83099, wiki_images:83100, wiki_images:83101, wiki_images:83102, wiki_images:83103, wiki_images:83104
+      The description turns a restoration into the original construction: 'Built on the Via Augusta through the will of Lucius Licinius Sura'. The cited article says the opposite: 'The monument was erected in the reign of Augustus, around 13 BC. It was later restored at the beginning of the 2nd century AD
+
+  [period_start] tier 4  Ahu Tongariki
+      site WAS flagged by other checks: country, site_content_links.content_url, wiki_images, wiki_images.author_url, wiki_images.is_hero, wiki_images.width, wiki_images:74904, wiki_images:74905, wiki_images:74906, wiki_images:74907, wiki_images:74908, wiki_images:74909, wiki_images:74910, wiki_images:74911, wiki_images:74912, wiki_images:74913, wiki_images:74914, wiki_images:74915, wiki_images:74916, wiki_images:74917, wiki_images:74918, wiki_images:74919, wiki_images:74920, wiki_images:74921, wiki_images:74922, wiki_images:74923
+      SEVERE. The moai are dated 1250-1500: enwiki 'Moai': 'monolithic human figures carved from stone by the Rapa Nui people, on Rapa Nui ... between the years 1250 and 1500' and 'The statues were carved ... mostly between 1250 and 1500'. A non-Wikipedia source states it for this ahu directly: culturalhe
+
+  [description] tier 4  Ahu Tongariki
+      site WAS flagged by other checks: country, site_content_links.content_url, wiki_images, wiki_images.author_url, wiki_images.is_hero, wiki_images.width, wiki_images:74904, wiki_images:74905, wiki_images:74906, wiki_images:74907, wiki_images:74908, wiki_images:74909, wiki_images:74910, wiki_images:74911, wiki_images:74912, wiki_images:74913, wiki_images:74914, wiki_images:74915, wiki_images:74916, wiki_images:74917, wiki_images:74918, wiki_images:74919, wiki_images:74920, wiki_images:74921, wiki_images:74922, wiki_images:74923
+      Same finding as period_start, in the prose: 'Ahu Tongariki was constructed between 1-500 AD [1]'. Every other sentence is verbatim from the cited article and correct: largest ahu, fifteen moai toppled in the civil wars, the 1960 tsunami ('In 1960, a tsunami caused by an earthquake off the coast of C
+
+  [period_start] tier 4  The Gop
+      site WAS flagged by other checks: wiki_images, wiki_images.is_hero, wiki_images:88244, wiki_images:88245
+      Coflein, the RCAHMW national database, records 'Period Neolithic, Bronze Age' and calls the monument a cairn. The British Neolithic begins c. 4000 BC, so -5000 (bucket '< 4500 BC') is a bucket early: the record's own card text says '5th-4th millennium BC' while the sources support the 4th-3rd. Bucke
+
+  [site_type] tier 4  The Gop
+      site WAS flagged by other checks: wiki_images, wiki_images.is_hero, wiki_images:88244, wiki_images:88245
+      Coflein's 'Type Of Site' field reads CAIRN; enwiki 'a Neolithic monument ... it is the second-largest Neolithic mound in Britain' and 'the cairn mound is 75-80m in diameter and 12m high'. The hillfort reading is one hypothesis ('excavations have not uncovered a burial chamber ... which may indicate 
+
+  [description] tier 4  The Gop
+      site WAS flagged by other checks: wiki_images, wiki_images.is_hero, wiki_images:88244, wiki_images:88245
+      Measurements contradicted by both sources: Coflein 'Gop Cairn is a titanic cairn, 75-80m in diameter and 12m high'; enwiki 'the cairn mound is 75-80m in diameter and 12m high'. The database says '14 m high with a maximum diameter of 101 m' - both numbers inflated, and a third site (stone-circles.org
+
+  [card_description] tier 4  The Gop
+      site WAS flagged by other checks: wiki_images, wiki_images.is_hero, wiki_images:88244, wiki_images:88245
+      The card's dating is the same error in the spoken text: '5th-4th millennium BC'. The British Neolithic begins c. 4000 BC, so the 5th millennium is too early for a Neolithic cairn. The rest of the card ('second-largest Neolithic mound in Britain after Silbury Hill', Clwydian Range, Flintshire) matche
+
+  [description] tier 4  Bulls of Guisando
+      site WAS flagged by other checks: wiki_images, wiki_images.author_url, wiki_images.is_hero, wiki_images.license_url, wiki_images.width, wiki_images:59124, wiki_images:59125, wiki_images:59126, wiki_images:59127, wiki_images:59128, wiki_images:59129, wiki_images:59130, wiki_images:59131, wiki_images:59132, wiki_images:59133, wiki_images:59134, wiki_images:59135, wiki_images:59136, wiki_images:59137, wiki_images:59138, wiki_images:59139, wiki_images:59140, wiki_images:59141, wiki_images:59142, wiki_images:59143
+      One spelling error: the record writes 'El Tiémblo'; enwiki writes 'El Tiemblo' in the same sentence ('located on the hill of Guisando in the municipality of El Tiemblo, Ávila, Spain'), and the Commons category members are titled 'El Tiemblo' ('File:El Tiemblo - Ávila - 002.jpg'). Cosmetic severity. 
+
+  [card_description] tier 3  Pyramid of Caius Cestius
+      site WAS flagged by other checks: wiki_images, wiki_images.author_url, wiki_images.is_hero, wiki_images.license_url, wiki_images.width, wiki_images:83919, wiki_images:83920, wiki_images:83921, wiki_images:83922, wiki_images:83923, wiki_images:83924, wiki_images:83925, wiki_images:83926, wiki_images:83927, wiki_images:83928, wiki_images:83929, wiki_images:83930, wiki_images:83931, wiki_images:83932, wiki_images:83933, wiki_images:83934, wiki_images:83935, wiki_images:83936, wiki_images:83937, wiki_images:83938
+      MINOR/COSMETIC, but a real contradiction with the cited source and with the record's own description: the article says the pyramid was 'built in the style of the Nubian pyramids' and that 'the sharply pointed shape of the pyramid is strongly reminiscent of the pyramids of Nubia, in particular of the
+
+  [card_description] tier 3  Overstone Anglo-Saxon Cemetery
+      site WAS flagged by other checks: site_content_links.content_url, wiki_images
+      SEVERE - the spoken text is fabricated in two places. (1) 'Over 160 skeletons': the excavation found 154 individual graves, and the article reports 154, not 'over 160'. (2) '70 square barrows of the Arras culture': the Arras culture is an IRON AGE culture of East Yorkshire, unrelated to a Northampto
+
+  [period_start] tier 3  The Merry Maidens
+      site WAS flagged by other checks: site_content_links.content_url, wiki_images, wiki_images.author_url, wiki_images.is_hero, wiki_images.license_url, wiki_images.width, wiki_images:92890, wiki_images:92891, wiki_images:92892, wiki_images:92893, wiki_images:92894, wiki_images:92895, wiki_images:92896, wiki_images:92897, wiki_images:92898, wiki_image

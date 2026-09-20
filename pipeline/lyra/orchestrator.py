@@ -22,6 +22,7 @@ from pathlib import Path
 from sqlalchemy import text
 
 from pipeline.lyra.config import LyraSettings
+from pipeline.lyra.site_key import site_key_sql
 
 logger = logging.getLogger(__name__)
 
@@ -1699,6 +1700,37 @@ def _run_migrations(engine) -> None:
             WHERE name_normalized IS NULL
                OR name_normalized IS DISTINCT FROM lower(unaccent(name_normalized))
         """)
+        )
+
+        # Reconcile the curated sites' match key with its producer.
+        #
+        # The UPDATE above compares the stored value against ITSELF, so it only
+        # fires while that value is not lower/unaccented.  A value that is
+        # well-formed but was derived from an older `name` is never repaired:
+        # correcting `name` (audit_enrich.py's merge and the db.html batch upload
+        # both leave this column alone) silently leaves the site unreachable under
+        # its own name - the duplicate-same-site hazard the remediation's D6 check
+        # exists for.  Production held exactly one such row on 2026-09-20:
+        # 'Eridu' carried name_normalized = 'eridu, sumeria', a fixed point of
+        # lower(unaccent(...)) that no restart would ever correct.
+        #
+        # Deliberately scoped to the curated sources: 80,083 further rows
+        # (geonames, osm_historic, vici_org, topostext, ...) equally disagree with
+        # left(lower(unaccent(name)), 500), but their loaders keyed them and a
+        # boot migration has no business rewriting 28 sources' match keys.
+        #
+        # Reconciliation is a no-op once it has run: the SET value and the guard
+        # are the same expression (pipeline/lyra/site_key.py), so the next boot
+        # matches nothing.
+        conn.execute(
+            text(
+                f"""
+                UPDATE unified_sites
+                SET name_normalized = {site_key_sql("name")}
+                WHERE source_id IN ('ancient_nerds', 'lyra', 'ancient_nerds_community')
+                  AND name_normalized IS DISTINCT FROM {site_key_sql("name")}
+            """
+            )
         )
 
         # Delete stale AI-generated research_alias entries that cause false

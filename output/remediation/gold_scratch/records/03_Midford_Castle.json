@@ -1,0 +1,175 @@
+{
+ "sample_index": 3,
+ "site_id": "32429f3c-6e14-4015-900a-a9cd9fbb81eb",
+ "site_name": "Midford Castle",
+ "rarity_tier": 4,
+ "sample_size": 36,
+ "checked_at": "2026-09-20T23:09:47+02:00",
+ "db_fields": {
+  "name": "Midford Castle",
+  "country": "England",
+  "coordinates": "51.35064268125167, -2.3463889027884193",
+  "period_start": 1775,
+  "period_name": "1500+ AD",
+  "site_type": "Castle/palace",
+  "description": "Midford Castle is a Grade I listed Gothic-style folly built in 1775 for Henry Disney Roebuck, designed by architect John Carter. The castle features a distinctive club-shaped plan resembling the clubs suit from playing cards, with three round towers joined together. The property includes Grade II* listed stables, a chapel, a priory ruin, and a gatehouse. Notable owners include the Conolly family (1810-1901), novelist Isabel Colegate, and actor Nicolas Cage, who purchased it for five million pounds in 2007.",
+  "card_description": "A 1775 folly castle built in the shape of a playing card's clubs symbol. Legend says the owner chose the design after winning the fortune to build it in a card game.",
+  "civilization": "England",
+  "heritage_designation": null,
+  "hero_image": "hero.webp (800x531, Commons File:Southstoke BA2, UK - panoramio (1).jpg, in Category:Midford Castle)",
+  "gallery_images": "5 further images, all in Commons Category:Midford Castle",
+  "thumbnail_url": "/data/images/wiki/32429f3c/hero.webp",
+  "source_url": "https://en.wikipedia.org/wiki/Midford_Castle",
+  "scope": "rest of world (lat 51.35, lon -2.35), period_start 1775 > 500 AD -> OUT OF SCOPE"
+ },
+ "verdicts": [
+  {
+   "field": "name",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Midford_Castle",
+    "https://de.wikipedia.org/wiki/Midford_Castle",
+    "https://www.wikidata.org/wiki/Q6842179"
+   ],
+   "note": "enwiki, dewiki and the Wikidata label all read 'Midford Castle'."
+  },
+  {
+   "field": "country",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.3 pattern 2"
+   ],
+   "note": "'England' rather than 'United Kingdom' is deliberate project design (plan 4.3.2), not a naming error, although Wikidata P17 is Q145 (United Kingdom)."
+  },
+  {
+   "field": "coordinates",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://www.wikidata.org/wiki/Q6842179",
+    "https://en.wikipedia.org/wiki/Midford_Castle"
+   ],
+   "note": "Database 51.3506427, -2.3463889; enwiki 51.35055556, -2.34638889; Wikidata P625 51.3505, -2.34665. Within ~15 m."
+  },
+  {
+   "field": "period_start",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Midford_Castle",
+    "https://www.wikidata.org/wiki/Q6842179"
+   ],
+   "note": "1775 is exactly the build year in enwiki ('built in 1775 for Henry Disney Roebuck') and Wikidata P571 (+1775). Internally the value is right; the problem is that a 1775 building does not belong in the dataset at all (see scope)."
+  },
+  {
+   "field": "period_name",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "docs/procedures/ENRICHMENT_AUDIT.md"
+   ],
+   "note": "categorize_period(1775) = '1500+ AD'."
+  },
+  {
+   "field": "site_type",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://www.wikidata.org/wiki/Q6842179"
+   ],
+   "note": "Wikidata P31 = folly (Q180174) and castle (Q23413); 'Castle/palace' matches the second and is the canonical list value."
+  },
+  {
+   "field": "description",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Midford_Castle"
+   ],
+   "note": "Every dated claim is in the cited article: 1775, Henry Disney Roebuck, John Carter, clubs/trefoil plan, Conolly family 1810-1901, Isabel Colegate, Nicolas Cage for GBP 5 million in July 2007. One sub-claim is NOT in the cited source and was not verified elsewhere: 'Grade II* listed stables' (enwiki only states that the priory 500 yards north-east is Grade II listed). Historic England was not consulted; treated as unverified, not as an error."
+  },
+  {
+   "field": "card_description",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Midford_Castle"
+   ],
+   "note": "The card text is accurate and correctly frames the card-game story as legend, which is how enwiki treats it ('It has been suggested ... but this is unlikely ... It is more likely that the layout was taken from an article ... in Builder's Magazine in 1774')."
+  },
+  {
+   "field": "civilization",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.3.4"
+   ],
+   "note": "Denormalised country copy by design."
+  },
+  {
+   "field": "heritage_designation",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://www.wikidata.org/wiki/Q6842179"
+   ],
+   "note": "NULL is permitted, and the column is empty on all 36 sampled sites (see GOLD_STANDARD.md systematic findings). Wikidata P1435 does hold Grade I listed building (Q15700818) for this site, so it is a fillable gap, not a wrong value."
+  },
+  {
+   "field": "hero_image",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://commons.wikimedia.org/wiki/Category:Midford_Castle"
+   ],
+   "note": "Metadata-level verdict. 800x531, in Commons Category:Midford Castle, a photograph of the castle. Not one of the 914 strips."
+  },
+  {
+   "field": "gallery_images",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://commons.wikimedia.org/wiki/Category:Midford_Castle"
+   ],
+   "note": "Metadata-level verdict. All 5 non-hero rows carry Category:Midford Castle; three are Geograph photographs of the castle."
+  },
+  {
+   "field": "thumbnail_url",
+   "verdict": "UNVERIFIABLE",
+   "correct_value": null,
+   "sources": [
+    "output/remediation/snapshot/wiki_images.jsonl.gz"
+   ],
+   "note": "Local export path; no public/data/images copy in this checkout."
+  },
+  {
+   "field": "source_url",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Midford_Castle"
+   ],
+   "note": "HTTP 200, dedicated article."
+  },
+  {
+   "field": "scope",
+   "verdict": "WRONG",
+   "correct_value": "out of scope - the record should be hidden or removed",
+   "sources": [
+    "docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.1 E3 and sec. 8.1"
+   ],
+   "note": "E3 cutoff: Americas through 1500 AD, rest of world through 500 AD. A folly castle of 1775 in Somerset is 1,275 years past the cutoff and has no ancient material to justify keeping it. Whether the shipped frontend actually hides it is a separate question the plan's S12 gate covers; the data record is out of scope either way."
+  }
+ ],
+ "errors_found": [
+  {
+   "id": "MC-1",
+   "field": "scope",
+   "severity": "moderate",
+   "claim": "1775 folly castle in the dataset although the rest-of-world cutoff is 500 AD (E3); mechanical check period_start > 500 catches it"
+  }
+ ],
+ "notes": "Only one error found, and it is the scope class. All content claims the description makes are traceable to the cited article, which is unusual for this sample. This site is a good example of 'correct data, wrong dataset'."
+}

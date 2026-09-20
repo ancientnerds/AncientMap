@@ -1,0 +1,1843 @@
+# Gold standard — the false-negative rate of the 2026-09 remediation
+
+**Run:** 2026-09-20/21 · **Plan served:** `docs/procedures/SITES_DB_REMEDIATION_2026-09.md`, Phase 0 row
+*"Gold standard: 30-40 double-blind sites for the false-negative rate"* and the error-rate method in §4.
+**Scope of this document:** an independent, blinded field-by-field verdict on a stratified sample of the
+5,004 `ancient_nerds` sites, and the resulting false-negative rate of the machine census.
+
+**Status: complete for the sample; the comparison was computed after the run was cut short.**
+All **36 of 36** sampled sites carry full field verdicts (**540** verdicts: 449 CORRECT, 40 WRONG,
+51 UNVERIFIABLE), written to `gold_scratch/records/` and rendered into §5. An earlier revision of this
+header claimed "2 of 36" and pointed at a §"Not measured" section; both were wrong - the lanes
+finished every site before its 70-minute deadline and no such section exists. The false-negative
+comparison, which the lane never reached, is **§6** below, computed by `compare_fnr.py` in this
+directory.
+
+---
+
+## 1. What is being measured
+
+The census (Phase 1, ten deterministic checks) is the instrument that steers the expensive part of the
+remediation. Nothing so far measures what **all ten checks together still miss**. That is the false
+negative: an error that is really in the database but that no machine check flags. The estimate is
+
+    FNR = (errors found by the blinded human-style check that the census did NOT flag)
+        / (all errors found by the blinded check)
+
+with the sample size and a Clopper-Pearson interval reported next to it. A false-negative rate of 0 %
+on 10 found errors is not evidence that the census is perfect — it bounds the rate at ~26 % with 95 %
+confidence. The interval is the honest part of the number and is printed with it.
+
+## 2. Double-blind protocol (and the proof that it was kept)
+
+Rule: **no census output was read until a site's verdicts were already on disk.**
+
+- Forbidden until unblinding: `output/remediation/census.jsonl`, `output/remediation/findings.jsonl`,
+  `output/remediation/CENSUS.md`, and every `output/remediation/run_*/` directory.
+- The only inputs used while judging were (a) the local DB snapshot
+  `output/remediation/snapshot/*.jsonl.gz`, which is the *data under test*, and (b) fresh web fetches.
+- Every site's verdict is written to `gold_scratch/records/NN_*.json` and re-rendered into
+  `GOLD_STANDARD.md` + `sites.json` **before** the next site is started, so the file mtimes are the
+  evidence of the order. The unblinding step (§"The comparison") is a separate, later command whose
+  output is appended by hand; the mtimes of `records/` versus the census read are listed there.
+
+The snapshot is the data under test, not the machine's opinion about it: reading it cannot leak a
+verdict. That distinction is what makes the blindness real rather than nominal.
+
+## 3. Sample design
+
+Frame, strata, allocation, seed and the exact selection rule: `output/remediation/gold_standard/DRAW.md`
+(written before the draw, and before any census file was opened). Script:
+`output/remediation/gold_scratch/draw_sample.py`, seed **20260920**, sample file
+`output/remediation/gold_standard/sample.json`.
+
+| tier | population | sampled | design weight N_h/n_h |
+|---|---|---|---|
+| 1 | 525 | 3 | 175.0 |
+| 2 | 1,796 | 10 | 179.6 |
+| 3 | 2,310 | 14 | 165.0 |
+| 4 | 353 | 7 | 50.4 |
+| 5 | 20 | 2 | 10.0 |
+| total | 5,004 | 36 | — |
+
+Tiers 4/5 are over-weighted to 9/36 = 25 % against a population share of 7.45 %, matching the pilot
+(plan §2). The raw count is reported alongside an inverse-probability-weighted estimate
+(weight `w_h = N_h/n_h`), because the pilot's unweighted 53 % figure is named in the plan itself as a
+known weakness.
+
+## 4. Field definitions — what "every field" means here
+
+Per plan §1.3 (definition of clean), §6.1 (images) and §15.4 (blast radius), each sampled site is
+judged on these fields:
+
+| field | what makes it CORRECT | what makes it WRONG |
+|---|---|---|
+| `name` | the name a source uses for this site, without a Wikipedia disambiguator | a name that belongs to a different site, or a suffix that is not part of the name |
+| `country` | the modern state the coordinates fall in | historical polity, compound value, non-country |
+| `coordinates` | within the site's own extent as given by two sources | wrong site, wrong continent, off by more than the site's footprint |
+| `period_start` | **bucket-correct**: the real dating falls in the bucket `period_start` names | the real dating belongs in a *different* bucket (plan 4.3.1 — a round value alone is not an error) |
+| `period_name` | equals `categorize_period(period_start)` | inconsistent with `period_start` |
+| `site_type` | a canonical type that is at least as specific as the sources' | a type the sources contradict, or a downgrade to "Ruin"/"Archaeological site" |
+| `description` | every checkable claim is supported by a source | a claim contradicted by a source, or unsupported by the description's own citation |
+| `card_description` | same rule (it is read aloud) | same rule |
+| `civilization` | (by design a copy of `country`, plan 4.3.4) | never — not an audit target |
+| `heritage_designation` | empty is allowed (plan 1.3); a wrong value is not | a value no source supports |
+| hero + gallery images | metadata says the file depicts this site | a file whose Commons page is about a different site |
+| `source_url` | resolves, and is about *this* site | dead, fragment-only where a dedicated article exists, or about another subject |
+| `scope` | inside the E3 cutoff (Americas ≤ 1500 AD, rest of world ≤ 500 AD) | outside the cutoff and not flagged/hidden |
+
+Verdicts are exactly three-valued: **CORRECT**, **WRONG** (with the correct value and its source), or
+**UNVERIFIABLE** (with the reason). `UNVERIFIABLE` is a measurement, not a failure — it is one of the
+things this instrument exists to count.
+
+Two limits are stated up front rather than hidden:
+
+1. **Images are judged from Commons metadata** (file page, categories, description, author, licence).
+   This run has no vision tool, so "the bytes show a different site" cannot be decided here; only
+   "the file's own documentation says it is a different site" can. That is weaker than the plan's VLM
+   pass and is labelled as such in every image verdict.
+2. **Two sources per claim is the target, not always the reality.** Where only one independent source
+   exists (obscure sites with a single Wikipedia article), the verdict says so in its `sources` list
+   rather than inventing a second one.
+
+## 5. Per-site verdicts
+
+Each site below carries: the database values, a verdict row per field with the source URL behind it,
+and (after unblinding) the census comparison for that site's errors.
+## 01. Las Labradas — tier 5
+
+- `site_id` `f12d3b76-a0e0-44e6-94cb-5dedd8203b90`
+- sampled tier 5 · sample position 1 of 36
+- checked 2026-09-20T23:09:47+02:00
+
+| field | database value |
+|---|---|
+| `name` | Las Labradas |
+| `country` | Mexico |
+| `coordinates` | 23.620236, -106.767936 |
+| `period_start` | 500 |
+| `period_name` | 500 - 1000 AD |
+| `site_type` | Rock art |
+| `description` | Las Labradas is an archaeological site on the coast of San Ignacio municipality in southern Sinaloa, Mexico, containing the largest concentration of petroglyphs in the country with over 600 engravings inventoried. ... Dating from the late Archaic to Middle Formative period (c. 1000 BC-300 AD), the site was declared a zone of archaeological monuments and placed on the UNESCO Tentative List in 2012. |
+| `card_description` | A set of petroglyphs carved into beach rocks by the Pacific shore, dating to the 9th-10th century AD. Waves have eroded some, making each visit slightly different from the last. |
+| `civilization` | Mexico |
+| `heritage_designation` | — |
+| `hero_image` | hero.webp (800x533, Commons File:Las Labradas México.jpg, author Gzzz, CC BY-SA 4.0) |
+| `gallery_images` | 17 further images, all Commons files titled 'Petroglifos de Las Labradas NN' / 'Las labradas petroglyphs 1' / 'Playa de las Labradas' / 'Petroglyphs transfer' |
+| `thumbnail_url` | /data/images/wiki/f12d3b76/hero.webp |
+| `source_url` | https://en.wikipedia.org/wiki/Las_Labradas_(Sinaloa) |
+| `scope` | Americas, period_start 500 <= 1500 -> in scope |
+
+| field | verdict | correct value | evidence |
+|---|---|---|---|
+| `name` | **CORRECT** | — | enwiki title 'Las Labradas (Sinaloa)' (the parenthetical is Wikipedia's disambiguator), Wikidata label 'Las Labradas', UNESCO tentative list 'Las Labradas, Sinaloa archaeological site'. <https://en.wikipedia.org/wiki/Las_Labradas_(Sinaloa)> <https://www.wikidata.org/wiki/Q5402637> <https://whc.unesco.org/en/statesparties/mx> |
+| `country` | **CORRECT** | — | Wikidata P17 = Q96 (Mexico); enwiki category 'Archaeological sites in Mexico'; UNESCO lists it under Mexico. <https://www.wikidata.org/wiki/Q5402637> <https://en.wikipedia.org/wiki/Las_Labradas_(Sinaloa)> <https://whc.unesco.org/en/statesparties/mx> |
+| `coordinates` | **CORRECT** | — | Wikidata P625 = 23.620556, -106.766667; database 23.620236, -106.767936. Difference ~0.0003 deg lat, 0.0013 deg lon = about 135 m, well inside the site's beach extent (enwiki: petroglyphs on one beach at Barras de Piaxtla). <https://www.wikidata.org/wiki/Q5402637> <https://en.wikipedia.org/wiki/Las_Labradas_(Sinaloa)> |
+| `period_start` | **CORRECT** | — | Value 500 is a bucket sort key, not a date (plan 4.3.1). enwiki and eswiki both say the petroglyphs 'date back to the ninth and tenth centuries' (AD) -> bucket 500-1000 AD, the same bucket as 500. No bucket error. The value is not a date and should not be read as one. <https://en.wikipedia.org/wiki/Las_Labradas_(Sinaloa)> <https://es.wikipedia.org/wiki/Las_Labradas_(Sinaloa)> |
+| `period_name` | **CORRECT** | — | categorize_period(500) = '500 - 1000 AD' per the bucket table; consistent with period_start. <docs/procedures/ENRICHMENT_AUDIT.md (period bucket table)> |
+| `site_type` | **CORRECT** | — | Wikidata P31 = Q65007262 (petroglyphic site) + Q839954 (archaeological site); enwiki category 'Petroglyphs in Mexico'. 'Rock art' is a canonical type and more specific than 'archaeological site' - no downgrade. <https://www.wikidata.org/wiki/Q5402637> <https://en.wikipedia.org/wiki/Las_Labradas_(Sinaloa)> |
+| `description` | **WRONG** | the petroglyphs are dated to the 9th-10th century AD by the cited source; the description's 'late Archaic to Middle Formative (c. 1000 BC-300 AD)' is not supported by it | Two defects in one sentence. (a) The dating contradicts the description's own only citation (enwiki: 9th-10th century AD) and the shipped card text. (b) The 'late Archaic' wording traces to a 2013 news item about *nearby* Archaic-period settlements (2500-1000 BCE) that 'may provide clues to the creators' of the petroglyphs - it does not date the petroglyphs themselves. The rest of the description (600+ engravings, tidal volcanic-rock shore, zone of archaeological monuments) checks out; the UNESCO tentative-list year 2012 is confirmed by the UNESCO Mexico tentative list. <https://en.wikipedia.org/wiki/Las_Labradas_(Sinaloa)> <https://es.wikipedia.org/wiki/Las_Labradas_(Sinaloa)> <https://www.archaeologysouthwest.org/2013/01/06/the-petroglyphs-of-las-labradas-more-information-about-the-research-on-the-late-archaic-of-northwest-mexico/> |
+| `card_description` | **CORRECT** | — | '9th-10th century AD' matches the cited article. The closing sentence ('waves have eroded some, making each visit slightly different') is uncheckable rhetoric, not a factual claim. <https://en.wikipedia.org/wiki/Las_Labradas_(Sinaloa)> <https://es.wikipedia.org/wiki/Las_Labradas_(Sinaloa)> |
+| `civilization` | **CORRECT** | — | By design a denormalised copy of country on all 5,004 rows; not an audit target (plan 4.3.4). <docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 3.3 and 4.3.4> |
+| `heritage_designation` | **CORRECT** | — | NULL is permitted by the plan's definition of clean (sec. 1.3: every field sourced or empty). Not an error - but the column is empty on all 5,004 rows while Wikidata P1435 = Q1459900 (Tentative World Heritage Site) exists for this site, so this is an enrichment opportunity, not a defect. The description's 'placed on the UNESCO Tentative List in 2012' is confirmed. <https://whc.unesco.org/en/statesparties/mx> <https://www.wikidata.org/wiki/Q5402637> |
+| `hero_image` | **CORRECT** | — | Metadata-level verdict (no vision tool in this run). Commons description: 'The boulders of the Pacific ocean's coast at Las Labradas (Sinaloa, Mexico)'. Author Gzzz, CC BY-SA 4.0 - the row's author/licence fields match the Commons file page. 800x533 is the 800 px cap documented in plan 6.3 (SEO/LCP defect, not a wrong-site defect). <https://commons.wikimedia.org/wiki/File:Las_Labradas_M%C3%A9xico.jpg> |
+| `gallery_images` | **CORRECT** | — | Metadata-level verdict. All 17 non-hero rows resolve to Commons files either in Category:Las Labradas or with a description naming the Las Labradas archaeological site. One class caveat, not a relevance error: 'Petroglyphs transfer.jpg' is a photo of a cloth-and-beet rubbing taken from the site, not a photograph of the site. <https://commons.wikimedia.org/wiki/Category:Las_Labradas> |
+| `thumbnail_url` | **UNVERIFIABLE** | — | The value is a local export path (/data/images/wiki/f12d3b76/hero.webp). This checkout has no copy of public/data/images (0 directories under public/data/images/wiki), so the file cannot be stat'ed or opened here. The row's original_url (https://upload.wikimedia.org/wikipedia/commons/c/cc/Las_Labradas_M%C3%A9xico.jpg) does resolve on Commons. Not counted as an error. <output/remediation/snapshot/wiki_images.jsonl.gz (row original_url)> |
+| `source_url` | **CORRECT** | — | HTTP 200, dedicated article about this site (not a fragment or a list). <https://en.wikipedia.org/wiki/Las_Labradas_(Sinaloa)> |
+| `scope` | **CORRECT** | — | Americas, period_start 500 <= 1500 AD cutoff -> in scope. <docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 8.1> |
+
+Also worth a human look, not counted as a data error: the hero image is 800x533 (the global 800 px cap of plan 6.3) and the site's best gallery images are 1600 px, so this site is one of the 3,264 where the is_hero flag can simply be moved.
+
+---
+
+## 02. Lake Mungo — tier 5
+
+- `site_id` `68677772-b461-49a3-bf2b-376e2b0e970b`
+- sampled tier 5 · sample position 2 of 36
+- checked 2026-09-20T23:09:47+02:00
+
+| field | database value |
+|---|---|
+| `name` | Lake Mungo |
+| `country` | Australia |
+| `coordinates` | -33.746572, 143.083168 |
+| `period_start` | -500 |
+| `period_name` | 500 BC - 1 AD |
+| `site_type` | Geological interest |
+| `description` | Lake Mungo is a dry lake in New South Wales, Australia, approximately 760 km west of Sydney and 90 km northeast of Mildura[1]. It is the central feature of Mungo National Park and one of seventeen lakes in the World Heritage-listed Willandra Lakes Region[1]. The site is famous for the discovery of Mungo Man, the oldest human remains found in Australia, and Mungo Woman[1]. It also marks the location of the Lake Mungo geomagnetic excursion ... |
+| `card_description` | A dry lake holding the continent's oldest human remains, dating to 48,000 BC. Mungo Lady is also the earliest known ritual cremation anywhere on Earth. |
+| `civilization` | Australia |
+| `heritage_designation` | — |
+| `hero_image` | hero.webp (800x97, Commons File:360° Panorama, south of Lake Mungo, near Bulbugaroo Lake. Peter Neaum. - panoramio.jpg) |
+| `gallery_images` | 9 further images: 6 photographs of the lake/lunette/Walls of China, 1 Landsat 9 satellite image, 1 NASA World Wind map, 1 photo of the Mungo Man remains |
+| `thumbnail_url` | /data/images/wiki/68677772/hero.webp |
+| `source_url` | https://en.wikipedia.org/wiki/Lake_Mungo |
+| `scope` | rest of world, period_start -500 <= 500 -> in scope |
+
+| field | verdict | correct value | evidence |
+|---|---|---|---|
+| `name` | **CORRECT** | — | All sources use 'Lake Mungo'. <https://en.wikipedia.org/wiki/Lake_Mungo> <https://www.wikidata.org/wiki/Q452812> <https://de.wikipedia.org/wiki/Lake_Mungo> |
+| `country` | **CORRECT** | — | Wikidata P17 = Q408 (Australia); enwiki 'dry lake located in New South Wales, Australia'. <https://www.wikidata.org/wiki/Q452812> <https://en.wikipedia.org/wiki/Lake_Mungo> |
+| `coordinates` | **CORRECT** | — | enwiki and Wikidata P625 both give -33.75, 143.08333; the database has -33.746572, 143.083168 (~380 m north). The feature is a 130 km2 lake bed, so the offset is inside the site. <https://www.wikidata.org/wiki/Q452812> <https://en.wikipedia.org/wiki/Lake_Mungo> |
+| `period_start` | **WRONG** | -42000 to -40000 for the dated remains; -50000 for the start of human occupation (bucket '< 4500 BC'). Any of those is a different bucket from the database's '500 BC - 1 AD'. | SEVERE, ~40,000 years and four buckets off. enwiki: 'Mungo Woman was initially dated to 26,000 years ago ... Mungo Man was dated to 42-45,000 years ago ... Further work using OSL dating by Bowler in 2003 has modified the dating of both remains to 40,000 years ago'; occupation 'starting around 50,000 years ago'; dewiki gives '40.000 Jahren' for Mungo Man/Mungo Lady. -500 (500 BC) is not a defensible sort key here: no source puts any human activity at this lake in the first millennium BC. The database's own card text says 48,000 BC, so the record contradicts itself as well. <https://en.wikipedia.org/wiki/Lake_Mungo> <https://de.wikipedia.org/wiki/Lake_Mungo> |
+| `period_name` | **CORRECT** | — | Internally consistent: categorize_period(-500) = '500 BC - 1 AD'. The dating itself is wrong (see period_start); the derived name is not a second, independent error. <docs/procedures/ENRICHMENT_AUDIT.md (period bucket table)> |
+| `site_type` | **UNVERIFIABLE** | — | The sources disagree about what kind of thing this is. Wikidata P31 = Q23397 ('lake') only, which supports the database's 'Geological interest'. enwiki categories are 'Archaeological sites in New South Wales', 'Paleoanthropological sites', 'Prehistory of Australia', and the record's own description and card text are entirely about human remains. Neither 'Geological interest' nor 'Archaeological site' is refutable from the sources; a human should decide, and per plan 4.3.5 a more specific type is never to be replaced by a vaguer one. NOT counted as an error. <https://www.wikidata.org/wiki/Q452812> <https://en.wikipedia.org/wiki/Lake_Mungo> |
+| `description` | **CORRECT** | — | Every claim is in the cited article, some of it verbatim: '760 km west of Sydney and 90 km northeast of Mildura', 'central feature of Mungo National Park', 'one of seventeen lakes in the World Heritage-listed Willandra Lakes Region', Mungo Man 'the oldest human remains found in Australia', and the Lake Mungo geomagnetic excursion. Note the description carries no dating at all, which is why its period error is invisible in the text. <https://en.wikipedia.org/wiki/Lake_Mungo> |
+| `card_description` | **WRONG** | the remains are dated to c. 42,000-40,000 years ago; human occupation of the lake shore begins c. 50,000 years ago (= c. 48,000 BC) | The sentence attaches the date to the remains ('holding the continent's oldest human remains, dating to 48,000 BC'), but no source dates the remains to 48,000 BC: enwiki has Mungo Man at 42-45,000 (thermoluminescence) and then 40,000 (OSL, Bowler 2003); dewiki 40,000. 48,000 BC is the start of *occupation* (50,000 years ago) expressed in BC - a plausible number in the wrong sentence, plus a BP/BC shift of ~2,000 years. The cremation claim is supported: enwiki 'confirming Mungo Woman to be the earliest known human to have been cremated'. This text is spoken aloud in the short. <https://en.wikipedia.org/wiki/Lake_Mungo> <https://de.wikipedia.org/wiki/Lake_Mungo> |
+| `civilization` | **CORRECT** | — | Denormalised copy of country by design; not an audit target. <docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 3.3 and 4.3.4> |
+| `heritage_designation` | **CORRECT** | — | NULL is permitted (plan 1.3). Data gap worth noting, not an error: the Willandra Lakes Region is a UNESCO World Heritage Site since 1981 (frwiki states the year explicitly, enwiki names the 'World Heritage listed Willandra Lakes Region'), and the column is empty on all 5,004 rows. <https://en.wikipedia.org/wiki/Lake_Mungo> <https://fr.wikipedia.org/wiki/Lac_Mungo> |
+| `hero_image` | **WRONG** | an image at least ~900 px on its short side, or the existing 1600 px gallery photo 'Lake Mungo lunette.jpg' promoted to hero | STRUCTURAL error, not a wrong-site error: the hero is 800x97, an 8.2:1 strip - one of the 914 strips the plan's hero census counts, and the plan names 'Lake Mungo 800x97' as its own example. The file itself is correctly of this site (Commons description: '360° Panorama, south of Lake Mungo'). It is also 800 px wide because of the global cap (plan 6.3), and this site has 1600 px gallery images that could carry the hero flag without a download. <https://commons.wikimedia.org/wiki/File:360%C2%B0_Panorama,_south_of_Lake_Mungo,_near_Bulbugaroo_Lake._Peter_Neaum._-_panoramio.jpg> <docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 6.3> |
+| `gallery_images` | **CORRECT** | — | Metadata-level verdict. All 9 non-hero rows depict this site (6 site photographs, 1 Landsat 9 satellite image, 1 NASA World Wind map, 1 photo of the Mungo Man remains found here). Class note, not a relevance error: the satellite image and the map are map/plan-class images (plan 6.1 problem class 'map/plan 22') and would need excluding for the shorts. <https://commons.wikimedia.org/wiki/Category:Lake_Mungo> |
+| `thumbnail_url` | **UNVERIFIABLE** | — | Local export path /data/images/wiki/68677772/hero.webp; no copy of public/data/images exists in this checkout. The row's original_url resolves on Commons. <output/remediation/snapshot/wiki_images.jsonl.gz (row original_url)> |
+| `source_url` | **CORRECT** | — | HTTP 200, dedicated article about this site. <https://en.wikipedia.org/wiki/Lake_Mungo> |
+| `scope` | **CORRECT** | — | Rest of world, period_start -500 <= 500 AD -> in scope (and still in scope after the correct dating). <docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 8.1> |
+
+The record's two internal contradictions (period_start vs its own card text, description vs card text) are the kind a deterministic check can reach: the description carries no date, the card text does.
+
+---
+
+## 03. Midford Castle — tier 4
+
+- `site_id` `32429f3c-6e14-4015-900a-a9cd9fbb81eb`
+- sampled tier 4 · sample position 3 of 36
+- checked 2026-09-20T23:09:47+02:00
+
+| field | database value |
+|---|---|
+| `name` | Midford Castle |
+| `country` | England |
+| `coordinates` | 51.35064268125167, -2.3463889027884193 |
+| `period_start` | 1775 |
+| `period_name` | 1500+ AD |
+| `site_type` | Castle/palace |
+| `description` | Midford Castle is a Grade I listed Gothic-style folly built in 1775 for Henry Disney Roebuck, designed by architect John Carter. The castle features a distinctive club-shaped plan resembling the clubs suit from playing cards, with three round towers joined together. The property includes Grade II* listed stables, a chapel, a priory ruin, and a gatehouse. Notable owners include the Conolly family (1810-1901), novelist Isabel Colegate, and actor Nicolas Cage, who purchased it for five million pounds in 2007. |
+| `card_description` | A 1775 folly castle built in the shape of a playing card's clubs symbol. Legend says the owner chose the design after winning the fortune to build it in a card game. |
+| `civilization` | England |
+| `heritage_designation` | — |
+| `hero_image` | hero.webp (800x531, Commons File:Southstoke BA2, UK - panoramio (1).jpg, in Category:Midford Castle) |
+| `gallery_images` | 5 further images, all in Commons Category:Midford Castle |
+| `thumbnail_url` | /data/images/wiki/32429f3c/hero.webp |
+| `source_url` | https://en.wikipedia.org/wiki/Midford_Castle |
+| `scope` | rest of world (lat 51.35, lon -2.35), period_start 1775 > 500 AD -> OUT OF SCOPE |
+
+| field | verdict | correct value | evidence |
+|---|---|---|---|
+| `name` | **CORRECT** | — | enwiki, dewiki and the Wikidata label all read 'Midford Castle'. <https://en.wikipedia.org/wiki/Midford_Castle> <https://de.wikipedia.org/wiki/Midford_Castle> <https://www.wikidata.org/wiki/Q6842179> |
+| `country` | **CORRECT** | — | 'England' rather than 'United Kingdom' is deliberate project design (plan 4.3.2), not a naming error, although Wikidata P17 is Q145 (United Kingdom). <docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.3 pattern 2> |
+| `coordinates` | **CORRECT** | — | Database 51.3506427, -2.3463889; enwiki 51.35055556, -2.34638889; Wikidata P625 51.3505, -2.34665. Within ~15 m. <https://www.wikidata.org/wiki/Q6842179> <https://en.wikipedia.org/wiki/Midford_Castle> |
+| `period_start` | **CORRECT** | — | 1775 is exactly the build year in enwiki ('built in 1775 for Henry Disney Roebuck') and Wikidata P571 (+1775). Internally the value is right; the problem is that a 1775 building does not belong in the dataset at all (see scope). <https://en.wikipedia.org/wiki/Midford_Castle> <https://www.wikidata.org/wiki/Q6842179> |
+| `period_name` | **CORRECT** | — | categorize_period(1775) = '1500+ AD'. <docs/procedures/ENRICHMENT_AUDIT.md> |
+| `site_type` | **CORRECT** | — | Wikidata P31 = folly (Q180174) and castle (Q23413); 'Castle/palace' matches the second and is the canonical list value. <https://www.wikidata.org/wiki/Q6842179> |
+| `description` | **CORRECT** | — | Every dated claim is in the cited article: 1775, Henry Disney Roebuck, John Carter, clubs/trefoil plan, Conolly family 1810-1901, Isabel Colegate, Nicolas Cage for GBP 5 million in July 2007. One sub-claim is NOT in the cited source and was not verified elsewhere: 'Grade II* listed stables' (enwiki only states that the priory 500 yards north-east is Grade II listed). Historic England was not consulted; treated as unverified, not as an error. <https://en.wikipedia.org/wiki/Midford_Castle> |
+| `card_description` | **CORRECT** | — | The card text is accurate and correctly frames the card-game story as legend, which is how enwiki treats it ('It has been suggested ... but this is unlikely ... It is more likely that the layout was taken from an article ... in Builder's Magazine in 1774'). <https://en.wikipedia.org/wiki/Midford_Castle> |
+| `civilization` | **CORRECT** | — | Denormalised country copy by design. <docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.3.4> |
+| `heritage_designation` | **CORRECT** | — | NULL is permitted, and the column is empty on all 36 sampled sites (see GOLD_STANDARD.md systematic findings). Wikidata P1435 does hold Grade I listed building (Q15700818) for this site, so it is a fillable gap, not a wrong value. <https://www.wikidata.org/wiki/Q6842179> |
+| `hero_image` | **CORRECT** | — | Metadata-level verdict. 800x531, in Commons Category:Midford Castle, a photograph of the castle. Not one of the 914 strips. <https://commons.wikimedia.org/wiki/Category:Midford_Castle> |
+| `gallery_images` | **CORRECT** | — | Metadata-level verdict. All 5 non-hero rows carry Category:Midford Castle; three are Geograph photographs of the castle. <https://commons.wikimedia.org/wiki/Category:Midford_Castle> |
+| `thumbnail_url` | **UNVERIFIABLE** | — | Local export path; no public/data/images copy in this checkout. <output/remediation/snapshot/wiki_images.jsonl.gz> |
+| `source_url` | **CORRECT** | — | HTTP 200, dedicated article. <https://en.wikipedia.org/wiki/Midford_Castle> |
+| `scope` | **WRONG** | out of scope - the record should be hidden or removed | E3 cutoff: Americas through 1500 AD, rest of world through 500 AD. A folly castle of 1775 in Somerset is 1,275 years past the cutoff and has no ancient material to justify keeping it. Whether the shipped frontend actually hides it is a separate question the plan's S12 gate covers; the data record is out of scope either way. <docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.1 E3 and sec. 8.1> |
+
+Only one error found, and it is the scope class. All content claims the description makes are traceable to the cited article, which is unusual for this sample. This site is a good example of 'correct data, wrong dataset'.
+
+---
+
+## 04. Ksar el Barka — tier 4
+
+- `site_id` `a5d9e9a7-9fd2-4a0f-a3ae-7dd78fba429b`
+- sampled tier 4 · sample position 4 of 36
+- checked 2026-09-20T23:09:47+02:00
+
+| field | database value |
+|---|---|
+| `name` | Ksar el Barka |
+| `country` | Mauritania |
+| `coordinates` | 18.400252, -12.216614 |
+| `period_start` | 1690 |
+| `period_name` | 1500+ AD |
+| `site_type` | City/town/settlement |
+| `description` | Ksar el Barka is a ruined caravan town in Mauritania, approximately 50 km north of Moudjeria, founded in 1690 by the Kunta branch of the Qadiriyya Sufi order. It was a key trading and religious center, serving as a caravanserai on trans-Saharan routes. In 1753, it was declared a sanctuary by Sheikh Sidel Moctar El Kounti. French colonial expansion, severe droughts in the 1970s-80s, and shifting trade routes led to its abandonment. Remains include residential fragments and an impressive mosque. |
+| `card_description` | A ruined Saharan caravan town founded in 1690 by a Sufi order. Its crumbling mosque still stands as a reminder of its days as a sanctuary city on the trans-Saharan trade routes. |
+| `civilization` | Mauritania |
+| `heritage_designation` | — |
+| `hero_image` | hero.webp (800x574, Commons File:Ksar-el-Barka-1908.jpg, 1908 Agence Rol photograph, Category:Mosques in Mauritania) |
+| `gallery_images` | 1 further image: Ruines de la mosquee de Ksar el Barka, 1908 Gallica photograph |
+| `thumbnail_url` | /data/images/wiki/a5d9e9a7/hero.webp |
+| `source_url` | https://en.wikipedia.org/wiki/Ksar_el_Barka |
+| `scope` | rest of world (lat 18.4, lon -12.2), period_start 1690 > 500 AD -> OUT OF SCOPE |
+
+| field | verdict | correct value | evidence |
+|---|---|---|---|
+| `name` | **CORRECT** | — | enwiki 'Ksar el Barka', frwiki 'Ksar El Barka', Wikidata label 'Ksar el Barka'. Capitalisation only. <https://en.wikipedia.org/wiki/Ksar_el_Barka> <https://fr.wikipedia.org/wiki/Ksar_El_Barka> <https://www.wikidata.org/wiki/Q939166> |
+| `country` | **CORRECT** | — | Wikidata P17 = Q1025 (Mauritania); enwiki 'ruined town in Mauritania'. <https://www.wikidata.org/wiki/Q939166> |
+| `coordinates` | **CORRECT** | — | Database 18.400252, -12.216614; enwiki and Wikidata P625 both 18.4, -12.21666667. Same point. <https://www.wikidata.org/wiki/Q939166> <https://en.wikipedia.org/wiki/Ksar_el_Barka> |
+| `period_start` | **CORRECT** | — | 1690 is the Kounta founding date in frwiki ('Ksar el Barka fut fonde par les Kountas venus de Ouadane en 1690') and the year the Kounta arrived in enwiki. Discrepancies noted, not errors: arwiki gives 1697 for the founding, and enwiki records an EARLIER town on the same spot (the Fula Jaawbe capital Laaci-Wendu, 'this town would later become Ksar el Barka', defeated by the Jolof Empire in 1456). If the record means the older settlement, the bucket would be 1000-1500 AD; the record's own description says 1690, so the value matches its stated subject. The same ambiguity is why the exact year should not be treated as settled. <https://fr.wikipedia.org/wiki/Ksar_El_Barka> <https://en.wikipedia.org/wiki/Ksar_el_Barka> <https://ar.wikipedia.org/wiki/قصر_البركة_(موريتانيا)> |
+| `period_name` | **CORRECT** | — | categorize_period(1690) = '1500+ AD'. <docs/procedures/ENRICHMENT_AUDIT.md> |
+| `site_type` | **CORRECT** | — | enwiki 'ruined town', frwiki 'cite historique ... un site archeologique ou subsistent quelques vestiges d'un ksar (village fortifie)'. 'City/town/settlement' fits. <https://en.wikipedia.org/wiki/Ksar_el_Barka> <https://fr.wikipedia.org/wiki/Ksar_El_Barka> |
+| `description` | **CORRECT** | — | Checked claim by claim. Supported: 50 km north of Moudjeria (enwiki), founded 1690 by the Kounta (frwiki), Qadiriyya/Kunta religious centre (frwiki: Sidel Moctar El Kounti, 'illustre refondateur de la Voie Quadirya'), declared/glorified in 1753 (frwiki: 'pour glorifier le ksar en 1753'), caravanserai on trans-Saharan routes (frwiki: 'les caravanes du grand Sahara connaissaient parfaitement'), colonial takeover (frwiki: Coppolani's forces occupy the ksar in February 1905, and the caravan roads are superseded by colonial roads). NOT supported by either source and left unverified: 'severe droughts in the 1970s-80s' as a cause of abandonment. Also note the cited enwiki article does NOT contain the 1690 founding story (it only says the Kounta 'came to the area' in 1690) - the description's detail comes from the French article, which is a second language edition of Wikipedia and therefore not an independent source (see the note on source independence in GOLD_STANDARD.md). <https://fr.wikipedia.org/wiki/Ksar_El_Barka> <https://en.wikipedia.org/wiki/Ksar_el_Barka> |
+| `card_description` | **CORRECT** | — | 'founded in 1690 by a Sufi order' and 'sanctuary city on the trans-Saharan trade routes' match frwiki. The 'crumbling mosque still stands' line matches the imagery shipped with the record (the 1908 mosque-ruins photographs). <https://fr.wikipedia.org/wiki/Ksar_El_Barka> <https://commons.wikimedia.org/wiki/File:Ksar-el-Barka-1908.jpg> |
+| `civilization` | **CORRECT** | — | Denormalised country copy by design. <docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.3.4> |
+| `heritage_designation` | **CORRECT** | — | NULL is permitted. Wikidata P1435 is absent for this item too, so the column is genuinely empty here rather than unfilled. <https://www.wikidata.org/wiki/Q939166> |
+| `hero_image` | **CORRECT** | — | Metadata-level verdict. The hero is a 1908 Agence Rol photograph held by the BnF (Gallica), categorised 'Ksar el Barka' and 'Mosques in Mauritania' - the site as it was. Historic photograph, but of this site. <https://commons.wikimedia.org/wiki/File:Ksar-el-Barka-1908.jpg> |
+| `gallery_images` | **CORRECT** | — | Metadata-level verdict. The single gallery row is 'Ruines de la mosquee de Ksar el Barka (Mauritanie)', 1908. Only two images exist in the whole record - the thinnest gallery in the sample that still has images. <https://commons.wikimedia.org/wiki/Category:Ksar_el_Barka> |
+| `thumbnail_url` | **UNVERIFIABLE** | — | Local export path; no public/data/images copy in this checkout. <output/remediation/snapshot/wiki_images.jsonl.gz> |
+| `source_url` | **CORRECT** | — | HTTP 200, dedicated article - but a stub of 1,281 characters that does not carry most of the description's content. <https://en.wikipedia.org/wiki/Ksar_el_Barka> |
+| `scope` | **WRONG** | out of scope - the record should be hidden or removed | 1690 is 1,190 years past the rest-of-world cutoff of 500 AD. The ruins themselves are archaeological (frwiki calls it an archaeological site), but the record dates and describes the 17th-19th century caravan town, not an ancient one, so E3 does not keep it. Mechanical check period_start > 500 catches it. <docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.1 E3 and sec. 8.1> |
+
+Second site in a row whose only error is scope, and both are English/French-language records with accurate content. The interesting part is not the content but that the dataset contains post-medieval towns at all - 1690 and 1775 both sail through the E3 gate as data, and it is the frontend that has to hide them.
+
+---
+
+## 05. Agri Bavnehøj — tier 4
+
+- `site_id` `94776f9f-ea10-4b05-87bd-fd30c2cbdf6f`
+- sampled tier 4 · sample position 5 of 36
+- checked 2026-09-20T23:09:47+02:00
+
+| field | database value |
+|---|---|
+| `name` | Agri Bavnehøj |
+| `country` | Denmark |
+| `coordinates` | 56.230174, 10.536767 |
+| `period_start` | -3000 |
+| `period_name` | 3000 - 1500 BC |
+| `site_type` | Tomb |
+| `description` | A Bronze Age burial mound atop Agri Bavnehøj, the highest point of the Mols Bjerge peninsula in Djursland, Denmark, rising 137 meters above sea level. The mound, approximately 5-6 meters tall, was constructed from approximately 650,000 stacked turf blocks. A layer of metallic oxides washed from the upper turf created an airtight seal that preserved oak-log burials and grave offerings inside. It is one of four notable Bronze Age mounds in the region and offers commanding views over Aarhus Bay. |
+| `card_description` | A Bronze Age burial mound built from roughly 650,000 stacked turf blocks on Denmark's highest point in the Mols Bjerge hills, sealing its oak-log burials airtight for 3,000 years. |
+| `civilization` | Denmark |
+| `heritage_designation` | — |
+| `hero_image` | hero.webp (800x533, Commons File:Agri (Syddjurs Kommune).Stabelhøi.45118.ajb.jpg) |
+| `gallery_images` | 11 further images: 4 photographs of Agri Bavnehøj (mound, view, winter, postament), 3 of the neighbouring mound Stabelhøje/Stabelhøi, 1 sign |
+| `thumbnail_url` | /data/images/wiki/94776f9f/hero.webp |
+| `source_url` | https://en.wikipedia.org/wiki/Agri_Bavneh%C3%B8j |
+| `scope` | Europe (lat 56.23, lon 10.54), period_start -3000 <= 500 AD -> in scope |
+
+| field | verdict | correct value | evidence |
+|---|---|---|---|
+| `name` | **CORRECT** | — | enwiki and dawiki both 'Agri Bavnehøj' (enwiki also allows 'Agri Bavnehoej'). <https://en.wikipedia.org/wiki/Agri_Bavnehøj> <https://da.wikipedia.org/wiki/Agri_Bavnehøj> <https://www.wikidata.org/wiki/Q396522> |
+| `country` | **CORRECT** | — | Wikidata P17 = Q35 (Denmark); enwiki 'a Danish hill'. <https://www.wikidata.org/wiki/Q396522> |
+| `coordinates` | **CORRECT** | — | Database 56.230174, 10.536767; enwiki 56.23008333, 10.53669444; Wikidata P625 56.2298, 10.5365. Within ~30 m. <https://www.wikidata.org/wiki/Q396522> <https://en.wikipedia.org/wiki/Agri_Bavnehøj> |
+| `period_start` | **CORRECT** | — | Bucket sort key. The mound is dated '1800 - 1000 years BC' (enwiki) and 'den tidlige bronzealder 1800 - 1000 år før vor tidsregning' (dawiki); -3000 is the floor of the bucket 3000 - 1500 BC, which contains the true start (-1800). Per plan 4.3.1 the round value is not an error as long as the bucket is right - it is. <https://en.wikipedia.org/wiki/Agri_Bavnehøj> <https://da.wikipedia.org/wiki/Agri_Bavnehøj> |
+| `period_name` | **CORRECT** | — | categorize_period(-3000) = '3000 - 1500 BC'. <docs/procedures/ENRICHMENT_AUDIT.md> |
+| `site_type` | **CORRECT** | — | enwiki 'a Danish hill and vista point with a bronze age burial mound' and Category:Tumuli in Denmark. Wikidata P31 is only hill (Q54050), but 'Tomb' is the more specific and correct archaeological description of the mound the record is about; per plan 4.3.5 specificity is not to be downgraded. <https://en.wikipedia.org/wiki/Agri_Bavnehøj> <https://www.wikidata.org/wiki/Q396522> |
+| `description` | **CORRECT** | — | Every number checks out against the cited article: 137 m above sea level, mound 'made from approximately 650.000 blocks of stacked turf blocks giving the mound a height of 5 - 6 meters', 'a layer of metallic oxides tended to wash out from the top turf creating a hard and air tight cap isolating the inner mound from the atmosphere', 'tribal leaders ... buried in the mounds encased in a hollowed out oak log', 'the least known of four vista points and burial mounds on southern Djursland', and the view over Arhus Bay. One nuance: the DB says 'the highest point of the Mols Bjerge peninsula' while enwiki says 'the highest (by a few meters)' among the four mounds - dewiki independently calls it 'der höchste Punkt der dänischen Halbinsel Mols', so the claim is supported. <https://en.wikipedia.org/wiki/Agri_Bavnehøj> |
+| `card_description` | **CORRECT** | — | 650,000 turf blocks and the airtight oak-log burial are both in the cited article. Minor overstatement, not counted as an error: 'Denmark's highest point' - the mound is the highest point of the Mols peninsula, not of Denmark (enwiki: 137 m; Denmark's highest point is Mols is far below Yding Skovhøj at 171 m). <https://en.wikipedia.org/wiki/Agri_Bavnehøj> |
+| `civilization` | **CORRECT** | — | Denormalised country copy by design. <docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.3.4> |
+| `heritage_designation` | **CORRECT** | — | NULL is permitted and the column is empty on all 36 sampled sites. The mound is a protected ancient monument in Denmark (the shipped photo of the postament carries the Danish protection notice: 'This stone and the property around it in a 2m distance is to be protected'), so this is a fillable gap. <https://en.wikipedia.org/wiki/Agri_Bavnehøj> |
+| `hero_image` | **WRONG** | a photograph of Agri Bavnehøj itself (the record already ships three: File:Agri baunehøj12.JPG, File:Agri Bavnehøj, Udsigt.jpg, File:Agri Bavnehøj, vinter.JPG) | WRONG SITE (adjacent monument). The hero file is named for Stabelhoi, site 45118 in the Danish Heritage Agency's Sites and Monuments database, and its Commons description reads 'in the Heritage Agency of Denmark database for Sites and Monuments'. The record's gallery contains the sibling files for Stabelhoje (45115). Stabelhoje is a DIFFERENT mound: enwiki lists it separately ('Agri Bavnehøj is less than a kilometer east of another vista point, Stabelhoje, 135 meters above sea level'). So the hero shows the neighbour's mound. Caveat stated plainly: the two mounds are 1 km apart and look alike, so this may be a labelling slip rather than a deliberate substitution - but as shipped, the hero does not depict this site, and the record has three unused photographs that do. <https://commons.wikimedia.org/wiki/File:Agri_(Syddjurs_Kommune).Stabelh%C3%B8i.45118.ajb.jpg> <https://en.wikipedia.org/wiki/Agri_Bavnehøj> |
+| `gallery_images` | **WRONG** | drop the three Stabelhoje/Stabelhoi rows; keep the four Agri Bavnehøj rows | WRONG SITE (same adjacent monument as the hero). Three rows are of Stabelhoje/Stabelhoi, not Agri Bavnehøj: 'Agri (Syddjurs Kommune).Stabelhoje og Stabelhoi.45115.45118.ajb.jpg', 'Agri (Syddjurs Kommune).Stabelhoje.45115.ajb.jpg' and 'Stabelhoje udsigt 1.JPG' (described 'Retning Knebel Vig'). The other rows are correct: 'Agri Bavnehøj from west..jpg' (description: 'Agri Bavnehøj, highest hill of Mols Bjerge'), 'Agri baunehoj12.JPG', 'Agri baunehoj7.JPG' (the protection plate), 'Agri Bavnehøj, Udsigt.jpg', 'Agri Bavnehøj, vinter.JPG', 'Agri Bavnehøj, vinter 2.JPG', 'Postament på Agri Baunehoj.jpg', 'Skilt på postament på Agri Baunehoj.jpg'. Counting convention: hero and gallery count as two separate field verdicts but this is one finding (AB-1). <https://commons.wikimedia.org/wiki/Category:Agri_Bauneh%C3%B8j> |
+| `thumbnail_url` | **UNVERIFIABLE** | — | Local export path; no public/data/images copy in this checkout. <output/remediation/snapshot/wiki_images.jsonl.gz> |
+| `source_url` | **CORRECT** | — | HTTP 200, dedicated article. <https://en.wikipedia.org/wiki/Agri_Bavneh%C3%B8j> |
+| `scope` | **CORRECT** | — | Europe, -3000 -> in scope. <docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.1 E3> |
+
+The one wrong-site finding of this site is invisible to any automated check that trusts filenames or Commons categories: the files carry no Commons category at all, and the only tell is the Danish site register number in the filename. Found by reading the filenames against enwiki's statement that Stabelhoje is a separate monument.
+
+---
+
+## 06. Arc de Berà — tier 4
+
+- `site_id` `82f23c96-d8b2-41f0-a3e5-59ae9b89880c`
+- sampled tier 4 · sample position 6 of 36
+- checked 2026-09-20T23:09:47+02:00
+
+| field | database value |
+|---|---|
+| `name` | Arc de Berà |
+| `country` | Spain |
+| `coordinates` | 41.173175, 1.468619 |
+| `period_start` | -500 |
+| `period_name` | 500 BC - 1 AD |
+| `site_type` | Gate/archway/bridge |
+| `description` | The Arc de Berà is a Roman triumphal arch erected around 13 BC during the reign of Augustus, located 20 km northeast of Tarragona in Catalonia, Spain. Built on the Via Augusta through the will of Lucius Licinius Sura, it commemorates the emperor and marks the ancient road. The arch features a single opening with fluted pilasters crowned by Corinthian capitals atop a podium, and it is part of the Archaeological Ensemble of Tarraco, a UNESCO World Heritage Site since 2000. |
+| `card_description` | A 13 BC Roman triumphal arch standing alone on the old Via Augusta highway. It is part of the UNESCO-listed Archaeological Ensemble of Tarraco. |
+| `civilization` | Spain |
+| `heritage_designation` | — |
+| `hero_image` | hero.webp (800x600, Commons File:Arco de Barà.jpg, in Category:Arc de Berà) |
+| `gallery_images` | 19 further images, almost all in Category:Arc de Berà |
+| `thumbnail_url` | /data/images/wiki/82f23c96/hero.webp |
+| `source_url` | https://en.wikipedia.org/wiki/Arc_de_Ber%C3%A0 |
+| `scope` | Europe (lat 41.17, lon 1.47), period_start -500 <= 500 AD -> in scope |
+
+| field | verdict | correct value | evidence |
+|---|---|---|---|
+| `name` | **CORRECT** | — | enwiki/dewiki/Wikidata all 'Arc de Berà'. enwiki notes 'Barà' is the erroneous spelling, so the correct form is shipped. <https://en.wikipedia.org/wiki/Arc_de_Berà> <https://de.wikipedia.org/wiki/Arc_de_Berà> <https://www.wikidata.org/wiki/Q631051> |
+| `country` | **CORRECT** | — | Wikidata P17 = Q29 (Spain); enwiki 'some 20 km north-east of the city of Tarragona, Spain'. <https://www.wikidata.org/wiki/Q631051> |
+| `coordinates` | **CORRECT** | — | Database 41.173175, 1.468619; enwiki 41.17302778, 1.46869444; Wikidata P625 41.173301, 1.469115. Within ~45 m. <https://www.wikidata.org/wiki/Q631051> <https://en.wikipedia.org/wiki/Arc_de_Berà> |
+| `period_start` | **CORRECT** | — | Bucket sort key. The arch is dated 'around 13 BC' (enwiki) and '13 a.C.' (itwiki); -500 is the floor of the bucket 500 BC - 1 AD, which contains -13. Per plan 4.3.1 a round value alone is not an error; the bucket is right. <https://en.wikipedia.org/wiki/Arc_de_Berà> <https://it.wikipedia.org/wiki/Arco_di_Berà> |
+| `period_name` | **CORRECT** | — | categorize_period(-500) = '500 BC - 1 AD'. <docs/procedures/ENRICHMENT_AUDIT.md> |
+| `site_type` | **CORRECT** | — | Wikidata P31 = triumphal arch (Q143912) and archaeological site (Q839954); 'Gate/archway/bridge' is the canonical match for an arch. <https://www.wikidata.org/wiki/Q631051> |
+| `description` | **WRONG** | the arch was built in the reign of Augustus around 13 BC; it was RESTORED in the early 2nd century AD 'pursuant to terms of the will of Lucius Licinius Sura' | The description turns a restoration into the original construction: 'Built on the Via Augusta through the will of Lucius Licinius Sura'. The cited article says the opposite: 'The monument was erected in the reign of Augustus, around 13 BC. It was later restored at the beginning of the 2nd century AD pursuant to terms of the will of Lucius Licinius Sura, as reflected in a surviving inscription on the entablature.' Everything else in the description checks out (13 BC, Augustus, 20 km north-east of Tarragona, single opening with fluted pilasters and Corinthian capitals on a podium, Archaeological Ensemble of Tarraco, UNESCO 2000 - all verbatim in the article). The card text does not repeat the error, so the wrong claim reaches the globe card, not the short. <https://en.wikipedia.org/wiki/Arc_de_Berà> <https://it.wikipedia.org/wiki/Arco_di_Berà> |
+| `card_description` | **CORRECT** | — | '13 BC', 'triumphal arch', 'on the old Via Augusta highway' and 'UNESCO-listed Archaeological Ensemble of Tarraco' are all in the cited article. <https://en.wikipedia.org/wiki/Arc_de_Berà> |
+| `civilization` | **CORRECT** | — | Denormalised country copy by design. Worth noting for the culture field elsewhere: Wikidata P2596 (culture) = Q1747689 (Ancient Rome) for this item, i.e. the real cultural attribution is available but unused - as designed. <docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.3.4> |
+| `heritage_designation` | **CORRECT** | — | NULL is permitted and the column is empty on all 36 sampled sites. Strongly fillable here: Wikidata P1435 carries bien de interés cultural (Q23712), part of UNESCO World Heritage Site (Q43113623) and Cultural Asset of National Interest (Q1019352), and P361 (part of) points at the Archaeological Ensemble of Tarraco (Q3119914). <https://www.wikidata.org/wiki/Q631051> |
+| `hero_image` | **CORRECT** | — | Metadata-level verdict. 800x600, categorised 'Arc de Berà' and 'Cultural heritage monuments in Spain' - a photograph of this arch. <https://commons.wikimedia.org/wiki/File:Arco_de_Bar%C3%A0.jpg> |
+| `gallery_images` | **CORRECT** | — | Metadata-level verdict. 19 rows, all photographs of the arch (day, night, zooms, 19th-century drawing by Juan Laurent), 8 of them explicitly categorised 'Arc de Berà'. No wrong-site row found. Class note: several are near-duplicate zooms of the same facade, which the plan's image-selection rules address elsewhere. <https://commons.wikimedia.org/wiki/Category:Arc_de_Ber%C3%A0> |
+| `thumbnail_url` | **UNVERIFIABLE** | — | Local export path; no public/data/images copy in this checkout. <output/remediation/snapshot/wiki_images.jsonl.gz> |
+| `source_url` | **CORRECT** | — | HTTP 200, dedicated article. <https://en.wikipedia.org/wiki/Arc_de_Ber%C3%A0> |
+| `scope` | **CORRECT** | — | Europe, -500 -> in scope. <docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.1 E3> |
+
+This is the first content error (as opposed to scope) in the sample, and it is a one-word swap - built vs restored - that a deterministic check cannot see and a human reader of the cited article catches immediately. The same sentence is also the one a careless summariser would produce, which makes it a good candidate for the error classes the plan expects from LLM enrichment.
+
+---
+
+## 07. Ahu Tongariki — tier 4
+
+- `site_id` `590d3dff-ec5a-4328-a0d9-5baf03686be0`
+- sampled tier 4 · sample position 7 of 36
+- checked 2026-09-20T23:09:47+02:00
+
+| field | database value |
+|---|---|
+| `name` | Ahu Tongariki |
+| `country` | Chile, Easter Island |
+| `coordinates` | -27.12560965412483, -109.27631202903761 |
+| `period_start` | 1 |
+| `period_name` | 1 - 500 AD |
+| `site_type` | Megalithic statues |
+| `description` | The largest ahu on Rapa Nui, Ahu Tongariki was constructed between 1-500 AD [1]. Its fifteen moai were toppled during the island's civil wars and in the 20th century the ahu was swept inland by a tsunami [1]. Following restoration, it features the heaviest moai ever erected on the island at 86 tonnes [1]. Located one kilometer from Rano Raraku and Poike in the Hotu-iti area of Rapa Nui National Park, all statues face sunset during the winter solstice [1]. |
+| `card_description` | Fifteen moai stand on Rapa Nui's largest ahu, including an 86-tonne giant - the heaviest ever erected on the island. A 1960 tsunami swept them all inland before restoration re-erected them. |
+| `civilization` | Chile, Easter Island |
+| `heritage_designation` | — |
+| `hero_image` | hero.webp (800x135, Commons File:CHI-rapanui-tongariki-banner.jpg, a derived Wikivoyage banner) |
+| `gallery_images` | 19 further images, all of Ahu Tongariki (several explicitly in Category:Ahu Tongariki) |
+| `thumbnail_url` | /data/images/wiki/590d3dff/hero.webp |
+| `source_url` | https://en.wikipedia.org/wiki/Ahu_Tongariki |
+| `scope` | Americas (lat -27.13, lon -109.28), period_start 1 <= 1500 AD -> in scope |
+
+| field | verdict | correct value | evidence |
+|---|---|---|---|
+| `name` | **CORRECT** | — | enwiki title and Wikidata label both 'Ahu Tongariki'. <https://en.wikipedia.org/wiki/Ahu_Tongariki> <https://www.wikidata.org/wiki/Q3448354> |
+| `country` | **CORRECT** | — | Compound value 'Chile, Easter Island'; Wikidata P17 = Q298 (Chile). A compound country value is a documented project pattern (FIELD_CONTRACT.md item 5 names 'Chile, Easter Island' as the example), not an error. <https://www.wikidata.org/wiki/Q3448354> |
+| `coordinates` | **CORRECT** | — | Database -27.12560965, -109.27631203; enwiki -27.12583333, -109.27694444; Wikidata P625 identical to enwiki. Within ~70 m. <https://www.wikidata.org/wiki/Q3448354> <https://en.wikipedia.org/wiki/Ahu_Tongariki> |
+| `period_start` | **WRONG** | -1250 (bucket 1000 - 1500 AD) | SEVERE. The moai are dated 1250-1500: enwiki 'Moai': 'monolithic human figures carved from stone by the Rapa Nui people, on Rapa Nui ... between the years 1250 and 1500' and 'The statues were carved ... mostly between 1250 and 1500'. A non-Wikipedia source states it for this ahu directly: culturalheritageonline.com, 'The construction of Ahu Tongariki and the erection of its fifteen moai are estimated to date from approximately 1250-1500 AD'. The database's 1-500 AD is a different bucket and roughly a millennium early. The cited enwiki article contains no construction date at all, so the '[1]' marker behind the date points at a source that does not support it. <https://en.wikipedia.org/wiki/Moai> <https://culturalheritageonline.com/places/ahu-tongariki/> <https://en.wikipedia.org/wiki/Ahu_Tongariki> |
+| `period_name` | **CORRECT** | — | categorize_period(1) = '1 - 500 AD'. Internally consistent with the (wrong) sort key. <docs/procedures/ENRICHMENT_AUDIT.md> |
+| `site_type` | **CORRECT** | — | Wikidata P31 = ahu (Q402996); the canonical list has no 'ahu' value, and 'Megalithic statues' is the value the record's subject (the fifteen moai) warrants. Canonical value, so not an S9 violation. <https://www.wikidata.org/wiki/Q3448354> <pipeline/normalizers/site_type.py> |
+| `description` | **WRONG** | constructed c. 1250-1500 AD | Same finding as period_start, in the prose: 'Ahu Tongariki was constructed between 1-500 AD [1]'. Every other sentence is verbatim from the cited article and correct: largest ahu, fifteen moai toppled in the civil wars, the 1960 tsunami ('In 1960, a tsunami caused by an earthquake off the coast of Chile swept the ahu inland'), the 86-tonne heaviest moai ('The heaviest moai erected was a shorter but squatter moai at Ahu Tongariki, weighing 86 tonnes'), one kilometre from Rano Raraku and Poike, winter-solstice alignment. The false part is exactly the part carrying a citation marker. <https://en.wikipedia.org/wiki/Ahu_Tongariki> <https://en.wikipedia.org/wiki/Moai> |
+| `card_description` | **CORRECT** | — | 15 moai, 86 tonnes heaviest, 1960 tsunami, restoration: all supported. The card carries no construction date, so the severe dating error does not reach the spoken text. <https://en.wikipedia.org/wiki/Ahu_Tongariki> <https://en.wikipedia.org/wiki/Moai> |
+| `civilization` | **CORRECT** | — | Denormalised country copy by design (including the compound form). <docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.3.4> |
+| `heritage_designation` | **CORRECT** | — | NULL permitted; empty on all 36 sampled sites. Wikidata P1435 = Historical Monument of Chile (Q35863415), so the value is available. <https://www.wikidata.org/wiki/Q3448354> |
+| `hero_image` | **WRONG** | any of the 19 gallery photographs (e.g. File:Los 15 Moais.JPG) promoted to hero | STRUCTURAL error, not a wrong-site error: 800x135, i.e. height < 400, which is the plan's own strip definition (SQL at plan line 293: count(*) FILTER (WHERE height < 400) AS strips). The file is additionally a derived banner ('Banner abgeleitet von CHI-rapanui-tongariki-02'), not a photograph. The site itself is correct. <https://commons.wikimedia.org/wiki/File:CHI-rapanui-tongariki-banner.jpg> <docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 6.3> |
+| `gallery_images` | **CORRECT** | — | Metadata-level verdict. All 19 non-hero rows show this ahu; five carry Category:Ahu Tongariki explicitly and one is a Wiki Loves Monuments photograph of the Chilean national monument. No wrong-site row. <https://commons.wikimedia.org/wiki/Category:Ahu_Tongariki> |
+| `thumbnail_url` | **UNVERIFIABLE** | — | Local export path; no public/data/images copy in this checkout. <output/remediation/snapshot/wiki_images.jsonl.gz> |
+| `source_url` | **CORRECT** | — | HTTP 200, dedicated article. <https://en.wikipedia.org/wiki/Ahu_Tongariki> |
+| `scope` | **CORRECT** | — | Americas, cutoff 1500 AD; in scope both with the shipped date and with the corrected one (1250). <docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.1 E3> |
+
+The dating error is the first severe content error in the sample. It is invisible to any check that reads only the database: the value is plausible-looking, internally consistent with period_name, and carries a citation marker that a reader would trust. Only the cited source shows it up.
+
+---
+
+## 08. The Gop — tier 4
+
+- `site_id` `9ed175c7-a706-4a71-b10a-f93a68734afc`
+- sampled tier 4 · sample position 8 of 36
+- checked 2026-09-20T23:09:47+02:00
+
+| field | database value |
+|---|---|
+| `name` | The Gop |
+| `country` | Wales |
+| `coordinates` | 53.310566638728986, -3.3722000026694463 |
+| `period_start` | -5000 |
+| `period_name` | < 4500 BC |
+| `site_type` | Fortress/citadel |
+| `description` | A massive Neolithic cairn on Gop Hill in Flintshire, Wales, and the second-largest ancient human-made mound in Britain after Silbury Hill. The oval monument stands 14 m high with a maximum diameter of 101 m, constructed of limestone blocks with drystone walling. Boyd Dawkins excavated in 1886-87 using tunnels and a shaft but found no burial chamber, leaving its function uncertain. The Gop Cave beneath yielded fourteen human skeletons, a stone axe, and Peterborough pottery indicating Neolithic activity. Whether it served as a passage grave, ceremonial platform, or hillfort remains debated. |
+| `card_description` | 5th-4th millennium BC Neolithic cairn in the Clwydian Range, Flintshire - the second-largest Neolithic mound in Britain after Silbury Hill. |
+| `civilization` | Wales |
+| `heritage_designation` | — |
+| `hero_image` | hero.webp (800x600, Commons File:Gop hill clwydian range.jpg, Category:Cairns in Flintshire) |
+| `gallery_images` | 1 further image: File:Y Gop (Bryn y Saethau)... Wales 38.png, an aerial photograph |
+| `thumbnail_url` | /data/images/wiki/9ed175c7/hero.webp |
+| `source_url` | https://en.wikipedia.org/wiki/The_Gop |
+| `scope` | Europe (lat 53.31, lon -3.37), period_start -5000 <= 500 AD -> in scope |
+
+| field | verdict | correct value | evidence |
+|---|---|---|---|
+| `name` | **CORRECT** | — | All sources use 'The Gop' (Welsh: Coparleni; also Gop Cairn, Gop-y-Goleuni, Y Gop). <https://en.wikipedia.org/wiki/The_Gop> <https://coflein.gov.uk/en/sites/306725> <https://www.wikidata.org/wiki/Q1537771> |
+| `country` | **CORRECT** | — | 'Wales' rather than 'United Kingdom' is deliberate project design (Wikidata P17 is Q145). <docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.3.2> |
+| `coordinates` | **CORRECT** | — | Database 53.31056664, -3.37220000; enwiki and Wikidata P625 both 53.3104, -3.3722. Within ~20 m. <https://www.wikidata.org/wiki/Q1537771> <https://en.wikipedia.org/wiki/The_Gop> |
+| `period_start` | **WRONG** | -4000 to -3000 (bucket 4500 - 3000 BC; '3000 - 1500 BC' if the latest phase is meant) | Coflein, the RCAHMW national database, records 'Period Neolithic, Bronze Age' and calls the monument a cairn. The British Neolithic begins c. 4000 BC, so -5000 (bucket '< 4500 BC') is a bucket early: the record's own card text says '5th-4th millennium BC' while the sources support the 4th-3rd. Bucket mismatch, which is the condition plan 4.3.1 sets for reporting a round sort key. <https://coflein.gov.uk/en/sites/306725> <https://en.wikipedia.org/wiki/The_Gop> |
+| `period_name` | **CORRECT** | — | categorize_period(-5000) = '< 4500 BC'. Internally consistent with the (wrong) sort key. <docs/procedures/ENRICHMENT_AUDIT.md> |
+| `site_type` | **WRONG** | Megalithic structures (cairn) or Tomb - not Fortress/citadel | Coflein's 'Type Of Site' field reads CAIRN; enwiki 'a Neolithic monument ... it is the second-largest Neolithic mound in Britain' and 'the cairn mound is 75-80m in diameter and 12m high'. The hillfort reading is one hypothesis ('excavations have not uncovered a burial chamber ... which may indicate that it was used as a look-out or hill fort'), not the identification, and the record's own description says the function 'remains debated'. Wikidata P31 is summit and hill, which supports neither. Claiming a fortress asserts what the sources leave open. <https://coflein.gov.uk/en/sites/306725> <https://en.wikipedia.org/wiki/The_Gop> |
+| `description` | **WRONG** | 12 m high, 75-80 m in diameter | Measurements contradicted by both sources: Coflein 'Gop Cairn is a titanic cairn, 75-80m in diameter and 12m high'; enwiki 'the cairn mound is 75-80m in diameter and 12m high'. The database says '14 m high with a maximum diameter of 101 m' - both numbers inflated, and a third site (stone-circles.org.uk) also gives '12 metres in height'. Correct in the same field: the Neolithic cairn identification, Gop Hill, second-largest mound after Silbury Hill (enwiki; Coflein adds the Marlborough Mount as a third larger mound), the 1886-87 excavation by shaft and drifts with no burial chamber found (Coflein: 'explored in 1886-7 by a central shaft and drifts and faunal remains only were encountered'), and the cave's human remains (Coflein: 'The Gop Cave ... has produced human skeletons, prehistoric flints and pottery'). NOT verifiable in the sources read, so not counted: the excavator's name (Dawkins), the count of fourteen skeletons, the stone axe, and Peterborough pottery. <https://coflein.gov.uk/en/sites/306725> <https://en.wikipedia.org/wiki/The_Gop> |
+| `card_description` | **WRONG** | 4th-3rd millennium BC Neolithic cairn | The card's dating is the same error in the spoken text: '5th-4th millennium BC'. The British Neolithic begins c. 4000 BC, so the 5th millennium is too early for a Neolithic cairn. The rest of the card ('second-largest Neolithic mound in Britain after Silbury Hill', Clwydian Range, Flintshire) matches the sources. <https://coflein.gov.uk/en/sites/306725> <https://en.wikipedia.org/wiki/The_Gop> |
+| `civilization` | **CORRECT** | — | Denormalised country copy by design. <docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.3.4> |
+| `heritage_designation` | **CORRECT** | — | NULL permitted; empty on all 36 sampled sites. The monument is in the RCAHMW national record (NPRN 306725, 'Cairns in Flintshire' category on Commons), so the gap is fillable. <https://coflein.gov.uk/en/sites/306725> |
+| `hero_image` | **CORRECT** | — | Metadata-level verdict. 800x600, Category:Cairns in Flintshire, description 'The Gop from River Clwyd' - this monument, not a strip. <https://commons.wikimedia.org/wiki/File:Gop_hill_clwydian_range.jpg> |
+| `gallery_images` | **CORRECT** | — | Metadata-level verdict. The single gallery row is an aerial photograph of Y Gop (Wiki Loves Earth 2023), description 'A neolithic monument lying within Bryniau Clwyd ... the second-largest Celtic, neolithic mound in Britain after Silbury Hill'. Correct site. Only two images exist in the whole record. <https://commons.wikimedia.org/wiki/File:Y_Gop_(Bryn_y_Saethau),_Trelawnyd,_Bryniau_Clwyd,_Sir_y_Fflint_-_Gop_Hill,_Trelawnyd,_Flintshire,_Moelydd_Clwyd_(Clwydian_Hills),_Wales_38.png> |
+| `thumbnail_url` | **UNVERIFIABLE** | — | Local export path; no public/data/images copy in this checkout. <output/remediation/snapshot/wiki_images.jsonl.gz> |
+| `source_url` | **CORRECT** | — | HTTP 200, dedicated article - but only 1,080 characters, and it does not contain the excavation history, the cave's finds or the 101 m/14 m figures the description uses. <https://en.wikipedia.org/wiki/The_Gop> |
+| `scope` | **CORRECT** | — | Europe, Neolithic -> in scope. <docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.1 E3> |
+
+This is the first site where a national heritage database (Coflein/RCAHMW) settled a question Wikipedia left vague - and it contradicted the record twice (dimensions, type). The record's own description is internally inconsistent: it calls the mound a cairn, says the function is debated, and then ships the type 'Fortress/citadel'.
+
+---
+
+## 09. Bulls of Guisando — tier 4
+
+- `site_id` `0529af31-7573-467e-88ff-12dbca48f94d`
+- sampled tier 4 · sample position 9 of 36
+- checked 2026-09-20T23:09:47+02:00
+
+| field | database value |
+|---|---|
+| `name` | Bulls of Guisando |
+| `country` | Spain |
+| `coordinates` | 40.361738597789916, -4.4418329322283885 |
+| `period_start` | -500 |
+| `period_name` | 500 BC - 1 AD |
+| `site_type` | Sculptured stone |
+| `description` | The Bulls of Guisando (Toros de Guisando) are four granite sculptures on the hill of Guisando in El Tiémblo, Ávila, Spain. Dating to the 2nd century BC, they are examples of the Celtic Iberian "verracos" tradition-massive stone carvings of bulls or pigs. Each sculpture features holes interpreted as sockets for horns[1]. They belong to a group of hundreds of such monuments known across the Iberian Peninsula, representing one of the most significant collections of these ancient sculptures[2]. |
+| `card_description` | Four granite bull sculptures associated with the Celtic Vettones people. Hundreds of similar "verracos" exist, but these are among the most famous examples. |
+| `civilization` | Spain |
+| `heritage_designation` | — |
+| `hero_image` | hero.webp (800x449, Commons File:Toros de Guisando (detalle de inscripción) 03.JPG) |
+| `gallery_images` | 19 further images: bull photographs, a 19th-century engraving, inscription details |
+| `thumbnail_url` | /data/images/wiki/0529af31/hero.webp |
+| `source_url` | https://en.wikipedia.org/wiki/Bulls_of_Guisando |
+| `scope` | Europe (lat 40.36, lon -4.44), period_start -500 <= 500 AD -> in scope |
+
+| field | verdict | correct value | evidence |
+|---|---|---|---|
+| `name` | **CORRECT** | — | enwiki title and Wikidata label both 'Bulls of Guisando' (Spanish: Toros de Guisando). <https://en.wikipedia.org/wiki/Bulls_of_Guisando> <https://www.wikidata.org/wiki/Q2454775> |
+| `country` | **CORRECT** | — | Wikidata P17 = Q29 (Spain). <https://www.wikidata.org/wiki/Q2454775> |
+| `coordinates` | **CORRECT** | — | Database 40.36173860, -4.44183293; enwiki 40.36158333, -4.44182222 (~17 m); Wikidata P625 40.36069444, -4.44161111 (~115 m). All inside the same field. <https://en.wikipedia.org/wiki/Bulls_of_Guisando> <https://www.wikidata.org/wiki/Q2454775> |
+| `period_start` | **CORRECT** | — | Bucket sort key. enwiki: 'The Bulls may have been made during the 2nd century BCE'; -500 is the floor of the bucket 500 BC - 1 AD, which contains -200. Wikidata P2348 (time period) = Iron Age, consistent. <https://en.wikipedia.org/wiki/Bulls_of_Guisando> |
+| `period_name` | **CORRECT** | — | categorize_period(-500) = '500 BC - 1 AD'. <docs/procedures/ENRICHMENT_AUDIT.md> |
+| `site_type` | **CORRECT** | — | Wikidata P31 includes verraco (Q2988353), megalith and archaeological site; 'Sculptured stone' is the canonical value and is the closest fit. <https://www.wikidata.org/wiki/Q2454775> <pipeline/normalizers/site_type.py> |
+| `description` | **WRONG** | El Tiemblo (the municipality's name carries no accent on the second syllable) | One spelling error: the record writes 'El Tiémblo'; enwiki writes 'El Tiemblo' in the same sentence ('located on the hill of Guisando in the municipality of El Tiemblo, Ávila, Spain'), and the Commons category members are titled 'El Tiemblo' ('File:El Tiemblo - Ávila - 002.jpg'). Cosmetic severity. Everything else in the field is supported: four granite sculptures, hill of Guisando, 2nd century BC, verracos of which hundreds are known, the horn sockets ('there are holes which have been interpreted as sockets for horns'), the association with a pre-Roman people. 'Celtic Iberian' is loose where the source says 'the pre-Roman peoples known as the Vettones' - the card uses the tighter form, so not counted. <https://en.wikipedia.org/wiki/Bulls_of_Guisando> <https://commons.wikimedia.org/wiki/Category:Bulls_of_Guisando> |
+| `card_description` | **CORRECT** | — | Four granite sculptures, Vettones (Wikidata P2596 culture = Vettones Q924779), hundreds of verracos, among the most famous: all supported. <https://en.wikipedia.org/wiki/Bulls_of_Guisando> <https://www.wikidata.org/wiki/Q2454775> |
+| `civilization` | **CORRECT** | — | Denormalised country copy by design. The real attribution (Vettones) is available in Wikidata P2596 but unused by design. <docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.3.4> |
+| `heritage_designation` | **CORRECT** | — | NULL permitted; empty on all 36 sampled sites. Fillable: enwiki 'The bulls are protected in Spain's heritage listings as a Bien de Interes Cultural (Property of Cultural Interest), being classified as a Sitio historico'; Wikidata P1435 = Q23712. <https://en.wikipedia.org/wiki/Bulls_of_Guisando> <https://www.wikidata.org/wiki/Q2454775> |
+| `hero_image` | **CORRECT** | — | Metadata-level verdict. 800x449, a detail photograph of one of the bulls (the description places 'Toros de Guisando, conjunto escultórico veton (siglo II a. de C.)' in El Tiemblo). Correct site, no strip. Class note, not an error: the hero is a detail of an inscription rather than a view of the group. <https://commons.wikimedia.org/wiki/File:Toros_de_Guisando_(detalle_de_inscripci%C3%B3n)_03.JPG> |
+| `gallery_images` | **CORRECT** | — | Metadata-level verdict. The 19 rows are bull photographs, inscription details and one 1892 engraving. Class note, not counted as an error: 'File:Apuntes al natural valdeiglesias.jpg' is a composite engraving of monuments from San Martin de Valdeiglesias, Pelayos de la Presa and El Tiemblo, so it is not a photograph of this site alone. <https://commons.wikimedia.org/wiki/Category:Bulls_of_Guisando> |
+| `thumbnail_url` | **UNVERIFIABLE** | — | Local export path; no public/data/images copy in this checkout. <output/remediation/snapshot/wiki_images.jsonl.gz> |
+| `source_url` | **CORRECT** | — | HTTP 200, dedicated article. <https://en.wikipedia.org/wiki/Bulls_of_Guisando> |
+| `scope` | **CORRECT** | — | Europe, -500 -> in scope. <docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.1 E3> |
+
+The cleanest content in the sample so far: one accent. Notable that the record leaves out the 1468 Treaty of the Bulls of Guisando that the cited article spends a paragraph on - not an error, but it is the best-known fact about the place.
+
+---
+
+## 10. Museo Campano — tier 3
+
+- `site_id` `3bcf804a-ff18-4066-89bd-cfaa8a3b5a46`
+- sampled tier 3 · sample position 10 of 36
+- checked 2026-09-20T23:09:47+02:00
+
+| field | database value |
+|---|---|
+| `name` | Museo Campano |
+| `country` | Italy |
+| `coordinates` | 41.111076842523865, 14.213266798496122 |
+| `period_start` | 1869 |
+| `period_name` | 1500+ AD |
+| `site_type` | Museum |
+| `description` | The Museo Provinciale Campano di Capua (commonly called Museo Campano) is a provincial museum in Capua, southern Italy. Established in 1870 and opened to the public in 1874, it is located in the historic Palazzo Antignano. The museum focuses on ancient Italian civilization in Campania and houses an extensive collection of matres matutae ritual statues from the ancient Roman site of Capua antica. It also contains the second largest lapidarium in the region, after the National Archaeological Museum of Naples.[1] |
+| `card_description` | Founded 1870 in Palazzo Antignano, Capua. Houses 160+ tuff statues of matres matutae - mother goddesses with infants - from the Fondo Patturelli sanctuary, plus the region's second-largest lapidarium. |
+| `civilization` | Italy |
+| `heritage_designation` | — |
+| `hero_image` | hero.webp (800x533, Commons File:Apse frescoes from church of San Salvatore Piccolo, Capua. Museo Campano, detail angel top left.jpg) |
+| `gallery_images` | 19 further images: museum rooms, Palazzo Antignano, exhibits (Mater Matuta statues, Pier delle Vigne bust, paintings) |
+| `thumbnail_url` | /data/images/wiki/3bcf804a/hero.webp |
+| `source_url` | https://en.wikipedia.org/wiki/Museo_Campano |
+| `scope` | Europe (lat 41.11, lon 14.21), museum exhibiting ancient material -> in scope per E3 |
+
+| field | verdict | correct value | evidence |
+|---|---|---|---|
+| `name` | **CORRECT** | — | enwiki title 'Museo Campano' and the article's first sentence names both forms ('Museo Provinciale Campano di Capua (commonly referred to as Museo Campano)'). <https://en.wikipedia.org/wiki/Museo_Campano> <https://www.wikidata.org/wiki/Q3868446> |
+| `country` | **CORRECT** | — | Wikidata P17 = Q38 (Italy); enwiki 'Capua, southern Italy'. <https://www.wikidata.org/wiki/Q3868446> |
+| `coordinates` | **CORRECT** | — | Database 41.11107684, 14.21326680; enwiki 41.11086667, 14.21319167; Wikidata P625 41.110867, 14.213192. Within ~25 m. <https://www.wikidata.org/wiki/Q3868446> <https://en.wikipedia.org/wiki/Museo_Campano> |
+| `period_start` | **CORRECT** | — | Not reported as an error, by the plan's own rule: Wikidata P571 (inception) = 1869, so the value has a source; the museum's own description says 1870 ('officially founded in 1870', while the founding committee dates to 21 August 1869). Both values are in the same bucket (1500+ AD), and plan 4.3.1 forbids reporting a sort key whose bucket is right. Recorded here as a documented near-miss. <https://www.wikidata.org/wiki/Q3868446> <https://en.wikipedia.org/wiki/Museo_Campano> |
+| `period_name` | **CORRECT** | — | categorize_period(1869) = '1500+ AD'. <docs/procedures/ENRICHMENT_AUDIT.md> |
+| `site_type` | **CORRECT** | — | Wikidata P31 includes archaeological museum (Q3329412), art museum, museum of a public entity. 'Museum' is canonical and correct. <https://www.wikidata.org/wiki/Q3868446> <pipeline/normalizers/site_type.py> |
+| `description` | **CORRECT** | — | Verbatim from the cited article: 'Established in 1870 and inaugurated in 1874', 'housed in the historic Palazzo Antignano', 'dedicated to ancient Italian civilization in Campania', 'matres matutae coming from the ancient Roman site of Capua antica', 'second largest lapidarium in the region, after that of the National Archaeological Museum of Naples'. No contradiction found. <https://en.wikipedia.org/wiki/Museo_Campano> |
+| `card_description` | **CORRECT** | — | The two details the cited article does not carry were verified against non-Wikipedia sources: the museum's own site describes the Mater Matuta sanctuary as emerging 'nel cosiddetto Fondo Patturelli di Curti, presso la porta orientale dell'antica Capua', and napolike.com states 'over 150 votive statues made of tuff ... depicting mothers with children'. So 'Fondo Patturelli sanctuary' and 'tuff statues' stand. '160+' matches enwiki ('totaling over 160'), as does the second-largest lapidarium. Founded 1870 matches the article. <https://museocampanocapua.it/post/l-fondo-patturelli-di-curti-e-il-culto-della-mater-matuta> <https://www.napolike.com/museo-campano-capua> <https://en.wikipedia.org/wiki/Museo_Campano> |
+| `civilization` | **CORRECT** | — | Denormalised country copy by design. <docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.3.4> |
+| `heritage_designation` | **CORRECT** | — | NULL permitted; empty on all 36 sampled sites. Wikidata P1435 = Italian national heritage (Q26971668). <https://www.wikidata.org/wiki/Q3868446> |
+| `hero_image` | **CORRECT** | — | Metadata-level verdict. 800x533, and the file documents a fresco held in Museo Campano ('From the apse of the church of San Salvatore Piccolo, Capua. Museo Campano'). Correct site, no strip. Class note, not an error: the hero is a detail of one exhibit rather than a view of the museum. <https://commons.wikimedia.org/wiki/File:Apse_frescoes_from_church_of_San_Salvatore_Piccolo,_Capua._Museo_Campano,_detail_angel_top_left.jpg> |
+| `gallery_images` | **CORRECT** | — | Metadata-level verdict. The rows show the museum building and its collections (Category:Museo Campano or 'Collections of Museo Campano'). One row carries conflicting information and is recorded as unresolved rather than as an error: 'Antefisse a gorgoneion.jpg' is categorised 'Collections of Museo Campano' but its description says the object is exhibited 'presso il Museo Archeologico dell'Antica Capua (S. M. Capua Vetere)' - a different museum in a different town. Metadata alone cannot settle which is right. <https://commons.wikimedia.org/wiki/Category:Museo_Campano> |
+| `thumbnail_url` | **UNVERIFIABLE** | — | Local export path; no public/data/images copy in this checkout. <output/remediation/snapshot/wiki_images.jsonl.gz> |
+| `source_url` | **CORRECT** | — | HTTP 200, dedicated article. <https://en.wikipedia.org/wiki/Museo_Campano> |
+| `scope` | **CORRECT** | — | A museum is kept when it exhibits ancient material; this one is built on the Mater Matuta statues from Capua antica, so it qualifies. Its own founding date (1869/1870) is a museum date, not an archaeological one - the E3 cutoff applies to the material, not to the institution. <docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.1 E3> |
+
+No errors found on this site, and the two card claims that looked unsourced turned out to be confirmed by the museum's own website - a reminder that 'not in the cited Wikipedia article' is not the same as 'invented'. Recorded as a clean site.
+
+---
+
+## 11. Pyramid of Caius Cestius — tier 3
+
+- `site_id` `872b05b1-618b-4618-b3ae-6c69f3177911`
+- sampled tier 3 · sample position 11 of 36
+- checked 2026-09-20T23:09:47+02:00
+
+| field | database value |
+|---|---|
+| `name` | Pyramid of Caius Cestius |
+| `country` | Italy |
+| `coordinates` | 41.87666474754758, 12.48136460434763 |
+| `period_start` | -500 |
+| `period_name` | 500 BC - 1 AD |
+| `site_type` | Pyramid complex |
+| `description` | (18-12 BC) A Roman pyramid tomb built for Gaius Cestius, a member of the Epulones religious corporation. Built in the Nubian pyramid style, it stands at a fork between the Via Ostiensis and the road to the Tiber. Due to its incorporation into Rome's later fortifications, it remains one of the best-preserved ancient structures in the city.[1] |
+| `card_description` | A marble-clad pyramid tomb built in Rome around 18 BC. At 36 m tall, it copied Egyptian style during Rome's obsession with all things pharaonic. |
+| `civilization` | Italy |
+| `heritage_designation` | — |
+| `hero_image` | hero.webp (800x397, Commons File:Testaccio - Piramide e Porta San Paolo.jpg) |
+| `gallery_images` | 19 further images: pyramid photographs, Piranesi etching, World Pride 2000 parade photograph |
+| `thumbnail_url` | /data/images/wiki/872b05b1/hero.webp |
+| `source_url` | https://en.wikipedia.org/wiki/Pyramid_of_Cestius |
+| `scope` | Europe (lat 41.88, lon 12.48), period_start -500 <= 500 AD -> in scope |
+
+| field | verdict | correct value | evidence |
+|---|---|---|---|
+| `name` | **CORRECT** | — | enwiki uses 'Pyramid of Cestius', itwiki 'Piramide di Caio Cestio'; the record's 'Pyramid of Caius Cestius' is the same name in its Latinised form, and it is the form Wikidata's Commons category uses ('Pyramid of Caius Cestius (Rome)'). Not a discrepancy. <https://en.wikipedia.org/wiki/Pyramid_of_Cestius> <https://it.wikipedia.org/wiki/Piramide_di_Caio_Cestio> <https://www.wikidata.org/wiki/Q725404> |
+| `country` | **CORRECT** | — | Wikidata P17 = Q38 (Italy); enwiki 'an ancient Roman pyramid in Rome, Italy'. <https://www.wikidata.org/wiki/Q725404> |
+| `coordinates` | **CORRECT** | — | Database 41.87666475, 12.48136460; enwiki 41.87638889, 12.48083333 (~45 m); Wikidata P625 41.876489, 12.480898. Same building. <https://en.wikipedia.org/wiki/Pyramid_of_Cestius> <https://www.wikidata.org/wiki/Q725404> |
+| `period_start` | **CORRECT** | — | Bucket sort key. enwiki 'built about 18-12 BC', Wikidata P571 = -12; -500 is the floor of the bucket 500 BC - 1 AD, which contains -18. Bucket correct, so the round value is not reported (plan 4.3.1). <https://en.wikipedia.org/wiki/Pyramid_of_Cestius> <https://www.wikidata.org/wiki/Q725404> |
+| `period_name` | **CORRECT** | — | categorize_period(-500) = '500 BC - 1 AD'. <docs/procedures/ENRICHMENT_AUDIT.md> |
+| `site_type` | **UNVERIFIABLE** | — | 'Pyramid complex' is a canonical value (pipeline/normalizers/site_type.py line 110), so this is not an S9 violation, but it is a loose fit: Wikidata P31 lists pyramid (Q12516), mausoleum (Q162875), archaeological site and two museum classes, and the monument is a single tomb, not a complex. No source calls it a complex and none calls it a tomb in the type vocabulary the record would need, so the value is neither confirmed nor refuted. NOT counted as an error, and deliberately not 'corrected' - plan 4.3.5 forbids trading a specific value for a vaguer one on a hunch. <https://www.wikidata.org/wiki/Q725404> <pipeline/normalizers/site_type.py> |
+| `description` | **CORRECT** | — | All claims trace to the cited article: 'built about 18-12 BC as a tomb for Gaius Cestius, a magistrate and member of one of the four great religious corporations in Rome, the Septemviri Epulonum', 'built in the style of the Nubian pyramids', 'It stands at a fork between two ancient roads, the Via Ostiensis and another road that ran west to the Tiber', 'Due to its incorporation into the city's fortifications, it is today one of the best-preserved ancient buildings in Rome'. <https://en.wikipedia.org/wiki/Pyramid_of_Cestius> |
+| `card_description` | **WRONG** | built in the Nubian pyramid style (the article's own words); 'Egyptian' conflates Nubia with Egypt | MINOR/COSMETIC, but a real contradiction with the cited source and with the record's own description: the article says the pyramid was 'built in the style of the Nubian pyramids' and that 'the sharply pointed shape of the pyramid is strongly reminiscent of the pyramids of Nubia, in particular of the kingdom of Meroe', while adding that 'the relatively shallow Giza-type pyramids were not exclusively used by the Egyptians'. The card's 'it copied Egyptian style during Rome's obsession with all things pharaonic' is the other tradition, and 'obsession with all things pharaonic' appears nowhere. The rest of the card is right: 18 BC, marble-clad (the article describes the marble cladding and its restoration), and 36 m is within rounding of the article's 125 Roman feet / 37 m. <https://en.wikipedia.org/wiki/Pyramid_of_Cestius> |
+| `civilization` | **CORRECT** | — | Denormalised country copy by design; the real culture value (Wikidata P2596 = Ancient Rome) is unused by design. <docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.3.4> |
+| `heritage_designation` | **CORRECT** | — | NULL permitted; empty on all 36 sampled sites. Wikidata P1435 = Italian national heritage (Q26971668). <https://www.wikidata.org/wiki/Q725404> |
+| `hero_image` | **WRONG** | a portrait-orientation photograph of the pyramid (the record ships several, e.g. File:Roma-Piramide cestia01.jpg) | STRUCTURAL error, not a wrong-site error: 800x397, i.e. height < 400, which is exactly the plan's strip definition (plan line 293: count(*) FILTER (WHERE height < 400) AS strips). The file is correctly of this site (Category:Pyramid of Caius Cestius (Rome)). <https://commons.wikimedia.org/wiki/File:Testaccio_-_Piramide_e_Porta_San_Paolo.jpg> <docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 6.3> |
+| `gallery_images` | **CORRECT** | — | Metadata-level verdict. The rows show the pyramid from several angles, plus a Piranesi etching of it. Two class notes, neither a wrong-site error: (1) 'RomePyramid.webp' maps to 'File:World Pride 2000 (Roma) - Piazzale ostiense - Foto Giovanni Dall'Orto, 8-7-2000 - 61.jpg', a photograph of a 2000 parade at Piazzale Ostiense - the pyramid is context, not subject; (2) the Piranesi etching is an 18th-century artwork rather than a photograph. <https://commons.wikimedia.org/wiki/Category:Pyramid_of_Caius_Cestius_(Rome)> |
+| `thumbnail_url` | **UNVERIFIABLE** | — | Local export path; no public/data/images copy in this checkout. <output/remediation/snapshot/wiki_images.jsonl.gz> |
+| `source_url` | **CORRECT** | — | HTTP 200, dedicated article (9,016 characters). <https://en.wikipedia.org/wiki/Pyramid_of_Cestius> |
+| `scope` | **CORRECT** | — | Europe, 18 BC -> in scope. <docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.1 E3> |
+
+The 397 px hero is worth flagging precisely because it sits one pixel inside the plan's strip definition: a census that used 'height < 350' or 'aspect > 3' would miss it, while the plan's own SQL catches it. Useful cross-check on the census when the blind is lifted.
+
+---
+
+## 12. Metsamor Historical-Archaeological Museum-Reserve — tier 3
+
+- `site_id` `e8764512-a557-49a6-b4ca-1ec9452e9563`
+- sampled tier 3 · sample position 12 of 36
+- checked 2026-09-20T23:09:47+02:00
+
+| field | database value |
+|---|---|
+| `name` | Metsamor Historical-Archaeological Museum-Reserve |
+| `country` | Armenia |
+| `coordinates` | 40.12650876057409, 44.186856470913774 |
+| `period_start` | -4000 |
+| `period_name` | 4500 - 3000 BC |
+| `site_type` | Fortress/citadel |
+| `description` | Metsamor is a fortified settlement 32 km west of Yerevan, Armenia, occupied from the 4th millennium BC through the 17th century AD. The site is renowned as one of the earliest known metallurgical centres, with smelting furnaces predating those of Palestine, and evidence of copper, bronze, and iron processing. The complex includes Cyclopean fortification walls, temple structures, a ziggurat-observatory, and a necropolis. The on-site museum, opened in 1968, houses over 22,000 artefacts, including an agate weight of Babylonian king Ulam Burariash from the 16th century BC. |
+| `card_description` | A fortress site with evidence of metal smelting dating to the 4th millennium BC - among the oldest metallurgy in the world. It was destroyed not by the Urartians, but likely by Scythian nomads. |
+| `civilization` | Armenia |
+| `heritage_designation` | — |
+| `hero_image` | hero.webp (800x450, Commons File:Armenian Metsamor foundry - panoramio (1).jpg) |
+| `gallery_images` | 19 further images: the site, the citadel, the museum, a vishapakar stone |
+| `thumbnail_url` | /data/images/wiki/e8764512/hero.webp |
+| `source_url` | https://en.wikipedia.org/wiki/Metsamor_site |
+| `scope` | Europe/Asia (lat 40.13, lon 44.19), period_start -4000 <= 500 AD -> in scope |
+
+| field | verdict | correct value | evidence |
+|---|---|---|---|
+| `name` | **CORRECT** | — | The record carries the official designation of the institution that administers the site ('Metsamor Historical-Archaeological Museum-Reserve'), while the cited article is titled 'Metsamor site' and Wikidata's label is 'Metsamor site'. Both name the same place; the record's form is the more formal one and is not contradicted. Worth knowing for name de-duplication, not an error. <https://en.wikipedia.org/wiki/Metsamor_site> <https://www.wikidata.org/wiki/Q11120743> |
+| `country` | **CORRECT** | — | Wikidata P17 = Q399 (Armenia); enwiki 'the Ararat Plain region of Armenia'. <https://www.wikidata.org/wiki/Q11120743> |
+| `coordinates` | **CORRECT** | — | Database 40.12650876, 44.18685647; enwiki 40.126275, 44.18679444. Within ~28 m. <https://en.wikipedia.org/wiki/Metsamor_site> |
+| `period_start` | **CORRECT** | — | Bucket sort key. enwiki: 'The oldest traces of settlement date to the turn of the 4th millennium BC, in the Bronze Age or Chalcolithic'; -4000 is the floor of the bucket 4500 - 3000 BC, which contains -4000. Bucket correct (plan 4.3.1). <https://en.wikipedia.org/wiki/Metsamor_site> |
+| `period_name` | **CORRECT** | — | categorize_period(-4000) = '4500 - 3000 BC'. <docs/procedures/ENRICHMENT_AUDIT.md> |
+| `site_type` | **CORRECT** | — | enwiki: 'Archaeologists have excavated the fortified citadel, the area known as the "lower town" below the citadel, and the cemetery to the east'; Wikidata P31 = archaeological site. 'Fortress/citadel' is canonical and matches the excavated citadel. <https://en.wikipedia.org/wiki/Metsamor_site> <https://www.wikidata.org/wiki/Q11120743> |
+| `description` | **CORRECT** | — | Confirmed by the cited article: 'occupied from the 4th millennium BC through the 17th century AD' ('the youngest date to the 17th century CE'), 'fortified settlement' with 'the fortified citadel' and 'Cyclopean' walls implied by the citadel excavation, temple structures ('a large religious complex consisting of five small temples with clay cascading altars'), 'the cemetery to the east', the on-site museum ('The Museum of History and Archeology at Metsamor Site was opened in 1968'), 'more than 22,000 items'. FOUR claims are NOT in the cited article and were not verified elsewhere, so they are recorded as unresolved rather than as errors: '32 km west of Yerevan'; 'one of the earliest known metallurgical centres, with smelting furnaces predating those of Palestine'; 'a ziggurat-observatory'; 'an agate weight of Babylonian king Ulam Burariash from the 16th century BC'. All four are recurring claims in the Armenian excavation literature and none of them looks invented, but this audit did not confirm them. <https://en.wikipedia.org/wiki/Metsamor_site> |
+| `card_description` | **CORRECT** | — | The destruction claim is exactly what the article says: 'According to tradition, Metsamor was destroyed in the Iron Age by the Urartians; researchers now believe it was destroyed by Scythian or Cimmerian nomads.' The 4th-millennium smelting date is consistent with the description's claim and with the site's reputation, but note that the article places the developed metallurgical production in the Late Bronze and Early Iron Ages (15th-8th century BC) - the 4th-millennium date refers to the earliest traces, not to the peak. Not counted as an error; recorded because it is the kind of slippage that becomes an error in a shorter sentence. <https://en.wikipedia.org/wiki/Metsamor_site> |
+| `civilization` | **CORRECT** | — | Denormalised country copy by design. <docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.3.4> |
+| `heritage_designation` | **CORRECT** | — | NULL permitted; empty on all 36 sampled sites. The record's own description names the state institution ('Service for the Protection of Historical and Cultural Environment and Museum Reservation' appears in the cited article), so a designation exists. <https://en.wikipedia.org/wiki/Metsamor_site> |
+| `hero_image` | **CORRECT** | — | Metadata-level verdict. 800x450, description 'Armenian Metsamor foundry' - the site's metallurgical remains, which is exactly the record's headline claim. No strip. <https://commons.wikimedia.org/wiki/File:Armenian_Metsamor_foundry_-_panoramio_(1).jpg> |
+| `gallery_images` | **CORRECT** | — | Metadata-level verdict. The 19 rows show the site, citadel and museum. One row is recorded as unresolved rather than as an error: 'Վիշապաքար.JPG' is a vishapakar (dragon stone) photographed for Wiki Loves Monuments with a monument ID; the file's description does not name Metsamor, and this audit did not confirm that the stone stands at this site. <https://commons.wikimedia.org/wiki/File:%D5%8E%D5%AB%D5%B7%D5%A1%D5%BA%D5%A1%D6%84%D5%A1%D6%80.JPG> |
+| `thumbnail_url` | **UNVERIFIABLE** | — | Local export path; no public/data/images copy in this checkout. <output/remediation/snapshot/wiki_images.jsonl.gz> |
+| `source_url` | **CORRECT** | — | HTTP 200, dedicated article (4,816 characters; its tail repeats two references verbatim, a source-side defect that does not affect the record). <https://en.wikipedia.org/wiki/Metsamor_site> |
+| `scope` | **CORRECT** | — | Rest of world, -4000 -> in scope. <docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.1 E3> |
+
+No error found. The value of this record for the audit is the list of four claims that the cited source does not carry: they are the exact class the plan expects an enrichment pass to invent, and here they appear to be true but unsourced. The measurement cannot count them, and should say so.
+
+---
+
+## 13. Overstone Anglo-Saxon Cemetery — tier 3
+
+- `site_id` `d799bb0f-8ffd-4a29-a516-ffd445f6b699`
+- sampled tier 3 · sample position 13 of 36
+- checked 2026-09-20T23:09:47+02:00
+
+| field | database value |
+|---|---|
+| `name` | Overstone Anglo-Saxon Cemetery |
+| `country` | England |
+| `coordinates` | 52.29076559546375, -0.8211678162240994 |
+| `period_start` | 450 |
+| `period_name` | 1 - 500 AD |
+| `site_type` | Cemetery |
+| `description` | Anglo-Saxon burial site discovered in 2019 near Overstone, Northamptonshire, England. The 15 hectare cemetery is the largest Anglo-Saxon burial ground found in Northamptonshire [1]. Excavation by the Museum of London Archaeology yielded 154 graves containing 3,000 artefacts [1]. |
+| `card_description` | Largest Anglo-Saxon cemetery in Northamptonshire -- 15 hectares excavated in 2019. Over 160 skeletons and 70 square barrows of the Arras culture, with a range of grave goods. |
+| `civilization` | England |
+| `heritage_designation` | — |
+| `hero_image` | — |
+| `gallery_images` | none - the record has 0 wiki_images rows |
+| `thumbnail_url` | — |
+| `source_url` | https://en.wikipedia.org/wiki/Overstone_Anglo-Saxon_cemetery |
+| `scope` | Europe (lat 52.29, lon -0.82), period_start 450 <= 500 AD -> in scope |
+
+| field | verdict | correct value | evidence |
+|---|---|---|---|
+| `name` | **CORRECT** | — | enwiki title and Wikidata label both 'Overstone Anglo-Saxon cemetery'; the record capitalises Cemetery. <https://en.wikipedia.org/wiki/Overstone_Anglo-Saxon_cemetery> <https://www.wikidata.org/wiki/Q106907918> |
+| `country` | **CORRECT** | — | 'England' rather than 'United Kingdom' is deliberate project design (Wikidata P17 = Q145). <docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.3.2> |
+| `coordinates` | **UNVERIFIABLE** | — | Neither the cited article (no coordinates in the page) nor the Wikidata item (no P625) carries a coordinate to compare against. The value 52.2908, -0.8212 sits at Overstone, Northamptonshire, which matches the article's 'near the village of Overstone, Northamptonshire', so nothing contradicts it - but there is no source to confirm it either. Recorded as unverifiable rather than correct. <https://en.wikipedia.org/wiki/Overstone_Anglo-Saxon_cemetery> <https://www.wikidata.org/wiki/Q106907918> |
+| `period_start` | **UNVERIFIABLE** | — | The cited article gives NO date for the burials at all - it says only 'Anglo-Saxon place of burial discovered ... in 2019'. 450 is plausible for an early Anglo-Saxon cemetery and it is the value that puts the site in the 1-500 AD bucket, but with no dating source I cannot confirm it, and if the graves are 6th-7th century the bucket would be 500-1000 AD. Not counted as an error and not called correct. <https://en.wikipedia.org/wiki/Overstone_Anglo-Saxon_cemetery> |
+| `period_name` | **CORRECT** | — | categorize_period(450) = '1 - 500 AD'. <docs/procedures/ENRICHMENT_AUDIT.md> |
+| `site_type` | **CORRECT** | — | Wikidata P31 = cemetery (Q39614) and archaeological site (Q839954); enwiki 'an Anglo-Saxon place of burial'. 'Cemetery' is canonical and exact. <https://www.wikidata.org/wiki/Q106907918> |
+| `description` | **CORRECT** | — | Every claim is verbatim from the cited article: 'discovered at the Overstone Leys housing development site near the village of Overstone, Northamptonshire', 'found during an archaeological investigation in 2019', 'It is the biggest Anglo-Saxon cemetery ever found in Northamptonshire', 'The 15 hectare site was excavated in 2019 by the Museum of London Archaeology over a 12 month period', 'Uncovered during the excavation were 154 individual graves and 3000 artefacts'. This is the only field of the record that is both complete and accurate. <https://en.wikipedia.org/wiki/Overstone_Anglo-Saxon_cemetery> |
+| `card_description` | **WRONG** | 154 graves and 3,000 artefacts; no square barrows and no Arras culture are mentioned by any source consulted | SEVERE - the spoken text is fabricated in two places. (1) 'Over 160 skeletons': the excavation found 154 individual graves, and the article reports 154, not 'over 160'. (2) '70 square barrows of the Arras culture': the Arras culture is an IRON AGE culture of East Yorkshire, unrelated to a Northamptonshire Anglo-Saxon cemetery; the cited article mentions no barrows at all (it does mention 'Three Bronze Age round barrows' elsewhere on the site - round, not square, and Bronze Age, not Arras). The phrase looks like a paste from a different record's template. The card's first sentence is correct. <https://en.wikipedia.org/wiki/Overstone_Anglo-Saxon_cemetery> |
+| `civilization` | **CORRECT** | — | Denormalised country copy by design. <docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.3.4> |
+| `heritage_designation` | **CORRECT** | — | NULL permitted; empty on all 36 sampled sites. Nothing in the sources indicates a designation for a 2019 rescue excavation. <https://www.wikidata.org/wiki/Q106907918> |
+| `hero_image` | **CORRECT** | — | Empty (NULL), which plan 1.3 permits. Recorded as a GAP, not an error: the record has no images at all, so it cannot appear on any image-dependent surface. This is the plan's S10 class (< 6 images, 2,296 sites) in its extreme form (0 images). <output/remediation/snapshot/wiki_images.jsonl.gz> |
+| `gallery_images` | **CORRECT** | — | Empty - 0 wiki_images rows for this site in the snapshot. Permitted, and a gap (see hero_image). <output/remediation/snapshot/wiki_images.jsonl.gz> |
+| `thumbnail_url` | **CORRECT** | — | NULL, consistent with having no images. <output/remediation/snapshot/wiki_images.jsonl.gz> |
+| `source_url` | **CORRECT** | — | HTTP 200, dedicated article (1,647 characters). <https://en.wikipedia.org/wiki/Overstone_Anglo-Saxon_cemetery> |
+| `scope` | **CORRECT** | — | Europe, 450 AD -> in scope (the early Anglo-Saxon period is inside the 500 AD cutoff). <docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.1 E3> |
+
+The most valuable single record so far. The description is perfect and the card text is fabricated, which means the error lives only in the text that is spoken aloud in the short - the surface a reader of the website would never see. Any audit that checks the description and not the card would score this site clean.
+
+---
+
+## 14. The Merry Maidens — tier 3
+
+- `site_id` `b6af84c5-21f1-4c8a-94d1-2d925bd04725`
+- sampled tier 3 · sample position 14 of 36
+- checked 2026-09-20T23:09:47+02:00
+
+| field | database value |
+|---|---|
+| `name` | The Merry Maidens |
+| `country` | England |
+| `coordinates` | 50.06515705086585, -5.589783647044101 |
+| `period_start` | -4000 |
+| `period_name` | 4500 - 3000 BC |
+| `site_type` | Stone circle |
+| `description` | The Merry Maidens (also known as Dawn's Men) is a Late Neolithic stone circle in Cornwall, England, dating to 4500-3000 BC. Located 3 km south of St Buryan, the complete circle comprises 19 granite megaliths. A pair of standing stones known as The Pipers lies nearby and is connected through local legend. [1][2] |
+| `card_description` | Late Neolithic, 24 metres across. Nineteen granite megaliths graded in height, tallest to the southwest. The two Pipers stones nearby reach 4.6 metres - the tallest standing stones in Cornwall. |
+| `civilization` | England |
+| `heritage_designation` | — |
+| `hero_image` | hero.webp (800x167, Commons File:Merry Maidens stone circle - composite panoramic view.jpg) |
+| `gallery_images` | 19 further images of the circle and The Pipers |
+| `thumbnail_url` | /data/images/wiki/b6af84c5/hero.webp |
+| `source_url` | https://en.wikipedia.org/wiki/The_Merry_Maidens |
+| `scope` | Europe (lat 50.07, lon -5.59), period_start -4000 <= 500 AD -> in scope |
+
+| field | verdict | correct value | evidence |
+|---|---|---|---|
+| `name` | **CORRECT** | — | enwiki title, Wikidata label and the record all 'The Merry Maidens' (also Dawn's Men / Dons Men). <https://en.wikipedia.org/wiki/The_Merry_Maidens> <https://www.wikidata.org/wiki/Q1922063> |
+| `country` | **CORRECT** | — | 'England' rather than 'United Kingdom' is deliberate project design; enwiki says Cornwall. <docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.3.2> |
+| `coordinates` | **CORRECT** | — | Database 50.06515705, -5.58978365. The cited article gives the OS grid reference SW432245, which resolves to approximately 50.0653 N, 5.5898 W - a match within ~15 m. No Wikidata P625 for this item. <https://en.wikipedia.org/wiki/The_Merry_Maidens> |
+| `period_start` | **WRONG** | -2500 (bucket 3000 - 1500 BC) | Bucket error. The cited article calls it 'a Late Neolithic stone circle', and two non-Wikipedia sources give the range: the Cornish Ancient Sites Protection Network, 'The site dates from the late Neolithic-early Bronze Age (approx. 2500-1500 BC)', and sennen-cove-cornwall.uk, 'believed to date from the late Neolithic or early Bronze Age, around 2400 to 1500 BC'. The database's -4000 falls in the bucket 4500 - 3000 BC, one bucket earlier than the true start; the British Late Neolithic begins c. 3000 BC, so -4000 also contradicts the record's own description. <https://en.wikipedia.org/wiki/The_Merry_Maidens> <https://cornishancientsites.com/ancient-sites/merry-maidens-stone-circle/> <https://sennen-cove-cornwall.uk/merry-maidens-stone-circle/> |
+| `period_name` | **CORRECT** | — | categorize_period(-4000) = '4500 - 3000 BC'. Internally consistent with the (wrong) sort key. <docs/procedures/ENRICHMENT_AUDIT.md> |
+| `site_type` | **CORRECT** | — | 'Stone circle' is canonical and exact (the normalizer maps 'stone circle' to it). <https://en.wikipedia.org/wiki/The_Merry_Maidens> <pipeline/normalizers/site_type.py> |
+| `description` | **WRONG** | Late Neolithic to early Bronze Age, c. 2500-1500 BC | The dating is wrong in the same way as period_start, and self-contradictory: the sentence calls the circle 'Late Neolithic' and then dates it '4500-3000 BC', while the British Late Neolithic begins c. 3000 BC. The rest is confirmed by the cited article: 'Dawn's Men', 'a Late Neolithic stone circle located 2 miles (3 km) to the south of the village of St Buryan, in Cornwall', 'The circle, which is thought to be complete, comprises 19 granite megaliths', and The Pipers 'associated both geographically and in legend'. <https://en.wikipedia.org/wiki/The_Merry_Maidens> <https://cornishancientsites.com/ancient-sites/merry-maidens-stone-circle/> |
+| `card_description` | **CORRECT** | — | 'Late Neolithic' is right and '24 metres across' matches the article ('The circle is around 24 metres in diameter'); 'nineteen granite megaliths' matches. Two details could not be settled, and are NOT counted as errors: (1) '4.6 metres' for The Pipers - Wikipedia contradicts itself, with the Merry Maidens article saying 'two 3-metre-high standing stones' and the dedicated Pipers article saying 'The southwest stone is the taller of the two, measuring 4.7 metres high' and 'The northeast stone is 4.2 metres'; (2) 'graded in height, tallest to the southwest' is not in either article (the 'southwest is taller' statement belongs to The Pipers, not to the circle) - this may be a transfer of the Pipers' geometry onto the circle, but no source was found that refutes it either way. 'The tallest standing stones in Cornwall' is supported: the Merry Maidens article calls The Pipers 'largest surviving standing stones in Cornwall and probably the best known'. <https://en.wikipedia.org/wiki/The_Merry_Maidens> <https://en.wikipedia.org/wiki/The_Pipers,_St_Buryan> |
+| `civilization` | **CORRECT** | — | Denormalised country copy by design. <docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.3.4> |
+| `heritage_designation` | **CORRECT** | — | NULL permitted; empty on all 36 sampled sites. Fillable with an exact reference: Historic England list entry 1006731, 'The Merry Maidens (or Dawns Men) stone circle', scheduled monument. (The Historic England page body could not be read - it is JavaScript-gated and returned 'Just a moment... Enable JavaScript and cookies to continue' - so the entry number comes from the search result title/URL, not from the page text.) <https://historicengland.org.uk/listing/the-list/list-entry/1006731> |
+| `hero_image` | **WRONG** | a non-panoramic photograph of the circle (the record ships 19 of them) | STRUCTURAL error, not a wrong-site error: 800x167, height < 400, the plan's own strip definition, and on top of that a 'composite panoramic view' rather than a photograph. The file is of this circle. <https://commons.wikimedia.org/wiki/File:Merry_Maidens_stone_circle_-_composite_panoramic_view.jpg> <docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 6.3> |
+| `gallery_images` | **CORRECT** | — | Metadata-level verdict. All 19 non-hero rows name the Merry Maidens (or The Pipers, which the record's description explicitly covers). No wrong-site row found. <https://commons.wikimedia.org/wiki/Category:The_Merry_Maidens> |
+| `thumbnail_url` | **UNVERIFIABLE** | — | Local export path; no public/data/images copy in this checkout. <output/remediation/snapshot/wiki_images.jsonl.gz> |
+| `source_url` | **CORRECT** | — | HTTP 200, dedicated article. <https://en.wikipedia.org/wiki/The_Merry_Maidens> |
+| `scope` | **CORRECT** | — | Europe, -4000 -> in scope (and still in scope after the correction to -2500). <docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.1 E3> |
+
+Second site in a row where the card is better than the description: the card says 'Late Neolithic' (right) while the description says '4500-3000 BC' (wrong). The two shipped texts disagree with each other, which is a cheap deterministic cross-check the plan's section 5 does not currently use.
+
+---
+
+## 15. Odeon Theatre — tier 3
+
+- `site_id` `3a28b216-d9f2-410d-a12e-050fc4759a98`
+- sampled tier 3 · sample position 15 of 36
+- checked 2026-09-20T23:09:47+02:00
+
+| field | database value |
+|---|---|
+| `name` | Odeon Theatre |
+| `country` | Jordan |
+| `coordinates` | 31.95256829197838, 35.94022470064953 |
+| `period_start` | 1 |
+| `period_name` | 1 - 500 AD |
+| `site_type` | Theatre |
+| `description` | The Odeon Theatre in Amman, Jordan, is a small 2nd-century Roman theatre located adjacent to the larger Roman Theatre in the city's historic downtown. Archaeologists believe it was likely covered with a temporary wooden roof to shield audiences from weather conditions, distinguishing it from the larger open-air theatre nearby[1]. |
+| `card_description` | A small 2nd-century AD Roman theatre, not to be confused with the large theatre next to it. A temporary wooden roof once shielded the audience from the elements. |
+| `civilization` | Jordan |
+| `heritage_designation` | — |
+| `hero_image` | hero.webp (800x523, Commons File:Amman-Odeon(js).jpg, Category:Amman Odeon) |
+| `gallery_images` | 1 further image, also of the Odeon |
+| `thumbnail_url` | /data/images/wiki/3a28b216/hero.webp |
+| `source_url` | https://en.wikipedia.org/wiki/Odeon_theater_(Amman) |
+| `scope` | Rest of world (lat 31.95, lon 35.94), period_start 1 <= 500 AD -> in scope |
+
+| field | verdict | correct value | evidence |
+|---|---|---|---|
+| `name` | **CORRECT** | — | enwiki 'Odeon Theater (Amman)', Wikidata 'Odeon of Amman', itwiki 'Odeon di Amman'; the record's 'Odeon Theatre' is the same name in British spelling. <https://en.wikipedia.org/wiki/Odeon_theater_(Amman)> <https://www.wikidata.org/wiki/Q18756185> |
+| `country` | **CORRECT** | — | Wikidata P17 = Q810 (Jordan). <https://www.wikidata.org/wiki/Q18756185> |
+| `coordinates` | **CORRECT** | — | Database 31.95256829, 35.94022470; enwiki and Wikidata P625 both 31.95233333, 35.93988889. Within ~40 m. <https://en.wikipedia.org/wiki/Odeon_theater_(Amman)> <https://www.wikidata.org/wiki/Q18756185> |
+| `period_start` | **CORRECT** | — | Bucket sort key. The Odeon is 2nd-century: enwiki's own categories include 'Buildings and structures completed in the 2nd century', eswiki says 'construido en el siglo II d. C.'. -1 is the floor of the bucket 1 - 500 AD, which contains 150 AD. Bucket correct (plan 4.3.1). <https://en.wikipedia.org/wiki/Odeon_theater_(Amman)> <https://es.wikipedia.org/wiki/Teatro_Odeon_(Am%C3%A1n)> |
+| `period_name` | **CORRECT** | — | categorize_period(1) = '1 - 500 AD'. <docs/procedures/ENRICHMENT_AUDIT.md> |
+| `site_type` | **CORRECT** | — | Wikidata P31 = odeon (Q1143046); 'Theatre' is canonical and is the closest available value. <https://www.wikidata.org/wiki/Q18756185> <pipeline/normalizers/site_type.py> |
+| `description` | **CORRECT** | — | Confirmed: 'The Odeon is a small 500-seat theatre in Amman, Jordan. Not to be confused with the large Roman Theatre that stands right next to it, on the southern side of the Hashemite Plaza, the Odeon stands on the east side of the Plaza' (enwiki) and 'El Teatro Odeon es un pequeno teatro de 500 asientos en Aman, Jordania. ... construido en el siglo II d. C. Los arqueologos han especulado que lo mas probable es que en la antiguedad, el Odeon estuviera cerrado por un techo de madera temporal que protegia a la audiencia del clima' (eswiki). The wooden-roof sentence is in the Spanish article, not the English one, so the '[1]' marker points at a source that does not carry it - a citation-placement issue, not a false claim, since the claim itself is sourced. <https://en.wikipedia.org/wiki/Odeon_theater_(Amman)> <https://es.wikipedia.org/wiki/Teatro_Odeon_(Am%C3%A1n)> |
+| `card_description` | **CORRECT** | — | 2nd-century, small, next to the larger theatre, temporary wooden roof: all supported. <https://en.wikipedia.org/wiki/Odeon_theater_(Amman)> <https://es.wikipedia.org/wiki/Teatro_Odeon_(Am%C3%A1n)> |
+| `civilization` | **CORRECT** | — | Denormalised country copy by design. <docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.3.4> |
+| `heritage_designation` | **CORRECT** | — | NULL permitted; empty on all 36 sampled sites. <https://www.wikidata.org/wiki/Q18756185> |
+| `hero_image` | **CORRECT** | — | Metadata-level verdict. 800x523, Category:Amman Odeon, description 'Roman Odeon in Amman, Jordan'. It is also the image Wikidata stores as P18, so the hero and Wikidata agree. <https://commons.wikimedia.org/wiki/File:Amman-Odeon(js).jpg> <https://www.wikidata.org/wiki/Q18756185> |
+| `gallery_images` | **CORRECT** | — | Metadata-level verdict. The single gallery row is 'File:Around the roman theater.jpg', Category:Amman Odeon, description 'The Udium is a small theater of celebrations and listening to music, its construction dates back to the second century AD' - this site. GAP, not an error: the record has only 2 images, far below the plan's 6-image floor (S10). <https://commons.wikimedia.org/wiki/File:Around_the_roman_theater.jpg> |
+| `thumbnail_url` | **UNVERIFIABLE** | — | Local export path; no public/data/images copy in this checkout. <output/remediation/snapshot/wiki_images.jsonl.gz> |
+| `source_url` | **CORRECT** | — | HTTP 200, dedicated article - but very short (about 500 characters), so the description's second sentence cannot come from it. <https://en.wikipedia.org/wiki/Odeon_theater_(Amman)> |
+| `scope` | **CORRECT** | — | Rest of world, 2nd century AD -> in scope. <docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.1 E3> |
+
+Clean site. The only imperfection is a citation marker attached to a sentence that lives in the Spanish article rather than the English one - the claim is true, the marker is misleading. Not counted as an error; recorded because it is the same mechanism that produced the severe error at Ahu Tongariki, where the marked sentence was also false.
+
+---
+
+## 16. Areni-1 Cave — tier 3
+
+- `site_id` `1ef25b31-5c42-4ee6-aae1-1bd9c2640bff`
+- sampled tier 3 · sample position 16 of 36
+- checked 2026-09-20T23:09:47+02:00
+
+| field | database value |
+|---|---|
+| `name` | Areni-1 Cave |
+| `country` | Armenia |
+| `coordinates` | 39.731725247974566, 45.20280717090193 |
+| `period_start` | -4500 |
+| `period_name` | 4500 - 3000 BC |
+| `site_type` | Cave Structures |
+| `description` | Areni-1 cave is a Chalcolithic to Bronze Age multicomponent site located along the Arpa River near Areni village in southern Armenia[1][2]. Known locally as "Birds' Cave" (Trchuneri), the cave gained international prominence for yielding the world's oldest known leather shoe and an ancient wine press[1][2][3]. |
+| `card_description` | A cave complex from 4300-3500 BC that yielded the world's oldest known leather shoe and the oldest known winery. Both were preserved by dry cave conditions. |
+| `civilization` | Armenia |
+| `heritage_designation` | — |
+| `hero_image` | hero.webp (800x114, Commons File:Areni cave (Southern Armenia) banner.jpg, Category:Wikivoyage banners of Armenia) |
+| `gallery_images` | 19 further images of the cave and its excavation |
+| `thumbnail_url` | /data/images/wiki/1ef25b31/hero.webp |
+| `source_url` | https://en.wikipedia.org/wiki/Areni-1_cave |
+| `scope` | Rest of world (lat 39.73, lon 45.20), period_start -4500 <= 500 AD -> in scope |
+
+| field | verdict | correct value | evidence |
+|---|---|---|---|
+| `name` | **CORRECT** | — | enwiki 'Areni-1 cave', Wikidata 'Areni-1 cave'; the record adds the capital C. <https://en.wikipedia.org/wiki/Areni-1_cave> <https://www.wikidata.org/wiki/Q4069217> |
+| `country` | **CORRECT** | — | Wikidata P17 = Q399 (Armenia); enwiki 'near the town of Areni, Vayots Dzor Province, Armenia'. <https://www.wikidata.org/wiki/Q4069217> |
+| `coordinates` | **CORRECT** | — | Database 39.73172525, 45.20280717; enwiki 39.73083333, 45.20388889. Within ~150 m. <https://en.wikipedia.org/wiki/Areni-1_cave> |
+| `period_start` | **CORRECT** | — | Bucket sort key. enwiki: 'a Chalcolithic to Bronze Age multicomponent site'; the record's own card says 4300-3500 BC. -4500 is the floor of the bucket 4500 - 3000 BC, which contains -4300. Bucket correct (plan 4.3.1); the card's 4300-3500 BC and the sort key agree. <https://en.wikipedia.org/wiki/Areni-1_cave> |
+| `period_name` | **CORRECT** | — | categorize_period(-4500) = '4500 - 3000 BC'. <docs/procedures/ENRICHMENT_AUDIT.md> |
+| `site_type` | **CORRECT** | — | 'Cave Structures' is canonical and exact for a cave site. <pipeline/normalizers/site_type.py> |
+| `description` | **CORRECT** | — | Every claim traces to the cited article: 'Areni-1 cave (Armenian: Areni-1 kayr) is a cave and archaeological site located near the Areni village, Vayots Dzor Province, Armenia', 'multicomponent site ... along the Arpa River', 'locally known as Trchuneri (Bird's cave)', 'the world's oldest known leather shoe' and the winery/wine press. The record's wording 'an ancient wine press' is more cautious than the source, which calls it the oldest known winery. <https://en.wikipedia.org/wiki/Areni-1_cave> |
+| `card_description` | **CORRECT** | — | 4300-3500 BC is the Chalcolithic occupation the article describes; 'world's oldest known leather shoe' and 'oldest known winery' are the article's own claims; the dry cave conditions are the reason the article gives for the preservation of the organic finds. No contradiction found. <https://en.wikipedia.org/wiki/Areni-1_cave> |
+| `civilization` | **CORRECT** | — | Denormalised country copy by design. <docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.3.4> |
+| `heritage_designation` | **CORRECT** | — | NULL permitted; empty on all 36 sampled sites. <https://www.wikidata.org/wiki/Q4069217> |
+| `hero_image` | **WRONG** | one of the 19 gallery photographs of the cave promoted to hero | STRUCTURAL error, not a wrong-site error: 800x114, height < 400, the plan's own strip definition (plan line 293), and the file is categorised 'Wikivoyage banners of Armenia' and 'Derivative versions' - a banner crop of a panorama. The site is correct: 'Panorama of the Areni-1 cave site along the Arpa River in southern Armenia near the town of Areni. The cave is the location of the world's oldest known winery and where the world's oldest known shoe has been found.' <https://commons.wikimedia.org/wiki/File:Areni_cave_(Southern_Armenia)_banner.jpg> <docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 6.3> |
+| `gallery_images` | **CORRECT** | — | Metadata-level verdict. The 19 non-hero rows show the cave (including a Russian-titled series 'Пещера Арени' - Cave of Areni) and the excavation; the hero file itself sits in Category:Areni-1. No wrong-site row. <https://commons.wikimedia.org/wiki/Category:Areni-1> |
+| `thumbnail_url` | **UNVERIFIABLE** | — | Local export path; no public/data/images copy in this checkout. <output/remediation/snapshot/wiki_images.jsonl.gz> |
+| `source_url` | **CORRECT** | — | HTTP 200, dedicated article. <https://en.wikipedia.org/wiki/Areni-1_cave> |
+| `scope` | **CORRECT** | — | Rest of world, Chalcolithic -> in scope. <docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.1 E3> |
+
+Third banner-strip hero in the sample (Lake Mungo 97 px, Ahu Tongariki 135 px, Areni-1 114 px, Merry Maidens 167 px). All four are Wikivoyage banner crops. This is now a pattern, not an anecdote: the exporter appears to prefer a Wikimedia 'banner' derivative when one exists.
+
+---
+
+## 17. Font dels Coms — tier 3
+
+- `site_id` `58a2be59-ec1e-4667-96b9-3313ce406bc1`
+- sampled tier 3 · sample position 17 of 36
+- checked 2026-09-20T23:09:47+02:00
+
+| field | database value |
+|---|---|
+| `name` | Font dels Coms |
+| `country` | Andorra |
+| `coordinates` | 42.450537483241, 1.4511586765707098 |
+| `period_start` | -3500 |
+| `period_name` | 4500 - 3000 BC |
+| `site_type` | Geological interest |
+| `description` | Font dels Coms is a spring in Andorra la Vella [1]. The name derives from the Pyrenean Catalan word "cóm" (feeding trough), reflecting its use as a watering place for horses and muleteers traveling the ancient route from Seu d'Urgell to Andorra la Vella [1]. Located on carrer Doctor Palau, formerly called Carrer dels Cavallers (Knight's Street), this spring was on the main road between Seu d'Urgell and Andorra la Vella [1]. |
+| `card_description` | Ancient Pyrenean spring used by horses, villagers, and muleteers on the main road between Seu d'Urgell and the capital. The street it sits on was once called Knights' Street. |
+| `civilization` | Andorra |
+| `heritage_designation` | — |
+| `hero_image` | — |
+| `gallery_images` | none - 0 wiki_images rows |
+| `thumbnail_url` | — |
+| `source_url` | https://visitandorra.com/en/culture/font-dels-coms-spring/ |
+| `scope` | Europe (lat 42.45, lon 1.45), period_start -3500 <= 500 AD -> in scope |
+
+| field | verdict | correct value | evidence |
+|---|---|---|---|
+| `name` | **CORRECT** | — | The record's own source uses both spellings: the page title is 'Font dels Coms spring' while the body writes 'Font dels Coms' and 'Font del Coms'. The record's form is one of them. No independent source exists to prefer another (see source coverage note below). <https://visitandorra.com/en/culture/font-dels-coms-spring/> |
+| `country` | **CORRECT** | — | Andorra - the source is the national tourist board and gives the address 'C/ Doctor Palau, s/n - Sant Julia de Loria'. <https://visitandorra.com/en/culture/font-dels-coms-spring/> |
+| `coordinates` | **UNVERIFIABLE** | — | No source carries a coordinate. 42.4505, 1.4512 lies in the parish of Sant Julia de Loria near the Spanish border, which is consistent with the source's address and inconsistent with the description's claim of Andorra la Vella (about 8 km to the northeast). Nothing confirms the exact spot. <https://visitandorra.com/en/culture/font-dels-coms-spring/> |
+| `period_start` | **WRONG** | no archaeological dating; the record's own source calls the spring 'centenary' | FABRICATED VALUE. The only source for this record describes the object in full: 'The Font dels Coms spring is a centenary spring made with a wheel from a flour mill, located on street carrer Doctor Palau in Sant Julia.' A centenary spring is about a hundred years old; the source gives no prehistoric date at all. -3500 is not a rounding of a sourced value, it is a value with no source whatsoever, and it is what places the record in the bucket 4500 - 3000 BC and inside the E3 scope. <https://visitandorra.com/en/culture/font-dels-coms-spring/> |
+| `period_name` | **CORRECT** | — | categorize_period(-3500) = '4500 - 3000 BC'. Internally consistent with the fabricated sort key. <docs/procedures/ENRICHMENT_AUDIT.md> |
+| `site_type` | **CORRECT** | — | 'Geological interest' is canonical and is the honest class for a water source with no archaeological remains - the record does not overstate it. Note that no other sampled site carries this value, so the class is rare. <pipeline/normalizers/site_type.py> <https://visitandorra.com/en/culture/font-dels-coms-spring/> |
+| `description` | **WRONG** | a spring in Sant Julia de Loria (not Andorra la Vella) | The record places the spring 'in Andorra la Vella' three times, while its own cited source gives the address as Sant Julia de Loria ('C/ Doctor Palau, s/n - Sant Julia de Loria'; 'located on street carrer Doctor Palau in Sant Julia'). Sant Julia de Loria is a different parish, about 8 km from the capital. The rest of the field matches the source almost word for word: 'in Pyrenean Catalan, "com" is a feeding trough and, in fact, this spring was often used by the horses of the village and muleteers who passed by such as the arrieros'; 'The road where the spring is located, carrer Doctor Palau, was formerly called the Carrer dels Cavallers [knight's street]'. The claim about the route from La Seu d'Urgell is NOT in the visible source text - recorded as unsupported, not as an error, since Sant Julia de Loria does lie on that road. <https://visitandorra.com/en/culture/font-dels-coms-spring/> |
+| `card_description` | **UNVERIFIABLE** | — | 'Ancient Pyrenean spring' is not supported: the only source calls it 'centenary', i.e. about a hundred years old, and 'made with a wheel from a flour mill' - a modern structure, not an ancient one. The rest (horses, villagers, muleteers, Knights' Street, the road to the capital) matches the source, and the card is more careful than the description in that it does not place the spring inside the capital. Recorded as unverifiable rather than wrong because 'ancient' is a word without a date behind it, and the dating error is already counted on period_start. <https://visitandorra.com/en/culture/font-dels-coms-spring/> |
+| `civilization` | **CORRECT** | — | Denormalised country copy by design. <docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.3.4> |
+| `heritage_designation` | **CORRECT** | — | NULL permitted; empty on all 36 sampled sites. Nothing indicates a designation for a village spring. <https://visitandorra.com/en/culture/font-dels-coms-spring/> |
+| `hero_image` | **CORRECT** | — | Empty (NULL), which plan 1.3 permits, and consistent: the site has no Wikipedia article, no Wikidata item and no Commons category, so no image could be sourced. GAP, not an error. <output/remediation/snapshot/wiki_images.jsonl.gz> |
+| `gallery_images` | **CORRECT** | — | Empty - 0 rows in the snapshot. Permitted; gap (see hero_image). <output/remediation/snapshot/wiki_images.jsonl.gz> |
+| `thumbnail_url` | **CORRECT** | — | NULL, consistent with having no images. <output/remediation/snapshot/wiki_images.jsonl.gz> |
+| `source_url` | **CORRECT** | — | The URL resolves (HTTP 301 to the canonical https://visitandorra.com/en/culture/font-dels-coms-spring, then 200) and the page carries the content the description quotes. It is, however, a tourist-board page: promotional, undated and not independent of the subject. <https://visitandorra.com/en/culture/font-dels-coms-spring/> |
+| `scope` | **WRONG** | not an ancient site; the record's own source dates the spring to the last century | Consequence of the fabricated period_start, not an independent error: with -3500 the record passes the E3 window automatically. On the source's evidence (a centenary spring with a flour-mill wheel, no archaeological remains, no dating) the record does not belong in a database of ancient sites at all. Counted once, on period_start. <docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.1 E3> <https://visitandorra.com/en/culture/font-dels-coms-spring/> |
+
+This is the site the supervisor's instruction was written for: without two usable sources the honest verdict is UNVERIFIABLE, and it stays in the denominator. Here one source exists and it contradicts the record twice, so those two contradictions are reported as errors and everything else is marked unverifiable. Note the mechanism: a fabricated -3500 is enough to make a village spring look like a Neolithic site to every automated check the plan has, including its own E3 scope rule.
+
+---
+
+## 18. Aubrey Holes - Stonehenge — tier 3
+
+- `site_id` `758dd394-0b33-4f82-821d-5b6de5058afe`
+- sampled tier 3 · sample position 18 of 36
+- checked 2026-09-20T23:09:47+02:00
+
+| field | database value |
+|---|---|
+| `name` | Aubrey Holes - Stonehenge |
+| `country` | England |
+| `coordinates` | 51.17924730976005, -1.825528629783467 |
+| `period_start` | -4500 |
+| `period_name` | 4500 - 3000 BC |
+| `site_type` | Timber circle |
+| `description` | Ring of 56 chalk pits forming the earliest phase of Stonehenge (c. 3000 BC), first noted by antiquarian John Aubrey in 1666 and formally identified by Robert Newall during Colonel Hawley's 1920s excavations. Each pit averages 0.76 m deep and 1.06 m in diameter. A 2008 excavation by Mike Parker Pearson suggested the holes originally held Welsh bluestones, based on their identical width and shape to bluestones found elsewhere at the monument. Human cremation burials were found within and around most holes, indicating a funerary function. |
+| `card_description` | A ring of 56 chalk pits from 3100 BC, the earliest phase of Stonehenge. They held cremated human remains - Stonehenge was a cemetery before it was a monument. |
+| `civilization` | England |
+| `heritage_designation` | — |
+| `hero_image` | hero.webp (800x1067, Commons File:Aubreyhole.jpg) |
+| `gallery_images` | 1 further image |
+| `thumbnail_url` | /data/images/wiki/758dd394/hero.webp |
+| `source_url` | https://en.wikipedia.org/wiki/Aubrey_holes |
+| `scope` | Europe (lat 51.18, lon -1.83), period_start -4500 <= 500 AD -> in scope |
+
+| field | verdict | correct value | evidence |
+|---|---|---|---|
+| `name` | **CORRECT** | — | enwiki 'Aubrey holes', Wikidata 'Aubrey holes'; the record adds the parent monument ('- Stonehenge'), which is accurate and helps disambiguation. <https://en.wikipedia.org/wiki/Aubrey_holes> <https://www.wikidata.org/wiki/Q758889> |
+| `country` | **CORRECT** | — | 'England' rather than 'United Kingdom' is deliberate project design (Wikidata P17 = Q145). <docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.3.2> |
+| `coordinates` | **CORRECT** | — | Database 51.17924731, -1.82552863; enwiki and Wikidata P625 both 51.179133, -1.825593. Within ~15 m. The holes form a ring around Stonehenge, so any point on the ring is defensible. <https://en.wikipedia.org/wiki/Aubrey_holes> <https://www.wikidata.org/wiki/Q758889> |
+| `period_start` | **CORRECT** | — | Checked carefully, because this looked like the Merry Maidens error and is not one. The article says the holes 'date to the earliest phases of Stonehenge in the late fourth and early third millennium BC', i.e. roughly 3300-2800 BC. The database's bucket is 4500 - 3000 BC, which CONTAINS the late fourth millennium (3300-3000 BC), so this is not a bucket mismatch and plan 4.3.1 says a round sort key is only reported when the bucket is wrong. NOT counted as an error. The record's own prose sits at the boundary - description 'c. 3000 BC', card '3100 BC' - so a stricter reviewer could argue for the next bucket; the sourced range supports the shipped one. <https://en.wikipedia.org/wiki/Aubrey_holes> |
+| `period_name` | **CORRECT** | — | categorize_period(-4500) = '4500 - 3000 BC'. <docs/procedures/ENRICHMENT_AUDIT.md> |
+| `site_type` | **WRONG** | not a timber setting - the pits are the stone/cremation setting of Stonehenge's first phase | Nothing supports a timber circle. The cited article calls them 'a ring of 56 chalk pits', states 'their purpose is still unknown, although an astronomical role has often been suggested', and reports that the pits 'may have originally held the bluestones' - the record's own description repeats the bluestone hypothesis. Wikidata P31 = Q188040 (a class for the Aubrey holes themselves), P361 = part of Stonehenge. 'Timber circle' is canonical, so this is not an S9 violation, but it asserts a material the sources explicitly do not support. <https://en.wikipedia.org/wiki/Aubrey_holes> <https://www.wikidata.org/wiki/Q758889> |
+| `description` | **CORRECT** | — | All claims trace to the article: 56 chalk pits, earliest phases of Stonehenge, named after the seventeenth-century antiquarian John Aubrey who noticed them in 1666, the 1920s Hawley excavations in which Robert Newall identified the full ring, the average dimensions, the 2008 Parker Pearson excavation and the bluestone hypothesis, and the cremation burials in and around the pits. The date 'c. 3000 BC' is within the article's 'late fourth and early third millennium BC'. <https://en.wikipedia.org/wiki/Aubrey_holes> |
+| `card_description` | **CORRECT** | — | 56 pits, earliest phase, cremated human remains, and the cemetery-before-monument reading all match the article's account of the cremation burials. '3100 BC' is inside the sourced range. <https://en.wikipedia.org/wiki/Aubrey_holes> |
+| `civilization` | **CORRECT** | — | Denormalised country copy by design. <docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.3.4> |
+| `heritage_designation` | **CORRECT** | — | NULL permitted; empty on all 36 sampled sites. The holes lie inside the Stonehenge scheduled monument and the World Heritage Site, so the gap is fillable from the parent site's designation. <https://en.wikipedia.org/wiki/Aubrey_holes> |
+| `hero_image` | **CORRECT** | — | Metadata-level verdict. 800x1067, a photograph of one of the chalk pits, and it is the image Wikidata stores as P18. No strip. <https://commons.wikimedia.org/wiki/File:Aubreyhole.jpg> <https://www.wikidata.org/wiki/Q758889> |
+| `gallery_images` | **CORRECT** | — | Metadata-level verdict: the second row is an image of the same monument area. GAP, not an error: only 2 images, far below the plan's 6-image floor (S10). <output/remediation/snapshot/wiki_images.jsonl.gz> |
+| `thumbnail_url` | **UNVERIFIABLE** | — | Local export path; no public/data/images copy in this checkout. <output/remediation/snapshot/wiki_images.jsonl.gz> |
+| `source_url` | **CORRECT** | — | HTTP 200, dedicated article. <https://en.wikipedia.org/wiki/Aubrey_holes> |
+| `scope` | **CORRECT** | — | Europe, Neolithic -> in scope. <docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.1 E3> |
+
+A useful negative: the -4500 here looks exactly like the Merry Maidens error and is not one, because the sourced range (late 4th-early 3rd millennium BC) still touches the shipped bucket. Applying the plan's bucket rule rather than a reflex is what keeps this measurement honest. If the census flags this site's period_start, that flag is a false positive under the plan's own rule - worth checking when the blind is lifted.
+
+---
+
+## 19. Langdale Axe Industry — tier 3
+
+- `site_id` `c63b0df7-79e5-4734-bb99-b17ccd8f54eb`
+- sampled tier 3 · sample position 19 of 36
+- checked 2026-09-20T23:09:47+02:00
+
+| field | database value |
+|---|---|
+| `name` | Langdale Axe Industry |
+| `country` | England |
+| `coordinates` | 54.44709978600596, -3.063957087255516 |
+| `period_start` | -4500 |
+| `period_name` | 4500 - 3000 BC |
+| `site_type` | Mine/quarry |
+| `description` | The Langdale Axe Industry was a major Neolithic stone axe production centre in the Lake District, using local greenstone volcanic rock to manufacture polished axes between 4000-3500 BC.[1] Systematic excavations by Clare Fell in the 1940s-1950s uncovered workshops and waste flakes, revealing large-scale specialized manufacturing.[1] |
+| `card_description` | A Neolithic stone tool factory from 4000-3500 BC, high in the mountains. Axes made from its volcanic tuff were traded across the entire island, hundreds of miles away. |
+| `civilization` | England |
+| `heritage_designation` | — |
+| `hero_image` | hero.webp (800x1001, Commons File:Polished axe1.jpg - 'stone axe. own scan from very old book') |
+| `gallery_images` | 9 further images: two of the Langdale Pikes, one of Pike of Stickle, and images of five other sites (Castlerigg, Gotland, Belfast, Ehenside Tarn, Mount William Australia) |
+| `thumbnail_url` | /data/images/wiki/c63b0df7/hero.webp |
+| `source_url` | https://en.wikipedia.org/wiki/Langdale_axe_industry |
+| `scope` | Europe (lat 54.45, lon -3.06), period_start -4500 <= 500 AD -> in scope |
+
+| field | verdict | correct value | evidence |
+|---|---|---|---|
+| `name` | **CORRECT** | — | enwiki 'Langdale axe industry', Wikidata label 'Langdale axe industry'; the record capitalises the common nouns. <https://en.wikipedia.org/wiki/Langdale_axe_industry> <https://www.wikidata.org/wiki/Q6485810> |
+| `country` | **CORRECT** | — | 'England' rather than 'United Kingdom' is deliberate project design (Wikidata P17 = Q145); the article says 'Great Langdale, in the English Lake District'. <docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.3.2> |
+| `coordinates` | **CORRECT** | — | Database 54.44709979, -3.06395709 is the axe-factory site at Pike of Stickle in Great Langdale; the article places the industry at 'the Langdale Pikes' and the famous working floor at Pike of Stickle. No source coordinate exists to compare (no P625 on the Wikidata item), so the check is a place-name match, not a numeric one. <https://en.wikipedia.org/wiki/Langdale_axe_industry> |
+| `period_start` | **CORRECT** | — | Bucket sort key. The industry's production is dated 4000-3500 BC in the article and in the record's own card; -4500 is the floor of the bucket 4500 - 3000 BC, which contains -4000. Bucket correct (plan 4.3.1). <https://en.wikipedia.org/wiki/Langdale_axe_industry> |
+| `period_name` | **CORRECT** | — | categorize_period(-4500) = '4500 - 3000 BC'. <docs/procedures/ENRICHMENT_AUDIT.md> |
+| `site_type` | **CORRECT** | — | 'Mine/quarry' is canonical and exact: the article calls it 'a major industry of the Neolithic period ... the stone axe factory' and the find spots are working floors and quarry sites. <https://en.wikipedia.org/wiki/Langdale_axe_industry> <pipeline/normalizers/site_type.py> |
+| `description` | **CORRECT** | — | Claims confirmed against the cited article: the Lake District location and the working of the local rock ('Great Langdale ... axes made from the volcanic tuff found in the area' - the record's 'greenstone volcanic rock' is the same material under its other common name, and the Langdale rock is a greenish volcanic tuff); the 4000-3500 BC production window; Clare Fell's excavations in the 1940s-1950s ('Clare Fell ... excavations ... in the late 1940s and 1950s'); the working floors with waste flakes; the large-scale specialised production. One wording is loose but not wrong: 'Systematic excavations ... uncovered workshops' - the article describes working floors and debitage rather than structural workshops. <https://en.wikipedia.org/wiki/Langdale_axe_industry> |
+| `card_description` | **CORRECT** | — | 4000-3500 BC, the mountains, the volcanic tuff, and the wide distribution (Langdale axes are found across Britain) all match the article. The card is the better text of the two: it says 'volcanic tuff', the material the source actually names. <https://en.wikipedia.org/wiki/Langdale_axe_industry> |
+| `civilization` | **CORRECT** | — | Denormalised country copy by design. <docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.3.4> |
+| `heritage_designation` | **CORRECT** | — | NULL permitted; empty on all 36 sampled sites. The Pike of Stickle working floors are a scheduled monument, so the gap is fillable. <https://en.wikipedia.org/wiki/Langdale_axe_industry> |
+| `hero_image` | **CORRECT** | — | Metadata-level verdict, with a class note: the hero is 800x1001 and shows a polished Neolithic axe, categorised 'Neolithic axes' and 'Westmorland' (the historic county of the Langdale fells), but its own description says 'stone axe. own scan from very old book' - it is a book illustration, not a photograph of the site or of a documented Langdale find. Recorded as a class note (illustration as hero), not as a wrong-site error: the object class and the county fit. <https://commons.wikimedia.org/wiki/File:Polished_axe1.jpg> |
+| `gallery_images` | **WRONG** | images of the Langdale axe factory (the Pikes, the working floors, Langdale axes) | WRONG-SITE CLUSTER, the strongest image finding in the sample so far. Of the 9 non-hero rows, only three belong to this site or its immediate fells (File:Langdales, Westmorland.jpg, File:Pike O'Stickle.jpg, File:Pike of Stickle from Loft Crag.jpg). Four rows are other sites, chosen by theme rather than by location: (1) 'File:Castlerigg.jpg' - Castlerigg Stone Circle, a different Cumbrian monument (Category:Castlerigg Stone Circle); (2) 'File:Horsne dibjars i.jpg' - 'Grooves from Horsne, Gotland, Sweden' (Category:Archaeological grooves in Gotland); (3) 'File:MaloneHoard.JPG' - a Neolithic axe hoard 'found at Danesfort, on the Malone Road, in Belfast' (Category:Irish prehistory in the Ulster Museum); (4) 'File:Mount William Aboriginal stone axe quarry.jpg' - an Aboriginal axe quarry in Victoria, Australia (Category:Archaeological sites in Victoria, Australia). A fifth, 'File:Neolithic stone axe with handle ehenside tarn british museum.JPG', is a Neolithic hafted axe from Ehenside Tarn - same period, same object class, different site. One more, 'File:Scafell Pike from Broad Crag.jpg', shows a neighbouring peak rather than the quarry. Metadata-level verdict: no local image copy exists to look at, but the Commons categories and descriptions leave no doubt about where these photographs were taken. <https://commons.wikimedia.org/wiki/Category:Castlerigg_Stone_Circle> <https://commons.wikimedia.org/wiki/Category:Archaeological_grooves_in_Gotland> <https://commons.wikimedia.org/wiki/Category:Irish_prehistory_in_the_Ulster_Museum> <https://commons.wikimedia.org/wiki/Category:Archaeological_sites_in_Victoria,_Australia> |
+| `thumbnail_url` | **UNVERIFIABLE** | — | Local export path; no public/data/images copy in this checkout. <output/remediation/snapshot/wiki_images.jsonl.gz> |
+| `source_url` | **CORRECT** | — | HTTP 200, dedicated article. <https://en.wikipedia.org/wiki/Langdale_axe_industry> |
+| `scope` | **CORRECT** | — | Europe, Neolithic -> in scope. <docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.1 E3> |
+
+This is the site that shows the image pipeline's real failure mode: an automated picker that selects by keyword ('axe', 'quarry', 'Neolithic') and never checks where the object is. Agri Bavnehoej (record 05) was the same class but milder - neighbouring mounds. Here the record ships a Swedish rock carving and an Australian quarry as illustrations of an English Neolithic axe factory. No property-based check in the plan (S10/S11 count images, author and licence) can see this; only reading the file's Commons category does.
+
+---
+
+## 20. Cueva de los Murciélagos — tier 3
+
+- `site_id` `57828dbd-9f7f-49e7-92bc-0f4eebae4829`
+- sampled tier 3 · sample position 20 of 36
+- checked 2026-09-20T23:09:47+02:00
+
+| field | database value |
+|---|---|
+| `name` | Cueva de los Murciélagos |
+| `country` | Spain |
+| `coordinates` | 37.54217405999256, -4.3042847207230714 |
+| `period_start` | 1 |
+| `period_name` | 1 - 500 AD |
+| `site_type` | Rock art |
+| `description` | Cueva de los Murcielagos is a cave system in the Sierras Subbeticas near Zuheros, Cordoba, Spain. Evidence of human occupation reaches back 35,000 years to the Middle Palaeolithic. Neolithic deposits dated 4300-3900 BC yielded decorated ceramics, stone and bone tools, and ornaments made from seashells. The cave contains schematic rock art including the striking Frieze of the Ibex, with over thirty quadrupeds identified as ibex shown in dynamic positions. A second art zone features anthropomorphic figures and an idol motif. The cave hosts one of the largest bat colonies in Andalusia. |
+| `card_description` | A karst cave system at 980 meters in the Sierras Subbeticas, with rock art spanning Paleolithic to Neolithic periods. It hosts one of Andalusia's largest bat colonies in the same chambers. |
+| `civilization` | Spain |
+| `heritage_designation` | — |
+| `hero_image` | hero.webp (800x530, Commons File:Alrededores de la Cueva de los Murciélagos 1.jpg - 'surroundings of the cave') |
+| `gallery_images` | 7 further images |
+| `thumbnail_url` | /data/images/wiki/57828dbd/hero.webp |
+| `source_url` | https://en.wikipedia.org/wiki/Cueva_de_los_Murci%C3%A9lagos |
+| `scope` | Europe (lat 37.54, lon -4.30), period_start 1 <= 500 AD -> in scope |
+
+| field | verdict | correct value | evidence |
+|---|---|---|---|
+| `name` | **CORRECT** | — | enwiki, dewiki, eswiki and itwiki all use 'Cueva de los Murciélagos'; the record drops the accent (the description has the accent, the name field does not) - a diacritic inconsistency inside the record, not a wrong name. <https://en.wikipedia.org/wiki/Cueva_de_los_Murci%C3%A9lagos> <https://de.wikipedia.org/wiki/Cueva_de_los_Murci%C3%A9lagos> |
+| `country` | **CORRECT** | — | Wikidata P17 = Q29 (Spain); enwiki 'the southern province of Cordoba in Spain'. <https://www.wikidata.org/wiki/Q5192373> |
+| `coordinates` | **CORRECT** | — | Database 37.54217406, -4.30428472; enwiki 37.54194444, -4.30416667; Wikidata P625 37.54204909, -4.30439199. Within ~20 m. <https://en.wikipedia.org/wiki/Cueva_de_los_Murci%C3%A9lagos> <https://www.wikidata.org/wiki/Q5192373> |
+| `period_start` | **WRONG** | -4300 (bucket 4500 - 3000 BC) for the art and the Neolithic deposits | SEVERE and self-contradictory: the record dates the cave to 1-500 AD (Roman period) while its own description says human occupation reaches back 35,000 years and that the deposits with decorated ceramics are 4300-3900 BC. The sources: eswiki 'La cueva de los Murcielagos es una cueva prehistorica de Andalucia'; dewiki 'Es gilt aufgrund der einzigartigen Felsmalereien und signifikanten archaologischen Funde aus der Jungsteinzeit als die bedeutendste unter den rund 60 Hohlen im Parque Natural de Sierra...'. Neolithic rock art in a cave, sorted as Roman. Four buckets wrong for the Neolithic phase, seven for the Palaeolithic occupation. <https://en.wikipedia.org/wiki/Cueva_de_los_Murci%C3%A9lagos> <https://de.wikipedia.org/wiki/Cueva_de_los_Murci%C3%A9lagos> <https://es.wikipedia.org/wiki/Cueva_de_los_Murci%C3%A9lagos> |
+| `period_name` | **CORRECT** | — | categorize_period(1) = '1 - 500 AD'. Internally consistent with the wrong sort key. <docs/procedures/ENRICHMENT_AUDIT.md> |
+| `site_type` | **CORRECT** | — | Wikidata P31 includes rock art (Q1211146) with a qualifier; 'Rock art' is canonical. Wikidata also lists 'human settlement' eight times, which is a Wikidata data-quality artefact, not a reason to change the type. <https://www.wikidata.org/wiki/Q5192373> <pipeline/normalizers/site_type.py> |
+| `description` | **CORRECT** | — | The enwiki article is a stub and carries only the cave-system sentence, the 1868 discovery, the 1938 study and the bat colony; the Sierras Subbeticas location, the 4 km from Zuheros and the bat colony are confirmed word for word, and dewiki confirms the Neolithic finds and the rock paintings. The specific archaeological claims (35,000 years, 4300-3900 BC, the Frieze of the Ibex with thirty quadrupeds, the second art zone) are NOT in the sources read and are recorded as unsupported rather than wrong - they are consistent with the specialised literature on Zuheros. The record's dating of the site is the error, and it is counted on period_start. <https://en.wikipedia.org/wiki/Cueva_de_los_Murci%C3%A9lagos> <https://de.wikipedia.org/wiki/Cueva_de_los_Murci%C3%A9lagos> |
+| `card_description` | **UNVERIFIABLE** | — | '980 meters' cannot be checked against any source read. 'Rock art spanning Paleolithic to Neolithic periods' is doubtful: dewiki attributes the rock paintings to the Neolithic (Jungsteinzeit) and no source read places Palaeolithic art in this cave, though the occupation does reach the Palaeolithic. Recorded as unverifiable, not as an error - the wording conflates the occupation span with the art span, and this audit found no source that states the art is Palaeolithic. <https://de.wikipedia.org/wiki/Cueva_de_los_Murci%C3%A9lagos> |
+| `civilization` | **CORRECT** | — | Denormalised country copy by design. <docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.3.4> |
+| `heritage_designation` | **CORRECT** | — | NULL permitted; empty on all 36 sampled sites. Fillable: Wikidata P1435 = bien de interes cultural (Q23712), itwiki dates the designation 23 November 2001, and enwiki's categories include 'Bien de Interes Cultural landmarks in the Province of Cordoba'. <https://www.wikidata.org/wiki/Q5192373> <https://it.wikipedia.org/wiki/Cueva_de_los_Murci%C3%A9lagos> |
+| `hero_image` | **CORRECT** | — | Metadata-level verdict. 800x530, 'Alrededores de la Cueva de los Murcielagos' - the surroundings of the cave, correct site, no strip. Class note: the hero shows the landscape, not the cave or its art. Wikidata's P18 for this item is 'Auge des Mauren01.jpg', a different image; the exporter did not use it. <https://commons.wikimedia.org/wiki/File:Alrededores_de_la_Cueva_de_los_Murci%C3%A9lagos_1.jpg> |
+| `gallery_images` | **CORRECT** | — | Metadata-level verdict: 7 further rows, all from the cave's own Commons category 'Cueva de los Murcielagos' (the category fetch for the digest failed, so the per-file metadata is thinner here than for other sites). GAP, not an error: 8 images in total, above the plan's 6-image floor. <output/remediation/snapshot/wiki_images.jsonl.gz> |
+| `thumbnail_url` | **UNVERIFIABLE** | — | Local export path; no public/data/images copy in this checkout. <output/remediation/snapshot/wiki_images.jsonl.gz> |
+| `source_url` | **CORRECT** | — | HTTP 200, dedicated article - but a three-sentence stub that cannot support the archaeological description. <https://en.wikipedia.org/wiki/Cueva_de_los_Murci%C3%A9lagos> |
+| `scope` | **CORRECT** | — | Europe; in scope with the shipped date and with the corrected Neolithic one. <docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.1 E3> |
+
+The second severe dating error, and the clearest case of an internal contradiction: the same record says '35,000 years' and '4300-3900 BC' in its prose and '1 - 500 AD' in its sort key. A deterministic check for 'does the description's earliest date agree with period_name's bucket' would catch this one for free.
+
+---
+
+## 21. Nina Kiru — tier 3
+
+- `site_id` `afb20664-90a8-4e20-bc76-d6c524f5ede0`
+- sampled tier 3 · sample position 21 of 36
+- checked 2026-09-20T23:09:47+02:00
+
+| field | database value |
+|---|---|
+| `name` | Nina Kiru |
+| `country` | Peru |
+| `coordinates` | -14.69367094880227, -74.12412378895188 |
+| `period_start` | 1000 |
+| `period_name` | 1000 - 1500 AD |
+| `site_type` | Necropolis/tombs complex |
+| `description` | Nina Kiru (Quechua for "fire tooth") is an archaeological site featuring stone burial towers known as chullpas, located in the Carmen Salcedo District, Lucanas Province, Ayacucho Region of Peru, near the village of Andamarca. The chullpa funerary towers are characteristic of pre-Inca Andean burial traditions found across the highlands. The site was declared a National Cultural Heritage of Peru by Resolution RDN No. 496 on May 31, 2002. |
+| `card_description` | Stone chullpa tomb complex in Lucanas Province, declared National Cultural Heritage in 2002. Funerary towers mark the high-altitude burial landscape of pre-Inca communities across the Ayacucho region. |
+| `civilization` | Peru |
+| `heritage_designation` | — |
+| `hero_image` | — |
+| `gallery_images` | none - 0 wiki_images rows |
+| `thumbnail_url` | — |
+| `source_url` | https://en.wikipedia.org/wiki/Nina_Kiru |
+| `scope` | Americas (lat -14.69, lon -74.12), period_start 1000 <= 1500 AD -> in scope |
+
+| field | verdict | correct value | evidence |
+|---|---|---|---|
+| `name` | **CORRECT** | — | enwiki and Wikidata both 'Nina Kiru' (also Nina Kiro, Ninaquero). <https://en.wikipedia.org/wiki/Nina_Kiru> <https://www.wikidata.org/wiki/Q13114673> |
+| `country` | **CORRECT** | — | Wikidata P17 = Q419 (Peru); enwiki 'the Ayacucho Region, Lucanas Province'. <https://www.wikidata.org/wiki/Q13114673> |
+| `coordinates` | **UNVERIFIABLE** | — | No source coordinate exists: the enwiki article is in Category:All articles needing coordinates and Category:Articles missing coordinates without coordinates on Wikidata, and the Wikidata item has no P625. The value -14.6937, -74.1241 lies in the Lucanas highlands near the Andamarca area, which is consistent with the described location, but nothing confirms the point. Recorded as unverifiable. <https://en.wikipedia.org/wiki/Nina_Kiru> <https://www.wikidata.org/wiki/Q13114673> |
+| `period_start` | **UNVERIFIABLE** | — | No source read dates the chullpas: the cited article says only 'an archaeological site with stone tombs (chullpa)'. 1000-1500 AD is a plausible window for highland chullpa cemeteries of the Late Intermediate Period and the record's card calls them 'pre-Inca', but plausible is not sourced. Not counted as an error. <https://en.wikipedia.org/wiki/Nina_Kiru> |
+| `period_name` | **CORRECT** | — | categorize_period(1000) = '1000 - 1500 AD'. <docs/procedures/ENRICHMENT_AUDIT.md> |
+| `site_type` | **CORRECT** | — | Wikidata P31 = archaeological site; the source describes stone chullpa tombs. 'Necropolis/tombs complex' is canonical and fits. <https://www.wikidata.org/wiki/Q13114673> <pipeline/normalizers/site_type.py> |
+| `description` | **CORRECT** | — | Nearly all of the field is verbatim from the cited article: 'Nina Kiru (Quechua nina fire, kiru tooth, "fire tooth", also spelled Nina Kiro, Ninaquero) is an archaeological site with stone tombs (chullpa) in Peru. It was declared a National Cultural Heritage by RDN No. 496 of May 31, 2002. Nina Kiru lies in the Ayacucho Region, Lucanas Province, Carmen Salcedo District, near Antamarka (Andamarca).' The one added sentence ('characteristic of pre-Inca Andean burial traditions found across the highlands') is a generalisation not in the source - recorded as unsupported, not wrong; the article itself calls the site pre-Inca only implicitly, by the absence of any Inca attribution. <https://en.wikipedia.org/wiki/Nina_Kiru> |
+| `card_description` | **CORRECT** | — | Lucanas Province, the 2002 National Cultural Heritage declaration and the chullpa towers all match the article. <https://en.wikipedia.org/wiki/Nina_Kiru> |
+| `civilization` | **CORRECT** | — | Denormalised country copy by design. <docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.3.4> |
+| `heritage_designation` | **CORRECT** | — | NULL permitted; empty on all 36 sampled sites. This is the sharpest instance of the gap: the record's own description quotes the designation ('RDN No. 496 of May 31, 2002') while the column is empty. <https://en.wikipedia.org/wiki/Nina_Kiru> |
+| `hero_image` | **CORRECT** | — | Empty (NULL), permitted. GAP: 0 images, so a record with a national heritage designation cannot be shown at all. <output/remediation/snapshot/wiki_images.jsonl.gz> |
+| `gallery_images` | **CORRECT** | — | Empty - 0 rows. Permitted; gap. <output/remediation/snapshot/wiki_images.jsonl.gz> |
+| `thumbnail_url` | **CORRECT** | — | NULL, consistent with having no images. <output/remediation/snapshot/wiki_images.jsonl.gz> |
+| `source_url` | **CORRECT** | — | HTTP 200, dedicated article. It is a stub: no coordinates, no dating, no image, one reference. The description is essentially the article with the same content in the same order. <https://en.wikipedia.org/wiki/Nina_Kiru> |
+| `scope` | **CORRECT** | — | Americas, 1000-1500 AD -> in scope. <docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.1 E3> |
+
+Clean but thin: a stub article produced a thin record, and the record copied the stub faithfully. The valuable observation is structural - the heritage declaration is quoted in the prose and missing from the column, and the article's own missing-coordinate maintenance categories tell the audit that this record's coordinate has no source anywhere on Wikipedia. One source only (enwiki), so most non-text fields are unverifiable rather than verified.
+
+---
+
+## 22. Amyntas Rock Tombs — tier 3
+
+- `site_id` `e19f7af0-539c-474c-9404-b11f22f48846`
+- sampled tier 3 · sample position 22 of 36
+- checked 2026-09-20T23:09:47+02:00
+
+| field | database value |
+|---|---|
+| `name` | Amyntas Rock Tombs |
+| `country` | Türkiye |
+| `coordinates` | 36.61915310100121, 29.119284230784206 |
+| `period_start` | -500 |
+| `period_name` | 500 BC - 1 AD |
+| `site_type` | Necropolis/tombs complex |
+| `description` | A 4th-century BC Lycian rock-cut tomb at ancient Telmessos (modern Fethiye, Turkey), carved into a cliff face to resemble a Greek temple facade with a triangular pediment and Ionic columns. The tomb interior contains a rectangular chamber with three stone benches (klinai) for burials. Named for Amyntas son of Hermapias, likely a local nobleman during the Achaemenid satrapy of Lycia. It is the largest of numerous rock tombs in the Fethiye cliffs. |
+| `card_description` | 4th-century BC Lycian tombs carved into a sheer cliff face, with temple-style facades complete with columns and pediments. The largest is attributed to King Amyntas. |
+| `civilization` | Türkiye |
+| `heritage_designation` | — |
+| `hero_image` | hero.webp (800x533, Commons File:185A7327.jpg, Category:Tomb of Amyntas) |
+| `gallery_images` | 19 further images, all of the Fethiye rock tombs |
+| `thumbnail_url` | /data/images/wiki/e19f7af0/hero.webp |
+| `source_url` | https://en.wikipedia.org/wiki/Tomb_of_Amyntas |
+| `scope` | Rest of world (lat 36.62, lon 29.12), period_start -500 <= 500 AD -> in scope |
+
+| field | verdict | correct value | evidence |
+|---|---|---|---|
+| `name` | **CORRECT** | — | enwiki 'Tomb of Amyntas' (also the Fethiye Tomb), Wikidata 'Tomb of Amyntas', Commons category 'Tomb of Amyntas'; the record uses the plural 'Amyntas Rock Tombs', which matches the site's presentation as a group of Fethiye rock tombs and does not contradict any source. <https://en.wikipedia.org/wiki/Tomb_of_Amyntas> <https://www.wikidata.org/wiki/Q1948790> |
+| `country` | **CORRECT** | — | Wikidata P17 = Q43 (Turkey); enwiki 'the district of Fethiye in Mugla Province'. The record's 'Turkiye' is the country's own UN name and matches the rest of the database's spelling. <https://www.wikidata.org/wiki/Q1948790> |
+| `coordinates` | **CORRECT** | — | Database 36.61915310, 29.11928423; enwiki 36.61833333, 29.11777778; Wikidata P625 36.6183, 29.1178. Within ~150 m, on the same cliff. <https://en.wikipedia.org/wiki/Tomb_of_Amyntas> <https://www.wikidata.org/wiki/Q1948790> |
+| `period_start` | **CORRECT** | — | Bucket sort key. The article's full text: 'The impressive looking tomb was built in 350 BCE'. -500 is the floor of the bucket 500 BC - 1 AD, which contains -350. Bucket correct (plan 4.3.1). <https://en.wikipedia.org/wiki/Tomb_of_Amyntas> |
+| `period_name` | **CORRECT** | — | categorize_period(-500) = '500 BC - 1 AD'. <docs/procedures/ENRICHMENT_AUDIT.md> |
+| `site_type` | **CORRECT** | — | enwiki's categories include 'Rock-cut tombs'; 'Necropolis/tombs complex' is canonical and fits both the single famous tomb and the surrounding group the description names. <https://en.wikipedia.org/wiki/Tomb_of_Amyntas> <pipeline/normalizers/site_type.py> |
+| `description` | **CORRECT** | — | Confirmed by the cited article: 'an ancient Lycian rock-hewn tomb at ancient Telmessos, in Lycia, which was at the time a satrapy of the Achaemenid Empire', 'located in the south side of the city in the mountainside', 'built in 350 BCE', 'named after the Greek inscription on the side of it which reads "Amyntou tou Ermagiou", which translated to English means "Amyntas, son of Hermagios"'. Two deviations from the cited source, neither counted as an error: the article spells the father's name 'Hermagios' where the record writes 'Hermapias' (both forms circulate; the record's version is not a fabrication), and the description's interior detail (three klinai) is not in the article read. The temple-facade description is standard for this tomb and is visible in the record's own images. <https://en.wikipedia.org/wiki/Tomb_of_Amyntas> |
+| `card_description` | **WRONG** | named for Amyntas son of Hermagios, a private individual - not a king | 'The largest is attributed to King Amyntas' is unsupported and contradicts the record's own description, which correctly says 'likely a local nobleman'. The article names the man by his patronymic only ('Amyntas, son of Hermagios') and gives no royal title; the tomb is a private rock-cut tomb, and the name Amyntas is common in Macedonia and Lycia. There was a Macedonian king Amyntas, but nothing links him to this tomb. The rest of the card (4th century BC, temple-style facades, columns and pediments) is supported. <https://en.wikipedia.org/wiki/Tomb_of_Amyntas> |
+| `civilization` | **CORRECT** | — | Denormalised country copy by design; the real culture (Lycia, Wikidata P17 aside) is unused by design. <docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.3.4> |
+| `heritage_designation` | **CORRECT** | — | NULL permitted; empty on all 36 sampled sites. <https://www.wikidata.org/wiki/Q1948790> |
+| `hero_image` | **CORRECT** | — | Metadata-level verdict. 800x533, 'File:185A7327.jpg', which is the first file of the Commons category 'Tomb of Amyntas' - this tomb. No strip. <https://commons.wikimedia.org/wiki/Category:Tomb_of_Amyntas> |
+| `gallery_images` | **CORRECT** | — | Metadata-level verdict. The 19 further rows are the numbered '185A73xx' series from the same category plus views of the Fethiye rock tombs; the category's own file list (185A7327-185A7356, 'Amintas Kaya Mezari', 'Fethiye Rock graves 6930', 'Excavated temple-tomb - Allan John H - 1843', an 1843 lithograph and the 1911 Britannica plan) matches what the record ships. No wrong-site row found. <https://commons.wikimedia.org/wiki/Category:Tomb_of_Amyntas> |
+| `thumbnail_url` | **UNVERIFIABLE** | — | Local export path; no public/data/images copy in this checkout. <output/remediation/snapshot/wiki_images.jsonl.gz> |
+| `source_url` | **CORRECT** | — | HTTP 200, dedicated article (short but specific; the full text carries the 350 BCE date and the inscription). <https://en.wikipedia.org/wiki/Tomb_of_Amyntas> |
+| `scope` | **CORRECT** | — | Rest of world, 4th century BC -> in scope. <docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.1 E3> |
+
+The description is careful and the card is not - the same asymmetry as Overstone and The Merry Maidens. Here the card promotes a private tomb owner to royalty; a spoken-audio listener would carry away a wrong fact that the written record does not contain.
+
+---
+
+## 23. Temple of Dedun — tier 3
+
+- `site_id` `da62b3af-331d-461c-a715-d64e35870466`
+- sampled tier 3 · sample position 23 of 36
+- checked 2026-09-20T23:09:47+02:00
+
+| field | database value |
+|---|---|
+| `name` | Temple of Dedun |
+| `country` | Egypt |
+| `coordinates` | 23.960839052640083, 32.866783873526195 |
+| `period_start` | -3000 |
+| `period_name` | 3000 - 1500 BC |
+| `site_type` | Temple complex |
+| `description` | [1] Dedun was a Kushite or Nehasi god worshipped during ancient times in ancient Egypt and Sudan and attested as early as 2400 BC. Depicted as a lion, Dedun began as a god of incense-a luxury commodity sourced primarily from Nubia-and evolved into the divine embodiment of prosperity and wealth. The temple represents religious and cultural exchange between Egypt and Nubia during a period when incense trade significantly shaped regional power dynamics. |
+| `card_description` | A temple to the Nubian god Dedun from 2040-1780 BC. Dedun was a god of wealth and incense-the luxuries that flowed from Nubia into the north. |
+| `civilization` | Egypt |
+| `heritage_designation` | — |
+| `hero_image` | hero.webp (800x518, Commons File:LD-Semna-West-ThutmosisIII-Detail.jpg, Commons category 'Dedun') |
+| `gallery_images` | 3 further images from the same Commons category 'Dedun' |
+| `thumbnail_url` | /data/images/wiki/da62b3af/hero.webp |
+| `source_url` | https://en.wikipedia.org/wiki/Dedun |
+| `scope` | Rest of world (lat 23.96, lon 32.87), period_start -3000 <= 500 AD -> in scope |
+
+| field | verdict | correct value | evidence |
+|---|---|---|---|
+| `name` | **UNVERIFIABLE** | — | The sources are about the god Dedun, not about a temple: the Wikidata item for Dedun is P31 'Ancient Egyptian deity' and P361 'Egyptian mythology', and the enwiki article is the deity's. No source read names this particular temple, so the name cannot be confirmed or refuted - a temple of Dedun exists at Semna (the record's own hero image is the Semna West temple of Thutmose III), but the record does not say which temple it means. <https://en.wikipedia.org/wiki/Dedun> <https://www.wikidata.org/wiki/Q1183353> |
+| `country` | **UNVERIFIABLE** | — | 'Egypt' fits a temple of Dedun only if it is the Semna temple, which is in Nubia (now Sudan's flooded Second Cataract region) - and the record's coordinates (23.96 N, 32.87 E, near the First Cataract south of Aswan) do not match Semna (21.50 N) either. Country and coordinates cannot be reconciled with the only source of location information the record itself ships (see hero_image). <https://en.wikipedia.org/wiki/Dedun> |
+| `coordinates` | **UNVERIFIABLE** | — | CONFLICT WITH THE RECORD'S OWN IMAGES, and a candidate error. The record's hero and all three gallery images come from Commons category 'Dedun', whose files are 'LD-Semna-West-ThutmosisIII.jpg' and its detail crops - the temple of Thutmose III at Semna West, at approximately 21.50 N, 30.97 E. The record's coordinate 23.9608, 32.8668 lies about 270 km to the north, near the First Cataract south of Aswan. One of the two is wrong; no authoritative source was consulted to decide which, so this is recorded as a conflict, not as a confirmed error. <https://commons.wikimedia.org/wiki/Category:Dedun> |
+| `period_start` | **UNVERIFIABLE** | — | No source read dates the temple. The bucket 3000 - 1500 BC would contain both the Middle Kingdom date in the card (2040-1780 BC) and the Thutmose III (New Kingdom) date the hero image implies, so the sort key is at least internally compatible - but the temple's own date is not established by any source in this audit. <https://en.wikipedia.org/wiki/Dedun> |
+| `period_name` | **CORRECT** | — | categorize_period(-3000) = '3000 - 1500 BC'. <docs/procedures/ENRICHMENT_AUDIT.md> |
+| `site_type` | **UNVERIFIABLE** | — | 'Temple complex' is canonical, and a temple of Dedun at Semna West is part of a temple group, so the value is plausible; but no source read describes this record's subject, so the type rests on the record's own assertion. <pipeline/normalizers/site_type.py> |
+| `description` | **WRONG** | a description of the temple (location, builder, date, plan) - not of the deity | WRONG SUBJECT, and the most complete example of this class in the sample. Every sentence except the last is a paraphrase of the enwiki article about the GOD: 'Dedun (or Dedwen) was a Kushite or Nehasi (C-Group culture) god worshipped during ancient times in ancient Egypt and Sudan and attested as early as 2400 BCE', 'he was depicted as a lion', the incense-god-to-wealth-god development. The record describes no temple at all: no location, no builder, no date, no architecture. The last sentence ('The temple represents religious and cultural exchange...') is generic filler with no facts. The field also opens with a bare '[1]' marker before any sentence. For a database whose purpose is to tell a reader what stands where, this record contains nothing about the site. <https://en.wikipedia.org/wiki/Dedun> |
+| `card_description` | **UNVERIFIABLE** | — | '2040-1780 BC' is not in any source read (it is the Middle Kingdom window, and the temple the record's own images show is Thutmose III's, New Kingdom). 'A god of wealth and incense' matches the sources. Recorded as unverifiable: the card at least speaks about the temple, unlike the description, but its date cannot be checked. <https://en.wikipedia.org/wiki/Dedun> |
+| `civilization` | **CORRECT** | — | Denormalised country copy by design. Notable here because the denormalisation hides the actual subject: Dedun is a Nubian/Kushite deity, and the column says 'Egypt'. <docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.3.4> |
+| `heritage_designation` | **CORRECT** | — | NULL permitted; empty on all 36 sampled sites. <https://www.wikidata.org/wiki/Q1183353> |
+| `hero_image` | **CORRECT** | — | Metadata-level verdict. 800x518, 'File:LD-Semna-West-ThutmosisIII-Detail.jpg' from Commons category 'Dedun' - a detail of the Semna West temple of Thutmose III, the temple of Dedun. Correct site for the category, no strip. It is also the only location evidence in the whole record. <https://commons.wikimedia.org/wiki/Category:Dedun> |
+| `gallery_images` | **CORRECT** | — | Metadata-level verdict. The 3 further rows are the remaining files of the same small category ('LD-Semna-West-ThutmosisIII.jpg' and its crops), i.e. this temple. GAP, not an error: only 4 images, below the plan's 6-image floor. <https://commons.wikimedia.org/wiki/Category:Dedun> |
+| `thumbnail_url` | **UNVERIFIABLE** | — | Local export path; no public/data/images copy in this checkout. <output/remediation/snapshot/wiki_images.jsonl.gz> |
+| `source_url` | **CORRECT** | — | HTTP 200 and it is a real article - but about the deity, not about the temple. The link resolves; it does not support the record's subject. Recorded as a source-subject mismatch inside the description verdict rather than as a second error. <https://en.wikipedia.org/wiki/Dedun> |
+| `scope` | **CORRECT** | — | Rest of world, Bronze Age -> in scope if the site is real. <docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.1 E3> |
+
+The mechanism here is different from the other errors: the enrichment took the subject from the SOURCE TITLE ('Dedun') and wrote about it, producing a record whose text is accurate about a god and empty about a temple. It is the only record in the sample whose description contains no site facts at all, and it is also the only one where the image category is better evidence than the source URL.
+
+---
+
+## 24. Bury Hill — tier 2
+
+- `site_id` `a90e4406-25e6-4646-ae73-0730696a22d4`
+- sampled tier 2 · sample position 24 of 36
+- checked 2026-09-20T23:09:47+02:00
+
+| field | database value |
+|---|---|
+| `name` | Bury Hill |
+| `country` | England |
+| `coordinates` | 51.19011583442974, -1.506811273962164 |
+| `period_start` | -1000 |
+| `period_name` | 1500 - 500 BC |
+| `site_type` | Fortress/citadel |
+| `description` | Bury Hill is an Iron Age hillfort in Hampshire, England, located 2.4 km (1.5 mi) southwest of Andover. The 8.9-hectare (22-acre) enclosure shows two construction phases: an earlier low single rampart to the north and west, later reinforced with a stronger double rampart and ditch that partially overlies the earlier earthworks [1]. The ramparts and ditch remain in good condition, though heavily wooded [1]. |
+| `card_description` | Two-phase fort enclosing 8.9 hectares near Andover: an earlier single rampart, then a stronger double rampart overlaid to the south and east. Both phases remain visible in the earthwork profile. |
+| `civilization` | England |
+| `heritage_designation` | — |
+| `hero_image` | hero.webp (800x600, Commons File:Bury Hill Andover Geograph-1899772-by-Chris-Talbot.jpg) |
+| `gallery_images` | none - 1 image in total |
+| `thumbnail_url` | /data/images/wiki/a90e4406/hero.webp |
+| `source_url` | https://en.wikipedia.org/wiki/Bury_Hill |
+| `scope` | Europe (lat 51.19, lon -1.51), period_start -1000 <= 500 AD -> in scope |
+
+| field | verdict | correct value | evidence |
+|---|---|---|---|
+| `name` | **CORRECT** | — | enwiki 'Bury Hill'. <https://en.wikipedia.org/wiki/Bury_Hill> |
+| `country` | **CORRECT** | — | 'England' rather than 'United Kingdom' is deliberate project design; enwiki says Hampshire. <docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.3.2> |
+| `coordinates` | **CORRECT** | — | The record's 51.1901, -1.5068 sits 2.4 km southwest of Andover town centre (51.2086, -1.4903) - the distance and bearing the article states. No article coordinate or Wikidata P625 to compare numerically. <https://en.wikipedia.org/wiki/Bury_Hill> |
+| `period_start` | **UNVERIFIABLE** | — | The article dates the fort only as 'Iron Age' and gives no construction date. -1000 is 1000 BC, about two centuries before the British Iron Age begins (c. 800 BC), but it is the floor of the bucket 1500 - 500 BC, which does contain the early Iron Age; so the bucket is defensible and cannot be called wrong under plan 4.3.1. If the fort is late Iron Age the bucket would be the next one. Not counted as an error. <https://en.wikipedia.org/wiki/Bury_Hill> |
+| `period_name` | **CORRECT** | — | categorize_period(-1000) = '1500 - 500 BC'. <docs/procedures/ENRICHMENT_AUDIT.md> |
+| `site_type` | **CORRECT** | — | 'Fortress/citadel' is canonical; the article calls it 'a former Iron Age hillfort', and hillfort is the value the normalizer maps to this class. <https://en.wikipedia.org/wiki/Bury_Hill> <pipeline/normalizers/site_type.py> |
+| `description` | **CORRECT** | — | Nearly verbatim from the article: 'the site of a former Iron Age hillfort about 1.5 miles (2.4 km) southwest of the centre of Andover, Hampshire', 'The site encloses about 22 acres (8.9 ha)', 'the first is a low single rampart and ditch, to the north and west of the second, stronger double rampart and ditch earthworks, part of which overlies the earlier work', 'The banks and the ditch are apparently in good condition, although fairly heavily wooded'. Omissions, not errors: the article also records Roman-era use and King Cnut's camp of 1016. <https://en.wikipedia.org/wiki/Bury_Hill> |
+| `card_description` | **CORRECT** | — | The card's 'overlaid to the south and east' is the correct reading of the article's 'to the north and west OF the second, stronger double rampart' - i.e. the earlier work lies north and west, so the later double rampart is to its south and east. The two shipped texts agree; 8.9 hectares and the two phases are right. <https://en.wikipedia.org/wiki/Bury_Hill> |
+| `civilization` | **CORRECT** | — | Denormalised country copy by design. <docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.3.4> |
+| `heritage_designation` | **CORRECT** | — | NULL permitted; empty on all 36 sampled sites. Fillable: 'The site has been designated as a scheduled monument since 1925'. <https://en.wikipedia.org/wiki/Bury_Hill> |
+| `hero_image` | **CORRECT** | — | Metadata-level verdict. 800x600, a Geograph photograph titled for this hillfort near Andover. No strip. <https://commons.wikimedia.org/wiki/File:Bury_Hill_Andover_Geograph-1899772-by-Chris-Talbot.jpg> |
+| `gallery_images` | **CORRECT** | — | Empty - this record has exactly 1 image. Permitted; GAP: far below the plan's 6-image floor (S10). <output/remediation/snapshot/wiki_images.jsonl.gz> |
+| `thumbnail_url` | **UNVERIFIABLE** | — | Local export path; no public/data/images copy in this checkout. <output/remediation/snapshot/wiki_images.jsonl.gz> |
+| `source_url` | **CORRECT** | — | HTTP 200, dedicated article (1,282 characters). <https://en.wikipedia.org/wiki/Bury_Hill> |
+| `scope` | **CORRECT** | — | Europe, Iron Age -> in scope. <docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.1 E3> |
+
+Clean. The description is a faithful compression of a short article, and the card's spatial reading ('overlaid to the south and east') is correct where a careless rewrite would have inverted it. No error to compare against the census here.
+
+---
+
+## 25. Mortuary Temple of Hatshepsut — tier 2
+
+- `site_id` `3f27e34a-1817-4b2b-bc19-c3c17a7e6374`
+- sampled tier 2 · sample position 25 of 36
+- checked 2026-09-20T23:09:47+02:00
+
+| field | database value |
+|---|---|
+| `name` | Mortuary Temple of Hatshepsut |
+| `country` | Egypt |
+| `coordinates` | 25.738630738696756, 32.606500907152515 |
+| `period_start` | -1500 |
+| `period_name` | 1500 - 500 BC |
+| `site_type` | Temple complex |
+| `description` | The Mortuary Temple of Hatshepsut is a temple complex built during the reign of Pharaoh Hatshepsut (1478-1458 BC) of the Eighteenth Dynasty[1]. Located opposite Luxor, it is considered a masterpiece of ancient architecture[2]. Its three massive terraces rise from the desert floor into the cliffs of Deir el-Bahari[3]. The temple's east-west axis received the barque of Amun-Re during the Beautiful Festival of the Valley[4]. |
+| `card_description` | Three terraces carved into the Deir el-Bahari cliffs for pharaoh Hatshepsut, who reigned 1478-1458 BC. Her successor Thutmose III later methodically chiseled her name from every wall. |
+| `civilization` | Egypt |
+| `heritage_designation` | — |
+| `hero_image` | hero.webp (800x500, Commons File:Templo funerario de Hatshepsut, Luxor, Egipto, 2022-04-03, DD 13.jpg) |
+| `gallery_images` | 19 further images |
+| `thumbnail_url` | /data/images/wiki/3f27e34a/hero.webp |
+| `source_url` | https://en.wikipedia.org/wiki/Mortuary_Temple_of_Hatshepsut |
+| `scope` | Rest of world (lat 25.74, lon 32.61), period_start -1500 <= 500 AD -> in scope |
+
+| field | verdict | correct value | evidence |
+|---|---|---|---|
+| `name` | **CORRECT** | — | enwiki title; also known as Djeser-Djeseru, which the record does not use. <https://en.wikipedia.org/wiki/Mortuary_Temple_of_Hatshepsut> |
+| `country` | **CORRECT** | — | Wikidata P17 = Q79 (Egypt); the temple is at Deir el-Bahari opposite Luxor. <https://www.wikidata.org/wiki/Q661518> |
+| `coordinates` | **CORRECT** | — | 25.7386, 32.6065 is the temple at Deir el-Bahari; consistent with Wikidata P625 for the item (25.73833, 32.60667). Within ~30 m. <https://www.wikidata.org/wiki/Q661518> |
+| `period_start` | **CORRECT** | — | Bucket sort key. Hatshepsut reigned 1478-1458 BC and the temple belongs to her reign; -1500 is the floor of the bucket 1500 - 500 BC, which contains -1478. Bucket correct (plan 4.3.1), and the record's own description states the reign dates. <https://en.wikipedia.org/wiki/Mortuary_Temple_of_Hatshepsut> |
+| `period_name` | **CORRECT** | — | categorize_period(-1500) = '1500 - 500 BC'. <docs/procedures/ENRICHMENT_AUDIT.md> |
+| `site_type` | **CORRECT** | — | 'Temple complex' is canonical and matches the article's description of terraces, colonnades and chapels. <https://en.wikipedia.org/wiki/Mortuary_Temple_of_Hatshepsut> <pipeline/normalizers/site_type.py> |
+| `description` | **CORRECT** | — | Confirmed by the cited article: the Eighteenth Dynasty and Hatshepsut's reign (1479-1458 BC in the article's infobox; the record writes 1478-1458 BC, a one-year difference in a disputed accession year - not counted), the location opposite Luxor at Deir el-Bahari, the three terraces, and the temple's role in the Beautiful Festival of the Valley, when the barque of Amun-Re was carried along its axis. <https://en.wikipedia.org/wiki/Mortuary_Temple_of_Hatshepsut> |
+| `card_description` | **CORRECT** | — | Three terraces, Deir el-Bahari, the reign dates and Thutmose III's systematic erasure of Hatshepsut's name and images are all in the article. The card is accurate and the erasure sentence is one of the best-supported claims in the sample. <https://en.wikipedia.org/wiki/Mortuary_Temple_of_Hatshepsut> |
+| `civilization` | **CORRECT** | — | Denormalised country copy by design. <docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.3.4> |
+| `heritage_designation` | **CORRECT** | — | NULL permitted; empty on all 36 sampled sites. The temple is part of the Thebes World Heritage Site; Wikidata carries a P1435 value. <https://www.wikidata.org/wiki/Q661518> |
+| `hero_image` | **CORRECT** | — | Metadata-level verdict. 800x500, a 2022 photograph of the mortuary temple by Diego Delso. Correct site, no strip. <https://commons.wikimedia.org/wiki/File:Templo_funerario_de_Hatshepsut,_Luxor,_Egipto,_2022-04-03,_DD_13.jpg> |
+| `gallery_images` | **CORRECT** | — | Metadata-level verdict: 19 further rows from the same Commons category, all of the temple at Deir el-Bahari. 20 images in total, comfortably above the plan's floor. <output/remediation/snapshot/wiki_images.jsonl.gz> |
+| `thumbnail_url` | **UNVERIFIABLE** | — | Local export path; no public/data/images copy in this checkout. <output/remediation/snapshot/wiki_images.jsonl.gz> |
+| `source_url` | **CORRECT** | — | HTTP 200, dedicated article. <https://en.wikipedia.org/wiki/Mortuary_Temple_of_Hatshepsut> |
+| `scope` | **CORRECT** | — | Rest of world, 15th century BC -> in scope. <docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.1 E3> |
+
+Clean on every field, and the strongest evidence so far that the pipeline can produce a good record: a well-referenced source article with four inline citations in the description, dates that agree with the sort key, 20 images and both texts consistent. The tier-2 records (well-known sites with long Wikipedia articles) look systematically better than the tier-3/4 ones - which matters when the census comparison is weighted.
+
+---
+
+## 26. Stanydale Temple — tier 2
+
+- `site_id` `60722e7e-587a-46fb-b09c-e6e82f1b74f7`
+- sampled tier 2 · sample position 26 of 36
+- checked 2026-09-20T23:09:47+02:00
+
+| field | database value |
+|---|---|
+| `name` | Stanydale Temple |
+| `country` | Scotland |
+| `coordinates` | 60.23557717245231, -1.4865578157177015 |
+| `period_start` | -3000 |
+| `period_name` | 3000 - 1500 BC |
+| `site_type` | Temple complex |
+| `description` | Stanydale Temple is a Neolithic site on Mainland, Shetland, Scotland. Located in a field south of Stanydale village, approximately 34 km (21 mi) by road northwest of Lerwick, the site originally functioned as a roofed building. Today, only a large walled enclosure remains. Despite uncertainty about its exact purpose, the structure's unusual size suggests it served a communal function or was the residence of a person of significance. [1] |
+| `card_description` | A Neolithic building on Shetland so unusually large it was likely communal or belonged to someone important. Only the massive walled enclosure survives. |
+| `civilization` | Scotland |
+| `heritage_designation` | — |
+| `hero_image` | hero.webp (800x520, Commons File:Megawal1o.jpg, Category:Stanydale Temple, description 'Stanydale House (schematisch)') |
+| `gallery_images` | 19 further images of the temple |
+| `thumbnail_url` | /data/images/wiki/60722e7e/hero.webp |
+| `source_url` | https://en.wikipedia.org/wiki/Stanydale_Temple |
+| `scope` | Europe (lat 60.24, lon -1.49), period_start -3000 <= 500 AD -> in scope |
+
+| field | verdict | correct value | evidence |
+|---|---|---|---|
+| `name` | **CORRECT** | — | enwiki 'Stanydale Temple' (also Staneydale). <https://en.wikipedia.org/wiki/Stanydale_Temple> |
+| `country` | **CORRECT** | — | 'Scotland' rather than 'United Kingdom' is deliberate project design; enwiki says Mainland, Shetland. <docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.3.2> |
+| `coordinates` | **CORRECT** | — | 60.2356, -1.4866 lies in the Stanydale area of Mainland, Shetland, consistent with the article's location (south of the village, northeast of Gruting, 34 km by road from Lerwick). No article coordinate or Wikidata P625 to compare numerically. <https://en.wikipedia.org/wiki/Stanydale_Temple> |
+| `period_start` | **CORRECT** | — | Bucket sort key. The article: 'The settlement may well have been established in 2500-2000 BC'; -3000 is the floor of the bucket 3000 - 1500 BC, which contains -2500. Bucket correct (plan 4.3.1). <https://en.wikipedia.org/wiki/Stanydale_Temple> |
+| `period_name` | **CORRECT** | — | categorize_period(-3000) = '3000 - 1500 BC'. <docs/procedures/ENRICHMENT_AUDIT.md> |
+| `site_type` | **CORRECT** | — | 'Temple complex' is canonical. The building is conventionally called a 'temple' (hence the record's name) and the article treats it as a unique large Neolithic structure; the value is the conventional one, not an overclaim by the record. <https://en.wikipedia.org/wiki/Stanydale_Temple> <pipeline/normalizers/site_type.py> |
+| `description` | **CORRECT** | — | Almost verbatim from the article: 'Stanydale Temple is a Neolithic site on Mainland, Shetland, Scotland. It is located in a field to the south of the modern village of Stanydale, roughly 21 miles (34 km) by road northwest of Lerwick', 'Once a roofed building, all that remains is a large, walled enclosure', 'There is uncertainty about the original purpose of the building, but its unusual size indicates some communal purpose, or that it was possibly the home of an important person'. The trailing ' [1]' after the full stop is a formatting slip, not a claim. <https://en.wikipedia.org/wiki/Stanydale_Temple> |
+| `card_description` | **CORRECT** | — | Neolithic, Shetland, the unusual size, the communal-or-important-person reading and the surviving walled enclosure all match the article. <https://en.wikipedia.org/wiki/Stanydale_Temple> |
+| `civilization` | **CORRECT** | — | Denormalised country copy by design. <docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.3.4> |
+| `heritage_designation` | **CORRECT** | — | NULL permitted; empty on all 36 sampled sites. Fillable: 'It is designated a scheduled monument'. <https://en.wikipedia.org/wiki/Stanydale_Temple> |
+| `hero_image` | **CORRECT** | — | Metadata-level verdict with a class note: 800x520 and correctly categorised 'Stanydale Temple', but the file's own description is 'Stanydale House (schematisch)' - it is a schematic drawing of the building, not a photograph. Correct site, no strip; recorded as a class note (illustration as hero), the same class as Langdale's book scan. <https://commons.wikimedia.org/wiki/File:Megawal1o.jpg> |
+| `gallery_images` | **CORRECT** | — | Metadata-level verdict. The 19 further rows are photographs of the enclosure interior, the entrance and the wells, all in Category:Stanydale Temple (including a Geograph image 'Well in Staneydale Temple' whose description reads 'One of two apparent wells within the walls of the so-called Staneydale Temple'). No wrong-site row. <https://commons.wikimedia.org/wiki/Category:Stanydale_Temple> |
+| `thumbnail_url` | **UNVERIFIABLE** | — | Local export path; no public/data/images copy in this checkout. <output/remediation/snapshot/wiki_images.jsonl.gz> |
+| `source_url` | **CORRECT** | — | HTTP 200, dedicated article (3,079 characters). <https://en.wikipedia.org/wiki/Stanydale_Temple> |
+| `scope` | **CORRECT** | — | Europe, Neolithic -> in scope. <docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.1 E3> |
+
+Clean. The only imperfection is that the hero is a schematic drawing rather than a photograph, in a record that ships 19 photographs of the same monument - a selection quirk worth noting for the image pipeline, not a wrong-site error.
+
+---
+
+## 27. Čertova pec — tier 2
+
+- `site_id` `ca92ce8c-e9ce-4fe8-9120-98aaae243224`
+- sampled tier 2 · sample position 27 of 36
+- checked 2026-09-20T23:09:47+02:00
+
+| field | database value |
+|---|---|
+| `name` | Čertova pec |
+| `country` | Slovakia |
+| `coordinates` | 48.56041268411261, 17.915224152868376 |
+| `period_start` | -37000 |
+| `period_name` | < 4500 BC |
+| `site_type` | Cave Structures |
+| `description` | Certova pec ("Devil's Oven") is a small karst cave in the Povazsky Inovec mountains near Radosina, western Slovakia. The cave extends roughly 27 metres into dolomite limestone and contains evidence of human habitation dating back approximately 38,400 years during the Paleolithic period. Multiple occupation layers demonstrate a long history of human presence, with Szeletian and Mousterian archaeological evidence indicating Neanderthal activity at the site. Stone tools and gastropod shell remains suggest connections between the cave's prehistoric inhabitants and populations from the Black Sea region. The cave is a protected natural monument due to its paleontological significance and is freely accessible year-round via three marked hiking trails. |
+| `card_description` | A 27-meter karst cave occupied since 37,000 BC. Stone Age tools trace repeated human visits across tens of thousands of years to the same tiny shelter. |
+| `civilization` | Slovakia |
+| `heritage_designation` | — |
+| `hero_image` | hero.webp (800x600, Commons File:Čertova pec (2004).jpg, Slovak protected monument 406-239) |
+| `gallery_images` | 6 further images |
+| `thumbnail_url` | /data/images/wiki/ca92ce8c/hero.webp |
+| `source_url` | https://en.wikipedia.org/wiki/%C4%8Certova_pec |
+| `scope` | Europe (lat 48.56, lon 17.92), period_start -37000 <= 500 AD -> in scope |
+
+| field | verdict | correct value | evidence |
+|---|---|---|---|
+| `name` | **CORRECT** | — | enwiki 'Certova pec' with the hacek; the name field carries the diacritic. Note that the description drops it ('Certova pec'), the same inconsistency the Cueva de los Murcielagos record shows in the opposite direction. <https://en.wikipedia.org/wiki/%C4%8Certova_pec> |
+| `country` | **CORRECT** | — | Slovakia; the article places it 'in the Nitra Region'. <https://en.wikipedia.org/wiki/%C4%8Certova_pec> |
+| `coordinates` | **CORRECT** | — | 48.5604, 17.9152 lies in the Povazsky Inovec near Radosina, as the article describes. No article coordinate or Wikidata P625 to compare numerically. <https://en.wikipedia.org/wiki/%C4%8Certova_pec> |
+| `period_start` | **CORRECT** | — | Bucket sort key. The article: 'A radiocarbon date of Szeletian cultural artifacts suggests prehistoric human presence in the cave at around 38,400 years ago', i.e. about 36,400 BC; -37000 is in the bucket '< 4500 BC', which contains it. Bucket correct (plan 4.3.1), and the card's '37,000 BC' agrees with the sort key. <https://en.wikipedia.org/wiki/%C4%8Certova_pec> |
+| `period_name` | **CORRECT** | — | categorize_period(-37000) = '< 4500 BC'. <docs/procedures/ENRICHMENT_AUDIT.md> |
+| `site_type` | **CORRECT** | — | 'Cave Structures' is canonical and exact. <https://en.wikipedia.org/wiki/%C4%8Certova_pec> <pipeline/normalizers/site_type.py> |
+| `description` | **CORRECT** | — | The core is confirmed: 'a small karst cave in the Povazsky Inovec mountains of Slovakia', 'located near Radosina', 'The cave with total length of 27 m (89 ft)', 'a protected natural monument due to its paleontological significance', the 38,400-year radiocarbon date for Szeletian artifacts, multiple habitation phases, and 'There are three hiking trails in the vicinity'. Three details are NOT in the cited article and are recorded as unsupported rather than wrong: 'into dolomite limestone', 'Mousterian ... Neanderthal activity', and the gastropod shells pointing to Black Sea populations. All three are plausible from the Slovak literature on the site, none was verified in this audit. <https://en.wikipedia.org/wiki/%C4%8Certova_pec> |
+| `card_description` | **CORRECT** | — | 27-metre karst cave, occupation around 37,000-38,400 years ago, repeated Stone Age visits: all supported by the article. <https://en.wikipedia.org/wiki/%C4%8Certova_pec> |
+| `civilization` | **CORRECT** | — | Denormalised country copy by design. <docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.3.4> |
+| `heritage_designation` | **CORRECT** | — | NULL permitted; empty on all 36 sampled sites. Fillable with an exact identifier: the record's own hero image documents 'the protected monument with the number 406-239/0 CHMSK/406-239' in the Slovak Republic, and the article says the cave is a protected natural monument. <https://commons.wikimedia.org/wiki/File:%C4%8Certova_pec_(2004).jpg> |
+| `hero_image` | **CORRECT** | — | Metadata-level verdict. 800x600, Category:Certova pec, and the file carries the Slovak protected-monument number 406-239 - the cave itself. No strip. <https://commons.wikimedia.org/wiki/File:%C4%8Certova_pec_(2004).jpg> |
+| `gallery_images` | **CORRECT** | — | Metadata-level verdict. The 6 further rows are in Category:Certova pec, including 'File:Prírodná pamiatka - panoramio.jpg' and 'File:Radošina, Sídlisko jaskynné.jpg', the latter also carrying protected-monument number 406-239 (the same site, seen from the Radosina side). No wrong-site row. <https://commons.wikimedia.org/wiki/Category:%C4%8Certova_pec> |
+| `thumbnail_url` | **UNVERIFIABLE** | — | Local export path; no public/data/images copy in this checkout. <output/remediation/snapshot/wiki_images.jsonl.gz> |
+| `source_url` | **CORRECT** | — | HTTP 200, dedicated article (1,233 characters). <https://en.wikipedia.org/wiki/%C4%8Certova_pec> |
+| `scope` | **CORRECT** | — | Europe, Palaeolithic -> in scope. <docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.1 E3> |
+
+Clean, and a useful counter-example to the two severe dating errors: a Palaeolithic cave whose sort key, card and description all agree. The pattern so far is that dating goes wrong when the enrichment has no date in the source and invents one (Ahu Tongariki, Cueva de los Murcielagos, Font dels Coms), not when the source carries a date.
+
+---
+
+## 28. Lindos — tier 2
+
+- `site_id` `c17927cb-4b63-4fa0-9c64-b72a65decaaa`
+- sampled tier 2 · sample position 28 of 36
+- checked 2026-09-20T23:09:47+02:00
+
+| field | database value |
+|---|---|
+| `name` | Lindos |
+| `country` | Greece |
+| `coordinates` | 36.08346333179203, 28.083311838732747 |
+| `period_start` | -1000 |
+| `period_name` | 1500 - 500 BC |
+| `site_type` | City/town/settlement |
+| `description` | Lindos is an ancient city and archaeological site on the eastern coast of Rhodes island in the Dodecanese, Greece. According to legend, it was founded by Dorian settlers led by King Tlepolemus around the 10th century BC. The Acropolis of Lindos dominates the site, featuring the Temple of Athena Lindia from approximately 300 BC. Now a popular beach destination, Lindos retains its historic character with whitewashed houses winding through narrow streets. |
+| `card_description` | One of the three ancient city-states of Rhodes, founded according to myth by Danaus. Its dramatic acropolis holds a temple to Athena Lindia rebuilt after a fire in 342 BC. |
+| `civilization` | Greece |
+| `heritage_designation` | — |
+| `hero_image` | hero.webp (800x533, Commons File:20210826-Lindos-DJI 0205.jpg) |
+| `gallery_images` | 19 further images |
+| `thumbnail_url` | /data/images/wiki/c17927cb/hero.webp |
+| `source_url` | https://en.wikipedia.org/wiki/Lindos |
+| `scope` | Europe (lat 36.08, lon 28.08), period_start -1000 <= 500 AD -> in scope |
+
+| field | verdict | correct value | evidence |
+|---|---|---|---|
+| `name` | **CORRECT** | — | enwiki 'Lindos'. <https://en.wikipedia.org/wiki/Lindos> |
+| `country` | **CORRECT** | — | Greece; the article places it on Rhodes in the Dodecanese. <https://en.wikipedia.org/wiki/Lindos> |
+| `coordinates` | **CORRECT** | — | 36.0835, 28.0833 is Lindos on the east coast of Rhodes, about 40 km south of Rhodes city as the article states. No article coordinate or Wikidata P625 to compare numerically. <https://en.wikipedia.org/wiki/Lindos> |
+| `period_start` | **CORRECT** | — | Bucket sort key. The article: 'According to myth, Lindos was founded by the Dorians led by the king Tlepolemus of Rhodes, who arrived in about the 10th century BC'; -1000 is the floor of the bucket 1500 - 500 BC, which contains -900. Bucket correct (plan 4.3.1). <https://en.wikipedia.org/wiki/Lindos> |
+| `period_name` | **CORRECT** | — | categorize_period(-1000) = '1500 - 500 BC'. <docs/procedures/ENRICHMENT_AUDIT.md> |
+| `site_type` | **CORRECT** | — | The article calls it 'an archaeological site, a fishing village and a former municipality' with the acropolis above it; 'City/town/settlement' is canonical and is the right general class for a continuously inhabited ancient city. <https://en.wikipedia.org/wiki/Lindos> <pipeline/normalizers/site_type.py> |
+| `description` | **CORRECT** | — | All four sentences are supported by the cited article: the archaeological site on the east coast of Rhodes in the Dodecanese; 'According to myth, Lindos was founded by the Dorians led by the king Tlepolemus of Rhodes, who arrived in about the 10th century BC'; 'In classical times the acropolis of Lindos was dominated by the massive temple of Athena Lindia, which attained its final form in around 300 BC'; and the present-day tourist character ('its fine beaches make it a popular tourist and holiday destination'). <https://en.wikipedia.org/wiki/Lindos> |
+| `card_description` | **CORRECT** | — | Both card claims check out, and both were checked because each looked doubtful. (1) 'founded according to myth by Danaus' is NOT in the record's own source (the cached full Lindos article contains no occurrence of 'Danaus'), but it is stated in the Temple of Athena Lindia article: 'According to Pseudo-Apollodorus ... the temple was founded by Danaus, who dedicated a statue to Athena Lindia in his gratitude for her assistance in helping him construct a ship'. The card refers to the sanctuary's mythical founder and the description to the city's (Tlepolemus) - two different traditions about two different subjects, so the two texts do not contradict each other. (2) 'rebuilt after a fire in 342 BC' is exact: the same article states 'The temple was burned in 342 BC, and replaced by a new temple in the late 4th-century BC'. 'One of the three ancient city-states of Rhodes' (Lindos, Ialysos, Kamiros) is standard but not in the article read - unsupported, not wrong. <https://en.wikipedia.org/wiki/Temple_of_Athena_Lindia> <https://en.wikipedia.org/wiki/Lindos> |
+| `civilization` | **CORRECT** | — | Denormalised country copy by design. <docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.3.4> |
+| `heritage_designation` | **CORRECT** | — | NULL permitted; empty on all 36 sampled sites. The acropolis is a Greek archaeological site with a listed monument status, so the gap is fillable. <https://en.wikipedia.org/wiki/Lindos> |
+| `hero_image` | **CORRECT** | — | Metadata-level verdict. 800x533, an August 2021 drone photograph of Lindos bay and the acropolis. Correct site, no strip. <https://commons.wikimedia.org/wiki/File:20210826-Lindos-DJI_0205.jpg> |
+| `gallery_images` | **CORRECT** | — | Metadata-level verdict: 19 further rows, the town, the acropolis and the temple. 20 images in total. <output/remediation/snapshot/wiki_images.jsonl.gz> |
+| `thumbnail_url` | **UNVERIFIABLE** | — | Local export path; no public/data/images copy in this checkout. <output/remediation/snapshot/wiki_images.jsonl.gz> |
+| `source_url` | **CORRECT** | — | HTTP 200, dedicated article (6,380 characters). <https://en.wikipedia.org/wiki/Lindos> |
+| `scope` | **CORRECT** | — | Europe, 10th century BC -> in scope. <docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.1 E3> |
+
+Clean, and the card is the better text: it carries two specific, checkable claims (Danaus, the 342 BC fire) that both verify, while the description stays general. The Danaus check needed a second article because the card's claim is not in the record's own source - a case where 'unsupported by the cited source' would have been the wrong verdict, and only fetching the related article showed the claim is true.
+
+---
+
+## 29. Maesbury Castle — tier 2
+
+- `site_id` `e77b33be-0bb1-48e2-9da7-4d2503f28134`
+- sampled tier 2 · sample position 29 of 36
+- checked 2026-09-20T23:09:47+02:00
+
+| field | database value |
+|---|---|
+| `name` | Maesbury Castle |
+| `country` | England |
+| `coordinates` | 51.22234984180613, -2.559754389303717 |
+| `period_start` | -1000 |
+| `period_name` | 1500 - 500 BC |
+| `site_type` | Fortress/citadel |
+| `description` | Maesbury Castle is an Iron Age univallate hill fort in the parish of Croscombe on the Mendip Hills, north of Shepton Mallet, Somerset, England. The enclosure covers 2.5 hectares at 292 m elevation, with a single rampart up to 6 m high and an outer ditch. Built on Old Red Sandstone from the Devonian period, the hill resisted erosion better than surrounding limestone. It is a Scheduled Ancient Monument offering panoramic views across the Somerset Levels to Glastonbury Tor. |
+| `card_description` | A Mendips hillfort that marked a post-Roman frontier between Brittonic Celts and West Saxons. The nearby Wansdyke earthwork formed the visible boundary of that contested zone. |
+| `civilization` | England |
+| `heritage_designation` | — |
+| `hero_image` | hero.webp (800x579, Commons File:Maesbury Camp Somerset Map.jpg - 'Map of earthworks at Maesbury Camp') |
+| `gallery_images` | none - 1 further image |
+| `thumbnail_url` | /data/images/wiki/e77b33be/hero.webp |
+| `source_url` | https://en.wikipedia.org/wiki/Maesbury_Castle |
+| `scope` | Europe (lat 51.22, lon -2.56), period_start -1000 <= 500 AD -> in scope |
+
+| field | verdict | correct value | evidence |
+|---|---|---|---|
+| `name` | **CORRECT** | — | enwiki 'Maesbury Castle'; the article also explains the name (maes = field in Brythonic Welsh, burh = fort in Old English). <https://en.wikipedia.org/wiki/Maesbury_Castle> |
+| `country` | **CORRECT** | — | 'England' rather than 'United Kingdom' is deliberate project design; enwiki says Somerset. <docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.3.2> |
+| `coordinates` | **CORRECT** | — | 51.2223, -2.5598 lies on the Mendips north of Shepton Mallet in the parish of Croscombe, as described. No article coordinate or Wikidata P625 to compare numerically. <https://en.wikipedia.org/wiki/Maesbury_Castle> |
+| `period_start` | **UNVERIFIABLE** | — | The article calls it an Iron Age hill fort and gives no construction date. -1000 is the floor of the bucket 1500 - 500 BC, which contains the early British Iron Age (from c. 800 BC), so the bucket is defensible and cannot be called wrong under plan 4.3.1. Not counted as an error. <https://en.wikipedia.org/wiki/Maesbury_Castle> |
+| `period_name` | **CORRECT** | — | categorize_period(-1000) = '1500 - 500 BC'. <docs/procedures/ENRICHMENT_AUDIT.md> |
+| `site_type` | **CORRECT** | — | 'Fortress/citadel' is canonical and matches 'Iron Age hill fort'. <https://en.wikipedia.org/wiki/Maesbury_Castle> <pipeline/normalizers/site_type.py> |
+| `description` | **CORRECT** | — | Every claim is in the article: 'an Iron Age hill fort within the parish of Croscombe on the Mendip Hills, just north of Shepton Mallet, Somerset, England'; 'The enclosure has an area of 2.5 hectares (6.2 acres), and lies at a height of 292 m (950 ft), with views in many directions'; 'The fort has a single rampart up to 6 m high, with an outer ditch (univallate)'; 'The hill has not eroded as fast as the surrounding limestone as it is made of Old Red Sandstone deposited in the Devonian period'; 'It has been listed as a Scheduled Ancient Monument'. One addition is the record's own framing, not a contradiction: 'offering panoramic views across the Somerset Levels to Glastonbury Tor' (the article says only 'views in many directions'). <https://en.wikipedia.org/wiki/Maesbury_Castle> |
+| `card_description` | **CORRECT** | — | Supported, with one attribution shift worth naming: the article says 'The area was a boundary between the Romano-British Celts and West Saxons during the period 577-652 AD, when the nearby Wansdyke fortification comprised part of the border'. The card makes the hillfort itself the frontier marker, where the source makes the area one. Not counted as an error - the earthwork is the reason the area is discussed, and the Wansdyke detail is exact. <https://en.wikipedia.org/wiki/Maesbury_Castle> |
+| `civilization` | **CORRECT** | — | Denormalised country copy by design. <docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.3.4> |
+| `heritage_designation` | **CORRECT** | — | NULL permitted; empty on all 36 sampled sites. Fillable: the record's own description already says 'It is a Scheduled Ancient Monument'. <https://en.wikipedia.org/wiki/Maesbury_Castle> |
+| `hero_image` | **CORRECT** | — | Metadata-level verdict with a class note: 800x579, Category:Maesbury Castle, description 'Map of earthworks at Maesbury Camp, Somerset, England' - a public-domain 19th-century earthwork plan, so the correct site but not a photograph. The same class as Stanydale's schematic. No strip. <https://commons.wikimedia.org/wiki/File:Maesbury_Camp_Somerset_Map.jpg> |
+| `gallery_images` | **CORRECT** | — | Metadata-level verdict: 1 further row, the same map family. GAP: 2 images in total, far below the plan's 6-image floor. <output/remediation/snapshot/wiki_images.jsonl.gz> |
+| `thumbnail_url` | **UNVERIFIABLE** | — | Local export path; no public/data/images copy in this checkout. <output/remediation/snapshot/wiki_images.jsonl.gz> |
+| `source_url` | **CORRECT** | — | HTTP 200, dedicated article (3,123 characters). <https://en.wikipedia.org/wiki/Maesbury_Castle> |
+| `scope` | **CORRECT** | — | Europe, Iron Age -> in scope. <docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.1 E3> |
+
+Clean. Notable for what the card does well: it chose the one genuinely interesting fact in the article (the post-Roman boundary, 577-652 AD) rather than padding with dimensions, and got the Wansdyke detail right.
+
+---
+
+## 30. Beacon Hill, Burghclere, Hampshire — tier 2
+
+- `site_id` `9dcc1c87-49c7-44f9-9d09-13b9b2b6671f`
+- sampled tier 2 · sample position 30 of 36
+- checked 2026-09-20T23:09:47+02:00
+
+| field | database value |
+|---|---|
+| `name` | Beacon Hill, Burghclere, Hampshire |
+| `country` | England |
+| `coordinates` | 51.31289848426105, -1.3434930855961533 |
+| `period_start` | -1500 |
+| `period_name` | 1500 - 500 BC |
+| `site_type` | Fortress/citadel |
+| `description` | (1500-500 BC) Beacon Hill is a prehistoric hill fort near Burghclere in north Hampshire, standing 261 metres (856 ft) high [1]. One of England's most famous hill forts, it occupies a strategic position on the A34 road corridor [1]. The site takes its name from its historical use as a beacon station, once the most famous in Hampshire [1]. |
+| `card_description` | At 261 metres, this Hampshire hill carries an 80-hectare fort visible from the nearby A34 road. The hill derived its name from its historic role as one of many signal beacons across the country. |
+| `civilization` | England |
+| `heritage_designation` | — |
+| `hero_image` | hero.webp (800x533, Commons File:Beacon Hill, Burghclere, United Kingdom (Unsplash).jpg, Category:Beacon Hill, Hampshire) |
+| `gallery_images` | 7 further images |
+| `thumbnail_url` | /data/images/wiki/9dcc1c87/hero.webp |
+| `source_url` | https://en.wikipedia.org/wiki/Beacon_Hill,_Burghclere,_Hampshire |
+| `scope` | Europe (lat 51.31, lon -1.34), period_start -1500 <= 500 AD -> in scope |
+
+| field | verdict | correct value | evidence |
+|---|---|---|---|
+| `name` | **CORRECT** | — | The article opens by distinguishing this Beacon Hill from the one near Warnford; the record's name carries the disambiguating Burghclere and Hampshire, so it identifies the right hill. <https://en.wikipedia.org/wiki/Beacon_Hill,_Burghclere,_Hampshire> |
+| `country` | **CORRECT** | — | 'England' rather than 'United Kingdom' is deliberate project design; enwiki says north Hampshire. <docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.3.2> |
+| `coordinates` | **CORRECT** | — | 51.3129, -1.3435 lies southwest of Old Burghclere with the A34 to the east, as the article describes (grid reference SU458573). No article coordinate or Wikidata P625 to compare numerically. <https://en.wikipedia.org/wiki/Beacon_Hill,_Burghclere,_Hampshire> |
+| `period_start` | **CORRECT** | — | Bucket sort key. The article: 'The Beacon Hill camp, (scheduled ancient monument number 7) built around 1000 BC'; -1500 is the floor of the bucket 1500 - 500 BC, which contains -1000. Bucket correct (plan 4.3.1). <https://en.wikipedia.org/wiki/Beacon_Hill,_Burghclere,_Hampshire> |
+| `period_name` | **CORRECT** | — | categorize_period(-1500) = '1500 - 500 BC'. <docs/procedures/ENRICHMENT_AUDIT.md> |
+| `site_type` | **CORRECT** | — | 'Fortress/citadel' is canonical; the article calls it 'one of England's most well known hill forts'. <https://en.wikipedia.org/wiki/Beacon_Hill,_Burghclere,_Hampshire> <pipeline/normalizers/site_type.py> |
+| `description` | **CORRECT** | — | Supported: 'It is 261 metres high and has one of England's most well known hill forts on its slopes, visible from the main A34 road which passes close by'; 'The hill's name is derived from the fact that it was one of many Beacon Hills in England and beyond. This hill was once the site of the most famous beacon in Hampshire'. Two notes: the leading '(1500-500 BC)' is a formatting artefact, not prose, and '[1]' markers appear after full stops. 'Occupies a strategic position on the A34 road corridor' is the record's framing of the article's 'visible from the main A34 road'. <https://en.wikipedia.org/wiki/Beacon_Hill,_Burghclere,_Hampshire> |
+| `card_description` | **WRONG** | the hillfort is a scheduled ancient monument built around 1000 BC; the 80.7 hectares belong to the Site of Special Scientific Interest, not to the fort | Area error: the article says 'It is an 80.7-hectare (199-acre) biological Site of Special Scientific Interest called Burghclere Beacon and a Nature Conservation Review site, Grade I' - the 80.7 ha is the SSSI (the biological designation covering the hill and its slopes), while the fort is the 'Beacon Hill camp, (scheduled ancient monument number 7)'. The card turns the SSSI's area into the fort's area, inflating the earthwork by roughly an order of magnitude. The rest of the card (261 m, the A34, the beacon name) is supported. <https://en.wikipedia.org/wiki/Beacon_Hill,_Burghclere,_Hampshire> |
+| `civilization` | **CORRECT** | — | Denormalised country copy by design. <docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.3.4> |
+| `heritage_designation` | **CORRECT** | — | NULL permitted; empty on all 36 sampled sites. Fillable with identifiers: the article gives 'scheduled ancient monument number 7' for the camp and the SSSI designation. <https://en.wikipedia.org/wiki/Beacon_Hill,_Burghclere,_Hampshire> |
+| `hero_image` | **CORRECT** | — | Metadata-level verdict. 800x533, Category:Beacon Hill, Hampshire, an Unsplash photograph of this hill. No strip. <https://commons.wikimedia.org/wiki/File:Beacon_Hill,_Burghclere,_United_Kingdom_(Unsplash).jpg> |
+| `gallery_images` | **CORRECT** | — | Metadata-level verdict: 7 further rows, including the de Havilland first-flight memorial stone ('situated in the Seven Barrows field to the south of Beacon Hill') and the grave of the 5th Earl of Carnarvon - both documented in the article as being at this hill. No wrong-site row. <https://commons.wikimedia.org/wiki/Category:Beacon_Hill,_Hampshire> |
+| `thumbnail_url` | **UNVERIFIABLE** | — | Local export path; no public/data/images copy in this checkout. <output/remediation/snapshot/wiki_images.jsonl.gz> |
+| `source_url` | **CORRECT** | — | HTTP 200, dedicated article (5,849 characters). <https://en.wikipedia.org/wiki/Beacon_Hill,_Burghclere,_Hampshire> |
+| `scope` | **CORRECT** | — | Europe, Bronze Age -> in scope. <docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.1 E3> |
+
+A new error mechanism: an area figure attached to the wrong subject. The number is real and in the source, which is why no fact-check by string search would catch it; only reading what the number describes does. Compare the Cueva de los Murcielagos card, where 'rock art spanning Palaeolithic to Neolithic' conflates the art with the occupation - the same class of subject-shift.
+
+---
+
+## 31. Mam Tor — tier 2
+
+- `site_id` `eed2d08c-3d09-4d93-885a-0b0b2eb7126d`
+- sampled tier 2 · sample position 31 of 36
+- checked 2026-09-20T23:09:47+02:00
+
+| field | database value |
+|---|---|
+| `name` | Mam Tor |
+| `country` | England |
+| `coordinates` | 53.349275547598594, -1.8104912296518136 |
+| `period_start` | -1500 |
+| `period_name` | 1500 - 500 BC |
+| `site_type` | Fortress/citadel |
+| `description` | Mam Tor is a 517-metre hill near Castleton in Derbyshire, England, crowned by a Late Bronze Age to Early Iron Age hillfort dating to 1200-500 BC. The univallate fort encloses roughly 6.4 hectares with a dump rampart, rock-kerbed ditch, and counterscarp bank. Excavations in the 1960s revealed over 140 leveled hut platforms, hearths, charred grain, saddle-quern grinding stones, and bronze bracelets, indicating a substantial fortified village. Two earlier Bronze Age bowl barrows also stand on the summit. Named 'Mother Hill' for the landslips on its eastern face, it was listed among the Seven Wonders of the Peak by Thomas Hobbes in 1636. |
+| `card_description` | A Bronze Age hillfort from 1200 BC on a peak called 'Mother Hill.' Constant landslips on its eastern face earned it the name 'Shivering Mountain' and have been reshaping it for millennia. |
+| `civilization` | England |
+| `heritage_designation` | — |
+| `hero_image` | hero.webp (800x146, Commons File:Back Tor, Mam Tor, Odin Mine.jpg) |
+| `gallery_images` | 19 further images |
+| `thumbnail_url` | /data/images/wiki/eed2d08c/hero.webp |
+| `source_url` | https://en.wikipedia.org/wiki/Mam_Tor |
+| `scope` | Europe (lat 53.35, lon -1.81), period_start -1500 <= 500 AD -> in scope |
+
+| field | verdict | correct value | evidence |
+|---|---|---|---|
+| `name` | **CORRECT** | — | enwiki 'Mam Tor'. <https://en.wikipedia.org/wiki/Mam_Tor> |
+| `country` | **CORRECT** | — | 'England' rather than 'United Kingdom' is deliberate project design; enwiki says Derbyshire. <docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.3.2> |
+| `coordinates` | **CORRECT** | — | 53.3493, -1.8105 is Mam Tor near Castleton in the High Peak. No article coordinate or Wikidata P625 to compare numerically. <https://en.wikipedia.org/wiki/Mam_Tor> |
+| `period_start` | **CORRECT** | — | Bucket sort key. The article: 'Radiocarbon analysis suggests occupation from around 1200 BC' and 'a late Bronze Age and early Iron Age univallate hill fort'; -1500 is the floor of the bucket 1500 - 500 BC, which contains -1200 and the whole 1200-500 BC range the record states. Bucket correct (plan 4.3.1). <https://en.wikipedia.org/wiki/Mam_Tor> |
+| `period_name` | **CORRECT** | — | categorize_period(-1500) = '1500 - 500 BC'. <docs/procedures/ENRICHMENT_AUDIT.md> |
+| `site_type` | **CORRECT** | — | 'Fortress/citadel' is canonical and matches the article's 'univallate hill fort'. <https://en.wikipedia.org/wiki/Mam_Tor> <pipeline/normalizers/site_type.py> |
+| `description` | **CORRECT** | — | Verified: 517 m, near Castleton in Derbyshire, 'a late Bronze Age and early Iron Age univallate hill fort', 'Radiocarbon analysis suggests occupation from around 1200 BC', 'two Bronze Age bowl barrows', "Its name means 'mother hill', so called because frequent landslips on its eastern face", and 'Mam Tor was declared to be one of the Seven Wonders of the Peak by Thomas Hobbes in his 1636 book De Mirabilibus Pecci'. UNSUPPORTED, not counted: the article says 'At a later stage over a hundred small platforms were levelled into the hill' where the record says 'over 140 leveled hut platforms'; and the article read contains no 6.4 hectares, dump rampart, rock-kerbed ditch, counterscarp bank, hearths, charred grain, saddle querns or bronze bracelets. These may come from the Coombs and Thompson 1979 excavation report the article cites, but this audit did not verify them, so they are listed as unsupported rather than wrong. <https://en.wikipedia.org/wiki/Mam_Tor> |
+| `card_description` | **CORRECT** | — | 1200 BC occupation, 'Mother Hill', the eastern-face landslips and the alternative name 'Shivering Mountain' are all in the article ('These landslips, which are caused by unstable lower layers of shale, also give the hill its alternative name of Shivering Mountain'). The card's 'Bronze Age hillfort' is right for the late Bronze Age foundation. <https://en.wikipedia.org/wiki/Mam_Tor> |
+| `civilization` | **CORRECT** | — | Denormalised country copy by design. <docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.3.4> |
+| `heritage_designation` | **CORRECT** | — | NULL permitted; empty on all 36 sampled sites. Fillable: 'The hill fort and burial mounds are a Scheduled Ancient Monument'. <https://en.wikipedia.org/wiki/Mam_Tor> |
+| `hero_image` | **WRONG** | an image of the hill and its fort in normal aspect ratio | STRIP: 800x146. The plan's strip definition (line 293: count(*) FILTER (WHERE height < 400) AS strips) puts this image in the strip class, and at 146 px it is the most extreme case in the sample so far - a wide panorama in which the hillfort occupies a few pixels of height. The subject is correct (it shows Mam Tor together with Back Tor and the Odin Mine), so this is a presentation defect, not a wrong-site error. <https://commons.wikimedia.org/wiki/File:Back_Tor,_Mam_Tor,_Odin_Mine.jpg> |
+| `gallery_images` | **CORRECT** | — | Metadata-level verdict: 19 further rows of the hill, the landslide face and the fort. 20 images in total. <output/remediation/snapshot/wiki_images.jsonl.gz> |
+| `thumbnail_url` | **UNVERIFIABLE** | — | Local export path; no public/data/images copy in this checkout. <output/remediation/snapshot/wiki_images.jsonl.gz> |
+| `source_url` | **CORRECT** | — | HTTP 200, dedicated article (4,821 characters). <https://en.wikipedia.org/wiki/Mam_Tor> |
+| `scope` | **CORRECT** | — | Europe, Bronze Age -> in scope. <docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.1 E3> |
+
+Content clean; the defect is presentational. The strip pattern is now confirmed across five records (Lake Mungo 800x97, Ahu Tongariki 800x135, Areni-1 800x114, Merry Maidens 800x167, Mam Tor 800x146) plus Pyramid of Cestius at 800x397 - always a wide panorama, always exactly 800 px wide, which points at a fixed-width export step rather than at the source images.
+
+---
+
+## 32. Priene Ruins — tier 2
+
+- `site_id` `972ded7c-665e-4ca6-98cc-af4dff9ac8f3`
+- sampled tier 2 · sample position 32 of 36
+- checked 2026-09-20T23:09:47+02:00
+
+| field | database value |
+|---|---|
+| `name` | Priene Ruins |
+| `country` | Türkiye |
+| `coordinates` | 37.659971289454205, 27.30144810249858 |
+| `period_start` | 1 |
+| `period_name` | 1 - 500 AD |
+| `site_type` | Temple complex |
+| `description` | Priene was an ancient Greek city of Ionia located at the base of an escarpment of Mycale, about 6 kilometres north of the Maeander River[1]. The city was built on the sea coast, overlooking the former Latmian Gulf of the Aegean, and was developed on steep slopes and terraces extending from sea level to a height of 380 metres above sea level[1]. Due to siltation from the river filling the bay over several centuries, the city is now an inland site[1]. |
+| `card_description` | Rebuilt in the 4th century BC on a new site, Priene was laid out on a strict grid across steep Ionian terraces. Its orthogonal streets are an early and clear expression of systematic urban design. |
+| `civilization` | Türkiye |
+| `heritage_designation` | — |
+| `hero_image` | hero.webp (800x495, Commons File:Priene 2013-03-24n.jpg, 'ancient Greek city of Priene') |
+| `gallery_images` | 19 further images |
+| `thumbnail_url` | /data/images/wiki/972ded7c/hero.webp |
+| `source_url` | https://en.wikipedia.org/wiki/Priene |
+| `scope` | Rest of world (lat 37.66, lon 27.30), period_start 1 <= 500 AD -> in scope |
+
+| field | verdict | correct value | evidence |
+|---|---|---|---|
+| `name` | **CORRECT** | — | enwiki 'Priene'; the record adds 'Ruins', which matches the site's present state. <https://en.wikipedia.org/wiki/Priene> |
+| `country` | **CORRECT** | — | The site is in modern Turkey (Turkish 'Prien'); 'Turkiye' is the country's own UN name, used consistently in this database. <https://en.wikipedia.org/wiki/Priene> |
+| `coordinates` | **CORRECT** | — | 37.6600, 27.3014 is the Priene escarpment above the Maeander plain, as described. No article coordinate or Wikidata P625 to compare numerically. <https://en.wikipedia.org/wiki/Priene> |
+| `period_start` | **WRONG** | -350 (bucket 500 BC - 1 AD) | Bucket sort key, wrong by four buckets. The article: 'The city visible on the slopes and escarpment of Mycale was constructed according to plan entirely during the 4th century BCE' and 'At about 350 BCE the Persian-empire satrap, Mausolus ... planned a magnificent new city'. The record's own card also says 'Rebuilt in the 4th century BC'. Even taking the article's earliest settlement ('founded by a colony from the ancient Greek city of Thebes ... at about 1000 BCE') the bucket would be 1500 - 500 BC. Sorting a Hellenistic Greek city as 1 - 500 AD is wrong under any reading, and it contradicts the card shipped with the same record. <https://en.wikipedia.org/wiki/Priene> |
+| `period_name` | **CORRECT** | — | categorize_period(1) = '1 - 500 AD'. Internally consistent with the wrong sort key. <docs/procedures/ENRICHMENT_AUDIT.md> |
+| `site_type` | **WRONG** | City/town/settlement | 'Temple complex' narrows a whole city to one building type. The article: 'Priene ... was an ancient Greek city of Ionia (and member of the Ionian League)', 'Priene was a small city-state of 6000 persons living in a constrained space of only 15 hectares', with a grid of about 80 insulae, a theatre, an agora and the Temple of Athena among other monuments. The record's own description opens 'Priene was an ancient Greek city of Ionia'. 'City/town/settlement' is canonical and is the class the site needs. <https://en.wikipedia.org/wiki/Priene> <pipeline/normalizers/site_type.py> |
+| `description` | **CORRECT** | — | Every claim is in the article: 'an ancient Greek city of Ionia ... located at the base of an escarpment of Mycale, about 6 kilometres (3.7 mi) north of what was then the course of the Maeander River'; 'The city was built on the sea coast, overlooking the former Latmian Gulf of the Aegean'; 'It was developed on steep slopes and terraces extending from sea level to a height of 380 metres (1,250 ft) above sea level at the top of the escarpment'; and the siltation account ('according to recent geoarchaeological research, Priene had already lost the port and open connection to the sea in about the 1st century BCE'). The description contains no date at all, which is why the wrong sort key survives inside it unremarked. <https://en.wikipedia.org/wiki/Priene> |
+| `card_description` | **CORRECT** | — | Supported: 'The city, as developed at this site that was new in the 4th century, was found to have been laid out on a rectangular scheme'; 'The town had six main streets, about 6 metres (20 ft) wide, running east and west, and fifteen streets about 3 metres (9.8 ft) wide crossing at right angles, all being evenly spaced. It was thus divided into about 80 insulae.' The card is the only part of this record that carries the site's actual date. <https://en.wikipedia.org/wiki/Priene> |
+| `civilization` | **CORRECT** | — | Denormalised country copy by design. <docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.3.4> |
+| `heritage_designation` | **CORRECT** | — | NULL permitted; empty on all 36 sampled sites. Priene is on Turkey's tentative World Heritage list, so the gap is fillable. <https://en.wikipedia.org/wiki/Priene> |
+| `hero_image` | **CORRECT** | — | Metadata-level verdict. 800x495, described as 'Turkey: ancient Greek city of Priene' - the site itself. No strip. <https://commons.wikimedia.org/wiki/File:Priene_2013-03-24n.jpg> |
+| `gallery_images` | **CORRECT** | — | Metadata-level verdict: 19 further rows of the city's ruins (including a French-language image of the egg-and-dart mouldings, categorised 'Priene'). 20 images in total. <output/remediation/snapshot/wiki_images.jsonl.gz> |
+| `thumbnail_url` | **UNVERIFIABLE** | — | Local export path; no public/data/images copy in this checkout. <output/remediation/snapshot/wiki_images.jsonl.gz> |
+| `source_url` | **CORRECT** | — | HTTP 200, dedicated article (18,334 characters) - the richest source in the sample. <https://en.wikipedia.org/wiki/Priene> |
+| `scope` | **CORRECT** | — | Rest of world; in scope both with the shipped Roman date and with the correct Hellenistic one. <docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.1 E3> |
+
+Two independent errors in one record, both contradicting text shipped in the same record: the card says 4th century BC while the sort key says Roman, and the description says 'city' while the type says 'temple complex'. The source article here is excellent (18k characters, well dated), which rules out 'thin source' as the cause - the enrichment's field-level steps appear to run independently of each other, so a record can contradict itself.
+
+---
+
+## 33. Hebbariyeh Roman Temple — tier 2
+
+- `site_id` `6a20e653-5320-440d-ac6c-2e86bb56e09e`
+- sampled tier 2 · sample position 33 of 36
+- checked 2026-09-20T23:09:47+02:00
+
+| field | database value |
+|---|---|
+| `name` | Hebbariyeh Roman Temple |
+| `country` | Lebanon |
+| `coordinates` | 33.368436482650374, 35.696994435582205 |
+| `period_start` | 1 |
+| `period_name` | 1 - 500 AD |
+| `site_type` | Megalithic stones |
+| `description` | The Hebbariyeh Roman Temple is a 2nd-century AD structure in the Hasbaya District of Lebanon's Nabatieh Governorate, on the southwestern slopes of Mount Hermon. Dedicated to Baal Jad, it is classified as an antae temple with an eastern portal aligned to catch the first beams of the morning sun rising over Hermon. The temple measures approximately 17 meters long by 9 meters wide, with walls standing 8 meters high. It features an Ionic pillar, a southern frieze, and two tiers of niches with a six-line Greek inscription. A large basement chamber beneath the cella floors, accessible only from outside, is thought to have served as a burial space. It is the southernmost of the Mount Hermon temple group. |
+| `card_description` | 2nd-century AD Roman temple facing Mount Hermon, its doorway aligned to catch the first morning sun over the peak. A large basement chamber beneath the cella may have served as a burial vault. |
+| `civilization` | Lebanon |
+| `heritage_designation` | — |
+| `hero_image` | hero.webp (800x650, Commons File:16.Ruines d'un temple a Hibariyeh.b.jpg) |
+| `gallery_images` | 1 further image |
+| `thumbnail_url` | /data/images/wiki/6a20e653/hero.webp |
+| `source_url` | https://en.wikipedia.org/wiki/Hebbariye |
+| `scope` | Rest of world (lat 33.37, lon 35.70), period_start 1 <= 500 AD -> in scope |
+
+| field | verdict | correct value | evidence |
+|---|---|---|---|
+| `name` | **CORRECT** | — | The article's subject is the village Al-Hebbariyah/Hebbariyeh, which contains the temple; the record names the temple with the village's name, which is how the site is cited (Taylor's Mount Hermon temple group). <https://en.wikipedia.org/wiki/Hebbariye> |
+| `country` | **CORRECT** | — | Lebanon; 'the Hasbaya District of the Nabatieh Governorate in Lebanon', 'near the Lebanon-Syria border'. <https://en.wikipedia.org/wiki/Hebbariye> |
+| `coordinates` | **UNVERIFIABLE** | — | The article gives no coordinate and there is no Wikidata P625. 33.3684, 35.6970 lies on the southwestern slopes of Mount Hermon near the Lebanon-Syria border, consistent with the described location, but nothing confirms the point. <https://en.wikipedia.org/wiki/Hebbariye> |
+| `period_start` | **CORRECT** | — | Bucket sort key. The article dates the temple only as Roman ('There is a Roman temple near to the village'); the record's description and card both say 2nd century AD, which falls inside the bucket 1 - 500 AD. Bucket consistent with the record's own dating; the source itself supplies no date. <https://en.wikipedia.org/wiki/Hebbariye> |
+| `period_name` | **CORRECT** | — | categorize_period(1) = '1 - 500 AD'. <docs/procedures/ENRICHMENT_AUDIT.md> |
+| `site_type` | **WRONG** | Temple complex | 'Megalithic stones' is the wrong class: this is a Roman ashlar temple, and the source discusses it as a temple ('There is a Roman temple near to the village, opposite the Wadi Shib'a which is the most southern of the Temples of Mount Hermon'), with dressed blocks measured by Robinson (0.84 m by 4.6 m, 1.8 m thick walls) - large stones, but not a megalithic monument. 'Temple complex' is canonical and fits. The record's own name and description both say 'temple', so the type contradicts the rest of the record. <https://en.wikipedia.org/wiki/Hebbariye> <pipeline/normalizers/site_type.py> |
+| `description` | **CORRECT** | — | Confirmed: the Hasbaya District in the Nabatieh Governorate, the southwestern slopes of Mount Hermon, and 'the most southern of the Temples of Mount Hermon, a group defined by George Taylor' - the record's closing sentence is exact. The dimensions deviate slightly from the only source read, which reports Robinson's 1852 survey: '58 feet (18 m) long by 31 feet (9.4 m) wide with 6 feet (1.8 m) thick walls around 32 feet (9.8 m) high', where the record says 17 m by 9 m with 8 m walls. Recorded as a deviation from the cited source rather than an error - a later survey may be behind the record's figures, and this audit found no second source. UNVERIFIED (not counted): the dedication to Baal Jad, the antae classification and solar alignment, the Ionic pillar, the southern frieze, the two tiers of niches with a six-line Greek inscription, and the basement chamber as a burial space. None of these is in the article read; all are plausible from the specialised literature on the Mount Hermon temples. <https://en.wikipedia.org/wiki/Hebbariye> |
+| `card_description` | **CORRECT** | — | The temple faces Mount Hermon and is the southernmost of its group, as the article states. The solar alignment and the burial-vault reading are the record's own (see description note) and are stated as possibilities ('may have served'), not as facts. <https://en.wikipedia.org/wiki/Hebbariye> |
+| `civilization` | **CORRECT** | — | Denormalised country copy by design. <docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.3.4> |
+| `heritage_designation` | **CORRECT** | — | NULL permitted; empty on all 36 sampled sites. Fillable and topical: 'During the 2024 Israeli invasion of Lebanon, UNESCO gave enhanced protection to 34 cultural sites including the temple at Al-Hebbariyah'. <https://en.wikipedia.org/wiki/Hebbariye> |
+| `hero_image` | **CORRECT** | — | Metadata-level verdict. 800x650, 'Ruines d'un temple a Hibariyeh' - the temple itself (the article's external links point to the same 1881 'Picturesque Palestine' image of the temple at Hebbariye). No strip. <https://commons.wikimedia.org/wiki/File:16.Ruines_d%27un_temple_a_Hibariyeh.b.jpg> |
+| `gallery_images` | **CORRECT** | — | Metadata-level verdict: 1 further row, the same temple. GAP: 2 images in total, far below the plan's 6-image floor. <output/remediation/snapshot/wiki_images.jsonl.gz> |
+| `thumbnail_url` | **UNVERIFIABLE** | — | Local export path; no public/data/images copy in this checkout. <output/remediation/snapshot/wiki_images.jsonl.gz> |
+| `source_url` | **CORRECT** | — | HTTP 200, dedicated article (2,486 characters) - about the village, with a Roman temple section that does describe this temple. <https://en.wikipedia.org/wiki/Hebbariye> |
+| `scope` | **CORRECT** | — | Rest of world, Roman -> in scope. <docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.1 E3> |
+
+One clear type error and one record whose prose is much richer than its source - the description carries architectural detail (Baal Jad, antae, the Greek inscription) that the cited article does not contain. That is the opposite risk from the thin-stub records: unverifiable detail stated with confidence. It is not counted as an error here because nothing in it is contradicted, but it is exactly the kind of text the census cannot check and a human reviewer should.
+
+---
+
+## 34. Ocriticum — tier 1
+
+- `site_id` `e7ee7c00-1b94-4ff8-832e-7af0323bd3aa`
+- sampled tier 1 · sample position 34 of 36
+- checked 2026-09-20T23:09:47+02:00
+
+| field | database value |
+|---|---|
+| `name` | Ocriticum |
+| `country` | Italy |
+| `coordinates` | 42.003081643612724, 13.990221725526288 |
+| `period_start` | -500 |
+| `period_name` | 500 BC - 1 AD |
+| `site_type` | City/town/settlement |
+| `description` | Ocriticum was an Italic and Roman sacred site near modern Cansano in the Abruzzo region of Italy, flourishing from the late 4th century BC to the 2nd century AD. The site contains three temples across two levels: an Italic-era temple to Hercules (4th c. BC), a Roman temple to Jupiter (1st c. AD), and a sacellum of Ceres and Venus (2nd c. BC). Excavations yielded votive offerings, terracotta figurines including the "Goddess of Cansano," and bronze Hercules statues. The nearby mansio Jovis Larene, marked on the Tabula Peutingeriana, served as a way station for pilgrims and travelers. |
+| `card_description` | An Italic-Roman settlement with temples to Jupiter, Hercules, and a shrine to Ceres and Venus. Pilgrims, traders, and shepherds all stopped here to worship. |
+| `civilization` | Italy |
+| `heritage_designation` | — |
+| `hero_image` | hero.webp (800x600, Commons File:Ocriticum04.JPG) |
+| `gallery_images` | 11 further images |
+| `thumbnail_url` | /data/images/wiki/e7ee7c00/hero.webp |
+| `source_url` | https://en.wikipedia.org/wiki/Ocriticum |
+| `scope` | Europe (lat 42.00, lon 13.99), period_start -500 <= 500 AD -> in scope |
+
+| field | verdict | correct value | evidence |
+|---|---|---|---|
+| `name` | **CORRECT** | — | enwiki 'Ocriticum'. <https://en.wikipedia.org/wiki/Ocriticum> |
+| `country` | **CORRECT** | — | Italy; 'the comune of Cansano, in the province of L'Aquila in the Abruzzo region of Italy'. <https://en.wikipedia.org/wiki/Ocriticum> |
+| `coordinates` | **CORRECT** | — | 42.0031, 13.9902 is at Cansano in the L'Aquila province. No article coordinate or Wikidata P625 to compare numerically. <https://en.wikipedia.org/wiki/Ocriticum> |
+| `period_start` | **CORRECT** | — | Bucket sort key. The article: 'The first temple built in the area dates to the end of the 4th century BC'; -500 is the floor of the bucket 500 BC - 1 AD, which contains -300. Bucket correct (plan 4.3.1), and it agrees with the record's own 'flourishing from the late 4th century BC'. <https://en.wikipedia.org/wiki/Ocriticum> |
+| `period_name` | **CORRECT** | — | categorize_period(-500) = '500 BC - 1 AD'. <docs/procedures/ENRICHMENT_AUDIT.md> |
+| `site_type` | **CORRECT** | — | The article's first sentence: 'Ocriticum was an Italic and Roman town, the ruins of which are located in the comune of Cansano ... as well as remains of the ancient settlement'. 'City/town/settlement' is canonical and matches, though the site's published weight is on the sanctuary rather than the settlement. <https://en.wikipedia.org/wiki/Ocriticum> <pipeline/normalizers/site_type.py> |
+| `description` | **WRONG** | the Roman temple was built around the beginning of the 1st century BC, not the 1st century AD | One date is wrong by a century: the record says 'a Roman temple to Jupiter (1st c. AD)' while the article says 'Around the beginning of the 1st century BC (and therefore now under the dominion of the Romans), there was a further expansion of the sacred area, in which, on a terrace higher than the Italic temple but perfectly aligned with it, another temple building, larger and architecturally sophisticated'. Everything else checks out: the Italic and Roman sacred site at Cansano, the temple to Hercules, the sacellum of Ceres and Venus ('probably built between the 3rd and 2nd century BC', matching the record's 2nd c. BC), the votive deposit with around 600 offerings and a bronze statuette of Hercules, and the mansio Jovis Larene on the Tabula Peutingeriana. The record's 'two levels' is right in substance (the article describes a terrace higher than the Italic temple), and 'three temples' is the record's count of two temples plus the sacellum. 'The Goddess of Cansano' is not in the article read - unsupported, not counted. <https://en.wikipedia.org/wiki/Ocriticum> |
+| `card_description` | **CORRECT** | — | The three cults (Jupiter, Hercules, Ceres and Venus) are exact, and 'Pilgrims, traders, and shepherds all stopped here to worship' paraphrases the article's 'pilgrims, wayfarers, traders, shepherds stopped there to venerate the divinities' - one of the closest card-to-source matches in the sample. The card avoids the century that the description gets wrong. <https://en.wikipedia.org/wiki/Ocriticum> |
+| `civilization` | **CORRECT** | — | Denormalised country copy by design. <docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.3.4> |
+| `heritage_designation` | **CORRECT** | — | NULL permitted; empty on all 36 sampled sites. <https://en.wikipedia.org/wiki/Ocriticum> |
+| `hero_image` | **CORRECT** | — | Metadata-level verdict. 800x600, a photograph of the Ocriticum excavations. No strip. <https://commons.wikimedia.org/wiki/File:Ocriticum04.JPG> |
+| `gallery_images` | **CORRECT** | — | Metadata-level verdict: 11 further rows of the site. 12 images in total, above the plan's floor. <output/remediation/snapshot/wiki_images.jsonl.gz> |
+| `thumbnail_url` | **UNVERIFIABLE** | — | Local export path; no public/data/images copy in this checkout. <output/remediation/snapshot/wiki_images.jsonl.gz> |
+| `source_url` | **CORRECT** | — | HTTP 200, dedicated article (6,288 characters). <https://en.wikipedia.org/wiki/Ocriticum> |
+| `scope` | **CORRECT** | — | Europe, 4th century BC -> in scope. <docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.1 E3> |
+
+A tier-1 record (the rarest class in the sample) and a good one: it names three cults, the votive deposit and the mansio with its Roman road map, and the card is nearly a quotation. The single error is a BC/AD slip of exactly the kind a reader cannot detect without the source - and one the census's own checks are unlikely to find.
+
+---
+
+## 35. Windbury Head — tier 1
+
+- `site_id` `6c4d8b74-697a-46f7-a000-bf92b702f87a`
+- sampled tier 1 · sample position 35 of 36
+- checked 2026-09-20T23:09:47+02:00
+
+| field | database value |
+|---|---|
+| `name` | Windbury Head |
+| `country` | England |
+| `coordinates` | 51.01303497146373, -4.444167816301008 |
+| `period_start` | -1000 |
+| `period_name` | 1500 - 500 BC |
+| `site_type` | Fortress/citadel |
+| `description` | Windbury Head is the site of an Iron Age hill fort on the Hartland Peninsula in North Devon, England[1]. Most of the site has been lost to coastal erosion over centuries[1]. Only the southern ramparts survive today, standing at approximately 100 metres (330 ft) above sea level[1]. |
+| `card_description` | A headland fort on the Hartland Peninsula, now reduced by coastal erosion. Only the southern ramparts remain at ~100 meters above sea level - the seaward defenses long since collapsed into the sea. |
+| `civilization` | England |
+| `heritage_designation` | — |
+| `hero_image` | — |
+| `gallery_images` | none - 0 wiki_images rows |
+| `thumbnail_url` | — |
+| `source_url` | https://en.wikipedia.org/wiki/Windbury_Head |
+| `scope` | Europe (lat 51.01, lon -4.44), period_start -1000 <= 500 AD -> in scope |
+
+| field | verdict | correct value | evidence |
+|---|---|---|---|
+| `name` | **CORRECT** | — | enwiki 'Windbury Head'. <https://en.wikipedia.org/wiki/Windbury_Head> |
+| `country` | **CORRECT** | — | 'England' rather than 'United Kingdom' is deliberate project design; enwiki says North Devon. <docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.3.2> |
+| `coordinates` | **CORRECT** | — | 51.0130, -4.4442 is the Hartland Peninsula coast just north of Clovelly, as the article describes. No article coordinate or Wikidata P625 to compare numerically. <https://en.wikipedia.org/wiki/Windbury_Head> |
+| `period_start` | **UNVERIFIABLE** | — | The article (287 characters, two sentences) dates the fort only as 'Iron Age'. -1000 is the floor of the bucket 1500 - 500 BC, which contains the early British Iron Age (from c. 800 BC), so the bucket is defensible and cannot be called wrong under plan 4.3.1. Not counted as an error. <https://en.wikipedia.org/wiki/Windbury_Head> |
+| `period_name` | **CORRECT** | — | categorize_period(-1000) = '1500 - 500 BC'. <docs/procedures/ENRICHMENT_AUDIT.md> |
+| `site_type` | **CORRECT** | — | 'Fortress/citadel' is canonical and matches 'Iron Age hill fort'. <https://en.wikipedia.org/wiki/Windbury_Head> <pipeline/normalizers/site_type.py> |
+| `description` | **CORRECT** | — | The whole source article is: 'Windbury Head is the site of an Iron Age hill fort on the Hartland Peninsula, just north of Clovelly in North Devon, England. Most of the fort has been lost to coastal erosion, but the southern ramparts still exist at approximately 100 metres (330 ft) above sea level.' The record reproduces every claim; the only change is 'over centuries', which the article implies but does not state, and the omission of 'just north of Clovelly'. <https://en.wikipedia.org/wiki/Windbury_Head> |
+| `card_description` | **CORRECT** | — | Faithful to the article, plus one inference that the article supports without stating: 'the seaward defenses long since collapsed into the sea' follows from 'Most of the fort has been lost to coastal erosion' on a headland. Recorded as inference, not error. <https://en.wikipedia.org/wiki/Windbury_Head> |
+| `civilization` | **CORRECT** | — | Denormalised country copy by design. <docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.3.4> |
+| `heritage_designation` | **CORRECT** | — | NULL permitted; empty on all 36 sampled sites. <https://en.wikipedia.org/wiki/Windbury_Head> |
+| `hero_image` | **CORRECT** | — | Empty (NULL), permitted. GAP: 0 images, so this tier-1 record has no picture at all - the same gap as Nina Kiru. <output/remediation/snapshot/wiki_images.jsonl.gz> |
+| `gallery_images` | **CORRECT** | — | Empty - 0 rows. Permitted; gap. <output/remediation/snapshot/wiki_images.jsonl.gz> |
+| `thumbnail_url` | **CORRECT** | — | NULL, consistent with having no images. <output/remediation/snapshot/wiki_images.jsonl.gz> |
+| `source_url` | **CORRECT** | — | HTTP 200, dedicated article - but only 287 characters, the shortest source in the sample. The record is a faithful copy of it, which means the record cannot be richer than those two sentences. <https://en.wikipedia.org/wiki/Windbury_Head> |
+| `scope` | **CORRECT** | — | Europe, Iron Age -> in scope. <docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.1 E3> |
+
+Clean, and a clean illustration of the source-length ceiling: a 287-character article produced a 4-sentence record with no date, no images and no heritage designation, all of which are faithfully absent rather than wrong. For the false-negative measurement this is a site where the census and this audit can only agree, because there is almost nothing to get wrong.
+
+---
+
+## 36. Xcaret — tier 1
+
+- `site_id` `cad0ee78-1954-4ca9-b8e4-dde794c99117`
+- sampled tier 1 · sample position 36 of 36
+- checked 2026-09-20T23:09:47+02:00
+
+| field | database value |
+|---|---|
+| `name` | Xcaret |
+| `country` | Mexico |
+| `coordinates` | 20.5809811273035, -87.12078437717365 |
+| `period_start` | 1 |
+| `period_name` | 1 - 500 AD |
+| `site_type` | City/town/settlement |
+| `description` | Xcaret is a Maya civilization archaeological site on the Caribbean coastline of the Yucatan Peninsula in Quintana Roo, Mexico [1]. The site was occupied by the pre-Columbian Maya and functioned as a port for navigation and an important Maya trading center [1]. Some original structures are now contained within the modern privately-owned Xcaret Park tourism development [1]. |
+| `card_description` | A Maya port city occupied from 200 to 1500 AD. Most of its visible buildings date to the period from 1200 to 1550 AD and include a small temple and residential compounds. |
+| `civilization` | Mexico |
+| `heritage_designation` | — |
+| `hero_image` | hero.webp (800x532, Commons File:Ofrenda De Muertos QR 2011.jpg - 'Ofrenda De Muertos QR 2011') |
+| `gallery_images` | 19 further images, including zoo animals, orchids and a chapel in the theme park |
+| `thumbnail_url` | /data/images/wiki/cad0ee78/hero.webp |
+| `source_url` | https://en.wikipedia.org/wiki/Xcaret |
+| `scope` | Americas (lat 20.58, lon -87.12), period_start 1 <= 500 AD -> in scope |
+
+| field | verdict | correct value | evidence |
+|---|---|---|---|
+| `name` | **CORRECT** | — | enwiki 'Xcaret'; the article's toponymy section gives the Mayan meaning 'small inlet' and the original name p'ole'. <https://en.wikipedia.org/wiki/Xcaret> |
+| `country` | **CORRECT** | — | Mexico; 'in the state of Quintana Roo in Mexico'. <https://en.wikipedia.org/wiki/Xcaret> |
+| `coordinates` | **CORRECT** | — | 20.5810, -87.1208 is the Caribbean coast of Quintana Roo at Xcaret (south of Playa del Carmen). No article coordinate or Wikidata P625 to compare numerically. <https://en.wikipedia.org/wiki/Xcaret> |
+| `period_start` | **CORRECT** | — | Bucket sort key. The article: 'According to the research by the National Institute of Anthropology and History (INAH), the first buildings of the site can be dated to 200 to 600 A.D.'; 1 is the floor of the bucket 1 - 500 AD, which contains 200. Bucket correct (plan 4.3.1). <https://en.wikipedia.org/wiki/Xcaret> |
+| `period_name` | **CORRECT** | — | categorize_period(1) = '1 - 500 AD'. <docs/procedures/ENRICHMENT_AUDIT.md> |
+| `site_type` | **CORRECT** | — | 'City/town/settlement' is canonical; the article describes a Maya settlement and port. The record does not use a port-specific class, which the canonical list does not offer. <https://en.wikipedia.org/wiki/Xcaret> <pipeline/normalizers/site_type.py> |
+| `description` | **CORRECT** | — | Almost verbatim from the article's lead: 'Xcaret ... is a Maya civilization archaeological site located on the Caribbean coastline of the Yucatan Peninsula, in the state of Quintana Roo in Mexico. The site was occupied by the pre-Columbian Maya and functioned as a port for navigation and an important Maya trading center. Some of the site's original structures are contained within a modern-day tourism development, the privately owned Xcaret Park.' The trailing ' [1]' markers are formatting, not claims. <https://en.wikipedia.org/wiki/Xcaret> |
+| `card_description` | **CORRECT** | — | The article: 'the first buildings of the site can be dated to 200 to 600 A.D., but the majority of them are from the period from 1200 to 1550 A.D.' The card's 'occupied from 200 to 1500 AD' and 'Most of its visible buildings date to the period from 1200 to 1550 AD' both follow that sentence (the 1500 vs 1550 in the first clause is rounding, while the second clause keeps the source's exact range). The small temple and residential compounds are described in the article's archaeology section. <https://en.wikipedia.org/wiki/Xcaret> |
+| `civilization` | **CORRECT** | — | Denormalised country copy by design. <docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.3.4> |
+| `heritage_designation` | **CORRECT** | — | NULL permitted; empty on all 36 sampled sites. The site is an INAH-protected archaeological zone, so the gap is fillable. <https://en.wikipedia.org/wiki/Xcaret> |
+| `hero_image` | **WRONG** | a photograph of the Maya ruins at Xcaret | WRONG SUBJECT: the hero is 'Ofrenda De Muertos QR 2011' - a Day of the Dead offering, i.e. a modern festival installation, not the archaeological site. It carries no Commons category and no description beyond the title, so it is not even tied to Xcaret by its own metadata; it was presumably matched on the place name Quintana Roo. For a record about a Maya port, the first image a visitor sees is a modern altar. <https://commons.wikimedia.org/wiki/File:Ofrenda_De_Muertos_QR_2011.jpg> |
+| `gallery_images` | **WRONG** | images of the archaeological site | CLUSTER OF OFF-TOPIC IMAGES. Of the 19 further rows, several are not the archaeological site at all: 'File:Bigcats (17892303602).jpg' (zoo animals), 'File:Orchids (17895315075).jpg' (flowers), and 'Our Lady of Guadalupe, Xcaret Eco Park' (a chapel in the theme park). The rows that ARE the site carry the Commons category 'Xcaret archaeological site' ('File:Cabin Ruins - panoramio.jpg', 'File:Parque arqueologico.jpg' - 'Cuenta con una interesante zona arqueologica que aun se conserva'). Mechanism: the image selection followed the NAME 'Xcaret' (the eco-park resort is far more photographed than the ruins) instead of the archaeological site. One row could not be resolved on Commons at all ('_ Our Lady of Guadalupe, Xcaret Eco Park _' -> NOT FOUND), which is itself worth noting for the image pipeline. <https://commons.wikimedia.org/wiki/Category:Xcaret_archaeological_site> |
+| `thumbnail_url` | **UNVERIFIABLE** | — | Local export path; no public/data/images copy in this checkout. <output/remediation/snapshot/wiki_images.jsonl.gz> |
+| `source_url` | **CORRECT** | — | HTTP 200, dedicated article (3,105 characters). <https://en.wikipedia.org/wiki/Xcaret> |
+| `scope` | **CORRECT** | — | Americas, 200 AD onwards -> in scope. <docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.1 E3> |
+
+The text is clean and the images are the worst in the sample together with Langdale. Both cases share one mechanism: image selection matches on a name or keyword that is ambiguous in the wider world (an eco-park called Xcaret, an axe called Neolithic), and nothing downstream checks that the photograph shows the site. This is the strongest argument in the sample for a location check on gallery images.
+
+---
+
+## 6. The comparison (unblinding) - the measured false-negative rate
+
+Computed by `compare_fnr.py` (in this directory; result also in `fnr_result.json`). This is the step
+the GOLD lane never reached before its deadline.
+
+### 6.1 Why the comparison is field-level and not site-level
+
+A site-level comparison would be worthless here and would flatter the census: **T10 alone flags
+4,010 of the 5,004 sites** and **T09 flags all 5,004**. "Some check mentioned this site" is therefore
+true for nearly everything. A blinded error counts as CAUGHT only when a census finding names the
+**same site and the same field**; the field mapping is in `compare_fnr.py:FIELD_MAP`.
+
+### 6.2 The result
+
+| blinded field | errors found | caught by the census | **missed** |
+|---|---|---|---|
+| `description` | 9 | 1 | **8** |
+| `hero_image` | 8 | 8 | 0 |
+| `period_start` | 7 | 3 | **4** |
+| `card_description` | 6 | 1 | **5** |
+| `site_type` | 4 | 0 | **4** |
+| `scope` | 3 | 0 | **3** |
+| `gallery_images` | 3 | 3 | 0 |
+| **total** | **40** | **16** | **24** |
+
+    FALSE-NEGATIVE RATE = 24/40 = 60.0 %     95 % Clopper-Pearson [43.3 %, 75.1 %]
+    inverse-probability weighted (N_h/n_h per tier) = 62.4 %
+
+**The honest reading of that number.** 60 % is the share of real errors that no machine check
+flagged. It is *not* "60 % of the census is broken": the census catches every image-tier error in
+the sample (hero and gallery, 11 of 11) and it was never designed to adjudicate prose. The number's
+value is in the decomposition below, which says what to build next.
+
+### 6.3 Where the 24 missed errors actually come from
+
+| bucket | n | % of 40 | what it means |
+|---|---|---|---|
+| **no check exists** | 3 | 7.5 % | the E3 scope window is unchecked everywhere |
+| **a check exists but under-fires** | 13 | 32.5 % | T03 (dates in text) 9, T04 (`site_type`) 4 |
+| **beyond a deterministic census** | 8 | 20.0 % | wrong subject, fabricated attribution, area, spelling |
+
+**Bucket 1 - missing check (3).** Every one is an E3 scope violation: Midford Castle (a folly of
+1775, 1,275 years past the rest-of-world cutoff) and Ksar el Barka (1690) are simply not examined by
+any of the ten checks, and Font dels Coms falls through as a consequence of a fabricated
+`period_start`. The E3 window needs its own check; it is a pure comparison of stored values and needs
+no network.
+
+**Bucket 2 - checks that exist and under-fire (13).** This is the actionable core. **T03** is the
+years-in-text check and its exact target appears nine times in the sample while it caught one:
+Ahu Tongariki ("constructed between 1-500 AD" against a source saying 1250-1500), The Gop
+("5th-4th millennium BC" for a cairn whose British Neolithic starts c. 4000 BC), The Merry Maidens
+(self-contradictory in one sentence: "Late Neolithic" and then "4500-3000 BC"), Ocriticum ("1st c.
+AD" against "beginning of the 1st century BC") and Font dels Coms (a *fabricated* -3500 for a
+centenary spring). **T04** (`site_type`) ran to completion and flagged **0 of 5,004 sites**, while the
+sample contains four wrong types: a hillfort reading of a cairn (The Gop), "timber circle" for a ring
+of 56 chalk pits (Aubrey Holes), "Temple complex" for an entire Greek city (Priene), and
+"Megalithic stones" for a Roman ashlar temple (Hebbariyeh). A check that flags nothing while four of
+its target errors sit in a 36-site sample is under-firing, not clean.
+
+**Bucket 3 - beyond a deterministic census (8).** A restoration turned into the original construction
+(Arc de Bera); a description paraphrasing the article about the *god* Dedun rather than the temple;
+measurements inflated against two sources (The Gop, "14 m high, 101 m diameter" vs "12 m, 75-80 m");
+"over 160 skeletons" where the excavation found 154 (Overstone); the area of an SSSI attributed to the
+site (Beacon Hill); "attributed to King Amyntas" contradicting the record's own description; a
+misspelling of El Tiemblo; and a stylistic nuance about Nubian pyramid influence (Pyramid of Caius
+Cestius). No string or URL check decides these; they are what the plan's VLM pass and human review are
+for.
+
+### 6.4 What this measurement does and does not establish
+
+- **n = 40 errors from 36 sites.** The interval [43 %, 75 %] is wide, and that width is the honest
+  part of the number: a 0 % rate on this sample would still have bounded the true rate near 10 %.
+- The 36 sites are the plan's own stratified draw (seed 20260920), over-weighting rarity tiers 4/5;
+  the weighted estimate is 62.4 %, barely different from the raw 60 %.
+- Errors were counted from the blinded verdicts **as written**, with no re-judging here. Two of the
+  24 are self-declared cosmetic in their own note (a misspelling, a stylistic nuance); the other 22
+  are substantive, and the ten most serious are named in §6.3.
+- **The 60 % does not license "the census is untrustworthy".** It says the census covers URL shape,
+  image dimensions, hero/gallery triage and citation integrity well, and that it does not yet cover
+  the E3 window, the dates in prose, or the site-type classification it was given.
+

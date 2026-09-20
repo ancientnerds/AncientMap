@@ -1,0 +1,176 @@
+{
+ "sample_index": 6,
+ "site_id": "82f23c96-d8b2-41f0-a3e5-59ae9b89880c",
+ "site_name": "Arc de Berà",
+ "rarity_tier": 4,
+ "sample_size": 36,
+ "checked_at": "2026-09-20T23:09:47+02:00",
+ "db_fields": {
+  "name": "Arc de Berà",
+  "country": "Spain",
+  "coordinates": "41.173175, 1.468619",
+  "period_start": -500,
+  "period_name": "500 BC - 1 AD",
+  "site_type": "Gate/archway/bridge",
+  "description": "The Arc de Berà is a Roman triumphal arch erected around 13 BC during the reign of Augustus, located 20 km northeast of Tarragona in Catalonia, Spain. Built on the Via Augusta through the will of Lucius Licinius Sura, it commemorates the emperor and marks the ancient road. The arch features a single opening with fluted pilasters crowned by Corinthian capitals atop a podium, and it is part of the Archaeological Ensemble of Tarraco, a UNESCO World Heritage Site since 2000.",
+  "card_description": "A 13 BC Roman triumphal arch standing alone on the old Via Augusta highway. It is part of the UNESCO-listed Archaeological Ensemble of Tarraco.",
+  "civilization": "Spain",
+  "heritage_designation": null,
+  "hero_image": "hero.webp (800x600, Commons File:Arco de Barà.jpg, in Category:Arc de Berà)",
+  "gallery_images": "19 further images, almost all in Category:Arc de Berà",
+  "thumbnail_url": "/data/images/wiki/82f23c96/hero.webp",
+  "source_url": "https://en.wikipedia.org/wiki/Arc_de_Ber%C3%A0",
+  "scope": "Europe (lat 41.17, lon 1.47), period_start -500 <= 500 AD -> in scope"
+ },
+ "verdicts": [
+  {
+   "field": "name",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Arc_de_Berà",
+    "https://de.wikipedia.org/wiki/Arc_de_Berà",
+    "https://www.wikidata.org/wiki/Q631051"
+   ],
+   "note": "enwiki/dewiki/Wikidata all 'Arc de Berà'. enwiki notes 'Barà' is the erroneous spelling, so the correct form is shipped."
+  },
+  {
+   "field": "country",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://www.wikidata.org/wiki/Q631051"
+   ],
+   "note": "Wikidata P17 = Q29 (Spain); enwiki 'some 20 km north-east of the city of Tarragona, Spain'."
+  },
+  {
+   "field": "coordinates",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://www.wikidata.org/wiki/Q631051",
+    "https://en.wikipedia.org/wiki/Arc_de_Berà"
+   ],
+   "note": "Database 41.173175, 1.468619; enwiki 41.17302778, 1.46869444; Wikidata P625 41.173301, 1.469115. Within ~45 m."
+  },
+  {
+   "field": "period_start",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Arc_de_Berà",
+    "https://it.wikipedia.org/wiki/Arco_di_Berà"
+   ],
+   "note": "Bucket sort key. The arch is dated 'around 13 BC' (enwiki) and '13 a.C.' (itwiki); -500 is the floor of the bucket 500 BC - 1 AD, which contains -13. Per plan 4.3.1 a round value alone is not an error; the bucket is right."
+  },
+  {
+   "field": "period_name",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "docs/procedures/ENRICHMENT_AUDIT.md"
+   ],
+   "note": "categorize_period(-500) = '500 BC - 1 AD'."
+  },
+  {
+   "field": "site_type",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://www.wikidata.org/wiki/Q631051"
+   ],
+   "note": "Wikidata P31 = triumphal arch (Q143912) and archaeological site (Q839954); 'Gate/archway/bridge' is the canonical match for an arch."
+  },
+  {
+   "field": "description",
+   "verdict": "WRONG",
+   "correct_value": "the arch was built in the reign of Augustus around 13 BC; it was RESTORED in the early 2nd century AD 'pursuant to terms of the will of Lucius Licinius Sura'",
+   "sources": [
+    "https://en.wikipedia.org/wiki/Arc_de_Berà",
+    "https://it.wikipedia.org/wiki/Arco_di_Berà"
+   ],
+   "note": "The description turns a restoration into the original construction: 'Built on the Via Augusta through the will of Lucius Licinius Sura'. The cited article says the opposite: 'The monument was erected in the reign of Augustus, around 13 BC. It was later restored at the beginning of the 2nd century AD pursuant to terms of the will of Lucius Licinius Sura, as reflected in a surviving inscription on the entablature.' Everything else in the description checks out (13 BC, Augustus, 20 km north-east of Tarragona, single opening with fluted pilasters and Corinthian capitals on a podium, Archaeological Ensemble of Tarraco, UNESCO 2000 - all verbatim in the article). The card text does not repeat the error, so the wrong claim reaches the globe card, not the short."
+  },
+  {
+   "field": "card_description",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Arc_de_Berà"
+   ],
+   "note": "'13 BC', 'triumphal arch', 'on the old Via Augusta highway' and 'UNESCO-listed Archaeological Ensemble of Tarraco' are all in the cited article."
+  },
+  {
+   "field": "civilization",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.3.4"
+   ],
+   "note": "Denormalised country copy by design. Worth noting for the culture field elsewhere: Wikidata P2596 (culture) = Q1747689 (Ancient Rome) for this item, i.e. the real cultural attribution is available but unused - as designed."
+  },
+  {
+   "field": "heritage_designation",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://www.wikidata.org/wiki/Q631051"
+   ],
+   "note": "NULL is permitted and the column is empty on all 36 sampled sites. Strongly fillable here: Wikidata P1435 carries bien de interés cultural (Q23712), part of UNESCO World Heritage Site (Q43113623) and Cultural Asset of National Interest (Q1019352), and P361 (part of) points at the Archaeological Ensemble of Tarraco (Q3119914)."
+  },
+  {
+   "field": "hero_image",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://commons.wikimedia.org/wiki/File:Arco_de_Bar%C3%A0.jpg"
+   ],
+   "note": "Metadata-level verdict. 800x600, categorised 'Arc de Berà' and 'Cultural heritage monuments in Spain' - a photograph of this arch."
+  },
+  {
+   "field": "gallery_images",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://commons.wikimedia.org/wiki/Category:Arc_de_Ber%C3%A0"
+   ],
+   "note": "Metadata-level verdict. 19 rows, all photographs of the arch (day, night, zooms, 19th-century drawing by Juan Laurent), 8 of them explicitly categorised 'Arc de Berà'. No wrong-site row found. Class note: several are near-duplicate zooms of the same facade, which the plan's image-selection rules address elsewhere."
+  },
+  {
+   "field": "thumbnail_url",
+   "verdict": "UNVERIFIABLE",
+   "correct_value": null,
+   "sources": [
+    "output/remediation/snapshot/wiki_images.jsonl.gz"
+   ],
+   "note": "Local export path; no public/data/images copy in this checkout."
+  },
+  {
+   "field": "source_url",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Arc_de_Ber%C3%A0"
+   ],
+   "note": "HTTP 200, dedicated article."
+  },
+  {
+   "field": "scope",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.1 E3"
+   ],
+   "note": "Europe, -500 -> in scope."
+  }
+ ],
+ "errors_found": [
+  {
+   "id": "ABe-1",
+   "field": "description",
+   "severity": "moderate",
+   "claim": "description states the arch was BUILT 'through the will of Lucius Licinius Sura'; the cited source says the will funded a 2nd-century RESTORATION of a 13 BC arch"
+  }
+ ],
+ "notes": "This is the first content error (as opposed to scope) in the sample, and it is a one-word swap - built vs restored - that a deterministic check cannot see and a human reader of the cited article catches immediately. The same sentence is also the one a careless summariser would produce, which makes it a good candidate for the error classes the plan expects from LLM enrichment."
+}

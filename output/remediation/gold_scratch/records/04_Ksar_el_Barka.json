@@ -1,0 +1,179 @@
+{
+ "sample_index": 4,
+ "site_id": "a5d9e9a7-9fd2-4a0f-a3ae-7dd78fba429b",
+ "site_name": "Ksar el Barka",
+ "rarity_tier": 4,
+ "sample_size": 36,
+ "checked_at": "2026-09-20T23:09:47+02:00",
+ "db_fields": {
+  "name": "Ksar el Barka",
+  "country": "Mauritania",
+  "coordinates": "18.400252, -12.216614",
+  "period_start": 1690,
+  "period_name": "1500+ AD",
+  "site_type": "City/town/settlement",
+  "description": "Ksar el Barka is a ruined caravan town in Mauritania, approximately 50 km north of Moudjeria, founded in 1690 by the Kunta branch of the Qadiriyya Sufi order. It was a key trading and religious center, serving as a caravanserai on trans-Saharan routes. In 1753, it was declared a sanctuary by Sheikh Sidel Moctar El Kounti. French colonial expansion, severe droughts in the 1970s-80s, and shifting trade routes led to its abandonment. Remains include residential fragments and an impressive mosque.",
+  "card_description": "A ruined Saharan caravan town founded in 1690 by a Sufi order. Its crumbling mosque still stands as a reminder of its days as a sanctuary city on the trans-Saharan trade routes.",
+  "civilization": "Mauritania",
+  "heritage_designation": null,
+  "hero_image": "hero.webp (800x574, Commons File:Ksar-el-Barka-1908.jpg, 1908 Agence Rol photograph, Category:Mosques in Mauritania)",
+  "gallery_images": "1 further image: Ruines de la mosquee de Ksar el Barka, 1908 Gallica photograph",
+  "thumbnail_url": "/data/images/wiki/a5d9e9a7/hero.webp",
+  "source_url": "https://en.wikipedia.org/wiki/Ksar_el_Barka",
+  "scope": "rest of world (lat 18.4, lon -12.2), period_start 1690 > 500 AD -> OUT OF SCOPE"
+ },
+ "verdicts": [
+  {
+   "field": "name",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Ksar_el_Barka",
+    "https://fr.wikipedia.org/wiki/Ksar_El_Barka",
+    "https://www.wikidata.org/wiki/Q939166"
+   ],
+   "note": "enwiki 'Ksar el Barka', frwiki 'Ksar El Barka', Wikidata label 'Ksar el Barka'. Capitalisation only."
+  },
+  {
+   "field": "country",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://www.wikidata.org/wiki/Q939166"
+   ],
+   "note": "Wikidata P17 = Q1025 (Mauritania); enwiki 'ruined town in Mauritania'."
+  },
+  {
+   "field": "coordinates",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://www.wikidata.org/wiki/Q939166",
+    "https://en.wikipedia.org/wiki/Ksar_el_Barka"
+   ],
+   "note": "Database 18.400252, -12.216614; enwiki and Wikidata P625 both 18.4, -12.21666667. Same point."
+  },
+  {
+   "field": "period_start",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://fr.wikipedia.org/wiki/Ksar_El_Barka",
+    "https://en.wikipedia.org/wiki/Ksar_el_Barka",
+    "https://ar.wikipedia.org/wiki/قصر_البركة_(موريتانيا)"
+   ],
+   "note": "1690 is the Kounta founding date in frwiki ('Ksar el Barka fut fonde par les Kountas venus de Ouadane en 1690') and the year the Kounta arrived in enwiki. Discrepancies noted, not errors: arwiki gives 1697 for the founding, and enwiki records an EARLIER town on the same spot (the Fula Jaawbe capital Laaci-Wendu, 'this town would later become Ksar el Barka', defeated by the Jolof Empire in 1456). If the record means the older settlement, the bucket would be 1000-1500 AD; the record's own description says 1690, so the value matches its stated subject. The same ambiguity is why the exact year should not be treated as settled."
+  },
+  {
+   "field": "period_name",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "docs/procedures/ENRICHMENT_AUDIT.md"
+   ],
+   "note": "categorize_period(1690) = '1500+ AD'."
+  },
+  {
+   "field": "site_type",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Ksar_el_Barka",
+    "https://fr.wikipedia.org/wiki/Ksar_El_Barka"
+   ],
+   "note": "enwiki 'ruined town', frwiki 'cite historique ... un site archeologique ou subsistent quelques vestiges d'un ksar (village fortifie)'. 'City/town/settlement' fits."
+  },
+  {
+   "field": "description",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://fr.wikipedia.org/wiki/Ksar_El_Barka",
+    "https://en.wikipedia.org/wiki/Ksar_el_Barka"
+   ],
+   "note": "Checked claim by claim. Supported: 50 km north of Moudjeria (enwiki), founded 1690 by the Kounta (frwiki), Qadiriyya/Kunta religious centre (frwiki: Sidel Moctar El Kounti, 'illustre refondateur de la Voie Quadirya'), declared/glorified in 1753 (frwiki: 'pour glorifier le ksar en 1753'), caravanserai on trans-Saharan routes (frwiki: 'les caravanes du grand Sahara connaissaient parfaitement'), colonial takeover (frwiki: Coppolani's forces occupy the ksar in February 1905, and the caravan roads are superseded by colonial roads). NOT supported by either source and left unverified: 'severe droughts in the 1970s-80s' as a cause of abandonment. Also note the cited enwiki article does NOT contain the 1690 founding story (it only says the Kounta 'came to the area' in 1690) - the description's detail comes from the French article, which is a second language edition of Wikipedia and therefore not an independent source (see the note on source independence in GOLD_STANDARD.md)."
+  },
+  {
+   "field": "card_description",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://fr.wikipedia.org/wiki/Ksar_El_Barka",
+    "https://commons.wikimedia.org/wiki/File:Ksar-el-Barka-1908.jpg"
+   ],
+   "note": "'founded in 1690 by a Sufi order' and 'sanctuary city on the trans-Saharan trade routes' match frwiki. The 'crumbling mosque still stands' line matches the imagery shipped with the record (the 1908 mosque-ruins photographs)."
+  },
+  {
+   "field": "civilization",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.3.4"
+   ],
+   "note": "Denormalised country copy by design."
+  },
+  {
+   "field": "heritage_designation",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://www.wikidata.org/wiki/Q939166"
+   ],
+   "note": "NULL is permitted. Wikidata P1435 is absent for this item too, so the column is genuinely empty here rather than unfilled."
+  },
+  {
+   "field": "hero_image",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://commons.wikimedia.org/wiki/File:Ksar-el-Barka-1908.jpg"
+   ],
+   "note": "Metadata-level verdict. The hero is a 1908 Agence Rol photograph held by the BnF (Gallica), categorised 'Ksar el Barka' and 'Mosques in Mauritania' - the site as it was. Historic photograph, but of this site."
+  },
+  {
+   "field": "gallery_images",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://commons.wikimedia.org/wiki/Category:Ksar_el_Barka"
+   ],
+   "note": "Metadata-level verdict. The single gallery row is 'Ruines de la mosquee de Ksar el Barka (Mauritanie)', 1908. Only two images exist in the whole record - the thinnest gallery in the sample that still has images."
+  },
+  {
+   "field": "thumbnail_url",
+   "verdict": "UNVERIFIABLE",
+   "correct_value": null,
+   "sources": [
+    "output/remediation/snapshot/wiki_images.jsonl.gz"
+   ],
+   "note": "Local export path; no public/data/images copy in this checkout."
+  },
+  {
+   "field": "source_url",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Ksar_el_Barka"
+   ],
+   "note": "HTTP 200, dedicated article - but a stub of 1,281 characters that does not carry most of the description's content."
+  },
+  {
+   "field": "scope",
+   "verdict": "WRONG",
+   "correct_value": "out of scope - the record should be hidden or removed",
+   "sources": [
+    "docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.1 E3 and sec. 8.1"
+   ],
+   "note": "1690 is 1,190 years past the rest-of-world cutoff of 500 AD. The ruins themselves are archaeological (frwiki calls it an archaeological site), but the record dates and describes the 17th-19th century caravan town, not an ancient one, so E3 does not keep it. Mechanical check period_start > 500 catches it."
+  }
+ ],
+ "errors_found": [
+  {
+   "id": "KB-1",
+   "field": "scope",
+   "severity": "moderate",
+   "claim": "17th-century caravan town in the dataset although the rest-of-world cutoff is 500 AD (E3)"
+  }
+ ],
+ "notes": "Second site in a row whose only error is scope, and both are English/French-language records with accurate content. The interesting part is not the content but that the dataset contains post-medieval towns at all - 1690 and 1775 both sail through the E3 gate as data, and it is the frontend that has to hide them."
+}

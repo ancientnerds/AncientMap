@@ -1,0 +1,172 @@
+{
+ "sample_index": 33,
+ "site_id": "6a20e653-5320-440d-ac6c-2e86bb56e09e",
+ "site_name": "Hebbariyeh Roman Temple",
+ "rarity_tier": 2,
+ "sample_size": 36,
+ "db_fields": {
+  "name": "Hebbariyeh Roman Temple",
+  "country": "Lebanon",
+  "coordinates": "33.368436482650374, 35.696994435582205",
+  "period_start": 1,
+  "period_name": "1 - 500 AD",
+  "site_type": "Megalithic stones",
+  "description": "The Hebbariyeh Roman Temple is a 2nd-century AD structure in the Hasbaya District of Lebanon's Nabatieh Governorate, on the southwestern slopes of Mount Hermon. Dedicated to Baal Jad, it is classified as an antae temple with an eastern portal aligned to catch the first beams of the morning sun rising over Hermon. The temple measures approximately 17 meters long by 9 meters wide, with walls standing 8 meters high. It features an Ionic pillar, a southern frieze, and two tiers of niches with a six-line Greek inscription. A large basement chamber beneath the cella floors, accessible only from outside, is thought to have served as a burial space. It is the southernmost of the Mount Hermon temple group.",
+  "card_description": "2nd-century AD Roman temple facing Mount Hermon, its doorway aligned to catch the first morning sun over the peak. A large basement chamber beneath the cella may have served as a burial vault.",
+  "civilization": "Lebanon",
+  "heritage_designation": null,
+  "hero_image": "hero.webp (800x650, Commons File:16.Ruines d'un temple a Hibariyeh.b.jpg)",
+  "gallery_images": "1 further image",
+  "thumbnail_url": "/data/images/wiki/6a20e653/hero.webp",
+  "source_url": "https://en.wikipedia.org/wiki/Hebbariye",
+  "scope": "Rest of world (lat 33.37, lon 35.70), period_start 1 <= 500 AD -> in scope"
+ },
+ "verdicts": [
+  {
+   "field": "name",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Hebbariye"
+   ],
+   "note": "The article's subject is the village Al-Hebbariyah/Hebbariyeh, which contains the temple; the record names the temple with the village's name, which is how the site is cited (Taylor's Mount Hermon temple group)."
+  },
+  {
+   "field": "country",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Hebbariye"
+   ],
+   "note": "Lebanon; 'the Hasbaya District of the Nabatieh Governorate in Lebanon', 'near the Lebanon-Syria border'."
+  },
+  {
+   "field": "coordinates",
+   "verdict": "UNVERIFIABLE",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Hebbariye"
+   ],
+   "note": "The article gives no coordinate and there is no Wikidata P625. 33.3684, 35.6970 lies on the southwestern slopes of Mount Hermon near the Lebanon-Syria border, consistent with the described location, but nothing confirms the point."
+  },
+  {
+   "field": "period_start",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Hebbariye"
+   ],
+   "note": "Bucket sort key. The article dates the temple only as Roman ('There is a Roman temple near to the village'); the record's description and card both say 2nd century AD, which falls inside the bucket 1 - 500 AD. Bucket consistent with the record's own dating; the source itself supplies no date."
+  },
+  {
+   "field": "period_name",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "docs/procedures/ENRICHMENT_AUDIT.md"
+   ],
+   "note": "categorize_period(1) = '1 - 500 AD'."
+  },
+  {
+   "field": "site_type",
+   "verdict": "WRONG",
+   "correct_value": "Temple complex",
+   "sources": [
+    "https://en.wikipedia.org/wiki/Hebbariye",
+    "pipeline/normalizers/site_type.py"
+   ],
+   "note": "'Megalithic stones' is the wrong class: this is a Roman ashlar temple, and the source discusses it as a temple ('There is a Roman temple near to the village, opposite the Wadi Shib'a which is the most southern of the Temples of Mount Hermon'), with dressed blocks measured by Robinson (0.84 m by 4.6 m, 1.8 m thick walls) - large stones, but not a megalithic monument. 'Temple complex' is canonical and fits. The record's own name and description both say 'temple', so the type contradicts the rest of the record."
+  },
+  {
+   "field": "description",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Hebbariye"
+   ],
+   "note": "Confirmed: the Hasbaya District in the Nabatieh Governorate, the southwestern slopes of Mount Hermon, and 'the most southern of the Temples of Mount Hermon, a group defined by George Taylor' - the record's closing sentence is exact. The dimensions deviate slightly from the only source read, which reports Robinson's 1852 survey: '58 feet (18 m) long by 31 feet (9.4 m) wide with 6 feet (1.8 m) thick walls around 32 feet (9.8 m) high', where the record says 17 m by 9 m with 8 m walls. Recorded as a deviation from the cited source rather than an error - a later survey may be behind the record's figures, and this audit found no second source. UNVERIFIED (not counted): the dedication to Baal Jad, the antae classification and solar alignment, the Ionic pillar, the southern frieze, the two tiers of niches with a six-line Greek inscription, and the basement chamber as a burial space. None of these is in the article read; all are plausible from the specialised literature on the Mount Hermon temples."
+  },
+  {
+   "field": "card_description",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Hebbariye"
+   ],
+   "note": "The temple faces Mount Hermon and is the southernmost of its group, as the article states. The solar alignment and the burial-vault reading are the record's own (see description note) and are stated as possibilities ('may have served'), not as facts."
+  },
+  {
+   "field": "civilization",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.3.4"
+   ],
+   "note": "Denormalised country copy by design."
+  },
+  {
+   "field": "heritage_designation",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Hebbariye"
+   ],
+   "note": "NULL permitted; empty on all 36 sampled sites. Fillable and topical: 'During the 2024 Israeli invasion of Lebanon, UNESCO gave enhanced protection to 34 cultural sites including the temple at Al-Hebbariyah'."
+  },
+  {
+   "field": "hero_image",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://commons.wikimedia.org/wiki/File:16.Ruines_d%27un_temple_a_Hibariyeh.b.jpg"
+   ],
+   "note": "Metadata-level verdict. 800x650, 'Ruines d'un temple a Hibariyeh' - the temple itself (the article's external links point to the same 1881 'Picturesque Palestine' image of the temple at Hebbariye). No strip."
+  },
+  {
+   "field": "gallery_images",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "output/remediation/snapshot/wiki_images.jsonl.gz"
+   ],
+   "note": "Metadata-level verdict: 1 further row, the same temple. GAP: 2 images in total, far below the plan's 6-image floor."
+  },
+  {
+   "field": "thumbnail_url",
+   "verdict": "UNVERIFIABLE",
+   "correct_value": null,
+   "sources": [
+    "output/remediation/snapshot/wiki_images.jsonl.gz"
+   ],
+   "note": "Local export path; no public/data/images copy in this checkout."
+  },
+  {
+   "field": "source_url",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Hebbariye"
+   ],
+   "note": "HTTP 200, dedicated article (2,486 characters) - about the village, with a Roman temple section that does describe this temple."
+  },
+  {
+   "field": "scope",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.1 E3"
+   ],
+   "note": "Rest of world, Roman -> in scope."
+  }
+ ],
+ "errors_found": [
+  {
+   "id": "HB-1",
+   "field": "site_type",
+   "severity": "moderate",
+   "claim": "'Megalithic stones' for a Roman ashlar temple whose own record calls it a temple"
+  }
+ ],
+ "notes": "One clear type error and one record whose prose is much richer than its source - the description carries architectural detail (Baal Jad, antae, the Greek inscription) that the cited article does not contain. That is the opposite risk from the thin-stub records: unverifiable detail stated with confidence. It is not counted as an error here because nothing in it is contradicted, but it is exactly the kind of text the census cannot check and a human reviewer should.",
+ "checked_at": "2026-09-20T23:09:47+02:00"
+}

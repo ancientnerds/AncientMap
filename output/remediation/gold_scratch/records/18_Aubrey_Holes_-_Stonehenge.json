@@ -1,0 +1,175 @@
+{
+ "sample_index": 18,
+ "site_id": "758dd394-0b33-4f82-821d-5b6de5058afe",
+ "site_name": "Aubrey Holes - Stonehenge",
+ "rarity_tier": 3,
+ "sample_size": 36,
+ "db_fields": {
+  "name": "Aubrey Holes - Stonehenge",
+  "country": "England",
+  "coordinates": "51.17924730976005, -1.825528629783467",
+  "period_start": -4500,
+  "period_name": "4500 - 3000 BC",
+  "site_type": "Timber circle",
+  "description": "Ring of 56 chalk pits forming the earliest phase of Stonehenge (c. 3000 BC), first noted by antiquarian John Aubrey in 1666 and formally identified by Robert Newall during Colonel Hawley's 1920s excavations. Each pit averages 0.76 m deep and 1.06 m in diameter. A 2008 excavation by Mike Parker Pearson suggested the holes originally held Welsh bluestones, based on their identical width and shape to bluestones found elsewhere at the monument. Human cremation burials were found within and around most holes, indicating a funerary function.",
+  "card_description": "A ring of 56 chalk pits from 3100 BC, the earliest phase of Stonehenge. They held cremated human remains - Stonehenge was a cemetery before it was a monument.",
+  "civilization": "England",
+  "heritage_designation": null,
+  "hero_image": "hero.webp (800x1067, Commons File:Aubreyhole.jpg)",
+  "gallery_images": "1 further image",
+  "thumbnail_url": "/data/images/wiki/758dd394/hero.webp",
+  "source_url": "https://en.wikipedia.org/wiki/Aubrey_holes",
+  "scope": "Europe (lat 51.18, lon -1.83), period_start -4500 <= 500 AD -> in scope"
+ },
+ "verdicts": [
+  {
+   "field": "name",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Aubrey_holes",
+    "https://www.wikidata.org/wiki/Q758889"
+   ],
+   "note": "enwiki 'Aubrey holes', Wikidata 'Aubrey holes'; the record adds the parent monument ('- Stonehenge'), which is accurate and helps disambiguation."
+  },
+  {
+   "field": "country",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.3.2"
+   ],
+   "note": "'England' rather than 'United Kingdom' is deliberate project design (Wikidata P17 = Q145)."
+  },
+  {
+   "field": "coordinates",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Aubrey_holes",
+    "https://www.wikidata.org/wiki/Q758889"
+   ],
+   "note": "Database 51.17924731, -1.82552863; enwiki and Wikidata P625 both 51.179133, -1.825593. Within ~15 m. The holes form a ring around Stonehenge, so any point on the ring is defensible."
+  },
+  {
+   "field": "period_start",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Aubrey_holes"
+   ],
+   "note": "Checked carefully, because this looked like the Merry Maidens error and is not one. The article says the holes 'date to the earliest phases of Stonehenge in the late fourth and early third millennium BC', i.e. roughly 3300-2800 BC. The database's bucket is 4500 - 3000 BC, which CONTAINS the late fourth millennium (3300-3000 BC), so this is not a bucket mismatch and plan 4.3.1 says a round sort key is only reported when the bucket is wrong. NOT counted as an error. The record's own prose sits at the boundary - description 'c. 3000 BC', card '3100 BC' - so a stricter reviewer could argue for the next bucket; the sourced range supports the shipped one."
+  },
+  {
+   "field": "period_name",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "docs/procedures/ENRICHMENT_AUDIT.md"
+   ],
+   "note": "categorize_period(-4500) = '4500 - 3000 BC'."
+  },
+  {
+   "field": "site_type",
+   "verdict": "WRONG",
+   "correct_value": "not a timber setting - the pits are the stone/cremation setting of Stonehenge's first phase",
+   "sources": [
+    "https://en.wikipedia.org/wiki/Aubrey_holes",
+    "https://www.wikidata.org/wiki/Q758889"
+   ],
+   "note": "Nothing supports a timber circle. The cited article calls them 'a ring of 56 chalk pits', states 'their purpose is still unknown, although an astronomical role has often been suggested', and reports that the pits 'may have originally held the bluestones' - the record's own description repeats the bluestone hypothesis. Wikidata P31 = Q188040 (a class for the Aubrey holes themselves), P361 = part of Stonehenge. 'Timber circle' is canonical, so this is not an S9 violation, but it asserts a material the sources explicitly do not support."
+  },
+  {
+   "field": "description",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Aubrey_holes"
+   ],
+   "note": "All claims trace to the article: 56 chalk pits, earliest phases of Stonehenge, named after the seventeenth-century antiquarian John Aubrey who noticed them in 1666, the 1920s Hawley excavations in which Robert Newall identified the full ring, the average dimensions, the 2008 Parker Pearson excavation and the bluestone hypothesis, and the cremation burials in and around the pits. The date 'c. 3000 BC' is within the article's 'late fourth and early third millennium BC'."
+  },
+  {
+   "field": "card_description",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Aubrey_holes"
+   ],
+   "note": "56 pits, earliest phase, cremated human remains, and the cemetery-before-monument reading all match the article's account of the cremation burials. '3100 BC' is inside the sourced range."
+  },
+  {
+   "field": "civilization",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.3.4"
+   ],
+   "note": "Denormalised country copy by design."
+  },
+  {
+   "field": "heritage_designation",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Aubrey_holes"
+   ],
+   "note": "NULL permitted; empty on all 36 sampled sites. The holes lie inside the Stonehenge scheduled monument and the World Heritage Site, so the gap is fillable from the parent site's designation."
+  },
+  {
+   "field": "hero_image",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://commons.wikimedia.org/wiki/File:Aubreyhole.jpg",
+    "https://www.wikidata.org/wiki/Q758889"
+   ],
+   "note": "Metadata-level verdict. 800x1067, a photograph of one of the chalk pits, and it is the image Wikidata stores as P18. No strip."
+  },
+  {
+   "field": "gallery_images",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "output/remediation/snapshot/wiki_images.jsonl.gz"
+   ],
+   "note": "Metadata-level verdict: the second row is an image of the same monument area. GAP, not an error: only 2 images, far below the plan's 6-image floor (S10)."
+  },
+  {
+   "field": "thumbnail_url",
+   "verdict": "UNVERIFIABLE",
+   "correct_value": null,
+   "sources": [
+    "output/remediation/snapshot/wiki_images.jsonl.gz"
+   ],
+   "note": "Local export path; no public/data/images copy in this checkout."
+  },
+  {
+   "field": "source_url",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Aubrey_holes"
+   ],
+   "note": "HTTP 200, dedicated article."
+  },
+  {
+   "field": "scope",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.1 E3"
+   ],
+   "note": "Europe, Neolithic -> in scope."
+  }
+ ],
+ "errors_found": [
+  {
+   "id": "AH-1",
+   "field": "site_type",
+   "severity": "moderate",
+   "claim": "'Timber circle' for a ring of chalk pits whose purpose the source calls unknown and which the record's own description says probably held bluestones"
+  }
+ ],
+ "notes": "A useful negative: the -4500 here looks exactly like the Merry Maidens error and is not one, because the sourced range (late 4th-early 3rd millennium BC) still touches the shipped bucket. Applying the plan's bucket rule rather than a reflex is what keeps this measurement honest. If the census flags this site's period_start, that flag is a false positive under the plan's own rule - worth checking when the blind is lifted.",
+ "checked_at": "2026-09-20T23:09:47+02:00"
+}

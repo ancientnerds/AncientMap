@@ -1,0 +1,172 @@
+{
+ "sample_index": 31,
+ "site_id": "eed2d08c-3d09-4d93-885a-0b0b2eb7126d",
+ "site_name": "Mam Tor",
+ "rarity_tier": 2,
+ "sample_size": 36,
+ "db_fields": {
+  "name": "Mam Tor",
+  "country": "England",
+  "coordinates": "53.349275547598594, -1.8104912296518136",
+  "period_start": -1500,
+  "period_name": "1500 - 500 BC",
+  "site_type": "Fortress/citadel",
+  "description": "Mam Tor is a 517-metre hill near Castleton in Derbyshire, England, crowned by a Late Bronze Age to Early Iron Age hillfort dating to 1200-500 BC. The univallate fort encloses roughly 6.4 hectares with a dump rampart, rock-kerbed ditch, and counterscarp bank. Excavations in the 1960s revealed over 140 leveled hut platforms, hearths, charred grain, saddle-quern grinding stones, and bronze bracelets, indicating a substantial fortified village. Two earlier Bronze Age bowl barrows also stand on the summit. Named 'Mother Hill' for the landslips on its eastern face, it was listed among the Seven Wonders of the Peak by Thomas Hobbes in 1636.",
+  "card_description": "A Bronze Age hillfort from 1200 BC on a peak called 'Mother Hill.' Constant landslips on its eastern face earned it the name 'Shivering Mountain' and have been reshaping it for millennia.",
+  "civilization": "England",
+  "heritage_designation": null,
+  "hero_image": "hero.webp (800x146, Commons File:Back Tor, Mam Tor, Odin Mine.jpg)",
+  "gallery_images": "19 further images",
+  "thumbnail_url": "/data/images/wiki/eed2d08c/hero.webp",
+  "source_url": "https://en.wikipedia.org/wiki/Mam_Tor",
+  "scope": "Europe (lat 53.35, lon -1.81), period_start -1500 <= 500 AD -> in scope"
+ },
+ "verdicts": [
+  {
+   "field": "name",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Mam_Tor"
+   ],
+   "note": "enwiki 'Mam Tor'."
+  },
+  {
+   "field": "country",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.3.2"
+   ],
+   "note": "'England' rather than 'United Kingdom' is deliberate project design; enwiki says Derbyshire."
+  },
+  {
+   "field": "coordinates",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Mam_Tor"
+   ],
+   "note": "53.3493, -1.8105 is Mam Tor near Castleton in the High Peak. No article coordinate or Wikidata P625 to compare numerically."
+  },
+  {
+   "field": "period_start",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Mam_Tor"
+   ],
+   "note": "Bucket sort key. The article: 'Radiocarbon analysis suggests occupation from around 1200 BC' and 'a late Bronze Age and early Iron Age univallate hill fort'; -1500 is the floor of the bucket 1500 - 500 BC, which contains -1200 and the whole 1200-500 BC range the record states. Bucket correct (plan 4.3.1)."
+  },
+  {
+   "field": "period_name",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "docs/procedures/ENRICHMENT_AUDIT.md"
+   ],
+   "note": "categorize_period(-1500) = '1500 - 500 BC'."
+  },
+  {
+   "field": "site_type",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Mam_Tor",
+    "pipeline/normalizers/site_type.py"
+   ],
+   "note": "'Fortress/citadel' is canonical and matches the article's 'univallate hill fort'."
+  },
+  {
+   "field": "description",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Mam_Tor"
+   ],
+   "note": "Verified: 517 m, near Castleton in Derbyshire, 'a late Bronze Age and early Iron Age univallate hill fort', 'Radiocarbon analysis suggests occupation from around 1200 BC', 'two Bronze Age bowl barrows', \"Its name means 'mother hill', so called because frequent landslips on its eastern face\", and 'Mam Tor was declared to be one of the Seven Wonders of the Peak by Thomas Hobbes in his 1636 book De Mirabilibus Pecci'. UNSUPPORTED, not counted: the article says 'At a later stage over a hundred small platforms were levelled into the hill' where the record says 'over 140 leveled hut platforms'; and the article read contains no 6.4 hectares, dump rampart, rock-kerbed ditch, counterscarp bank, hearths, charred grain, saddle querns or bronze bracelets. These may come from the Coombs and Thompson 1979 excavation report the article cites, but this audit did not verify them, so they are listed as unsupported rather than wrong."
+  },
+  {
+   "field": "card_description",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Mam_Tor"
+   ],
+   "note": "1200 BC occupation, 'Mother Hill', the eastern-face landslips and the alternative name 'Shivering Mountain' are all in the article ('These landslips, which are caused by unstable lower layers of shale, also give the hill its alternative name of Shivering Mountain'). The card's 'Bronze Age hillfort' is right for the late Bronze Age foundation."
+  },
+  {
+   "field": "civilization",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.3.4"
+   ],
+   "note": "Denormalised country copy by design."
+  },
+  {
+   "field": "heritage_designation",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Mam_Tor"
+   ],
+   "note": "NULL permitted; empty on all 36 sampled sites. Fillable: 'The hill fort and burial mounds are a Scheduled Ancient Monument'."
+  },
+  {
+   "field": "hero_image",
+   "verdict": "WRONG",
+   "correct_value": "an image of the hill and its fort in normal aspect ratio",
+   "sources": [
+    "https://commons.wikimedia.org/wiki/File:Back_Tor,_Mam_Tor,_Odin_Mine.jpg"
+   ],
+   "note": "STRIP: 800x146. The plan's strip definition (line 293: count(*) FILTER (WHERE height < 400) AS strips) puts this image in the strip class, and at 146 px it is the most extreme case in the sample so far - a wide panorama in which the hillfort occupies a few pixels of height. The subject is correct (it shows Mam Tor together with Back Tor and the Odin Mine), so this is a presentation defect, not a wrong-site error."
+  },
+  {
+   "field": "gallery_images",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "output/remediation/snapshot/wiki_images.jsonl.gz"
+   ],
+   "note": "Metadata-level verdict: 19 further rows of the hill, the landslide face and the fort. 20 images in total."
+  },
+  {
+   "field": "thumbnail_url",
+   "verdict": "UNVERIFIABLE",
+   "correct_value": null,
+   "sources": [
+    "output/remediation/snapshot/wiki_images.jsonl.gz"
+   ],
+   "note": "Local export path; no public/data/images copy in this checkout."
+  },
+  {
+   "field": "source_url",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Mam_Tor"
+   ],
+   "note": "HTTP 200, dedicated article (4,821 characters)."
+  },
+  {
+   "field": "scope",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.1 E3"
+   ],
+   "note": "Europe, Bronze Age -> in scope."
+  }
+ ],
+ "errors_found": [
+  {
+   "id": "MT-1",
+   "field": "hero_image",
+   "severity": "cosmetic",
+   "claim": "hero is a 800x146 panorama strip (class: hero strip, plan line 293)"
+  }
+ ],
+ "notes": "Content clean; the defect is presentational. The strip pattern is now confirmed across five records (Lake Mungo 800x97, Ahu Tongariki 800x135, Areni-1 800x114, Merry Maidens 800x167, Mam Tor 800x146) plus Pyramid of Cestius at 800x397 - always a wide panorama, always exactly 800 px wide, which points at a fixed-width export step rather than at the source images.",
+ "checked_at": "2026-09-20T23:09:47+02:00"
+}

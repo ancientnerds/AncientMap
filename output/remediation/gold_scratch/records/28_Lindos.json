@@ -1,0 +1,166 @@
+{
+ "sample_index": 28,
+ "site_id": "c17927cb-4b63-4fa0-9c64-b72a65decaaa",
+ "site_name": "Lindos",
+ "rarity_tier": 2,
+ "sample_size": 36,
+ "db_fields": {
+  "name": "Lindos",
+  "country": "Greece",
+  "coordinates": "36.08346333179203, 28.083311838732747",
+  "period_start": -1000,
+  "period_name": "1500 - 500 BC",
+  "site_type": "City/town/settlement",
+  "description": "Lindos is an ancient city and archaeological site on the eastern coast of Rhodes island in the Dodecanese, Greece. According to legend, it was founded by Dorian settlers led by King Tlepolemus around the 10th century BC. The Acropolis of Lindos dominates the site, featuring the Temple of Athena Lindia from approximately 300 BC. Now a popular beach destination, Lindos retains its historic character with whitewashed houses winding through narrow streets.",
+  "card_description": "One of the three ancient city-states of Rhodes, founded according to myth by Danaus. Its dramatic acropolis holds a temple to Athena Lindia rebuilt after a fire in 342 BC.",
+  "civilization": "Greece",
+  "heritage_designation": null,
+  "hero_image": "hero.webp (800x533, Commons File:20210826-Lindos-DJI 0205.jpg)",
+  "gallery_images": "19 further images",
+  "thumbnail_url": "/data/images/wiki/c17927cb/hero.webp",
+  "source_url": "https://en.wikipedia.org/wiki/Lindos",
+  "scope": "Europe (lat 36.08, lon 28.08), period_start -1000 <= 500 AD -> in scope"
+ },
+ "verdicts": [
+  {
+   "field": "name",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Lindos"
+   ],
+   "note": "enwiki 'Lindos'."
+  },
+  {
+   "field": "country",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Lindos"
+   ],
+   "note": "Greece; the article places it on Rhodes in the Dodecanese."
+  },
+  {
+   "field": "coordinates",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Lindos"
+   ],
+   "note": "36.0835, 28.0833 is Lindos on the east coast of Rhodes, about 40 km south of Rhodes city as the article states. No article coordinate or Wikidata P625 to compare numerically."
+  },
+  {
+   "field": "period_start",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Lindos"
+   ],
+   "note": "Bucket sort key. The article: 'According to myth, Lindos was founded by the Dorians led by the king Tlepolemus of Rhodes, who arrived in about the 10th century BC'; -1000 is the floor of the bucket 1500 - 500 BC, which contains -900. Bucket correct (plan 4.3.1)."
+  },
+  {
+   "field": "period_name",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "docs/procedures/ENRICHMENT_AUDIT.md"
+   ],
+   "note": "categorize_period(-1000) = '1500 - 500 BC'."
+  },
+  {
+   "field": "site_type",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Lindos",
+    "pipeline/normalizers/site_type.py"
+   ],
+   "note": "The article calls it 'an archaeological site, a fishing village and a former municipality' with the acropolis above it; 'City/town/settlement' is canonical and is the right general class for a continuously inhabited ancient city."
+  },
+  {
+   "field": "description",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Lindos"
+   ],
+   "note": "All four sentences are supported by the cited article: the archaeological site on the east coast of Rhodes in the Dodecanese; 'According to myth, Lindos was founded by the Dorians led by the king Tlepolemus of Rhodes, who arrived in about the 10th century BC'; 'In classical times the acropolis of Lindos was dominated by the massive temple of Athena Lindia, which attained its final form in around 300 BC'; and the present-day tourist character ('its fine beaches make it a popular tourist and holiday destination')."
+  },
+  {
+   "field": "card_description",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Temple_of_Athena_Lindia",
+    "https://en.wikipedia.org/wiki/Lindos"
+   ],
+   "note": "Both card claims check out, and both were checked because each looked doubtful. (1) 'founded according to myth by Danaus' is NOT in the record's own source (the cached full Lindos article contains no occurrence of 'Danaus'), but it is stated in the Temple of Athena Lindia article: 'According to Pseudo-Apollodorus ... the temple was founded by Danaus, who dedicated a statue to Athena Lindia in his gratitude for her assistance in helping him construct a ship'. The card refers to the sanctuary's mythical founder and the description to the city's (Tlepolemus) - two different traditions about two different subjects, so the two texts do not contradict each other. (2) 'rebuilt after a fire in 342 BC' is exact: the same article states 'The temple was burned in 342 BC, and replaced by a new temple in the late 4th-century BC'. 'One of the three ancient city-states of Rhodes' (Lindos, Ialysos, Kamiros) is standard but not in the article read - unsupported, not wrong."
+  },
+  {
+   "field": "civilization",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.3.4"
+   ],
+   "note": "Denormalised country copy by design."
+  },
+  {
+   "field": "heritage_designation",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Lindos"
+   ],
+   "note": "NULL permitted; empty on all 36 sampled sites. The acropolis is a Greek archaeological site with a listed monument status, so the gap is fillable."
+  },
+  {
+   "field": "hero_image",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://commons.wikimedia.org/wiki/File:20210826-Lindos-DJI_0205.jpg"
+   ],
+   "note": "Metadata-level verdict. 800x533, an August 2021 drone photograph of Lindos bay and the acropolis. Correct site, no strip."
+  },
+  {
+   "field": "gallery_images",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "output/remediation/snapshot/wiki_images.jsonl.gz"
+   ],
+   "note": "Metadata-level verdict: 19 further rows, the town, the acropolis and the temple. 20 images in total."
+  },
+  {
+   "field": "thumbnail_url",
+   "verdict": "UNVERIFIABLE",
+   "correct_value": null,
+   "sources": [
+    "output/remediation/snapshot/wiki_images.jsonl.gz"
+   ],
+   "note": "Local export path; no public/data/images copy in this checkout."
+  },
+  {
+   "field": "source_url",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Lindos"
+   ],
+   "note": "HTTP 200, dedicated article (6,380 characters)."
+  },
+  {
+   "field": "scope",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.1 E3"
+   ],
+   "note": "Europe, 10th century BC -> in scope."
+  }
+ ],
+ "errors_found": [],
+ "notes": "Clean, and the card is the better text: it carries two specific, checkable claims (Danaus, the 342 BC fire) that both verify, while the description stays general. The Danaus check needed a second article because the card's claim is not in the record's own source - a case where 'unsupported by the cited source' would have been the wrong verdict, and only fetching the related article showed the claim is true.",
+ "checked_at": "2026-09-20T23:09:47+02:00"
+}

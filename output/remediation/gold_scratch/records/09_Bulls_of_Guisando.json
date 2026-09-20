@@ -1,0 +1,177 @@
+{
+ "sample_index": 9,
+ "site_id": "0529af31-7573-467e-88ff-12dbca48f94d",
+ "site_name": "Bulls of Guisando",
+ "rarity_tier": 4,
+ "sample_size": 36,
+ "checked_at": "2026-09-20T23:09:47+02:00",
+ "db_fields": {
+  "name": "Bulls of Guisando",
+  "country": "Spain",
+  "coordinates": "40.361738597789916, -4.4418329322283885",
+  "period_start": -500,
+  "period_name": "500 BC - 1 AD",
+  "site_type": "Sculptured stone",
+  "description": "The Bulls of Guisando (Toros de Guisando) are four granite sculptures on the hill of Guisando in El Tiémblo, Ávila, Spain. Dating to the 2nd century BC, they are examples of the Celtic Iberian \"verracos\" tradition-massive stone carvings of bulls or pigs. Each sculpture features holes interpreted as sockets for horns[1]. They belong to a group of hundreds of such monuments known across the Iberian Peninsula, representing one of the most significant collections of these ancient sculptures[2].",
+  "card_description": "Four granite bull sculptures associated with the Celtic Vettones people. Hundreds of similar \"verracos\" exist, but these are among the most famous examples.",
+  "civilization": "Spain",
+  "heritage_designation": null,
+  "hero_image": "hero.webp (800x449, Commons File:Toros de Guisando (detalle de inscripción) 03.JPG)",
+  "gallery_images": "19 further images: bull photographs, a 19th-century engraving, inscription details",
+  "thumbnail_url": "/data/images/wiki/0529af31/hero.webp",
+  "source_url": "https://en.wikipedia.org/wiki/Bulls_of_Guisando",
+  "scope": "Europe (lat 40.36, lon -4.44), period_start -500 <= 500 AD -> in scope"
+ },
+ "verdicts": [
+  {
+   "field": "name",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Bulls_of_Guisando",
+    "https://www.wikidata.org/wiki/Q2454775"
+   ],
+   "note": "enwiki title and Wikidata label both 'Bulls of Guisando' (Spanish: Toros de Guisando)."
+  },
+  {
+   "field": "country",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://www.wikidata.org/wiki/Q2454775"
+   ],
+   "note": "Wikidata P17 = Q29 (Spain)."
+  },
+  {
+   "field": "coordinates",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Bulls_of_Guisando",
+    "https://www.wikidata.org/wiki/Q2454775"
+   ],
+   "note": "Database 40.36173860, -4.44183293; enwiki 40.36158333, -4.44182222 (~17 m); Wikidata P625 40.36069444, -4.44161111 (~115 m). All inside the same field."
+  },
+  {
+   "field": "period_start",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Bulls_of_Guisando"
+   ],
+   "note": "Bucket sort key. enwiki: 'The Bulls may have been made during the 2nd century BCE'; -500 is the floor of the bucket 500 BC - 1 AD, which contains -200. Wikidata P2348 (time period) = Iron Age, consistent."
+  },
+  {
+   "field": "period_name",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "docs/procedures/ENRICHMENT_AUDIT.md"
+   ],
+   "note": "categorize_period(-500) = '500 BC - 1 AD'."
+  },
+  {
+   "field": "site_type",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://www.wikidata.org/wiki/Q2454775",
+    "pipeline/normalizers/site_type.py"
+   ],
+   "note": "Wikidata P31 includes verraco (Q2988353), megalith and archaeological site; 'Sculptured stone' is the canonical value and is the closest fit."
+  },
+  {
+   "field": "description",
+   "verdict": "WRONG",
+   "correct_value": "El Tiemblo (the municipality's name carries no accent on the second syllable)",
+   "sources": [
+    "https://en.wikipedia.org/wiki/Bulls_of_Guisando",
+    "https://commons.wikimedia.org/wiki/Category:Bulls_of_Guisando"
+   ],
+   "note": "One spelling error: the record writes 'El Tiémblo'; enwiki writes 'El Tiemblo' in the same sentence ('located on the hill of Guisando in the municipality of El Tiemblo, Ávila, Spain'), and the Commons category members are titled 'El Tiemblo' ('File:El Tiemblo - Ávila - 002.jpg'). Cosmetic severity. Everything else in the field is supported: four granite sculptures, hill of Guisando, 2nd century BC, verracos of which hundreds are known, the horn sockets ('there are holes which have been interpreted as sockets for horns'), the association with a pre-Roman people. 'Celtic Iberian' is loose where the source says 'the pre-Roman peoples known as the Vettones' - the card uses the tighter form, so not counted."
+  },
+  {
+   "field": "card_description",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Bulls_of_Guisando",
+    "https://www.wikidata.org/wiki/Q2454775"
+   ],
+   "note": "Four granite sculptures, Vettones (Wikidata P2596 culture = Vettones Q924779), hundreds of verracos, among the most famous: all supported."
+  },
+  {
+   "field": "civilization",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.3.4"
+   ],
+   "note": "Denormalised country copy by design. The real attribution (Vettones) is available in Wikidata P2596 but unused by design."
+  },
+  {
+   "field": "heritage_designation",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Bulls_of_Guisando",
+    "https://www.wikidata.org/wiki/Q2454775"
+   ],
+   "note": "NULL permitted; empty on all 36 sampled sites. Fillable: enwiki 'The bulls are protected in Spain's heritage listings as a Bien de Interes Cultural (Property of Cultural Interest), being classified as a Sitio historico'; Wikidata P1435 = Q23712."
+  },
+  {
+   "field": "hero_image",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://commons.wikimedia.org/wiki/File:Toros_de_Guisando_(detalle_de_inscripci%C3%B3n)_03.JPG"
+   ],
+   "note": "Metadata-level verdict. 800x449, a detail photograph of one of the bulls (the description places 'Toros de Guisando, conjunto escultórico veton (siglo II a. de C.)' in El Tiemblo). Correct site, no strip. Class note, not an error: the hero is a detail of an inscription rather than a view of the group."
+  },
+  {
+   "field": "gallery_images",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://commons.wikimedia.org/wiki/Category:Bulls_of_Guisando"
+   ],
+   "note": "Metadata-level verdict. The 19 rows are bull photographs, inscription details and one 1892 engraving. Class note, not counted as an error: 'File:Apuntes al natural valdeiglesias.jpg' is a composite engraving of monuments from San Martin de Valdeiglesias, Pelayos de la Presa and El Tiemblo, so it is not a photograph of this site alone."
+  },
+  {
+   "field": "thumbnail_url",
+   "verdict": "UNVERIFIABLE",
+   "correct_value": null,
+   "sources": [
+    "output/remediation/snapshot/wiki_images.jsonl.gz"
+   ],
+   "note": "Local export path; no public/data/images copy in this checkout."
+  },
+  {
+   "field": "source_url",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Bulls_of_Guisando"
+   ],
+   "note": "HTTP 200, dedicated article."
+  },
+  {
+   "field": "scope",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.1 E3"
+   ],
+   "note": "Europe, -500 -> in scope."
+  }
+ ],
+ "errors_found": [
+  {
+   "id": "BG-1",
+   "field": "description",
+   "severity": "cosmetic",
+   "claim": "'El Tiémblo' misspells the municipality El Tiemblo"
+  }
+ ],
+ "notes": "The cleanest content in the sample so far: one accent. Notable that the record leaves out the 1468 Treaty of the Bulls of Guisando that the cited article spends a paragraph on - not an error, but it is the best-known fact about the place."
+}

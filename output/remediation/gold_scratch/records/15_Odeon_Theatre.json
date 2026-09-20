@@ -1,0 +1,171 @@
+{
+ "sample_index": 15,
+ "site_id": "3a28b216-d9f2-410d-a12e-050fc4759a98",
+ "site_name": "Odeon Theatre",
+ "rarity_tier": 3,
+ "sample_size": 36,
+ "db_fields": {
+  "name": "Odeon Theatre",
+  "country": "Jordan",
+  "coordinates": "31.95256829197838, 35.94022470064953",
+  "period_start": 1,
+  "period_name": "1 - 500 AD",
+  "site_type": "Theatre",
+  "description": "The Odeon Theatre in Amman, Jordan, is a small 2nd-century Roman theatre located adjacent to the larger Roman Theatre in the city's historic downtown. Archaeologists believe it was likely covered with a temporary wooden roof to shield audiences from weather conditions, distinguishing it from the larger open-air theatre nearby[1].",
+  "card_description": "A small 2nd-century AD Roman theatre, not to be confused with the large theatre next to it. A temporary wooden roof once shielded the audience from the elements.",
+  "civilization": "Jordan",
+  "heritage_designation": null,
+  "hero_image": "hero.webp (800x523, Commons File:Amman-Odeon(js).jpg, Category:Amman Odeon)",
+  "gallery_images": "1 further image, also of the Odeon",
+  "thumbnail_url": "/data/images/wiki/3a28b216/hero.webp",
+  "source_url": "https://en.wikipedia.org/wiki/Odeon_theater_(Amman)",
+  "scope": "Rest of world (lat 31.95, lon 35.94), period_start 1 <= 500 AD -> in scope"
+ },
+ "verdicts": [
+  {
+   "field": "name",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Odeon_theater_(Amman)",
+    "https://www.wikidata.org/wiki/Q18756185"
+   ],
+   "note": "enwiki 'Odeon Theater (Amman)', Wikidata 'Odeon of Amman', itwiki 'Odeon di Amman'; the record's 'Odeon Theatre' is the same name in British spelling."
+  },
+  {
+   "field": "country",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://www.wikidata.org/wiki/Q18756185"
+   ],
+   "note": "Wikidata P17 = Q810 (Jordan)."
+  },
+  {
+   "field": "coordinates",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Odeon_theater_(Amman)",
+    "https://www.wikidata.org/wiki/Q18756185"
+   ],
+   "note": "Database 31.95256829, 35.94022470; enwiki and Wikidata P625 both 31.95233333, 35.93988889. Within ~40 m."
+  },
+  {
+   "field": "period_start",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Odeon_theater_(Amman)",
+    "https://es.wikipedia.org/wiki/Teatro_Odeon_(Am%C3%A1n)"
+   ],
+   "note": "Bucket sort key. The Odeon is 2nd-century: enwiki's own categories include 'Buildings and structures completed in the 2nd century', eswiki says 'construido en el siglo II d. C.'. -1 is the floor of the bucket 1 - 500 AD, which contains 150 AD. Bucket correct (plan 4.3.1)."
+  },
+  {
+   "field": "period_name",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "docs/procedures/ENRICHMENT_AUDIT.md"
+   ],
+   "note": "categorize_period(1) = '1 - 500 AD'."
+  },
+  {
+   "field": "site_type",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://www.wikidata.org/wiki/Q18756185",
+    "pipeline/normalizers/site_type.py"
+   ],
+   "note": "Wikidata P31 = odeon (Q1143046); 'Theatre' is canonical and is the closest available value."
+  },
+  {
+   "field": "description",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Odeon_theater_(Amman)",
+    "https://es.wikipedia.org/wiki/Teatro_Odeon_(Am%C3%A1n)"
+   ],
+   "note": "Confirmed: 'The Odeon is a small 500-seat theatre in Amman, Jordan. Not to be confused with the large Roman Theatre that stands right next to it, on the southern side of the Hashemite Plaza, the Odeon stands on the east side of the Plaza' (enwiki) and 'El Teatro Odeon es un pequeno teatro de 500 asientos en Aman, Jordania. ... construido en el siglo II d. C. Los arqueologos han especulado que lo mas probable es que en la antiguedad, el Odeon estuviera cerrado por un techo de madera temporal que protegia a la audiencia del clima' (eswiki). The wooden-roof sentence is in the Spanish article, not the English one, so the '[1]' marker points at a source that does not carry it - a citation-placement issue, not a false claim, since the claim itself is sourced."
+  },
+  {
+   "field": "card_description",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Odeon_theater_(Amman)",
+    "https://es.wikipedia.org/wiki/Teatro_Odeon_(Am%C3%A1n)"
+   ],
+   "note": "2nd-century, small, next to the larger theatre, temporary wooden roof: all supported."
+  },
+  {
+   "field": "civilization",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.3.4"
+   ],
+   "note": "Denormalised country copy by design."
+  },
+  {
+   "field": "heritage_designation",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://www.wikidata.org/wiki/Q18756185"
+   ],
+   "note": "NULL permitted; empty on all 36 sampled sites."
+  },
+  {
+   "field": "hero_image",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://commons.wikimedia.org/wiki/File:Amman-Odeon(js).jpg",
+    "https://www.wikidata.org/wiki/Q18756185"
+   ],
+   "note": "Metadata-level verdict. 800x523, Category:Amman Odeon, description 'Roman Odeon in Amman, Jordan'. It is also the image Wikidata stores as P18, so the hero and Wikidata agree."
+  },
+  {
+   "field": "gallery_images",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://commons.wikimedia.org/wiki/File:Around_the_roman_theater.jpg"
+   ],
+   "note": "Metadata-level verdict. The single gallery row is 'File:Around the roman theater.jpg', Category:Amman Odeon, description 'The Udium is a small theater of celebrations and listening to music, its construction dates back to the second century AD' - this site. GAP, not an error: the record has only 2 images, far below the plan's 6-image floor (S10)."
+  },
+  {
+   "field": "thumbnail_url",
+   "verdict": "UNVERIFIABLE",
+   "correct_value": null,
+   "sources": [
+    "output/remediation/snapshot/wiki_images.jsonl.gz"
+   ],
+   "note": "Local export path; no public/data/images copy in this checkout."
+  },
+  {
+   "field": "source_url",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Odeon_theater_(Amman)"
+   ],
+   "note": "HTTP 200, dedicated article - but very short (about 500 characters), so the description's second sentence cannot come from it."
+  },
+  {
+   "field": "scope",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.1 E3"
+   ],
+   "note": "Rest of world, 2nd century AD -> in scope."
+  }
+ ],
+ "errors_found": [],
+ "notes": "Clean site. The only imperfection is a citation marker attached to a sentence that lives in the Spanish article rather than the English one - the claim is true, the marker is misleading. Not counted as an error; recorded because it is the same mechanism that produced the severe error at Ahu Tongariki, where the marked sentence was also false.",
+ "checked_at": "2026-09-20T23:09:47+02:00"
+}

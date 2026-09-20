@@ -1,0 +1,178 @@
+{
+ "sample_index": 23,
+ "site_id": "da62b3af-331d-461c-a715-d64e35870466",
+ "site_name": "Temple of Dedun",
+ "rarity_tier": 3,
+ "sample_size": 36,
+ "db_fields": {
+  "name": "Temple of Dedun",
+  "country": "Egypt",
+  "coordinates": "23.960839052640083, 32.866783873526195",
+  "period_start": -3000,
+  "period_name": "3000 - 1500 BC",
+  "site_type": "Temple complex",
+  "description": "[1] Dedun was a Kushite or Nehasi god worshipped during ancient times in ancient Egypt and Sudan and attested as early as 2400 BC. Depicted as a lion, Dedun began as a god of incense-a luxury commodity sourced primarily from Nubia-and evolved into the divine embodiment of prosperity and wealth. The temple represents religious and cultural exchange between Egypt and Nubia during a period when incense trade significantly shaped regional power dynamics.",
+  "card_description": "A temple to the Nubian god Dedun from 2040-1780 BC. Dedun was a god of wealth and incense-the luxuries that flowed from Nubia into the north.",
+  "civilization": "Egypt",
+  "heritage_designation": null,
+  "hero_image": "hero.webp (800x518, Commons File:LD-Semna-West-ThutmosisIII-Detail.jpg, Commons category 'Dedun')",
+  "gallery_images": "3 further images from the same Commons category 'Dedun'",
+  "thumbnail_url": "/data/images/wiki/da62b3af/hero.webp",
+  "source_url": "https://en.wikipedia.org/wiki/Dedun",
+  "scope": "Rest of world (lat 23.96, lon 32.87), period_start -3000 <= 500 AD -> in scope"
+ },
+ "verdicts": [
+  {
+   "field": "name",
+   "verdict": "UNVERIFIABLE",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Dedun",
+    "https://www.wikidata.org/wiki/Q1183353"
+   ],
+   "note": "The sources are about the god Dedun, not about a temple: the Wikidata item for Dedun is P31 'Ancient Egyptian deity' and P361 'Egyptian mythology', and the enwiki article is the deity's. No source read names this particular temple, so the name cannot be confirmed or refuted - a temple of Dedun exists at Semna (the record's own hero image is the Semna West temple of Thutmose III), but the record does not say which temple it means."
+  },
+  {
+   "field": "country",
+   "verdict": "UNVERIFIABLE",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Dedun"
+   ],
+   "note": "'Egypt' fits a temple of Dedun only if it is the Semna temple, which is in Nubia (now Sudan's flooded Second Cataract region) - and the record's coordinates (23.96 N, 32.87 E, near the First Cataract south of Aswan) do not match Semna (21.50 N) either. Country and coordinates cannot be reconciled with the only source of location information the record itself ships (see hero_image)."
+  },
+  {
+   "field": "coordinates",
+   "verdict": "UNVERIFIABLE",
+   "correct_value": null,
+   "sources": [
+    "https://commons.wikimedia.org/wiki/Category:Dedun"
+   ],
+   "note": "CONFLICT WITH THE RECORD'S OWN IMAGES, and a candidate error. The record's hero and all three gallery images come from Commons category 'Dedun', whose files are 'LD-Semna-West-ThutmosisIII.jpg' and its detail crops - the temple of Thutmose III at Semna West, at approximately 21.50 N, 30.97 E. The record's coordinate 23.9608, 32.8668 lies about 270 km to the north, near the First Cataract south of Aswan. One of the two is wrong; no authoritative source was consulted to decide which, so this is recorded as a conflict, not as a confirmed error."
+  },
+  {
+   "field": "period_start",
+   "verdict": "UNVERIFIABLE",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Dedun"
+   ],
+   "note": "No source read dates the temple. The bucket 3000 - 1500 BC would contain both the Middle Kingdom date in the card (2040-1780 BC) and the Thutmose III (New Kingdom) date the hero image implies, so the sort key is at least internally compatible - but the temple's own date is not established by any source in this audit."
+  },
+  {
+   "field": "period_name",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "docs/procedures/ENRICHMENT_AUDIT.md"
+   ],
+   "note": "categorize_period(-3000) = '3000 - 1500 BC'."
+  },
+  {
+   "field": "site_type",
+   "verdict": "UNVERIFIABLE",
+   "correct_value": null,
+   "sources": [
+    "pipeline/normalizers/site_type.py"
+   ],
+   "note": "'Temple complex' is canonical, and a temple of Dedun at Semna West is part of a temple group, so the value is plausible; but no source read describes this record's subject, so the type rests on the record's own assertion."
+  },
+  {
+   "field": "description",
+   "verdict": "WRONG",
+   "correct_value": "a description of the temple (location, builder, date, plan) - not of the deity",
+   "sources": [
+    "https://en.wikipedia.org/wiki/Dedun"
+   ],
+   "note": "WRONG SUBJECT, and the most complete example of this class in the sample. Every sentence except the last is a paraphrase of the enwiki article about the GOD: 'Dedun (or Dedwen) was a Kushite or Nehasi (C-Group culture) god worshipped during ancient times in ancient Egypt and Sudan and attested as early as 2400 BCE', 'he was depicted as a lion', the incense-god-to-wealth-god development. The record describes no temple at all: no location, no builder, no date, no architecture. The last sentence ('The temple represents religious and cultural exchange...') is generic filler with no facts. The field also opens with a bare '[1]' marker before any sentence. For a database whose purpose is to tell a reader what stands where, this record contains nothing about the site."
+  },
+  {
+   "field": "card_description",
+   "verdict": "UNVERIFIABLE",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Dedun"
+   ],
+   "note": "'2040-1780 BC' is not in any source read (it is the Middle Kingdom window, and the temple the record's own images show is Thutmose III's, New Kingdom). 'A god of wealth and incense' matches the sources. Recorded as unverifiable: the card at least speaks about the temple, unlike the description, but its date cannot be checked."
+  },
+  {
+   "field": "civilization",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.3.4"
+   ],
+   "note": "Denormalised country copy by design. Notable here because the denormalisation hides the actual subject: Dedun is a Nubian/Kushite deity, and the column says 'Egypt'."
+  },
+  {
+   "field": "heritage_designation",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://www.wikidata.org/wiki/Q1183353"
+   ],
+   "note": "NULL permitted; empty on all 36 sampled sites."
+  },
+  {
+   "field": "hero_image",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://commons.wikimedia.org/wiki/Category:Dedun"
+   ],
+   "note": "Metadata-level verdict. 800x518, 'File:LD-Semna-West-ThutmosisIII-Detail.jpg' from Commons category 'Dedun' - a detail of the Semna West temple of Thutmose III, the temple of Dedun. Correct site for the category, no strip. It is also the only location evidence in the whole record."
+  },
+  {
+   "field": "gallery_images",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://commons.wikimedia.org/wiki/Category:Dedun"
+   ],
+   "note": "Metadata-level verdict. The 3 further rows are the remaining files of the same small category ('LD-Semna-West-ThutmosisIII.jpg' and its crops), i.e. this temple. GAP, not an error: only 4 images, below the plan's 6-image floor."
+  },
+  {
+   "field": "thumbnail_url",
+   "verdict": "UNVERIFIABLE",
+   "correct_value": null,
+   "sources": [
+    "output/remediation/snapshot/wiki_images.jsonl.gz"
+   ],
+   "note": "Local export path; no public/data/images copy in this checkout."
+  },
+  {
+   "field": "source_url",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Dedun"
+   ],
+   "note": "HTTP 200 and it is a real article - but about the deity, not about the temple. The link resolves; it does not support the record's subject. Recorded as a source-subject mismatch inside the description verdict rather than as a second error."
+  },
+  {
+   "field": "scope",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.1 E3"
+   ],
+   "note": "Rest of world, Bronze Age -> in scope if the site is real."
+  }
+ ],
+ "errors_found": [
+  {
+   "id": "TD-1",
+   "field": "description",
+   "severity": "severe",
+   "claim": "the description is about the god Dedun, not about the temple: it gives no location, builder, date or architecture for the site, and it opens with a bare '[1]' marker"
+  },
+  {
+   "id": "TD-2",
+   "field": "coordinates",
+   "severity": "unknown",
+   "claim": "coordinate near the First Cataract (23.96 N) conflicts with the record's own images, which are of the temple at Semna West (21.50 N), ~270 km away"
+  }
+ ],
+ "notes": "The mechanism here is different from the other errors: the enrichment took the subject from the SOURCE TITLE ('Dedun') and wrote about it, producing a record whose text is accurate about a god and empty about a temple. It is the only record in the sample whose description contains no site facts at all, and it is also the only one where the image category is better evidence than the source URL.",
+ "checked_at": "2026-09-20T23:09:47+02:00"
+}

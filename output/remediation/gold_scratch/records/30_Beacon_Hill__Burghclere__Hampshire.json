@@ -1,0 +1,172 @@
+{
+ "sample_index": 30,
+ "site_id": "9dcc1c87-49c7-44f9-9d09-13b9b2b6671f",
+ "site_name": "Beacon Hill, Burghclere, Hampshire",
+ "rarity_tier": 2,
+ "sample_size": 36,
+ "db_fields": {
+  "name": "Beacon Hill, Burghclere, Hampshire",
+  "country": "England",
+  "coordinates": "51.31289848426105, -1.3434930855961533",
+  "period_start": -1500,
+  "period_name": "1500 - 500 BC",
+  "site_type": "Fortress/citadel",
+  "description": "(1500-500 BC) Beacon Hill is a prehistoric hill fort near Burghclere in north Hampshire, standing 261 metres (856 ft) high [1]. One of England's most famous hill forts, it occupies a strategic position on the A34 road corridor [1]. The site takes its name from its historical use as a beacon station, once the most famous in Hampshire [1].",
+  "card_description": "At 261 metres, this Hampshire hill carries an 80-hectare fort visible from the nearby A34 road. The hill derived its name from its historic role as one of many signal beacons across the country.",
+  "civilization": "England",
+  "heritage_designation": null,
+  "hero_image": "hero.webp (800x533, Commons File:Beacon Hill, Burghclere, United Kingdom (Unsplash).jpg, Category:Beacon Hill, Hampshire)",
+  "gallery_images": "7 further images",
+  "thumbnail_url": "/data/images/wiki/9dcc1c87/hero.webp",
+  "source_url": "https://en.wikipedia.org/wiki/Beacon_Hill,_Burghclere,_Hampshire",
+  "scope": "Europe (lat 51.31, lon -1.34), period_start -1500 <= 500 AD -> in scope"
+ },
+ "verdicts": [
+  {
+   "field": "name",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Beacon_Hill,_Burghclere,_Hampshire"
+   ],
+   "note": "The article opens by distinguishing this Beacon Hill from the one near Warnford; the record's name carries the disambiguating Burghclere and Hampshire, so it identifies the right hill."
+  },
+  {
+   "field": "country",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.3.2"
+   ],
+   "note": "'England' rather than 'United Kingdom' is deliberate project design; enwiki says north Hampshire."
+  },
+  {
+   "field": "coordinates",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Beacon_Hill,_Burghclere,_Hampshire"
+   ],
+   "note": "51.3129, -1.3435 lies southwest of Old Burghclere with the A34 to the east, as the article describes (grid reference SU458573). No article coordinate or Wikidata P625 to compare numerically."
+  },
+  {
+   "field": "period_start",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Beacon_Hill,_Burghclere,_Hampshire"
+   ],
+   "note": "Bucket sort key. The article: 'The Beacon Hill camp, (scheduled ancient monument number 7) built around 1000 BC'; -1500 is the floor of the bucket 1500 - 500 BC, which contains -1000. Bucket correct (plan 4.3.1)."
+  },
+  {
+   "field": "period_name",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "docs/procedures/ENRICHMENT_AUDIT.md"
+   ],
+   "note": "categorize_period(-1500) = '1500 - 500 BC'."
+  },
+  {
+   "field": "site_type",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Beacon_Hill,_Burghclere,_Hampshire",
+    "pipeline/normalizers/site_type.py"
+   ],
+   "note": "'Fortress/citadel' is canonical; the article calls it 'one of England's most well known hill forts'."
+  },
+  {
+   "field": "description",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Beacon_Hill,_Burghclere,_Hampshire"
+   ],
+   "note": "Supported: 'It is 261 metres high and has one of England's most well known hill forts on its slopes, visible from the main A34 road which passes close by'; 'The hill's name is derived from the fact that it was one of many Beacon Hills in England and beyond. This hill was once the site of the most famous beacon in Hampshire'. Two notes: the leading '(1500-500 BC)' is a formatting artefact, not prose, and '[1]' markers appear after full stops. 'Occupies a strategic position on the A34 road corridor' is the record's framing of the article's 'visible from the main A34 road'."
+  },
+  {
+   "field": "card_description",
+   "verdict": "WRONG",
+   "correct_value": "the hillfort is a scheduled ancient monument built around 1000 BC; the 80.7 hectares belong to the Site of Special Scientific Interest, not to the fort",
+   "sources": [
+    "https://en.wikipedia.org/wiki/Beacon_Hill,_Burghclere,_Hampshire"
+   ],
+   "note": "Area error: the article says 'It is an 80.7-hectare (199-acre) biological Site of Special Scientific Interest called Burghclere Beacon and a Nature Conservation Review site, Grade I' - the 80.7 ha is the SSSI (the biological designation covering the hill and its slopes), while the fort is the 'Beacon Hill camp, (scheduled ancient monument number 7)'. The card turns the SSSI's area into the fort's area, inflating the earthwork by roughly an order of magnitude. The rest of the card (261 m, the A34, the beacon name) is supported."
+  },
+  {
+   "field": "civilization",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.3.4"
+   ],
+   "note": "Denormalised country copy by design."
+  },
+  {
+   "field": "heritage_designation",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Beacon_Hill,_Burghclere,_Hampshire"
+   ],
+   "note": "NULL permitted; empty on all 36 sampled sites. Fillable with identifiers: the article gives 'scheduled ancient monument number 7' for the camp and the SSSI designation."
+  },
+  {
+   "field": "hero_image",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://commons.wikimedia.org/wiki/File:Beacon_Hill,_Burghclere,_United_Kingdom_(Unsplash).jpg"
+   ],
+   "note": "Metadata-level verdict. 800x533, Category:Beacon Hill, Hampshire, an Unsplash photograph of this hill. No strip."
+  },
+  {
+   "field": "gallery_images",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://commons.wikimedia.org/wiki/Category:Beacon_Hill,_Hampshire"
+   ],
+   "note": "Metadata-level verdict: 7 further rows, including the de Havilland first-flight memorial stone ('situated in the Seven Barrows field to the south of Beacon Hill') and the grave of the 5th Earl of Carnarvon - both documented in the article as being at this hill. No wrong-site row."
+  },
+  {
+   "field": "thumbnail_url",
+   "verdict": "UNVERIFIABLE",
+   "correct_value": null,
+   "sources": [
+    "output/remediation/snapshot/wiki_images.jsonl.gz"
+   ],
+   "note": "Local export path; no public/data/images copy in this checkout."
+  },
+  {
+   "field": "source_url",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Beacon_Hill,_Burghclere,_Hampshire"
+   ],
+   "note": "HTTP 200, dedicated article (5,849 characters)."
+  },
+  {
+   "field": "scope",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.1 E3"
+   ],
+   "note": "Europe, Bronze Age -> in scope."
+  }
+ ],
+ "errors_found": [
+  {
+   "id": "BH-1",
+   "field": "card_description",
+   "severity": "moderate",
+   "claim": "'an 80-hectare fort' - the 80.7 ha in the source is the biological Site of Special Scientific Interest, not the hillfort"
+  }
+ ],
+ "notes": "A new error mechanism: an area figure attached to the wrong subject. The number is real and in the source, which is why no fact-check by string search would catch it; only reading what the number describes does. Compare the Cueva de los Murcielagos card, where 'rock art spanning Palaeolithic to Neolithic' conflates the art with the occupation - the same class of subject-shift.",
+ "checked_at": "2026-09-20T23:09:47+02:00"
+}

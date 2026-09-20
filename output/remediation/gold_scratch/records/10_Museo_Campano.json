@@ -1,0 +1,170 @@
+{
+ "sample_index": 10,
+ "site_id": "3bcf804a-ff18-4066-89bd-cfaa8a3b5a46",
+ "site_name": "Museo Campano",
+ "rarity_tier": 3,
+ "sample_size": 36,
+ "checked_at": "2026-09-20T23:09:47+02:00",
+ "db_fields": {
+  "name": "Museo Campano",
+  "country": "Italy",
+  "coordinates": "41.111076842523865, 14.213266798496122",
+  "period_start": 1869,
+  "period_name": "1500+ AD",
+  "site_type": "Museum",
+  "description": "The Museo Provinciale Campano di Capua (commonly called Museo Campano) is a provincial museum in Capua, southern Italy. Established in 1870 and opened to the public in 1874, it is located in the historic Palazzo Antignano. The museum focuses on ancient Italian civilization in Campania and houses an extensive collection of matres matutae ritual statues from the ancient Roman site of Capua antica. It also contains the second largest lapidarium in the region, after the National Archaeological Museum of Naples.[1]",
+  "card_description": "Founded 1870 in Palazzo Antignano, Capua. Houses 160+ tuff statues of matres matutae - mother goddesses with infants - from the Fondo Patturelli sanctuary, plus the region's second-largest lapidarium.",
+  "civilization": "Italy",
+  "heritage_designation": null,
+  "hero_image": "hero.webp (800x533, Commons File:Apse frescoes from church of San Salvatore Piccolo, Capua. Museo Campano, detail angel top left.jpg)",
+  "gallery_images": "19 further images: museum rooms, Palazzo Antignano, exhibits (Mater Matuta statues, Pier delle Vigne bust, paintings)",
+  "thumbnail_url": "/data/images/wiki/3bcf804a/hero.webp",
+  "source_url": "https://en.wikipedia.org/wiki/Museo_Campano",
+  "scope": "Europe (lat 41.11, lon 14.21), museum exhibiting ancient material -> in scope per E3"
+ },
+ "verdicts": [
+  {
+   "field": "name",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Museo_Campano",
+    "https://www.wikidata.org/wiki/Q3868446"
+   ],
+   "note": "enwiki title 'Museo Campano' and the article's first sentence names both forms ('Museo Provinciale Campano di Capua (commonly referred to as Museo Campano)')."
+  },
+  {
+   "field": "country",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://www.wikidata.org/wiki/Q3868446"
+   ],
+   "note": "Wikidata P17 = Q38 (Italy); enwiki 'Capua, southern Italy'."
+  },
+  {
+   "field": "coordinates",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://www.wikidata.org/wiki/Q3868446",
+    "https://en.wikipedia.org/wiki/Museo_Campano"
+   ],
+   "note": "Database 41.11107684, 14.21326680; enwiki 41.11086667, 14.21319167; Wikidata P625 41.110867, 14.213192. Within ~25 m."
+  },
+  {
+   "field": "period_start",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://www.wikidata.org/wiki/Q3868446",
+    "https://en.wikipedia.org/wiki/Museo_Campano"
+   ],
+   "note": "Not reported as an error, by the plan's own rule: Wikidata P571 (inception) = 1869, so the value has a source; the museum's own description says 1870 ('officially founded in 1870', while the founding committee dates to 21 August 1869). Both values are in the same bucket (1500+ AD), and plan 4.3.1 forbids reporting a sort key whose bucket is right. Recorded here as a documented near-miss."
+  },
+  {
+   "field": "period_name",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "docs/procedures/ENRICHMENT_AUDIT.md"
+   ],
+   "note": "categorize_period(1869) = '1500+ AD'."
+  },
+  {
+   "field": "site_type",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://www.wikidata.org/wiki/Q3868446",
+    "pipeline/normalizers/site_type.py"
+   ],
+   "note": "Wikidata P31 includes archaeological museum (Q3329412), art museum, museum of a public entity. 'Museum' is canonical and correct."
+  },
+  {
+   "field": "description",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Museo_Campano"
+   ],
+   "note": "Verbatim from the cited article: 'Established in 1870 and inaugurated in 1874', 'housed in the historic Palazzo Antignano', 'dedicated to ancient Italian civilization in Campania', 'matres matutae coming from the ancient Roman site of Capua antica', 'second largest lapidarium in the region, after that of the National Archaeological Museum of Naples'. No contradiction found."
+  },
+  {
+   "field": "card_description",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://museocampanocapua.it/post/l-fondo-patturelli-di-curti-e-il-culto-della-mater-matuta",
+    "https://www.napolike.com/museo-campano-capua",
+    "https://en.wikipedia.org/wiki/Museo_Campano"
+   ],
+   "note": "The two details the cited article does not carry were verified against non-Wikipedia sources: the museum's own site describes the Mater Matuta sanctuary as emerging 'nel cosiddetto Fondo Patturelli di Curti, presso la porta orientale dell'antica Capua', and napolike.com states 'over 150 votive statues made of tuff ... depicting mothers with children'. So 'Fondo Patturelli sanctuary' and 'tuff statues' stand. '160+' matches enwiki ('totaling over 160'), as does the second-largest lapidarium. Founded 1870 matches the article."
+  },
+  {
+   "field": "civilization",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.3.4"
+   ],
+   "note": "Denormalised country copy by design."
+  },
+  {
+   "field": "heritage_designation",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://www.wikidata.org/wiki/Q3868446"
+   ],
+   "note": "NULL permitted; empty on all 36 sampled sites. Wikidata P1435 = Italian national heritage (Q26971668)."
+  },
+  {
+   "field": "hero_image",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://commons.wikimedia.org/wiki/File:Apse_frescoes_from_church_of_San_Salvatore_Piccolo,_Capua._Museo_Campano,_detail_angel_top_left.jpg"
+   ],
+   "note": "Metadata-level verdict. 800x533, and the file documents a fresco held in Museo Campano ('From the apse of the church of San Salvatore Piccolo, Capua. Museo Campano'). Correct site, no strip. Class note, not an error: the hero is a detail of one exhibit rather than a view of the museum."
+  },
+  {
+   "field": "gallery_images",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://commons.wikimedia.org/wiki/Category:Museo_Campano"
+   ],
+   "note": "Metadata-level verdict. The rows show the museum building and its collections (Category:Museo Campano or 'Collections of Museo Campano'). One row carries conflicting information and is recorded as unresolved rather than as an error: 'Antefisse a gorgoneion.jpg' is categorised 'Collections of Museo Campano' but its description says the object is exhibited 'presso il Museo Archeologico dell'Antica Capua (S. M. Capua Vetere)' - a different museum in a different town. Metadata alone cannot settle which is right."
+  },
+  {
+   "field": "thumbnail_url",
+   "verdict": "UNVERIFIABLE",
+   "correct_value": null,
+   "sources": [
+    "output/remediation/snapshot/wiki_images.jsonl.gz"
+   ],
+   "note": "Local export path; no public/data/images copy in this checkout."
+  },
+  {
+   "field": "source_url",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Museo_Campano"
+   ],
+   "note": "HTTP 200, dedicated article."
+  },
+  {
+   "field": "scope",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.1 E3"
+   ],
+   "note": "A museum is kept when it exhibits ancient material; this one is built on the Mater Matuta statues from Capua antica, so it qualifies. Its own founding date (1869/1870) is a museum date, not an archaeological one - the E3 cutoff applies to the material, not to the institution."
+  }
+ ],
+ "errors_found": [],
+ "notes": "No errors found on this site, and the two card claims that looked unsourced turned out to be confirmed by the museum's own website - a reminder that 'not in the cited Wikipedia article' is not the same as 'invented'. Recorded as a clean site."
+}

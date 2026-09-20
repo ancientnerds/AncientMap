@@ -1,0 +1,174 @@
+{
+ "sample_index": 22,
+ "site_id": "e19f7af0-539c-474c-9404-b11f22f48846",
+ "site_name": "Amyntas Rock Tombs",
+ "rarity_tier": 3,
+ "sample_size": 36,
+ "db_fields": {
+  "name": "Amyntas Rock Tombs",
+  "country": "Türkiye",
+  "coordinates": "36.61915310100121, 29.119284230784206",
+  "period_start": -500,
+  "period_name": "500 BC - 1 AD",
+  "site_type": "Necropolis/tombs complex",
+  "description": "A 4th-century BC Lycian rock-cut tomb at ancient Telmessos (modern Fethiye, Turkey), carved into a cliff face to resemble a Greek temple facade with a triangular pediment and Ionic columns. The tomb interior contains a rectangular chamber with three stone benches (klinai) for burials. Named for Amyntas son of Hermapias, likely a local nobleman during the Achaemenid satrapy of Lycia. It is the largest of numerous rock tombs in the Fethiye cliffs.",
+  "card_description": "4th-century BC Lycian tombs carved into a sheer cliff face, with temple-style facades complete with columns and pediments. The largest is attributed to King Amyntas.",
+  "civilization": "Türkiye",
+  "heritage_designation": null,
+  "hero_image": "hero.webp (800x533, Commons File:185A7327.jpg, Category:Tomb of Amyntas)",
+  "gallery_images": "19 further images, all of the Fethiye rock tombs",
+  "thumbnail_url": "/data/images/wiki/e19f7af0/hero.webp",
+  "source_url": "https://en.wikipedia.org/wiki/Tomb_of_Amyntas",
+  "scope": "Rest of world (lat 36.62, lon 29.12), period_start -500 <= 500 AD -> in scope"
+ },
+ "verdicts": [
+  {
+   "field": "name",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Tomb_of_Amyntas",
+    "https://www.wikidata.org/wiki/Q1948790"
+   ],
+   "note": "enwiki 'Tomb of Amyntas' (also the Fethiye Tomb), Wikidata 'Tomb of Amyntas', Commons category 'Tomb of Amyntas'; the record uses the plural 'Amyntas Rock Tombs', which matches the site's presentation as a group of Fethiye rock tombs and does not contradict any source."
+  },
+  {
+   "field": "country",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://www.wikidata.org/wiki/Q1948790"
+   ],
+   "note": "Wikidata P17 = Q43 (Turkey); enwiki 'the district of Fethiye in Mugla Province'. The record's 'Turkiye' is the country's own UN name and matches the rest of the database's spelling."
+  },
+  {
+   "field": "coordinates",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Tomb_of_Amyntas",
+    "https://www.wikidata.org/wiki/Q1948790"
+   ],
+   "note": "Database 36.61915310, 29.11928423; enwiki 36.61833333, 29.11777778; Wikidata P625 36.6183, 29.1178. Within ~150 m, on the same cliff."
+  },
+  {
+   "field": "period_start",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Tomb_of_Amyntas"
+   ],
+   "note": "Bucket sort key. The article's full text: 'The impressive looking tomb was built in 350 BCE'. -500 is the floor of the bucket 500 BC - 1 AD, which contains -350. Bucket correct (plan 4.3.1)."
+  },
+  {
+   "field": "period_name",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "docs/procedures/ENRICHMENT_AUDIT.md"
+   ],
+   "note": "categorize_period(-500) = '500 BC - 1 AD'."
+  },
+  {
+   "field": "site_type",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Tomb_of_Amyntas",
+    "pipeline/normalizers/site_type.py"
+   ],
+   "note": "enwiki's categories include 'Rock-cut tombs'; 'Necropolis/tombs complex' is canonical and fits both the single famous tomb and the surrounding group the description names."
+  },
+  {
+   "field": "description",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Tomb_of_Amyntas"
+   ],
+   "note": "Confirmed by the cited article: 'an ancient Lycian rock-hewn tomb at ancient Telmessos, in Lycia, which was at the time a satrapy of the Achaemenid Empire', 'located in the south side of the city in the mountainside', 'built in 350 BCE', 'named after the Greek inscription on the side of it which reads \"Amyntou tou Ermagiou\", which translated to English means \"Amyntas, son of Hermagios\"'. Two deviations from the cited source, neither counted as an error: the article spells the father's name 'Hermagios' where the record writes 'Hermapias' (both forms circulate; the record's version is not a fabrication), and the description's interior detail (three klinai) is not in the article read. The temple-facade description is standard for this tomb and is visible in the record's own images."
+  },
+  {
+   "field": "card_description",
+   "verdict": "WRONG",
+   "correct_value": "named for Amyntas son of Hermagios, a private individual - not a king",
+   "sources": [
+    "https://en.wikipedia.org/wiki/Tomb_of_Amyntas"
+   ],
+   "note": "'The largest is attributed to King Amyntas' is unsupported and contradicts the record's own description, which correctly says 'likely a local nobleman'. The article names the man by his patronymic only ('Amyntas, son of Hermagios') and gives no royal title; the tomb is a private rock-cut tomb, and the name Amyntas is common in Macedonia and Lycia. There was a Macedonian king Amyntas, but nothing links him to this tomb. The rest of the card (4th century BC, temple-style facades, columns and pediments) is supported."
+  },
+  {
+   "field": "civilization",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.3.4"
+   ],
+   "note": "Denormalised country copy by design; the real culture (Lycia, Wikidata P17 aside) is unused by design."
+  },
+  {
+   "field": "heritage_designation",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://www.wikidata.org/wiki/Q1948790"
+   ],
+   "note": "NULL permitted; empty on all 36 sampled sites."
+  },
+  {
+   "field": "hero_image",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://commons.wikimedia.org/wiki/Category:Tomb_of_Amyntas"
+   ],
+   "note": "Metadata-level verdict. 800x533, 'File:185A7327.jpg', which is the first file of the Commons category 'Tomb of Amyntas' - this tomb. No strip."
+  },
+  {
+   "field": "gallery_images",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://commons.wikimedia.org/wiki/Category:Tomb_of_Amyntas"
+   ],
+   "note": "Metadata-level verdict. The 19 further rows are the numbered '185A73xx' series from the same category plus views of the Fethiye rock tombs; the category's own file list (185A7327-185A7356, 'Amintas Kaya Mezari', 'Fethiye Rock graves 6930', 'Excavated temple-tomb - Allan John H - 1843', an 1843 lithograph and the 1911 Britannica plan) matches what the record ships. No wrong-site row found."
+  },
+  {
+   "field": "thumbnail_url",
+   "verdict": "UNVERIFIABLE",
+   "correct_value": null,
+   "sources": [
+    "output/remediation/snapshot/wiki_images.jsonl.gz"
+   ],
+   "note": "Local export path; no public/data/images copy in this checkout."
+  },
+  {
+   "field": "source_url",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "https://en.wikipedia.org/wiki/Tomb_of_Amyntas"
+   ],
+   "note": "HTTP 200, dedicated article (short but specific; the full text carries the 350 BCE date and the inscription)."
+  },
+  {
+   "field": "scope",
+   "verdict": "CORRECT",
+   "correct_value": null,
+   "sources": [
+    "docs/procedures/SITES_DB_REMEDIATION_2026-09.md sec. 4.1 E3"
+   ],
+   "note": "Rest of world, 4th century BC -> in scope."
+  }
+ ],
+ "errors_found": [
+  {
+   "id": "AM-1",
+   "field": "card_description",
+   "severity": "moderate",
+   "claim": "card calls the tomb's owner 'King Amyntas'; the inscription names 'Amyntas, son of Hermagios', a private man, and the record's own description says 'local nobleman'"
+  }
+ ],
+ "notes": "The description is careful and the card is not - the same asymmetry as Overstone and The Merry Maidens. Here the card promotes a private tomb owner to royalty; a spoken-audio listener would carry away a wrong fact that the written record does not contain.",
+ "checked_at": "2026-09-20T23:09:47+02:00"
+}
