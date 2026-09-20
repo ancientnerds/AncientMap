@@ -2011,3 +2011,73 @@ That is the third distinct instrument-mismatch family in this session, and worth
 (1) a probe matching the file's own explanatory **comment**; (2) a probe matching a legitimate SQL
 **literal** in a `WHERE` clause; (3) a scanner matching `.query(` on a **spatial index**. Each looked
 like a finding and each was the question being asked of the wrong object.
+
+## Wave 5 review, first half: 3 of 6 lenses in (DEPLOY, SECURITY, TESTS) - triage with my own re-checks
+
+The reviews are correct in substance more often than not, and two of the DEPLOY lens's own findings
+are refuted by the database. Both directions are recorded, because a checker's output is a trace, not
+a verdict.
+
+### Verified by me and REAL (each re-checked independently)
+
+**P0-A - the CI `tests` job cannot collect `tests/remediation/test_mechanical.py`, so nothing deploys.**
+The chain is forced and each link was read: `test_mechanical.py:34-35` imports `mechanical.plan` at
+module level; `plan.py:124-126` imports `census.tests.t02_admin_country` at module level;
+`t02_admin_country.py:137,140` imports `geopandas` and `pyproj` at module level; and
+`.github/workflows/ci.yml:184` installs only `-r requirements-api.txt -r requirements.lyra.txt`, in
+which geopandas and pyproj occur **0** times each. So collection raises ModuleNotFoundError, `tests`
+is red, and `deploy` is skipped. It is invisible locally because the project venv has geopandas -
+exactly the hole the working-tree check does not close.
+
+**P0-B - a test ERRORS (not skips) in a clean checkout.** `test_gallery_audit.py:145`
+(`test_load_verdicts_on_the_real_input_finds_105_rows`) calls `load_verdicts()` against
+`video-assets/shorts`, which `.gitignore` excludes, and `load_verdicts` *raises* when the directory is
+absent. Same deploy-blocking consequence as P0-A, and unlike the other two data dependencies in these
+files it carries no guard.
+
+**P0-C - third-party live keys are in my committed history, and gitleaks scans the full history.**
+Found all three patterns in `output/remediation/phase3_pilot/evidence/`: a Google Maps key
+(`AIzaSy...`, 39 chars = gitleaks' default `gcp-api-key` shape) in `Satsurblia%2Fnationalparks.txt:792`,
+a Mapbox token (`pk.eyJ...`) in `Didnauri%2Fmapcarto.txt:40`... (path: `Didnauri%2Fmapcarta.txt:40`),
+and a Carto key (`cb1_...`) in `Satsurblia%2Fgeorgia_to.txt:1451`. **76 of those evidence files are
+git-tracked**, so they are in the commits, not merely on disk. `sast` runs on every push and must
+succeed, so this blocks the deploy as well - and it is the single strongest argument for having not
+pushed: these bytes would be on GitHub.
+
+### Refuted by me - the DEPLOY lens's findings 6 and 7 are not real
+
+Its premises were reasonable and its reasoning sound, but the database says otherwise. Read-only on
+the VPS, `SELECT filename FROM applied_migrations`:
+
+* **`restore_ancient_nerds.sql` IS recorded** (last row), so its 5,005 `INSERT ... ON CONFLICT DO
+  NOTHING` lines do not re-run each deploy. Finding 6 is not a finding.
+* **`0017_remediation_change_log.sql` IS recorded** too. The deploy loop skips a recorded file, so the
+  broken pre-0018 function body is never re-set - the "one-sided recording" window the lens feared
+  cannot open. Finding 7 is not a finding.
+* `0018` and `0019` are indeed absent from the table, so `0019` does re-run every deploy: finding 3
+  stands, including the lens's observation that its writing self-test takes a row lock on a real row.
+
+### The rest of the real list (from all three lenses)
+
+| # | where | what | why it matters |
+|---|---|---|---|
+| D | `persist_verdicts.py:416-419` | `v.slug` is the only external value not `!r`-ed; a slug with a newline could reach a line-initial `\` in a script piped to psql | asymmetry, proven; exploit unproven - fix the asymmetry, do not claim the exploit |
+| E | `mechanical/apply.py:227` | `{source}` interpolated raw into a single-quoted RAISE message | the same defect G0 measured and fixed; the TESTS lens independently noticed the rendered text and read it as correct SQL, which is how it stays latent |
+| F | `0018:123-126` | a caller can journal a "change" where `p_old = p_new` | the journal may not lie - same class as 0018's own truncation refusal |
+| G | `0019:97-118` | re-run takes ACCESS EXCLUSIVE and writes a real row; and `LIMIT 1` + "must be NULL" can abort spuriously | a deploy that fails for a reason unrelated to the change; the TESTS lens found the same trap independently |
+| H | `ci.yml:198` | the CI pytest call has no `-rs` | this project's own rule: a silent skip must never read as green |
+| I | `apply.py` / `persist_verdicts.py` | `APPLY.sql` is sent to production with no integrity link to the plan it renders | no privilege gain, but the undo a reviewer checks is unverified |
+| J | `test_gallery_audit.py:359,367` | two tests re-implement the rehearsal transform inline, so the module's guard and transform are untested | if the COMMIT strip breaks, `--rehearse` runs the real statement to COMMIT and prints REHEARSAL OK |
+| K | `test_mechanical.py:604` | the reconciliation assertion is satisfied by `POST_COMMIT_READS`/the header | deleting invariant 2 keeps all 63 tests green |
+| L | `test_mechanical.py:744,751`; `test_gallery_audit.py:215,255` | counts and value-presence asserted, never per-site identity | a plan of 35 right values on 35 wrong sites validates |
+| M | `persist_verdicts.py:verify_sql` | the documented `_kind_plan` failure has no regression test | one assertion kills the class |
+| N | `ci.yml:36-51` | `migrations/**` and `scripts/**` are in no change filter | a migration-only push skips every code gate yet still deploys |
+| O | `phase3_pilot/http_get.py:34` | the `# noqa: S310 - https only` claim is not enforced | a claim without a check, which this project does not allow |
+| P | `test_mechanical.py:47-49`; `REHEARSAL_READS` | skip reason names a command that raises; the "left-behind temp table" read filters `nspname='public'` against a `pg_temp_N` object | a message that cannot be acted on, and a metric that cannot fail |
+
+Lens #4 of the TESTS review is the **fifth** instance in this session of an assertion satisfied by
+the file's own comment or by a vacuous predicate - the family that keeps producing false assurance.
+
+**Sequencing, deliberately:** SQL, BACKEND and GEGENPRUEFER are still reading these trees, so no file
+under review is touched until they finish. The `-rs` gap (H) is itself the reason to trust the skip
+counts I have been reading by hand.
