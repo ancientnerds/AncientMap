@@ -2161,3 +2161,58 @@ quiescent and after a `git bundle` backup, because a live VLM lane is still read
 so nothing has been published. Either the rewrite happens before the first push, or the first push
 publishes seven live third-party keys to GitHub and the deploy stays blocked by the sast gate. Both
 are defensible; choosing between them is his, because a push is the outward action.
+
+## Wave 5 complete - the measuring lens refutes two of my own decisions
+
+All six lenses are in. The gegenpruefer (the only reviewer with a shell, whose job is to refute its own
+recommendation) measured rather than read, and it confirmed the load-bearing numbers with raw output:
+1,813 phase3 records / 2,210 findings / **8 `set` = 0.36 %**; 285 coords-only = 15.72 %; PILOT 40 rows =
+28 CORRECT / 11 WRONG / 1 UNVERIFIABLE, proposal 28 none / 6 set / 6 review, 110 evidence items of which
+**15 carry no HTTP status** (local code and snapshot citations - so "110 evidence items" is not "110
+fetches"); COST refuses to average and labels its token figures derived, not measured. It also proved
+the pilot's independence rather than asserting it: **14 reviewer fetches, 0 sharing a URL with a finder
+fetch**. And it confirmed my "35 = 27 + 8" split precisely: the 27 `set` findings outside Phase 3 sit on
+the 27 records whose `phase3` flag is false.
+
+**P1 - the single UNVERIFIABLE verdict does not hold, and this makes the pilot look worse, not better.**
+The OSM evidence line for that row quotes a coordinate that belongs to a different node: the node
+carrying the name `საწურბლიას მღვიმე` is at 42.3886354, 42.6060480, **1.331 km** from the stored point,
+while the quoted 42.3964749, 42.5890186 is an untagged, self-closing node of a `highway=unclassified`
+way - and it lies **outside the query's own bounds** (`<bounds maxlat=42.395>` versus lat 42.3965), so it
+was never a member of the fetched candidate set at all. The published 2.35 km is exactly the distance to
+that road node. The three real candidates sit 60-90 m from each other and ~1.3 km from the stored value,
+which is the same shape as rows the pilot itself called WRONG (Karpasia, 3.5 km). So the justification
+"three candidates, none authoritative enough" collapses, and the honest verdict is WRONG -> review. The
+batch headline becomes **28 / 10 / 2**, and the already-serious false-negative rate becomes 25/40 = 62.5 %,
+not 24/40 = 60 %. The direction matters: the pilot was lenient in a second, independent way, and it is
+the reviewer who caught it, which is the entire argument for the fleet's division of labour.
+
+**Two decisions of mine are refuted, and I am correcting them rather than defending them.**
+
+1. *"The 285 coords-only sites can never produce a write."* Unbacked in that strong form. Both cited rules
+   (FIELD_CONTRACT section 4 item 6 and ENRICHMENT_AUDIT anti-pattern 4) speak only about the *coordinate*
+   findings; the census says nothing about those sites' other fields, and the pilot itself wrote findings
+   for field classes that "only T01/coords" does not exclude. What is supported is the weaker claim: no
+   *census finding* of those 285 is writable. Consequence: they stay in Phase 3 - the scope is **1,813**,
+   not 1,528 - because prose and other-field findings are exactly what the pilot found by hand.
+2. *"invisible to T02 because T02 only asks about the country."* Refuted by the pilot's own citation:
+   `output/remediation/run_t02/findings.jsonl` line 31 names the coordinate as a suspect explicitly. The
+   defect is real and unnamed; the reason attached to it was wrong.
+
+**P2 - a systematic error class, not seven accidents.** Seven claims are wrong for one shared reason:
+the wrong geometric reference point was used, or a number was published as measured when its provenance
+does not support it. Bounding-box centre quoted as the geometry (Danube: 82.7 km, actually **74.18 km** -
+an 8.5 km error in three documents marked "measured"; polygon "centre" 73 m, actually the bbox centre,
+the centroid is 254 m); a non-existent Satsurblia named-feature query cited as evidence (both 287-byte
+responses are Petroglyph queries); a "six largest pages = 70 %" figure that only reproduces by counting
+one page in the numerator and not the denominator; a division wrong in the third digit (3,653,051/180 is
+20,294.7, not 20,293); and a 102 km distance whose coordinate appears in none of the 76 evidence files,
+which contradicts the pilot's own traceability claim section 7 even though the number is right. The rule
+this earns, and which I am adding to the briefs: **name the reference point whenever a distance is
+published, and never label a value "measured" when what was measured was a bounding box.**
+
+Everything it verified is listed in its report as verified, which is what makes the rest credible: the
+Grave Street ranges reproduce exactly with the point 5 m from the nearest way, Juneau 0.396 km, the
+Didnauri wikidata ways, the PLOS 25,535-24,408 cal. BP quotation verbatim, the fetch_log totals (76 rows,
+57x200, 19 non-200, 2,399,608 bytes), all six COST aggregates, and a 239-token citation audit that found
+no invented source. The FIELD_CONTRACT and ENRICHMENT_AUDIT citations all exist verbatim.

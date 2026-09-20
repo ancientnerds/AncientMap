@@ -263,6 +263,15 @@ output/remediation/mechanical/REHEARSAL.sql
 output/remediation/mechanical/PLAN.jsonl
 !output/remediation/phase3_pilot/
 
+# Raw third-party response bodies, fetched as evidence during the Phase-3 pilot, are NOT versioned.
+# gitleaks reported seven live third-party credentials inside verbatim public HTML in this directory
+# (Google/Mapbox/Carto client keys published by the sites themselves) - keys we cannot rotate because
+# they are not ours, so .gitleaksignore must not exempt them. The rule above is placed BEFORE this one
+# on purpose: a directory negation has to precede the rules that re-exclude paths beneath it.
+# What survives as the record: fetch_log.jsonl keeps url, http status, byte count and sha256 per fetch,
+# and the extracted evidence text already lives in PILOT.jsonl. The bodies stay on the workstation.
+output/remediation/phase3_pilot/evidence/
+
 # G0: the verdict persister. The undo is versioned; the regenerable plan output is not.
 !output/remediation/gallery_audit/
 output/remediation/gallery_audit/APPLY.sql
