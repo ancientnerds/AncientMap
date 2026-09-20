@@ -237,6 +237,13 @@ def main(argv: list[str] | None = None) -> int:
 
     bad = [s["test_id"] for s in summary if s["errors"]]
     log.info("wrote %s: %d findings, %d census rows", out, len(findings), len(rows))
+    # Printed, not just logged: a run that writes files but says nothing is indistinguishable
+    # from a run that did nothing, and this is the one line that shows the shape of the result.
+    print(
+        f"[census] {len(snap.sites)} sites x {len(summary)} tests -> {len(rows)} rows, "
+        f"{len(findings)} findings; wrote {out}/CENSUS.md",
+        flush=True,
+    )
     if bad:
         log.error("tests that crashed: %s", ", ".join(bad))
         return 1
@@ -256,7 +263,7 @@ def _report(summary: list[dict[str, Any]], findings: list[M.Finding], snap: Snap
         "## Tests",
         "",
         "| test | dimension | sites | applicable | flagged | n/a | errors | findings "
-        "| applicable findings | s |",
+        "| applicable findings | elapsed_s |",
         "|---|---|---|---|---|---|---|---|---|---|",
     ]
     for s in summary:
@@ -264,6 +271,16 @@ def _report(summary: list[dict[str, Any]], findings: list[M.Finding], snap: Snap
             f"| {s['test_id']} {s['name']} | {s['dimension']} | {s['sites']} "
             f"| {s['applicable']} | {s['flagged']} | {s['not_applicable']} | {s['errors']} "
             f"| {s['findings']} | {s['applicable_findings']} | {s['elapsed_s']} |")
+
+    # The column was headed `s`, which reads like a score. It is wall-clock seconds, so it
+    # changes between runs (whichever test runs first pays the snapshot-load cost). Say so,
+    # and name the artifacts that ARE reproducible, so nobody hashes this file.
+    lines += [
+        "",
+        "`elapsed_s` is wall-clock seconds and varies between runs: it is a timing note, not a"
+        " quality score, and it is not part of the reproducible output. `census.jsonl` and"
+        " `findings.jsonl` are the byte-reproducible artifacts.",
+    ]
 
     lines += ["", "## Findings by severity, field and proposal", "",
               "| severity | field | proposal | count |",
