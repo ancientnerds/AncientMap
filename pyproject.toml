@@ -198,6 +198,19 @@ ignore = [
 known-first-party = ["api", "pipeline"]
 
 # =============================================================================
+# Pyright Configuration
+# =============================================================================
+[tool.pyright]
+# The remediation census lives under scripts/remediation/ as an importable package
+# (`census`) that is loaded by inserting scripts/remediation on sys.path, because a
+# dependency installs a top-level package named `scripts` into site-packages which
+# shadows this repo's scripts/ directory (see tests/scripts/test_funnel_report.py).
+# Without this extraPath the type checker cannot resolve `from census import model`,
+# even though the import is correct at runtime. It only widens the search path; it
+# does not change which files are checked.
+extraPaths = ["scripts/remediation"]
+
+# =============================================================================
 # Pytest Configuration
 # =============================================================================
 [tool.pytest.ini_options]

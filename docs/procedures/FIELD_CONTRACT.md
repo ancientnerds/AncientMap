@@ -1,0 +1,219 @@
+# Field contract for the site remediation
+
+Status: **active**, written 2026-09-20 from verified source reads. Applies to every write made
+by the 2026-09 remediation of the 5,004 `ancient_nerds` sites
+(`docs/procedures/SITES_DB_REMEDIATION_2026-09.md`).
+
+Read this before writing anything. A value that is correct in the database can still be wrong
+*ten minutes later*, because two code paths in this project rewrite site data on every container
+start. This file says which fields those are, what makes a written value survive them, and what
+shape each column accepts.
+
+---
+
+## 1. The only supported write path
+
+Every remediation write goes through one function, added in `migrations/0017_remediation_change_log.sql`:
+
+```sql
+SELECT apply_remediation_change(
+    'unified_sites', 'country', 'id', '<uuid>',
+    '<expected current value>', '<new value>',
+    'T05/country-compounded', '2026-09-20_remediation',
+    '<change_key>', 'authoritative', '<evidence jsonb>'::jsonb, '<site uuid>');
+```
+
+It is verified to have these properties (all seven asserted by
+`scripts/remediation/0017_migration_selftest.sql`, run green against a scratch database on
+2026-09-20):
+
+1. **Conditional WHERE.** The update only applies if the row still holds the exact expected old
+   value, compared with `IS NOT DISTINCT FROM` rather than `=` — so correcting a field that is
+   currently `NULL` works (`col = NULL` is never true, which would silently match zero rows).
+2. **Aborts instead of guessing.** If the row does not hold the expected value, or the primary key
+   matches no row, it raises. A correction based on a stale reading is never applied.
+3. **Journals atomically.** The value change and its `remediation_change_log` row commit together in
+   one statement, so the audit trail cannot disagree with the data.
+4. **Reversible.** `old_value` is recorded for every change; `remediation_change_history` exposes
+   the preceding value per row.
+5. **Table allowlist.** Only `unified_sites`, `card_stats`, `wiki_images`, `site_content_links`,
+   `site_external_ids`, `unified_site_names` can be written. Anything else raises.
+6. **`run_stamp` required**, so no change can exist without naming the run that made it.
+7. **`p_new = NULL` clears a field** and still records what was there.
+
+Non-negotiable consequences:
+
+- **No `DELETE`, ever.** Out-of-scope or unusable rows are flagged or cleared, never removed.
+  (Owner decision E1.)
+- **No `UPDATE ... SET x = y` by hand**, and no `psql -c "UPDATE ..."` in a loop. An unjournalled
+  write to this data is not recoverable by review, only by restoring the dump.
+- Scoped tables hold **1,759,676 rows across 28 sources**; `ancient_nerds` is 5,004 of them. The
+  UUID primary key makes each call row-exact, but never write a query that filters on a *value*
+  without also naming the source.
+
+---
+
+## 2. The restart rule: a written value must be a fixed point
+
+Two code paths re-derive site data on **every** start of the Lyra orchestrator or the API. There is
+no opt-out flag. Only the `WHERE ... IS DISTINCT FROM` guard limits how many rows they touch.
+
+### 2.1 `unified_sites.site_type` — normalizer-run
+
+`pipeline/lyra/orchestrator.py:1476-1488`, inside `_run_migrations()` (called from `main()` at
+`:1990`, so once per orchestrator start):
+
+```python
+_raw_types = conn.execute(
+    text("SELECT DISTINCT site_type FROM unified_sites WHERE site_type IS NOT NULL")
+).fetchall()
+for (raw,) in _raw_types:
+    canonical = _norm_type(raw)
+    if canonical != raw:
+        conn.execute(
+            text("UPDATE unified_sites SET site_type = :canonical WHERE site_type = :raw"),
+            {"canonical": canonical, "raw": raw},
+        )
+```
+
+**Rule:** any `site_type` you write must satisfy `normalize_site_type(value) == value`
+(`pipeline/normalizers/site_type.py`). Otherwise the next container start rewrites it. An
+unmappable value is therefore not a correction at all — it is a temporary edit that reverts itself,
+which is why `t04_site_type.py` asserts this as an invariant and emits `Proposal.REVIEW` for
+anything it cannot place.
+
+Measured 2026-09-20: all 97 canonical types are fixed points, and the only non-canonical value
+present in production is `suspect_modern` (1 site), which the check deliberately skips.
+
+`user_contributions.site_type` is normalized the same way (`:1490-1502`) — irrelevant to this
+remediation but part of the same rule.
+
+### 2.2 `unified_sites.name_normalized` — and the trap in its own WHERE clause
+
+`pipeline/lyra/orchestrator.py:1694-1702`:
+
+```sql
+UPDATE unified_sites
+SET name_normalized = left(lower(unaccent(name)), 500)
+WHERE name_normalized IS NULL
+   OR name_normalized IS DISTINCT FROM lower(unaccent(name_normalized))
+```
+
+The `SET` derives from **`name`**; the `WHERE` compares against **`name_normalized`**. That
+asymmetry is the whole story:
+
+- A written value survives **iff** `value = left(lower(unaccent(value)), 500)` — i.e. it is already
+  normalised and at most 500 characters.
+- If it is not, the row is rewritten from `name`, and the value is gone.
+
+So a `name_normalized` that is a normalisation fixed point persists **even when it does not match
+`lower(unaccent(name))`** — the guard never fires, so nothing corrects it. That is a footgun in both
+directions: it means a wrong-but-well-formed value is durable, and it means "the normalizer will
+clean it up for me" is false.
+
+**Rule: write `left(lower(unaccent(name)), 500)` — the derivation the code intends — not merely some
+fixed point.** That satisfies both the intent and the guard.
+
+`unified_site_names.name_normalized` (`:1687-1692`) is re-normalised **in place** (from itself, not
+from `name`), so its fixed point is the same condition, `value = left(lower(unaccent(value)), 500)`.
+The same block (`:1679-1685`) deletes duplicate `unified_site_names` rows keeping the lowest id, so
+inserting a duplicate name here is undone on the next start.
+
+### 2.3 `card_stats.card_description` — the JSON file wins on every API boot
+
+`api/main.py:493-552`, an unconditional startup import:
+
+- Source: `public/data/card_descriptions.json` (git-LFS tracked), key `descriptions`.
+- Upsert at `api/main.py:527-531`:
+
+```sql
+INSERT INTO card_stats (site_id, card_description, ...)
+VALUES (:id, :desc, 0, 0, 0, 0, 0, 0, 0, 0, 'unknown')
+ON CONFLICT (site_id) DO UPDATE SET card_description = :desc
+WHERE card_stats.card_description IS DISTINCT FROM :desc
+```
+
+- Truncated to 200 characters at `api/main.py:533`.
+
+The `IS DISTINCT FROM` guard only prevents rewriting an identical value. It does **not** protect a
+differing one — the JSON value overwrites the database value on every API start.
+
+**Rule: never treat `card_stats.card_description` as the source of truth, and never fix a card text
+in the database alone. Any Phase 5 correction must be applied to `public/data/card_descriptions.json`
+*and* the database, or it is reverted at the next API restart.** The descriptions are generated and
+exported by the pipeline; the correct order is: fix the text, regenerate/export the JSON, then let
+the startup import carry it into the database.
+
+For contrast, `api/routes/sites.py:1743-1751` deliberately does **not** overwrite — it uses
+`card_description = COALESCE(EXCLUDED.card_description, card_stats.card_description)`. Two write
+paths, opposite semantics; only the startup one is authoritative.
+
+---
+
+## 3. Column shape: what a proposed value must fit
+
+Verified against `information_schema.columns` on production, 2026-09-20. A value that violates these
+is either truncated silently or rejected — so the census must not propose one.
+
+| Table | Column | Type | Limit | Nullable |
+|---|---|---|---|---|
+| unified_sites | `name` | varchar | **500** | no |
+| unified_sites | `name_normalized` | varchar | **500** | yes |
+| unified_sites | `site_type` | varchar | **100** | yes |
+| unified_sites | `country` | varchar | **100** | yes |
+| unified_sites | `period_name` | varchar | **100** | yes |
+| unified_sites | `period_start` / `period_end` | integer | — | yes |
+| unified_sites | `lat` / `lon` | double precision | — | **no** |
+| unified_sites | `description` / `source_url` / `thumbnail_url` | text | — | yes |
+| unified_sites | `edited_by` | varchar | **20** | no |
+| unified_sites | `raw_data` | jsonb | — | yes |
+| card_stats | `card_description` | varchar | **200** | yes |
+| card_stats | `civilization` | varchar | **100** | yes |
+| card_stats | `rarity_tier` | integer | — | **no** |
+| card_stats | `heritage_designation` | text | — | yes |
+| card_stats | `inception_year` | integer | — | yes |
+| wiki_images | `width` / `height` / `thumb_width` / `file_size_bytes` | integer | — | yes |
+| wiki_images | `is_hero` / `is_lead` / `is_excluded` | boolean | — | no |
+| wiki_images | `sort_order` | integer | — | no |
+
+Notes that follow from the table:
+
+- **`edited_by` is only 20 characters.** It is the provenance marker (`'audit'`,
+  `'cited_enrichment'`, `'QuetzalcoatlCat'`, `'initial'`). `'remediation-2026-09'` is 18 and fits;
+  anything longer fails. Do not invent a marker that does not fit.
+- **`lat`/`lon` are `NOT NULL` and `double precision`.** They can be corrected, never cleared.
+- **`card_description` is 200 characters**, and the startup import truncates to 200 as well. A
+  longer generated text is silently cut, so a card-text fix that relies on the tail of a sentence is
+  a fix that will not appear.
+- **`wiki_images` boolean/int columns are `NOT NULL`** — `is_hero` can be moved, not nulled.
+
+---
+
+## 4. What this means for the census
+
+The ten Phase-1 checks run against the local snapshot and may propose values. Every proposal must be
+read through this contract before it becomes a write:
+
+1. **`site_type` proposals** must be fixed points of `normalize_site_type()`. Anything else is a
+   revert-on-restart edit — emit `REVIEW` instead. (Enforced in `t04_site_type.py`.)
+2. **`name_normalized` proposals** must equal `left(lower(unaccent(name)), 500)`.
+3. **`card_description` proposals** are not database fixes; they are JSON-file fixes that the DB
+   import then carries. A Phase-5 plan that only writes SQL is wrong.
+4. **Value proposals must fit the column**, checked before the proposal is made, not at write time.
+5. **`country` and `site_type` are `varchar(100)`** — a compound value like `"Chile, Easter Island"`
+   fits, but the replacement must also fit.
+6. **Coordinate proposals** are the highest-risk: `lat`/`lon` are not nullable, and a wrong
+   coordinate moves a dot on a globe rather than merely looking wrong. Disagreements with Wikidata
+   or Natural Earth are `REVIEW`, never an automatic overwrite.
+
+---
+
+## 5. Related
+
+- `docs/procedures/SITES_DB_REMEDIATION_2026-09.md` — the plan; §1.2 holds owner decisions E1–E5.
+- `docs/procedures/ENRICHMENT_AUDIT.md` — audit dimensions, anti-patterns, SQL conventions.
+- `migrations/0017_remediation_change_log.sql` — the write primitive.
+- `scripts/remediation/0017_migration_selftest.sql` — its seven verified properties.
+- `scripts/remediation/census/tests/t04_site_type.py` — the fixed-point rule as executable code.
+- `output/remediation/recon/schema-and-overwriters.md` — the recon this contract was verified
+  against (three claims re-read at source on 2026-09-20 before this file was written).
