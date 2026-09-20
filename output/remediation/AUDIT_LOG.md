@@ -1177,6 +1177,54 @@ re-proof all hold, and its two headline numbers reproduce from its own query. Th
 remains is the one already recorded above - the tier system underneath the selection has four of eight
 signals rebuilt - and it is a review gap, not a correctness failure I can demonstrate.
 
+## Wave 4 launched - and a lane's correct finding that my re-check nearly reversed
+
+Wave 4 (`ce8c7bcc-6148-48c2-bda5-29e43d4beb6e`, launcher `scripts/remediation/fleet_wave4.js`) runs
+three lanes, all `deepseek-v4.1-flash`, fresh context, 20 M token budget:
+
+* **MECHANICAL** - settle the sites a deterministic script can settle, with the same journalled
+  primitive the hero write used, `ROLLBACK.sql` written before `APPLY.sql` and rehearsed on the
+  byte-identical file. The only lane permitted to touch production.
+* **PILOT** - run **one** Phase-3 batch of five sites end to end and report what it costs, because the
+  plan's own cost anchors contradict each other by exactly 2x (~40,000 tokens/site implies 91 sites;
+  "36 agents x 5 sites" means 180). Averaging two contradictory anchors would be inventing a number,
+  so the lane measures instead. Read-only.
+* **GALLERY** - design the gallery audit (Phase 2 items 2-5) and settle whether anything reachable here
+  can judge an image visually, rather than assuming a vision model exists. Read-only.
+
+### The episode worth recording: I nearly logged a correct finding as false
+
+Before writing the PILOT brief I checked the FACTS lane's claim that 8 T05 sites "carry both a `set`
+and a `review` finding". My check found **0**, so I was about to record the lane's finding - which is
+already in the audit trail - as wrong.
+
+It was **my reading that was wrong, not the finding.** T05's 70 findings do sit on 70 distinct sites
+with no site carrying two proposals; that part of my check was right. But the 8 are the sites that
+carry a **set finding under T05 AND a review finding under another check** - the overlap of the
+mechanical set and the review set:
+
+| | |
+|---|---|
+| mechanically settlable | **35** |
+| ... that also carry ≥1 review finding (both lanes would work them) | **8** |
+| ... mechanically settlable only | **27** |
+
+The 8 names are Armazi, Didnauri, Dmanisi, Easter Island, Kutaisi, Satsurblia Cave, Tsona Cave and
+**Tsutskhvati Cave Natural Monument**. And **35 = 27 + 8 explains MECHANICAL.md's 27** - the clean
+mechanical set is the 35 minus the 8 that Phase 3 will also touch. So the lane's number and its names
+were both right; only its wording was loose, and my verification read that wording one granularity too
+narrowly and manufactured a contradiction out of it.
+
+**This is the mirror of the five earlier instrument errors.** There my probe was too *coarse* and
+reported something impossible (0 files where 15,230 existed; 1,033 where the answer was 1,041). Here
+my probe was too *narrow*: it answered a stricter question than the one asked, got 0, and I was one
+step from overwriting a correct record with my own misreading. The rule that covers both directions:
+**when my probe contradicts an artifact, suspect the probe - and check that I am asking the claim's
+own question before I call it false.**
+
+The brief now states the precise version, including that no T05 site carries two proposals, so the
+next reader cannot repeat my mistake.
+
 ### Safety check after the probe
 
 The real backups directory was intact: `2026-09-19_pre-audit` and `2026-09-20_remediation` both
