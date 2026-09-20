@@ -1014,6 +1014,80 @@ was invalidated by the rule I set for myself. Re-running it left `fnr_result.jso
 9+7+6+8+3+3+4 = 40 wrong, 1+3+1+8+0+3+0 = 16 caught) - so the formatter moved no number and the
 verification stands.
 
+## Wave 3 / HERO: the first production DATA write - 5,438 journalled rows, audited line by line
+
+**This is the remediation's first authorised change to production data** (E1). Migration 0017/0018
+were DDL; this moves the hero flag on real rows. 2,719 sites, each swapped from a hero the page was
+serving as an 800 px `THUMB_WIDTH` derivative to an already-local 1600 px image.
+
+### The journal (production, read after the write)
+
+| check | result |
+|---|---|
+| rows | **5,438** = 2,719 `true→false` + 2,719 `false→true` |
+| distinct images / distinct sites | 5,438 / **2,719** |
+| sites with exactly 2 rows | **2,719** (0 with ≠2) |
+| sites with ≠1 promotion / ≠1 demotion | **0 / 0** |
+| NULL `site_id_ref` / `old_value` / `new_value` / `evidence` | **0 / 0 / 0 / 0** |
+| rows outside `source_id='ancient_nerds'` | **0** - the scoping held |
+| `run_stamp` / `test_id` / `confidence` | `2026-09-20_remediation` / `T09/hero-not-best` / `authoritative` |
+
+Every touched site therefore got a genuine **swap** - one demotion and one promotion - not an
+accidental net gain. `is_hero` carries **no restart writer** (the OVERWRITER lane proved that), so
+this change survives a container restart; that is why the hero move could be made first.
+
+### The invariant, and the accounting that closes on both sides
+
+**0 ancient_nerds sites have more than one hero.** Hero rows stay at **3,858** - unchanged from the
+baseline, because this is a swap and not an increase. `scripts/remediation/hero_repair/` code reads
+**the cached true Commons dimensions** (`plan.py:28`, `:171-173` reads the wrapper's `entries` key as
+warned) and keeps the stored `wiki_images.width` only as a **cross-check** - `plan.py:314` names the
+column "the one T09 measured wrong", and **276 candidates were refused** because the stored size was
+the sole witness and Commons contradicted it. My specific instruction held: no candidate was chosen on
+that column.
+
+The lane's own table looked wrong against my first count, and **it was my count that was narrow**:
+
+| | |
+|---|---|
+| sites with ≥1 image row | **4,010** (matches T10's 4,010) |
+| sites with no image row at all | **994** (matches T10's 994 n/a) |
+| = 3,858 with a hero + **152** without | the lane's "152 sites-without-hero-flag", confirmed |
+| of the 3,858: **2,719 repaired + 545 rejected + 594 no candidate** | sums exactly |
+| repaired = **1,344 tier D + 1,375 tier C** | sums to 2,719; never a suspect tier A/B |
+| plan-rule candidates = 2,719 + 545 = **3,264** | **the plan's own 3,264, reproduced** |
+
+I had counted 134 "has a usable image but no hero" because I excluded `is_excluded` rows; the lane
+counted 152 sites that have image rows at all. Both are honest, they measure different things, and
+994 + 152 = 1,146 = every hero-less site. **The split I explicitly asked for is answered:** 3,264
+replaceable = 2,719 repaired + 545 rejected by the stricter rule.
+
+### ROLLBACK.sql is the exact inverse - verified, not assumed
+
+`APPLY.sql` was regenerated at 23:48 (after the 0018 fix) while `ROLLBACK.sql` kept its 23:45
+timestamp, so the rollback could have been stale. It is not: it is set-based (`CREATE TEMP TABLE
+_hero_plan` + one `UPDATE … FROM`), and against the live journal
+
+* 5,438 plan tuples, 5,438 distinct image ids,
+* journal ids absent from the rollback: **0** (nothing unrecoverable),
+* rollback ids absent from the journal: **0** (no phantom values),
+* `site_id` disagreeing with the journal: **0**,
+* rows where the rollback is **not** the exact inverse of what APPLY wrote: **0**.
+
+It restores the pre-write state for all 5,438 rows. Each tuple also carries a **three-source evidence
+chain** (`commons:imageinfo`, `snapshot:wiki_images`, `census:T10`) and a written reason, which is what
+makes a later disagreement arguable rather than a matter of trust.
+
+**Two of my own probes failed on the way to this** - both were my parse, not the artifact: I first
+searched for 5,438 separate `UPDATE` statements (there are 2, it is set-based), then for 4-field
+tuples (they have 7, with the reason and a JSONB evidence array). The near-miss is worth naming
+because the second failure *looked* like a real finding - "5438 ids unrecoverable" - and would have
+been a false alarm about a rollback that is in fact exact. Same discipline as the sharded cache: **when
+my probe contradicts the artifact, suspect the probe first.**
+
+**Gate suite, run by me rather than accepted:** `2023 passed, 3 skipped, 57 deselected, 32 warnings in
+150.94s` - the 3 skips are the two known refactors plus `THEO_REGEN_TEST`.
+
 ### Safety check after the probe
 
 The real backups directory was intact: `2026-09-19_pre-audit` and `2026-09-20_remediation` both
