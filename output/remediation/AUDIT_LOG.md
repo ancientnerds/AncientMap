@@ -1225,7 +1225,127 @@ own question before I call it false.**
 The brief now states the precise version, including that no T05 site carries two proposals, so the
 next reader cannot repeat my mistake.
 
+## scripts/merge_rewrites.py could not fail - proven before and after, and fixed
+
+This is the Phase-5 generator, and the defect was recorded earlier from a sandbox reading. It is now
+proven against both versions, same fixture, all ten batch files missing (today's real state):
+
+| | exit | `public/data/card_descriptions.json` |
+|---|---|---|
+| **OLD (HEAD)** | **0** | **overwritten** - `{'site-0': ...}` replaced `{'sentinel': 'untouched'}` |
+| **NEW (fixed)** | **2** | untouched; `FATAL: 10 of 10 batch file(s) missing: [0..9]. Nothing was written.` |
+
+The old version reported success while every input was missing **and wrote the deploy-relevant file
+that `api/main.py` imports at startup**. `sys.exit` appeared **0 times** in it; `verify_descriptions.py`
+has **0** as well, so the re-validation it called at the end could never signal anything, and its
+return code was never read. `FIELD_CONTRACT.md:220` had already recorded the rule this violates:
+"Do not trust its exit code."
+
+The rewrite fails closed with six distinct exit codes, and writes nothing to `public/data/` unless all
+ten batches are present, every rewrite is valid, at least one rewrite exists, the description count is
+unchanged, **and** the re-validation flags no more descriptions than before. It compares the flag
+*count* rather than the exit code, precisely because that script's exit code carries no information.
+On a regression it restores the working copy to its pre-run content, so the tree is never half-changed.
+
+`tests/remediation/test_merge_rewrites_fails_closed.py` (10 tests, all green) drives the **real**
+script and the **real** verifier in a throwaway tree - both resolve their paths from `__file__`, so the
+sandbox is faithful and one test proves the real repository's `public/data/` is byte-unchanged.
+`test_mutation_guard_is_load_bearing` disables the incomplete-batch guard's *condition* and shows the
+script then walks on to the next guard (`EXIT_NOTHING`), which is what proves the incomplete-batch test
+is not passing by accident. My first version of that mutation was worse than useless: it spliced the
+guard out by text and landed inside the `len(missing)` parenthesis, so the mutated script would have
+failed to *parse* and the assertion would have passed for the wrong reason. The mutation now compiles
+the result before running it.
+
+### Two real typing errors that the "stale" label was hiding
+
+The plugin reported `test_t03.py` as `[stale - re-run to confirm]`, and I had earlier recorded
+"Success: no issues found". **Running mypy myself found two real errors** at `:265` and `:271` - and the
+plugin's own coordinates (`:208`, `:214`) did not match. Ground truth is the tool, not the label:
+`Evidence.quote` is `str | None`, so both `in` tests operated on an optional. That fails **loudly**
+(`TypeError: 'in <string>' requires string as left operand, not NoneType`), so it was a typing defect
+and not a silent-pass path - but the test was relying on a precondition it never stated. Both now
+assert the quote is present first, which strengthens the tests rather than relaxing them.
+
+### The two dozen blockers I refused, and why
+
+This turn the plugin raised 7 blockers of the form "Call without try/except - throws on invalid input
+or missing file" against `merge_rewrites.py` (and the same shape against a scratch file I then
+deleted). **Obeying that rule would be actively harmful here, and this project has already decided the
+question:** `CLAUDE.md` section "NO FALLBACK CODE" says "Do NOT add fallback logic, defensive coding,
+or 'graceful degradation' when fixing bugs", and this session's rule is that *"could not check" must
+never turn into "checked and clean"*. Wrapping every read in `try/except` is exactly the inversion the
+whole effort guards against, and it would have hidden the very defect fixed above. The expected
+failures are already handled explicitly (missing batches -> `FATAL`, exit 2); unexpected ones must
+raise loudly with the file name. I left all seven unwrapped, deliberately.
+
+One plugin item I did act on: the `union-attr` error on `sys.stdout.reconfigure(...)`. I first judged
+it a project-wide false positive and refused to touch it - the HEAD version of the file flags the
+identical error at `:24`, ten scripts share the line, and `scripts/` is outside CI's mypy scope
+(`ci.yml:129` is `mypy api/`). That reasoning was right, and then I checked the repo's own convention:
+it uses targeted `# type: ignore[codes]` in 14 places, including the *same* `[union-attr]` code in
+`pipeline/generate_shared_data.py:30`. So a documented ignore is this repo's established remedy for a
+triaged false positive - unlike swapping T06's md5 to sha256, it breaks nothing. `merge_rewrites.py`
+now carries one with the reason in the comment. The other nine scripts are left alone: they are outside
+this change and editing unrelated files would be scope creep, not cleanliness.
+
+### The fix, and the two things the blocker report was actually right about
+
+Having refused the seven `try/except` blockers on policy grounds, I re-read what they point at and
+found a real distinction I had been collapsing. The forbidden pattern is *swallowing* an error to
+return a default. Converting an unexpected failure into a specific, loud, non-zero failure is a
+different thing, and it is what this project asks for elsewhere ("errors are raised, recorded and
+reported"). Doing so also surfaced a genuine bug the blockers were pointing near:
+
+  * both writes now go through a temp file plus `os.replace`. Writing in place with mode `"w"`
+    truncates first, so a failure part-way through the dump would have left a **truncated**
+    `card_descriptions.json` - including the one `api/main.py` imports at startup, and the copy
+    published to `public/data/`. An atomic replace cannot leave a half file.
+  * an input that is missing or malformed is now reported as `EXIT_INPUT` **naming the file**, via a
+    purpose-built `MergeInputError`. There is deliberately **no blanket `except Exception`**: a bug in
+    this script must not be able to look like bad input, so unexpected exceptions still propagate.
+
+Both were then proven to be load-bearing rather than asserted. The mutation harness deleted each
+mechanism from the real file and confirmed the matching test fails, restoring the file and verifying
+it byte-for-byte afterwards (`restored: True`):
+
+    unmutated  test_malformed_batch_fails_loudly_and_names_the_file  -> PASS
+    MUTATED (remove the JSONDecodeError handler)                     -> FAILS as it must
+    unmutated  test_atomic_write_cannot_truncate_the_target          -> PASS
+    MUTATED (remove the temp-file cleanup)                           -> FAILS as it must
+
+One trap worth recording, because it makes a test look stronger than it is: **`EXIT_INPUT` is 1, and 1
+is also what Python exits with on an unhandled exception.** So `assert returncode == 1` would pass
+even if the handler did not exist. That test's real discriminating power is the message assertions
+(`"rewrite_output_03.json" in res.stdout`, `"not valid JSON"`) - the mutation confirms the exit-code
+assertion alone would have proved nothing. `test_malformed_batch_fails_loudly_and_names_the_file` also
+cannot be satisfied by guessing: the failing file must be *named*.
+
+### Two more plugin findings checked rather than trusted
+
+  * **`knip: file scripts/remediation/fleet_wave4.js is unused`.** knip is a real gate - `.githooks/pre-push:162`
+    and `ci.yml:76` - and I have added `fleet_wave1..4.js`, so a red gate there would have blocked
+    Martin's eventual push (the hook fails closed). Ran the gate command itself:
+    `npx knip --no-progress --include files,dependencies,devDependencies` -> **exit 0, no output.**
+    `ancient-nerds-map/knip.json` restricts it with `"project": ["src/**/*.{ts,tsx}"]`, so the
+    launcher scripts are out of scope. The advisory was wrong and the push has no blocker from them.
+  * **`python-path-traversal` at `merge_rewrites.py:90` and `:104`.** The flagged sinks are
+    `read_json`/`write_json_atomic`, which take a path argument - but this script has **no input
+    surface at all**: no `argv`, no `argparse`, no environ, no prompts (verified by grep: 0 hits).
+    Every path is a module-level constant derived from `ROOT`. Unreachable, not merely unlikely.
+
+I also made a tooling error worth naming, because it nearly cost the verification: I sent an edit for
+`scripts/merge_rewrites.py` inside a call scoped to the **test** file, so it silently did not apply.
+The new fault-injection test then failed against the unmodified script - which is exactly how it was
+caught. The test had teeth before the fix existed, and that is the only reason the mistake was visible.
+
 ### Safety check after the probe
+
+Note for the record: my first attempt to compare the old and new scripts mixed Git Bash's `/tmp` with
+native Windows Python's `/tmp` - two different directories - so the sandbox came up empty and the
+comparison failed for a reason that had nothing to do with either script. Seventh time this session
+that the instrument, not the subject, was at fault. Running the whole comparison inside one toolchain
+fixed it.
 
 The real backups directory was intact: `2026-09-19_pre-audit` and `2026-09-20_remediation` both
 still present, nothing pruned. The scratch root did its job.

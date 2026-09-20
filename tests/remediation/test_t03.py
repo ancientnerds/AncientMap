@@ -262,13 +262,18 @@ class TestFindings:
         site = _site("a", period_start=-500, period_name="500 BC - 1 AD", description=text)
         f = _flagged(site)[0]
         assert f.evidence[0].source == t03.TEXT_SOURCE["description"]
-        assert f.evidence[0].quote in text
+        # Make the precondition explicit instead of relying on it: `Evidence.quote` is
+        # `str | None`, so a bare `in` test would raise TypeError rather than fail meaningfully
+        # if the producer ever stopped attaching the quote.
+        quote = f.evidence[0].quote
+        assert quote is not None, "text evidence must carry the quote it was drawn from"
+        assert quote in text
         assert {ev.source for ev in f.evidence} == {
             t03.TEXT_SOURCE["description"],
             "snapshot:unified_sites",
             "pipeline/utils/text.py:PERIOD_BUCKETS",
         }
-        assert any("period_name" in ev.quote for ev in f.evidence)
+        assert any(ev.quote is not None and "period_name" in ev.quote for ev in f.evidence)
 
     @pytest.mark.parametrize(
         ("start", "name", "text"),
