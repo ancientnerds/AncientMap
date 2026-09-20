@@ -24,11 +24,22 @@
 #      the published port (`pg_restore -h 127.0.0.1 -p 5432`) - DOES NOT WORK either:
 #          pg_restore: error: connection to server at "127.0.0.1", port 5432 failed:
 #          fe_sendauth: no password supplied
-#      The container's pg_hba.conf ends with `host all all all scram-sha-256`, and a
-#      connection arriving through Docker's port publication does NOT come from 127.0.0.1 -
-#      it arrives from the Docker gateway (e.g. 172.17.0.1). So it misses the
-#      `host all all 127.0.0.1/32 trust` line and is asked for a password. Inside the
-#      container, `local all all trust` applies and no password is needed.
+#      Why no password was supplied is the second half, and it is measured rather than
+#      guessed. The container's pg_hba.conf ends with a catch-all
+#          host all all all scram-sha-256
+#      and a connection from the HOST does not arrive as 127.0.0.1, so it never matches the
+#      `host all all 127.0.0.1/32 trust` line above it. Measured 2026-09-20 from the VPS:
+#          $ psql -h 127.0.0.1 -p 5432 -U ancient_map -d ancient_map \
+#              -At -c 'SELECT client_addr FROM pg_stat_activity WHERE pid = pg_backend_pid()'
+#          172.18.0.1/32        <- the Docker gateway, not loopback
+#      So the host path always needs a password, and the original drill - which never loaded
+#      .env and so exported no PGPASSWORD - could only ever fail there. Inside the container
+#      `local all all trust` applies and no password is needed at all.
+#
+#      (Host-side pg_restore DOES work if you do export PGPASSWORD first. The container method
+#      is still preferred: it needs no credential handling and no stdin, so there is one less
+#      way for it to go wrong. Do not "simplify" it back to the host path without also making
+#      it load .env, or the fe_sendauth failure returns verbatim.)
 #
 # THE METHOD THAT WORKS, and the only one this script uses: copy the dump INTO the container
 # and run the container's own pg_restore with the dump as a FILE ARGUMENT. No stdin is

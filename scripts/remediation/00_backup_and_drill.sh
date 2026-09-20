@@ -10,12 +10,32 @@
 # The drill is the point of this script. An untested backup is not a backup.
 #
 # Usage:  ./00_backup_and_drill.sh [stamp]        (default stamp: <date>_remediation)
-# Exit codes: 0 = dump + drill both verified, 1 = anything unverified.
+#
+# Env vars:
+#   DO_DRILL=1|0   default 1. 0 writes the dump + CSVs only (the nightly cron run).
+#   KEEP=<n>       default 7.  how many of this script's stamp directories to retain.
+#
+# Exit codes: 0 = dump verified (and, when DO_DRILL=1, the drill passed), 1 = anything
+# unverified. A non-zero exit from the nightly run means the safety net is gone - it is a
+# real alert, not noise.
+#
+# Retention is built in and is not optional: a 654 MB dump per day fills the 98 GB of free
+# space in about five months, and a full disk takes the DATABASE down, not just the backups.
+# Only directories shaped "<date>_remediation" are ever pruned, so hand-made restore points
+# such as 2026-09-19_pre-audit are safe from this script.
 
 set -euo pipefail
 
 STAMP="${1:-$(date +%Y-%m-%d)_remediation}"
-BASE="/var/www/ancientnerds/backups/$STAMP"
+# The backup root is overridable so the retention logic can be exercised against a synthetic
+# directory tree (tests/remediation/test_prune_backups.py) instead of being trusted.
+BACKUP_ROOT="${BACKUP_ROOT:-/var/www/ancientnerds/backups}"
+# The nightly cron run sets DO_DRILL=0 because the drill costs ~2 min and 625 MB of container
+# I/O; the weekly run keeps it at 1. Never leave the drill off permanently: it is the only
+# thing that distinguishes a backup from a belief, so it must run at least once a week.
+DO_DRILL="${DO_DRILL:-1}"
+KEEP="${KEEP:-7}"
+BASE="$BACKUP_ROOT/$STAMP"
 ENV_FILE="/var/www/ancientnerds/.env"
 DRILL_DB="ancient_map_restore_drill_$$"
 CTR="ancient_nerds_db"
@@ -31,10 +51,15 @@ export PGPASSWORD
 export PGHOST=127.0.0.1 PGPORT=5432 PGUSER=ancient_map
 
 mkdir -p "$BASE"
-log "stamp=$STAMP  dir=$BASE  free=$(df -h /var/www | awk 'NR==2{print $4}')"
+# Guard before, not after: pg_dump needs room for a ~654 MB dump plus the CSVs on top of
+# whatever is already there, and running out mid-dump leaves a truncated file that looks
+# like a backup until someone tries to restore it.
+FREE_KB=$(df -Pk "$BACKUP_ROOT" | awk 'NR==2{print $4}')
+[ "$FREE_KB" -gt 5242880 ] || die "only $((FREE_KB/1024)) MB free on $BACKUP_ROOT - refusing to start"
+log "stamp=$STAMP  dir=$BASE  free=$(df -h "$BACKUP_ROOT" | awk 'NR==2{print $4}')"
 
 # ---------------------------------------------------------------- 1. full dump
-log "1/3 full pg_dump (this is the restore point) ..."
+log "1/4 full pg_dump (this is the restore point) ..."
 pg_dump -Fc -d ancient_map > "$BASE/database_$STAMP.dump"
 DUMP_BYTES=$(stat -c %s "$BASE/database_$STAMP.dump")
 [ "$DUMP_BYTES" -gt 100000000 ] || die "dump suspiciously small: $DUMP_BYTES bytes"
@@ -53,22 +78,41 @@ declare -A Q=(
   [snapshot_rows]="SELECT * FROM snapshot_rows"
   [site_name_token_df]="SELECT * FROM site_name_token_df"
 )
-log "2/3 targeted CSV dump of ${#Q[@]} tables ..."
+log "2/4 targeted CSV dump of ${#Q[@]} tables ..."
 # No `docker exec -i` here: if this script itself arrives over stdin, -i would eat the remainder.
 for t in "${!Q[@]}"; do
   docker exec "$CTR" psql -U ancient_map -d ancient_map -c \
     "COPY (${Q[$t]}) TO STDOUT WITH CSV HEADER" </dev/null | gzip -6 > "$BASE/$t.csv.gz"
-  log "    $t: $(zcat "$BASE/$t.csv.gz" | wc -l) lines incl. header, $(du -h "$BASE/$t.csv.gz" | cut -f1)"
+  # `wc -l` counts NEWLINES, not rows. A quoted CSV field may itself contain newlines, so this
+  # number is slightly above the true row count. Measured 2026-09-20: unified_sites reported
+  # 5,025 lines for 5,004 rows - exactly the 3,004... precisely: 5,004 rows + 1 header + 20
+  # rows whose text contains a newline = 5,025. wiki_images is off by 1,221 for the same
+  # reason. Useful as a "did this export change drastically" signal; useless as a row count, so
+  # it is labelled as newlines and not as rows.
+  log "    $t: $(du -h "$BASE/$t.csv.gz" | cut -f1) gz / $(zcat "$BASE/$t.csv.gz" | wc -l) newlines"
 done
 
 # ------------------------------------------------------------- 3. restore drill
-# Delegate to the standalone drill script: it is deliberately re-runnable on its own,
-# so the next person can re-verify this dump (or an older one) without taking a new one.
-# The drill runs on the HOST's pg_restore against 127.0.0.1:5432 - see the pitfall note
-# at the top of 00_restore_drill.sh for why piping the dump into `docker exec` silently
-# restores an empty database.
-log "3/3 restore drill -> $DRILL_DB ..."
+# Delegate to the standalone drill script: it is deliberately re-runnable on its own, so the
+# next person can re-verify this dump - or an older one - without taking a new one.
+# The drill copies the dump into the container and runs the container's own pg_restore with
+# the dump as a file argument. See the two failure notes at the top of 00_restore_drill.sh for
+# why neither `docker exec -i ... < dump` nor a host-side pg_restore against 127.0.0.1 works.
 HERE="$(cd "$(dirname "$0")" && pwd)"
-"$HERE/00_restore_drill.sh" "$STAMP" || die "restore drill failed - see $BASE/DRILL_REPORT.txt"
+if [ "$DO_DRILL" = "1" ]; then
+  log "3/4 restore drill -> $DRILL_DB ..."
+  "$HERE/00_restore_drill.sh" "$STAMP" || die "restore drill failed - see $BASE/DRILL_REPORT.txt"
+else
+  log "3/4 restore drill SKIPPED (DO_DRILL=0). The dump is NOT verified by this run."
+fi
+
+# ------------------------------------------------------------------- 4. retention
+# Delegated to 00_prune_backups.sh: it deletes directories, so its behaviour is tested rather
+# than assumed (tests/remediation/test_prune_backups.py, plus a 20-case run on the VPS).
+# It keeps the newest $KEEP "<date>_remediation" dirs and never touches anything else.
+log "4/4 retention: keep the newest $KEEP '<date>_remediation' directories ..."
+BACKUP_ROOT="$BACKUP_ROOT" KEEP="$KEEP" "$HERE/00_prune_backups.sh" "$STAMP" \
+  || log "    retention reported a problem - continuing, the dump itself is intact"
+log "    free now $(df -h "$BACKUP_ROOT" | awk 'NR==2{print $4}')"
 
 log "done. dump=$BASE/database_$STAMP.dump  report=$BASE/DRILL_REPORT.txt"
