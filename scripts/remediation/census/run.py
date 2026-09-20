@@ -56,6 +56,7 @@ REGISTRY: dict[str, str] = {
     "T08": "t08_citation_markers",
     "T09": "t09_commons_dimensions",
     "T10": "t10_gallery_tiers",
+    "T11": "t11_scope_window",
 }
 
 

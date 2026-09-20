@@ -39,8 +39,18 @@ FIELD_MAP: dict[str, set[str]] = {
     "card_description": {"card_description"},
     "period_start": {"description", "card_description"},
     "period_name": {"description", "card_description"},
-    "hero_image": {"wiki_images.is_hero", "wiki_images.width", "wiki_images.original_url", "wiki_images"},
-    "gallery_images": {"wiki_images.is_hero", "wiki_images.width", "wiki_images.original_url", "wiki_images"},
+    "hero_image": {
+        "wiki_images.is_hero",
+        "wiki_images.width",
+        "wiki_images.original_url",
+        "wiki_images",
+    },
+    "gallery_images": {
+        "wiki_images.is_hero",
+        "wiki_images.width",
+        "wiki_images.original_url",
+        "wiki_images",
+    },
     "thumbnail_url": {"unified_sites.thumbnail_url", "wiki_images.original_url"},
     "source_url": {"unified_sites.source_url", "site_content_links.content_url"},
     "name": {"name"},
@@ -174,7 +184,11 @@ def main() -> None:
     print("THE ERRORS THE CENSUS DID NOT FLAG (the point of the measurement)")
     print("=" * 78)
     for b in uncaught:
-        anyf = "site WAS flagged by other checks: " + ", ".join(b["site_fields"]) if b["site_flagged_anyway"] else "site NOT flagged by any check"
+        anyf = (
+            "site WAS flagged by other checks: " + ", ".join(b["site_fields"])
+            if b["site_flagged_anyway"]
+            else "site NOT flagged by any check"
+        )
         print(f"\n  [{b['field']}] tier {b['tier']}  {b['site_name']}")
         print(f"      {anyf}")
         note = " ".join(str(b["note"]).split())
@@ -185,7 +199,9 @@ def main() -> None:
     print("=" * 78)
     for b in blinds:
         if b["caught"]:
-            print(f"  [{b['field']:20s}] tier {b['tier']}  {b['site_name'][:44]:44s} via {b['caught_by']}")
+            print(
+                f"  [{b['field']:20s}] tier {b['tier']}  {b['site_name'][:44]:44s} via {b['caught_by']}"
+            )
 
     out = {
         "blinded_errors": n,

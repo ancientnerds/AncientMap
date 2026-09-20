@@ -950,6 +950,70 @@ the same site is worked twice unless the fleet dedupes by `(site, field)` rather
 a first `WORKLIST.jsonl` built from the wrong source. Its suite run reported `1954 passed, 3 skipped,
 57 deselected in 156.05s`, matching the gate result I measured independently.
 
+## Wave 3 / SCOPE: T11 closes the census gap, and 69 vs 84 is settled - by evidence, not by splitting
+
+**The question I left open is answered.** S12's 84 is not the plan's number disagreeing with the
+project's rule. It is **two different things added together**: 69 sites strictly out of the time
+window **plus 15 sites with no `period_start` at all**. Verified independently by my own recompute
+over the frozen snapshot, not by reading the lane's report:
+
+| rule | count |
+|---|---|
+| strict `ps > cutoff` (Americas 1500 / RoW 500) | **69** |
+| period-inclusive `ps >= cutoff` | 78 (107 sites sit exactly on 500/1500) |
+| `period_start IS NULL` | **15** |
+| **69 + 15** | **84 = S12** |
+| 78 + 15 | 93, so the boundary rule does **not** explain 84 |
+
+The assessment says it verbatim (`_wf2_result.json`, copied to `scope_scratch/wf2_s12.txt`):
+*"4.920 pass / 84 fail (69 ausserhalb, 15 ohne period_start)"*. Plan §7 kept the total and dropped the
+parenthetical, which is how it came to look like a contradiction. **My first attempt at this check
+reported the inclusive variant as 69, not 78** - I had made the *longitude* boundary inclusive instead
+of the *period* one, which is a different rule entirely. Another instrument error, caught because the
+number disagreed with a specific claim and I went looking rather than writing it down.
+
+**T11 (`t11_scope_window.py`, 27 tests) reproduces S12 exactly: 84 flagged / 4,920 pass.** Two offline
+runs byte-identical (`findings.jsonl` `be3107ddccfea39dad06937e…`). It **imports** the project's own
+rule (`pipeline/normalizers/dates.py:58-88`) rather than re-typing it, and `run()` re-calls
+`passes_date_cutoff()` on every site it decides, raising an `AssertionError` if the two ever disagree -
+so the census cannot publish a second scope rule. Mutation proof: `run()` forced to `[]` → **19 failed /
+8 passed**, then restored **byte-identically** (`9e523273676327f3…`). The 8 survivors are the contract
+tests, the three "reports nothing" tests and the blind-spot pin.
+
+**It flags, it never retires** - all findings are `Proposal.REVIEW`, because E4's column does not exist
+yet and "wrong date" vs "out-of-scope row" is a factual question. 51 severe out-of-window (2 Americas /
+49 RoW), 18 museum-typed out-of-window, 15 undecidable. **Documented blind spot, pinned by a test:**
+Font dels Coms (fabricated `-3500`) passes, so T11 closes 2 of the gold standard's 3 E3 errors and the
+third needs the Phase-3 factual audit. The pass rows must not be read as "all E3 errors found".
+
+### T07 run-level audit: sound
+
+Two offline runs over the now-quiescent cache are **byte-identical** (`findings.jsonl`
+`957c9ccdc55996dba80a75ee…`), and both match the watcher's own `run_t07` **exactly**, so its result is
+reproducible. 19 tests pass. Final numbers: **5,052 findings over 2,799 sites**, classes refused 3,767 /
+server-error 617 / unreachable 405 / gone 252 / unclassified 7 / gone-permanent 4.
+
+**The earlier 5,071 / 2,806 was the pre-healing state, and 5,052 / 2,799 is the healed one** - not a
+contradiction. The cache holds 15,230 records, all readable, of which **400 are still pending** (no HTTP
+status), down from 516 because the watcher re-probed them. They sit on 181 hosts (`www.megalithic.co.uk`
+89, `www.ascsa.edu.gr` 24, `visitmexico.com` 16, `www.tumblr.com` 13) and are deliberately re-probed
+every run rather than hardened into "unreachable": a laptop that was offline must not become a permanent
+verdict about someone else's host. The 3,439 `403` and 539 `503` responses are *refused*, never dead.
+
+### Instrument error: I could not see the cache at all
+
+My cache probe reported `0 files` where 15,230 exist, and I nearly recorded a working sweep as a lost
+cache. The cause: **the probe cache is sharded into 256 subdirectories** (`cache/t07_links/00` … `ff`),
+so a flat `glob("*.json")` finds nothing. `find -type f` finds all 15,230. The module was right again;
+my instrument was wrong for the fourth time this session. A near-miss on the same pattern as the `final`
+key: **an empty result from my own probe is a fact about my probe.**
+
+Also re-proved: `gold_standard/compare_fnr.py` was reformatted by pi-lens, so its earlier verification
+was invalidated by the rule I set for myself. Re-running it left `fnr_result.json` **byte-unchanged** -
+`fnr_unweighted = 0.6`, `fnr_weighted = 0.6243577462335628`, caught 16 of 40 wrong (per-field sums:
+9+7+6+8+3+3+4 = 40 wrong, 1+3+1+8+0+3+0 = 16 caught) - so the formatter moved no number and the
+verification stands.
+
 ### Safety check after the probe
 
 The real backups directory was intact: `2026-09-19_pre-audit` and `2026-09-20_remediation` both
