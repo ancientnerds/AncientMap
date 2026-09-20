@@ -896,6 +896,60 @@ transaction, so the expected old value was stale.
 **Applied to production** (DDL only, `CREATE OR REPLACE`; `BEGIN / CREATE FUNCTION / COMMENT / COMMIT`).
 Not recorded in `applied_migrations`, so the deploy job re-applies the identical, idempotent body.
 
+## Wave 3 / FACTS: the Phase-3 worklist, and a 2x contradiction in the plan's own cost anchors
+
+Read-only lane, no DB, no commits. Deliverables under `output/remediation/phase3_worklist/`:
+`WORKLIST.jsonl` (1,840 records, worst-first), `WORKLIST.md`, `BATCH_PLAN.md`, `FINDER_BRIEF.md`,
+`REVIEWER_BRIEF.md`, `MECHANICAL.md`, `_counts.json`, `build_worklist.py`, `build_mechanical.py`.
+
+**I re-derived every headline number independently rather than accepting the report** (my own script
+over the ten `run_t*/findings.jsonl`, not the lane's):
+
+| test | sites (mine) | sites (lane) | findings |
+|---|---|---|---|
+| T01 | 1,063 | 1,063 | 1,175 |
+| T02 | 117 | 117 | 117 |
+| T03 | 875 | 875 | 875 |
+| T04 | — (0 findings) | 0 | 0 |
+| T05 | 70 | 70 | 70 |
+| T06 | 3,010 | 3,010 | 13,020 |
+| T07 | 2,806 | 2,806 | 5,071 |
+| T08 | 94 | 94 | 99 |
+| T09 | 5,004 | 5,004 | 17,315 |
+| T10 | 4,010 | 4,010 | 49,691 |
+
+**Union of the factual tests (T01/T02/T03/T05) = 1,840 exactly**, and every `run_t*` directory holds
+exactly one `test_id` - so the union really was rebuilt rather than read from the top-level
+`findings.jsonl`, which the lane correctly identified as holding **T03 only**. `run_t06_reverify`
+duplicates T06's 13,020 rows and is not an eleventh check. Phase 3 = **1,813** sites (1,840 minus 27
+mechanically settlable), severity severe 468 / moderate 1,174 / cosmetic 171.
+
+**The lane's real finding: the plan contradicts itself about its own cost, by exactly 2x.** §13 states
+"~40,000 tokens per two-stage-reviewed site" *and* "run 1 = 36 agents / 3,653,051 tokens / 37 min at
+10-14 parallel" with "5 sites per agent". But 3,653,051 / 40,000 = **91 sites**, while 36 x 5 = **180**.
+Both cannot hold. The consequence is the size of the Phase-3 run: **~36.8 M tokens / ~6.2 h, or
+~72.5 M tokens / ~12.2 h.** The lane flagged it and refused to invent a resolution, which is right -
+the plan is not its lane. Recorded here as an open decision input, not resolved by averaging.
+
+**What that implies for the cost model, stated as an estimate with its basis.** §13's recommended
+middle path is $1,100-1,400 over ~6 days, and the plan prices Phase 3 at about $350. Those figures
+assume a frontier model's per-token price. On `deepseek-v4.1-flash` (input 0.15 / output 0.60 /
+cache-read 0.003 per million) the same 37-73 M tokens cost on the order of **$10-40**, because the
+workflow is input-dominated and cache-heavy. The 363 batches / 726 agent runs (finder + reviewer, 5
+sites each) also amortise the ~31.5 k fixed per-agent overhead across five sites, which is what makes
+the 40 k/site anchor plausible at all. **This is an estimate, not a measurement** - the two anchors
+differ 2x, and no Phase-3 run has happened yet. The honest next step is to price ONE batch of five
+sites before funding 363 of them.
+
+**Second finding, unfixed by design:** 8 T05 sites carry both a `set` and a `review` finding
+(Satsurblia Cave, Didnauri, Armazi, Tsutskhvati Cave, Tsona Cave, Kutaisi, Dmanisi, Easter Island).
+They appear in the Phase-3 list for the review finding while a script settles the `set` finding - so
+the same site is worked twice unless the fleet dedupes by `(site, field)` rather than by site.
+
+**Two of the lane's own bugs, found by running it:** 4 typing errors in its first script (fixed), and
+a first `WORKLIST.jsonl` built from the wrong source. Its suite run reported `1954 passed, 3 skipped,
+57 deselected in 156.05s`, matching the gate result I measured independently.
+
 ### Safety check after the probe
 
 The real backups directory was intact: `2026-09-19_pre-audit` and `2026-09-20_remediation` both
