@@ -2216,3 +2216,45 @@ Grave Street ranges reproduce exactly with the point 5 m from the nearest way, J
 Didnauri wikidata ways, the PLOS 25,535-24,408 cal. BP quotation verbatim, the fetch_log totals (76 rows,
 57x200, 19 non-200, 2,399,608 bytes), all six COST aggregates, and a 239-token citation audit that found
 no invented source. The FIELD_CONTRACT and ENRICHMENT_AUDIT citations all exist verbatim.
+
+## Live state and what remains (written before a context compaction, as a recovery anchor)
+
+**Four lanes are running as this is written.** Wave 6: FIX-1 owns
+`scripts/remediation/mechanical/` plus `tests/remediation/test_mechanical.py`, `migrations/0018` and
+`.github/workflows/ci.yml`; FIX-2 owns `scripts/remediation/gallery_audit/` plus
+`tests/remediation/test_gallery_audit.py`, `migrations/0019`. Both were confirmed writing to disjoint
+files. Wave 7 owns the pilot and worklist documents. The VLM pilot worker owns
+`scripts/remediation/vlm_pilot/`. Nothing else may be edited until they finish - one writer per tree.
+
+**The complete verified fix list they are working from** (each verified by me directly, not taken from a
+report): DEPLOY P0-A the CI collection break, where `test_mechanical.py` imports `mechanical.plan`, which
+imports the census T02 module, which imports geopandas and pyproj at module level while ci.yml installs
+neither - so the tests job is red, the deploy job is skipped, and migrations 0018/0019 never reach
+production. SECURITY 2 the raw `{source}` interpolation in `mechanical/apply.py`. BACKEND B3 the
+unchecked post-write read-back that was already blind once. SQL 6 a guard that cannot fire. SQL 7 and
+BACKEND B8 the rollback journalling under the apply's own change_key, found independently by two lenses.
+SQL 8 a NULL-silent `<>` where `IS DISTINCT FROM` is required. SQL 5 and BACKEND B4 a skipped mutation
+counted as fired. SECURITY 4 the `0018` not-a-change guard. CI hygiene: `-rs` missing from the pytest
+job, and `migrations/**`/`scripts/**` missing from the backend change filter. BACKEND B5 a claim the code
+does not cover. DEPLOY 4b versioning `PLAN.jsonl`/`APPLY.sql`, whose "regenerable" premise is false.
+TESTS 1, 3, 4, 6, 7, 8, 9, 10, 12 in `test_mechanical.py` and `test_gallery_audit.py`. And the whole
+gallery-audit group: B1 the `--plan` that destroys the rollback artefact, SQL 1/B2 the verify that
+compares a run-local count with a table-wide one, SQL 2 the rollback with no executable path, three
+fewer guards and never parsed by psql, SQL 3 its single 86.7 KB line, SECURITY 1 the un-repr-ed slug,
+SQL 9 a print where a raise belongs, BACKEND B6 a third hardcoded vocabulary, SECURITY 3/B7 the missing
+plan-to-apply integrity link and the timeout that cannot say whether it committed, DEPLOY 3/TESTS the
+`0019` re-run that is not a no-op.
+
+**Deliberately NOT done, with the reason.** The credential fix's second half - a targeted rewrite of the
+single unpushed commit `b2dc450e` so the seven third-party keys leave history - waits for the fleet to be
+quiescent, because a rewrite rebases all 42 commits and four lanes are editing the working tree. Before
+it: a `git bundle` backup, and after it: the old-to-new commit hash mapping recorded here, since this
+log cites hashes throughout.
+
+**Next, in order.** When the fixers land: triage, re-run the gate, re-emit and re-pin the delivered
+SQL artefacts where a guard changed. When the VLM pilot lands: label the four contact sheets by eye and
+compute the confusion matrix against `VLM.jsonl` - its semantic competence is still unverified. When
+wave 7 lands: verify the re-adjudication is visible rather than substituted, and that no stale figure
+survives. Then the history rewrite. Then build the Phase-3 runner, which must emit the `defect` flag and
+the `true_but_no_correction` verdict that currently exist only as words in two briefs, and which should
+run one instrumented batch of 15 sites with real token accounting before scaling to 1,813.
