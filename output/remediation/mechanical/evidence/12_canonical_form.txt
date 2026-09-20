@@ -1,0 +1,21 @@
+[32m2026-09-21 01:00:22[0m | [1mINFO    [0m | [36mpipeline.utils.logging[0m:[36msetup_logging[0m:[36m57[0m - [1mLogging configured: level=INFO[0m
+the project's own normalisation, applied to the written values and the ones they replace
+
+stored  'Georgia (country)'
+  canonicalize_country_display_name('Georgia (country)') = 'Georgia (country)'
+  canonicalize_country_display_name('Georgia') = 'Georgia'   equals the proposal: True
+  the census' own fixed-point test: stored False, written True
+  normalize_country: stored 'GE', written 'GE'
+  getCountryCode (countryFlags.ts): stored 'GE', written 'GE'
+  carried by the frontend vocabulary: True -> GE
+
+stored  'Chile, Easter Island'
+  canonicalize_country_display_name('Chile, Easter Island') = 'Chile, Easter Island'
+  canonicalize_country_display_name('Chile') = 'Chile'   equals the proposal: True
+  the census' own fixed-point test: stored False, written True
+  normalize_country: stored 'CL', written 'CL'
+  getCountryCode (countryFlags.ts): stored 'CL', written 'CL'
+  carried by the frontend vocabulary: True -> CL
+
+rule: a row is written only when canonicalize_country_display_name(reduced) == the proposal;
+otherwise it is refused as `canonicalisation-differs-from-proposal`. Refusals of that kind: 0.

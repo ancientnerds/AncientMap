@@ -1,0 +1,33 @@
+guard removed                    test asked to fail                                   result
+finding not applicable           test_a_review_finding_is_refused                     fired: 
+curated source only              test_a_row_of_another_source_is_refused              fired: 
+snapshot matches live            test_a_snapshot_value_the_database_no_longer_holds_is_refused fired: 
+finding not stale                test_a_stale_finding_is_refused                      fired: 
+canonical equals proposal        test_a_canonical_form_that_disagrees_with_the_proposal_is_refused fired: 
+ISO code unchanged               test_a_write_that_would_change_the_iso_code_is_refused fired: 
+value is a frontend key          test_a_frontend_map_that_carries_another_code_is_refused fired: 
+point inside the polygon         test_a_point_in_another_country_is_refused           fired: TestClassify::test_a_point_in_another_country_is_refused
+wikidata non-contradicting       test_an_external_contradiction_refuses               fired: 
+fixed point                      test_a_value_the_census_would_flag_again_is_refused  fired: 
+the value is a change            test_a_reduction_that_changes_nothing_is_refused     fired: 
+preferred rank is decisive       test_history_beside_a_preferred_country_is_not_a_contradiction fired: TestWikidataWitness::test_history_beside_a_preferred_country_is_not_a_contradiction
+compound needs a state           test_compound_reduces_to_the_state_not_the_territory fired: TestReduceValue::test_compound_reduces_to_the_state_not_the_territory
+Natural Earth names the state    test_both_vocabularies_know_the_territory_as_chile   fired: TestReduceValue::test_both_vocabularies_know_the_territory_as_chile
+compound refuses two countries   test_two_candidate_countries_refuse                  fired: TestReduceValue::test_two_candidate_countries_refuse
+plan-side source check           test_a_foreign_source_is_refused                     fired: 
+plan-side old value              test_the_plan_side_mirror_refuses_a_corrupt_record   fired: 
+plan-side new value              test_the_plan_side_mirror_refuses_a_corrupt_record   fired: 
+plan-side is a change            test_the_plan_side_mirror_refuses_a_corrupt_record   fired: 
+plan-side column length          test_the_plan_side_mirror_refuses_a_corrupt_record   fired: 
+plan-side evidence               test_the_plan_side_mirror_refuses_a_corrupt_record   fired: TestRenderTransaction::test_the_plan_side_mirror_refuses_a_corrupt_record[change5-not
+plan-side duplicates             test_the_same_site_twice_is_refused                  fired: 
+no empty transaction             test_an_empty_plan_is_refused                        fired: TestRenderTransaction::test_an_empty_plan_is_refused
+rollback written first           test_emit_refuses_when_the_rollback_does_not_exist   fired: 
+statement must commit            test_a_statement_without_a_commit_cannot_be_rehearsed SKIPPED needle appears 2x
+in-transaction scope guard       test_the_scope_guard_names_the_curated_source        fired: TestRenderTransaction::test_the_scope_guard_names_the_curated_source
+journal reconciles the data      test_the_journal_is_reconciled_inside_the_transaction fired: TestRenderTransaction::test_the_journal_is_reconciled_inside_the_transaction
+the write uses the old value     test_the_conditional_write_uses_the_planned_old_value fired: TestRenderTransaction::test_the_conditional_write_uses_the_planned_old_value
+the read-back names its run      test_the_verify_statement_names_the_run_it_reads_back fired: TestReadBackStatements::test_the_verify_statement_names_the_run_it_reads_back
+the reversal must exist          test_the_rollback_rehearsal_refuses_without_a_reversal fired: TestReadBackStatements::test_the_rollback_rehearsal_refuses_without_a_reversal
+
+cases: 30  fired: 30  survived: 0

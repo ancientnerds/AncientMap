@@ -1,0 +1,19 @@
+[32m2026-09-21 00:57:12[0m | [1mINFO    [0m | [36mpipeline.utils.logging[0m:[36msetup_logging[0m:[36m57[0m - [1mLogging configured: level=INFO[0m
+INFO mechanical.apply: wrote C:\PythonProjects\AncientMap\output\remediation\mechanical\APPLY.sql (35 rows); ROLLBACK.sql is older than APPLY.sql: 1789944062.123982 vs 1789945032.6903956
+INFO mechanical.apply: wrote C:\PythonProjects\AncientMap\output\remediation\mechanical\REHEARSAL_ROLLBACK.sql (the reversal, COMMIT -> ROLLBACK)
+NOTICE:  country repair: 35 row(s) changed and journalled over 35 curated site(s)
+
+BEGIN
+CREATE TABLE
+INSERT 0 35
+DO
+ROLLBACK
+                    metric                    | value 
+----------------------------------------------+-------
+ journal rows for the rollback stamp          | 0
+ planned rows still holding the written value | 35
+ curated sites                                | 5004
+ temp table _country_plan left behind         | 0
+(4 rows)
+
+

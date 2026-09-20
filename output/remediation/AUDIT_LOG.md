@@ -1832,3 +1832,71 @@ that do not survive one direct tool run. Ground truth is `py_compile`/`ruff`/`my
 widget. I record it again because the failure mode is persuasive - 29 syntax errors in a file that
 just wrote to production is exactly the kind of claim that deserves to be checked rather than
 believed.
+
+## Phase 2 opened on DATA: G0 persists the already-computed verdicts (105 rows)
+
+Wave 4 closed, and with it GALLERY's G0 became executable. This is the first *data* write of the
+remediation that is not a repair of a known error - it records verdicts the shorts pipeline had
+already made and thrown away.
+
+**The write, read back from production after it committed:**
+
+| fact | value |
+|---|---|
+| journal rows for `2026-09-21_gallery-verdicts-persist` | **105** |
+| journal total | **5,578** (5,473 + 105) |
+| distinct `row_pk` | **105** (0 duplicated) |
+| table / column | `wiki_images` / `image_kind` only (0 rows elsewhere in this run) |
+| test id / confidence | `G0/vlm-kind` / `authoritative` |
+| `old_value IS NULL` | **105** - and `old_value = 'NULL'` returned NULL, not false, which is the proof it is a real NULL rather than the text |
+| `new_value` | `site_photo` for all 105 |
+| `site_id_ref` set | 105 / empty evidence **0** |
+| rows outside `source_id='ancient_nerds'` | **0** |
+| distinct `applied_at` instants | **1** (one transaction) |
+| landed `image_kind = 'site_photo'` | **105** |
+| curated rows still NULL | **49,586** |
+| rows with a kind outside the vocabulary | **0** |
+| **non-curated rows carrying a kind** | **0** |
+| `is_hero` true among the 105 | 7 |
+
+**Bijection proven, not assumed:** the 105 journal ids, the 105 plan rows and the union of
+`id` fields across the 16 `selection.json` files are the same set (`plan == selection ids: True`).
+So the write is exactly the set GALLERY measured - no row was invented, none was dropped.
+
+**The undo is committed with the code** (`output/remediation/gallery_audit/ROLLBACK.sql`, 105 rows
+back to NULL, each tuple carrying a three-source evidence chain), following the same versioning
+rule as the hero lane: the file describing an action not yet taken is versioned, the regenerable
+files describing the action already taken are ignored.
+
+**Four of my own instrument errors on the way, all caught before they mattered:**
+
+1. **A wrong `# type: ignore` code.** I wrote `# type: ignore[arg-type]` where the real error is
+   `call-overload`. The project sets `warn_unused_ignores = false`, so mypy stayed silent and the
+   plugin caught it. Credit where it is due: this is a case where the widget found something the
+   project's own config would have missed. Fixed at the source with a checked conversion
+   (`_as_int`), not by correcting the ignore code.
+2. **A success reported as failure.** `--check-primitive` ran the *apply script's* in-transaction
+   verification, which references a temp table the probe never creates; a probe that had printed
+   `probe OK: NULL old value accepted, exactly one row moved, value landed` exited 3.
+3. **The same defect in its twin call site, missed.** I fixed the probe but left the identical
+   dependency in the post-hoc verify path, so a successful `--apply` exited **4**. `_kind_plan` is
+   `ON COMMIT DROP`; after the commit it no longer exists. The write itself was correct and its
+   in-transaction numbers were all right. Fixed by splitting the queries: the in-transaction
+   checks read `_kind_plan`, the post-hoc ones may only read facts that outlive the transaction.
+   Lesson recorded: when a defect has two call sites, fix both - I fixed one and the other fired.
+4. **`RAISE NOTICE` arrives on stderr, not stdout**, so my assertion on the probe's own
+   confirmation initially found nothing. Both streams are searched now.
+
+Two further defects were found by the checks rather than by review, which is the point of having
+them: the rehearsal caught a **real SQL syntax error** (`RAISE EXCEPTION '... source_id='ancient_nerds''`
+- an embedded literal terminated the message string; the source name is now passed as a `%`
+argument and a regression test pins it), and my own new test asserted against its own explanatory
+comment **for the third time this session** (`"image_kind = NULL" not in sql` matched the comment
+saying `= NULL` is wrong). Both are the same failure mode as the earlier entries: a probe that
+cannot ask the claim's own question.
+
+**What this does NOT establish**, carried forward rather than tucked away: GALLERY proved the
+vision model is *reachable* and correctly labels colour, but its semantic **competence** on
+archaeological imagery is unverified. These 105 rows are a first reviewable batch, not a validated
+classifier, and only `site_photo` is treated as clean - the other 49,586 curated images are still
+NULL, i.e. never judged. The 30 kind-labelled rejections remain a recorded follow-up.

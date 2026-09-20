@@ -1,0 +1,68 @@
+[32m2026-09-21 00:42:47[0m | [1mINFO    [0m | [36mpipeline.utils.logging[0m:[36msetup_logging[0m:[36m57[0m - [1mLogging configured: level=INFO[0m
+INFO mechanical.apply: wrote C:\PythonProjects\AncientMap\output\remediation\mechanical\APPLY.sql (35 rows); ROLLBACK.sql is older than APPLY.sql: 1789944062.123982 vs 1789944167.936015
+NOTICE:  country repair: 35 row(s) changed and journalled over 35 curated site(s)
+
+=== before ===
+                              metric                              | value 
+------------------------------------------------------------------+-------
+ card_stats rows whose civilization differs from the site country | 0
+ curated rows whose country is a NULL or empty                    | 0
+ curated sites                                                    | 5004
+ distinct country values (curated)                                | 98
+ distinct values for this run (should be 2)                       | 0
+ journal rows for the rollback stamp                              | 0
+ journal rows for this run on non-curated rows                    | 0
+ journal rows for this run outside unified_sites.country          | 0
+ journal rows for this run stamp                                  | 0
+ journal rows for this run with a site_id_ref of another site     | 0
+ journal rows for this test id                                    | 0
+ rows country = 'Chile'                                           | 3
+ rows country = 'Chile, Easter Island'                            | 8
+ rows country = 'Georgia'                                         | 3
+ rows country = 'Georgia (country)'                               | 27
+
+
+country value         slug                     rows
+Chile                 chile                      3
+Chile, Easter Island  chile-easter-island        8
+Georgia               georgia                    3
+Georgia (country)     georgia-country           27
+=== the write ===
+BEGIN
+CREATE TABLE
+INSERT 0 35
+DO
+COMMIT
+                           metric                            | value 
+-------------------------------------------------------------+-------
+ journal rows for this run stamp                             | 35
+ journal rows for this test id                               | 35
+ planned rows now holding the new value                      | 35
+ curated rows still holding a parenthetical or comma country | 0
+ curated sites                                               | 5004
+(5 rows)
+
+
+=== after ===
+                              metric                              | value 
+------------------------------------------------------------------+-------
+ card_stats rows whose civilization differs from the site country | 35
+ curated rows whose country is a NULL or empty                    | 0
+ curated sites                                                    | 5004
+ distinct country values (curated)                                | 96
+ distinct values for this run (should be 2)                       | 0
+ journal rows for the rollback stamp                              | 0
+ journal rows for this run on non-curated rows                    | 0
+ journal rows for this run outside unified_sites.country          | 0
+ journal rows for this run stamp                                  | 0
+ journal rows for this run with a site_id_ref of another site     | 0
+ journal rows for this test id                                    | 0
+ rows country = 'Chile'                                           | 11
+ rows country = 'Chile, Easter Island'                            | 0
+ rows country = 'Georgia'                                         | 30
+ rows country = 'Georgia (country)'                               | 0
+
+
+country value  slug                     rows
+Chile    chile                     11
+Georgia  georgia                   30

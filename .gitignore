@@ -262,3 +262,8 @@ output/remediation/mechanical/APPLY.sql
 output/remediation/mechanical/REHEARSAL.sql
 output/remediation/mechanical/PLAN.jsonl
 !output/remediation/phase3_pilot/
+
+# G0: the verdict persister. The undo is versioned; the regenerable plan output is not.
+!output/remediation/gallery_audit/
+output/remediation/gallery_audit/APPLY.sql
+output/remediation/gallery_audit/PLAN.jsonl

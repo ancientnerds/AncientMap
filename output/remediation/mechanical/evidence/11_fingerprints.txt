@@ -1,0 +1,14 @@
+[32m2026-09-21 01:07:38[0m | [1mINFO    [0m | [36mpipeline.utils.logging[0m:[36msetup_logging[0m:[36m57[0m - [1mLogging configured: level=INFO[0m
+=== the delivered statements are what the delivered code emits from the delivered plan ===
+APPLY.sql: differing lines 0, byte-identical True
+ROLLBACK.sql: differing lines 0, byte-identical True
+
+=== fingerprints of the delivered artifacts (as published) ===
+APPLIED.md                 27079 bytes    434 lines  sha256 6b412f9a13ad1a90c022f1c8a4aad59616b9d2d9b919088b8398d5e95e587923
+APPLY.sql                  77332 bytes    154 lines  sha256 0e2cb32716c0c2a1af8bb1cad59ca46facbbf34376a291bc9d3a00a18a27d0c5
+PLAN.jsonl                 88330 bytes     35 lines  sha256 cc2e885f980f2467f7bbddfbafc5fdf8c58396dde3969411cc303ca4f490b3f3
+PLAN.md                     5380 bytes     61 lines  sha256 d0574aebe24a2064e3f4e322df9eb210ea06e8dc78b26d8b5326ea09cde0b823   (hand-synced: restart wording, command list, hub-split arithmetic - not byte-reproducible)
+REHEARSAL.sql              76982 bytes    147 lines  sha256 08d092f849d2b4aa2e3bd4c934e216f245dabaff658cb31abd942adf9ddb7163
+REHEARSAL_ROLLBACK.sql     78240 bytes    146 lines  sha256 7518c75f6e58eec9187f038d1108e1e3feadb169af007c7bd44685c1769d7dc7
+ROLLBACK.sql               76977 bytes    154 lines  sha256 df1bf7b0c18e73b2199d1d6641aa7a4acbc831502774f55364f58c0329e47d7f
+SKIPPED.jsonl              36449 bytes     35 lines  sha256 d2380bfab90833ad6fc22da7b7872b66d26a4bb6d6f3c2457f0d557a3ee9226c

@@ -1,0 +1,4 @@
+[32m2026-09-21 00:59:54[0m | [1mINFO    [0m | [36mpipeline.utils.logging[0m:[36msetup_logging[0m:[36m57[0m - [1mLogging configured: level=INFO[0m
+country value  slug                     rows
+Chile    chile                     11
+Georgia  georgia                   30
