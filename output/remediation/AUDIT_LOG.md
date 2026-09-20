@@ -2258,3 +2258,30 @@ wave 7 lands: verify the re-adjudication is visible rather than substituted, and
 survives. Then the history rewrite. Then build the Phase-3 runner, which must emit the `defect` flag and
 the `true_but_no_correction` verdict that currently exist only as words in two briefs, and which should
 run one instrumented batch of 15 sites with real token accounting before scaling to 1,813.
+
+## The t02 SQL-injection advisory, refuted a fourth time - and closed as an instrument mismatch
+
+The linter flagged `scripts/remediation/census/tests/t02_admin_country.py:354` as a SQL injection sink
+again, marked stale, claiming the file had changed. It had not: `git status` shows the file untouched,
+while `mechanical/plan.py` - which imports it - is being edited by a live lane, which is presumably why
+the advisory re-fired. The finding is a false positive and the mechanism is nameable in one line: line 354
+is `sorted({self.features[int(i)].admin for i in self._tree.query(pt)})`, and `self._tree` is a **Shapely
+STRtree**, an R-tree spatial index (`shapely.strtree` imported at line 145, constructed at line 313) - not
+a database, not a session, not a cursor. `query(` occurs exactly once in the whole file, on that object.
+
+The whole-file sink census is zero: `execute(` 0, `executemany` 0, `cursor` 0, `psycopg` 0, `sqlalchemy` 0,
+`sql.SQL` 0, `conn.` 0, `session.` 0, `subprocess` 0, `eval(` 0, `os.system` 0. The only network reach is
+`httpx` inside `collect()`, which is the contract's designated network phase.
+
+Two instrument slips of my own, recorded because this is how most of this session's false alarms began.
+First, three of my grep patterns had an unescaped `(`, so `grep -E` printed a syntax error where a count
+belonged - an errored probe says nothing about the file. Re-run with fixed strings, the counts are the
+ones above. Second, `text(` counted 11 and I could not explain it, so I did not report it as clean: the 11
+are nine calls to this module's own `_text()` helper plus pathlib's `read_text`/`write_text`. There is no
+SQLAlchemy `text()` construct in the file at all. My first classifier missed that because it looked for
+`context(`-style prefixes and did not anticipate the `_text` boundary - too narrow, the same failure
+direction as the probe that concluded a function did not exist because the name pattern was too tight.
+
+Verdict: no code change. A false positive with receipts is not repaired by a suppression, and adding one
+would hide the next, real finding in the same place. The advisory is now adjudicated in this log and will
+be ignored on later firings for this file.
