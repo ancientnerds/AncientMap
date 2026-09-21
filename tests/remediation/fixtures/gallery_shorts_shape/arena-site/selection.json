@@ -1,0 +1,64 @@
+{
+  "stills": [
+    {
+      "id": 900001,
+      "filename": "Arena_01.webp",
+      "original_url": "https://upload.wikimedia.org/wikipedia/commons/0/01/Arena_01.jpg",
+      "commons_page_url": "https://commons.wikimedia.org/wiki/File%3AArena_01.jpg",
+      "author": "Fixture Author One",
+      "author_url": "https://commons.wikimedia.org/w/index.php?title=User:Fixture_Author_One&action=edit&redlink=1",
+      "license": "CC BY-SA 4.0",
+      "license_url": "https://creativecommons.org/licenses/by-sa/4.0",
+      "title": "Arena 01",
+      "is_hero": false,
+      "width": 4000,
+      "height": 3000,
+      "local_path": "video-assets/shorts/arena-site/images/01_Arena_01.jpg",
+      "verdict": {
+        "kind": "site_photo",
+        "subject": "The arena wall seen from the west, with the entrance in the centre of frame",
+        "people_prominent": false,
+        "text_or_overlay": false,
+        "quality": 4,
+        "relevance": 5,
+        "illustrates": "the excavated arena wall",
+        "focus": "the site itself",
+        "vertical_crop_ok": true
+      },
+      "score": 19
+    },
+    {
+      "id": 900002,
+      "filename": "Arena_02.webp",
+      "original_url": "https://upload.wikimedia.org/wikipedia/commons/0/02/Arena_02.jpg",
+      "commons_page_url": "https://commons.wikimedia.org/wiki/File%3AArena_02.jpg",
+      "author": "Fixture Author Two",
+      "author_url": "https://commons.wikimedia.org/w/index.php?title=User:Fixture_Author_Two&action=edit&redlink=1",
+      "license": "CC BY 2.0",
+      "license_url": "https://creativecommons.org/licenses/by/2.0",
+      "title": "Arena 02",
+      "is_hero": true,
+      "width": 3000,
+      "height": 4000,
+      "local_path": "video-assets/shorts/arena-site/images/02_Arena_02.jpg",
+      "verdict": {
+        "kind": "site_photo",
+        "subject": "The same wall in portrait, the horizon two thirds up the frame",
+        "people_prominent": false,
+        "text_or_overlay": false,
+        "quality": 4,
+        "relevance": 5,
+        "illustrates": "the arena wall in portrait",
+        "focus": "the site itself",
+        "vertical_crop_ok": true
+      },
+      "score": 18
+    }
+  ],
+  "rejected": [
+    {
+      "filename": "hero.webp",
+      "reason": "too small (1024x768)"
+    }
+  ]
+}

@@ -67,6 +67,22 @@ COUNTRY_COLUMN_CHARS = 100
 PROBE_RUN_STAMP = f"{RUN_STAMP}-probe"
 
 
+def change_key(site_id: str) -> str:
+    """The journal's identity for one row's *write*.
+
+    `change_key` names the exact transition, so the write and its reversal must not share one:
+    `Georgia (country) -> Georgia` and `Georgia -> Georgia (country)` are two different
+    transitions, and a single key for both makes them indistinguishable in
+    `remediation_change_log` - the reversal would read as a duplicate of the write it undoes.
+    """
+    return f"country-canonical:{site_id}"
+
+
+def rollback_change_key(site_id: str) -> str:
+    """The journal's identity for one row's *reversal*: G0's `-rollback` suffix, same shape."""
+    return f"country-canonical-rollback:{site_id}"
+
+
 # --------------------------------------------------------------------------------- the records
 @dataclass(frozen=True)
 class ChangeRecord:
@@ -157,6 +173,7 @@ def render_transaction(
     site_ids: Iterable[str],
     source: str = CURATED_SOURCE,
     validate: bool = True,
+    rollback: bool = False,
 ) -> str:
     """One transaction that writes `records` and journals each row, or writes nothing.
 
@@ -167,12 +184,16 @@ def render_transaction(
 
     `validate=False` is for `--probe-guards` only: the probes must reach the *database's* guards,
     so the plan-side mirror must not refuse them a line earlier.
+
+    `rollback=True` renders the reversal, and with it the reversal's own `change_key` (see
+    `rollback_change_key`): the two directions of one row are two transitions, not one.
     """
     records = list(records)
     if not records:
         raise PlanError("refusing to render a transaction with no rows")
     if validate:
         validate_records(records, source=source)
+    key_of = rollback_change_key if rollback else change_key
     sites = sorted({str(s) for s in site_ids})
     out: list[str] = []
     add = out.append
@@ -205,7 +226,7 @@ def render_transaction(
         rows.append(
             "    ("
             f"{_literal(r.site_id)}::uuid, {_literal(r.old_value)}, {_literal(r.new_value)}, "
-            f"{_literal(f'country-canonical:{r.site_id}')}, {_literal(r.reason)}, "
+            f"{_literal(key_of(r.site_id))}, {_literal(r.reason)}, "
             f"{_literal(json.dumps(list(r.evidence), ensure_ascii=False))}::jsonb)"
         )
     add(",\n".join(rows) + ";")
@@ -214,17 +235,28 @@ def render_transaction(
     add("DECLARE")
     add("    bad      INTEGER;")
     add("    moved    INTEGER := 0;")
-    add("    expected INTEGER;")
+    add(f"    expected INTEGER := {len(records)};")
     add("    r        RECORD;")
     add("BEGIN")
-    add("    SELECT count(*) INTO expected FROM _country_plan;")
+    add("    -- expected is the plan's own row count, rendered here, and not a second count of the")
+    add("    -- temp table the loop below iterates: counting the same table twice would make the")
+    add("    -- comparison after the loop a tautology. The instance that makes a short loop")
+    add("    -- unreachable is apply_remediation_change, which raises unless exactly one row")
+    add("    -- matched; this guard is what reports a loop that changed fewer rows than the plan.")
     add("")
     add("    -- scope guard 1: every planned row is a curated site that still exists")
     add("    SELECT count(*) INTO bad")
     add("      FROM _country_plan p LEFT JOIN unified_sites u ON u.id = p.site_id")
     add(f"     WHERE u.id IS NULL OR u.source_id <> {_literal(source)};")
     add("    IF bad > 0 THEN")
-    add(f"        RAISE EXCEPTION 'country repair: % planned row(s) are not {source} sites', bad;")
+    add("        -- the source name is a RAISE argument, never part of the quoted message: a name")
+    add("        -- spliced into the message text only parses while the name happens to contain no")
+    add("        -- quote, which is a property of today's value and not of this code. G0's guard is")
+    add("        -- the shape this one copies.")
+    add(
+        "        RAISE EXCEPTION 'country repair: % planned row(s) are not % sites', bad, "
+        f"{_literal(source)};"
+    )
     add("    END IF;")
     add("")
     add("    -- scope guard 2: the plan is a set of real changes, each one writable in the column")
@@ -337,6 +369,77 @@ SELECT 'curated sites', count(*)::text
   FROM unified_sites WHERE source_id = {source};
 """
 
+#: The post-write read-back as *numbers to be asserted*, not as text to be printed. Read with
+#: `-t -A` so the values are parsed, and built from the plan's own rows so it cannot be satisfied by
+#: a different 35 rows. `evidence/05_apply.txt` shows why this exists: the journal metric read 0 next
+#: to `country = 'Georgia'` = 30, because `VERIFY_SQL` was not an f-string and every placeholder was
+#: read as its literal self - and `--apply` printed that without asserting anything about it.
+POST_WRITE_ASSERT_SQL = """\
+WITH planned(site_id, new_value) AS (VALUES {values})
+SELECT 'journal rows for this run stamp' AS metric, count(*)::text AS value
+  FROM remediation_change_log WHERE run_stamp = {run_stamp}
+UNION ALL
+SELECT 'planned rows now holding the planned new value', count(*)::text
+  FROM planned p JOIN unified_sites u ON u.id = p.site_id
+ WHERE u.country IS NOT DISTINCT FROM p.new_value
+UNION ALL
+SELECT 'planned rows with no journal row for this run stamp', count(*)::text
+  FROM planned p LEFT JOIN remediation_change_log l
+    ON l.row_pk = p.site_id::text AND l.table_name = 'unified_sites'
+   AND l.column_name = 'country' AND l.run_stamp = {run_stamp}
+ WHERE l.id IS NULL
+UNION ALL
+SELECT 'journal rows for this run outside unified_sites.country', count(*)::text
+  FROM remediation_change_log
+ WHERE run_stamp = {run_stamp}
+   AND (table_name <> 'unified_sites' OR column_name <> 'country');
+"""
+
+
+def assert_the_write_landed(
+    records: Sequence[ChangeRecord], *, run_stamp: str = RUN_STAMP
+) -> dict[str, int]:
+    """Read the landed state back and refuse unless it is the plan, row for row.
+
+    Read-only, and run after the COMMIT: the journal is counted for this run stamp, every planned
+    site is checked against the value the plan names for *that* site, and nothing may be journalled
+    outside `unified_sites.country`. A mismatch raises, so `--apply` cannot report success over a
+    read-back that disagrees with the plan it just wrote.
+    """
+    if not records:
+        raise PlanError("refusing to check the read-back of an empty plan")
+    values = ", ".join(
+        f"({_literal(r.site_id)}::uuid, {_literal(r.new_value)})" for r in records
+    )
+    rows = read_rows(POST_WRITE_ASSERT_SQL.format(values=values, run_stamp=_literal(run_stamp)))
+    got = {name.strip(): int(value) for name, value in rows}
+    expected = len(records)
+    checks = (
+        (
+            "journal rows for this run stamp",
+            expected,
+            f"the plan has {expected} row(s)",
+        ),
+        (
+            "planned rows now holding the planned new value",
+            expected,
+            f"the plan names {expected} row(s)",
+        ),
+        ("planned rows with no journal row for this run stamp", 0, "every planned row is journalled"),
+        (
+            "journal rows for this run outside unified_sites.country",
+            0,
+            "this run stamp journals unified_sites.country only",
+        ),
+    )
+    for name, want, why in checks:
+        if got.get(name) != want:
+            raise PlanError(
+                f"the read-back after the write disagrees with the plan: {name} = "
+                f"{got.get(name)}, expected {want} ({why})"
+            )
+    return got
+
 REHEARSAL_READS = """\
 -- after ROLLBACK: nothing may have changed
 SELECT 'journal rows for this run stamp' AS metric, count(*)::text AS value
@@ -349,9 +452,12 @@ UNION ALL
 SELECT 'curated sites', count(*)::text
   FROM unified_sites WHERE source_id = {source}
 UNION ALL
-SELECT 'temp table _country_plan left behind', count(*)::text
-  FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
- WHERE n.nspname = 'public' AND c.relname = '_country_plan';
+-- `_country_plan` is a CREATE TEMP TABLE, so it lives in this session's `pg_temp_N` schema and
+-- `nspname = 'public'` could never match it - the old form of this read was 0 whatever happened.
+-- `to_regclass('pg_temp....')` resolves the current session's temp schema and is NULL when the
+-- table is gone, so this reads 1 exactly when a leftover exists.
+SELECT 'temp table _country_plan left behind',
+       (to_regclass('pg_temp._country_plan') IS NOT NULL)::int::text
 """
 
 VERIFY_SQL = f"""\
@@ -396,7 +502,7 @@ SELECT 'journal rows for this run on non-curated rows', count(*)::text
 UNION ALL
 SELECT 'journal rows for this run with a site_id_ref of another site', count(*)::text
   FROM remediation_change_log
- WHERE run_stamp = '{RUN_STAMP}' AND site_id_ref::text <> row_pk
+ WHERE run_stamp = '{RUN_STAMP}' AND site_id_ref::text IS DISTINCT FROM row_pk
 UNION ALL
 SELECT 'distinct values for this run (should be 2)', count(DISTINCT new_value)::text
   FROM remediation_change_log WHERE run_stamp = '{RUN_STAMP}'
@@ -422,9 +528,8 @@ UNION ALL
 SELECT 'curated sites', count(*)::text
   FROM unified_sites WHERE source_id = {source}
 UNION ALL
-SELECT 'temp table _country_plan left behind', count(*)::text
-  FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
- WHERE n.nspname = 'public' AND c.relname = '_country_plan';
+SELECT 'temp table _country_plan left behind',
+       (to_regclass('pg_temp._country_plan') IS NOT NULL)::int::text
 """
 
 PRIMITIVE_CHECK_SQL = """\
@@ -589,6 +694,11 @@ def cmd_apply(records: Sequence[ChangeRecord], out: Path) -> str:
     print("=== after ===")
     print(run_psql(VERIFY_SQL).stdout)
     print(verify_interests(records))
+    # Printed above, asserted here: a read-back that disagrees with the plan is a failed apply.
+    landed = assert_the_write_landed(records)
+    for name, value in landed.items():
+        print(f"  {name}: {value}")
+    print("APPLY OK: the read-back matches the plan, row for row")
     return proc.stdout
 
 

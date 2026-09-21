@@ -5,6 +5,12 @@
 `image_kind` is written only where it is currently NULL, and only for rows whose site
 belongs to `source_id = 'ancient_nerds'`. Nothing is overwritten and nothing is deleted.
 
+The write this plan describes is recorded in `remediation_change_log` under the run stamp
+`2026-09-21_gallery-verdicts-persist`. `APPLY.sql` and `ROLLBACK.sql` beside this file are the record and the
+undo of that batch, not a queue: an `APPLY.sql` whose batch is already journalled is never
+re-sent. `--rehearse` and `--rehearse-rollback` run either file and roll it back, which is
+the safe way to re-check them.
+
 ## Why this set is 105 and not 280
 
 The 16 `selection.json` files hold 280 entries in two shapes: 105 `stills` (full record,
@@ -131,7 +137,8 @@ None.
 ```bash
 ./.venv/Scripts/python.exe scripts/remediation/gallery_audit/persist_verdicts.py --plan
 ./.venv/Scripts/python.exe scripts/remediation/gallery_audit/persist_verdicts.py --rehearse
-./.venv/Scripts/python.exe scripts/remediation/gallery_audit/persist_verdicts.py --apply
+./.venv/Scripts/python.exe scripts/remediation/gallery_audit/persist_verdicts.py --rehearse-rollback
 ./.venv/Scripts/python.exe scripts/remediation/gallery_audit/persist_verdicts.py --verify
+./.venv/Scripts/python.exe scripts/remediation/gallery_audit/persist_verdicts.py --apply
 ```
 

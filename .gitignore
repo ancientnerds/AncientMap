@@ -258,9 +258,12 @@ output/remediation/hero_repair/PLAN.jsonl
 !output/remediation/phase3_worklist/
 output/remediation/phase3_worklist/WORKLIST.jsonl
 !output/remediation/mechanical/
-output/remediation/mechanical/APPLY.sql
+# APPLY.sql and PLAN.jsonl are pinned rather than ignored: the deploy lens established that
+# the generator cannot reproduce them, and APPLY.sql is the exact statement set that wrote
+# the 35-row country change, whose journal rows are already in production. Versioning the
+# undo while ignoring the apply is half an audit trail. REHEARSAL.sql stays out: it rolls
+# back inside its own transaction and writes nothing.
 output/remediation/mechanical/REHEARSAL.sql
-output/remediation/mechanical/PLAN.jsonl
 !output/remediation/phase3_pilot/
 
 # Raw third-party response bodies, fetched as evidence during the Phase-3 pilot, are NOT versioned.

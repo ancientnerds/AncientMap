@@ -1,0 +1,41 @@
+{
+  "stills": [
+    {
+      "id": 900003,
+      "filename": "Dolmen_01.webp",
+      "original_url": "https://upload.wikimedia.org/wikipedia/commons/0/03/Dolmen_01.jpg",
+      "commons_page_url": "https://commons.wikimedia.org/wiki/File%3ADolmen_01.jpg",
+      "author": "Fixture Author Three",
+      "author_url": "https://commons.wikimedia.org/w/index.php?title=User:Fixture_Author_Three&action=edit&redlink=1",
+      "license": "CC0 1.0",
+      "license_url": "https://creativecommons.org/publicdomain/zero/1.0",
+      "title": "Dolmen 01",
+      "is_hero": false,
+      "width": 4200,
+      "height": 2800,
+      "local_path": "video-assets/shorts/dolmen-site/images/01_Dolmen_01.jpg",
+      "verdict": {
+        "kind": "site_photo",
+        "subject": "The chambered tomb in its field, the capstone in the foreground",
+        "people_prominent": false,
+        "text_or_overlay": false,
+        "quality": 5,
+        "relevance": 5,
+        "illustrates": "the chambered tomb",
+        "focus": "the site itself",
+        "vertical_crop_ok": false
+      },
+      "score": 20
+    }
+  ],
+  "rejected": [
+    {
+      "filename": "map_1900.webp",
+      "reason": "the image is a map, not the site"
+    },
+    {
+      "filename": "visitors.webp",
+      "reason": "people fill the frame"
+    }
+  ]
+}

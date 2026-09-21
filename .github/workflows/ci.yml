@@ -40,6 +40,13 @@ jobs:
               # exactly that test.
               - 'tests/**'
               - 'pyproject.toml'
+              # Same failure mode, one directory over: a commit that
+              # changes only a forward-only migration, or only the
+              # remediation tooling under scripts/, did not count as a
+              # backend change, so the DB-less pytest subset never ran
+              # before the deploy that applied it.
+              - 'migrations/**'
+              - 'scripts/**'
             deps:
               - 'requirements*.txt'
               - 'ancient-nerds-map/package.json'
@@ -195,7 +202,10 @@ jobs:
           # Low-priority crawl pacing (>=60s/LLM-call) is the DEFAULT — it
           # paced the mocked dispatch tests straight into the 90s timeout.
           LYRA_THEO_LOW_PRIORITY: "0"
-        run: python -m pytest -q -m "not integration and not live_llm and not slow" --timeout 90 --tb=short
+        # -rs is not decoration: the subset skips a few tests by design
+        # (timezone- and artefact-dependent ones), and without it a
+        # silent skip is indistinguishable from a pass in the log.
+        run: python -m pytest -q -rs -m "not integration and not live_llm and not slow" --timeout 90 --tb=short
 
   sast:
     name: SAST & Secrets

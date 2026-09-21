@@ -2331,3 +2331,79 @@ but it was not lost either.
 Limitations, stated in `COMPETENCE.md` as well: the ground truth is one thumbnail pass by me, not an
 independent panel; tiers C and D were not eye-checked; no repeat-call stability test was run; the sample
 is stratified by tier, so these rates describe the tiers, not the corpus.
+
+## Wave 6 (the post-review fix wave): both lanes timed out, and what that cost
+
+**Both fixers hit the 30-minute ceiling and both artifacts are empty fragments** - one caught the single
+line "Now the `--render-rollback` CLI mode in `plan.py`:", the other "Now extract `journalled_ids_sql` in
+the module:". So nothing about the work could be taken from the lanes themselves. This is the second and
+third timeout of the session (the VLM pilot was the first), and the pattern is now clear: **the brief was
+larger than the ceiling allows**, not that the work was hard. The fix is smaller briefs, not more time.
+
+**The receipt's file list is unusable, and provably so.** Both children reported the identical,
+alphabetically-sorted list of every changed file - including files in each other's scope. With
+`isolation: none` the "changed tracked files" summary is the whole working-tree diff, never per-child
+attribution; it also named `scripts/merge_rewrites.py`, `tests/remediation/test_merge_rewrites_fails_closed.py`
+and `docs/procedures/SITES_DB_REMEDIATION_2026-09.md`, all three of which have **no diff at all**. So the
+list is not merely unattributed, it is false, and nothing may be concluded from it. Everything below was
+therefore established by executing the tree, not by reading a summary.
+
+### Verified, by execution
+
+- **Tests: 136 passed** across `tests/remediation/test_mechanical.py` and `test_gallery_audit.py`.
+- **One genuine regression, adjudicated rather than papered over.** FIX-1's rework of the scope guard in
+  `apply.py` broke `test_the_scope_guard_names_the_curated_source`, which asserted the phrase
+  "are not ancient_nerds sites". The guard now raises
+  `'country repair: % planned row(s) are not % sites', bad, _literal(source)` - the name reaches the
+  operator as a RAISE **argument** instead of text spliced into the message, which is exactly the rule
+  three lenses asked for. The old phrase was assertable only *because* the name was spliced in, so
+  re-asserting it would have re-asserted the defect. I rewrote the test to ask for both halves - the
+  placeholder present in the message, the name absent from it - which is strictly stronger than the old
+  expectation, since the old one could not tell the two apart. **Teeth proven:** mutating the render back
+  to the spliced form makes the test fail; the file was then restored byte-identically (sha256
+  `8b0c9b32e13431a5...`, checked before and after).
+- **Both landed writes' undos are exact inverses**, checked with my own tuple parser rather than the
+  generator's own logic: mechanical 35/35 and gallery 105/105 on key set, old/new swap, `site_id`
+  agreement and distinct `change_key`. The values make sense: country restored to "Chile, Easter Island"
+  and "Georgia (country)"; image_kind restored to NULL.
+- **The integrity digest is real, and recomputed independently.** `plan_digest` is sha256 over sorted
+  canonical JSON lines, order-independent; recomputing it myself from `PLAN.jsonl` gives
+  `b39d38cdad3ff0e3...`, matching the header on both APPLY and ROLLBACK.
+- **The re-rendered apply still describes production.** FIX-1 re-rendered both mechanical scripts, so
+  their hashes changed (APPLY `71ad097ac794133a`, ROLLBACK `83ccdfb3035d2d2a`) and a re-render can
+  silently divorce an artifact from the journalled write. Checked against the **live production journal**,
+  read-only: the pinned APPLY matches the 35 journalled rows 35/35 on site set, `change_key` and
+  old+new values. The claim survived the re-render.
+- **Only the undo had been versioned for the mechanical write**, while the gallery pair was versioned
+  whole. `APPLY.sql` and `PLAN.jsonl` are now pinned too: the generator cannot reproduce them, and
+  APPLY.sql is the statement set that wrote rows already journalled in production. Versioning the undo
+  while ignoring the apply is half an audit trail.
+
+### Fixed in this wave, and what remains
+
+`ci.yml` now runs the DB-less subset with **`-rs`** (a silent skip was indistinguishable from a pass) and
+counts **`migrations/**` and `scripts/**`** as backend changes - the same hole the file already documents
+for a test-only commit that skipped Backend Tests and deployed over a red predecessor. Still undone from
+the wave-6 brief, and now the only outstanding item: **FIX-1 `[H]`**, the 0018 refusal guard and its
+self-test cases.
+
+### Two more instrument slips of mine, recorded because the instrument was ours
+
+1. My new tuple parser cut the `VALUES` body at the **first semicolon**, which occurs inside the evidence
+   JSON, and so reported **0 tuples for both files** - including the gallery file where an earlier regex
+   had found 105. An empty result from my own probe is a statement about my probe. Fixed to stop at the
+   semicolon that closes the statement.
+2. My YAML probe verified `-rs` by taking the first step whose text contains "pytest" - which is the
+   **install** step (`pip install ... pytest ...`), not the test step. It reported `has -rs: False` for a
+   file that had it. Re-asked by selecting the step that runs `pytest -q`.
+
+### Adjudicated, no action (the checker is wrong, not the code)
+
+- `mechanical/apply.py:111, 415, 599` - "call without try/except". L111 is guarded four lines above by
+  `raise PlanError(f"{path} is missing - build the plan first")`; L415 refuses an empty plan and raises on
+  a read-back that disagrees, by design; L599 is a read-only measurement SELECT. Wrapping these in
+  try/except is the fallback code this project forbids, so the finding is a named instrument mismatch,
+  the same class as the earlier `apply.py:95` advisory.
+- `ci.yml` line-length (76 hits, 4 of them mine) - an 80-column prose rule applied to a YAML workflow
+  that already violates it in 60-odd pre-existing lines. No project gate lints YAML line length; I
+  shortened my own comment and left the rest alone rather than churn the file.

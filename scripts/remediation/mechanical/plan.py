@@ -56,10 +56,15 @@ independent checks; the first failure refuses the row (SKIPPED, with the measure
    the third party says which of the two names is an admin-0 state. Two parts that survive, a part
    that is empty, or no rule at all is a refusal - which part of a compound is the country is
    measured, not guessed.
-2. **Canonical form** (`canonicalize_country_display_name`, `pipeline/utils/country_lookup.py`), the
-   function the pipeline routes `unified_sites.country` writes through. It must equal the T05
-   proposal; if the canonical derivation disagrees with the proposal the row is refused rather than
-   "corrected" to a value of this module's own invention.
+2. **Canonical form** (`canonicalize_country_display_name`, `pipeline/utils/country_lookup.py`): the
+   project's own display-name normalizer, and the written value must be its output for the reduced
+   name. It is *not* enforced on `country` writes anywhere in the pipeline - measured 2026-09-21,
+   `git grep -n canonicalize_country_display_name -- pipeline/ api/` finds only the definition
+   (`country_lookup.py:572`); every other caller is this lane. Its docstring says connectors *should*
+   route through it, which is a recommendation and not a route. So the load-bearing comparison here
+   is reduction-versus-proposal: the reduced value must be a spelling the project already carries
+   *and* must equal the T05 proposal. A row whose canonical form disagrees with the proposal is
+   refused rather than "corrected" to a value of this module's own invention.
 3. **Vocabulary 1** (`country_lookup.py`): `normalize_country(old)` and `normalize_country(new)`
    must both be the same 2-letter ISO code.
 4. **Vocabulary 2** (`countryFlags.ts`): the new value must be a key of `COUNTRY_CODES` whose code
@@ -110,7 +115,7 @@ from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime, timezone
 from pathlib import Path
-from typing import Any, Protocol
+from typing import TYPE_CHECKING, Any, Protocol
 
 _HERE = Path(__file__).resolve()
 REPO = _HERE.parents[3]
@@ -122,15 +127,6 @@ for _root in (str(REPO), str(REPO / "scripts" / "remediation")):
         sys.path.insert(0, _root)
 
 from census.fetch import USER_AGENT  # noqa: E402
-from census.tests.t02_admin_country import (  # noqa: E402
-    NE_URL,
-    TOLERANCE_M,
-    _Atlas,
-    _dataset_dir,
-    _fold,
-    _load_features,
-    _nearest_m,
-)
 from census.tests.t05_country_values import (  # noqa: E402
     _DISAMBIGUATED,
     _display_name,
@@ -141,6 +137,11 @@ from census.tests.t05_country_values import (  # noqa: E402
 )
 
 from pipeline.utils.country_lookup import canonicalize_country_display_name  # noqa: E402
+
+if TYPE_CHECKING:
+    #: Only the annotation of `_geography`, `classify`, `build_plan` and `_atlas`. The module
+    #: itself is imported inside those functions - see `_t02()`.
+    from census.tests.t02_admin_country import _Atlas
 
 log = logging.getLogger("mechanical.plan")
 
@@ -376,6 +377,8 @@ def names_a_country(atlas: CountryNamer, part: str) -> bool:
     `_Atlas.claim()` maps `Easter Island` through the project's own vocabulary to Chile's polygon,
     which would make the territory look like a country. The feature's own name cannot.
     """
+    from census.tests.t02_admin_country import _fold  # the geo stack, imported on use only
+
     key = _fold(part)
     return any(key == _fold(f.admin) or key in f.name_keys for f in atlas.features)
 
@@ -398,6 +401,8 @@ def _geography(
     atlas: _Atlas, country: str, lat: float | None, lon: float | None, retrieved_at: str | None
 ) -> tuple[bool, str, dict[str, Any] | None]:
     """Is the row's own point inside the country the new value names?"""
+    from census.tests.t02_admin_country import NE_URL, TOLERANCE_M, _nearest_m
+
     if lat is None or lon is None:
         return False, "the row carries no usable point to test", None
     claim = atlas.claim(country)
@@ -883,6 +888,8 @@ def resolve_anchors(sites: Mapping[str, Site], known_qids: Mapping[str, str]) ->
     measurement, not a guess: the search must return exactly one entity whose English label is
     the row's own name, and that entity's `P625` must be within 1000 m of the row's point.
     """
+    from census.tests.t02_admin_country import TOLERANCE_M
+
     anchors: dict[str, Anchor] = {
         sid: Anchor(qid, "site_external_ids:wikidata_qid")
         for sid, qid in known_qids.items()
@@ -1143,34 +1150,75 @@ def write_plan_md(plan: Plan, path: Path, extra: Mapping[str, Any]) -> None:
     path.write_text("\n".join(lines), encoding="utf-8", newline="\n")
 
 
-def write_rollback_sql(plan: Plan, path: Path) -> int:
-    """The reversal, written **before** the apply file - both from the same generator."""
+def reversed_records(records: Sequence[Any]) -> list[Any]:
+    """The reversal of a set of changes: old and new swapped, one record per row.
+
+    Takes anything carrying `site_id`, `site_name`, `old_value`, `new_value`, `rule`, `evidence`
+    and `phase3` - a `Verdict` from the plan, or an `apply.ChangeRecord` read back out of the
+    delivered `PLAN.jsonl`. Both produce the same records, which is what makes the delivered
+    `ROLLBACK.sql` reproducible from the delivered plan (measured: byte-identical, see
+    `evidence/11_fingerprints.txt`).
+    """
     from mechanical import apply as apply_mod
 
-    records = [
+    return [
         apply_mod.ChangeRecord(
-            site_id=c.site_id,
-            site_name=c.site_name,
-            old_value=str(c.new_value),
-            new_value=str(c.old_value),
-            rule=f"rollback-{c.rule}",
-            condition=f"id = {c.site_id} AND country IS NOT DISTINCT FROM {_quoted(c.new_value)}",
-            reason=f"rollback of country-canonical: {c.old_value!r} restored on {c.site_name}",
-            evidence=tuple(c.evidence),
-            phase3=c.phase3,
+            site_id=r.site_id,
+            site_name=r.site_name,
+            old_value=str(r.new_value),
+            new_value=str(r.old_value),
+            rule=f"rollback-{r.rule}",
+            condition=f"id = {r.site_id} AND country IS NOT DISTINCT FROM {_quoted(r.new_value)}",
+            reason=f"rollback of country-canonical: {r.old_value!r} restored on {r.site_name}",
+            evidence=tuple(r.evidence),
+            phase3=r.phase3,
         )
-        for c in reversed(plan.changes)
+        for r in reversed(list(records))
     ]
-    sql = apply_mod.render_transaction(
-        records, run_stamp=ROLLBACK_RUN_STAMP, site_ids=plan.sites, source=plan.source_id
+
+
+def render_rollback_sql(
+    records: Sequence[Any], *, site_ids: Iterable[str], source_id: str = CURATED_SOURCE
+) -> str:
+    """The reversal of `records`, rendered - the one place the undo is produced.
+
+    `rollback=True` gives every journal row the reversal's own `change_key`: the undo of
+    `Georgia (country) -> Georgia` is the different transition `Georgia -> Georgia (country)`, and
+    one key for both would make the two indistinguishable in `remediation_change_log`.
+    """
+    from mechanical import apply as apply_mod
+
+    return apply_mod.render_transaction(
+        reversed_records(records),
+        run_stamp=ROLLBACK_RUN_STAMP,
+        site_ids=site_ids,
+        source=source_id,
+        rollback=True,
     )
+
+
+def write_rollback_sql(plan: Plan, path: Path) -> int:
+    """The reversal, written **before** the apply file - both from the same generator."""
+    sql = render_rollback_sql(plan.changes, site_ids=plan.sites, source_id=plan.source_id)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(sql, encoding="utf-8", newline="\n")
-    return len(records)
+    return len(plan.changes)
 
 
 # ------------------------------------------------------------------------------------- CLI
 def _atlas() -> tuple[_Atlas, str | None]:
+    """Natural Earth's admin-0 polygons, from the census cache.
+
+    The census T02 module is imported here, not at module level: it imports `geopandas` and
+    `pyproj` at module level, and the CI `tests` job installs neither
+    (`.github/workflows/ci.yml:184` installs `-r requirements-api.txt -r requirements.lyra.txt`,
+    and geopandas/pyproj occur 0 times in both). Importing it at module level made every
+    collection of `tests/remediation/test_mechanical.py` raise ModuleNotFoundError in CI, which
+    turned the `tests` job red and skipped `deploy`. Only the dataset paths need the geo stack;
+    the guarded tests skip without it, exactly as `tests/remediation/test_t02.py` does.
+    """
+    from census.tests.t02_admin_country import _Atlas, _dataset_dir, _load_features
+
     dataset = _dataset_dir(REPO / "output/remediation/cache")
     shapefile = dataset / "ne_10m_admin_0_countries.shp"
     if not shapefile.exists():
@@ -1219,9 +1267,30 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="write PLAN.jsonl, PLAN.md, SKIPPED.jsonl, ROLLBACK.sql (reads prod)",
     )
+    ap.add_argument(
+        "--render-rollback",
+        action="store_true",
+        help=(
+            "re-render ROLLBACK.sql from the delivered PLAN.jsonl alone - no database, no "
+            "dataset, no re-collection. The undo is a function of the plan it reverses, so it "
+            "stays checkable after the write; re-rendering cannot change its bytes"
+        ),
+    )
     args = ap.parse_args(argv)
 
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+
+    if args.render_rollback:
+        from mechanical import apply as apply_mod
+
+        plan_file = args.out / "PLAN.jsonl"
+        records = apply_mod.load_records(plan_file)
+        sql = render_rollback_sql(records, site_ids={r.site_id for r in records})
+        target = args.out / "ROLLBACK.sql"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(sql, encoding="utf-8", newline="\n")
+        log.info("wrote %s (%d row(s)) from %s", target, len(records), plan_file)
+        return 0
 
     findings = load_findings(args.findings)
     applicable = [f for f in findings if f.applicable]

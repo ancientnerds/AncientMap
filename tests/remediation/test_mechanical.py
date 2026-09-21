@@ -599,7 +599,16 @@ class TestRenderTransaction:
     def test_the_scope_guard_names_the_curated_source(self) -> None:
         sql = A.render_transaction([record()], site_ids={SITE_GEORGIA})
         assert "u.source_id <> 'ancient_nerds'" in sql
-        assert "are not ancient_nerds sites" in sql
+        # The guard still names the curated source, but the name reaches the operator as a RAISE
+        # argument and no longer as text spliced into the message. That is the point of the change:
+        # a name written into the message literal only parses while the name happens to contain no
+        # quote, which is a property of today's value and not of this code. This assertion was
+        # rewritten from the old expectation "are not ancient_nerds sites", which held only because
+        # the name was spliced in; asserting it again would re-assert the defect. Asking for both
+        # halves - the placeholder in the message, the name kept out of it - is strictly stronger
+        # than the old expectation, which could not tell the two apart.
+        assert "RAISE EXCEPTION 'country repair: % planned row(s) are not % sites'" in sql
+        assert "are not ancient_nerds sites" not in sql
 
     def test_the_journal_is_reconciled_inside_the_transaction(self) -> None:
         sql = A.render_transaction([record()], site_ids={SITE_GEORGIA})
