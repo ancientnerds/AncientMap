@@ -4392,3 +4392,64 @@ generic: filtering the session log on `name`/`tool_use` when the records carry `
 found nothing and I nearly read that as evidence), and `run.py` sitting at `pass_name=None` in
 `git diff` while **the mutation sweep held that mutant in the tree** - a live sweep is not an editor,
 and `git diff` during one is not a statement about the repository.
+
+## One empty model answer discards a whole batch - measured on the live run (2026-09-21)
+
+**The observation.** The driver log carried five lines of the same shape:
+
+```
+batch-0100: FAILED - judge exited 2 (1 in a row)
+batch-0118: FAILED - judge exited 2 (1 in a row)
+batch-0124: FAILED - judge exited 2 (1 in a row)
+batch-0143: FAILED - judge exited 2 (1 in a row)
+batch-0146: FAILED - judge exited 2 (1 in a row)
+```
+
+`progress.json` agreed: `batches_done: 121, batches_failed: 5, batches_skipped: 20, stopped: None,
+not_reached: []`. `"(1 in a row)"` every time - so the breaker (`DEFAULT_FAILURES_BEFORE_STOP = 3`)
+never trips, and the run continues past all five.
+
+**The cause, from the stage's own log** (`output/remediation/logs/mass/batch-0143.judge.log`, quoted
+verbatim):
+
+```
+"error": "0294d74b-0e97-4509-913a-475e3c21e1a7/site_type stdout:9 assistant message_end:
+          the assistant message carries no text - an empty answer is not a result"
+```
+
+So it is **not** a transport failure and **not** a 429. The model returned an empty assistant message for
+one field of one site, `model_stage` refused it - correctly, an empty answer is not a result and must not
+be silently read as "no findings" - and the refusal propagated out of `run.py judge` as **exit 2**.
+
+**Why that costs more than one field.** The measure is the answer count per batch dir: a healthy batch
+holds **75** answers (`answers/<site_id>%2F<field>.txt`), the five failed ones hold **62, 50, 33, 22
+and 12**. A partially written answer set is not a partial result; it is a batch that stopped mid-way,
+and the run moves to the next batch. Five batches x up to 5 sites is up to 25 sites that would be
+quietly absent from the deliverable.
+
+**The remedy is built in - verified in the code, not assumed.** `batch_state`
+(`mass_run.py:255-277`) returns `done` **only** when the artefacts parse *and* `len(judgements) ==
+calls`, with the comment "a truncated artefact is not evidence: the batch is redone, and a re-run is
+cheap because fetch and judge both skip what is already on disk". And `run_mass` keeps
+`progress.failed[batch_id] = detail` and returns 1 if anything failed. So **re-invoking the same
+command is the top-up**: finished batches are skipped (`batches_skipped`), the five incomplete ones are
+redone. No code change, no data loss - but it has to be done, and `batches_failed` has to reach 0 before
+the run counts as finished.
+
+**Ordered follow-up, with the reason attached:** the top-up pass also brings the `Retry-After` fix to
+the batches that run in it - the live run reads the worktree pinned at `d899af3`, i.e. **before**
+`8d0b7ef`, so politeness towards a 429 is not yet in force for anything already fetched.
+
+**A measurement gap this exposed, recorded because it is the kind that makes a green number lie.**
+The ledger's model rows carry `error` on **all 11,023** of them as `None`, and `outcome` also as `None` -
+so the ledger does **not** record how a model call ended. "No errors in the ledger" therefore says
+nothing about model calls; the failing signal lives in the stage log and in `progress.json`. Anyone
+reading model health from the ledger today is reading an empty column.
+
+**Two instruments were wrong before the numbers were right, both the same mistake.**
+(a) My first count filtered the ledger on `kind == "model"` and printed an empty counter - the value is
+`model_call`, and the empty result was not "zero failures", it was "matched nothing". (b) My first
+session-log probe filtered on `name`/`tool_use` and found zero write calls on `fetch_stage.py`, which I
+almost read as exculpatory; the records carry `toolName`, and a re-run with that field found that the
+log does not record tool **inputs** at all - so it cannot answer the question either way. An empty
+result is a statement about the filter, not about the world.
