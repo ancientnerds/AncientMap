@@ -32,7 +32,7 @@ have none. A site must be judged on its own text, with no finding to point at it
 | file | rows | what this piece needs from it |
 | --- | --- | --- |
 | `unified_sites.jsonl.gz` | **5,004** | `id`, `name`, `description`, `site_type`, `country`, `period_start`, `period_end`, `period_name`, `lat`, `lon`, `raw_data` |
-| `card_stats.jsonl.gz` | **5,004** | `card_description`, `wikidata_qid` |
+| `card_stats.jsonl.gz` | **5,004** | `card_description`, and a `wikidata_qid` column that is **NULL in all 5,004 rows** — see the correction in §3 |
 | `site_external_ids.jsonl.gz` | 9,237 | external identifiers where present |
 | `wiki_images.jsonl.gz` | 49,691 | **not used here** (images are Phase 2 / G0) |
 
@@ -51,8 +51,18 @@ snapshot, exactly like the census.
    `outcome` (`CORRECT` / `WRONG` / `UNVERIFIABLE`), `evidence`, `reviewer`.
 3. **Routing for a site-level question**: evidence per field, from the existing `fetch_stage` routers —
    `description` / `period_start` / `site_type` / `country` / `card_description` → enwiki by name, and
-   Wikidata by `wikidata_qid` where `card_stats` carries one. No raw geometry; the named-feature rule
-   and the 61,440-byte per-page cap are unchanged.
+   Wikidata by the site's Q-id, read from **`site_external_ids` (`kind='wikidata_qid'`, 4,618 rows)**.
+   No raw geometry; the named-feature rule and the 61,440-byte per-page cap are unchanged.
+
+   **Corrected 2026-09-21, from measurement.** This brief first said "Wikidata by `wikidata_qid` where
+   `card_stats` carries one". `card_stats.wikidata_qid` is present in all 5,004 exported rows and
+   **NULL in every one**: nothing in the repository writes it, the column is created only by
+   `api/main.py:126` (`ADD COLUMN IF NOT EXISTS`), and the only writer of a Q-id is
+   `pipeline/lyra/prospector/external_ids.py:55`, into `site_external_ids`. Following this brief
+   literally would have routed **no site at all** to Wikidata — the failure would have looked like a
+   quiet drop in evidence, not like an error. The implementing lane found it, deviated with the
+   evidence, and the brief now says what the data says. The lesson is the one this workstream keeps
+   relearning: name the artefact, not the field you remember.
 
 ## 4. Constraints (these are the contract, not preferences)
 
