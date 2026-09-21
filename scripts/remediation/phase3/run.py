@@ -32,6 +32,7 @@ being skipped. A silently smaller plan is the failure this whole phase is paid t
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import sys
 from dataclasses import dataclass
@@ -48,6 +49,13 @@ from phase3.model import Stage  # noqa: E402
 
 #: Ratified run shape (brief decision 12): 15 sites per run, two stages per batch.
 DEFAULT_BATCH_SIZE = 15
+
+#: The marker a batch carries when it comes from the snapshot plan instead of the worklist
+#: (`phase3/snapshot_plan.py`, piece 5). It is part of the batch shape, so it lives here with it,
+#: and it is what tells `judge` that a batch's unit is one (site, field) rather than one site: a
+#: discover batch is judged one call per (site, field), one question per call, and refuses the
+#: reviewer stage, which judges a finder's finding and has none here.
+DISCOVER_PASS = "discover"  # noqa: S105 - a batch marker, not a credential (bandit reads "PASS")
 
 REPO = Path(__file__).resolve().parents[3]
 DEFAULT_WORKLIST = REPO / "output" / "remediation" / "phase3_worklist" / "WORKLIST.jsonl"
@@ -67,9 +75,14 @@ class Batch:
     batch_id: str
     ordinal: int
     sites: tuple[dict[str, Any], ...]
+    #: `"pass"` in the written JSON, and only when it is set: the worklist plan's bytes are pinned
+    #: (piece 1's hash) and gaining a field would change them. `None` is the finding-driven plan.
+    pass_name: str | None = None
 
     def to_json(self) -> str:
         payload = {"batch_id": self.batch_id, "ordinal": self.ordinal, "sites": list(self.sites)}
+        if self.pass_name is not None:
+            payload["pass"] = self.pass_name
         return json.dumps(payload, ensure_ascii=False, sort_keys=True)
 
 
@@ -110,8 +123,10 @@ def select_phase3(records: list[dict[str, Any]], origin: Path) -> list[dict[str,
     return selected
 
 
-def assign_batches(records: list[dict[str, Any]], size: int) -> list[Batch]:
-    """Chunk the worklist, preserving its order. `size` must be a positive integer."""
+def assign_batches(
+    records: list[dict[str, Any]], size: int, *, pass_name: str | None = None
+) -> list[Batch]:
+    """Chunk the records, preserving their order. `size` must be a positive integer."""
     if size < 1:
         raise InputError(f"batch size must be >= 1, got {size}")
     return [
@@ -119,6 +134,7 @@ def assign_batches(records: list[dict[str, Any]], size: int) -> list[Batch]:
             batch_id=f"batch-{ordinal:04d}",
             ordinal=ordinal,
             sites=tuple(records[start : start + size]),
+            pass_name=pass_name,
         )
         for ordinal, start in enumerate(range(0, len(records), size), start=1)
     ]
@@ -132,6 +148,14 @@ def write_batches(path: Path, batches: list[Batch]) -> None:
 
 
 def cmd_plan(args: argparse.Namespace) -> int:
+    """Write the plan: the worklist's records, or every site of the snapshot (piece 5)."""
+    if args.from_snapshot:
+        return _plan_from_snapshot(args)
+    if args.site_ids:
+        raise InputError(
+            "--site-ids selects sites of the snapshot plan; without --from-snapshot it means "
+            "nothing, and the worklist plan ignores it"
+        )
     records = read_jsonl(Path(args.worklist))
     selected = select_phase3(records, Path(args.worklist))
     batches = assign_batches(selected, args.batch_size)
@@ -142,8 +166,58 @@ def cmd_plan(args: argparse.Namespace) -> int:
                 "batches": len(batches),
                 "batch_size": args.batch_size,
                 "out": str(args.out),
+                "pass": None,
+                "sha256": _sha256(Path(args.out)),
                 "sites": len(selected),
                 "worklist": str(args.worklist),
+            },
+            indent=1,
+            sort_keys=True,
+        )
+    )
+    return 0
+
+
+def _sha256(path: Path) -> str:
+    """The written plan's own hash. Printed so an operator can compare it without a second tool."""
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1 << 20), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _plan_from_snapshot(args: argparse.Namespace) -> int:
+    """The discover plan: one record per snapshot site, one finding per field (piece 5).
+
+    Imported here because `snapshot_plan` imports this module's `InputError` (the same shim
+    `fetch_stage` uses), so a top-level import would be circular.
+    """
+    from phase3 import snapshot_plan as SP
+
+    if args.worklist != str(DEFAULT_WORKLIST):
+        raise InputError(
+            "--worklist and --from-snapshot are two different inputs: the worklist plan reads "
+            "census findings, the snapshot plan reads the database export"
+        )
+    snapshot_dir = Path(args.snapshot_dir) if args.snapshot_dir else SP.DEFAULT_SNAPSHOT_DIR
+    site_ids = SP.read_site_ids(Path(args.site_ids)) if args.site_ids else None
+    records = SP.build_discover_sites(snapshot_dir=snapshot_dir, site_ids=site_ids)
+    batches = assign_batches(records, args.batch_size, pass_name=DISCOVER_PASS)
+    write_batches(Path(args.out), batches)
+    print(
+        json.dumps(
+            {
+                "batches": len(batches),
+                "batch_size": args.batch_size,
+                "calls": len(records) * len(SP.DISCOVER_FIELDS),
+                "fields": list(SP.DISCOVER_FIELDS),
+                "out": str(args.out),
+                "pass": DISCOVER_PASS,
+                "sha256": _sha256(Path(args.out)),
+                "site_ids": str(args.site_ids) if args.site_ids else None,
+                "sites": len(records),
+                "snapshot_dir": str(snapshot_dir),
             },
             indent=1,
             sort_keys=True,
@@ -348,6 +422,16 @@ def cmd_judge(args: argparse.Namespace) -> int:
     # a failed target would be a preview of a call nobody is going to make.
     failures = MS.read_fetch_failures(run_dir / batch_id / "fetch.json")
 
+    if batch.get("pass") == DISCOVER_PASS:
+        return _judge_discover(
+            args, batch=batch, run_dir=run_dir, batch_id=batch_id, failures=failures
+        )
+    if batch.get("pass") is not None:
+        raise InputError(
+            f"{batch_id}: the batch carries pass={batch.get('pass')!r}, which this runner does not "
+            f"know (known: {DISCOVER_PASS!r}; a batch without `pass` is the finding-driven plan)"
+        )
+
     if not args.live:
         prepared = MS.prepare_batch(
             batch=batch, store=store, stage=stage, allow_absent=True, failures=failures
@@ -435,6 +519,130 @@ def cmd_judge(args: argparse.Namespace) -> int:
     return 0
 
 
+def _judge_discover(
+    args: argparse.Namespace,
+    *,
+    batch: dict[str, Any],
+    run_dir: Path,
+    batch_id: str,
+    failures: dict[str, dict[str, str]],
+) -> int:
+    """`judge` for a discover batch: one call per (site, field), one question per call.
+
+    Two differences from the finding-driven judge, both from the batch's own `pass` marker:
+
+    * the unit is one (site, field), so a batch of 15 sites buys 75 calls and every call carries
+      its field (the label, the answer file and the report entry are per field);
+    * a site whose evidence is over the bound is **that site's own** `unverifiable` outcome and the
+      batch carries on - `discover_stage.plan_batch` records it before any call is bought, which is
+      also why the dry run below shows those sites instead of dying on the first one.
+
+    `--stage reviewer` is refused: the reviewer's question is "can this finder's finding be
+    refuted", and a discover batch carries no finder finding - only the fields' own questions.
+    """
+    from phase3 import discover_stage as DS
+    from phase3 import fetch_stage as F
+    from phase3 import model_stage as MS
+
+    if args.stage != Stage.FINDER.value:
+        raise InputError(
+            f"{batch_id}: a discover batch is judged with --stage finder; the field questions this "
+            "pass asks are the finder's, and the reviewer stage refutes a finder's finding, which "
+            "a discover batch does not carry"
+        )
+    store = F.EvidenceStore(run_dir / batch_id / "evidence")
+
+    if not args.live:
+        plan = DS.plan_batch(batch=batch, store=store, allow_absent=True, failures=failures)
+        print(
+            json.dumps(
+                {
+                    "batch_id": batch_id,
+                    "calls": len(plan.calls),
+                    "fields": list(DS.DISCOVER_FIELDS),
+                    "live": False,
+                    "model": MS.MODEL,
+                    "pass": DISCOVER_PASS,
+                    "program": MS.PROGRAM,
+                    "run_dir": str(run_dir),
+                    "sites": [
+                        {
+                            "argv": MS.pi_argv(),
+                            "evidence": [
+                                {
+                                    "chars": e.chars,
+                                    "failure": e.failure,
+                                    "feature": e.feature,
+                                    "path": str(e.path),
+                                    "present": e.present,
+                                    "url": e.url,
+                                }
+                                for e in item.excerpts
+                            ],
+                            "field": item.call.field,
+                            "label": item.call.label,
+                            "prompt": item.call.prompt,
+                            "prompt_chars": len(item.call.prompt),
+                            "site_id": item.call.site_id,
+                        }
+                        for item in plan.calls
+                    ],
+                    "skipped": [s.to_dict() for s in plan.skipped],
+                    "stage": args.stage,
+                },
+                indent=1,
+                sort_keys=True,
+            )
+        )
+        return 0
+
+    runner = MS.PiRunner(timeout=args.timeout)
+    answers = F.EvidenceStore(run_dir / batch_id / "answers")
+    try:
+        report = DS.judge_discover_batch(
+            batch=batch,
+            runner=runner,
+            store=store,
+            answers=answers,
+            ledger=L.Ledger(Path(args.ledger)),
+            failures=failures,
+        )
+    except MS.ModelCallFailed as exc:
+        # Same rule as the finding-driven path: the batch stops at the call that could not be
+        # measured. What the over-bound rule already decided is in the report's `skipped`, and a
+        # batch that stops there never writes one - the ledger carries the calls that did happen.
+        print(
+            json.dumps(
+                {
+                    "batch_id": batch_id,
+                    "error": str(exc),
+                    "live": True,
+                    "model": MS.MODEL,
+                    "pass": DISCOVER_PASS,
+                    "run_dir": str(run_dir),
+                },
+                indent=1,
+                sort_keys=True,
+            )
+        )
+        return 2
+
+    MS.write_report(run_dir / batch_id / "model.json", report)
+    payload = json.loads(report.to_json())
+    payload.update(
+        {
+            "answers": str(answers.root),
+            "ledger": str(args.ledger),
+            "live": True,
+            "model": MS.MODEL,
+            "pass": DISCOVER_PASS,
+            "run_dir": str(run_dir),
+        }
+    )
+    print(json.dumps(payload, indent=1, sort_keys=True))
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     # Imported here, not at module level: `model_stage` imports `fetch_stage`, which imports this
     # module, so a top-level import of it would be circular.
@@ -450,6 +658,29 @@ def build_parser() -> argparse.ArgumentParser:
     plan.add_argument("--worklist", default=str(DEFAULT_WORKLIST))
     plan.add_argument("--out", default=str(DEFAULT_PLAN))
     plan.add_argument("--batch-size", type=int, default=DEFAULT_BATCH_SIZE)
+    plan.add_argument(
+        "--from-snapshot",
+        action="store_true",
+        help=(
+            "plan every site of the offline snapshot instead of the worklist: one finding per "
+            "(site, field) for description, period_start, site_type, country and "
+            "card_description (piece 5)"
+        ),
+    )
+    plan.add_argument(
+        "--site-ids",
+        default=None,
+        help=(
+            "a file with one site id per line, selecting sites of the snapshot plan; "
+            "output/remediation/gold_standard/truth_sites.txt is such a file. Needs "
+            "--from-snapshot"
+        ),
+    )
+    plan.add_argument(
+        "--snapshot-dir",
+        default=None,
+        help="where the snapshot export lives (default: output/remediation/snapshot)",
+    )
     plan.set_defaults(func=cmd_plan)
 
     prepare = sub.add_parser("prepare", help="write one input file per batch (offline)")
@@ -494,7 +725,10 @@ def build_parser() -> argparse.ArgumentParser:
         "--stage",
         choices=[s.value for s in Stage],
         default=Stage.FINDER.value,
-        help="which question the stage asks (phase3/model_stage.py pins one question per stage)",
+        help=(
+            "which question the stage asks (phase3/model_stage.py pins one question per stage; a "
+            "discover batch is finder-only)"
+        ),
     )
     judge.add_argument(
         "--live",

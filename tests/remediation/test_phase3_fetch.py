@@ -244,8 +244,13 @@ def test_every_target_of_every_phase3_worklist_record_is_a_named_feature_query()
 
 
 def test_a_field_no_rule_covers_raises_instead_of_being_skipped() -> None:
+    # `scope_status` is T11's field (`census/tests/t11_scope_window.py:146`): whether the record is
+    # inside the project's E3 date window. It has no evidence target and never will - the site's own
+    # sources cannot settle a project decision - so the rule table must raise rather than quietly
+    # buy nothing. (This test used `period_start` until piece 5 gave that field an article+item
+    # route, and `period_start` was the only unroutable field it had.)
     site = _site_record(
-        findings=[{"test_id": "T03/all-outside", "field": "period_start", "current_value": -500}]
+        findings=[{"test_id": "T11/out_of_window", "field": "scope_status", "current_value": None}]
     )
     with pytest.raises(R.InputError, match="no target rule"):
         F.targets_for_site(site)

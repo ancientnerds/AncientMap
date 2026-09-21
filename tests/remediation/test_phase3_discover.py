@@ -1,0 +1,898 @@
+"""Does the discover pass ask every site about its own fields, one field per call, and record what
+it could not buy instead of ending the batch?
+
+Piece 5 of the Phase-3 runner. The census flagged 1,813 of the 5,004 sites and left 13 of the 17
+sites that hold the 24 known-wrong fields alone, so this pass stops reading findings and starts
+reading the snapshot: `plan --from-snapshot` writes one record per site, whose findings are its own
+stored values, and `judge` buys one call per (site, field).
+
+The interesting mistakes are not exceptions, they are *silently different* artefacts:
+
+* a plan that is not byte-identical across runs, or that quietly drops a site id it was asked for;
+* a value read from the wrong table - `card_description` lives in `card_stats`, and the truth
+  fixture's own `stored_in` key is what this suite checks the plan against;
+* a site whose whole audit ends because one page was too large, or a field whose evidence never
+  arrived being judged as if it had;
+* a question that cannot tell a wrong value from a missing one (3 of the 24 truth entries store
+  nothing, and 22 (site, field) pairs across the snapshot do too);
+* five calls for one site written into one answer file, so four of them are lost.
+
+Each guard below has a test that fails when the guard is removed; the mutation evidence (the
+mutation, the failing assertion and the sha256 of the restored file) is in
+`output/remediation/phase3_runner/PIECE5.md`.
+
+The plan tests read the *real* snapshot (`output/remediation/snapshot/`) and the real truth fixture
+(`output/remediation/gold_standard/`), so a change in either fails here instead of in the paid
+recall experiment. Nothing in this file opens a socket or starts a process.
+"""
+
+from __future__ import annotations
+
+import gzip
+import hashlib
+import json
+import re
+import sys
+from pathlib import Path
+from typing import Any
+
+import pytest
+
+REPO = Path(__file__).resolve().parents[2]
+PHASE3_PARENT = REPO / "scripts" / "remediation"
+if str(PHASE3_PARENT) not in sys.path:
+    sys.path.insert(0, str(PHASE3_PARENT))
+
+from phase3 import discover_stage as DS  # noqa: E402
+from phase3 import fetch_stage as F  # noqa: E402
+from phase3 import ledger as L  # noqa: E402
+from phase3 import model as M  # noqa: E402
+from phase3 import model_stage as MS  # noqa: E402
+from phase3 import run as R  # noqa: E402
+from phase3 import snapshot_plan as SP  # noqa: E402
+
+SNAPSHOT = REPO / "output" / "remediation" / "snapshot"
+TRUTH_SITE_IDS = REPO / "output" / "remediation" / "gold_standard" / "truth_sites.txt"
+TRUTH_FIELDS = REPO / "output" / "remediation" / "gold_standard" / "truth_fields.json"
+WORKLIST = REPO / "output" / "remediation" / "phase3_worklist" / "WORKLIST.jsonl"
+NO_EXTENSIONS = Path(__file__).resolve().parent / "fixtures" / "pi_probe_no_extensions.json"
+
+#: Piece 1's plan anchor, recorded in `PIECE1.md:120-124` and re-measured on 2026-09-21. The
+#: snapshot plan is a second plan; the worklist plan's bytes are not allowed to move because of it.
+PIECE1_PLAN_SHA256 = "96704b808ae1b29d694806934569bd0265aa369d0b0532a6e6a8f35e4f6c8001"
+
+#: Counts measured on the snapshot of 2026-09-20 (export 20:20:01+02:00, host `ancientnerds`).
+SNAPSHOT_SITES = 5_004
+SNAPSHOT_QIDS = 4_618
+SNAPSHOT_EMPTY_CARDS = 7
+
+#: The one truth site that carries no `site_external_ids` row at all, so it has no Wikidata route.
+TRUTH_SITE_WITHOUT_QID = "58a2be59-ec1e-4667-96b9-3313ce406bc1"
+
+
+# ── helpers ──────────────────────────────────────────────────────────────────────────────────
+
+
+def _truth_ids() -> list[str]:
+    return SP.read_site_ids(TRUTH_SITE_IDS)
+
+
+def _answer() -> MS.ModelAnswer:
+    """The captured settled answer, parsed - the numbers every scripted call replays."""
+    lines = NO_EXTENSIONS.read_text(encoding="utf-8").splitlines()
+    return MS.parse_stream(lines, source=str(NO_EXTENSIONS))
+
+
+def _site_record(
+    site_id: str = "site-1",
+    *,
+    name: str = "Cave 1",
+    values: dict[str, Any] | None = None,
+    qid: str | None = None,
+) -> dict[str, Any]:
+    """One plan-shaped record: one finding per discover field, values from `values`."""
+    actual = dict.fromkeys(SP.DISCOVER_FIELDS, "a value")
+    if values:
+        actual.update(values)
+    record: dict[str, Any] = {
+        "findings": [SP.finding_row(name, actual[name]) for name in SP.DISCOVER_FIELDS],
+        "name": name,
+        "site_id": site_id,
+    }
+    if qid:
+        record["wikidata_qid"] = qid
+    return record
+
+
+def _planned_row(record: dict[str, Any], field: str) -> dict[str, Any]:
+    """The plan's own finding for one field of one record (the plan writes a list, in field order)."""
+    rows = [row for row in record["findings"] if row["field"] == field]
+    assert len(rows) == 1, f"{record['site_id']}: {len(rows)} findings for {field!r}"
+    return rows[0]
+
+
+def _batch(*sites: dict[str, Any]) -> dict[str, Any]:
+    return {"batch_id": "batch-0001", "ordinal": 1, "pass": R.DISCOVER_PASS, "sites": list(sites)}
+
+
+def _evidence_store(root: Path, *sites: str, chars: int = 40) -> F.EvidenceStore:
+    """An evidence store with one enwiki page per named site."""
+    store = F.EvidenceStore(root)
+    for site_id in sites:
+        path = store.path_for(site_id, F.FEATURE_ENWIKI)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("Cave text " + "x" * chars, encoding="utf-8")
+    return store
+
+
+class ScriptedRunner:
+    """A fake runner: counts the calls and returns a text that names the call. No process."""
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        self.calls: list[MS.ModelCall] = []
+        self.answer = _answer()
+
+    def run(self, call: MS.ModelCall) -> MS.ModelAnswer:
+        self.calls.append(call)
+        return MS.ModelAnswer(text=f"VERDICT: CORRECT - {call.label}", usage=self.answer.usage)
+
+
+def _assert_no_process(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Fail the test if anything starts a Pi process. Used by every dry-run path."""
+
+    def refuse(*args: Any, **kwargs: Any) -> None:
+        raise AssertionError(f"a dry run must not start a process: {args!r} {kwargs!r}")
+
+    monkeypatch.setattr(MS.subprocess, "run", refuse)
+
+
+def _prepared_discover_run(
+    tmp_path: Path, *sites: dict[str, Any], batch_id: str = "batch-0001"
+) -> Path:
+    """A run directory holding one prepared discover batch, exactly as `prepare` would write it."""
+    run_dir = tmp_path / "runs"
+    batch_dir = run_dir / batch_id
+    batch_dir.mkdir(parents=True)
+    payload = {"batch_id": batch_id, "ordinal": 1, "pass": R.DISCOVER_PASS, "sites": list(sites)}
+    (batch_dir / "input.json").write_text(
+        json.dumps(payload, ensure_ascii=False, sort_keys=True) + "\n", encoding="utf-8"
+    )
+    return run_dir
+
+
+def _tiny_snapshot(
+    tmp_path: Path,
+    *,
+    unified: list[dict[str, Any]],
+    cards: list[dict[str, Any]] | None = None,
+    external: list[dict[str, Any]] | None = None,
+) -> Path:
+    """A snapshot directory built by hand, for the input shapes the real export happens to lack.
+
+    Every file holds at least one row unless a test asks for less: `read_snapshot_jsonl` refuses an
+    empty export, so a hand-built snapshot that is empty everywhere would exercise that refusal
+    instead of the shape the test is about.
+    """
+    tmp_path.mkdir(parents=True, exist_ok=True)
+
+    def write(name: str, rows: list[dict[str, Any]]) -> None:
+        with gzip.open(tmp_path / name, "wt", encoding="utf-8", newline="\n") as handle:
+            for row in rows:
+                handle.write(json.dumps(row, ensure_ascii=False) + "\n")
+
+    write(SP.UNIFIED_SITES_FILE, unified)
+    write(
+        SP.CARD_STATS_FILE,
+        cards if cards is not None else [{"card_description": "A card", "site_id": "site-1"}],
+    )
+    write(
+        SP.SITE_EXTERNAL_IDS_FILE,
+        external
+        if external is not None
+        else [{"kind": "enwiki_title", "site_id": "site-1", "value": "Cave 1"}],
+    )
+    return tmp_path
+
+
+def _plan(tmp_path: Path, *args: str) -> Path:
+    out = tmp_path / "plan.jsonl"
+    assert R.main(["plan", "--from-snapshot", "--out", str(out), *args]) == 0
+    return out
+
+
+# ── the plan: deterministic, complete, and reading the right table ───────────────────────────
+
+
+def test_the_snapshot_plan_is_byte_identical_across_runs_and_covers_all_5004_sites(
+    tmp_path: Path,
+) -> None:
+    first = _plan(tmp_path, "--snapshot-dir", str(SNAPSHOT))
+    second = tmp_path / "second.jsonl"
+    assert (
+        R.main(
+            [
+                "plan",
+                "--from-snapshot",
+                "--snapshot-dir",
+                str(SNAPSHOT),
+                "--out",
+                str(second),
+            ]
+        )
+        == 0
+    )
+
+    one, two = first.read_bytes(), second.read_bytes()
+    assert one == two
+    assert hashlib.sha256(one).hexdigest() == hashlib.sha256(two).hexdigest()
+    assert b"\r\n" not in one  # newline pinned to LF
+    assert not re.search(rb'"(at|ts|timestamp|generated_at|date)"', one)  # no timestamp
+
+    batches = [json.loads(line) for line in one.decode("utf-8").splitlines()]
+    assert len(batches) == 334  # ceil(5004 / 15)
+    assert [b["batch_id"] for b in batches[:2]] == ["batch-0001", "batch-0002"]
+    assert {b["pass"] for b in batches} == {R.DISCOVER_PASS}
+    assert [len(b["sites"]) for b in batches[:2]] == [15, 15]
+    assert sum(len(b["sites"]) for b in batches) == SNAPSHOT_SITES
+    assert sum(len(row["findings"]) for b in batches for row in b["sites"]) == (
+        SNAPSHOT_SITES * len(SP.DISCOVER_FIELDS)
+    )
+
+
+def test_the_snapshot_plan_of_the_truth_ids_holds_exactly_those_sites_and_five_fields_each(
+    tmp_path: Path,
+) -> None:
+    ids = _truth_ids()
+    out = _plan(tmp_path, "--site-ids", str(TRUTH_SITE_IDS))
+
+    batches = [json.loads(line) for line in out.read_text(encoding="utf-8").splitlines()]
+    assert [len(b["sites"]) for b in batches] == [15, 2]
+    sites = [site for b in batches for site in b["sites"]]
+    # The snapshot's own file order, filtered by the id list - not the order of the id list.
+    wanted = set(ids)
+    with gzip.open(SNAPSHOT / SP.UNIFIED_SITES_FILE, "rt", encoding="utf-8") as handle:
+        expected = [row["id"] for row in map(json.loads, handle) if row["id"] in wanted]
+    assert len(ids) == 17
+    assert [site["site_id"] for site in sites] == expected
+
+    for site in sites:
+        assert [row["field"] for row in site["findings"]] == list(SP.DISCOVER_FIELDS)
+        assert [row["test_id"] for row in site["findings"]] == [
+            f"P3/{name}" for name in SP.DISCOVER_FIELDS
+        ]
+        assert site["name"]
+        assert site["findings"][-1]["field"] == "card_description"
+
+
+def test_the_order_of_the_site_id_list_cannot_change_the_plan(tmp_path: Path) -> None:
+    straight = _plan(tmp_path, "--site-ids", str(TRUTH_SITE_IDS))
+    reversed_ids = tmp_path / "reversed.txt"
+    reversed_ids.write_text(
+        "\n".join(reversed(_truth_ids())) + "\n", encoding="utf-8", newline="\n"
+    )
+    other = tmp_path / "other.jsonl"
+    assert (
+        R.main(
+            [
+                "plan",
+                "--from-snapshot",
+                "--site-ids",
+                str(reversed_ids),
+                "--out",
+                str(other),
+            ]
+        )
+        == 0
+    )
+
+    assert straight.read_bytes() == other.read_bytes()
+
+
+def test_an_unknown_site_id_is_refused_rather_than_dropped(tmp_path: Path) -> None:
+    asked = tmp_path / "ids.txt"
+    missing = "00000000-0000-4000-8000-000000000000"
+    asked.write_text("\n".join([*_truth_ids(), missing]) + "\n", encoding="utf-8", newline="\n")
+
+    with pytest.raises(R.InputError, match="not in .*unified_sites.jsonl.gz"):
+        R.main(
+            [
+                "plan",
+                "--from-snapshot",
+                "--site-ids",
+                str(asked),
+                "--out",
+                str(tmp_path / "plan.jsonl"),
+            ]
+        )
+
+
+def test_a_blank_or_repeated_site_id_is_refused(tmp_path: Path) -> None:
+    ids = _truth_ids()
+    blank = tmp_path / "blank.txt"
+    blank.write_text(f"{ids[0]}\n\n{ids[1]}\n", encoding="utf-8", newline="\n")
+    with pytest.raises(R.InputError, match="empty line"):
+        SP.read_site_ids(blank)
+
+    repeated = tmp_path / "repeated.txt"
+    repeated.write_text(f"{ids[0]}\n{ids[0]}\n", encoding="utf-8", newline="\n")
+    with pytest.raises(R.InputError, match="appears twice"):
+        SP.read_site_ids(repeated)
+
+    with pytest.raises(R.InputError, match="no site-id list at"):
+        SP.read_site_ids(tmp_path / "absent.txt")
+
+
+def test_every_planned_value_comes_from_the_table_truth_fields_json_names() -> None:
+    """The brief's own warning, as a test: five entries live in `card_stats`, not `unified_sites`."""
+    entries = json.loads(TRUTH_FIELDS.read_text(encoding="utf-8"))["entries"]
+    assert len(entries) == 24
+
+    records = {
+        record["site_id"]: record
+        for record in SP.build_discover_sites(snapshot_dir=SNAPSHOT, site_ids=_truth_ids())
+    }
+    compared = 0
+    for entry in entries:
+        stored_in = entry["stored_in"]
+        if stored_in is None:
+            # A scope decision is not a column value: no plan field may claim to answer it.
+            assert entry["field"] not in SP.DISCOVER_FIELDS
+            assert entry["stored_value"] is None
+            continue
+        assert SP.FIELD_STORED_IN[entry["field"]] == stored_in
+        assert (
+            _planned_row(records[entry["site_id"]], entry["field"])["current_value"]
+            == (entry["stored_value"])
+        ), entry
+        compared += 1
+    assert compared == 21  # 24 entries - the 3 scope decisions
+
+    # The five that would have been read off the wrong table, named: card_description.
+    card_entries = [e for e in entries if e["stored_in"] == "card_stats"]
+    assert len(card_entries) == 5
+    assert {e["field"] for e in card_entries} == {"card_description"}
+
+
+def test_the_three_truth_entries_a_value_question_cannot_reach_are_scope_entries() -> None:
+    """The one honest cap of this pass, pinned so it cannot move unnoticed.
+
+    `scope` is not a stored value: the fixture's own `correct_value` for those entries is "out of
+    scope - the record should be hidden or removed", and `stored_in` is null. A per-field value
+    question cannot produce that, so the discover pass reaches 21 of the 24 entries by construction
+    (`PIECE5.md` reports it rather than letting the recall number absorb it).
+    """
+    entries = json.loads(TRUTH_FIELDS.read_text(encoding="utf-8"))["entries"]
+    missing = [e for e in entries if e["stored_value"] is None]
+    assert len(missing) == 3
+    assert {e["field"] for e in missing} == {"scope"}
+    assert all(e["field"] not in SP.DISCOVER_FIELDS for e in missing)
+    # Every entry the pass *can* reach stores a value: no planned field of the truth set is empty.
+    reachable = [e for e in entries if e["field"] in SP.DISCOVER_FIELDS]
+    assert len(reachable) == 21
+    assert all(e["stored_value"] is not None for e in reachable)
+    assert {e["field"] for e in reachable} == {
+        "description",
+        "period_start",
+        "site_type",
+        "card_description",
+    }
+
+
+def test_a_snapshot_row_without_a_name_or_without_an_id_is_refused(tmp_path: Path) -> None:
+    nameless = _tiny_snapshot(tmp_path / "nameless", unified=[{"id": "site-1", "name": None}])
+    with pytest.raises(R.InputError, match="name is None"):
+        SP.build_discover_sites(snapshot_dir=nameless)
+
+    anonymous = _tiny_snapshot(tmp_path / "anonymous", unified=[{"name": "Cave 1"}])
+    with pytest.raises(R.InputError, match="carries no 'id'"):
+        SP.build_discover_sites(snapshot_dir=anonymous)
+
+    doubled = _tiny_snapshot(
+        tmp_path / "doubled",
+        unified=[{"id": "site-1", "name": "A"}, {"id": "site-1", "name": "A again"}],
+    )
+    with pytest.raises(R.InputError, match="duplicate site id"):
+        SP.build_discover_sites(snapshot_dir=doubled)
+
+
+def test_a_qid_row_that_is_not_a_q_number_is_refused_at_plan_time(tmp_path: Path) -> None:
+    """A mangled id would fetch an empty entity set, which reads as "the item says nothing"."""
+    rows = [{"id": "site-1", "name": "Cave 1"}]
+    bad = _tiny_snapshot(
+        tmp_path / "bad",
+        unified=rows,
+        external=[{"kind": "wikidata_qid", "site_id": "site-1", "value": "12345"}],
+    )
+    with pytest.raises(R.InputError, match=r"not a \(site, Q-number\) pair"):
+        SP.build_discover_sites(snapshot_dir=bad)
+
+    two_ids = _tiny_snapshot(
+        tmp_path / "two",
+        unified=rows,
+        external=[
+            {"kind": "wikidata_qid", "site_id": "site-1", "value": "Q1"},
+            {"kind": "wikidata_qid", "site_id": "site-1", "value": "Q2"},
+        ],
+    )
+    with pytest.raises(R.InputError, match="two wikidata_qid values"):
+        SP.build_discover_sites(snapshot_dir=two_ids)
+
+    # An unrelated kind is not a qid claim and is skipped, and a qid row for a site that is not in
+    # the plan is not an error either: it routes nothing.
+    ok = _tiny_snapshot(
+        tmp_path / "ok",
+        unified=rows,
+        external=[
+            {"kind": "enwiki_title", "site_id": "site-1", "value": "Cave 1"},
+            {"kind": "wikidata_qid", "site_id": "gone", "value": "Q3"},
+            {"kind": "wikidata_qid", "site_id": "site-1", "value": "Q4"},
+        ],
+    )
+    assert SP.build_discover_sites(snapshot_dir=ok)[0]["wikidata_qid"] == "Q4"
+
+
+def test_the_snapshot_qid_comes_from_site_external_ids_not_from_the_vestigial_column() -> None:
+    """Measured, because the brief's sentence and the export disagree.
+
+    `card_stats.wikidata_qid` is NULL in all 5,004 exported rows and no code writes it (the only
+    writer of a Q-id is `pipeline/lyra/prospector/external_ids.py:55`, into `site_external_ids`);
+    `site_external_ids` carries 4,618. Reading the column would route **no** site to Wikidata.
+    """
+    cards = SP.read_snapshot_jsonl(SNAPSHOT / SP.CARD_STATS_FILE)
+    assert len(cards) == SNAPSHOT_SITES
+    assert all(row["wikidata_qid"] is None for row in cards)  # the vestigial column
+    assert sum(1 for row in cards if (row["card_description"] or "").strip()) == (
+        SNAPSHOT_SITES - SNAPSHOT_EMPTY_CARDS
+    )
+    rows = SP.read_snapshot_jsonl(SNAPSHOT / SP.SITE_EXTERNAL_IDS_FILE)
+    qids = SP.qids_by_site(rows, origin="snapshot")
+    assert len(qids) == SNAPSHOT_QIDS
+
+    records = SP.build_discover_sites(snapshot_dir=SNAPSHOT, site_ids=_truth_ids())
+    routed = [r for r in records if r.get("wikidata_qid")]
+    assert len(routed) == 16  # 16 of the 17 truth sites carry a qid; `Font dels Coms` carries none
+    # ... and every qid a record carries is the one the external-ids file holds for that site.
+    for record in records:
+        assert record.get("wikidata_qid") == qids.get(record["site_id"])
+
+
+def test_a_missing_card_stats_row_reads_as_no_value_not_as_an_error(tmp_path: Path) -> None:
+    """`card_description` lives in another table, so a row that is not there is a case, not a bug."""
+    snapshot = _tiny_snapshot(
+        tmp_path,
+        unified=[{"country": "Spain", "id": "site-1", "name": "Cave 1"}],
+        cards=[{"card_description": "another site's card", "site_id": "site-2"}],
+    )
+    record = SP.build_discover_sites(snapshot_dir=snapshot)[0]
+
+    assert _planned_row(record, "card_description")["current_value"] is None
+    assert _planned_row(record, "description")["current_value"] is None
+    plan = DS.plan_batch(
+        batch=_batch(record), store=F.EvidenceStore(tmp_path / "empty"), allow_absent=True
+    )
+    assert 'stored="absent"' in plan.calls[-1].call.prompt  # the card_description call
+    assert 'stored="absent"' in plan.calls[0].call.prompt  # the description call
+    assert 'stored="present"' in plan.calls[3].call.prompt  # country: a value exists
+
+
+# ── routing: one question per field, one route per field ─────────────────────────────────────
+
+
+def test_every_discover_field_has_a_route_and_a_question() -> None:
+    assert set(DS.FIELD_CLAUSE) == set(SP.DISCOVER_FIELDS)
+    assert set(DS.FIELD_QUESTION) == set(SP.DISCOVER_FIELDS)
+    for name in SP.DISCOVER_FIELDS:
+        assert set(F.FEATURES_FOR_FIELD[name])
+        assert f"`{name}`" in DS.FIELD_QUESTION[name]
+    assert len(set(DS.FIELD_QUESTION.values())) == len(SP.DISCOVER_FIELDS)
+
+
+def test_the_discover_routing_is_enwiki_by_name_and_wikidata_by_the_qid() -> None:
+    site = _site_record("site-1", name="Ksar el Barka", qid="Q939166")
+    targets = F.targets_for_site(site)
+
+    assert [t.feature for t in targets] == [F.FEATURE_ENWIKI, F.FEATURE_WIKIDATA_ENTITY]
+    assert "titles=Ksar%20el%20Barka" in targets[0].url
+    assert "ids=Q939166" in targets[1].url
+    for target in targets:
+        F.assert_named_feature(target.url)
+        assert target.label == f"site-1/{target.feature}"
+
+    # No qid, no entity target - and no substitute: the name search answers the `name` question.
+    without = F.targets_for_site(_site_record("site-2", name="Cave 2"))
+    assert [t.feature for t in without] == [F.FEATURE_ENWIKI]
+
+    # The two routes this piece added buy the same two features as the rest.
+    for name in SP.DISCOVER_FIELDS:
+        assert F.FEATURES_FOR_FIELD[name] == (F.FEATURE_ENWIKI, F.FEATURE_WIKIDATA_ENTITY)
+
+
+def test_a_qid_that_is_not_a_q_number_is_refused_by_the_url_builder() -> None:
+    for bad in ("12345", "Q", "Q0", "Q1 OR 1=1", "q42"):
+        with pytest.raises(R.InputError, match="is not a Q-number"):
+            F.wikidata_entity_url(bad)
+    assert "ids=Q42" in F.wikidata_entity_url("Q42")
+
+
+def test_every_truth_site_is_routable_offline() -> None:
+    """No site of the 17 is planned and then unfetchable: every route resolves, offline."""
+    records = SP.build_discover_sites(snapshot_dir=SNAPSHOT, site_ids=_truth_ids())
+    only_enwiki = []
+    for record in records:
+        targets = F.targets_for_site(record)
+        assert 1 <= len(targets) <= 2
+        if not any(t.feature == F.FEATURE_WIKIDATA_ENTITY for t in targets):
+            only_enwiki.append(record["site_id"])
+        for target in targets:
+            F.assert_named_feature(target.url)
+            assert target.url.startswith("https://")
+            assert target.reason.startswith("P3/")
+    # 16 of the 17 carry a qid; the one that does not has no `site_external_ids` row at all and is
+    # judged on its article alone - which is found by name, so nothing is plan-only.
+    assert only_enwiki == [TRUTH_SITE_WITHOUT_QID]
+
+
+# ── one call per (site, field), and the question for a missing value ─────────────────────────
+
+
+def test_every_site_buys_one_call_per_field_and_the_call_names_its_field(tmp_path: Path) -> None:
+    store = _evidence_store(tmp_path / "evidence", "site-1", "site-2")
+    plan = DS.plan_batch(batch=_batch(_site_record("site-1"), _site_record("site-2")), store=store)
+
+    assert plan.skipped == []
+    assert [item.call.label for item in plan.calls[:6]] == [
+        "site-1/description",
+        "site-1/period_start",
+        "site-1/site_type",
+        "site-1/country",
+        "site-1/card_description",
+        "site-2/description",
+    ]
+    assert len(plan.calls) == 2 * len(SP.DISCOVER_FIELDS)
+    for item in plan.calls:
+        name = item.call.field
+        assert name in SP.DISCOVER_FIELDS
+        assert DS.field_question(name) in item.call.prompt
+        assert item.call.stage is M.Stage.FINDER
+        # The five calls of one site carry five *different* questions: one question per call.
+        for other in SP.DISCOVER_FIELDS:
+            if other != name:
+                assert DS.field_question(other) not in item.call.prompt
+        # The site's evidence is read once and shared by its five calls.
+        assert [e.feature for e in item.excerpts] == [F.FEATURE_ENWIKI]
+
+
+def test_an_empty_stored_value_is_marked_absent_and_the_question_calls_it_wrong(
+    tmp_path: Path,
+) -> None:
+    """3 of the 24 truth entries store nothing; across the snapshot 22 (site, field) pairs do.
+
+    A question that only asked "is this wrong?" would read an empty field as nothing to report, so
+    the prompt marks the value `stored="absent"` and the question says an empty field where a value
+    belongs is `WRONG`.
+    """
+    store = _evidence_store(tmp_path / "evidence", "site-1")
+    record = _site_record("site-1", values={"period_start": None, "description": ""})
+    plan = DS.plan_batch(batch=_batch(record), store=store)
+    by_field = {item.call.field: item.call.prompt for item in plan.calls}
+
+    empty = by_field["period_start"]
+    assert 'stored="absent"' in empty
+    assert DS.ABSENT_VALUE_TEXT in empty
+    assert "or is it missing where a value belongs" in empty
+    assert "no value at all where one belongs" in empty
+    assert 'the string "null"' in empty
+    # The empty *description* is absent too, and an existing value is present.
+    assert 'stored="absent"' in by_field["description"]
+    assert 'stored="present"' in by_field["country"]
+    assert DS.ABSENT_VALUE_TEXT not in by_field["country"]
+
+    # A stored 0 is a value, not an absence: nothing here may read a falsy value as missing.
+    zero = DS.plan_batch(
+        batch=_batch(_site_record("site-1", values={"period_start": 0})), store=store
+    )
+    assert 'stored="present"' in zero.calls[0].call.prompt
+
+
+# ── the failure modes that must not end a batch ──────────────────────────────────────────────
+
+
+def test_an_oversized_site_becomes_its_own_unverifiable_outcome_and_the_batch_carries_on(
+    tmp_path: Path,
+) -> None:
+    store = F.EvidenceStore(tmp_path / "evidence")
+    over = MS.MAX_EVIDENCE_CHARS + 10
+    store.path_for("site-big", F.FEATURE_ENWIKI).parent.mkdir(parents=True, exist_ok=True)
+    store.path_for("site-big", F.FEATURE_ENWIKI).write_text("x" * over, encoding="utf-8")
+    store.path_for("site-small", F.FEATURE_ENWIKI).write_text("Cave text", encoding="utf-8")
+
+    runner = ScriptedRunner()
+    report = DS.judge_discover_batch(
+        batch=_batch(_site_record("site-big"), _site_record("site-small")),
+        runner=runner,
+        store=store,
+        answers=F.EvidenceStore(tmp_path / "answers"),
+        ledger=L.Ledger(tmp_path / "LEDGER.jsonl"),
+    )
+
+    assert [call.site_id for call in runner.calls] == ["site-small"] * len(SP.DISCOVER_FIELDS)
+    assert report.calls == len(SP.DISCOVER_FIELDS)
+    assert [s.site_id for s in report.skipped] == ["site-big"] * len(SP.DISCOVER_FIELDS)
+    for skipped in report.skipped:
+        assert skipped.field in SP.DISCOVER_FIELDS
+        assert skipped.reason.startswith("site-big:")
+        assert f"the evidence is {over} characters" in skipped.reason
+        assert f"over the {MS.MAX_EVIDENCE_CHARS}-character bound" in skipped.reason
+        assert "the batch carries on" in skipped.reason
+        # One unverifiable finding for the field this skip is about, from the plan's own row.
+        assert len(skipped.findings) == 1
+        finding = skipped.findings[0]
+        assert finding.verdict is M.Verdict.UNVERIFIABLE
+        assert finding.field == skipped.field
+        assert finding.test_id == f"P3/{skipped.field}"
+        assert finding.note == skipped.reason
+    # The report counts them, and no call was bought for the big site.
+    assert report.unverifiable == len(SP.DISCOVER_FIELDS)
+    assert {j.site_id for j in report.judgements} == {"site-small"}
+
+
+def test_a_field_whose_evidence_was_never_fetched_is_recorded_not_attempted_and_the_batch_carries_on(
+    tmp_path: Path,
+) -> None:
+    store = _evidence_store(tmp_path / "evidence", "site-2")
+    reason = "enwiki: no response: GET https://en.wikipedia.org/...: ReadTimeout"
+    runner = ScriptedRunner()
+    report = DS.judge_discover_batch(
+        batch=_batch(_site_record("site-1"), _site_record("site-2")),
+        runner=runner,
+        store=store,
+        answers=F.EvidenceStore(tmp_path / "answers"),
+        ledger=L.Ledger(tmp_path / "LEDGER.jsonl"),
+        failures={"site-1": {F.FEATURE_ENWIKI: reason}},
+    )
+
+    assert [call.site_id for call in runner.calls] == ["site-2"] * len(SP.DISCOVER_FIELDS)
+    assert len(report.skipped) == len(SP.DISCOVER_FIELDS)
+    for skipped in report.skipped:
+        assert skipped.site_id == "site-1"
+        assert "no evidence file was read for this site (no model call bought)" in skipped.reason
+        assert reason in skipped.reason
+        assert skipped.findings[0].verdict is M.Verdict.UNVERIFIABLE
+        assert skipped.findings[0].field == skipped.field
+    # The lines that exist are site-2's: the site nobody could read bought nothing.
+    lines = [
+        json.loads(line)
+        for line in (tmp_path / "LEDGER.jsonl").read_text(encoding="utf-8").splitlines()
+    ]
+    assert len(lines) == len(SP.DISCOVER_FIELDS)
+    assert all(line["label"].startswith("site-2/") for line in lines)
+
+
+def test_partial_evidence_still_buys_the_call_and_the_prompt_names_the_failure(
+    tmp_path: Path,
+) -> None:
+    """The other half: one target of a site failed, the site is judged anyway, and the prompt says
+    which fact it is - "asked and failed", never "nothing there"."""
+    store = _evidence_store(tmp_path / "evidence", "site-1")
+    failure = "wikidata_entity: no response: GET https://www.wikidata.org/...: ReadTimeout"
+    plan = DS.plan_batch(
+        batch=_batch(_site_record("site-1", qid="Q1")),
+        store=store,
+        failures={"site-1": {F.FEATURE_WIKIDATA_ENTITY: failure}},
+    )
+
+    assert len(plan.calls) == len(SP.DISCOVER_FIELDS)
+    assert plan.skipped == []
+    prompt = plan.calls[0].call.prompt
+    assert f'<evidence feature="{F.FEATURE_ENWIKI}" status="present"' in prompt
+    assert f'<evidence feature="{F.FEATURE_WIKIDATA_ENTITY}" status="failed"' in prompt
+    assert failure.split(": ", 1)[1] in prompt
+
+
+def test_a_missing_evidence_file_with_no_recorded_failure_still_raises(tmp_path: Path) -> None:
+    """Piece 4's guard, unchanged in the discover path: a hole in the record is not weather."""
+    store = F.EvidenceStore(tmp_path / "evidence")
+    with pytest.raises(MS.EvidenceUnusable, match="records no failure for it"):
+        DS.plan_batch(batch=_batch(_site_record("site-1")), store=store)
+
+
+def test_an_over_bound_site_is_recorded_before_anything_is_spent(tmp_path: Path) -> None:
+    """The preview and the live run take the same decision, because it is a plan-time one."""
+    store = F.EvidenceStore(tmp_path / "evidence")
+    path = store.path_for("site-1", F.FEATURE_ENWIKI)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("x" * (MS.MAX_EVIDENCE_CHARS + 1), encoding="utf-8")
+
+    plan = DS.plan_batch(batch=_batch(_site_record("site-1")), store=store)
+    assert plan.calls == []
+    assert len(plan.skipped) == len(SP.DISCOVER_FIELDS)
+
+
+# ── the CLI: the same calls, previewed and then bought ───────────────────────────────────────
+
+
+def test_prepare_writes_the_discover_pass_marker_verbatim(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The plan's `pass` marker is how `judge` knows which pass it is holding, so it has to survive
+    `prepare` - which copies the batch rather than rebuilding one of its own."""
+    plan = tmp_path / "plan.jsonl"
+    plan.write_text(
+        json.dumps(
+            {
+                "batch_id": "batch-0001",
+                "ordinal": 1,
+                "pass": R.DISCOVER_PASS,
+                "sites": [_site_record("site-1")],
+            },
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+        newline="\n",
+    )
+    run_dir = tmp_path / "runs"
+    assert R.main(["prepare", "--plan", str(plan), "--run-dir", str(run_dir)]) == 0
+    capsys.readouterr()
+
+    written = json.loads((run_dir / "batch-0001" / "input.json").read_text(encoding="utf-8"))
+    assert written["pass"] == R.DISCOVER_PASS
+    assert [row["field"] for row in written["sites"][0]["findings"]] == list(SP.DISCOVER_FIELDS)
+
+
+def test_judge_without_live_previews_the_discover_calls_and_starts_nothing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _assert_no_process(monkeypatch)
+    run_dir = _prepared_discover_run(tmp_path, _site_record("site-1"), _site_record("site-2"))
+    ledger = tmp_path / "LEDGER.jsonl"
+
+    rc = R.main(
+        ["judge", "--run-dir", str(run_dir), "--batch-id", "batch-0001", "--ledger", str(ledger)]
+    )
+
+    payload = json.loads(capsys.readouterr().out)
+    assert rc == 0
+    assert payload["live"] is False
+    assert payload["pass"] == R.DISCOVER_PASS
+    assert payload["calls"] == 2 * len(SP.DISCOVER_FIELDS)
+    assert payload["fields"] == list(SP.DISCOVER_FIELDS)
+    assert payload["skipped"] == []
+    assert [site["field"] for site in payload["sites"][:2]] == ["description", "period_start"]
+    for site in payload["sites"]:
+        assert site["prompt_chars"] == len(site["prompt"])
+        assert site["prompt"] not in site["argv"]
+        assert site["evidence"][0]["present"] is False  # the missing page is shown, not hidden
+    assert not ledger.exists()
+    assert not (run_dir / "batch-0001" / "answers").exists()
+
+    # The preview's prompt is the live prompt: one builder, and the dry run is not a second one.
+    live_plan = DS.plan_batch(
+        batch=json.loads((run_dir / "batch-0001" / "input.json").read_text(encoding="utf-8")),
+        store=F.EvidenceStore(run_dir / "batch-0001" / "evidence"),
+        allow_absent=True,
+    )
+    assert [p.call.prompt for p in live_plan.calls] == [s["prompt"] for s in payload["sites"]]
+
+
+def test_judge_live_stores_one_answer_per_field_and_one_ledger_line_each(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Five calls for one site must leave five records. One answer key would lose four of them."""
+    monkeypatch.setattr(MS, "PiRunner", ScriptedRunner)
+    run_dir = _prepared_discover_run(tmp_path, _site_record("site-1"), _site_record("site-2"))
+    _evidence_store(run_dir / "batch-0001" / "evidence", "site-1", "site-2")
+    ledger = tmp_path / "LEDGER.jsonl"
+
+    rc = R.main(
+        [
+            "judge",
+            "--run-dir",
+            str(run_dir),
+            "--batch-id",
+            "batch-0001",
+            "--ledger",
+            str(ledger),
+            "--live",
+        ]
+    )
+
+    payload = json.loads(capsys.readouterr().out)
+    assert rc == 0
+    assert payload["pass"] == R.DISCOVER_PASS
+    assert payload["totals"]["calls"] == 2 * len(SP.DISCOVER_FIELDS)
+    assert payload["skipped"] == []
+    assert [j["field"] for j in payload["judgements"][:5]] == list(SP.DISCOVER_FIELDS)
+    assert [j["label"] for j in payload["judgements"][:5]] == [
+        f"site-1/{name}" for name in SP.DISCOVER_FIELDS
+    ]
+
+    answers = sorted((run_dir / "batch-0001" / "answers").iterdir())
+    assert {p.name for p in answers} == {
+        f"{F.EvidenceStore.slug(f'site-{i}', name)}.txt"
+        for i in (1, 2)
+        for name in SP.DISCOVER_FIELDS
+    }
+    assert answers[0].read_text(encoding="utf-8").startswith("VERDICT: CORRECT")
+
+    lines = [json.loads(line) for line in ledger.read_text(encoding="utf-8").splitlines()]
+    assert [line["label"] for line in lines] == [j["label"] for j in payload["judgements"]]
+    assert {line["kind"] for line in lines} == {"model_call"}
+    assert {line["stage"] for line in lines} == {"finder"}
+
+    stored = json.loads((run_dir / "batch-0001" / "model.json").read_text(encoding="utf-8"))
+    assert stored["totals"]["calls"] == 2 * len(SP.DISCOVER_FIELDS)
+    assert stored["stage"] == "finder"
+
+
+def test_judge_refuses_the_reviewer_stage_for_a_discover_batch(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _assert_no_process(monkeypatch)
+    run_dir = _prepared_discover_run(tmp_path, _site_record("site-1"))
+
+    with pytest.raises(R.InputError, match="judged with --stage finder"):
+        R.main(
+            [
+                "judge",
+                "--run-dir",
+                str(run_dir),
+                "--batch-id",
+                "batch-0001",
+                "--stage",
+                "reviewer",
+                "--live",
+            ]
+        )
+
+
+def test_judge_refuses_a_pass_marker_it_does_not_know(tmp_path: Path) -> None:
+    run_dir = _prepared_discover_run(tmp_path, _site_record("site-1"))
+    input_path = run_dir / "batch-0001" / "input.json"
+    payload = json.loads(input_path.read_text(encoding="utf-8"))
+    payload["pass"] = "sweep"  # noqa: S105 - a batch marker, not a credential
+    input_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(R.InputError, match="which this runner does not know"):
+        R.main(["judge", "--run-dir", str(run_dir), "--batch-id", "batch-0001"])
+
+
+def test_plan_refuses_the_two_inputs_at_once_and_site_ids_without_the_snapshot_flag(
+    tmp_path: Path,
+) -> None:
+    out = tmp_path / "plan.jsonl"
+    with pytest.raises(R.InputError, match="two different inputs"):
+        R.main(
+            [
+                "plan",
+                "--from-snapshot",
+                "--worklist",
+                str(tmp_path / "somewhere_else.jsonl"),
+                "--out",
+                str(out),
+            ]
+        )
+    with pytest.raises(R.InputError, match="means nothing"):
+        R.main(["plan", "--site-ids", str(TRUTH_SITE_IDS), "--out", str(out)])
+
+
+def test_the_worklist_plan_still_hashes_to_the_piece_1_anchor(tmp_path: Path) -> None:
+    """The existing plan's bytes are frozen: a new plan may not move the old one.
+
+    The anchor comes from `PIECE1.md:120-124`, and `test_phase3_runner.py` pins only that the plan
+    is reproducible - not what it is. This is the byte-level pin.
+    """
+    out = tmp_path / "worklist_plan.jsonl"
+    assert R.main(["plan", "--worklist", str(WORKLIST), "--out", str(out)]) == 0
+
+    assert hashlib.sha256(out.read_bytes()).hexdigest() == PIECE1_PLAN_SHA256
+    assert b'"pass"' not in out.read_bytes()  # the marker is the discover plan's, not the default
+
+
+def test_the_discover_modules_reach_no_network_client_and_no_shell() -> None:
+    """The plan builder and the discover stage must start nothing and open nothing themselves."""
+    banned = re.compile(r"\b(httpx|requests|urllib|socket|aiohttp|openai|anthropic|subprocess)\b")
+    for module in (SP, DS):
+        source = Path(module.__file__).read_text(encoding="utf-8")
+        hits = sorted(set(banned.findall(source)))
+        assert hits == [], f"{Path(module.__file__).name} reaches outside the process: {hits}"

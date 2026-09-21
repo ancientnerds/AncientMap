@@ -76,11 +76,24 @@ reason, and **no request to their URLs** - while the batch continues with the ot
 whose targets are all already on disk is not probed at all: a re-run costs exactly what it cost
 before. No host is substituted and no endpoint is rotated; picking `overpass.osm.ch` because it
 answers is a decision for the operator, not for this module.
+
+**Piece 5 adds the `wikidata_entity` target and two fields.** The discover pass asks every site
+about its own fields, one call per (site, field), so `period_start` and `site_type` join
+`FEATURES_FOR_FIELD`, and the same stored `country`/`description`/`card_description`/year/type are
+also asked against the site's **own** Wikidata item - by id, never by search - when the record
+carries one. A record without a `wikidata_qid` buys no entity target (the name search answers the
+`name` field's question, which is a different one). The id is read from `site_external_ids`
+(`kind='wikidata_qid'`, 4,618 rows of the snapshot's 9,237), not from `card_stats.wikidata_qid`:
+that column is NULL in **all 5,004** snapshot rows and no code in this repository writes it - the
+only writer of a Q-id is `pipeline/lyra/prospector/external_ids.py:55`, into `site_external_ids`
+(`phase3/snapshot_plan.py` carries the measurement). A qid that is not a Q-number is refused
+rather than written into an `ids=` parameter that would answer with no entities at all.
 """
 
 from __future__ import annotations
 
 import json
+import re
 import time
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field
@@ -175,19 +188,29 @@ HOST_PROBE_PREFIX = "host_probe:"
 #: Feature slugs. The first two are the pilot's own label suffixes (`fetch_log.jsonl`:
 #: `Satsurblia/enwiki`, `Karpasia/wd_kition_label`); `overpass_named` names the query shape the
 #: pilot used for the same job under `overpass_bbox`/`overpass_stored_features`, kept distinct
-#: from the dumps those labels also covered.
+#: from the dumps those labels also covered. `wikidata_entity` names the pilot's
+#: `Special:EntityData/Q28220554.json` fetch - here as the API query the project already uses for
+#: the same data (`scripts/audit_wikidata_batch.py:56`), so one request carries claims, labels and
+#: descriptions of the **site's own** item instead of a full JSON dump.
 FEATURE_ENWIKI = "enwiki"
 FEATURE_WIKIDATA_SEARCH = "wikidata_search"
+FEATURE_WIKIDATA_ENTITY = "wikidata_entity"
 FEATURE_OVERPASS_NAMED = "overpass_named"
 
-#: Which features a finding's field buys. Every field named by the finder brief's method §1 is
-#: here, so an unknown field is a raise and not a silently unfetched site.
+#: The fields the **discover pass** asks about (`phase3/snapshot_plan.py`), and what each buys.
+#: `card_description` lives in `card_stats` (see `snapshot_plan.FIELD_STORED_IN`); its evidence is
+#: the same article and item as the other four fields'. `period_start` and `site_type` join the
+#: table in piece 5: neither buys Overpass - a year and a type are claims about the site, not
+#: features around its stored point - and both are asked against the article and, when the record
+#: carries one, the Wikidata item.
 FEATURES_FOR_FIELD: dict[str, tuple[str, ...]] = {
     "lat/lon": (FEATURE_ENWIKI, FEATURE_OVERPASS_NAMED),
     "name": (FEATURE_ENWIKI, FEATURE_WIKIDATA_SEARCH),
-    "country": (FEATURE_ENWIKI,),
-    "description": (FEATURE_ENWIKI,),
-    "card_description": (FEATURE_ENWIKI,),
+    "country": (FEATURE_ENWIKI, FEATURE_WIKIDATA_ENTITY),
+    "description": (FEATURE_ENWIKI, FEATURE_WIKIDATA_ENTITY),
+    "card_description": (FEATURE_ENWIKI, FEATURE_WIKIDATA_ENTITY),
+    "period_start": (FEATURE_ENWIKI, FEATURE_WIKIDATA_ENTITY),
+    "site_type": (FEATURE_ENWIKI, FEATURE_WIKIDATA_ENTITY),
 }
 
 #: Census check families that buy **no** fetch at all (decision 12: "T02 is one human
@@ -200,6 +223,12 @@ NO_FETCH_PREFIXES = frozenset({"T02"})
 #: URL shapes the pilot measured as raw geometry dumps. `api/0.6/map?bbox=` delivered 598 KB
 #: and 400 KB; `out geom` is Overpass's spelling of the same thing. Both are refused.
 RAW_GEOMETRY_MARKERS = ("/api/0.6/map?", "out geom", "out:geom")
+
+#: A Wikidata item id: `Q` followed by digits. The one shape `wikidata_entity_url` accepts; the
+#: snapshot's own qids are read against it at plan time (`phase3/snapshot_plan.py`), so the plan
+#: refuses the same ids the URL builder would refuse instead of building a URL that answers with
+#: no entities.
+QID_PATTERN = re.compile(r"Q[1-9][0-9]*")
 
 
 class TransportFailure(RuntimeError):
@@ -426,6 +455,40 @@ def wikidata_search_url(name: str) -> str:
     )
 
 
+def wikidata_entity_url(qid: str) -> str:
+    """The `wikidata_entity` target: one Q-id's claims, labels and descriptions, by id.
+
+    This is the hop the pilot made by hand (`Special:EntityData/Q28220554.json`,
+    `phase3_pilot/evidence/`): the item is **known**, so nothing is searched for and nothing is
+    guessed. The API query is the project's existing one for the same data
+    (`scripts/audit_wikidata_batch.py:56` uses `props=claims|labels`); `descriptions` is added
+    because a description is one of the fields the discover pass asks about.
+
+    A qid that is not a Q-number raises instead of being written into the URL: a mangled `ids=`
+    value answers `{"entities":{}}`, which reads as "the item says nothing" and would be recorded
+    as evidence against the site's value.
+    """
+    if not QID_PATTERN.fullmatch(qid):
+        raise InputError(
+            f"wikidata_qid {qid!r} is not a Q-number (Q followed by digits); refusing to build an "
+            "entity URL that would answer with no entities"
+        )
+    return (
+        WIKIDATA_ENDPOINT
+        + "?"
+        + urlencode(
+            {
+                "action": "wbgetentities",
+                "ids": qid,
+                "props": "claims|labels|descriptions",
+                "languages": "en",
+                "format": "json",
+            },
+            quote_via=quote,
+        )
+    )
+
+
 def overpass_named_feature_url(name: str, *, lat: float, lon: float) -> str:
     """The Overpass target: named nodes/ways within `NAMED_FEATURE_RADIUS_M` of the stored point.
 
@@ -503,6 +566,13 @@ def targets_for_site(site: Mapping[str, Any]) -> list[Target]:
 
     Driven by the findings: the census check family decides *whether* to fetch at all (T02 buys
     none), the field decides *what*, and the record supplies the name and the stored point.
+
+    A record that carries no `wikidata_qid` buys no `wikidata_entity` target: there is no id to ask
+    about, and the name search (`wikidata_search`) answers a **different** question - it returns
+    candidate items for a name, which is what the `name` field needs and not what a stored
+    description, year, type, country or card text is judged against. The finding-driven worklist
+    records carry no qid at all (`WORKLIST.jsonl`, 1,840 records, re-verified), so their targets
+    are unchanged by this rule.
     """
     site_id = str(_finding(site, "site_id", "site record"))
     name = str(_finding(site, "name", f"site {site_id}"))
@@ -513,6 +583,7 @@ def targets_for_site(site: Mapping[str, Any]) -> list[Target]:
     usable = [
         f for f in findings if str(f.get("test_id", "")).partition("/")[0] not in NO_FETCH_PREFIXES
     ]
+    qid = site.get("wikidata_qid")
     targets: dict[str, Target] = {}
     for finding in usable:
         test_id = str(_finding(finding, "test_id", f"site {site_id}"))
@@ -525,6 +596,8 @@ def targets_for_site(site: Mapping[str, Any]) -> list[Target]:
         reason = f"{test_id} {field_name}"
         for feature in FEATURES_FOR_FIELD[field_name]:
             if feature in targets:
+                continue
+            if feature == FEATURE_WIKIDATA_ENTITY and not qid:
                 continue
             targets[feature] = Target(
                 site_id=site_id,
@@ -540,6 +613,8 @@ def _url_for(feature: str, site: Mapping[str, Any], site_id: str, name: str) -> 
         return wikipedia_extract_url(name)
     if feature == FEATURE_WIKIDATA_SEARCH:
         return wikidata_search_url(name)
+    if feature == FEATURE_WIKIDATA_ENTITY:
+        return wikidata_entity_url(str(_finding(site, "wikidata_qid", f"site {site_id}")))
     if feature == FEATURE_OVERPASS_NAMED:
         lat, lon = _stored_coordinates(site, site_id)
         return overpass_named_feature_url(name, lat=lat, lon=lon)

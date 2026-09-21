@@ -64,6 +64,20 @@ batch died because one Overpass request timed out and no evidence file was writt
   `Finding` per census finding, carrying the reason, in the batch report. Spending a call to ask a
   model about a page that was never read would buy a guess; writing nothing would hide it.
 
+Three of this module's pieces are reused *outside* it, by the discover pass
+(`phase3/discover_stage.py`, piece 5), and each one is a seam rather than a shorthand:
+
+* `evidence_excerpts` and `check_evidence_bound` are the evidence selection and the size guard, so
+the discover pass's one-prompt-per-(site, field) calls are built through the same code and cannot
+drift from the per-site prompt;
+* `ModelCall.field` (with `answer_key`) is what makes five calls for one site five records instead
+of one - `judge_site` stores an answer under the call's key, and the fetch stage's own store refuses
+to write different bytes over an existing file;
+* `EvidenceOverBound` is the one `EvidenceUnusable` case that must **not** end a batch: "the evidence
+was too large to judge" is a fact about the evidence, and the discover pass records it as that
+site's own `unverifiable` outcome while the batch carries on. Evidence that is missing with
+**nothing** recorded about it still stops the batch - that is a hole in the record, not weather.
+
 What this module does not do, stated so it is not mistaken for covered: it does not parse the
 model's answer into `phase3.model.Finding` records (that is the next piece - here the answer is
 stored verbatim as bytes, one file per `(site, stage)`) - with the one exception of that recorded
@@ -180,6 +194,29 @@ class ModelCallFailed(RuntimeError):
 
 class EvidenceUnusable(ModelCallFailed):
     """The evidence for a site cannot be turned into one bounded prompt (absent, or too large)."""
+
+
+class EvidenceOverBound(EvidenceUnusable):
+    """The site's readable evidence is over `MAX_EVIDENCE_CHARS`, so no bounded prompt exists.
+
+    A class of its own rather than a message a caller has to match, because the two facts need
+    different handling and a caller must not be able to confuse them: evidence that is missing with
+    **nothing recorded about it** is a hole in the record and stops the batch (`prepare_call` raises
+    the parent), while evidence that is **too large to judge** is a fact about the evidence, which
+    the discover pass records as that site's own `unverifiable` outcome and carries on past
+    (`phase3/discover_stage.py`). `total` and `bound` are the site's own numbers, so a report can
+    quote the arithmetic that decided it without parsing this message.
+    """
+
+    def __init__(self, *, site_id: str, total: int, bound: int) -> None:
+        super().__init__(
+            f"{site_id}: the evidence is {total} characters, over the {bound}-character bound "
+            "(the design point is ~2,300 input tokens per call). Truncating silently would judge a "
+            "page the model never saw; narrow the evidence or raise the bound deliberately."
+        )
+        self.site_id = site_id
+        self.total = total
+        self.bound = bound
 
 
 def pi_argv(
@@ -336,19 +373,36 @@ class ModelCall:
     batch_id: str
     site_id: str
     prompt: str
+    #: The one field this call judges, or `None` for the finding-driven call whose subject is the
+    #: whole site record. The discover pass sets it: it asks one question per (site, field), so the
+    #: field is part of the call's identity - it names the answer file (`answer_key`) and the ledger
+    #: label, which is what keeps five calls for one site from being written as one.
+    field: str | None = None
 
     def __post_init__(self) -> None:
         if not self.batch_id:
             raise InputError("a model call needs the batch_id it belongs to")
         if not self.site_id:
             raise InputError("a model call needs the site it judges")
+        if self.field is not None and not self.field:
+            raise InputError(f"{self.site_id}: a field-scoped call needs the field it judges")
         if not self.prompt.strip():
             raise InputError(f"{self.site_id}: a model call needs a prompt")
 
     @property
+    def answer_key(self) -> str:
+        """What this call's answer is stored under: the field, or the stage when none is set.
+
+        `fetch_stage.EvidenceStore` is keyed by `(site, feature)` and refuses to put different
+        bytes over a recorded file, so a stage-keyed answer would make a site's second field a
+        conflict with its first. Keying by field is what makes one answer per (site, field).
+        """
+        return self.field or self.stage.value
+
+    @property
     def label(self) -> str:
-        """`<site_id>/<stage>`, the fetch stage's `<site>/<feature>` label shape."""
-        return f"{self.site_id}/{self.stage.value}"
+        """`<site_id>/<field-or-stage>`, the fetch stage's `<site>/<feature>` label shape."""
+        return f"{self.site_id}/{self.answer_key}"
 
 
 @runtime_checkable
@@ -501,7 +555,7 @@ def _site_block(site: Mapping[str, Any], site_id: str) -> str:
     return f'<site id="{site_id}" name="{name}">\n' + "\n".join(rows) + "\n</site>"
 
 
-def _evidence_block(excerpts: list[EvidenceExcerpt]) -> str:
+def evidence_block(excerpts: list[EvidenceExcerpt]) -> str:
     blocks = []
     for excerpt in excerpts:
         if excerpt.text is not None:
@@ -525,7 +579,7 @@ def _evidence_block(excerpts: list[EvidenceExcerpt]) -> str:
     return "\n".join(blocks)
 
 
-def _failed_target_block(excerpts: list[EvidenceExcerpt]) -> str:
+def failed_target_block(excerpts: list[EvidenceExcerpt]) -> str:
     """The failed targets, named, or "" when every target answered."""
     failed = [e for e in excerpts if e.failure is not None]
     if not failed:
@@ -571,6 +625,60 @@ def read_fetch_failures(path: Path) -> dict[str, dict[str, str]]:
     return failures
 
 
+def evidence_excerpts(
+    *,
+    site_id: str,
+    site: Mapping[str, Any],
+    store: F.EvidenceStore,
+    allow_absent: bool = False,
+    failures: Mapping[str, str] | None = None,
+) -> list[EvidenceExcerpt]:
+    """The site's evidence, read once: one excerpt per target `fetch_stage` built for it.
+
+    Extracted from `prepare_call` for the discover pass, which builds one prompt per (site, field)
+    from the same excerpts (`phase3/discover_stage.py`): the guard below is the thing that must not
+    have two spellings. A file that is not on disk is named by `failures` **when the fetch stage
+    recorded a failure for that feature**, and refused otherwise - evidence missing with nothing
+    recorded about it is a hole in the record, and the model is never asked to judge a page nobody
+    has an account of. `allow_absent` marks it for a preview instead of raising.
+    """
+    recorded = failures or {}
+    excerpts: list[EvidenceExcerpt] = []
+    for target in F.targets_for_site(site):
+        path = store.path_for(target.site_id, target.feature)
+        failure: str | None = None
+        if path.exists():
+            text = path.read_text(encoding="utf-8")
+        elif target.feature in recorded:
+            text = None
+            failure = recorded[target.feature]
+        elif allow_absent:
+            text = None
+        else:
+            raise EvidenceUnusable(
+                f"{site_id}: the evidence file for {target.feature} is not at {path}, and the "
+                "fetch report records no failure for it; the model is never asked to judge "
+                "evidence that is not on disk"
+            )
+        excerpts.append(
+            EvidenceExcerpt(
+                feature=target.feature, url=target.url, path=path, text=text, failure=failure
+            )
+        )
+    return excerpts
+
+
+def check_evidence_bound(site_id: str, excerpts: Iterable[EvidenceExcerpt]) -> None:
+    """Refuse to build a prompt over `MAX_EVIDENCE_CHARS`, quoting the site's own arithmetic.
+
+    Shared with the discover pass, which turns `EvidenceOverBound` into that site's own outcome
+    instead of letting it end the batch; the comparison itself has one spelling, here.
+    """
+    total = sum(excerpt.chars for excerpt in excerpts)
+    if total > MAX_EVIDENCE_CHARS:
+        raise EvidenceOverBound(site_id=site_id, total=total, bound=MAX_EVIDENCE_CHARS)
+
+
 def prepare_call(
     *,
     batch_id: str,
@@ -589,43 +697,19 @@ def prepare_call(
     a target named there was asked and failed, so the prompt carries that instead of guessing.
     Evidence missing with no such record is still refused: the model is never asked to judge a
     page that nobody has an account of.
+
+    The evidence selection and the size guard are `evidence_excerpts` and `check_evidence_bound`,
+    so the discover pass's per-(site, field) prompts go through the same two calls.
     """
     site_id = str(site.get("site_id") or "")
     if not site_id:
         raise InputError(f"batch {batch_id}: a site record carries no site_id")
-    recorded = failures or {}
-    excerpts: list[EvidenceExcerpt] = []
-    total = 0
-    for target in F.targets_for_site(site):
-        path = store.path_for(target.site_id, target.feature)
-        failure: str | None = None
-        if path.exists():
-            text = path.read_text(encoding="utf-8")
-        elif target.feature in recorded:
-            text = None
-            failure = recorded[target.feature]
-        elif allow_absent:
-            text = None
-        else:
-            raise EvidenceUnusable(
-                f"{site_id}: the evidence file for {target.feature} is not at {path}, and the "
-                "fetch report records no failure for it; the model is never asked to judge "
-                "evidence that is not on disk"
-            )
-        total += len(text) if text is not None else 0
-        excerpts.append(
-            EvidenceExcerpt(
-                feature=target.feature, url=target.url, path=path, text=text, failure=failure
-            )
-        )
-    if total > MAX_EVIDENCE_CHARS:
-        raise EvidenceUnusable(
-            f"{site_id}: the evidence is {total} characters, over the {MAX_EVIDENCE_CHARS}-character "
-            "bound (the design point is ~2,300 input tokens per call). Truncating silently would "
-            "judge a page the model never saw; narrow the evidence or raise the bound deliberately."
-        )
+    excerpts = evidence_excerpts(
+        site_id=site_id, site=site, store=store, allow_absent=allow_absent, failures=failures
+    )
+    check_evidence_bound(site_id, excerpts)
     user = "\n".join(
-        [_site_block(site, site_id), _evidence_block(excerpts), _failed_target_block(excerpts)]
+        [_site_block(site, site_id), evidence_block(excerpts), failed_target_block(excerpts)]
     )
     prompt = Prompt(stage=stage, system=STAGE_QUESTION[stage], user=user)
     return PreparedCall(
@@ -704,9 +788,11 @@ def judge_site(
         )
     )
     # The fetch stage's store, reused deliberately: one file per (site, feature) there, one file
-    # per (site, stage) here, and both refuse to overwrite recorded bytes with different ones.
+    # per (site, field-or-stage) here, and both refuse to overwrite recorded bytes with different
+    # ones. `call.answer_key` is the field for a discover call, so five calls for one site leave
+    # five files instead of five writes to one.
     stored = answers.write(
-        site_id=call.site_id, feature=call.stage.value, body=answer.text.encode("utf-8")
+        site_id=call.site_id, feature=call.answer_key, body=answer.text.encode("utf-8")
     )
     return JudgedCall(answer=answer, wrote=stored.wrote)
 
@@ -724,6 +810,9 @@ class SiteJudgement:
     cache_write_tokens: int
     cost_usd: float
     wrote: bool
+    #: The field this call judged, or `None` for a per-site call (`ModelCall.field`). Carried here
+    #: so a report reader can count calls per field without parsing `label`.
+    field: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return dict(vars(self))
@@ -742,10 +831,15 @@ class SkippedSite:
     site_id: str
     reason: str
     findings: list[M.Finding] = field(default_factory=list)
+    #: The one field whose call was not bought, or `None` when the whole site was skipped
+    #: (`ModelCall.field`). The discover pass asks one question per (site, field), so its skips are
+    #: per field too: a field whose evidence never arrived is recorded on its own.
+    field: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "site_id": self.site_id,
+            "field": self.field,
             "reason": self.reason,
             "findings": [json.loads(f.to_json()) for f in self.findings],
         }
@@ -880,7 +974,7 @@ def judge_batch(
     for item in prepared:
         site_id = item.call.site_id
         if not any(e.present for e in item.excerpts):
-            reason = _no_evidence_reason(item)
+            reason = no_evidence_reason(item)
             skipped.append(
                 SkippedSite(
                     site_id=site_id,
@@ -902,6 +996,7 @@ def judge_batch(
                 cache_write_tokens=usage.cache_write_tokens,
                 cost_usd=usage.cost_usd,
                 wrote=judged.wrote,
+                field=item.call.field,
             )
         )
     return BatchModelReport(
@@ -913,7 +1008,7 @@ def judge_batch(
     )
 
 
-def _no_evidence_reason(item: PreparedCall) -> str:
+def no_evidence_reason(item: PreparedCall) -> str:
     """Why no call was bought for this site. Two different facts, never one blurry sentence."""
     failed = [e for e in item.excerpts if e.failure is not None]
     if not failed:
