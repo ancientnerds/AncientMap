@@ -215,6 +215,10 @@ output/*
 !output/remediation/
 output/remediation/*
 !output/remediation/AUDIT_LOG.md
+# The list of what only Martin can decide (2026-09-21). It is addressed to him, it is not derivable
+# from any run, and a file directly under `output/remediation/` is silently swallowed by the glob
+# above - which is how a deliverable goes missing without a word.
+!output/remediation/HUMAN_ONLY.md
 # The old-to-new commit table for the 2026-09-21 history rewrite. It cannot be regenerated -
 # filter-branch does not keep its mapping - and every hash recorded before the rewrite is
 # stale without it, so it is versioned like AUDIT_LOG.md rather than left to the glob.

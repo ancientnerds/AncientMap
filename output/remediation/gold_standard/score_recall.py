@@ -26,7 +26,6 @@ from __future__ import annotations
 
 import json
 import pathlib
-import re
 import sys
 from collections import Counter, defaultdict
 
@@ -35,7 +34,17 @@ TRUTH = REPO / "output" / "remediation" / "gold_standard" / "truth_fields.json"
 DEFAULT_RUN = REPO / "output" / "remediation" / "phase3_runner" / "runs" / "gold"
 OUT = REPO / "output" / "remediation" / "gold_standard" / "recall_result.json"
 
-VERDICT = re.compile(r"VERDICT:\s*(CORRECT|WRONG|UNVERIFIABLE)")
+# The pipeline's own expression rather than a second copy of it. `discover_stage.VERDICT_RE` is what
+# the answer parser uses, and two spellings of one rule drift: the round-3 under-count of five
+# answers that write the verdict inline (`2. VERDICT: UNVERIFIABLE`) came from exactly that. This
+# script scores what the pass produced, so it has to ask the pass's question.
+PHASE3_PARENT = REPO / "scripts" / "remediation"
+if str(PHASE3_PARENT) not in sys.path:
+    sys.path.insert(0, str(PHASE3_PARENT))
+
+from phase3 import discover_stage as DS  # noqa: E402
+
+VERDICT = DS.VERDICT_RE
 
 
 def verdict_of(text: str) -> str | None:

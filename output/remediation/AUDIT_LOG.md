@@ -3021,6 +3021,8 @@ is cheaper than a comment that suppresses them:
 | `run.py:121` | `if record["phase3"] is True:` | The plan-format guard. A JSON `true` is a Python `bool`; `is True` is the strictest correct spelling. The suggested `== True` would *weaken* it - `1 == True` is also true. |
 | `run.py:403`, `508`, `639` | `payload = json.loads(report.to_json())` | `to_json()` (`model_stage.py:917-924`) is `json.dumps` of a dict built from the object's own fields. **There is no file and no foreign input**, so "missing file" cannot arise; a `try/except` here would hide a serialisation bug rather than handle one. |
 | `run.py:759` | `return int(args.func(args))` | The argparse dispatch. `args.func` is set by `set_defaults(func=cmd_*)` for every subparser (`run.py:692,698,718,747,753`), and an unknown verb is refused by argparse **before** dispatch: `run.py not-a-subcommand` exits `2` with `invalid choice`. Executed, not assumed. |
+| `list_other_flags.py:52` | a reader of `model.json` and the answer files | `call without try/except` again - and here the `try/except` would be the defect. This script exists to surface flags the fixture does not list; a reader that swallows a missing file or unparsable JSON reports "no flags" for a run it never read, which is the one outcome it must never produce. Raising loudly **is** the check. |
+| `verify_sources.py:48` | a reader of `fetch.json` (the page map for the citation check) | Same class, same reason, and one step stronger: this file decides whether a correction is writable, so a swallowed error would silently make a fabricated citation look verified. |
 
 No change is the correct outcome: the only edits that would silence these are a `try/except` around the
 dispatch and an `== True`, and both would make the code check less. Nothing here is suppressed with a
@@ -3166,7 +3168,51 @@ change between rounds 4 and 5, so that flip is variance by construction.
 | 4 | 5 | 13 | 32 | 30 | $0.058388 |
 | 5 | 7 | 15 | 33 | 27 | $0.058558 |
 
-### The freeze, and why no round 6
+### Owner decision, 2026-09-21: all 5,004, and corrections with sources
+
+Martin decided three things in one message, and they change the remaining work:
+
+1. **Scope is all 5,004 sites**, not the 1,813-site census worklist. That matches the coverage
+   finding (`5815e64`: the worklist holds 4 of the 17 sites carrying the 24 missed errors) and it is
+   the answer to the question the plan left open. Cost is not the reason to hesitate - the discover
+   stage over all 5,004 is 25,020 calls, measured at $0.000781 per call = **~$19.5**; wall clock is
+   the constraint, which is what the mass-run driver addresses.
+2. **The model must correct, not only flag.** The delivered question says the opposite today, in
+   writing: `Never guess a replacement value.` and `You propose; you do not write.` Under the new
+   requirement a `WRONG` verdict must carry the value the site should store.
+3. **Every correction must carry evidence and a source.** So the answer gains `PROPOSED:` and
+   `SOURCE:` lines, and - this is the part that keeps the project's own rule intact - **a cited source
+   must be a URL the run actually fetched, with a verbatim quote that occurs in the bytes we stored**.
+   A model may not cite a page nobody pulled; the quote is machine-checkable against our own evidence
+   files, so "with sources" becomes a verified property rather than a claim in prose.
+
+Consequence for the pipeline: the discover answer format is extended (parse into
+`evidence`, `verdict`, `proposed`, `sources` plus a `problems` list), the source claim is verified
+against the fetched bytes, and the writer refuses any finding that is incomplete or whose quote does
+not occur in the stored page. `HUMAN_ONLY.md` lists what stays a human decision (push/deploy, a search
+provider key, the 285 name/coordinate cases, the 117 T02 cases, the 17 sites with no prose route, the
+42 without `source_url`, image spot-check, style calls).
+
+**No search route exists in this codebase** (checked: no `*SEARCH*`/`SERP`/`TAVILY`/`EXA` accessor
+anywhere in `api/`, `pipeline/`, `scripts/`). "Research online" therefore means, until a provider is
+named: more and independent *fetched* routes, not a model with a browser.
+
+#### The trap inside "with sources": the evidence is API JSON
+
+The first version of the citation check would have failed every honest quote, and the failure would
+have looked like a model that fabricates citations. `model_stage.evidence_block:558` puts
+`EvidenceExcerpt.text` into the prompt **verbatim**, and for `enwiki`/`wikidata_entity` that text is
+the API's **JSON response** - so the page carries `\u00c1vila` and `\n` exactly where the model reads
+`Ávila` and a line break. A byte comparison of a normally-transcribed quote against the stored file
+therefore reports "does not occur" for a quote that is perfectly genuine, and the metric would have
+measured JSON escaping rather than citation honesty.
+
+Both sides are unescaped (`\uXXXX`, `\n`, `\"`, `\/`), whitespace-folded and case-folded before they
+are compared. That fold is the only relaxation and it is deliberately narrow - the words and their
+order are still required - but it is also the honest description of the instrument: this check proves
+a sentence was **in the page we fetched**, not that it was byte-identical to it. Recorded here because
+the next person to tighten this check would otherwise re-introduce the false negative.
+
 
 The question is frozen at round 5's wording. Three reasons, all measured:
 
@@ -3194,4 +3240,61 @@ delivered rule is "Only the evidence in this message decides", so that answer is
 delivered rubric*; the fixture expects a solver that also uses its own subject knowledge. That is a
 design decision (own knowledge may refute and never uphold?) and it is deliberately **not** folded
 into this fix.
+
+## Round 6: the correction contract, and zero fabricated citations (2026-09-21)
+
+Martin's direction changed the deliverable: **all 5,004 sites, the model corrects instead of only
+reporting, and every correction carries evidence and a source.** The delivered question said the
+opposite - `Never guess a replacement value.` / `You propose; you do not write.` - so this is a design
+change, and it is measured like the five rounds before it.
+
+The contract: a `WRONG` verdict now owes `PROPOSED: <the value the field should hold>` and up to three
+`SOURCE:` lines, each `<url from the evidence> - "<a sentence copied from that page>"`. Five places
+decide whether such a finding may be written, and each was proved to have teeth by mutation: the
+question asks for it, `parse_answer` parses it (inline verdicts included), `source_problems` requires
+a source, refuses a url **this run never fetched**, and `quote_occurs` requires the sentence to be in
+that page. `verify_sources.py` reports the rate over a whole run; the writer (piece 6) will call
+`source_problems` and drop what fails.
+
+**The trap that would have made this look like the model's fault.** The `enwiki`/`wikidata_entity`
+evidence files are the APIs' JSON responses and `model_stage.evidence_block:558` puts them into the
+prompt verbatim, so the page says `\u00c1vila` and `\n` where the model reads `Ávila` and a break. A
+raw-byte comparison reports every honest quote as missing, and the metric would have measured JSON
+escaping while reading as a model that invents citations. Both sides are unescaped, whitespace- and
+case-folded first; words, order, punctuation and digits are still required.
+
+Round 6, controlled like the others - plan sha256 `ad32d26fccb3913b...`, all six stage exits verified
+against their artefacts, **33/33 evidence files byte-identical to round 1**:
+
+| | round 6 |
+|---|---|
+| recall | **7 of 19 asked = 36.8 %** (of 24: 29.2 %) |
+| verdicts | CORRECT 31 / WRONG 13 / UNVERIFIABLE 31 |
+| WRONG carrying a proposed value | **13 of 13** |
+| WRONG carrying a source | **13 of 13** |
+| quoted sentences | 14 |
+| **citation problems** | **0** - every quote occurs in the page it cites |
+| cost (frozen `model.json`) | 75 calls, 382,930 in / 7,439 out, `$0.061903` = **`$0.000825`/call** |
+
+Two readings. Recall sits inside the noise band the five earlier rounds established (5, 8, 7, 5, 7):
+the contract costs nothing in catches. The citation rate is **not** a noise band - 14 of 14 verified
+against our own bytes - and that was the risk worth $0.06 before 25,020 calls: a model that
+paraphrases would make the design unusable at scale, and it does not paraphrase. Cost per call rose
+from `$0.000781` to `$0.000825` (longer answers), so the discover stage over all 5,004 sites projects
+to **~$20.6**; wall clock remains the binding constraint. Out-of-fixture flags fell 8 -> 6.
+
+What this obliges: a finding whose source cannot be verified must never reach the journal, and the
+mass run should record the citation rate per batch - it is the one number that says the running model
+is still the measured one.
+
+`output/remediation/HUMAN_ONLY.md` now carries the table Martin asked for: what only he can decide
+(the push, the mass-write deploy, a search-provider key, cron mail, offsite, the `mypy api/` debt) and
+what only a human should judge per site (285 name/coordinate calls, 117 T02 countries, 17 sites with
+no prose route, 42 without `source_url`, deletions). Its counts come from the snapshot and from
+`output/remediation/phase3_pilot/COST.md:141`, not from memory.
+
+Also decided here, because it was the same defect class twice: `score_recall.py` no longer carries its
+own verdict regex but imports `discover_stage.VERDICT_RE`, and the five committed
+`recall_result_*.json` files were re-derived with the shared rule and came back **byte-identical**
+(5/19, 8/19, 7/19, 5/19, 7/19).
 

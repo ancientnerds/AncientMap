@@ -48,6 +48,14 @@ PRECEDENCE = "test_the_field_clause_is_stated_to_beat_the_general_rules"
 VOCAB = "test_the_site_type_question_carries_the_catalogues_own_value_list"
 VOCAB_REFUSAL = "test_the_site_type_question_refuses_to_be_built_without_the_value_list"
 SPANS = "test_the_period_question_gives_the_bucket_spans_and_not_only_lower_bounds"
+#: The correction-and-source guards of 2026-09-21: the model must propose a value and cite a page the
+#: run itself fetched, so "with sources" is checked rather than believed. One name per guard - a
+#: single test with three assertions proves the suite fails, not which guard caught it.
+CORRECTION = "test_the_question_asks_for_a_correction_and_names_where_it_must_come_from"
+SOURCE_REQUIRED = "test_a_wrong_answer_without_a_source_is_a_problem"
+QUOTE_FOLD = "test_a_quote_is_recognised_across_the_differences_a_retyping_has"
+QUOTE_ESCAPE = "test_a_quote_is_recognised_across_json_escapes_in_the_evidence"
+UNFETCHED_SOURCE = "test_a_cited_page_the_run_did_not_fetch_is_a_problem"
 
 #: (name, file, the exact text to replace, what to replace it with, test file, test name)
 MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
@@ -273,11 +281,51 @@ MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         "scripts/remediation/phase3/discover_stage.py",
         '        "evidence often names a century rather than a year, and the direction of BC years is easy to "\n'
         '        "invert: the 2nd century BC is -200 up to but not including -101, and the 4th century BC is "\n'
-        '        "-400 up to but not including -301, so **both of those centuries fall in `500 BC - 1 AD`** "\n'
+        '        "-400 up to but not including -301, so **both of those centuries fall in `500 BC - 1 AD` "\n'
         '        "and neither is in `1500 - 500 BC`**. Most sites "',
         '        "Most sites "',
         TEST,
         SPANS,
+    ),
+    (
+        "the question stops asking for a correction value",
+        "scripts/remediation/phase3/discover_stage.py",
+        '    "PROPOSED: <the value this field should hold, in the field\'s own shape>\\n"\n',
+        "",
+        TEST,
+        CORRECTION,
+    ),
+    (
+        "a WRONG verdict no longer needs a source",
+        "scripts/remediation/phase3/discover_stage.py",
+        "        if not sources:",
+        "        if False:  # mutated",
+        TEST,
+        SOURCE_REQUIRED,
+    ),
+    (
+        "a quote is matched without folding whitespace and quote marks",
+        "scripts/remediation/phase3/discover_stage.py",
+        '    return " ".join(unescaped.translate(_QUOTE_FOLD).split()).casefold()',
+        "    return unescaped",
+        TEST,
+        QUOTE_FOLD,
+    ),
+    (
+        "a cited page the run never fetched is accepted",
+        "scripts/remediation/phase3/discover_stage.py",
+        "        page = pages.get(claim.url)\n        if page is None:",
+        "        page = pages.get(claim.url)\n        if False:  # mutated",
+        TEST,
+        UNFETCHED_SOURCE,
+    ),
+    (
+        "the JSON escapes in the evidence are not undone",
+        "scripts/remediation/phase3/discover_stage.py",
+        "    unescaped = _ESCAPE_RE.sub(_unescape_match, text)",
+        "    unescaped = text",
+        TEST,
+        QUOTE_ESCAPE,
     ),
 ]
 

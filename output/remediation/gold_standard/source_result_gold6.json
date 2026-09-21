@@ -1,0 +1,15 @@
+{
+  "run": "gold6",
+  "seen": {
+    "answered": 75,
+    "citation_problems": 0,
+    "quotes": 14,
+    "verdict_CORRECT": 31,
+    "verdict_UNVERIFIABLE": 31,
+    "verdict_WRONG": 13,
+    "wrong": 13,
+    "wrong_with_proposed": 13,
+    "wrong_with_source": 13
+  },
+  "problems": []
+}

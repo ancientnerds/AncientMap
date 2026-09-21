@@ -1099,3 +1099,131 @@ def test_the_site_type_vocabulary_is_read_from_the_snapshot_sorted_and_deduplica
     with pytest.raises(R.InputError) as caught:
         SP.site_type_vocabulary(snapshot_dir=snapshot)
     assert "no non-empty site_type value" in str(caught.value)
+
+
+# ---------------------------------------------------------------------------------------------
+# The correction and its source. Martin's requirement of 2026-09-21 is that the model **corrects**
+# rather than only flags, and that every correction carries a page and a sentence. That sentence is
+# then checked against the bytes the run itself fetched, which is what makes "with sources" a
+# property of the artefact instead of a claim in prose. Before this, the question said the opposite
+# in writing (`Never guess a replacement value.`), so these tests also pin that it no longer does.
+# ---------------------------------------------------------------------------------------------
+
+GOOD_WRONG = (
+    "EVIDENCE: the article says the tomb was built in the 4th century BC.\n"
+    "VERDICT: WRONG\n"
+    "PROPOSED: -400\n"
+    'SOURCE: https://en.wikipedia.org/wiki/Amyntas - "The tomb dates from the 4th century BC."\n'
+)
+
+
+def test_a_wrong_answer_keeps_its_proposed_value_and_its_source() -> None:
+    answer = DS.parse_answer(GOOD_WRONG)
+    assert answer.verdict == "WRONG"
+    assert answer.proposed == "-400"
+    assert answer.sources == (
+        DS.SourceClaim(
+            url="https://en.wikipedia.org/wiki/Amyntas",
+            quote="The tomb dates from the 4th century BC.",
+        ),
+    )
+    assert answer.problems == ()
+    assert answer.complete
+
+
+def test_a_wrong_answer_without_a_proposed_value_is_a_problem() -> None:
+    answer = DS.parse_answer(GOOD_WRONG.replace("PROPOSED: -400\n", ""))
+    assert any("no `PROPOSED:` value" in problem for problem in answer.problems)
+    assert not answer.complete
+
+
+def test_a_wrong_answer_without_a_source_is_a_problem() -> None:
+    text = "\n".join(line for line in GOOD_WRONG.splitlines() if not line.startswith("SOURCE:"))
+    answer = DS.parse_answer(text)
+    assert any("no `SOURCE:` page" in problem for problem in answer.problems)
+
+
+def test_a_correct_answer_carrying_a_correction_is_a_problem() -> None:
+    answer = DS.parse_answer(GOOD_WRONG.replace("VERDICT: WRONG", "VERDICT: CORRECT"))
+    assert any("carrying a correction" in problem for problem in answer.problems)
+
+
+def test_a_source_line_without_a_url_and_a_quote_is_a_problem() -> None:
+    # Built here rather than by editing GOOD_WRONG: a `str.replace` that does not match is a silent
+    # no-op, and this test then asserts about the wrong text (it did, first time).
+    text = (
+        "EVIDENCE: the article says the tomb was built in the 4th century BC.\n"
+        "VERDICT: WRONG\n"
+        "PROPOSED: -400\n"
+        "SOURCE: see the article above\n"
+    )
+    answer = DS.parse_answer(text)
+    assert answer.sources == ()
+    assert any("1 `SOURCE:` line(s), 0 carrying" in problem for problem in answer.problems)
+
+
+def test_more_than_three_sources_are_a_problem_and_the_first_three_are_kept() -> None:
+    extra = "".join(f'SOURCE: https://example.org/{n} - "quote {n}"\n' for n in range(1, 6))
+    answer = DS.parse_answer(GOOD_WRONG + extra)
+    assert len(answer.sources) == DS.MAX_SOURCES == 3
+    assert [claim.url for claim in answer.sources][:2] == [
+        "https://en.wikipedia.org/wiki/Amyntas",
+        "https://example.org/1",
+    ]
+    assert any("6 sources; at most 3" in problem for problem in answer.problems)
+
+
+def test_the_verdict_is_found_when_it_is_written_inline() -> None:
+    answer = DS.parse_answer(
+        "EVIDENCE: the page is silent on the date.\n2. VERDICT: UNVERIFIABLE\n"
+    )
+    assert answer.verdict == "UNVERIFIABLE"
+
+
+def test_a_quote_is_recognised_across_json_escapes_in_the_evidence() -> None:
+    # The enwiki/wikidata evidence files *are* the APIs' JSON responses and go into the prompt
+    # verbatim, so the page spells a break `\n` and a non-ASCII letter `\u00c1vila` exactly where the
+    # model reads a break and `Ávila`. Without undoing those escapes on both sides, every honest
+    # quote would be reported as missing and the metric would be about JSON, not about citations.
+    page = '{"extract":"in the municipality of El Tiemblo, \\u00c1vila,\\nSpain."}'
+    assert DS.quote_occurs("in the municipality of El Tiemblo, Ávila, Spain.", page)
+    assert DS.quote_occurs("El Tiemblo, \\u00c1vila,\\nSpain", page)
+
+
+def test_a_quote_is_recognised_across_the_differences_a_retyping_has() -> None:
+    page = "He built it\n  in the 4th century BC,\nas the sources say."
+    assert DS.quote_occurs("in the 4th century BC,", page)
+    assert DS.quote_occurs("He built it in the 4th century BC", page)
+    assert DS.quote_occurs("as the sources say", page)
+
+
+def test_a_quote_that_is_not_in_the_page_is_a_problem() -> None:
+    answer = DS.parse_answer(GOOD_WRONG)
+    problems = DS.source_problems(
+        answer, {"https://en.wikipedia.org/wiki/Amyntas": "The tomb is Hellenistic."}
+    )
+    assert any("quote does not occur" in problem for problem in problems)
+
+
+def test_a_cited_page_the_run_did_not_fetch_is_a_problem() -> None:
+    answer = DS.parse_answer(GOOD_WRONG)
+    problems = DS.source_problems(answer, {})
+    assert any("was not fetched by this run" in problem for problem in problems)
+
+
+def test_pages_from_excerpts_carries_only_the_pages_we_have() -> None:
+    excerpts = [
+        MS.EvidenceExcerpt(feature="article", url="https://a", path=Path("a"), text="text a"),
+        MS.EvidenceExcerpt(
+            feature="wikidata", url="https://b", path=Path("b"), text=None, failure="timeout"
+        ),
+    ]
+    assert DS.pages_from_excerpts(excerpts) == {"https://a": "text a"}
+
+
+def test_the_question_asks_for_a_correction_and_names_where_it_must_come_from() -> None:
+    question = DS.field_question("description", ())
+    assert "PROPOSED:" in question
+    assert "SOURCE:" in question
+    assert "must occur in that page" in question
+    assert "Never guess a replacement value" not in question

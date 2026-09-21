@@ -46,7 +46,8 @@ fetched file `absent` instead of refusing it.
 from __future__ import annotations
 
 import json
-from collections.abc import Mapping, Sequence
+import re
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -98,7 +99,7 @@ FIELD_CLAUSE: dict[str, str] = {
         "-500 belongs to `500 BC - 1 AD`, not to the bucket whose name begins with them. The "
         "evidence often names a century rather than a year, and the direction of BC years is easy to "
         "invert: the 2nd century BC is -200 up to but not including -101, and the 4th century BC is "
-        "-400 up to but not including -301, so **both of those centuries fall in `500 BC - 1 AD`** "
+        "-400 up to but not including -301, so **both of those centuries fall in `500 BC - 1 AD` "
         "and neither is in `1500 - 500 BC`**. Most sites "
         "sit on a bucket lower bound. Work out **which span each of the two values falls in**, "
         "state both, and then compare: they are `WRONG` when the spans differ, and a round value "
@@ -168,10 +169,24 @@ QUESTION_TEMPLATE = (
     "* `CORRECT` - the evidence **states** this field's value and it matches the stored value.\n"
     "* `WRONG` - the evidence states **a different value**; or the field stores no value where one "
     "belongs; or a claim the stored value itself makes is contradicted by the evidence. The sentence "
-    "must say which of these it is.\n"
+    "must say which of these it is, and a `WRONG` verdict **carries the value the field should hold "
+    "and the page it comes from**, on two more lines:\n"
+    "\n"
+    "PROPOSED: <the value this field should hold, in the field's own shape>\n"
+    'SOURCE: <a url that appears in the evidence below> - "<a sentence you copied word for word '
+    'from that page>"\n'
+    "\n"
     "* `UNVERIFIABLE` - the evidence states nothing about this field's value. **Silence is not "
     'agreement**: "I looked and the evidence says nothing about this" is `UNVERIFIABLE`, never '
-    "`CORRECT`. Never guess a replacement value.\n"
+    "`CORRECT`, and `PROPOSED`/`SOURCE` are not written for it. Never invent a value the evidence "
+    "does not give.\n"
+    "\n"
+    "The `SOURCE` line is not decoration: it must name a page that is in the evidence below, and the "
+    "quoted sentence must occur in that page, word for word in that order - your quotation marks "
+    "and spacing are your own, the words are not. A correction whose page the run did not fetch, "
+    "or whose sentence is not in it, is thrown away. Use up to three `SOURCE` lines when one claim "
+    "rests on more than one page. Never write `PROPOSED` or `SOURCE` for `CORRECT` or "
+    "`UNVERIFIABLE`.\n"
     "\n"
     "**Only the evidence in this message decides.** Your own knowledge of the subject is not "
     "evidence: it cannot uphold the stored value, and the sentence may not cite it.\n"
@@ -496,3 +511,199 @@ def judge_discover_batch(
         judgements=judgements,
         skipped=skipped,
     )
+
+
+#: The answer's shape, parsed. The verdict expression is the recall scorer's own rule, stated once
+#: here so the two cannot drift: five round-3 answers write the verdict inline
+#: (`2. VERDICT: UNVERIFIABLE`), and a rule anchored to the start of a line under-counted them.
+VERDICT_RE = re.compile(r"VERDICT:\s*(CORRECT|WRONG|UNVERIFIABLE)")
+PROPOSED_RE = re.compile(r"^\s*PROPOSED:\s*(?P<value>\S.*?)\s*$", re.MULTILINE)
+SOURCE_RE = re.compile(
+    r"^\s*SOURCE:\s*(?P<url>https?://\S+)\s*[-\u2013\u2014]?\s*[\"\u201c](?P<quote>.+?)[\"\u201d]\s*$",
+    re.MULTILINE,
+)
+
+#: A `SOURCE:` line that does not match `SOURCE_RE` (no URL, no quoted sentence) is a problem too,
+#: so its presence is counted by its prefix rather than inferred from the number of matches.
+SOURCE_PREFIX = "SOURCE:"
+EVIDENCE_PREFIX = "EVIDENCE:"
+
+#: How many pages one correction may cite. More are a problem rather than a bonus: the writer stores
+#: them in the journal's `evidence`, and a human reads that.
+MAX_SOURCES = 3
+
+
+@dataclass(frozen=True)
+class SourceClaim:
+    """One page the answer cites, and the sentence it says is on that page."""
+
+    url: str
+    quote: str
+
+
+@dataclass(frozen=True)
+class DiscoverAnswer:
+    """One parsed answer. `problems` is empty exactly when the answer is shaped as asked.
+
+    A problem is **recorded, not raised**: the call was bought and paid for, and the batch's job is
+    to report what came back. What refuses is the *write* (piece 6) - a `WRONG` verdict with no
+    proposed value, or with a source that cannot be found in the page the run fetched, must not
+    reach the database.
+    """
+
+    evidence: str
+    verdict: str | None
+    proposed: str | None
+    sources: tuple[SourceClaim, ...]
+    problems: tuple[str, ...]
+
+    @property
+    def complete(self) -> bool:
+        """True when nothing about the answer's shape is wrong."""
+        return not self.problems
+
+
+def parse_answer(text: str) -> DiscoverAnswer:
+    """Read one answer. Every deviation lands in `problems`, naming what was missing."""
+    problems: list[str] = []
+    verdict_match = VERDICT_RE.search(text)
+    verdict = verdict_match.group(1) if verdict_match else None
+    if verdict is None:
+        problems.append("no `VERDICT:` line naming CORRECT, WRONG or UNVERIFIABLE")
+
+    evidence = ""
+    for line in text.splitlines():
+        if line.strip().upper().startswith(EVIDENCE_PREFIX):
+            evidence = line.split(":", 1)[1].strip()
+            break
+    if not evidence:
+        problems.append("no `EVIDENCE:` sentence saying what the evidence gives")
+
+    proposed_hits = [m.group("value") for m in PROPOSED_RE.finditer(text)]
+    if len(proposed_hits) > 1:
+        problems.append(
+            f"{len(proposed_hits)} `PROPOSED:` lines; one field carries one value"
+        )
+    proposed = proposed_hits[0] if proposed_hits else None
+
+    sources = tuple(
+        SourceClaim(url=m.group("url"), quote=m.group("quote")) for m in SOURCE_RE.finditer(text)
+    )
+    source_lines = sum(
+        1 for line in text.splitlines() if line.strip().upper().startswith(SOURCE_PREFIX)
+    )
+    if source_lines != len(sources):
+        problems.append(
+            f"{source_lines} `SOURCE:` line(s), {len(sources)} carrying both a url and a quoted "
+            'sentence; each needs `SOURCE: <url> - "<sentence>"`'
+        )
+    if len(sources) > MAX_SOURCES:
+        problems.append(
+            f"{len(sources)} sources; at most {MAX_SOURCES} are kept and the rest are dropped"
+        )
+        sources = sources[:MAX_SOURCES]
+
+    if verdict == "WRONG":
+        if proposed is None:
+            problems.append("a `WRONG` verdict with no `PROPOSED:` value")
+        if not sources:
+            problems.append("a `WRONG` verdict with no `SOURCE:` page to answer for it")
+    elif verdict is not None and (proposed is not None or sources):
+        problems.append(
+            f"a `{verdict}` verdict carrying a correction (`PROPOSED`/`SOURCE` belong to `WRONG`)"
+        )
+    return DiscoverAnswer(
+        evidence=evidence,
+        verdict=verdict,
+        proposed=proposed,
+        sources=sources,
+        problems=tuple(problems),
+    )
+
+
+#: What a retyped quotation legitimately changes: whitespace runs, quote marks, dash characters and
+#: non-breaking spaces. Case is folded too, because a sentence lifted from mid-paragraph is
+#: legitimately recased. What is **not** folded: the words, their order, punctuation and digits.
+_QUOTE_FOLD = str.maketrans(
+    {
+        "\u2018": "'",
+        "\u2019": "'",
+        "\u201c": '"',
+        "\u201d": '"',
+        "\u00a0": " ",
+        "\u2011": "-",
+        "\u2012": "-",
+        "\u2013": "-",
+        "\u2014": "-",
+        "\u2212": "-",
+    }
+)
+
+
+#: The JSON escapes that occur in an evidence file (`\uXXXX`, `\n`, `\"`, `\/`). Undone on both
+#: sides of the comparison - `normalise_quote` says why.
+_ESCAPE_RE = re.compile(r"\\(u[0-9a-fA-F]{4}|U[0-9a-fA-F]{8}|[ntr\"'/\\bf])")
+_ESCAPE_CHARS = {
+    "n": "\n",
+    "t": "\t",
+    "r": "\r",
+    '"': '"',
+    "'": "'",
+    "/": "/",
+    "\\": "\\",
+    "b": "\b",
+    "f": "\f",
+}
+
+
+def _unescape_match(match: re.Match[str]) -> str:
+    body = match.group(1)
+    if body[0] in "uU":
+        return chr(int(body[1:], 16))
+    return _ESCAPE_CHARS[body]
+
+
+def normalise_quote(text: str) -> str:
+    """The form in which a quote and a page are compared.
+
+    JSON escapes are undone first. The evidence files for `enwiki` and `wikidata_entity` are the
+    APIs' **JSON responses**, and `model_stage.evidence_block` puts that text into the prompt
+    verbatim - so the page spells a line break `\\n` and `Ávila` `\\u00c1vila` exactly where the model
+    reads a break and an `Á`. Comparing raw bytes would report every honest quote as missing, and the
+    metric would then be about JSON escaping instead of about citations.
+
+    What is still required: the words, their order, punctuation and digits. What is folded: case,
+    whitespace runs, the quote and dash characters a retyping may change, and those escapes.
+    """
+    unescaped = _ESCAPE_RE.sub(_unescape_match, text)
+    return " ".join(unescaped.translate(_QUOTE_FOLD).split()).casefold()
+
+
+def quote_occurs(quote: str, page: str) -> bool:
+    """True when the page carries the sentence, up to the differences a retyping may have."""
+    needle = normalise_quote(quote)
+    return bool(needle) and needle in normalise_quote(page)
+
+
+def pages_from_excerpts(excerpts: Iterable[MS.EvidenceExcerpt]) -> dict[str, str]:
+    """The pages behind one call's evidence: url -> the text we stored, for the pages we have."""
+    return {e.url: e.text for e in excerpts if e.text is not None}
+
+
+def source_problems(answer: DiscoverAnswer, pages: Mapping[str, str]) -> tuple[str, ...]:
+    """What is wrong with this answer's sources, judged against the pages the run fetched.
+
+    This is the line that makes "with sources" a property rather than a claim: a page the run did
+    not fetch cannot be checked, and a quoted sentence that does not occur in the page we stored is
+    a fabricated citation. Either one is recorded here, and the finding that carries it is not
+    written.
+    """
+    problems: list[str] = []
+    for claim in answer.sources:
+        page = pages.get(claim.url)
+        if page is None:
+            problems.append(f"cited page was not fetched by this run: {claim.url}")
+            continue
+        if not quote_occurs(claim.quote, page):
+            problems.append(f"quote does not occur in {claim.url}: {claim.quote!r}")
+    return tuple(problems)
