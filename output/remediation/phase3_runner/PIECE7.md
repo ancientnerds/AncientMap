@@ -155,3 +155,52 @@ Also fixed: the projection line printed `$0.00` for a five-call run (`.2f`); it 
 The first run also produced a real correction (`card_description`: the stored "founded in 1690 by the
 Kounta" against a source that says the Kounta *came* to an existing community), with `PROPOSED:` and a
 `SOURCE:` quote that occurs in the page the run fetched.
+
+## The relaunch, and the ledger that ended it (2026-09-21)
+
+With the pacer's lock repaired (`d4d9834`) the run was relaunched at `--jobs 4`. It reached
+`batch-0017: done`, quit the twentieth batch, and then the driver died on its own bookkeeping:
+
+```
+LedgerDamage: ...\LEDGER.jsonl:2735: a ledger line inside the file does not parse
+DRIVER_EXIT=1
+```
+
+Line 2735 was 99 bytes: `?action=wbgetentities&ids=Q12339802&...&format=json"}` - a fetch line with no
+head. The neighbours give the arithmetic: a 438-byte model-call line sits where the head should be, a
+537-byte fetch line is the shape of the damaged line, and 537 - 438 = 99. Two writers computed the
+same end-of-file position; the shorter write landed on the longer one's head and the leftover tail
+became a line of its own.
+
+**Measured, because the count decides whether this is a nuisance or a hole in the accounting.** Four
+processes appending 250 lines each through the real `Ledger.append`: **880 lines in the file, 0
+unparsable, 0 duplicates**. The 120 missing entries are not damaged - the line that overwrote them is
+valid, so `Spend.from_ledger`'s parse check cannot see them. One process: 250 of 250. The raw
+`os.open(O_APPEND)` + `os.write` route is worse (743 of 1000). `_O_APPEND` is emulated as
+seek-to-end-then-write on this platform, and `os.fsync` flushes without serialising. Behind an OS
+byte-range lock the same four processes keep **1000 of 1000**.
+
+**What it cost, honestly.** Not the 12 % the tight loop suggests: the run's window in the ledger holds
+1429 model-call lines against the twenty batches' 1430 reported calls (the one in flight at the kill),
+with no label twice. Model calls are seconds apart, so writers rarely collide. The damage was the
+**parse**, not the count: one clobbered line stops a 46-hour run.
+
+The damaged line is quarantined with its neighbours in
+`output/remediation/logs/ledger_damage_2026-09-21.txt`, not deleted, and the ledger parses again
+(2938 lines, 0 unreadable). The dry run on the repaired ledger reports `20 of 334 batches already
+done; nothing was bought`, and the pacing directory holds only host stamps, no lock.
+
+**The fix, and the receipts.** `Ledger.append` now holds an OS region lock around the write
+(`msvcrt.locking` with a sleep between attempts on Windows, `fcntl.flock` on POSIX), which the system
+releases when a writer dies. The four-process probe, which runs the real writer, went from 888 of 1000
+lines to **1000 of 1000**. The test that pins it starts four processes appending 150 entries each and
+asserts 600 distinct lines; with the lock replaced by `if True:` it reports `assert 543 == 600`, so it
+fails on the file it was written against. The mutation is in the sweep's inventory as number 70.
+
+One finding from the static checker was worth taking seriously: it flagged `fcntl.flock` as an unknown
+attribute, and `mypy` reproduced it - typeshed declares `flock`/`LOCK_EX`/`LOCK_UN` inside
+`if sys.platform != "win32"`, so the POSIX branch is dead code on Windows and only a `sys.platform`
+narrowing lets a checker see that. Rewritten as `sys.platform == "win32"`, no suppression. The branch
+stays: this run may move to the VPS, which is Linux.
+
+The ledger is repaired (2938 lines, 0 unreadable) and the run is ready to be relaunched.

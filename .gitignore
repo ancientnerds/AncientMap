@@ -274,6 +274,9 @@ output/remediation/phase3_worklist/WORKLIST.jsonl
 # 12 MB of generated JSON in the history would be paid for by every clone, forever.
 output/remediation/phase3_runner/PLAN*.jsonl
 output/remediation/phase3_runner/runs/
+# The append lock is machine state, not data: `Ledger.append` holds it only while it writes a line,
+# and the operating system frees it when a writer dies. It must never be versioned or deleted.
+output/remediation/phase3_runner/LEDGER.jsonl.lock
 !output/remediation/mechanical/
 # APPLY.sql and PLAN.jsonl are pinned rather than ignored: the deploy lens established that
 # the generator cannot reproduce them, and APPLY.sql is the exact statement set that wrote

@@ -42,18 +42,29 @@ nothing was given up. The probe itself is an ordinary fetch line (`kind="fetch"`
 Crash safety: `Ledger.append` opens the file in append mode, writes exactly one line ending in
 `\n`, flushes and `os.fsync`s before returning, so a crash loses at most the call in flight and
 never leaves a half line behind (a half line would make every later `summarise()` a guess).
+
+Concurrency, added 2026-09-21 after the second mass run died on its own bookkeeping: append mode is
+**not** enough when several processes write one ledger. `_O_APPEND` is emulated as
+seek-to-end-then-write, so two writers that seek in the same instant get the same offset and the
+shorter line overwrites the head of the longer one. Both halves are silent - the surviving line is
+valid and the lost entry is simply absent - so four processes appending 250 entries each left 888
+lines in the file, where `Spend.from_ledger`'s parse check sees nothing wrong. `append` therefore
+holds an OS region lock around the write (1000 of 1000 lines in that same measurement).
 """
 
 from __future__ import annotations
 
 import json
 import os
-from collections.abc import Callable, Iterable
+import sys
+import time
+from collections.abc import Callable, Iterable, Iterator
+from contextlib import contextmanager
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
-from typing import Any
+from typing import Any, BinaryIO
 
 from phase3.model import Stage
 
@@ -276,11 +287,56 @@ class Ledger:
             entry = _with_time(entry, self.clock())
         line = entry.to_json()
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        with self.path.open("a", encoding="utf-8", newline="\n") as fh:
-            fh.write(line + "\n")
-            fh.flush()
-            os.fsync(fh.fileno())
+        with _serialised(self.path):
+            with self.path.open("a", encoding="utf-8", newline="\n") as fh:
+                fh.write(line + "\n")
+                fh.flush()
+                os.fsync(fh.fileno())
         return entry
+
+
+def _lock(handle: BinaryIO, *, hold: bool) -> None:
+    """Take or release the exclusive lock on an open lock file.
+
+    Windows needs the retry loop: `LK_NBLCK` fails immediately while another process holds the byte.
+    The waiting is a sleep, never a spin, and it is unbounded on purpose - giving up would mean
+    appending without the lock, which is the defect this exists to remove.
+    """
+    if sys.platform == "win32":
+        import msvcrt
+
+        handle.seek(0)
+        while True:
+            try:
+                msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK if hold else msvcrt.LK_UNLCK, 1)
+                return
+            except OSError:
+                if not hold:
+                    raise
+                time.sleep(0.005)
+    else:
+        import fcntl
+
+        fcntl.flock(handle.fileno(), fcntl.LOCK_EX if hold else fcntl.LOCK_UN)
+
+
+@contextmanager
+def _serialised(path: Path) -> Iterator[None]:
+    """Hold an exclusive lock on `path` so two processes never write one line into the other.
+
+    A region lock and not a create-exclusive lock file: the operating system frees it when the holder
+    dies, so a killed batch cannot leave behind a lock that nobody can take away. Measured
+    2026-09-21 - four processes, 250 entries each through `Ledger.append`: 888 lines without this,
+    1000 with it.
+    """
+    lock_path = path.with_name(path.name + ".lock")
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    with lock_path.open("a+b") as handle:
+        _lock(handle, hold=True)
+        try:
+            yield
+        finally:
+            _lock(handle, hold=False)
 
 
 def _with_time(entry: Entry, at: str) -> Entry:

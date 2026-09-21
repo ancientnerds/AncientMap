@@ -530,6 +530,139 @@ def cmd_judge(args: argparse.Namespace) -> int:
     return 0
 
 
+def _has_answers(root: Path) -> bool:
+    """True when the batch carries at least one of the finder's answers.
+
+    The question is asked about the answers, not about the directory: an empty `answers/` is the
+    same as no answers for a reviewer, and a folder a crash left behind must not buy a review pass
+    that produces nothing. `is_dir` alone would be satisfied by that empty folder.
+    """
+    if not root.is_dir():
+        return False
+    return any(root.glob("*.txt"))
+
+
+def _judge_discover_reviewer(
+    args: argparse.Namespace,
+    *,
+    batch: dict[str, Any],
+    batch_id: str,
+    run_dir: Path,
+    failures: dict[str, dict[str, str]],
+) -> int:
+    """`judge --stage reviewer` for a discover batch: one verdict per usable finding.
+
+    The unit is the finder's finding, so there are fewer calls than the finder bought: only a field
+    whose finder answer is a complete `WRONG` proposes a change, and only a change can be refuted.
+    Everything not reviewed is written into the same report with its reason, so "nothing to
+    review" and "not reviewed yet" never look alike.
+
+    The report goes to `review.json`, not to the finder's `model.json`: a batch directory is the
+    finder's record, and a second stage writing over its numbers would destroy the evidence of what
+    the finder said and what it cost.
+    """
+    from phase3 import discover_stage as DS
+    from phase3 import fetch_stage as F
+    from phase3 import model_stage as MS
+    from phase3 import review_stage as RS
+
+    store = F.EvidenceStore(run_dir / batch_id / "evidence")
+    answers = F.EvidenceStore(run_dir / batch_id / "answers")
+    reviews = F.EvidenceStore(run_dir / batch_id / "reviews")
+
+    if not args.live:
+        plan = RS.plan_batch(batch=batch, answers=answers, store=store, failures=failures)
+        print(
+            json.dumps(
+                {
+                    "batch_id": batch_id,
+                    "calls": len(plan.calls),
+                    "fields": list(DS.DISCOVER_FIELDS),
+                    "live": False,
+                    "model": MS.MODEL,
+                    "pass": DISCOVER_PASS,
+                    "program": MS.PROGRAM,
+                    "run_dir": str(run_dir),
+                    "sites": [
+                        {
+                            "argv": MS.pi_argv(),
+                            "evidence": [
+                                {
+                                    "chars": e.chars,
+                                    "failure": e.failure,
+                                    "feature": e.feature,
+                                    "path": str(e.path),
+                                    "present": e.present,
+                                    "url": e.url,
+                                }
+                                for e in item.excerpts
+                            ],
+                            "field": item.call.field,
+                            "label": item.call.label,
+                            "prompt": item.call.prompt,
+                            "prompt_chars": len(item.call.prompt),
+                            "site_id": item.call.site_id,
+                        }
+                        for item in plan.calls
+                    ],
+                    "stage": args.stage,
+                    "unreviewable": [v.to_dict() for v in plan.unreviewable],
+                },
+                indent=1,
+                sort_keys=True,
+            )
+        )
+        return 0
+
+    runner = MS.PiRunner(timeout=args.timeout)
+    try:
+        report = RS.judge_review_batch(
+            batch=batch,
+            runner=runner,
+            store=store,
+            answers=answers,
+            reviews=reviews,
+            ledger=L.Ledger(Path(args.ledger)),
+            failures=failures,
+        )
+    except MS.ModelCallFailed as exc:
+        # Same rule as the finder's path: the batch stops at the call that could not be measured,
+        # and says so in the JSON a caller reads instead of writing a report that pretends to be
+        # complete.
+        print(
+            json.dumps(
+                {
+                    "batch_id": batch_id,
+                    "error": str(exc),
+                    "live": True,
+                    "model": MS.MODEL,
+                    "pass": DISCOVER_PASS,
+                    "run_dir": str(run_dir),
+                    "stage": args.stage,
+                },
+                indent=1,
+                sort_keys=True,
+            )
+        )
+        return 2
+
+    RS.write_report(run_dir / batch_id / "review.json", report)
+    payload = json.loads(report.to_json())
+    payload.update(
+        {
+            "answers": str(answers.root),
+            "ledger": str(args.ledger),
+            "live": True,
+            "model": MS.MODEL,
+            "pass": DISCOVER_PASS,
+            "reviews": str(reviews.root),
+            "run_dir": str(run_dir),
+        }
+    )
+    print(json.dumps(payload, indent=1, sort_keys=True))
+    return 0
+
+
 def _judge_discover(
     args: argparse.Namespace,
     *,
@@ -548,19 +681,32 @@ def _judge_discover(
       batch carries on - `discover_stage.plan_batch` records it before any call is bought, which is
       also why the dry run below shows those sites instead of dying on the first one.
 
-    `--stage reviewer` is refused: the reviewer's question is "can this finder's finding be
-    refuted", and a discover batch carries no finder finding - only the fields' own questions.
+    `--stage reviewer` is this pass's second question, and it is allowed **only** when the batch
+    carries the finding it is about: the reviewer refutes a finding the finder made, so `answers/`
+    must hold at least one answer file. A reviewer pass over a batch nobody judged would buy
+    nothing and write empty verdicts - a silent zero that reads like a finished review, which is
+    exactly what the condition below prevents.
     """
     from phase3 import discover_stage as DS
     from phase3 import fetch_stage as F
     from phase3 import model_stage as MS
     from phase3 import snapshot_plan as SP
 
+    if args.stage == Stage.REVIEWER.value:
+        answers_root = run_dir / batch_id / "answers"
+        if not _has_answers(answers_root):
+            raise InputError(
+                f"{batch_id}: --stage reviewer refutes a finding the finder made, and this batch "
+                f"carries none ({answers_root} holds no answer file); judge it with --stage "
+                "finder first"
+            )
+        return _judge_discover_reviewer(
+            args, batch=batch, batch_id=batch_id, run_dir=run_dir, failures=failures
+        )
     if args.stage != Stage.FINDER.value:
         raise InputError(
-            f"{batch_id}: a discover batch is judged with --stage finder; the field questions this "
-            "pass asks are the finder's, and the reviewer stage refutes a finder's finding, which "
-            "a discover batch does not carry"
+            f"{batch_id}: a discover batch is judged with --stage finder or --stage reviewer; "
+            "every other stage asks about a value, and this pass asks about the fields themselves"
         )
     store = F.EvidenceStore(run_dir / batch_id / "evidence")
     # The catalogue's own `site_type` list, read from the snapshot this plan was built from: one
@@ -756,7 +902,8 @@ def build_parser() -> argparse.ArgumentParser:
         default=Stage.FINDER.value,
         help=(
             "which question the stage asks (phase3/model_stage.py pins one question per stage; a "
-            "discover batch is finder-only)"
+            "discover batch is judged by --stage finder and then, once its answers exist, by "
+            "--stage reviewer)"
         ),
     )
     judge.add_argument(

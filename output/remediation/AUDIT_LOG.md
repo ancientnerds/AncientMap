@@ -3028,10 +3028,13 @@ cheaper than a comment that suppresses them:
 | `fetch_stage.py:392` | `def __exit__(self, *exc: object) -> None:` | The exit protocol calls this with `(exc_type, exc_value, traceback)`, and a variadic parameter accepts all three - the contract is met, and the line predates the pacer work. The suggested named signature would be equivalent, not a fix, so it is not applied. |
 | `mass_run.py:190-191` | `if isinstance(cost, (int, float)) and not isinstance(cost, bool):` then `spend.cost_usd += float(cost)` | `float` of an `int` or `float` cannot raise. The guard exists because a *fetch* ledger line carries `"cost_usd": null`, and null must not be summed as zero silently. |
 | `mutation_sweep.py` | `sys.exit(main())` | The instrument's own entry point. `main` returns an `int`, and a crash inside the sweep **must** reach the exit code: the one failure mode this instrument was rebuilt to prevent (2026-09-21) is a sweep that dies mid-loop and reports nothing, leaving a mutant in the tree. A `try/except` here would turn a dead sweep into a green one. |
+| `review_stage.py`, four sites | `refuted is True` / `refuted is False` | The same three-state rule as `model_stage.py`, now in the reviewer: `REFUTED` is `YES` / `NO` / **`UNRESOLVED`**, and the value is `True` / `False` / `None`. Measured, all three states: `True -> applies=False`, `False -> applies=True`, `None -> applies=False`, while the naive `if refuted:` spells them `True -> True`, `False -> False`, `None -> False`. So the naive form would have written a finding the reviewer **refuted** - the one outcome the pass exists to prevent. `== True` is not equivalent for `1` either. The suite pins all three states (`test_unresolved_is_neither_refuted_nor_not_refuted`). |
+| `test_phase3_discover.py:1001` (line moves with every insert; cited by expression) | the `.encode("utf-8")` on the body handed to `EvidenceStore.write` | **Not** unnecessary: the parameter is `body: bytes` (`fetch_stage.py:831`) and the store writes it with `write_bytes`. Executed rather than assumed - passing the `str` raises `TypeError: memoryview: a bytes-like object is required, not 'str'`. The encode is what makes the call correct, and the suggested removal would break it. |
 
 No change is the correct outcome: the only edits that would silence these are a `try/except` around the
-dispatch and an `== True`, and both would make the code check less. Nothing here is suppressed with a
-`# type: ignore` or a `nosemgrep`, so the findings stay visible on every run.
+dispatch, an `== True`, and dropping an `encode` the callee's own signature requires - all three would
+make the code check less. Nothing here is suppressed with a `# type: ignore` or a `nosemgrep`, so the
+findings stay visible on every run.
 
 ## The third recall round: 7 of 19, and the boundary the question itself got wrong
 
@@ -3606,6 +3609,33 @@ believe must stop the call, not be coaxed into a number. The second parses our o
 dataclass - the same class as the three sites in `run.py`. Neither is a defect; both stay visible and
 neither takes an action.
 
+### An appended log is not evidence about the latest attempt (2026-09-21)
+
+After the pacer fix, the restarted run was inspected two minutes in. Two stage logs had **fresh
+mtimes** and contained `PacerTimeout` / `WinError 32`:
+
+```
+13:37:03  batch-0001.fetch.log   Treffer=2
+13:39:40  batch-0005.fetch.log   Treffer=1
+```
+
+The conclusion drawn from that was "the repair did not remove the wedge" - and it was wrong. Stage
+logs are **appended**, so an mtime dates the *last* write, not the content above it: the traceback sat
+**above** the new attempt's own `$ ... run.py fetch ...` line and belonged to the run that had been
+stopped an hour earlier. The new attempt's payload was a complete report with `skipped_existing: 27`,
+and the driver itself said `batch-0001: done (55 answers on disk)` with `0` FAILED.
+
+The rule, which is the same one as "check the instrument before believing the number":
+
+* the identity of a *line* in an appended log comes from the text around it (`$ <command>` starts an
+  attempt), never from the file's timestamp;
+* the driver's own verdict (`done`, `FAILED`) is the measurement; a pattern count in a stage log is
+  not one.
+
+And the cheap confirmation that it is the *new* run: `output/remediation/logs/mass_run_driver.log`
+carries `0` FAILED and the ledger's `at` timestamps move forward, while every traceback in those logs
+predates the launch.
+
 ### The first mass run died on the pacer's lock, and the lock was wrong (2026-09-21)
 
 Four batches in, every fetch ended `exit 1`; the tracebacks all ended the same way:
@@ -3699,4 +3729,144 @@ function with its own test and its own mutation.
 not in the working tree. Its digest guard hashes `phase3/*.py` per batch and stops the run when they
 change, so a plugin writing into the working tree would kill a multi-day run that is otherwise
 resumable and correct. Outside the working tree, no formatter can reach it.
+
+## Piece 6a: the reviewer, and what its own tests found (2026-09-21)
+
+The discover batch is deliberately **finder-only**, and that makes the finder's precision the
+pipeline's precision. Nothing inside that batch can tell a wrong finding from a right one: the same
+question, asked twice, would answer itself. What a second pass can add is a **different question**
+about the same evidence, and that is what the reviewer asks - not "is this value wrong", but "can
+this finding be refuted". The pilot answered it 61 % of the time with a refutation, which is the
+reason the pass is worth its calls at all.
+
+The module carries four decisions worth naming, because each one is a way the pass could quietly
+become useless:
+
+* **Only a complete `WRONG` finding that proposes a change is reviewed.** A finding that says
+  `CORRECT` proposes nothing, and there is nothing to refute. Those fields are written into the same
+  report as `unreviewable` **with the finder's own reason**, never silently skipped - "nothing to
+  review" and "not reviewed yet" must not look alike in a receipt.
+* **`UNRESOLVED` is a third state.** `if refuted:` would fold a recorded "I could not settle this"
+  into "not refuted", and the writer applies only `refuted is False`. The identity comparisons
+  (`is True` / `is False`) are load-bearing here for the same reason they are in `model_stage.py`.
+* **The citation check is the finder's own code.** `discover_stage.source_problems` now delegates to
+  a new `claim_problems(sources, pages)`, and the reviewer calls that. An invented citation is the
+  same defect in both roles; two spellings of the check would have been two chances to drift apart.
+* **A refutation must cite a page this run fetched.** The reviewer's sources are checked against the
+  same excerpt set the finder saw, so "the page says otherwise" cannot be a claim about a page
+  nobody opened.
+
+**Its own tests caught two real defects of mine before anything else could.** The first was dead
+code: an edit of mine nested the `if refuted is not True and sources:` check *inside* the
+`if refuted is True and not sources:` block, so the "a source on a non-refutation is a problem" rule
+could never fire. The second was the fixture's own honesty: it cited
+`https://en.wikipedia.org/wiki/Cave`, a pretty URL the run never fetches - the honest citations are
+the API URLs the fetch bought. The fixture now derives its URL from `F.targets_for_site(site)`, so
+the test cannot cite a page the pipeline never opened. A test that invents its own evidence would
+have passed against a reviewer that invented its own citations.
+
+**The routing: a refusal became a condition.** `run._judge_discover` used to refuse
+`--stage reviewer` outright. It now allows it **when the batch carries the finding the reviewer is
+about**, and `_has_answers` asks about the *answers*, not about the directory: a killed run leaves an
+empty `answers/` behind, and a reviewer that trusted the directory would buy nothing and write a
+report of five empty verdicts - a receipt that says a review happened. The refusal message names the
+directory that is empty and the pass to run first, because "not allowed" leaves the caller guessing.
+
+**One refusal is unreachable, and that is now stated rather than mutated.** `--stage` is declared
+with `choices=[s.value for s in Stage]` and `Stage` has exactly two members, so `args.stage !=
+Stage.FINDER.value` cannot be reached from `R.main` once the reviewer branch returns. The mutation
+that used to disable it was therefore replaced by three reachable ones (no answers, an empty answers
+folder, an unrouted reviewer stage), and the `--stage` help text - which still claimed the pass was
+"finder-only" - was corrected. A mutation no test can catch is noise, not evidence.
+
+**A mutation that would have been caught for the wrong reason, found before the sweep ran.** A
+partial `edit` of mine left `REVIEWER` assigned **twice**: the new line at the top of the constants,
+and the old line 12 lines below it. The later assignment wins in Python, so the mutation carried the
+name of the test I had just deleted - pytest would have collected nothing, exited with a collection
+error, and the sweep would have counted that as "caught". The pre-sweep check (each anchor must occur
+exactly once, each named test must exist, no mutation may be a no-op) found it. That check itself
+first printed `Mutationen: 0 | Probleme: 0`, because it walked `ast.Assign` while the list is
+annotated (`MUTATIONS: list[...] = [...]`, an `AnnAssign`). **An empty loop is not a clean result**;
+the check now asserts a floor on the number of mutations it read.
+
+## The ledger lost lines silently, and an append is not an append (2026-09-21)
+
+The relaunched mass run stopped after `batch-0017: done`, with `DRIVER_EXIT=1` and
+`LedgerDamage: LEDGER.jsonl:2735: a ledger line inside the file does not parse`. The line was 99
+bytes long and read `?action=wbgetentities&ids=Q12339802&props=claims%7Clabels%7Cdescriptions&
+languages=en&format=json"}` - the **tail** of a fetch line whose head was gone. Its neighbours give
+the arithmetic: a 438-byte model-call line sits where the head should be, a 537-byte fetch line is
+the shape of the damaged one, and **537 - 438 = 99**, the fragment's exact length. That is not a torn
+write, which loses its tail; it is a **clobber**: two writers computed the same end-of-file position,
+the shorter write landed on the longer one's head, and the leftover tail stayed behind as a line of
+its own.
+
+**The instrument, before any repair.** Four processes appending 250 lines each through the real
+`Ledger.append`: **880 lines in the file, 0 unparsable, 0 duplicates** - the missing 120 are not
+damaged, they are gone, because the line that overwrote them is a valid line. Repeated: 888 of 1000.
+Control with one process: 250 of 250. The raw route is no better: `os.open(...,
+O_APPEND|O_CREAT|O_WRONLY)` plus `os.write` lost **257** of 1000. So `_O_APPEND` on this platform is
+emulated as seek-to-end-then-write, not as an atomic append, and `os.fsync` flushes - it does not
+serialise.
+
+**Why the guard could not see it.** `Spend.from_ledger` parses every line, so it catches a *damaged*
+line - and it caught exactly one. The silently lost lines were never damaged; there was nothing to
+catch. The ledger's own numbers were simply low, and the driver's budget check reads the ledger.
+
+**What it cost this run, measured rather than feared.** Not the 12 % the tight-loop probe suggests:
+the run's window in the ledger holds **1429** model-call lines and the twenty batches' `model.json`
+report **1430** calls (the one in flight when the driver died), with no label appearing twice. Model
+calls are seconds apart, so writers rarely collide; the probe writes back to back. The damage was not
+the count but the **parse**: one clobbered line was enough to stop a 46-hour run.
+
+**The fix, validated before it was written.** The same four processes behind an OS byte-range lock
+(`msvcrt.locking` with a retry, `fcntl.flock` on POSIX): **1000 of 1000, nothing lost, nothing
+unparsable**, 2.2 s against 1.1 s. A region lock and not a create-exclusive lock file: the first
+attempt of this probe died with `PermissionError` on Windows while another process was removing the
+lock - a lock whose identity can be taken away is not a lock. The OS frees a region lock when the
+holder dies, so a killed batch cannot leave one behind.
+
+**The damaged line is quarantined, not deleted.** Its bytes and its two neighbours on either side are
+in `output/remediation/logs/ledger_damage_2026-09-21.txt`; the line was then removed from the ledger
+and the file parses again (2938 lines, 0 unreadable). Deleting a record whose meaning is
+unrecoverable is how an audit trail turns into a story.
+
+### The fix, and what its own receipts show (2026-09-21)
+
+`Ledger.append` now holds an operating-system region lock around the write: `msvcrt.locking` with a
+sleep between attempts on Windows, `fcntl.flock` on POSIX, released by the OS when the writer dies.
+
+**The platform narrowing came from mypy, not from a hunch.** The first version tested `os.name ==
+"nt"`, and `mypy scripts/remediation/phase3/ledger.py` printed three errors - `Module has no attribute
+"flock" / "LOCK_EX" / "LOCK_UN"` at line 319. The finding is correct and the cause is visible in the
+stub: typeshed's `fcntl.pyi` declares `flock` and those constants **inside `if sys.platform !=
+"win32"`**, so on Windows my POSIX branch is dead code a checker can only see through if the code
+narrows on `sys.platform`. Rewriting the guard as `if sys.platform == "win32"` cleared all three
+errors (mypy: no output) with no `# type: ignore`. The branch stays, because the run this protects may
+move to the VPS, which is Linux.
+
+**The delivered code, measured by the probe and not by a model of it.** The same four-process probe
+that lost 120 of 1000 entries before now reports **0 lost, 0 unparsable, 1000 of 1000** - it runs the
+real `Ledger.append`, so this is a statement about the shipped writer.
+
+**The test has teeth, and they were proven before the sweep saw them.**
+`test_a_second_writer_never_costs_a_ledger_line` starts four processes that append 150 entries each
+through `Ledger.append` and asserts 600 lines, all distinct. With the lock: `1 passed in 1.63s`. With
+the lock replaced by `if True:` - the same mutation now in the inventory: `assert 543 == 600`, 57
+entries lost, tree restored byte-identically (sha256 unchanged). Writing the test found a guard of the
+project's own first: `LedgerError: 0-0000: a model call needs the model it called`, so the child builds
+a complete model call rather than the guard being relaxed.
+
+**The instruments were fixed too, because both had lied.** The anchor checker - which had only ever run
+inline - is now a file, and it no longer walks the AST: `MUTATIONS: list[...] = [...]` holds **names**
+like `REVIEW_TEST`, so `ast.literal_eval` raises and my first version had reported `Mutationen: 0 |
+Probleme: 0` for a list it never read. It imports the sweep and reads the list the sweep will read: `70
+| 0`.
+
+**Two of my own instruments were wrong on the way, in the same direction.** The first check for the
+repair compared `len(raw)` with `sum(len(line) + 1)`, which is off by one for every file that ends
+with a newline - it refused a file that was fine. And the first damage count compared the **cumulative
+ledger of the whole session** against the reports of **one run's twenty batches**, which is why it
+reported "-499 model calls missing": a cumulative file is not a per-run report, and a number that
+large should have sent me to the instrument before the code.
 

@@ -31,6 +31,7 @@ TEST = "tests/remediation/test_phase3_discover.py"
 FETCH_TEST = "tests/remediation/test_phase3_fetch.py"
 MASSRUN_TEST = "tests/remediation/test_phase3_massrun.py"
 MODEL_TEST = "tests/remediation/test_phase3_model.py"
+RUNNER_TEST = "tests/remediation/test_phase3_runner.py"
 PACE = "test_two_processes_take_turns_on_one_host"
 PACE_HOSTS = "test_one_host_waiting_does_not_hold_up_another"
 PACE_STALE = "test_a_lock_left_by_a_killed_process_is_taken_over"
@@ -40,6 +41,23 @@ PACE_UNDELETABLE = "test_a_lock_that_cannot_be_deleted_is_waited_out_not_spun_on
 PACE_FOREIGN = "test_a_lock_whose_content_is_not_ours_is_not_deleted_by_us"
 PACE_WIRED = "test_the_pace_covers_the_probe_and_the_targets_alike"
 
+REVIEW_TEST = "tests/remediation/test_phase3_review.py"
+#: The reviewer's own tests, one per guard (piece 6a). Each name below is the test that must fail
+#: when the mutation next to it is applied - a mutation no test can catch is noise, not evidence.
+REVIEWER = "test_judge_refuses_the_reviewer_stage_when_the_batch_carries_no_finding"
+REVIEW_EMPTY_ANSWERS = "test_judge_refuses_the_reviewer_stage_when_the_answers_folder_is_empty"
+REVIEW_ROUTED = "test_judge_reviews_a_batch_that_carries_the_finders_findings"
+REVIEW_COUNTS = "test_the_report_counts_what_the_verdicts_say"
+REVIEW_UNRESOLVED = "test_unresolved_is_neither_refuted_nor_not_refuted"
+REVIEW_RESUMED = "test_a_review_already_on_disk_is_read_and_not_bought_again"
+REVIEW_ONLY_WRONG = "test_only_a_complete_wrong_finding_is_asked_about"
+REVIEW_NO_ANSWER = "test_a_field_the_finder_never_answered_is_recorded_not_silently_skipped"
+REVIEW_VERBATIM = "test_the_prompt_carries_the_finders_answer_verbatim_and_the_same_page"
+REVIEW_OWN_REPORT = (
+    "test_the_reviewer_writes_its_own_report_and_leaves_the_finders_model_json_alone"
+)
+LEDGER_LOCK = "test_a_second_writer_never_costs_a_ledger_line"
+
 RUN = "test_every_site_buys_one_call_per_field_and_the_call_names_its_field"
 ROUTE = "test_the_discover_routing_is_enwiki_by_name_and_wikidata_by_the_qid"
 EMPTY = "test_an_empty_stored_value_is_marked_absent_and_the_question_calls_it_wrong"
@@ -48,7 +66,6 @@ NEVER = "test_a_field_whose_evidence_was_never_fetched_is_recorded_not_attempted
 TABLE = "test_every_planned_value_comes_from_the_table_truth_fields_json_names"
 NAMELESS = "test_a_snapshot_row_without_a_name_or_without_an_id_is_refused"
 LIVE = "test_judge_live_stores_one_answer_per_field_and_one_ledger_line_each"
-REVIEWER = "test_judge_refuses_the_reviewer_stage_for_a_discover_batch"
 UNKNOWN = "test_judge_refuses_a_pass_marker_it_does_not_know"
 TWO_INPUTS = "test_plan_refuses_the_two_inputs_at_once_and_site_ids_without_the_snapshot_flag"
 ANCHOR = "test_the_worklist_plan_still_hashes_to_the_piece_1_anchor"
@@ -221,12 +238,100 @@ MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         TWO_INPUTS,
     ),
     (
-        "the reviewer stage accepted for a discover batch",
+        "a reviewer pass runs over a batch the finder never judged",
         "scripts/remediation/phase3/run.py",
-        "    if args.stage != Stage.FINDER.value:\n",
-        "    if False:\n",
+        "        if not _has_answers(answers_root):\n",
+        "        if False:  # mutated\n",
         TEST,
         REVIEWER,
+    ),
+    (
+        "an empty answers folder counts as a batch of findings",
+        "scripts/remediation/phase3/run.py",
+        '    return any(root.glob("*.txt"))\n',
+        "    return True  # mutated\n",
+        TEST,
+        REVIEW_EMPTY_ANSWERS,
+    ),
+    (
+        "the reviewer stage is never routed",
+        "scripts/remediation/phase3/run.py",
+        "    if args.stage == Stage.REVIEWER.value:\n",
+        "    if False:  # mutated\n",
+        TEST,
+        REVIEW_ROUTED,
+    ),
+    (
+        "a refutation's citation is not checked against the pages the run fetched",
+        "scripts/remediation/phase3/review_stage.py",
+        "        problems = answer.problems + DS.claim_problems(answer.sources, pages)\n",
+        "        problems = list(answer.problems)  # mutated\n",
+        REVIEW_TEST,
+        REVIEW_COUNTS,
+    ),
+    (
+        "the report follows the order the fields happened to be judged in",
+        "scripts/remediation/phase3/review_stage.py",
+        "        verdicts=sorted(verdicts, key=lambda v: (_field_rank(v.field), v.site_id)),\n",
+        "        verdicts=verdicts,  # mutated\n",
+        REVIEW_TEST,
+        REVIEW_COUNTS,
+    ),
+    (
+        "an unresolved refutation is treated as not refuted",
+        "scripts/remediation/phase3/review_stage.py",
+        "        return self.asked and self.refuted is False and not self.problems\n",
+        "        return self.asked and not self.refuted and not self.problems  # mutated\n",
+        REVIEW_TEST,
+        REVIEW_UNRESOLVED,
+    ),
+    (
+        "a review already on disk is bought again",
+        "scripts/remediation/phase3/review_stage.py",
+        '        if path.exists():\n            text = path.read_text(encoding="utf-8")\n            resumed += 1\n',
+        '        if False:  # mutated\n            text = path.read_text(encoding="utf-8")\n            resumed += 1\n',
+        REVIEW_TEST,
+        REVIEW_RESUMED,
+    ),
+    (
+        "a finding that proposes no change is reviewed anyway",
+        "scripts/remediation/phase3/review_stage.py",
+        "        if answer.verdict != REVIEWED_VERDICT:\n",
+        "        if False:  # mutated\n",
+        REVIEW_TEST,
+        REVIEW_ONLY_WRONG,
+    ),
+    (
+        "an unusable finding is reviewed anyway",
+        "scripts/remediation/phase3/review_stage.py",
+        "        if answer.problems:\n",
+        "        if False:  # mutated\n",
+        REVIEW_TEST,
+        REVIEW_ONLY_WRONG,
+    ),
+    (
+        "a field the finder never answered is dropped without a record",
+        "scripts/remediation/phase3/review_stage.py",
+        "        if not path.exists():\n            plan.unreviewable.append(\n",
+        "        if False:  # mutated\n            plan.unreviewable.append(\n",
+        REVIEW_TEST,
+        REVIEW_NO_ANSWER,
+    ),
+    (
+        "the finder's finding is not given to the reviewer",
+        "scripts/remediation/phase3/review_stage.py",
+        "            answer_text.strip(),\n",
+        '            "",  # mutated\n',
+        REVIEW_TEST,
+        REVIEW_VERBATIM,
+    ),
+    (
+        "the reviewer's report overwrites the finder's",
+        "scripts/remediation/phase3/review_stage.py",
+        "    tmp.replace(path)\n",
+        '    tmp.replace(path.with_name("model.json"))  # mutated\n',
+        REVIEW_TEST,
+        REVIEW_OWN_REPORT,
     ),
     (
         "a discover batch judged with the finding-driven path",
@@ -588,6 +693,14 @@ MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         "        if False:\n",
         SWEEP_TEST,
         DRIFT,
+    ),
+    (
+        "the ledger's appends are not serialised across processes",
+        "scripts/remediation/phase3/ledger.py",
+        "        with _serialised(self.path):\n",
+        "        if True:  # mutated\n",
+        RUNNER_TEST,
+        LEDGER_LOCK,
     ),
 ]
 

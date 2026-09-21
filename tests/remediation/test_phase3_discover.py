@@ -146,6 +146,17 @@ class ScriptedRunner:
         return MS.ModelAnswer(text=f"VERDICT: CORRECT - {call.label}", usage=self.answer.usage)
 
 
+class ReviewingRunner(ScriptedRunner):
+    """The same scripted call, answering the reviewer's question instead of a field's."""
+
+    def run(self, call: MS.ModelCall) -> MS.ModelAnswer:
+        self.calls.append(call)
+        return MS.ModelAnswer(
+            text="REFUTED: NO\nWHY: the page says exactly what the record says\n",
+            usage=self.answer.usage,
+        )
+
+
 def _assert_no_process(monkeypatch: pytest.MonkeyPatch) -> None:
     """Fail the test if anything starts a Pi process. Used by every dry-run path."""
 
@@ -911,13 +922,20 @@ def test_judge_live_stores_one_answer_per_field_and_one_ledger_line_each(
     assert stored["stage"] == "finder"
 
 
-def test_judge_refuses_the_reviewer_stage_for_a_discover_batch(
+def test_judge_refuses_the_reviewer_stage_when_the_batch_carries_no_finding(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    """A reviewer pass over a batch nobody judged would buy nothing and write empty verdicts.
+
+    The refusal survives the widening of the stage's routing; what changed is its *condition*. The
+    message must name the directory that is empty, because the caller has to know which pass to run
+    first - an error that only says "not allowed" leaves them guessing.
+    """
     _assert_no_process(monkeypatch)
     run_dir = _prepared_discover_run(tmp_path, _site_record("site-1"))
+    answers = run_dir / "batch-0001" / "answers"
 
-    with pytest.raises(R.InputError, match="judged with --stage finder"):
+    with pytest.raises(R.InputError, match="carries none") as caught:
         R.main(
             [
                 "judge",
@@ -930,6 +948,101 @@ def test_judge_refuses_the_reviewer_stage_for_a_discover_batch(
                 "--live",
             ]
         )
+
+    message = str(caught.value)
+    assert str(answers) in message, message
+    assert "--stage finder" in message, message
+
+
+def test_judge_refuses_the_reviewer_stage_when_the_answers_folder_is_empty(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An empty `answers/` is not a batch of findings - a killed run leaves one behind.
+
+    This is the difference between "the directory exists" and "there are answers". A reviewer that
+    trusted the directory would write a report of zero verdicts for five fields, and that receipt
+    would claim a review happened.
+    """
+    _assert_no_process(monkeypatch)
+    run_dir = _prepared_discover_run(tmp_path, _site_record("site-1"))
+    (run_dir / "batch-0001" / "answers").mkdir(parents=True, exist_ok=True)
+
+    with pytest.raises(R.InputError, match="carries none"):
+        R.main(
+            [
+                "judge",
+                "--run-dir",
+                str(run_dir),
+                "--batch-id",
+                "batch-0001",
+                "--stage",
+                "reviewer",
+                "--live",
+            ]
+        )
+
+
+def test_judge_reviews_a_batch_that_carries_the_finders_findings(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The reviewer's path through the real CLI: one verdict per usable finding, its own report.
+
+    Four of the five fields carry no finder answer here, so the report has to show them as
+    unreviewable *with a reason* - a pass that reviewed one field and stayed silent about the other
+    four would be indistinguishable from a pass that reviewed everything.
+    """
+    monkeypatch.setattr(MS, "PiRunner", ReviewingRunner)
+    run_dir = _prepared_discover_run(tmp_path, _site_record("site-1"))
+    _evidence_store(run_dir / "batch-0001" / "evidence", "site-1")
+    answers = F.EvidenceStore(run_dir / "batch-0001" / "answers")
+    answers.write(
+        site_id="site-1",
+        feature="description",
+        body=(
+            b"VERDICT: WRONG\nEVIDENCE: the page disagrees with the record\nPROPOSED: Cave\n"
+            b'SOURCE: https://en.wikipedia.org/w/api.php?titles=Cave - "Cave text"\n'
+        ),
+    )
+    ledger = tmp_path / "LEDGER.jsonl"
+
+    rc = R.main(
+        [
+            "judge",
+            "--run-dir",
+            str(run_dir),
+            "--batch-id",
+            "batch-0001",
+            "--stage",
+            "reviewer",
+            "--ledger",
+            str(ledger),
+            "--live",
+        ]
+    )
+
+    payload = json.loads(capsys.readouterr().out)
+    assert rc == 0
+    assert payload["stage"] == "reviewer"
+    assert payload["pass"] == R.DISCOVER_PASS
+    assert payload["calls"] == 1, payload
+    assert payload["resumed"] == 0
+    assert payload["applies"] == 1, payload
+    assert payload["unreviewable"] == len(SP.DISCOVER_FIELDS) - 1, payload
+    assert [v["field"] for v in payload["verdicts"]] == list(SP.DISCOVER_FIELDS)
+    unreviewed = [v for v in payload["verdicts"] if not v["asked"]]
+    assert all("is not on disk" in v["unreviewable"] for v in unreviewed), unreviewed
+
+    written = json.loads((run_dir / "batch-0001" / "review.json").read_text(encoding="utf-8"))
+    assert written["stage"] == "reviewer"
+    assert written["calls"] == 1
+    assert not (run_dir / "batch-0001" / "model.json").exists(), (
+        "the reviewer must not write the finder's report"
+    )
+
+    lines = [json.loads(line) for line in ledger.read_text(encoding="utf-8").splitlines()]
+    assert len(lines) == 1, lines
+    assert lines[0]["stage"] == "reviewer"
+    assert lines[0]["kind"] == "model_call"
 
 
 def test_judge_refuses_a_pass_marker_it_does_not_know(tmp_path: Path) -> None:

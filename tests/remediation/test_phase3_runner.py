@@ -17,6 +17,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import subprocess
 import sys
 from pathlib import Path
 from typing import Any
@@ -35,9 +36,43 @@ from phase3 import run as R  # noqa: E402
 WORKLIST = REPO / "output" / "remediation" / "phase3_worklist" / "WORKLIST.jsonl"
 PHASE3_MODULES = (M, L, R)
 
+#: One writer in the ledger race below, as its own file so pytest's own process stays clean. It shells
+#: out through the *real* `Ledger.append`, which is the point: a re-implementation would prove nothing
+#: about the writer the mass run uses.
+CHILD_APPEND = """\
+import sys
+import time
+from pathlib import Path
+
+sys.path.insert(0, sys.argv[1])
+from phase3.ledger import Entry, Ledger
+
+_, _repo, ledger, go, writer, count = sys.argv
+while not Path(go).exists():
+    time.sleep(0.001)
+ledger = Ledger(Path(ledger))
+for n in range(int(count)):
+    ledger.append(
+        Entry(
+            kind="model_call",
+            stage="finder",
+            batch_id="batch-0001",
+            label=f"{writer}-{n:04d}",
+            model="opencode-go/deepseek-v4.1-flash",
+            input_tokens=1,
+            output_tokens=1,
+        )
+    )
+"""
+
 
 def _evidence() -> M.Evidence:
-    return M.Evidence(source="enwiki", url="https://en.wikipedia.org/wiki/X", quote="...", retrieved_at="2026-09-21T00:00:00+00:00")
+    return M.Evidence(
+        source="enwiki",
+        url="https://en.wikipedia.org/wiki/X",
+        quote="...",
+        retrieved_at="2026-09-21T00:00:00+00:00",
+    )
 
 
 def _finding(**over: object) -> M.Finding:
@@ -56,7 +91,12 @@ def _finding(**over: object) -> M.Finding:
 
 
 def test_all_three_verdict_kinds_are_expressible() -> None:
-    defect = _finding(proposal=M.Proposal.SET, proposed_value=-2000, evidence=[_evidence()], confidence=M.Confidence.TWO_SOURCE)
+    defect = _finding(
+        proposal=M.Proposal.SET,
+        proposed_value=-2000,
+        evidence=[_evidence()],
+        confidence=M.Confidence.TWO_SOURCE,
+    )
     odd_but_right = _finding(
         verdict=M.Verdict.TRUE_BUT_NO_CORRECTION,
         severity=M.Severity.MODERATE,
@@ -84,9 +124,7 @@ def test_all_three_verdict_kinds_are_expressible() -> None:
     assert payload["verdict"] == "true_but_no_correction"
 
 
-@pytest.mark.parametrize(
-    "verdict", [M.Verdict.TRUE_BUT_NO_CORRECTION, M.Verdict.UNVERIFIABLE]
-)
+@pytest.mark.parametrize("verdict", [M.Verdict.TRUE_BUT_NO_CORRECTION, M.Verdict.UNVERIFIABLE])
 def test_a_no_write_verdict_cannot_carry_a_write(verdict: M.Verdict) -> None:
     # Everything else about the record is a valid write, so the verdict is the only guard left.
     with pytest.raises(ValueError, match="no write"):
@@ -121,7 +159,12 @@ def test_a_defect_cannot_be_recorded_as_nothing_to_see() -> None:
 @pytest.mark.parametrize("field", sorted(M.REPORT_ONLY_FIELDS))
 def test_text_fields_are_report_only(field: str) -> None:
     with pytest.raises(ValueError, match="report-only"):
-        _finding(field=field, proposal=M.Proposal.SET, proposed_value="a new sentence", evidence=[_evidence()])
+        _finding(
+            field=field,
+            proposal=M.Proposal.SET,
+            proposed_value="a new sentence",
+            evidence=[_evidence()],
+        )
 
 
 def test_a_proposed_write_needs_evidence() -> None:
@@ -174,7 +217,9 @@ def test_a_stage_result_refuses_findings_from_outside_its_batch() -> None:
 
 def test_a_crashed_stage_must_name_its_error() -> None:
     with pytest.raises(ValueError, match="needs the error"):
-        M.StageResult(stage=M.Stage.FINDER, batch_id="batch-0001", site_ids=["a"], status=M.StageStatus.ERROR)
+        M.StageResult(
+            stage=M.Stage.FINDER, batch_id="batch-0001", site_ids=["a"], status=M.StageStatus.ERROR
+        )
     with pytest.raises(ValueError, match="cannot carry an error"):
         M.StageResult(
             stage=M.Stage.FINDER,
@@ -240,7 +285,9 @@ def test_appending_is_additive_and_leaves_no_half_line(tmp_path: Path) -> None:
     raw = path.read_bytes()
     assert raw.endswith(b"\n")
     assert b"\r\n" not in raw
-    assert len(raw.decode("utf-8").splitlines()) == 2  # the second append did not overwrite the first
+    assert (
+        len(raw.decode("utf-8").splitlines()) == 2
+    )  # the second append did not overwrite the first
     assert first.at == "2026-09-21T00:00:00+00:00"  # stamped by the ledger's own clock
     assert json.loads(raw.decode("utf-8").splitlines()[0])["kind"] == "model_call"
 
@@ -255,7 +302,12 @@ def test_summarise_totals_by_stage(tmp_path: Path) -> None:
     assert sorted(summary.by_stage) == ["finder", "reviewer"]
     assert summary.lines == 2
     finder = summary.by_stage["finder"]
-    assert (finder.model_calls, finder.input_tokens, finder.output_tokens, finder.total_tokens) == (1, 1000, 200, 1200)
+    assert (finder.model_calls, finder.input_tokens, finder.output_tokens, finder.total_tokens) == (
+        1,
+        1000,
+        200,
+        1200,
+    )
     assert finder.cache_read_tokens == 800
     reviewer = summary.by_stage["reviewer"]
     assert (reviewer.fetches, reviewer.fetch_bytes, reviewer.model_calls) == (1, 4096, 0)
@@ -265,9 +317,25 @@ def test_summarise_totals_by_stage(tmp_path: Path) -> None:
 
 def test_a_model_call_without_token_counts_is_refused() -> None:
     with pytest.raises(L.LedgerError, match="never estimated"):
-        L.Entry(kind=L.LedgerKind.MODEL_CALL, stage=M.Stage.FINDER, batch_id="b", label="x", model="m", input_tokens=None, output_tokens=1)
+        L.Entry(
+            kind=L.LedgerKind.MODEL_CALL,
+            stage=M.Stage.FINDER,
+            batch_id="b",
+            label="x",
+            model="m",
+            input_tokens=None,
+            output_tokens=1,
+        )
     with pytest.raises(L.LedgerError, match="never estimated"):
-        L.Entry(kind=L.LedgerKind.MODEL_CALL, stage=M.Stage.FINDER, batch_id="b", label="x", model="m", input_tokens=1, output_tokens=None)
+        L.Entry(
+            kind=L.LedgerKind.MODEL_CALL,
+            stage=M.Stage.FINDER,
+            batch_id="b",
+            label="x",
+            model="m",
+            input_tokens=1,
+            output_tokens=None,
+        )
 
 
 def test_a_fetch_without_a_recorded_outcome_is_refused() -> None:
@@ -490,7 +558,9 @@ def test_summarise_of_a_missing_ledger_raises(tmp_path: Path) -> None:
 def test_a_truncated_ledger_line_raises(tmp_path: Path) -> None:
     path = tmp_path / "LEDGER.jsonl"
     # A line that is not JSON at all: a total over it would be a guess.
-    path.write_text('{"kind": "model_call", "stage": "finder"}\nnot json\n', encoding="utf-8", newline="\n")
+    path.write_text(
+        '{"kind": "model_call", "stage": "finder"}\nnot json\n', encoding="utf-8", newline="\n"
+    )
     with pytest.raises(L.LedgerError, match="not JSON"):
         L.summarise(path)
     # A line without its newline: the append was interrupted mid-write.
@@ -498,7 +568,7 @@ def test_a_truncated_ledger_line_raises(tmp_path: Path) -> None:
     with pytest.raises(L.LedgerError, match="does not end in a newline"):
         L.summarise(path)
     # An empty line is not a measurement either.
-    path.write_text('\n', encoding="utf-8", newline="\n")
+    path.write_text("\n", encoding="utf-8", newline="\n")
     with pytest.raises(L.LedgerError, match="empty line"):
         L.summarise(path)
 
@@ -541,7 +611,9 @@ def test_plan_has_the_ratified_batch_arithmetic(tmp_path: Path) -> None:
 
 def test_plan_refuses_a_record_it_cannot_place(tmp_path: Path) -> None:
     bad = tmp_path / "bad.jsonl"
-    bad.write_text('{"site_id": "a", "phase3": true}\n{"site_id": "b"}\n', encoding="utf-8", newline="\n")
+    bad.write_text(
+        '{"site_id": "a", "phase3": true}\n{"site_id": "b"}\n', encoding="utf-8", newline="\n"
+    )
     with pytest.raises(R.InputError, match="carries no `phase3` flag"):
         R.main(["plan", "--worklist", str(bad), "--out", str(tmp_path / "out.jsonl")])
 
@@ -553,7 +625,17 @@ def test_plan_refuses_a_record_it_cannot_place(tmp_path: Path) -> None:
 
 def test_plan_refuses_a_batch_size_below_one(tmp_path: Path) -> None:
     with pytest.raises(R.InputError, match="batch size must be >= 1"):
-        R.main(["plan", "--worklist", str(WORKLIST), "--out", str(tmp_path / "out.jsonl"), "--batch-size", "0"])
+        R.main(
+            [
+                "plan",
+                "--worklist",
+                str(WORKLIST),
+                "--out",
+                str(tmp_path / "out.jsonl"),
+                "--batch-size",
+                "0",
+            ]
+        )
 
 
 def _tiny_plan(tmp_path: Path) -> Path:
@@ -577,7 +659,9 @@ def test_prepare_writes_one_input_file_per_batch(tmp_path: Path) -> None:
     # Selecting one batch rewrites only that one and cannot invent a batch id.
     R.main(["prepare", "--plan", str(plan), "--run-dir", str(run_dir), "--batch-id", "batch-0002"])
     with pytest.raises(R.InputError, match="not in the plan"):
-        R.main(["prepare", "--plan", str(plan), "--run-dir", str(run_dir), "--batch-id", "batch-0009"])
+        R.main(
+            ["prepare", "--plan", str(plan), "--run-dir", str(run_dir), "--batch-id", "batch-0009"]
+        )
 
 
 def test_status_reports_a_fresh_run_directory_as_a_state_not_an_error(
@@ -653,7 +737,10 @@ def test_status_reports_what_is_on_disk(tmp_path: Path, capsys: pytest.CaptureFi
     ledger = tmp_path / "LEDGER.jsonl"
     L.Ledger(ledger, clock=lambda: "2026-09-21T00:00:00+00:00").append(_call())
     capsys.readouterr()
-    assert R.main(["status", "--run-dir", str(run_dir), "--plan", str(plan), "--ledger", str(ledger)]) == 0
+    assert (
+        R.main(["status", "--run-dir", str(run_dir), "--plan", str(plan), "--ledger", str(ledger)])
+        == 0
+    )
     payload = json.loads(capsys.readouterr().out)
     assert payload["planned_batches"] == 2
     assert payload["planned_sites"] == 2
@@ -669,3 +756,47 @@ def test_the_skeleton_touches_no_network_and_no_model_client() -> None:
         source = Path(module.__file__).read_text(encoding="utf-8")
         hits = sorted(set(banned.findall(source)))
         assert hits == [], f"{Path(module.__file__).name} reaches outside the process: {hits}"
+
+
+def test_a_second_writer_never_costs_a_ledger_line(tmp_path: Path) -> None:
+    """Four processes appending through the real `Ledger.append` keep every line.
+
+    Append mode alone is not atomic on this platform: `_O_APPEND` is emulated as
+    seek-to-end-then-write, so two writers that seek in the same instant write at the same offset, and
+    the line that survives is a valid line - which is why a parse check cannot see the entry it
+    covered. Measured 2026-09-21, four writers x 250 entries: 888 lines in the file without the lock
+    and 1000 with it. Both assertions below fail on the file this test was written against.
+    """
+    child = tmp_path / "append_child.py"
+    child.write_text(CHILD_APPEND, encoding="utf-8")
+    ledger = tmp_path / "LEDGER.jsonl"
+    go = tmp_path / "go"
+    writers = [
+        subprocess.Popen(
+            [
+                sys.executable,
+                str(child),
+                str(PHASE3_PARENT),
+                str(ledger),
+                str(go),
+                str(writer),
+                "150",
+            ],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            encoding="utf-8",
+        )
+        for writer in range(4)
+    ]
+    go.write_text("go", encoding="utf-8")
+    for writer in writers:
+        _, err = writer.communicate(timeout=180)
+        assert writer.returncode == 0, err[-800:]
+    labels = [
+        json.loads(line)["label"]
+        for line in ledger.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    assert len(labels) == 4 * 150
+    assert len(set(labels)) == 4 * 150

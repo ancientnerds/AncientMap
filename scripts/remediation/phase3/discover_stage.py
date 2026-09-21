@@ -581,9 +581,7 @@ def parse_answer(text: str) -> DiscoverAnswer:
 
     proposed_hits = [m.group("value") for m in PROPOSED_RE.finditer(text)]
     if len(proposed_hits) > 1:
-        problems.append(
-            f"{len(proposed_hits)} `PROPOSED:` lines; one field carries one value"
-        )
+        problems.append(f"{len(proposed_hits)} `PROPOSED:` lines; one field carries one value")
     proposed = proposed_hits[0] if proposed_hits else None
 
     sources = tuple(
@@ -690,16 +688,20 @@ def pages_from_excerpts(excerpts: Iterable[MS.EvidenceExcerpt]) -> dict[str, str
     return {e.url: e.text for e in excerpts if e.text is not None}
 
 
-def source_problems(answer: DiscoverAnswer, pages: Mapping[str, str]) -> tuple[str, ...]:
-    """What is wrong with this answer's sources, judged against the pages the run fetched.
+def claim_problems(sources: Iterable[SourceClaim], pages: Mapping[str, str]) -> tuple[str, ...]:
+    """What is wrong with a set of cited pages, judged against the pages the run fetched.
 
     This is the line that makes "with sources" a property rather than a claim: a page the run did
     not fetch cannot be checked, and a quoted sentence that does not occur in the page we stored is
     a fabricated citation. Either one is recorded here, and the finding that carries it is not
     written.
+
+    Split out of `source_problems` on 2026-09-21 so the **reviewer's** refutations go through the
+    same code as the finder's corrections: an invented citation is the same defect in both roles,
+    and two spellings of this check would be two chances to drift.
     """
     problems: list[str] = []
-    for claim in answer.sources:
+    for claim in sources:
         page = pages.get(claim.url)
         if page is None:
             problems.append(f"cited page was not fetched by this run: {claim.url}")
@@ -707,3 +709,8 @@ def source_problems(answer: DiscoverAnswer, pages: Mapping[str, str]) -> tuple[s
         if not quote_occurs(claim.quote, page):
             problems.append(f"quote does not occur in {claim.url}: {claim.quote!r}")
     return tuple(problems)
+
+
+def source_problems(answer: DiscoverAnswer, pages: Mapping[str, str]) -> tuple[str, ...]:
+    """`claim_problems` for a finder's answer."""
+    return claim_problems(answer.sources, pages)
