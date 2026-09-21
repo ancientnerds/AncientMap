@@ -2949,3 +2949,79 @@ So the "unverifiable" answers on those fields are partly a **routing gap, not a 
 cheapest next recall gain is a third route rather than a better question. Not adopted yet: whether a
 `source_url` page *settles* a field is a separate question, and it gets measured before it is believed -
 this is recorded as a measured input, not as a design change.
+
+---
+
+## The recall re-run: 5 of 19 -> 8 of 19, and the three defects the answers exposed
+
+`runs/gold2`, 2026-09-21, commit `42fb917` (the rewritten question), same plan, same fixture, same
+evidence - **the evidence is byte-identical between the two rounds** (33 files, 0 differing bytes,
+verified after the fact), so the question was the only variable.
+
+| | round 1 | round 2 |
+|---|---|---|
+| caught | 5 of 19 reachable (26.3 %) | **8 of 19 (42.1 %)** |
+| against the 24-entry ceiling | 5 of 24 (20.8 %) | 8 of 24 (33.3 %) |
+| `WRONG` verdicts | 12 | 25 |
+| `UNVERIFIABLE` | 16 | 27 |
+| cost | $0.054226 / 75 calls | $0.056514 / 75 calls |
+
+Five entries became catches (`Arc de Bera` description, `Ahu Tongariki` description, `The Gop`
+site_type and description, `The Merry Maidens` description); two were lost (`The Gop`
+card_description, `Overstone Anglo-Saxon Cemetery` card_description). The rewrite works, and it also
+made the pass **less** willing to call a value correct - `UNVERIFIABLE` rose from 16 to 27.
+
+**The number that mattered was not the recall.** Round 2 produced 17 `WRONG` verdicts that are **not**
+in the gold standard. Adjudicated by reading the 17 full answers, they separate into three defects of
+*mine* and the model's own errors - and all three of mine were **missing information**, not prompt
+polish:
+
+1. **The prompt contradicted itself.** The rewrite said `Only the evidence in this message decides`,
+   and the model then flagged `England` as `WRONG` because the evidence wrote `United Kingdom` -
+   citing the clause that permits exactly that and overriding it in the same sentence: *"under the
+   allowed design England is acceptable, yet ... so the stored value differs"*. Four false positives
+   (`Midford Castle`, `Aubrey Holes`, `Overstone`, `Amyntas`), all `country`. An absolute-sounding rule
+   had demoted the per-field clause to a subordinate paragraph.
+2. **`site_type` was judged without the catalogue's vocabulary.** All four `site_type` flags were
+   wrong, each by reading the evidence's own phrase as the target value: "triumphal arch" against
+   `Gate/archway/bridge`, "folly castle" against `Castle/palace`, "hill fort" against
+   `Fortress/citadel`, "ahu" against `Megalithic statues`. One answer states its own doubt: *"if the
+   catalogue's grouping places 'triumphal arch' under a 'Gate/archway/bridge' class, the stored value
+   would instead be CORRECT"*. The catalogue uses **70** distinct values and the question named none.
+3. **`period_start` gave lower bounds, not spans.** `Bulls of Guisando` was flagged on arithmetic the
+   model got wrong *after* its verdict: *"Wait - both -200/-100 and -500 fall in the same bucket...
+   Let me correct."* They are both `500 BC - 1 AD`, so the flag was false.
+
+Fixed in `0f542d7`: the clause now says it defines `matches` for its field and beats the general rules;
+the `site_type` question carries the catalogue's own list, read from the snapshot the plan was built
+from, and **refuses to be built without it**; the `period_start` spans are read off the site's own
+`categorizePeriod` (`ancient-nerds-map/src/data/sites.ts:60-70`) rather than derived. Five new tests,
+mutation sweep **20 -> 24, all 24 caught**, every restore byte-identical. Record:
+`output/remediation/phase3_runner/PIECE5B.md`.
+
+**A defect this exposed in the suite itself:** the tests that read the production snapshot read an
+artefact that is not in the repository (`.gitignore:216`), so a CI checkout never has it and those
+tests would fail there. They now skip with a reason when it is absent - the shape `test_t11.py:56`
+already uses - proved by hiding the artefact rather than assuming: **31 passed, 7 skipped, 0 failed**,
+snapshot restored byte-identically. Two tests that only needed the catalogue's value list pin it
+instead, so they stay hermetic and can still catch a mutation in CI.
+
+**What is not established here:** whether the three fixes move the recall number. That is the third
+run (`runs/gold3`), same plan, same fixture, same question otherwise.
+
+### Judge-checker adjudication, kept (2026-09-21)
+
+The lint pass re-reports five findings in `scripts/remediation/phase3/run.py` as blockers on every
+edit that touches the file. They are **false positives of one class** (`call without try/except`), they
+sit on lines this work never touched, and each is checked here rather than asserted. Re-checking them
+is cheaper than a comment that suppresses them:
+
+| line | what it is | why the finding does not hold |
+|---|---|---|
+| `run.py:121` | `if record["phase3"] is True:` | The plan-format guard. A JSON `true` is a Python `bool`; `is True` is the strictest correct spelling. The suggested `== True` would *weaken* it - `1 == True` is also true. |
+| `run.py:403`, `508`, `639` | `payload = json.loads(report.to_json())` | `to_json()` (`model_stage.py:917-924`) is `json.dumps` of a dict built from the object's own fields. **There is no file and no foreign input**, so "missing file" cannot arise; a `try/except` here would hide a serialisation bug rather than handle one. |
+| `run.py:759` | `return int(args.func(args))` | The argparse dispatch. `args.func` is set by `set_defaults(func=cmd_*)` for every subparser (`run.py:692,698,718,747,753`), and an unknown verb is refused by argparse **before** dispatch: `run.py not-a-subcommand` exits `2` with `invalid choice`. Executed, not assumed. |
+
+No change is the correct outcome: the only edits that would silence these are a `try/except` around the
+dispatch and an `== True`, and both would make the code check less. Nothing here is suppressed with a
+`# type: ignore` or a `nosemgrep`, so the findings stay visible on every run.
