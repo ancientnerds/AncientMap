@@ -4545,3 +4545,53 @@ What must be true for this to be honest, and is therefore part of the change: th
 recorded per batch (not just the final outcome), each attempt appears in the batch's log with its
 reason, and `batches_failed` still counts a batch whose *last* attempt failed. A retry that hides a
 systematic failure behind a green total would be worse than the defect.
+
+### That remedy was wrong, and a re-run proved it (2026-09-21, run 3, ninety seconds long)
+
+Two sentences above are corrected by the measurement that followed them, and both are left standing so
+the correction is checkable: "**Both modes are sporadic, not systematic**" and "Restarting is still
+worth it". Run 3 was launched as a plain restart and ended after about ninety seconds - `DRIVER_EXIT=1`
+at 17:16:30, the same breaker, the *same* failures at the *same* `(site, field)` with the *same*
+messages: `batch-0155` again on `355d25f2-.../site_type`, `batch-0146` again on
+`7e5a3822-.../description`.
+
+So the anomaly is sporadic **across sites** and **deterministic for a given question**. Re-asking
+reproduces it. A bounded retry cannot fix these eight; it would spend its attempts arriving at what one
+re-run already showed. The reasoning that made the retry look right is worth naming, because it is the
+kind that reads as obviously true: "the answers are on disk and reused" is a true statement about the
+**batch**, and it says nothing about the one call that never landed.
+
+Two measurements pin it down:
+
+* **No answer file exists** for the failing field of either batch - `runs/mass/batch-0155/answers/`
+  holds 62 files and `batch-0146` holds 50, and neither contains `355d25f2-...%2Fsite_type` or
+  `7e5a3822-...%2Fdescription`. The call is genuinely unanswered, not a stale bad file re-read.
+* **The retry produces nothing**: eight batches attempted, three consecutive failures, breaker, stop -
+  and not one new answer for any of them.
+
+**A fourth instrument of mine was wrong, and this one was load-bearing.** My first read of run 3's spend
+filtered the ledger on timestamps beginning `2026-09-21T17:1` and printed **zero calls**, which I very
+nearly recorded as "the judge failed without paying for anything" - a claim that would have inverted
+the diagnosis. The ledger stores `at` as **UTC with an offset** (`2026-09-21T15:16:25+00:00`), so local
+17:16 is `T15:16` and the filter matched nothing. The last rows at `15:16:25`, `15:16:26` and
+`15:16:29` line up second-for-second with the fresh judge logs at 17:16:25/26/29 local. An empty result
+was, for the fourth time in this section, a statement about the filter.
+
+**The remedy that follows from the measurement.** The call must be allowed to fail **as a recorded
+per-field outcome** while the batch continues - the rule this project already applies on the fetch side
+("a transport failure is recorded data, not a batch-killer", implemented as
+`TargetOutcome.given_up_reason` beside `not_attempted`). The shape exists: `model.json`'s `judgements`
+already carry a `wrote` flag, so a failed call is a judgement with `wrote: False` and its reason, and
+`batch_state`'s `len(judgements) == calls` still holds, because a failed call is still a call.
+
+The objection recorded above - that this "would put a model-call failure into the same record as a
+judgement" - is answered by the field, not by the shape: the judgement is marked `wrote: False` with the
+reason, which is exactly how a fetch failure is already recorded, and it is **not** a `Verdict`. Nothing
+in the record then says the field was judged; it says the question could not be asked. The consequence
+for the deliverable is honest and small: of roughly 2,500 questions, eight stay unanswered with the
+reason named and **no value written for them** - which is the safe default, since a field nobody could
+ask about must never become a field somebody guessed at.
+
+This is a change in `model_stage.py`'s judge path, which the piece-6 build currently holds locked, so it
+is the first task after that build lands. Until then, a restart of the mass run is not partial progress:
+it is no progress, and it costs a minute of model calls each time.
