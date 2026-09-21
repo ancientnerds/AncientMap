@@ -2407,3 +2407,35 @@ self-test cases.
 - `ci.yml` line-length (76 hits, 4 of them mine) - an 80-column prose rule applied to a YAML workflow
   that already violates it in 60-odd pre-existing lines. No project gate lints YAML line length; I
   shortened my own comment and left the rest alone rather than churn the file.
+
+## The raw third-party response bodies leave the repository history (2026-09-21)
+
+**gitleaks, pointed at the same target where it found 7 live `generic-api-key` findings, now reports
+"no leaks found"** - 3,475 commits, ~4.89 GB, 2m22s, exit 0. The removal is at the level the finding
+lived at (history), not just at the level it was noticed (the index).
+
+The fix, in order. All 76 raw bodies were taken out of the index earlier (`git rm -r --cached`, keeping
+the bytes on disk) and re-ignored, but that alone leaves the blobs reachable from the commit that
+introduced them, so the first push would have published the keys and the sast gate would have stayed
+red. `.gitleaksignore`'s own header forbids allowlisting a live credential, so exemption was never an
+option. So `git filter-branch --index-filter` over `b2dc450^..main` removed
+`output/remediation/phase3_pilot/evidence/` from every commit in that range: 15 commits rewritten,
+everything before them untouched. The reference tree is provably unaffected - `git diff --stat` between
+the old and the new HEAD is empty, because the path had already been unversioned and was absent from
+HEAD beforehand. The files are still on disk and still the fetch evidence; they are simply not versioned.
+
+Verified rather than assumed, at each step: 47 unpushed commits before and after, 0 commits on `main`
+holding the path, 0 files at HEAD under it, 0 modified files in the working tree, and the identical HEAD
+tree. The old refs (`refs/original`) and the reflogs were then dropped so the objects are truly
+unreachable, which is what makes the scan meaningful - and the same command was re-run to prove it, not
+a different smoke test.
+
+Backup, because a rewrite without one is a guess: `/c/PythonProjects/ancientmap-pre-rewrite-20260921-0211.bundle`
+(2,113,204 bytes) from `origin/main..HEAD`. Nothing has been pushed, so no remote ever saw the old
+hashes and no force-push or coordination is needed.
+
+**Warning for anyone reading older entries here: the hashes recorded before this one are stale.** The 15
+rewritten commits have new ids - the old `b2dc450` is now `98ce0c3`, `f96d4c3` is now `835653d`,
+`c10f582` is now `000bd1e`, `4a7e000` is now `cabed98`, `6cf4802` is now `a9585f5`. The full old-to-new
+table, with each subject, is in `output/remediation/HISTORY_REWRITE_2026-09-21.md`; the old ids resolve
+only through the backup bundle.
