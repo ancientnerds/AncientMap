@@ -22,7 +22,7 @@ those numbers rather than instead of them.
 The question has to be answerable for a field that stores **nothing**. Three of the 24 truth
 entries have `stored_value: null`, and a question that only asked "is this value wrong?" would read
 an empty field as nothing to report. So two things are structural here: `FIELD_QUESTION` says what
-`WRONG` means for an empty field (`or the field stores no value at all where one belongs`), and
+`WRONG` means for an empty field (`or the field stores no value where one belongs`), and
 `site_field_block` marks the value `stored="absent"`. Across the snapshot this is not a corner:
 7 `card_description` and 15 `period_start` values are empty (measured 2026-09-21, of 25,020 planned
 (site, field) pairs), and none of the 17 truth sites has one - the 3 that a value question cannot
@@ -89,8 +89,9 @@ FIELD_CLAUSE: dict[str, str] = {
     "period_start": (
         "`unified_sites.period_start` is an integer year, negative for BC, and the card buckets it "
         "for display. Most sites sit on a bucket lower bound (-4500/-3000/-1500/-500/1/500/1000/"
-        "1500) and a round value alone is not an error: report it only when the real dating belongs "
-        "in a **different bucket**."
+        "1500). State the dating the evidence gives, then compare buckets: a stored value in a "
+        "**different bucket** from the dating the evidence states is `WRONG`, and a round value "
+        "alone is not an error."
     ),
     "site_type": (
         "`unified_sites.site_type` is the catalogue's own type, at most 100 characters, and it has "
@@ -109,8 +110,15 @@ FIELD_CLAUSE: dict[str, str] = {
     ),
 }
 
-#: The question's fixed body: what a verdict means, and the one case a value question tends to lose
-#: - an empty field where a value belongs. `{field}` and `{clause}` are the only format slots.
+#: The question's fixed body: what a verdict means, and the three cases a value question tends to
+#: lose - an empty field where a value belongs; evidence that is silent being read as agreement; and
+#: a verdict contradicted by the finder's own sentence. `{field}` and `{clause}` are the only format
+#: slots.
+#:
+#: The evidence statement is asked for **before** the verdict line on purpose. The first live run
+#: (`runs/gold`, 2026-09-21) answered `VERDICT: CORRECT` after writing a sentence that placed the
+#: site's real dating in a different bucket from the stored one - the prompt's own rule, stated and
+#: then ignored, because the verdict was written first. Recall on the 24 known-wrong fields was 5/22.
 QUESTION_TEMPLATE = (
     "You are the finder in a two-stage factual audit. **No census check flagged this site**: "
     "nothing points at it and its stored values have never been questioned. This call is about one "
@@ -119,21 +127,34 @@ QUESTION_TEMPLATE = (
     "\n"
     "{clause}\n"
     "\n"
-    "Is the stored value right, or is it missing where a value belongs? Answer with one verdict "
-    "line and one sentence.\n"
+    "Answer in this order, and keep it short:\n"
+    "\n"
+    "1. One sentence saying what the evidence in this message gives for this field - the value it "
+    "states, or the word `silent` if it states nothing about this field.\n"
+    "2. Then the verdict line.\n"
     "\n"
     "VERDICT: CORRECT | WRONG | UNVERIFIABLE\n"
     "\n"
-    "* `CORRECT` - the evidence agrees with the stored value, including an empty field where no "
-    "value belongs.\n"
-    "* `WRONG` - the evidence contradicts the stored value, **or** the field stores no value at all "
-    "where one belongs. The sentence must say which of the two it is.\n"
-    "* `UNVERIFIABLE` - the evidence does not settle it. Never guess a replacement value.\n"
+    "* `CORRECT` - the evidence **states** this field's value and it matches the stored value.\n"
+    "* `WRONG` - the evidence states **a different value**; or the field stores no value where one "
+    "belongs; or a claim the stored value itself makes is contradicted by the evidence. The sentence "
+    "must say which of these it is.\n"
+    "* `UNVERIFIABLE` - the evidence states nothing about this field's value. **Silence is not "
+    'agreement**: "I looked and the evidence says nothing about this" is `UNVERIFIABLE`, never '
+    "`CORRECT`. Never guess a replacement value.\n"
+    "\n"
+    "**Only the evidence in this message decides.** Your own knowledge of the subject is not "
+    "evidence: it cannot uphold the stored value, and the sentence may not cite it.\n"
+    "\n"
+    "If your own sentence puts the site's real value anywhere other than the stored value - a "
+    'different bucket, century, era, type or place - then the verdict is `WRONG`, and saying "this '
+    'is consistent" in the same breath does not change it.\n'
     "\n"
     "A field whose `stored` attribute is `absent` holds nothing: no text, no number, not the string "
-    '"null". If a value belongs in that field, that is `WRONG`; if none belongs, it is `CORRECT`.\n'
+    '"null". If the evidence shows a value belongs in that field, that is `WRONG`; if the evidence '
+    "gives no value for it either, that is `UNVERIFIABLE`.\n"
     "\n"
-    "The sentence names the evidence that decides it. You propose; you do not write."
+    "You propose; you do not write."
 )
 
 

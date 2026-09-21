@@ -562,6 +562,50 @@ def test_every_site_buys_one_call_per_field_and_the_call_names_its_field(tmp_pat
         assert [e.feature for e in item.excerpts] == [F.FEATURE_ENWIKI]
 
 
+def _discover_prompt(tmp_path: Path) -> str:
+    store = _evidence_store(tmp_path / "evidence", "site-1")
+    return DS.plan_batch(batch=_batch(_site_record("site-1")), store=store).calls[0].call.prompt
+
+
+def test_the_question_asks_for_the_evidence_before_the_verdict(tmp_path: Path) -> None:
+    """The first live run's central failure, pinned.
+
+    `runs/gold` answered `VERDICT: CORRECT` after writing a sentence that placed the site's real
+    dating in a different bucket from the stored one - the prompt's own rule, stated and then
+    ignored, because the verdict was written first. Recall was 5/22. The evidence statement is
+    therefore asked for *before* the verdict line, and this test is what keeps that order.
+    """
+    prompt = _discover_prompt(tmp_path)
+    assert prompt.index("what the evidence in this message gives") < prompt.index(
+        "VERDICT: CORRECT"
+    )
+    assert "the evidence **states** this field's value and it matches" in prompt
+    assert 'saying "this is consistent" in the same breath does not change it' in prompt
+
+
+def test_the_question_refuses_silence_as_agreement(tmp_path: Path) -> None:
+    """`CORRECT` must mean the evidence states the value, not that it fails to contradict it.
+
+    8 of the 11 `CORRECT` answers that missed a known-wrong field reasoned "the evidence does not
+    contradict it", so a silent evidence block was being read as agreement.
+    """
+    prompt = _discover_prompt(tmp_path)
+    assert "Silence is not" in prompt
+    assert "never `CORRECT`" in prompt
+
+
+def test_the_question_forbids_upholding_a_value_with_the_finders_own_knowledge(
+    tmp_path: Path,
+) -> None:
+    """The other half of the misses: "4500-3000 BC is a standard attribution" upheld a wrong date.
+
+    The pass exists to judge a stored value against fetched evidence, so its own subject knowledge
+    may not be the thing that keeps a value alive.
+    """
+    prompt = _discover_prompt(tmp_path)
+    assert "Your own knowledge of the subject is not " in prompt
+
+
 def test_an_empty_stored_value_is_marked_absent_and_the_question_calls_it_wrong(
     tmp_path: Path,
 ) -> None:
@@ -579,8 +623,8 @@ def test_an_empty_stored_value_is_marked_absent_and_the_question_calls_it_wrong(
     empty = by_field["period_start"]
     assert 'stored="absent"' in empty
     assert DS.ABSENT_VALUE_TEXT in empty
-    assert "or is it missing where a value belongs" in empty
-    assert "no value at all where one belongs" in empty
+    assert "or the field stores no value where one belongs" in empty
+    assert "If the evidence shows a value belongs in that field, that is `WRONG`" in empty
     assert 'the string "null"' in empty
     # The empty *description* is absent too, and an existing value is present.
     assert 'stored="absent"' in by_field["description"]
