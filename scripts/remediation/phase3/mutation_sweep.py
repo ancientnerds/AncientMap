@@ -26,6 +26,12 @@ REPO = Path(__file__).resolve().parents[3]
 PY = REPO / ".venv" / "Scripts" / "python.exe"
 BACKUP = REPO / "output" / "remediation" / "logs" / "phase3_mutations" / "backup"
 TEST = "tests/remediation/test_phase3_discover.py"
+FETCH_TEST = "tests/remediation/test_phase3_fetch.py"
+MASSRUN_TEST = "tests/remediation/test_phase3_massrun.py"
+PACE = "test_two_processes_take_turns_on_one_host"
+PACE_HOSTS = "test_one_host_waiting_does_not_hold_up_another"
+PACE_STALE = "test_a_lock_left_by_a_killed_process_is_taken_over"
+PACE_WIRED = "test_the_pace_covers_the_probe_and_the_targets_alike"
 
 RUN = "test_every_site_buys_one_call_per_field_and_the_call_names_its_field"
 ROUTE = "test_the_discover_routing_is_enwiki_by_name_and_wikidata_by_the_qid"
@@ -56,6 +62,14 @@ SOURCE_REQUIRED = "test_a_wrong_answer_without_a_source_is_a_problem"
 QUOTE_FOLD = "test_a_quote_is_recognised_across_the_differences_a_retyping_has"
 QUOTE_ESCAPE = "test_a_quote_is_recognised_across_json_escapes_in_the_evidence"
 UNFETCHED_SOURCE = "test_a_cited_page_the_run_did_not_fetch_is_a_problem"
+BUDGET = "test_the_call_ceiling_stops_between_batches_and_names_what_was_not_reached"
+BREAKER = "test_the_circuit_breaker_trips_after_the_configured_number_of_failures"
+BREAKER_RESET = "test_a_success_clears_the_failure_count"
+TORN_JSON = "test_a_truncated_model_json_is_broken_and_never_done"
+MISSING_ANSWER = "test_a_written_judgement_without_its_answer_file_is_broken"
+DIGEST_GUARD = "test_the_source_digest_guard_stops_a_run_whose_sources_changed"
+ATOMIC = "test_a_crash_between_the_write_and_the_swap_leaves_the_previous_progress_intact"
+DRY_RUN = "test_a_dry_run_buys_nothing_and_leaves_the_ledger_exactly_as_it_was"
 
 #: (name, file, the exact text to replace, what to replace it with, test file, test name)
 MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
@@ -326,6 +340,106 @@ MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         "    unescaped = text",
         TEST,
         QUOTE_ESCAPE,
+    ),
+    (
+        "the pacer lets two processes into one host at once",
+        "scripts/remediation/phase3/fetch_stage.py",
+        "        if wait > 0:\n            self._sleep(wait)\n",
+        "        if False:  # mutated\n            self._sleep(wait)\n",
+        FETCH_TEST,
+        PACE,
+    ),
+    (
+        "a lock left by a killed process wedges the fleet",
+        "scripts/remediation/phase3/fetch_stage.py",
+        "        return self._clock() - held_since > self._stale_after\n",
+        "        return False  # mutated\n",
+        FETCH_TEST,
+        PACE_STALE,
+    ),
+    (
+        "every host shares one stamp",
+        "scripts/remediation/phase3/fetch_stage.py",
+        "        stamp = self.stamp_of(host)\n",
+        '        stamp = self.stamp_of("every-host")  # mutated\n',
+        FETCH_TEST,
+        PACE_HOSTS,
+    ),
+    (
+        "the paced fetcher does not pace",
+        "scripts/remediation/phase3/fetch_stage.py",
+        "        self._pacer.wait(host_of(url))\n        return self._inner.get(url)\n",
+        "        return self._inner.get(url)  # mutated\n",
+        FETCH_TEST,
+        PACE_WIRED,
+    ),
+    (
+        "the call ceiling is not checked between batches",
+        "scripts/remediation/phase3/mass_run.py",
+        "        reason = budget.stop_reason(Spend.from_ledger(ledger))\n"
+        "        if reason:\n            return reason\n",
+        "        reason = budget.stop_reason(Spend.from_ledger(ledger))\n"
+        "        if False:  # mutated\n            return reason\n",
+        MASSRUN_TEST,
+        BUDGET,
+    ),
+    (
+        "the circuit breaker never trips",
+        "scripts/remediation/phase3/mass_run.py",
+        "        if consecutive >= failures_before_stop:\n",
+        "        if False:  # mutated\n",
+        MASSRUN_TEST,
+        BREAKER,
+    ),
+    (
+        "a success does not clear the failure count",
+        "scripts/remediation/phase3/mass_run.py",
+        "                if ok:\n                    consecutive = 0\n",
+        "                if ok:\n                    consecutive = consecutive + 0  # mutated\n",
+        MASSRUN_TEST,
+        BREAKER_RESET,
+    ),
+    (
+        "an artefact that does not parse counts as done",
+        "scripts/remediation/phase3/mass_run.py",
+        '            return BROKEN, f"{name} does not parse: {exc}"\n',
+        '            return DONE, f"{name} does not parse: {exc}"  # mutated\n',
+        MASSRUN_TEST,
+        TORN_JSON,
+    ),
+    (
+        "a recorded answer that is not on disk still counts as done",
+        "scripts/remediation/phase3/mass_run.py",
+        "            return BROKEN, f\"answer missing for {row['site_id']}/{row['field']}\"\n",
+        "            continue  # mutated\n",
+        MASSRUN_TEST,
+        MISSING_ANSWER,
+    ),
+    (
+        "the source digest guard is not applied",
+        "scripts/remediation/phase3/mass_run.py",
+        "        if plan_digest is not None and digest_of() != plan_digest:\n",
+        "        if False:  # mutated\n",
+        MASSRUN_TEST,
+        DIGEST_GUARD,
+    ),
+    (
+        "the progress file is written in place instead of swapped in",
+        "scripts/remediation/phase3/mass_run.py",
+        '        temporary = path.with_name(path.name + ".tmp")\n'
+        '        temporary.write_text(text + "\\n", encoding="utf-8")\n'
+        "        os.replace(temporary, path)  # atomic on POSIX and on Windows\n",
+        '        path.write_text(text + "\\n", encoding="utf-8")  # mutated: not atomic\n',
+        MASSRUN_TEST,
+        ATOMIC,
+    ),
+    (
+        "the projection counts one call per site",
+        "scripts/remediation/phase3/mass_run.py",
+        "FIELDS_PER_SITE = 5\n",
+        "FIELDS_PER_SITE = 1  # mutated\n",
+        MASSRUN_TEST,
+        DRY_RUN,
     ),
 ]
 

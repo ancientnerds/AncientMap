@@ -3011,10 +3011,10 @@ run (`runs/gold3`), same plan, same fixture, same question otherwise.
 
 ### Judge-checker adjudication, kept (2026-09-21)
 
-The lint pass re-reports five findings in `scripts/remediation/phase3/run.py` as blockers on every
-edit that touches the file. They are **false positives of one class** (`call without try/except`), they
-sit on lines this work never touched, and each is checked here rather than asserted. Re-checking them
-is cheaper than a comment that suppresses them:
+The lint pass re-reports a fixed set of findings on every edit that touches `run.py` or
+`fetch_stage.py`. They are **false positives of one class** (`call without try/except`), they sit on
+lines this work never touched, and each is checked here rather than asserted. Re-checking them is
+cheaper than a comment that suppresses them:
 
 | line | what it is | why the finding does not hold |
 |---|---|---|
@@ -3023,6 +3023,10 @@ is cheaper than a comment that suppresses them:
 | `run.py:759` | `return int(args.func(args))` | The argparse dispatch. `args.func` is set by `set_defaults(func=cmd_*)` for every subparser (`run.py:692,698,718,747,753`), and an unknown verb is refused by argparse **before** dispatch: `run.py not-a-subcommand` exits `2` with `invalid choice`. Executed, not assumed. |
 | `list_other_flags.py:52` | a reader of `model.json` and the answer files | `call without try/except` again - and here the `try/except` would be the defect. This script exists to surface flags the fixture does not list; a reader that swallows a missing file or unparsable JSON reports "no flags" for a run it never read, which is the one outcome it must never produce. Raising loudly **is** the check. |
 | `verify_sources.py:48` | a reader of `fetch.json` (the page map for the citation check) | Same class, same reason, and one step stronger: this file decides whether a correction is writable, so a swallowed error would silently make a fabricated citation look verified. |
+| `fetch_stage.py:682` (x2) | `return float(value[0]), float(value[1])` | Not unguarded - the three lines above it require the value to be a 2-sequence and every element to be `isinstance(v, (int, float))` and not a `bool`. `float()` on an `int`/`float` cannot raise; the `raise InputError` for everything else is one line below. |
+| `fetch_stage.py:1307` | `result.truncated += int(outcome.truncated)` | `outcome.truncated` is this module's own dataclass field, computed by `one_attempt` from the transport's `truncated` flag. There is no foreign input to validate. |
+| `fetch_stage.py:392` | `def __exit__(self, *exc: object) -> None:` | The exit protocol calls this with `(exc_type, exc_value, traceback)`, and a variadic parameter accepts all three - the contract is met, and the line predates the pacer work. The suggested named signature would be equivalent, not a fix, so it is not applied. |
+| `mass_run.py:190-191` | `if isinstance(cost, (int, float)) and not isinstance(cost, bool):` then `spend.cost_usd += float(cost)` | `float` of an `int` or `float` cannot raise. The guard exists because a *fetch* ledger line carries `"cost_usd": null`, and null must not be summed as zero silently. |
 
 No change is the correct outcome: the only edits that would silence these are a `try/except` around the
 dispatch and an `== True`, and both would make the code check less. Nothing here is suppressed with a
@@ -3297,4 +3301,83 @@ Also decided here, because it was the same defect class twice: `score_recall.py`
 own verdict regex but imports `discover_stage.VERDICT_RE`, and the five committed
 `recall_result_*.json` files were re-derived with the shared rule and came back **byte-identical**
 (5/19, 8/19, 7/19, 5/19, 7/19).
+
+---
+
+## Piece 7: the mass-run driver, and the host pacer under it (2026-09-21)
+
+`scripts/remediation/phase3/mass_run.py` walks a plan and drives every batch through `prepare`, `fetch`
+and `judge`. Nothing in it touches the database: this piece produces findings, piece 6 turns confirmed
+findings into guarded writes, and keeping those apart is what makes findings safe to produce in bulk.
+
+**A script, not a subagent lane, and that is a measured decision.** The 30-minute ceiling binds lanes,
+not `bg_run` scripts. Two lanes this session were killed at that ceiling and their workflow receipts
+reported files they had not written - one of them left a mutant in the tree. A script writing to files
+it owns cannot lose its evidence that way, and an interrupted batch is simply not done.
+
+**The prerequisite, built first: the host pacer.** `HostPacer` + `PacedFetcher` in `fetch_stage.py`.
+One lock file per host (created `O_CREAT|O_EXCL`, stamped with its own acquisition time, stale takeover
+after 30 s), a minimum interval of 0.2 s between two requests to the same host, and a fail-closed
+`PacerTimeout` instead of an unbounded wait. It decorates the `Fetcher.get` seam, so probes, retries
+and targets are paced alike. It is a **cross-process** handshake on **one machine**; it is not a global
+rate limiter and not a distributed one, and that sentence stays true if the mass run ever moves to the
+VPS.
+
+**The guards, each with a test that has been proved able to fail by mutation:**
+
+| guard | protects against |
+|---|---|
+| `batch_state` says `done` only when both artefacts parse and every recorded answer is on disk | a truncated `model.json` from a kill mid-write reading as success |
+| the ledger is read before each batch is started | spending past a ceiling because nobody looked |
+| N consecutive failures stop the run; a success clears the count | 300 batches burned against one broken assumption, or a breaker that is only a counter |
+| the phase-3 sources are hashed at start and compared before every batch | two batches executing two versions of the code |
+| the progress file is written to a temp file and swapped in | a reader seeing half a progress report |
+| the dry run writes no ledger line | a "harmless" dry run that quietly bought something |
+| every stage exiting 0 is *not* enough; the artefacts decide | `exit 0` taken as a claim, again |
+| a stage past its wall clock is recorded, not fatal | one hung batch killing a 40-hour run |
+
+**The budget is checked between batches**, so with `--jobs N` up to `N` batches are in flight when a
+ceiling is reached. That is written down rather than discovered: the driver stops naming what it did not
+reach, and the overshoot is bounded by the batch wave. **Resumption** is by construction: `fetch` skips a
+target whose evidence file exists and `judge` re-uses an answer it already has (`wrote=False`), which is
+what makes "a half-written batch is redone rather than trusted" cheap enough to be the default.
+
+**Numbers.** `PLAN.snapshot.jsonl` over the whole table was generated and its sha256 is
+**`a5786f102c8352bbfe94eb9ecfd9dc7d0b8b15625f4ac94b6753a245572716bb`** - identical to the piece-5
+figure, 12,042,556 bytes, 334 batches, 5,004 sites, ordinals 1..334, last batch 9 sites - while the
+worklist plan stayed byte-identical at `96704b808ae1b29d…`. 25,020 calls at the measured $0.000825
+(round 6) is **~$20.6** for the discover stage; a reviewer stage would roughly double it and is **not
+built**. Serial wall clock is ~76,000 fetches at 8.8 s plus ~25,000 calls at 2.6 s, so **~200 h and
+up**; `--jobs 4` is a first measurement, not a promise, because the pacer keeps two processes out of one
+host without making the host faster, and every batch wants the same hosts.
+
+**One decision belongs to Martin before this starts** (`HUMAN_ONLY.md` (h)): `overpass-api.de` is
+unreachable from this workstation while the VPS can reach it. A mass run started here therefore
+collects **no overpass evidence at all**, and the discover pass would answer with strictly less
+evidence than it was measured with - the six recall rounds all share the same 33 evidence files, which
+is exactly what makes them comparable to each other. Either run it on the VPS or accept the reduced
+evidence and say so in the findings.
+
+**Defects of my own, found while writing, recorded because the classes recur:** two identical branches
+(`live` / not `live`) doing the same thing were dead duplicated logic and were collapsed; an unclosed
+backtick left a mangled sentence in a docstring, which no tool reported; and the first atomicity test
+could not distinguish `os.replace` from a plain write - asserting "no `.tmp` is left behind" is
+satisfied by both - so it was replaced by one that dies between the write and the swap, and the new
+mutation then proved it has teeth. The `BatchRunner` protocol replaces what would have been a
+`# type: ignore` in the tests, following the repo's own `Fetcher` protocol. And `read_plan`'s bare field
+access became a `PlanError` naming file and line: here the checker was right, unlike the five `run.py`
+lines, and the difference is that a **plan is input** - unknown fields and a non-numeric ordinal are
+things that happen to input.
+
+**Verified.** The gate after the pacer: **2316 passed, 3 skipped, 57 deselected in 181.94 s** (2309 +
+7 pacer tests). The driver's own file: **29 tests** green. Mutation sweep **43/43 caught, `missed: []`**,
+restore proved byte-identical for all six files it touches (`mass_run.py` `ba511951644ce0b1`,
+`fetch_stage.py` `126396c218747869`, `discover_stage.py` `cd2a3edb3eb104d2`, `snapshot_plan.py`
+`983b5ea8e8c42798`, `model_stage.py` `2810315bc048a1ef`, `run.py` `1f51e01aa3f75d21`). The full report is
+`output/remediation/phase3_runner/PIECE7.md`.
+
+**Not in this piece:** no database writes, no reviewer stage (so still no path from a discover finding
+to the writer, which needs `refuted=false`), no per-field evidence selection (an oversized site is still
+refused as a whole), and no search provider - the answer contract requires a source the run itself
+fetched, which is the only kind of source it can check.
 

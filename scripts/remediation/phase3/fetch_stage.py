@@ -93,6 +93,7 @@ rather than written into an `ids=` parameter that would answer with no entities 
 from __future__ import annotations
 
 import json
+import os
 import re
 import time
 from collections.abc import Callable, Iterable, Mapping
@@ -390,6 +391,128 @@ class HttpFetcher:
 
     def __exit__(self, *exc: object) -> None:
         self.close()
+
+
+HOST_MIN_INTERVAL_SECONDS = 0.2
+HOST_LOCK_STALE_SECONDS = 30.0
+HOST_LOCK_WAIT_SECONDS = 60.0
+HOST_LOCK_POLL_SECONDS = 0.05
+
+
+class PacerTimeout(RuntimeError):
+    """A host's lock was held so long that waiting further would only hide a stuck neighbour."""
+
+
+class HostPacer:
+    """One request at a time per host, **across processes**.
+
+    Parallel batches are separate processes, so an in-memory limiter would multiply the rate per
+    host by the number of jobs - which is the impoliteness a pacer exists to prevent. The mutex is
+    therefore a file beside a per-host stamp: take the lock, measure the time since this host's last
+    request, sleep the rest of the interval, rewrite the stamp, release the lock. The **stamp**, not
+    the lock, is what sets the interval, so a lock lost to a crash costs at most one early request.
+
+    `clock` and `sleep` are injected, and the lock records its own acquisition time in the file
+    rather than relying on the filesystem clock, so tests drive both without mocking `os.stat`.
+
+    Honest about its reach: this is **machine-local**. Two machines running this fleet share no
+    per-host state, so the claim it supports is "this machine does not hammer a host", not "a host
+    sees at most five requests a second worldwide".
+    """
+
+    def __init__(
+        self,
+        root: Path,
+        *,
+        min_interval: float = HOST_MIN_INTERVAL_SECONDS,
+        clock: Callable[[], float] = time.time,
+        sleep: Callable[[float], None] = time.sleep,
+        stale_after: float = HOST_LOCK_STALE_SECONDS,
+        wait_seconds: float = HOST_LOCK_WAIT_SECONDS,
+    ) -> None:
+        self.root = Path(root)
+        self.min_interval = min_interval
+        self._clock = clock
+        self._sleep = sleep
+        self._stale_after = stale_after
+        self._wait_seconds = wait_seconds
+
+    def stamp_of(self, host: str) -> Path:
+        return self.root / f"{host}.stamp"
+
+    def lock_of(self, host: str) -> Path:
+        return self.root / f"{host}.lock"
+
+    def wait(self, host: str) -> float:
+        """Block until a request to `host` is polite. Returns the seconds slept (0.0 = no wait)."""
+        self.root.mkdir(parents=True, exist_ok=True)
+        lock = self.lock_of(host)
+        deadline = self._clock() + self._wait_seconds
+        while True:
+            try:
+                handle = os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            except FileExistsError:
+                if self._is_stale(lock):
+                    # Best effort on purpose: a lock that outlived its process must not wedge the
+                    # whole fleet, and the worst case of losing this race is one early request.
+                    lock.unlink(missing_ok=True)
+                    continue
+                if self._clock() > deadline:
+                    raise PacerTimeout(
+                        f"{lock} was held for {self._wait_seconds:.0f}s - the holder is stuck, "
+                        "not busy"
+                    ) from None
+                self._sleep(HOST_LOCK_POLL_SECONDS)
+                continue
+            try:
+                os.write(handle, f"{self._clock():.6f}".encode())
+                return self._hold(host)
+            finally:
+                os.close(handle)
+                lock.unlink(missing_ok=True)
+
+    def _hold(self, host: str) -> float:
+        """Inside the lock: sleep the rest of the interval, then claim this request's time."""
+        stamp = self.stamp_of(host)
+        last = self._read_stamp(stamp)
+        wait = 0.0 if last is None else max(0.0, self.min_interval - (self._clock() - last))
+        if wait > 0:
+            self._sleep(wait)
+        stamp.write_text(f"{self._clock():.6f}", encoding="utf-8")
+        return wait
+
+    @staticmethod
+    def _read_stamp(stamp: Path) -> float | None:
+        try:
+            return float(stamp.read_text(encoding="utf-8").strip())
+        except (OSError, ValueError):
+            return None
+
+    def _is_stale(self, lock: Path) -> bool:
+        try:
+            held_since = float(lock.read_text(encoding="utf-8").strip())
+        except OSError:
+            return False
+        except ValueError:
+            return True  # a lock that cannot say when it was taken is a leftover
+        return self._clock() - held_since > self._stale_after
+
+
+class PacedFetcher:
+    """A `Fetcher` that waits its turn per host before delegating.
+
+    It decorates the seam instead of threading a pacer through `probe_host`, `one_attempt` and
+    `collect_batch`: every request in this module goes through `Fetcher.get`, so one decorator paces
+    the reachability probe, every retry and every target, and no call site can forget.
+    """
+
+    def __init__(self, inner: Fetcher, pacer: HostPacer) -> None:
+        self._inner = inner
+        self._pacer = pacer
+
+    def get(self, url: str) -> FetchedPage:
+        self._pacer.wait(host_of(url))
+        return self._inner.get(url)
 
 
 def assert_named_feature(url: str) -> None:

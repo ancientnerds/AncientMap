@@ -267,7 +267,12 @@ output/remediation/hero_repair/PLAN.jsonl
 output/remediation/phase3_worklist/WORKLIST.jsonl
 
 !output/remediation/phase3_runner/
-output/remediation/phase3_runner/PLAN.jsonl
+# Plans are regenerable and are therefore not versioned - the rule at the top of this block. The
+# snapshot plan over all 5,004 sites was regenerated on 2026-09-21 and came back with the identical
+# sha256 (a5786f102c8352bbfe94eb9ecfd9dc7d0b8b15625f4ac94b6753a245572716bb), which is the proof that
+# it is derivable; the hash itself is recorded in AUDIT_LOG.md and PIECE7.md, where it cannot rot.
+# 12 MB of generated JSON in the history would be paid for by every clone, forever.
+output/remediation/phase3_runner/PLAN*.jsonl
 output/remediation/phase3_runner/runs/
 !output/remediation/mechanical/
 # APPLY.sql and PLAN.jsonl are pinned rather than ignored: the deploy lens established that

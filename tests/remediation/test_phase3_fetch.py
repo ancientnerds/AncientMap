@@ -46,7 +46,9 @@ OTHER_SITE_ID = "9f0b0e6d-0000-4000-8000-000000000001"
 #: The pilot's own two raw-geometry dumps, byte-identical in shape to `fetch_log.jsonl`
 #: (`Petroglyph/osm_bbox`, 400 KB) and the Overpass spelling of the same request.
 PILOT_BBOX_DUMP = "https://api.openstreetmap.org/api/0.6/map?bbox=-132.400,56.475,-132.385,56.487"
-PILOT_GEOM_QUERY = "https://overpass-api.de/api/interpreter?data=[out:json];way(around:600,56.4,56.4);out%20geom;"
+PILOT_GEOM_QUERY = (
+    "https://overpass-api.de/api/interpreter?data=[out:json];way(around:600,56.4,56.4);out%20geom;"
+)
 
 
 def _site_record(
@@ -78,7 +80,9 @@ def _batch(sites: list[dict[str, Any]] | None = None) -> dict[str, Any]:
     return {"batch_id": "batch-0001", "ordinal": 1, "sites": sites or [_site_record()]}
 
 
-def _ok_transport(body: bytes = b'{"answer": 42}', calls: list[str] | None = None) -> httpx.BaseTransport:
+def _ok_transport(
+    body: bytes = b'{"answer": 42}', calls: list[str] | None = None
+) -> httpx.BaseTransport:
     def handler(request: httpx.Request) -> httpx.Response:
         if calls is not None:
             calls.append(str(request.url))
@@ -198,9 +202,7 @@ def test_decision_12_refuses_the_two_raw_geometry_shapes_the_pilot_measured() ->
 
 def test_the_overpass_target_is_a_name_filtered_query_around_the_stored_point() -> None:
     target = next(
-        t
-        for t in F.targets_for_site(_site_record())
-        if t.feature == F.FEATURE_OVERPASS_NAMED
+        t for t in F.targets_for_site(_site_record()) if t.feature == F.FEATURE_OVERPASS_NAMED
     )
     query = unquote(urlsplit(target.url).query)
 
@@ -363,10 +365,8 @@ def test_a_transport_failure_is_recorded_and_the_next_target_is_still_asked(tmp_
 
 
 def test_an_empty_result_is_a_success_while_a_failure_is_not(tmp_path: Path) -> None:
-    """"I looked and there was nothing" is a result; "I could not look" is not (pilot, 287 bytes)."""
-    empty = (
-        b'{"version": 0.6, "generator": "Overpass API 0.7.62.11", "elements": []}'
-    )
+    """ "I looked and there was nothing" is a result; "I could not look" is not (pilot, 287 bytes)."""
+    empty = b'{"version": 0.6, "generator": "Overpass API 0.7.62.11", "elements": []}'
 
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(200, content=empty)
@@ -939,3 +939,99 @@ def test_the_fetch_command_records_a_transport_failure_and_writes_its_report(
     assert {r["outcome"] for r in rows} == {"transport_failure"}
     assert [r["given_up"] for r in rows] == [False, False, True, False, False, True]
     assert (run_dir / "batch-0001" / "fetch.json").exists()
+
+
+class _PaceClock:
+    """One timeline shared by the clock and the sleeper, so a test can assert what was waited.
+
+    Also the point of the injected pair: the pacer's interval is *time*, and a test that really slept
+    through it would take as long as the run it is checking.
+    """
+
+    def __init__(self, start: float = 1000.0) -> None:
+        self.now = start
+        self.slept: list[float] = []
+
+    def time(self) -> float:
+        return self.now
+
+    def sleep(self, seconds: float) -> None:
+        self.slept.append(seconds)
+        self.now += seconds
+
+
+def _pacer(tmp_path: Path, clock: _PaceClock, **kwargs: Any) -> F.HostPacer:
+    return F.HostPacer(tmp_path / "pacing", clock=clock.time, sleep=clock.sleep, **kwargs)
+
+
+def test_two_processes_take_turns_on_one_host(tmp_path: Path) -> None:
+    """The reason the pacer is a file and not a dictionary: parallel batches are processes."""
+    clock = _PaceClock()
+    first, second = _pacer(tmp_path, clock), _pacer(tmp_path, clock)
+    assert first.wait("en.wikipedia.org") == 0.0
+    assert second.wait("en.wikipedia.org") == pytest.approx(F.HOST_MIN_INTERVAL_SECONDS)
+    clock.now += 10.0
+    assert first.wait("en.wikipedia.org") == 0.0  # the interval has passed; nothing to wait for
+    assert clock.slept == [pytest.approx(F.HOST_MIN_INTERVAL_SECONDS)]
+
+
+def test_one_host_waiting_does_not_hold_up_another(tmp_path: Path) -> None:
+    clock = _PaceClock()
+    pacer = _pacer(tmp_path, clock)
+    pacer.wait("en.wikipedia.org")
+    assert pacer.wait("www.wikidata.org") == 0.0
+    assert clock.slept == []
+
+
+def test_a_lock_left_by_a_killed_process_is_taken_over(tmp_path: Path) -> None:
+    """A killed run must not wedge the fleet: the lock states its own age and an old one goes."""
+    clock = _PaceClock(start=1000.0)
+    pacer = _pacer(tmp_path, clock, stale_after=30.0)
+    pacer.root.mkdir(parents=True, exist_ok=True)
+    lock = pacer.lock_of("en.wikipedia.org")
+    lock.write_text(f"{clock.now - 31.0:.6f}", encoding="utf-8")
+    assert pacer.wait("en.wikipedia.org") == 0.0
+    assert not lock.exists()
+
+
+def test_a_lock_file_that_cannot_say_when_it_was_taken_is_a_leftover(tmp_path: Path) -> None:
+    """Killed between `os.open` and the write: the file is there, the time is not."""
+    clock = _PaceClock()
+    pacer = _pacer(tmp_path, clock)
+    pacer.root.mkdir(parents=True, exist_ok=True)
+    pacer.lock_of("en.wikipedia.org").write_text("half a line", encoding="utf-8")
+    assert pacer.wait("en.wikipedia.org") == 0.0
+
+
+def test_a_lock_held_by_a_live_process_fails_closed(tmp_path: Path) -> None:
+    """Waiting past the budget would hide a stuck neighbour behind a slow fetcher."""
+    clock = _PaceClock(start=1000.0)
+    pacer = _pacer(tmp_path, clock, wait_seconds=1.0)
+    pacer.root.mkdir(parents=True, exist_ok=True)
+    lock = pacer.lock_of("en.wikipedia.org")
+    lock.write_text(f"{clock.now:.6f}", encoding="utf-8")
+    with pytest.raises(F.PacerTimeout):
+        pacer.wait("en.wikipedia.org")
+    assert lock.exists()  # a waiter never clears a live holder's lock
+
+
+def test_the_paced_fetcher_paces_every_request_and_returns_the_answer(tmp_path: Path) -> None:
+    clock = _PaceClock()
+    inner = _CountingFetcher()
+    paced = F.PacedFetcher(inner, _pacer(tmp_path, clock))
+    first = paced.get("https://en.wikipedia.org/w/api.php?action=query&titles=A")
+    second = paced.get("https://en.wikipedia.org/w/api.php?action=query&titles=B")
+    assert [page.status for page in (first, second)] == [200, 200]
+    assert len(inner.urls) == 2  # paced, not swallowed
+    assert clock.slept == [pytest.approx(F.HOST_MIN_INTERVAL_SECONDS)]
+
+
+def test_the_pace_covers_the_probe_and_the_targets_alike(tmp_path: Path) -> None:
+    """The claim the decorator buys: no call site can forget to pace - the probe is paced too."""
+    clock = _PaceClock()
+    inner = _CountingFetcher()
+    pacer = _pacer(tmp_path, clock)
+    _collect_with(tmp_path, F.PacedFetcher(inner, pacer))
+    hosts = {F.host_of(url) for url in inner.urls}
+    assert len(_probe_requests(inner.urls)) == 2  # one probe per host, through the pacer
+    assert {p.name for p in pacer.root.glob("*.stamp")} == {f"{host}.stamp" for host in hosts}
