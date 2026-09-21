@@ -5076,3 +5076,35 @@ The guard has teeth, measured rather than asserted: mutation 119 replaces `if an
 (`EvidenceConflict: ...answers\site-1%2Ffinder.txt`) - `1/1 mutations caught`, the tree byte-identical
 afterwards. Full gate: **2460 passed, 3 skipped**.
 
+### Round 4 died on a tool that was rewriting itself
+
+Round 4 finished ten batches, and they cost **509 calls ($0.43)** - the judge fix worked: not one batch
+ended on the `EvidenceConflict` any more. Then the circuit breaker stopped the run after four failures in
+a row, and the failure was a different one:
+
+```
+"error": "...\/period_start: 'pi.cmd' could not be started: [WinError 2] ..."
+```
+
+No model error, no network, no evidence: **the tool itself could not be started for about three seconds.**
+Measured, not guessed:
+
+| measurement | value |
+|---|---|
+| the two failure times (local) | 21:47:00 and 21:47:03 |
+| a **successful** call after them | 21:47:12 (batch-0167) |
+| `pi-node/current` last written | 21:47:27 |
+| the same command, now | `rc=0`, version 0.87.0 |
+
+It was not the environment: in exactly the same background environment `shutil.which('pi.cmd')` resolves
+the program and `subprocess.run(['pi.cmd','--version'])` returns `rc=0` from both trees. And it was not the
+working directory either - `ModelRunner(cwd=None)` inherits it, and the same call succeeds from every
+directory tried. The run starts thousands of `pi` children, and one of them touched the Pi tree: a mass run
+is its own disturber here. **The mechanism inside Pi is not established** and is not claimed here.
+
+The circuit breaker behaved correctly: four failures in a row on the same tool are a reason to stop, not to
+keep going. And because the run is resumable, stopping cost **nothing** - the ten finished batches were
+recognised as `already done` on the second attempt, free of charge, and the four failed ones are retried.
+What is *not* done about it is a retry: a retry would hide exactly the failure class that wants to be seen,
+which is the same reason the module refuses to retry a model call.
+
