@@ -351,6 +351,9 @@ def test_a_fetch_line_cannot_carry_a_model_cost() -> None:
             url="https://en.wikipedia.org/wiki/X",
             http_status=200,
             bytes=10,
+            outcome=L.FetchOutcome.OK,
+            attempt=1,
+            given_up=False,
             cost_usd=0.5,
         )
 
@@ -444,7 +447,247 @@ def test_the_prompt_says_which_census_finding_it_is_about(tmp_path: Path) -> Non
     assert 'field="country"' in prepared.call.prompt
     assert "Georgia (country)" in prepared.call.prompt
     assert prepared.call.prompt.startswith("<question>")
-    assert prepared.call.prompt.endswith("</evidence>\n")
+    assert prepared.call.prompt.rstrip().endswith("</evidence>")
+    assert "<failed_targets>" not in prepared.call.prompt  # nothing failed for this site
+
+
+# ── piece 4: partial evidence, and the site no evidence reached ──────────────────────────────
+
+
+def _latlon_site(site_id: str) -> dict[str, Any]:
+    """A site whose findings buy **two** targets: `enwiki` and `overpass_named`."""
+    return {
+        "site_id": site_id,
+        "name": f"Cave {site_id}",
+        "findings": [
+            {
+                "test_id": "T01/coords",
+                "field": "lat/lon",
+                "current_value": [42.3772, 42.6010],
+                "severity": "moderate",
+                "note": "Wikidata says the stored point is 1.2 km east",
+            }
+        ],
+    }
+
+
+OVERPASS_FAILURE = "no response: GET https://overpass-api.de/api/interpreter: ReadTimeout (3 request(s) recorded, the last one given up; no evidence on disk)"
+
+
+def _enwiki_only_store(tmp_path: Path, site_id: str = "site-1") -> F.EvidenceStore:
+    store = F.EvidenceStore(tmp_path / "evidence")
+    path = store.path_for(site_id, F.FEATURE_ENWIKI)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("Cave site-1 lies in Georgia.", encoding="utf-8")
+    return store
+
+
+def test_a_partially_failed_site_still_gets_a_call_and_the_prompt_names_the_failure(
+    tmp_path: Path,
+) -> None:
+    """The wiki evidence did answer the coordinate question, so the dead Overpass is not fatal.
+
+    This is the case the first live batch could not reach: the enwiki file for that site was on
+    disk (4,356 bytes, http_status 200) while the Overpass request had timed out.
+    """
+    prepared = MS.prepare_call(
+        batch_id="batch-0001",
+        site=_latlon_site("site-1"),
+        store=_enwiki_only_store(tmp_path),
+        stage=M.Stage.FINDER,
+        failures={F.FEATURE_OVERPASS_NAMED: OVERPASS_FAILURE},
+    )
+
+    prompt = prepared.call.prompt
+    assert MS.PARTIAL_EVIDENCE_NOTE in prompt
+    assert "<failed_targets>" in prompt
+    assert 'feature="overpass_named"' in prompt
+    assert "ReadTimeout" in prompt
+    assert 'status="failed"' in prompt
+    assert MS.FAILED_TARGET_MARKER in prompt
+    # The evidence that *did* arrive is still there, and it is the only one called present.
+    assert "Cave site-1 lies in Georgia." in prompt
+    assert prompt.count('status="present"') == 1
+    assert [e.failure is None for e in prepared.excerpts] == [True, False]
+    assert prepared.excerpts[1].text is None
+
+    # And the call is made: a failed second opinion is not a reason to skip a site.
+    runner = ScriptedRunner()
+    report = MS.judge_batch(
+        batch={"batch_id": "batch-0001", "sites": [_latlon_site("site-1")]},
+        runner=runner,
+        store=_enwiki_only_store(tmp_path),
+        answers=F.EvidenceStore(tmp_path / "answers"),
+        ledger=L.Ledger(tmp_path / "LEDGER.jsonl"),
+        stage=M.Stage.FINDER,
+        failures={"site-1": {F.FEATURE_OVERPASS_NAMED: OVERPASS_FAILURE}},
+    )
+    assert len(runner.calls) == 1
+    assert report.calls == 1
+    assert report.skipped == []
+    assert MS.PARTIAL_EVIDENCE_NOTE in runner.calls[0].prompt
+
+
+def test_a_site_no_evidence_reached_is_recorded_unverifiable_without_a_model_call(
+    tmp_path: Path,
+) -> None:
+    """No evidence at all: no call (that would buy a guess), but a recorded verdict with a reason."""
+    runner = ScriptedRunner()
+    ledger = L.Ledger(tmp_path / "LEDGER.jsonl")
+
+    report = MS.judge_batch(
+        batch={"batch_id": "batch-0001", "sites": [_latlon_site("site-1")]},
+        runner=runner,
+        store=F.EvidenceStore(tmp_path / "empty-evidence"),
+        answers=F.EvidenceStore(tmp_path / "answers"),
+        ledger=ledger,
+        stage=M.Stage.FINDER,
+        failures={
+            "site-1": {
+                F.FEATURE_ENWIKI: OVERPASS_FAILURE,
+                F.FEATURE_OVERPASS_NAMED: OVERPASS_FAILURE,
+            }
+        },
+    )
+
+    assert runner.calls == []  # no process, no money
+    assert report.calls == 0
+    assert len(report.skipped) == 1
+    skipped = report.skipped[0]
+    assert skipped.site_id == "site-1"
+    assert F.FEATURE_ENWIKI in skipped.reason  # every failed target is named, with its reason
+    assert F.FEATURE_OVERPASS_NAMED in skipped.reason
+    assert "ReadTimeout" in skipped.reason
+    assert len(skipped.findings) == 1  # one per census finding of the site
+    finding = skipped.findings[0]
+    assert finding.verdict is M.Verdict.UNVERIFIABLE
+    assert finding.defect is False  # derived from the verdict: it is not a clean bill of health
+    assert finding.test_id == "T01/coords"
+    assert finding.note == skipped.reason
+    # Recorded, not silently empty: in the report, and nothing in the ledger (no call was made).
+    payload = json.loads(report.to_json())
+    assert payload["totals"]["calls"] == 0
+    assert payload["totals"]["unverifiable_findings"] == 1
+    assert payload["skipped"][0]["findings"][0]["defect"] is False
+    assert payload["skipped"][0]["findings"][0]["verdict"] == "unverifiable"
+    assert not ledger.path.exists()
+
+
+def test_a_site_that_buys_no_target_is_recorded_unverifiable_as_such(tmp_path: Path) -> None:
+    """All-T02 findings buy no fetch (decision 12), so there is nothing a call could judge."""
+    site = {
+        "site_id": "site-1",
+        "name": "Cave site-1",
+        "findings": [
+            {
+                "test_id": "T02/outside-polygon",
+                "field": "country",
+                "current_value": "Ireland",
+                "severity": "cosmetic",
+            }
+        ],
+    }
+    runner = ScriptedRunner()
+
+    report = MS.judge_batch(
+        batch={"batch_id": "batch-0001", "sites": [site]},
+        runner=runner,
+        store=F.EvidenceStore(tmp_path / "evidence"),
+        answers=F.EvidenceStore(tmp_path / "answers"),
+        ledger=L.Ledger(tmp_path / "LEDGER.jsonl"),
+        stage=M.Stage.FINDER,
+    )
+
+    assert runner.calls == []
+    assert "buy no evidence target" in report.skipped[0].reason
+    assert report.skipped[0].findings[0].verdict is M.Verdict.UNVERIFIABLE
+
+
+def test_a_missing_evidence_file_with_no_recorded_failure_still_raises(tmp_path: Path) -> None:
+    """The guard that fired correctly stays exactly as it was: nothing recorded, nothing judged."""
+    with pytest.raises(MS.EvidenceUnusable, match="records no failure"):
+        MS.prepare_call(
+            batch_id="batch-0001",
+            site=_latlon_site("site-1"),
+            store=_enwiki_only_store(tmp_path),
+            stage=M.Stage.FINDER,
+        )
+    # And a failure recorded for a *different* target does not excuse the missing one either.
+    with pytest.raises(MS.EvidenceUnusable, match="records no failure"):
+        MS.prepare_call(
+            batch_id="batch-0001",
+            site=_latlon_site("site-1"),
+            store=F.EvidenceStore(tmp_path / "nothing"),
+            stage=M.Stage.FINDER,
+            failures={F.FEATURE_ENWIKI: OVERPASS_FAILURE},
+        )
+    # Through the stage as well: the batch stops rather than judging what is not on disk.
+    with pytest.raises(MS.EvidenceUnusable, match="not on disk"):
+        MS.judge_batch(
+            batch={"batch_id": "batch-0001", "sites": [_latlon_site("site-1")]},
+            runner=ScriptedRunner(),
+            store=_enwiki_only_store(tmp_path),
+            answers=F.EvidenceStore(tmp_path / "answers"),
+            ledger=L.Ledger(tmp_path / "LEDGER.jsonl"),
+            stage=M.Stage.FINDER,
+        )
+
+
+def test_read_fetch_failures_reads_what_the_fetch_stage_wrote(tmp_path: Path) -> None:
+    """The round trip that makes the judge's "explained failure" a record, not a belief."""
+    site = _site_record_for_report()
+    report = F.BatchFetchReport(batch_id="batch-0001", stage=M.Stage.FINDER)
+    outcome = F.SiteEvidence(site_id=site["site_id"])
+    outcome.outcomes.append(
+        F.TargetOutcome(
+            feature=F.FEATURE_ENWIKI,
+            url="https://en.wikipedia.org/w/api.php?data=x",
+            bought_by="T01/coords lat/lon",
+            attempts=[
+                F.FetchAttempt(1, L.FetchOutcome.OK, 200, 4356, None),
+            ],
+            stored=True,
+        )
+    )
+    outcome.outcomes.append(
+        F.TargetOutcome(
+            feature=F.FEATURE_OVERPASS_NAMED,
+            url=site["targets"][1]["url"],
+            bought_by="T01/coords lat/lon",
+            attempts=[
+                F.FetchAttempt(1, L.FetchOutcome.TRANSPORT_FAILURE, None, 0, "ReadTimeout"),
+                F.FetchAttempt(2, L.FetchOutcome.TRANSPORT_FAILURE, None, 0, "ReadTimeout"),
+                F.FetchAttempt(3, L.FetchOutcome.TRANSPORT_FAILURE, None, 0, "ReadTimeout"),
+            ],
+        )
+    )
+    report.sites.append(outcome)
+    path = tmp_path / "fetch.json"
+    F.write_report(path, report)
+
+    assert MS.read_fetch_failures(path) == report.failures_by_site()
+    assert MS.read_fetch_failures(path) == {
+        site["site_id"]: {F.FEATURE_OVERPASS_NAMED: outcome.outcomes[1].failure}
+    }
+    # A batch that was never fetched live explains nothing, and says so by explaining nothing.
+    assert MS.read_fetch_failures(tmp_path / "absent.json") == {}
+    # An unreadable report is not an empty one.
+    broken = tmp_path / "broken.json"
+    broken.write_text("not json", encoding="utf-8")
+    with pytest.raises(R.InputError, match="not JSON"):
+        MS.read_fetch_failures(broken)
+    shape = tmp_path / "shape.json"
+    shape.write_text(json.dumps({"sites": [{"site_id": "s"}]}), encoding="utf-8")
+    with pytest.raises(R.InputError, match="no `outcomes` list"):
+        MS.read_fetch_failures(shape)
+
+
+def _site_record_for_report() -> dict[str, Any]:
+    site = _latlon_site("31860bc4-476a-49bc-9f97-e25220063d19")
+    site["targets"] = [
+        {"feature": t.feature, "url": t.url} for t in F.targets_for_site(site)
+    ]
+    return site
 
 
 # ── the CLI: dry run by default ──────────────────────────────────────────────────────────────
@@ -499,6 +742,71 @@ def test_judge_without_live_renders_the_argv_and_the_prompt_and_starts_nothing(
     assert site["evidence"][0]["present"] is False
     assert not ledger.exists()
     assert not (run_dir / "batch-0001" / "answers").exists()
+
+
+def test_judge_live_records_unverifiable_findings_for_a_site_with_no_evidence(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The whole live path, with the fetch report naming what failed: recorded, not surfacing as 2."""
+    started: list[str] = []
+
+    class CountingRunner:
+        def __init__(self, **kwargs: Any) -> None:
+            self.kwargs = kwargs
+
+        def run(self, call: MS.ModelCall) -> MS.ModelAnswer:
+            started.append(call.site_id)
+            return _answer()
+
+    monkeypatch.setattr(MS, "PiRunner", CountingRunner)
+    run_dir = _prepared_run_dir(tmp_path)
+    batch_dir = run_dir / "batch-0001"
+    (batch_dir / "fetch.json").write_text(
+        json.dumps(
+            {
+                "batch_id": "batch-0001",
+                "sites": [
+                    {
+                        "site_id": "site-1",
+                        "outcomes": [
+                            {
+                                "feature": "enwiki",
+                                "url": "https://en.wikipedia.org/w/api.php?data=x",
+                                "failure": "no response: GET ...: ReadTimeout (3 request(s) recorded)",
+                            }
+                        ],
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    ledger = tmp_path / "LEDGER.jsonl"
+
+    rc = R.main(
+        [
+            "judge",
+            "--run-dir",
+            str(run_dir),
+            "--batch-id",
+            "batch-0001",
+            "--ledger",
+            str(ledger),
+            "--live",
+        ]
+    )
+
+    payload = json.loads(capsys.readouterr().out)
+    assert rc == 0
+    assert started == []  # no model call: there was nothing for a model to read
+    assert payload["totals"]["calls"] == 0
+    assert payload["totals"]["unverifiable_findings"] == 1
+    assert payload["skipped"][0]["site_id"] == "site-1"
+    assert "ReadTimeout" in payload["skipped"][0]["reason"]
+    stored = json.loads((batch_dir / "model.json").read_text(encoding="utf-8"))
+    assert stored["skipped"][0]["findings"][0]["verdict"] == "unverifiable"
+    assert stored["skipped"][0]["findings"][0]["field"] == "country"
+    assert not ledger.exists()  # no call, no measurement, so no line claiming one
 
 
 def test_judge_live_reports_a_call_it_could_not_measure_with_exit_2(

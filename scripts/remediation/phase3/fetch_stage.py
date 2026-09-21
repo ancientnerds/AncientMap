@@ -44,16 +44,32 @@ field**, and `ledger.summarise` groups by stage. So the line carries the string 
 
 What this layer does not do, stated so it is not mistaken for covered: it does not parse the
 evidence it stores (that is the finder's job, and the pilot's warning is that reading the two
-OSM dumps instead of parsing them would have cost ~3x the plan's token anchor), and it does not
-retry. One target is one fetch and one ledger line: the pilot's retried 504 appears as a second
-line in its own log, and a retry the ledger cannot see would be exactly the invisible cost this
-ledger exists to replace the plan's two 2x-apart anchors with.
+OSM dumps instead of parsing them would have cost ~3x the plan's token anchor).
+
+**Piece 4 replaced "one target is one fetch and one ledger line" with "one target is up to three
+attempts, and every attempt has its own line".** The first live batch (2026-09-21) measured why:
+a single `ReadTimeout` on the Overpass target ended the whole batch **and** wrote no ledger line,
+so the ledger undercounted exactly what the pilot had counted (19 non-200 of 76 requests; COST.md
+§1). Three recorded outcomes now stand apart, because "I could not look" and "I looked and there
+was nothing" justify different verdicts:
+
+* **`FetchOutcome.OK`** - a 2xx answer, its bytes on disk. A valid **empty** result (Overpass
+  `"elements": []`, the pilot's 287-byte `Petroglyph/overpass.txt`) is an OK attempt.
+* **`FetchOutcome.HTTP_ERROR`** - a response with a non-2xx status. Recorded data.
+* **`FetchOutcome.TRANSPORT_FAILURE`** - no response at all. Recorded with its reason and no
+  status, and **retried** (see `MAX_ATTEMPTS`), because 25 % of the pilot's requests failed this
+  way and a design that dies on one of them cannot finish a wave.
+
+A retried target is bounded: `MAX_ATTEMPTS` attempts total, a `RETRY_BACKOFF_SECONDS` pause between
+them through an injectable sleeper, and **no** fallback endpoint - which host to ask is a decision
+for the operator, not something a retry loop may change silently.
 """
 
 from __future__ import annotations
 
 import json
-from collections.abc import Iterable, Mapping
+import time
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
@@ -91,6 +107,52 @@ NAMED_FEATURE_RADIUS_M = 2000
 OVERPASS_ENDPOINT = "https://overpass-api.de/api/interpreter"
 WIKIPEDIA_ENDPOINT = "https://en.wikipedia.org/w/api.php"
 WIKIDATA_ENDPOINT = "https://www.wikidata.org/w/api.php"
+
+#: The User-Agent this client sends, re-exported under this module's own name so the string is
+#: visible where the request is built. `census.fetch.USER_AGENT` is the project's one spelling of
+#: it: `AncientNerdsSiteAudit/1.0 (https://ancientnerds.com; database audit;
+#: ancient.nerds@protonmail.com)` - a named client, a real site and a contact address.
+#:
+#: Why this is pinned here: overpass-api.de answers a request it will not serve with 89 bytes of
+#: plain text (`output/remediation/phase3_pilot/evidence/Didnauri%2Foverpass_shiraki.txt`):
+#:
+#:     Please include a meaningful User-Agent string with your requests to avoid rate-limiting.
+#:
+#: The pilot's own client did send one (`http_get.py:UA`, `AncientMap-Phase3-Pilot/1.0
+#: (https://github.com/ancientnerds; martin@example.invalid)`) and still got that body - with
+#: **HTTP 429** from `overpass.kumi.systems` (`fetch_log.jsonl`, 2026-09-20T22:22:35), i.e. it is
+#: this service's rate-limit body, not proof of a missing header. "Meaningful" is the service's
+#: word and no source states what satisfies it: whether the runner's own string is accepted is
+#: **unverified** - no live request is made from this piece. What *is* pinned is that every request
+#: carries this non-default, identifying string instead of httpx's own `python-httpx/x.y`.
+PHASE3_USER_AGENT = USER_AGENT
+
+#: How many times one target may be asked in total (so: two retries). **A chosen bound, not a
+#: measurement**: no source states an attempt budget. What the sources state is that the weather
+#: is bad - `COST.md` §1: 19 non-200 of 76 requests (403 x8, 404 x3, transport x5, 504 x2, 429 x1)
+#: - and that the pilot's own retried 504 and 429 succeeded.
+MAX_ATTEMPTS = 3
+
+#: The pause before retry 1 and retry 2, in seconds. **A chosen bound**, and the only number here
+#: whose source is a log line rather than a phrase: `fetch_log.jsonl` has the failed 504 at
+#: 2026-09-20T22:21:01Z (`Pannonian/overpass_stored_point`) and its successful re-ask 20 s later at
+#: 22:21:21Z. That 20 s is a request *plus* a pause, so it is read as "the pilot waited on the
+#: order of seconds", not as a delay to copy.
+RETRY_BACKOFF_SECONDS = (1.0, 3.0)
+
+#: Statuses worth a second attempt: 429 (with the body above) and every 5xx. Everything else -
+#: 400, 403, 404 - is an answer the same question gets again unchanged, so it is recorded once and
+#: not re-asked.
+RETRYABLE_STATUSES = frozenset({408, 429})
+
+#: How long the Overpass target may take, in seconds, versus the client's own `timeout` for the
+#: other hosts. **A chosen bound, not a measurement.** What is measured: the first live batch lost
+#: the Overpass request to a read timeout at 40 s (`run.py --timeout`), and the enwiki target for
+#: the same site answered in the same batch (`LEDGER.jsonl`, `31860bc4.../enwiki`, 4,356 bytes).
+#: Wikipedia's `prop=extracts|coordinates` already carries the article's coordinate claim, so
+#: Overpass is a **second opinion** here - it is kept, bounded, and must never be the reason a site
+#: is unverifiable when the enwiki evidence answered the question.
+OVERPASS_TIMEOUT = 20.0
 
 #: Feature slugs. The first two are the pilot's own label suffixes (`fetch_log.jsonl`:
 #: `Satsurblia/enwiki`, `Karpasia/wd_kition_label`); `overpass_named` names the query shape the
@@ -136,6 +198,22 @@ class RawGeometryRefused(ValueError):
 
 class EvidenceConflict(RuntimeError):
     """An evidence file for this (site, feature) exists and holds *different* bytes."""
+
+
+def is_retryable_status(status: int | None) -> bool:
+    """429/408 or any 5xx. A 400/403/404 is asked once: the next answer would be the same one."""
+    if status is None:
+        return False
+    return status in RETRYABLE_STATUSES or 500 <= status < 600
+
+
+def timeout_for(url: str) -> float | None:
+    """The per-target bound, or `None` for the client's own default.
+
+    Overpass is the one host this module asks a *second opinion* of, and the one the first live
+    batch lost to a read timeout, so it gets the shorter bound (`OVERPASS_TIMEOUT`).
+    """
+    return OVERPASS_TIMEOUT if url.startswith(OVERPASS_ENDPOINT) else None
 
 
 @dataclass(frozen=True)
@@ -209,8 +287,9 @@ class HttpFetcher:
     def get(self, url: str) -> FetchedPage:
         """GET `url`. Every URL is checked against decision 12 before a socket is opened."""
         assert_named_feature(url)
+        timeout = self._timeout(url)
         try:
-            with self._client.stream("GET", url) as response:
+            with self._client.stream("GET", url, timeout=timeout) as response:
                 body, truncated = _read_capped(response.iter_bytes())
                 return FetchedPage(
                     status=response.status_code,
@@ -222,6 +301,11 @@ class HttpFetcher:
             # No response, or the body died mid-stream: both are "could not ask". A partial
             # body is not a result and is not returned.
             raise TransportFailure(f"GET {url}: {type(exc).__name__}: {exc}") from exc
+
+    def _timeout(self, url: str) -> httpx.Timeout | float:
+        """`httpx`'s own default for this client, or the target's shorter bound (`timeout_for`)."""
+        bound = timeout_for(url)
+        return self._client.timeout if bound is None else bound
 
     def close(self) -> None:
         self._client.close()
@@ -465,17 +549,118 @@ class EvidenceStore:
         return EvidenceFile(site_id=site_id, feature=feature, path=path, wrote=True)
 
 
+@dataclass(frozen=True)
+class FetchAttempt:
+    """One HTTP attempt on one target: what happened, and what it bought.
+
+    Exactly the shape of the ledger line written for it, so the report and the ledger cannot
+    disagree about a request (the report is for a human, the ledger carries the clock).
+    """
+
+    attempt: int  #: 1-based
+    outcome: L.FetchOutcome
+    http_status: int | None  #: None for a transport failure: no response arrived
+    bytes: int  #: 0 when nothing arrived
+    error: str | None  #: the reason, for a transport failure only
+
+    @property
+    def ok(self) -> bool:
+        return self.outcome is L.FetchOutcome.OK
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "attempt": self.attempt,
+            "outcome": self.outcome.value,
+            "http_status": self.http_status,
+            "bytes": self.bytes,
+            "error": self.error,
+        }
+
+
+@dataclass
+class TargetOutcome:
+    """Every attempt made on one target, and what the target ended with."""
+
+    feature: str
+    url: str
+    bought_by: str  #: the finding's "<test_id> <field>"
+    attempts: list[FetchAttempt] = field(default_factory=list)
+    #: Set only by `one_attempt`: the page this target bought is on disk, and whether it was cut
+    #: at `MAX_PAGE_BYTES`.
+    stored: bool = False
+    truncated: bool = False
+
+    @property
+    def requests(self) -> int:
+        return len(self.attempts)
+
+    @property
+    def final(self) -> FetchAttempt:
+        if not self.attempts:  # pragma: no cover - a target with no attempt is never appended
+            raise RuntimeError(f"{self.feature}: no attempt was recorded")
+        return self.attempts[-1]
+
+    @property
+    def succeeded(self) -> bool:
+        return bool(self.attempts) and self.final.ok
+
+    @property
+    def failure(self) -> str | None:
+        """Why this target has no evidence, or `None` when it does have some.
+
+        This is the sentence the judge stage reads back out of the report before it decides
+        whether a missing evidence file is an explained failure or a hole in the record.
+        """
+        if self.succeeded:
+            return None
+        final = self.final
+        if final.outcome is L.FetchOutcome.TRANSPORT_FAILURE:
+            what = f"no response: {final.error}"
+        else:
+            what = f"HTTP {final.http_status}"
+        return (
+            f"{what} ({self.requests} request(s) recorded, the last one given up; "
+            "no evidence on disk)"
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "attempts": [a.to_dict() for a in self.attempts],
+            "bought_by": self.bought_by,
+            "feature": self.feature,
+            "failure": self.failure,
+            "requests": self.requests,
+            "url": self.url,
+        }
+
+
 @dataclass
 class SiteEvidence:
     """What the fetch stage did for one site. Counts, not prose."""
 
     site_id: str
     targets: list[Target] = field(default_factory=list)
-    fetched: int = 0
+    fetched: int = 0  #: targets that produced an evidence file
     skipped_existing: int = 0
     truncated: int = 0
     bytes: int = 0
     non_2xx: list[tuple[str, int]] = field(default_factory=list)
+    #: One record per attempted target, in attempt order. A failed target is here too - that is
+    #: the whole point of piece 4: a request that bought nothing must be visible in the report.
+    outcomes: list[TargetOutcome] = field(default_factory=list)
+
+    @property
+    def requests(self) -> int:
+        """HTTP attempts made for this site (every one of them has its own ledger line)."""
+        return sum(o.requests for o in self.outcomes)
+
+    @property
+    def failed(self) -> list[TargetOutcome]:
+        return [o for o in self.outcomes if not o.succeeded]
+
+    def failures(self) -> dict[str, str]:
+        """`feature -> why it has no evidence`, for the targets that have none."""
+        return {o.feature: str(o.failure) for o in self.failed}
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -483,6 +668,7 @@ class SiteEvidence:
             "targets": [
                 {"feature": t.feature, "reason": t.reason, "url": t.url} for t in self.targets
             ],
+            "outcomes": [o.to_dict() for o in self.outcomes],
             "fetched": self.fetched,
             "skipped_existing": self.skipped_existing,
             "truncated": self.truncated,
@@ -519,6 +705,19 @@ class BatchFetchReport:
     def non_2xx(self) -> list[tuple[str, int]]:
         return [row for s in self.sites for row in s.non_2xx]
 
+    @property
+    def requests(self) -> int:
+        """Every HTTP attempt of the batch. Each one is a ledger line, so this is countable twice."""
+        return sum(s.requests for s in self.sites)
+
+    @property
+    def failed(self) -> list[TargetOutcome]:
+        return [o for s in self.sites for o in s.failed]
+
+    def failures_by_site(self) -> dict[str, dict[str, str]]:
+        """The record the judge stage reads: `site_id -> {feature: why it has no evidence}`."""
+        return {s.site_id: s.failures() for s in self.sites if s.failed}
+
     def to_json(self) -> str:
         payload = {
             "batch_id": self.batch_id,
@@ -526,6 +725,8 @@ class BatchFetchReport:
             "sites": [s.to_dict() for s in self.sites],
             "totals": {
                 "fetches": self.fetches,
+                "requests": self.requests,
+                "failed": len(self.failed),
                 "skipped_existing": self.skipped_existing,
                 "truncated": self.truncated,
                 "bytes": self.bytes,
@@ -535,6 +736,95 @@ class BatchFetchReport:
         return json.dumps(payload, ensure_ascii=False, sort_keys=True)
 
 
+def one_attempt(
+    *,
+    target: Target,
+    fetcher: Fetcher,
+    store: EvidenceStore,
+    ledger: L.Ledger,
+    batch_id: str,
+    stage: Stage,
+    sleep: Callable[[float], None],
+) -> TargetOutcome:
+    """Ask one target, up to `MAX_ATTEMPTS` times, and record every attempt exactly once.
+
+    The order inside an attempt is the ledger's rule from piece 2 and it does not change: the
+    **line goes down first**, because the request happened and a crash after it must leave a
+    visible measurement rather than an invisible one; the page is stored second.
+
+    What is retried is decided by `is_retryable_status` plus a transport failure, and what is
+    *not*: a fallback host. `HttpFetcher` keeps asking the same URL, because which endpoint to ask
+    is a decision for the operator (and `overpass.kumi.systems` - the third-party mirror the pilot
+    fell back to by hand - is a different service with different terms).
+    """
+    outcome = TargetOutcome(feature=target.feature, url=target.url, bought_by=target.reason)
+    for number in range(1, MAX_ATTEMPTS + 1):
+        attempt, page = _ask(target=target, fetcher=fetcher, number=number)
+        retryable = attempt.outcome is L.FetchOutcome.TRANSPORT_FAILURE or is_retryable_status(
+            attempt.http_status
+        )
+        last = not retryable or number == MAX_ATTEMPTS
+        ledger.append(
+            L.Entry(
+                kind=L.LedgerKind.FETCH,
+                stage=stage,
+                batch_id=batch_id,
+                label=target.label,
+                url=target.url,
+                http_status=attempt.http_status,
+                bytes=attempt.bytes,
+                outcome=attempt.outcome,
+                attempt=number,
+                error=attempt.error,
+                given_up=last and not attempt.ok,
+            )
+        )
+        if page is not None and page.ok:
+            # A valid *empty* answer (Overpass `"elements": []`) is an OK attempt like any other:
+            # the file is the record that the question was asked *and answered with nothing*.
+            store.write(site_id=target.site_id, feature=target.feature, body=page.body)
+            outcome.stored = True
+            outcome.truncated = page.truncated
+        outcome.attempts.append(attempt)
+        if last:
+            return outcome
+        sleep(RETRY_BACKOFF_SECONDS[number - 1])
+    raise AssertionError("unreachable: the loop returns on its last attempt")  # pragma: no cover
+
+
+def _ask(
+    *, target: Target, fetcher: Fetcher, number: int
+) -> tuple[FetchAttempt, FetchedPage | None]:
+    """One request. A transport failure is turned into a recorded attempt, never into a stop.
+
+    Nothing else is caught: an exception the fetcher was not asked to raise (a `ValueError`, a
+    `RawGeometryRefused`) is a bug in the caller, not weather, and propagates.
+    """
+    try:
+        page = fetcher.get(target.url)
+    except TransportFailure as exc:
+        return (
+            FetchAttempt(
+                attempt=number,
+                outcome=L.FetchOutcome.TRANSPORT_FAILURE,
+                http_status=None,
+                bytes=0,
+                error=str(exc),
+            ),
+            None,
+        )
+    return (
+        FetchAttempt(
+            attempt=number,
+            outcome=L.FetchOutcome.OK if page.ok else L.FetchOutcome.HTTP_ERROR,
+            http_status=page.status,
+            bytes=len(page.body),
+            error=None,
+        ),
+        page,
+    )
+
+
 def collect_batch(
     *,
     batch: Mapping[str, Any],
@@ -542,12 +832,17 @@ def collect_batch(
     store: EvidenceStore,
     ledger: L.Ledger,
     stage: Stage = Stage.FINDER,
+    sleep: Callable[[float], None] = time.sleep,
 ) -> BatchFetchReport:
-    """Fetch every target the batch's sites buy, writing one ledger line and one file each.
+    """Fetch every target the batch's sites buy, writing one ledger line per *attempt*.
 
-    A `TransportFailure` propagates: the batch stops with the fetch that could not be measured,
-    and the pages already stored stay on disk, so a re-run resumes on the remaining targets
-    instead of paying for them twice. Nothing is caught into an empty result.
+    No failure of one target stops the batch. A transport failure is recorded as that target's
+    outcome with its reason and the next target is asked; a 429/5xx is retried up to
+    `MAX_ATTEMPTS` times; anything else is recorded once. Nothing is caught into an empty result,
+    and nothing is retried without a ledger line - an unrecorded retry is the invisible charge
+    this ledger exists to prevent.
+
+    `sleep` is the retry pause, injected so a test never waits on a real clock.
     """
     batch_id = str(_finding(batch, "batch_id", "batch"))
     sites = batch.get("sites")
@@ -562,29 +857,24 @@ def collect_batch(
             if store.exists(target.site_id, target.feature):
                 result.skipped_existing += 1
                 continue
-            page = fetcher.get(target.url)
-            # The line goes first, and it is fsynced: the fetch *happened*, and a crash after
-            # this point must leave a visible measurement rather than an invisible one. The
-            # other order would record a page nobody could account for.
-            ledger.append(
-                L.Entry(
-                    kind=L.LedgerKind.FETCH,
-                    stage=stage,
-                    batch_id=batch_id,
-                    label=target.label,
-                    url=target.url,
-                    http_status=page.status,
-                    bytes=len(page.body),
-                )
+            outcome = one_attempt(
+                target=target,
+                fetcher=fetcher,
+                store=store,
+                ledger=ledger,
+                batch_id=batch_id,
+                stage=stage,
+                sleep=sleep,
             )
-            store.write(site_id=target.site_id, feature=target.feature, body=page.body)
-            result.fetched += 1
-            result.bytes += len(page.body)
-            if page.truncated:
-                result.truncated += 1
-            if not page.ok:
-                # Data, not an exception: the pilot recorded 403/404/504/429 and continued.
-                result.non_2xx.append((target.url, page.status))
+            result.outcomes.append(outcome)
+            if outcome.stored:
+                result.fetched += 1
+                result.bytes += outcome.final.bytes
+                result.truncated += int(outcome.truncated)
+            for attempt in outcome.attempts:
+                if not attempt.ok and attempt.http_status is not None:
+                    # Data, not an exception: the pilot recorded 403/404/504/429 and continued.
+                    result.non_2xx.append((target.url, attempt.http_status))
     return report
 
 

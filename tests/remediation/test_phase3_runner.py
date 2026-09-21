@@ -223,6 +223,9 @@ def _fetch(at: str) -> L.Entry:
         url="https://en.wikipedia.org/wiki/Satsurblia_Cave",
         http_status=200,
         bytes=4096,
+        outcome=L.FetchOutcome.OK,
+        attempt=1,
+        given_up=False,
     )
 
 
@@ -266,11 +269,117 @@ def test_a_model_call_without_token_counts_is_refused() -> None:
         L.Entry(kind=L.LedgerKind.MODEL_CALL, stage=M.Stage.FINDER, batch_id="b", label="x", model="m", input_tokens=1, output_tokens=None)
 
 
-def test_a_fetch_without_an_observed_status_is_refused() -> None:
-    with pytest.raises(L.LedgerError, match="raises in the fetcher"):
-        L.Entry(kind=L.LedgerKind.FETCH, stage=M.Stage.FINDER, batch_id="b", label="x", url="https://example.org", bytes=10)
+def test_a_fetch_without_a_recorded_outcome_is_refused() -> None:
+    # The status is recorded when a response arrived, and only then: an attempt that bought
+    # nothing says so with its outcome and, for a transport failure, its reason (piece 4).
+    with pytest.raises(L.LedgerError, match="records the outcome observed"):
+        L.Entry(
+            kind=L.LedgerKind.FETCH,
+            stage=M.Stage.FINDER,
+            batch_id="b",
+            label="x",
+            url="https://example.org",
+            http_status=200,
+            bytes=10,
+            attempt=1,
+            given_up=False,
+        )
+    with pytest.raises(L.LedgerError, match="needs the status observed"):
+        L.Entry(
+            kind=L.LedgerKind.FETCH,
+            stage=M.Stage.FINDER,
+            batch_id="b",
+            label="x",
+            url="https://example.org",
+            bytes=10,
+            outcome=L.FetchOutcome.OK,
+            attempt=1,
+            given_up=False,
+        )
+    with pytest.raises(L.LedgerError, match="needs the reason"):
+        L.Entry(
+            kind=L.LedgerKind.FETCH,
+            stage=M.Stage.FINDER,
+            batch_id="b",
+            label="x",
+            url="https://example.org",
+            bytes=0,
+            outcome=L.FetchOutcome.TRANSPORT_FAILURE,
+            attempt=1,
+            given_up=True,
+        )
+    # A failure with no response may not carry a status it never saw, and the outcome and the
+    # status may not contradict each other.
+    with pytest.raises(L.LedgerError, match="cannot carry http_status"):
+        L.Entry(
+            kind=L.LedgerKind.FETCH,
+            stage=M.Stage.FINDER,
+            batch_id="b",
+            label="x",
+            url="https://example.org",
+            bytes=0,
+            outcome=L.FetchOutcome.TRANSPORT_FAILURE,
+            attempt=1,
+            given_up=True,
+            http_status=504,
+            error="ReadTimeout",
+        )
+    with pytest.raises(L.LedgerError, match="outcome and the status disagree"):
+        L.Entry(
+            kind=L.LedgerKind.FETCH,
+            stage=M.Stage.FINDER,
+            batch_id="b",
+            label="x",
+            url="https://example.org",
+            http_status=200,
+            bytes=0,
+            outcome=L.FetchOutcome.HTTP_ERROR,
+            attempt=1,
+            given_up=True,
+        )
     with pytest.raises(L.LedgerError, match="a fetch cannot carry"):
-        L.Entry(kind=L.LedgerKind.FETCH, stage=M.Stage.FINDER, batch_id="b", label="x", url="https://example.org", http_status=200, bytes=10, input_tokens=5)
+        L.Entry(
+            kind=L.LedgerKind.FETCH,
+            stage=M.Stage.FINDER,
+            batch_id="b",
+            label="x",
+            url="https://example.org",
+            http_status=200,
+            bytes=10,
+            outcome=L.FetchOutcome.OK,
+            attempt=1,
+            given_up=False,
+            input_tokens=5,
+        )
+
+
+def test_the_ledger_counts_how_many_attempts_bought_nothing(tmp_path: Path) -> None:
+    path = tmp_path / "LEDGER.jsonl"
+    ledger = L.Ledger(path, clock=lambda: "2026-09-21T00:03:00+00:00")
+    ledger.append(_fetch("2026-09-21T00:00:30+00:00"))
+    ledger.append(
+        L.Entry(
+            kind=L.LedgerKind.FETCH,
+            stage=M.Stage.FINDER,
+            batch_id="batch-0001",
+            label="31860bc4-476a-49bc-9f97-e25220063d19/overpass_named",
+            at="2026-09-21T00:00:40+00:00",
+            url="https://overpass-api.de/api/interpreter?data=x",
+            bytes=0,
+            outcome=L.FetchOutcome.TRANSPORT_FAILURE,
+            attempt=3,
+            error="GET https://overpass-api.de/api/interpreter?data=x: ReadTimeout: timed out",
+            given_up=True,
+        )
+    )
+
+    summary = L.summarise(path)
+
+    # Two attempts were spent; one of them bought nothing. Both figures come from lines.
+    assert summary.by_stage["reviewer"].fetches == 1
+    assert summary.by_stage["finder"].fetches == 1
+    assert summary.total.fetches == 2
+    assert summary.total.fetch_failures == 1
 
 
 def test_a_model_call_cannot_carry_fetch_fields() -> None:
@@ -377,12 +486,75 @@ def test_prepare_writes_one_input_file_per_batch(tmp_path: Path) -> None:
         R.main(["prepare", "--plan", str(plan), "--run-dir", str(run_dir), "--batch-id", "batch-0009"])
 
 
+def test_status_reports_a_fresh_run_directory_as_a_state_not_an_error(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The operator's own report command, on the run it is supposed to report on.
+
+    Piece 4: this used to raise `FileNotFoundError("nothing has been prepared")` before printing a
+    single figure - an absent run directory, plan and ledger are facts about a fresh run.
+    """
+    plan = _tiny_plan(tmp_path)
+    run_dir = tmp_path / "runs"
+    ledger = tmp_path / "LEDGER.jsonl"
+
+    assert R.main(["status", "--run-dir", str(run_dir), "--plan", str(plan)]) == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["exists"] is False
+    assert payload["batches_with_input"] == []
+    assert payload["batches_with_result"] == []
+    assert payload["planned_batches"] == 2
+
+    # And with a ledger that does not exist yet: zero measured, and it says why.
+    assert (
+        R.main(
+            [
+                "status",
+                "--run-dir",
+                str(run_dir),
+                "--plan",
+                str(tmp_path / "absent-plan.jsonl"),
+                "--ledger",
+                str(ledger),
+            ]
+        )
+        == 0
+    )
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["planned"] is False
+    assert payload["ledger"]["measured"] is False
+    assert payload["ledger"]["lines"] == 0
+    assert payload["ledger"]["stages"] == {}
+    assert payload["ledger"]["total"]["fetches"] == 0
+    assert payload["ledger"]["total"]["model_calls"] == 0
+    assert "nothing has been measured yet" in payload["ledger"]["reason"]
+    assert not ledger.exists()
+
+
+def test_status_still_raises_on_a_ledger_it_cannot_read(tmp_path: Path) -> None:
+    """An absent ledger is a fresh run; an unreadable one is a different fact and is not masked."""
+    run_dir = tmp_path / "runs"
+    run_dir.mkdir()
+    ledger = tmp_path / "LEDGER.jsonl"
+    ledger.write_text('{"kind": "fetch", "stage": "finder"}\nnot json\n', encoding="utf-8")
+
+    with pytest.raises(L.LedgerError, match="not JSON"):
+        R.main(
+            [
+                "status",
+                "--run-dir",
+                str(run_dir),
+                "--plan",
+                str(tmp_path / "absent-plan.jsonl"),
+                "--ledger",
+                str(ledger),
+            ]
+        )
+
+
 def test_status_reports_what_is_on_disk(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     plan = _tiny_plan(tmp_path)
     run_dir = tmp_path / "runs"
-    with pytest.raises(FileNotFoundError, match="nothing has been prepared"):
-        R.main(["status", "--run-dir", str(run_dir), "--plan", str(plan)])
-
     R.main(["prepare", "--plan", str(plan), "--run-dir", str(run_dir)])
     ledger = tmp_path / "LEDGER.jsonl"
     L.Ledger(ledger, clock=lambda: "2026-09-21T00:00:00+00:00").append(_call())
@@ -393,6 +565,7 @@ def test_status_reports_what_is_on_disk(tmp_path: Path, capsys: pytest.CaptureFi
     assert payload["planned_sites"] == 2
     assert payload["batches_with_input"] == ["batch-0001", "batch-0002"]
     assert payload["batches_with_result"] == []
+    assert payload["ledger"]["measured"] is True
     assert payload["ledger"]["stages"]["finder"]["model_calls"] == 1
 
 

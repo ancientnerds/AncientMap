@@ -44,9 +44,23 @@ number:
 through `pi_argv` / `Prompt.render` without starting a process, so a batch is readable - and its
 prompt sizes are visible - before any money is spent.
 
+Piece 4 added the two halves of "partial evidence" whose absence the first live batch exposed. The
+batch died because one Overpass request timed out and no evidence file was written for it, and
+`prepare_call` then refused to build the prompt - correctly, and on its own terms:
+
+* **A failure the fetch stage recorded is not a hole in the record.** `read_fetch_failures` reads
+  the batch's own `fetch.json`, so a target whose file is missing *because that target failed* is
+  named in the prompt as failed (`<failed_target ... />` in a `<failed_targets>` block plus
+  `PARTIAL_EVIDENCE_NOTE`), and the model can answer `unverifiable` about what it could not see.
+  Evidence that is missing with **nothing recorded about it** still raises (`EvidenceUnusable`).
+* **A site with no evidence at all buys no model call.** It is recorded as an `unverifiable`
+  `Finding` per census finding, carrying the reason, in the batch report. Spending a call to ask a
+  model about a page that was never read would buy a guess; writing nothing would hide it.
+
 What this module does not do, stated so it is not mistaken for covered: it does not parse the
 model's answer into `phase3.model.Finding` records (that is the next piece - here the answer is
-stored verbatim as bytes, one file per `(site, stage)`), and it does not judge `stopReason`: a
+stored verbatim as bytes, one file per `(site, stage)`) - with the one exception of that recorded
+`unverifiable` case, which has no answer to parse - and it does not judge `stopReason`: a
 `length`-truncated answer would be recorded like any other. Both are named in
 `output/remediation/phase3_runner/PIECE3.md`.
 """
@@ -58,7 +72,7 @@ import os
 import subprocess
 import sys
 from collections.abc import Iterable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
 
@@ -70,6 +84,7 @@ if __package__ in (None, ""):
 
 from phase3 import fetch_stage as F  # noqa: E402  - the evidence this stage reads
 from phase3 import ledger as L  # noqa: E402
+from phase3 import model as M  # noqa: E402  - the census vocabulary a verdict is spelled in
 from phase3.model import Stage  # noqa: E402
 from phase3.run import InputError  # noqa: E402  - one spelling per concept, not a second
 
@@ -123,6 +138,25 @@ STAGE_QUESTION: dict[Stage, str] = {
     Stage.FINDER: FINDER_QUESTION,
     Stage.REVIEWER: REVIEWER_QUESTION,
 }
+
+#: Read into every prompt whose site has at least one failed target. It exists because "could not
+#: look" and "looked and found nothing" justify different verdicts, and the prompt has to say which
+#: one it is holding: a page that was never read is not a page that says nothing. **The wording is
+#: mine** - the requirement is piece 4's deliverable C, the sentence is an interpretation of it.
+PARTIAL_EVIDENCE_NOTE = (
+    "Some evidence targets for this site could not be read; they are listed below with "
+    'status="failed" and the reason. A failed target is evidence that was never read - it is '
+    "neither confirmation nor a clean bill of health. If your answer depends on a failed target, "
+    "answer `unverifiable` and name that target instead of reading the failure as absence of a "
+    "defect."
+)
+
+#: The first words of an evidence block whose target failed (the full reason follows).
+FAILED_TARGET_MARKER = "[failed:"
+
+#: The marker for a target that is not on disk in a *preview* (`allow_absent=True`), where no
+#: failure was recorded either: the dry run shows the hole rather than hiding it.
+ABSENT_TARGET_MARKER = "[absent:"
 
 
 class ModelCallFailed(RuntimeError):
@@ -394,16 +428,26 @@ class Prompt:
 
 @dataclass(frozen=True)
 class EvidenceExcerpt:
-    """One evidence file as it goes into the prompt. `text is None` only in a dry run."""
+    """One evidence file as it goes into the prompt. `text is None` when it could not be read.
+
+    `failure` is set only when the fetch stage recorded that this target failed: it carries the
+    reason the file is not there, so the prompt says which question it cannot answer instead of
+    presenting an unread page as an empty one.
+    """
 
     feature: str
     url: str
     path: Path
     text: str | None
+    failure: str | None = None
 
     @property
     def chars(self) -> int:
         return len(self.text) if self.text is not None else 0
+
+    @property
+    def present(self) -> bool:
+        return self.text is not None
 
 
 @dataclass(frozen=True)
@@ -440,17 +484,71 @@ def _site_block(site: Mapping[str, Any], site_id: str) -> str:
 def _evidence_block(excerpts: list[EvidenceExcerpt]) -> str:
     blocks = []
     for excerpt in excerpts:
-        if excerpt.text is None:
+        if excerpt.text is not None:
+            status, body = "present", excerpt.text
+        elif excerpt.failure is not None:
+            status = "failed"
             body = (
-                f"[absent: no evidence file at {excerpt.path} - a live call refuses to judge "
-                "evidence that is not on disk; run `phase3-run fetch --live` first]"
+                f"{FAILED_TARGET_MARKER} {excerpt.failure}] This target was never read, so it "
+                "shows nothing about the stored value either way."
             )
         else:
-            body = excerpt.text
+            status = "absent"
+            body = (
+                f"{ABSENT_TARGET_MARKER} no evidence file at {excerpt.path} - a live call refuses "
+                "to judge evidence that is not on disk; run `phase3-run fetch --live` first]"
+            )
         blocks.append(
-            f'<evidence feature="{excerpt.feature}" url="{excerpt.url}">\n{body}\n</evidence>'
+            f'<evidence feature="{excerpt.feature}" status="{status}" url="{excerpt.url}">\n'
+            f"{body}\n</evidence>"
         )
     return "\n".join(blocks)
+
+
+def _failed_target_block(excerpts: list[EvidenceExcerpt]) -> str:
+    """The failed targets, named, or "" when every target answered."""
+    failed = [e for e in excerpts if e.failure is not None]
+    if not failed:
+        return ""
+    rows = "".join(
+        f'<failed_target feature="{e.feature}" url="{e.url}" reason="{e.failure}" />\n'
+        for e in failed
+    )
+    return f"<failed_targets>\n{PARTIAL_EVIDENCE_NOTE}\n{rows}</failed_targets>\n"
+
+
+def read_fetch_failures(path: Path) -> dict[str, dict[str, str]]:
+    """`site_id -> {feature: why it has no evidence}`, read from the fetch stage's own report.
+
+    An absent `fetch.json` means this batch was never fetched live, and `{}` is the honest answer:
+    no target's absence is explained, so every one of them still raises at prompt time. A report
+    that **exists** but is unreadable, or whose shape is not the one `fetch_stage.write_report`
+    writes, raises - an unreadable record must not look like a clean one.
+    """
+    if not path.exists():
+        return {}
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise InputError(f"{path}: the fetch report is not JSON: {exc}") from exc
+    sites = payload.get("sites") if isinstance(payload, dict) else None
+    if not isinstance(sites, list):
+        raise InputError(f"{path}: the fetch report carries no `sites` list: {payload!r}")
+    failures: dict[str, dict[str, str]] = {}
+    for site in sites:
+        if not isinstance(site, dict) or not site.get("site_id"):
+            raise InputError(f"{path}: a fetch report entry carries no site_id: {site!r}")
+        rows = site.get("outcomes")
+        if not isinstance(rows, list):
+            raise InputError(f"{path}: {site['site_id']} carries no `outcomes` list: {site!r}")
+        for row in rows:
+            if not isinstance(row, dict) or row.get("failure") is None:
+                continue
+            feature = row.get("feature")
+            if not isinstance(feature, str) or not feature:
+                raise InputError(f"{path}: a failed outcome carries no feature: {row!r}")
+            failures.setdefault(str(site["site_id"]), {})[feature] = str(row["failure"])
+    return failures
 
 
 def prepare_call(
@@ -460,33 +558,45 @@ def prepare_call(
     store: F.EvidenceStore,
     stage: Stage,
     allow_absent: bool = False,
+    failures: Mapping[str, str] | None = None,
 ) -> PreparedCall:
     """Build one site's prompt: its record, plus the evidence files piece 2 stored.
 
     `allow_absent` exists for `run judge` without `--live`: the preview renders the call a batch
     *would* make, and marks each evidence file that is not on disk yet. With `allow_absent=False`
-    (every live path) an absent file raises - the model must not be asked to judge evidence that
-    is not there.
+    (every live path) an absent file **raises** - unless `failures` explains it: `failures` is
+    `{feature: reason}`, read back from the batch's own `fetch.json` via `read_fetch_failures`, and
+    a target named there was asked and failed, so the prompt carries that instead of guessing.
+    Evidence missing with no such record is still refused: the model is never asked to judge a
+    page that nobody has an account of.
     """
     site_id = str(site.get("site_id") or "")
     if not site_id:
         raise InputError(f"batch {batch_id}: a site record carries no site_id")
+    recorded = failures or {}
     excerpts: list[EvidenceExcerpt] = []
     total = 0
     for target in F.targets_for_site(site):
         path = store.path_for(target.site_id, target.feature)
+        failure: str | None = None
         if path.exists():
             text = path.read_text(encoding="utf-8")
+        elif target.feature in recorded:
+            text = None
+            failure = recorded[target.feature]
         elif allow_absent:
             text = None
         else:
             raise EvidenceUnusable(
-                f"{site_id}: the evidence file for {target.feature} is not at {path}; the model is "
-                "never asked to judge evidence that is not on disk"
+                f"{site_id}: the evidence file for {target.feature} is not at {path}, and the "
+                "fetch report records no failure for it; the model is never asked to judge "
+                "evidence that is not on disk"
             )
         total += len(text) if text is not None else 0
         excerpts.append(
-            EvidenceExcerpt(feature=target.feature, url=target.url, path=path, text=text)
+            EvidenceExcerpt(
+                feature=target.feature, url=target.url, path=path, text=text, failure=failure
+            )
         )
     if total > MAX_EVIDENCE_CHARS:
         raise EvidenceUnusable(
@@ -494,7 +604,9 @@ def prepare_call(
             "bound (the design point is ~2,300 input tokens per call). Truncating silently would "
             "judge a page the model never saw; narrow the evidence or raise the bound deliberately."
         )
-    user = _site_block(site, site_id) + "\n" + _evidence_block(excerpts)
+    user = "\n".join(
+        [_site_block(site, site_id), _evidence_block(excerpts), _failed_target_block(excerpts)]
+    )
     prompt = Prompt(stage=stage, system=STAGE_QUESTION[stage], user=user)
     return PreparedCall(
         call=ModelCall(stage=stage, batch_id=batch_id, site_id=site_id, prompt=prompt.render()),
@@ -508,17 +620,27 @@ def prepare_batch(
     store: F.EvidenceStore,
     stage: Stage,
     allow_absent: bool = False,
+    failures: Mapping[str, Mapping[str, str]] | None = None,
 ) -> list[PreparedCall]:
-    """One prepared call per site of the batch, in batch order."""
+    """One prepared call per site of the batch, in batch order.
+
+    `failures` is `read_fetch_failures`'s whole result (keyed by site), not one site's slice.
+    """
     batch_id = str(batch.get("batch_id") or "")
     if not batch_id:
         raise InputError("batch carries no batch_id")
     sites = batch.get("sites")
     if not isinstance(sites, list) or not sites:
         raise InputError(f"{batch_id}: batch carries no sites")
+    recorded = failures or {}
     return [
         prepare_call(
-            batch_id=batch_id, site=site, store=store, stage=stage, allow_absent=allow_absent
+            batch_id=batch_id,
+            site=site,
+            store=store,
+            stage=stage,
+            allow_absent=allow_absent,
+            failures=recorded.get(str(site.get("site_id") or "")),
         )
         for site in sites
     ]
@@ -587,6 +709,62 @@ class SiteJudgement:
         return dict(vars(self))
 
 
+@dataclass(frozen=True)
+class SkippedSite:
+    """A site that bought **no model call**, and why. Never an empty result: a record with a reason.
+
+    `findings` are the `unverifiable` verdicts this site's record now carries: one per census
+    finding, because `phase3.model.Finding` is one judgement about one field of one site and the
+    verdict for each of them is the same - the evidence cannot settle it. No answer was parsed
+    here: there was no call to parse.
+    """
+
+    site_id: str
+    reason: str
+    findings: list[M.Finding] = field(default_factory=list)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "site_id": self.site_id,
+            "reason": self.reason,
+            "findings": [json.loads(f.to_json()) for f in self.findings],
+        }
+
+
+def unverifiable_findings(site: Mapping[str, Any], *, site_id: str, reason: str) -> list[M.Finding]:
+    """One `Verdict.UNVERIFIABLE` finding per census finding of a site no evidence reached.
+
+    `defect` is derived from the verdict (`model.Finding.defect`), so these can never be read as
+    "no defect found": they say the question was not answered, and the reason is in `note`.
+    """
+    findings: list[M.Finding] = []
+    rows = site.get("findings")
+    if not isinstance(rows, list) or not rows:
+        raise InputError(f"{site_id}: site record carries no findings")
+    for row in rows:
+        test_id = row.get("test_id")
+        field_name = row.get("field")
+        severity = row.get("severity")
+        if not test_id or not field_name or not severity:
+            raise InputError(
+                f"{site_id}: a finding carries no test_id/field/severity: {dict(row)!r} - an "
+                "unverifiable verdict is recorded per finding, so one it cannot name is a record "
+                "this runner will not invent"
+            )
+        findings.append(
+            M.Finding(
+                site_id=site_id,
+                field=str(field_name),
+                verdict=M.Verdict.UNVERIFIABLE,
+                severity=M.Severity(str(severity)),
+                test_id=str(test_id),
+                current_value=row.get("current_value"),
+                note=reason,
+            )
+        )
+    return findings
+
+
 @dataclass
 class BatchModelReport:
     """One batch's model stage. Deterministic: no timestamp (the ledger carries the clock)."""
@@ -595,10 +773,19 @@ class BatchModelReport:
     stage: Stage
     site_ids: list[str]
     judgements: list[SiteJudgement]
+    #: Sites that bought no call, each with the reason and the `unverifiable` findings they now
+    #: carry. Recorded in the report, **not** in the ledger: the ledger's line kinds are
+    #: measurements (a fetch, a model call), and a site that spent nothing has no measurement to
+    #: write - a zero-token `model_call` line would be a fabricated one. This is the report line.
+    skipped: list[SkippedSite] = field(default_factory=list)
 
     @property
     def calls(self) -> int:
         return len(self.judgements)
+
+    @property
+    def unverifiable(self) -> int:
+        return sum(len(s.findings) for s in self.skipped)
 
     @property
     def input_tokens(self) -> int:
@@ -619,11 +806,13 @@ class BatchModelReport:
             "stage": self.stage.value,
             "sites": self.site_ids,
             "judgements": [j.to_dict() for j in self.judgements],
+            "skipped": [s.to_dict() for s in self.skipped],
             "totals": {
                 "calls": self.calls,
                 "input_tokens": self.input_tokens,
                 "output_tokens": self.output_tokens,
                 "cost_usd": self.cost_usd,
+                "unverifiable_findings": self.unverifiable,
             },
         }
         return json.dumps(payload, ensure_ascii=False, sort_keys=True)
@@ -643,25 +832,48 @@ def judge_batch(
     answers: F.EvidenceStore,
     ledger: L.Ledger,
     stage: Stage,
+    failures: Mapping[str, Mapping[str, str]] | None = None,
 ) -> BatchModelReport:
-    """Judge every site of the batch: one call, one ledger line, one stored answer per site.
+    """Judge every site of the batch: one call, one ledger line, one stored answer per **judged** site.
 
-    Nothing is caught: the first failure propagates, so a batch that could not be measured is
-    reported as failed rather than as a smaller batch (`phase3.model.StageResult` has the same
-    rule). A re-run re-answers every site and writes a second line per call: the second charge is
-    then visible in the ledger instead of hidden behind an invisible retry.
+    A site with no evidence on disk at all is not judged: it is recorded as `unverifiable` with the
+    reason (`failures` names the targets that failed; a site whose findings buy no target at all is
+    recorded as such), and no process is started.
+
+    Nothing else is caught: the first call that could not be measured propagates, so a batch that
+    could not be measured is reported as failed rather than as a smaller batch
+    (`phase3.model.StageResult` has the same rule). A re-run re-answers every site and writes a
+    second line per call: the second charge is then visible in the ledger instead of hidden behind
+    an invisible retry.
     """
     batch_id = str(batch.get("batch_id") or "")
     if not batch_id:
         raise InputError("batch carries no batch_id")
-    prepared = prepare_batch(batch=batch, store=store, stage=stage)
+    prepared = prepare_batch(batch=batch, store=store, stage=stage, failures=failures)
+    by_id = {
+        str(site.get("site_id") or ""): site
+        for site in (batch.get("sites") or [])
+        if isinstance(site, dict)
+    }
     judgements: list[SiteJudgement] = []
+    skipped: list[SkippedSite] = []
     for item in prepared:
+        site_id = item.call.site_id
+        if not any(e.present for e in item.excerpts):
+            reason = _no_evidence_reason(item)
+            skipped.append(
+                SkippedSite(
+                    site_id=site_id,
+                    reason=reason,
+                    findings=unverifiable_findings(by_id[site_id], site_id=site_id, reason=reason),
+                )
+            )
+            continue
         judged = judge_site(prepared=item, runner=runner, ledger=ledger, answers=answers)
         usage = judged.answer.usage
         judgements.append(
             SiteJudgement(
-                site_id=item.call.site_id,
+                site_id=site_id,
                 label=item.call.label,
                 answer_chars=len(judged.answer.text),
                 input_tokens=usage.input_tokens,
@@ -677,4 +889,20 @@ def judge_batch(
         stage=stage,
         site_ids=[item.call.site_id for item in prepared],
         judgements=judgements,
+        skipped=skipped,
+    )
+
+
+def _no_evidence_reason(item: PreparedCall) -> str:
+    """Why no call was bought for this site. Two different facts, never one blurry sentence."""
+    failed = [e for e in item.excerpts if e.failure is not None]
+    if not failed:
+        return (
+            "the site's findings buy no evidence target, so there is nothing this stage could "
+            "judge; recorded as unverifiable rather than answered from no evidence"
+        )
+    detail = "; ".join(f"{e.feature}: {e.failure}" for e in failed)
+    return (
+        f"no evidence file was read for this site (no model call bought): {detail}. The evidence "
+        "cannot settle the stored value, so every finding is recorded unverifiable"
     )

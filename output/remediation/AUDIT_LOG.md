@@ -2564,3 +2564,39 @@ The sequence is documented in the CLI's own docstring: plan -> prepare -> fetch 
 opening paragraph that still described this file as "piece 1" and said the runner "does not exist yet"
 was corrected with this commit, since a docstring that misdescribes the file is exactly the kind of
 false claim this record is supposed to catch.
+
+## Phase-3 runner piece 4 - the batch-killer the first live run exposed, and three claims of mine it corrected
+
+The first live batch was worth its zero model spend: it found that **one flaky Overpass request ended a
+whole 15-site batch**, and that the request which timed out left **no ledger line at all**, so the cost
+record undercounted exactly the attempts the pilot counted. My own brief caused it - I wrote that a
+transport failure must RAISE. The distinction it missed: raising protects a single site's evidence,
+killing the batch protects nothing.
+
+Now: a transport failure and a retryable status (408/429/5xx) are recorded outcomes, retried at most
+twice, with **one ledger line per attempt**, so the attempts are countable and a retry cannot hide. The
+guard that worked - refusing to judge evidence that is not on disk - is untouched and mutation-proven.
+Partial evidence is now named in the prompt so the model can answer `unverifiable` instead of implying
+there is no defect, a site with no evidence at all buys no model call yet still yields a recorded
+`unverifiable`, and `status` reports an absent ledger as a fact instead of raising on a fresh run.
+
+**Three claims of mine were wrong, and the lane corrected all three. I verified each against the raw
+files before accepting it.**
+
+1. I said the runner was probably failing Overpass for lack of a User-Agent, quoting the 89-byte body
+   "Please include a meaningful User-Agent string with your requests". The fetch log says that body came
+   with **HTTP 429 from `overpass.kumi.systems`** - a *different host*, one the pilot had rotated to -
+   and the runner already sends the project's identifying agent. I inferred a cause from an error
+   message without checking which client sent it or who answered. No defect existed; the header is now
+   pinned by a wire-level test instead of being "fixed".
+2. I said `Karpasia%2Foverpass_site.txt` was an empty result. It is **a hit**: 1 element,
+   `historic=archaeological_site`, `name='Ayios Philon Roman harbor'`. The truly empty ones are
+   `Petroglyph%2Foverpass.txt` and `_bbox.txt` (287 bytes, `"elements": []`).
+3. My framing that Overpass was "largely useless" is **unsupported by the same files**: on
+   `overpass-api.de` the pilot got 61, 27, 14, 8 and 1 real named features. The failures were
+   host-specific (`kumi.systems`) and status-specific (504), not systematic. Overpass stays, as a
+   second opinion whose yield the next live batch measures rather than assumes.
+
+The pattern in all three: I read an error *body* and reasoned about its *cause* without checking the
+transport that carried it. That is the same class of mistake this project keeps finding in its own
+checks - a number that looked impossible was a bug in the measuring code - and it is mine here.

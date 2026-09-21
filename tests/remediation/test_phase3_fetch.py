@@ -112,7 +112,9 @@ def _collect(
     *,
     sites: list[dict[str, Any]] | None = None,
     ledger_name: str = "LEDGER.jsonl",
+    pauses: list[float] | None = None,
 ) -> tuple[F.BatchFetchReport, F.EvidenceStore, L.Ledger]:
+    """Run one batch with the transport injected. The retry pause is recorded, never waited."""
     store = F.EvidenceStore(tmp_path / "evidence")
     ledger = L.Ledger(tmp_path / ledger_name)
     with F.HttpFetcher(transport=transport) as fetcher:
@@ -122,6 +124,7 @@ def _collect(
             store=store,
             ledger=ledger,
             stage=Stage.FINDER,
+            sleep=(pauses if pauses is not None else []).append,
         )
     return report, store, ledger
 
@@ -237,42 +240,213 @@ def test_a_field_no_rule_covers_raises_instead_of_being_skipped() -> None:
 # ── the fetch itself: measured outcomes ──────────────────────────────────────────────────────
 
 
-@pytest.mark.parametrize("status", [403, 404, 504, 429])
+@pytest.mark.parametrize("status", [400, 403, 404])
 def test_a_non_2xx_is_recorded_as_data_and_never_raised(tmp_path: Path, status: int) -> None:
     body = f"<html>{status} page</html>".encode()
+    calls: list[str] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(str(request.url))
         return httpx.Response(status, content=body)
 
     report, store, ledger = _collect(tmp_path, httpx.MockTransport(handler))
 
-    assert report.fetches == 2  # both targets were attempted, the batch did not stop
+    # Both targets were attempted, the batch did not stop - and *neither* bought a page, which is
+    # what `fetches` counts: `requests` is the traffic, `fetches` the evidence.
+    assert report.fetches == 0
+    assert report.requests == 2
     assert [s for _, s in report.non_2xx] == [status, status]
+    # A 400/403/404 is an answer the same question gets again unchanged: asked exactly once.
+    assert len(calls) == 2
+    assert report.requests == 2
     entries = L.read_entries(ledger.path)
     assert [e["http_status"] for e in entries] == [status, status]
+    assert [e["outcome"] for e in entries] == ["http_error", "http_error"]
+    assert [e["attempt"] for e in entries] == [1, 1]
+    assert [e["given_up"] for e in entries] == [True, True]
     assert [e["bytes"] for e in entries] == [len(body), len(body)]
-    assert store.path_for(SITE_ID, F.FEATURE_ENWIKI).read_bytes() == body
+    # The failed target's reason is what the judge stage reads back before it refuses to judge.
+    assert [o["failure"] for o in json.loads(report.to_json())["sites"][0]["outcomes"]] == [
+        f"HTTP {status} (1 request(s) recorded, the last one given up; no evidence on disk)"
+    ] * 2
+    assert report.failures_by_site() == {
+        SITE_ID: {
+            F.FEATURE_OVERPASS_NAMED: report.sites[0].outcomes[1].failure,
+            F.FEATURE_ENWIKI: report.sites[0].outcomes[0].failure,
+        }
+    }
+    assert not store.path_for(SITE_ID, F.FEATURE_ENWIKI).exists()
 
 
-def test_a_transport_failure_raises_and_is_never_an_empty_result(tmp_path: Path) -> None:
+def test_a_transport_failure_is_recorded_and_the_next_target_is_still_asked(tmp_path: Path) -> None:
+    """The defect the first live batch exposed: one timed-out request ended all 13 Overpass targets.
+
+    A read timeout on target 1 must be target 1's outcome - recorded, with its reason - and target 2
+    must still be fetched. Nothing here is swallowed: the failure is in the report *and* the ledger.
+    """
+    calls: list[str] = []
+
     def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(str(request.url))
+        if "wikipedia" in str(request.url):
+            raise httpx.ReadTimeout("The read operation timed out", request=request)
+        return httpx.Response(200, content=b'{"elements": []}')
+
+    report, store, ledger = _collect(tmp_path, httpx.MockTransport(handler))
+
+    assert report.sites[0].outcomes[0].feature == F.FEATURE_ENWIKI
+    assert report.sites[0].outcomes[0].failure is not None
+    assert "ReadTimeout" in report.sites[0].outcomes[0].failure
+    # Target 2 was asked afterwards, and its (valid, empty) answer is on disk.
+    assert report.sites[0].outcomes[1].succeeded
+    assert store.path_for(SITE_ID, F.FEATURE_OVERPASS_NAMED).read_bytes() == b'{"elements": []}'
+    assert report.fetches == 1
+    assert [o.requests for o in report.sites[0].outcomes] == [F.MAX_ATTEMPTS, 1]
+    assert len(calls) == F.MAX_ATTEMPTS + 1
+    assert report.requests == F.MAX_ATTEMPTS + 1
+
+    # The fetcher itself still raises: "could not ask" stays distinguishishable from "answered
+    # with nothing" at the seam, and the stage is what turns it into recorded data.
+    def dead(request: httpx.Request) -> httpx.Response:
         raise httpx.ConnectError("connection reset by peer", request=request)
 
-    with F.HttpFetcher(transport=httpx.MockTransport(handler)) as fetcher:
+    with F.HttpFetcher(transport=httpx.MockTransport(dead)) as fetcher:
         with pytest.raises(F.TransportFailure, match="ConnectError"):
             fetcher.get("https://example.invalid/x")
 
-    # Through the stage: the batch stops at the unmeasurable fetch and records nothing for it.
-    # An empty result would read as "the source had nothing", which is a different claim.
-    store = F.EvidenceStore(tmp_path / "evidence")
-    ledger = L.Ledger(tmp_path / "LEDGER.jsonl")
-    with F.HttpFetcher(transport=httpx.MockTransport(handler)) as fetcher:
-        with pytest.raises(F.TransportFailure):
-            F.collect_batch(
-                batch=_batch(), fetcher=fetcher, store=store, ledger=ledger, stage=Stage.FINDER
-            )
-    assert not ledger.path.exists()
-    assert list((tmp_path / "evidence").glob("*.txt")) == []
+    rows = L.read_entries(ledger.path)
+    assert len(rows) == F.MAX_ATTEMPTS + 1  # one line per attempt, failures included
+    assert [r["outcome"] for r in rows] == [
+        "transport_failure",
+        "transport_failure",
+        "transport_failure",
+        "ok",
+    ]
+    assert rows[0]["http_status"] is None
+    assert rows[0]["bytes"] == 0
+    assert rows[0]["attempt"] == 1
+    assert rows[0]["given_up"] is False
+    assert rows[F.MAX_ATTEMPTS - 1]["attempt"] == F.MAX_ATTEMPTS
+    assert rows[F.MAX_ATTEMPTS - 1]["given_up"] is True
+    assert "ReadTimeout" in rows[0]["error"]
+    assert rows[-1]["error"] is None
+    # The two figures the ledger must be able to answer: how much traffic this batch spent (4
+    # attempts) and how much of it bought nothing (3 of them).
+    assert L.summarise(ledger.path).total.fetches == len(rows) == F.MAX_ATTEMPTS + 1
+    assert L.summarise(ledger.path).total.fetch_failures == F.MAX_ATTEMPTS
+
+
+def test_an_empty_result_is_a_success_while_a_failure_is_not(tmp_path: Path) -> None:
+    """"I looked and there was nothing" is a result; "I could not look" is not (pilot, 287 bytes)."""
+    empty = (
+        b'{"version": 0.6, "generator": "Overpass API 0.7.62.11", "elements": []}'
+    )
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, content=empty)
+
+    report, store, ledger = _collect(tmp_path, httpx.MockTransport(handler))
+
+    assert report.failed == []
+    assert report.fetches == 2
+    assert store.path_for(SITE_ID, F.FEATURE_OVERPASS_NAMED).read_bytes() == empty
+    assert [e["outcome"] for e in L.read_entries(ledger.path)] == ["ok", "ok"]
+    assert [e["http_status"] for e in L.read_entries(ledger.path)] == [200, 200]
+    assert L.summarise(ledger.path).total.fetch_failures == 0
+
+
+def test_a_429_is_retried_and_a_400_is_not(tmp_path: Path) -> None:
+    """The weather is normal, and two kinds of bad weather are not the same thing.
+
+    `COST.md` §1 measured 429 x1 and 504 x2 in the pilot *and* that the pilot's retries of those
+    succeeded; a 400/403/404 is a stable answer, so asking twice would only buy the same one again.
+    """
+    calls: list[str] = []
+    pauses: list[float] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        url = str(request.url)
+        calls.append(url)
+        status = 400 if "wikipedia" in url else 429
+        return httpx.Response(status, content=b"nope")
+
+    report, _, ledger = _collect(tmp_path, httpx.MockTransport(handler), pauses=pauses)
+
+    enwiki = next(o for o in report.sites[0].outcomes if o.feature == F.FEATURE_ENWIKI)
+    overpass = next(o for o in report.sites[0].outcomes if o.feature == F.FEATURE_OVERPASS_NAMED)
+    assert enwiki.requests == 1  # 400: asked once, recorded once
+    assert overpass.requests == F.MAX_ATTEMPTS  # 429: two retries, then given up with the reason
+    assert "HTTP 429" in str(overpass.failure)
+    assert f"{F.MAX_ATTEMPTS} request(s) recorded" in str(overpass.failure)
+    # The pause before retry 1 and before retry 2, and never a third attempt.
+    assert pauses == list(F.RETRY_BACKOFF_SECONDS)
+    rows = L.read_entries(ledger.path)
+    assert len(rows) == 1 + F.MAX_ATTEMPTS
+    assert [r["attempt"] for r in rows if r["http_status"] == 429] == [1, 2, 3]
+    assert [r["given_up"] for r in rows if r["http_status"] == 429] == [False, False, True]
+    assert len([c for c in calls if "overpass" in c]) == F.MAX_ATTEMPTS
+
+
+def test_the_same_url_is_asked_again_and_no_other_host_is_tried(tmp_path: Path) -> None:
+    """A retry is a second attempt at one target, not a quiet rotation of endpoints or mirrors."""
+    calls: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(str(request.url))
+        return httpx.Response(504, content=b"too busy")
+
+    report, _, _ = _collect(tmp_path, httpx.MockTransport(handler))
+
+    overpass = [c for c in calls if "overpass" in c]
+    # One URL, three times. The pilot fell back to `overpass.kumi.systems` by hand; that is a
+    # decision for the operator, so no other host appears in this runner's own traffic.
+    assert len(set(overpass)) == 1
+    assert len(overpass) == F.MAX_ATTEMPTS
+    assert all(c.startswith(F.OVERPASS_ENDPOINT) for c in overpass)
+    assert report.failed and all("HTTP 504" in str(o.failure) for o in report.failed)
+
+
+def test_every_request_carries_the_projects_identifying_user_agent(tmp_path: Path) -> None:
+    """overpass-api.de answers a client it will not serve with 89 bytes of plain text:
+
+        "Please include a meaningful User-Agent string with your requests to avoid rate-limiting."
+
+    (`phase3_pilot/evidence/Didnauri%2Foverpass_shiraki.txt`, which the log shows arrived with HTTP
+    429 from a mirror.) The runner sends the project's own string - not httpx's default, and not
+    nothing - so the header is asserted here rather than assumed.
+    """
+    seen: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request.headers.get("user-agent", ""))
+        return httpx.Response(200, content=b"{}")
+
+    _collect(tmp_path, httpx.MockTransport(handler))
+
+    assert seen == [F.PHASE3_USER_AGENT, F.PHASE3_USER_AGENT]
+    assert F.PHASE3_USER_AGENT == F.USER_AGENT
+    assert "ancientnerds.com" in F.PHASE3_USER_AGENT
+    assert not F.PHASE3_USER_AGENT.lower().startswith("python-httpx")
+
+
+def test_the_overpass_target_gets_the_shorter_timeout_and_the_others_do_not(
+    tmp_path: Path,
+) -> None:
+    """Overpass is the second opinion, so it is bounded (it is the host the first batch lost)."""
+    bounds: list[tuple[str, object]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        bounds.append((request.url.host, request.extensions["timeout"]["read"]))
+        return httpx.Response(200, content=b"{}")
+
+    _collect(tmp_path, httpx.MockTransport(handler))
+
+    assert F.OVERPASS_TIMEOUT < 40.0  # the client default (`run.py --timeout`, HttpFetcher)
+    by_host = dict(bounds)
+    assert by_host["overpass-api.de"] == F.OVERPASS_TIMEOUT
+    assert by_host["en.wikipedia.org"] != F.OVERPASS_TIMEOUT
+    assert F.timeout_for(F.OVERPASS_ENDPOINT + "?data=x") == F.OVERPASS_TIMEOUT
+    assert F.timeout_for(F.WIKIPEDIA_ENDPOINT) is None
 
 
 def test_one_ledger_line_per_fetch_carrying_the_site_the_url_the_status_and_the_bytes(
@@ -283,7 +457,7 @@ def test_one_ledger_line_per_fetch_carrying_the_site_the_url_the_status_and_the_
 
     assert report.fetches == 2
     entries = L.read_entries(ledger.path)
-    assert len(entries) == 2  # exactly one line per fetch, no more and no fewer
+    assert len(entries) == 2  # exactly one line per attempt, no more and no fewer
     assert {e["label"] for e in entries} == {
         f"{SITE_ID}/{F.FEATURE_ENWIKI}",
         f"{SITE_ID}/{F.FEATURE_OVERPASS_NAMED}",
@@ -296,6 +470,10 @@ def test_one_ledger_line_per_fetch_carrying_the_site_the_url_the_status_and_the_
         assert entry["http_status"] == 200
         assert entry["bytes"] == len(body)
         assert entry["at"].endswith("+00:00")
+        assert entry["outcome"] == "ok"
+        assert entry["attempt"] == 1
+        assert entry["given_up"] is False
+        assert entry["error"] is None
 
     # And the ledger's own grouping still works: this is what keeps COST.md's per-stage split
     # (finder 62 / reviewer 14) reportable from the runner's ledger.
@@ -436,6 +614,8 @@ def test_the_fetch_command_with_live_writes_ledger_lines_evidence_and_a_report(
     assert code == 0
     payload = json.loads(capsys.readouterr().out)
     assert payload["totals"]["fetches"] == 2
+    assert payload["totals"]["requests"] == 2
+    assert payload["totals"]["failed"] == 0
     assert len(fake.urls) == 2
     assert len(L.read_entries(ledger)) == 2
     evidence = sorted(p.name for p in (run_dir / "batch-0001" / "evidence").glob("*.txt"))
@@ -443,17 +623,21 @@ def test_the_fetch_command_with_live_writes_ledger_lines_evidence_and_a_report(
     report = json.loads((run_dir / "batch-0001" / "fetch.json").read_text(encoding="utf-8"))
     assert report["totals"] == {
         "bytes": 28,
+        "failed": 0,
         "fetches": 2,
         "non_2xx": 0,
+        "requests": 2,
         "skipped_existing": 0,
         "truncated": 0,
     }
 
 
-def test_the_fetch_command_reports_a_transport_failure_instead_of_a_clean_batch(
+def test_the_fetch_command_records_a_transport_failure_and_writes_its_report(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
+    """Piece 4, at the CLI: a dead target is data, not a reason to exit 2 and lose the batch."""
     run_dir = _prepare_run_dir(tmp_path)
+    ledger = tmp_path / "LEDGER.jsonl"
 
     class _DeadFetcher(_FakeFetcher):
         def get(self, url: str) -> F.FetchedPage:
@@ -468,12 +652,21 @@ def test_the_fetch_command_reports_a_transport_failure_instead_of_a_clean_batch(
             "--run-dir",
             str(run_dir),
             "--ledger",
-            str(tmp_path / "LEDGER.jsonl"),
+            str(ledger),
             "--live",
         ]
     )
 
-    assert code == 2
+    assert code == 0
     payload = json.loads(capsys.readouterr().out)
-    assert "ConnectError" in payload["error"]
-    assert not (run_dir / "batch-0001" / "fetch.json").exists()
+    assert payload["totals"]["failed"] == 2
+    assert payload["totals"]["requests"] == 2 * F.MAX_ATTEMPTS
+    report = json.loads((run_dir / "batch-0001" / "fetch.json").read_text(encoding="utf-8"))
+    assert report["totals"]["fetches"] == 0
+    assert [o["requests"] for o in report["sites"][0]["outcomes"]] == [F.MAX_ATTEMPTS] * 2
+    assert all("ConnectError" in o["failure"] for o in report["sites"][0]["outcomes"])
+    rows = L.read_entries(ledger)
+    assert len(rows) == 2 * F.MAX_ATTEMPTS
+    assert {r["outcome"] for r in rows} == {"transport_failure"}
+    assert [r["given_up"] for r in rows] == [False, False, True, False, False, True]
+    assert (run_dir / "batch-0001" / "fetch.json").exists()

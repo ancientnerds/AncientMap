@@ -190,8 +190,19 @@ def cmd_prepare(args: argparse.Namespace) -> int:
 
 
 def _run_dir_state(run_dir: Path) -> dict[str, Any]:
+    """What is on disk. A run directory that does not exist yet is a fact, not an error.
+
+    `phase3-run status` is the operator's own report command, and it ran on a fresh run for the
+    first time in the first live batch - where it died with `FileNotFoundError` before it reported
+    anything. Nothing under the run directory is invented here: absent means `exists: false`.
+    """
     if not run_dir.exists():
-        raise FileNotFoundError(f"no run directory at {run_dir}: nothing has been prepared")
+        return {
+            "batches_with_input": [],
+            "batches_with_result": [],
+            "exists": False,
+            "run_dir": str(run_dir),
+        }
     prepared: list[str] = []
     results: list[str] = []
     for child in sorted(p for p in run_dir.iterdir() if p.is_dir()):
@@ -199,26 +210,55 @@ def _run_dir_state(run_dir: Path) -> dict[str, Any]:
             prepared.append(child.name)
         if (child / "result.json").exists():
             results.append(child.name)
-    return {"batches_with_input": prepared, "batches_with_result": results, "run_dir": str(run_dir)}
+    return {
+        "batches_with_input": prepared,
+        "batches_with_result": results,
+        "exists": True,
+        "run_dir": str(run_dir),
+    }
+
+
+def _ledger_state(ledger: Path) -> dict[str, Any]:
+    """The ledger, totalled. **Absence is the only thing handled here.**
+
+    A ledger that does not exist yet means nothing has been measured: zero lines, zero dollars -
+    a sum over no lines, which is what the numbers say rather than a guess. A ledger that exists
+    and cannot be read (a truncated line, a byte that is not JSON, no permission) is a *different*
+    fact and raises out of `L.summarise`: an unreadable ledger must never be reported as an empty
+    one.
+    """
+    if not ledger.exists():
+        empty = L.LedgerSummary()
+        return {
+            "lines": 0,
+            "measured": False,
+            "path": str(ledger),
+            "reason": f"no ledger at {ledger}: nothing has been measured yet",
+            "stages": {},
+            "total": empty.total.as_dict(),
+        }
+    summary = L.summarise(ledger)
+    return {
+        "lines": summary.lines,
+        "measured": True,
+        "path": str(ledger),
+        "stages": {stage: totals.as_dict() for stage, totals in summary.by_stage.items()},
+        "total": summary.total.as_dict(),
+    }
 
 
 def cmd_status(args: argparse.Namespace) -> int:
     payload: dict[str, Any] = _run_dir_state(Path(args.run_dir))
     if args.plan:
         plan = Path(args.plan)
-        batches = read_jsonl(plan)
-        payload["planned_batches"] = len(batches)
-        payload["planned_sites"] = sum(len(b.get("sites") or []) for b in batches)
         payload["plan"] = str(plan)
+        payload["planned"] = plan.exists()
+        if plan.exists():
+            batches = read_jsonl(plan)
+            payload["planned_batches"] = len(batches)
+            payload["planned_sites"] = sum(len(b.get("sites") or []) for b in batches)
     if args.ledger:
-        ledger = Path(args.ledger)
-        summary = L.summarise(ledger)
-        payload["ledger"] = {
-            "lines": summary.lines,
-            "path": str(ledger),
-            "stages": {stage: totals.as_dict() for stage, totals in summary.by_stage.items()},
-            "total": summary.total.as_dict(),
-        }
+        payload["ledger"] = _ledger_state(Path(args.ledger))
     print(json.dumps(payload, indent=1, sort_keys=True))
     return 0
 
@@ -278,25 +318,13 @@ def cmd_fetch(args: argparse.Namespace) -> int:
             ledger=L.Ledger(Path(args.ledger)),
             stage=stage,
         )
-    except F.TransportFailure as exc:
-        # Fail-closed, and loud: no response means no measurement, so the batch stops here and
-        # says so. Evidence already on disk stays, so a re-run resumes instead of re-paying.
-        print(
-            json.dumps(
-                {
-                    "batch_id": batch_id,
-                    "error": str(exc),
-                    "live": True,
-                    "run_dir": str(run_dir),
-                },
-                indent=1,
-                sort_keys=True,
-            )
-        )
-        return 2
     finally:
         fetcher.close()
 
+    # No `except F.TransportFailure` here any more, and that is the fix, not a relaxation: a
+    # transport failure is one target's recorded outcome now (`phase3/fetch_stage.py`), written to
+    # the ledger with its reason and to this report, so the batch continues and the report below
+    # shows it. Exit code 2 was exactly the defect the first live batch exposed.
     F.write_report(run_dir / batch_id / "fetch.json", report)
     payload = json.loads(report.to_json())
     payload.update({"ledger": str(args.ledger), "live": True, "run_dir": str(run_dir)})
@@ -315,9 +343,15 @@ def cmd_judge(args: argparse.Namespace) -> int:
     batch = _single_batch(run_dir / batch_id / "input.json", batch_id)
     stage = Stage(args.stage)
     store = F.EvidenceStore(run_dir / batch_id / "evidence")
+    # The batch's own fetch report is the record of what could not be read (piece 4). Reading it
+    # for the dry run too keeps the preview and the live prompt the same text: a preview that hid
+    # a failed target would be a preview of a call nobody is going to make.
+    failures = MS.read_fetch_failures(run_dir / batch_id / "fetch.json")
 
     if not args.live:
-        prepared = MS.prepare_batch(batch=batch, store=store, stage=stage, allow_absent=True)
+        prepared = MS.prepare_batch(
+            batch=batch, store=store, stage=stage, allow_absent=True, failures=failures
+        )
         print(
             json.dumps(
                 {
@@ -333,9 +367,10 @@ def cmd_judge(args: argparse.Namespace) -> int:
                             "evidence": [
                                 {
                                     "chars": e.chars,
+                                    "failure": e.failure,
                                     "feature": e.feature,
                                     "path": str(e.path),
-                                    "present": e.text is not None,
+                                    "present": e.present,
                                     "url": e.url,
                                 }
                                 for e in item.excerpts
@@ -365,6 +400,7 @@ def cmd_judge(args: argparse.Namespace) -> int:
             answers=answers,
             ledger=L.Ledger(Path(args.ledger)),
             stage=stage,
+            failures=failures,
         )
     except MS.ModelCallFailed as exc:
         # Fail-closed and loud: the batch stops at the call that could not be measured. Answers

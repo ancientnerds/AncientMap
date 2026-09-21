@@ -20,8 +20,17 @@ What is measured here, and what is deliberately not:
   field for exactly that reason: piece 1 had no dollar column because there was no measurement to
   put in one). Totals are then sums of measured figures; nothing is extrapolated.
 * **Refused, not defaulted:** a model call without its token counts, or a fetch without the
-  status actually observed, raises at construction. An unmeasured call cannot be written as
+  outcome actually observed, raises at construction. An unmeasured call cannot be written as
   if it had been measured.
+
+Piece 4 added the fetch line's `outcome` (and `attempt`, `error`, `given_up`) because the first
+live batch measured the hole: a `ReadTimeout` on the Overpass target wrote **no line at all**, so
+the ledger counted the successes only - exactly the undercount that made one flaky request look
+free while it killed the batch. Every attempt now writes a line, a transport failure carries its
+reason instead of a status it never saw, and `fetch_failures` totals the attempts that bought
+nothing. A fetch line written *before* that field existed (the one line of the pilot's
+`LEDGER.jsonl`, 2026-09-21) is counted in `fetches`/`fetch_bytes` and in neither bucket: it is
+not guessed at.
 
 Crash safety: `Ledger.append` opens the file in append mode, writes exactly one line ending in
 `\n`, flushes and `os.fsync`s before returning, so a crash loses at most the call in flight and
@@ -45,6 +54,25 @@ from phase3.model import Stage
 class LedgerKind(StrEnum):
     MODEL_CALL = "model_call"
     FETCH = "fetch"
+
+
+class FetchOutcome(StrEnum):
+    """How one fetch *attempt* ended. One of these is on every fetch line, so a failure is data.
+
+    Kept in this module rather than in `phase3.fetch_stage` because it is a property of a ledger
+    line, and `fetch_stage` imports this module (the other direction would be a cycle).
+    """
+
+    #: A 2xx answer arrived and its bytes are on disk. A **valid empty result** (Overpass answers
+    #: `"elements": []` with status 200; the pilot's `Petroglyph/overpass.txt`, 287 bytes) is an
+    #: `OK` attempt: "I looked and there was nothing" is a result, not a failure.
+    OK = "ok"
+    #: A response arrived with a non-2xx status. Recorded data, not an exception - the pilot's
+    #: 403/404/504/429 were all recorded and its run continued.
+    HTTP_ERROR = "http_error"
+    #: No response arrived at all (DNS, connect, TLS, reset, read timeout). There is no status to
+    #: record, so `http_status` is None and `error` carries the reason instead.
+    TRANSPORT_FAILURE = "transport_failure"
 
 
 class LedgerError(ValueError):
@@ -78,6 +106,14 @@ class Entry:
     url: str | None = None
     http_status: int | None = None
     bytes: int | None = None
+    #: fetch shape, piece 4: how the attempt ended, which attempt it was (1-based), the reason a
+    #: transport failure had none of its own, and whether this attempt was the last one for that
+    #: target (so the target ends with no evidence). `given_up` cannot be inferred from a single
+    #: line: only the writer knows that no further attempt follows.
+    outcome: FetchOutcome | None = None
+    attempt: int | None = None
+    error: str | None = None
+    given_up: bool | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "kind", _coerce(LedgerKind, self.kind, "kind"))
@@ -113,24 +149,73 @@ class Entry:
                 or self.cost_usd < 0
             ):
                 raise LedgerError(f"{self.label}: cost_usd={self.cost_usd!r} is not a cost")
-            for name in ("url", "http_status", "bytes"):
+            for name in ("url", "http_status", "bytes", "attempt", "error", "given_up"):
                 if getattr(self, name) is not None:
                     raise LedgerError(f"{self.label}: a model call cannot carry {name}")
+            if self.outcome is not None:
+                raise LedgerError(f"{self.label}: a model call cannot carry outcome")
         else:
             if not self.url:
                 raise LedgerError(f"{self.label}: a fetch needs the url it fetched")
-            if self.http_status is None:
-                raise LedgerError(
-                    f"{self.label}: a fetch records the status observed; a network failure "
-                    "raises in the fetcher and is never written as an empty result"
-                )
-            if not isinstance(self.http_status, int) or not 100 <= self.http_status <= 599:
-                raise LedgerError(f"{self.label}: http_status={self.http_status!r} is not a status")
-            if self.bytes is None or not isinstance(self.bytes, int) or self.bytes < 0:
-                raise LedgerError(f"{self.label}: bytes={self.bytes!r} is not a byte count")
+            self._check_fetch_attempt()
             for name in ("model", "input_tokens", "output_tokens", "cost_usd"):
                 if getattr(self, name) is not None:
                     raise LedgerError(f"{self.label}: a fetch cannot carry {name}")
+
+    def _check_fetch_attempt(self) -> None:
+        """The fetch line's shape: an observed outcome, and a status exactly when one arrived."""
+        if self.outcome is None:
+            raise LedgerError(
+                f"{self.label}: a fetch records the outcome observed (one of "
+                f"{[m.value for m in FetchOutcome]}); a request that bought nothing is written "
+                "as data too, never left out"
+            )
+        object.__setattr__(self, "outcome", _coerce(FetchOutcome, self.outcome, "outcome"))
+        answered = self.outcome in (FetchOutcome.OK, FetchOutcome.HTTP_ERROR)
+        if answered:
+            if not isinstance(self.http_status, int) or not 100 <= self.http_status <= 599:
+                raise LedgerError(
+                    f"{self.label}: outcome={self.outcome} needs the status observed, got "
+                    f"http_status={self.http_status!r}"
+                )
+            if self.outcome is FetchOutcome.OK and not 200 <= self.http_status < 300:
+                raise LedgerError(
+                    f"{self.label}: outcome=ok with http_status={self.http_status} - a 2xx answer "
+                    "is the only outcome that buys a page"
+                )
+            if self.outcome is FetchOutcome.HTTP_ERROR and 200 <= self.http_status < 300:
+                raise LedgerError(
+                    f"{self.label}: outcome=http_error with the 2xx status "
+                    f"{self.http_status} - the outcome and the status disagree"
+                )
+            if self.error is not None:
+                raise LedgerError(
+                    f"{self.label}: a response that arrived is recorded by its status, not by "
+                    f"an error string ({self.error!r})"
+                )
+        else:
+            if self.http_status is not None:
+                raise LedgerError(
+                    f"{self.label}: outcome=transport_failure arrived with no response, so it "
+                    f"cannot carry http_status={self.http_status!r}"
+                )
+            if not self.error:
+                raise LedgerError(
+                    f"{self.label}: outcome=transport_failure needs the reason (DNS, connect, "
+                    "reset, timeout) - a failure with no reason is not a measurement"
+                )
+        if not isinstance(self.attempt, int) or isinstance(self.attempt, bool) or self.attempt < 1:
+            raise LedgerError(
+                f"{self.label}: attempt={self.attempt!r} is not a 1-based attempt number; a retry "
+                "is countable only because every attempt has its own line"
+            )
+        if not isinstance(self.given_up, bool):
+            raise LedgerError(
+                f"{self.label}: given_up={self.given_up!r} is not a boolean; every fetch line says "
+                "whether it was the target's last attempt"
+            )
+        if self.bytes is None or not isinstance(self.bytes, int) or self.bytes < 0:
+            raise LedgerError(f"{self.label}: bytes={self.bytes!r} is not a byte count")
 
     def to_json(self) -> str:
         payload = asdict(self)
@@ -182,6 +267,10 @@ def _with_time(entry: Entry, at: str) -> Entry:
         url=entry.url,
         http_status=entry.http_status,
         bytes=entry.bytes,
+        outcome=entry.outcome,
+        attempt=entry.attempt,
+        error=entry.error,
+        given_up=entry.given_up,
     )
 
 
@@ -200,6 +289,11 @@ class StageTotals:
     #: to a token count.
     cost_usd: float = 0.0
     fetch_bytes: int = 0
+    #: Attempts whose recorded outcome bought nothing (`http_error`, `transport_failure`).
+    #: `fetches` counts **attempts** - every one of them has a line - so a target retried twice
+    #: appears twice, and `fetch_failures` answers exactly what the pilot's count asked: how much of
+    #: this batch's traffic bought nothing.
+    fetch_failures: int = 0
     first_at: str | None = None
     last_at: str | None = None
 
@@ -263,7 +357,7 @@ def summarise(path: Path) -> LedgerSummary:
 
 
 def _totals(stage: str, entries: Iterable[Any]) -> StageTotals:
-    calls = fetches = 0
+    calls = fetches = failures = 0
     tokens = {
         "input_tokens": 0,
         "output_tokens": 0,
@@ -283,6 +377,7 @@ def _totals(stage: str, entries: Iterable[Any]) -> StageTotals:
             tokens["cache_write_tokens"] += entry.cache_write_tokens
             cost_usd += entry.cost_usd
             fetch_bytes += entry.fetch_bytes
+            failures += entry.fetch_failures
             times.extend(t for t in (entry.first_at, entry.last_at) if t)
             continue
         if entry["kind"] == LedgerKind.MODEL_CALL.value:
@@ -293,6 +388,10 @@ def _totals(stage: str, entries: Iterable[Any]) -> StageTotals:
         else:
             fetches += 1
             fetch_bytes += int(entry.get("bytes") or 0)
+            # A line without an `outcome` predates piece 4; it is not counted as a failure (that
+            # would invent one) and not as a success either. See the module docstring.
+            if entry.get("outcome") not in (None, FetchOutcome.OK.value):
+                failures += 1
         if entry.get("at"):
             times.append(str(entry["at"]))
     times.sort()
@@ -301,6 +400,7 @@ def _totals(stage: str, entries: Iterable[Any]) -> StageTotals:
         model_calls=calls,
         fetches=fetches,
         fetch_bytes=fetch_bytes,
+        fetch_failures=failures,
         cost_usd=cost_usd,
         first_at=times[0] if times else None,
         last_at=times[-1] if times else None,
