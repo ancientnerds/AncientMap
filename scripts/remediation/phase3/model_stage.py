@@ -869,8 +869,35 @@ def judge_site(
     The line goes down as soon as the call is answered, so a crash after it leaves the *money*
     visible and only the answer missing. The stored answer keeps the raw text: the numbers are in
     the ledger, the words are in the file, and neither is a second spelling of the other.
+
+    A question whose answer is already on disk is not asked again. The store's own rule - existence
+    is the record - belongs here as much as in the fetch stage, and it belongs here *before* the
+    call: a re-run of a batch whose answers survive would pay for a second answer to a settled
+    question, and `write` refuses to overwrite the first one with different bytes, so the batch
+    would end on an `EvidenceConflict` instead of a verdict. That is measured, not imagined: three
+    consecutive mass-run batches died exactly there on 2026-09-21 and tripped the circuit breaker.
+    Nothing is appended to the ledger either, because asking is what a ledger line records and
+    nothing was asked; the judgement carries the stored answer's own length with zero usage, so a
+    reuse reads as `wrote=False` and a cost of 0 in `model.json`. Deleting the answer file (with the
+    evidence file it was judged against) is how a human asks that one question again.
     """
     call = prepared.call
+    if answers.exists(call.site_id, call.answer_key):
+        stored_path = answers.path_for(call.site_id, call.answer_key)
+        return JudgedCall(
+            answer=ModelAnswer(
+                text=stored_path.read_text(encoding="utf-8"),
+                usage=Usage(
+                    input_tokens=0,
+                    output_tokens=0,
+                    cache_read_tokens=0,
+                    cache_write_tokens=0,
+                    total_tokens=0,
+                    cost_usd=0.0,
+                ),
+            ),
+            wrote=False,
+        )
     answer = runner.run(call)
     ledger.append(
         L.Entry(

@@ -5039,3 +5039,40 @@ Its first version was wrong, and how it was wrong is why it is now written in bo
 only the withheld rows, so the boundary-refused rows whose batches were applied counted as written, and it
 reported two deviations that were the refusal *working*. A control that cannot fail is not a check.
 
+### The mass run's real blocker: the judge asked a question whose answer was already on disk
+
+Rounds 2 and 3 of the mass run ended at 130 of 334 batches on the circuit breaker, "3 consecutive batch
+failures". Those failures are not the fetch stage and not the overpass endpoint - each one is `judge exited
+1`, and the traceback names the cause exactly:
+
+```
+phase3.fetch_stage.EvidenceConflict: ...\answers\<site>%2Fdescription.txt holds different bytes
+than the answer just received; refusing to overwrite a recorded fetch
+```
+
+The guard is right: a recorded answer is never overwritten with different bytes. What was wrong is that the
+question was asked at all. `EvidenceStore` documents its own rule - *"Existence is the record: a target
+whose file is already on disk is not fetched again, so a re-run costs nothing"* - and the fetch stage
+honours it, but `judge_site` called the model **before** it looked: `runner.run(call)` first,
+`answers.write(...)` after. A re-run therefore paid for a second answer to a settled question and then died
+on the second bytes.
+
+`judge_site` now returns the stored answer without a call. Three consequences, all deliberate:
+
+- **No money.** No ledger line is appended, because a ledger line is the record of *asking* and nothing was
+  asked. The judgement carries the stored answer's own length with zero usage, so a reuse reads as
+  `wrote=False` and a cost of 0 in `model.json`.
+- **The guard is untouched.** The refusal to overwrite is not weakened; the collision is avoided.
+- **The escape hatch stays the store's own.** Deleting the answer file (with the evidence file it was judged
+  against) is how a human asks that one question again.
+
+That last point is also the one way this rule can mislead, and it is written down here rather than left to
+be discovered: a *changed* question written to the same key reuses the recorded answer silently. Within one
+run directory the question is frozen, so a re-review with new wording needs the file deleted - otherwise the
+measurement is not a measurement. The zero cost is the sign that nothing was asked.
+
+The guard has teeth, measured rather than asserted: mutation 119 replaces `if answers.exists(...)` with
+`if False`, and the new test then fails with the mass run's own error
+(`EvidenceConflict: ...answers\site-1%2Ffinder.txt`) - `1/1 mutations caught`, the tree byte-identical
+afterwards. Full gate: **2460 passed, 3 skipped**.
+

@@ -383,6 +383,46 @@ def test_exactly_one_ledger_line_per_call_records_tokens_and_the_reported_cost(
     assert summary.by_stage["finder"].cost_usd == 2 * REPORTED_COST
 
 
+def test_a_question_whose_answer_is_already_on_disk_is_not_asked_again(tmp_path: Path) -> None:
+    """Existence is the record - and it has to hold *before* the call, where the money is spent.
+
+    A re-run of a batch whose answers survive must not call the model twice: the second answer is
+    paid for, and `EvidenceStore.write` refuses to overwrite the recorded one with different bytes,
+    so the batch ends on an `EvidenceConflict` instead of a verdict. Measured on 2026-09-21: three
+    consecutive mass-run batches (batch-0100/0118/0124) died exactly there and tripped the circuit
+    breaker at 130 of 334 batches.
+    """
+    ledger_path = tmp_path / "LEDGER.jsonl"
+    ledger = L.Ledger(ledger_path, clock=lambda: "2026-09-21T06:00:00+00:00")
+    answers = F.EvidenceStore(tmp_path / "answers")
+    recorded = answers.path_for("site-1", "finder")
+    recorded.parent.mkdir(parents=True, exist_ok=True)
+    recorded.write_text("the answer that was already recorded", encoding="utf-8")
+    runner = ScriptedRunner()
+
+    report = MS.judge_batch(
+        batch=_batch(1),
+        runner=runner,
+        store=_evidence_store(tmp_path, 1),
+        answers=answers,
+        ledger=ledger,
+        stage=M.Stage.FINDER,
+    )
+
+    # The model was not asked: no call, and therefore nothing in the ledger that says it was.
+    assert runner.calls == []
+    assert not ledger_path.exists() or ledger_path.read_text("utf-8") == ""
+    # The recorded bytes are left exactly as they were, and the answer is the one on disk.
+    assert recorded.read_text(encoding="utf-8") == "the answer that was already recorded"
+    assert report.calls == 1
+    assert report.cost_usd == 0.0
+    assert report.input_tokens == 0
+    judgement = report.judgements[0]
+    assert judgement.wrote is False
+    assert judgement.cost_usd == 0.0
+    assert judgement.answer_chars == len("the answer that was already recorded")
+
+
 def test_a_fetch_line_cannot_carry_a_model_cost() -> None:
     with pytest.raises(L.LedgerError, match="a fetch cannot carry cost_usd"):
         L.Entry(

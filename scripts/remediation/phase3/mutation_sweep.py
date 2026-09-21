@@ -188,6 +188,11 @@ WRITE_STAGE = "scripts/remediation/phase3/write_stage.py"
 MODEL_HOLE = "test_an_unreadable_stream_is_a_named_failure_and_the_batch_carries_on"
 MODEL_TRANSPORT = "test_a_run_stops_at_the_first_call_it_could_not_measure"
 MODEL_HOLE_CLI = "test_judge_live_records_an_unreadable_stream_as_a_hole_and_exits_zero"
+#: One guard, one test: `judge_site` reuses the answer that is already on disk instead of asking
+#: again. Without the guard the model is paid a second time for a settled question and `write`
+#: refuses the second bytes, which is exactly how three consecutive mass-run batches ended on
+#: 2026-09-21 and tripped the circuit breaker at 130 of 334 batches.
+MODEL_REUSE = "test_a_question_whose_answer_is_already_on_disk_is_not_asked_again"
 DISCOVER_HOLE = "test_an_unreadable_stream_for_one_field_is_a_hole_and_the_other_calls_are_bought"
 DISCOVER_HOLE_REVIEW = "test_the_reviewer_does_not_clear_a_field_whose_finder_call_was_a_hole"
 MASSRUN_HOLE = "test_a_named_failure_counts_as_settled_and_the_batch_is_done"
@@ -1127,6 +1132,14 @@ MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         "        judged = judge_site(prepared=item, runner=runner, ledger=ledger, answers=answers)\n",
         MODEL_TEST,
         MODEL_HOLE,
+    ),
+    (
+        "a stored answer is asked for a second time instead of being reused",
+        "scripts/remediation/phase3/model_stage.py",
+        "    if answers.exists(call.site_id, call.answer_key):",
+        "    if False:  # mutant: every re-run pays for the answer again",
+        MODEL_TEST,
+        MODEL_REUSE,
     ),
     (
         "every ModelCallFailed is swallowed as a named hole",
