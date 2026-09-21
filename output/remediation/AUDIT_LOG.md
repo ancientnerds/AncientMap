@@ -4595,3 +4595,44 @@ ask about must never become a field somebody guessed at.
 This is a change in `model_stage.py`'s judge path, which the piece-6 build currently holds locked, so it
 is the first task after that build lands. Until then, a restart of the mass run is not partial progress:
 it is no progress, and it costs a minute of model calls each time.
+
+### The module had already refused the retry, for a better reason than my measurement (same day)
+
+Reading `model_stage.py`'s own docstring - in the worktree, i.e. the bytes the run actually used -
+settles two questions this section got wrong, and both are before the raise sites rather than after
+them:
+
+> Three things this module refuses to do, because each of them is an invisible cost or an invented
+> number: 1. **It never computes a cost.** ... 2. **It never writes an unmeasured call.** A non-zero
+> exit, a timeout, a stream that does not parse, a missing `message_end` usage block or an empty
+> assistant text all raise. Usage is never defaulted to zero and an empty answer is never returned as
+> a result. A call that fails *after* the provider billed it is therefore not in the ledger - the ledger
+> refuses a line it cannot total - which is stated here rather than papered over. 3. **It never retries.**
+> A retry doubles the charge invisibly.
+
+**The "ledger gap" I was about to record as a defect is refusal 2, and it is the right call.** I had
+measured that `355d25f2-.../site_type` has no `model_call` row while its neighbours `description` and
+`period_start` do, and read that as an attempt going unrecorded. The bytes say the opposite: a failed
+call is deliberately kept out of the ledger because **the ledger refuses a line it cannot total**, and
+the alternative - a line with usage defaulted to zero - would be an invented number in the one artefact
+whose whole purpose is to be a measurement. The ledger's model rows carry `outcome: None` and
+`error: None` on all 11,872 of them, so the failing signal lives in the stage log and in
+`progress.json`, and it is **not** supposed to be reconstructed from the ledger.
+
+**And the batch retry I proposed above contradicts refusal 3.** The reason is stronger than my
+measurement was: a batch retry skips the answered calls, so it re-buys **exactly** the calls that were
+billed and never journalled - the one charge that is invisible by construction. My measurement (the
+same question fails again, twice, in ninety seconds) reached the right conclusion - do not retry - from
+weaker evidence. Both are kept, because the measurement is what would have to be redone if the design
+reason were ever dropped.
+
+**What survives both refusals.** The per-field recorded failure: no retry (no second charge) and no
+invented cost (the ledger stays empty for that call, as designed), with the reason written where it
+belongs - beside the other calls of the batch - so that every call is either answered or **named** as
+unanswerable. `BatchModelReport.calls` should count an unmeasurable call because it genuinely was one,
+while the completeness check that `batch_state` performs must count the named hole as accounted for, not
+as a missing answer. Nothing in that change tells a lie about usage, and nothing re-buys a call.
+
+**The lesson, which this section has now produced four times in one afternoon: read the artefact
+before claiming a defect.** A missing row looked like a gap in an invariant; it was a documented
+refusal in the same module, four lines above the `raise`.
