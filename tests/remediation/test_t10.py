@@ -526,8 +526,8 @@ class TestSignals:
         ctx = Harness(t10, tmp_path, sites, rows, _index())
         sc = t10.build_site_context(ctx.sites)
         t10.distinctive_place_tokens(sc, ctx.snap.rows("wiki_images"), budget=1)
-        assert set(sc.place_tokens) == {"gate"} or set(sc.place_tokens) == {"temple"}, (
-            list(sc.place_tokens)
+        assert set(sc.place_tokens) == {"gate"} or set(sc.place_tokens) == {"temple"}, list(
+            sc.place_tokens
         )
 
     def test_the_place_dictionary_is_derived_from_the_curated_names(self, t10):
