@@ -4729,3 +4729,71 @@ authored this turn and not a sweep target (`grep -c test_t10` over `mutation_swe
 reverting invites the formatter to redo it, and `.githooks/pre-push:105` compares the working tree with
 the commit being pushed, so one uncommitted cosmetic diff is enough to block every future `main` push.
 The proof for that commit is the suite above, which ran on exactly those bytes.
+
+## A mutant survived the kill, and the sweep's own `assert` was what found it (2026-09-21)
+
+The acceptance of the judge path was launched, wrote a zero-byte sweep log and stopped. Its task file
+says why: `"status": "killed"`, `"error": "Killed during Pi session shutdown/reload"`,
+`"notified": false`. A background task is killed with the session that owns it, so the absence of a
+completion notice is **not** evidence that a run is still going - the task record is. The same run was
+re-launched verbatim; the second attempt finished, and its own trailing lines are the reason this
+section exists:
+
+```
+SWEEP_EXIT=1
+= 2 failed, 2456 passed, 3 skipped, 57 deselected in 122.52s =
+PYTEST_EXIT=1
+Nachher unveraendert: 8 von 8 | abweichend: []
+SNAPSHOT_OK=0
+```
+
+Two tests red, and the sweep refusing to run: `mutation_sweep.py:1235`
+`assert original.count(old) >= 1, f"{name}: anchor not found in {rel}"` fired with
+*"the ceiling counts the ledger's whole history: anchor not found in mass_run.py"*. Both symptoms have
+one cause. `mass_run.py:226` held **a mutant left in the tree**:
+
+```
+ bough = spend.calls  # mutated                                <- what stood there
+ bought = spend.calls - (baseline.calls if baseline is not None else 0)  <- what belongs there
+```
+
+The 30-minute lane that was killed had been running this sweep; the kill landed between the mutation
+and its restore, and the mutant stayed. The two red tests are the mutation's own catchers
+(`test_a_ceiling_means_this_run_and_not_the_ledgers_whole_history`, `..._that_is_not_reached_lets_the_batches_run`, both `assert code == 0` -> `1`), i.e. **the tests were right and the tree was wrong**.
+The sweep's guard had predicted exactly this: `mutation_sweep.py:1241` carries the comment about a
+mutated file in the tree and a TypeError in that very loop, dated the same day.
+
+**A before/after hash snapshot cannot see this.** `SNAPSHOT_OK=0` reported 8 of 8 files unchanged and
+that statement is true - the sweep had changed nothing, because it refused to start. The snapshot
+measures *drift during the run*, not *health of the tree*. What found the mutant was the opposite of a
+consistency check: an instrument (the sweep's anchor assertion) that refuses to measure a tree it
+describes incorrectly. Repair was surgical and double-sourced - `git show HEAD:` has the line at 225
+and the mutation table has the identical original string at `mutation_sweep.py:633` - so the mutant's
+absence is not restored from memory but from two independent statements of what the line is. After the
+repair: `38 passed` in `test_phase3_massrun.py` (was 36 passed, 2 failed).
+
+**Rule this buys:** any instrument that mutates the sources it proves must be preceded by a hash
+snapshot *outside* the instrument's own scope, and a kill during a sweep has to be treated as "the tree
+may be mutated" until an anchor assertion has run. A green suite and a clean tree are two claims, and
+the suite is the one that can be green for the wrong reason.
+
+## `mass_run.py:198`: a real gap, one line to the left of where the checker pointed (2026-09-21)
+
+pi-lens raised `unchecked-throwing-call-python` on `spend.cost_usd += float(cost)`. The reading is
+wrong at that line and right at its neighbour. The call is guarded by
+`if isinstance(cost, (int, float)) and not isinstance(cost, bool):`, so `float()` cannot raise for the
+values it receives; a `try/except` around it would be precisely the silent swallow `CLAUDE.md` forbids.
+The actual defect is the `else` branch that does not exist: **a `cost_usd` that is not a number is
+skipped silently and counted as 0**, and this number is the one the money ceiling is measured against.
+A ledger row with a stringified cost would therefore under-count the spend and let a run past its
+ceiling. The repair is to stop loudly, as the neighbouring cases already do (`LedgerDamage` for an
+inner unparsable line, `torn_lines` for a trailing one), plus a range check so a huge integer cannot
+become `inf`. It is recorded here as a **scheduled wave with its own mutation and gate**, not smuggled
+into the judge-path commit, and the finding is marked `flagged` (a fix is expected; the disposition
+stays until the fix is observed) rather than `false-positive` - the symptom is a false alarm, the
+finding is not.
+
+This is the third variant of one lesson, and it is worth stating once in its general form: **a checker
+can point at the right file and the wrong line, and its recommended remedy can be weaker than the code
+it criticises.** Fixed `float()` in a `try` would have turned a loud-stop candidate into a silent zero;
+the finding belongs one statement to the left.
