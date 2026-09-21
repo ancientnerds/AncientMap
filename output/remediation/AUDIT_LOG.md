@@ -2868,3 +2868,59 @@ a rate.
 
 **Not proved here:** what the model actually answers. The recall number is the next measurement and the
 only one that decides whether this design works at all.
+
+
+## 2026-09-21 - the discover pass measured for the first time: 5 of 19, and the misses were the question's fault
+
+**The number.** 75 calls - one per (site, field) over the 17 truth sites - caught **5 of the 19** known-wrong
+fields the pass can actually ask about (5/24 against all 24). That is **26.3 % recall on the errors the
+census missed**, where the census's own recall on those is 0 % by construction. Cost: **$0.054226**, i.e.
+**$0.000723 per call**, 49 % dearer than the census-driven finder's $0.000486 because this prompt carries
+the site's whole evidence. Projected across all 5,004 sites: **~$18 per stage** - money is still not the
+constraint, which is why a 26 % recall is the problem and not the price.
+
+**Three ceilings, and they are not the same thing.** Of the 24 ground-truth entries: **2** sit on sites the
+evidence bound refused outright (`Priene Ruins`, `Pyramid of Caius Cestius`), and **3** are `scope`
+decisions that no column holds, so no per-field value question can reach them. **19** were therefore asked.
+Reporting 5/22, as the first version of my own scoring script did, would have counted the `scope` entries as
+reached merely because their site was judged - an inflated denominator built out of questions that were
+never asked. The script now defines `asked` as "a call was made and answered for this exact (site, field)",
+which is the only definition that cannot flatter the result.
+
+**What actually failed, read from the answers rather than inferred.** Of 14 misses, 11 were confident
+`CORRECT` and 3 `UNVERIFIABLE`. The `CORRECT` ones cluster into three causes:
+
+* **Silence read as agreement (8 of 11).** `Ahu Tongariki`: *"the only discrepancy being an unsourced
+  construction date absent from the evidence but not contradicted"* -> `CORRECT`, though the stored date
+  (1-500 AD) is wrong (c. 1250-1500 AD). The question said `CORRECT` = "the evidence agrees", and "does not
+  contradict" was read as agreement.
+* **The finder's own sentence contradicting its own verdict.** `The Merry Maidens / period_start` wrote that
+  the evidence *"places its construction within the -3000 to -1500 bucket"* while the stored `-4000` is
+  *"a bucket lower bound for the preceding -4500 to -3000 range"* - the prompt's own "different bucket is
+  `WRONG`" rule firing in the model's own words - and then answered `CORRECT`.
+* **The model's subject knowledge upholding a wrong value.** *"the dating (4500-3000 BC) is a standard
+  attribution for the site"* kept a wrong date alive; *"the Neolithic in Britain begins c. 4000 BC"* did the
+  same for `The Gop`.
+
+**Two of the misses cannot be caught from this evidence at all.** `Arc de Berà`: the enwiki extract itself
+says the arch was built through the will of Lucius Licinius Sura, while the truth is that it was *restored*
+under that will - the evidence repeats the stored error, and no finder can see through it. `Font dels Coms`:
+the enwiki lookup returns *missing* (no English article), so the field is unanswerable by this route; a site
+with no enwiki article needs another evidence route, and that is a routing gap, not a model failure.
+
+**And it is not merely conservative.** 7 `WRONG` verdicts are not ground-truth entries; several are
+plausible catches the blinded check did not record (`Bulls of Guisando / period_start`, `Midford Castle /
+card_description`, `Ocriticum / period_start`, `Hebbariyeh Roman Temple / description`). They are listed
+with their reasons in `recall_result_gold.json` for adjudication rather than counted as false positives -
+the ground truth is what the blinded check could see, not every error that exists.
+
+**The response (`42fb917`).** The question now asks for the evidence statement **before** the verdict line
+(the verdict was written first, and the sentence then contradicted it), says `CORRECT` requires the evidence
+to *state* the value, says silence is never `CORRECT`, forbids citing the finder's own knowledge, and says a
+sentence that puts the real value elsewhere makes the verdict `WRONG`. Three new tests pin those three guards
+separately so each mutation reddens its own test, and the sweep - moved out of gitignored scratch into
+`scripts/remediation/phase3/mutation_sweep.py` - is **20/20 caught** with every restore byte-identical.
+
+**Still unproven:** whether the rewrite moves the number. Round 2 runs the identical experiment, same sites,
+same evidence, into `runs/gold2`; the only difference is the question. Until it lands, the 26.3 % stands as
+the measured performance of the design as it was.
