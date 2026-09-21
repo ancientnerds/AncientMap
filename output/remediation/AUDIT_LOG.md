@@ -2629,3 +2629,33 @@ one that is whole. I recommend all 5,004. That is Martin's call, and the next me
 that should precede it: run the new finder over the 17 truth-set sites, whose correct values are
 recorded in `fnr_result.json`, and see how many of the 24 missed errors it actually catches. That
 measures recall directly rather than arguing it, for about five cents.
+
+## The evidence bound was set below the real distribution - measured, then raised
+
+The second live batch got past the fetch stage (61 requests, 22 successful, 13 failed, 4 non-2xx) and
+stopped at the judge with the refusal it was built to make:
+
+    the evidence is 23947 characters, over the 9200-character bound (the design point is
+    ~2,300 input tokens per call). Truncating silently would judge a page the model never saw;
+    narrow the evidence or raise the bound deliberately.
+
+The refusal was right and the number was wrong. `MAX_EVIDENCE_CHARS = 2300 * 4` came from my own
+misreading: "~2,300 input tokens" was a design point about a *whole call*, and a bare call measures
+437 input tokens, so the phrase never described the evidence at all. The batch's own files give the
+real distribution: 23 evidence files, **median 469 bytes**, with a long tail - 23,947 characters for
+Siega Verde, 13,649 for Hattusas, then 8,194 and 8,071. The bound sat below the middle of that tail
+and refused 2 of 15 sites.
+
+Raised to 32,000 characters: the observed maximum plus about a third, still far under the 61,440-byte
+per-page cap the fetch stage enforces, and about $0.0013 per call at the worst case. I chose to raise
+it rather than narrow the evidence on purpose - the sentence that decides a verdict is exactly what
+narrowing deletes. The refusal stays as the sensor: raising this number again happens from a later
+batch's figures, not from another guess.
+
+Two things this batch measured that outlast the bug:
+
+- **Every recorded non-2xx is Overpass** (429 x3, 504 x1, all `overpass-api.de`). The retry fix was
+  not defensive coding; it was the difference between a batch that finishes and one that does not.
+- Evidence is **cheap and mostly small**: 61,616 bytes for 22 successful fetches, median 469 bytes a
+  site. The expensive tail is a handful of long Wikipedia articles, and those are the sites where
+  there is something to judge.

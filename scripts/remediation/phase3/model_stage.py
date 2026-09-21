@@ -111,12 +111,20 @@ PROGRAM = "pi.cmd" if os.name == "nt" else "pi"
 #: longer, and the brief names no number. A call that exceeds it raises; the batch stops.
 DEFAULT_TIMEOUT = 180.0
 
-#: How much evidence text may be inlined into one prompt, in characters. **An interpretation, not
-#: a measurement**, and the only number here read off a phrase: the brief sets the design point of
-#: this whole transport at "~2,300 input tokens", and 2,300 x 4 characters per token = 9,200. A
-#: page that does not fit raises rather than being truncated silently - a judgement made on half a
-#: page is a judgement on evidence the model never saw.
-MAX_EVIDENCE_CHARS = 2300 * 4
+#: How much evidence text may be inlined into one prompt, in characters. **An interpretation, not a
+#: source's figure** - but one bounded by a measurement now instead of by arithmetic on a phrase.
+#: The first live batch (batch-0001: 15 sites, 61 requests, 2026-09-21) wrote 23 evidence files:
+#: median 469 bytes, with a long tail - the largest site's combined evidence was 23,947 characters
+#: (Siega Verde), then 13,649 (Hattusas), 8,194 and 8,071. The derivation that stood here before
+#: (a "~2,300 input tokens" design point x 4 characters per token) misread what that phrase covered:
+#: a bare call is 437 input tokens, and 2,300 described the whole call rather than its evidence, so
+#: the bound was set below the real middle of the distribution and refused 2 of 15 sites.
+#: 32,000 covers the observed maximum with about a third of headroom, and the fetch stage caps every
+#: page at 61,440 bytes, so the input is bounded whatever this value says. A page that does not fit
+#: still raises rather than being truncated silently - a judgement made on half a page is a judgement
+#: on evidence the model never saw - and that refusal is the sensor: if a later batch trips it, this
+#: number gets raised from that batch's own figures rather than from another guess.
+MAX_EVIDENCE_CHARS = 32_000
 
 #: The ONE question each stage asks. The finder's is the brief's own frame ("You are the finder in
 #: a two-stage factual audit ... You propose; you do not write", `FINDER_BRIEF.md` heading), the
