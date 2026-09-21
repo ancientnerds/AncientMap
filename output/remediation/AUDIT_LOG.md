@@ -2439,3 +2439,29 @@ rewritten commits have new ids - the old `b2dc450` is now `98ce0c3`, `f96d4c3` i
 `c10f582` is now `000bd1e`, `4a7e000` is now `cabed98`, `6cf4802` is now `a9585f5`. The full old-to-new
 table, with each subject, is in `output/remediation/HISTORY_REWRITE_2026-09-21.md`; the old ids resolve
 only through the backup bundle.
+
+## Item [H]: the journal could record a change that never happened (fixed, and reproduced first)
+
+SECURITY 4 was right, and the reproduction is the proof. Before the fix, `apply_remediation_change`
+accepted `p_old = p_new`: the conditional UPDATE matched, the round-trip check passed, and a journal row
+was written whose `old_value` equals its `new_value` - a correction the journal claims and the data never
+received. Run against production, the two new cases failed exactly there: **C11 "p_old = p_new was
+accepted as a change"** and **C12 "journal rows = 1 (want 0)"**. So the defect was not theoretical and
+the cases are not decorative; the mutation run is the evidence for both halves at once.
+
+The guard is `IF p_old IS NOT DISTINCT FROM p_new THEN RAISE` near the top of the function, `IS NOT
+DISTINCT FROM` rather than `=` so that NULL -> NULL is refused too - "set this NULL field to NULL" is
+precisely the no-op worth catching, and `= NULL` is never true. `COMMENT ON FUNCTION` now records the
+refusal, so the documented contract matches the code rather than lagging it (the comment had claimed
+only truncation and coercion).
+
+**Applied to production** with `-v ON_ERROR_STOP=1`. Without it psql continues past a failed `CREATE`
+and `COMMIT`s an empty transaction, which would have looked exactly like success. Verified by read-back
+rather than by the script's exit: `pg_get_functiondef` now contains the guard. Re-run afterwards:
+**12 ok, 0 failed**, and `remediation_change_log` held 5,578 rows before, during and after.
+
+One smaller real defect found on the way, in the same family as everything else here: the selftest's
+closing line was labelled `change_log_rows_must_be_0`, a question that number can never answer on
+production - it printed 5,578. A reader would have taken a correct run for a failed one, or trained
+themselves to ignore the line. Relabelled `journal_rows_after_rollback`, with the actual invariant
+spelled out: it must equal the count taken before the run.

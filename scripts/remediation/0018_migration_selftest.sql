@@ -200,6 +200,35 @@ BEGIN
         END IF;
     END;
 
+    -- ---- C11: the same value on both sides is not a change (SECURITY 4) ----
+    -- Read the value first instead of reusing C1's 'true': C1 already flipped this row, and
+    -- passing a hard-coded old value would make this case depend on C1's outcome.
+    SELECT is_hero INTO v_bool FROM wiki_images WHERE id::text = v_id;
+    BEGIN
+        PERFORM apply_remediation_change(
+            'wiki_images', 'is_hero', 'id', v_id, v_bool::text, v_bool::text,
+            'T09/selftest-noop', 'selftest', 'selftest-c11', 'authoritative',
+            NULL::jsonb, NULL::uuid);
+        failed := failed + 1; RAISE NOTICE 'C11 FAILED p_old = p_new was accepted as a change';
+    EXCEPTION WHEN others THEN
+        IF SQLERRM LIKE '%same old and new value%' THEN
+            ok := ok + 1;  RAISE NOTICE 'C11 OK   a no-op change is refused';
+        ELSE
+            failed := failed + 1; RAISE NOTICE 'C11 FAILED wrong error: %', SQLERRM;
+        END IF;
+    END;
+
+    -- ---- C12: and the refused no-op left no journal row behind -------------
+    -- The point of C11 is not the error message but the journal: a row claiming a correction
+    -- the data never received is worse than a failed call.
+    SELECT count(*) INTO v_journal
+      FROM remediation_change_log WHERE change_key = 'selftest-c11';
+    IF v_journal = 0 THEN
+        ok := ok + 1;  RAISE NOTICE 'C12 OK   no journal row for the refused no-op';
+    ELSE
+        failed := failed + 1; RAISE NOTICE 'C12 FAILED journal rows = % (want 0)', v_journal;
+    END IF;
+
     RAISE NOTICE 'selftest done: % ok, % failed', ok, failed;
     IF failed > 0 THEN
         RAISE EXCEPTION 'SELFTEST FAILED: % of % cases', failed, ok + failed;
@@ -211,4 +240,9 @@ $selftest$;
 ROLLBACK;
 
 -- After the rollback the journal must be exactly as empty as before.
-SELECT count(*) AS change_log_rows_must_be_0 FROM remediation_change_log;
+-- The journal must hold exactly what it held before: every case above runs inside the
+-- enclosing BEGIN, so this number has to equal the count taken before the run. It is NOT
+-- expected to be 0 - that is only true on an empty database, and this script is meant to
+-- be run against production. The old alias here read 'must_be_0', which asked a question
+-- the number can never answer.
+SELECT count(*) AS journal_rows_after_rollback FROM remediation_change_log;

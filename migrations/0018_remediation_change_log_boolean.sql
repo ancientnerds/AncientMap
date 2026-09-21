@@ -93,6 +93,20 @@ BEGIN
         RAISE EXCEPTION 'apply_remediation_change: p_run_stamp is required';
     END IF;
 
+    -- A no-op is not a change. Without this, p_old = p_new matches the conditional UPDATE,
+    -- passes the round-trip check, and writes a journal row whose old_value equals its
+    -- new_value: a correction the journal claims and the data never received. It is the same
+    -- "the journal must not lie" reason the truncation check below exists - that one catches
+    -- a value the row does not hold, this one catches a change the row never had.
+    -- IS NOT DISTINCT FROM rather than `=`, so NULL -> NULL is refused too: `= NULL` is never
+    -- true, and "set this NULL field to NULL" is exactly the no-op worth catching.
+    IF p_old IS NOT DISTINCT FROM p_new THEN
+        RAISE EXCEPTION
+            'apply_remediation_change: %.% for %=% was given the same old and new value (%) - '
+            'refusing to journal a change that is not one',
+            p_table, p_column, p_pk_col, p_pk, coalesce(p_new, '<NULL>');
+    END IF;
+
     -- The column's declared type, taken from the catalog rather than guessed. pg_attribute
     -- avoids information_schema's privilege filtering and its slow view, and attnum > 0
     -- excludes system columns while attisdropped excludes a column that was dropped (whose
@@ -185,7 +199,8 @@ COMMENT ON FUNCTION apply_remediation_change IS
     'its journal row commit together; raises unless exactly one row matches the expected '
     'old value. Type-safe for every column type via the catalog (0018). Refuses a change '
     'whose value the column would silently truncate or coerce, so the journal never records '
-    'a value the row does not hold. p_new = NULL clears the column (an empty field beats a '
-    'wrong one).';
+    'a value the row does not hold, and refuses a no-op where p_old already equals p_new, so '
+    'the journal holds only changes that actually happened. p_new = NULL clears the column (an '
+    'empty field beats a wrong one).';
 
 COMMIT;
