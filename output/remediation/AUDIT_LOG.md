@@ -2924,3 +2924,28 @@ separately so each mutation reddens its own test, and the sweep - moved out of g
 **Still unproven:** whether the rewrite moves the number. Round 2 runs the identical experiment, same sites,
 same evidence, into `runs/gold2`; the only difference is the question. Until it lands, the 26.3 % stands as
 the measured performance of the design as it was.
+
+
+### The routing measurement behind two of the round-1 misses (measured from the snapshot, 2026-09-21)
+
+Round 1 could not reach `Font dels Coms` at all: the enwiki lookup returns *missing*, and the pass has no
+other prose route. Measured over the snapshot, that is not a corner case:
+
+| route | sites | share |
+|---|---|---|
+| `enwiki_title` (the prose route the pass uses) | 4,619 | 92.3 % |
+| `wikidata_qid` (claims: `country`, `site_type`) | 4,618 | 92.3 % |
+| `unified_sites.source_url` | **4,962** | **99.2 %** |
+| a `site_content_links` row carrying a URL | 3,575 | 71.4 % |
+| neither enwiki nor a Q-id | 385 | 7.7 % |
+
+**385 sites have no English article**, so `description` and `card_description` have no prose route for them
+as the pass is built. Of those, **368 are reachable through `source_url` or a content link** and only
+**17 sites (0.3 %) have no prose route at all today**. `Font dels Coms` itself carries
+`source_url = https://visitandorra.com/en/culture/font-dels-coms-spring/` and five content links - the prose
+was reachable, the pass had no route to it.
+
+So the "unverifiable" answers on those fields are partly a **routing gap, not a model failure**, and the
+cheapest next recall gain is a third route rather than a better question. Not adopted yet: whether a
+`source_url` page *settles* a field is a separate question, and it gets measured before it is believed -
+this is recorded as a measured input, not as a design change.
