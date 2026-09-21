@@ -2807,3 +2807,64 @@ noise, and a reviewer who wants it green can have it green in one command.
 **Not proved by me:** the lane's eleven mutation proofs (I verified the artefacts, the gates, the code
 and the *substance* of the tests, not the mutation sweep itself), and the judge stage's live behaviour
 with a real model - this fix was verified through the prompt text, not through a paid call.
+
+
+## 2026-09-21 - piece 5: the report was true and the tree was broken, and a mutation sweep inside a lane is the reason
+
+**The lane died at the 30-minute ceiling, and its report was accurate anyway.** Piece 5 (the
+snapshot-driven discover plan) was delivered by `75e09c31`, killed mid-flight. Its ledger claim ("no
+`--live` call") holds: the ledger was still 169 lines with all 15 `model_call` rows, so the paid recall
+experiment stayed mine. Its plan figures hold too - reproduced here byte for byte: **85 calls / 40,096 B
+/ `ad32d26f...`** for the 17-site truth list, **25,020 calls / 12,042,556 B / `a5786f10...`** across all
+5,004, and the piece-1 anchor unmoved at **`96704b80...`** on both the committed artefact and a fresh
+run.
+
+**But the tree it left behind did not work.** Five tests failed on the delivered files, contradicting
+its own "gates green" - which was true when written and false afterwards. Cause, found by comparing the
+five file hashes it says it restored against the files on disk: four matched, `snapshot_plan.py` did
+not (`9257da45...` claimed, `66f94870...` on disk). Its `DISCOVER_FIELDS` was missing `country` while
+`FIELD_STORED_IN`, `FIELD_QUESTION` and the tests all still demanded it - i.e. **mutation #3 of its own
+sweep was still applied**. The lane re-ran the sweep after writing its report, and the ceiling killed
+it between applying that mutation and restoring it.
+
+**Detection technique worth keeping:** a lane's report is verifiable in one command, because a
+mutation-proof table that names the sha256 it restored is a *testable claim* - hash the files and
+compare. That is what turned "probably fine" into a five-failure tree in under a minute.
+
+**Restore proved, not asserted.** Re-adding `country` in the frozen order reproduced the report's
+restored hash exactly (`9257da451c6ada58`) *and* both plan hashes and byte counts above, through an
+independent path. Gates re-run here: **640 passed** in `tests/remediation/` (610 before, 30 new), `ruff
+check` clean, `mypy` clean on 8 files, and the mutation sweep **run by me, not read**: **17/17 caught,
+all five file hashes identical before and after** - which also proves the sweep restores cleanly when
+it is allowed to finish.
+
+**Process lesson (the one that will recur):** a mutation sweep run inside a subagent lane is unsafe,
+because the ceiling can kill it mid-restore and leave a mutant in the working tree that looks like
+finished work. Sweeps belong in the parent process, or must restore on signal. This is the second lane
+this session the ceiling killed mid-sweep.
+
+**Corrected: the brief that pointed at a dead column.** `PIECE5_BRIEF.md` told the piece to route
+Wikidata by `card_stats.wikidata_qid`. Measured: that column is present in all 5,004 exported rows and
+**NULL in every one**; nothing in the repository writes it, it is created only by `api/main.py:126`, and
+the only writer of a Q-id is `pipeline/lyra/prospector/external_ids.py:55`, into `site_external_ids`
+(**4,618** rows). Following the brief literally would have routed **no site at all** to Wikidata, and it
+would have looked like thin evidence rather than like a bug. The lane found it, deviated with the
+evidence and reported it as an open question. Corrected in the brief (`15898c5`). This is the second
+piece in a row where the lane corrected me from the artefact, and both times it was right.
+
+**The discover pass's first real evidence, and its first measured coverage cost.** Fetching the 17 truth
+sites cost 33 targets (17 `enwiki` + 16 `wikidata_entity`; `Font dels Coms` has no Q-id), **0 failures,
+0 non-2xx**, both hosts probed HTTP 200, 226,668 + 8,694 bytes. The pilot's "8.8 s per fetch" was
+Overpass timeouts; against Wikipedia and Wikidata the whole thing finishes in seconds.
+
+Then the bound bit, and the measurement is uncomfortable: `plan_site` puts a site's *entire* evidence
+into all five field prompts and checks `MAX_EVIDENCE_CHARS = 32_000` **once per site**, so one large
+site loses all five fields at once. **2 of the 17 truth sites are refused** (Priene Ruins 37,339 chars,
+Pyramid of Caius Cestius 49,952). Those two sites hold **2 of the 24 known-wrong fields**, which are
+therefore unmeasurable by construction - and the 3 `scope` entries no column holds are unreachable too,
+so the value pass can reach **at most 19 of 24**. Extrapolated to the full run that is roughly 12 % of
+sites recorded unverifiable without a question being asked; on a 17-site sample that is a direction, not
+a rate.
+
+**Not proved here:** what the model actually answers. The recall number is the next measurement and the
+only one that decides whether this design works at all.
