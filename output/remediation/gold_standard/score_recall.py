@@ -48,7 +48,9 @@ def reason_of(text: str) -> str:
     return body[1] if len(body) > 1 else ""
 
 
-def collect(run_dir: pathlib.Path) -> tuple[dict[tuple[str, str], str], dict[tuple[str, str], str], set[str]]:
+def collect(
+    run_dir: pathlib.Path,
+) -> tuple[dict[tuple[str, str], str], dict[tuple[str, str], str], set[str]]:
     """Every answered (site, field) -> verdict and reason, plus the sites the run judged."""
     verdicts: dict[tuple[str, str], str] = {}
     reasons: dict[tuple[str, str], str] = {}
@@ -103,13 +105,19 @@ def main() -> int:
     print(f"  verdicts overall: {dict(Counter(verdicts.values()))}")
     print(f"\n  ceiling_24 = {len(rows)}   reachable = {len(reachable)}   caught = {len(caught)}")
     if reachable:
-        print(f"  RECALL on the reachable set: {len(caught)}/{len(reachable)} = {len(caught)/len(reachable):.1%}")
-    print(f"  RECALL against all 24:       {len(caught)}/{len(rows)} = {len(caught)/len(rows):.1%}")
+        print(
+            f"  RECALL on the reachable set: {len(caught)}/{len(reachable)} = {len(caught) / len(reachable):.1%}"
+        )
+    print(
+        f"  RECALL against all 24:       {len(caught)}/{len(rows)} = {len(caught) / len(rows):.1%}"
+    )
 
     print("\n  --- the ground-truth entries, one line each ---")
     for r in sorted(rows, key=lambda r: (not r["caught"], r["site_name"], r["field"])):
         mark = "CAUGHT" if r["caught"] else ("not asked" if not r["asked"] else r["verdict"])
-        print(f"    {mark:10s} {r['site_name'][:28]:30s} {r['field']:16s} stored={str(r['stored_value'])[:22]}")
+        print(
+            f"    {mark:10s} {r['site_name'][:28]:30s} {r['field']:16s} stored={str(r['stored_value'])[:22]}"
+        )
 
     print("\n  --- unreachable, with the reason ---")
     for r in unreachable:
@@ -127,7 +135,9 @@ def main() -> int:
         for key, verdict in verdicts.items()
         if verdict == "WRONG" and key not in caught_keys
     ]
-    print(f"\n  --- {len(extra)} WRONG verdicts that are NOT ground-truth entries (adjudicate by hand) ---")
+    print(
+        f"\n  --- {len(extra)} WRONG verdicts that are NOT ground-truth entries (adjudicate by hand) ---"
+    )
     for key, _ in sorted(extra):
         site_id, field = key
         name = next((r["site_name"] for r in rows if r["site_id"] == site_id), site_id[:8])

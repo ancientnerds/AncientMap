@@ -1,0 +1,334 @@
+{
+  "run_dir": "output\\remediation\\phase3_runner\\runs\\gold3",
+  "question_commit": "round 1 = 6efec9a (verdict first); round 2 = 42fb917 (evidence statement first)",
+  "judged_sites": 15,
+  "answered_pairs": 75,
+  "verdict_counts": {
+    "UNVERIFIABLE": 29,
+    "CORRECT": 29,
+    "WRONG": 17
+  },
+  "ceiling_24": 24,
+  "reachable": 19,
+  "caught": 7,
+  "recall_on_reachable": 0.3684210526315789,
+  "recall_against_24": 0.2916666666666667,
+  "entries": [
+    {
+      "site_name": "Midford Castle",
+      "site_id": "32429f3c-6e14-4015-900a-a9cd9fbb81eb",
+      "field": "scope",
+      "asked": false,
+      "verdict": "NOT ASKED",
+      "caught": false,
+      "stored_value": null,
+      "correct_value": "out of scope - the record should be hidden or removed",
+      "reason": ""
+    },
+    {
+      "site_name": "Ksar el Barka",
+      "site_id": "a5d9e9a7-9fd2-4a0f-a3ae-7dd78fba429b",
+      "field": "scope",
+      "asked": false,
+      "verdict": "NOT ASKED",
+      "caught": false,
+      "stored_value": null,
+      "correct_value": "out of scope - the record should be hidden or removed",
+      "reason": ""
+    },
+    {
+      "site_name": "Arc de Berà",
+      "site_id": "82f23c96-d8b2-41f0-a3e5-59ae9b89880c",
+      "field": "description",
+      "asked": true,
+      "verdict": "CORRECT",
+      "caught": false,
+      "stored_value": "The Arc de Bera is a Roman triumphal arch erected around 13 BC during the reign of Augustus, located 20 km northeast of Tarragona, Catalonia, Spain. Built on the Via Augusta through the will of Lucius Licinius Sura, it features a single opening with fluted pilasters crowned by Corinthian capitals atop a podium. The arch likely marked the boundary of the Tarraco district. It forms part of the Archaeological Ensemble of Tarraco, inscribed as a UNESCO World Heritage Site in 2000.",
+      "correct_value": "the arch was built in the reign of Augustus around 13 BC; it was RESTORED in the early 2nd century AD 'pursuant to terms of the will of Lucius Licinius Sura'",
+      "reason": "VERDICT: CORRECT"
+    },
+    {
+      "site_name": "Ahu Tongariki",
+      "site_id": "590d3dff-ec5a-4328-a0d9-5baf03686be0",
+      "field": "period_start",
+      "asked": true,
+      "verdict": "UNVERIFIABLE",
+      "caught": false,
+      "stored_value": 1,
+      "correct_value": "-1250 (bucket 1000 - 1500 AD)",
+      "reason": "Stored value `1` falls in `1 - 500 AD`. No evidence value is stated, so the spans cannot be compared."
+    },
+    {
+      "site_name": "Ahu Tongariki",
+      "site_id": "590d3dff-ec5a-4328-a0d9-5baf03686be0",
+      "field": "description",
+      "asked": true,
+      "verdict": "WRONG",
+      "caught": true,
+      "stored_value": "The largest ahu on Rapa Nui, Ahu Tongariki was constructed between 1-500 AD [1]. Its fifteen moai were toppled during the island's civil wars and in the 20th century the ahu was swept inland by a tsunami [1]. Following restoration, it features the heaviest moai ever erected on the island at 86 tonnes [1]. Located one kilometer from Rano Raraku and Poike in the Hotu-iti area of Rapa Nui National Park, all statues face sunset during the winter solstice [1].",
+      "correct_value": "constructed c. 1250-1500 AD",
+      "reason": "VERDICT: WRONG — the stored description's claim that the ahu \"was constructed between 1-500 AD\" is not supported by any evidence here (the evidence is silent on construction date), and the stored value presents it as fact."
+    },
+    {
+      "site_name": "The Gop",
+      "site_id": "9ed175c7-a706-4a71-b10a-f93a68734afc",
+      "field": "period_start",
+      "asked": true,
+      "verdict": "WRONG",
+      "caught": true,
+      "stored_value": -5000,
+      "correct_value": "-4000 to -3000 (bucket 4500 - 3000 BC; '3000 - 1500 BC' if the latest phase is meant)",
+      "reason": "VERDICT: WRONG — the evidence states a different value (Neolithic, i.e. within 4500–3000 BC) than the stored -5000."
+    },
+    {
+      "site_name": "The Gop",
+      "site_id": "9ed175c7-a706-4a71-b10a-f93a68734afc",
+      "field": "site_type",
+      "asked": true,
+      "verdict": "WRONG",
+      "caught": true,
+      "stored_value": "Fortress/citadel",
+      "correct_value": "Megalithic structures (cairn) or Tomb - not Fortress/citadel",
+      "reason": "VERDICT: WRONG — the evidence states this is a Neolithic cairn/mound (a monument), not a fortress/citadel; the \"hill fort\" mention is only a speculative possible use, so `Fortress/citadel` names a different kind of thing than the monument the evidence describes."
+    },
+    {
+      "site_name": "The Gop",
+      "site_id": "9ed175c7-a706-4a71-b10a-f93a68734afc",
+      "field": "description",
+      "asked": true,
+      "verdict": "WRONG",
+      "caught": true,
+      "stored_value": "A massive Neolithic cairn on Gop Hill in Flintshire, Wales, and the second-largest ancient human-made mound in Britain after Silbury Hill. The oval monument stands 14 m high with a maximum diameter of 101 m, constructed of limestone blocks with drystone walling. Boyd Dawkins excavated in 1886-87 using tunnels and a shaft but found no burial chamber, leaving its function uncertain. The Gop Cave beneath yielded fourteen human skeletons, a stone axe, and Peterborough pottery indicating Neolithic activity. Whether it served as a passage grave, ceremonial platform, or hillfort remains debated.",
+      "correct_value": "12 m high, 75-80 m in diameter",
+      "reason": "VERDICT: WRONG — the evidence gives different values (75–80 m diameter, 12 m high) and contradicts the stored value's specific dimensions and excavation/contents claims."
+    },
+    {
+      "site_name": "The Gop",
+      "site_id": "9ed175c7-a706-4a71-b10a-f93a68734afc",
+      "field": "card_description",
+      "asked": true,
+      "verdict": "WRONG",
+      "caught": true,
+      "stored_value": "5th-4th millennium BC Neolithic cairn in the Clwydian Range, Flintshire — the second-largest Neolithic mound in Britain after Silbury Hill.",
+      "correct_value": "4th-3rd millennium BC Neolithic cairn",
+      "reason": "VERDICT: WRONG — the stored value's claim of a \"5th-4th millennium BC\" date is not supported by (and is contradicted as to content by) the evidence, which gives no such date."
+    },
+    {
+      "site_name": "Bulls of Guisando",
+      "site_id": "0529af31-7573-467e-88ff-12dbca48f94d",
+      "field": "description",
+      "asked": true,
+      "verdict": "CORRECT",
+      "caught": false,
+      "stored_value": "The Bulls of Guisando (Toros de Guisando) are four granite sculptures on the hill of Guisando in El Tiémblo, Ávila, Spain. Dating to the 2nd century BC, they are examples of the Celtic Iberian \"verracos\" tradition—massive stone carvings of bulls or pigs. Each sculpture features holes interpreted as sockets for horns[1]. They belong to a group of hundreds of such monuments known across the Iberian Peninsula, representing one of the most significant collections of these ancient sculptures[2].",
+      "correct_value": "El Tiemblo (the municipality's name carries no accent on the second syllable)",
+      "reason": "VERDICT: CORRECT"
+    },
+    {
+      "site_name": "Pyramid of Caius Cestius",
+      "site_id": "872b05b1-618b-4618-b3ae-6c69f3177911",
+      "field": "card_description",
+      "asked": false,
+      "verdict": "NOT ASKED",
+      "caught": false,
+      "stored_value": "A marble-clad pyramid tomb built in Rome around 18 BC. At 36 m tall, it copied Egyptian style during Rome's obsession with all things pharaonic.",
+      "correct_value": "built in the Nubian pyramid style (the article's own words); 'Egyptian' conflates Nubia with Egypt",
+      "reason": ""
+    },
+    {
+      "site_name": "Overstone Anglo-Saxon Cemetery",
+      "site_id": "d799bb0f-8ffd-4a29-a516-ffd445f6b699",
+      "field": "card_description",
+      "asked": true,
+      "verdict": "UNVERIFIABLE",
+      "caught": false,
+      "stored_value": "Largest Anglo-Saxon cemetery in Northamptonshire -- 15 hectares excavated in 2019. Over 160 skeletons and 70 square barrows of the Arras culture, with a range of grave goods.",
+      "correct_value": "154 graves and 3,000 artefacts; no square barrows and no Arras culture are mentioned by any source consulted",
+      "reason": "VERDICT: UNVERIFIABLE"
+    },
+    {
+      "site_name": "The Merry Maidens",
+      "site_id": "b6af84c5-21f1-4c8a-94d1-2d925bd04725",
+      "field": "period_start",
+      "asked": true,
+      "verdict": "UNVERIFIABLE",
+      "caught": false,
+      "stored_value": -4000,
+      "correct_value": "-2500 (bucket 3000 - 1500 BC)",
+      "reason": "Stored value: -4000 → bucket `< 4500 BC`? No: -4000 is ≥ -4500 and < -3000, so `4500 - 3000 BC`."
+    },
+    {
+      "site_name": "The Merry Maidens",
+      "site_id": "b6af84c5-21f1-4c8a-94d1-2d925bd04725",
+      "field": "description",
+      "asked": true,
+      "verdict": "UNVERIFIABLE",
+      "caught": false,
+      "stored_value": "The Merry Maidens (also known as Dawn's Men) is a Late Neolithic stone circle in Cornwall, England, dating to 4500–3000 BC. Located 3 km south of St Buryan, the complete circle comprises 19 granite megaliths. A pair of standing stones known as The Pipers lies nearby and is connected through local legend. [1][2]",
+      "correct_value": "Late Neolithic to early Bronze Age, c. 2500-1500 BC",
+      "reason": "2. However, the stored text itself makes a claim contradicted by the evidence: the stored description dates the circle to \"4500–3000 BC\", whereas the evidence's Wikipedia article says the opposite of that dating — it states the site is \"a Late Neolithic stone circle\" without that range, and the claim of a 4500–3000 BC date is not supported anywhere in the evidence."
+    },
+    {
+      "site_name": "Font dels Coms",
+      "site_id": "58a2be59-ec1e-4667-96b9-3313ce406bc1",
+      "field": "period_start",
+      "asked": true,
+      "verdict": "UNVERIFIABLE",
+      "caught": false,
+      "stored_value": -3500,
+      "correct_value": "no archaeological dating; the record's own source calls the spring 'centenary'",
+      "reason": "VERDICT: UNVERIFIABLE"
+    },
+    {
+      "site_name": "Font dels Coms",
+      "site_id": "58a2be59-ec1e-4667-96b9-3313ce406bc1",
+      "field": "description",
+      "asked": true,
+      "verdict": "UNVERIFIABLE",
+      "caught": false,
+      "stored_value": "Font dels Coms is a spring in Andorra la Vella [1]. The name derives from the Pyrenean Catalan word \"cóm\" (feeding trough), reflecting its use as a watering place for horses and muleteers traveling the ancient route from Seu d'Urgell to Andorra la Vella [1]. Located on carrer Doctor Palau, formerly called Carrer dels Cavallers (Knight's Street), this spring was on the main road between Seu d'Urgell and Andorra la Vella [1].",
+      "correct_value": "a spring in Sant Julia de Loria (not Andorra la Vella)",
+      "reason": "VERDICT: UNVERIFIABLE"
+    },
+    {
+      "site_name": "Font dels Coms",
+      "site_id": "58a2be59-ec1e-4667-96b9-3313ce406bc1",
+      "field": "scope",
+      "asked": false,
+      "verdict": "NOT ASKED",
+      "caught": false,
+      "stored_value": null,
+      "correct_value": "not an ancient site; the record's own source dates the spring to the last century",
+      "reason": ""
+    },
+    {
+      "site_name": "Aubrey Holes - Stonehenge",
+      "site_id": "758dd394-0b33-4f82-821d-5b6de5058afe",
+      "field": "site_type",
+      "asked": true,
+      "verdict": "UNVERIFIABLE",
+      "caught": false,
+      "stored_value": "Timber circle",
+      "correct_value": "not a timber setting - the pits are the stone/cremation setting of Stonehenge's first phase",
+      "reason": "VERDICT: UNVERIFIABLE"
+    },
+    {
+      "site_name": "Amyntas Rock Tombs",
+      "site_id": "e19f7af0-539c-474c-9404-b11f22f48846",
+      "field": "card_description",
+      "asked": true,
+      "verdict": "UNVERIFIABLE",
+      "caught": false,
+      "stored_value": "4th-century BC Lycian tombs carved into a sheer cliff face, with temple-style facades complete with columns and pediments. The largest is attributed to King Amyntas.",
+      "correct_value": "named for Amyntas son of Hermagios, a private individual - not a king",
+      "reason": "2. VERDICT: UNVERIFIABLE"
+    },
+    {
+      "site_name": "Temple of Dedun",
+      "site_id": "da62b3af-331d-461c-a715-d64e35870466",
+      "field": "description",
+      "asked": true,
+      "verdict": "UNVERIFIABLE",
+      "caught": false,
+      "stored_value": "[1] Dedun was a Kushite or Nehasi god worshipped during ancient times in ancient Egypt and Sudan and attested as early as 2400 BC. Depicted as a lion, Dedun began as a god of incense—a luxury commodity sourced primarily from Nubia—and evolved into the divine embodiment of prosperity and wealth. The temple represents religious and cultural exchange between Egypt and Nubia during a period when incense trade significantly shaped regional power dynamics.",
+      "correct_value": "a description of the temple (location, builder, date, plan) - not of the deity",
+      "reason": "VERDICT: UNVERIFIABLE"
+    },
+    {
+      "site_name": "Beacon Hill, Burghclere, Hampshire",
+      "site_id": "9dcc1c87-49c7-44f9-9d09-13b9b2b6671f",
+      "field": "card_description",
+      "asked": true,
+      "verdict": "WRONG",
+      "caught": true,
+      "stored_value": "At 261 metres, this Hampshire hill carries an 80-hectare fort visible from the nearby A34 road. The hill derived its name from its historic role as one of many signal beacons across the country.",
+      "correct_value": "the hillfort is a scheduled ancient monument built around 1000 BC; the 80.7 hectares belong to the Site of Special Scientific Interest, not to the fort",
+      "reason": "VERDICT: WRONG — the stored text calls the 80-hectare feature a \"fort\" whereas the evidence says the 80.7-hectare designation is a biological Site of Special Scientific Interest (the hill fort is a separate, unmeasured earthwork), so the stored description misattributes the hectare figure to the fort."
+    },
+    {
+      "site_name": "Priene Ruins",
+      "site_id": "972ded7c-665e-4ca6-98cc-af4dff9ac8f3",
+      "field": "site_type",
+      "asked": false,
+      "verdict": "NOT ASKED",
+      "caught": false,
+      "stored_value": "Temple complex",
+      "correct_value": "City/town/settlement",
+      "reason": ""
+    },
+    {
+      "site_name": "Hebbariyeh Roman Temple",
+      "site_id": "6a20e653-5320-440d-ac6c-2e86bb56e09e",
+      "field": "site_type",
+      "asked": true,
+      "verdict": "UNVERIFIABLE",
+      "caught": false,
+      "stored_value": "Megalithic stones",
+      "correct_value": "Temple complex",
+      "reason": "VERDICT: UNVERIFIABLE"
+    },
+    {
+      "site_name": "Ocriticum",
+      "site_id": "e7ee7c00-1b94-4ff8-832e-7af0323bd3aa",
+      "field": "description",
+      "asked": true,
+      "verdict": "WRONG",
+      "caught": true,
+      "stored_value": "Ocriticum was an Italic and Roman sacred site near modern Cansano in the Abruzzo region of Italy, flourishing from the late 4th century BC to the 2nd century AD. The site contains three temples across two levels: an Italic-era temple to Hercules (4th c. BC), a Roman temple to Jupiter (1st c. AD), and a sacellum of Ceres and Venus (2nd c. BC). Excavations yielded votive offerings, terracotta figurines including the \"Goddess of Cansano,\" and bronze Hercules statues. The nearby mansio Jovis Larene, marked on the Tabula Peutingeriana, served as a way station for pilgrims and travelers.",
+      "correct_value": "the Roman temple was built around the beginning of the 1st century BC, not the 1st century AD",
+      "reason": "VERDICT: WRONG"
+    }
+  ],
+  "wrong_not_in_ground_truth": [
+    {
+      "site_id": "0529af31-7573-467e-88ff-12dbca48f94d",
+      "field": "card_description",
+      "reason": "VERDICT: WRONG — the stored value's second claim (\"among the most famous examples\") is not supported and the first clause's \"Celtic\" characterization is contradicted by the evidence's \"pre-Roman peoples known as the Vettones.\""
+    },
+    {
+      "site_id": "0529af31-7573-467e-88ff-12dbca48f94d",
+      "field": "period_start",
+      "reason": "VERDICT: WRONG — the evidence gives a different value (2nd century BCE, ~-200/-100, spanning 1500–500 BC) than the stored -500 (500 BC – 1 AD)."
+    },
+    {
+      "site_id": "32429f3c-6e14-4015-900a-a9cd9fbb81eb",
+      "field": "card_description",
+      "reason": "VERDICT: WRONG — the stored value presents the card-game legend as fact (\"Legend says the owner chose the design after winning the fortune to build it in a card game\"), while the evidence contradicts that specific claim, stating the story is unlikely since the porch creating the clubs' stem was added later."
+    },
+    {
+      "site_id": "82f23c96-d8b2-41f0-a3e5-59ae9b89880c",
+      "field": "card_description",
+      "reason": "VERDICT: WRONG — the stored description calls it \"A 13 BC Roman triumphal arch standing alone on the old Via Augusta highway\" and assigns its boundary-marker role to \"triumphal arches outside cities\" generally, whereas the evidence states specifically that this arch \"marked the limit of the district of Tarraco,\" and places it on the Via Augusta now the N-340 road; the boundary/marking claim as stored is contradicted by the evidence's specific attribution."
+    },
+    {
+      "site_id": "82f23c96-d8b2-41f0-a3e5-59ae9b89880c",
+      "field": "period_start",
+      "reason": "Stored -500 falls in `1500 - 500 BC`; the evidence's -13 falls in `500 BC - 1 AD`. Spans differ → WRONG."
+    },
+    {
+      "site_id": "9dcc1c87-49c7-44f9-9d09-13b9b2b6671f",
+      "field": "description",
+      "reason": "VERDICT: WRONG — the evidence states a different dating for the hill fort (built around 1000 BC) than the stored value's 1500–500 BC range, so the stored description's claim is contradicted."
+    },
+    {
+      "site_id": "9dcc1c87-49c7-44f9-9d09-13b9b2b6671f",
+      "field": "period_start",
+      "reason": "Stored value -1500 falls in the span `3000 - 1500 BC` (upper bound inclusive, i.e. -3000 to -1500); evidence value -1000 falls in `1500 - 500 BC`. The spans differ."
+    },
+    {
+      "site_id": "b6af84c5-21f1-4c8a-94d1-2d925bd04725",
+      "field": "card_description",
+      "reason": "VERDICT: WRONG — the stored value claims The Pipers reach 4.6 metres, while the evidence states they are 3 metres high; the claim of graded heights with the tallest to the southwest is also unsupported by the evidence."
+    },
+    {
+      "site_id": "d799bb0f-8ffd-4a29-a516-ffd445f6b699",
+      "field": "description",
+      "reason": "VERDICT: WRONG — the evidence gives a different value (a short Wikidata description, \"archaeological site in the United Kingdom\"), not the stored multi-sentence account."
+    },
+    {
+      "site_id": "e7ee7c00-1b94-4ff8-832e-7af0323bd3aa",
+      "field": "period_start",
+      "reason": "Wait—correct span: -400 and -100 both fall in the `1500 - 500 BC` bucket (from -1500 to -500), while stored -500 falls in `500 BC - 1 AD`."
+    }
+  ]
+}

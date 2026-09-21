@@ -1028,16 +1028,50 @@ def test_the_field_clause_is_stated_to_beat_the_general_rules() -> None:
     assert "are **the same answer**" in DS.field_question("country", VOCAB)
 
 
+def _categorize_period_steps() -> list[tuple[int, str]]:
+    """The bucket table, read off the site's own `categorizePeriod` rather than copied from it."""
+    source = (REPO / "ancient-nerds-map" / "src" / "data" / "sites.ts").read_text(encoding="utf-8")
+    steps = re.findall(r"if \(start < (-?\d+)\) return '([^']+)'", source)
+    assert steps, "categorizePeriod's comparisons were not found in sites.ts"
+    return [(int(bound), label) for bound, label in steps]
+
+
 def test_the_period_question_gives_the_bucket_spans_and_not_only_lower_bounds() -> None:
     """`Bulls of Guisando` was flagged `WRONG` on arithmetic the model got wrong after its own
-    verdict ("Wait - both -200/-100 and -500 fall in the same bucket. Let me correct."). The spans
-    are read off `categorizePeriod` in `ancient-nerds-map/src/data/sites.ts`, where -500 and -200 do
-    land in the same span, `500 BC - 1 AD`.
+    verdict ("Wait - both -200/-100 and -500 fall in the same bucket. Let me correct.").
+
+    The first repair wrote the spans but left the last boundaries open ("-1500 to -500 ..."), and
+    the two surviving false positives of the third run sat on exactly those two values: a stored
+    -1500 and a stored -500, both of which the question placed one bucket too early. Every span is
+    therefore derived from `categorizePeriod` here - inclusive of its first year, exclusive of its
+    second - so the question cannot drift from the code it describes.
     """
     question = DS.field_question("period_start", VOCAB)
-    assert "-500 to 1 is `500 BC - 1 AD`" in question
-    assert "1500 and later is `1500+ AD`" in question
+    steps = _categorize_period_steps()
+    assert steps[0] == (-4500, "< 4500 BC")
+    assert f"below {steps[0][0]} is `{steps[0][1]}`" in question
+    # Ragged on purpose: each step is compared with the one that follows it.
+    for (previous, _), (bound, label) in zip(steps, steps[1:], strict=False):
+        assert f"{previous} up to but not including {bound} is `{label}`" in question
+    assert f"{steps[-1][0]} and later is `1500+ AD`" in question
+    assert "-1500 belongs to `1500 - 500 BC` and -500 belongs to `500 BC - 1 AD`" in question
     assert "which span each of the two values falls in" in question
+
+    # The century workaround must be *true*, not merely present: the spans it names have to agree
+    # with the code for every year they cover. Round 3 flagged `Bulls of Guisando` (stored -500)
+    # against evidence saying "2nd century BCE", and round 4 repeated it plus `Ocriticum` against
+    # "4th century BC", both placing the evidence in `1500 - 500 BC` - one bucket too early, because
+    # -200 and -400 are greater than -500.
+    def label_of(year: int) -> str:
+        for bound, label in steps:
+            if year < bound:
+                return label
+        return "1500+ AD"
+
+    for century, first, last in (("2nd", -200, -101), ("4th", -400, -301)):
+        assert f"the {century} century BC is {first} up to but not including {last}" in question
+        assert label_of(first) == label_of(last) == "500 BC - 1 AD"
+    assert "both of those centuries fall in `500 BC - 1 AD`" in question
 
 
 def test_the_site_type_vocabulary_is_read_from_the_snapshot_sorted_and_deduplicated(

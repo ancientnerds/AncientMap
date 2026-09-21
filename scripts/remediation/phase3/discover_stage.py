@@ -88,13 +88,21 @@ FIELD_CLAUSE: dict[str, str] = {
     ),
     "period_start": (
         "`unified_sites.period_start` is an integer year, negative for BC, and the card buckets it "
-        "for display. The buckets are spans, read off the site's own `categorizePeriod`: a value "
-        "below -4500 is `< 4500 BC`; -4500 up to but not including -3000 is `4500 - 3000 BC`; "
-        "-3000 to -1500 is `3000 - 1500 BC`; -1500 to -500 is `1500 - 500 BC`; -500 to 1 is "
-        "`500 BC - 1 AD`; 1 to 500 is `1 - 500 AD`; 500 to 1000 is `500 - 1000 AD`; 1000 to 1500 "
-        "is `1000 - 1500 AD`; 1500 and later is `1500+ AD`. Most sites sit on a bucket lower bound. "
-        "Work out **which span each of the two values falls in**, state both, and then compare: they "
-        "are `WRONG` when the spans differ, and a round value alone is not an error."
+        "for display. The buckets are the site's own `categorizePeriod`, and each one runs from its "
+        "first year up to but **not including** its second: below -4500 is `< 4500 BC`; -4500 up to "
+        "but not including -3000 is `4500 - 3000 BC`; -3000 up to but not including -1500 is "
+        "`3000 - 1500 BC`; -1500 up to but not including -500 is `1500 - 500 BC`; -500 up to but "
+        "not including 1 is `500 BC - 1 AD`; 1 up to but not including 500 is `1 - 500 AD`; 500 up "
+        "to but not including 1000 is `500 - 1000 AD`; 1000 up to but not including 1500 is "
+        "`1000 - 1500 AD`; 1500 and later is `1500+ AD`. So -1500 belongs to `1500 - 500 BC` and "
+        "-500 belongs to `500 BC - 1 AD`, not to the bucket whose name begins with them. The "
+        "evidence often names a century rather than a year, and the direction of BC years is easy to "
+        "invert: the 2nd century BC is -200 up to but not including -101, and the 4th century BC is "
+        "-400 up to but not including -301, so **both of those centuries fall in `500 BC - 1 AD`** "
+        "and neither is in `1500 - 500 BC`**. Most sites "
+        "sit on a bucket lower bound. Work out **which span each of the two values falls in**, "
+        "state both, and then compare: they are `WRONG` when the spans differ, and a round value "
+        "alone is not an error."
     ),
     "site_type": (
         "`unified_sites.site_type` is the catalogue's own type and is drawn from a fixed list of "

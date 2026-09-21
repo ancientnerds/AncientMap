@@ -255,8 +255,27 @@ MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "the period question goes back to lower bounds without the spans",
         "scripts/remediation/phase3/discover_stage.py",
-        '        "-3000 to -1500 is `3000 - 1500 BC`; -1500 to -500 is `1500 - 500 BC`; -500 to 1 is "',
-        '        "Most sites sit on a bucket lower bound (-4500/-3000/-1500/-500/1/500/1000/1500); "',
+        '        "`3000 - 1500 BC`; -1500 up to but not including -500 is `1500 - 500 BC`; -500 up to but "',
+        '        "a bucket lower bound (-4500/-3000/-1500/-500/1/500/1000/1500); "',
+        TEST,
+        SPANS,
+    ),
+    (
+        "bucket boundaries stated as closed ranges",
+        "scripts/remediation/phase3/discover_stage.py",
+        '        "but not including -3000 is `4500 - 3000 BC`; -3000 up to but not including -1500 is "',
+        '        "but not including -3000 is `4500 - 3000 BC`; -3000 to -1500 is "',
+        TEST,
+        SPANS,
+    ),
+    (
+        "the century conversion is dropped",
+        "scripts/remediation/phase3/discover_stage.py",
+        '        "evidence often names a century rather than a year, and the direction of BC years is easy to "\n'
+        '        "invert: the 2nd century BC is -200 up to but not including -101, and the 4th century BC is "\n'
+        '        "-400 up to but not including -301, so **both of those centuries fall in `500 BC - 1 AD`** "\n'
+        '        "and neither is in `1500 - 500 BC`**. Most sites "',
+        '        "Most sites "',
         TEST,
         SPANS,
     ),

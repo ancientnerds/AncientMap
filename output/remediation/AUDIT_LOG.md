@@ -3025,3 +3025,173 @@ is cheaper than a comment that suppresses them:
 No change is the correct outcome: the only edits that would silence these are a `try/except` around the
 dispatch and an `== True`, and both would make the code check less. Nothing here is suppressed with a
 `# type: ignore` or a `nosemgrep`, so the findings stay visible on every run.
+
+## The third recall round: 7 of 19, and the boundary the question itself got wrong
+
+Run: `bash output/remediation/logs/gold3_run.sh` -> `runs/gold3/`. The plan's sha256 is
+`ad32d26fccb3913b2656d70df5485f9185bbe956a343f4476668e6e00dcbb9c0` (identical to rounds 1 and 2), and
+the 33 fetched evidence files are **byte-identical to round 1's** (0 differing bytes over 17 enwiki +
+16 wikidata_entity files), so the only variable between the rounds is the question. Every stage exit
+was checked against its artefact rather than believed: `plan`, `prepare`, both `fetch`, both `judge`.
+
+| round | question | CORRECT | WRONG | UNVERIFIABLE | caught / 19 | cost |
+|---|---|---|---|---|---|---|
+| 1 | first live question | 47 | 12 | 16 | 5 (26.3 %) | $0.054226 |
+| 2 | + silence-is-not-agreement, evidence-first | 23 | 25 | 27 | 8 (42.1 %) | $0.056514 |
+| 3 | + clause precedence, `site_type` vocabulary, bucket spans | 29 | 17 | 29 | **7 (36.8 %)** | $0.058108 |
+| 4 | + the spans stated inclusive-first/exclusive-second (the boundary fix) | 32 | 13 | 30 | **5 (26.3 %)** | $0.058388 |
+
+Cost is read from the frozen per-run `model.json` (75 calls, 364,945 in / 5,611 out for round 3), never
+from `LEDGER.jsonl`, which a live run is appending to. The input rise of ~12k tokens across rounds is
+consistent with the 70-value `site_type` list being carried in 75 calls.
+
+**The two information fixes did what they were for, on precision.** `WRONG` fell 25 -> 17, and the
+eight that disappeared are exactly the ones named in the round-2 entry: **0 `country`** and **0
+`site_type`** false positives remain. Per entry, round 3 gained `The Gop/period_start`,
+`Ocriticum/description` and `The Gop/card_description`, and lost `Arc de Berà/description`,
+`The Merry Maidens/description`, `Temple of Dedun/description` and `Hebbariyeh Roman Temple/site_type`
+- each of those four lost to `UNVERIFIABLE` on evidence that states no value.
+
+### The defect: the clause stated a bucket boundary that the code does not have
+
+The question taught the model a false fact. As delivered in round 3, the `period_start` clause read:
+
+> `-3000 to -1500 is 3000 - 1500 BC; -1500 to -500 is 1500 - 500 BC; -500 to 1 is 500 BC - 1 AD`
+
+`categorizePeriod` (`ancient-nerds-map/src/data/sites.ts:58-70`) compares with `<`, so each bucket is
+inclusive of its first year and **exclusive of its second**: `-1500` belongs to `1500 - 500 BC` and
+`-500` to `500 BC - 1 AD`. Both values land one bucket late, not one bucket early, and the two
+surviving `period_start` false positives sat on exactly those two values - a stored `-1500`
+(`Beacon Hill`) and three stored `-500` (`Arc de Berà`, `Bulls of Guisando`, `Ocriticum`). The Beacon
+Hill answer states the cause in its own words: *"Stored value -1500 falls in the span `3000 - 1500 BC`
+(upper bound inclusive, i.e. -3000 to -1500)"*. The model applied the rule it was given.
+
+Fixed by stating every span as inclusive-first/exclusive-second and naming the two boundaries a reader
+gets wrong, and the test that guards it no longer restates the spans - it **derives** them from
+`sites.ts` (`re.findall(r"if \(start < (-?\d+)\) return '([^']+)'", ...)`) and asserts each one appears
+in the question, so the question cannot drift from the code again. Sweep: **25/25 mutations caught**,
+the restored file byte-identical (`discover_stage.py` `3368c12a29f3d534`); the sweep now carries a
+"bucket boundaries stated as closed ranges" case, and the older "spans dropped" case was re-anchored to
+the new text.
+
+### What the flags outside the fixture are
+
+The fixture is *"the 24 errors the census did not flag"*, not the complete error set, so a `WRONG`
+verdict on a pair the fixture does not list is undecided evidence. Adjudicated one by one for round 3
+(10 such flags), with the stored value in hand:
+
+| class | n | which |
+|---|---|---|
+| the question's boundary bug | 4 | `Bulls of Guisando`, `Arc de Berà`, `Beacon Hill`, `Ocriticum` - all `period_start`, stored exactly `-500`/`-1500` |
+| model error | 2 | `Beacon Hill/description` calls 1000 BC "outside" 1500-500 BC (it is inside); `Overstone/description` reads thin evidence as a *different* value |
+| rubric-boundary call | 3 | `Midford Castle` and `Bulls of Guisando` `card_description` flagging "Legend says ..." / "among the most famous"; `Arc de Berà/card_description` flags an overstated generalisation |
+| **a real error the fixture lacks** | **1** | `The Merry Maidens/card_description`: stored "the two Pipers stones reach 4.6 metres", evidence "two 3-metre-high standing stones" |
+
+The honest reading: the finder's true-flag rate in round 3 is 8 of 17, and **4 of the 9 false ones
+were the question's fault, not the model's**.
+
+### An instrument bug found while doing this, in my own tooling
+
+`output/remediation/gold_standard/list_other_flags.py` (new, and the reason the table above exists)
+first reported round 2 as 21 `WRONG` where the committed scorer says 25. Both read the same answers.
+The cause: the new script required the verdict at the *start of a line*, while 5 answers write it
+inline (`2. VERDICT: UNVERIFIABLE`). The scorer's whole-text regex is correct, and the new script now
+imports the same rule instead of re-deriving it; both instruments reproduce
+`{CORRECT 29, WRONG 17, UNVERIFIABLE 29}` for round 3 exactly. Two instruments disagreeing on the same
+artefacts was the finding - not either number.
+
+### Round 4, and the claim it refuted
+
+I predicted before the run that the boundary fix "cannot lose a catch": it stops flagging pairs
+`categorizePeriod` puts in the same bucket and can only add a flag where the code puts them in
+different ones. **The measurement says otherwise, and the mechanism is worth recording.** Round 4
+caught **5 of 19** - back to round 1's level - and two catches went `WRONG` -> `UNVERIFIABLE`:
+
+* `The Gop/period_start` (stored -5000, truth -4000 to -3000). Round 3 answered "the evidence states
+a different value (Neolithic, i.e. within 4500-3000 BC)". Round 4 answers: *"The evidence states the
+site is a Neolithic monument but gives no numeric year for `period_start`; on this field it is
+silent."* The clause is read by a model, and a clause that insists on numeric spans makes a model
+refuse to bucket an era name. The arithmetic is unchanged; the **behaviour** changed.
+* `Ocriticum/description`. A prose field, untouched by the period clause: this one is variance.
+
+**The series is 5, 8, 7, 5.** With one model and 19 reachable entries, that is a noise band, not a
+trend - and the honest reading is that prompt editing on this fixture does **not** measurably raise
+recall. What it does move, monotonically and in the right direction, is the number of flags: `WRONG`
+went 12 -> 25 -> 17 -> 13, and the clause went from containing a false statement about the code (round
+3) to containing none (round 4). The delivered question is therefore chosen for **being correct**, not
+for scoring best, and the recall estimate reported for it must carry the band: any of 5-8 of 19 is
+consistent with these runs. Further rounds on this fixture would be fitting noise.
+
+### Round 4's flags outside the fixture, adjudicated
+
+8 flags, against round 3's 10:
+
+| class | n | which |
+|---|---|---|
+| **real, and absent from the fixture** | **2** | `The Merry Maidens/card_description` (Pipers 4.6 m vs the evidence's 3 m), `Ksar el Barka/card_description` (stored "founded in 1690 by the Kounta"; the evidence has the Kounta arriving to an existing town called Laaci-Wendu) |
+| century arithmetic | 2 | `Bulls of Guisando/period_start` ("2nd century BCE") and `Ocriticum/period_start` ("4th century BC") both placed in `1500 - 500 BC`; both centuries are inside `500 BC - 1 AD`, since -200 and -400 are greater than -500 |
+| rubric-boundary call | 4 | the "Legend says ..." and "Vettones as the *Celtic* Vettones" flags, plus two fine-grained prose mismatches |
+
+The two arithmetic flags are a **new** defect class, not the boundary one: the model converts a
+century phrase to the wrong span. That conversion is convention, not subject knowledge, so the fix is
+the same kind as the span table itself: the clause now works both examples ("the 2nd century BC is
+-200 up to but not including -101, and the 4th century BC is -400 up to but not including -301, so
+both of those centuries fall in `500 BC - 1 AD`"), and the test checks the sentence against
+`categorizePeriod` for every year it covers rather than checking that the words are present.
+
+### Round 5, and the freeze
+
+Command: `bash output/remediation/logs/gold5_run.sh` -> `runs/gold5/`. Plan sha256 unchanged
+(`ad32d26fccb3913b...`), 33/33 evidence files byte-identical to round 1, all six stage exits checked
+against artefacts. **7 of 19 caught, 15 `WRONG`, 33 `CORRECT`, 27 `UNVERIFIABLE`**, 75 calls,
+367,345 in / 5,760 out, **$0.058558**.
+
+The century sentence did what it was for, on half its targets. `Ocriticum/period_start` (the "4th
+century BC" case) is gone from the out-of-fixture flags; `Bulls of Guisando/period_start` (the "2nd
+century BCE" case, stored -500) is still flagged, even though the clause now says in words that the
+2nd century BC is -200 to -101 and therefore falls in `500 BC - 1 AD`. That remaining flag is a
+**model arithmetic failure with the correct fact in front of it**, not a question defect, and it is
+recorded that way rather than repaired with another sentence.
+
+Per entry against round 4: gained `Temple of Dedun/description`, `Hebbariyeh Roman Temple/site_type`
+and `Ocriticum/description` (all three were round-3/4 losses returning); lost `Beacon Hill/
+card_description`. The `Hebbariyeh site_type` return is instructive - the `site_type` clause did not
+change between rounds 4 and 5, so that flip is variance by construction.
+
+| round | caught / 19 | WRONG | CORRECT | UNVERIFIABLE | cost |
+|---|---|---|---|---|---|
+| 1 | 5 | 12 | 47 | 16 | $0.054226 |
+| 2 | 8 | 25 | 23 | 27 | $0.056514 |
+| 3 | 7 | 17 | 29 | 29 | $0.058108 |
+| 4 | 5 | 13 | 32 | 30 | $0.058388 |
+| 5 | 7 | 15 | 33 | 27 | $0.058558 |
+
+### The freeze, and why no round 6
+
+The question is frozen at round 5's wording. Three reasons, all measured:
+
+1. **The catch count is noise.** 5, 8, 7, 5, 7 over five rounds with one model and 19 reachable
+   entries. Two of the five rounds differ by three entries (`The Gop period_start`,
+   `Ocriticum description`) with no clause between them touching those fields. Any further edit would
+   be fitted to 19 data points.
+2. **The question no longer states anything false.** Round 3's clause mislabelled two bucket
+   boundaries; round 5's derives every span from `categorizePeriod` and states the century
+   convention. What remains disagreeing is the model's arithmetic and its judgement calls on prose -
+   not facts the question asserts.
+3. **The remaining false flags cannot be removed by prompt text without changing the rubric.** The
+   residual classes are century arithmetic (model-side, with the fact supplied), and "the stored claim
+   is unsupported / too general / a legend" - which is the evidence-only rule working as designed.
+   Softening it to reduce those flags would trade a known, inspectable false-alarm rate for an
+   unknown one, and the pass exists to raise **leads**, which a human then reviews.
+
+Delivered numbers, for the mass-run decision: **recall 7/19 (band 5-8)**, **8 of 15 flags lie
+outside the fixture** and were adjudicated by hand (2 real errors it does not list, 1-2 century
+arithmetic, the rest rubric calls), **$0.000781 per call**, so the discover stage over all 5,004 sites
+is 25,020 calls ≈ **$19.5** - against the earlier wall-clock figure of ~211 h, which remains the
+binding constraint and is unaffected by any of this.
+* Three of the four lost catches went to `UNVERIFIABLE` on evidence that states no value. The
+delivered rule is "Only the evidence in this message decides", so that answer is *correct under the
+delivered rubric*; the fixture expects a solver that also uses its own subject knowledge. That is a
+design decision (own knowledge may refute and never uphold?) and it is deliberately **not** folded
+into this fix.
+
