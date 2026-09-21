@@ -13,6 +13,9 @@ would touch the network or a model deliberately absent.
              byte-identical (proved in `tests/remediation/test_phase3_runner.py` and in
              `output/remediation/phase3_runner/PIECE1.md`).
 * `prepare` - materialise one input file per batch under the run directory. No fetch, no model.
+* `fetch`   - collect the evidence a batch's findings buy (`phase3/fetch_stage.py`). **Offline
+             unless `--live` is given**: without it the command only lists the targets and the
+             URLs, so what a batch would cost is reviewable before it costs a request.
 * `status` - read the run directory and the ledger and report what is actually on disk.
 
 Fail-closed: a worklist record whose shape is not the one the run needs raises, rather than
@@ -34,6 +37,7 @@ if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from phase3 import ledger as L  # noqa: E402
+from phase3.model import Stage  # noqa: E402
 
 #: Ratified run shape (brief decision 12): 15 sites per run, two stages per batch.
 DEFAULT_BATCH_SIZE = 15
@@ -212,6 +216,87 @@ def cmd_status(args: argparse.Namespace) -> int:
     return 0
 
 
+def _single_batch(path: Path, batch_id: str) -> dict[str, Any]:
+    """The one batch prepared at `path`. Not zero, not two: a missing input is not an empty run."""
+    records = read_jsonl(path)
+    if len(records) != 1:
+        raise InputError(f"{path}: expected exactly one batch, found {len(records)}")
+    if records[0].get("batch_id") != batch_id:
+        raise InputError(f"{path}: holds batch {records[0].get('batch_id')!r}, not {batch_id!r}")
+    return records[0]
+
+
+def cmd_fetch(args: argparse.Namespace) -> int:
+    """Collect evidence for one prepared batch. Nothing happens unless `--live` is passed."""
+    # Imported here because `fetch_stage` imports this module's `InputError`.
+    from phase3 import fetch_stage as F
+
+    run_dir = Path(args.run_dir)
+    batch_id = args.batch_id
+    batch = _single_batch(run_dir / batch_id / "input.json", batch_id)
+    stage = Stage(args.stage)
+
+    if not args.live:
+        targets = [t for site in batch["sites"] for t in F.targets_for_site(site)]
+        print(
+            json.dumps(
+                {
+                    "batch_id": batch_id,
+                    "live": False,
+                    "run_dir": str(run_dir),
+                    "sites": len(batch["sites"]),
+                    "stage": stage.value,
+                    "targets": [
+                        {
+                            "feature": t.feature,
+                            "label": t.label,
+                            "reason": t.reason,
+                            "url": t.url,
+                        }
+                        for t in targets
+                    ],
+                },
+                indent=1,
+                sort_keys=True,
+            )
+        )
+        return 0
+
+    fetcher = F.HttpFetcher(timeout=args.timeout)
+    try:
+        report = F.collect_batch(
+            batch=batch,
+            fetcher=fetcher,
+            store=F.EvidenceStore(run_dir / batch_id / "evidence"),
+            ledger=L.Ledger(Path(args.ledger)),
+            stage=stage,
+        )
+    except F.TransportFailure as exc:
+        # Fail-closed, and loud: no response means no measurement, so the batch stops here and
+        # says so. Evidence already on disk stays, so a re-run resumes instead of re-paying.
+        print(
+            json.dumps(
+                {
+                    "batch_id": batch_id,
+                    "error": str(exc),
+                    "live": True,
+                    "run_dir": str(run_dir),
+                },
+                indent=1,
+                sort_keys=True,
+            )
+        )
+        return 2
+    finally:
+        fetcher.close()
+
+    F.write_report(run_dir / batch_id / "fetch.json", report)
+    payload = json.loads(report.to_json())
+    payload.update({"ledger": str(args.ledger), "live": True, "run_dir": str(run_dir)})
+    print(json.dumps(payload, indent=1, sort_keys=True))
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="phase3-run",
@@ -230,6 +315,26 @@ def build_parser() -> argparse.ArgumentParser:
     prepare.add_argument("--run-dir", default=str(DEFAULT_RUN_DIR))
     prepare.add_argument("--batch-id", action="append", default=None)
     prepare.set_defaults(func=cmd_prepare)
+
+    fetch = sub.add_parser(
+        "fetch", help="collect evidence for one prepared batch (offline unless --live)"
+    )
+    fetch.add_argument("--run-dir", default=str(DEFAULT_RUN_DIR))
+    fetch.add_argument("--batch-id", required=True)
+    fetch.add_argument("--ledger", default=str(DEFAULT_LEDGER))
+    fetch.add_argument(
+        "--stage",
+        choices=[s.value for s in Stage],
+        default=Stage.FINDER.value,
+        help="which stage the ledger line belongs to (the reviewer reuses this command)",
+    )
+    fetch.add_argument(
+        "--live",
+        action="store_true",
+        help="actually open sockets; without it the command only lists the targets",
+    )
+    fetch.add_argument("--timeout", type=float, default=40.0)
+    fetch.set_defaults(func=cmd_fetch)
 
     status = sub.add_parser("status", help="report what is on disk, plus the ledger (offline)")
     status.add_argument("--run-dir", default=str(DEFAULT_RUN_DIR))

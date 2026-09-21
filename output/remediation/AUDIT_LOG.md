@@ -2502,3 +2502,31 @@ summing them; the true count is 1,813 (120 full batches plus 13), which is exact
 The determinism claim was reproduced here rather than taken from the lane's summary: three independent
 runs give `96704b808ae1b29d69480693...`, and the plan's 1,813 site ids are exactly the
 `WORKLIST.jsonl` `phase3=true` set with no duplicates.
+
+## Phase-3 runner piece 2 - the evidence-fetch stage, and two interpretation calls ratified
+
+The fetch stage collects per-site evidence before any model call. 47 tests across the two runner
+files, ruff and mypy clean. The cap **stops the stream** rather than slicing a buffered body, and
+decision 12's named-feature rule is enforced twice: at the URL builders and again in `get` before a
+socket opens, so the expensive URL shape cannot be reached by another route.
+
+The one permitted live fetch was corroborated rather than believed: it returned 200 and **4,356 bytes**
+for Satsurblia Cave, and the *pilot's own* evidence file for that page is exactly 4,356 bytes. Two
+independent fetches, same byte count.
+
+**Ratified, call 1:** a fetch line carries `kind="fetch"` with `stage=finder/reviewer`.
+`LedgerKind.FETCH` is a first-class shape from piece 1, and `stage` preserves the finder/reviewer
+split that `COST.md` measures its 76 fetches by. Collapsing `stage` to `"fetch"` would destroy the only
+dimension that split carries.
+
+**Ratified, call 2:** a body of exactly 61,440 bytes reports `truncated=True` and cannot be told from a
+cut one. Left deliberately, not overlooked. Disambiguating means reading past the cap, and the cap
+exists so that a 598 KB dump is not pulled over the wire only to be discarded. The skew is toward
+"this evidence may be incomplete", which is the safe direction for an audit: it can cost a verdict, it
+cannot manufacture one. The consequence is now written at the function, so the next reader does not
+have to rediscover it.
+
+The ambiguity was **measured, not argued**: exactly-at-cap reports `True`, under-cap `False`, over-cap
+yields exactly 61,440 bytes. My first reading of the code claimed the opposite - the grep excerpt I was
+reading had cut off the two lines that decide it. That is the third time this session a probe of mine
+was the thing at fault, and measuring took ten seconds.
