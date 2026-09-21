@@ -4305,3 +4305,90 @@ edit are false positives, re-checked at the byte today — `list_other_flags.py:
 `child_append.py:62` reads `with open(lock_path, "r+b") as handle:` — the checker quotes the source's own
 quotation marks as part of the mode string; `measure_reviewer.py:110/113` use `is True` on JSON tri-state
 values, where `== True` would also accept `1`. `ruff` is clean on all of them.
+
+## The fetcher never read `Retry-After`, and the ledger is why the fix looks like that (2026-09-21)
+
+**The finding.** `git grep -n "Retry-After\|retry_after" -- scripts/remediation/phase3/` returned **no
+hits**, and `FetchedPage` carried only `status, final_url, body, truncated` - the response headers were
+never read at all. So on a 429 a host saying *wait 30 s* was re-asked after this module's own 0.2 s
+pacer interval and its own `RETRY_BACKOFF_SECONDS = (1.0, 3.0)`. That is precisely the impoliteness
+the pacer exists to prevent: our clock deciding, against the provider's own instruction.
+
+**What was verified before the comment was written.** RFC 9110 section 10.2.3 was fetched from
+`rfc-editor.org` and the comment cites only what that text contains:
+`Retry-After = HTTP-date / delay-seconds`, `delay-seconds = 1*DIGIT`, the 503 sentence and the 3xx
+sentence. No "MUST ignore an invalid value" claim is made, because the fetched text does not contain
+one.
+
+**The design, and where the ledger forced it.** The first version carried the refusal reason on the
+**ledger line's** `error` (`error=attempt.error or refusal`). That is a real defect, not a style
+choice: `L.Entry._check_fetch_attempt` (`ledger.py:214-218`) **raises**
+`LedgerError("... a response that arrived is recorded by its status, not by an error string")` for any
+answered attempt that carries an `error`. A 429 **is** an answered attempt, so the first version would
+have thrown on the exact path it was written for.
+
+So the reason lives on `TargetOutcome.given_up_reason` instead - a field of our own, next to
+`not_attempted`, which already exists for the neighbouring sentence ("never asked" versus "asked and
+failed"). `failure` reads it back (`elif self.given_up_reason:`), which is the sentence the judge stage
+consumes when it decides whether a missing evidence file is an explained failure or a hole in the
+record. The ledger line keeps saying what it is: a status, and `given_up`.
+
+**Three consequences worth stating, because each is a decision and not an accident:**
+
+1. **The host's number outranks ours** (`if asked is not None and asked > wait: wait = asked`), and
+   **our backoff is a floor the host cannot lower** - `Retry-After: 0` does not shorten the 1 s/3 s we
+   already chose. Both are asserted.
+2. **A host asking for longer than we will block on one host is not disobeyed.**
+   `RETRY_AFTER_CAP_SECONDS = 60.0`, the same bound as `HOST_LOCK_WAIT_SECONDS`: the target is given up
+   on **with the asked-for delay named**, not re-asked sooner. Waiting less and asking again would be
+   the very thing this fix exists to stop.
+3. **A value that is not in the RFC's grammar is treated as absent, not as zero**
+   (`delay-seconds = 1*DIGIT` -> `text.isascii() and text.isdigit()` first, because Python's
+   `str.isdigit()` is also true for `"\u0663"` and `"\uff11"`; `"7.5"` is absent too).
+
+**The five `STOP` claims pi-lens raised on the new code are false positives, each checked at the byte.**
+
+The rule this project already paid for holds: a checker gives a trace, not truth, and adjudicating is
+not the same as silencing. None of these was "fixed" by adding a `try/except` or an ignore - several of
+them are load-bearing guards that a `try/except` would destroy.
+
+| claim | the byte it points at | verdict |
+|---|---|---|
+| `L292` `return float(text)` "throws on invalid input" | `if text.isascii() and text.isdigit():` on the line above | **false** - measured: `float()` on a non-empty ASCII-digit string raises for no input, including `"9"*400` -> `inf` and `"0"*10**6` -> `0.0` |
+| `L785` `return float(value[0]), float(value[1])` | `all(isinstance(v, (int, float)) and not isinstance(v, bool) for v in value)` on the line above | **false** - `float()` of an `int`/`float` cannot fail; same class as the already-adjudicated `model_stage.py` `float(reported)` site |
+| `L1432` `result.truncated += int(outcome.truncated)` | `truncated` is a dataclass field set from `page.truncated`, a `bool` | **false** - measured: `int(True) -> 1`, `int(False) -> 0`, no exception |
+| `L516` `except FileExistsError:` "boolean expressions should not be used in except" | `handle = os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY)` above it | **false** - `FileExistsError` is an exception class (`issubclass(FileExistsError, OSError)` is `True`), not a boolean expression; this is the canonical way to catch "the lock file already exists" |
+| (repeat) the four long-standing classes | `list_other_flags.py:52`, `race_probe2.py:25`, `child_append.py:62`, `measure_reviewer.py:110/113` | **false, re-checked at the byte today** - raising *is* the check in the first two; `"r+b"` in the third is a valid mode (the checker quotes the source's own quotation marks); the fourth is the tri-state test where `None` must not count as applied |
+
+**One of those was re-checked with a measurement, not with an assertion.** pi-lens repeated
+`child_append.py:62: open() called with invalid mode '"r+b"'` and offered a suggested "safer, explicit
+form" as the fix. Read at the byte, the line is `with open(lock_path, "r+b") as handle:` - the mode is
+the three-character string `r+b`, and the checker read the source's own quotation marks as part of the
+literal. The distinction is measurable, so it was measured: `open(p, 'r+b')` opens;
+`open(p, '"r+b"')` raises `ValueError: invalid mode: '"r+b"'`. The checker's *reading* would make the
+probe broken, and the probe is not broken. The finding was already stale (`Historical finding;
+workspace changed since capture`), and the file is a throwaway probe under the gitignored
+`logs/ledger_probe/`. Applying the suggested "fix" would have been a change made to quiet a display on
+code that is correct - which is the one thing this project does not do.
+
+`ruff check scripts/remediation/phase3/fetch_stage.py` -> `All checks passed!`, exit 0;
+`mypy` -> `Success: no issues found in 1 source file`; `tests/remediation/test_phase3_fetch.py` ->
+**44 passed**. The `Retry-After` guards are mutation-proven (8 entries, 77 -> 85).
+
+### Provenance note, because the working tree moved under the summary
+
+`HEAD` (`7ad305d`) has `error=attempt.error,` at `fetch_stage.py:1215` and a two-branch `failure`;
+the working tree has `given_up_reason`. So that improvement is **uncommitted and newer than `HEAD`**,
+while the handover summary describes the ledger line as `error=attempt.error or refusal`. **The summary
+is a lossy artefact and it is wrong on this detail; the bytes are not.** Checked at the time: no
+subagent fleet active (`subagent({action:"status",view:"fleet"})` -> "No active subagent fleet"), and
+only one session log for this project had been written recently. Recorded here instead of quietly
+repaired, because "the file is not what the handover says" is exactly the class of fact this log
+exists for. The content is **not** accepted on trust: `anchor_check.py` finds all 8 new mutation
+anchors and all 6 new test names **in these bytes**, and the suite is green on them.
+
+Two instruments were wrong before the number was right, both recorded because the mistake is
+generic: filtering the session log on `name`/`tool_use` when the records carry `toolName` (the filter
+found nothing and I nearly read that as evidence), and `run.py` sitting at `pass_name=None` in
+`git diff` while **the mutation sweep held that mutant in the tree** - a live sweep is not an editor,
+and `git diff` during one is not a statement about the repository.

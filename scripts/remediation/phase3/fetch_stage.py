@@ -92,12 +92,14 @@ rather than written into an `ids=` parameter that would answer with no entities 
 
 from __future__ import annotations
 
+import email.utils
 import json
 import os
 import re
 import time
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field
+from datetime import UTC
 from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
 from urllib.parse import quote, unquote, urlencode, urlsplit
@@ -166,6 +168,14 @@ MAX_ATTEMPTS = 3
 #: 22:21:21Z. That 20 s is a request *plus* a pause, so it is read as "the pilot waited on the
 #: order of seconds", not as a delay to copy.
 RETRY_BACKOFF_SECONDS = (1.0, 3.0)
+
+#: The longest a retry may be postponed because a **host asked for it** (`Retry-After`, RFC 9110
+#: section 10.2.3). **A chosen bound**, deliberately the same 60 s as `HOST_LOCK_WAIT_SECONDS`, so
+#: no path in this module blocks longer than a minute on one host. A host that asks for more is not
+#: disobeyed: the target is recorded as given up on, with the asked-for delay in its own line, and
+#: the batch carries on. Re-asking sooner than the host asked is the impoliteness the pacer exists
+#: to prevent, so waiting less is not an option either.
+RETRY_AFTER_CAP_SECONDS = 60.0
 
 #: Statuses worth a second attempt: 429 (with the body above) and every 5xx. Everything else -
 #: 400, 403, 404 - is an answer the same question gets again unchanged, so it is recorded once and
@@ -255,6 +265,40 @@ def is_retryable_status(status: int | None) -> bool:
     return status in RETRYABLE_STATUSES or 500 <= status < 600
 
 
+def parse_retry_after(value: str | None, *, received_at: float) -> float | None:
+    """How long a host asked to be left alone, or `None` when it did not say.
+
+    RFC 9110 section 10.2.3 gives the field exactly two forms - `Retry-After = HTTP-date /
+    delay-seconds`, `delay-seconds = 1*DIGIT` - and only those two are read. A value in neither
+    form is treated as if the field were absent, so the run waits its own backoff rather than a
+    delay it could not read; that is the conservative side of the choice, and it is not a
+    fallback: nothing is asked twice and no endpoint is substituted.
+
+    `delay-seconds` is ASCII digits by its own grammar, so `isascii()` is tested first: Python's
+    `str.isdigit()` is true for other scripts' digits (`"\u0663"`), and this module does not
+    accept a header value that the grammar it cites excludes.
+
+    `received_at` is the moment the response arrived, passed in rather than read here so the
+    HTTP-date branch can be tested without a wall clock. An HTTP-date is GMT by definition; a
+    parse that comes back naive is read as UTC, because reading it as the machine's local time
+    would move the delay by this machine's own offset.
+    """
+    if value is None:
+        return None
+    text = value.strip()
+    if not text:
+        return None
+    if text.isascii() and text.isdigit():
+        return float(text)
+    try:
+        when = email.utils.parsedate_to_datetime(text)
+    except (TypeError, ValueError):
+        return None
+    if when.tzinfo is None:
+        when = when.replace(tzinfo=UTC)
+    return max(0.0, when.timestamp() - received_at)
+
+
 def host_of(url: str) -> str:
     """The host a URL belongs to, lowercased. The key every per-host decision is taken under."""
     host = urlsplit(url).hostname
@@ -300,6 +344,10 @@ class FetchedPage:
     final_url: str
     body: bytes
     truncated: bool
+    #: What the host asked in `Retry-After`, in seconds, or `None` when it did not ask. A field on
+    #: the answer rather than a decision: the retry loop is what decides, and other callers (a
+    #: probe) read no delay from it at all.
+    retry_after: float | None = None
 
     @property
     def ok(self) -> bool:
@@ -352,7 +400,9 @@ class HttpFetcher:
         transport: httpx.BaseTransport | None = None,
         timeout: float = 40.0,
         user_agent: str = USER_AGENT,
+        clock: Callable[[], float] = time.time,
     ) -> None:
+        self._clock = clock
         self._client = httpx.Client(
             transport=transport,
             timeout=timeout,
@@ -372,6 +422,9 @@ class HttpFetcher:
                     final_url=str(response.url),
                     body=body,
                     truncated=truncated,
+                    retry_after=parse_retry_after(
+                        response.headers.get("retry-after"), received_at=self._clock()
+                    ),
                 )
         except httpx.HTTPError as exc:
             # No response, or the body died mid-stream: both are "could not ask". A partial
@@ -885,6 +938,12 @@ class TargetOutcome:
     #: answered, so this was not tried" and "this was tried and failed" are different sentences,
     #: and the judge reads them back as the reason a site has no evidence.
     not_attempted: str | None = None
+    #: Set only by `one_attempt` when the target was given up on for a reason of *ours* rather
+    #: than the host's - today exactly one case, a `Retry-After` longer than this run will block
+    #: on a single host. It lives here and not on the attempt's `error`, because the ledger's own
+    #: invariant is that a request that got a response is recorded by its status and carries no
+    #: error string; the sentence is what the judge reads, not what the ledger stores.
+    given_up_reason: str | None = None
     #: Set only by `one_attempt`: the page this target bought is on disk, and whether it was cut
     #: at `MAX_PAGE_BYTES`.
     stored: bool = False
@@ -924,6 +983,12 @@ class TargetOutcome:
         final = self.final
         if final.outcome is L.FetchOutcome.TRANSPORT_FAILURE:
             what = f"no response: {final.error}"
+        elif self.given_up_reason:
+            # An HTTP failure can carry a reason of our own. The one case today is a `Retry-After`
+            # longer than this run will wait for - a *decision* of ours, not the host's fault, and
+            # the reason it is not simply re-asked. Without it the judge reads a bare `HTTP 429`
+            # and cannot tell a rate limit we honoured from one we walked into.
+            what = f"HTTP {final.http_status}: {self.given_up_reason}"
         else:
             what = f"HTTP {final.http_status}"
         return (
@@ -1201,6 +1266,20 @@ def one_attempt(
             attempt.http_status
         )
         last = not retryable or number == MAX_ATTEMPTS
+        asked = page.retry_after if page is not None else None
+        if not last and asked is not None and asked > RETRY_AFTER_CAP_SECONDS:
+            # The host asked to be left alone for longer than this run will block on one host.
+            # Waiting less and asking again would be the impoliteness the pacer exists to prevent,
+            # so the target is given up on instead - and the reason names the delay, because a
+            # `given_up` line without one reads like an ordinary failure.
+            last = True
+            refusal: str | None = (
+                f"HTTP {attempt.http_status} asked for {asked:.0f}s; given up rather than block "
+                f"longer than {RETRY_AFTER_CAP_SECONDS:.0f}s and then re-ask sooner than asked"
+            )
+        else:
+            refusal = None
+        outcome.given_up_reason = refusal
         ledger.append(
             L.Entry(
                 kind=L.LedgerKind.FETCH,
@@ -1212,6 +1291,9 @@ def one_attempt(
                 bytes=attempt.bytes,
                 outcome=attempt.outcome,
                 attempt=number,
+                # No `error` here: a request that got a response is recorded by its status (the
+                # ledger refuses an error string on an answered attempt). The refusal - ours, not
+                # the host's - travels on `outcome.given_up_reason` for the judge to read.
                 error=attempt.error,
                 given_up=last and not attempt.ok,
             )
@@ -1225,7 +1307,10 @@ def one_attempt(
         outcome.attempts.append(attempt)
         if last:
             return outcome
-        sleep(RETRY_BACKOFF_SECONDS[number - 1])
+        wait = RETRY_BACKOFF_SECONDS[number - 1]
+        if asked is not None and asked > wait:
+            wait = asked
+        sleep(wait)
     raise AssertionError("unreachable: the loop returns on its last attempt")  # pragma: no cover
 
 

@@ -113,6 +113,16 @@ SWEEP_UNREADABLE = "test_a_child_whose_output_cannot_be_read_does_not_kill_the_s
 SWEEP_MISSED = "test_a_mutation_that_is_not_caught_is_still_undone"
 BOUND_MEASURED = "test_the_evidence_bound_is_above_every_site_the_recall_fixture_measured"
 DRIFT = "test_final_drift_names_a_file_that_changed_under_the_sweep"
+#: The host's own number: `Retry-After` (RFC 9110 section 10.2.3), 2026-09-21. The host decides how
+#: long we wait, our own backoff is only the floor, and a host that asks for longer than this run
+#: will block on one host is given up on rather than re-asked sooner than it asked. One name per
+#: guard - a guard without a test that catches it is not a guard.
+RETRY_AFTER_WAIT = "test_a_host_that_asks_for_longer_than_the_backoff_gets_that_longer_pause"
+RETRY_AFTER_CAP = "test_a_host_asking_for_longer_than_the_cap_is_left_alone_not_re_asked"
+RETRY_AFTER_UNREADABLE = "test_a_retry_after_that_cannot_be_read_is_treated_as_absent"
+RETRY_AFTER_ASCII = "test_delay_seconds_are_ascii_digits_by_the_grammars_own_rule"
+RETRY_AFTER_DATE = "test_the_other_form_the_field_may_have_is_an_http_date"
+RETRY_AFTER_FLOOR = "test_a_retry_after_of_zero_does_not_shorten_our_own_backoff"
 
 #: (name, file, the exact text to replace, what to replace it with, test file, test name)
 MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
@@ -766,6 +776,74 @@ MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         'REFUTED_RE = re.compile(r"^\\s*REFUTED:\\s*(?P<value>\\S+)\\s*$", re.MULTILINE)',
         REVIEW_TEST,
         REVIEW_NUMBERED,
+    ),
+    (
+        "the host's own Retry-After is ignored and our own backoff decides",
+        "scripts/remediation/phase3/fetch_stage.py",
+        "        wait = RETRY_BACKOFF_SECONDS[number - 1]\n"
+        "        if asked is not None and asked > wait:\n"
+        "            wait = asked\n",
+        "        wait = RETRY_BACKOFF_SECONDS[number - 1]\n",
+        FETCH_TEST,
+        RETRY_AFTER_WAIT,
+    ),
+    (
+        "a host asking for longer than the cap is re-asked sooner instead of left alone",
+        "scripts/remediation/phase3/fetch_stage.py",
+        "        if not last and asked is not None and asked > RETRY_AFTER_CAP_SECONDS:\n",
+        "        if False:\n",
+        FETCH_TEST,
+        RETRY_AFTER_CAP,
+    ),
+    (
+        "a Retry-After that cannot be read is guessed at as zero",
+        "scripts/remediation/phase3/fetch_stage.py",
+        "    except (TypeError, ValueError):\n        return None\n",
+        "    except (TypeError, ValueError):\n        return 0.0\n",
+        FETCH_TEST,
+        RETRY_AFTER_UNREADABLE,
+    ),
+    (
+        "delay-seconds accepts any script's digits, not only ASCII ones",
+        "scripts/remediation/phase3/fetch_stage.py",
+        "    if text.isascii() and text.isdigit():\n",
+        "    if text.isdigit():\n",
+        FETCH_TEST,
+        RETRY_AFTER_ASCII,
+    ),
+    (
+        "a Retry-After date already in the past becomes a negative delay",
+        "scripts/remediation/phase3/fetch_stage.py",
+        "    return max(0.0, when.timestamp() - received_at)\n",
+        "    return when.timestamp() - received_at\n",
+        FETCH_TEST,
+        RETRY_AFTER_DATE,
+    ),
+    (
+        "Retry-After: 0 shortens our own backoff instead of leaving it standing",
+        "scripts/remediation/phase3/fetch_stage.py",
+        "        if asked is not None and asked > wait:\n",
+        "        if asked is not None:\n",
+        FETCH_TEST,
+        RETRY_AFTER_FLOOR,
+    ),
+    (
+        "the reason we gave up on a target stops reaching the judge's sentence",
+        "scripts/remediation/phase3/fetch_stage.py",
+        "        elif self.given_up_reason:\n",
+        "        elif False:\n",
+        FETCH_TEST,
+        RETRY_AFTER_CAP,
+    ),
+    (
+        "the Retry-After header is never read off the response",
+        "scripts/remediation/phase3/fetch_stage.py",
+        '                    retry_after=parse_retry_after(\n'
+        '                        response.headers.get("retry-after"), received_at=self._clock()\n'
+        "                    ),\n",
+        "                    retry_after=None,\n",
+        FETCH_TEST,
+        RETRY_AFTER_WAIT,
     ),
 ]
 

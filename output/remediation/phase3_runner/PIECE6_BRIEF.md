@@ -99,3 +99,36 @@ already had to establish this.
   Qdrant resync, the scope column).
 * Deciding *whether* to write to production. That is the owner's decision, and the writer's job is to
   make the decision cheap to make and cheap to reverse.
+
+## 7. The owner's decision of 2026-09-21: 100 sites per step, a check after every step
+
+Verbatim (owner, 2026-09-21): *"wenn wir soweit sind will ich die sites in 100er schritten updaten,
+nach 100 immer prüfung, dann erst weiter bis fertig."* - write in steps of 100 sites; after every 100
+always the check; only then continue, until done.
+
+That is a requirement on this piece, not a preference about reporting. It settles three things:
+
+1. **The unit of a write is a chunk of 100 sites**, in a stable order - the snapshot's own line order,
+   so "the first 100" is the same 100 on every run and after a resume. A chunk is never a set whose
+   membership depends on which findings happened to be ready first.
+2. **A chunk is finished only together with its check**, and the check comes from the database, not
+   from the writer's own memory of what it sent. The shape is the mechanical lane's, once per chunk:
+   digest-pinned chunk plan -> `APPLY.sql` + `ROLLBACK.sql` -> guarded apply (`-v ON_ERROR_STOP=1`,
+   conditional `WHERE <column> IS NOT DISTINCT FROM <old>`) -> **read-back, with every applied value
+   compared against the intended one** -> and only then the next chunk. A chunk whose read-back
+   differs is a **stop**, not a warning: the run does not go on to chunk n+1 until the difference is
+   understood. That is the whole point of the step size.
+3. **That check includes the inverse, per chunk**: the chunk's `ROLLBACK.sql` is proven to undo exactly
+   the chunk it just wrote, folded into the same check, so a chunk that cannot be undone does not
+   accumulate 99 successors behind a discovery made at the end.
+
+Decided here because the brief must be unambiguous to build from:
+
+* The step size is a **knob with a proven default** (`--chunk-size`, default 100), not a bare constant.
+  The owner asked for a step; a step that cannot be raised or lowered without editing code is a
+  constant wearing its name.
+* The chunk is named by its own `p_run_stamp` value (`apply_remediation_change` requires one per row),
+  so a chunk is identifiable after the fact **without a schema change**. Verified in
+  `migrations/0018_remediation_change_log_boolean.sql`: `p_run_stamp` is a required argument.
+* The read-back is a statement about the *same* sites the chunk named, not a count: a count cannot
+  tell "absent" from "changed", which is the trap this project already paid for once.

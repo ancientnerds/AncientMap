@@ -15,6 +15,7 @@ fail by mutating the module and restoring it - the mutation evidence is in
 
 from __future__ import annotations
 
+import email.utils
 import hashlib
 import json
 import os
@@ -438,6 +439,106 @@ def test_the_same_url_is_asked_again_and_no_other_host_is_tried(tmp_path: Path) 
         "https://overpass-api.de/"
     ]
     assert report.failed and all("HTTP 504" in str(o.failure) for o in report.failed)
+
+
+# ── the host's own instruction: `Retry-After` (RFC 9110 section 10.2.3) ──────────────────────
+
+
+def _retry_after_transport(value: str | None, *, status: int = 429) -> httpx.MockTransport:
+    """Wikipedia answers; the Overpass host says `status` and asks for `value` seconds.
+
+    The header is sent only when a value is given, so "no header at all" is this same transport
+    with `value=None` rather than a second helper.
+    """
+    headers = {} if value is None else {"Retry-After": value}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if "wikipedia" in str(request.url):
+            return httpx.Response(200, content=b"fine")
+        return httpx.Response(status, headers=headers, content=b"slow down")
+
+    return httpx.MockTransport(handler)
+
+
+def _overpass(report: F.BatchFetchReport) -> F.TargetOutcome:
+    return next(o for o in report.sites[0].outcomes if o.feature == F.FEATURE_OVERPASS_NAMED)
+
+
+def test_a_host_that_asks_for_longer_than_the_backoff_gets_that_longer_pause(
+    tmp_path: Path,
+) -> None:
+    """The host's own instruction outranks our fixed backoff, and the backoff stays the floor.
+
+    `RETRY_BACKOFF_SECONDS` is a number this module chose off a log line; `Retry-After` is the
+    number the host chose. Where they differ, the host's decides how long we wait - asking again
+    at our own pace instead is exactly how a soft rate limit is turned into a hard one.
+    """
+    pauses: list[float] = []
+    report, _, _ = _collect(tmp_path, _retry_after_transport("7"), pauses=pauses)
+
+    assert _overpass(report).requests == F.MAX_ATTEMPTS
+    # 7 s before each of the two retries, never the module's own (1.0, 3.0).
+    assert pauses == [7.0, 7.0]
+    assert F.RETRY_BACKOFF_SECONDS == (1.0, 3.0), "the floor this replaces did not move"
+
+
+def test_a_host_asking_for_longer_than_the_cap_is_left_alone_not_re_asked(tmp_path: Path) -> None:
+    """Not disobeyed: the target is given up on, with the asked-for delay named in its line."""
+    pauses: list[float] = []
+    report, _, ledger = _collect(tmp_path, _retry_after_transport("3600"), pauses=pauses)
+
+    overpass = _overpass(report)
+    assert overpass.requests == 1, "re-asking inside the hour the host asked for is the 429"
+    assert pauses == [], "nothing was waited, because nothing was asked again"
+    rows = [r for r in _target_lines(L.read_entries(ledger.path)) if r["http_status"] == 429]
+    assert len(rows) == 1
+    assert rows[0]["given_up"] is True
+    # The ledger records an answered request by its status and carries **no** error string (its
+    # own invariant), so the refusal - which is ours, not the host's - is not in `error`.
+    assert rows[0]["error"] is None
+    # ...and the reason reaches the sentence the judge reads back out of the report, because a
+    # `given_up` that says only `HTTP 429` reads like a rate limit we walked into.
+    assert "3600" in str(overpass.failure)
+    assert f"{F.RETRY_AFTER_CAP_SECONDS:.0f}" in str(overpass.failure)
+
+
+def test_a_retry_after_that_cannot_be_read_is_treated_as_absent(tmp_path: Path) -> None:
+    """The field has two forms; a third is ignored, not guessed at."""
+    assert F.parse_retry_after("soon", received_at=0.0) is None
+    assert F.parse_retry_after("", received_at=0.0) is None
+    assert F.parse_retry_after("   ", received_at=0.0) is None
+    assert F.parse_retry_after(None, received_at=0.0) is None
+    # An ignored field leaves the module's own backoff standing: nothing is invented for it.
+    pauses: list[float] = []
+    _collect(tmp_path, _retry_after_transport("soon"), pauses=pauses)
+    assert pauses == list(F.RETRY_BACKOFF_SECONDS)
+
+
+def test_delay_seconds_are_ascii_digits_by_the_grammars_own_rule() -> None:
+    """`delay-seconds = 1*DIGIT`, so the digit test is ASCII first."""
+    assert F.parse_retry_after("7", received_at=0.0) == 7.0
+    assert F.parse_retry_after("0", received_at=0.0) == 0.0
+    # Python's `str.isdigit()` says True for both of these; the grammar this cites says no.
+    assert F.parse_retry_after("\u0663", received_at=0.0) is None
+    assert F.parse_retry_after("\uff11", received_at=0.0) is None
+    assert F.parse_retry_after("7.5", received_at=0.0) is None
+
+
+def test_the_other_form_the_field_may_have_is_an_http_date() -> None:
+    """`Retry-After = HTTP-date / delay-seconds`: a date means the delta from arrival."""
+    received = 1_700_000_000.0
+    later = email.utils.formatdate(received + 45, usegmt=True)
+    assert F.parse_retry_after(later, received_at=received) == pytest.approx(45.0, abs=1.0)
+    # A date already in the past is a zero delay, never a negative sleep.
+    past = email.utils.formatdate(received - 600, usegmt=True)
+    assert F.parse_retry_after(past, received_at=received) == 0.0
+
+
+def test_a_retry_after_of_zero_does_not_shorten_our_own_backoff(tmp_path: Path) -> None:
+    """The header can lengthen a pause; it cannot lower it. `0` means "at once", and we do not."""
+    pauses: list[float] = []
+    _collect(tmp_path, _retry_after_transport("0"), pauses=pauses)
+    assert pauses == list(F.RETRY_BACKOFF_SECONDS)
 
 
 def test_every_request_carries_the_projects_identifying_user_agent(tmp_path: Path) -> None:
