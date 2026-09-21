@@ -2600,3 +2600,32 @@ files before accepting it.**
 The pattern in all three: I read an error *body* and reasoned about its *cause* without checking the
 transport that carried it. That is the same class of mistake this project keeps finding in its own
 checks - a number that looked impossible was a bug in the measuring code - and it is mine here.
+
+## The 1,813-site worklist does not cover the errors - measured, not argued
+
+While the instrumented batch re-ran, I put a number on the doubt that has been in this file since the
+60% false-negative rate was first computed. It is worse than "the census misses some errors".
+
+The blinded gold-standard check examined **36 sites**. Of those, **11 (31%) are inside the planned
+1,813 and 25 (69%) are outside it**. And of the **17 distinct sites that actually held a verified
+missed error**, only **3 are in the worklist** - the other 14 are not planned at all. Taken together
+with `fnr_result.json` (40 blinded errors, 16 caught, 24 missed, FNR 0.60, CI 43-75%), this says the
+worklist's flags correlate poorly with where the errors are.
+
+So fixing only the 1,813 would produce a database in which **14 of the 17 known-error sites are still
+untouched** - the exact "looks audited" outcome this file warned about, now with a number attached
+rather than a worry. The per-field pattern shows why: the missed errors sit in `description` (8),
+`card_description` (5), `period_start` (4), `scope` (3) and `site_type` (4), while the census's flags
+are dominated by the hero-image, URL-shape and link checks (T09 alone flags 5,004, T10 4,010, T06
+3,010, T07 2,806).
+
+Limits, stated plainly: 36 sites is a small sample, so the true share is uncertain - the direction is
+not. The 3-of-17 figure is about sites the blinded check happened to draw, which was a random draw,
+not a sample of error-bearing sites.
+
+**The consequence for scope.** Covering all 5,004 sites costs about ten dollars at the measured token
+rate, so the choice is no longer expensive - it is between a database that is one-third audited and
+one that is whole. I recommend all 5,004. That is Martin's call, and the next measurement is the one
+that should precede it: run the new finder over the 17 truth-set sites, whose correct values are
+recorded in `fnr_result.json`, and see how many of the 24 missed errors it actually catches. That
+measures recall directly rather than arguing it, for about five cents.
