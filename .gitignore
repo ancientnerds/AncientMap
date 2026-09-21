@@ -215,6 +215,10 @@ output/*
 !output/remediation/
 output/remediation/*
 !output/remediation/AUDIT_LOG.md
+# The old-to-new commit table for the 2026-09-21 history rewrite. It cannot be regenerated -
+# filter-branch does not keep its mapping - and every hash recorded before the rewrite is
+# stale without it, so it is versioned like AUDIT_LOG.md rather than left to the glob.
+!output/remediation/HISTORY_REWRITE_*.md
 # The gold standard is web research: 36 sites judged field by field against live sources. Nothing in
 # the repo can regenerate it, so it is versioned for the same reason as the log - and its
 # comparison script with it, so the false-negative rate is recomputable rather than asserted.
