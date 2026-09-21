@@ -4797,3 +4797,25 @@ This is the third variant of one lesson, and it is worth stating once in its gen
 can point at the right file and the wrong line, and its recommended remedy can be weaker than the code
 it criticises.** Fixed `float()` in a `try` would have turned a loud-stop candidate into a silent zero;
 the finding belongs one statement to the left.
+
+**Fixed the same day, as promised - and the shape is the file's own.** The `if isinstance(...)` filter
+became a guard with an `else` that stops: a `cost_usd` that is present and is neither `None` nor a
+non-bool number raises `LedgerDamage` naming the line and the type it found; a value that is negative
+or not finite raises the same, and a literal integer too large for a float is caught as `OverflowError`
+and raised as the same damage rather than crashing as an arithmetic accident. `None` - the normal case
+for a row that carries no charge - still counts as zero, and the test asserts that case explicitly
+before it asserts the six that must stop. Two new mutations hold the two guards in place
+(`a cost that is not a number is counted as zero`, `a negative or infinite cost is counted`), because a
+guard nobody mutates is a guard that has silently stopped guarding. The property being repaired is not
+robustness for its own sake: this sum is the number the money ceiling is measured against, so a cost
+counted as zero is a run that spends past a ceiling it believes it has not reached.
+
+**Its outcome, measured.** `118/118 mutations caught; missed: []` (`SWEEP_EXIT=0`) - the two new
+mutations among them, so both guards have teeth - and `2459 passed, 3 skipped, 57 deselected`
+(`PYTEST_EXIT=0`), one more than the judge-path gate's 2458 and exactly the new test. The same run's
+snapshot reported this file as drifting, and the cause is this file: the edit that wrote the paragraph
+above and the acceptance that hashes it were issued in one tool block, so the snapshot captured the
+earlier bytes. The three executable files were byte-identical, which is the claim that gate had to
+make. The rule it buys is small and sharp: **a file is never written in the same block as the run that
+hashes it** - an instrument whose input and whose subject are written in the same breath measures
+neither.
