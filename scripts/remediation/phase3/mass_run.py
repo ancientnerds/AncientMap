@@ -17,6 +17,12 @@ What it is careful about - every one of these has a test and a mutation behind i
   than discovered later.
 * **A circuit breaker**: N consecutive batch failures stop the run instead of burning 300 batches
   against a broken assumption.
+* **A *start* failure is retried, bounded and loud.** Measured 2026-09-21: twice the host had a few
+  seconds in which no process could be started at all - `judge exited 2` with the child's own report
+  saying `'pi.cmd' could not be started`, and `prepare exited 3221225794` (`STATUS_DLL_INIT_FAILED`).
+  Up to `MAX_SPAWN_ATTEMPTS` starts, one line per retry in the stage log, the count in
+  `progress.json`, and a stage that recovers is neither a failed batch nor a circuit-breaker count.
+  Every other failure - a failed call, a timeout, a parse error - is returned on its first exit.
 * **A progress file a human can read while the run is going**, rewritten atomically (temp file plus
   replace), never only at the end.
 * **One writer per tree**: the phase-3 sources are hashed at the start and compared before every
@@ -46,6 +52,7 @@ import math
 import os
 import subprocess
 import sys
+import time
 from collections.abc import Callable
 from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 from dataclasses import dataclass, field
@@ -85,6 +92,19 @@ FIELDS_PER_SITE = 5
 #: The measured cost of a discover call (round 6, `model.json` of `runs/gold6`). A projection, not a
 #: ceiling: the ceilings are read from the ledger's provider-reported numbers.
 MEASURED_COST_PER_CALL = 0.000825
+#: The first NTSTATUS value. An exit code at or above it means Windows never gave the child a process:
+#: `0xC0000142` (`STATUS_DLL_INIT_FAILED`) and its neighbours arrive here as the unsigned DWORD
+#: measured on 2026-09-21 as `prepare exited 3221225794`. The runner's own codes sit far below it, and
+#: so does the timeout sentinel `-9`.
+NTSTATUS_START_FAILURE = 0xC0000000
+#: How often one stage may be *started*. Bounded on purpose: the measured hiccup lasts seconds, and
+#: a retry that hides real breakage is worse than the stop.
+MAX_SPAWN_ATTEMPTS = 3
+#: How long to wait between those starts. Short, for the same reason.
+SPAWN_RETRY_WAIT_SECONDS = 5.0
+#: The child's own words when a program *it* started never came up (`model_stage.ModelCallFailed`,
+#: its `OSError` branch). A child that did run says so in the `error` of its own JSON report.
+UNSTARTABLE_PROGRAM = "could not be started"
 STAGES = ("prepare", "fetch", "judge")
 DONE, PARTIAL, BROKEN, ABSENT = "done", "partial", "broken", "absent"
 
@@ -340,6 +360,7 @@ class Progress:
     batches_done: int = 0
     batches_skipped: int = 0
     batches_failed: int = 0
+    spawn_retries: int = 0
     in_flight: list[str] = field(default_factory=list)
     failed: dict[str, str] = field(default_factory=dict)
     not_reached: list[str] = field(default_factory=list)
@@ -358,6 +379,7 @@ class Progress:
             "batches_done": self.batches_done,
             "batches_skipped": self.batches_skipped,
             "batches_failed": self.batches_failed,
+            "spawn_retries": self.spawn_retries,
             "in_flight": sorted(self.in_flight),
             "failed": dict(sorted(self.failed.items())),
             "not_reached": self.not_reached,
@@ -374,6 +396,40 @@ class Progress:
         os.replace(temporary, path)  # atomic on POSIX and on Windows
 
 
+def report_error(text: str) -> str | None:
+    """The `error` string of the child's own JSON report, or `None` when the child wrote none.
+
+    `run.py` prints that report to stdout, which the driver sends to the stage log, so the log is the
+    only place a failed spawn *inside* the child is visible. The report is indented (`json.dumps(...,
+    indent=1, sort_keys=True)`), so its key's line is read rather than the whole document: the value
+    is a JSON string, and only a line that really opens with an `"error"` key counts.
+    """
+    for line in reversed(text.splitlines()):
+        stripped = line.strip()
+        if not stripped.startswith('"error":'):
+            continue
+        try:
+            error = json.loads(stripped[len('"error":') :].rstrip(",").strip())
+        except json.JSONDecodeError:
+            continue
+        return error if isinstance(error, str) else None
+    return None
+
+
+def spawn_failure(code: int, output: str) -> bool:
+    """Did the process fail to *start*, rather than fail at the work?
+
+    Two shapes, and only these two: (a) the exit code is an NTSTATUS, so Windows never ran the child;
+    (b) the child ran and its own report names a program that "could not be started" - the spawn that
+    failed was inside the child. A failed model call, a parse error and a timeout are the work's own
+    outcomes and are **not** retried.
+    """
+    if code >= NTSTATUS_START_FAILURE:
+        return True
+    error = report_error(output)
+    return error is not None and UNSTARTABLE_PROGRAM in error
+
+
 class BatchRunner(Protocol):
     """The seam `run_mass` drives: one batch in, `(ok, detail)` out.
 
@@ -382,6 +438,9 @@ class BatchRunner(Protocol):
     """
 
     run_dir: Path
+    #: How often a stage was started again after a failed start, carried into `progress.json`. Part of
+    #: the seam because the driver writes that file; a stub that never retries reports 0.
+    spawn_retries: int
 
     def batch(self, planned: PlannedBatch) -> tuple[bool, str]: ...
 
@@ -413,6 +472,9 @@ class StageRunner:
         self.pacing_dir = pacing_dir
         self.python = python or python_executable()
         self.runner = runner
+        #: Counted here and carried into `progress.json`: a retry nobody can see is indistinguishable
+        #: from a run that never needed one.
+        self.spawn_retries = 0
 
     def argv(self, stage: str, batch_id: str) -> list[str]:
         """The argv of one stage, built from what that stage of `run.py` actually accepts.
@@ -449,28 +511,51 @@ class StageRunner:
         return argv
 
     def call(self, stage: str, batch_id: str) -> int:
-        """One stage of one batch. The log is opened before the call, so a crash still leaves why."""
+        """One stage of one batch. The log is opened before the call, so a crash still leaves why.
+
+        A *start* failure (`spawn_failure`) is retried up to `MAX_SPAWN_ATTEMPTS` starts, with one
+        line per retry in this stage's own log. Every other failure comes back on its first exit.
+        """
         argv = self.argv(stage, batch_id)
         log_path = self.log_dir / f"{batch_id}.{stage}.log"
         log_path.parent.mkdir(parents=True, exist_ok=True)
         env = {**os.environ, "PYTHONIOENCODING": "utf-8"}  # the judge's prompts carry non-ASCII
+        attempt = 1
         with log_path.open("a", encoding="utf-8") as log:
-            log.write(f"\n$ {' '.join(argv)}\n")
-            log.flush()
-            try:
-                done = subprocess.run(  # noqa: S603 - our own runner, our own argv, no shell
-                    argv,
-                    cwd=REPO,
-                    stdout=log,
-                    stderr=subprocess.STDOUT,
-                    env=env,
-                    timeout=self.stage_timeout,
-                    check=False,
+            while True:
+                log.write(f"\n$ {' '.join(argv)}\n")
+                log.flush()
+                # A byte count, taken after the flush: only what *this* attempt writes is read back,
+                # so a report an earlier attempt left in the log is never mistaken for this one's.
+                attempted_at = log_path.stat().st_size
+                try:
+                    done = subprocess.run(  # noqa: S603 - our own runner, our own argv, no shell
+                        argv,
+                        cwd=REPO,
+                        stdout=log,
+                        stderr=subprocess.STDOUT,
+                        env=env,
+                        timeout=self.stage_timeout,
+                        check=False,
+                    )
+                except subprocess.TimeoutExpired:
+                    log.write(f"\n! {stage} exceeded {self.stage_timeout:.0f}s and was killed\n")
+                    return -9
+                log.flush()
+                code = done.returncode
+                if code == 0 or attempt >= MAX_SPAWN_ATTEMPTS:
+                    return code
+                written = log_path.read_bytes()[attempted_at:].decode("utf-8", errors="replace")
+                if not spawn_failure(code, written):
+                    return code
+                self.spawn_retries += 1
+                log.write(
+                    f"\n! {stage} did not start (exit {code}); attempt {attempt + 1} of "
+                    f"{MAX_SPAWN_ATTEMPTS} after {SPAWN_RETRY_WAIT_SECONDS:.0f}s\n"
                 )
-            except subprocess.TimeoutExpired:
-                log.write(f"\n! {stage} exceeded {self.stage_timeout:.0f}s and was killed\n")
-                return -9
-        return done.returncode
+                log.flush()
+                time.sleep(SPAWN_RETRY_WAIT_SECONDS)
+                attempt += 1
 
     def batch(self, planned: PlannedBatch) -> tuple[bool, str]:
         """All three stages for one batch. Returns `(ok, detail)`; `detail` says where it stands."""
@@ -555,12 +640,14 @@ def run_mass(
                     progress.batches_failed += 1
                     progress.failed[planned.batch_id] = detail
                     announce(f"{planned.batch_id}: FAILED - {detail} ({consecutive} in a row)")
+            progress.spawn_retries = runner.spawn_retries
             progress.in_flight = [b.batch_id for b in pending.values()]
             progress.spend = Spend.from_ledger(ledger).to_dict()
             progress.write(progress_path)
 
     if progress.stopped is None:
         progress.not_reached = []
+    progress.spawn_retries = runner.spawn_retries
     progress.spend = Spend.from_ledger(ledger).to_dict()
     progress.write(progress_path)
     return 1 if (progress.stopped or progress.batches_failed) else 0

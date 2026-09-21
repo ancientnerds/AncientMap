@@ -5076,7 +5076,7 @@ The guard has teeth, measured rather than asserted: mutation 119 replaces `if an
 (`EvidenceConflict: ...answers\site-1%2Ffinder.txt`) - `1/1 mutations caught`, the tree byte-identical
 afterwards. Full gate: **2460 passed, 3 skipped**.
 
-### Round 4 died on a tool that was rewriting itself
+### Round 4 died twice on a host hiccup, not on the work
 
 Round 4 finished ten batches, and they cost **509 calls ($0.43)** - the judge fix worked: not one batch
 ended on the `EvidenceConflict` any more. Then the circuit breaker stopped the run after four failures in
@@ -5107,4 +5107,25 @@ keep going. And because the run is resumable, stopping cost **nothing** - the te
 recognised as `already done` on the second attempt, free of charge, and the four failed ones are retried.
 What is *not* done about it is a retry: a retry would hide exactly the failure class that wants to be seen,
 which is the same reason the module refuses to retry a model call.
+
+The second attempt died the same way, and it widened the picture: this time `prepare` itself failed with
+`3221225794` (`0xC0000142`, `STATUS_DLL_INIT_FAILED`), so **`python.exe` could not start either**, and the
+"the Pi tree was being rewritten" reading was too narrow. Measured afterwards - every one of these is a
+refutation, not a hypothesis:
+
+| measurement | value |
+|---|---|
+| 80 starts, one at a time | **0 failures** |
+| 100 starts, 4 at a time, cwd = the worktree | **0 failures** |
+| RAM free / page file in use | 7.4 GB of 31.3 GB / 177 MB of 11,278 MB |
+| orphaned `pi`/`node` children | none |
+| error or warning entries in the System/Application logs in the window | none |
+
+So the cause is a few-second window in which **no process can start at all** - not the environment, not the
+working directory, not the concurrency, not memory - and its host-side mechanism stays unestablished. That
+leaves one honest place to act: not the model stage, but the driver, and only for a *start* failure. The
+retry is bounded (`MAX_SPAWN_ATTEMPTS = 3`), loud (one line per retry in the stage's own log, the count in
+`progress.json`), and blind to everything else: a failed call, a timeout and a parse error come back on
+their **first** exit, because a retry that hides real breakage is worse than the stop it replaces.
+`spawn_retries` in `progress.json` is how a human sees whether the protection was ever needed.
 

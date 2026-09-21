@@ -96,6 +96,7 @@ UNFETCHED_SOURCE = "test_a_cited_page_the_run_did_not_fetch_is_a_problem"
 BUDGET = "test_the_call_ceiling_stops_between_batches_and_names_what_was_not_reached"
 BREAKER = "test_the_circuit_breaker_trips_after_the_configured_number_of_failures"
 BREAKER_RESET = "test_a_success_clears_the_failure_count"
+SPAWN_RETRY = "test_a_start_failure_is_retried_and_the_stage_then_succeeds"
 TORN_JSON = "test_a_truncated_model_json_is_broken_and_never_done"
 LEDGER_COST = "test_a_cost_that_is_not_a_finite_number_is_damage_and_not_a_zero"
 MISSING_ANSWER = "test_a_written_judgement_without_its_answer_file_is_broken"
@@ -729,6 +730,14 @@ MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         "                if ok:\n                    consecutive = consecutive + 0  # mutated\n",
         MASSRUN_TEST,
         BREAKER_RESET,
+    ),
+    (
+        "a failed start is not recognised, so the stage is never retried",
+        "scripts/remediation/phase3/mass_run.py",
+        "    if code >= NTSTATUS_START_FAILURE:\n        return True\n",
+        "    if False:  # mutated: a failed start counts as any other failure\n        return True\n",
+        MASSRUN_TEST,
+        SPAWN_RETRY,
     ),
     (
         "an artefact that does not parse counts as done",

@@ -116,6 +116,7 @@ class _StubRunner:
         self.calls_per_batch = calls_per_batch
         self.cost_per_call = cost_per_call
         self.called: list[str] = []
+        self.spawn_retries = 0
 
     def batch(self, planned: M.PlannedBatch) -> tuple[bool, str]:
         self.called.append(planned.batch_id)
@@ -576,6 +577,245 @@ def test_a_batch_that_ends_incomplete_is_a_failure_even_though_every_stage_exite
     ok, detail = runner.batch(M.PlannedBatch("batch-0001", 1, 1))
     assert not ok
     assert detail.startswith("after all three stages: absent")
+
+
+# ── a failed *start* is retried, bounded and loud; nothing else is ──────────────────────────────
+
+#: `STATUS_DLL_INIT_FAILED`, as the driver saw it on 2026-09-21: `prepare exited 3221225794`.
+NTSTATUS_DLL_INIT_FAILED = 0xC0000142
+#: `run.py` prints this to stdout when a model program *it* started never came up. The driver sends
+#: that stdout to the stage log, so the log is the only place a failed spawn inside the child shows.
+UNSTARTABLE_REPORT = json.dumps(
+    {
+        "batch_id": "batch-0001",
+        "error": "'pi.cmd' could not be started: [WinError 2] The system cannot find the file",
+        "live": True,
+        "model": "pi",
+        "run_dir": "runs/batch-0001",
+    },
+    indent=1,
+    sort_keys=True,
+)
+
+
+def _stage_runner(
+    tmp_path: Path, *, stage_timeout: float = M.DEFAULT_STAGE_TIMEOUT
+) -> M.StageRunner:
+    """The real `StageRunner`; each test stubs `subprocess.run`, so no stage ever starts."""
+    return M.StageRunner(
+        plan=tmp_path / "PLAN.jsonl",
+        run_dir=tmp_path / "runs",
+        ledger=tmp_path / "L.jsonl",
+        log_dir=tmp_path / "logs",
+        live=True,
+        stage_timeout=stage_timeout,
+        python=Path("python"),
+        runner=Path("run.py"),
+    )
+
+
+def test_a_start_failure_is_retried_and_the_stage_then_succeeds(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A host that could start no process for a few seconds must not stop a multi-hour run.
+
+    `0xC0000142` is `STATUS_DLL_INIT_FAILED` and arrives as the unsigned `3221225794`: Windows never
+    gave the child a process, so nothing about the work can be read out of that exit - and the next
+    start is exactly the same call.
+    """
+    codes = iter([NTSTATUS_DLL_INIT_FAILED, 0])
+    starts: list[int] = []
+    waited: list[float] = []
+
+    def fake_run(argv: list[str], **kwargs: Any) -> Any:
+        starts.append(1)
+        return types.SimpleNamespace(returncode=next(codes))
+
+    monkeypatch.setattr(M.subprocess, "run", fake_run)
+    monkeypatch.setattr(M.time, "sleep", waited.append)
+
+    runner = _stage_runner(tmp_path)
+    assert runner.call("prepare", "batch-0001") == 0
+
+    assert len(starts) == 2
+    assert runner.spawn_retries == 1
+    assert waited == [M.SPAWN_RETRY_WAIT_SECONDS]  # written to the log, then waited out
+    log = (tmp_path / "logs" / "batch-0001.prepare.log").read_text(encoding="utf-8")
+    assert "did not start (exit 3221225794)" in log  # loud: a retry nobody can see is not a retry
+    assert log.count("$ python run.py prepare") == 2  # both starts are in the log
+
+
+def test_a_child_that_names_a_program_it_could_not_start_is_retried(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The spawn that failed can be *inside* the child: the measured `judge exited 2`."""
+    codes = iter([2, 0])
+    starts: list[int] = []
+
+    def fake_run(argv: list[str], **kwargs: Any) -> Any:
+        starts.append(1)
+        kwargs["stdout"].write(UNSTARTABLE_REPORT + "\n")
+        return types.SimpleNamespace(returncode=next(codes))
+
+    monkeypatch.setattr(M.subprocess, "run", fake_run)
+    monkeypatch.setattr(M.time, "sleep", lambda _: None)
+
+    runner = _stage_runner(tmp_path)
+    assert runner.call("judge", "batch-0001") == 0
+
+    assert len(starts) == 2
+    assert runner.spawn_retries == 1
+
+
+def test_the_retry_budget_is_bounded_and_the_failure_then_stands(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A host that cannot start a process at all must not hold the run up for ever."""
+    starts: list[int] = []
+
+    def fake_run(argv: list[str], **kwargs: Any) -> Any:
+        starts.append(1)
+        return types.SimpleNamespace(returncode=NTSTATUS_DLL_INIT_FAILED)
+
+    monkeypatch.setattr(M.subprocess, "run", fake_run)
+    monkeypatch.setattr(M.time, "sleep", lambda _: None)
+
+    runner = _stage_runner(tmp_path)
+    assert runner.call("prepare", "batch-0001") == NTSTATUS_DLL_INIT_FAILED
+
+    assert len(starts) == M.MAX_SPAWN_ATTEMPTS
+    assert runner.spawn_retries == M.MAX_SPAWN_ATTEMPTS - 1
+    log = (tmp_path / "logs" / "batch-0001.prepare.log").read_text(encoding="utf-8")
+    assert log.count("did not start") == M.MAX_SPAWN_ATTEMPTS - 1  # one line per retry, and no more
+
+
+def test_an_ordinary_failure_is_started_exactly_once(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The teeth: a failed model call is the work's own outcome, and a retry would hide it.
+
+    The child's own report names a program that *did* run and exited 1. That is a real breakage: one
+    start, no wait, no retry line - a retry here is worse than the stop it would paper over.
+    """
+    starts: list[int] = []
+
+    def fake_run(argv: list[str], **kwargs: Any) -> Any:
+        starts.append(1)
+        kwargs["stdout"].write(
+            json.dumps(
+                {
+                    "batch_id": "batch-0001",
+                    "error": "call 3: 'pi.cmd' exited 1; stderr tail: 'boom'",
+                },
+                indent=1,
+                sort_keys=True,
+            )
+            + "\n"
+        )
+        return types.SimpleNamespace(returncode=2)
+
+    monkeypatch.setattr(M.subprocess, "run", fake_run)
+    monkeypatch.setattr(M.time, "sleep", lambda _: pytest.fail("a real failure was retried"))
+
+    runner = _stage_runner(tmp_path)
+    assert runner.call("judge", "batch-0001") == 2
+
+    assert len(starts) == 1
+    assert runner.spawn_retries == 0
+    log = (tmp_path / "logs" / "batch-0001.judge.log").read_text(encoding="utf-8")
+    assert "did not start" not in log
+
+
+def test_a_timeout_is_started_exactly_once(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """`-9` is the driver's own sentinel, not an NTSTATUS: a second start would re-buy the batch."""
+    starts: list[int] = []
+
+    def fake_run(argv: list[str], **kwargs: Any) -> Any:
+        starts.append(1)
+        raise M.subprocess.TimeoutExpired(cmd=argv, timeout=1.0)
+
+    monkeypatch.setattr(M.subprocess, "run", fake_run)
+    monkeypatch.setattr(M.time, "sleep", lambda _: pytest.fail("a timeout was retried"))
+
+    runner = _stage_runner(tmp_path, stage_timeout=1.0)
+    assert runner.call("fetch", "batch-0001") == -9
+
+    assert len(starts) == 1
+    assert runner.spawn_retries == 0
+
+
+def test_only_the_current_attempts_own_report_is_read(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A repaired start failure must not make the *next* attempt's real failure retryable.
+
+    The second start writes no report at all (an argv refusal looks like that). Reading the log
+    rather than what this attempt wrote would find the first attempt's report and start the stage a
+    third time - on a failure that was never a start failure.
+    """
+    reports = [UNSTARTABLE_REPORT, "", ""]
+    starts: list[int] = []
+
+    def fake_run(argv: list[str], **kwargs: Any) -> Any:
+        starts.append(1)
+        if reports[len(starts) - 1]:
+            kwargs["stdout"].write(reports[len(starts) - 1] + "\n")
+        return types.SimpleNamespace(returncode=2)
+
+    monkeypatch.setattr(M.subprocess, "run", fake_run)
+    monkeypatch.setattr(M.time, "sleep", lambda _: None)
+
+    runner = _stage_runner(tmp_path)
+    assert runner.call("judge", "batch-0001") == 2
+
+    assert len(starts) == 2
+    assert runner.spawn_retries == 1
+
+
+def test_a_recovered_start_failure_is_no_failed_batch_and_leaves_the_breaker_alone(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The point of the whole retry: a three-second hiccup must not stop a multi-hour run.
+
+    `failures_before_stop=1`, so counting the recovered start as a failed batch would end the run
+    before `batch-0002` was ever submitted. The count is in the progress file a human reads.
+    """
+    plan = _plan(tmp_path, [("batch-0001", 1), ("batch-0002", 2)])
+    ledger = _ledger(tmp_path)
+    run_dir = tmp_path / "runs"
+    hiccup = [NTSTATUS_DLL_INIT_FAILED]  # the run's very first start fails; every later one starts
+    started: list[str] = []
+
+    def fake_run(argv: list[str], **kwargs: Any) -> Any:
+        stage, batch_id = argv[2], argv[argv.index("--batch-id") + 1]
+        started.append(f"{batch_id}.{stage}")
+        if not hiccup and stage == "judge":
+            _artefacts(run_dir, batch_id, calls=1)  # what the three stages leave on disk
+        return types.SimpleNamespace(returncode=hiccup.pop(0) if hiccup else 0)
+
+    monkeypatch.setattr(M.subprocess, "run", fake_run)
+    monkeypatch.setattr(M.time, "sleep", lambda _: None)
+
+    progress = M.Progress(plan=str(plan), run_dir=str(run_dir), live=True, jobs=1, batches_total=2)
+    code = M.run_mass(
+        batches=M.read_plan(plan),
+        runner=_stage_runner(tmp_path),
+        budget=M.Budget(),
+        ledger=ledger,
+        progress=progress,
+        progress_path=tmp_path / "progress.json",
+        failures_before_stop=1,
+        jobs=1,
+    )
+
+    assert code == 0
+    assert started[:2] == ["batch-0001.prepare", "batch-0001.prepare"]  # the hiccup, then a start
+    assert progress.spawn_retries == 1
+    assert progress.batches_done == 2
+    assert progress.batches_failed == 0
+    assert progress.stopped is None
+    written = json.loads((tmp_path / "progress.json").read_text(encoding="utf-8"))
+    assert written["spawn_retries"] == 1
 
 
 # --- the plan and the ledger as input -------------------------------------------------------------
