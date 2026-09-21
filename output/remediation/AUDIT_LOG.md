@@ -4711,3 +4711,21 @@ describe as "sites fixed".
   restored, per-file sha256 equal and the final tree byte-identical. That claim is worth exactly as much
   as its independent reproduction, which is running now in the parent process; until its `SWEEP_EXIT`
   line is read, the 106/106 is **unconfirmed** and this entry says so.
+
+**Outcome of both open checks, same day.** The parent-process re-run finished:
+`106/106 mutations caught; missed: []`, `SWEEP_EXIT=0` (read from the sweep's own trailing line, not
+the wrapper's exit code), and **"the tree is byte-identical to the sweep's start for 10 file(s)"**.
+The lane's claim therefore stands as independently reproduced, not merely asserted - and the same run
+also demonstrated the restore path that matters: `review_stage.py` was visibly modified while the sweep
+held its mutant and its sha256 equals `HEAD` afterwards, which is the `finally` doing its job.
+
+The DB-less suite on the committed bytes: **`2448 passed, 3 skipped, 57 deselected, 32 warnings in
+114.96s`**, `PYTEST_EXIT=0` - 2398 + exactly the 50 tests piece 6 added, and the same three known skips.
+Every number the lane reported is now reproduced by a second process on the same bytes.
+
+One housekeeping consequence: a **formatter reflowed `tests/remediation/test_t10.py`** - a file no lane
+authored this turn and not a sweep target (`grep -c test_t10` over `mutation_sweep.py` = 0), numstat
+`2 2`, `f(x), (list(y))` becoming `f(x), list(y)`. It is committed (`777d37f`) rather than reverted:
+reverting invites the formatter to redo it, and `.githooks/pre-push:105` compares the working tree with
+the commit being pushed, so one uncommitted cosmetic diff is enough to block every future `main` push.
+The proof for that commit is the suite above, which ran on exactly those bytes.
