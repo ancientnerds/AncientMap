@@ -58,7 +58,11 @@ REVIEW_OWN_REPORT = (
 )
 LEDGER_LOCK = "test_a_second_writer_never_costs_a_ledger_line"
 REVIEW_SHAPE = "test_the_reviewer_question_asks_for_the_verdict_line_the_parser_wants"
-REVIEW_KNOWLEDGE = "test_the_reviewer_question_forbids_refuting_from_the_referees_own_knowledge"
+REVIEW_KNOWLEDGE = "test_the_reviewer_question_lets_its_own_knowledge_refute_a_finding"
+REVIEW_KNOWLEDGE_NO_SOURCE = "test_a_refutation_from_the_reviewers_own_knowledge_needs_no_source"
+REVIEW_HALVES = "test_the_reviewer_question_names_both_ways_a_finding_can_fail"
+REVIEW_BRIEFING = "test_the_reviewer_is_briefed_on_every_false_alarm_the_plan_lists"
+REVIEW_NUMBERED = "test_a_numbered_verdict_line_is_still_a_verdict"
 
 RUN = "test_every_site_buys_one_call_per_field_and_the_call_names_its_field"
 ROUTE = "test_the_discover_routing_is_enwiki_by_name_and_wikidata_by_the_qid"
@@ -722,12 +726,46 @@ MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         REVIEW_SHAPE,
     ),
     (
-        "the reviewer may refute a finding with its own knowledge",
+        "the reviewer may no longer refute a finding with its own knowledge",
         "scripts/remediation/phase3/model_stage.py",
-        '    "break it. **Your own knowledge is not evidence and may not refute a finding**: a finding stands "\n',
-        '    "break it. "\n',
+        '    "Use everything you have: the evidence in this message and your own knowledge of the subject. "\n',
+        '    "\\n"\n',
         REVIEW_TEST,
         REVIEW_KNOWLEDGE,
+    ),
+    (
+        "the reviewer loses the second way a finding can fail",
+        "scripts/remediation/phase3/model_stage.py",
+        '    "2. the proposed value is contradicted by the evidence.\\n"\n',
+        '    "\\n"\n',
+        REVIEW_TEST,
+        REVIEW_HALVES,
+    ),
+    (
+        "the reviewer loses the plan's false-alarm briefing",
+        "scripts/remediation/phase3/model_stage.py",
+        '    "\\n" + _false_alarm_block() + "\\n"\n',
+        '    "\\n"\n',
+        REVIEW_TEST,
+        REVIEW_BRIEFING,
+    ),
+    (
+        "a refutation from the reviewer's own knowledge is a problem again",
+        "scripts/remediation/phase3/review_stage.py",
+        "    if refuted is not True and sources:\n",
+        "    if refuted is True and not sources:\n"
+        '        problems.append("a `REFUTED: YES` with no `SOURCE:` page")\n'
+        "    if refuted is not True and sources:\n",
+        REVIEW_TEST,
+        REVIEW_KNOWLEDGE_NO_SOURCE,
+    ),
+    (
+        "a verdict line the model numbered is no longer read as a verdict",
+        "scripts/remediation/phase3/review_stage.py",
+        'REFUTED_RE = re.compile(r"^\\s*(?:\\d+[.)]\\s*)?REFUTED:\\s*(?P<value>\\S+)\\s*$", re.MULTILINE)',
+        'REFUTED_RE = re.compile(r"^\\s*REFUTED:\\s*(?P<value>\\S+)\\s*$", re.MULTILINE)',
+        REVIEW_TEST,
+        REVIEW_NUMBERED,
     ),
 ]
 

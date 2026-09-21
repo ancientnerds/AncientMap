@@ -162,32 +162,81 @@ FINDER_QUESTION = (
     "message? Answer yes or no, then name the evidence that decides it in one sentence. "
     "You propose; you do not write."
 )
+FALSE_ALARMS: tuple[str, ...] = (
+    "a round era value on its own - `period_start` is a sort key, and only a value from a different "
+    "bucket is an error",
+    "`England` / `Scotland` / `Wales` on a UK site, and `civilization` as the stored country copy - "
+    "both are project design, not errors",
+    "an official UNESCO title such as `Archaeological Site of Olympia` - that is the name, not "
+    "prefix clutter",
+    "a *less* specific value where the stored one is finer - Wikidata saying 'archaeological site' "
+    "does not make 'Temple' wrong",
+    "a date on the card that belongs to a named person, or that is only the text's terminus - "
+    "neither is a dating of the site",
+    "a Wikidata coordinate that is the parent city's, or a distance smaller than the item's own "
+    "precision",
+    "a border or a missing island in a generalised map - Northern Ireland drawn as `Ireland`, "
+    "Crimea, Northern Cyprus, Kosovo, the Baltic",
+    "a site of the same name somewhere else - the name *and* the coordinates must both match",
+)
+
+#: Which plan item each `FALSE_ALARMS` entry paraphrases, position for position. The plan's 4.3 lists
+#: eleven patterns and these eight entries cover all eleven; the numbers live here rather than in the
+#: question because the model has never read the plan, and a test reads them back against the plan
+#: file so that an added or dropped pattern is loud instead of silent.
+FALSE_ALARM_SOURCES: tuple[tuple[str, ...], ...] = (
+    ("4.3.1",),
+    ("4.3.2", "4.3.4"),
+    ("4.3.3",),
+    ("4.3.5",),
+    ("4.3.7", "4.3.8"),
+    ("4.3.9", "4.3.10"),
+    ("4.3.11",),
+    ("4.3.6",),
+)
+
+
+def _false_alarm_block() -> str:
+    """The briefing Phase 3 requires: "must be briefed on the false-alarm patterns in 4.3".
+
+    Kept as data rather than as prose inside the question, so that a test can hold it against the
+    plan's own list - `FALSE_ALARM_SOURCES` says which plan item each line covers.
+    """
+    return "False alarms that are not errors, however wrong they look:\n" + "".join(
+        f"- {pattern}\n" for pattern in FALSE_ALARMS
+    )
+
+
 REVIEWER_QUESTION = (
-    "Can the finder's finding for this site be refuted against the evidence in this message? Try to "
-    "break it. **Your own knowledge is not evidence and may not refute a finding**: a finding stands "
-    "unless the evidence in this message shows the claim it rests on failing.\n"
+    "A finding claims the stored value is wrong and proposes what to write instead. **Refute it if "
+    "either half fails**:\n"
     "\n"
-    "Answer in this order, and keep it short:\n"
+    "1. the reason it gives does not hold - the evidence does not show the stored value wrong; or\n"
+    "2. the proposed value is contradicted by the evidence.\n"
     "\n"
-    "1. One sentence saying what the evidence in this message gives for the finding's claim.\n"
-    "2. Then the verdict line.\n"
+    "Use everything you have: the evidence in this message and your own knowledge of the subject. "
+    "That the stored text looks weak is **not** by itself a reason to refute - saying so is what "
+    "every finding does.\n"
+    "\n" + _false_alarm_block() + "\n"
+    "Answer with a `WHY:` line and one verdict line, and nothing else:\n"
     "\n"
     "REFUTED: YES | NO | UNRESOLVED\n"
     "\n"
-    "* `YES` - the evidence in this message shows the finding's claim failing, and this is the only "
-    "verdict that carries a citation: name the claim on the `WHY:` line, and the page that shows it "
-    "on a `SOURCE:` line.\n"
-    "* `NO` - the finding's claim survives this message's evidence. Say on the `WHY:` line which "
-    "evidence shows that, and write no `SOURCE:` line.\n"
-    "* `UNRESOLVED` - this message's evidence does not settle the claim. Say so on the `WHY:` line, "
-    "and write no `SOURCE:` line.\n"
+    "* `YES` - one of the two halves fails. Name which on the `WHY:` line, and add a `SOURCE:` line "
+    "only if a page in this message is what shows it.\n"
+    "* `NO` - both halves hold: the reason stands and the proposed value is not contradicted. Say on "
+    "the `WHY:` line what supports it, and write no `SOURCE:` line.\n"
+    "* `UNRESOLVED` - neither this message's evidence nor your own knowledge settles one of the two "
+    "halves. Say which on the `WHY:` line, and write no `SOURCE:` line.\n"
     "\n"
-    "WHY: <one sentence naming the claim that failed, or that none did>\n"
+    "WHY: <one sentence naming the half that fails, or that both hold>\n"
     'SOURCE: <a url that appears in the evidence below> - "<a sentence you copied word for word '
     'from that page>"\n'
     "\n"
-    "Write exactly one `REFUTED:` line. A `SOURCE:` line on a verdict that is not `YES` is an "
-    "opinion dressed as a citation, and it is read as a problem rather than as support."
+    "Write exactly one `REFUTED:` line, unnumbered and unshaded, and write nothing after it: a "
+    "numbered answer, or a second verdict line, is read as no verdict at all. A `SOURCE:` line on a "
+    "verdict that is not `YES` is an opinion dressed as a citation, and it is read as a problem "
+    "rather than as support."
 )
 
 #: One question per stage, keyed by the stage enum piece 1 already defines.

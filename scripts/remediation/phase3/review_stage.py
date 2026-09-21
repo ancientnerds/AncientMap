@@ -61,7 +61,12 @@ REVIEWED_VERDICT = "WRONG"
 
 #: The answer's shape, parsed. One refutation per finding, and a refutation that cannot be read is a
 #: problem rahter than a `False`: "unreadable" and "not refuted" must not be the same value.
-REFUTED_RE = re.compile(r"^\s*REFUTED:\s*(?P<value>\S+)\s*$", re.MULTILINE)
+#: The question numbers its answer steps, and the model mirrors the numbering: one measured answer
+#: opened the verdict line with a literal "2. " and the strict pattern read no verdict at all, which
+#: silently turned a grounded refutation into `UNRESOLVED` and dropped a source line into the
+#: wrong-verdict check. A leading list marker is part of the shape now. The guards are untouched:
+#: exactly one hit, and the value has to be one of `REFUTED_VALUES`.
+REFUTED_RE = re.compile(r"^\s*(?:\d+[.)]\s*)?REFUTED:\s*(?P<value>\S+)\s*$", re.MULTILINE)
 WHY_PREFIX = "WHY:"
 
 #: What a `REFUTED:` line may say. `UNRESOLVED` is neither: the evidence does not settle it, and the
@@ -145,8 +150,12 @@ def parse_review(text: str) -> ReviewAnswer:
         )
         sources = sources[: DS.MAX_SOURCES]
 
-    if refuted is True and not sources:
-        problems.append("a `REFUTED: YES` with no `SOURCE:` page to answer for it")
+    # A `REFUTED: YES` needs no `SOURCE:`. Phase 3 asks stage 2 to refute "using its own research -
+    # not by re-reading stage 1's evidence", and a reviewer with no fetch step of its own can only
+    # refute from what it knows; demanding a page for every refutation would forbid exactly the
+    # refuter the plan asks for, and would strand the strongest verdict in `UNRESOLVED` - the one
+    # value that never lets a state change. Any `SOURCE:` it does give is still checked word for word
+    # against the pages this run fetched, in `judge_review_batch`.
     if refuted is not True and sources:
         problems.append(
             "a `SOURCE:` page belongs to `REFUTED: YES`, not to a referee's own opinion"

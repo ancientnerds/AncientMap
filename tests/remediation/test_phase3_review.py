@@ -28,6 +28,7 @@ process: every runner here is scripted.
 from __future__ import annotations
 
 import json
+import re
 import sys
 from pathlib import Path
 from typing import Any
@@ -156,11 +157,22 @@ def _ledger(tmp_path: Path) -> L.Ledger:
 # ── the answer's shape ───────────────────────────────────────────────────────────────────────
 
 
-def test_a_refutation_without_a_source_is_a_problem() -> None:
+def test_a_refutation_from_the_reviewers_own_knowledge_needs_no_source() -> None:
+    """A refuter with no fetch step cannot cite a page it never fetched.
+
+    This used to be a problem, and that made every knowledge-based refutation unusable: it fell to
+    `UNRESOLVED`, the one value that never lets a state change, so the strongest answer the reviewer
+    can give was silently turned into the weakest. Phase 3 asks stage 2 to refute "using its own
+    research - not by re-reading stage 1's evidence", so the parser has to accept it. The citation
+    rules that remain are the ones the plan's method does impose, and the two tests below still
+    hold: any `SOURCE:` that is given must be a page this run fetched, with a quote that occurs in
+    it.
+    """
     answer = RS.parse_review("REFUTED: YES\nWHY: the page is about another cave\n")
     assert answer.refuted is True
-    assert any("no `SOURCE:` page" in p for p in answer.problems), answer.problems
-    assert not answer.complete
+    assert answer.problems == (), answer.problems
+    assert answer.complete
+    assert answer.sources == ()
 
 
 def test_a_refutation_that_cites_a_page_the_run_never_fetched_is_a_problem() -> None:
@@ -229,6 +241,34 @@ def test_a_refuted_line_with_a_value_outside_the_vocabulary_is_a_problem() -> No
 
 def test_two_refuted_lines_are_a_problem() -> None:
     answer = RS.parse_review("REFUTED: YES\nREFUTED: NO\nWHY: both\n")
+    assert any("2 `REFUTED:` line(s)" in p for p in answer.problems), answer.problems
+
+
+def test_a_numbered_verdict_line_is_still_a_verdict() -> None:
+    """The question numbered its answer steps, and one measured answer numbered the verdict too.
+
+    `a5d9e9a7%2Fcard_description` came back as "1. The first half fails: ... 2. REFUTED: YES". The
+    pattern matched nothing, so a refutation that named its reason was read as `UNRESOLVED`, and its
+    `SOURCE:` line then tripped the wrong-verdict check - both problems from the numbering, neither
+    from the content. The guards are unchanged: exactly one hit, and a value from the vocabulary.
+    """
+    answer = RS.parse_review(
+        "1. The first half fails.\n2. REFUTED: NO\n\nWHY: the proposal stands\n"
+    )
+
+    assert answer.problems == ()
+    assert answer.refuted is False
+
+
+def test_the_numbered_tolerance_does_not_swallow_a_second_verdict() -> None:
+    """One measured answer wrote `REFUTED: YES`, a `WHY:` line, and then `REFUTED: YES` again.
+
+    That is a real shape error - the model answered its own numbered step and then restated the
+    verdict - and reading the first hit would hide it. Two hits must stay a problem.
+    """
+    answer = RS.parse_review("REFUTED: YES\nWHY: it names a reason\n\nREFUTED: YES\n")
+
+    assert answer.refuted is None
     assert any("2 `REFUTED:` line(s)" in p for p in answer.problems), answer.problems
 
 
@@ -350,14 +390,14 @@ def test_the_reviewer_question_asks_for_the_verdict_line_the_parser_wants(tmp_pa
     assert "WHY:" in prompt
 
 
-def test_the_reviewer_question_forbids_refuting_from_the_referees_own_knowledge(
-    tmp_path: Path,
-) -> None:
-    """The finder may not uphold a stored value with its own knowledge; the reviewer may not kill a
-    finding with its own knowledge either.
+def test_the_reviewer_question_lets_its_own_knowledge_refute_a_finding(tmp_path: Path) -> None:
+    """Stage 2 refutes with its own research, and `refuted = false` is the only write gate.
 
-    A refutation removes a correction from the write path, so a reviewer that refutes from memory
-    rather than from a page this run fetched throws away the corrections the evidence supports.
+    The plan asks the reviewer to "refute every error claim using its own research - not by
+    re-reading stage 1's evidence", and the rule this test replaces forbade exactly that: it made
+    the reviewer's own knowledge unusable for refutation, which is the one job that stage has. The
+    guard that remains is the one that matters - a refutation must name the claim that fails, or it
+    is a guess.
     """
     site = _site()
     store = _evidence_store(tmp_path / "evidence", "site-1")
@@ -366,7 +406,94 @@ def test_the_reviewer_question_forbids_refuting_from_the_referees_own_knowledge(
 
     prompt = RS.plan_batch(batch=_batch(site), answers=answers, store=store).calls[0].call.prompt
 
-    assert "may not refute a finding" in prompt
+    assert "your own knowledge of the subject" in prompt, "the plan's own research must be usable"
+    assert "may not refute" not in prompt, "the replaced rule forbade what Phase 3 asks for"
+    assert "Name which on the `WHY:` line" in prompt, "a refutation of nothing is a guess"
+
+
+def test_the_reviewer_question_names_both_ways_a_finding_can_fail(tmp_path: Path) -> None:
+    """Three measured rounds fixed the question's referent; the record of them is the reason.
+
+    Round 1 forbade refuting from the reviewer's own knowledge: measured over the 13 findings of the
+    blinded truth set it refuted 3 and left 4 of 6 suspect findings standing. Round 2 allowed
+    knowledge but left "the claim" without a referent, and the reviewer attached it per call: in
+    three of the 13 its own `WHY:` sentence names evidence that *supports* the finding while the
+    verdict kills it, and in one it names evidence that defeats the finding while the verdict keeps
+    it. Round 3 pinned the referent to the proposal alone, and that made the stage nearly inert - 1
+    refutation in 13 - so the only write gate in Phase 3 waved everything through.
+
+    What the writer needs is neither half alone: a finding fails when the reason it gives does not
+    hold, *or* when the value it would write is contradicted. That is what the question says now.
+    """
+    site = _site()
+    store = _evidence_store(tmp_path / "evidence", "site-1")
+    answers = F.EvidenceStore(tmp_path / "answers")
+    _answer_file(answers, "site-1", "description", _finder_answer(site))
+
+    prompt = RS.plan_batch(batch=_batch(site), answers=answers, store=store).calls[0].call.prompt
+
+    assert "Refute it if either half fails" in prompt
+    assert "the reason it gives does not hold" in prompt
+    assert "the proposed value is contradicted by the evidence" in prompt
+    assert "is **not** by itself a reason to refute" in prompt, (
+        "weak-looking stored text is no proof"
+    )
+
+
+def test_the_reviewer_is_briefed_on_every_false_alarm_the_plan_lists(tmp_path: Path) -> None:
+    """Phase 3: the reviewer "must be briefed on the false-alarm patterns in 4.3".
+
+    The briefing is data (`MS.FALSE_ALARMS`), with `MS.FALSE_ALARM_SOURCES` naming the plan item each
+    line paraphrases, and this test reads the plan file itself: the question and the plan have to
+    agree on which patterns exist. A paraphrased clause inside a prompt string is exactly what drifts
+    unnoticed, and this one is the reviewer's only defence against the false alarms patterns 2 and 11
+    measured - the deliberate `England`/`Scotland`/`Wales` vocabulary, and the generalised map that
+    draws Northern Ireland as `Ireland` and drops Crimea and Northern Cyprus.
+    """
+    plan_text = (REPO / "docs" / "procedures" / "SITES_DB_REMEDIATION_2026-09.md").read_text(
+        encoding="utf-8"
+    )
+    section = plan_text.split("### 4.3 ", 1)[1].split("\n### ", 1)[0]
+    in_plan = re.findall(r"^(\d+)\. \*\*", section, flags=re.MULTILINE)
+
+    assert len(MS.FALSE_ALARMS) == len(MS.FALSE_ALARM_SOURCES)
+    covered = {number for group in MS.FALSE_ALARM_SOURCES for number in group}
+    assert covered == {f"4.3.{number}" for number in in_plan}, (
+        "the briefing and the plan's 4.3 list must cover the same items"
+    )
+
+    site = _site()
+    store = _evidence_store(tmp_path / "evidence", "site-1")
+    answers = F.EvidenceStore(tmp_path / "answers")
+    _answer_file(answers, "site-1", "description", _finder_answer(site))
+    prompt = RS.plan_batch(batch=_batch(site), answers=answers, store=store).calls[0].call.prompt
+
+    assert "False alarms that are not errors" in prompt
+    for pattern in MS.FALSE_ALARMS:
+        assert pattern in prompt
+
+
+def test_the_question_and_the_parser_agree_that_a_source_belongs_to_yes(tmp_path: Path) -> None:
+    """The question states a fact about the parser, so both sides are asserted together.
+
+    The closing paragraph of the question tells the model that a `SOURCE:` line on a verdict that is
+    not `YES` is read as a problem. That is a clause about code, written by hand in a string, which
+    is how such clauses drift: change the parser and the prompt still promises the old shape. The
+    parser's own behaviour and the sentence are therefore pinned in one test - either side moving
+    alone fails here.
+    """
+    answer = RS.parse_review(
+        'REFUTED: NO\nWHY: the proposal stands\nSOURCE: https://example.org/x - "y"\n'
+    )
+    assert any("belongs to `REFUTED: YES`" in p for p in answer.problems), answer.problems
+
+    site = _site()
+    store = _evidence_store(tmp_path / "evidence", "site-1")
+    answers = F.EvidenceStore(tmp_path / "answers")
+    _answer_file(answers, "site-1", "description", _finder_answer(site))
+    prompt = RS.plan_batch(batch=_batch(site), answers=answers, store=store).calls[0].call.prompt
+
+    assert "A `SOURCE:` line on a verdict that is not `YES` is an " in prompt
 
 
 def test_the_reviewers_prompt_is_bounded_like_the_finders(tmp_path: Path) -> None:

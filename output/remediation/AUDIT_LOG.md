@@ -2407,6 +2407,19 @@ self-test cases.
 - `ci.yml` line-length (76 hits, 4 of them mine) - an 80-column prose rule applied to a YAML workflow
   that already violates it in 60-odd pre-existing lines. No project gate lints YAML line length; I
   shortened my own comment and left the rest alone rather than churn the file.
+- `logs/ledger_probe/child_append.py:62` and `race_probe2.py:25` - "open() called with invalid mode
+  `\"r+b\"`" and "call without try/except". The mode in the source is `with open(lock_path, "r+b")`,
+  which is valid (read/write binary, no truncate); the checker read the source's own quotation marks
+  as part of the mode. Both files are throwaway concurrency probes under the ignored
+  `output/remediation/logs/` tree (`.gitignore:216`), and both must fail loudly: a probe that falls
+  back on a missing argument reports a run it never made, and its earlier green run proved only that
+  it was too gentle. Adjudicated at the bytes, left visible.
+- `gold_standard/measure_reviewer.py:110, 113` and `review_stage.py:153, 187, 420` - "identity
+  operators with literal values". The value arrives from JSON with three states, so `is True` /
+  `is False` is the load-bearing distinction and not a slip for `==`. Measured: `refuted is True ->
+  applies=False`, `refuted is False -> applies=True`, `refuted is None -> applies=False`. A truthiness
+  check would count `None` as applied and inflate the measured rate, and `if refuted:` in the writer
+  would let a refuted finding through the only write gate Phase 3 has.
 
 ## The raw third-party response bodies leave the repository history (2026-09-21)
 
@@ -4126,3 +4139,113 @@ fourth adds a deity the page names in a later section. So the honest reading of 
 
 Both readings are at n=7 and n=6. At n=19 this project already had to treat a 5-8 spread as noise;
 these rates are preliminary and the sample cannot settle the reviewer's quality either way.
+
+---
+
+## The reviewer's referent, five measurements, and the plan's own briefing (2026-09-21)
+
+The reviewer is the only write gate Phase 3 has: `applies = asked and refuted is False and not
+problems`, and the plan says plainly that "Only `refuted = false` is applied". So the question the
+reviewer is asked is not prompt polish - it decides what reaches the database. It had never been
+measured before this session, and measuring it five times found a logical defect, not a rate
+problem.
+
+### The defect was the referent, not the rubric
+
+The question said "name the claim it rests on" without saying what "it" was. The finder complains
+about the stored value in *every* finding it issues, so the reading "the stored value" makes every
+finding refutable; the reading "the proposal" makes almost none. The model resolved the ambiguity
+per call, and hand-reading all thirteen findings of the blinded truth set shows it resolving it both
+ways in adjacent calls.
+
+Five rounds, thirteen live calls each, same evidence, same model (`deepseek-v4.1-flash`,
+`--thinking off`), only the question changed:
+
+| round | question | refuted | real repairs kept | suspect findings rejected |
+|---|---|---|---|---|
+| A | evidence only, own knowledge forbidden | 3 | 5 / 7 | 2 / 6 |
+| B | own knowledge allowed, referent ambiguous | 8 | 2 / 7 | 4 / 6 |
+| C | referent pinned to the proposal alone | 1 | 7 / 7 | 1 / 3 |
+| D | both halves + the plan's 4.3 briefing | 6 | 3 / 7 | 2 / 4 |
+| E | D + parser tolerance + unnumbered answer | 5 | 3 / 7 | 2 / 6 |
+
+Round B's count looked best and was the worst answer: of its thirteen `WHY:` sentences, **three name
+evidence that supports the finder's correction while the verdict kills it, and one names evidence
+that defeats the correction while the verdict keeps it**. No rate exposes that; only reading the
+sentences does. Round C fixed the direction and destroyed the instrument - one refutation in
+thirteen means the only write gate in Phase 3 waves everything through.
+
+### The plan named the missing ingredient, and I had not implemented it
+
+Phase 3, verbatim: stage 2 "attempts to refute every error claim using **its own** research - not by
+re-reading stage 1's evidence. **Must be briefed on the false-alarm patterns in 4.3.**" Section 4.3
+lists eleven patterns "correctly refuted" in the pilot, and they are exactly the shapes in which a
+value looks wrong without being wrong. The question carried none of them until round D.
+
+They are now data, not prose: `MS.FALSE_ALARMS` with a parallel `MS.FALSE_ALARM_SOURCES` naming the
+plan item each line paraphrases, and a test that reads the plan file and asserts the two lists cover
+the same items. The numbers are deliberately *not* in the prompt - the model has never read the
+plan, and a citation index in an instruction is noise.
+
+The effect is visible in the specimen: both truth-set errors the reviewer refuted in D and E are
+refuted **with the pattern, named**, e.g. `758dd394%2Fsite_type` - "Wikidata's P31 is the generic
+'monument' (Q188040), while 'Timber circle' is a plausible finer type not contradicted here, so the
+first half fails and the proposed 'Monument' is merely less specific" (4.3.5, *never downgrade
+specificity*). The plan asks the reviewer to be conservative in exactly this way.
+
+Also decided, on the plan's own text rather than on a rate: **own knowledge may refute, never
+uphold.** The plan's stage 2 refutes "using its own research", and `refuted = false` is the only
+write gate - so a rule that forbade refuting from knowledge would have disabled the stage the plan
+describes. The `SOURCE:`-on-`YES` requirement was dropped with it: a refuter with no fetch step
+cannot cite a page it never fetched.
+
+### A parser is a second statement of the question
+
+Two of thirteen answers in round D came back with `problems`, and neither was a model error:
+
+```
+a5d9e9a7%2Fcard_description:   "1. The first half fails: ... 2. REFUTED: YES"
+                               -> 0 `REFUTED:` line(s); a `SOURCE:` page belongs to `REFUTED: YES`
+b6af84c5%2Fcard_description:   "REFUTED: YES" ... "REFUTED: YES"
+                               -> 2 `REFUTED:` line(s)
+```
+
+The question numbered its answer steps ("1. One sentence ... 2. Then the verdict line.") and the
+model mirrored the numbering into the verdict line. `REFUTED_RE` anchored on `^\s*REFUTED:`, so a
+literal `2. ` before it read as **no verdict at all** - a grounded refutation silently downgraded to
+`UNRESOLVED`, and its source line then tripped the wrong-verdict check. Both problems, one cause,
+and the cause was mine. The pattern now accepts an optional list marker; the guards are untouched
+(exactly one hit, value from `REFUTED_VALUES`). The question no longer numbers its answer steps and
+says to write nothing after the verdict line. Measured after the fix: both cases are `problems == ()`
+and one of them is `applies=True`, i.e. a repair that had been silently dropped is written again.
+
+### Measured, and honest: the reviewer is not deterministic here
+
+`a5d9e9a7%2Fcard_description` and `b6af84c5%2Fcard_description` received **opposite verdicts in
+rounds D and E on identical input** - same question, same evidence, same model, `--thinking off`.
+Two of thirteen. This bounds what any single run can be claimed to show, and it is the reason the
+decisions above rest on mechanisms (referent, false-alarm patterns, parser shape) rather than on
+round-to-round counts.
+
+### The residual, named
+
+Three of seven real repairs kept; three real errors refuted, each with an explicit 4.3-based
+justification; one honestly `UNRESOLVED`. The error is in the **conservative** direction - the
+reviewer under-corrects rather than corrupting - which is what a gate whose only action is
+`refuted = false` is for.
+
+### Three instrument bugs of mine, caught by their own receipts
+
+* `sorted()` on strings is lexicographic, so a complete 4.3 coverage printed as incomplete:
+  `['1','10','11','2',...] != ['1','2',...,'11']`. The data was whole; the check was not.
+* `p.count("4.3.1")` also matches inside `4.3.10` and `4.3.11`, so my duplicate check reported
+  duplicates that do not exist.
+* An `edit` whose `oldText` appended a `\n` the closing paragraph does not have - the third
+  occurrence of this session's recurring form, *a truncated or remembered read is a different
+  artefact from the artefact*. The tool's "content-drift" message was right about the mismatch and
+  wrong about the cause: nothing else had written the file.
+
+And one real defect in my own change, caught by `mypy` before any test ran: a `+` ended the implicit
+string concatenation and a trailing comma turned `REVIEWER_QUESTION` into a 2-tuple
+(`Dict entry 1 has incompatible type "Stage": "tuple[str, str]"`). The constant is a `str`; the
+check is `isinstance(q, str)` plus `mypy` on the module.
