@@ -4471,3 +4471,58 @@ is going ("the phase-3 sources changed while the run was going"). So:
 Step 3 skips what `batch_state` calls `done` (`mass_run.py:255-277`) and redoes exactly the
 incomplete batches: the five above, plus anything that fails later. `batches_failed` must reach 0
 before the run counts as finished.
+
+## Correction: it is TWO unusable-stream modes, not one empty answer (2026-09-21, run 2 ended)
+
+The heading above is too narrow and the measurement corrects it. Run 2 ended on its own terms:
+`DRIVER_EXIT=1`, `stopped: circuit breaker: 3 consecutive batch failures`, `batches_done: 130`,
+`batches_skipped: 20`, `batches_failed: 8`, and **175 batches never reached** (`batch-0161` to
+`batch-0334`); 11,866 calls, $11.375892. Eight failed batches, and the eight stage-log error strings
+split **4 / 4** into two different causes:
+
+**Mode A - the stream ended with no text** (4 of 8, verbatim):
+
+```
+<site>/<field> stdout:9 assistant message_end: the assistant message carries no text -
+                       an empty answer is not a result
+```
+
+**Mode B - two billed calls in one stream** (4 of 8, verbatim):
+
+```
+<site>/<field> stdout: 2 settled assistant usages in one stream;
+                       this runner will not guess which call was billed
+```
+
+Mode B is the interesting one, and the runner's refusal is correct: it must not invent a billing
+attribution for a call it cannot identify. What is *not* correct is the consequence of that refusal -
+the whole batch is abandoned, with 62, 50, 33, 22 and 12 of 75 answers already on disk. **The
+refusal is right about the call and wrong about the blast radius.** The two batches differ only in
+which numbered stdout record carried the anomaly: `stdout:9` for A, `stdout: 2` for B.
+
+**Both modes are sporadic, not systematic.** The eight failures are eight *distinct* `(site, field)`
+pairs on eight *distinct* sites - no site appears twice, and there is no field clustering (5
+`site_type`, 1 `country`, 1 `description`, 1 `card_description`). This is a transport/protocol flake,
+not a property of any site.
+
+**This contradicts a decision this project already made.** "A transport failure is recorded data, not
+a batch-killer" is the recorded rule for the fetch path, and `TargetOutcome.given_up_reason` (with
+`not_attempted` beside it) is the machinery that implements it - a missing evidence file is an
+*explained* failure, not a hole in the record. In the judge path the same class of anomaly propagates
+out of `run.py judge` as **exit 2** and takes the batch with it.
+
+**Consequence, stated plainly because it decides the rest of the work:** 8 failures in 138 attempted
+batches is 5.8 %, and the breaker trips at 3 *consecutive*. With 175 batches unrun, a restart alone
+cannot finish the deliverable - it will stop again at the next cluster. The transport anomaly has to
+be turned into a per-field recorded failure before the remaining 175 batches can complete. That is a
+change in `model_stage.py`/the judge path, which the piece-6 build holds locked; it is therefore the
+first task after that build lands, and until then a restart is only partial progress. Restarting is
+still worth it, and run 3 does exactly that: `batch_state` skips the 150 and redoes the 8.
+
+**A third instrument of mine was wrong, same class as the other two.** The classifier that produced
+"4 with the empty-answer wording, 4 other" used the pattern `'[^"\\]'` inside a non-raw Python
+string, which Python folds to `[^"\]` - an unterminated character class, so the probe raised
+`re.PatternError` rather than reporting. Printing the `"error"` values without a regex gave the four
+verbatim strings above. The lesson of this section and of the two before it is one lesson: the probe
+is part of the evidence, and a probe that fails loudly is worth more than one that returns something
+plausible.
