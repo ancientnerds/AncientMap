@@ -251,7 +251,9 @@ def render_transaction(
     add("    IF bad > 0 THEN")
     add("        -- the source name is a RAISE argument, never part of the quoted message: a name")
     add("        -- spliced into the message text only parses while the name happens to contain no")
-    add("        -- quote, which is a property of today's value and not of this code. G0's guard is")
+    add(
+        "        -- quote, which is a property of today's value and not of this code. G0's guard is"
+    )
     add("        -- the shape this one copies.")
     add(
         "        RAISE EXCEPTION 'country repair: % planned row(s) are not % sites', bad, "
@@ -408,9 +410,7 @@ def assert_the_write_landed(
     """
     if not records:
         raise PlanError("refusing to check the read-back of an empty plan")
-    values = ", ".join(
-        f"({_literal(r.site_id)}::uuid, {_literal(r.new_value)})" for r in records
-    )
+    values = ", ".join(f"({_literal(r.site_id)}::uuid, {_literal(r.new_value)})" for r in records)
     rows = read_rows(POST_WRITE_ASSERT_SQL.format(values=values, run_stamp=_literal(run_stamp)))
     got = {name.strip(): int(value) for name, value in rows}
     expected = len(records)
@@ -425,7 +425,11 @@ def assert_the_write_landed(
             expected,
             f"the plan names {expected} row(s)",
         ),
-        ("planned rows with no journal row for this run stamp", 0, "every planned row is journalled"),
+        (
+            "planned rows with no journal row for this run stamp",
+            0,
+            "every planned row is journalled",
+        ),
         (
             "journal rows for this run outside unified_sites.country",
             0,
@@ -439,6 +443,7 @@ def assert_the_write_landed(
                 f"{got.get(name)}, expected {want} ({why})"
             )
     return got
+
 
 REHEARSAL_READS = """\
 -- after ROLLBACK: nothing may have changed

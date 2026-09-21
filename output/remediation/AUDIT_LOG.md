@@ -2465,3 +2465,40 @@ closing line was labelled `change_log_rows_must_be_0`, a question that number ca
 production - it printed 5,578. A reader would have taken a correct run for a failed one, or trained
 themselves to ignore the line. Relabelled `journal_rows_after_rollback`, with the actual invariant
 spelled out: it must equal the count taken before the run.
+
+## Phase-3 runner piece 1 - the missing component, and a reformat that had to be re-proved
+
+The Phase-3 review of 1,813 sites needs a runner that did not exist. Piece 1 landed the finding
+schema, a measured cost ledger and an offline deterministic plan: 28 tests, ruff and mypy clean.
+
+`Verdict` is exactly `defect | true_but_no_correction | unverifiable`, and that first pair is the
+point - neither value had any producer in this repository, which is why the census can flag a site
+and still leave "is the stored value actually wrong?" unanswered. `Finding.defect` is derived from the
+verdict, so the flag can never contradict it. The ledger records token counts per call and never
+estimates them, and it deliberately carries **no dollar figure**: a price table is an assumption, and
+an assumed cost is the invention this runner exists to prevent.
+
+**A formatter had rewritten an already-verified file.** `scripts/remediation/mechanical/apply.py`
+came back from the lane reformatted by `ruff format` - the lane reported it as pre-existing, but the
+tree was clean before the lane started. By this project's rule that invalidates the file's
+verification, so it was re-proved rather than waved through. My first instrument was token-stream
+equality and it is the **wrong instrument**: it reports a difference, because ruff inserts trailing
+commas when it explodes a tuple, and those are inert. The right instrument is the syntax tree -
+`ast.dump` of both versions is identical, 88,735 characters each - which proves the change cannot
+alter behaviour, and the 552-test remediation suite is green. A render comparison was attempted twice
+and **not obtained** (`emit` requires `ROLLBACK.sql` to exist first, and `--render-rollback` reads
+`PLAN.jsonl` from the output directory); the AST proof is stronger than that comparison would have
+been, so it was not chased further.
+
+**Instrument slips of my own, four in this stretch.** One: a `&&` chain aborted after a probe crashed,
+and a later `;`-separated command printed anyway, so the output *looked* like a complete run while the
+render check had been skipped entirely - the fix is newline-separated commands. Two: `echo $?` after a
+pipeline reports the **pipeline's** exit, not the command's, so two lines reading `exit: 0` were
+worthless while argparse had in fact rejected the flag. Three: I guessed the JSON key names
+(`site_ids`) and the CLI flag name (`--rollback`) instead of reading them, and mistook each failure
+for a defect in the artifact. Four: I computed 1,815 sites by multiplying 121 batches by 15 instead of
+summing them; the true count is 1,813 (120 full batches plus 13), which is exactly the scope.
+
+The determinism claim was reproduced here rather than taken from the lane's summary: three independent
+runs give `96704b808ae1b29d69480693...`, and the plan's 1,813 site ids are exactly the
+`WORKLIST.jsonl` `phase3=true` set with no duplicates.
