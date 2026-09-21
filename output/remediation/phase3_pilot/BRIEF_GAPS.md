@@ -101,9 +101,12 @@ near its limit, so a finder that writes a fuller sentence will hit the cut.
 ## 6. Nothing verifies the prose
 
 The three defects the census never named (PILOT.md §5) were all found by reading the text: the
-Pannonian coordinate 82.7 km off the Danube, the Pannonian description that scopes a
+Pannonian coordinate **74.18 km** off the nearest Danube geometry (published first as "82.7 km",
+which is the nearest way's **bounding-box centre**, not its line — PILOT.md §3.3), the Pannonian
+description that scopes a
 multinational frontier to Croatia and contradicts itself, the Karpasia card that gives Zeno of
-Citium a birthplace 102 km away. T01 compares *values*, T02 compares *geometry against Natural
+Citium a birthplace 102 km away (a figure measured outside the pilot's capture — PILOT.md §3.4).
+T01 compares *values*, T02 compares *geometry against Natural
 Earth*, T03 reads *dates* out of the text, T05 looks at *country strings*. No test asks whether
 the **sentences are true**, although the sentences are what the narrator reads
 (`pipeline/video/shorts_tts.py` speaks name + card closing line).
@@ -139,6 +142,12 @@ families it does not cover:
    item's own precision is unfalsifiable; the brief says "do not refute on a sub-precision
    difference" but nothing in the census output exposes `P625`'s precision, so a finder cannot
    apply that rule without fetching Wikidata itself.
+   *Amended 2026-09-21 (Wave 7):* this pattern describes a **threshold** problem, not a licence to
+   refute a row — and in the pilot's own case the sub-precision difference sat on a **real**
+   defect: the stored pin is the visitor complex of the neighbouring Prometheus Cave, and the
+   reviewer's own evidence (a named `natural=cave_entrance` node 1.33 km away, 59 m from `P625`)
+   settles it. So: do not refute a coordinate finding *because* the gap is below the witness's
+   stated precision; look for a named feature instead (`PILOT.md` §2.1).
 5. **"Natural Earth draws de-facto borders and drops small islands."** Measured over the 117 T02
    findings: 45 open water (real coastline generalization — Petroglyph's 1.1 km), 22 United
    Kingdom (points in Northern Ireland against the value `Ireland`), 7 Northern Cyprus,
@@ -208,3 +217,9 @@ side by side and refuses to average them. The pilot measured no tokens, so it ca
 but it can say that with 726 lifecycles the fixed context overhead alone (~31,500 tokens/run per
 the project's own measurement) is ~22.9 M tokens, versus ~1.3 M for 40 lifecycles. **Decision
 needed before launch, from whoever holds the run-1 token accounting.**
+
+*Amended 2026-09-21 (Wave 7):* the run shape is decided — **15 sites per run, ~121 runs per stage,
+242 lifecycles**, so the overhead figure for the shape that will actually run is 242 × ~31,500 ≈
+**7.6 M tokens** (not 22.9 M). The 726-lifecycle arithmetic above describes the superseded 5-sites-
+per-batch shape and is kept as the reason it was dropped (`BATCH_PLAN.md`). The token anchor itself
+is still unresolved — it is not this pilot's to settle.

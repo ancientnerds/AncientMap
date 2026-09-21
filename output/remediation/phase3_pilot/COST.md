@@ -42,7 +42,11 @@ and every one of them still cost a turn.
 
 ## 3. The size lever (measured, and the cheapest thing in this report)
 
-The six largest pages are **70 % of all fetched bytes**:
+The six largest pages are **69.9 % of the 2,343 KB that arrived with a 200** — and **65.1 %** of
+the 2,516 KB that arrived in total, failures included. One definition per number: the six rows
+below, summed, over the denominator named in the sentence. *As first published here the line read
+"**70 % of all fetched bytes**", which mixed the two definitions — it sorted by delivered bytes (so
+the 105 KB 404 page counted) but divided by the 200-only total. No conclusion changes.*
 
 | page | bytes |
 |---|---|
@@ -54,9 +58,13 @@ The six largest pages are **70 % of all fetched bytes**:
 | travelguide.ge (404) | 105 KB |
 
 The two OSM bbox dumps alone are **1.0 MB of 2.34 MB** and were fetched only to find one or two
-named features in a 2 km box — a name-filtered Overpass query does that in 4 KB (measured on
-this pilot: the named-feature queries for Petroglyph and for Satsurblia's box returned 4.1 KB and
-287 bytes respectively). **Derived:** at ~4 characters
+named features in a 2 km box — a name-filtered Overpass query does that in 4 KB or less (measured
+on this pilot: the named-feature queries for **Petroglyph** returned 4.1 KB and 287 bytes. *The
+line first published here read "the named-feature queries for Petroglyph and for Satsurblia's box
+returned 4.1 KB and 287 bytes respectively" — there is **no Satsurblia Overpass query** in
+`fetch_log.jsonl`, and both 287-byte responses are Petroglyph queries (`Petroglyph/overpass` and
+`Petroglyph/overpass_bbox`). The Petroglyph pairing is the stronger evidence anyway: 400 KB of raw
+bbox dump against 287 bytes for the same box.*) **Derived:** at ~4 characters
 per token, *if* every fetched byte entered the agent's context, the batch would be ≈ 585–600 k
 tokens (117–120 k/site, the range being decimal vs binary KB) — roughly 3× the plan's own
 40 k/site anchor for the fetch text alone. The
@@ -67,8 +75,9 @@ of reading them; that is a discipline the batch runner has to impose, not a prop
 
 * Research 11.2 min, batch end to end **16.2 min** for 5 sites → **3.2 min/site**, write-up
   included.
-* *Derived:* 363 batches sequentially ≈ **98 h** of agent wall clock; at 36 concurrent runs
-  ≈ **2.7 h**.
+* *Derived:* 363 batches sequentially ≈ **98 h** of agent wall clock (363 = the plan's 5 sites per
+  batch; at the ratified 15 sites per run it is 121 batches per stage — `BATCH_PLAN.md`); at 36
+  concurrent runs ≈ **2.7 h**.
 * The plan's own run-1 anchor (`BATCH_PLAN.md` §Wall clock: 3,653,051 tokens / 37 min at 10–14
   parallel; 180 sites) implies **7.4 min per site per agent** (37 min / 5 sites per agent).
   This batch ran **3.2 min/site**, i.e. 2.3× faster — but its agent did both stages with no
@@ -86,14 +95,19 @@ cannot both be right:
 
 * **Anchor A — "~40,000 tokens/site" (both stages)**, from the plan §13 "measured anchor".
 * **Anchor B — run-1 = 36 agents / 3,653,051 tokens / 37 min**; read at 36 agents × 5 sites =
-  180 sites, that is **20,293 tokens/site**.
+  180 sites, that is **20,294.7 tokens/site** (≈ 20,295; *first published here as "20,293" — the
+division was written out, so it is corrected to the true quotient rather than rounded away*).
 
 Side by side, neither averaged (the plan itself shows both readings; it flags the same 2×):
 
 | | per site (both stages) | total for 1,813 sites | per batch of 5 (both stages) | per agent run (one stage) |
 |---|---|---|---|---|
 | **Anchor A** | 40,000 | 1,813 × 40,000 = **72.5 M** | 200,000 | 100,000 |
-| **Anchor B** | 20,293 | 1,813 × 20,293 = **36.8 M** | 101,500 | 50,700 |
+| **Anchor B** | 20,294.7 (≈ 20,295) | 1,813 × 20,295 = **36.8 M** | 101,474 | 50,737 |
+
+*The Anchor B row first read "20,293 / 36.8 M / 101,500 / 50,700": the total is unchanged at this
+precision, the two right-hand cells were rounded from the wrong base (they now follow the true rate
+20,294.7: 5 × 20,294.7 = 101,473.5, and half of that per stage).*
 
 So the *total* swings 2× (36.8 M vs 72.5 M) purely on which anchor is believed — and the *run
 count* swings 18×, because the two anchors imply different batching: 5 sites per agent gives
@@ -133,6 +147,17 @@ reviewer upgrades anything is zero**, and 285 sites (with their 2 × 285 agent r
 produce a write at all, because FIELD_CONTRACT §4.6 makes every coordinate correction a human
 review by contract.
 
+**Amended 2026-09-21 (Wave 7) — the second half of that sentence is not what the cited rules say,
+and it changed the Phase-3 scope.** Both rules (FIELD_CONTRACT §4 item 6, ENRICHMENT_AUDIT
+anti-pattern 4) speak only about **coordinate** findings, while the claim made was about those
+sites' **writes in general**. Supported is the narrower statement: **no *census finding* of these
+285 sites is writable** — re-verified on `WORKLIST.jsonl` (285 records whose only finding is
+`T01/coords`, one finding each; 202 `moderate`, 83 `severe`), and a coordinate correction is human
+review by contract. **Not** supported is "those sites can write nothing": the census says nothing
+about their other fields, and the pilot found three defects the census never named, **two of them
+prose**. The 285 therefore stay in Phase 3: the scope is **1,813 sites, not 1,528** (decision 12's
+exclusion is superseded — `BATCH_PLAN.md`), and §7 item 3 below is withdrawn with it.
+
 What the pilot adds to that: the reviewer *can* upgrade a `review` finding into a `set` — in this
 batch 4 of 15 census findings (27 %) ended as writable `set`s (two periods, two countries) on 2
 of the 5 sites. That is the value Phase 3 buys. It is **not** a rate: this batch is 5 of the only
@@ -149,12 +174,20 @@ per-site figure here (6 `set`s, 15.2 fetches, 3 new defects) is biased **upward*
    that fits in 60 KB except the PLOS article, which a `?`-less abstract/full-text choice or the
    Europe PMC abstract service (measured, #71) covers.
 2. **Fetch named features, not raw geometry.** The two OSM dumps cost 1 MB to answer what a
-   filtered Overpass query answered in 4 KB (Petroglyph) and 287 bytes (Satsurblia box).
-3. **Do not spend a finder+reviewer pair on the 285 coords-only sites** unless the plan intends
-   to write coordinates, which §4.6 forbids. Deciding this before the run saves 570 agent runs —
-   more than the entire difference between the plan's two token anchors.
+   filtered Overpass query answered in 4 KB or less (Petroglyph: 400 KB of bbox dump against
+   287 bytes for the same box — *as first published "4 KB (Petroglyph) and 287 bytes (Satsurblia
+   box)"; there is no Satsurblia Overpass query, see §3*).
+3. **Withdrawn 2026-09-21: "Do not spend a finder+reviewer pair on the 285 coords-only sites"**
+   (as first published: "… unless the plan intends to write coordinates, which §4.6 forbids.
+   Deciding this before the run saves 570 agent runs — more than the entire difference between the
+   plan's two token anchors."). The strong claim was unbacked (§6 amendment): the two cited rules
+exclude a *coordinate write*, not a write on those sites, and the pilot found three defects the
+census never named, two of them prose. **The 285 are in Phase 3**, so this saving does not exist.
+   If runs must be saved, the lever is the batch size (decision 12), not a site class.
 4. **Reviewer stage is cheap and should stay.** 14 of 76 fetches (18 %) bought 6 refutations and
-   1 unresolved — the highest-value fetches in the batch. Halving it would be false economy.
+   1 verdict the pilot left *unresolved* — the Satsurblia coordinate, which the 2026-09-21
+   re-adjudication then settled as **WRONG** (`PILOT.md` §2.1), i.e. the reviewer's own evidence
+   line was the defect. The highest-value fetches in the batch. Halving it would be false economy.
 5. **Batch the de-facto-border T02 classes as one decision, not 117 reviews.** Measured
    composition of all 117 T02 findings: **45** "no country polygon (open water)" (Natural Earth
    coastline generalization — see Petroglyph, 1.1 km), **22** United Kingdom (points in Northern

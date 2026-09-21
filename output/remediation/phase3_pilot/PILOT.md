@@ -3,11 +3,12 @@
 Read-only pilot. No database write, no commit, no push. Everything here is derived from
 `output/remediation/snapshot/` (exported 2026-09-20), the census output
 (`output/remediation/run_t01|run_t02|run_t03|run_t05`), `phase3_worklist/WORKLIST.jsonl` and
-76 logged HTTP fetches in `fetch_log.jsonl`.
+76 logged HTTP fetches in `fetch_log.jsonl` (with the one recorded exception named in §7).
 
 **What this batch is:** the first five records of `WORKLIST.jsonl` in run order (worst first).
-It is one batch out of 363. It measures *cost per batch* and *what a batch produces*; it does
-not measure a rate. Anything called a rate below says so and names its n.
+It is one batch out of 363 (at the plan's 5 sites per batch; the ratified run shape is **15 sites
+per run**, i.e. 121 batches per stage — `BATCH_PLAN.md`). It measures *cost per batch* and *what a
+batch produces*; it does not measure a rate. Anything called a rate below says so and names its n.
 
 ## 0. Method honesty — the two stages were run by one agent
 
@@ -78,7 +79,7 @@ Nothing was written; `proposal=set` means "this would be writable after the revi
 |---|---|---|---|---|---|
 | Satsurblia | name | `Satsurblia Cave` | CORRECT | — | — |
 | Satsurblia | country | `Georgia (country)` | WRONG (severe) | set | `Georgia` |
-| Satsurblia | lat/lon | 42.37727, 42.60098 | UNVERIFIABLE (moderate) | review | not decided — 3 candidates |
+| Satsurblia | lat/lon | 42.37727, 42.60098 | **WRONG (moderate)** — re-adjudicated 2026-09-21, §2.1; first published here as UNVERIFIABLE | review | not decided — 3 candidates, all ~1.3 km away |
 | Satsurblia | period_start | `-500` | WRONG (severe) | set | `-23500` |
 | Satsurblia | period_name | `500 BC - 1 AD` | WRONG (severe) | set | `< 4500 BC` |
 | Satsurblia | site_type | `Cave Structures` | CORRECT | — | — |
@@ -117,11 +118,14 @@ Nothing was written; `proposal=set` means "this would be writable after the revi
 | Didnauri | description | (Late Bronze/Early Iron Age) | CORRECT | — | — |
 | Didnauri | card_description | (12th–9th c. BC) | CORRECT | — | — |
 
-Totals: **28 CORRECT, 11 WRONG, 1 UNVERIFIABLE**. Of the 11 WRONG, **6 are field-level
-`set`s** (2 × country `Georgia`, 2 × period_start, 2 × period_name — i.e. two country fixes
-plus two period fixes) and **5 are human decisions** (2 coordinates, 1 multinational `country`,
-1 description, 1 card text). Both period fixes and both country fixes are on two of the five
-sites.
+Totals, re-counted 2026-09-21 after the §2.1 re-adjudication: **28 CORRECT, 12 WRONG,
+0 UNVERIFIABLE** (all 40 rows). Of the 12 WRONG, **6 are field-level `set`s** (2 × country
+`Georgia`, 2 × period_start, 2 × period_name — i.e. two country fixes plus two period fixes)
+and **6 are human decisions** (3 coordinates, 1 multinational `country`, 1 description, 1 card
+text). Both period fixes and both country fixes are on two of the five sites.
+*As first published (2026-09-20) the totals read "**28 CORRECT, 11 WRONG, 1 UNVERIFIABLE** …
+**5 are human decisions** (2 coordinates, …)". The single change is the Satsurblia `lat/lon`
+row, whose UNVERIFIABLE verdict did not survive re-measurement — §2.1.*
 
 For comparison with the mechanical lane: of those 6 `set`s, the 2 country fixes are
 `confidence=authoritative` and are exactly what the mechanical lane would have applied without
@@ -130,8 +134,9 @@ corrections** (Satsurblia and Didnauri `period_start`+`period_name`), on 5 sites
 
 **Confidence audit (the brief's "distinct hosts; two pages on one host is one source" rule).**
 Every non-CORRECT verdict in `PILOT.jsonl` was re-checked against that rule: 34 rows are
-`two_source`, 5 are `authoritative` and 1 is `unverifiable`, and no non-CORRECT verdict now rests
-on a single host unless it is labelled `authoritative`. Three verdicts were **downgraded** during
+`two_source`, 5 are `authoritative` and 1 is `unverifiable` (the re-adjudicated Satsurblia
+coordinate — §2.1: the *defect* is measured, the *replacement* is not), and no non-CORRECT verdict
+now rests on a single host unless it is labelled `authoritative`. Three verdicts were **downgraded** during
 that audit because their evidence turned out to be one family — the Karpasia card (both items
 Wikidata: `P19`/`P27` of Q171303 and the label of Q1743884), the Satsurblia `period_name` (PLOS
 ONE plus the local bucket function) and the Petroglyph card (the official Alaska DNR page, from
@@ -141,6 +146,38 @@ snapshot measurement, `fetch_log_label: null`) — that is two independent check
 and the label says which is which. Same trap, caught once: GeoNames reproduced both the stored
 Satsurblia coordinate *and* Wikipedia's wrong Juneau coordinate, so "GeoNames agrees" was never
 counted as corroboration.
+
+### 2.1 Re-adjudication, 2026-09-21 (the measuring lens)
+
+**Satsurblia `lat/lon` — UNVERIFIABLE → WRONG.**
+*As first published (2026-09-20):* outcome `UNVERIFIABLE (moderate)`, proposal `review`, reason
+"three candidate points, none authoritative enough to overrule the others" (this row and §3.1).
+*What was measured (2026-09-21), re-read from the raw body of fetch #57
+(`evidence/Satsurblia%2Fosm_bbox.txt`, 612,198 bytes, `<bounds minlat="42.3700000"
+minlon="42.5900000" maxlat="42.3950000" maxlon="42.6150000"/>`):*
+
+| element | coordinate | distance to the stored point (42.37727, 42.60098) |
+|---|---|---|
+| node `12660399343` — of the dump's 2,972 elements the **only** one carrying the name `საწურბლიას მღვიმე` (`name:en = Satsurblia Cave`, `natural=cave_entrance`, `wikipedia = en:Satsurblia Cave`) | 42.3886354, 42.6060480 | **1.331 km** |
+| node `12660390054` — **self-closing, no tags**, a `<nd ref>` of way `370555413` (`highway=unclassified`) | 42.3964749, 42.5890186 | 2.351 km |
+| Wikidata `P625` (#1) — the census's own witness | 42.388111, 42.606167 | 1.279 km |
+
+The published **2.35 km is the distance to the untagged road node**, and that node lies **outside
+the fetched box** (`maxlat=42.395` against lat 42.3964749): it was never a member of the candidate
+set the sentence claimed. The named cave node sits **1.331 km** from the stored point and **59 m**
+from Wikidata's `P625`; the three real witnesses (Wikidata, showcaves.com, the OSM named node)
+agree to within 35–94 m of each other and ~1.3 km from the stored value. That is the same shape as
+the rows this pilot called WRONG (Karpasia: the stored point is the modern town, 3.5 km from the
+site).
+*Corrected verdict:* **WRONG (moderate) → `review`, no write.** The stored pin is not the cave; it
+sits on the visitor complex of the neighbouring Prometheus Cave — which this row's own evidence
+already showed (50 m from the `პრომეთეს მღვიმე` way). What is *not* decided is the **replacement**,
+which is why `confidence` stays `unverifiable` in `PILOT.jsonl`: the defect is measured, the fix is
+not. `proposed_value` stays `null` — every coordinate correction is human review by contract
+(`FIELD_CONTRACT.md` §4 item 6). The row is therefore the **third** coordinate in the human queue,
+not a case of "no source settles it".
+*Also corrected:* §3.1's distance list is **1.28 / 1.25 / 1.33 km** (was "1.28 km, 1.25 km and
+2.35 km"), and §3.1's quotation of the OSM named node was the wrong element.
 
 ## 3. Site by site
 
@@ -155,7 +192,9 @@ threshold 1000 m)".
 *Finder:* Wikidata Q28220554 `P625 = 42.388111, 42.606167`, **with its own precision
 `0.01216°` = 1.35 km** (fetch #1) — the 1.28 km difference is *smaller than Wikidata's own
 stated uncertainty*, and the REVIEWER_BRIEF names exactly this as a false-positive source
-("do not refute on a sub-precision difference").
+("do not refute on a sub-precision difference"). *(2026-09-21: that argument did not hold for
+this row — the sub-precision difference sat on a real defect, and the reviewer's own evidence
+settled it. §2.1.)*
 *Reviewer (own sources):* `showcaves.com` "Location: Village Kumistavi, Tskaltubo Municipality.
 (42.387795, 42.606163) … 287 m asl., L=130 m, A=1,950 m²" (#55) agrees with Wikidata
 (40 m apart). `geonames.org` places "Satsurblia Cave" at **42.3772 / 42.6009** (#65) — the
@@ -168,6 +207,17 @@ away from the stored point — and one of them (GeoNames) agrees with it exactly
 have: the stored pin sits on the visitor complex of the *neighbouring* Prometheus Cave, so the
 row is probably wrong, but no defensible replacement exists (three candidate points, none
 authoritative enough to overrule the others). This is a human decision, not an applier write.
+
+*Amended 2026-09-21 — the coordinate quoted in the paragraph above is the wrong node, and the
+verdict changes to WRONG.* Everything above stays on the record as first published; corrections:
+the OSM element carrying the name `საწურბლიას მღვიმე` is at **42.3886354 / 42.6060480**, not
+42.39647 / 42.58902 — that second coordinate belongs to a self-closing, **untagged** node of a
+`highway=unclassified` way, and it lies **outside the fetched box** (`maxlat=42.395`), so it was
+never a candidate; **2.35 km is the distance to that road node**, while the named cave node is
+**1.33 km** from the stored point, and the distance list becomes **1.28 / 1.25 / 1.33 km**; the
+three witnesses (Wikidata, showcaves.com, the named OSM node) sit within **35–94 m** of each other
+and ~1.3 km from the stored value; GeoNames reproduces the *stored (wrong)* value exactly, so that
+"agreement" corroborates nothing. Measurement, element ids and the raw-file check: §2.1.
 
 **census 2 — T03/all-outside (severe).** "card_description dates the site to 23,500 BC
 (< 4500 BC), but the declared period is 500 BC - 1 AD".
@@ -280,7 +330,12 @@ Croatia".
 *Reviewer (own measurement):* Overpass `waterway=river name=Дунав` around the stored point
 (#75) returns the nearest Danube geometry **82.7 km** away (44.7437, 20.9918). The Pannonian
 Limes *is* the Danube line. The stored point is a village (`Јабучје`, 43.99911/20.99020, ~1 km)
-in central Serbia.
+in central Serbia. *(2026-09-21: 82.7 km is not the geometry — it is the **bounding-box centre**
+of the nearest way, which is what `out center` returns. Re-run with the identical selector and
+only the output mode changed (`out geom tags`, 8 elements, way `434028188` `name = Дунав`, 77
+geometry points): the nearest point of that line is 44.65710, 20.83819 = **74.18 km** from the
+stored point, and the same way's bbox centre (44.74369, 20.99180) is 82.69 km — the published
+figure. The finding strengthens by 8.5 km; the reference point is named from here on.)*
 *Verdict:* **WRONG → review.** A 420 km linear frontier has no representative point;
 `lat`/`lon` are `NOT NULL` (FIELD_CONTRACT §3), so `clear` is not available either. A human
 must decide (e.g. the frontier's midpoint, or a re-scope to one fort).
@@ -344,6 +399,15 @@ Wikidata is wrong about Zeno's birthplace, this specific verdict falls; every ot
 in this batch rests on two families. It is kept as WRONG because "Zeno of Citium" is the
 standard epithet (Citium = Kition = Larnaca) and the claim is the card's alone — but the reader
 should see the seam.
+*Provenance of the "~102 km" (added 2026-09-21).* The number is right, but it was **not traceable
+to this capture**: the only fetch of `Q1743884` is #73 (`wd_kition_label`,
+`action=wbgetentities&props=labels|descriptions`) — a label, not an entity — so its coordinate is
+in none of the 76 evidence files (#72 fetches `Q171303`, the *other* item). The traceability claim
+in §7 therefore did not hold for this number, which was written as *measured* without a cited
+measurement. Re-measured outside the capture on 2026-09-21
+(`Special:EntityData/Q1743884`: `P625 = 34.923296, 33.630545`, precision 1e-06; haversine against
+the stored point 35.59664186874294 / 34.37808778289012) = **101.06 km**, i.e. "~102 km" as written.
+The number now says where it comes from: a separate measurement, not this batch's evidence.
 *Verdict:* **WRONG (severe) → review.** A false biography claim on a card that is read aloud
 (cf. `shorts_tts.py`); the fix is a Phase-5 card rewrite (JSON file, then DB), not a SQL
 update. Second clause of suspicion: "ancient Greek city-kingdom … founded by Phoenicians" is
@@ -369,7 +433,13 @@ credible for a field-surveyed 1.5 km site, #9); enwiki's infobox coordinate
 `archaeological_site=settlement`, `ruins=fort`, `historic:period=iron-age`; the larger one
 spans lat 41.41159–41.41729, lon 46.21381–46.23019 (measured 0.63 × 1.37 km) and the **stored
 point lies inside it**, 73 m from the polygon's centre, while the Wikidata point lies 2.09 km
-north-west of the polygon. mapcarta (#46) repeats 41.41444.
+north-west of the polygon. mapcarta (#46) repeats 41.41444. *(2026-09-21: the 73 m is the distance
+to the polygon's **bounding-box centre** 41.414438, 46.222002 — computed from the way's `<bounds>`,
+not measured against the geometry; "the polygon's centre"
+named no reference point, and the centroid quoted in the evidence line above, 41.415504,
+46.219961, is **254 m** away, while the polygon's area centroid is 77 m. The span, the "inside"
+verdict, the 2.09 km and the 73 m all reproduce from `evidence/Didnauri%2Fosm_bbox_se.txt`; only
+the name of the reference point was missing.)*
 *Verdict:* **CORRECT — the census lead is REFUTED.** The DB's point is the site; Wikidata's is
 off it. Third coordinate finding in this batch where the DB side survived.
 
@@ -396,7 +466,7 @@ Satsurblia. **WRONG → `set "Georgia"`** (authoritative).
 | outcome | n | findings |
 |---|---|---|
 | real error, mechanically applicable fix | 4 | Satsurblia T03, Satsurblia T05, Didnauri T03, Didnauri T05 |
-| real defect → human decision | 4 | Satsurblia T01/coords (unresolved), Pannonian T01/country, Pannonian T02/outside-polygon, Karpasia T01/coords |
+| real defect → human decision | 4 | Satsurblia T01/coords ("unresolved" as published; re-adjudicated 2026-09-21 to *wrong, no decidable replacement* — §2.1), Pannonian T01/country, Pannonian T02/outside-polygon, Karpasia T01/coords |
 | refuted (false alarm) | 6 | Petroglyph T01/coords, Petroglyph T02, Pannonian T03, Karpasia T02, Karpasia T03, Didnauri T01/coords |
 | true but not a factual error (decision item) | 1 | Petroglyph T05/spelling-split |
 
@@ -408,8 +478,10 @@ T03 was the worst test in this batch: **4** findings, **2 right, 2 false alarms*
 only dated claim is the terminus; Karpasia: the date belongs to a person born elsewhere;
 Satsurblia and Didnauri: right, and the *bucket* was the broken end). T01/coords: **4** findings,
 **0 writable**, 2 refuted outright (Petroglyph 235.6 km, Didnauri 2.86 km — in both, Wikidata
-was the wrong side), 1 unresolved (Satsurblia, 1.28 km inside Wikidata's own precision) and 1
-confirmed-wrong-but-review (Karpasia). T02: 3 findings, all refuted as
+was the wrong side), and 2 wrong-but-review — Karpasia (the stored point is the modern town) and
+Satsurblia, which was published here as "unresolved, 1.28 km inside Wikidata's own precision" and
+was re-adjudicated on 2026-09-21: the 1.28 km lead is real, the precision argument did not rescue
+the stored value (§2.1). T02: 3 findings, all refuted as
 data errors (2 Natural Earth artifacts, 1 row-internal contradiction that was useful anyway).
 
 ## 5. Defects the census did not name
@@ -417,8 +489,15 @@ data errors (2 Natural Earth artifacts, 1 row-internal contradiction that was us
 Three, on 3 of the 5 sites — i.e. the batch produced more *new* real defects than writable
 corrections:
 
-1. **Pannonian `lat/lon`** — 82.7 km off the Danube, measured; invisible to T01 because
-   Wikidata has no `P625` for this item, and to T02 because T02 only asks about the country.
+1. **Pannonian `lat/lon`** — **74.18 km** off the nearest Danube geometry, measured (the
+   bounding-box centre quoted first here, 82.7 km, is not the geometry — §3.3); invisible to T01
+   because Wikidata has no `P625` for this item, and unnamed by T02 **although T02 names the
+   coordinate as a suspect**: `output/remediation/run_t02/findings.jsonl:31` says of this site
+   "point (44.00010, 20.99992) lies 182.2 km outside the Croatia polygon (nearest boundary
+   45.17967, 19.40536); Natural Earth places it in Republic of Serbia. Either `country` or the
+   coordinates are wrong - T02 cannot tell which". T02's real defect is that it cannot separate
+   the two halves of the row; the reason first published here — "T02 only asks about the country"
+   — is refuted by that citation.
 2. **Pannonian `description`** — a multinational frontier presented as Croatian, in a sentence
    that contradicts itself. No census check reads the description's *scope* claims.
 3. **Karpasia `card_description`** — a false "most famous resident" claim (Zeno of Citium,
@@ -434,10 +513,12 @@ read aloud. Two of the three new defects are prose.
 **Established (measured).**
 * 15.2 fetches per site (76 fetches / 5 sites: 62 finder, 14 reviewer), 19 of 76 non-200
   (25 %) — §3 of `COST.md` has the per-site table.
-* 28 of 40 (site, field) pairs CORRECT, 11 WRONG, 1 UNVERIFIABLE.
+* 28 of 40 (site, field) pairs CORRECT, **12 WRONG, 0 UNVERIFIABLE** (re-counted 2026-09-21
+after the §2.1 re-adjudication; first published as "11 WRONG, 1 UNVERIFIABLE").
 * 6 of 15 census findings refuted as false alarms (40 %); at the (site, field) level the human
-  queue is **6 items**: 5 WRONG→`review` plus 1 UNVERIFIABLE→`review`; 3 of the 6 are
-  coordinates, 2 are prose (1 description, 1 card) and 1 is a multinational country.
+  queue is **6 items**: **6 WRONG→`review`** (first published as "5 WRONG→`review` plus
+  1 UNVERIFIABLE→`review`"); 3 of the 6 are coordinates, 2 are prose (1 description, 1 card) and
+  1 is a multinational country.
 * 2 mechanically applicable LLM-derived corrections across 5 sites (the two period fixes,
   i.e. 4 field-level `set`s) and 3 new defects the census never named.
 * The eight overlap sites belong to Phase 3 (§1.1).
@@ -466,4 +547,12 @@ C:/PythonProjects/AncientMap/.venv/Scripts/python.exe build_pilot_jsonl.py      
 ```
 
 `fetch_log.jsonl` is append-only; `evidence/` holds the raw bodies (URL-encoded labels).
-Everything in this document is traceable to one of those two places.
+Everything in this document is traceable to one of those two places, with **one recorded
+exception** rather than a silent gap: the "~102 km" Kition distance in §3.4 — `Q1743884` was
+fetched for labels and descriptions only, so no coordinate of it is in either place; the figure was
+re-measured outside the capture and is labelled as such there. The 2026-09-21 amendments appended
+**nothing** to `fetch_log.jsonl` (it is append-only and stays untouched): they either re-read the
+raw bodies under `evidence/` — and name the file — or re-issued one query whose URL/selector is
+given inline (the `out geom` Danube query in §3.3, the `Special:EntityData/Q1743884` call in §3.4).
+No number in this document rests on a fetch that is neither in the log nor reproducible from the
+text.

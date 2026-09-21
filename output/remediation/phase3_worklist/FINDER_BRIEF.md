@@ -89,7 +89,9 @@ article's own `{{Coord}}` both carry downtown Juneau 235 km away, and GeoNames r
 same point, so the error looks corroborated; (iv) *"the item's own precision is an alibi"* —
 Satsurblia P625 precision 0.01216 deg = 1.35 km, larger than the 1.28 km difference flagged,
 so any threshold below the item's own precision is unfalsifiable (and nothing in the census
-output exposes that precision, so you must fetch it); (v) *"Natural Earth draws de-facto
+output exposes that precision, so you must fetch it — but do **not** refute a coordinate finding
+because the gap is sub-precision: in this pilot that gap sat on a real defect, the stored pin
+being the neighbouring cave's visitor complex, `../phase3_pilot/PILOT.md` §2.1); (v) *"Natural Earth draws de-facto
 borders and drops small islands"* — measured over the 117 T02 findings: 45 open water, 22
 United Kingdom (points in Northern Ireland against the value Ireland), 9 Russia (Crimea), 7
 Northern Cyprus, 4 "Northern Ireland matches no Natural Earth admin-0 feature", 2 Akrotiri SBA,
@@ -128,18 +130,37 @@ verdicts — but do not manufacture a correction to avoid that outcome either: t
 encoding of those cases is `defect: false` + `proposal: review` (decision 2) or a
 `found_not_named` report (decision 6).
 
-**12. Run shape — decided from the pilot's own arithmetic.** **15 sites per run** (about 102 runs
-per stage over ~1,528 sites), the **285 coords-only sites excluded entirely**
+**12. Run shape — decided from the pilot's own arithmetic.** **15 sites per run** (about 121 runs
+per stage over **1,813** sites). *Superseded 2026-09-21 (Wave 7), kept for the record:* "about 102
+runs per stage over ~1,528 sites, the **285 coords-only sites excluded entirely**
 (`FIELD_CONTRACT.md` §4 item 6 makes every coordinate correction human, so those 570 runs can
 write nothing; re-verified against `WORKLIST.jsonl`: 1,813 phase-3 sites minus the 285 whose only
-findings are `T01/coords` = 1,528). The reviewer stage stays (18 % of fetches bought 6
+findings are `T01/coords` = 1,528)". The exclusion is withdrawn because the cited rule speaks only
+about **coordinate** findings: what is supported is the narrower claim that **no *census finding*
+of those 285 sites is writable** (re-verified on `WORKLIST.jsonl` 2026-09-21: 285 records, exactly
+one `T01/coords` finding each), and the census says nothing about their other fields — the pilot
+found three defects the census never named, two of them prose. So the 285 are **in** the run and
+the scope is 1,813. The reviewer stage stays (18 % of fetches bought 6
 refutations). 60 KB per-page fetch cap. Fetch **named features** instead of raw geometry dumps (2
 OSM dumps cost 1 MB where a filtered query cost 4 KB). Never count a derived source twice. T02 is
 **one human vocabulary decision plus a short exception list**, not 117 reviews. **Superseded:** 5
 sites per batch means 726 agent lifecycles, and the project's own measured fixed overhead is
-~31,500 tokens per lifecycle → ~22.9 M tokens of pure overhead versus ~1.3 M for 40 lifecycles.
+~31,500 tokens per lifecycle → ~22.9 M tokens of pure overhead versus ~1.3 M for 40 lifecycles (at
+15 sites per run the same figure is 242 lifecycles ≈ 7.6 M).
 Token accounting must be **MEASURED** on the first instrumented run, not assumed: the plan's two
 anchors differ by 2× and must not be averaged.
+
+**13. A published distance names its reference point.** Whenever you publish a distance, say which
+point it was measured to: the **nearest geometry** (the nearest point of the way/line/polygon —
+that is what "x km away" means for a frontier or a river), the **centroid**, or the
+**bounding-box centre**. The three are different numbers for the same object, and the difference is
+not academic: Overpass `out center` returns the **centre of a way's bounding box**, not its line,
+and in this pilot that turned a 74.18 km distance into 82.7 km — an 8.5 km error that was written
+into three documents as "measured". For the Didnauri polygon the three points give 73 m (bbox
+centre), 77 m (area centroid) and 254 m (the centroid quoted in the evidence) for the same stored
+coordinate. **Never label a value "measured" when what was measured was a bounding box**, and
+never leave the reference point implicit: a reader cannot check a distance whose reference point is
+unnamed.
 
 ## Your batch
 
