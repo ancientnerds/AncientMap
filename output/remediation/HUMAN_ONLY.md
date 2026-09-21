@@ -5,8 +5,10 @@ Stand: 2026-09-21. Auftrag: **alle 5.004 `ancient_nerds`-Sites prüfen und vom M
 davon **nicht** durch einen Agenten erledigt werden kann — mit Menge, Beleg und der Frage, die du
 beantworten musst.
 
-**Stand des Schreibens (2026-09-21):** Die Korrekturen gehen seit heute in die **Produktionsdatenbank**,
-in 100er-Schritten mit Nachlesen nach jedem Schritt (deine Regel). Vorher: Sicherung
+**Stand des Schreibens (2026-09-21):** Die Korrekturen sind **in der Produktionsdatenbank** —
+**410 Zeilen an 396 Sites**, jede mit Journaleintrag. Zurückgehalten: 72 Zeilen. An der Grenze abgelehnt:
+3 Zeilen. 75 geplante Zeilen stehen unverändert auf dem alten Wert. Abnahme von außen
+(`logs/verify_writes.py`): **0 Abweichungen**, geprüft in beide Richtungen. Vorher: Sicherung
 `backups/2026-09-21_pre-write/` (655 MB) mit bestandenem Restore-Test (`unified_sites` 1.759.676 =
 1.759.676). Zu jeder Schreibung liegt eine Zeile im Journal `remediation_change_log` mit altem und
 neuem Wert, und daneben je Chunk eine `ROLLBACK.sql`, die die Umkehrung in einer Transaktion ausführt,

@@ -5011,3 +5011,31 @@ with the rows already written, which was **empty**. The count that counts is the
 from the file, never the one the script's source suggests, and the file is regenerated before the
 reader starts. The eleven finished batches were resumed, not re-applied.
 
+### The wave is finished: 410 rows at 396 sites, nothing deviating
+
+The run wrote in eight checks of a hundred sites, and each check read its rows back out of the database:
+at 100/200/315/400/507/622/701/800 sites, 36/80/114/168/223/267/312/360 rows written - **zero deviations
+every time**. `matched_0=3` is the batch that was in flight when the first attempt was stopped: its three
+rows already held the new value, so resuming wrote nothing twice. That is the idempotence the conditional
+`WHERE` promises, measured instead of argued.
+
+| | count | |
+|---|---|---|
+| planned rows | 485 | the writer's dry run, unchanged by the reading |
+| refused by the boundary rule | 3 | Lamay, San Claudio, Soura - the name matched a place thousands of kilometres from the coordinates |
+| withheld after the hand-read | 72 | their own reviewer reason does not carry both halves of the claim |
+| **written** | **410** | 485 - 3 - 72 |
+| journal rows for this wave | 410 | `run_stamp LIKE 'phase3:batch-%'`, one per written row |
+| sites in the plan | 462 | the writer's own dry-run figure, so no site slipped out |
+| **sites actually changed** | **396** | `count(DISTINCT row_pk)` over this wave's journal rows |
+| planned rows still at their old value | 75 | the 72 withheld plus the 3 refused |
+
+The acceptance is `output/remediation/logs/verify_writes.py`, and it asks production rather than the
+writer: every journal row of this wave must find its new value in `unified_sites`, **and every planned row
+without a journal row must still hold its old value** - which is what tests the 75. `ERGEBNIS: 0
+Abweichungen`, `ABNAHME_EXIT=0`.
+
+Its first version was wrong, and how it was wrong is why it is now written in both directions: it excluded
+only the withheld rows, so the boundary-refused rows whose batches were applied counted as written, and it
+reported two deviations that were the refusal *working*. A control that cannot fail is not a check.
+
