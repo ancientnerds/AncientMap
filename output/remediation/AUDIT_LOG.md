@@ -4453,3 +4453,21 @@ session-log probe filtered on `name`/`tool_use` and found zero write calls on `f
 almost read as exculpatory; the records carry `toolName`, and a re-run with that field found that the
 log does not record tool **inputs** at all - so it cannot answer the question either way. An empty
 result is a statement about the filter, not about the world.
+
+**The top-up recipe, with its evidence.** The run lives in the worktree at `d899af3`, which is
+*before* `8d0b7ef` - so the polite `Retry-After` path is not in force for anything it fetches. Read at
+the byte, the digest guard does **not** forbid resuming with newer code: `mass_run.py:578` computes
+`digest = None if args.no_digest_guard else package_digest()` **fresh on every invocation**, and
+`:481` compares that value against `digest_of()`, which is the same function - `run_mass`'s
+`plan_digest` parameter receives exactly the fresh digest at `:629`. The check is therefore a
+comparison of the live digest with itself, always equal on a fresh start, and it has teeth only
+**within one process**, where it re-runs between batches and catches a source edit made while the run
+is going ("the phase-3 sources changed while the run was going"). So:
+
+1. let the current run end, or stop it - the `phase3/` bytes must not change under a live process;
+2. advance the worktree to the new commit;
+3. re-invoke the same command with the same plan, the same run dir and the same ledger.
+
+Step 3 skips what `batch_state` calls `done` (`mass_run.py:255-277`) and redoes exactly the
+incomplete batches: the five above, plus anything that fails later. `batches_failed` must reach 0
+before the run counts as finished.
