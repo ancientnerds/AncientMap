@@ -104,6 +104,35 @@ DISCOVER_DIMENSION = "phase3"
 TEST_ID_PREFIX = "P3/"
 
 
+def site_type_vocabulary(*, snapshot_dir: Path = DEFAULT_SNAPSHOT_DIR) -> tuple[str, ...]:
+    """The `site_type` values the catalogue uses, sorted - the buckets a stored type is drawn from.
+
+    The pass judges a stored `site_type` against the evidence's own phrasing, and the evidence almost
+    never uses a catalogue value ("triumphal arch" is not one of the 70). Without the list the
+    question can only be answered by guessing whether a phrase and a bucket are the same thing, and
+    the second live run guessed wrong on all four `site_type` flags it raised - `Castle/palace`
+    against "folly castle", `Gate/archway/bridge` against "triumphal arch", `Fortress/citadel`
+    against "hill fort", `Megalithic statues` against "ahu" - because it compared the evidence's
+    wording with the stored bucket as if the wording were the target value.
+
+    Read from the snapshot, so the question cannot be built from a hand-copy of the list that has
+    since drifted, and an empty result raises instead of yielding a question with no list in it.
+    """
+    path = snapshot_dir / UNIFIED_SITES_FILE
+    values = {
+        str(row["site_type"]).strip()
+        for row in read_snapshot_jsonl(path)
+        if str(row.get("site_type") or "").strip()
+    }
+    if not values:
+        raise InputError(
+            f"{path}: no non-empty site_type value at all; the discover question asks which of the "
+            "catalogue's values the evidence describes, so a plan built from this snapshot would "
+            "ask a question it cannot answer"
+        )
+    return tuple(sorted(values))
+
+
 def read_snapshot_jsonl(path: Path) -> list[dict[str, Any]]:
     """Read a gzipped JSONL export in file order, refusing anything odd.
 

@@ -88,20 +88,30 @@ FIELD_CLAUSE: dict[str, str] = {
     ),
     "period_start": (
         "`unified_sites.period_start` is an integer year, negative for BC, and the card buckets it "
-        "for display. Most sites sit on a bucket lower bound (-4500/-3000/-1500/-500/1/500/1000/"
-        "1500). State the dating the evidence gives, then compare buckets: a stored value in a "
-        "**different bucket** from the dating the evidence states is `WRONG`, and a round value "
-        "alone is not an error."
+        "for display. The buckets are spans, read off the site's own `categorizePeriod`: a value "
+        "below -4500 is `< 4500 BC`; -4500 up to but not including -3000 is `4500 - 3000 BC`; "
+        "-3000 to -1500 is `3000 - 1500 BC`; -1500 to -500 is `1500 - 500 BC`; -500 to 1 is "
+        "`500 BC - 1 AD`; 1 to 500 is `1 - 500 AD`; 500 to 1000 is `500 - 1000 AD`; 1000 to 1500 "
+        "is `1000 - 1500 AD`; 1500 and later is `1500+ AD`. Most sites sit on a bucket lower bound. "
+        "Work out **which span each of the two values falls in**, state both, and then compare: they "
+        "are `WRONG` when the spans differ, and a round value alone is not an error."
     ),
     "site_type": (
-        "`unified_sites.site_type` is the catalogue's own type, at most 100 characters, and it has "
-        "to survive the project's normaliser. Never downgrade specificity: an item whose type is "
-        '"archaeological site" does not make a stored "Temple" wrong.'
+        "`unified_sites.site_type` is the catalogue's own type and is drawn from a fixed list of "
+        "{n} values: {vocabulary}. It has to survive the project's normaliser. The evidence will "
+        "almost never use one of these words, so decide **which of the catalogue's values the "
+        "evidence describes** - `Gate/archway/bridge` holds a triumphal arch, `Fortress/citadel` "
+        "holds a hill fort, `Castle/palace` holds a folly castle. A stored value is `WRONG` only "
+        "when the evidence describes something no catalogue value can hold, or when the stored "
+        "value names a different kind of thing; never because the evidence's own wording differs "
+        "from the bucket."
     ),
     "country": (
         "`unified_sites.country` is at most 100 characters and is read aloud on the card. "
         "`England`, `Scotland` and `Wales` in place of `United Kingdom` are deliberate project "
-        "design, and a compound value like `Chile, Easter Island` is allowed; both are correct."
+        "design, and a compound value like `Chile, Easter Island` is allowed. Under that design "
+        "`England` and `United Kingdom` are **the same answer**, and so is `Türkiye` for `Turkey`: "
+        "a `WRONG` verdict must never rest on that difference, however the evidence words it."
     ),
     "card_description": (
         "`card_stats.card_description` is the card's own text, at most 200 characters, and it is "
@@ -118,7 +128,16 @@ FIELD_CLAUSE: dict[str, str] = {
 #: The evidence statement is asked for **before** the verdict line on purpose. The first live run
 #: (`runs/gold`, 2026-09-21) answered `VERDICT: CORRECT` after writing a sentence that placed the
 #: site's real dating in a different bucket from the stored one - the prompt's own rule, stated and
-#: then ignored, because the verdict was written first. Recall on the 24 known-wrong fields was 5/22.
+#: then ignored, because the verdict was written first. Recall was 5 of 19 known-wrong fields.
+#:
+#: The second run (8 of 19) added the precedence sentence below. Its rewrite said `Only the
+#: evidence in this message decides`, and the model then flagged `England` as `WRONG` because the
+#: evidence wrote `United Kingdom` - citing the clause that allows exactly that and overriding it
+#: in the same sentence ("under the allowed design England is acceptable, yet ... the stored value
+#: differs"). An absolute-sounding rule demoted the per-field clause to a subordinate paragraph,
+#: so the precedence is now stated rather than left to be inferred. The same run showed the other
+#: half: without the catalogue's own value list, all four `site_type` flags were wrong, each by
+#: reading the evidence's phrase as if it were the catalogue's bucket.
 QUESTION_TEMPLATE = (
     "You are the finder in a two-stage factual audit. **No census check flagged this site**: "
     "nothing points at it and its stored values have never been questioned. This call is about one "
@@ -126,6 +145,9 @@ QUESTION_TEMPLATE = (
     "the evidence fetched for the site.\n"
     "\n"
     "{clause}\n"
+    "\n"
+    "**The clause above defines what `matches` means for this field, and it beats the general rules "
+    "below wherever the two disagree.**\n"
     "\n"
     "Answer in this order, and keep it short:\n"
     "\n"
@@ -158,25 +180,39 @@ QUESTION_TEMPLATE = (
 )
 
 
-def _compose(field: str) -> str:
-    return QUESTION_TEMPLATE.format(field=field, clause=FIELD_CLAUSE[field])
+def _compose(field: str, vocabulary: Sequence[str]) -> str:
+    """One field's question, with its clause filled in.
+
+    A clause may carry `{n}`/`{vocabulary}` because it cannot be answered without the catalogue's own
+    value list (see `FIELD_CLAUSE['site_type']`). An empty vocabulary is **refused** rather than
+    quietly producing a question that asks which catalogue value the evidence describes while listing
+    none: that failure would read as a thinner answer, not as an error.
+    """
+    clause = FIELD_CLAUSE[field]
+    if "{vocabulary}" in clause:
+        if not vocabulary:
+            raise InputError(
+                f"the {field!r} clause names the catalogue's own value list, and none was supplied; "
+                "a question that asks which catalogue value the evidence describes, while listing "
+                "no catalogue values, cannot be answered"
+            )
+        clause = clause.replace("{n}", str(len(vocabulary)))
+        clause = clause.replace("{vocabulary}", ", ".join(f"`{value}`" for value in vocabulary))
+    return QUESTION_TEMPLATE.format(field=field, clause=clause)
 
 
-#: The one question each (site, field) call asks, per field - built at import, so a field without a
-#: clause is an import error rather than a call whose question is a bare template. Every question
-#: names its own field, so an answer cannot be filed against the field it did not answer.
-FIELD_QUESTION: dict[str, str] = {field: _compose(field) for field in DISCOVER_FIELDS}
+def field_question(field: str, vocabulary: Sequence[str] = ()) -> str:
+    """The question for this field. A field the pass does not ask about raises.
 
-
-def field_question(field: str) -> str:
-    """The question for this field. A field the pass does not ask about raises."""
-    try:
-        return FIELD_QUESTION[field]
-    except KeyError:
+    Built per call rather than at import, because one clause's text depends on the snapshot the plan
+    was built from. `vocabulary` is only read for the clause that asks for it.
+    """
+    if field not in FIELD_CLAUSE:
         raise InputError(
             f"no discover question for field {field!r}; the plan is built for "
             f"{list(DISCOVER_FIELDS)} and each of them has one question"
-        ) from None
+        )
+    return _compose(field, vocabulary)
 
 
 def field_finding(site: Mapping[str, Any], field: str) -> Mapping[str, Any]:
@@ -261,6 +297,7 @@ def plan_site(
     batch_id: str,
     site: Mapping[str, Any],
     store: F.EvidenceStore,
+    vocabulary: Sequence[str],
     allow_absent: bool = False,
     failures: Mapping[str, str] | None = None,
 ) -> DiscoverPlan:
@@ -270,6 +307,9 @@ def plan_site(
     checked **once** (`model_stage.check_evidence_bound`), so all five prompts of a site quote the
     same bytes and the same arithmetic. An over-bound site is recorded as five skipped fields with
     that one reason - the site's own outcome - and the batch carries on.
+
+    `vocabulary` is the catalogue's own `site_type` list, which one field's question cannot be built
+    without; it is a required keyword so that no caller can ask that question unarmed.
     """
     site_id = str(site.get("site_id") or "")
     if not site_id:
@@ -290,7 +330,7 @@ def plan_site(
                 batch_id=batch_id,
                 site_id=site_id,
                 field=name,
-                prompt=_prompt(site, site_id, name, excerpts).render(),
+                prompt=_prompt(site, site_id, name, excerpts, vocabulary).render(),
             ),
             excerpts=excerpts,
         )
@@ -300,12 +340,16 @@ def plan_site(
 
 
 def _prompt(
-    site: Mapping[str, Any], site_id: str, field: str, excerpts: Sequence[MS.EvidenceExcerpt]
+    site: Mapping[str, Any],
+    site_id: str,
+    field: str,
+    excerpts: Sequence[MS.EvidenceExcerpt],
+    vocabulary: Sequence[str],
 ) -> MS.Prompt:
     """One field's prompt: the site's record for that field, then the evidence, all of it."""
     return MS.Prompt(
         stage=STAGE,
-        system=field_question(field),
+        system=field_question(field, vocabulary),
         user="\n".join(
             [
                 site_field_block(site, site_id, field),
@@ -338,6 +382,7 @@ def plan_batch(
     *,
     batch: Mapping[str, Any],
     store: F.EvidenceStore,
+    vocabulary: Sequence[str],
     allow_absent: bool = False,
     failures: Mapping[str, Mapping[str, str]] | None = None,
 ) -> DiscoverPlan:
@@ -362,6 +407,7 @@ def plan_batch(
                 batch_id=batch_id,
                 site=site,
                 store=store,
+                vocabulary=vocabulary,
                 allow_absent=allow_absent,
                 failures=recorded.get(str(site.get("site_id") or "")),
             )
@@ -376,6 +422,7 @@ def judge_discover_batch(
     store: F.EvidenceStore,
     answers: F.EvidenceStore,
     ledger: L.Ledger,
+    vocabulary: Sequence[str],
     failures: Mapping[str, Mapping[str, str]] | None = None,
 ) -> MS.BatchModelReport:
     """Buy one call per (site, field) that has evidence, and record every call not bought.
@@ -392,7 +439,7 @@ def judge_discover_batch(
     batch_id = str(batch.get("batch_id") or "")
     if not batch_id:
         raise InputError("batch carries no batch_id")
-    plan = plan_batch(batch=batch, store=store, failures=failures)
+    plan = plan_batch(batch=batch, store=store, vocabulary=vocabulary, failures=failures)
     by_id = {
         str(site.get("site_id") or ""): site
         for site in (batch.get("sites") or [])

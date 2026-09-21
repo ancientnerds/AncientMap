@@ -55,6 +55,15 @@ SNAPSHOT = REPO / "output" / "remediation" / "snapshot"
 TRUTH_SITE_IDS = REPO / "output" / "remediation" / "gold_standard" / "truth_sites.txt"
 TRUTH_FIELDS = REPO / "output" / "remediation" / "gold_standard" / "truth_fields.json"
 WORKLIST = REPO / "output" / "remediation" / "phase3_worklist" / "WORKLIST.jsonl"
+
+#: The snapshot is a production-database export and is **not** in the repository (`.gitignore` line
+#: 216), so a CI checkout does not have it. The tests that read it are skipped with a reason there
+#: instead of failing - the shape `test_t11.py:56` and `test_gallery_audit.py:169` already use for
+#: local artefacts. Every other test in this module builds its own snapshot under `tmp_path`.
+needs_snapshot = pytest.mark.skipif(
+    not (SNAPSHOT / SP.UNIFIED_SITES_FILE).exists(),
+    reason=f"production snapshot not present ({SNAPSHOT})",
+)
 NO_EXTENSIONS = Path(__file__).resolve().parent / "fixtures" / "pi_probe_no_extensions.json"
 
 #: Piece 1's plan anchor, recorded in `PIECE1.md:120-124` and re-measured on 2026-09-21. The
@@ -203,6 +212,7 @@ def _plan(tmp_path: Path, *args: str) -> Path:
 # ── the plan: deterministic, complete, and reading the right table ───────────────────────────
 
 
+@needs_snapshot
 def test_the_snapshot_plan_is_byte_identical_across_runs_and_covers_all_5004_sites(
     tmp_path: Path,
 ) -> None:
@@ -239,6 +249,7 @@ def test_the_snapshot_plan_is_byte_identical_across_runs_and_covers_all_5004_sit
     )
 
 
+@needs_snapshot
 def test_the_snapshot_plan_of_the_truth_ids_holds_exactly_those_sites_and_five_fields_each(
     tmp_path: Path,
 ) -> None:
@@ -264,6 +275,7 @@ def test_the_snapshot_plan_of_the_truth_ids_holds_exactly_those_sites_and_five_f
         assert site["findings"][-1]["field"] == "card_description"
 
 
+@needs_snapshot
 def test_the_order_of_the_site_id_list_cannot_change_the_plan(tmp_path: Path) -> None:
     straight = _plan(tmp_path, "--site-ids", str(TRUTH_SITE_IDS))
     reversed_ids = tmp_path / "reversed.txt"
@@ -288,6 +300,7 @@ def test_the_order_of_the_site_id_list_cannot_change_the_plan(tmp_path: Path) ->
     assert straight.read_bytes() == other.read_bytes()
 
 
+@needs_snapshot
 def test_an_unknown_site_id_is_refused_rather_than_dropped(tmp_path: Path) -> None:
     asked = tmp_path / "ids.txt"
     missing = "00000000-0000-4000-8000-000000000000"
@@ -322,6 +335,7 @@ def test_a_blank_or_repeated_site_id_is_refused(tmp_path: Path) -> None:
         SP.read_site_ids(tmp_path / "absent.txt")
 
 
+@needs_snapshot
 def test_every_planned_value_comes_from_the_table_truth_fields_json_names() -> None:
     """The brief's own warning, as a test: five entries live in `card_stats`, not `unified_sites`."""
     entries = json.loads(TRUTH_FIELDS.read_text(encoding="utf-8"))["entries"]
@@ -431,6 +445,7 @@ def test_a_qid_row_that_is_not_a_q_number_is_refused_at_plan_time(tmp_path: Path
     assert SP.build_discover_sites(snapshot_dir=ok)[0]["wikidata_qid"] == "Q4"
 
 
+@needs_snapshot
 def test_the_snapshot_qid_comes_from_site_external_ids_not_from_the_vestigial_column() -> None:
     """Measured, because the brief's sentence and the export disagree.
 
@@ -468,23 +483,31 @@ def test_a_missing_card_stats_row_reads_as_no_value_not_as_an_error(tmp_path: Pa
     assert _planned_row(record, "card_description")["current_value"] is None
     assert _planned_row(record, "description")["current_value"] is None
     plan = DS.plan_batch(
-        batch=_batch(record), store=F.EvidenceStore(tmp_path / "empty"), allow_absent=True
+        vocabulary=VOCAB,
+        batch=_batch(record),
+        store=F.EvidenceStore(tmp_path / "empty"),
+        allow_absent=True,
     )
     assert 'stored="absent"' in plan.calls[-1].call.prompt  # the card_description call
     assert 'stored="absent"' in plan.calls[0].call.prompt  # the description call
     assert 'stored="present"' in plan.calls[3].call.prompt  # country: a value exists
 
 
+#: A stand-in for the catalogue's value list. Three values are enough to prove the question carries
+#: whatever list it is given, and that it refuses to be built without one; the real 70 come from the
+#: snapshot (`snapshot_plan.site_type_vocabulary`) and are asserted against a written snapshot below.
+VOCAB = ("Castle/palace", "Gate/archway/bridge", "Temple complex")
+
 # ── routing: one question per field, one route per field ─────────────────────────────────────
 
 
 def test_every_discover_field_has_a_route_and_a_question() -> None:
     assert set(DS.FIELD_CLAUSE) == set(SP.DISCOVER_FIELDS)
-    assert set(DS.FIELD_QUESTION) == set(SP.DISCOVER_FIELDS)
+    questions = {name: DS.field_question(name, VOCAB) for name in SP.DISCOVER_FIELDS}
     for name in SP.DISCOVER_FIELDS:
         assert set(F.FEATURES_FOR_FIELD[name])
-        assert f"`{name}`" in DS.FIELD_QUESTION[name]
-    assert len(set(DS.FIELD_QUESTION.values())) == len(SP.DISCOVER_FIELDS)
+        assert f"`{name}`" in questions[name]
+    assert len(set(questions.values())) == len(SP.DISCOVER_FIELDS)
 
 
 def test_the_discover_routing_is_enwiki_by_name_and_wikidata_by_the_qid() -> None:
@@ -514,6 +537,7 @@ def test_a_qid_that_is_not_a_q_number_is_refused_by_the_url_builder() -> None:
     assert "ids=Q42" in F.wikidata_entity_url("Q42")
 
 
+@needs_snapshot
 def test_every_truth_site_is_routable_offline() -> None:
     """No site of the 17 is planned and then unfetchable: every route resolves, offline."""
     records = SP.build_discover_sites(snapshot_dir=SNAPSHOT, site_ids=_truth_ids())
@@ -537,7 +561,9 @@ def test_every_truth_site_is_routable_offline() -> None:
 
 def test_every_site_buys_one_call_per_field_and_the_call_names_its_field(tmp_path: Path) -> None:
     store = _evidence_store(tmp_path / "evidence", "site-1", "site-2")
-    plan = DS.plan_batch(batch=_batch(_site_record("site-1"), _site_record("site-2")), store=store)
+    plan = DS.plan_batch(
+        vocabulary=VOCAB, batch=_batch(_site_record("site-1"), _site_record("site-2")), store=store
+    )
 
     assert plan.skipped == []
     assert [item.call.label for item in plan.calls[:6]] == [
@@ -552,19 +578,23 @@ def test_every_site_buys_one_call_per_field_and_the_call_names_its_field(tmp_pat
     for item in plan.calls:
         name = item.call.field
         assert name in SP.DISCOVER_FIELDS
-        assert DS.field_question(name) in item.call.prompt
+        assert DS.field_question(name, VOCAB) in item.call.prompt
         assert item.call.stage is M.Stage.FINDER
         # The five calls of one site carry five *different* questions: one question per call.
         for other in SP.DISCOVER_FIELDS:
             if other != name:
-                assert DS.field_question(other) not in item.call.prompt
+                assert DS.field_question(other, VOCAB) not in item.call.prompt
         # The site's evidence is read once and shared by its five calls.
         assert [e.feature for e in item.excerpts] == [F.FEATURE_ENWIKI]
 
 
 def _discover_prompt(tmp_path: Path) -> str:
     store = _evidence_store(tmp_path / "evidence", "site-1")
-    return DS.plan_batch(batch=_batch(_site_record("site-1")), store=store).calls[0].call.prompt
+    return (
+        DS.plan_batch(vocabulary=VOCAB, batch=_batch(_site_record("site-1")), store=store)
+        .calls[0]
+        .call.prompt
+    )
 
 
 def test_the_question_asks_for_the_evidence_before_the_verdict(tmp_path: Path) -> None:
@@ -617,7 +647,7 @@ def test_an_empty_stored_value_is_marked_absent_and_the_question_calls_it_wrong(
     """
     store = _evidence_store(tmp_path / "evidence", "site-1")
     record = _site_record("site-1", values={"period_start": None, "description": ""})
-    plan = DS.plan_batch(batch=_batch(record), store=store)
+    plan = DS.plan_batch(vocabulary=VOCAB, batch=_batch(record), store=store)
     by_field = {item.call.field: item.call.prompt for item in plan.calls}
 
     empty = by_field["period_start"]
@@ -633,7 +663,9 @@ def test_an_empty_stored_value_is_marked_absent_and_the_question_calls_it_wrong(
 
     # A stored 0 is a value, not an absence: nothing here may read a falsy value as missing.
     zero = DS.plan_batch(
-        batch=_batch(_site_record("site-1", values={"period_start": 0})), store=store
+        vocabulary=VOCAB,
+        batch=_batch(_site_record("site-1", values={"period_start": 0})),
+        store=store,
     )
     assert 'stored="present"' in zero.calls[0].call.prompt
 
@@ -652,6 +684,7 @@ def test_an_oversized_site_becomes_its_own_unverifiable_outcome_and_the_batch_ca
 
     runner = ScriptedRunner()
     report = DS.judge_discover_batch(
+        vocabulary=VOCAB,
         batch=_batch(_site_record("site-big"), _site_record("site-small")),
         runner=runner,
         store=store,
@@ -687,6 +720,7 @@ def test_a_field_whose_evidence_was_never_fetched_is_recorded_not_attempted_and_
     reason = "enwiki: no response: GET https://en.wikipedia.org/...: ReadTimeout"
     runner = ScriptedRunner()
     report = DS.judge_discover_batch(
+        vocabulary=VOCAB,
         batch=_batch(_site_record("site-1"), _site_record("site-2")),
         runner=runner,
         store=store,
@@ -720,6 +754,7 @@ def test_partial_evidence_still_buys_the_call_and_the_prompt_names_the_failure(
     store = _evidence_store(tmp_path / "evidence", "site-1")
     failure = "wikidata_entity: no response: GET https://www.wikidata.org/...: ReadTimeout"
     plan = DS.plan_batch(
+        vocabulary=VOCAB,
         batch=_batch(_site_record("site-1", qid="Q1")),
         store=store,
         failures={"site-1": {F.FEATURE_WIKIDATA_ENTITY: failure}},
@@ -737,7 +772,7 @@ def test_a_missing_evidence_file_with_no_recorded_failure_still_raises(tmp_path:
     """Piece 4's guard, unchanged in the discover path: a hole in the record is not weather."""
     store = F.EvidenceStore(tmp_path / "evidence")
     with pytest.raises(MS.EvidenceUnusable, match="records no failure for it"):
-        DS.plan_batch(batch=_batch(_site_record("site-1")), store=store)
+        DS.plan_batch(vocabulary=VOCAB, batch=_batch(_site_record("site-1")), store=store)
 
 
 def test_an_over_bound_site_is_recorded_before_anything_is_spent(tmp_path: Path) -> None:
@@ -747,7 +782,7 @@ def test_an_over_bound_site_is_recorded_before_anything_is_spent(tmp_path: Path)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("x" * (MS.MAX_EVIDENCE_CHARS + 1), encoding="utf-8")
 
-    plan = DS.plan_batch(batch=_batch(_site_record("site-1")), store=store)
+    plan = DS.plan_batch(vocabulary=VOCAB, batch=_batch(_site_record("site-1")), store=store)
     assert plan.calls == []
     assert len(plan.skipped) == len(SP.DISCOVER_FIELDS)
 
@@ -788,6 +823,9 @@ def test_judge_without_live_previews_the_discover_calls_and_starts_nothing(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     _assert_no_process(monkeypatch)
+    # The judge reads the catalogue's value list from the production snapshot; this test is about the
+    # two builders agreeing, not about that list, so it pins the list instead of reading it.
+    monkeypatch.setattr(SP, "site_type_vocabulary", lambda: VOCAB)
     run_dir = _prepared_discover_run(tmp_path, _site_record("site-1"), _site_record("site-2"))
     ledger = tmp_path / "LEDGER.jsonl"
 
@@ -812,6 +850,7 @@ def test_judge_without_live_previews_the_discover_calls_and_starts_nothing(
 
     # The preview's prompt is the live prompt: one builder, and the dry run is not a second one.
     live_plan = DS.plan_batch(
+        vocabulary=VOCAB,
         batch=json.loads((run_dir / "batch-0001" / "input.json").read_text(encoding="utf-8")),
         store=F.EvidenceStore(run_dir / "batch-0001" / "evidence"),
         allow_absent=True,
@@ -824,6 +863,9 @@ def test_judge_live_stores_one_answer_per_field_and_one_ledger_line_each(
 ) -> None:
     """Five calls for one site must leave five records. One answer key would lose four of them."""
     monkeypatch.setattr(MS, "PiRunner", ScriptedRunner)
+    # The live path reads the catalogue's value list from the production snapshot; this test is about
+    # the answer and ledger bookkeeping, so the list is pinned rather than read.
+    monkeypatch.setattr(SP, "site_type_vocabulary", lambda: VOCAB)
     run_dir = _prepared_discover_run(tmp_path, _site_record("site-1"), _site_record("site-2"))
     _evidence_store(run_dir / "batch-0001" / "evidence", "site-1", "site-2")
     ledger = tmp_path / "LEDGER.jsonl"
@@ -940,3 +982,86 @@ def test_the_discover_modules_reach_no_network_client_and_no_shell() -> None:
         source = Path(module.__file__).read_text(encoding="utf-8")
         hits = sorted(set(banned.findall(source)))
         assert hits == [], f"{Path(module.__file__).name} reaches outside the process: {hits}"
+
+
+# ── the catalogue's own value list, and the clause's precedence over the general rules ─────────
+
+
+def test_the_site_type_question_carries_the_catalogues_own_value_list() -> None:
+    """All four `site_type` flags of the second run were wrong, each by reading the evidence's own
+    phrase as if it were the catalogue's bucket - "triumphal arch" against `Gate/archway/bridge`,
+    "folly castle" against `Castle/palace`, "hill fort" against `Fortress/citadel`, "ahu" against
+    `Megalithic statues`. The question names the list the answer has to come from, and no other
+    field's question carries it.
+    """
+    question = DS.field_question("site_type", VOCAB)
+    for value in VOCAB:
+        assert f"`{value}`" in question
+    assert f"list of {len(VOCAB)} values" in question
+    assert "never because the evidence's own wording differs" in question
+    for other in SP.DISCOVER_FIELDS:
+        if other != "site_type":
+            assert "Gate/archway/bridge" not in DS.field_question(other, VOCAB)
+
+
+def test_the_site_type_question_refuses_to_be_built_without_the_value_list() -> None:
+    """A question asking which catalogue value the evidence describes, while listing none, cannot be
+    answered - and the failure would read as a thinner answer, not as an error."""
+    empties: list[Any] = [[], ()]
+    for empty in empties:
+        with pytest.raises(R.InputError) as caught:
+            DS.field_question("site_type", empty)
+        assert "cannot be answered" in str(caught.value)
+    # The other four clauses do not need it, so a batch is only refused for the field that does.
+    assert DS.field_question("description")
+
+
+def test_the_field_clause_is_stated_to_beat_the_general_rules() -> None:
+    """The regression this pins: the second run's rewrite said `Only the evidence in this message
+    decides`, and the model then flagged `England` as `WRONG` because the evidence wrote `United
+    Kingdom` - citing the clause that allows it and overriding it in the same sentence.
+    """
+    for name in SP.DISCOVER_FIELDS:
+        question = DS.field_question(name, VOCAB)
+        assert "The clause above defines what `matches` means" in question
+        assert "it beats the general rules" in question
+    assert "are **the same answer**" in DS.field_question("country", VOCAB)
+
+
+def test_the_period_question_gives_the_bucket_spans_and_not_only_lower_bounds() -> None:
+    """`Bulls of Guisando` was flagged `WRONG` on arithmetic the model got wrong after its own
+    verdict ("Wait - both -200/-100 and -500 fall in the same bucket. Let me correct."). The spans
+    are read off `categorizePeriod` in `ancient-nerds-map/src/data/sites.ts`, where -500 and -200 do
+    land in the same span, `500 BC - 1 AD`.
+    """
+    question = DS.field_question("period_start", VOCAB)
+    assert "-500 to 1 is `500 BC - 1 AD`" in question
+    assert "1500 and later is `1500+ AD`" in question
+    assert "which span each of the two values falls in" in question
+
+
+def test_the_site_type_vocabulary_is_read_from_the_snapshot_sorted_and_deduplicated(
+    tmp_path: Path,
+) -> None:
+    """The list is read from the snapshot the plan was built from, not from a hand-copy of it, and
+    a snapshot that yields no value at all is refused rather than producing a question with an empty
+    list in it."""
+    snapshot = tmp_path / "snapshot"
+    snapshot.mkdir()
+    rows: list[dict[str, Any]] = [
+        {"id": "a", "site_type": "Temple complex"},
+        {"id": "b", "site_type": "Castle/palace"},
+        {"id": "c", "site_type": "Temple complex"},
+        {"id": "d", "site_type": ""},
+        {"id": "e", "site_type": None},
+    ]
+    with gzip.open(snapshot / SP.UNIFIED_SITES_FILE, "wt", encoding="utf-8") as fh:
+        for row in rows:
+            fh.write(json.dumps(row) + "\n")
+    assert SP.site_type_vocabulary(snapshot_dir=snapshot) == ("Castle/palace", "Temple complex")
+
+    with gzip.open(snapshot / SP.UNIFIED_SITES_FILE, "wt", encoding="utf-8") as fh:
+        fh.write(json.dumps({"id": "a", "site_type": " "}) + "\n")
+    with pytest.raises(R.InputError) as caught:
+        SP.site_type_vocabulary(snapshot_dir=snapshot)
+    assert "no non-empty site_type value" in str(caught.value)

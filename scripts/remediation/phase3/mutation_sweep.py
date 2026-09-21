@@ -44,6 +44,10 @@ PREPARE = "test_prepare_writes_the_discover_pass_marker_verbatim"
 ORDER = "test_the_question_asks_for_the_evidence_before_the_verdict"
 SILENCE = "test_the_question_refuses_silence_as_agreement"
 KNOWLEDGE = "test_the_question_forbids_upholding_a_value_with_the_finders_own_knowledge"
+PRECEDENCE = "test_the_field_clause_is_stated_to_beat_the_general_rules"
+VOCAB = "test_the_site_type_question_carries_the_catalogues_own_value_list"
+VOCAB_REFUSAL = "test_the_site_type_question_refuses_to_be_built_without_the_value_list"
+SPANS = "test_the_period_question_gives_the_bucket_spans_and_not_only_lower_bounds"
 
 #: (name, file, the exact text to replace, what to replace it with, test file, test name)
 MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
@@ -222,6 +226,39 @@ MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         '            json.dumps({k: v for k, v in batch.items() if k != "pass"}, ensure_ascii=False, sort_keys=True)\n            + "\\n",',
         TEST,
         PREPARE,
+    ),
+    # ── the three information defects the second live run exposed ────────────────────────────────
+    (
+        "the clause no longer beats the general rules",
+        "scripts/remediation/phase3/discover_stage.py",
+        '    "**The clause above defines what `matches` means for this field, and it beats the general rules "',
+        '    "**The general rules below decide wherever the clause above appears to say otherwise. "',
+        TEST,
+        PRECEDENCE,
+    ),
+    (
+        "the site_type question stops naming the catalogue's value list",
+        "scripts/remediation/phase3/discover_stage.py",
+        '        "{n} values: {vocabulary}. It has to survive the project\'s normaliser. The evidence will "',
+        '        "several values. It has to survive the project\'s normaliser. The evidence will "',
+        TEST,
+        VOCAB,
+    ),
+    (
+        "an empty value list is accepted instead of refused",
+        "scripts/remediation/phase3/discover_stage.py",
+        '    if "{vocabulary}" in clause:\n        if not vocabulary:',
+        '    if "{vocabulary}" in clause:\n        if False:',
+        TEST,
+        VOCAB_REFUSAL,
+    ),
+    (
+        "the period question goes back to lower bounds without the spans",
+        "scripts/remediation/phase3/discover_stage.py",
+        '        "-3000 to -1500 is `3000 - 1500 BC`; -1500 to -500 is `1500 - 500 BC`; -500 to 1 is "',
+        '        "Most sites sit on a bucket lower bound (-4500/-3000/-1500/-500/1/500/1000/1500); "',
+        TEST,
+        SPANS,
     ),
 ]
 

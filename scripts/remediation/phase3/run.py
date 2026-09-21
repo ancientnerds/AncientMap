@@ -543,6 +543,7 @@ def _judge_discover(
     from phase3 import discover_stage as DS
     from phase3 import fetch_stage as F
     from phase3 import model_stage as MS
+    from phase3 import snapshot_plan as SP
 
     if args.stage != Stage.FINDER.value:
         raise InputError(
@@ -551,9 +552,15 @@ def _judge_discover(
             "a discover batch does not carry"
         )
     store = F.EvidenceStore(run_dir / batch_id / "evidence")
+    # The catalogue's own `site_type` list, read from the snapshot this plan was built from: one
+    # field's question asks which of those values the evidence describes, and cannot be asked
+    # without them. Read once per invocation, not per call.
+    vocabulary = SP.site_type_vocabulary()
 
     if not args.live:
-        plan = DS.plan_batch(batch=batch, store=store, allow_absent=True, failures=failures)
+        plan = DS.plan_batch(
+            batch=batch, store=store, vocabulary=vocabulary, allow_absent=True, failures=failures
+        )
         print(
             json.dumps(
                 {
@@ -605,6 +612,7 @@ def _judge_discover(
             store=store,
             answers=answers,
             ledger=L.Ledger(Path(args.ledger)),
+            vocabulary=vocabulary,
             failures=failures,
         )
     except MS.ModelCallFailed as exc:
