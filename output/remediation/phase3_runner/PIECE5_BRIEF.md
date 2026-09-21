@@ -96,7 +96,46 @@ exactly the failure this number exists to prevent.
 
 ## 7. Non-goals
 
-* Images, heroes, galleries (`image_kind`, G0) — separate, already done.
+* Images, heroes, galleries (`image_kind`, G0) - separate, already done.
 * Rewriting text. This piece proposes; a later, guarded step writes.
-* The 285 coords-only sites and the 117 T02 sites — those are human calls by
+* The 285 coords-only sites and the 117 T02 sites - those are human calls by
   `docs/procedures/FIELD_CONTRACT.md` §4 item 6.
+
+## 8. Addendum, 2026-09-21 - the numbers that settle §5, and the fixture §6 needs
+
+**The fixture exists now.** The recall experiment's inputs are committed:
+
+* `output/remediation/gold_standard/truth_sites.txt` - the 17 truth-set site ids, one per line, ready
+  for `--site-ids`. All 17 are present in `unified_sites.jsonl.gz` (checked, 0 absent).
+* `output/remediation/gold_standard/truth_fields.json` - the 24 entries to score against, each with
+  `site_id`, `field`, `stored_value`, **`stored_in`** (the table the value really lives in) and
+  `correct_value`.
+
+Read `stored_in` rather than assuming a table. Building this fixture produced exactly the mistake to
+avoid: reading `stored_value` from `unified_sites` alone made all five `card_description` entries look
+absent, when that column lives in `card_stats` and every one of them has real text. One entry's field
+(`scope`) has no column at all - 3 of the 24 are missing values, not wrong ones, and a finder that can
+only spot wrong values will miss them.
+
+**What the finder already measures per call**, so §5 is decided on numbers rather than taste: a live
+call cost **$0.000486** (provider-reported), mean 2,895 input tokens, and the fixed per-call overhead is
+about **437 input tokens ≈ $0.000066**. So all 5,004 sites as one call each is about **$2.43 per
+stage**, and five calls per site (one per text field) about **$12.2 per stage**. The evidence fetch is
+identical either way, because the evidence store is keyed by (site, feature) and is written once.
+
+Money therefore does not decide it. Two things do: the project's own principle, already written into
+`model_stage.py`, that **one question per call is the point** (`FINDER_QUESTION` and `REVIEWER_QUESTION`
+are one each), and the pilot's own precedent - `PILOT.jsonl` is one record per **(site, field)**, not
+one per site. So: **one call per (site, field)**, with that field's own question. Record the measured
+call count, tokens and cost either way.
+
+**One measured constraint to inherit.** `overpass-api.de` is unreachable from this workstation (TLS
+reset in 0.077 s; the VPS reaches it in 0.35 s) and piece 4b now records its targets as *not attempted*
+instead of retrying them. The discover pass asks about text fields, so this should not bite - but if a
+field's routing touches Overpass, the run must record it as not attempted and carry on, never end the
+batch. Coordinates are a human call by contract in any case.
+
+**How recall is scored:** for each of the 24 entries, did the finder flag **that field on that site**?
+Report caught/24, by field, with the misses named. `batch-0001` and the truth set do not intersect, so
+this is the first time the finder's recall is measured at all - and if it is poor, the prompt is what
+needs work, not the scope.
