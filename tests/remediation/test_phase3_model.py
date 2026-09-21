@@ -479,6 +479,18 @@ def test_an_oversized_evidence_block_raises_instead_of_being_truncated(tmp_path:
         )
 
 
+def test_the_evidence_bound_is_above_every_site_the_recall_fixture_measured() -> None:
+    """The bound was raised from 32,000 to 64,000 because it refused 2 of the fixture's 24 sites whole.
+
+    The figures are the fixture's own (`output/remediation/gold_standard/`): the combined evidence of
+    the Pyramid of Caius Cestius is 49,952 characters and of Priene Ruins 37,339, and at 32,000 both
+    sites lost all five fields - including the fields whose decisive sentence sits inside the part
+    that would have fitted. The assertion is a **floor**, not the value, so the number may be raised
+    again without touching this test while it may not be lowered past the measurement.
+    """
+    assert MS.MAX_EVIDENCE_CHARS >= 49_952  # Pyramid of Caius Cestius, the fixture's largest site
+
+
 def test_the_prompt_says_which_census_finding_it_is_about(tmp_path: Path) -> None:
     prepared = MS.prepare_call(
         batch_id="batch-0001",

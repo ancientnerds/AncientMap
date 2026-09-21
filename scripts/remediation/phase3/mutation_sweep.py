@@ -21,6 +21,7 @@ import os
 import shutil
 import subprocess
 import sys
+from collections.abc import Mapping
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[3]
@@ -29,6 +30,7 @@ BACKUP = REPO / "output" / "remediation" / "logs" / "phase3_mutations" / "backup
 TEST = "tests/remediation/test_phase3_discover.py"
 FETCH_TEST = "tests/remediation/test_phase3_fetch.py"
 MASSRUN_TEST = "tests/remediation/test_phase3_massrun.py"
+MODEL_TEST = "tests/remediation/test_phase3_model.py"
 PACE = "test_two_processes_take_turns_on_one_host"
 PACE_HOSTS = "test_one_host_waiting_does_not_hold_up_another"
 PACE_STALE = "test_a_lock_left_by_a_killed_process_is_taken_over"
@@ -81,6 +83,8 @@ PACE_DRIVER_OFF = "test_the_driver_can_be_told_not_to_pace"
 SWEEP_TEST = "tests/remediation/test_phase3_sweep.py"
 SWEEP_UNREADABLE = "test_a_child_whose_output_cannot_be_read_does_not_kill_the_sweep"
 SWEEP_MISSED = "test_a_mutation_that_is_not_caught_is_still_undone"
+BOUND_MEASURED = "test_the_evidence_bound_is_above_every_site_the_recall_fixture_measured"
+DRIFT = "test_final_drift_names_a_file_that_changed_under_the_sweep"
 
 #: (name, file, the exact text to replace, what to replace it with, test file, test name)
 MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
@@ -533,6 +537,22 @@ MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         MASSRUN_TEST,
         REAL_CLI,
     ),
+    (
+        "the evidence bound falls back below a site it was raised for",
+        "scripts/remediation/phase3/model_stage.py",
+        "MAX_EVIDENCE_CHARS = 64_000\n",
+        "MAX_EVIDENCE_CHARS = 32_000\n",
+        MODEL_TEST,
+        BOUND_MEASURED,
+    ),
+    (
+        "a file that changed under the sweep is not reported",
+        "scripts/remediation/phase3/mutation_sweep.py",
+        "        if now != was:\n",
+        "        if False:\n",
+        SWEEP_TEST,
+        DRIFT,
+    ),
 ]
 
 
@@ -547,11 +567,31 @@ def first_failure(output: str) -> str:
     return output.strip().splitlines()[-1][:160] if output.strip() else "(no output)"
 
 
+def final_drift(repo: Path, before: Mapping[str, str]) -> dict[str, tuple[str, str]]:
+    """Files whose bytes are no longer the ones the sweep started with, and both digests.
+
+    The sweep restores every file it mutates, so at the end the tree has to be byte-identical to the
+    moment it started - and that is a statement about the **tree**, not about the loop, which is why
+    the per-mutation comparison cannot make it: that comparison only ever ran earlier. On 2026-09-21
+    pi-lens wrote into `discover_stage.py` at 13:02 *while a sweep was running*, and afterwards into
+    `snapshot_plan.py`, where it deleted the `"country"` element from `DISCOVER_FIELDS` and called it
+    a reformat. A change like that is reported here and never repaired: the sweep does not know which
+    revision the other writer meant, and guessing would be worse than saying so.
+    """
+    drift: dict[str, tuple[str, str]] = {}
+    for rel, was in before.items():
+        now = digest(repo / rel)
+        if now != was:
+            drift[rel] = (was, now)
+    return drift
+
+
 def main(argv: list[str], *, repo: Path = REPO, backup_dir: Path = BACKUP) -> int:
     """Run every wanted mutation. `repo` and `backup_dir` are parameters so the sweep can be tested
     against a throwaway tree instead of the one it is guarding."""
     backup_dir.mkdir(parents=True, exist_ok=True)
     wanted = [m for m in MUTATIONS if not argv or any(a in m[0] for a in argv)]
+    started = {rel: digest(repo / rel) for rel in sorted({m[1] for m in wanted})}
     rows: list[tuple[str, str, bool, str, str]] = []
     for name, rel, old, new, test_file, test_name in wanted:
         path = repo / rel
@@ -606,6 +646,14 @@ def main(argv: list[str], *, repo: Path = REPO, backup_dir: Path = BACKUP) -> in
             print(f"{'':52}   {detail}")
     missed = [r[0] for r in rows if not r[2]]
     print(f"\n{len(rows) - len(missed)}/{len(rows)} mutations caught; missed: {missed}")
+    # The sweep's own loop is done; what follows is about the tree it ran in.
+    drift = final_drift(repo, started)
+    if drift:
+        for rel, (was, now) in sorted(drift.items()):
+            print(f"DRIFT {rel}: {was[:16]} -> {now[:16]} - written while this sweep ran")
+        print(f"{len(drift)} file(s) changed under the sweep: the tree is not what it was.")
+        return 1
+    print(f"the tree is byte-identical to the sweep's start for {len(started)} file(s)")
     return 0 if not missed else 1
 
 

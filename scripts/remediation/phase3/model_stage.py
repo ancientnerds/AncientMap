@@ -140,12 +140,17 @@ DEFAULT_TIMEOUT = 180.0
 #: (a "~2,300 input tokens" design point x 4 characters per token) misread what that phrase covered:
 #: a bare call is 437 input tokens, and 2,300 described the whole call rather than its evidence, so
 #: the bound was set below the real middle of the distribution and refused 2 of 15 sites.
-#: 32,000 covers the observed maximum with about a third of headroom, and the fetch stage caps every
-#: page at 61,440 bytes, so the input is bounded whatever this value says. A page that does not fit
-#: still raises rather than being truncated silently - a judgement made on half a page is a judgement
-#: on evidence the model never saw - and that refusal is the sensor: if a later batch trips it, this
-#: number gets raised from that batch's own figures rather than from another guess.
-MAX_EVIDENCE_CHARS = 32_000
+#: **Raised from 32,000 to 64,000 on 2026-09-21, from the recall fixture's own figures** - which is
+#: what this comment asks for rather than a fresh guess. Across those 24 sites the combined evidence
+#: reached 49,952 characters (Pyramid of Caius Cestius) and 37,339 (Priene Ruins), and a 32,000 bound
+#: refused exactly those two **whole**: all five of their fields became unverifiable, including the
+#: fields whose decisive sentence sits in the part that would have fitted. 64,000 is the observed
+#: maximum plus about a third, the headroom the earlier figure was aiming at, and the fetch stage
+#: caps every page at 61,440 bytes, so the input is bounded whatever this value says. A page that
+#: does not fit still raises rather than being truncated silently - a judgement made on half a page
+#: is a judgement on evidence the model never saw - and that refusal is the sensor: if a later batch
+#: trips it, this number gets raised from that batch's own figures rather than from another guess.
+MAX_EVIDENCE_CHARS = 64_000
 
 #: The ONE question each stage asks. The finder's is the brief's own frame ("You are the finder in
 #: a two-stage factual audit ... You propose; you do not write", `FINDER_BRIEF.md` heading), the

@@ -81,3 +81,26 @@ def test_a_mutation_that_is_not_caught_is_still_undone(
 
     assert S.main([MUTATION], repo=root, backup_dir=tmp_path / "backup") == 1  # reported as missed
     assert (root / TARGET).read_bytes() == before
+
+
+def test_final_drift_names_a_file_that_changed_under_the_sweep(tmp_path: Path) -> None:
+    """The end check is about the TREE, not about the loop - which is why the loop cannot make it.
+
+    Every per-mutation comparison ran earlier, so a writer that touches a `phase3/` file *after* the
+    last restore is invisible to all of them. That is not hypothetical: on 2026-09-21 pi-lens wrote
+    into `discover_stage.py` at 13:02 while a sweep was running, and into `snapshot_plan.py`
+    afterwards, where it deleted the `"country"` element from `DISCOVER_FIELDS` and called it a
+    reformat. Caught by hand that day, and this check is the instrument that replaces the hand.
+    """
+    root = _throwaway_tree(tmp_path)
+    before = {str(TARGET): S.digest(root / TARGET)}
+    assert S.final_drift(root, before) == {}  # the sweep's own restore leaves no drift
+
+    (root / TARGET).write_text("x = 1  # a plugin, not this sweep\n", encoding="utf-8")
+
+    drift = S.final_drift(root, before)
+    assert list(drift) == [str(TARGET)]  # named, not merely counted
+    was, now = drift[str(TARGET)]
+    assert was == before[str(TARGET)]
+    assert now == S.digest(root / TARGET)
+    assert was != now

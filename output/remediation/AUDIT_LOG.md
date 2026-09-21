@@ -3569,3 +3569,79 @@ multi-block `edit` of mine deleted the path element from one mutation tuple, lea
 instead of six - caught by `mypy` before any test ran, which is the argument for keeping the mutation
 list typed.
 
+### The evidence bound was raised from the fixture's own figures (2026-09-21)
+
+`MAX_EVIDENCE_CHARS` was 32,000, and a site whose combined evidence exceeded it was refused **whole**:
+`check_evidence_bound` raised, and the discover pass turned that into all five of the site's fields
+being unverifiable. Across the recall fixture's 24 truth sites that hit two - Priene Ruins (37,339
+characters) and the Pyramid of Caius Cestius (49,952) - and it hit them inclusively: the fields whose
+decisive sentence sits in the part that *would* have fitted were refused along with the rest.
+
+The comment on that constant already said what to do about it - "if a later batch trips it, this
+number gets raised from that batch's own figures rather than from another guess" - and the fixture is
+those figures, so it was raised to **64,000**: the observed maximum plus about a third, the same
+headroom the earlier figure was aiming at, and still well inside the fetch stage's 61,440-byte page cap.
+
+**The alternative was rejected, and the reason matters more than the decision.** Truncating each page
+to a share of the budget and *naming the cut* would refuse no site at all, and `PARTIAL_EVIDENCE_NOTE`
+already shows the shape for saying that honestly. What stops it is who would catch the error it can
+cause: a finding justified by the visible part of a page but contradicted by the hidden part would be
+seen by the finder and by the reviewer **through the same truncation** - and refuting the finder is the
+reviewer's entire job. The quote requirement narrows that hole (a `SOURCE:` quote has to occur in the
+evidence the run fetched) but it does not close it. Refusing leaves the pipeline unable to make that
+mistake at all; a larger bound buys back the coverage the refusal was costing without buying the risk.
+So the refusal stays, and it stays a sensor for the next batch's own figures.
+
+A test now pins the floor: `test_the_evidence_bound_is_above_every_site_the_recall_fixture_measured`
+asserts the bound is at least 49,952 and names both figures, so lowering the number past the
+measurement fails instead of quietly re-refusing a site the fixture had already paid for.
+
+### Two more checker findings, adjudicated (2026-09-21)
+
+`model_stage.py`'s `float(reported)` (three sites) and `json.loads(f.to_json())` join the table above.
+The first is the fail-closed path and says so one line later (`reported != reported or reported in
+(float("inf"), float("-inf")) or reported < 0`): a provider that reports a cost this code cannot
+believe must stop the call, not be coaxed into a number. The second parses our own in-process
+dataclass - the same class as the three sites in `run.py`. Neither is a defect; both stay visible and
+neither takes an action.
+
+### pi-lens deleted a tuple element and called it a reformat (2026-09-21)
+
+While a mutation sweep was running, pi-lens reported two autofixes. The first was **false**: it named
+`fetch_stage.py`, and that file was byte-identical to HEAD with an mtime from four hours earlier -
+verified by `git diff` and sha256, not by the message. The second was real, twice over:
+
+* `discover_stage.py` was reformatted at 13:02:32, **while the sweep was running**: one
+  `problems.append(...)` collapsed onto a single line. Harmless as text - and still enough to
+  invalidate the sweep, because mutations target that file and the per-mutation comparison only ever
+  compares bytes it captured itself.
+* `snapshot_plan.py` was "reformatted" afterwards, and that diff is **not** a reformat:
+
+```diff
+     "site_type",
+-    "country",
+     "card_description",
+```
+
+`DISCOVER_FIELDS` lost an element. That tuple decides which fields the discover pass judges, so every
+plan built from it would have carried four fields instead of five - silently, and with a plan digest
+nobody had a previous value to compare against. It is the same defect class as the multi-block `edit`
+of mine that dropped `mass_run.py` from a mutation tuple earlier the same day, and the second time a
+hash comparison against a known-good revision was the only thing between it and the pipeline.
+
+Both files were reverted to HEAD (`discover_stage.py` back to `cd2a3edb3eb104d2`, `snapshot_plan.py`
+to its blob) and the sweep was re-run on the frozen bytes.
+
+**Two rules, one of them now an instrument.** Never carry a plugin's autofix on trust: read the diff
+against HEAD and compare hashes, whatever the message claims was fixed. And because "compare the
+hashes by hand after every sweep" is exactly the discipline that fails at hour eleven,
+`mutation_sweep.py` now captures every touched file's digest *before* its loop and reports
+`DRIFT <file>: <before> -> <after>`, exiting non-zero - a statement about the **tree**, which the
+per-mutation comparison cannot make, since that one only ever ran earlier. `final_drift` is a plain
+function with its own test and its own mutation.
+
+**Consequence for the mass run, decided here:** it runs in a **git worktree pinned to one commit**,
+not in the working tree. Its digest guard hashes `phase3/*.py` per batch and stops the run when they
+change, so a plugin writing into the working tree would kill a multi-day run that is otherwise
+resumable and correct. Outside the working tree, no formatter can reach it.
+
