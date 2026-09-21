@@ -2285,3 +2285,49 @@ direction as the probe that concluded a function did not exist because the name 
 Verdict: no code change. A false positive with receipts is not repaired by a suppression, and adding one
 would hide the next, real finding in the same place. The advisory is now adjudicated in this log and will
 be ignored on later firings for this file.
+
+## The VLM competence caveat, measured and narrowed (and one lane recovered from a stall)
+
+**The VLM pilot did not fail - it finished its measurement and then ran out of wall clock.** The worker
+was killed at the 30-minute ceiling, which is why it reported as a timeout, but `VLM.jsonl` had already
+been written complete: 200 of 200 verdicts parsed, 0 errors, `finish_reason` stop for all 200, 195 first
+attempt, median 11.2 s per tile, 735 s and $0.35088 in total. The timeout fell on the write-up, not the
+measurement. My first probe reported the file as missing because I looked for `VLM.partial.jsonl` - the
+instrument again: the worker had renamed the partial to the final name on success.
+
+One belief dies here: the gateway is not broken. A previous measurement recorded 664 failures in 733
+calls; this run had 0 failures in 200. Whatever that earlier figure described, it was not this endpoint
+with this client.
+
+**What was measured.** 200 real rows from the 49,691-image snapshot, seed 20260921, stratified 50 per T10
+tier (A hero, B suspect, C grey, D clear), tiles deliberately blinded so the verdict cannot be read off
+metadata. Ground truth is my own eye-labelling of all 100 tiles in tiers A and B against the contact
+sheets, tile by tile. Result: `site_photo` share is 74 % (A), 40 % (B), 72 % (C), 76 % (D). So the model
+reacts to something real in the suspect tier, but does **not** reproduce the boundary between grey and
+clear - not necessarily a failure, since tier C's only signal is a weak metadata property (the site name
+absent from the filename) that need not be visible in a picture.
+
+**The competence is asymmetric, and that is the finding.** In tier B, agreement is about nine in ten, and
+in three disagreements the model was right and I was wrong: a football stadium I read as a colonnade, a
+museum ivory I read as in-situ rock art, a basilica mosaic I read as a line drawing. In tier A it
+degrades: of the 37 `site_photo` verdicts I accept about 20. The excess is generic landscape - empty
+fields, hillsides, a pond, a coastline, a road through fields - and one hard error: `#66405` is a
+19th-century engraving returned as `site_photo`. An engraving is not a photograph of a site under any
+definition this plan uses. Rejecting documents, objects and people, by contrast, looked reliable
+throughout.
+
+So `site_photo` must be read as "an outdoor photograph", not "a photograph of the archaeology". For the
+§7 shorts gate and any gallery cleanliness number, treat it as an upper bound on clean images and re-check
+the hero tier specifically, where the over-call concentrates.
+
+**Intervention, recorded because it was a stall and not a slow task.** FIX-1 issued a bare recursive
+`grep` at the repo root and its shell had been open 600 s. I inspected rather than interrupting: the
+process was `grep.exe` at 1 GB resident, and `.git` alone is 35 GB (LFS objects), so the search was
+reading tens of gigabytes. That is the trap this project already paid for twice. I killed that one search
+process - freeing the child's shell while leaving its 169k tokens of work intact - and steered it to
+`git grep` or a scoped `--include` search. Not an interrupt: the child was not progressing on that call,
+but it was not lost either.
+
+Limitations, stated in `COMPETENCE.md` as well: the ground truth is one thumbnail pass by me, not an
+independent panel; tiers C and D were not eye-checked; no repeat-call stability test was run; the sample
+is stratified by tier, so these rates describe the tiers, not the corpus.

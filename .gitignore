@@ -272,7 +272,21 @@ output/remediation/mechanical/PLAN.jsonl
 # and the extracted evidence text already lives in PILOT.jsonl. The bodies stay on the workstation.
 output/remediation/phase3_pilot/evidence/
 
-# G0: the verdict persister. The undo is versioned; the regenerable plan output is not.
+# G0: the verdict persister. All of it is versioned, including APPLY.sql and PLAN.jsonl: the
+# premise that they are "regenerable" was false. They are rendered from
+# `video-assets/shorts/*/selection.json`, which is gitignored working data that never leaves the
+# workstation, so on any other checkout the same command reproduces nothing - and the write they
+# describe is already in `remediation_change_log` (run_stamp 2026-09-21_gallery-verdicts-persist,
+# 105 rows). The plan and the two scripts are the record and the undo of that write, not a cache.
 !output/remediation/gallery_audit/
-output/remediation/gallery_audit/APPLY.sql
-output/remediation/gallery_audit/PLAN.jsonl
+
+# VLM competence pilot. The measurement and its generators are versioned: VLM.jsonl cost 200
+# billed vision calls and cannot be regenerated identically, and the scripts are the method.
+# The 24 MB of contact sheets and 4.6 MB of tile crops are rebuilt on demand by make_sheets.py,
+# so they stay out. As always the negation comes BEFORE the rules that re-exclude beneath it.
+!output/remediation/vlm_pilot/
+output/remediation/vlm_pilot/tiles/
+output/remediation/vlm_pilot/contact_sheet_*.png
+output/remediation/vlm_pilot/__pycache__/
+output/remediation/vlm_pilot/*.log
+output/remediation/vlm_pilot/*.partial.jsonl
