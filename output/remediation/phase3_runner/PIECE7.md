@@ -28,6 +28,12 @@ time, stale takeover after 30 s, fail-closed `PacerTimeout`) plus `PacedFetcher`
   machine. Two runs on two machines are not coordinated. If the mass run ever moves to the VPS, that
   sentence stays true.
 
+**Wired in on 2026-09-21, and the scope of the default is the interesting part:** `run.py fetch` defaults
+`--pacing-dir` to **empty** - one fetch process has nobody to pace against, and a machine-wide default is
+a shared resource a test can grab - and `StageRunner` passes the directory for the `fetch` stage, because
+the driver is what creates concurrency. The first version defaulted to the repo directory and a test left
+the lock behind; see `AUDIT_LOG.md`, "The pace belongs to the driver".
+
 ## The driver's guards
 
 Every guard has a test, and every test has been proved able to fail by mutating the guard (43/43 in
@@ -118,3 +124,34 @@ writer, which needs reviewer verdicts with `refuted=false` (recorded gap). No pe
 selection, so an oversized site is still refused as a whole rather than field by field. No search
 provider: the answer contract requires a source the run itself fetched, and that is the only kind of
 source it can check.
+
+## Addendum: the two defects the first use found (2026-09-21, after the commit)
+
+This piece was committed green and then *used*, and using it found two defects in it. Both sat in the
+seam to `run.py`. Details and receipts are in `output/remediation/AUDIT_LOG.md`, section "Piece 7, the
+part the stubs could not see".
+
+1. **`prepare` was sent `--ledger` and `--live`, which it does not have** (exit 2 on every batch), and
+   **was never sent the plan at all**. The second half is the dangerous one: `prepare` would have read
+   the default worklist plan under a batch id that exists in both plans, and the run would have fetched
+   and judged the wrong fifteen sites with nothing raising. Proved in production, not in a test: the
+   smoke run's `input.json` holds the site from *my* plan, while the worklist's `batch-0001` holds
+   `31860bc4-476a-49bc-9f97-e25220063d19`. The argv is now stage-specific, and two tests check it
+   against `run.build_parser()` itself rather than against a stub - **29 green tests had hidden it**.
+2. **The ceiling counted the ledger's whole history** (465 model calls of pilot and recall rounds), so
+   `--max-calls 25020` would have stopped 465 calls early. The ceilings now count from the ledger as it
+   stood at the start of the run, and the stop message names both numbers.
+
+Also fixed: the projection line printed `$0.00` for a five-call run (`.2f`); it is `.4f` now.
+
+### The smoke runs
+
+| run | what it proves |
+|---|---|
+| `runs/smoke1` - 1 site, `--jobs 2 --limit 1` | the driver prepares, fetches, judges and records end to end: `done (5 answers on disk)`, ledger 465 -> 470 calls (+$0.003606), 4 requests / 7,367 bytes / 0 failures, evidence byte-identical to the recall round, **19 s** |
+| `runs/smoke2` - 2 batches, `--jobs 2`, one site each | two processes in flight at once (their model calls interleave second by second) and **two uncoordinated requests to `www.wikidata.org` inside the same second** - which is what a pacer is for, and at that moment it was not wired |
+| `runs/smoke3`/`runs/smoke4` - the same two batches, after the pacer was wired | the driver's argv carries `--pacing-dir`, the banner names it, and both hosts the batches touched leave a stamp file there; the `runs/smoke4` argv line is quoted in `AUDIT_LOG.md` |
+
+The first run also produced a real correction (`card_description`: the stored "founded in 1690 by the
+Kounta" against a source that says the Kounta *came* to an existing community), with `PROPOSED:` and a
+`SOURCE:` quote that occurs in the page the run fetched.

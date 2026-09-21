@@ -1035,3 +1035,76 @@ def test_the_pace_covers_the_probe_and_the_targets_alike(tmp_path: Path) -> None
     hosts = {F.host_of(url) for url in inner.urls}
     assert len(_probe_requests(inner.urls)) == 2  # one probe per host, through the pacer
     assert {p.name for p in pacer.root.glob("*.stamp")} == {f"{host}.stamp" for host in hosts}
+
+
+def test_the_live_fetch_command_paces_its_requests_across_processes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Wiring, not the pacer itself: a *live* fetch leaves one stamp per host it touched.
+
+    The pace has to be a file because parallel batches are separate processes - an in-memory limiter
+    would multiply the rate per host by the number of jobs, which is the impoliteness it exists to
+    prevent. A stamp in `--pacing-dir` is the observable proof that the command used it.
+    """
+    run_dir = _prepare_run_dir(tmp_path)
+    ledger = tmp_path / "LEDGER.jsonl"
+    pacing = tmp_path / "pacing"
+    monkeypatch.setattr(F, "HttpFetcher", lambda timeout: _FakeFetcher())
+
+    code = R.main(
+        [
+            "fetch",
+            "--batch-id",
+            "batch-0001",
+            "--run-dir",
+            str(run_dir),
+            "--ledger",
+            str(ledger),
+            "--live",
+            "--pacing-dir",
+            str(pacing),
+        ]
+    )
+
+    assert code == 0
+    capsys.readouterr()
+    assert sorted(p.name for p in pacing.glob("*.stamp")) == [
+        "en.wikipedia.org.stamp",
+        "overpass-api.de.stamp",
+    ]
+
+
+def test_an_empty_pacing_dir_paces_nothing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The off switch.
+
+    `monkeypatch.chdir` is what makes this observable at all: a pacer that ignored the empty
+    directory would resolve it to the working directory and drop its stamps there, where this finds
+    them.
+    """
+    monkeypatch.chdir(tmp_path)
+    run_dir = _prepare_run_dir(tmp_path)
+    ledger = tmp_path / "LEDGER.jsonl"
+    fake = _FakeFetcher()
+    monkeypatch.setattr(F, "HttpFetcher", lambda timeout: fake)
+
+    code = R.main(
+        [
+            "fetch",
+            "--batch-id",
+            "batch-0001",
+            "--run-dir",
+            str(run_dir),
+            "--ledger",
+            str(ledger),
+            "--live",
+            "--pacing-dir",
+            "",
+        ]
+    )
+
+    assert code == 0
+    capsys.readouterr()
+    assert len(fake.urls) == 4  # the requests happened; only the pace is off
+    assert not list(tmp_path.glob("**/*.stamp"))

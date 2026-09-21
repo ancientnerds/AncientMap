@@ -66,6 +66,12 @@ DEFAULT_PLAN = REPO / "output" / "remediation" / "phase3_runner" / "PLAN.jsonl"
 DEFAULT_RUN_DIR = REPO / "output" / "remediation" / "phase3_runner" / "runs" / "mass1"
 DEFAULT_LEDGER = REPO / "output" / "remediation" / "phase3_runner" / "LEDGER.jsonl"
 DEFAULT_LOG_DIR = REPO / "output" / "remediation" / "logs" / "massrun"
+#: The machine-local pace directory every batch this driver starts shares. Passed to `fetch`
+#: explicitly rather than left to that command's default, and the default there has to stay empty: a
+#: lone `run.py fetch --live` has nobody to pace against, while a shared default would let a test or a
+#: second run take a host's lock and hold a live run up. Same path as `run.DEFAULT_PACING_DIR` (a test
+#: asserts the two agree).
+DEFAULT_PACING_DIR = REPO / "output" / "remediation" / "logs" / "pacing"
 RUNNER = REPO / "scripts" / "remediation" / "phase3" / "run.py"
 PACKAGE = REPO / "scripts" / "remediation" / "phase3"
 
@@ -207,17 +213,33 @@ class Budget:
     max_calls: int | None = None
     max_usd: float | None = None
 
-    def stop_reason(self, spend: Spend) -> str | None:
-        if self.max_calls is not None and spend.calls >= self.max_calls:
-            return f"call ceiling reached: {spend.calls} >= {self.max_calls}"
-        if self.max_usd is not None and spend.cost_usd >= self.max_usd:
-            return f"dollar ceiling reached: {spend.cost_usd:.6f} >= {self.max_usd:.6f}"
+    def stop_reason(self, spend: Spend, baseline: Spend | None = None) -> str | None:
+        """The ceiling is for **this run**, counted from the ledger as it was when the run started.
+
+        The ledger is shared with the pilot and with six recall rounds, 465 model calls of it. An
+        absolute ceiling would therefore make `--max-calls 25020` stop 465 calls early and quietly
+        mean something other than what it says - the same defect class as a migration label that
+        asks a different question than it answers. Both numbers are named, so the ledger's total
+        stays in view instead of being hidden by the subtraction.
+        """
+        bought = spend.calls - (baseline.calls if baseline is not None else 0)
+        spent = spend.cost_usd - (baseline.cost_usd if baseline is not None else 0.0)
+        if self.max_calls is not None and bought >= self.max_calls:
+            return (
+                f"call ceiling reached: {bought} >= {self.max_calls} calls this run "
+                f"(the ledger holds {spend.calls})"
+            )
+        if self.max_usd is not None and spent >= self.max_usd:
+            return (
+                f"dollar ceiling reached: {spent:.6f} >= {self.max_usd:.6f} this run "
+                f"(the ledger holds {spend.cost_usd:.6f})"
+            )
         return None
 
     def as_text(self) -> str:
         return (
             f"calls<={self.max_calls if self.max_calls is not None else 'unbounded'}, "
-            f"usd<={self.max_usd if self.max_usd is not None else 'unbounded'}"
+            f"usd<={self.max_usd if self.max_usd is not None else 'unbounded'} per run"
         )
 
 
@@ -330,25 +352,38 @@ class StageRunner:
     def __init__(
         self,
         *,
+        plan: Path,
         run_dir: Path,
         ledger: Path,
         log_dir: Path,
         live: bool,
         stage_timeout: float = DEFAULT_STAGE_TIMEOUT,
         request_timeout: float | None = None,
+        pacing_dir: Path | None = DEFAULT_PACING_DIR,
         python: Path | None = None,
         runner: Path = RUNNER,
     ) -> None:
+        self.plan = plan
         self.run_dir = run_dir
         self.ledger = ledger
         self.log_dir = log_dir
         self.live = live
         self.stage_timeout = stage_timeout
         self.request_timeout = request_timeout
+        self.pacing_dir = pacing_dir
         self.python = python or python_executable()
         self.runner = runner
 
     def argv(self, stage: str, batch_id: str) -> list[str]:
+        """The argv of one stage, built from what that stage of `run.py` actually accepts.
+
+        `prepare` is the odd one out: it takes the **plan**, and it has no ledger and no `--live`.
+        That matters more than it looks - without `--plan` it would prepare the *default* worklist
+        batch under a batch id that exists in both plans, and the run would then fetch and judge the
+        wrong sites with nothing raising. Found on 2026-09-21 by feeding this argv to the real
+        `run.build_parser()`; the unit tests up to then had stubbed `subprocess.run` and only ever
+        inspected `fetch`, so they proved the stub, not the driver.
+        """
         argv = [
             str(self.python),
             str(self.runner),
@@ -357,12 +392,19 @@ class StageRunner:
             str(self.run_dir),
             "--batch-id",
             batch_id,
-            "--ledger",
-            str(self.ledger),
         ]
+        if stage == "prepare":
+            return [*argv, "--plan", str(self.plan)]
+        argv += ["--ledger", str(self.ledger)]
         if self.live:
             argv.append("--live")
-        if stage != "prepare" and self.request_timeout is not None:
+        if stage == "fetch" and self.pacing_dir is not None:
+            # Only `fetch` opens sockets, and with `--jobs N` the batches are separate *processes*, so
+            # an in-memory limiter would multiply the per-host rate by N - the politeness a pacer
+            # exists to keep. Hence a shared directory of lock files, and hence the driver being the
+            # one that names it: the driver is what creates concurrency.
+            argv += ["--pacing-dir", str(self.pacing_dir)]
+        if self.request_timeout is not None:
             argv += ["--timeout", f"{self.request_timeout:g}"]
         return argv
 
@@ -420,6 +462,9 @@ def run_mass(
     queue = list(batches)
     consecutive = 0
     pending: dict[Future[tuple[bool, str]], PlannedBatch] = {}
+    # What the ledger holds *now* is not this run's spend: the pilot and six recall rounds are in
+    # there too. The ceilings are measured from here.
+    baseline = Spend.from_ledger(ledger)
 
     def announce(message: str) -> None:
         print(message, flush=True)
@@ -428,7 +473,7 @@ def run_mass(
 
     def guard() -> str | None:
         """Everything that must be true *between* batches, checked before each one is started."""
-        reason = budget.stop_reason(Spend.from_ledger(ledger))
+        reason = budget.stop_reason(Spend.from_ledger(ledger), baseline=baseline)
         if reason:
             return reason
         if consecutive >= failures_before_stop:
@@ -537,13 +582,16 @@ def main(argv: list[str] | None = None) -> int:
     print(f"batches       {len(batches)} ({sites} sites)")
     print(f"expected      {sites * FIELDS_PER_SITE} calls at {FIELDS_PER_SITE} per site")
     print(
-        f"projected     ${sites * FIELDS_PER_SITE * MEASURED_COST_PER_CALL:.2f} "
+        f"projected     ${sites * FIELDS_PER_SITE * MEASURED_COST_PER_CALL:.4f} "
         f"at the measured ${MEASURED_COST_PER_CALL} per call"
     )
     print(f"budget        {Budget(args.max_calls, args.max_usd).as_text()}")
-    print(f"already spent {spend.calls} calls, ${spend.cost_usd:.6f}")
+    print(
+        f"already spent {spend.calls} calls, ${spend.cost_usd:.6f} (the ceilings count from here)"
+    )
     print(f"jobs          {args.jobs}")
     print(f"live          {args.live}")
+    print(f"pace          {DEFAULT_PACING_DIR}")
     if digest is not None:
         print(f"sources       {digest[:16]}")
     if not args.live:
@@ -561,6 +609,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     progress.write(progress_path)
     runner = StageRunner(
+        plan=plan_path,
         run_dir=run_dir,
         ledger=ledger,
         log_dir=log_dir,

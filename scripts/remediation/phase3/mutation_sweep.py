@@ -17,6 +17,7 @@ Usage:
 from __future__ import annotations
 
 import hashlib
+import os
 import shutil
 import subprocess
 import sys
@@ -70,6 +71,16 @@ MISSING_ANSWER = "test_a_written_judgement_without_its_answer_file_is_broken"
 DIGEST_GUARD = "test_the_source_digest_guard_stops_a_run_whose_sources_changed"
 ATOMIC = "test_a_crash_between_the_write_and_the_swap_leaves_the_previous_progress_intact"
 DRY_RUN = "test_a_dry_run_buys_nothing_and_leaves_the_ledger_exactly_as_it_was"
+PREPARE_PLAN = "test_prepare_is_given_the_plan_and_neither_the_ledger_nor_live"
+REAL_CLI = "test_every_stage_argv_is_accepted_by_the_real_cli"
+CEILING_BASELINE = "test_a_ceiling_means_this_run_and_not_the_ledgers_whole_history"
+PACE_COMMAND = "test_the_live_fetch_command_paces_its_requests_across_processes"
+PACE_OFF = "test_an_empty_pacing_dir_paces_nothing"
+PACE_DRIVER = "test_the_driver_tells_fetch_which_pace_directory_to_use"
+PACE_DRIVER_OFF = "test_the_driver_can_be_told_not_to_pace"
+SWEEP_TEST = "tests/remediation/test_phase3_sweep.py"
+SWEEP_UNREADABLE = "test_a_child_whose_output_cannot_be_read_does_not_kill_the_sweep"
+SWEEP_MISSED = "test_a_mutation_that_is_not_caught_is_still_undone"
 
 #: (name, file, the exact text to replace, what to replace it with, test file, test name)
 MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
@@ -376,12 +387,77 @@ MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "the call ceiling is not checked between batches",
         "scripts/remediation/phase3/mass_run.py",
-        "        reason = budget.stop_reason(Spend.from_ledger(ledger))\n"
+        "        reason = budget.stop_reason(Spend.from_ledger(ledger), baseline=baseline)\n"
         "        if reason:\n            return reason\n",
-        "        reason = budget.stop_reason(Spend.from_ledger(ledger))\n"
+        "        reason = budget.stop_reason(Spend.from_ledger(ledger), baseline=baseline)\n"
         "        if False:  # mutated\n            return reason\n",
         MASSRUN_TEST,
         BUDGET,
+    ),
+    (
+        "the ceiling counts the ledger's whole history",
+        "scripts/remediation/phase3/mass_run.py",
+        "        bought = spend.calls - (baseline.calls if baseline is not None else 0)\n",
+        "        bought = spend.calls  # mutated\n",
+        MASSRUN_TEST,
+        CEILING_BASELINE,
+    ),
+    (
+        "the fetch command does not pace its requests",
+        "scripts/remediation/phase3/run.py",
+        "    if args.pacing_dir:\n"
+        "        fetcher = F.PacedFetcher(http, F.HostPacer(Path(args.pacing_dir)))\n",
+        "    if False:  # mutated\n"
+        "        fetcher = F.PacedFetcher(http, F.HostPacer(Path(args.pacing_dir)))\n",
+        FETCH_TEST,
+        PACE_COMMAND,
+    ),
+    (
+        "an empty pacing directory is paced anyway",
+        "scripts/remediation/phase3/run.py",
+        "    if args.pacing_dir:\n"
+        "        fetcher = F.PacedFetcher(http, F.HostPacer(Path(args.pacing_dir)))\n",
+        "    if True:  # mutated\n"
+        "        fetcher = F.PacedFetcher(http, F.HostPacer(Path(args.pacing_dir)))\n",
+        FETCH_TEST,
+        PACE_OFF,
+    ),
+    (
+        "the child's output is decoded with the locale's codec",
+        "scripts/remediation/phase3/mutation_sweep.py",
+        '                encoding="utf-8",\n                errors="replace",\n',
+        "",
+        SWEEP_TEST,
+        SWEEP_UNREADABLE,
+    ),
+    (
+        "a mutation is restored only when the sweep itself fails",
+        "scripts/remediation/phase3/mutation_sweep.py",
+        "        finally:\n            shutil.copy2(backup, path)\n",
+        "        except Exception:\n            shutil.copy2(backup, path)\n",
+        SWEEP_TEST,
+        SWEEP_MISSED,
+    ),
+    (
+        "the driver does not pace its batches",
+        "scripts/remediation/phase3/mass_run.py",
+        '        if stage == "fetch" and self.pacing_dir is not None:\n'
+        "            # Only `fetch` opens sockets, and with `--jobs N` the batches are separate *processes*, so\n"
+        "            # an in-memory limiter would multiply the per-host rate by N - the politeness a pacer\n"
+        "            # exists to keep. Hence a shared directory of lock files, and hence the driver being the\n"
+        "            # one that names it: the driver is what creates concurrency.\n"
+        '            argv += ["--pacing-dir", str(self.pacing_dir)]\n',
+        "",
+        MASSRUN_TEST,
+        PACE_DRIVER,
+    ),
+    (
+        "the pace cannot be switched off",
+        "scripts/remediation/phase3/mass_run.py",
+        '        if stage == "fetch" and self.pacing_dir is not None:\n',
+        '        if stage == "fetch":\n',
+        MASSRUN_TEST,
+        PACE_DRIVER_OFF,
     ),
     (
         "the circuit breaker never trips",
@@ -441,6 +517,22 @@ MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         MASSRUN_TEST,
         DRY_RUN,
     ),
+    (
+        "prepare is not told which plan to prepare",
+        "scripts/remediation/phase3/mass_run.py",
+        '            return [*argv, "--plan", str(self.plan)]\n',
+        "            return list(argv)  # mutated\n",
+        MASSRUN_TEST,
+        PREPARE_PLAN,
+    ),
+    (
+        "the ledger is sent to prepare as well",
+        "scripts/remediation/phase3/mass_run.py",
+        '            return [*argv, "--plan", str(self.plan)]\n',
+        '            return [*argv, "--plan", str(self.plan), "--ledger", str(self.ledger)]  # mutated\n',
+        MASSRUN_TEST,
+        REAL_CLI,
+    ),
 ]
 
 
@@ -455,31 +547,51 @@ def first_failure(output: str) -> str:
     return output.strip().splitlines()[-1][:160] if output.strip() else "(no output)"
 
 
-def main(argv: list[str]) -> int:
-    BACKUP.mkdir(parents=True, exist_ok=True)
+def main(argv: list[str], *, repo: Path = REPO, backup_dir: Path = BACKUP) -> int:
+    """Run every wanted mutation. `repo` and `backup_dir` are parameters so the sweep can be tested
+    against a throwaway tree instead of the one it is guarding."""
+    backup_dir.mkdir(parents=True, exist_ok=True)
     wanted = [m for m in MUTATIONS if not argv or any(a in m[0] for a in argv)]
     rows: list[tuple[str, str, bool, str, str]] = []
     for name, rel, old, new, test_file, test_name in wanted:
-        path = REPO / rel
+        path = repo / rel
         original = path.read_text(encoding="utf-8")
         assert original.count(old) >= 1, f"{name}: anchor not found in {rel}"
         before = digest(path)
-        backup = BACKUP / path.name
+        backup = backup_dir / path.name
         shutil.copy2(path, backup)
-        path.write_text(original.replace(old, new, 1), encoding="utf-8", newline="\n")
-        proc = subprocess.run(
-            [str(PY), "-m", "pytest", f"{test_file}::{test_name}", "-q", "-x", "--no-header"],
-            cwd=REPO,
-            capture_output=True,
-            text=True,
-        )
-        caught = proc.returncode != 0
-        if proc.returncode == 4:
-            raise SystemExit(
-                f"{name}: the test {test_file}::{test_name} was not collected; nothing was proven"
+        # The restore is **unconditional**: an exception anywhere after this point (a crash in the
+        # sweep itself, a KeyboardInterrupt, a pytest that never returns) must never leave the
+        # mutated file in the tree. That happened on 2026-09-21 - a TypeError in this very loop
+        # killed the run mid-mutation and left `discover_stage.py` carrying a mutant, which then
+        # looked like finished work. A sweep whose failure mode is "the tree is now wrong" is worse
+        # than no sweep.
+        try:
+            path.write_text(original.replace(old, new, 1), encoding="utf-8", newline="\n")
+            proc = subprocess.run(
+                [str(PY), "-m", "pytest", f"{test_file}::{test_name}", "-q", "-x", "--no-header"],
+                cwd=repo,
+                capture_output=True,
+                text=True,
+                # Without this the child's output is decoded with the *locale's* codec (cp1252 on
+                # this workstation), and one UTF-8 byte outside cp1252 kills subprocess's reader
+                # thread: `stdout` then comes back as None. On 2026-09-21 that TypeError aborted the
+                # sweep and left a mutant in `discover_stage.py`. The locale is not the child's
+                # encoding - UTF-8 is, and the child is told so.
+                encoding="utf-8",
+                errors="replace",
+                env={**os.environ, "PYTHONIOENCODING": "utf-8"},
             )
-        detail = first_failure(proc.stdout + proc.stderr) if caught else "NOT CAUGHT"
-        shutil.copy2(backup, path)
+            caught = proc.returncode != 0
+            if proc.returncode == 4:
+                raise SystemExit(
+                    f"{name}: the test {test_file}::{test_name} was not collected; nothing was proven"
+                )
+            detail = (
+                first_failure((proc.stdout or "") + (proc.stderr or "")) if caught else "NOT CAUGHT"
+            )
+        finally:
+            shutil.copy2(backup, path)
         after = digest(path)
         rows.append(
             (name, f"{test_name} ({'failed' if caught else 'PASSED'})", caught, detail, before[:16])

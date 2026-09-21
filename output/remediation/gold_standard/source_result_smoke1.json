@@ -1,0 +1,15 @@
+{
+  "run": "smoke1",
+  "seen": {
+    "answered": 5,
+    "citation_problems": 0,
+    "quotes": 1,
+    "verdict_CORRECT": 3,
+    "verdict_UNVERIFIABLE": 1,
+    "verdict_WRONG": 1,
+    "wrong": 1,
+    "wrong_with_proposed": 1,
+    "wrong_with_source": 1
+  },
+  "problems": []
+}

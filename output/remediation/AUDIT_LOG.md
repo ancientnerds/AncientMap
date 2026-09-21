@@ -3019,8 +3019,8 @@ cheaper than a comment that suppresses them:
 | line | what it is | why the finding does not hold |
 |---|---|---|
 | `run.py:121` | `if record["phase3"] is True:` | The plan-format guard. A JSON `true` is a Python `bool`; `is True` is the strictest correct spelling. The suggested `== True` would *weaken* it - `1 == True` is also true. |
-| `run.py:403`, `508`, `639` | `payload = json.loads(report.to_json())` | `to_json()` (`model_stage.py:917-924`) is `json.dumps` of a dict built from the object's own fields. **There is no file and no foreign input**, so "missing file" cannot arise; a `try/except` here would hide a serialisation bug rather than handle one. |
-| `run.py:759` | `return int(args.func(args))` | The argparse dispatch. `args.func` is set by `set_defaults(func=cmd_*)` for every subparser (`run.py:692,698,718,747,753`), and an unknown verb is refused by argparse **before** dispatch: `run.py not-a-subcommand` exits `2` with `invalid choice`. Executed, not assumed. |
+| the three `payload = json.loads(report.to_json())` sites in `run.py` (fetch, judge, judge-discover) | `payload = json.loads(report.to_json())` | `to_json()` (`model_stage.py:917-924`) is `json.dumps` of a dict built from the object's own fields. **There is no file and no foreign input**, so "missing file" cannot arise; a `try/except` here would hide a serialisation bug rather than handle one. Cited by expression, not by line: every inserted line in `run.py` moves the number, and this is re-reported every turn. |
+| the `return int(args.func(args))` at the end of `run.py` | `return int(args.func(args))` | The argparse dispatch. `args.func` is set by `set_defaults(func=cmd_*)` for every subparser, and an unknown verb is refused by argparse **before** dispatch: `run.py not-a-subcommand` exits `2` with `invalid choice`. Executed, not assumed. |
 | `list_other_flags.py:52` | a reader of `model.json` and the answer files | `call without try/except` again - and here the `try/except` would be the defect. This script exists to surface flags the fixture does not list; a reader that swallows a missing file or unparsable JSON reports "no flags" for a run it never read, which is the one outcome it must never produce. Raising loudly **is** the check. |
 | `verify_sources.py:48` | a reader of `fetch.json` (the page map for the citation check) | Same class, same reason, and one step stronger: this file decides whether a correction is writable, so a swallowed error would silently make a fabricated citation look verified. |
 | `fetch_stage.py:682` (x2) | `return float(value[0]), float(value[1])` | Not unguarded - the three lines above it require the value to be a 2-sequence and every element to be `isinstance(v, (int, float))` and not a `bool`. `float()` on an `int`/`float` cannot raise; the `raise InputError` for everything else is one line below. |
@@ -3380,4 +3380,192 @@ restore proved byte-identical for all six files it touches (`mass_run.py` `ba511
 to the writer, which needs `refuted=false`), no per-field evidence selection (an oversized site is still
 refused as a whole), and no search provider - the answer contract requires a source the run itself
 fetched, which is the only kind of source it can check.
+
+## Piece 7, the part the stubs could not see (2026-09-21)
+
+The driver and the pacer were committed green - 29 driver tests, 43/43 mutations, 2316 in the gate -
+and the first attempt to actually *use* it found two defects in it. Both were in the seam between the
+driver and `run.py`, and neither was reachable by a test that stubs that seam.
+
+### `prepare` was sent flags it does not have, and never the plan
+
+The driver built one argv shape for all three stages. Checked against the real parser instead of a stub:
+
+    $ run.py prepare ... --ledger L.jsonl --live
+    EXIT 2: unrecognized arguments: --ledger L.jsonl --live
+
+and, once that was visible, the defect behind it: `prepare` was **never** passed `--plan`. It would have
+prepared the default worklist plan under a batch id that exists in *both* plans, so the run would have
+fetched and judged the wrong fifteen sites - silently, because nothing about that raises.
+
+That is not hypothetical: the smoke plan and the worklist both have a `batch-0001`.
+
+    input.json      batch_id=batch-0001  sites=['a5d9e9a7-9fd2-4a0f-a3ae-7dd78fba429b']
+    worklist        batch_id=batch-0001  sites=['31860bc4-476a-49bc-9f97-e25220063d19', ...]
+
+**The lesson is the shape of the test, not the bug.** 29 tests were green while the driver could not
+have prepared a single batch: `_StubRunner` stood in for `StageRunner`, so the argv was only ever
+inspected, never parsed. A seam that is stubbed must *also* be checked against the real thing -
+`test_every_stage_argv_is_accepted_by_the_real_cli` feeds every stage's argv to `run.build_parser()`,
+and `test_prepare_is_given_the_plan_and_neither_the_ledger_nor_live` asserts on the namespace it parses
+into (`not hasattr(ns, "ledger")`), which is the only way "prepare does not take a ledger" can be stated
+once and stay true.
+
+### The ceiling counted the ledger's whole history
+
+Found while preparing the smoke run: `Budget.stop_reason` compared `spend.calls` - the **total** in the
+shared ledger - against `--max-calls`. The ledger is shared with the pilot and the six recall rounds,
+which held 465 model calls at that moment, so `--max-calls 25020` would have stopped 465 calls early and
+meant something other than what it says.
+
+The ceilings now count from the ledger as it stood when the run started, and both numbers are named:
+`call ceiling reached: 80 >= 75 calls this run (the ledger holds 80)`. The start-up line reads
+`already spent 465 calls, $0.354982 (the ceilings count from here)`.
+
+This one required rewriting a test of mine: `test_the_call_ceiling_stops_...` seeded the ledger with 75
+calls and asserted a stop, i.e. it *encoded the absolute reading*. A seeded ledger is a baseline now, so
+that test asserted the superseded defect. It was rewritten so the stub buys calls the way `judge` does
+(`calls_per_batch`, `cost_per_call`), and the test a mutation now has to break is
+`test_a_ceiling_means_this_run_and_not_the_ledgers_whole_history`: five hundred calls of history, a
+ceiling of 75, forty calls bought per batch, two batches - the run finishes, and the ledger total ends at
+580, well past the ceiling.
+
+### Two smaller ones, both mine, both caught by something already built
+
+- A replacement block I wrote renamed `queue` to `queues` in `run_mass` while the rest of the function
+  still used `queue`. The checker reported seven `queue is not defined` errors in the same call that
+  introduced it. Credit where it is due: that is the second time this session a checker caught a defect
+  of mine before it reached a commit.
+- My first version of the dollar-ceiling test bought $0.16 of calls against a $0.25 ceiling and asserted
+  a stop. The test failed, loudly, which is what it is for. The arithmetic is now 3 batches x 20 calls x
+  $0.01 = $0.40, and the assertion names the batch that was not reached.
+
+The projection line also read `projected $0.00` for a five-call run (`.2f` of 0.004125). Now `.4f`:
+`projected $0.0041`.
+
+### The first end-to-end run: one site, 19 seconds, and a real correction
+
+`mass_run.py --live --limit 1` over a one-site plan (`PLAN.smoke.jsonl`), run dir `runs/smoke1`.
+
+| | |
+|---|---|
+| stages | `batch-0001: done (5 answers on disk)`, exit 0, nothing not reached |
+| ledger | 465 -> 470 calls, $0.354982 -> $0.358588 (**+$0.003606**, $0.000721/call) |
+| fetch | 2 probes + 2 targets = 4 requests, 7,367 bytes, 0 failures, 0 truncations |
+| evidence | `enwiki` 1,533 B + `wikidata_entity` 5,834 B - **byte-identical to the recall round** |
+| model | 5 calls, 21,255 in / 695 out, 0 calls skipped |
+| wall clock | 10:22:17 -> 10:22:36 (19 s); four fetches inside one second, calls ~2.5 s apart |
+
+And the run produced a finding, not just an exit code. `card_description` came back:
+
+    VERDICT: WRONG - the sources say the Kounta arrived in 1690 to an already-existing community
+    (Laaci-Wendu existed earlier as the Jaawbe capital), not that the town was founded by them then.
+    PROPOSED: Ruined town in Mauritania, later Ksar el Barka, on the shores of Lake Gabou; ...
+    SOURCE: https://en.wikipedia.org/w/api.php?... - "In 1690 the Kounta, who were from Ouadane and
+    fleeing increasingly desertification, came to the area. There was still a Black African farming
+    community there ..."
+
+The stored value claims a founding in 1690; the cited sentence says they *came* to a community that was
+already there. That is the round-6 answer contract - a correction with a source - working in production
+rather than in a measurement.
+
+**Wall clock, corrected by measurement - and the old estimate stands until the mass run says
+otherwise.** One site of the enwiki+wikidata shape takes 19 s. The truth-plan sites took ~120 s each (up
+to 15 targets each, including the unreachable `overpass-api.de`). Which of the two the 5,004 sites
+resemble is not yet measured; the first mass batches will say. Nothing here is a projection from n=1.
+
+### The pace belongs to the driver, not to a default in `run.py`
+
+Wiring the pacer into `cmd_fetch` was one `if`, and it was wrong in the way that matters: the new
+`--pacing-dir` **defaulted to the repository's own directory**. The first command after that edit failed
+to delete a lock it had left behind:
+
+    rm: cannot remove '.../output/remediation/logs/pacing/en.wikipedia.org.lock': Device or resource busy
+
+The lock came from a *test*. The existing live-fetch tests call `R.main(["fetch", ..., "--live"])`
+without `--pacing-dir`, so they took the default and wrote real lock and stamp files into the working
+tree. Two consequences, both real: a test run can hold a host's lock while a live run waits up to
+`HOST_LOCK_WAIT_SECONDS` and then fails closed, and every test run quietly rewrites the machine's pace
+state.
+
+The scope was the defect, not the value. **Concurrency is what the driver creates, so the driver is what
+names the pace:**
+
+- `run.py fetch --pacing-dir` defaults to **empty**: one `fetch` process has nobody to pace against, and
+  a machine-wide default is a shared resource a test can grab.
+- `mass_run.StageRunner` passes `--pacing-dir <DEFAULT_PACING_DIR>` for the `fetch` stage only (nothing
+  else opens a connection), and the run banner prints it. `run.DEFAULT_PACING_DIR` and
+  `M.DEFAULT_PACING_DIR` are the same path, and a test asserts they agree.
+
+Proved at the CLI, not in the abstract - the stage log of the `--jobs 2` run carries the flag:
+
+    $ ...\python.exe ...\run.py fetch --run-dir ...runs\smoke4 --batch-id batch-0001 \
+        --ledger ...\LEDGER.jsonl --live --pacing-dir C:\...\output\remediation\logs\pacing
+
+and afterwards both hosts those two batches touched have a stamp file in that directory.
+
+### The guard caught my prose
+
+The same edit broke `test_the_skeleton_touches_no_network_and_no_model_client`, which bans
+`httpx|requests|urllib|socket|aiohttp|openai|anthropic|subprocess` in the source of `model.py`,
+`ledger.py` and `run.py`. The hit was `socket` - in a **comment of mine** ("not a second owner of the
+socket"). The guard is blunt and its intent is exact: those three modules do not even *name* a network
+or model client. So the comment was reworded, not the guard. That is the third time this session that
+something already built caught something I wrote.
+
+Also mine, and caught by reading my own diff inside the same edit: while adding `pacing_dir` to
+`StageRunner.__init__` I renamed `stage_timeout` to `step_timeout` in the signature and left
+`self.stage_timeout = stage_timeout` below it - a `NameError` at every construction, i.e. no batch could
+have started. Reverted before any test ran.
+
+### The sweep died and left a mutant in the tree (2026-09-21)
+
+This is the worst failure mode this project has, and it happened: the sweep that proves every guard has
+one aborted mid-mutation and left the mutated file behind. The receipt is
+`output/remediation/logs/phase3_mutations/sweep_after_pacing_wiring.txt`, 24 lines, `SWEEP_EXIT=1`:
+
+    Exception in thread Thread-61 (_readerthread):
+      File ".../subprocess.py", line 1615, in _readerthread
+        buffer.append(fh.read())
+    UnicodeDecodeError: 'charmap' codec can't decode byte 0x81 in position 489
+    ...
+      File ".../mutation_sweep.py", line 553, in main
+        detail = first_failure(proc.stdout + proc.stderr) if caught else "NOT CAUGHT"
+    TypeError: unsupported operand type(s) for +: 'NoneType' and 'str'
+
+**Two causes, and the second one is mine.** `subprocess.run(..., text=True)` decodes the child's output
+with the **locale's** codec - cp1252 here - so one UTF-8 byte outside cp1252 killed subprocess's reader
+thread and `stdout` came back `None`. And the restore (`shutil.copy2(backup, path)`) sat *after* the line
+that raised, so nothing put the file back.
+
+**What was left behind.** `discover_stage.py` carried
+`unescaped = text` instead of `unescaped = _ESCAPE_RE.sub(_unescape_match, text)` - the JSON-escape
+decoding silently switched off, in a file that otherwise looked like finished work. Found, not stumbled
+on, by asking the mutations themselves: for each one, is its **original** text still in the file? The
+anchor question is the decisive one, because a mutation *replaces* its anchor - and one mutation
+(`over-bound evidence no longer becomes the site's own outcome`) duly reported both texts present,
+because its replacement text also occurs legitimately elsewhere. Both facts are in the log of that
+check; only one of them was a mutant. `git checkout --` restored the file to its committed bytes, and
+the 51 discover tests pass.
+
+**The repair.** Not `(proc.stdout or "")` - that tolerates an unreadable capture and quietly loses the
+failure detail. The child is read as UTF-8 explicitly (`encoding="utf-8", errors="replace"`), and the
+child is told to write UTF-8 (`PYTHONIOENCODING`), which is what `StageRunner.call` already does for the
+judge's non-ASCII prompts. The locale is not the child's encoding, and assuming it is was the bug.
+
+**The instrument now has its own tests** (`tests/remediation/test_phase3_sweep.py`, 2 tests, each with
+its own mutation): `main()` takes `repo` and `backup_dir` so a test can sweep a throwaway tree - a sweep
+test that touched the real tree could leave exactly the mutant it exists to prevent. One test feeds it
+the unreachable output (`stdout=None`), the other a mutation the test *did not* catch; both assert the
+file is byte-identical afterwards, and the first also pins the encoding the child is read with.
+
+**The rule this earns, and it is not a metaphor:** a sweep whose failure mode is "the tree is now wrong"
+is worse than no sweep, because a mutant in the tree looks exactly like work already done.
+
+**Two smaller things from the same hour, both mine.** Running `ruff format` on the whole of
+`phase3/` rewrote a line in `discover_stage.py` that no change of mine had touched; that was reverted to
+the committed bytes, and the rule is to format the files being changed and not the directory. And a
+multi-block `edit` of mine deleted the path element from one mutation tuple, leaving it with five
+instead of six - caught by `mypy` before any test ran, which is the argument for keeping the mutation
+list typed.
 

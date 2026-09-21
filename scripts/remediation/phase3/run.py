@@ -62,6 +62,10 @@ DEFAULT_WORKLIST = REPO / "output" / "remediation" / "phase3_worklist" / "WORKLI
 DEFAULT_RUN_DIR = REPO / "output" / "remediation" / "phase3_runner" / "runs"
 DEFAULT_PLAN = REPO / "output" / "remediation" / "phase3_runner" / "PLAN.jsonl"
 DEFAULT_LEDGER = REPO / "output" / "remediation" / "phase3_runner" / "LEDGER.jsonl"
+#: Where the cross-process host pace keeps its lock and stamp files. Machine-local by design
+#: (`fetch_stage.HostPacer`): two machines share no per-host state, so what this supports is "this
+#: machine does not hammer a host", not a worldwide rate limit.
+DEFAULT_PACING_DIR = REPO / "output" / "remediation" / "logs" / "pacing"
 
 
 class InputError(ValueError):
@@ -383,7 +387,14 @@ def cmd_fetch(args: argparse.Namespace) -> int:
         )
         return 0
 
-    fetcher = F.HttpFetcher(timeout=args.timeout)
+    http = F.HttpFetcher(timeout=args.timeout)
+    # The pace sits on the `Fetcher` seam, so it covers the reachability probe, every retry and every
+    # target without a call site having to remember. The transport is what closes: `Fetcher` has one
+    # method (`get`), and `PacedFetcher` is a decorator over it - a pace, not a second owner of the
+    # connection.
+    fetcher: F.Fetcher = http
+    if args.pacing_dir:
+        fetcher = F.PacedFetcher(http, F.HostPacer(Path(args.pacing_dir)))
     try:
         report = F.collect_batch(
             batch=batch,
@@ -393,7 +404,7 @@ def cmd_fetch(args: argparse.Namespace) -> int:
             stage=stage,
         )
     finally:
-        fetcher.close()
+        http.close()
 
     # No `except F.TransportFailure` here any more, and that is the fix, not a relaxation: a
     # transport failure is one target's recorded outcome now (`phase3/fetch_stage.py`), written to
@@ -715,6 +726,16 @@ def build_parser() -> argparse.ArgumentParser:
         help="actually open sockets; without it the command only lists the targets",
     )
     fetch.add_argument("--timeout", type=float, default=40.0)
+    fetch.add_argument(
+        "--pacing-dir",
+        default="",
+        help=(
+            "directory the cross-process host pace keeps its locks in. Empty (the default) paces "
+            "nothing, because a lone fetch has nobody to pace against; the mass-run driver passes "
+            f"{DEFAULT_PACING_DIR} for every batch, and with --jobs N those batches are separate "
+            "processes"
+        ),
+    )
     fetch.set_defaults(func=cmd_fetch)
 
     judge = sub.add_parser(

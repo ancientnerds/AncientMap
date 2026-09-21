@@ -28,6 +28,7 @@ if str(PHASE3_PARENT) not in sys.path:
     sys.path.insert(0, str(PHASE3_PARENT))
 
 from phase3 import mass_run as M  # noqa: E402
+from phase3 import run as R  # noqa: E402
 
 SITE = "31860bc4-476a-49bc-9f97-e25220063d19"
 FIELDS = ("description", "period_start", "site_type", "country", "card_description")
@@ -93,15 +94,40 @@ def _artefacts(
 
 
 class _StubRunner:
-    """The seam: no subprocess, same contract as `StageRunner`."""
+    """The seam: no subprocess, same contract as `StageRunner`.
 
-    def __init__(self, run_dir: Path, *, fail: set[str] | None = None) -> None:
+    `ledger` plus `calls_per_batch` make it buy like the real `judge` does. Without that the budgets
+    could not be tested at all under ceilings that are measured *from the start of the run*: a stub
+    that never spends never reaches a ceiling, and the test would pass for the wrong reason.
+    """
+
+    def __init__(
+        self,
+        run_dir: Path,
+        *,
+        fail: set[str] | None = None,
+        ledger: Path | None = None,
+        calls_per_batch: int = 0,
+        cost_per_call: float = 0.002,
+    ) -> None:
         self.run_dir = run_dir
         self.fail = fail or set()
+        self.ledger = ledger
+        self.calls_per_batch = calls_per_batch
+        self.cost_per_call = cost_per_call
         self.called: list[str] = []
 
     def batch(self, planned: M.PlannedBatch) -> tuple[bool, str]:
         self.called.append(planned.batch_id)
+        if self.ledger is not None and self.calls_per_batch:
+            with self.ledger.open("a", encoding="utf-8") as handle:
+                for _ in range(self.calls_per_batch):
+                    row = {
+                        "kind": "model_call",
+                        "cost_usd": self.cost_per_call,
+                        "batch_id": planned.batch_id,
+                    }
+                    handle.write(json.dumps(row) + "\n")
         if planned.batch_id in self.fail:
             return False, f"{planned.batch_id}: judge exited 2"
         return True, "1 answers on disk"
@@ -116,13 +142,17 @@ def _drive(
     runner: _StubRunner | None = None,
     max_calls: int | None = None,
     max_usd: float | None = None,
+    calls_per_batch: int = 0,
+    cost_per_call: float = 0.002,
     failures_before_stop: int = M.DEFAULT_FAILURES_BEFORE_STOP,
     plan_digest: str | None = None,
     digest_of: Any = None,
 ) -> tuple[int, M.Progress, _StubRunner]:
     run_dir = tmp_path / "runs"
     plan_batches = M.read_plan(plan)
-    runner = runner or _StubRunner(run_dir)
+    runner = runner or _StubRunner(
+        run_dir, ledger=ledger, calls_per_batch=calls_per_batch, cost_per_call=cost_per_call
+    )
     progress = M.Progress(
         plan=str(plan), run_dir=str(run_dir), live=True, jobs=jobs, batches_total=len(plan_batches)
     )
@@ -263,28 +293,53 @@ def test_a_done_batch_is_skipped_and_the_unfinished_one_is_run(tmp_path: Path) -
 def test_the_call_ceiling_stops_between_batches_and_names_what_was_not_reached(
     tmp_path: Path,
 ) -> None:
+    """The ceiling is reached by *this run's* calls, so the stub has to buy like `judge` does."""
     plan = _plan(tmp_path, [("batch-0001", 1), ("batch-0002", 2), ("batch-0003", 3)])
-    ledger = _ledger(tmp_path, rows=[_model_call(0.002)] * 75)
-    code, progress, runner = _drive(tmp_path, plan, ledger, max_calls=75)
+    ledger = _ledger(tmp_path)
+    code, progress, runner = _drive(tmp_path, plan, ledger, max_calls=75, calls_per_batch=40)
     assert code == 1
-    assert runner.called == []
-    assert progress.stopped == "call ceiling reached: 75 >= 75"
-    assert progress.not_reached == ["batch-0001", "batch-0002", "batch-0003"]
+    assert runner.called == ["batch-0001", "batch-0002"]
+    assert progress.stopped is not None
+    assert progress.stopped.startswith("call ceiling reached: 80 >= 75 calls this run")
+    assert "the ledger holds 80" in progress.stopped
+    assert progress.not_reached == ["batch-0003"]
+
+
+def test_a_ceiling_means_this_run_and_not_the_ledgers_whole_history(tmp_path: Path) -> None:
+    """The ledger is shared with the pilot and six recall rounds, so a ceiling must not count them.
+
+    With an absolute reading, `--max-calls 75` against a ledger that already held 500 calls would
+    stop before the first batch and quietly mean something other than what it says.
+    """
+    plan = _plan(tmp_path, [("batch-0001", 1), ("batch-0002", 2)])
+    ledger = _ledger(tmp_path, rows=[_model_call(0.002)] * 500)
+    code, progress, runner = _drive(tmp_path, plan, ledger, max_calls=75, calls_per_batch=40)
+    assert code == 0
+    assert runner.called == ["batch-0001", "batch-0002"]
+    assert progress.stopped is None
+    assert M.Spend.from_ledger(ledger).calls == 580  # well past the ceiling, and still running
 
 
 def test_the_dollar_ceiling_stops_the_run(tmp_path: Path) -> None:
-    plan = _plan(tmp_path, [("batch-0001", 1)])
-    ledger = _ledger(tmp_path, rows=[_model_call(0.5)])
-    code, progress, runner = _drive(tmp_path, plan, ledger, max_usd=0.25)
+    """Three batches at 20 calls of one cent each: 0, 0.20, then 0.40 against a 0.25 ceiling."""
+    plan = _plan(tmp_path, [("batch-0001", 1), ("batch-0002", 2), ("batch-0003", 3)])
+    ledger = _ledger(tmp_path)
+    code, progress, runner = _drive(
+        tmp_path, plan, ledger, max_usd=0.25, calls_per_batch=20, cost_per_call=0.01
+    )
     assert code == 1
-    assert runner.called == []
+    assert runner.called == ["batch-0001", "batch-0002"]
     assert progress.stopped is not None and "dollar ceiling" in progress.stopped
+    assert progress.not_reached == ["batch-0003"]
 
 
 def test_a_ceiling_that_is_not_reached_lets_the_batches_run(tmp_path: Path) -> None:
+    """Seeded with 200 calls and 5 dollars of history, so a run that buys 40 more still passes."""
     plan = _plan(tmp_path, [("batch-0001", 1)])
-    ledger = _ledger(tmp_path, rows=[_model_call(0.2)])
-    code, progress, runner = _drive(tmp_path, plan, ledger, max_calls=100, max_usd=0.25)
+    ledger = _ledger(tmp_path, rows=[_model_call(0.025)] * 200)
+    code, progress, runner = _drive(
+        tmp_path, plan, ledger, max_calls=100, max_usd=6.0, calls_per_batch=40
+    )
     assert code == 0
     assert runner.called == ["batch-0001"]
     assert progress.stopped is None
@@ -410,6 +465,7 @@ def test_the_stage_runner_asks_the_cli_and_logs_to_a_file_the_driver_owns(
 
     monkeypatch.setattr(M.subprocess, "run", fake_run)
     runner = M.StageRunner(
+        plan=tmp_path / "PLAN.jsonl",
         run_dir=tmp_path / "runs",
         ledger=tmp_path / "L.jsonl",
         log_dir=tmp_path / "logs",
@@ -429,6 +485,7 @@ def test_the_stage_runner_asks_the_cli_and_logs_to_a_file_the_driver_owns(
 
 def test_the_dry_runner_does_not_pass_live(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     runner = M.StageRunner(
+        plan=tmp_path / "PLAN.jsonl",
         run_dir=tmp_path / "runs",
         ledger=tmp_path / "L.jsonl",
         log_dir=tmp_path / "logs",
@@ -440,6 +497,42 @@ def test_the_dry_runner_does_not_pass_live(tmp_path: Path, monkeypatch: pytest.M
     assert "--live" not in runner.argv("judge", "batch-0001")
 
 
+def test_the_driver_tells_fetch_which_pace_directory_to_use(tmp_path: Path) -> None:
+    """The pace is named here, not by `run.py`'s default, and both modules mean the same path.
+
+    That default is empty on purpose: one `fetch` process has nobody to pace against, while a
+    machine-wide default would let a test - or a second run - take a host's lock and hold a live run
+    up. Concurrency is what the driver creates, so the driver is what has to name the pace.
+    """
+    runner = M.StageRunner(
+        plan=tmp_path / "PLAN.jsonl",
+        run_dir=tmp_path / "runs",
+        ledger=tmp_path / "L.jsonl",
+        log_dir=tmp_path / "logs",
+        live=True,
+        python=Path("python"),
+        runner=Path("run.py"),
+    )
+    argv = runner.argv("fetch", "batch-0001")
+    assert argv[argv.index("--pacing-dir") + 1] == str(M.DEFAULT_PACING_DIR)
+    assert "--pacing-dir" not in runner.argv("judge", "batch-0001")  # no sockets there
+    assert M.DEFAULT_PACING_DIR == R.DEFAULT_PACING_DIR  # two modules, one path
+
+
+def test_the_driver_can_be_told_not_to_pace(tmp_path: Path) -> None:
+    runner = M.StageRunner(
+        plan=tmp_path / "PLAN.jsonl",
+        run_dir=tmp_path / "runs",
+        ledger=tmp_path / "L.jsonl",
+        log_dir=tmp_path / "logs",
+        live=True,
+        pacing_dir=None,
+        python=Path("python"),
+        runner=Path("run.py"),
+    )
+    assert "--pacing-dir" not in runner.argv("fetch", "batch-0001")
+
+
 def test_a_stage_that_runs_too_long_is_recorded_as_a_failure_rather_than_killing_the_run(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -448,6 +541,7 @@ def test_a_stage_that_runs_too_long_is_recorded_as_a_failure_rather_than_killing
 
     monkeypatch.setattr(M.subprocess, "run", fake_run)
     runner = M.StageRunner(
+        plan=tmp_path / "PLAN.jsonl",
         run_dir=tmp_path / "runs",
         ledger=tmp_path / "L.jsonl",
         log_dir=tmp_path / "logs",
@@ -471,6 +565,7 @@ def test_a_batch_that_ends_incomplete_is_a_failure_even_though_every_stage_exite
         lambda argv, **kwargs: types.SimpleNamespace(returncode=0),
     )
     runner = M.StageRunner(
+        plan=tmp_path / "PLAN.jsonl",
         run_dir=tmp_path / "runs",
         ledger=tmp_path / "L.jsonl",
         log_dir=tmp_path / "logs",
@@ -560,3 +655,57 @@ def test_as_many_workers_are_used_as_asked(tmp_path: Path, monkeypatch: pytest.M
     plan = _plan(tmp_path, [("batch-0001", 1), ("batch-0002", 2), ("batch-0003", 3)])
     _drive(tmp_path, plan, _ledger(tmp_path), jobs=3)
     assert seen == [3]
+
+
+def test_every_stage_argv_is_accepted_by_the_real_cli(tmp_path: Path) -> None:
+    """The flags are checked against `run.py` itself, not against a memory of its flags.
+
+    Stubbing `subprocess.run` proves the stub. On 2026-09-21 that stub let three defects through
+    that would have stopped the very first live batch: `prepare` was sent `--ledger` and `--live`,
+    neither of which it has - exit 2 on every batch - and it was never sent the plan at all.
+    """
+    plan = tmp_path / "PLAN.jsonl"
+    plan.write_text("", encoding="utf-8")
+    runner = M.StageRunner(
+        plan=plan,
+        run_dir=tmp_path / "runs",
+        ledger=tmp_path / "L.jsonl",
+        log_dir=tmp_path / "logs",
+        live=True,
+        python=Path("python"),
+        runner=Path("run.py"),
+    )
+    parser = R.build_parser()  # SystemExit(2) if a stage does not take what we send it
+    for stage in ("prepare", "fetch", "judge"):
+        parsed = parser.parse_args(runner.argv(stage, "batch-0001")[2:])
+        assert parsed.run_dir == str(tmp_path / "runs")
+    assert parser.parse_args(runner.argv("prepare", "batch-0001")[2:]).batch_id == ["batch-0001"]
+    assert parser.parse_args(runner.argv("fetch", "batch-0001")[2:]).batch_id == "batch-0001"
+    assert parser.parse_args(runner.argv("judge", "batch-0001")[2:]).batch_id == "batch-0001"
+
+
+def test_prepare_is_given_the_plan_and_neither_the_ledger_nor_live(tmp_path: Path) -> None:
+    """`prepare` without `--plan` is silent, not loud - and that is the dangerous one.
+
+    It would prepare the default worklist batch under a batch id that exists in both plans, and the
+    run would then fetch and judge those sites with nothing raising anywhere.
+    """
+    plan = tmp_path / "PLAN.jsonl"
+    plan.write_text("", encoding="utf-8")
+    runner = M.StageRunner(
+        plan=plan,
+        run_dir=tmp_path / "runs",
+        ledger=tmp_path / "L.jsonl",
+        log_dir=tmp_path / "logs",
+        live=True,
+        python=Path("python"),
+        runner=Path("run.py"),
+    )
+    argv = runner.argv("prepare", "batch-0001")
+    prepared = R.build_parser().parse_args(argv[2:])
+    assert Path(prepared.plan) == plan
+    # `prepare` has no ledger and no `--live`; the proof is the namespace it parses into.
+    assert not hasattr(prepared, "ledger")
+    assert not hasattr(prepared, "live")
+    assert "--ledger" not in argv
+    assert "--live" not in argv
