@@ -264,6 +264,7 @@ output/remediation/phase3_worklist/WORKLIST.jsonl
 
 !output/remediation/phase3_runner/
 output/remediation/phase3_runner/PLAN.jsonl
+output/remediation/phase3_runner/runs/
 !output/remediation/mechanical/
 # APPLY.sql and PLAN.jsonl are pinned rather than ignored: the deploy lens established that
 # the generator cannot reproduce them, and APPLY.sql is the exact statement set that wrote

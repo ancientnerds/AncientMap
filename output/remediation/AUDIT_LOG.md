@@ -2530,3 +2530,37 @@ The ambiguity was **measured, not argued**: exactly-at-cap reports `True`, under
 yields exactly 61,440 bytes. My first reading of the code claimed the opposite - the grep excerpt I was
 reading had cut off the two lines that decide it. That is the third time this session a probe of mine
 was the thing at fault, and measuring took ten seconds.
+
+## Phase-3 runner piece 3 - the measured model call, and two measurements that changed the design
+
+The runner can now make a call and record what it cost. 590 tests in the remediation suite, ruff and
+mypy clean, and **zero live calls in the tests**: they run against two captured transcripts, and both
+fixtures were verified byte-identical (sha256) to the probe files they were copied from.
+
+**The dollar figure is measured, not assumed.** Pi's JSON stream carries the settled usage in the
+`message_end` event - tokens *and* the provider's own `cost.total` - so the ledger records what was
+actually charged. Piece 1 deliberately carried no price figure, because a price table is an
+assumption, and an assumed cost is the invention this runner exists to prevent.
+
+**Two measurements changed the design, and neither was a preference:**
+
+- **`-ne` is not optional.** Identical prompt, same model: with extensions loaded, 2,271 input tokens,
+  14,013 ms, $0.000341 per call; with `-ne`, **437 tokens, 2,698 ms, $0.000066**. Extensions inject
+  roughly 1,830 tokens into every call for a model that only ever judges text the runner already
+  fetched - 5.2x the money and 5x the time. The four numbers sit in the comment beside `PI_FLAGS`.
+- **`pi` is a POSIX sh script on Windows** and cannot be exec'd by `subprocess` without a shell:
+  `FileNotFoundError [WinError 2]`. `pi.cmd` reports 0.86.1 and execs the same bundle with the same
+  argv. **Found by the lane, not by me**, and it would otherwise have failed at batch runtime -
+  recorded here because a finding that arrives from a worker still has to be right, and this one was.
+
+**What this still does not establish.** Cheap calls are not correct calls. The 60% false-negative rate
+belongs to the census-with-tools design; the argument that this design is better is an argument, not a
+measurement. The instrumented batch is what converts it, and it is also what turns the two extrapolated
+cost anchors into one measured number.
+
+**Slip of my own:** I ran `judge` without running `prepare` first and got a `FileNotFoundError` on the
+batch's `input.json` - the third time this session I guessed a CLI's contract instead of reading it.
+The sequence is documented in the CLI's own docstring: plan -> prepare -> fetch -> judge. The stale
+opening paragraph that still described this file as "piece 1" and said the runner "does not exist yet"
+was corrected with this commit, since a docstring that misdescribes the file is exactly the kind of
+false claim this record is supposed to catch.

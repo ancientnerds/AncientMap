@@ -1,10 +1,13 @@
-"""The Phase-3 CLI skeleton: `plan`, `prepare`, `status` - offline, deterministic, no model.
+"""The Phase-3 CLI: `plan`, `prepare`, `fetch`, `judge`, `status`.
 
-The runner does not exist yet (`output/remediation/AUDIT_LOG.md`: "build the Phase-3 runner,
+The runner the audit asks for (`output/remediation/AUDIT_LOG.md`: "build the Phase-3 runner,
 which must emit the `defect` flag and the `true_but_no_correction` verdict ... and which should
-run one instrumented batch of 15 sites with real token accounting before scaling to 1,813").
-This file is piece 1: the shape of the run, its input and its accounting, with every line that
-would touch the network or a model deliberately absent.
+run one instrumented batch of 15 sites with real token accounting before scaling to 1,813") is
+built in three pieces: the schema and the plan, then the evidence fetch, then the model call.
+
+The sequence is plan -> prepare -> fetch -> judge. `judge` reads the `input.json` that `prepare`
+wrote, so a batch that was never prepared has no input to judge and raises rather than judging an
+empty one.
 
 * `plan`   - assign the Phase-3 worklist to batches of K (default 15, brief decision 12) and
              write them as JSONL. Deterministic by construction: the worklist's own order is
@@ -16,6 +19,10 @@ would touch the network or a model deliberately absent.
 * `fetch`   - collect the evidence a batch's findings buy (`phase3/fetch_stage.py`). **Offline
              unless `--live` is given**: without it the command only lists the targets and the
              URLs, so what a batch would cost is reviewable before it costs a request.
+* `judge`   - run one stage over one prepared batch (`phase3/model_stage.py`). **Dry run unless
+             `--live` is given**: without it the command renders the exact argv and the exact
+             prompt text of every call in the batch and starts no process, so a batch is readable
+             - and its prompt sizes visible - before any money is spent.
 * `status` - read the run directory and the ledger and report what is actually on disk.
 
 Fail-closed: a worklist record whose shape is not the one the run needs raises, rather than
@@ -297,7 +304,106 @@ def cmd_fetch(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_judge(args: argparse.Namespace) -> int:
+    """Run one stage over one prepared batch. No model call unless `--live` is passed."""
+    # Imported here because `model_stage` imports `fetch_stage`, which imports this module.
+    from phase3 import fetch_stage as F
+    from phase3 import model_stage as MS
+
+    run_dir = Path(args.run_dir)
+    batch_id = args.batch_id
+    batch = _single_batch(run_dir / batch_id / "input.json", batch_id)
+    stage = Stage(args.stage)
+    store = F.EvidenceStore(run_dir / batch_id / "evidence")
+
+    if not args.live:
+        prepared = MS.prepare_batch(batch=batch, store=store, stage=stage, allow_absent=True)
+        print(
+            json.dumps(
+                {
+                    "batch_id": batch_id,
+                    "calls": len(prepared),
+                    "live": False,
+                    "model": MS.MODEL,
+                    "program": MS.PROGRAM,
+                    "run_dir": str(run_dir),
+                    "sites": [
+                        {
+                            "argv": MS.pi_argv(item.call.prompt),
+                            "evidence": [
+                                {
+                                    "chars": e.chars,
+                                    "feature": e.feature,
+                                    "path": str(e.path),
+                                    "present": e.text is not None,
+                                    "url": e.url,
+                                }
+                                for e in item.excerpts
+                            ],
+                            "label": item.call.label,
+                            "prompt": item.call.prompt,
+                            "prompt_chars": len(item.call.prompt),
+                            "site_id": item.call.site_id,
+                        }
+                        for item in prepared
+                    ],
+                    "stage": stage.value,
+                },
+                indent=1,
+                sort_keys=True,
+            )
+        )
+        return 0
+
+    runner = MS.PiRunner(timeout=args.timeout)
+    answers = F.EvidenceStore(run_dir / batch_id / "answers")
+    try:
+        report = MS.judge_batch(
+            batch=batch,
+            runner=runner,
+            store=store,
+            answers=answers,
+            ledger=L.Ledger(Path(args.ledger)),
+            stage=stage,
+        )
+    except MS.ModelCallFailed as exc:
+        # Fail-closed and loud: the batch stops at the call that could not be measured. Answers
+        # already stored stay, and the ledger already carries the calls that did happen.
+        print(
+            json.dumps(
+                {
+                    "batch_id": batch_id,
+                    "error": str(exc),
+                    "live": True,
+                    "model": MS.MODEL,
+                    "run_dir": str(run_dir),
+                },
+                indent=1,
+                sort_keys=True,
+            )
+        )
+        return 2
+
+    MS.write_report(run_dir / batch_id / "model.json", report)
+    payload = json.loads(report.to_json())
+    payload.update(
+        {
+            "answers": str(answers.root),
+            "ledger": str(args.ledger),
+            "live": True,
+            "model": MS.MODEL,
+            "run_dir": str(run_dir),
+        }
+    )
+    print(json.dumps(payload, indent=1, sort_keys=True))
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
+    # Imported here, not at module level: `model_stage` imports `fetch_stage`, which imports this
+    # module, so a top-level import of it would be circular.
+    from phase3 import model_stage as MS
+
     parser = argparse.ArgumentParser(
         prog="phase3-run",
         description="Phase-3 runner: plan, prepare and report a two-stage audit run",
@@ -335,6 +441,32 @@ def build_parser() -> argparse.ArgumentParser:
     )
     fetch.add_argument("--timeout", type=float, default=40.0)
     fetch.set_defaults(func=cmd_fetch)
+
+    judge = sub.add_parser(
+        "judge",
+        help="run one stage over one prepared batch (dry run unless --live)",
+        description=(
+            "Without --live this renders the exact argv and prompt of every call in the batch and "
+            "starts nothing. Run it with PYTHONIOENCODING=utf-8: the prompts carry site names, "
+            "notes and page text, and the Windows console code page raises on non-ASCII."
+        ),
+    )
+    judge.add_argument("--run-dir", default=str(DEFAULT_RUN_DIR))
+    judge.add_argument("--batch-id", required=True)
+    judge.add_argument("--ledger", default=str(DEFAULT_LEDGER))
+    judge.add_argument(
+        "--stage",
+        choices=[s.value for s in Stage],
+        default=Stage.FINDER.value,
+        help="which question the stage asks (phase3/model_stage.py pins one question per stage)",
+    )
+    judge.add_argument(
+        "--live",
+        action="store_true",
+        help="actually run one Pi process per site; without it nothing is executed",
+    )
+    judge.add_argument("--timeout", type=float, default=MS.DEFAULT_TIMEOUT)
+    judge.set_defaults(func=cmd_judge)
 
     status = sub.add_parser("status", help="report what is on disk, plus the ledger (offline)")
     status.add_argument("--run-dir", default=str(DEFAULT_RUN_DIR))

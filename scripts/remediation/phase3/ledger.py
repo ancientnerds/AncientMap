@@ -12,10 +12,13 @@ What is measured here, and what is deliberately not:
   model API (`input_tokens`, `output_tokens`, `cache_read_tokens`, `cache_write_tokens`) or
   from the HTTP response (`url`, `http_status`, `bytes`), plus the wall-clock instant. These
   are recorded, never derived.
-* **Not computed: USD.** A price table is an assumption, not a measurement (the plan's own
-  prices are dated 2026-09-19 assumptions), so a per-call dollar figure here would be exactly
-  the invention this runner must not contain. Totals are tokens, bytes and seconds; whoever
-  wants money applies a price to a measured token count, outside this file.
+* **USD, recorded but never computed.** A price table is an assumption, not a measurement (the
+  plan's own prices are dated 2026-09-19 assumptions), so this file never applies one to a token
+  count. The provider does report a real figure per call - `cost.total` in the `message_end`
+  event of the `--mode json` stream, captured in `output/remediation/logs/pi_probe.json` - and
+  that reported number is stored verbatim as `cost_usd` on the call's own line (piece 3 added the
+  field for exactly that reason: piece 1 had no dollar column because there was no measurement to
+  put in one). Totals are then sums of measured figures; nothing is extrapolated.
 * **Refused, not defaulted:** a model call without its token counts, or a fetch without the
   status actually observed, raises at construction. An unmeasured call cannot be written as
   if it had been measured.
@@ -68,6 +71,9 @@ class Entry:
     output_tokens: int | None = None
     cache_read_tokens: int | None = None
     cache_write_tokens: int | None = None
+    #: The provider's own reported cost (`cost.total`) of this call, in USD. Recorded as
+    #: reported; never computed from a price table (see the module docstring).
+    cost_usd: float | None = None
     #: fetch shape
     url: str | None = None
     http_status: int | None = None
@@ -99,6 +105,14 @@ class Entry:
                     not isinstance(value, int) or isinstance(value, bool) or value < 0
                 ):
                     raise LedgerError(f"{self.label}: {name}={value!r} is not a token count")
+            if self.cost_usd is not None and (
+                not isinstance(self.cost_usd, (int, float))
+                or isinstance(self.cost_usd, bool)
+                or self.cost_usd != self.cost_usd
+                or self.cost_usd in (float("inf"), float("-inf"))
+                or self.cost_usd < 0
+            ):
+                raise LedgerError(f"{self.label}: cost_usd={self.cost_usd!r} is not a cost")
             for name in ("url", "http_status", "bytes"):
                 if getattr(self, name) is not None:
                     raise LedgerError(f"{self.label}: a model call cannot carry {name}")
@@ -114,7 +128,7 @@ class Entry:
                 raise LedgerError(f"{self.label}: http_status={self.http_status!r} is not a status")
             if self.bytes is None or not isinstance(self.bytes, int) or self.bytes < 0:
                 raise LedgerError(f"{self.label}: bytes={self.bytes!r} is not a byte count")
-            for name in ("model", "input_tokens", "output_tokens"):
+            for name in ("model", "input_tokens", "output_tokens", "cost_usd"):
                 if getattr(self, name) is not None:
                     raise LedgerError(f"{self.label}: a fetch cannot carry {name}")
 
@@ -164,6 +178,7 @@ def _with_time(entry: Entry, at: str) -> Entry:
         output_tokens=entry.output_tokens,
         cache_read_tokens=entry.cache_read_tokens,
         cache_write_tokens=entry.cache_write_tokens,
+        cost_usd=entry.cost_usd,
         url=entry.url,
         http_status=entry.http_status,
         bytes=entry.bytes,
@@ -181,6 +196,9 @@ class StageTotals:
     output_tokens: int = 0
     cache_read_tokens: int = 0
     cache_write_tokens: int = 0
+    #: Sum of the per-call costs the provider reported. A sum of measurements, not a price applied
+    #: to a token count.
+    cost_usd: float = 0.0
     fetch_bytes: int = 0
     first_at: str | None = None
     last_at: str | None = None
@@ -252,6 +270,7 @@ def _totals(stage: str, entries: Iterable[Any]) -> StageTotals:
         "cache_read_tokens": 0,
         "cache_write_tokens": 0,
     }
+    cost_usd = 0.0
     fetch_bytes = 0
     times: list[str] = []
     for entry in entries:
@@ -262,6 +281,7 @@ def _totals(stage: str, entries: Iterable[Any]) -> StageTotals:
             tokens["output_tokens"] += entry.output_tokens
             tokens["cache_read_tokens"] += entry.cache_read_tokens
             tokens["cache_write_tokens"] += entry.cache_write_tokens
+            cost_usd += entry.cost_usd
             fetch_bytes += entry.fetch_bytes
             times.extend(t for t in (entry.first_at, entry.last_at) if t)
             continue
@@ -269,6 +289,7 @@ def _totals(stage: str, entries: Iterable[Any]) -> StageTotals:
             calls += 1
             for name in tokens:
                 tokens[name] += int(entry.get(name) or 0)
+            cost_usd += float(entry.get("cost_usd") or 0.0)
         else:
             fetches += 1
             fetch_bytes += int(entry.get("bytes") or 0)
@@ -280,6 +301,7 @@ def _totals(stage: str, entries: Iterable[Any]) -> StageTotals:
         model_calls=calls,
         fetches=fetches,
         fetch_bytes=fetch_bytes,
+        cost_usd=cost_usd,
         first_at=times[0] if times else None,
         last_at=times[-1] if times else None,
         **tokens,
