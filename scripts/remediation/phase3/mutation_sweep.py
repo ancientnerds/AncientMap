@@ -97,6 +97,7 @@ BUDGET = "test_the_call_ceiling_stops_between_batches_and_names_what_was_not_rea
 BREAKER = "test_the_circuit_breaker_trips_after_the_configured_number_of_failures"
 BREAKER_RESET = "test_a_success_clears_the_failure_count"
 TORN_JSON = "test_a_truncated_model_json_is_broken_and_never_done"
+LEDGER_COST = "test_a_cost_that_is_not_a_finite_number_is_damage_and_not_a_zero"
 MISSING_ANSWER = "test_a_written_judgement_without_its_answer_file_is_broken"
 DIGEST_GUARD = "test_the_source_digest_guard_stops_a_run_whose_sources_changed"
 ATOMIC = "test_a_crash_between_the_write_and_the_swap_leaves_the_previous_progress_intact"
@@ -634,6 +635,22 @@ MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         "        bought = spend.calls  # mutated\n",
         MASSRUN_TEST,
         CEILING_BASELINE,
+    ),
+    (
+        "a cost that is not a number is counted as zero",
+        "scripts/remediation/phase3/mass_run.py",
+        "                if isinstance(cost, bool) or not isinstance(cost, (int, float)):\n",
+        "                if False:  # mutated\n",
+        MASSRUN_TEST,
+        LEDGER_COST,
+    ),
+    (
+        "a negative or infinite cost is counted",
+        "scripts/remediation/phase3/mass_run.py",
+        "                if not math.isfinite(value) or value < 0:\n",
+        "                if False:  # mutated\n",
+        MASSRUN_TEST,
+        LEDGER_COST,
     ),
     (
         "the fetch command does not pace its requests",

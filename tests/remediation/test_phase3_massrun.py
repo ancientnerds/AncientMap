@@ -636,6 +636,24 @@ def test_a_torn_trailing_ledger_line_is_named_while_an_inner_one_raises(tmp_path
         M.Spend.from_ledger(damaged)
 
 
+def test_a_cost_that_is_not_a_finite_number_is_damage_and_not_a_zero(tmp_path: Path) -> None:
+    """This sum is what the money ceiling is measured against, so a skipped cost spends too much.
+
+    `None` is the normal case for a row that carries no charge, and stays zero. Anything else that is
+    not a finite, non-negative number is damage: a string would have been counted as 0 and let a run
+    past its ceiling, and a negative or infinite one would have moved the sum the wrong way.
+    """
+    ledger = _ledger(tmp_path, rows=[_model_call(0.01), {"kind": "fetch", "cost_usd": None}])
+    assert M.Spend.from_ledger(ledger).cost_usd == pytest.approx(0.01)
+    for bad in ("0.02", True, -1.0, float("inf"), float("nan"), 10**400):
+        damaged = tmp_path / "BAD.jsonl"
+        damaged.write_text(
+            json.dumps({"kind": "model_call", "cost_usd": bad}) + "\n", encoding="utf-8"
+        )
+        with pytest.raises(M.LedgerDamage):
+            M.Spend.from_ledger(damaged)
+
+
 def test_the_ledger_of_a_run_that_never_started_is_not_an_error(tmp_path: Path) -> None:
     spend = M.Spend.from_ledger(tmp_path / "nothing.jsonl")
     assert spend.calls == 0

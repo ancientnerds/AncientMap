@@ -42,6 +42,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 import os
 import subprocess
 import sys
@@ -173,6 +174,12 @@ class Spend:
         Counting it as `torn_lines` keeps the loss visible. An unparsable line *inside* the file means
         something was written over or truncated after the fact, and a charge may be missing - that is
         a stop, not a shrug.
+
+        A `cost_usd` that is present and is not a finite, non-negative number raises for that same
+        reason: this sum is what the money ceiling is measured against, so a cost silently skipped as
+        zero would under-count the spend and let a run past its ceiling. A missing or `null` cost is
+        the normal case for a row that has no charge and stays zero. The `OverflowError` is the case
+        of a literal integer in the ledger too large for a float; it is a damaged ledger, not a cost.
         """
         spend = cls()
         if not path.exists():
@@ -194,8 +201,22 @@ class Spend:
             elif kind == L.LedgerKind.FETCH.value:
                 spend.fetch_lines += 1
             cost = row.get("cost_usd")
-            if isinstance(cost, (int, float)) and not isinstance(cost, bool):
-                spend.cost_usd += float(cost)
+            if cost is not None:
+                if isinstance(cost, bool) or not isinstance(cost, (int, float)):
+                    raise LedgerDamage(
+                        f"{path}:{number}: cost_usd is {type(cost).__name__}, which is not a cost"
+                    )
+                try:
+                    value = float(cost)
+                except OverflowError:
+                    raise LedgerDamage(
+                        f"{path}:{number}: cost_usd is an integer too large to be a cost"
+                    ) from None
+                if not math.isfinite(value) or value < 0:
+                    raise LedgerDamage(
+                        f"{path}:{number}: cost_usd is {cost!r}, which is not a cost"
+                    )
+                spend.cost_usd += value
         return spend
 
     def to_dict(self) -> dict[str, Any]:
