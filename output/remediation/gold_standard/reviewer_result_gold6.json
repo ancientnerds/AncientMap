@@ -1,0 +1,40 @@
+{
+ "answers": 75,
+ "real_errors_left_standing": 5,
+ "real_errors_left_standing_list": [
+  "0529af31%2Fdescription",
+  "758dd394%2Fsite_type",
+  "9dcc1c87%2Fcard_description",
+  "9ed175c7%2Fdescription",
+  "b6af84c5%2Fdescription"
+ ],
+ "real_errors_refuted": 1,
+ "real_errors_refuted_list": [
+  "e7ee7c00%2Fdescription"
+ ],
+ "real_errors_with_a_finding": 7,
+ "refuted_counts": {
+  "False": 9,
+  "None": 1,
+  "True": 3
+ },
+ "refuted_on_correct_list": [
+  "a5d9e9a7%2Fcard_description",
+  "b6af84c5%2Fcard_description"
+ ],
+ "reviewed": 13,
+ "reviewed_on_correct_fields": 6,
+ "reviewed_on_correct_fields_refuted": 2,
+ "reviewed_on_correct_fields_upheld": 4,
+ "reviewed_on_error_fields": 7,
+ "reviewed_on_unexamined_fields": 0,
+ "run": "output\\remediation\\phase3_runner\\runs\\gold6",
+ "truth_errors": 43,
+ "unresolved": 1,
+ "upheld_on_correct_list": [
+  "0529af31%2Fcard_description",
+  "32429f3c%2Fcard_description",
+  "590d3dff%2Fcard_description",
+  "e7ee7c00%2Fcard_description"
+ ]
+}

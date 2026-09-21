@@ -57,6 +57,8 @@ REVIEW_OWN_REPORT = (
     "test_the_reviewer_writes_its_own_report_and_leaves_the_finders_model_json_alone"
 )
 LEDGER_LOCK = "test_a_second_writer_never_costs_a_ledger_line"
+REVIEW_SHAPE = "test_the_reviewer_question_asks_for_the_verdict_line_the_parser_wants"
+REVIEW_KNOWLEDGE = "test_the_reviewer_question_forbids_refuting_from_the_referees_own_knowledge"
 
 RUN = "test_every_site_buys_one_call_per_field_and_the_call_names_its_field"
 ROUTE = "test_the_discover_routing_is_enwiki_by_name_and_wikidata_by_the_qid"
@@ -72,6 +74,7 @@ ANCHOR = "test_the_worklist_plan_still_hashes_to_the_piece_1_anchor"
 SNAPSHOT_PLAN = "test_the_snapshot_plan_is_byte_identical_across_runs_and_covers_all_5004_sites"
 PREPARE = "test_prepare_writes_the_discover_pass_marker_verbatim"
 ORDER = "test_the_question_asks_for_the_evidence_before_the_verdict"
+REASON = "test_an_answer_without_a_reason_sentence_is_a_problem"
 SILENCE = "test_the_question_refuses_silence_as_agreement"
 KNOWLEDGE = "test_the_question_forbids_upholding_a_value_with_the_finders_own_knowledge"
 PRECEDENCE = "test_the_field_clause_is_stated_to_beat_the_general_rules"
@@ -701,6 +704,30 @@ MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         "        if True:  # mutated\n",
         RUNNER_TEST,
         LEDGER_LOCK,
+    ),
+    (
+        "the reason sentence is taken from the verdict line instead",
+        "scripts/remediation/phase3/discover_stage.py",
+        "        if not stripped.upper().startswith(MARKER_PREFIXES):\n",
+        "        if True:  # mutated\n",
+        TEST,
+        REASON,
+    ),
+    (
+        "the reviewer's question stops naming the verdict line the parser reads",
+        "scripts/remediation/phase3/model_stage.py",
+        '    "REFUTED: YES | NO | UNRESOLVED\\n"\n',
+        '    "\\n"\n',
+        REVIEW_TEST,
+        REVIEW_SHAPE,
+    ),
+    (
+        "the reviewer may refute a finding with its own knowledge",
+        "scripts/remediation/phase3/model_stage.py",
+        '    "break it. **Your own knowledge is not evidence and may not refute a finding**: a finding stands "\n',
+        '    "break it. "\n',
+        REVIEW_TEST,
+        REVIEW_KNOWLEDGE,
     ),
 ]
 

@@ -105,7 +105,7 @@ def _finder_answer(
     quote: str = "Cave text",
 ) -> str:
     """A finder's answer that parses without a single problem - the only kind that is reviewed."""
-    lines = [f"VERDICT: {verdict}", "EVIDENCE: the page calls it a cave"]
+    lines = ["The page calls it a cave.", f"VERDICT: {verdict}"]
     if proposed is not None:
         lines.append(f"PROPOSED: {proposed}")
     if with_source:
@@ -327,6 +327,46 @@ def test_the_prompt_carries_the_finders_answer_verbatim_and_the_same_page(tmp_pa
     assert MS.REVIEWER_QUESTION in prompt
     assert plan.calls[0].call.stage.value == "reviewer"
     assert plan.calls[0].call.field == "description"
+
+
+def test_the_reviewer_question_asks_for_the_verdict_line_the_parser_wants(tmp_path: Path) -> None:
+    """The reviewer's question was never measured before it was asked twelve times, and it never
+    asked for the line the parser reads.
+
+    In the round-6 gold run every one of the 12 answers came back with no `REFUTED:` line at all -
+    the model wrote `**VERDICT: none refuted**` in a shape of its own - so all 12 were read as
+    `UNRESOLVED`, `applies` was false everywhere, and the write path would have had nothing to
+    apply. The finder's frozen question spells its answer shape out; this one now does too, and the
+    shape is taken from the parser's own vocabulary so that a drift on either side fails here.
+    """
+    site = _site()
+    store = _evidence_store(tmp_path / "evidence", "site-1")
+    answers = F.EvidenceStore(tmp_path / "answers")
+    _answer_file(answers, "site-1", "description", _finder_answer(site))
+
+    prompt = RS.plan_batch(batch=_batch(site), answers=answers, store=store).calls[0].call.prompt
+
+    assert f"REFUTED: {' | '.join(RS.REFUTED_VALUES)}" in prompt
+    assert "WHY:" in prompt
+
+
+def test_the_reviewer_question_forbids_refuting_from_the_referees_own_knowledge(
+    tmp_path: Path,
+) -> None:
+    """The finder may not uphold a stored value with its own knowledge; the reviewer may not kill a
+    finding with its own knowledge either.
+
+    A refutation removes a correction from the write path, so a reviewer that refutes from memory
+    rather than from a page this run fetched throws away the corrections the evidence supports.
+    """
+    site = _site()
+    store = _evidence_store(tmp_path / "evidence", "site-1")
+    answers = F.EvidenceStore(tmp_path / "answers")
+    _answer_file(answers, "site-1", "description", _finder_answer(site))
+
+    prompt = RS.plan_batch(batch=_batch(site), answers=answers, store=store).calls[0].call.prompt
+
+    assert "may not refute a finding" in prompt
 
 
 def test_the_reviewers_prompt_is_bounded_like_the_finders(tmp_path: Path) -> None:

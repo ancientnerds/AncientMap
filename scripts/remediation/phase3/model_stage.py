@@ -163,8 +163,31 @@ FINDER_QUESTION = (
     "You propose; you do not write."
 )
 REVIEWER_QUESTION = (
-    "Can the finder's finding for this site be refuted against the evidence in this message? "
-    "Name the single claim that fails, or say that none did. Try to break every finding."
+    "Can the finder's finding for this site be refuted against the evidence in this message? Try to "
+    "break it. **Your own knowledge is not evidence and may not refute a finding**: a finding stands "
+    "unless the evidence in this message shows the claim it rests on failing.\n"
+    "\n"
+    "Answer in this order, and keep it short:\n"
+    "\n"
+    "1. One sentence saying what the evidence in this message gives for the finding's claim.\n"
+    "2. Then the verdict line.\n"
+    "\n"
+    "REFUTED: YES | NO | UNRESOLVED\n"
+    "\n"
+    "* `YES` - the evidence in this message shows the finding's claim failing, and this is the only "
+    "verdict that carries a citation: name the claim on the `WHY:` line, and the page that shows it "
+    "on a `SOURCE:` line.\n"
+    "* `NO` - the finding's claim survives this message's evidence. Say on the `WHY:` line which "
+    "evidence shows that, and write no `SOURCE:` line.\n"
+    "* `UNRESOLVED` - this message's evidence does not settle the claim. Say so on the `WHY:` line, "
+    "and write no `SOURCE:` line.\n"
+    "\n"
+    "WHY: <one sentence naming the claim that failed, or that none did>\n"
+    'SOURCE: <a url that appears in the evidence below> - "<a sentence you copied word for word '
+    'from that page>"\n'
+    "\n"
+    "Write exactly one `REFUTED:` line. A `SOURCE:` line on a verdict that is not `YES` is an "
+    "opinion dressed as a citation, and it is read as a problem rather than as support."
 )
 
 #: One question per stage, keyed by the stage enum piece 1 already defines.

@@ -3031,6 +3031,8 @@ cheaper than a comment that suppresses them:
 | `review_stage.py`, four sites | `refuted is True` / `refuted is False` | The same three-state rule as `model_stage.py`, now in the reviewer: `REFUTED` is `YES` / `NO` / **`UNRESOLVED`**, and the value is `True` / `False` / `None`. Measured, all three states: `True -> applies=False`, `False -> applies=True`, `None -> applies=False`, while the naive `if refuted:` spells them `True -> True`, `False -> False`, `None -> False`. So the naive form would have written a finding the reviewer **refuted** - the one outcome the pass exists to prevent. `== True` is not equivalent for `1` either. The suite pins all three states (`test_unresolved_is_neither_refuted_nor_not_refuted`). |
 | `test_phase3_discover.py:1001` (line moves with every insert; cited by expression) | the `.encode("utf-8")` on the body handed to `EvidenceStore.write` | **Not** unnecessary: the parameter is `body: bytes` (`fetch_stage.py:831`) and the store writes it with `write_bytes`. Executed rather than assumed - passing the `str` raises `TypeError: memoryview: a bytes-like object is required, not 'str'`. The encode is what makes the call correct, and the suggested removal would break it. |
 
+| `model_stage.py` (line numbers move; cited by expression) | the two `Usage` guards (`reported in (float("inf"), float("-inf"))`, `float(reported)`) and `[json.loads(f.to_json()) for f in self.findings]` | Both `float` sites stand under a guard that has already refused everything but a non-`bool` `int`/`float`, and both **raise `ModelCallFailed`** two lines above - a `try/except` there would swap a loud refusal of a nonsense cost for a silent default, which is the one thing that guard exists to prevent. The `json.loads` site parses this module's own `to_json()`, with no file and no foreign input, exactly like the three `run.py` sites above. Re-reported here because the reviewer question's rewrite moved these lines. |
+
 No change is the correct outcome: the only edits that would silence these are a `try/except` around the
 dispatch, an `== True`, and dropping an `encode` the callee's own signature requires - all three would
 make the code check less. Nothing here is suppressed with a `# type: ignore` or a `nosemgrep`, so the
@@ -3870,3 +3872,257 @@ ledger of the whole session** against the reports of **one run's twenty batches*
 reported "-499 model calls missing": a cumulative file is not a per-run report, and a number that
 large should have sent me to the instrument before the code.
 
+## The bytes that were verified, and the bytes that were committed (2026-09-21)
+
+The commit `d899af3` landed and the run's worktree was moved onto it, and then the question that
+belongs after every commit came up: *does the run execute the bytes that were tested?* It did not, in
+a way `git status` cannot show.
+
+`git status` in both trees called the phase3 sources clean - and it called them clean *after* two of
+them had been rewritten from CRLF to LF. Measured on `discover_stage.py`:
+
+| quantity | value |
+| --- | --- |
+| `git rev-parse d899af3:scripts/remediation/phase3/discover_stage.py` | `6f66d0ad...` |
+| `git ls-files -s` (index blob) | `6f66d0ad...` |
+| `git hash-object --path=... <file>` (worktree, filters applied) | `6f66d0ad...` |
+| `git hash-object --no-filters <file>` | `6f66d0ad...` |
+| `git diff --numstat` | empty |
+
+So the file *was* the commit, and the ` M` in `git status --short` was a stat-cache artefact. That is
+the uncomfortable half: the same command that said "clean" a minute earlier had told me nothing.
+**`git status` is not a hash check**, in either direction - an earlier lesson was a `checkout` writing
+CRLF where the blob had LF while status said unmodified; this one is status saying modified while every
+hash agrees.
+
+The real finding was elsewhere. The main tree's working copies of `discover_stage.py` (716 lines) and
+`snapshot_plan.py` (331 lines) carried CRLF, because a tool had rewritten them, while the committed
+blobs are LF throughout. Gate `b75f86946` therefore tested bytes that the commit does not contain - and
+for `discover_stage.py` that includes the multi-line `QUESTION_TEMPLATE`, whose literal line endings
+differ between the two variants. The semantics survived (2382 passed either way), but "the gate tested
+the tree that gets committed" was, for those two files, a claim I had not earned. Both were normalised
+to LF, the anchor checker and the affected suites re-run, and the gate was run again on exactly the
+committed bytes: `output/remediation/logs/gate_on_committed_bytes.txt`.
+
+The run executes the **worktree**, so its bytes were checked the same way, file by file, for all eleven
+phase3 modules - every `hash-object --path` equals the blob of `d899af3`. Finally, the digest the run
+prints is a *within-run* guard (`mass_run.py:481` - computed at start, re-checked between batches), so
+it never was a statement about an earlier run, and moving the worktree onto a new commit cannot block
+the resume. That question was worth asking before the relaunch rather than after it.
+
+## The parser demanded a marker the question never asked for (2026-09-21)
+
+**Found by measuring the reviewer on the gold fixture before trusting it** — the step the plan asks
+for, and it found a defect in the reviewer instead of a number.
+
+The dry run planned **0 calls** for both gold6 batches, against 85 (site, field) pairs. A reviewer
+that reviews nothing writes nothing, and the writer applies only findings the reviewer did not
+refute: the whole remediation would have produced **zero corrections** while every gate stayed green.
+
+The cause was a single line, and it was mine. `discover_stage.parse_answer` required a literal
+`EVIDENCE:` line — `git log -S 'EVIDENCE: <a sentence' -- scripts/remediation/phase3/discover_stage.py`
+is **empty**: the frozen question never asked for a marker. It asks for
+
+> *One sentence saying what the evidence in this message gives for this field - the value it states,
+> or the word `silent` if it states nothing about this field.*
+
+and then for the verdict line. The `EVIDENCE:` requirement came in with `f042e85`, my own round-6
+commit, which added the correction-and-source guards.
+
+Measured on the real corpus, not on the fixtures:
+
+| | answers | carry the marker | the old rule called them unusable |
+| --- | --- | --- | --- |
+| gold6 (round-6 contract) | 75 | **0** | all of them |
+| first 20 mass-run batches | 1777 | 3 | 1774 |
+
+**The fix reads the question instead of a marker:** the reason is the first line that is neither
+empty nor a marker line (`VERDICT:`, `PROPOSED:`, `SOURCE:`), and the `EVIDENCE:` spelling is read as
+the same sentence — 3 of 1777 answers wrote it that way, so it is tolerated rather than thrown away.
+With it, the reviewer plans 12 + 1 calls on gold6, and on the mass corpus so far:
+
+| | answers | `WRONG` verdicts | reviewable (no problem at all) |
+| --- | --- | --- | --- |
+| the new rule | 2440 | 475 | **462** |
+| the old rule | 2440 | 475 | ~3 |
+
+The 19 answers that still carry a problem carry a **real** one — 5 `WRONG` with no `SOURCE:` page, 5
+with two `PROPOSED:` lines, 4 `SOURCE:` lines with no url and quote, 4 `CORRECT` verdicts carrying a
+correction, 2 with no `VERDICT:` line. An instrument that flags 19 real deviations out of 2440 is
+doing its job; one that flags 2437 is not an instrument.
+
+Paid for with three tests and mutation 71: `test_the_reason_is_the_sentence_the_question_asks_for`
+uses the gold run's own answer shape and asserts `problems == ()`,
+`test_an_answer_without_a_reason_sentence_is_a_problem` is the one that fails when the reason is
+taken from the verdict line, and `test_an_evidence_marker_is_read_as_the_same_sentence` pins the
+tolerated spelling. The fixtures that wrote `EVIDENCE:` were rewritten to the shape the question
+actually produces — a fixture is a statement about the code, and this one was stating the wrong
+thing.
+
+**The lesson is not "the marker was wrong".** It is that a parser is a *second* statement of the
+question, written by hand, and when the two drift the parser wins silently: the question keeps being
+asked, the answers keep being bought and paid for, and the parser discards them one by one while
+every count, every ledger line and every gate still reports success.
+
+## The reviewer forbade nothing, because it was never asked in a shape we could read (2026-09-21)
+
+**The second zero-write defect of the same afternoon, found the same way — by measuring the stage
+instead of trusting it.**
+
+The measurement was the small one the plan asks for before a stage is used at scale: 17 blinded
+truth sites, their findings handed to the reviewer, the verdicts scored against the gold standard.
+What came back:
+
+| | |
+| --- | --- |
+| findings the reviewer was asked about | 13 |
+| `refuted` | **0** |
+| `unresolved` | **12** |
+| `with_problems` | 12 |
+| `applies` | **0** |
+
+Every one of the twelve answers ended with a line like
+
+```
+**VERDICT: none refuted** — the finding overstates a wording preference as a contradiction.
+```
+
+and `"REFUTED" in text` was **false** for all of them. The model had done the work — that answer
+reasons its way to exactly the right conclusion, that the finder's claim of a contradiction is not
+made out — and then wrote its verdict in a shape of its own invention.
+
+**The cause was the question, and it is the exact mirror of the finder's defect reported above.**
+`REVIEWER_QUESTION` (`model_stage.py`) asked the question in prose:
+
+> *Can the finder's finding for this site be refuted against the evidence in this message? Name the
+> single claim that fails, or say that none did. Try to break every finding.*
+
+It never named an answer shape. The parser (`review_stage.parse_review`) demands exactly one line
+matching `^\s*REFUTED:\s*(YES|NO|UNRESOLVED)\s*$` plus a `WHY:` sentence — and no answer ever carried
+one. The frozen finder question, by contrast, spells its shape out line by line.
+
+**The two directions are not symmetric, and the asymmetry is the point.** For the finder, the
+question was frozen at round 5 after seven measured rounds and the parser was mine and wrong, so the
+parser was fixed. For the reviewer, the parser is right and the question was wrong: the plan applies
+**only** `refuted = false`, so an unreadable verdict must never be read as "not refuted". That is
+what `review_stage.py` says in as many words — *"unreadable" and "not refuted" must not be the same
+value* — and it is why the failure mode was UNRESOLVED rather than a write. A pipeline that silently
+treated a malformed verdict as permission would have been worse.
+
+**The consequence, had it shipped:** every finding read as unresolved, `applies` false everywhere,
+the writer applying nothing — and every gate, every ledger line and every count still green. That is
+twice in one afternoon that the pipeline's output was zero and only a measurement said so. The first
+was the finder's discarded answers, the second the reviewer's discarded verdicts; both were format
+drift between a question and the parser that reads it.
+
+**The fix** writes the shape into the question the way the finder's question learned to: the three
+values named with what each one means, `YES` as the only verdict that carries a citation, `WHY:` as
+the sentence that names the claim, the reason-sentence-before-the-verdict order that the finder's
+first live run had to learn the hard way, and one rule the reviewer needs in mirror image of the
+finder's — **own knowledge may not refute a finding.** A refutation removes a correction from the
+write path, so a reviewer that refutes from memory rather than from a page this run fetched throws
+away corrections the evidence supports.
+
+**Paid for with two tests and two mutations (72, 73):**
+
+* `test_the_reviewer_question_asks_for_the_verdict_line_the_parser_wants` builds the shape from
+  `REFUTED_VALUES` itself, so the question and the parser cannot drift apart without one of them
+  failing here;
+* `test_the_reviewer_question_forbids_refuting_from_the_referees_own_knowledge` pins the clause that
+  keeps a refutation on the evidence.
+
+**The lesson, and it is the general one:** a parser is a *second* statement of its question, written
+by hand in another file, and the two only stay in step if something tests them **against each other**.
+A literal in the question and a literal in the parser agree today and are two independent things;
+the assertion above derives the one from the other's vocabulary. Where a question and its parser are
+literally two literals, the honest form is one test that ties them — otherwise the next drift is
+found the same way this one was, by noticing that a stage which spent real money produced nothing.
+
+## The reviewer measured, and the leniency cost less than the arithmetic said (2026-09-21)
+
+The reviewer had to be measured before the writer exists, because the plan's Phase 3 rule makes it
+the last gate before a database write: **only `refuted = false` is applied**. If the reviewer is
+lenient, a doubtful correction gets written; if it is harsh, a real correction is thrown away. Both
+numbers are needed, and the first pass over them was wrong in two ways - one in the instrument, one
+in my reading of it.
+
+### What the number was, and the instrument defect behind it
+
+`output/remediation/gold_standard/measure_reviewer.py <run-dir>`, against the 17 blinded truth sites
+of `runs/gold6`:
+
+| | first pass | after fixing the instrument |
+|---|---|---|
+| blinded truth errors (field level) | 39 | **43** |
+| of those, the finder proposed a correction | 6 | **7** |
+| - left standing (would be written) | 4 | **5** |
+| - thrown away by the reviewer | 1 | 1 |
+| - left undecided (`UNRESOLVED`) | 1 | 1 |
+| reviewed on a field the blinded check called **correct** | 6 | 6 |
+| - the reviewer rejected the finding | 2 | 2 |
+| - the reviewer let it through | 4 | 4 |
+| counted as `unexamined` | 1 | **0** |
+
+The defect was in `truth()`: the blinded check writes **compound field labels** when one error sits
+in two fields at once (`"period_start + description"`, `"hero_image + gallery_images"`) and one label
+that is not a field at all (`"source coverage"`). Keying on the raw string silently lost the first
+and invented a phantom key for the second. Measured consequence: **7 of the 24 missed errors in
+`truth_fields.json` looked absent from `errors_found`**, and **three real error fields**
+(`590d3dff/description`, `9ed175c7/card_description`, `b6af84c5/description`) were counted as
+`unexamined` - i.e. the instrument was quietly discarding exactly the truth it was measuring against.
+Splitting the label on `+` reconstructs all 24.
+
+**The 43 and the FNR's 40 are different denominators, not a disagreement.** `fnr_result.json`'s
+`blinded_errors: 40` is `16 caught + the 24 the census missed` - errors scoped to what the census
+could be scored against. `43` is every field the blinded check named as an error, including the ones
+the census did catch, with compound labels split into their two fields. Neither number belongs in the
+other's place.
+
+### The semantics are not inverted - and I thought they were, twice, from truncated text
+
+The dangerous hypothesis was that the reviewer's `YES`/`NO` might be inverted, which with
+`applies = refuted is False` would have written exactly the refuted findings. The evidence says no:
+**in 10 of the 13 reviewed findings the `WHY:` sentence and the `REFUTED:` value agree** - where the
+reason says the finder's claim *fails* it wrote `YES` (`a5d9e9a7 card_description`, `e7ee7c00
+description`), and where the reason says the finding *survives* it wrote `NO`. Two cases are
+ambiguous in their wording, and **one case (`9ed175c7 site_type`) carries no `REFUTED:` line at all**
+- its `WHY:` says the evidence "corroborates" the finding, i.e. the verdict should have been `NO`,
+and the parser read the absence as `UNRESOLVED`. That is a format slip in the safe direction: no
+write follows from it.
+
+**The mistake was mine and it was made twice in this one measurement.** I read a 200-character
+excerpt of each `WHY:` sentence, concluded two verdicts contradicted their reasons, and nearly
+recorded a "possibly inverted semantics" defect. The full sentences say something else. This is the
+third time in this session that a truncated read produced a false conclusion - after the mutation
+names truncated to 52 characters and the appended log treated as evidence about the latest attempt.
+**An excerpt is a different artefact from the artefact.** Print the whole line before judging the
+line.
+
+### The four writes the arithmetic called unjustified, and what they actually are
+
+The instrument's own label was wrong - it printed `refuted (false positive)` for the case where the
+reviewer **rejects** a finding on a correct field, which is the reviewer doing its job. Corrected. The
+expensive direction is the other one, and there are four specimens. All four, stored value against
+proposed value, read by hand:
+
+| field | stored | proposed |
+|---|---|---|
+| `0529af31 card_description` | "associated with the **Celtic** Vettones people" | "associated with the territory of the **pre-Roman peoples known as the Vettones**" |
+| `32429f3c card_description` | "**Legend says** the owner chose the design after winning the fortune in a card game" | "**It has been suggested** ... **but this is unlikely**" |
+| `590d3dff card_description` | "A 1960 tsunami **swept them all inland** before restoration re-erected them" | "**toppled in civil wars** before the 1960 tsunami **swept the ahu inland**" |
+| `e7ee7c00 card_description` | "a shrine to Ceres and Venus" | "a **sacellum** of Ceres, Venus **and Proserpina**" |
+
+**Not one of them is a corruption.** Each is closer to the cited page than the stored text: the third
+corrects a causal claim (the tsunami swept the ahu inland after civil wars had toppled the moai, as
+the reviewer itself argued), the second replaces an unsourced legend with the page's own hedge, the
+fourth adds a deity the page names in a later section. So the honest reading of the number is:
+
+* **Sensitivity 5/7**: of the blinded errors the finder proposed a correction for, five survive the
+  reviewer. One real repair is thrown away and one is left undecided.
+* The four "upheld on a correct field" findings are **unjustified rather than wrong** - and the
+  blinded check's `CORRECT` verdict means "this value is not false", not "this value may not be
+  touched". That softens the denominator, and it is written down here rather than left to be
+  discovered by whoever reads the number next.
+
+Both readings are at n=7 and n=6. At n=19 this project already had to treat a 5-8 spread as noise;
+these rates are preliminary and the sample cannot settle the reviewer's quality either way.

@@ -528,6 +528,12 @@ SOURCE_RE = re.compile(
 SOURCE_PREFIX = "SOURCE:"
 EVIDENCE_PREFIX = "EVIDENCE:"
 
+#: The line prefixes that mark the answer's structure. `QUESTION_TEMPLATE` asks for the reason
+#: sentence before the verdict line and marks it with nothing, so the parser reads the first line that
+#: is neither empty nor one of these. 3 of the 1777 answers of the first mass-run batches spelled it
+#: `EVIDENCE:` anyway; that spelling is read as the same sentence rather than thrown away.
+MARKER_PREFIXES = (EVIDENCE_PREFIX, SOURCE_PREFIX, "VERDICT:", "PROPOSED:")
+
 #: How many pages one correction may cite. More are a problem rather than a bonus: the writer stores
 #: them in the journal's `evidence`, and a human reads that.
 MAX_SOURCES = 3
@@ -564,7 +570,13 @@ class DiscoverAnswer:
 
 
 def parse_answer(text: str) -> DiscoverAnswer:
-    """Read one answer. Every deviation lands in `problems`, naming what was missing."""
+    """Read one answer. Every deviation lands in `problems`, naming what was missing.
+
+    The reason is the first line that is neither empty nor a marker line. That is what the question
+    asks for - one sentence about what the evidence gives, before the verdict line - and it asks for
+    no marker in front of it. Demanding one made the reviewer find nothing to review in the round-6
+    gold run, whose 75 answers all carry the sentence unmarked.
+    """
     problems: list[str] = []
     verdict_match = VERDICT_RE.search(text)
     verdict = verdict_match.group(1) if verdict_match else None
@@ -573,11 +585,17 @@ def parse_answer(text: str) -> DiscoverAnswer:
 
     evidence = ""
     for line in text.splitlines():
-        if line.strip().upper().startswith(EVIDENCE_PREFIX):
-            evidence = line.split(":", 1)[1].strip()
+        stripped = line.strip()
+        if not stripped:
+            continue
+        if stripped.upper().startswith(EVIDENCE_PREFIX):
+            evidence = stripped.split(":", 1)[1].strip()
+            break
+        if not stripped.upper().startswith(MARKER_PREFIXES):
+            evidence = stripped
             break
     if not evidence:
-        problems.append("no `EVIDENCE:` sentence saying what the evidence gives")
+        problems.append("no sentence saying what the evidence gives")
 
     proposed_hits = [m.group("value") for m in PROPOSED_RE.finditer(text)]
     if len(proposed_hits) > 1:

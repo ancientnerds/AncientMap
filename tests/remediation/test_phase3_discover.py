@@ -999,7 +999,7 @@ def test_judge_reviews_a_batch_that_carries_the_finders_findings(
         site_id="site-1",
         feature="description",
         body=(
-            b"VERDICT: WRONG\nEVIDENCE: the page disagrees with the record\nPROPOSED: Cave\n"
+            b"The page disagrees with the record.\n\nVERDICT: WRONG\nPROPOSED: Cave\n"
             b'SOURCE: https://en.wikipedia.org/w/api.php?titles=Cave - "Cave text"\n'
         ),
     )
@@ -1223,11 +1223,46 @@ def test_the_site_type_vocabulary_is_read_from_the_snapshot_sorted_and_deduplica
 # ---------------------------------------------------------------------------------------------
 
 GOOD_WRONG = (
-    "EVIDENCE: the article says the tomb was built in the 4th century BC.\n"
+    "The article says the tomb was built in the 4th century BC.\n"
     "VERDICT: WRONG\n"
     "PROPOSED: -400\n"
     'SOURCE: https://en.wikipedia.org/wiki/Amyntas - "The tomb dates from the 4th century BC."\n'
 )
+
+
+def test_the_reason_is_the_sentence_the_question_asks_for() -> None:
+    # The question asks for one sentence about what the evidence gives, *before* the verdict line, and
+    # marks that sentence with nothing. The parser demanded an `EVIDENCE:` marker instead, which the
+    # question never asks for: 0 of the round-6 gold run's 75 answers carry one, so the reviewer found
+    # nothing to review in any of them, and the write path would have had nothing to apply. The shape
+    # below is that gold run's own.
+    answer = DS.parse_answer(
+        "1. The Kounta arrived in 1690 at a place where a farming community already existed, and the "
+        "earlier settlement is attributed to the Fula Jaawbe clan.\n"
+        "\n"
+        "VERDICT: WRONG\n"
+        "PROPOSED: A ruined town in Mauritania, near Lake Gabou.\n"
+        'SOURCE: https://en.wikipedia.org/w/api.php?titles=Ksar%20el%20Barka - "This town would '
+        'later become Ksar el Barka."\n'
+    )
+    assert answer.evidence.startswith("1. The Kounta arrived in 1690")
+    assert answer.problems == ()
+
+
+def test_an_answer_without_a_reason_sentence_is_a_problem() -> None:
+    answer = DS.parse_answer("VERDICT: UNVERIFIABLE\n")
+    assert answer.verdict == "UNVERIFIABLE"
+    assert any(
+        "no sentence saying what the evidence gives" in problem for problem in answer.problems
+    )
+
+
+def test_an_evidence_marker_is_read_as_the_same_sentence() -> None:
+    answer = DS.parse_answer(
+        "EVIDENCE: the tomb dates from the 4th century BC.\nVERDICT: CORRECT\n"
+    )
+    assert answer.evidence == "the tomb dates from the 4th century BC."
+    assert answer.problems == ()
 
 
 def test_a_wrong_answer_keeps_its_proposed_value_and_its_source() -> None:
@@ -1265,7 +1300,7 @@ def test_a_source_line_without_a_url_and_a_quote_is_a_problem() -> None:
     # Built here rather than by editing GOOD_WRONG: a `str.replace` that does not match is a silent
     # no-op, and this test then asserts about the wrong text (it did, first time).
     text = (
-        "EVIDENCE: the article says the tomb was built in the 4th century BC.\n"
+        "The article says the tomb was built in the 4th century BC.\n"
         "VERDICT: WRONG\n"
         "PROPOSED: -400\n"
         "SOURCE: see the article above\n"
@@ -1287,9 +1322,7 @@ def test_more_than_three_sources_are_a_problem_and_the_first_three_are_kept() ->
 
 
 def test_the_verdict_is_found_when_it_is_written_inline() -> None:
-    answer = DS.parse_answer(
-        "EVIDENCE: the page is silent on the date.\n2. VERDICT: UNVERIFIABLE\n"
-    )
+    answer = DS.parse_answer("The page is silent on the date.\n2. VERDICT: UNVERIFIABLE\n")
     assert answer.verdict == "UNVERIFIABLE"
 
 
