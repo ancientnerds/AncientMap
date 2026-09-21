@@ -4526,3 +4526,22 @@ string, which Python folds to `[^"\]` - an unterminated character class, so the 
 verbatim strings above. The lesson of this section and of the two before it is one lesson: the probe
 is part of the evidence, and a probe that fails loudly is worth more than one that returns something
 plausible.
+
+**The remedy, decided before it is built, with the reason it is cheap.** The anomaly is per call and
+sporadic (measured above: eight distinct sites), and the expensive part of a batch - fetch and the
+calls already answered - is **on disk** and reused: `batch_state`'s own comment says "a re-run is
+cheap because fetch and judge both skip what is already on disk". So the batch is retried **in place**,
+a bounded number of times, inside `mass_run.batch()`, instead of being abandoned to a manual top-up.
+The retry re-buys only the calls that never landed - one or two of seventy-five - and a failed attempt
+is still recorded as an attempt, not erased.
+
+Why the retry rather than letting an unusable stream become a per-field finding: turning it into a
+finding would put a model-call failure into the same record as a *judgement*, and a hole that looks
+like a verdict is the one thing this pipeline must not produce (`model.py`'s third verdict exists
+precisely to keep "cannot be settled" apart from "settled"). A retry leaves the record's meaning
+alone: either the batch completes and every answer is a real answer, or it fails and says so.
+
+What must be true for this to be honest, and is therefore part of the change: the attempt count is
+recorded per batch (not just the final outcome), each attempt appears in the batch's log with its
+reason, and `batches_failed` still counts a batch whose *last* attempt failed. A retry that hides a
+systematic failure behind a green total would be worse than the defect.
