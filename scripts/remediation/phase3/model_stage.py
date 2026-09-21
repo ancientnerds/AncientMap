@@ -269,6 +269,25 @@ class ModelCallFailed(RuntimeError):
     """The call produced no usable, measured answer. Raised, never turned into an empty result."""
 
 
+class UnreadableStream(ModelCallFailed):
+    """Bytes came back, and no single settled measured answer could be read out of them.
+
+    The subclass exists so the two facts a `ModelCallFailed` carries are told apart. A *transport*
+    failure - a timeout, a non-zero exit, a process that could not be started - is a fact about the
+    run of the process and stops the batch. An *unreadable stream* is a fact about one call's bytes:
+    the provider answered (and may have billed), but the stream carries no text, or no usage block,
+    or more than one settled assistant usage, so there is nothing to write and nothing to measure.
+
+    Measured 2026-09-21, the mass run over 5,004 sites: 8 calls threw from exactly two sites of this
+    class - the empty assistant text (`_assistant_text`) and the stream with more than one settled
+    assistant usage (`parse_stream`) - four batches each, and each throw took the whole batch, its
+    already-answered calls included, down with it (`output/remediation/logs/mass/batch-0143.judge.log`).
+    The judge loops record one of these per call as a named failure and carry on; the transport
+    class still propagates. Nothing is retried and no zero-usage ledger line is written: module
+    refusal 2 ("It never writes an unmeasured call") is unchanged.
+    """
+
+
 class EvidenceUnusable(ModelCallFailed):
     """The evidence for a site cannot be turned into one bounded prompt (absent, or too large)."""
 
@@ -338,22 +357,22 @@ class Usage:
         }
         cost = usage.get("cost")
         if not isinstance(cost, dict) or "total" not in cost:
-            raise ModelCallFailed(
+            raise UnreadableStream(
                 f"{source}: usage carries no `cost.total` - the provider's own cost is the only "
                 "dollar figure this runner records, and it is never computed from a price table"
             )
         reported = cost["total"]
         if not isinstance(reported, (int, float)) or isinstance(reported, bool):
-            raise ModelCallFailed(f"{source}: cost.total={reported!r} is not a number")
+            raise UnreadableStream(f"{source}: cost.total={reported!r} is not a number")
         if reported != reported or reported in (float("inf"), float("-inf")) or reported < 0:
-            raise ModelCallFailed(f"{source}: cost.total={reported!r} is not a cost")
+            raise UnreadableStream(f"{source}: cost.total={reported!r} is not a cost")
         return cls(cost_usd=float(reported), **counts)
 
 
 def _count(usage: Mapping[str, Any], key: str, source: str) -> int:
     value = usage.get(key)
     if not isinstance(value, int) or isinstance(value, bool) or value < 0:
-        raise ModelCallFailed(
+        raise UnreadableStream(
             f"{source}: usage.{key}={value!r} is not a token count - token counts are recorded "
             "per call and never estimated, so a call without them is not written"
         )
@@ -364,7 +383,7 @@ def _assistant_text(message: Mapping[str, Any], *, source: str) -> str:
     """`message.content[].text`, joined. An answer of nothing is not an answer."""
     content = message.get("content")
     if not isinstance(content, list):
-        raise ModelCallFailed(
+        raise UnreadableStream(
             f"{source}: assistant message carries content={content!r}, not a list"
         )
     text = "".join(
@@ -375,7 +394,7 @@ def _assistant_text(message: Mapping[str, Any], *, source: str) -> str:
         and isinstance(part.get("text"), str)
     ).strip()
     if not text:
-        raise ModelCallFailed(
+        raise UnreadableStream(
             f"{source}: the assistant message carries no text - an empty answer is not a result"
         )
     return text
@@ -401,18 +420,21 @@ def parse_stream(lines: Iterable[str], *, source: str) -> ModelAnswer:
     not read: a partial answer is not a result, and a usage that is not settled is not a
     measurement. Any line that is not a JSON object raises (a capture that merged a second stream
     into this one is a shape this parser refuses, not one it guesses about).
+
+    Every refusal here is an `UnreadableStream`: the bytes are in hand and hold no single settled
+    measured answer, which is a fact about this one call rather than about the batch.
     """
     settled: list[ModelAnswer] = []
     for lineno, raw in enumerate(lines, start=1):
         text = raw.strip()
         if not text:
-            raise ModelCallFailed(f"{source}:{lineno}: empty line in the event stream")
+            raise UnreadableStream(f"{source}:{lineno}: empty line in the event stream")
         try:
             event = json.loads(text)
         except json.JSONDecodeError as exc:
-            raise ModelCallFailed(f"{source}:{lineno}: not JSON ({exc}): {text[:120]!r}") from exc
+            raise UnreadableStream(f"{source}:{lineno}: not JSON ({exc}): {text[:120]!r}") from exc
         if not isinstance(event, dict):
-            raise ModelCallFailed(
+            raise UnreadableStream(
                 f"{source}:{lineno}: event is {type(event).__name__}, not an object"
             )
         if event.get("type") != "message_end":
@@ -423,7 +445,7 @@ def parse_stream(lines: Iterable[str], *, source: str) -> ModelAnswer:
         where = f"{source}:{lineno} assistant message_end"
         usage = message.get("usage")
         if not isinstance(usage, dict):
-            raise ModelCallFailed(
+            raise UnreadableStream(
                 f"{where}: no usage block - the call cannot be written as if it were measured"
             )
         settled.append(
@@ -433,9 +455,9 @@ def parse_stream(lines: Iterable[str], *, source: str) -> ModelAnswer:
             )
         )
     if not settled:
-        raise ModelCallFailed(f"{source}: no assistant message_end event - nothing was measured")
+        raise UnreadableStream(f"{source}: no assistant message_end event - nothing was measured")
     if len(settled) > 1:
-        raise ModelCallFailed(
+        raise UnreadableStream(
             f"{source}: {len(settled)} settled assistant usages in one stream; this runner will "
             "not guess which call was billed"
         )
@@ -552,7 +574,7 @@ class PiRunner:
         try:
             stdout = proc.stdout.decode("utf-8")
         except UnicodeDecodeError as exc:
-            raise ModelCallFailed(
+            raise UnreadableStream(
                 f"{call.label}: stdout is not UTF-8 ({exc}); the event stream is unreadable"
             ) from exc
         return parse_stream(stdout.splitlines(), source=f"{call.label} stdout")
@@ -956,6 +978,54 @@ def unverifiable_findings(site: Mapping[str, Any], *, site_id: str, reason: str)
     return findings
 
 
+@dataclass(frozen=True)
+class FailedCall:
+    """One call whose stream could not be read as a single settled measured answer: a named hole.
+
+    Recorded beside the judgements so the batch's `model.json` carries it - the `reason`, the
+    `site_id` and the `field` - and deliberately **neither a verdict nor a proposed value**. There
+    was no answer, so a verdict or a proposal here would be an invented finding, which is the one
+    thing this record exists to prevent.
+
+    It is not a ledger line either. The provider may have billed a stream that came back unreadable,
+    but no usage was measured, so a line could only carry invented zeros - which is what
+    `phase3.ledger` refuses (module refusal 2, "It never writes an unmeasured call"). A retry has the
+    same objection from the other side (refusal 3: a retry doubles the charge invisibly). So the hole
+    is written down instead, in the artefact that has a word for it.
+    """
+
+    site_id: str
+    field: str | None
+    reason: str
+
+    def to_dict(self) -> dict[str, Any]:
+        return {"site_id": self.site_id, "field": self.field, "reason": self.reason}
+
+
+#: The exact keys a named failure carries. `mass_run.batch_state` counts a row only when its key set
+#: is this one, so a failure record that grew a `verdict` or a `proposed` value is refused rather
+#: than read as settled: "a truncated artefact is not evidence" applies to this list as well.
+NAMED_FAILURE_KEYS = frozenset({"site_id", "field", "reason"})
+
+
+def is_named_failure(row: Any) -> bool:
+    """True when `row` is a well-formed named failure, and therefore carries no verdict.
+
+    Read by `mass_run.batch_state`, which must count a call the stream swallowed as settled - that
+    call **was** a call - without letting *any* row be counted. Hence the exact key set rather than
+    "whatever the list holds": an entry that cannot be located (empty `site_id`), cannot be named
+    (`field` neither a string nor `None`), carries no reason, or carries a key this shape does not
+    have, is not a named failure.
+    """
+    if not isinstance(row, dict) or set(row) != NAMED_FAILURE_KEYS:
+        return False
+    if not isinstance(row.get("site_id"), str) or not row["site_id"]:
+        return False
+    if row.get("field") is not None and not isinstance(row.get("field"), str):
+        return False
+    return isinstance(row.get("reason"), str) and bool(row["reason"])
+
+
 @dataclass
 class BatchModelReport:
     """One batch's model stage. Deterministic: no timestamp (the ledger carries the clock)."""
@@ -969,10 +1039,23 @@ class BatchModelReport:
     #: measurements (a fetch, a model call), and a site that spent nothing has no measurement to
     #: write - a zero-token `model_call` line would be a fabricated one. This is the report line.
     skipped: list[SkippedSite] = field(default_factory=list)
+    #: Calls that were bought and came back as an unreadable stream, one `FailedCall` each. The
+    #: third outcome beside "judged" and "bought no call": the call happened, the answer did not,
+    #: and the batch continues past it. Written to `model.json` so a later reader - a human, the
+    #: mass runner's state check - can see which (site, field) pairs are holes instead of counting
+    #: answers and guessing.
+    failures: list[FailedCall] = field(default_factory=list)
 
     @property
     def calls(self) -> int:
-        return len(self.judgements)
+        """Every call the batch made: the judged answers plus the named holes.
+
+        A failed call **was** a call - the provider was asked and may have charged for it - so it is
+        counted here rather than hidden, and `mass_run.batch_state` needs that count to add up
+        (`len(judgements) + len(failures)`). It is deliberately not counted as money: with no usage
+        block there is no measured `cost_usd`, and a zero would be a fabricated figure (refusal 2).
+        """
+        return len(self.judgements) + len(self.failures)
 
     @property
     def unverifiable(self) -> int:
@@ -998,6 +1081,7 @@ class BatchModelReport:
             "sites": self.site_ids,
             "judgements": [j.to_dict() for j in self.judgements],
             "skipped": [s.to_dict() for s in self.skipped],
+            "failures": [f.to_dict() for f in self.failures],
             "totals": {
                 "calls": self.calls,
                 "input_tokens": self.input_tokens,
@@ -1031,11 +1115,17 @@ def judge_batch(
     reason (`failures` names the targets that failed; a site whose findings buy no target at all is
     recorded as such), and no process is started.
 
-    Nothing else is caught: the first call that could not be measured propagates, so a batch that
-    could not be measured is reported as failed rather than as a smaller batch
-    (`phase3.model.StageResult` has the same rule). A re-run re-answers every site and writes a
-    second line per call: the second charge is then visible in the ledger instead of hidden behind
-    an invisible retry.
+    A call whose stream comes back unreadable is recorded as a `FailedCall` and the batch carries on
+    to the next site. That call was bought and produced no answer, so it is recorded - `site_id`,
+    `field`, the reason, no verdict - rather than retried or charged at zero. The rest of the batch is
+    untouched by it: before 2026-09-21 one such call threw out of this loop and took every answer
+    already written down with it (`output/remediation/logs/mass/batch-0143.judge.log`).
+
+    Nothing else is caught: a call that could not be *made* - a timeout, a non-zero exit, a process
+    that would not start, all plain `ModelCallFailed` - propagates, so a batch that could not be
+    measured is reported as failed rather than as a smaller batch (`phase3.model.StageResult` has the
+    same rule). A re-run re-answers every site and writes a second line per call: the second charge
+    is then visible in the ledger instead of hidden behind an invisible retry.
     """
     batch_id = str(batch.get("batch_id") or "")
     if not batch_id:
@@ -1048,6 +1138,7 @@ def judge_batch(
     }
     judgements: list[SiteJudgement] = []
     skipped: list[SkippedSite] = []
+    named_failures: list[FailedCall] = []
     for item in prepared:
         site_id = item.call.site_id
         if not any(e.present for e in item.excerpts):
@@ -1060,7 +1151,13 @@ def judge_batch(
                 )
             )
             continue
-        judged = judge_site(prepared=item, runner=runner, ledger=ledger, answers=answers)
+        try:
+            judged = judge_site(prepared=item, runner=runner, ledger=ledger, answers=answers)
+        except UnreadableStream as exc:
+            named_failures.append(
+                FailedCall(site_id=site_id, field=item.call.field, reason=str(exc))
+            )
+            continue
         usage = judged.answer.usage
         judgements.append(
             SiteJudgement(
@@ -1082,6 +1179,7 @@ def judge_batch(
         site_ids=[item.call.site_id for item in prepared],
         judgements=judgements,
         skipped=skipped,
+        failures=named_failures,
     )
 
 

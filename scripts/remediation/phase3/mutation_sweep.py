@@ -179,6 +179,22 @@ WRITE_ONLY_DISCOVER = "test_the_plan_refuses_a_batch_that_is_not_the_discover_pa
 WRITE_MISSING = "test_reading_a_missing_batch_directory_says_which_file_is_missing"
 WRITE_STAGE = "scripts/remediation/phase3/write_stage.py"
 
+#: The named holes (2026-09-21). Measured: the mass run over 5,004 sites died in 4 of its 334
+#: batches because one call's stream came back unreadable, and each death took the answers already
+#: on disk with it (`output/remediation/logs/mass/batch-0143.judge.log`). A hole is now a recorded
+#: `model_stage.FailedCall` beside the judgements - and "settled" must not become "anything goes":
+#: a truncated `model.json` is still not done. One guard, one test that must fail without it.
+MODEL_HOLE = "test_an_unreadable_stream_is_a_named_failure_and_the_batch_carries_on"
+MODEL_TRANSPORT = "test_a_run_stops_at_the_first_call_it_could_not_measure"
+MODEL_HOLE_CLI = "test_judge_live_records_an_unreadable_stream_as_a_hole_and_exits_zero"
+DISCOVER_HOLE = "test_an_unreadable_stream_for_one_field_is_a_hole_and_the_other_calls_are_bought"
+DISCOVER_HOLE_REVIEW = "test_the_reviewer_does_not_clear_a_field_whose_finder_call_was_a_hole"
+MASSRUN_HOLE = "test_a_named_failure_counts_as_settled_and_the_batch_is_done"
+MASSRUN_HOLE_COUNT = "test_a_model_json_that_lost_a_call_is_broken_even_with_an_empty_failures_list"
+MASSRUN_HOLE_VERDICT = "test_a_failure_that_carries_a_verdict_is_not_a_named_failure"
+MASSRUN_HOLE_SHAPE = "test_a_failures_list_of_bare_strings_is_broken_rather_than_settled"
+WRITE_HOLE = "test_a_field_whose_finder_call_was_a_hole_is_refused_and_no_row_is_planned"
+
 #: (name, file, the exact text to replace, what to replace it with, test file, test name)
 MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
@@ -1079,6 +1095,99 @@ MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         "    if False:  # mutant: any column may be read",
         WRITE_TEST,
         WRITE_READ_STMT,
+    ),
+    # ── the named holes (2026-09-21) ─────────────────────────────────────────────────────────────
+    (
+        "an unreadable stream ends the finding-driven batch again",
+        "scripts/remediation/phase3/model_stage.py",
+        "        try:\n"
+        "            judged = judge_site(prepared=item, runner=runner, ledger=ledger, answers=answers)\n"
+        "        except UnreadableStream as exc:\n"
+        "            named_failures.append(\n"
+        "                FailedCall(site_id=site_id, field=item.call.field, reason=str(exc))\n"
+        "            )\n"
+        "            continue\n",
+        "        judged = judge_site(prepared=item, runner=runner, ledger=ledger, answers=answers)\n",
+        MODEL_TEST,
+        MODEL_HOLE,
+    ),
+    (
+        "every ModelCallFailed is swallowed as a named hole",
+        "scripts/remediation/phase3/model_stage.py",
+        "        except UnreadableStream as exc:\n",
+        "        except ModelCallFailed as exc:\n",
+        MODEL_TEST,
+        MODEL_TRANSPORT,
+    ),
+    (
+        "the report's call count forgets the holes",
+        "scripts/remediation/phase3/model_stage.py",
+        "        return len(self.judgements) + len(self.failures)\n",
+        "        return len(self.judgements)\n",
+        MODEL_TEST,
+        MODEL_HOLE_CLI,
+    ),
+    (
+        "an unreadable stream ends the discover batch again",
+        "scripts/remediation/phase3/discover_stage.py",
+        "        try:\n"
+        "            judged = MS.judge_site(prepared=item, runner=runner, ledger=ledger, answers=answers)\n"
+        "        except MS.UnreadableStream as exc:\n"
+        "            named_failures.append(\n"
+        "                MS.FailedCall(site_id=site_id, field=field_name or None, reason=str(exc))\n"
+        "            )\n"
+        "            continue\n",
+        "        judged = MS.judge_site(prepared=item, runner=runner, ledger=ledger, answers=answers)\n",
+        TEST,
+        DISCOVER_HOLE,
+    ),
+    (
+        "a field the finder's stream left empty is cleared like a finding",
+        "scripts/remediation/phase3/review_stage.py",
+        "        if not path.exists():\n            plan.unreviewable.append(\n",
+        "        if False:  # mutated\n            plan.unreviewable.append(\n",
+        TEST,
+        DISCOVER_HOLE_REVIEW,
+    ),
+    (
+        "the batch counts only its judgements again",
+        "scripts/remediation/phase3/mass_run.py",
+        "    if len(judgements) + len(named) != calls:\n",
+        "    if len(judgements) != calls:\n",
+        MASSRUN_TEST,
+        MASSRUN_HOLE,
+    ),
+    (
+        "the call count need not add up",
+        "scripts/remediation/phase3/mass_run.py",
+        "    if len(judgements) + len(named) != calls:\n",
+        "    if len(judgements) + len(named) < 0:  # mutant: any count settles\n",
+        MASSRUN_TEST,
+        MASSRUN_HOLE_COUNT,
+    ),
+    (
+        "a listed failure is credited whatever it says",
+        "scripts/remediation/phase3/model_stage.py",
+        "    if not isinstance(row, dict) or set(row) != NAMED_FAILURE_KEYS:\n        return False\n",
+        "    if not isinstance(row, dict):\n        return False\n",
+        MASSRUN_TEST,
+        MASSRUN_HOLE_VERDICT,
+    ),
+    (
+        "any list under `failures` is credited",
+        "scripts/remediation/phase3/mass_run.py",
+        "    if not isinstance(named, list) or not all(MS.is_named_failure(row) for row in named):\n",
+        "    if not isinstance(named, list):\n",
+        MASSRUN_TEST,
+        MASSRUN_HOLE_SHAPE,
+    ),
+    (
+        "the writer plans a row for a field with no answer on disk",
+        WRITE_STAGE,
+        "    path = answers.path_for(site_id, field_name)\n    if not path.exists():\n",
+        "    path = answers.path_for(site_id, field_name)\n    if False:  # mutant: a missing answer no longer refuses the row\n",
+        WRITE_TEST,
+        WRITE_HOLE,
     ),
 ]
 

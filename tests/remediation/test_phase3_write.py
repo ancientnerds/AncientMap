@@ -1097,3 +1097,40 @@ def test_reading_a_missing_batch_directory_says_which_file_is_missing(tmp_path: 
     """A path that is not a batch is refused by name, not with a KeyError."""
     with pytest.raises(W.WriteRefused, match="input.json does not exist"):
         W.load_plan(tmp_path / "nowhere")
+
+
+def test_a_field_whose_finder_call_was_a_hole_is_refused_and_no_row_is_planned(
+    tmp_path: Path,
+) -> None:
+    """A hole has no answer text, so there is no value to write - a cleared hole is still a refusal.
+
+    The batch is the shape `batch-0143` was left in: the finder's `model.json` names the `country`
+    call as a `FailedCall`, `answers/` holds no `country` file, and the review cleared the field
+    anyway. The writer may not build a row here - the value would be one nobody proposed. The
+    review's own `applies` boolean is not consulted either (`rebuilt_verdict`), so a file that
+    merely claims the verdict clears cannot smuggle the hole through.
+    """
+    batch_dir = _batch(
+        tmp_path,
+        cleared={(SITE_A, "country"): _cleared(SITE_A, "country")},
+    )
+    (batch_dir / "model.json").write_text(
+        json.dumps(
+            {
+                "batch_id": BATCH,
+                "failures": [
+                    {"site_id": SITE_A, "field": "country", "reason": "the stream carries no text"}
+                ],
+                "judgements": [],
+                "totals": {"calls": 1},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    plan = W.load_plan(batch_dir)
+
+    assert plan.rows == []
+    refused = plan.refused_fields(W.RULE_NO_ANSWER)
+    assert [(r.site_id, r.field) for r in refused] == [(SITE_A, "country")]
+    assert "does not exist" in refused[0].detail

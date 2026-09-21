@@ -403,16 +403,24 @@ def test_a_fetch_line_cannot_carry_a_model_cost() -> None:
 def test_a_run_stops_at_the_first_call_it_could_not_measure(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    """A **transport** failure ends the batch; only an unreadable stream is a named hole.
+
+    The seam is the exception class. `ModelCallFailed` says the call could not be *made* - a
+    timeout, a non-zero exit, a process that would not start - and nothing after it may be trusted,
+    so it propagates. `UnreadableStream` says these bytes hold no answer: the batch records the hole
+    and buys the next call (the two tests below).
+    """
+
     class FailingRunner:
         def __init__(self, **kwargs: Any) -> None:
             self.kwargs = kwargs
 
         def run(self, call: MS.ModelCall) -> MS.ModelAnswer:
-            raise MS.ModelCallFailed(f"{call.label}: no usage block (scripted)")
+            raise MS.ModelCallFailed(f"{call.label}: pi exited 1; stderr tail: 'boom'")
 
     monkeypatch.setattr(MS, "PiRunner", FailingRunner)
 
-    with pytest.raises(MS.ModelCallFailed, match="no usage block"):
+    with pytest.raises(MS.ModelCallFailed, match="exited 1"):
         MS.judge_batch(
             batch=_batch(1),
             runner=FailingRunner(),
@@ -422,6 +430,130 @@ def test_a_run_stops_at_the_first_call_it_could_not_measure(
             stage=M.Stage.FINDER,
         )
     assert not (tmp_path / "LEDGER.jsonl").exists()
+
+
+# ── an unreadable stream is a named hole, never the end of the batch ─────────────────────────
+
+
+class HoleRunner:
+    """A scripted runner whose one named site answers with an unreadable stream.
+
+    It raises exactly what `PiRunner` raises once `parse_stream` has refused the bytes, so the loop
+    under test cannot tell the scripted hole from the measured one. That loop is the whole point of
+    the class: measured 2026-09-21, 4 of the mass run's 334 batches died on such a call and lost
+    every answer they had already written (`output/remediation/logs/mass/batch-0143.judge.log`).
+    """
+
+    def __init__(self, hole: str = "site-2", **kwargs: Any) -> None:
+        self.hole = hole
+        self.kwargs = kwargs
+        self.calls: list[MS.ModelCall] = []
+
+    def run(self, call: MS.ModelCall) -> MS.ModelAnswer:
+        self.calls.append(call)
+        if call.site_id == self.hole:
+            raise MS.UnreadableStream(
+                f"{call.label} stdout:9 assistant message_end: the assistant message carries no "
+                "text - an empty answer is not a result"
+            )
+        return _answer()
+
+
+def test_an_unreadable_stream_is_a_named_failure_and_the_batch_carries_on(tmp_path: Path) -> None:
+    """The defect the mass run measured, pinned: one hole, three calls, two answers, exit 0.
+
+    The hole is recorded where a later reader looks - `site_id`, `field`, reason, no verdict - the
+    calls after it are still bought, and the ledger carries one line per call that was measured.
+    """
+    runner = HoleRunner()
+    ledger = L.Ledger(tmp_path / "LEDGER.jsonl")
+    answers = F.EvidenceStore(tmp_path / "answers")
+
+    report = MS.judge_batch(
+        batch=_batch(3),
+        runner=runner,
+        store=_evidence_store(tmp_path, 3),
+        answers=answers,
+        ledger=ledger,
+        stage=M.Stage.FINDER,
+    )
+
+    assert [call.site_id for call in runner.calls] == ["site-1", "site-2", "site-3"]
+    assert [j.site_id for j in report.judgements] == ["site-1", "site-3"]
+    assert report.calls == 3  # a failed call was a call
+    assert report.cost_usd == 2 * REPORTED_COST  # ... and not an invented zero
+    assert len(report.failures) == 1
+    hole = report.failures[0]
+    assert (hole.site_id, hole.field) == ("site-2", None)
+    assert "carries no text" in hole.reason
+    assert set(hole.to_dict()) == {"site_id", "field", "reason"}  # no verdict, no proposal
+    stored = json.loads(report.to_json())
+    assert stored["failures"] == [hole.to_dict()]
+    assert stored["totals"]["calls"] == 3
+    rows = [
+        json.loads(line) for line in (tmp_path / "LEDGER.jsonl").read_text("utf-8").splitlines()
+    ]
+    assert [row["label"] for row in rows] == ["site-1/finder", "site-3/finder"]
+    assert answers.path_for("site-1", "finder").exists()
+    assert not answers.path_for("site-2", "finder").exists()
+
+
+def test_a_named_failure_carries_a_site_a_field_and_a_reason_and_no_verdict() -> None:
+    """`is_named_failure` is the shape check `mass_run.batch_state` settles a batch with.
+
+    A record that grew a `verdict` or a `proposed` value is a finding the call never made, and a
+    record that cannot be located is not one either. Refusing both is the whole reason the hole is
+    written down instead of guessed at.
+    """
+    row: dict[str, Any] = {"site_id": "site-1", "field": "country", "reason": "no text"}
+
+    assert MS.is_named_failure(row) is True
+    assert MS.is_named_failure({**row, "field": None}) is True  # a per-site call has no field
+    assert MS.is_named_failure({**row, "verdict": "WRONG"}) is False
+    assert MS.is_named_failure({**row, "proposed": "Cave"}) is False
+    assert MS.is_named_failure({k: v for k, v in row.items() if k != "field"}) is False
+    assert MS.is_named_failure({"site_id": "", "field": "country", "reason": "no text"}) is False
+    assert MS.is_named_failure({"site_id": "site-1", "field": "country", "reason": ""}) is False
+    assert MS.is_named_failure(["site-1", "country", "no text"]) is False
+
+
+def test_judge_live_records_an_unreadable_stream_as_a_hole_and_exits_zero(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Exit 2 stays for a call that could not be *made*; an unreadable stream ends as a hole.
+
+    Measured 2026-09-21: batch-0143 died with exit 2 on one site's empty stream and the restart then
+    hit the answers it had already written. Neither happens now - the batch finishes, `model.json`
+    carries the hole, and the exit code says the batch is done.
+    """
+    monkeypatch.setattr(MS, "PiRunner", HoleRunner)
+    run_dir = _prepared_run_dir(tmp_path, count=2)
+    # The store the CLI builds sits next to input.json: <run_dir>/<batch_id>/evidence.
+    _evidence_store(run_dir / "batch-0001", 2)
+    ledger = tmp_path / "LEDGER.jsonl"
+
+    rc = R.main(
+        [
+            "judge",
+            "--run-dir",
+            str(run_dir),
+            "--batch-id",
+            "batch-0001",
+            "--ledger",
+            str(ledger),
+            "--live",
+        ]
+    )
+
+    payload = json.loads(capsys.readouterr().out)
+    assert rc == 0
+    assert payload["totals"]["calls"] == 2
+    assert [j["site_id"] for j in payload["judgements"]] == ["site-1"]
+    assert [f["site_id"] for f in payload["failures"]] == ["site-2"]
+    assert "carries no text" in payload["failures"][0]["reason"]
+    stored = json.loads((run_dir / "batch-0001" / "model.json").read_text(encoding="utf-8"))
+    assert stored["failures"][0]["site_id"] == "site-2"
+    assert stored["totals"]["calls"] == 2
 
 
 # ── the prompt: bounded, one question per stage ──────────────────────────────────────────────

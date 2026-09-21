@@ -709,3 +709,110 @@ def test_prepare_is_given_the_plan_and_neither_the_ledger_nor_live(tmp_path: Pat
     assert not hasattr(prepared, "live")
     assert "--ledger" not in argv
     assert "--live" not in argv
+
+
+# ── a named failure is a settled call, and "settled" is not "ignore what is missing" ──────────
+
+
+def _named_failure(field: str) -> dict[str, Any]:
+    """One `model_stage.FailedCall`, as `BatchModelReport.to_json` writes it."""
+    return {"site_id": SITE, "field": field, "reason": "the stream carries no text"}
+
+
+def test_a_named_failure_counts_as_settled_and_the_batch_is_done(tmp_path: Path) -> None:
+    """A call whose stream was unreadable **was** a call: the count adds the holes to the answers.
+
+    `totals.calls` is the batch's own count of what it bought, so the check must not drop either
+    side. Dropping the holes would leave every batch that hit one `broken` for ever - and a re-run
+    re-buys every call of a discover batch, which is the second charge refusal 3 exists to prevent.
+    """
+    run_dir = tmp_path / "runs"
+    _artefacts(
+        run_dir,
+        "batch-0001",
+        calls=2,
+        model_text=json.dumps(
+            {
+                "totals": {"calls": 3},
+                "judgements": [
+                    {"site_id": SITE, "field": FIELDS[0], "wrote": True},
+                    {"site_id": SITE, "field": FIELDS[1], "wrote": True},
+                ],
+                "failures": [_named_failure(FIELDS[2])],
+            }
+        ),
+    )
+
+    state, reason = M.batch_state(run_dir, "batch-0001")
+
+    assert state == M.DONE
+    assert reason == "3 calls accounted for: 2 answers on disk, 1 unreadable stream(s)"
+
+
+def test_a_model_json_that_lost_a_call_is_broken_even_with_an_empty_failures_list(
+    tmp_path: Path,
+) -> None:
+    """`failures: []` must not rescue a batch whose third call left no trace at all."""
+    run_dir = tmp_path / "runs"
+    _artefacts(
+        run_dir,
+        "batch-0001",
+        calls=2,
+        model_text=json.dumps(
+            {
+                "totals": {"calls": 3},
+                "judgements": [
+                    {"site_id": SITE, "field": FIELDS[0], "wrote": True},
+                    {"site_id": SITE, "field": FIELDS[1], "wrote": True},
+                ],
+                "failures": [],
+            }
+        ),
+    )
+
+    state, reason = M.batch_state(run_dir, "batch-0001")
+
+    assert state == M.BROKEN
+    assert reason == "model.json claims 3 calls but carries 2 judgements"
+
+
+def test_a_failure_that_carries_a_verdict_is_not_a_named_failure(tmp_path: Path) -> None:
+    """The exact key set is the guard: a "hole" with a verdict in it is an invented finding."""
+    run_dir = tmp_path / "runs"
+    _artefacts(
+        run_dir,
+        "batch-0001",
+        model_text=json.dumps(
+            {
+                "totals": {"calls": 2},
+                "judgements": [{"site_id": SITE, "field": FIELDS[0], "wrote": True}],
+                "failures": [{**_named_failure(FIELDS[1]), "verdict": "WRONG"}],
+            }
+        ),
+    )
+
+    state, reason = M.batch_state(run_dir, "batch-0001")
+
+    assert state == M.BROKEN
+    assert reason == "model.json carries a failures list that is not a set of named failures"
+
+
+def test_a_failures_list_of_bare_strings_is_broken_rather_than_settled(tmp_path: Path) -> None:
+    """A list that merely has the right *length* is not a set of located holes."""
+    run_dir = tmp_path / "runs"
+    _artefacts(
+        run_dir,
+        "batch-0001",
+        model_text=json.dumps(
+            {
+                "totals": {"calls": 2},
+                "judgements": [{"site_id": SITE, "field": FIELDS[0], "wrote": True}],
+                "failures": [FIELDS[1]],
+            }
+        ),
+    )
+
+    state, reason = M.batch_state(run_dir, "batch-0001")
+
+    assert state == M.BROKEN
+    assert reason == "model.json carries a failures list that is not a set of named failures"

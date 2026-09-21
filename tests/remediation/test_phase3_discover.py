@@ -1373,3 +1373,151 @@ def test_the_question_asks_for_a_correction_and_names_where_it_must_come_from() 
     assert "SOURCE:" in question
     assert "must occur in that page" in question
     assert "Never guess a replacement value" not in question
+
+
+# ── a call whose stream came back unreadable: a recorded hole, not the end of the batch ───────
+
+
+class OneHoleRunner(ScriptedRunner):
+    """The scripted discover runner, with one (site, field) answering with an unreadable stream."""
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        self.hole = ("site-1", "country")
+
+    def run(self, call: MS.ModelCall) -> MS.ModelAnswer:
+        self.calls.append(call)
+        if (call.site_id, call.field) == self.hole:
+            raise MS.UnreadableStream(
+                f"{call.label} stdout:9 assistant message_end: the assistant message carries no "
+                "text - an empty answer is not a result"
+            )
+        return MS.ModelAnswer(text=f"VERDICT: CORRECT - {call.label}", usage=self.answer.usage)
+
+
+def test_an_unreadable_stream_for_one_field_is_a_hole_and_the_other_calls_are_bought(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Measured 2026-09-21: 4 of the mass run's 334 batches died this way (`batch-0143.judge.log`).
+
+    The whole live CLI path with one field's stream empty: the batch exits 0, `model.json` carries
+    the hole with the field's name, the other nine calls are answered, and the ledger holds nine
+    lines - the hole is not written as a zero-usage line.
+    """
+    monkeypatch.setattr(MS, "PiRunner", OneHoleRunner)
+    monkeypatch.setattr(SP, "site_type_vocabulary", lambda: VOCAB)
+    run_dir = _prepared_discover_run(tmp_path, _site_record("site-1"), _site_record("site-2"))
+    _evidence_store(run_dir / "batch-0001" / "evidence", "site-1", "site-2")
+    ledger = tmp_path / "LEDGER.jsonl"
+
+    rc = R.main(
+        [
+            "judge",
+            "--run-dir",
+            str(run_dir),
+            "--batch-id",
+            "batch-0001",
+            "--ledger",
+            str(ledger),
+            "--live",
+        ]
+    )
+
+    payload = json.loads(capsys.readouterr().out)
+    assert rc == 0
+    assert payload["pass"] == R.DISCOVER_PASS
+    assert payload["totals"]["calls"] == 10
+    assert len(payload["judgements"]) == 9
+    assert "site-1/country" not in [j["label"] for j in payload["judgements"]]
+    assert [f["field"] for f in payload["failures"]] == ["country"]
+    assert payload["failures"][0]["site_id"] == "site-1"
+    assert set(payload["failures"][0]) == {"site_id", "field", "reason"}
+    assert "carries no text" in payload["failures"][0]["reason"]
+
+    hole = run_dir / "batch-0001" / "answers" / f"{F.EvidenceStore.slug('site-1', 'country')}.txt"
+    assert not hole.exists()
+    assert (run_dir / "batch-0001" / "answers").glob("*.txt")
+    lines = [json.loads(line) for line in ledger.read_text(encoding="utf-8").splitlines()]
+    assert len(lines) == 9
+    assert "site-1/country" not in [line["label"] for line in lines]
+
+    stored = json.loads((run_dir / "batch-0001" / "model.json").read_text(encoding="utf-8"))
+    assert stored["failures"] == payload["failures"]
+    assert stored["totals"]["calls"] == 10
+
+
+def test_the_reviewer_does_not_clear_a_field_whose_finder_call_was_a_hole(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A hole is not a finding, so there is nothing to clear: the field is recorded unreviewable.
+
+    The finder's `model.json` here carries a `FailedCall` for `country` and answers for the other
+    four fields. The reviewer is asked about the four; about `country` it says `asked=False`, and
+    nothing in `review.json` can be read as "the record is right about the country".
+    """
+    monkeypatch.setattr(MS, "PiRunner", ReviewingRunner)
+    run_dir = _prepared_discover_run(tmp_path, _site_record("site-1"))
+    _evidence_store(run_dir / "batch-0001" / "evidence", "site-1")
+    answered = [field for field in SP.DISCOVER_FIELDS if field != "country"]
+    body = (
+        b"The page disagrees with the record.\n\nVERDICT: WRONG\nPROPOSED: Cave\n"
+        b'SOURCE: https://en.wikipedia.org/w/api.php?titles=Cave - "Cave text"\n'
+    )
+    answers = F.EvidenceStore(run_dir / "batch-0001" / "answers")
+    for field in answered:
+        answers.write(site_id="site-1", feature=field, body=body)
+    model = _answer().usage
+    MS.write_report(
+        run_dir / "batch-0001" / "model.json",
+        MS.BatchModelReport(
+            batch_id="batch-0001",
+            stage=M.Stage.FINDER,
+            site_ids=["site-1"],
+            judgements=[
+                MS.SiteJudgement(
+                    site_id="site-1",
+                    label=f"site-1/{field}",
+                    answer_chars=len(body),
+                    input_tokens=model.input_tokens,
+                    output_tokens=model.output_tokens,
+                    cache_read_tokens=model.cache_read_tokens,
+                    cache_write_tokens=model.cache_write_tokens,
+                    cost_usd=model.cost_usd,
+                    wrote=True,
+                    field=field,
+                )
+                for field in answered
+            ],
+            failures=[
+                MS.FailedCall(
+                    site_id="site-1", field="country", reason="the stream carries no text"
+                )
+            ],
+        ),
+    )
+    ledger = tmp_path / "LEDGER.jsonl"
+
+    rc = R.main(
+        [
+            "judge",
+            "--run-dir",
+            str(run_dir),
+            "--batch-id",
+            "batch-0001",
+            "--stage",
+            "reviewer",
+            "--ledger",
+            str(ledger),
+            "--live",
+        ]
+    )
+
+    payload = json.loads(capsys.readouterr().out)
+    assert rc == 0
+    assert payload["calls"] == len(answered)
+    assert payload["applies"] == len(answered)
+    country = [v for v in payload["verdicts"] if v["field"] == "country"][0]
+    assert country["asked"] is False
+    assert country["applies"] is False  # a hole cannot be a cleared finding
+    assert "is not on disk" in country["unreviewable"]
+    assert "country" not in [v["field"] for v in payload["verdicts"] if v["applies"]]

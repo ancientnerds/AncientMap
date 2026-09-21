@@ -61,6 +61,7 @@ if __package__ in (None, ""):
 
 from phase3 import fetch_stage as F  # noqa: E402
 from phase3 import ledger as L  # noqa: E402
+from phase3 import model_stage as MS  # noqa: E402  - one spelling for a named failure's shape
 
 DEFAULT_PLAN = REPO / "output" / "remediation" / "phase3_runner" / "PLAN.jsonl"
 DEFAULT_RUN_DIR = REPO / "output" / "remediation" / "phase3_runner" / "runs" / "mass1"
@@ -274,8 +275,19 @@ def batch_state(run_dir: Path, batch_id: str) -> tuple[str, str]:
     judgements = model.get("judgements")
     if not isinstance(calls, int) or not isinstance(judgements, list):
         return BROKEN, "model.json carries no totals.calls or no judgements"
-    if len(judgements) != calls:
-        return BROKEN, f"model.json claims {calls} calls but carries {len(judgements)} judgements"
+    # A named failure (`model_stage.FailedCall`) is a call the runner bought and could not read an
+    # answer out of. It is settled - the call happened - but only *in its recorded shape*:
+    # `site_id`, `field`, `reason` and nothing else. A list of bare strings, or an entry that grew a
+    # `verdict` or a `proposed` value, is not credited, so the check still cannot be satisfied by
+    # writing something else into the file. "A truncated artefact is not evidence" holds here too.
+    named = model.get("failures", [])
+    if not isinstance(named, list) or not all(MS.is_named_failure(row) for row in named):
+        return BROKEN, "model.json carries a failures list that is not a set of named failures"
+    if len(judgements) + len(named) != calls:
+        return BROKEN, (
+            f"model.json claims {calls} calls but carries {len(judgements)} judgements"
+            + (f" and {len(named)} named failures" if named else "")
+        )
     answers = root / "answers"
     for row in judgements:
         if not row.get("wrote"):
@@ -283,6 +295,13 @@ def batch_state(run_dir: Path, batch_id: str) -> tuple[str, str]:
         slug = F.EvidenceStore.slug(str(row["site_id"]), str(row["field"]))
         if not (answers / f"{slug}.txt").exists():
             return BROKEN, f"answer missing for {row['site_id']}/{row['field']}"
+    if named:
+        # Done, and honest about the holes: the batch is never re-run for them (a re-run re-buys
+        # every call of a discover batch and would only hit the recorded bytes as a conflict).
+        return DONE, (
+            f"{calls} calls accounted for: {len(judgements)} answers on disk, "
+            f"{len(named)} unreadable stream(s)"
+        )
     return DONE, f"{calls} answers on disk"
 
 

@@ -455,6 +455,12 @@ def judge_discover_batch(
     for that field was planned, or no evidence for the site was readable at all - a site whose
     targets were asked and failed, which is not the same fact as a site nobody asked about.
 
+    A fourth way the batch survives: a call that **was** bought and came back as an unreadable
+    stream. It is recorded as a `MS.FailedCall` beside the judgements - `site_id`, `field`, reason,
+    and no verdict - and the remaining calls are still bought. Before 2026-09-21 that one call threw
+    out of this loop and ended the batch, answers already on disk included (`output/remediation/logs/
+    mass/batch-0143.judge.log`, where 4 of 334 batches died this way).
+
     Nothing else is caught: a missing evidence file **with no recorded failure** still propagates
     out of `plan_batch` (`model_stage.evidence_excerpts`), so a batch that cannot account for its
     evidence fails loudly instead of judging a page nobody has a record of.
@@ -470,6 +476,7 @@ def judge_discover_batch(
     }
     judgements: list[MS.SiteJudgement] = []
     skipped: list[MS.SkippedSite] = list(plan.skipped)
+    named_failures: list[MS.FailedCall] = []
     for item in plan.calls:
         site_id = item.call.site_id
         field_name = str(item.call.field or "")
@@ -488,7 +495,13 @@ def judge_discover_batch(
                 )
             )
             continue
-        judged = MS.judge_site(prepared=item, runner=runner, ledger=ledger, answers=answers)
+        try:
+            judged = MS.judge_site(prepared=item, runner=runner, ledger=ledger, answers=answers)
+        except MS.UnreadableStream as exc:
+            named_failures.append(
+                MS.FailedCall(site_id=site_id, field=field_name or None, reason=str(exc))
+            )
+            continue
         usage = judged.answer.usage
         judgements.append(
             MS.SiteJudgement(
@@ -510,6 +523,7 @@ def judge_discover_batch(
         site_ids=[str(site.get("site_id") or "") for site in (batch.get("sites") or [])],
         judgements=judgements,
         skipped=skipped,
+        failures=named_failures,
     )
 
 
