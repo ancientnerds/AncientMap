@@ -4819,3 +4819,195 @@ earlier bytes. The three executable files were byte-identical, which is the clai
 make. The rule it buys is small and sharp: **a file is never written in the same block as the run that
 hashes it** - an instrument whose input and whose subject are written in the same breath measures
 neither.
+
+## 2026-09-21 - the finder's description proposals would replace a passage with a stub, and the phase split already refuses them
+
+**The reviewer stage ran for the first time, over the batches that already exist.**
+`run.py judge --stage reviewer` (`run.py:545`, `_judge_discover_reviewer`) over `batch-0001`: 8 calls,
+23.6 s, 5 findings cleared, 3 refuted, 67 recorded as unreviewable with the finder's own reason. The
+dry run over all 160 batch directories puts the whole pass at **2,165 calls** and 9,835 unreviewable
+records, so the reviewer's unit is the finding, not the site. The verdict mix of the 11,367 finder
+answers, counted from the answer texts themselves (`CORRECT` 5,431 = 47.8 %, `UNVERIFIABLE` 3,708 =
+32.6 %, `WRONG` **2,209** = 19.4 %, 19 answers with no verdict line):
+
+**1,341 of those 2,209 findings cannot be written by this stage at all** - `description` 459 and
+`card_description` 882, both report-only (`phase3/model.py:49`, `write_stage.py:206-223`). The writable
+ones are `site_type` 475, `period_start` 371 and `country` 22. The review pass the writer needs is
+therefore 868 findings, not 2,165; the other 1,341 reviews are reviews of a field no Phase-3 statement
+can reach (recorded for Phase 5, not wasted, but not Phase 3's bill either).
+
+**Then the measurement that makes that split load-bearing.**
+`output/remediation/logs/proposal_shape.py` compares every proposal with the stored value it would
+replace, read from `PLAN.snapshot.jsonl`, and of the 456 `description` proposals **136 are under half
+the stored length and 73 under a quarter**. The specimens are not marginal: Troy `0576c316` proposes
+113 characters where the row holds 505 (Wikidata's one-liner "ancient Homeric-era city in northwest
+Asia Minor ..."), Duloe Stone Circle `4a42b149` proposes 62 where the row holds 742 ("Small stone
+circle at Duloe, 150m south east of Stonetown Farm"), Dun Fiadhairt `b4666064` 45 against 98.
+
+**The mechanism is a field confusion, and the finder states it itself.** Its evidence line for Troy
+reads "The evidence gives a **Wikidata English description** for Q22647" - the short string that
+belongs to `card_description` - and it concludes `VERDICT: WRONG` because "the evidence states a
+different value for this field (a short one-line description rather than the stored multi-sentence
+account)". The same answer shows why the evidence was thin: the enwiki extract for that title "returned
+no page", which left Wikidata's short string as the only witness. The reviewer then cleared it, because
+its contract is `applies = not refuted` and not-refuted is not the claim "better than what it
+replaces" - its own reason text records that the stored text is the richer one and applies the change
+anyway.
+
+**No guard was added, and that is the finding.** The obvious repair is a floor - a long-form field is
+not replaced by a value under half its length - and it was written and then **reverted**: `description`
+never reaches `_row_for`'s checks, it is refused as report-only three statements earlier, so the rule
+would have been dead code with a passing unit test. `git diff` was empty afterwards and the file is
+byte-identical to `7b87f6e`. The floor belongs to **Phase 5**, in the writer that first makes
+`description` writable, and it must be there before that writer runs: 136 of the 456 proposals measured
+here are exactly the rows it would otherwise write. Threshold and evidence: 50 % of the stored length,
+as measured here.
+
+**The `period_start` proposals are not the same case, and were read rather than counted.** A year has
+no length, so the three specimens were read verbatim: Dun Telve `52258395` `-2000 -> 1` (the source
+says the broch is "Iron Age, approximately 2000 years ago", so the stored value is a probable import
+artefact that read an age as a year), Schwarzenacker `4fbef8ee` `-500 -> 1` ("existed from the time of
+the birth of Christ until 275 A.D.") and Castro of Monte Castelo `6d04a9ad` `-1000 -> -5`, where the
+source names "5 B.C. and the 5th century" *and* "the oldest artefacts from 900 B.C." and the finder
+took the later phase. Two of the three correct a real legacy error; one picks the wrong number out of
+the same sentence. That is a reviewer-question matter, not a length matter.
+
+## 2026-09-21 - the boundaries the project already ships answer the country question, and 83 rows contradict them
+
+The `country` verdicts are the weakest of the five fields because the finder matches a *name*, and a
+name collides across continents: two of the ten clearances are 5,000 and 10,000 km from the coordinates
+of the row they claim to describe. The project, however, already ships
+`data/boundaries/countries.geojson` (258 polygons, 96 spellings in the database) and `shapely` is a
+declared dependency (`requirements.txt:32`), so "which country is this place in" is a point-in-polygon
+test rather than a judgement. Measured over all 5,004 curated rows on 2026-09-21 with one read-only
+`SELECT id, name, country, lat, lon` (`output/remediation/logs/country_census.py`):
+
+- **4,713 agree** with their own coordinates
+- **83 contradict** them (`output/remediation/logs/_country_mismatches.txt`)
+- **208 fall in no polygon** - coastal, island and offshore points. The test is inconclusive there and
+  must never be read as agreement.
+
+The contradictions are not one kind of thing, and that is the finding that matters:
+
+- **~30 are political lines the boundary file draws differently**: `Cyprus -> Northern Cyprus` (7),
+  `Cyprus -> Akrotiri Sovereign Base Area` (6), `Cyprus -> Cyprus No Mans Area` (1),
+  `Ukraine -> Russia` (9, all Crimea), `Serbia -> Kosovo` (2), `Syria -> Israel` (2, Nimrod Fortress in
+  the Golan), `Israel -> Palestine` (2). The stored value is the internationally recognised state in
+  each case and the file holds the de-facto line. Nothing here is ours to decide: an automatic rule that
+  "corrected" these would write a political judgement into the database.
+- **~25 straddle a border**: `France -> Germany` (Bliesbruck-Reinheim is a cross-border park),
+  `Slovakia -> Hungary` (Celemantia, on the Danube), `Spain -> Portugal` (the Coa valley property spans
+  both countries), `Belgium -> Netherlands` (Veldwezelt-Hezerwater), `Bulgaria -> Romania` (Silistra),
+  `Belize -> Guatemala` (Pusilha). `Greece -> Italy` is Selinunte, a Greek colony *in* Italy, and is a
+  genuine stored error rather than a border case.
+- **22 are one and the same genuine error**: `Ireland -> United Kingdom`, every one of them in Northern
+  Ireland (Boa Island 54.5168/-7.8333, Moylehid, Goward Dolmen, Ballylumford Dolmen, Annaghmare Court
+  Tomb, Annadorn Dolmen and 16 more). The finder proposed three of them, because it saw 2,280 of the
+  5,004 sites; the census needs no model for any of the 22.
+- **A handful are outright inconsistencies** that deserve their own look: `Saudi Arabia -> France`,
+  `Pakistan -> Peru`, `Bolivia -> Peru`, `Azerbaijan -> Armenia`, `Germany -> Switzerland`,
+  `Croatia -> Republic of Serbia`, `Sweden -> Switzerland` (the last is Aquae Helveticae, which is
+  Baden in Switzerland, stored as "Sweden" - a real legacy error).
+
+The ten `country` rows the reviewer cleared were then verified one by one against the polygons
+(`output/remediation/logs/country_probe.py`): **six are right** (Selinunte -> Italy, Annadorn Dolmen /
+Dooey's Cairn / Giant's Ring -> United Kingdom, Aquae Helveticae -> Switzerland, Ahin Posh Tape ->
+Pakistan, stored as "Afghanistan" while the coordinates are in Pakistan), **three are name collisions**
+(Lamay in the Yucatan proposed as Peru, San Claudio in Chiapas as Spain, Soura in Lycia as India) and
+**one is a political line** (Jaffa Gate, Israel/Palestine). The gate for the writer is therefore "the
+proposed country must contain the site's own coordinates", with the alias map derived from the
+database's own 96 spellings rather than from imagination: `England`, `Wales`, `Scotland` and `Northern
+Ireland` are *more* specific than `United Kingdom`, not contradictions, and neither are the boundary
+file's `Northern Cyprus` / `Akrotiri Sovereign Base Area` / `Cyprus No Mans Area` subdivisions.
+
+That alias map then produced a second finding, and it is a spelling one. The database holds
+**1,052 `England` + 118 `Wales` + 83 `Scotland` + 4 `Northern Ireland` against exactly one
+`United Kingdom`** - the dataset's convention is the constituent country. The reviewer's three Northern
+Irish clearances propose `United Kingdom`, which is geographically right and still the wrong value:
+written, they would put a second spelling on the same place and split the filter list. The correction
+value for those 26 rows (22 from the census, 3 from the reviewer, and one more the census places in
+Northern Ireland) is `Northern Ireland`. That is a spelling decision and it is recorded here rather
+than taken by a model: the gate lets the reviewer's three through, because the coordinates prove the
+country and a wrong spelling still beats the wrong country, and the split stays visible in the filter
+list until the owner picks one convention for the other 23.
+
+## 2026-09-21 - the write path is proven on production, and 72 of 481 rows are held back
+
+**The first write happened, and it is the smallest one that could prove anything.** One chunk, read by
+hand, against a database snapshotted minutes earlier - the owner's own precondition. The backup is
+`backups/2026-09-21_pre-write/` (655,369,826 bytes, stamp outside the prune pattern, so it can never be
+deleted) and its `DRILL_REPORT.txt` is the proof rather than the log line: `unified_sites` 1,759,676 =
+1,759,676 restored, `VERDICT: dump is restorable and matches production row-for-row`.
+
+| check | result |
+|---|---|
+| writer report | `batch-0001 zeilen=2 sites=1 matched_0=0 journal=2`, `batch-0002 zeilen=2 sites=6 matched_0=0 journal=2` |
+| summary | `4 Zeilen fuer 7 Sites geschrieben, 4 Journaleintraege, matched_0=0, Abweichungen beim Nachlesen: 0` |
+| independent read-back (the database, not the writer) | Aguada Fenix `-1000` + `Archaeological site`; Annadorn Dolmen `United Kingdom`; Appolonia Temple Ruins `Settlement` |
+| the journal's own rows | `phase3:batch-0001:chunk-0001`, `phase3:batch-0002:chunk-0001/0002`, old and new value per row |
+| the hold mechanism | Monte Lazzu is in an applied batch and its `site_type` still reads `Settlement` - the row was refused, not written |
+
+`Annadorn Dolmen Ireland -> United Kingdom` is one of the 22 Northern-Irish rows the country census
+found; the boundary file's own words are what let it through, and the spelling question stays open
+above.
+
+**Two defects were found by running the driver, not by reading it.** (1) `write_batch` passed
+`rows[0]["plan_dir"]` to the writer, and a planned row has no such key - the batch directory is
+`RUN / batch_id` (`write_dry_all.py:23,46`). (2) The child needs `PYTHONPATH` to import
+`pipeline.normalizers`; the dry run had only ever succeeded because the calling shell exported it. The
+gate now carries its own environment, so it behaves the same from a bare prompt. Both failures happened
+**before** any writer call, which is why the database was untouched and no partial row exists.
+
+**The row-level apply is `--chunk-size 1 --chunk K`, and K counts the writable rows, not the plan's
+rows.** `build_plan` appends only `WriteRow`s to `plan.rows` and puts the refusals in `plan.refusals`,
+so `chunks_for` slices the writable list; `PLAN.jsonl` is that list in order, and `ALL_ROWS.jsonl` is
+built by concatenating each batch's `PLAN.jsonl` (`write_dry_all.py:106`). That is why this driver can
+write one row of a batch where another row was withheld, and why the read-back after the first chunk
+proves the alignment rather than assuming it.
+
+**72 of the 481 writable rows are held back**, and the criterion is not "the model may be wrong" but
+"this row's own reviewer reason does not carry both halves of its claim": the stored value is shown
+wrong **and** the proposed value is supported by the evidence. The reason a row is held is therefore
+always quotable from the row itself, and the 72 are listed with those quotes in
+`logs/_write_apply/HOLDS.md`.
+
+| class | example (row number) |
+|---|---|
+| the reason says the stored value is *not* shown wrong | 22 Hattusas, 125 Cochabamba, 148 Pagans Hill, 217 Paanamarca, 282 Wanakawri, 324, 382 Alte Burg |
+| the reason says the stored value is the *finer* one and the proposal is coarser | 244, 318, 373, 441, 454, 353 Xultun, 104 Inka Murata |
+| the reason says the evidence *supports the stored* value | 171 Tulum, 375, 425 Stones of Stenness, 437, 470 Salona |
+| both halves fail in the reviewer's own words | 71 Upper Plym Valley, 193, 268 Kahu-Jo-Darro, 391 Devil's Lair (its BP arithmetic refutes its own conclusion, `48,000 BP` is `-46,050`, so the proposal is right and the reason is not) |
+| a bucket-boundary nudge with no date behind it | 39 (`-3000 -> -2999`), 176, 200, 202, 206, 338, 347 |
+| the evidence quote shows no value at all (`P571` alone, or raw JSON) | 12, 70, 131, 192, 430 |
+| the stored value is right and the proposal is not | 303 Goebekli Tepe, 421 Stoa Basileios, 441 Tan Hill, 454 Braughing |
+
+**The filter that finds these is a reading aid, and its recall was measured rather than assumed.**
+Within the first hundred rows - read by hand, ten of them holds - the two marker passes plus the
+not-a-sentence test flagged all ten. The first run of the extended filter printed into a truncated
+view, so it was re-run to completion: **245 hits, 60 already decided, 185 open** - and reading those 185
+found **12 more holds** the truncated view had hidden. Two of those twelve use the exact sentence shape
+that the better-known holds use ("the stored value is not contradicted", "a coarser type does not
+invalidate the finer stored one"), which is the honest limit of this method: a filter is not the
+verdict.
+
+**The country gate refused four of the ten cleared `country` rows** - Lamay (`Mexico -> Peru`), San
+Claudio (`Mexico -> Spain`) and Soura (`Turkiye -> India`) because the site's own coordinates lie
+thousands of kilometres from the place the name matched, and Jaffa Gate (`Israel -> Palestine`) because
+its coordinates lie in Israel and the row is a political line rather than a correction. Ahin Posh Tape
+(`Afghanistan -> Pakistan`) passed: the boundary file puts its coordinates in Pakistan, which is a
+stored error the census had already found.
+
+**The steps are the owner's rule of 2026-09-21**: `--step 100` stops every hundred *sites*, reads the
+rows it wrote back out of the database itself and prints what it found, then continues; `--limit` counts
+sites; a finished batch is marked with `_write_apply/<batch>/APPLIED.json` so a second run resumes
+instead of re-applying rows whose old value is no longer there to match.
+
+**The first attempt at the full run was stopped after eleven batches, and the reason is worth keeping.**
+Twelve further holds had been written into `make_holds.py` - but the gate reads `HOLDS.jsonl`, and that
+file is only rewritten when `make_holds.py` *runs*. The edit was verified and the artefact was not, so
+the run started with `zurueckgehalten: 60` and would have written those twelve rows; it was stopped
+while batch 11 of 160 was in flight, and the check that mattered was the intersection of the new holds
+with the rows already written, which was **empty**. The count that counts is the one the gate prints
+from the file, never the one the script's source suggests, and the file is regenerated before the
+reader starts. The eleven finished batches were resumed, not re-applied.
+
