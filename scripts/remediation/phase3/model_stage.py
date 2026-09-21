@@ -4,9 +4,16 @@ The transport is decided and measured, not chosen here. A Pi process in `--mode 
 model driver, invoked from an argv list:
 
     pi -p --mode json -ne -nt -nc --no-session --model opencode-go/deepseek-v4.1-flash
-       --thinking off <prompt>
+       --thinking off < prompt
 
 * `-p`          one non-interactive run, no TUI.
+* prompt on **stdin**, never in argv. Measured 2026-09-21: a real prompt (one site record plus its
+                evidence, ~24,000 characters) passed as the last argv element made `pi.cmd` fail
+                with `Die Befehlszeile ist zu lang.` - `pi.cmd` is a batch file, so Windows runs
+                it through `cmd.exe`, whose command line stops near 8,191 characters. The same
+                shape of prompt on stdin answered normally: 445 input tokens, $0.00006735, and a
+                one-word answer. Stdin has no such bound, and a prompt that is never an argv
+                element never needs quoting either.
 * `--mode json` one JSON object per line on stdout; the settled usage of the assistant message
                 arrives in the `message_end` event at `message.usage`.
 * `-nt`         **no tools.** The runner fetches the evidence (`phase3/fetch_stage.py`) and the
@@ -176,19 +183,19 @@ class EvidenceUnusable(ModelCallFailed):
 
 
 def pi_argv(
-    prompt: str,
     *,
     program: str = PROGRAM,
     model: str = MODEL,
     thinking: str = THINKING,
 ) -> list[str]:
-    """The exact argv, as a **list**. Nothing here is ever a command line string.
+    """The exact argv, as a **list**. The prompt is deliberately **not** in it.
 
     `subprocess` gets this list and no shell, so a shell metacharacter in a prompt (a site name
     with `$(`, `&`, `|` or a quote) is data, not syntax. There is no quoting to get wrong because
-    nothing quotes.
+    nothing quotes - and because the prompt travels on stdin, it is not limited by the operating
+    system's command-line length either (see the module docstring for the measurement).
     """
-    return [program, *PI_FLAGS, "--model", model, "--thinking", thinking, prompt]
+    return [program, *PI_FLAGS, "--model", model, "--thinking", thinking]
 
 
 @dataclass(frozen=True)
@@ -373,9 +380,9 @@ class PiRunner:
         self.thinking = thinking
         self.cwd = cwd
 
-    def argv(self, prompt: str) -> list[str]:
-        """The exact argv this runner would hand to `subprocess`."""
-        return pi_argv(prompt, program=self.program, model=self.model, thinking=self.thinking)
+    def argv(self) -> list[str]:
+        """The exact argv this runner would hand to `subprocess`. The prompt is on stdin."""
+        return pi_argv(program=self.program, model=self.model, thinking=self.thinking)
 
     def run(self, call: ModelCall) -> ModelAnswer:
         """Run one Pi process and return its settled answer.
@@ -383,10 +390,15 @@ class PiRunner:
         `subprocess.run(..., timeout=)` kills the child and re-raises, so a hung process cannot
         hold the batch; the kill is turned into `ModelCallFailed` here.
         """
-        argv = self.argv(call.prompt)
+        argv = self.argv()
         try:
             proc = subprocess.run(  # noqa: S603 - argv list, shell=False, no string ever built
                 argv,
+                # The prompt goes on **stdin**, UTF-8 encoded, so it is never an argv element:
+                # Windows caps a `cmd.exe` command line near 8,191 characters and a prompt
+                # carrying evidence is far longer (the module docstring records the measurement).
+                # Encoded explicitly so the child reads the same bytes on every platform.
+                input=call.prompt.encode("utf-8"),
                 capture_output=True,
                 timeout=self.timeout,
                 shell=False,

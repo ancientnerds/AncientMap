@@ -2659,3 +2659,41 @@ Two things this batch measured that outlast the bug:
 - Evidence is **cheap and mostly small**: 61,616 bytes for 22 successful fetches, median 469 bytes a
   site. The expensive tail is a handful of long Wikipedia articles, and those are the sites where
   there is something to judge.
+
+## 2026-09-21 - the live batch's second failure: the prompt was in argv (measured)
+
+`judge` made **zero** model calls and exited 2 with:
+
+```text
+31860bc4-476a-49bc-9f97-e25220063d19/finder: pi.cmd exited 1; stderr tail: 'Die Befehlszeile ist zu lang.'
+```
+
+The defect was mine, and it was in the transport, not in the model. The runner handed the prompt to
+`subprocess.run` as the **last argv element**. `pi.cmd` is a batch file, so Windows executes it
+through `cmd.exe`, whose command line stops near 8,191 characters - and a real prompt (one site
+record plus its evidence) measures about 24,000. The same run's `fetch` stage succeeded
+(`FETCH_EXIT=0`), so the failure looked like a model problem; it was a Windows problem. A design that
+says "argv as a list, never a command line" is still bounded by the operating system's command-line
+length, and nothing in the earlier measurements had exposed that because every probe prompt was tiny.
+
+Fixed by moving the prompt to **stdin**, UTF-8 encoded, leaving argv at 13 short elements:
+
+* measured before believing: `pi -p` reads the prompt from stdin - a one-word question answered
+  445 input tokens, $0.00006735, exit 0, 15 JSON lines.
+* `pi_argv()` no longer takes a prompt at all, so a later edit cannot put it back by accident.
+* the test that pins it builds a **20,000+ character** prompt and asserts (a) the prompt is in no
+  argv element, (b) the whole argv stays under 200 characters, (c) the child receives the exact
+  UTF-8 bytes including the non-ASCII site name. Mutation-proven: with the prompt put back into
+  argv it fails on `assert prompt not in argv`, and the file restores byte-identically.
+* two older tests asserted the superseded contract (`argv[-1] == prompt`). They are rewritten, not
+  deleted, and they failed first - which is how I know they still ask a question.
+
+**Carried forward, measured, not mine to fix here:** `mypy api/` - a CI gate (`ci.yml:136`, no
+`continue-on-error`) - reports **93 errors in 14 files** locally (mypy 1.19.1, Python 3.13): 35 in
+`api/cardgame/discord_commands.py`, 18 in `api/routes/public_v1.py`, 16 in
+`api/services/discord_bot.py`. Those files are **byte-identical to `origin/main`**
+(`git diff --stat origin/main..HEAD -- <paths>` is empty), so this is pre-existing type debt and not
+the work of any unpushed commit. Whether CI is actually red is **unverified**: `gh` is not
+authenticated here, and CI type-checks on Python 3.11 with an unpinned mypy, so a version-dependent
+difference is possible. It matters because a push that touches `api/` runs that job and would block
+the deploy.

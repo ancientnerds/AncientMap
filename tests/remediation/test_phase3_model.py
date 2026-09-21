@@ -235,8 +235,7 @@ def test_a_stream_without_a_settled_assistant_message_raises() -> None:
 
 
 def test_the_argv_is_a_list_with_the_measured_flags_and_the_exact_model_id() -> None:
-    prompt = 'site "Ötzi" $(rm -rf /) && echo | done'
-    argv = MS.pi_argv(prompt)
+    argv = MS.pi_argv()
 
     assert isinstance(argv, list)
     assert all(isinstance(part, str) for part in argv)
@@ -245,11 +244,47 @@ def test_the_argv_is_a_list_with_the_measured_flags_and_the_exact_model_id() -> 
     assert argv[argv.index("--mode") + 1] == "json"
     assert argv[argv.index("--model") + 1] == "opencode-go/deepseek-v4.1-flash"
     assert argv[argv.index("--thinking") + 1] == "off"
-    # The prompt is one element, undivided: no shell metacharacter handling happens anywhere.
-    assert argv[-1] == prompt
-    assert argv.count(prompt) == 1
     # Nothing was string-formatted into a command line: no flag element carries a space.
-    assert [part for part in argv[:-1] if " " in part] == []
+    assert [part for part in argv if " " in part] == []
+
+
+def test_the_prompt_never_becomes_an_argv_element_and_arrives_on_stdin(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The defect that stopped the first live batch, pinned.
+
+    Measured 2026-09-21: a real prompt (one site record plus its evidence) reached ~24,000
+    characters. Passed as the last argv element it made `pi.cmd` exit 1 with `Die Befehlszeile ist
+    zu lang.` - `pi.cmd` is a batch file, so Windows runs it through `cmd.exe`, whose command line
+    stops near 8,191 characters. The prompt must travel on stdin, UTF-8 encoded, and the argv must
+    stay far below that ceiling. This test fails if the prompt is put back into the argv list.
+    """
+    prompt = 'site "Ötzi" $(rm -rf /) && echo | done ' + "evidence " * 4_000
+    assert len(prompt) > 20_000, "this test only means something with a prompt of the real size"
+    seen: dict[str, Any] = {}
+
+    def fake_run(argv: list[str], **kwargs: Any) -> subprocess.CompletedProcess[bytes]:
+        seen["argv"] = argv
+        seen.update(kwargs)
+        return subprocess.CompletedProcess(argv, 0, NO_EXTENSIONS.read_bytes(), b"")
+
+    monkeypatch.setattr(MS.subprocess, "run", fake_run)
+
+    call = MS.ModelCall(
+        stage=M.Stage.FINDER, batch_id="batch-0001", site_id="site-1", prompt=prompt
+    )
+    answer = MS.PiRunner(timeout=5.0).run(call)
+
+    assert answer.usage.cost_usd == REPORTED_COST
+    argv = seen["argv"]
+    # 1. The prompt is not there, whole or in pieces.
+    assert prompt not in argv
+    assert [part for part in argv if "evidence" in part] == []
+    # 2. The whole argv fits a Windows command line with room to spare.
+    assert sum(len(part) for part in argv) < 200, sum(len(part) for part in argv)
+    # 3. The child receives the prompt's exact bytes, and the non-ASCII site name survives.
+    assert seen["input"] == prompt.encode("utf-8")
+    assert "Ötzi" in seen["input"].decode("utf-8")
 
 
 def test_the_runner_passes_the_argv_list_without_a_shell(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -267,7 +302,9 @@ def test_the_runner_passes_the_argv_list_without_a_shell(monkeypatch: pytest.Mon
     assert answer.usage.cost_usd == REPORTED_COST
     assert isinstance(seen["argv"], list)
     assert seen["shell"] is False
-    assert seen["argv"][-1] == "a prompt"
+    # The prompt is not in the argv; it goes to the child on stdin, UTF-8 encoded.
+    assert seen["input"] == b"a prompt"
+    assert "a prompt" not in seen["argv"]
 
 
 def test_a_non_zero_exit_raises(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -281,11 +318,11 @@ def test_a_non_zero_exit_raises(monkeypatch: pytest.MonkeyPatch) -> None:
         MS.PiRunner(timeout=5.0).run(_call())
 
 
-def test_a_hung_process_is_killed_and_raises(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_a_hung_process_is_killed_and_raises(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     marker = tmp_path / "survived.txt"
-    code = "import time,pathlib;time.sleep(6);pathlib.Path({!r}).write_text('x')".format(
-        marker.as_posix()
-    )
+    code = f"import time,pathlib;time.sleep(6);pathlib.Path({marker.as_posix()!r}).write_text('x')"
     # A real child process: the flags are replaced by `-c <code>` so that sys.executable can be the
     # "pi" for this one call. Everything else - subprocess, timeout, kill - is the real path.
     monkeypatch.setattr(MS, "PI_FLAGS", ("-c", code))
@@ -304,7 +341,9 @@ def test_a_hung_process_is_killed_and_raises(tmp_path: Path, monkeypatch: pytest
 # ── the ledger: one measured line per call, with the reported cost ───────────────────────────
 
 
-def test_exactly_one_ledger_line_per_call_records_tokens_and_the_reported_cost(tmp_path: Path) -> None:
+def test_exactly_one_ledger_line_per_call_records_tokens_and_the_reported_cost(
+    tmp_path: Path,
+) -> None:
     ledger = L.Ledger(tmp_path / "LEDGER.jsonl", clock=lambda: "2026-09-21T06:00:00+00:00")
     runner = ScriptedRunner()
     answers = F.EvidenceStore(tmp_path / "answers")
@@ -318,7 +357,9 @@ def test_exactly_one_ledger_line_per_call_records_tokens_and_the_reported_cost(t
         stage=M.Stage.FINDER,
     )
 
-    rows = [json.loads(line) for line in (tmp_path / "LEDGER.jsonl").read_text("utf-8").splitlines()]
+    rows = [
+        json.loads(line) for line in (tmp_path / "LEDGER.jsonl").read_text("utf-8").splitlines()
+    ]
     assert len(rows) == len(runner.calls) == 2
     assert {row["kind"] for row in rows} == {"model_call"}
     assert {row["stage"] for row in rows} == {"finder"}
@@ -390,7 +431,9 @@ def test_the_finder_and_the_reviewer_ask_different_questions(tmp_path: Path) -> 
     assert MS.FINDER_QUESTION != MS.REVIEWER_QUESTION
 
     store = _evidence_store(tmp_path, 1)
-    finder = MS.prepare_call(batch_id="batch-0001", site=_site("site-1"), store=store, stage=M.Stage.FINDER)
+    finder = MS.prepare_call(
+        batch_id="batch-0001", site=_site("site-1"), store=store, stage=M.Stage.FINDER
+    )
     reviewer = MS.prepare_call(
         batch_id="batch-0001", site=_site("site-1"), store=store, stage=M.Stage.REVIEWER
     )
@@ -684,9 +727,7 @@ def test_read_fetch_failures_reads_what_the_fetch_stage_wrote(tmp_path: Path) ->
 
 def _site_record_for_report() -> dict[str, Any]:
     site = _latlon_site("31860bc4-476a-49bc-9f97-e25220063d19")
-    site["targets"] = [
-        {"feature": t.feature, "url": t.url} for t in F.targets_for_site(site)
-    ]
+    site["targets"] = [{"feature": t.feature, "url": t.url} for t in F.targets_for_site(site)]
     return site
 
 
@@ -728,13 +769,14 @@ def test_judge_without_live_renders_the_argv_and_the_prompt_and_starts_nothing(
     assert payload["calls"] == 1
     assert payload["model"] == "opencode-go/deepseek-v4.1-flash"
     site = payload["sites"][0]
-    assert site["argv"][-1] == site["prompt"]
+    # The preview shows the argv the runner would use, and the prompt **separately**: the prompt is
+    # never an argv element (it travels on stdin - the module docstring records the measurement).
+    assert site["prompt"] not in site["argv"]
     assert site["argv"][1:] == list(MS.PI_FLAGS) + [
         "--model",
         "opencode-go/deepseek-v4.1-flash",
         "--thinking",
         "off",
-        site["prompt"],
     ]
     assert site["prompt_chars"] == len(site["prompt"])
     assert MS.FINDER_QUESTION in site["prompt"]

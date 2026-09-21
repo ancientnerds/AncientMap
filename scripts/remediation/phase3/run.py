@@ -363,7 +363,7 @@ def cmd_judge(args: argparse.Namespace) -> int:
                     "run_dir": str(run_dir),
                     "sites": [
                         {
-                            "argv": MS.pi_argv(item.call.prompt),
+                            "argv": MS.pi_argv(),
                             "evidence": [
                                 {
                                     "chars": e.chars,
