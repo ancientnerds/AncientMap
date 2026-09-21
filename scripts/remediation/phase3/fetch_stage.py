@@ -415,6 +415,15 @@ class HostPacer:
     `clock` and `sleep` are injected, and the lock records its own acquisition time in the file
     rather than relying on the filesystem clock, so tests drive both without mocking `os.stat`.
 
+    **Ownership is carried in the lock's content**, and three rules were added on 2026-09-21 after
+    eight processes on one host were measured: four died with `PermissionError: [WinError 32]`
+    (Windows refuses to delete a file another process holds open) and four timed out waiting. The
+    cause was not the speed of the loop but the identity of a lock: it is created empty and filled a
+    moment later, and treating that moment as "a leftover" stole a lock from a live holder - whose
+    release then deleted a file that was no longer its own. So: a lock's **age** (its mtime when its
+    content says nothing) decides whether it may be taken over; a lock is deleted only while its
+    content is still ours; and a lock that cannot be deleted is waited out rather than spun on.
+
     Honest about its reach: this is **machine-local**. Two machines running this fleet share no
     per-host state, so the claim it supports is "this machine does not hammer a host", not "a host
     sees at most five requests a second worldwide".
@@ -452,10 +461,10 @@ class HostPacer:
             try:
                 handle = os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
             except FileExistsError:
-                if self._is_stale(lock):
-                    # Best effort on purpose: a lock that outlived its process must not wedge the
-                    # whole fleet, and the worst case of losing this race is one early request.
-                    lock.unlink(missing_ok=True)
+                # Best effort on purpose: a lock that outlived its process must not wedge the
+                # whole fleet, and the worst case of losing this race is one early request. A lock
+                # that is *not* stale, or that cannot be deleted, is waited for - never spun on.
+                if self._is_stale(lock) and self._take_over(lock):
                     continue
                 if self._clock() > deadline:
                     raise PacerTimeout(
@@ -464,12 +473,13 @@ class HostPacer:
                     ) from None
                 self._sleep(HOST_LOCK_POLL_SECONDS)
                 continue
+            token = f"{self._clock():.6f} {os.urandom(8).hex()}"
             try:
-                os.write(handle, f"{self._clock():.6f}".encode())
+                os.write(handle, token.encode())
                 return self._hold(host)
             finally:
                 os.close(handle)
-                lock.unlink(missing_ok=True)
+                self._release(lock, token)
 
     def _hold(self, host: str) -> float:
         """Inside the lock: sleep the rest of the interval, then claim this request's time."""
@@ -483,19 +493,59 @@ class HostPacer:
 
     @staticmethod
     def _read_stamp(stamp: Path) -> float | None:
+        """The time a stamp or lock records. A lock carries `"<time> <token>"`; a stamp the time."""
         try:
-            return float(stamp.read_text(encoding="utf-8").strip())
-        except (OSError, ValueError):
+            text = stamp.read_text(encoding="utf-8").strip()
+        except OSError:
+            return None
+        try:
+            return float(text.split(" ", 1)[0])
+        except ValueError:
             return None
 
     def _is_stale(self, lock: Path) -> bool:
-        try:
-            held_since = float(lock.read_text(encoding="utf-8").strip())
-        except OSError:
-            return False
-        except ValueError:
-            return True  # a lock that cannot say when it was taken is a leftover
+        """Whether a lock that exists may be taken over.
+
+        The **age of the file** decides, because a lock is created empty and written a moment later.
+        Until 2026-09-21 unreadable content meant "a leftover", which stole a lock from a live
+        holder - measured: with eight processes on one host, four of them then failed with
+        `WinError 32` (deleting a file another process has open) and four timed out. An mtime is set
+        at creation, so it has no such window.
+        """
+        held_since = self._read_stamp(lock)
+        if held_since is None:
+            try:
+                held_since = lock.stat().st_mtime
+            except OSError:
+                return False  # gone under us; the next create attempt decides
         return self._clock() - held_since > self._stale_after
+
+    @staticmethod
+    def _take_over(lock: Path) -> bool:
+        """Delete a lock that outlived its holder. False when it cannot be deleted right now."""
+        try:
+            lock.unlink()
+        except FileNotFoundError:
+            return True  # already gone; the caller's next create attempt decides
+        except OSError:
+            return False  # held open somewhere (Windows refuses): wait, do not spin
+        return True
+
+    @staticmethod
+    def _release(lock: Path, token: str) -> None:
+        """Delete the lock only while it is still ours, and never let that failure out.
+
+        A lock we do not own is not ours to delete: taking it over is `_take_over`'s job and it
+        respects the age rule. On Windows, deleting a file another process holds open raises
+        `PermissionError` - which used to abort the whole fetch, the failure this method exists to
+        contain.
+        """
+        try:
+            if lock.read_text(encoding="utf-8").strip() != token:
+                return
+            lock.unlink(missing_ok=True)
+        except OSError:
+            return
 
 
 class PacedFetcher:

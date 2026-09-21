@@ -17,7 +17,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import sys
+import time
 from pathlib import Path
 from typing import Any
 from urllib.parse import unquote, urlsplit
@@ -994,13 +996,78 @@ def test_a_lock_left_by_a_killed_process_is_taken_over(tmp_path: Path) -> None:
     assert not lock.exists()
 
 
-def test_a_lock_file_that_cannot_say_when_it_was_taken_is_a_leftover(tmp_path: Path) -> None:
-    """Killed between `os.open` and the write: the file is there, the time is not."""
-    clock = _PaceClock()
-    pacer = _pacer(tmp_path, clock)
+def test_a_lock_file_that_cannot_say_when_it_was_taken_is_not_a_leftover_yet(
+    tmp_path: Path,
+) -> None:
+    """A lock is created empty and filled a moment later, so unreadable content is not age.
+
+    Until 2026-09-21 this test asserted the opposite, and the assertion was the defect: with eight
+    processes on one host, treating that moment as "a leftover" stole a lock from a live holder,
+    four processes then died with `WinError 32` and four timed out. The file's own age decides.
+    """
+    pacer = F.HostPacer(tmp_path / "pacing", wait_seconds=0.2, stale_after=30.0)  # real clock
     pacer.root.mkdir(parents=True, exist_ok=True)
-    pacer.lock_of("en.wikipedia.org").write_text("half a line", encoding="utf-8")
+    lock = pacer.lock_of("en.wikipedia.org")
+    lock.write_text("half a line", encoding="utf-8")
+    assert not pacer._is_stale(lock), "a just-created lock was declared a leftover"
+    with pytest.raises(F.PacerTimeout):
+        pacer.wait("en.wikipedia.org")
+    assert lock.exists()  # a waiter never clears a young holder's lock
+
+
+def test_a_lock_file_that_cannot_say_when_it_was_taken_and_is_old_is_taken_over(
+    tmp_path: Path,
+) -> None:
+    """The other direction, so the rule is pinned from both sides: age, not readability."""
+    pacer = F.HostPacer(tmp_path / "pacing", wait_seconds=0.2, stale_after=30.0)  # real clock
+    pacer.root.mkdir(parents=True, exist_ok=True)
+    lock = pacer.lock_of("en.wikipedia.org")
+    lock.write_text("half a line", encoding="utf-8")
+    old = time.time() - 31.0
+    os.utime(lock, (old, old))
+    assert pacer._is_stale(lock)
     assert pacer.wait("en.wikipedia.org") == 0.0
+    assert not lock.exists()
+
+
+def test_a_lock_that_cannot_be_deleted_is_waited_out_not_spun_on(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Windows refuses to delete a file another process holds open (WinError 32).
+
+    That `PermissionError` escaped and aborted whole fetches on 2026-09-21. Waiting costs one
+    batch's time, never the batch.
+    """
+    pacer = F.HostPacer(tmp_path / "pacing", wait_seconds=0.3, stale_after=30.0)  # real clock
+    pacer.root.mkdir(parents=True, exist_ok=True)
+    lock = pacer.lock_of("en.wikipedia.org")
+    lock.write_text("half a line", encoding="utf-8")
+    old = time.time() - 31.0
+    os.utime(lock, (old, old))
+    real_unlink = Path.unlink
+
+    def refusing(self: Path, *args: Any, **kwargs: Any) -> None:
+        if self == lock:
+            raise PermissionError(32, "held by another process")
+        real_unlink(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "unlink", refusing)
+    assert pacer._is_stale(lock)
+    assert not pacer._take_over(lock)  # reported, not raised
+    with pytest.raises(F.PacerTimeout):  # and the wait ends as a timeout, not as WinError 32
+        pacer.wait("en.wikipedia.org")
+
+
+def test_a_lock_whose_content_is_not_ours_is_not_deleted_by_us(tmp_path: Path) -> None:
+    """A lock taken over by someone else is not ours to destroy: `_take_over` owns that decision."""
+    pacer = F.HostPacer(tmp_path / "pacing")
+    pacer.root.mkdir(parents=True, exist_ok=True)
+    lock = pacer.lock_of("en.wikipedia.org")
+    foreign = "1789989867.614431 ff00ff00ff00ff00"
+    lock.write_text(foreign, encoding="utf-8")
+    pacer._release(lock, "1789999999.000000 aaaaaaaaaaaaaaaa")
+    assert lock.exists()
+    assert lock.read_text(encoding="utf-8") == foreign
 
 
 def test_a_lock_held_by_a_live_process_fails_closed(tmp_path: Path) -> None:
@@ -1009,10 +1076,11 @@ def test_a_lock_held_by_a_live_process_fails_closed(tmp_path: Path) -> None:
     pacer = _pacer(tmp_path, clock, wait_seconds=1.0)
     pacer.root.mkdir(parents=True, exist_ok=True)
     lock = pacer.lock_of("en.wikipedia.org")
-    lock.write_text(f"{clock.now:.6f}", encoding="utf-8")
+    lock.write_text(f"{clock.now:.6f} someone else's token", encoding="utf-8")
     with pytest.raises(F.PacerTimeout):
         pacer.wait("en.wikipedia.org")
     assert lock.exists()  # a waiter never clears a live holder's lock
+    assert lock.read_text(encoding="utf-8").endswith("someone else's token")
 
 
 def test_the_paced_fetcher_paces_every_request_and_returns_the_answer(tmp_path: Path) -> None:

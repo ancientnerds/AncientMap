@@ -3027,6 +3027,7 @@ cheaper than a comment that suppresses them:
 | `fetch_stage.py:1307` | `result.truncated += int(outcome.truncated)` | `outcome.truncated` is this module's own dataclass field, computed by `one_attempt` from the transport's `truncated` flag. There is no foreign input to validate. |
 | `fetch_stage.py:392` | `def __exit__(self, *exc: object) -> None:` | The exit protocol calls this with `(exc_type, exc_value, traceback)`, and a variadic parameter accepts all three - the contract is met, and the line predates the pacer work. The suggested named signature would be equivalent, not a fix, so it is not applied. |
 | `mass_run.py:190-191` | `if isinstance(cost, (int, float)) and not isinstance(cost, bool):` then `spend.cost_usd += float(cost)` | `float` of an `int` or `float` cannot raise. The guard exists because a *fetch* ledger line carries `"cost_usd": null`, and null must not be summed as zero silently. |
+| `mutation_sweep.py` | `sys.exit(main())` | The instrument's own entry point. `main` returns an `int`, and a crash inside the sweep **must** reach the exit code: the one failure mode this instrument was rebuilt to prevent (2026-09-21) is a sweep that dies mid-loop and reports nothing, leaving a mutant in the tree. A `try/except` here would turn a dead sweep into a green one. |
 
 No change is the correct outcome: the only edits that would silence these are a `try/except` around the
 dispatch and an `== True`, and both would make the code check less. Nothing here is suppressed with a
@@ -3604,6 +3605,60 @@ The first is the fail-closed path and says so one line later (`reported != repor
 believe must stop the call, not be coaxed into a number. The second parses our own in-process
 dataclass - the same class as the three sites in `run.py`. Neither is a defect; both stay visible and
 neither takes an action.
+
+### The first mass run died on the pacer's lock, and the lock was wrong (2026-09-21)
+
+Four batches in, every fetch ended `exit 1`; the tracebacks all ended the same way:
+
+```
+phase3.fetch_stage.PacerTimeout: ...\pacing\en.wikipedia.org.lock was held for 60s
+  - the holder is stuck, not busy
+```
+
+The run was stopped by hand (it is resumable, so stopping cost nothing but the probe requests).
+
+**Reproduced, then explained.** The first probe - four processes, twelve waits each, against a fresh
+directory - passed, and that green was a statement about the probe, not about the pacer: the race is
+hit when processes start *simultaneously* on one host. With **eight** processes and the real
+constants, four died with
+
+```
+PermissionError: [WinError 32] Der Prozess kann nicht auf die Datei zugreifen,
+  da sie von einem anderen Prozess verwendet wird ... en.wikipedia.org.lock
+```
+
+and four gave up waiting. Three defects, each with a measured consequence:
+
+1. **An empty lock was called a leftover.** The lock is created by `os.open(O_CREAT|O_EXCL)` and
+   filled by the next statement, so for that instant the file exists and says nothing. `_is_stale`
+   read "no readable timestamp" as "a killed process's lock" and stole it from a **live** holder.
+2. **The thief and the victim then both held it.** The victim's `finally` deleted a file that was no
+   longer its own, and the mutex stopped being a mutex: several processes were inside the critical
+   section at once, which is the impoliteness the pacer exists to prevent.
+3. **On Windows that delete fails.** A file another process holds open cannot be removed - WinError
+   32 - and that `PermissionError` escaped `wait()`, so the failure was not a slow fetch but a dead
+   batch. The stale-takeover path had the same exposure.
+
+The rules that replace them, each pinned by its own test and its own mutation:
+
+* **Age, not readability.** A lock's mtime is set at creation, so it has no empty window. The
+  content is still used when it parses (it carries the injected clock's time, which is what makes
+  the interval testable), and the file's age is the fallback. Both directions are pinned: young and
+  unreadable is *held*; old and unreadable is *taken over*.
+* **A lock is deleted only while its content is still ours.** The content is now `<time> <token>`;
+  a lock somebody else owns is not ours to destroy.
+* **A lock that cannot be deleted is waited out, never spun on**, and a failed delete is a return
+  value, not an exception. Losing this race costs one batch's time; it must not cost the batch.
+
+**The earlier smoke runs proved the wiring, not the race.** `smoke2` and `smoke4` ran `--jobs 2`
+with two batches - and the collapse needs several processes probing the same host at the same
+instant. What they proved (the flag reaches `fetch`, the pacer wraps the `Fetcher` seam, the stamps
+land in the machine-local directory) still stands; what they did not prove is now stated as not
+proven.
+
+**What made this cheap to find:** the failure was loud - a traceback per batch, `exit 1`, no silent
+empty result - and the pacer's own error message named the file and the duration. A guard that fails
+by *waiting quietly* would have burned the two days before anyone read a log.
 
 ### pi-lens deleted a tuple element and called it a reformat (2026-09-21)
 

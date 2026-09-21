@@ -34,6 +34,10 @@ MODEL_TEST = "tests/remediation/test_phase3_model.py"
 PACE = "test_two_processes_take_turns_on_one_host"
 PACE_HOSTS = "test_one_host_waiting_does_not_hold_up_another"
 PACE_STALE = "test_a_lock_left_by_a_killed_process_is_taken_over"
+PACE_EMPTY = "test_a_lock_file_that_cannot_say_when_it_was_taken_is_not_a_leftover_yet"
+PACE_OLD = "test_a_lock_file_that_cannot_say_when_it_was_taken_and_is_old_is_taken_over"
+PACE_UNDELETABLE = "test_a_lock_that_cannot_be_deleted_is_waited_out_not_spun_on"
+PACE_FOREIGN = "test_a_lock_whose_content_is_not_ours_is_not_deleted_by_us"
 PACE_WIRED = "test_the_pace_covers_the_probe_and_the_targets_alike"
 
 RUN = "test_every_site_buys_one_call_per_field_and_the_call_names_its_field"
@@ -371,6 +375,38 @@ MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         "        return False  # mutated\n",
         FETCH_TEST,
         PACE_STALE,
+    ),
+    (
+        "a lock whose content is not written yet is stolen",
+        "scripts/remediation/phase3/fetch_stage.py",
+        "            held_since = lock.stat().st_mtime\n",
+        "            return True  # mutated\n",
+        FETCH_TEST,
+        PACE_EMPTY,
+    ),
+    (
+        "a lock whose content is not written yet is taken over when it is old",
+        "scripts/remediation/phase3/fetch_stage.py",
+        "                held_since = lock.stat().st_mtime\n",
+        "                return False  # mutated\n",
+        FETCH_TEST,
+        PACE_OLD,
+    ),
+    (
+        "a lock that cannot be deleted aborts the fetch",
+        "scripts/remediation/phase3/fetch_stage.py",
+        "        except OSError:\n            return False  # held open somewhere (Windows refuses): wait, do not spin\n",
+        "        except OSError:\n            raise  # mutated\n",
+        FETCH_TEST,
+        PACE_UNDELETABLE,
+    ),
+    (
+        "a lock is deleted even when its content is not ours",
+        "scripts/remediation/phase3/fetch_stage.py",
+        '            if lock.read_text(encoding="utf-8").strip() != token:\n                return\n',
+        "            if False:  # mutated\n                return\n",
+        FETCH_TEST,
+        PACE_FOREIGN,
     ),
     (
         "every host shares one stamp",
