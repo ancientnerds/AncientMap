@@ -4636,3 +4636,78 @@ as a missing answer. Nothing in that change tells a lie about usage, and nothing
 **The lesson, which this section has now produced four times in one afternoon: read the artefact
 before claiming a defect.** A missing row looked like a gap in an invariant; it was a documented
 refusal in the same module, four lines above the `raise`.
+
+## Piece 6 landed, and was verified against its own bytes (2026-09-21)
+
+Commit `7b87f6e`: four files, 3298 insertions and 1 deletion -
+`scripts/remediation/phase3/write_stage.py` (new, 1746 lines),
+`tests/remediation/test_phase3_write.py` (new, 1099 lines), `scripts/remediation/phase3/mutation_sweep.py`
+(+237, appended only) and `output/remediation/phase3_runner/PIECE6.md` (new, 217 lines).
+`LEDGER.jsonl` is **not** in it, and the working tree equals the commit for all four files (sha256 of
+`git show HEAD:<path>` against the file).
+
+**Reproduced by me rather than taken on report:** `ruff check` -> `All checks passed!` (exit 0);
+`ruff format --check` -> `2 files already formatted`; `mypy` -> `Success: no issues found in 1 source
+file`; `anchor_check.py` -> `Mutationen: 106 | Probleme: 0`; and
+`pytest tests/remediation/test_phase3_write.py -q` -> **50 passed in 0.38 s**.
+
+**The owner's 100-step rule is implemented word for word.** `--chunk-size` defaults to **100** with the
+owner's date in the comment ("in 100er schritten updaten, nach jedem 100 immer die Pruefung");
+`APPLY.sql` is one transaction opening with `\\set ON_ERROR_STOP on` and `BEGIN;`; every applied row is
+re-read and compared against the intended value *for the same named sites*; `ROLLBACK.sql` is run as-is
+and the invariant inside it asserts the rows are back at the old value; and the module states the
+consequence in its own words: "A chunk whose read-back or inverse disagrees **raises** and chunk *n+1*
+is never sent: that is the STOP". A mismatch is a STOP, not a warning.
+
+**The data rules are honoured at the byte where it matters.** The conditional `WHERE` is
+`IS NOT DISTINCT FROM $3::<column type>` - the NULL-safe form, so a NULL old value is compared
+correctly and `=` would not be - taken from the primitive's own conditional in `0018`; each row's
+`change_key` is recomputed and a mismatch **raises** (`{site}: change_key ... is not the digest of the
+row`); and the reversal uses `mechanical.apply.rollback_change_key`, a *different* name, so the apply
+and the rollback of one row cannot collide in the journal. `PSQL` carries `-v ON_ERROR_STOP=1` and
+`-t -A` (the read-backs are parsed).
+
+### And what it plans on real data: no row at all, for two reasons that are decisions, not defects
+
+My own dry run on `runs/gold6/batch-0001`, exit 0:
+
+```
+"not_cleared_by_the_reviewer": 68, "rows_planned": 0, "chunk_size": 100, "dry_run": true,
+"refused_by_rule": {"report-only-field": 7, "reviewer-did-not-clear": 68}
+```
+
+Seventy-five verdicts, seven cleared by the reviewer, and **all seven on a field that can never be
+written**, so the writer plans nothing. The two reasons, both read from source:
+
+* `model.REPORT_ONLY_FIELDS = frozenset({"description", "card_description"})` - brief decision 5, with
+the brief's own reasons: a boot overwriter for `card_description`, the phase split for `description`.
+  The mass run asks five fields per site, so **three can ever be written**: `period_start`, `site_type`,
+  `country`.
+* In this sample the reviewer cleared 7 of 75 (9.3 %).
+
+**The consequence has to be said plainly, because it bounds the owner's own instruction.** Martin asked
+that the model *correct* the content rather than only flag it, and research and cite as it does. With the
+brief as it stands, phase 3 can correct at most three of the five fields it judges, and the field most
+associated with "the content" - `description` - is deferred by another phase on purpose. On the gold
+sample, one real batch, the write path would change **no row**. That is the writer behaving correctly on
+this data; it is not evidence that the pipeline is broken, and it is also not a result anybody should
+describe as "sites fixed".
+
+### What is verified, and what is not
+
+* **Verified against the bytes:** every number in the two lists above, plus the digest binding, the
+  NULL-safe conditional, the distinct rollback key and the `ON_ERROR_STOP` flags.
+* **Not verified, and not verifiable here: anything that needs Postgres.** No database was contacted -
+  none exists locally and nothing was sent to the VPS. The PL/pgSQL block, the 12-argument
+  `apply_remediation_change` call, the read-back against real `to_jsonb` output and the journal
+  invariants all rest on a **fake psql seam** in every test. The first `--apply` must therefore be a
+  single chunk, read by hand, against a freshly snapshotted database.
+* **Unreachable by design, and recorded instead of coded:** `unified_sites.name_normalized`. Its refusal
+  is `no-table-mapping`, derived from the plan's own field map, so a branch keyed on `unaccent` would be
+  code no test could reach; the module says so in its guard table ("If that mapping ever grows the
+  column, this table has to grow with it").
+* **One standing rule was deviated from inside the lane:** the mutation sweep ran there, against the
+  rule that it runs from a parent process (piece 5's incident). The lane reports every mutation
+  restored, per-file sha256 equal and the final tree byte-identical. That claim is worth exactly as much
+  as its independent reproduction, which is running now in the parent process; until its `SWEEP_EXIT`
+  line is read, the 106/106 is **unconfirmed** and this entry says so.
