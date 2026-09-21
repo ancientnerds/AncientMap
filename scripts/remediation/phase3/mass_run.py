@@ -97,11 +97,14 @@ MEASURED_COST_PER_CALL = 0.000825
 #: measured on 2026-09-21 as `prepare exited 3221225794`. The runner's own codes sit far below it, and
 #: so does the timeout sentinel `-9`.
 NTSTATUS_START_FAILURE = 0xC0000000
-#: How often one stage may be *started*. Bounded on purpose: the measured hiccup lasts seconds, and
-#: a retry that hides real breakage is worse than the stop.
-MAX_SPAWN_ATTEMPTS = 3
-#: How long to wait between those starts. Short, for the same reason.
-SPAWN_RETRY_WAIT_SECONDS = 5.0
+#: How often one stage may be *started*. Bounded on purpose: a retry that hides real breakage is worse
+#: than the stop. Measured 2026-09-22 00:09: three attempts five seconds apart were **not** enough - four
+#: batches exhausted them while the host still could not start a process, after six other retries had
+#: already recovered. Hence six starts.
+MAX_SPAWN_ATTEMPTS = 6
+#: How long to wait between those starts. Long enough to outlast the measured hiccup: six starts fifteen
+#: seconds apart cover 75 s. Everything that is *not* a start failure still returns on its first exit.
+SPAWN_RETRY_WAIT_SECONDS = 15.0
 #: The child's own words when a program *it* started never came up (`model_stage.ModelCallFailed`,
 #: its `OSError` branch). A child that did run says so in the `error` of its own JSON report.
 UNSTARTABLE_PROGRAM = "could not be started"

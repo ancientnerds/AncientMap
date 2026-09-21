@@ -5129,3 +5129,39 @@ retry is bounded (`MAX_SPAWN_ATTEMPTS = 3`), loud (one line per retry in the sta
 their **first** exit, because a retry that hides real breakage is worse than the stop it replaces.
 `spawn_retries` in `progress.json` is how a human sees whether the protection was ever needed.
 
+### The owner's five decisions, 2026-09-21
+
+Asked as an interactive multiple-choice list - Pi ships the tool as an example, installed unchanged as
+`~/.pi/agent/extensions/60-questionnaire.ts`. Each answer is recorded with what it *changes*, because a
+decision that changes nothing is not a decision.
+
+| # | question | answer | what it changes |
+|---|---|---|---|
+| 1 | the 72 held rows | **leave them, write nothing** | nothing: `HOLDS.jsonl` already carries all 72 |
+| 2 | the Northern-Irish spelling | **`Northern Ireland`** | the two open plan rows and the one already written row are re-spelled, and the discover prompt gets the dataset's convention as a note |
+| 3 | the 4 refused rows | **write none of them** | nothing: the writer already refuses all four (boundary and fixed point) |
+| 4 | the 29 geopolitical census rows | **leave them as they are** | nothing: they are census findings, not planned rows |
+| 5 | when to deploy | **only after all 5,004 are through** | nothing today: 102 commits stay local until the run is complete |
+
+**B9 was asked twice, and the first answer was worthless because my framing was wrong.** The first version
+called `United Kingdom` "one spelling for the whole country - like England, Scotland, Wales". Measured on
+production afterwards: `England` 1052, `Wales` 118, `Scotland` 83 - those **are** country parts, so the
+argument pointed at `Northern Ireland`, not away from it. The question was put again with the measurement
+inside it, and the owner then chose `Northern Ireland`. The wrong answer was not quietly kept, and the
+wrong recommendation is written down here rather than edited out.
+
+Measured while answering: the plan holds **485** rows, **10** of them `country`, **72** held; exactly **3**
+planned rows come from `Ireland` (Annadorn Dolmen, Dooey's Cairn, Giant's Ring), and the wave already wrote
+the first of them - so that one now needs a follow-up correction to match the decided spelling.
+
+### The spawn protection worked, and its window was still too short
+
+The fourth attempt is the first one that ran with the protection, and it paid for itself: `spawn_retries:
+6` in `progress.json` - six start failures were retried and **recovered**, and the attempt got 28 batches
+further than the one before (`batches_done` 27 -> 55, 254 of 334 batches, about 3,810 sites, $20.46). It
+still stopped on the circuit breaker, because four batches exhausted their three attempts: the hiccup
+outlasted 3 x 5 s = 10 s. So the window was widened to `MAX_SPAWN_ATTEMPTS = 6` and
+`SPAWN_RETRY_WAIT_SECONDS = 15.0` - 75 s of coverage - which is still bounded, still loud, and still blind
+to every real failure. The number that matters is not the constant but `spawn_retries`: it says whether
+the protection was needed, and how often.
+
