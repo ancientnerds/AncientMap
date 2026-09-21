@@ -4249,3 +4249,59 @@ And one real defect in my own change, caught by `mypy` before any test ran: a `+
 string concatenation and a trailing comma turned `REVIEWER_QUESTION` into a 2-tuple
 (`Dict entry 1 has incompatible type "Stage": "tuple[str, str]"`). The constant is a `str`; the
 check is `isinstance(q, str)` plus `mypy` on the module.
+
+## The pre-push gate does not test the phase-3 sources, and five more holes (2026-09-21)
+
+Measured against the tree at `7ad305d`, 81 commits ahead of `origin/main`, unpushed. Six things, each
+with the command that shows it. They are recorded as **open**, because they are.
+
+**1. The gate the push actually runs does not exercise `scripts/remediation/phase3/`.**
+`.githooks/pre-push` names, in its own gates, only the paths the project's CI names:
+
+```
+$ grep -n "phase3\|scripts/remediation" .githooks/pre-push
+(no output)
+$ grep -n "git diff --name-only" .githooks/pre-push
+109:    echo "pre-push: tracked files that were pushed: $(git diff --name-only "$MAIN_LOCAL_SHA" -- . | wc -l)" >&2
+```
+No per-test or per-path section exists (`grep -cE '^AKTUELLER_TEST=' .githooks/pre-push` → 0). So a push
+today would run the DB-less pytest subset — which *does* import and exercise `phase3` through
+`tests/remediation/` — but **no** phase-3-specific check is a gate in its own right. The evidence that
+this matters: `f72141e` fixed a parser that demanded a marker the frozen question never asked for, and
+`7ad305d` fixed the reviewer's referent; both were found by reading the artefacts, not by the gate.
+
+**2. `run.py` has no `report` subcommand, so the mass run's outcome is only in `LEDGER.jsonl` and the
+log.** `grep -n '"report"' scripts/remediation/phase3/run.py` → no match. A resume, an abort, and a
+completion therefore look alike from outside except for the driver's own lines. `mass_run.py` writes a
+progress file, but nothing turns the ledger into the run's result.
+
+**3. The reviewer has never run against the mass run.** `ls output/remediation/phase3_runner/runs/mass/batch-0001/reviews/`
+→ *No such file or directory*. The 13-call measurement on `gold6` established that the question is
+answerable (`reviewer_result_gold6.json`: 13 reviewed, 5 refuted, 1 unresolved, 2 refuted on
+blinded-correct fields, 3 real errors left standing) — but no verdict exists for any of the 138 finished
+batches. `refuted is False` is the only key to the writer, so the writer currently has nothing to open.
+
+**4. `pacing_scope` does not exist in the code.** `grep -rn "pacing_scope\|pacing-scope" scripts/ tests/`
+→ no match. `run.py:396` constructs `PacedFetcher(http, HostPacer(args.pacing_dir))` whenever
+`--pacing-dir` is given, so `--jobs N` batches pace *each other* on the same host. Measured from the
+ledger: the last 1,200 fetches are **620 `en.wikipedia.org` + 580 `www.wikidata.org`, exactly two hosts**.
+A design that wanted to raise concurrency without raising the per-host rate has no switch for it.
+
+**5. The mutation sweep is the instrument every guard is measured with, and it has never been run on
+the mass run's own corpus.** All 77 mutations run the unit tests in `tests/remediation/`. They have
+never been pointed at the 138 finished batches' answers or at a real reviewer verdict. That is the same
+gap class as the reviewer measurement: a guard proven against fixtures, unproven against the artefacts.
+
+**6. `bash output/remediation/logs/mass_run.sh` can report `exit=0` while the driver died.** Measured
+twice in this session (`DRIVER_EXIT=1` inside the log, `exit=0` from the wrapper). The exit code of a
+pipeline is the last command's, and the script ends on a `date`. The fix is one line (capture
+`DRIVER_EXIT` and `exit "$DRIVER_EXIT"`), and it is not made, because the run is live and the script is
+its launcher.
+
+**Not a finding, verified so it stops being re-litigated:** the four lint classes reported on every
+edit are false positives, re-checked at the byte today — `list_other_flags.py:52` and
+`race_probe2.py:25` are readers of the run's **own** artefacts, where raising *is* the check (a
+`try/except` would turn a loud abort into an empty answer, which `CLAUDE.md` forbids);
+`child_append.py:62` reads `with open(lock_path, "r+b") as handle:` — the checker quotes the source's own
+quotation marks as part of the mode string; `measure_reviewer.py:110/113` use `is True` on JSON tri-state
+values, where `== True` would also accept `1`. `ruff` is clean on all of them.
