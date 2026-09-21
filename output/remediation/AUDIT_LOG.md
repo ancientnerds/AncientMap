@@ -2697,3 +2697,65 @@ the work of any unpushed commit. Whether CI is actually red is **unverified**: `
 authenticated here, and CI type-checks on Python 3.11 with an unpinned mypy, so a version-dependent
 difference is possible. It matters because a push that touches `api/` runs that job and would block
 the deploy.
+
+## 2026-09-21 - the first measured live batch: judgement is cheap, fetching was the whole cost
+
+The batch that finally ran made **15 model calls, 15 sites, 0 skipped, 0 unverifiable findings**:
+
+| measured | value |
+| --- | --- |
+| provider-reported cost, summed verbatim from the ledger | **$0.007285** for 15 calls |
+| per call | **$0.000486** |
+| input / output tokens | 43,431 / 1,284 (mean 2,895 in, 86 out per call) |
+| cache reads | 0 |
+| extrapolated, one stage | **1,813 sites -> $0.88**; **5,004 sites -> $2.43** |
+| fetch stage wall clock | **38 minutes** (06:17:36 -> 06:55:21) |
+| judge stage wall clock, all 15 calls | **39 seconds** (06:55:25 -> 06:56:04) |
+
+The plan's Phase-3 cost model ("two-stage factual audit, reduced, ~2,217 sites, ~$350") is therefore
+**two orders of magnitude off, in the safe direction**, and for a reason worth naming: it prices
+agentic loops at ~40,000 tokens per site, while this runner fetches the evidence itself and asks one
+bounded question. The money was never the blocker. I said so earlier from arithmetic; now it is
+measured. Even a second stage (finder + reviewer) leaves all 5,004 sites near **$5**.
+
+The blocker was the wall clock, and it was one host.
+
+**Every single fetch failure is `overpass-api.de`.** Grouped from the ledger by host and by the last
+attempt's outcome: `overpass-api.de` 113 `transport_failure` + 4 `http_error`; `en.wikipedia.org` 14
+`ok`; `www.wikidata.org` 8 `ok`. The 117 Overpass failures are 39 distinct targets x `MAX_ATTEMPTS=3`,
+each burning `OVERPASS_TIMEOUT=20.0` seconds - which is exactly the 38 minutes. **98 % of the batch's
+run time was spent retrying a host that never answers, to buy 39 seconds of real work.** At that rate
+the 1,813-site worklist is ~77 hours and all 5,004 sites ~211 hours.
+
+Why the host never answers, measured rather than guessed (same User-Agent the runner sends):
+
+```text
+overpass-api.de         http=000 time=0.077s   curl: (35) Recv failure: Connection was reset
+overpass-api.de  (root) http=000 time=0.076s   same, so it is not the query
+overpass.kumi.systems   http=000 time=25.02s   curl: (28) timed out
+overpass.osm.ch         http=400 time=0.41s    an HTTP answer - this host IS reachable
+en.wikipedia.org        http=301 time=0.16s    control: the network is otherwise fine
+VPS -> overpass-api.de  http=400 time=0.35s    the VPS reaches it fine
+```
+
+A TLS-level reset with **0 bytes** in 0.077 s is not a rate limit and not a refusal - both of those
+answer with a status code. My first hypothesis was a broken IPv6 path, and **it was wrong**: the name
+resolves to IPv4 only here (162.55.144.139, 65.109.112.52, no AAAA record) and `curl -4` is reset just
+the same. So it is this workstation's network path, not Overpass and not the address family. The VPS
+answers the same host in 0.35 s, which means coordinate evidence *is* obtainable in this project - on
+the VPS, exactly as the plan already rules for the VLM work. It is not on the critical path: the
+contract makes coordinates a human call (285 coords-only sites, 117 T02 sites).
+
+Decision, taken from the measurement: **probe a host once per run instead of hammering it.** If a host
+does not answer a probe, its targets are recorded as *not attempted*, with the reason, one ledger line
+each, and the batch continues on the hosts that do answer. The distinction is the one this log keeps
+insisting on: *"this host did not answer, so the target was not attempted"* and *"this target was
+attempted and failed"* are different facts, and both must be readable. See `PIECE4b_BRIEF.md`. No host
+rotation, no fallback endpoint: which endpoint to ask stays the operator's decision.
+
+**One thing this batch does not yet prove.** Fifteen sites were judged, zero were unverifiable, and
+**not one of them carries a known truth**: `batch-0001` and the 17 truth-set sites do not intersect
+(`input.json` against `fnr_result.json`). A cheap pass that quietly misses defects produces exactly the
+"looks audited" database this whole remediation exists to prevent, so the finder's *recall* is still
+unmeasured. That measurement is the next piece, and it is why the plan builder must learn to be driven
+by an explicit site-id list.
