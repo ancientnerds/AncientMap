@@ -63,6 +63,19 @@ was nothing" justify different verdicts:
 A retried target is bounded: `MAX_ATTEMPTS` attempts total, a `RETRY_BACKOFF_SECONDS` pause between
 them through an injectable sleeper, and **no** fallback endpoint - which host to ask is a decision
 for the operator, not something a retry loop may change silently.
+
+**Piece 4b bounds the retries by host instead of per target.** The first live batch's ledger
+measured where its 38 minutes went: 117 of its 121 fetch lines are `overpass-api.de` - 39 targets x
+`MAX_ATTEMPTS`, every one of them a TLS reset the runner then slept 20 s over - while the 15 model
+calls of the same batch took 39 seconds. So a host is now asked **once per run, before its first
+pending target**, through a probe of its own root URL (`host_probe_url`): one request, one ledger
+line (`label="host_probe:<host>"`), never retried. Any HTTP answer means the host is reachable and
+nothing else about the run changes; only a `TransportFailure` marks it down, and then every pending
+target on it is recorded `host_unreachable` - one line each, `attempt=0`, carrying the probe's
+reason, and **no request to their URLs** - while the batch continues with the other hosts. A host
+whose targets are all already on disk is not probed at all: a re-run costs exactly what it cost
+before. No host is substituted and no endpoint is rotated; picking `overpass.osm.ch` because it
+answers is a decision for the operator, not for this module.
 """
 
 from __future__ import annotations
@@ -73,7 +86,7 @@ from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
-from urllib.parse import quote, unquote, urlencode
+from urllib.parse import quote, unquote, urlencode, urlsplit
 
 import httpx
 
@@ -154,6 +167,11 @@ RETRYABLE_STATUSES = frozenset({408, 429})
 #: is unverifiable when the enwiki evidence answered the question.
 OVERPASS_TIMEOUT = 20.0
 
+#: The ledger label of a host probe: `host_probe:<host>`. A probe line is a fetch line like any
+#: other (the ledger records every request that left the machine), and this prefix is what tells it
+#: from a target's attempt when a reader totals a run.
+HOST_PROBE_PREFIX = "host_probe:"
+
 #: Feature slugs. The first two are the pilot's own label suffixes (`fetch_log.jsonl`:
 #: `Satsurblia/enwiki`, `Karpasia/wd_kition_label`); `overpass_named` names the query shape the
 #: pilot used for the same job under `overpass_bbox`/`overpass_stored_features`, kept distinct
@@ -207,13 +225,41 @@ def is_retryable_status(status: int | None) -> bool:
     return status in RETRYABLE_STATUSES or 500 <= status < 600
 
 
+def host_of(url: str) -> str:
+    """The host a URL belongs to, lowercased. The key every per-host decision is taken under."""
+    host = urlsplit(url).hostname
+    if not host:
+        raise InputError(f"{url!r} carries no host; a request needs one to leave the machine")
+    return host
+
+
+def host_probe_url(url: str) -> str:
+    """`scheme://host/` for `url`: the one address that belongs to the host and to no target.
+
+    The probe is a request, and the ledger records it as one. Asking the host's own root - the bare
+    host URL the brief's `curl` measurements used (`overpass-api.de http=000 time=0.077s`) - keeps
+    the probe's ledger line from being read as an attempt on some target: no target is ever asked
+    for `/`. The other candidate, reusing the first target's URL as the probe, would make that one
+    request both a probe and an attempt, and one of the two would go unrecorded.
+    """
+    parts = urlsplit(url)
+    return f"{parts.scheme}://{parts.netloc}/"
+
+
+#: Which hosts get the shorter bound, by host name. Keyed by host rather than by URL so that the
+#: run's probe - which asks the host's root, not the endpoint - waits exactly as long as the targets
+#: it gates: a host that never answers costs one bounded wait per run, never a longer one than the
+#: operator's own `OVERPASS_TIMEOUT`.
+SHORT_TIMEOUT_HOSTS: dict[str, float] = {host_of(OVERPASS_ENDPOINT): OVERPASS_TIMEOUT}
+
+
 def timeout_for(url: str) -> float | None:
-    """The per-target bound, or `None` for the client's own default.
+    """The per-target bound for this URL's host, or `None` for the client's own default.
 
     Overpass is the one host this module asks a *second opinion* of, and the one the first live
     batch lost to a read timeout, so it gets the shorter bound (`OVERPASS_TIMEOUT`).
     """
-    return OVERPASS_TIMEOUT if url.startswith(OVERPASS_ENDPOINT) else None
+    return SHORT_TIMEOUT_HOSTS.get(host_of(url))
 
 
 @dataclass(frozen=True)
@@ -585,6 +631,12 @@ class TargetOutcome:
     url: str
     bought_by: str  #: the finding's "<test_id> <field>"
     attempts: list[FetchAttempt] = field(default_factory=list)
+    #: Set only by `collect_batch` when the target's host did not answer the run's probe: the
+    #: probe's reason, and the fact that **no attempt was made** - `attempts` stays empty and no
+    #: request went to `url`. Kept apart from a failed attempt on purpose: "the host never
+    #: answered, so this was not tried" and "this was tried and failed" are different sentences,
+    #: and the judge reads them back as the reason a site has no evidence.
+    not_attempted: str | None = None
     #: Set only by `one_attempt`: the page this target bought is on disk, and whether it was cut
     #: at `MAX_PAGE_BYTES`.
     stored: bool = False
@@ -592,11 +644,12 @@ class TargetOutcome:
 
     @property
     def requests(self) -> int:
+        """HTTP requests made for this target. Zero for one that was never attempted."""
         return len(self.attempts)
 
     @property
     def final(self) -> FetchAttempt:
-        if not self.attempts:  # pragma: no cover - a target with no attempt is never appended
+        if not self.attempts:  # pragma: no cover - `failure` handles a not-attempted target first
             raise RuntimeError(f"{self.feature}: no attempt was recorded")
         return self.attempts[-1]
 
@@ -609,10 +662,17 @@ class TargetOutcome:
         """Why this target has no evidence, or `None` when it does have some.
 
         This is the sentence the judge stage reads back out of the report before it decides
-        whether a missing evidence file is an explained failure or a hole in the record.
+        whether a missing evidence file is an explained failure or a hole in the record. It says
+        which of the two facts it is: a target nobody asked because its host did not answer, or a
+        target that was asked and failed.
         """
         if self.succeeded:
             return None
+        if self.not_attempted is not None:
+            return (
+                f"not attempted: this target's host did not answer the run's host probe "
+                f"({self.not_attempted}); 0 request(s) recorded, no evidence on disk"
+            )
         final = self.final
         if final.outcome is L.FetchOutcome.TRANSPORT_FAILURE:
             what = f"no response: {final.error}"
@@ -629,6 +689,7 @@ class TargetOutcome:
             "bought_by": self.bought_by,
             "feature": self.feature,
             "failure": self.failure,
+            "not_attempted": self.not_attempted,
             "requests": self.requests,
             "url": self.url,
         }
@@ -658,6 +719,11 @@ class SiteEvidence:
     def failed(self) -> list[TargetOutcome]:
         return [o for o in self.outcomes if not o.succeeded]
 
+    @property
+    def not_attempted(self) -> list[TargetOutcome]:
+        """Targets recorded as `host_unreachable`: their host never answered, so nothing was asked."""
+        return [o for o in self.outcomes if o.not_attempted is not None]
+
     def failures(self) -> dict[str, str]:
         """`feature -> why it has no evidence`, for the targets that have none."""
         return {o.feature: str(o.failure) for o in self.failed}
@@ -670,10 +736,40 @@ class SiteEvidence:
             ],
             "outcomes": [o.to_dict() for o in self.outcomes],
             "fetched": self.fetched,
+            "not_attempted": len(self.not_attempted),
             "skipped_existing": self.skipped_existing,
             "truncated": self.truncated,
             "bytes": self.bytes,
             "non_2xx": [{"url": url, "http_status": status} for url, status in self.non_2xx],
+        }
+
+
+@dataclass(frozen=True)
+class HostProbe:
+    """One host's reachability decision for this run, and the single request that bought it.
+
+    `reachable` is decided by *any* HTTP answer: a 400, a 404, a 429 and a 500 all mean the host
+    answered, so only a `TransportFailure` marks a host down (the brief's measurement: the same
+    `curl` gets a reset from `overpass-api.de` and a 400 from `overpass.osm.ch`, and only the reset
+    means "not there"). `reason` carries what was observed, so the report and the prompt can say
+    which of the two facts is on the table.
+    """
+
+    host: str
+    url: str  #: the probe URL (the host's root), not any target's
+    reachable: bool
+    outcome: L.FetchOutcome
+    http_status: int | None
+    reason: str
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "host": self.host,
+            "url": self.url,
+            "reachable": self.reachable,
+            "outcome": self.outcome.value,
+            "http_status": self.http_status,
+            "reason": self.reason,
         }
 
 
@@ -684,6 +780,9 @@ class BatchFetchReport:
     batch_id: str
     stage: Stage
     sites: list[SiteEvidence] = field(default_factory=list)
+    #: One record per host this run actually asked, in the order the batch reached them. Empty when
+    #: every target was already on disk: then no host was asked at all.
+    probes: list[HostProbe] = field(default_factory=list)
 
     @property
     def fetches(self) -> int:
@@ -707,26 +806,47 @@ class BatchFetchReport:
 
     @property
     def requests(self) -> int:
-        """Every HTTP attempt of the batch. Each one is a ledger line, so this is countable twice."""
-        return sum(s.requests for s in self.sites)
+        """Every HTTP request the batch made: one probe per host asked, plus every target attempt.
+
+        A target recorded `host_unreachable` contributes 0 - no request went to its URL - while the
+        probe that decided that contributes 1. Both have a ledger line, so this figure and the
+        ledger's `fetches` for the batch stay the same number.
+        """
+        return sum(s.requests for s in self.sites) + len(self.probes)
+
+    @property
+    def probe_requests(self) -> int:
+        return len(self.probes)
+
+    @property
+    def not_attempted(self) -> list[TargetOutcome]:
+        """Targets no request was made for: their host did not answer the run's probe."""
+        return [o for s in self.sites for o in s.not_attempted]
 
     @property
     def failed(self) -> list[TargetOutcome]:
         return [o for s in self.sites for o in s.failed]
 
     def failures_by_site(self) -> dict[str, dict[str, str]]:
-        """The record the judge stage reads: `site_id -> {feature: why it has no evidence}`."""
+        """The record the judge stage reads: `site_id -> {feature: why it has no evidence}`.
+
+        A target that was never attempted is in here too, with the sentence that says so: the
+        judge must be told which of the two facts it is holding.
+        """
         return {s.site_id: s.failures() for s in self.sites if s.failed}
 
     def to_json(self) -> str:
         payload = {
             "batch_id": self.batch_id,
             "stage": self.stage.value,
+            "probes": [p.to_dict() for p in self.probes],
             "sites": [s.to_dict() for s in self.sites],
             "totals": {
                 "fetches": self.fetches,
                 "requests": self.requests,
+                "probes": self.probe_requests,
                 "failed": len(self.failed),
+                "not_attempted": len(self.not_attempted),
                 "skipped_existing": self.skipped_existing,
                 "truncated": self.truncated,
                 "bytes": self.bytes,
@@ -734,6 +854,75 @@ class BatchFetchReport:
             },
         }
         return json.dumps(payload, ensure_ascii=False, sort_keys=True)
+
+
+def probe_host(
+    *,
+    host: str,
+    url: str,
+    fetcher: Fetcher,
+    ledger: L.Ledger,
+    batch_id: str,
+    stage: Stage,
+) -> HostProbe:
+    """Ask a host once, before its first pending target, and record that one request.
+
+    The probe is **not** retried, and that is the whole point: `MAX_ATTEMPTS` copies of the same
+    wait is what the first live batch measured as 38 minutes (117 lines on one host, every one of
+    them a nested wait over a host that answered nothing). One bounded request per host per run
+    turns that into one; when the host answers, the run proceeds exactly as it did before.
+
+    Its line is an ordinary fetch line, written *before* the decision is applied (piece 2's rule:
+    a request that left the machine is visible even if the next byte of code does not run), and it
+    carries `given_up=False` even when the host is down: `given_up` records that a *target's* last
+    attempt ended without evidence, and no target was attempted here.
+    """
+    try:
+        page = fetcher.get(url)
+    except TransportFailure as exc:
+        reason = str(exc)
+        probe = HostProbe(
+            host=host,
+            url=url,
+            reachable=False,
+            outcome=L.FetchOutcome.TRANSPORT_FAILURE,
+            http_status=None,
+            reason=reason,
+        )
+        status: int | None = None
+        size = 0
+        error: str | None = reason
+    else:
+        # **Any** HTTP answer means reachable - 400, 404, 429, 500 included. A host that says "no"
+        # is a host that is there; only silence is absence (the brief's curl: a reset from
+        # `overpass-api.de`, a 400 from `overpass.osm.ch`).
+        status = page.status
+        size = len(page.body)
+        error = None
+        probe = HostProbe(
+            host=host,
+            url=url,
+            reachable=True,
+            outcome=L.FetchOutcome.OK if page.ok else L.FetchOutcome.HTTP_ERROR,
+            http_status=status,
+            reason=f"HTTP {status}",
+        )
+    ledger.append(
+        L.Entry(
+            kind=L.LedgerKind.FETCH,
+            stage=stage,
+            batch_id=batch_id,
+            label=f"{HOST_PROBE_PREFIX}{host}",
+            url=url,
+            http_status=status,
+            bytes=size,
+            outcome=probe.outcome,
+            attempt=1,
+            error=error,
+            given_up=False,
+        )
+    )
+    return probe
 
 
 def one_attempt(
@@ -842,6 +1031,13 @@ def collect_batch(
     and nothing is retried without a ledger line - an unrecorded retry is the invisible charge
     this ledger exists to prevent.
 
+    Each host is probed **once per run, immediately before its first pending target**
+    (`probe_host`), and only then: a host whose targets are all already on disk is not asked at
+    all, so a re-run costs exactly what it cost before. A host that does not answer the probe
+    leaves every pending target on it recorded as `host_unreachable` - one line each, `attempt=0`,
+    the probe's reason, and **no request to their URLs** - while the targets of the other hosts are
+    fetched normally. No other host is tried in its place.
+
     `sleep` is the retry pause, injected so a test never waits on a real clock.
     """
     batch_id = str(_finding(batch, "batch_id", "batch"))
@@ -849,6 +1045,7 @@ def collect_batch(
     if not isinstance(sites, list) or not sites:
         raise InputError(f"{batch_id}: batch carries no sites")
     report = BatchFetchReport(batch_id=batch_id, stage=stage)
+    probes: dict[str, HostProbe] = {}
     for site in sites:
         result = SiteEvidence(site_id=str(_finding(site, "site_id", "site record")))
         result.targets = targets_for_site(site)
@@ -856,6 +1053,45 @@ def collect_batch(
         for target in result.targets:
             if store.exists(target.site_id, target.feature):
                 result.skipped_existing += 1
+                continue
+            host = host_of(target.url)
+            probe = probes.get(host)
+            if probe is None:
+                probe = probe_host(
+                    host=host,
+                    url=host_probe_url(target.url),
+                    fetcher=fetcher,
+                    ledger=ledger,
+                    batch_id=batch_id,
+                    stage=stage,
+                )
+                probes[host] = probe
+            if not probe.reachable:
+                # One line, and no request to this target's URL: nothing was asked, so there is no
+                # attempt to number (`attempt=0`) and the reason is the probe's own.
+                ledger.append(
+                    L.Entry(
+                        kind=L.LedgerKind.FETCH,
+                        stage=stage,
+                        batch_id=batch_id,
+                        label=target.label,
+                        url=target.url,
+                        http_status=None,
+                        bytes=0,
+                        outcome=L.FetchOutcome.HOST_UNREACHABLE,
+                        attempt=0,
+                        error=probe.reason,
+                        given_up=False,
+                    )
+                )
+                result.outcomes.append(
+                    TargetOutcome(
+                        feature=target.feature,
+                        url=target.url,
+                        bought_by=target.reason,
+                        not_attempted=probe.reason,
+                    )
+                )
                 continue
             outcome = one_attempt(
                 target=target,
@@ -875,6 +1111,7 @@ def collect_batch(
                 if not attempt.ok and attempt.http_status is not None:
                     # Data, not an exception: the pilot recorded 403/404/504/429 and continued.
                     result.non_2xx.append((target.url, attempt.http_status))
+    report.probes = list(probes.values())
     return report
 
 

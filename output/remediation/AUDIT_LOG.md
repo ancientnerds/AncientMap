@@ -2759,3 +2759,51 @@ rotation, no fallback endpoint: which endpoint to ask stays the operator's decis
 "looks audited" database this whole remediation exists to prevent, so the finder's *recall* is still
 unmeasured. That measurement is the next piece, and it is why the plan builder must learn to be driven
 by an explicit site-id list.
+
+## 2026-09-21 - piece 4b landed: 38 minutes became 1.45 seconds, and the two facts stayed apart
+
+The fix is one reachability probe per host per run, taken lazily immediately before that host's first
+*pending* target. A host that does not answer leaves every pending target on it recorded as
+`host_unreachable` - one line each, `attempt=0` because nothing was attempted, the probe's own reason
+as the error, `given_up=False`, and **no request to their URLs** - while the other hosts are fetched as
+they always were. No host rotation, no fallback endpoint.
+
+**What I measured myself, from the artefact, not from the report:**
+
+| check | before | after |
+| --- | --- | --- |
+| ledger lines | 155 (140 fetch + 15 model_call) | **169** (154 fetch + 15 model_call) |
+| the run's own new rows | - | 1 probe + 13 `host_unreachable` |
+| `fetch.json` totals.requests | 39 | **1** |
+| `...totals.not_attempted` / `.probes` | absent | **13 / 1** |
+| `...totals.bytes` / `.fetches` | 0 / 0 | **0 / 0** (nothing written, nothing overwritten) |
+| live fetch wall clock | **~38 min** | **1.45 s** |
+
+The 15 `model_call` rows from the cost measurement are still there - the proof this piece was supposed
+to preserve. Every one of the 13 not-attempted rows carries `attempt=0`, `given_up=False`, no
+`http_status` and the probe's own reason, and their 13 URLs are the *target* URLs, not the probe URL.
+One request at 1.45 s is itself the proof that no target was asked: 13 targets x 3 attempts x 20 s
+cannot fit in 1.45 s.
+
+The distinction this log keeps insisting on is now proven end to end, through the real collector, the
+real report, the real reader and the real prompt builder: the built prompt says `not attempted`, names
+the `host probe` and its `ConnectError`, says `0 request(s) recorded`, and does **not** contain the
+sentence used for a target that was asked and failed - while the evidence that did arrive is still
+there and is the only thing called present.
+
+**Gates, run by me:** `tests/remediation/` **610 passed** (83.53 s, was 603); `ruff check` clean;
+`mypy scripts/remediation/phase3/` clean on 6 files; the full DB-less suite **2258 passed, 3 skipped,
+57 deselected** (145.44 s).
+
+**One red gate, and it is not this piece's.** `ruff format --check tests/remediation/` is red for 14 of
+27 files, and it was already red at HEAD - measured by piping every committed file through
+`ruff format --check --stdin-filename` so the project config still applied. For the two files this piece
+touched, HEAD's version has **14** format hunks and the working tree has **14**: the same hunks on the
+same pre-existing tests, none inside the new code. The lane added **zero** formatting debt and correctly
+refused to reformat unrelated lines. It stays red on purpose: `ruff format --check` is a CI gate for
+`api/ pipeline/` only (`ci.yml:124`), reformatting 12 unrelated test files would bury a real change in
+noise, and a reviewer who wants it green can have it green in one command.
+
+**Not proved by me:** the lane's eleven mutation proofs (I verified the artefacts, the gates, the code
+and the *substance* of the tests, not the mutation sweep itself), and the judge stage's live behaviour
+with a real model - this fix was verified through the prompt text, not through a paid call.

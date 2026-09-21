@@ -19,6 +19,7 @@ import json
 import re
 import sys
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -350,6 +351,99 @@ def test_a_fetch_without_a_recorded_outcome_is_refused() -> None:
             attempt=1,
             given_up=False,
             input_tokens=5,
+        )
+
+
+def _host_unreachable() -> L.Entry:
+    """Piece 4b's line: a target on a host that did not answer the run's probe, never asked."""
+    return L.Entry(
+        kind=L.LedgerKind.FETCH,
+        stage=M.Stage.FINDER,
+        batch_id="batch-0001",
+        label="31860bc4-476a-49bc-9f97-e25220063d19/overpass_named",
+        at="2026-09-21T00:00:50+00:00",
+        url="https://overpass-api.de/api/interpreter?data=x",
+        bytes=0,
+        outcome=L.FetchOutcome.HOST_UNREACHABLE,
+        attempt=0,
+        error="GET https://overpass-api.de/: ConnectError: connection reset by peer",
+        given_up=False,
+    )
+
+
+def test_a_not_attempted_target_is_recorded_once_with_attempt_zero(tmp_path: Path) -> None:
+    """The line that says "no request was made" - and that it counts as a fetch failure.
+
+    `attempt=0` is what makes that fact structural rather than prose: an attempt number exists
+    because a request left the machine, and no request did.
+    """
+    path = tmp_path / "LEDGER.jsonl"
+    ledger = L.Ledger(path, clock=lambda: "2026-09-21T00:04:00+00:00")
+    ledger.append(_fetch("2026-09-21T00:00:30+00:00"))
+    ledger.append(_host_unreachable())
+
+    summary = L.summarise(path)
+    # Two lines, one of them bought nothing - the same bucket a transport failure falls in.
+    assert summary.total.fetches == 2
+    assert summary.total.fetch_failures == 1
+    row = L.read_entries(path)[1]
+    assert row["outcome"] == "host_unreachable"
+    assert row["attempt"] == 0
+    assert row["http_status"] is None
+    assert row["given_up"] is False
+    assert "ConnectError" in row["error"]
+
+
+def test_a_not_attempted_line_cannot_claim_an_attempt_or_a_giving_up() -> None:
+    """The two facts cannot be written as each other, whichever way round the attempt number goes."""
+    base: dict[str, Any] = {
+        "kind": L.LedgerKind.FETCH,
+        "stage": M.Stage.FINDER,
+        "batch_id": "batch-0001",
+        "label": "31860bc4-476a-49bc-9f97-e25220063d19/overpass_named",
+        "url": "https://overpass-api.de/api/interpreter?data=x",
+        "bytes": 0,
+        "error": "GET https://overpass-api.de/: ConnectError: connection reset by peer",
+    }
+    with pytest.raises(L.LedgerError, match="attempt must be 0"):
+        L.Entry(
+            **{**base, "outcome": L.FetchOutcome.HOST_UNREACHABLE, "attempt": 1, "given_up": False}
+        )
+    with pytest.raises(L.LedgerError, match="cannot carry given_up=True"):
+        L.Entry(
+            **{**base, "outcome": L.FetchOutcome.HOST_UNREACHABLE, "attempt": 0, "given_up": True}
+        )
+    with pytest.raises(L.LedgerError, match="needs the reason"):
+        L.Entry(
+            **{
+                **base,
+                "outcome": L.FetchOutcome.HOST_UNREACHABLE,
+                "attempt": 0,
+                "given_up": False,
+                "error": None,
+            }
+        )
+    with pytest.raises(L.LedgerError, match="cannot carry http_status"):
+        L.Entry(
+            **{
+                **base,
+                "outcome": L.FetchOutcome.HOST_UNREACHABLE,
+                "attempt": 0,
+                "given_up": False,
+                "http_status": 200,
+            }
+        )
+    # And the other way round: a request that *was* made cannot be filed as attempt 0.
+    with pytest.raises(L.LedgerError, match="not a 1-based attempt number"):
+        L.Entry(
+            **{
+                **base,
+                "http_status": 200,
+                "outcome": L.FetchOutcome.OK,
+                "attempt": 0,
+                "given_up": False,
+                "error": None,
+            }
         )
 
 

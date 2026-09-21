@@ -133,6 +133,20 @@ def _hash(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def _probe_requests(calls: list[str]) -> list[str]:
+    """The requests that went to a host's own root: the run's reachability probes (piece 4b)."""
+    return [c for c in calls if urlsplit(c).path == "/"]
+
+
+def _target_lines(entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """The ledger lines of *targets*. A probe line carries `host_probe:<host>` as its label."""
+    return [e for e in entries if not str(e["label"]).startswith(F.HOST_PROBE_PREFIX)]
+
+
+def _probe_lines(entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [e for e in entries if str(e["label"]).startswith(F.HOST_PROBE_PREFIX)]
+
+
 # ── decision 12, rule 1: the 60 KB cap ───────────────────────────────────────────────────────
 
 
@@ -252,14 +266,16 @@ def test_a_non_2xx_is_recorded_as_data_and_never_raised(tmp_path: Path, status: 
     report, store, ledger = _collect(tmp_path, httpx.MockTransport(handler))
 
     # Both targets were attempted, the batch did not stop - and *neither* bought a page, which is
-    # what `fetches` counts: `requests` is the traffic, `fetches` the evidence.
+    # what `fetches` counts: `requests` is the traffic, `fetches` the evidence. The traffic is the
+    # two host probes plus the two attempts (piece 4b: the probes are requests like any other).
     assert report.fetches == 0
-    assert report.requests == 2
+    assert report.requests == 4
+    assert [p.reachable for p in report.probes] == [True, True]  # a 4xx is an answer
     assert [s for _, s in report.non_2xx] == [status, status]
     # A 400/403/404 is an answer the same question gets again unchanged: asked exactly once.
-    assert len(calls) == 2
-    assert report.requests == 2
-    entries = L.read_entries(ledger.path)
+    assert _probe_requests(calls) == ["https://en.wikipedia.org/", "https://overpass-api.de/"]
+    assert len(calls) == 4
+    entries = _target_lines(L.read_entries(ledger.path))
     assert [e["http_status"] for e in entries] == [status, status]
     assert [e["outcome"] for e in entries] == ["http_error", "http_error"]
     assert [e["attempt"] for e in entries] == [1, 1]
@@ -283,12 +299,17 @@ def test_a_transport_failure_is_recorded_and_the_next_target_is_still_asked(tmp_
 
     A read timeout on target 1 must be target 1's outcome - recorded, with its reason - and target 2
     must still be fetched. Nothing here is swallowed: the failure is in the report *and* the ledger.
+    The host's probe answers here (piece 4b), so the failure is the target's own - a host that never
+    answers its probe is the other test.
     """
     calls: list[str] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
-        calls.append(str(request.url))
-        if "wikipedia" in str(request.url):
+        url = str(request.url)
+        calls.append(url)
+        if urlsplit(url).path == "/":
+            return httpx.Response(200, content=b"<html>the host is there</html>")
+        if "wikipedia" in url:
             raise httpx.ReadTimeout("The read operation timed out", request=request)
         return httpx.Response(200, content=b'{"elements": []}')
 
@@ -302,8 +323,8 @@ def test_a_transport_failure_is_recorded_and_the_next_target_is_still_asked(tmp_
     assert store.path_for(SITE_ID, F.FEATURE_OVERPASS_NAMED).read_bytes() == b'{"elements": []}'
     assert report.fetches == 1
     assert [o.requests for o in report.sites[0].outcomes] == [F.MAX_ATTEMPTS, 1]
-    assert len(calls) == F.MAX_ATTEMPTS + 1
-    assert report.requests == F.MAX_ATTEMPTS + 1
+    assert len(calls) == F.MAX_ATTEMPTS + 1 + 2  # two probes, three lost attempts, one good fetch
+    assert report.requests == F.MAX_ATTEMPTS + 1 + 2
 
     # The fetcher itself still raises: "could not ask" stays distinguishishable from "answered
     # with nothing" at the seam, and the stage is what turns it into recorded data.
@@ -314,7 +335,7 @@ def test_a_transport_failure_is_recorded_and_the_next_target_is_still_asked(tmp_
         with pytest.raises(F.TransportFailure, match="ConnectError"):
             fetcher.get("https://example.invalid/x")
 
-    rows = L.read_entries(ledger.path)
+    rows = _target_lines(L.read_entries(ledger.path))
     assert len(rows) == F.MAX_ATTEMPTS + 1  # one line per attempt, failures included
     assert [r["outcome"] for r in rows] == [
         "transport_failure",
@@ -332,7 +353,7 @@ def test_a_transport_failure_is_recorded_and_the_next_target_is_still_asked(tmp_
     assert rows[-1]["error"] is None
     # The two figures the ledger must be able to answer: how much traffic this batch spent (4
     # attempts) and how much of it bought nothing (3 of them).
-    assert L.summarise(ledger.path).total.fetches == len(rows) == F.MAX_ATTEMPTS + 1
+    assert L.summarise(ledger.path).total.fetches == F.MAX_ATTEMPTS + 3 == len(rows) + 2
     assert L.summarise(ledger.path).total.fetch_failures == F.MAX_ATTEMPTS
 
 
@@ -350,8 +371,9 @@ def test_an_empty_result_is_a_success_while_a_failure_is_not(tmp_path: Path) -> 
     assert report.failed == []
     assert report.fetches == 2
     assert store.path_for(SITE_ID, F.FEATURE_OVERPASS_NAMED).read_bytes() == empty
-    assert [e["outcome"] for e in L.read_entries(ledger.path)] == ["ok", "ok"]
-    assert [e["http_status"] for e in L.read_entries(ledger.path)] == [200, 200]
+    entries = _target_lines(L.read_entries(ledger.path))
+    assert [e["outcome"] for e in entries] == ["ok", "ok"]
+    assert [e["http_status"] for e in entries] == [200, 200]
     assert L.summarise(ledger.path).total.fetch_failures == 0
 
 
@@ -380,11 +402,11 @@ def test_a_429_is_retried_and_a_400_is_not(tmp_path: Path) -> None:
     assert f"{F.MAX_ATTEMPTS} request(s) recorded" in str(overpass.failure)
     # The pause before retry 1 and before retry 2, and never a third attempt.
     assert pauses == list(F.RETRY_BACKOFF_SECONDS)
-    rows = L.read_entries(ledger.path)
+    rows = _target_lines(L.read_entries(ledger.path))
     assert len(rows) == 1 + F.MAX_ATTEMPTS
     assert [r["attempt"] for r in rows if r["http_status"] == 429] == [1, 2, 3]
     assert [r["given_up"] for r in rows if r["http_status"] == 429] == [False, False, True]
-    assert len([c for c in calls if "overpass" in c]) == F.MAX_ATTEMPTS
+    assert len([c for c in calls if "/api/interpreter" in c]) == F.MAX_ATTEMPTS
 
 
 def test_the_same_url_is_asked_again_and_no_other_host_is_tried(tmp_path: Path) -> None:
@@ -397,12 +419,17 @@ def test_the_same_url_is_asked_again_and_no_other_host_is_tried(tmp_path: Path) 
 
     report, _, _ = _collect(tmp_path, httpx.MockTransport(handler))
 
-    overpass = [c for c in calls if "overpass" in c]
+    overpass = [c for c in calls if "/api/interpreter" in c]
     # One URL, three times. The pilot fell back to `overpass.kumi.systems` by hand; that is a
     # decision for the operator, so no other host appears in this runner's own traffic.
     assert len(set(overpass)) == 1
     assert len(overpass) == F.MAX_ATTEMPTS
     assert all(c.startswith(F.OVERPASS_ENDPOINT) for c in overpass)
+    # The one other request on that host is the run's probe, and it is the host's own root.
+    assert {urlsplit(c).netloc for c in calls} == {"en.wikipedia.org", "overpass-api.de"}
+    assert [c for c in calls if c == F.host_probe_url(F.OVERPASS_ENDPOINT)] == [
+        "https://overpass-api.de/"
+    ]
     assert report.failed and all("HTTP 504" in str(o.failure) for o in report.failed)
 
 
@@ -423,7 +450,7 @@ def test_every_request_carries_the_projects_identifying_user_agent(tmp_path: Pat
 
     _collect(tmp_path, httpx.MockTransport(handler))
 
-    assert seen == [F.PHASE3_USER_AGENT, F.PHASE3_USER_AGENT]
+    assert seen == [F.PHASE3_USER_AGENT] * 4  # two probes and two attempts, one string
     assert F.PHASE3_USER_AGENT == F.USER_AGENT
     assert "ancientnerds.com" in F.PHASE3_USER_AGENT
     assert not F.PHASE3_USER_AGENT.lower().startswith("python-httpx")
@@ -436,16 +463,24 @@ def test_the_overpass_target_gets_the_shorter_timeout_and_the_others_do_not(
     bounds: list[tuple[str, object]] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
-        bounds.append((request.url.host, request.extensions["timeout"]["read"]))
+        bounds.append((str(request.url), request.extensions["timeout"]["read"]))
         return httpx.Response(200, content=b"{}")
 
     _collect(tmp_path, httpx.MockTransport(handler))
 
     assert F.OVERPASS_TIMEOUT < 40.0  # the client default (`run.py --timeout`, HttpFetcher)
-    by_host = dict(bounds)
-    assert by_host["overpass-api.de"] == F.OVERPASS_TIMEOUT
-    assert by_host["en.wikipedia.org"] != F.OVERPASS_TIMEOUT
+    by_url = dict(bounds)
+    assert len(by_url) == 4  # two probes and two attempts
+    # The bound belongs to the *host*, so the probe of `overpass-api.de` waits exactly as long as
+    # that host's targets do: it asks the host's root, which no endpoint prefix covers.
+    assert by_url[F.host_probe_url(F.OVERPASS_ENDPOINT)] == F.OVERPASS_TIMEOUT
+    assert by_url[F.host_probe_url(F.WIKIPEDIA_ENDPOINT)] != F.OVERPASS_TIMEOUT
+    for url, bound in by_url.items():
+        overpass = urlsplit(url).hostname == "overpass-api.de"
+        assert bound == (F.OVERPASS_TIMEOUT if overpass else 40.0)
+        assert F.timeout_for(url) == (F.OVERPASS_TIMEOUT if overpass else None)
     assert F.timeout_for(F.OVERPASS_ENDPOINT + "?data=x") == F.OVERPASS_TIMEOUT
+    assert F.timeout_for(F.host_probe_url(F.OVERPASS_ENDPOINT)) == F.OVERPASS_TIMEOUT
     assert F.timeout_for(F.WIKIPEDIA_ENDPOINT) is None
 
 
@@ -456,7 +491,7 @@ def test_one_ledger_line_per_fetch_carrying_the_site_the_url_the_status_and_the_
     report, store, ledger = _collect(tmp_path, _ok_transport(body))
 
     assert report.fetches == 2
-    entries = L.read_entries(ledger.path)
+    entries = _target_lines(L.read_entries(ledger.path))
     assert len(entries) == 2  # exactly one line per attempt, no more and no fewer
     assert {e["label"] for e in entries} == {
         f"{SITE_ID}/{F.FEATURE_ENWIKI}",
@@ -476,8 +511,10 @@ def test_one_ledger_line_per_fetch_carrying_the_site_the_url_the_status_and_the_
         assert entry["error"] is None
 
     # And the ledger's own grouping still works: this is what keeps COST.md's per-stage split
-    # (finder 62 / reviewer 14) reportable from the runner's ledger.
-    assert L.summarise(ledger.path).by_stage["finder"].fetches == 2
+    # (finder 62 / reviewer 14) reportable from the runner's ledger. The two probe lines are fetch
+    # lines in the same stage - every request that left the machine has one.
+    assert len(_probe_lines(L.read_entries(ledger.path))) == 2
+    assert L.summarise(ledger.path).by_stage["finder"].fetches == 4
 
     # The evidence file's name is the URL-encoded label, exactly like the pilot's evidence/.
     slug = F.EvidenceStore.slug(SITE_ID, F.FEATURE_ENWIKI)
@@ -517,8 +554,12 @@ def test_a_second_run_skips_what_is_already_on_disk_and_duplicates_nothing(tmp_p
     assert first.fetches == 2
     assert second.fetches == 0
     assert second.skipped_existing == 2  # reported, not silent
-    assert len(calls) == 2  # the transport was asked exactly twice in total
-    assert len(L.read_entries(ledger.path)) == 2  # no second line for a fetch that did not happen
+    # Two probes and two fetches on the first run; **nothing** on the second - a host whose targets
+    # are all already on disk is not probed, so the re-run costs what it cost before.
+    assert len(calls) == 4
+    assert len(_probe_requests(calls)) == 2
+    assert second.probes == []
+    assert len(L.read_entries(ledger.path)) == 4  # no second line for a request that did not happen
     after_second = {
         path.name: _hash(path) for path in sorted((tmp_path / "evidence").glob("*.txt"))
     }
@@ -535,6 +576,210 @@ def test_receiving_different_bytes_for_a_recorded_target_raises_instead_of_overw
         store.write(site_id=SITE_ID, feature=F.FEATURE_ENWIKI, body=b"second answer")
     with pytest.raises(F.EvidenceConflict, match="different bytes"):
         store.write(site_id=SITE_ID, feature=F.FEATURE_ENWIKI, body=b"third answer")
+
+
+# ── piece 4b: one reachability probe per host per run ────────────────────────────────────────
+#
+# The first live batch's ledger measured where its 38 minutes went: 117 of its 121 fetch lines sat
+# on one host that answers nothing from this workstation (a TLS reset at 0.077 s), each line three
+# 20-second waits - while the model calls of the same 15 sites took 39 seconds. The fix is one
+# bounded request per host per run. The tests below pin it, including that a host which answers
+# changes nothing at all.
+
+
+class _CountingFetcher:
+    """The seam with a counter: every URL it is asked for is recorded. No socket, no httpx.
+
+    A host in `down_hosts` raises `TransportFailure` - the measured weather, where
+    `overpass-api.de` resets after 0.077 s; every other host answers, with `statuses` overriding
+    the 200 for a named host.
+    """
+
+    def __init__(
+        self, *, down_hosts: set[str] | None = None, statuses: dict[str, int] | None = None
+    ) -> None:
+        self.urls: list[str] = []
+        self._down = down_hosts or set()
+        self._statuses = statuses or {}
+
+    def get(self, url: str) -> F.FetchedPage:
+        self.urls.append(url)
+        host = urlsplit(url).hostname or ""
+        if host in self._down:
+            raise F.TransportFailure(f"GET {url}: ConnectError: connection reset by peer")
+        return F.FetchedPage(
+            status=self._statuses.get(host, 200),
+            final_url=url,
+            body=b'{"query": {}}',
+            truncated=False,
+        )
+
+
+def _two_sites() -> list[dict[str, Any]]:
+    """Two sites, each buying an `enwiki` and an `overpass_named` target."""
+    return [_site_record(), _site_record(site_id=OTHER_SITE_ID, name="Other Cave")]
+
+
+def _collect_with(
+    tmp_path: Path, fetcher: F.Fetcher, sites: list[dict[str, Any]] | None = None
+) -> tuple[F.BatchFetchReport, F.EvidenceStore, L.Ledger, list[float]]:
+    """Collect a batch with an injected fetcher, recording (never sleeping through) the pauses."""
+    store = F.EvidenceStore(tmp_path / "evidence")
+    ledger = L.Ledger(tmp_path / "LEDGER.jsonl")
+    pauses: list[float] = []
+    report = F.collect_batch(
+        batch=_batch(sites if sites is not None else _two_sites()),
+        fetcher=fetcher,
+        store=store,
+        ledger=ledger,
+        stage=Stage.FINDER,
+        sleep=pauses.append,
+    )
+    return report, store, ledger, pauses
+
+
+def test_a_host_that_does_not_answer_is_probed_once_and_its_targets_are_not_attempted(
+    tmp_path: Path,
+) -> None:
+    """The measured defect: 39 targets x 3 attempts x 20 s against a host that answers nothing."""
+    dead = "GET https://overpass-api.de/: ConnectError: connection reset by peer"
+    fetcher = _CountingFetcher(down_hosts={"overpass-api.de"})
+
+    report, store, ledger, pauses = _collect_with(tmp_path, fetcher)
+
+    # The probe: exactly one request to the dead host, and it is the host's own root...
+    assert [u for u in fetcher.urls if urlsplit(u).hostname == "overpass-api.de"] == [
+        "https://overpass-api.de/"
+    ]
+    # ...so not one request went to any of its targets, which the report still names.
+    overpass_targets = {
+        t.url for s in report.sites for t in s.targets if t.feature == F.FEATURE_OVERPASS_NAMED
+    }
+    assert len(overpass_targets) == 2
+    assert overpass_targets.isdisjoint(fetcher.urls)
+    # And nothing waited: the dead host costs one request, not `MAX_ATTEMPTS` waits per target.
+    assert pauses == []
+    assert report.requests == 4  # two probes + the two enwiki targets, and nothing else
+    assert report.fetches == 2  # the other host was fetched normally, in the same run
+    assert all(store.exists(s.site_id, F.FEATURE_ENWIKI) for s in report.sites)
+
+    # Each pending target on the dead host: exactly one ledger line, `attempt=0`, the probe's reason.
+    rows = L.read_entries(ledger.path)
+    not_attempted = [r for r in _target_lines(rows) if r["outcome"] == "host_unreachable"]
+    assert len(not_attempted) == 2
+    assert {r["label"] for r in not_attempted} == {
+        f"{SITE_ID}/{F.FEATURE_OVERPASS_NAMED}",
+        f"{OTHER_SITE_ID}/{F.FEATURE_OVERPASS_NAMED}",
+    }
+    for row in not_attempted:
+        assert row["attempt"] == 0
+        assert row["http_status"] is None
+        assert row["bytes"] == 0
+        assert row["given_up"] is False
+        assert row["error"] == dead
+    # Three lines bought nothing: the probe that found the host down, and the two targets it spared
+    # from `MAX_ATTEMPTS` waits each. `fetches` counts all six lines; `fetch_failures` puts a
+    # host-unreachable target in the same bucket as a transport failure.
+    assert L.summarise(ledger.path).total.fetch_failures == 3
+    assert L.summarise(ledger.path).total.fetches == 6
+    assert [r["url"] for r in _probe_lines(rows)] == [
+        "https://en.wikipedia.org/",
+        "https://overpass-api.de/",
+    ]
+
+    # fetch.json carries the probe decision per host, and the two facts stay apart.
+    payload = json.loads(report.to_json())
+    assert payload["probes"] == [
+        {
+            "host": "en.wikipedia.org",
+            "url": "https://en.wikipedia.org/",
+            "reachable": True,
+            "outcome": "ok",
+            "http_status": 200,
+            "reason": "HTTP 200",
+        },
+        {
+            "host": "overpass-api.de",
+            "url": "https://overpass-api.de/",
+            "reachable": False,
+            "outcome": "transport_failure",
+            "http_status": None,
+            "reason": dead,
+        },
+    ]
+    assert payload["totals"]["not_attempted"] == 2
+    assert payload["totals"]["probes"] == 2
+    assert [s["not_attempted"] for s in payload["sites"]] == [1, 1]
+    outcome = payload["sites"][0]["outcomes"][1]
+    assert outcome["attempts"] == []
+    assert outcome["requests"] == 0
+    assert outcome["not_attempted"] == dead
+    assert outcome["failure"] == (
+        f"not attempted: this target's host did not answer the run's host probe ({dead}); "
+        "0 request(s) recorded, no evidence on disk"
+    )
+    # The same site's *other* target is evidence that arrived: one sentence each, never blurred.
+    assert payload["sites"][0]["outcomes"][0]["failure"] is None
+
+
+def test_a_reachable_host_is_probed_exactly_once_for_all_of_its_targets(tmp_path: Path) -> None:
+    """When the host answers, nothing about the run changes - except the two probe requests."""
+    fetcher = _CountingFetcher()
+
+    report, _, ledger, _ = _collect_with(tmp_path, fetcher)
+
+    # One probe per host, and the same probe serves both sites' targets of that host.
+    assert _probe_requests(fetcher.urls) == [
+        "https://en.wikipedia.org/",
+        "https://overpass-api.de/",
+    ]
+    assert len([u for u in fetcher.urls if "/w/api.php" in u]) == 2
+    assert len([u for u in fetcher.urls if "/api/interpreter" in u]) == 2
+    assert report.probe_requests == 2
+    assert [(p.host, p.reachable, p.reason) for p in report.probes] == [
+        ("en.wikipedia.org", True, "HTTP 200"),
+        ("overpass-api.de", True, "HTTP 200"),
+    ]
+    # Every target was fetched, exactly as it was before the probe existed.
+    assert report.requests == 6
+    assert report.fetches == 4
+    assert report.not_attempted == []
+    assert report.failed == []
+    assert len(_probe_lines(L.read_entries(ledger.path))) == 2
+
+
+def test_the_probe_writes_its_own_ledger_line_and_any_http_answer_means_reachable(
+    tmp_path: Path,
+) -> None:
+    """Brief item 3: a 404 is an answer, so it is not "down". Only silence is absence."""
+    fetcher = _CountingFetcher(statuses={"en.wikipedia.org": 404})
+
+    report, _, ledger, _ = _collect_with(tmp_path, fetcher)
+
+    probe_lines = _probe_lines(L.read_entries(ledger.path))
+    assert len(probe_lines) == 2  # one request, one line, per host per run
+    assert {r["label"] for r in probe_lines} == {
+        f"{F.HOST_PROBE_PREFIX}en.wikipedia.org",
+        f"{F.HOST_PROBE_PREFIX}overpass-api.de",
+    }
+    line = next(r for r in probe_lines if r["label"].endswith("en.wikipedia.org"))
+    assert line["kind"] == "fetch"  # an ordinary fetch line: every request has one
+    assert line["stage"] == "finder"
+    assert line["batch_id"] == "batch-0001"
+    assert line["url"] == "https://en.wikipedia.org/"  # the host's root, never a target's URL
+    assert line["http_status"] == 404
+    assert line["outcome"] == "http_error"
+    assert line["attempt"] == 1
+    assert line["given_up"] is False
+    assert line["error"] is None  # a response that arrived is recorded by its status
+    assert line["bytes"] == len(b'{"query": {}}')
+    # The 404 gated nothing: the host answered, so its targets were asked as before.
+    assert next(p for p in report.probes if p.host == "en.wikipedia.org").reason == "HTTP 404"
+    assert report.not_attempted == []
+    assert len([u for u in fetcher.urls if "/w/api.php" in u]) == 2
+    # A probe URL belongs to no target of the batch, so its line can never be read as an attempt.
+    target_urls = {t.url for s in report.sites for t in s.targets}
+    assert {r["url"] for r in probe_lines}.isdisjoint(target_urls)
 
 
 # ── the CLI: offline unless told otherwise ───────────────────────────────────────────────────
@@ -614,10 +859,16 @@ def test_the_fetch_command_with_live_writes_ledger_lines_evidence_and_a_report(
     assert code == 0
     payload = json.loads(capsys.readouterr().out)
     assert payload["totals"]["fetches"] == 2
-    assert payload["totals"]["requests"] == 2
+    assert payload["totals"]["requests"] == 4  # two host probes + two fetches
+    assert payload["totals"]["probes"] == 2
+    assert payload["totals"]["not_attempted"] == 0
     assert payload["totals"]["failed"] == 0
-    assert len(fake.urls) == 2
-    assert len(L.read_entries(ledger)) == 2
+    assert len(fake.urls) == 4
+    assert sorted(_probe_requests(fake.urls)) == [
+        "https://en.wikipedia.org/",
+        "https://overpass-api.de/",
+    ]
+    assert len(L.read_entries(ledger)) == 4
     evidence = sorted(p.name for p in (run_dir / "batch-0001" / "evidence").glob("*.txt"))
     assert len(evidence) == 2
     report = json.loads((run_dir / "batch-0001" / "fetch.json").read_text(encoding="utf-8"))
@@ -626,21 +877,33 @@ def test_the_fetch_command_with_live_writes_ledger_lines_evidence_and_a_report(
         "failed": 0,
         "fetches": 2,
         "non_2xx": 0,
-        "requests": 2,
+        "not_attempted": 0,
+        "probes": 2,
+        "requests": 4,
         "skipped_existing": 0,
         "truncated": 0,
     }
+    assert {p["host"] for p in report["probes"]} == {"en.wikipedia.org", "overpass-api.de"}
+    assert all(p["reachable"] is True and p["reason"] == "HTTP 200" for p in report["probes"])
 
 
 def test_the_fetch_command_records_a_transport_failure_and_writes_its_report(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """Piece 4, at the CLI: a dead target is data, not a reason to exit 2 and lose the batch."""
+    """Piece 4, at the CLI: a dead *target* is data, not a reason to exit 2 and lose the batch.
+
+    The host's probe answers here (piece 4b), so these two targets are the ones that fail: a host
+    that answers nothing at all is the other case - one probe line and two not-attempted records.
+    """
     run_dir = _prepare_run_dir(tmp_path)
     ledger = tmp_path / "LEDGER.jsonl"
 
     class _DeadFetcher(_FakeFetcher):
         def get(self, url: str) -> F.FetchedPage:
+            F.assert_named_feature(url)
+            self.urls.append(url)
+            if urlsplit(url).path == "/":
+                return F.FetchedPage(status=200, final_url=url, body=b"root", truncated=False)
             raise F.TransportFailure(f"GET {url}: ConnectError: connection reset by peer")
 
     monkeypatch.setattr(F, "HttpFetcher", lambda timeout: _DeadFetcher())
@@ -660,12 +923,13 @@ def test_the_fetch_command_records_a_transport_failure_and_writes_its_report(
     assert code == 0
     payload = json.loads(capsys.readouterr().out)
     assert payload["totals"]["failed"] == 2
-    assert payload["totals"]["requests"] == 2 * F.MAX_ATTEMPTS
+    assert payload["totals"]["not_attempted"] == 0
+    assert payload["totals"]["requests"] == 2 * F.MAX_ATTEMPTS + 2  # every attempt, plus two probes
     report = json.loads((run_dir / "batch-0001" / "fetch.json").read_text(encoding="utf-8"))
     assert report["totals"]["fetches"] == 0
     assert [o["requests"] for o in report["sites"][0]["outcomes"]] == [F.MAX_ATTEMPTS] * 2
     assert all("ConnectError" in o["failure"] for o in report["sites"][0]["outcomes"])
-    rows = L.read_entries(ledger)
+    rows = _target_lines(L.read_entries(ledger))
     assert len(rows) == 2 * F.MAX_ATTEMPTS
     assert {r["outcome"] for r in rows} == {"transport_failure"}
     assert [r["given_up"] for r in rows] == [False, False, True, False, False, True]

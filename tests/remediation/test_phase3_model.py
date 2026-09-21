@@ -29,6 +29,7 @@ import sys
 import time
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 import pytest
 
@@ -723,6 +724,62 @@ def test_read_fetch_failures_reads_what_the_fetch_stage_wrote(tmp_path: Path) ->
     shape.write_text(json.dumps({"sites": [{"site_id": "s"}]}), encoding="utf-8")
     with pytest.raises(R.InputError, match="no `outcomes` list"):
         MS.read_fetch_failures(shape)
+
+
+class _ProbeDownFetcher:
+    """`overpass-api.de` resets, everything else answers. The seam, so no socket is opened."""
+
+    def get(self, url: str) -> F.FetchedPage:
+        if urlsplit(url).hostname == "overpass-api.de":
+            raise F.TransportFailure(f"GET {url}: ConnectError: connection reset by peer")
+        return F.FetchedPage(
+            status=200, final_url=url, body=b'{"query": {"pages": {}}}', truncated=False
+        )
+
+
+def test_a_target_on_an_unreachable_host_reaches_the_prompt_as_not_attempted(
+    tmp_path: Path,
+) -> None:
+    """Piece 4b, end to end: the probe's decision must reach `<failed_targets>`, and say which of
+    the two facts it is. A target nobody asked because its host was silent is *not* a target that
+    was asked and failed, and a prompt that blurred the two would let the model read silence as
+    absence of a defect.
+    """
+    store = F.EvidenceStore(tmp_path / "evidence")
+    site = _latlon_site("site-1")
+    report = F.collect_batch(
+        batch={"batch_id": "batch-0001", "sites": [site]},
+        fetcher=_ProbeDownFetcher(),
+        store=store,
+        ledger=L.Ledger(tmp_path / "LEDGER.jsonl"),
+        stage=M.Stage.FINDER,
+    )
+    path = tmp_path / "fetch.json"
+    F.write_report(path, report)
+
+    failures = MS.read_fetch_failures(path)
+    assert set(failures["site-1"]) == {F.FEATURE_OVERPASS_NAMED}
+    prepared = MS.prepare_call(
+        batch_id="batch-0001",
+        site=site,
+        store=store,
+        stage=M.Stage.FINDER,
+        failures=failures["site-1"],
+    )
+
+    prompt = prepared.call.prompt
+    assert "<failed_targets>" in prompt
+    assert 'feature="overpass_named"' in prompt
+    assert "not attempted" in prompt  # the fact: this target was never asked
+    assert "host probe" in prompt  # ... because the host did not answer the run's probe
+    assert "ConnectError" in prompt  # the probe's own reason, not an attempt's status
+    assert "0 request(s) recorded" in prompt
+    # A target that *was* asked and failed says the other sentence; this prompt must not carry it.
+    assert "the last one given up" not in prompt
+    assert MS.FAILED_TARGET_MARKER in prompt
+    # The evidence that did arrive is still there, and it is the only one called present.
+    assert prompt.count('status="present"') == 1
+    assert [e.failure is None for e in prepared.excerpts] == [True, False]
 
 
 def _site_record_for_report() -> dict[str, Any]:

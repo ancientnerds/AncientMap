@@ -32,6 +32,13 @@ nothing. A fetch line written *before* that field existed (the one line of the p
 `LEDGER.jsonl`, 2026-09-21) is counted in `fetches`/`fetch_bytes` and in neither bucket: it is
 not guessed at.
 
+Piece 4b added `FetchOutcome.HOST_UNREACHABLE` and the one line shape it carries. A target on a
+host that did not answer the run's reachability probe is recorded **once, with `attempt=0`**: no
+request left the machine for it, so there is no attempt to number. That is why `attempt` may be 0
+here and only here, and why such a line cannot carry `given_up=True` - nothing was asked, so
+nothing was given up. The probe itself is an ordinary fetch line (`kind="fetch"`,
+`label="host_probe:<host>"`), because it is an ordinary request.
+
 Crash safety: `Ledger.append` opens the file in append mode, writes exactly one line ending in
 `\n`, flushes and `os.fsync`s before returning, so a crash loses at most the call in flight and
 never leaves a half line behind (a half line would make every later `summarise()` a guess).
@@ -73,6 +80,11 @@ class FetchOutcome(StrEnum):
     #: No response arrived at all (DNS, connect, TLS, reset, read timeout). There is no status to
     #: record, so `http_status` is None and `error` carries the reason instead.
     TRANSPORT_FAILURE = "transport_failure"
+    #: The host did not answer this run's reachability probe, so this target was **not attempted**:
+    #: no request left the machine for it (`attempt=0` on its line) and `error` carries the probe's
+    #: reason. A different fact from `TRANSPORT_FAILURE`, which is a target that *was* asked and got
+    #: nothing - "I could not look because the host never answered" versus "I asked and it failed".
+    HOST_UNREACHABLE = "host_unreachable"
 
 
 class LedgerError(ValueError):
@@ -196,15 +208,30 @@ class Entry:
         else:
             if self.http_status is not None:
                 raise LedgerError(
-                    f"{self.label}: outcome=transport_failure arrived with no response, so it "
+                    f"{self.label}: outcome={self.outcome.value} arrived with no response, so it "
                     f"cannot carry http_status={self.http_status!r}"
                 )
             if not self.error:
                 raise LedgerError(
-                    f"{self.label}: outcome=transport_failure needs the reason (DNS, connect, "
-                    "reset, timeout) - a failure with no reason is not a measurement"
+                    f"{self.label}: outcome={self.outcome.value} needs the reason (DNS, connect, "
+                    "reset, timeout, or the host probe that never answered) - a failure with no "
+                    "reason is not a measurement"
                 )
-        if not isinstance(self.attempt, int) or isinstance(self.attempt, bool) or self.attempt < 1:
+        if self.outcome is FetchOutcome.HOST_UNREACHABLE:
+            # No request was made for this target, so there is no attempt to number: `attempt=0` is
+            # that fact, and every other outcome needs a 1-based attempt number.
+            if (
+                not isinstance(self.attempt, int)
+                or isinstance(self.attempt, bool)
+                or self.attempt != 0
+            ):
+                raise LedgerError(
+                    f"{self.label}: outcome=host_unreachable means no request was made, so "
+                    f"attempt must be 0, got {self.attempt!r}"
+                )
+        elif (
+            not isinstance(self.attempt, int) or isinstance(self.attempt, bool) or self.attempt < 1
+        ):
             raise LedgerError(
                 f"{self.label}: attempt={self.attempt!r} is not a 1-based attempt number; a retry "
                 "is countable only because every attempt has its own line"
@@ -213,6 +240,11 @@ class Entry:
             raise LedgerError(
                 f"{self.label}: given_up={self.given_up!r} is not a boolean; every fetch line says "
                 "whether it was the target's last attempt"
+            )
+        if self.outcome is FetchOutcome.HOST_UNREACHABLE and self.given_up:
+            raise LedgerError(
+                f"{self.label}: outcome=host_unreachable cannot carry given_up=True; nothing was "
+                "given up on a target that was never asked"
             )
         if self.bytes is None or not isinstance(self.bytes, int) or self.bytes < 0:
             raise LedgerError(f"{self.label}: bytes={self.bytes!r} is not a byte count")
@@ -289,10 +321,12 @@ class StageTotals:
     #: to a token count.
     cost_usd: float = 0.0
     fetch_bytes: int = 0
-    #: Attempts whose recorded outcome bought nothing (`http_error`, `transport_failure`).
-    #: `fetches` counts **attempts** - every one of them has a line - so a target retried twice
-    #: appears twice, and `fetch_failures` answers exactly what the pilot's count asked: how much of
-    #: this batch's traffic bought nothing.
+    #: Lines whose recorded outcome bought nothing (`http_error`, `transport_failure`, and
+    #: `host_unreachable` - a target that was never asked because its host did not answer the run's
+    #: probe, which counts here exactly like a transport failure). `fetches` counts **lines**: every
+    #: request has one, and a not-attempted target has a line without a request. So a target retried
+    #: twice appears twice, and `fetch_failures` answers exactly what the pilot's count asked: how
+    #: much of this batch's traffic bought nothing.
     fetch_failures: int = 0
     first_at: str | None = None
     last_at: str | None = None
