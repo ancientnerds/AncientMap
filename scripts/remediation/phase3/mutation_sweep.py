@@ -124,6 +124,61 @@ RETRY_AFTER_ASCII = "test_delay_seconds_are_ascii_digits_by_the_grammars_own_rul
 RETRY_AFTER_DATE = "test_the_other_form_the_field_may_have_is_an_http_date"
 RETRY_AFTER_FLOOR = "test_a_retry_after_of_zero_does_not_shorten_our_own_backoff"
 
+WRITE_TEST = "tests/remediation/test_phase3_write.py"
+#: The writer's own guards (piece 6). One guard, one test that must fail when the guard is broken - a
+#: mutation no test can catch is noise, not evidence.
+WRITE_PLAN = "test_the_plan_takes_the_new_value_from_the_answer_and_the_old_one_from_the_batch"
+WRITE_REFUTED = "test_a_refuted_verdict_is_refused_and_counted_as_not_cleared"
+WRITE_APPLIES = "test_a_verdict_whose_parts_refute_it_is_not_cleared_by_its_own_applies_flag"
+WRITE_NO_VERDICT = "test_a_field_without_a_verdict_is_refused_rather_than_forgotten"
+WRITE_REPORT_ONLY = "test_the_report_only_fields_are_refused_though_the_reviewer_cleared_them"
+WRITE_REPORT_REASONS = "test_the_two_report_only_reasons_stay_apart"
+WRITE_FIXED_POINT = "test_a_site_type_the_normaliser_would_rewrite_is_refused"
+WRITE_FIXED_POINT_OK = "test_a_site_type_that_is_a_fixed_point_is_planned"
+WRITE_COUNTRY = "test_a_country_is_writable_because_its_patcher_guards_on_the_source"
+WRITE_PATCHERS = "test_the_two_startup_patchers_really_guard_their_updates_on_the_lyra_source"
+WRITE_PERIOD = "test_a_period_start_that_is_not_a_year_is_refused_before_the_transaction"
+WRITE_WIDTH = "test_a_country_longer_than_the_column_is_refused_before_the_transaction"
+WRITE_NOT_A_CHANGE = "test_a_value_the_row_already_holds_is_not_a_change"
+WRITE_INCOMPLETE = "test_an_answer_the_parser_calls_incomplete_is_refused_with_what_was_missing"
+WRITE_NOT_WRONG = "test_a_finder_answer_that_is_not_wrong_has_nothing_to_write"
+WRITE_EVIDENCE = "test_the_evidence_carries_the_finders_citations_and_the_reviewers_reason"
+WRITE_KEY = "test_the_change_key_is_a_digest_of_the_transition_not_of_the_row"
+WRITE_READ_STMT = "test_the_read_statement_names_the_row_its_column_and_refuses_an_unwritable_one"
+WRITE_VALIDATE = "test_a_plan_side_row_that_is_not_a_real_change_is_refused"
+WRITE_DEFAULT = "test_the_default_step_is_the_owners_hundred_rows"
+WRITE_CHUNK_ORDER = "test_chunks_cut_the_plan_in_its_own_order_and_share_the_batch_id"
+WRITE_CHUNK_ZERO = "test_a_chunk_size_below_one_is_refused"
+WRITE_NO_CHUNK = "test_an_empty_plan_yields_no_chunk"
+WRITE_DIGEST = "test_every_chunk_carries_a_digest_over_its_own_rows"
+WRITE_STAMP = "test_the_run_stamp_names_the_batch_and_the_chunk_and_the_reversal_gets_its_own"
+WRITE_COMMIT = "test_the_write_statement_ends_in_commit_and_the_reversal_in_rollback"
+WRITE_STOP = "test_both_statements_set_on_error_stop"
+WRITE_ARGS = "test_the_loop_calls_the_primitive_with_the_twelve_arguments_in_order"
+WRITE_CURATED = "test_the_write_guard_keeps_the_write_inside_the_curated_source"
+WRITE_CHANGE_GUARD = "test_the_write_guard_refuses_a_value_that_is_not_a_change"
+WRITE_COMPARE = "test_every_writable_column_has_a_comparison_in_the_guards"
+WRITE_JOURNAL = "test_the_journal_invariant_covers_both_directions"
+WRITE_REVERSAL = "test_the_reversal_carries_the_values_swapped_and_its_own_change_key"
+WRITE_FILES = "test_the_plan_file_is_written_line_by_line_and_the_refusals_beside_it"
+WRITE_PIN = "test_the_apply_refuses_a_statement_that_was_generated_from_other_rows"
+WRITE_UNRENDERED = "test_the_apply_refuses_when_the_statements_were_never_rendered"
+WRITE_MOVED = "test_a_row_that_moved_since_the_snapshot_is_recorded_and_nothing_is_written"
+WRITE_LEFT_SOURCE = "test_a_site_that_left_the_curated_source_is_not_written"
+WRITE_PREFLIGHT_FIRST = "test_a_pre_flight_that_agrees_sends_the_read_first_and_then_the_write"
+WRITE_KEPT_WRITE = "test_the_reversal_leaves_the_write_exactly_as_it_was"
+WRITE_READBACK = "test_a_value_the_database_kept_differently_is_a_stop"
+WRITE_OUTSIDE_JOURNAL = "test_a_journal_row_outside_the_plan_is_a_stop"
+WRITE_KEPT_REVERSAL = "test_a_reversal_that_is_kept_is_a_stop"
+WRITE_REPORT = "test_the_report_counts_the_refusals_by_rule_and_names_the_fixed_points"
+WRITE_DRY = "test_a_dry_run_sends_nothing_to_the_database"
+WRITE_MAIN = "test_main_applies_through_the_seam_and_reports_the_numbers"
+WRITE_NO_SUCH_CHUNK = "test_main_refuses_a_chunk_number_the_plan_does_not_have"
+WRITE_OTHER_BATCH = "test_the_plan_refuses_a_review_that_names_another_batch"
+WRITE_ONLY_DISCOVER = "test_the_plan_refuses_a_batch_that_is_not_the_discover_pass"
+WRITE_MISSING = "test_reading_a_missing_batch_directory_says_which_file_is_missing"
+WRITE_STAGE = "scripts/remediation/phase3/write_stage.py"
+
 #: (name, file, the exact text to replace, what to replace it with, test file, test name)
 MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
@@ -838,12 +893,192 @@ MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "the Retry-After header is never read off the response",
         "scripts/remediation/phase3/fetch_stage.py",
-        '                    retry_after=parse_retry_after(\n'
+        "                    retry_after=parse_retry_after(\n"
         '                        response.headers.get("retry-after"), received_at=self._clock()\n'
         "                    ),\n",
         "                    retry_after=None,\n",
         FETCH_TEST,
         RETRY_AFTER_WAIT,
+    ),
+    # ── the writer (piece 6) ─────────────────────────────────────────────────────────────────────
+    (
+        "the site_type fixed point is never checked",
+        WRITE_STAGE,
+        '    if field_name == "site_type" and not M.site_type_fixed_point(value):',
+        "    if False:  # mutant: no fixed-point check",
+        WRITE_TEST,
+        WRITE_FIXED_POINT,
+    ),
+    (
+        "the report-only fields are written like any other",
+        WRITE_STAGE,
+        "    if field_name in M.REPORT_ONLY_FIELDS:",
+        "    if False:  # mutant: report-only fields are writable",
+        WRITE_TEST,
+        WRITE_REPORT_ONLY,
+    ),
+    (
+        "the width of the varchar column is not checked",
+        WRITE_STAGE,
+        "        if len(value) > limit:",
+        "        if False:  # mutant: no width check",
+        WRITE_TEST,
+        WRITE_WIDTH,
+    ),
+    (
+        "a value the row already holds is planned as a change",
+        WRITE_STAGE,
+        "    if new_value == old_value:",
+        "    if False:  # mutant: no equality check",
+        WRITE_TEST,
+        WRITE_NOT_A_CHANGE,
+    ),
+    (
+        "the pre-flight stops comparing the stored value",
+        WRITE_STAGE,
+        '            if not same_value(observed=observed.get("value"), planned=row.old_value, '
+        "column=column):",
+        "            if False:  # mutant: every row counts as held",
+        WRITE_TEST,
+        WRITE_MOVED,
+    ),
+    (
+        "the digest pin accepts any digest of the right shape",
+        WRITE_STAGE,
+        "    if pinned != want:",
+        "    if len(pinned) != len(want):",
+        WRITE_TEST,
+        WRITE_PIN,
+    ),
+    (
+        "the read-back ignores what the database kept",
+        WRITE_STAGE,
+        '            if not same_value(observed=observed.get("value"), planned=row.new_value, '
+        "column=column):",
+        "            if False:  # mutant: the read-back always agrees",
+        WRITE_TEST,
+        WRITE_READBACK,
+    ),
+    (
+        "the reversal is not checked for having been rolled back",
+        WRITE_STAGE,
+        "    if not inverse.ok:",
+        "    if False:  # mutant: whatever the reversal did is fine",
+        WRITE_TEST,
+        WRITE_KEPT_REVERSAL,
+    ),
+    (
+        "the reversal reuses the write's own change key",
+        WRITE_STAGE,
+        '        key = row.change_key + (ROLLBACK_KEY_SUFFIX if reversal else "")',
+        "        key = row.change_key",
+        WRITE_TEST,
+        WRITE_REVERSAL,
+    ),
+    (
+        "the reversal commits instead of rolling back",
+        WRITE_STAGE,
+        '    add("ROLLBACK;")',
+        '    add("COMMIT;")',
+        WRITE_TEST,
+        WRITE_COMMIT,
+    ),
+    (
+        "the chunk step is one row too long",
+        WRITE_STAGE,
+        "        Chunk(batch_id=plan.batch_id, index=index, rows=tuple(rows[start : start + "
+        "chunk_size]))",
+        "        Chunk(batch_id=plan.batch_id, index=index, rows=tuple(rows[start : start + "
+        "chunk_size + 1]))",
+        WRITE_TEST,
+        WRITE_CHUNK_ORDER,
+    ),
+    (
+        "the statements no longer stop on the first database error",
+        WRITE_STAGE,
+        '    lines.append("\\\\set ON_ERROR_STOP on")\n    lines.append("BEGIN;")\n',
+        '    lines.append("BEGIN;")\n',
+        WRITE_TEST,
+        WRITE_STOP,
+    ),
+    (
+        "the loop passes the new value as the old one",
+        WRITE_STAGE,
+        "    add(\"            'unified_sites', r.column_name, r.pk_column, r.pk,\")\n"
+        '    add("            r.old_value, r.new_value,")\n'
+        '    add(f"            r.test_id, {_sql_text(chunk.stamp)}, r.change_key, '
+        '{_sql_text(CONFIDENCE)},")\n',
+        "    add(\"            'unified_sites', r.column_name, r.pk_column, r.pk,\")\n"
+        '    add("            r.new_value, r.old_value,")\n'
+        '    add(f"            r.test_id, {_sql_text(chunk.stamp)}, r.change_key, '
+        '{_sql_text(CONFIDENCE)},")\n',
+        WRITE_TEST,
+        WRITE_ARGS,
+    ),
+    (
+        "the write guard no longer checks the source",
+        WRITE_STAGE,
+        '    add(f"     WHERE u.id IS NULL OR u.source_id <> {_sql_text(CURATED_SOURCE)};")',
+        '    add("     WHERE u.id IS NULL;")',
+        WRITE_TEST,
+        WRITE_CURATED,
+    ),
+    (
+        "the period_start comparison loses its integer cast",
+        WRITE_STAGE,
+        '    "period_start": "u.period_start IS DISTINCT FROM {planned}::integer",',
+        '    "period_start": "u.period_start IS DISTINCT FROM {planned}",',
+        WRITE_TEST,
+        WRITE_COMPARE,
+    ),
+    (
+        "the column allowlist is cut down to one column",
+        WRITE_STAGE,
+        '    columns = ", ".join(_sql_text(column) for column in WRITABLE_COLUMNS)',
+        '    columns = ", ".join(_sql_text(column) for column in WRITABLE_COLUMNS[:1])',
+        WRITE_TEST,
+        WRITE_CHANGE_GUARD,
+    ),
+    (
+        "the journal invariant only looks one way",
+        WRITE_STAGE,
+        '    add("       AND NOT EXISTS (SELECT 1 FROM _phase3_plan p WHERE p.change_key = '
+        'l.change_key);")',
+        '    add("       ;")',
+        WRITE_TEST,
+        WRITE_JOURNAL,
+    ),
+    (
+        "the review file's own applies boolean is trusted",
+        WRITE_STAGE,
+        '        refuted=_tristate(raw.get("refuted")),',
+        '        refuted=False if raw.get("applies") else _tristate(raw.get("refuted")),',
+        WRITE_TEST,
+        WRITE_APPLIES,
+    ),
+    (
+        "a review may be joined to any batch's input",
+        WRITE_STAGE,
+        '    if review.get("batch_id") != batch_id:',
+        "    if False:  # mutant: the batch ids need not agree",
+        WRITE_TEST,
+        WRITE_OTHER_BATCH,
+    ),
+    (
+        "the discover pass marker is not checked",
+        WRITE_STAGE,
+        "    if pass_name != DISCOVER_PASS:",
+        "    if False:  # mutant: any pass may be written",
+        WRITE_TEST,
+        WRITE_ONLY_DISCOVER,
+    ),
+    (
+        "the read statement takes any column name",
+        WRITE_STAGE,
+        "    if column not in WRITABLE_COLUMNS:",
+        "    if False:  # mutant: any column may be read",
+        WRITE_TEST,
+        WRITE_READ_STMT,
     ),
 ]
 
