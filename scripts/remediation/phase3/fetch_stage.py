@@ -258,6 +258,28 @@ class EvidenceConflict(RuntimeError):
     """An evidence file for this (site, feature) exists and holds *different* bytes."""
 
 
+def write_once(path: Path, body: bytes, *, source: str) -> bool:
+    """Write `body` to `path` unless it is already there: the evidence store's one write rule.
+
+    Identical bytes are left alone (`False`). Different bytes raise `EvidenceConflict`, naming
+    `source` - where the new bytes came from - because a recorded file is never overwritten. Otherwise
+    the bytes go to a `.tmp` beside `path` and are swapped in, so a kill leaves no half file behind
+    (`True`). Shared by `EvidenceStore.write` and the search lane's byte-identical copies
+    (`search_plan.prepare_search_batch`), so the rule has one spelling.
+    """
+    if path.exists():
+        if path.read_bytes() != body:
+            raise EvidenceConflict(
+                f"{path} holds different bytes than {source}; refusing to overwrite a recorded file"
+            )
+        return False
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(".tmp")
+    tmp.write_bytes(body)
+    tmp.replace(path)
+    return True
+
+
 def is_retryable_status(status: int | None) -> bool:
     """429/408 or any 5xx. A 400/403/404 is asked once: the next answer would be the same one."""
     if status is None:
@@ -882,18 +904,12 @@ class EvidenceStore:
 
     def write(self, *, site_id: str, feature: str, body: bytes) -> EvidenceFile:
         path = self.path_for(site_id, feature)
-        if path.exists():
-            if path.read_bytes() != body:
-                raise EvidenceConflict(
-                    f"{path} holds different bytes than the answer just received; refusing to "
-                    "overwrite a recorded fetch (delete the file to refetch this one target)"
-                )
-            return EvidenceFile(site_id=site_id, feature=feature, path=path, wrote=False)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        tmp = path.with_suffix(".tmp")
-        tmp.write_bytes(body)
-        tmp.replace(path)
-        return EvidenceFile(site_id=site_id, feature=feature, path=path, wrote=True)
+        wrote = write_once(
+            path,
+            body,
+            source="the answer just received (delete the file to refetch this one target)",
+        )
+        return EvidenceFile(site_id=site_id, feature=feature, path=path, wrote=wrote)
 
 
 @dataclass(frozen=True)

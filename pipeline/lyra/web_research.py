@@ -19,6 +19,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from pipeline.lyra.blocked_domains import listed_domain_of
 from pipeline.lyra.config import LyraAPIError, LyraSettings, call_api
 from pipeline.lyra.minimax_shared import (
     MINIMAX_MODEL,
@@ -56,7 +57,7 @@ def _is_blocked_correction_domain(url: str) -> bool:
 
     host = urlparse(url).netloc.lower().rsplit("@", 1)[-1].split(":", 1)[0]
     host = host.removeprefix("www.")
-    return any(host == d or host.endswith("." + d) for d in _CORRECTION_BLOCKED_DOMAINS)
+    return listed_domain_of(host, _CORRECTION_BLOCKED_DOMAINS) is not None
 
 
 ARTICLE_TIMEOUT = 600.0

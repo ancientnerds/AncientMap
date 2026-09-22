@@ -30,6 +30,7 @@ from dotenv import load_dotenv
 # Load .env so os.getenv() picks up THEO_* keys
 load_dotenv(Path(__file__).resolve().parents[2] / ".env")
 
+from pipeline.lyra.blocked_domains import listed_domain_of
 from pipeline.lyra.config import LyraSettings
 from pipeline.lyra.minimax_shared import (
     WebSearchResult,
@@ -239,14 +240,8 @@ def _extract_domain(url: str) -> str:
 
 def _is_blocked(url: str) -> bool:
     """Check if a URL's domain is in the blocklist."""
-    domain = _extract_domain(url)
-    # Check exact match and parent domain (e.g., "old.reddit.com" -> "reddit.com")
-    parts = domain.split(".")
-    for i in range(len(parts) - 1):
-        candidate = ".".join(parts[i:])
-        if candidate in BLOCKED_DOMAINS:
-            return True
-    return False
+    # Exact match and parent domain (e.g., "old.reddit.com" -> "reddit.com")
+    return listed_domain_of(_extract_domain(url), BLOCKED_DOMAINS) is not None
 
 
 # ---------------------------------------------------------------------------

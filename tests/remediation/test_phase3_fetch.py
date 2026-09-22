@@ -693,6 +693,20 @@ def test_receiving_different_bytes_for_a_recorded_target_raises_instead_of_overw
         store.write(site_id=SITE_ID, feature=F.FEATURE_ENWIKI, body=b"third answer")
 
 
+def test_the_write_once_rule_keeps_identical_bytes_and_leaves_no_temp_file(tmp_path: Path) -> None:
+    """One spelling of the rule for the store and for the search lane's byte-identical copies."""
+    path = tmp_path / "deep" / "fetch.json"
+    assert F.write_once(path, b"{}", source="a test") is True
+    assert F.write_once(path, b"{}", source="a test") is False
+    with pytest.raises(F.EvidenceConflict, match="different bytes than the copy's source"):
+        F.write_once(path, b"[]", source="the copy's source")
+    assert path.read_bytes() == b"{}"
+    assert sorted(p.name for p in path.parent.iterdir()) == ["fetch.json"]
+    store = F.EvidenceStore(tmp_path / "evidence")
+    assert store.write(site_id=SITE_ID, feature=F.FEATURE_ENWIKI, body=b"x").wrote is True
+    assert store.write(site_id=SITE_ID, feature=F.FEATURE_ENWIKI, body=b"x").wrote is False
+
+
 # ── piece 4b: one reachability probe per host per run ────────────────────────────────────────
 #
 # The first live batch's ledger measured where its 38 minutes went: 117 of its 121 fetch lines sat
