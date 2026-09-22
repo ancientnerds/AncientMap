@@ -411,13 +411,23 @@ def minimax_search(client: httpx.Client, query: str) -> list[WebSearchResult]:
     tweet_verifier._web_verify_items, theo_sources.MiniMaxSearchAdapter).
     For the documented success body and every HTTP, transport and JSON failure
     the result is the same as before, entries without a link included.
-    Differences, all outside that envelope: a 2xx body whose ``base_resp``
-    reports an error is ``[]`` even if it also carries results (the old code
-    read them as hits); a contract break (`CodingPlanShapeError`) raises, as
-    the old code raised AttributeError/TypeError on the same bodies - except
-    an `organic` that is an empty non-list, which the old loop read as ``[]``;
-    and an exception from the client that is not an ``httpx.HTTPError``
-    (a malformed base URL's InvalidURL) propagates instead of reading as ``[]``.
+    Differences, all outside that envelope:
+
+    * a 2xx body whose ``base_resp`` reports an error is ``[]`` even if it
+      also carries results (the old code read them as hits);
+    * a contract break (`CodingPlanShapeError`) raises. For a body that is not
+      an object, an `organic` that is not a list or a result that is not an
+      object, the old loop raised AttributeError/TypeError too - except an
+      `organic` that is an empty non-list, which it read as ``[]``. A
+      malformed ``base_resp`` - not an object, or a ``status_code`` that is
+      not an integer - is a **new** raise: the old code never read
+      ``base_resp`` and returned the results beside it;
+    * an exception from the client that is not an ``httpx.HTTPError`` (a
+      malformed base URL's InvalidURL) propagates instead of reading as ``[]``.
+
+    The raises are deliberate: a body that breaks the documented contract is
+    not an empty result, and the callers (web_research, tweet_verifier,
+    theo_sources) must see it rather than read it as "nothing found".
     """
     try:
         return list(minimax_search_strict(client, query).items)
@@ -839,10 +849,12 @@ def minimax_vlm(client: httpx.Client, image_bytes: bytes, prompt: str) -> str:
     scripts/pick_meaningful_gallery and two e2e scripts). For the documented
     success body and every HTTP, transport and JSON failure the result is the
     same as before. Differences, all outside that envelope: a 200 whose
-    ``base_resp`` reports an error, or whose `content` is not text, is ``""``
-    (the old code returned what it found); and an exception from the client
-    that is not an ``httpx.HTTPError`` (a malformed base URL's InvalidURL, a
-    test double's RuntimeError) propagates instead of reading as a reject.
+    ``base_resp`` reports an error or is malformed (not an object, or a
+    ``status_code`` that is not an integer), or whose `content` is not text,
+    is ``""`` (the old code never read ``base_resp`` and returned what it
+    found in `content`); and an exception from the client that is not an
+    ``httpx.HTTPError`` (a malformed base URL's InvalidURL, a test double's
+    RuntimeError) propagates instead of reading as a reject.
     """
     try:
         return minimax_vlm_strict(client, image_bytes, prompt)

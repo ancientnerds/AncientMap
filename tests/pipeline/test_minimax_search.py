@@ -184,17 +184,48 @@ def test_no_response_at_all_is_a_transport_error_with_no_status() -> None:
         [1, 2],
         {"organic": "nope"},
         {"organic": [["not", "an", "object"]]},
-        {"base_resp": "broken", "organic": []},
-        {"base_resp": {"status_code": "0"}, "organic": []},
     ],
 )
 def test_a_contract_break_raises_from_both_the_strict_call_and_the_wrapper(body: Any) -> None:
-    """The old loop raised AttributeError/TypeError on these bodies; a contract break stays loud."""
+    """The old loop raised AttributeError/TypeError on these bodies too; a contract break stays loud."""
     client = _client(_answer(200, body))
     with pytest.raises(S.CodingPlanShapeError):
         S.minimax_search_strict(client, "q")
     with pytest.raises(S.CodingPlanShapeError):
         S.minimax_search(client, "q")
+
+
+@pytest.mark.parametrize(
+    "base_resp",
+    [
+        "broken",
+        {"status_code": "0"},
+        # `False == 0` in Python: without the bool exclusion this would read as success.
+        {"status_code": False},
+        {"status_code": True},
+    ],
+)
+def test_a_malformed_base_resp_is_a_new_raise_where_the_old_wrapper_returned_the_hits(
+    base_resp: Any,
+) -> None:
+    """A deliberate change for web_research, tweet_verifier and theo_sources: the old code never read
+    `base_resp` and returned the results beside it. A body that breaks the documented contract is not
+    a set of hits, so both the strict call and the wrapper now raise instead."""
+    client = _client(_answer(200, {"base_resp": base_resp, "organic": ORGANIC}))
+    with pytest.raises(S.CodingPlanShapeError, match="base_resp"):
+        S.minimax_search_strict(client, "q")
+    with pytest.raises(S.CodingPlanShapeError, match="base_resp"):
+        S.minimax_search(client, "q")
+
+
+def test_a_body_that_names_both_the_budget_and_the_rate_cap_is_the_budget() -> None:
+    """`minimax_limiter.is_plan_rate_throttle`'s own rule: check the budget first (conservative)."""
+    body = {"error": "token plan rate limit reached (2062); usage limit reached (2056)"}
+    with pytest.raises(S.CodingPlanQuotaError):
+        S.minimax_search_strict(_client(_answer(429, body)), "q")
+    both = {"base_resp": {"status_code": 2062, "status_msg": "usage limit reached"}, "organic": []}
+    with pytest.raises(S.CodingPlanQuotaError):
+        S.minimax_search_strict(_client(_answer(200, both)), "q")
 
 
 # ── the VLM endpoint ──────────────────────────────────────────────────────────────────────────────
