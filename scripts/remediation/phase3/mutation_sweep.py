@@ -1478,6 +1478,14 @@ MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         "test_a_resumed_batch_with_every_search_on_disk_is_not_gated",
     ),
     (
+        "a missing key fails batch by batch instead of stopping the run",
+        "scripts/remediation/phase3/run.py",
+        "        return STOP_RUN_EXIT\n    pacer = F.HostPacer(",
+        "        return 1  # mutated\n    pacer = F.HostPacer(",
+        SEARCH_TEST,
+        "test_search_live_without_a_key_stops_the_run_and_asks_nothing",
+    ),
+    (
         "a stop-class error is retried like weather",
         SEARCH_STAGE,
         "    if isinstance(exc, STOP_ERRORS):\n        return False\n",

@@ -1113,6 +1113,27 @@ def test_search_live_writes_its_report_and_exits_with_what_happened(
     assert ("error" in payload) is (code == R.STOP_RUN_EXIT)
 
 
+def test_search_live_without_a_key_stops_the_run_and_asks_nothing(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    run_dir, batch_id = _prepared_search_run(tmp_path)
+    capsys.readouterr()
+
+    def no_key(cls: Any) -> Any:
+        raise R.InputError("LyraSettings carries no MiniMax key or base url")
+
+    def refuse(*args: Any, **kwargs: Any) -> None:
+        raise AssertionError("no key, so nothing may be probed")
+
+    monkeypatch.setattr(SS.MiniMaxSearcher, "from_settings", classmethod(no_key))
+    monkeypatch.setattr(MX, "probe_minimax_quota", refuse)
+    argv = ["search", "--live", "--run-dir", str(run_dir), "--batch-id", batch_id,
+            "--ledger", str(tmp_path / "L.jsonl"), "--pacing-dir", str(tmp_path / "pace")]  # fmt: skip
+    assert R.main(argv) == R.STOP_RUN_EXIT
+    assert "no MiniMax key" in json.loads(capsys.readouterr().out)["error"]
+    assert not (tmp_path / "L.jsonl").exists()
+
+
 # ── the mass driver's part ────────────────────────────────────────────────────────────────────────
 
 

@@ -889,7 +889,8 @@ def cmd_plan_search(args: argparse.Namespace) -> int:
             "scope": args.scope,
             "sha256": digest,
             "source_run_dir": str(args.source_run_dir),
-            "unwritten_rows_in_scope": None if extra is None else len(extra),
+            # Read from the write records; how many landed in this plan is `fields_by_reason`.
+            "unwritten_rows_read": None if extra is None else len(extra),
         }
     )
     print(json.dumps(summary, indent=1, sort_keys=True))
@@ -950,7 +951,19 @@ def cmd_search(args: argparse.Namespace) -> int:
 
     from pipeline.lyra import minimax_shared
 
-    searcher = SS.MiniMaxSearcher.from_settings()
+    try:
+        searcher = SS.MiniMaxSearcher.from_settings()
+    except InputError as exc:
+        # No key or no base url: every batch would fail the same way, so this stops the run like
+        # an auth failure does, instead of counting towards the circuit breaker batch by batch.
+        print(
+            json.dumps(
+                {"batch_id": batch_id, "error": f"search stopped: {exc}", "live": True},
+                indent=1,
+                sort_keys=True,
+            )
+        )
+        return STOP_RUN_EXIT
     pacer = F.HostPacer(Path(args.pacing_dir), min_interval=SS.SEARCH_MIN_INTERVAL_SECONDS)
     host = F.host_of(searcher.endpoint)
     try:
