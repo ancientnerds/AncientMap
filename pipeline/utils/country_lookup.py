@@ -324,6 +324,7 @@ NAME_TO_ISO: dict[str, str] = {
     "england": "GB",
     "scotland": "GB",
     "wales": "GB",
+    "northern ireland": "GB",
     "great britain": "GB",
     "ireland": "IE",
     "germany": "DE",

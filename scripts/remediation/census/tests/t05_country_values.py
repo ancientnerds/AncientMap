@@ -32,9 +32,16 @@ and no ISO code), and that is what this check reports.
 The plan's Phase 1 item 5 names three defects, and the enumeration reproduces its counts
 exactly: `Georgia (country)` 27, `Chile, Easter Island` 8, `Baltic Sea` 1. Three further
 classes are not in the plan: `USA` 28 (the same country as `United States` 1, in two hub
-pages and two filter entries), `Northern Ireland` 4 (in neither vocabulary, which the
-plan's own S6 criterion counts as a failure) and `Republic of The Gambia` 2 (the long
-official form, where both vocabularies also carry `Gambia`/`The Gambia`).
+pages and two filter entries), `Northern Ireland` 4 (in neither vocabulary on the
+2026-09-20 snapshot, which the plan's own S6 criterion counts as a failure) and
+`Republic of The Gambia` 2 (the long official form, where both vocabularies also carry
+`Gambia`/`The Gambia`).
+
+`Northern Ireland` stopped being a gap on 2026-09-22: the owner decided the United
+Kingdom's parts are spelled by region (HUMAN_ONLY.md B9, `Northern Ireland`), and both
+vocabularies now carry it as GB next to England, Scotland and Wales - so it passes here
+like the other three, and its hand-written REVIEW entry was removed rather than left to
+contradict the vocabularies it describes.
 
 What this check refuses to do:
 
@@ -112,16 +119,6 @@ BY_HAND: dict[str, tuple[str, str]] = {
             "(61.377 / 18.448) and which coastal state's waters those are is T02's "
             "point-in-polygon answer or a human's, not something this check may guess; "
             "CLEAR would also drop the site out of every /sites/{country} hub"
-        ),
-    ),
-    "Northern Ireland": (
-        "vocabulary-gap",
-        (
-            "in neither vocabulary, although the other three constituent countries of the UK "
-            "are: no COUNTRY_CODES key, so no flag, and normalize_country() returns "
-            "'northern ireland', not an ISO code - the plan's S6 counts exactly these 4 rows "
-            "as failures. The value itself matches the deliberate local-name design "
-            "(plan §4.3.2), so the gap is in the two vocabularies and no data change is safe"
         ),
     ),
     "USA": (

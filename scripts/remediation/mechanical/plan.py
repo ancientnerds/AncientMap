@@ -18,9 +18,10 @@ and all 35 are `proposal=set`:
   below is the load-bearing one and not the flag.
 
 The other 35 T05 findings are **not** settlable by a script (spelling splits like `USA`, vocabulary
-gaps like `Northern Ireland`, a value that is not a country at all) and every one of them is refused
-here with its reason. `output/remediation/mechanical/SKIPPED.jsonl` holds them, so the report does
-not have to be believed.
+gaps like `Northern Ireland` - a gap until 2026-09-22, when both vocabularies gained it as GB - a
+value that is not a country at all) and every one of them is refused here with its reason.
+`output/remediation/mechanical/SKIPPED.jsonl` holds them, so the report does not have to be
+believed.
 
 ## The set, and the 27/35 decision
 

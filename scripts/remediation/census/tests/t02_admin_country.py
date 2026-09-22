@@ -98,10 +98,12 @@ translated by -360, 0 and +360 degrees and the shortest geodesic wins. Fiji, Rus
 United States all carry parts on both sides of the line in this dataset.
 
 **A country string that matches no feature is itself a finding** (`T02/unmatched-country`,
-`review`): 5 sites on this snapshot (`Northern Ireland` 4, `Baltic Sea` 1), where the
-project's vocabulary and Natural Earth's genuinely differ. It is reported rather than
+`review`): 5 sites on the 2026-09-20 snapshot (`Northern Ireland` 4, `Baltic Sea` 1), where
+the project's vocabulary and Natural Earth's genuinely differed. It is reported rather than
 forced onto a neighbour, and it means those sites were not geometry-checked - the run's
-`pass` for them would otherwise be a claim T02 cannot make.
+`pass` for them would otherwise be a claim T02 cannot make. Since 2026-09-22 both project
+vocabularies map `Northern Ireland` to GB (the owner's B9 decision), so it resolves to the
+United Kingdom polygon like England, Scotland and Wales; `Baltic Sea` is the one left.
 
 ## Where the reference data comes from
 

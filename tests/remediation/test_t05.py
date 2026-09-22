@@ -86,10 +86,32 @@ class TestT05CountryValues:
         assert not f.applicable
 
     def test_value_in_neither_vocabulary_is_reviewed(self, t05):
-        got = t05.run(_ctx([_site("a", "Northern Ireland")]))
+        """Rewritten 2026-09-22: the old example, `Northern Ireland`, is a GB spelling in both
+        vocabularies now (owner decision B9), so it no longer tests "in neither vocabulary". The
+        premise is asserted first, so a vocabulary that ever learns this value turns the test red
+        instead of letting it pass on a different path."""
+        codes, normalize = t05._vocabulary()
+        assert t05._flag_code("Atlantis", codes) is None
+        assert t05._iso("Atlantis", normalize) is None
+        got = t05.run(_ctx([_site("a", "Atlantis")]))
         assert len(got) == 1
+        assert got[0].test_id == "T05/unknown-value"
         assert got[0].proposal is M.Proposal.REVIEW
         assert got[0].proposed_value is None
+        assert got[0].confidence is M.Confidence.UNVERIFIABLE
+        assert not got[0].applicable
+
+    def test_northern_ireland_is_a_uk_part_like_the_other_three(self, t05):
+        """The B9 decision spells the UK by region; `Northern Ireland` must be a fixed point of
+        this check, resolve to GB in both vocabularies, and carry no hand-written REVIEW entry -
+        otherwise the census keeps flagging the value the mechanical lane writes."""
+        codes, normalize = t05._vocabulary()
+        assert "Northern Ireland" not in t05.BY_HAND
+        assert codes["Northern Ireland"] == "GB"
+        assert t05._iso("Northern Ireland", normalize) == "GB"
+        assert t05._flag_code("Northern Ireland", codes) == "GB"
+        assert t05._is_canonical("Northern Ireland", codes, normalize)
+        assert t05.run(_ctx([_site("a", "Northern Ireland"), _site("b", "England")])) == []
 
     def test_a_historical_entity_is_never_modernised(self, t05):
         """A site inside the Ottoman Empire may properly carry that name - no replacement."""

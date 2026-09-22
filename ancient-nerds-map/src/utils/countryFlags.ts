@@ -81,6 +81,7 @@ export const COUNTRY_CODES: Record<string, string> = {
   'England': 'GB',
   'Scotland': 'GB',
   'Wales': 'GB',
+  'Northern Ireland': 'GB',
   'Ireland': 'IE',
   'Germany': 'DE',
   'Austria': 'AT',
