@@ -89,9 +89,13 @@ only writer of a Q-id is `pipeline/lyra/prospector/external_ids.py:55`, into `si
 (`phase3/snapshot_plan.py` carries the measurement). A qid that is not a Q-number is refused
 rather than written into an `ids=` parameter that would answer with no entities at all.
 
-**2026-09-22: three additions for new runs only (the gap run of the 152 over-bound sites).** None of
-them changes a target of a record that does not ask for it, so `runs/mass` and every plan built before
-them fetch, store and prompt exactly as they did:
+**2026-09-22: three additions (the gap run of the 152 over-bound sites).** The two routes change no
+target of a record that does not ask for them, so `runs/mass` and every plan built before them fetch
+and prompt the targets they always did. The truncation marker is **not** gated: it applies to every
+page stored from now on, in any run - a page of `runs/mass` fetched again (a deleted or failed target
+re-asked) is stored with the marker, beside the 27 cut pages that run stored without one. A marked
+page says what the unmarked one hid, so the mixed convention is the lesser defect, and it is named
+here rather than claimed away:
 
 * **A cut page says so.** A page that stopped at `MAX_PAGE_BYTES` is stored with `TRUNCATION_MARKER`
   after the bytes read, so the prompt names what was not read instead of presenting half a page as a
@@ -111,12 +115,14 @@ them fetch, store and prompt exactly as they did:
   Each answer is stored as a plain-text rendering, one statement per line, because that is a text a
   finder can quote word for word - 12 of the 44 production rows whose citation fails the writer's
   check quoted re-typed Wikidata JSON. The bytes actually read are kept beside it
-  (`evidence_raw/`), so the rendering is checkable against its source.
+  (`evidence_raw/`), so the rendering is checkable against its source. The WDQS query is shown and
+  cited as the item's page (`Target.url`, 2026-09-23), not as its 2 KB GET address (`query_url`).
 * **The English article through the item's own sitelink** (`enwiki_sitelink: {qid, title}` on the
   record, W12): 974 sites of the mass run had no article under their stored name while their item
   links one. The title is resolved when the plan is built (`resolve_enwiki_sitelinks`), refused for
   an item that more than one curated site shares (a parent or a generic item: 212 sites share 90
-  items), and fetched through the same extract URL as the name route.
+  items) and for a sitelink badged as a redirect (`REDIRECT_BADGES`), and fetched through the same
+  extract URL as the name route.
 """
 
 from __future__ import annotations
@@ -851,12 +857,22 @@ def wikidata_truthy_query(qid: str) -> str:
 
 
 def wikidata_truthy_url(qid: str) -> str:
-    """The `wikidata_truthy` target: `wikidata_truthy_query` as a WDQS GET."""
+    """The `wikidata_truthy` request: `wikidata_truthy_query` as a WDQS GET (`Target.query_url`)."""
     return (
         WDQS_ENDPOINT
         + "?"
         + urlencode({"query": wikidata_truthy_query(qid), "format": "json"}, quote_via=quote)
     )
+
+
+def wikidata_truthy_citation_url(qid: str) -> str:
+    """The `wikidata_truthy` target's address in the prompt and in a citation (`Target.url`).
+
+    The item's own page - a reader who opens it sees the statements the rendering lists - with the
+    feature as its fragment, so it is distinct from any other target of the site. Not the query
+    itself: that is ~2 KB of percent-encoding, and a citation is matched by URL byte for byte.
+    """
+    return f"https://www.wikidata.org/wiki/{_require_qid(qid)}#{FEATURE_WIKIDATA_TRUTHY}"
 
 
 def wikidata_claims_url(qid: str, pid: str) -> str:
@@ -1040,23 +1056,53 @@ def rendered_evidence(target: Target, body: bytes) -> str | None:
     return None
 
 
-def enwiki_titles_from_sitelinks(body: bytes) -> dict[str, str | None]:
-    """`{qid: English article title or None}` out of a `wikidata_sitelinks_url` answer.
+#: The sitelink badges that say the linked title is a **redirect**, not an article: "sitelink to
+#: redirect" and "intentional sitelink to redirect". Verified 2026-09-23 with the project's
+#: User-Agent: Q4810863 (Astibo, Estipeon's item after the external-id repair) links enwiki `Astibo`
+#: with badge Q70893996, and `Astibo` redirects to `Štip#History` - the extract route follows
+#: redirects, so the site would be judged on the whole article of the modern town. That is the
+#: section-fragment failure behind the `History` ids the repair corrects (`qid_repair.py`).
+REDIRECT_BADGES: dict[str, str] = {
+    "Q70893996": "sitelink to redirect",
+    "Q70894304": "intentional sitelink to redirect",
+}
+
+
+@dataclass(frozen=True)
+class Sitelink:
+    """An item's English sitelink as the API states it: the title and the badges on it."""
+
+    title: str
+    badges: tuple[str, ...]
+
+
+def enwiki_sitelinks_from_answer(body: bytes) -> dict[str, Sitelink | None]:
+    """`{qid: its English sitelink, or None}` out of a `wikidata_sitelinks_url` answer.
 
     An id the answer marks `missing` raises: that item does not exist, which is a fact about the
-    record's id, not an item without an article.
+    record's id, not an item without an article. A sitelink without its `badges` list raises too:
+    the API always sends it (`[]` when there is none), and a badge is what says a title is a redirect.
     """
     payload = _json_answer(body, what="wbgetentities sitelinks")
     entities = payload.get("entities") if isinstance(payload, Mapping) else None
     if not isinstance(entities, Mapping):
         raise EvidenceUnrenderable(f"sitelinks answer carries no entities: {str(payload)[:200]}")
-    titles: dict[str, str | None] = {}
+    links: dict[str, Sitelink | None] = {}
     for qid, entity in entities.items():
         if "missing" in entity:
             raise EvidenceUnrenderable(f"{qid}: Wikidata says this item does not exist")
         link = (entity.get("sitelinks") or {}).get("enwiki")
-        titles[qid] = link.get("title") if isinstance(link, Mapping) else None
-    return titles
+        if link is None:
+            links[qid] = None
+            continue
+        title = link.get("title") if isinstance(link, Mapping) else None
+        badges = link.get("badges") if isinstance(link, Mapping) else None
+        if not isinstance(title, str) or not title or not isinstance(badges, list):
+            raise EvidenceUnrenderable(
+                f"{qid}: an enwiki sitelink without title and badges: {link!r}"
+            )
+        links[qid] = Sitelink(title=title, badges=tuple(str(badge) for badge in badges))
+    return links
 
 
 @dataclass(frozen=True)
@@ -1087,7 +1133,9 @@ def resolve_enwiki_sitelinks(
     share 90 items; `Dolmens of Sardinia` links `Dolmen`), and its article describes something other
     than any one of them - so it is refused, with the count, and nothing is fetched for it. Every
     other item is asked in batches of 50; a request that is not a 2xx raises (the plan builder is
-    run by hand, and a plan built on a failed lookup would silently route fewer sites).
+    run by hand, and a plan built on a failed lookup would silently route fewer sites). A sitelink
+    that carries a redirect badge (`REDIRECT_BADGES`) is refused with the badge named: its title is
+    another article's, or a section of one, not the item's own article.
     """
     resolutions: dict[str, SitelinkResolution] = {}
     wanted: dict[str, list[str]] = {}
@@ -1111,16 +1159,29 @@ def resolve_enwiki_sitelinks(
             raise EvidenceUnrenderable(
                 f"GET {url}: HTTP {page.status}, truncated={page.truncated}; no sitelink resolved"
             )
-        titles = enwiki_titles_from_sitelinks(page.body)
+        links = enwiki_sitelinks_from_answer(page.body)
         for qid in window:
-            if qid not in titles:
+            if qid not in links:
                 raise EvidenceUnrenderable(f"{qid}: asked for, and absent from the answer")
+            link = links[qid]
+            refused: str | None = None
+            if link is None:
+                refused = f"{qid} has no English Wikipedia sitelink"
+            else:
+                redirect = [
+                    f"{badge} {REDIRECT_BADGES[badge]}"
+                    for badge in link.badges
+                    if badge in REDIRECT_BADGES
+                ]
+                if redirect:
+                    refused = (
+                        f"{qid}'s English sitelink {link.title!r} is a redirect "
+                        f"({', '.join(redirect)}): it leads to another article or a section of "
+                        "one, not the item's own"
+                    )
             for site_id in wanted[qid]:
-                title = titles[qid]
                 resolutions[site_id] = SitelinkResolution(
-                    qid=qid,
-                    title=title,
-                    refused=None if title else f"{qid} has no English Wikipedia sitelink",
+                    qid=qid, title=None if link is None else link.title, refused=refused
                 )
     return resolutions
 
@@ -1157,7 +1218,15 @@ def _overpass_regex(name: str) -> str:
 
 @dataclass(frozen=True)
 class Target:
-    """One URL to try, and the finding that asked for it."""
+    """One URL to try, and the finding that asked for it.
+
+    `url` is the page's address as the prompt shows it and as a finder's citation must name it, byte
+    for byte (`discover_stage.claim_problems` looks pages up by it). For every feature but one it is
+    also the address requested. The exception is the narrowed route's WDQS query, whose GET address
+    is some 2 KB of percent-encoded SPARQL (1,951 characters for Q10288): a finder cannot be expected
+    to copy that exactly, so the target shows and is cited by its item's page
+    (`wikidata_truthy_citation_url`) and carries the query in `query_url`.
+    """
 
     site_id: str
     feature: str
@@ -1165,6 +1234,13 @@ class Target:
     reason: str  #: "<test_id> <field>" of the finding that bought this target
     #: The item a rendered Wikidata feature is about - its rendering names it. `None` elsewhere.
     qid: str | None = None
+    #: The address actually requested, where it is not `url`. `None` for every verbatim feature.
+    query_url: str | None = None
+
+    @property
+    def request_url(self) -> str:
+        """What is sent, recorded in the ledger and the fetch report: `query_url` or `url`."""
+        return self.url if self.query_url is None else self.query_url
 
     @property
     def label(self) -> str:
@@ -1245,6 +1321,11 @@ def targets_for_site(site: Mapping[str, Any]) -> list[Target]:
                     url=_url_for(feature, site, site_id, name),
                     reason=reason,
                     qid=str(qid) if feature in _QID_FEATURES or _is_date(feature) else None,
+                    query_url=(
+                        wikidata_truthy_url(str(qid))
+                        if feature == FEATURE_WIKIDATA_TRUTHY
+                        else None
+                    ),
                 )
     return list(targets.values())
 
@@ -1309,7 +1390,7 @@ def _url_for(feature: str, site: Mapping[str, Any], site_id: str, name: str) -> 
     if feature == FEATURE_ENWIKI_SITELINK:
         return wikipedia_extract_url(str(site[ENWIKI_SITELINK_KEY]["title"]))
     if feature == FEATURE_WIKIDATA_TRUTHY:
-        return wikidata_truthy_url(str(_finding(site, "wikidata_qid", f"site {site_id}")))
+        return wikidata_truthy_citation_url(str(_finding(site, "wikidata_qid", f"site {site_id}")))
     if _is_date(feature):
         return wikidata_claims_url(
             str(_finding(site, "wikidata_qid", f"site {site_id}")),
@@ -1538,8 +1619,12 @@ class SiteEvidence:
     def to_dict(self) -> dict[str, Any]:
         return {
             "site_id": self.site_id,
+            # `url` is what the prompt shows and a citation names; a target that requests another
+            # address (the narrowed route's WDQS query) says so, and its outcome records that one.
             "targets": [
-                {"feature": t.feature, "reason": t.reason, "url": t.url} for t in self.targets
+                {"feature": t.feature, "reason": t.reason, "url": t.url}
+                | ({} if t.query_url is None else {"request_url": t.query_url})
+                for t in self.targets
             ],
             "outcomes": [o.to_dict() for o in self.outcomes],
             "fetched": self.fetched,
@@ -1753,7 +1838,7 @@ def one_attempt(
     is a decision for the operator (and `overpass.kumi.systems` - the third-party mirror the pilot
     fell back to by hand - is a different service with different terms).
     """
-    outcome = TargetOutcome(feature=target.feature, url=target.url, bought_by=target.reason)
+    outcome = TargetOutcome(feature=target.feature, url=target.request_url, bought_by=target.reason)
     for number in range(1, MAX_ATTEMPTS + 1):
         attempt, page = _ask(target=target, fetcher=fetcher, number=number)
         retryable = attempt.outcome is L.FetchOutcome.TRANSPORT_FAILURE or is_retryable_status(
@@ -1780,7 +1865,7 @@ def one_attempt(
                 stage=stage,
                 batch_id=batch_id,
                 label=target.label,
-                url=target.url,
+                url=target.request_url,
                 http_status=attempt.http_status,
                 bytes=attempt.bytes,
                 outcome=attempt.outcome,
@@ -1858,7 +1943,7 @@ def _ask(
     `RawGeometryRefused`) is a bug in the caller, not weather, and propagates.
     """
     try:
-        page = fetcher.get(target.url)
+        page = fetcher.get(target.request_url)
     except TransportFailure as exc:
         return (
             FetchAttempt(
@@ -1922,12 +2007,12 @@ def collect_batch(
             if store.exists(target.site_id, target.feature):
                 result.skipped_existing += 1
                 continue
-            host = host_of(target.url)
+            host = host_of(target.request_url)
             probe = probes.get(host)
             if probe is None:
                 probe = probe_host(
                     host=host,
-                    url=host_probe_url(target.url),
+                    url=host_probe_url(target.request_url),
                     fetcher=fetcher,
                     ledger=ledger,
                     batch_id=batch_id,
@@ -1943,7 +2028,7 @@ def collect_batch(
                         stage=stage,
                         batch_id=batch_id,
                         label=target.label,
-                        url=target.url,
+                        url=target.request_url,
                         http_status=None,
                         bytes=0,
                         outcome=L.FetchOutcome.HOST_UNREACHABLE,
@@ -1955,7 +2040,7 @@ def collect_batch(
                 result.outcomes.append(
                     TargetOutcome(
                         feature=target.feature,
-                        url=target.url,
+                        url=target.request_url,
                         bought_by=target.reason,
                         not_attempted=probe.reason,
                     )
@@ -1978,7 +2063,7 @@ def collect_batch(
             for attempt in outcome.attempts:
                 if not attempt.ok and attempt.http_status is not None:
                     # Data, not an exception: the pilot recorded 403/404/504/429 and continued.
-                    result.non_2xx.append((target.url, attempt.http_status))
+                    result.non_2xx.append((target.request_url, attempt.http_status))
     report.probes = list(probes.values())
     return report
 

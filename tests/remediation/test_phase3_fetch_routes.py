@@ -396,6 +396,59 @@ def test_the_finder_and_the_citation_check_read_the_rendering(tmp_path: Path) ->
     assert sum(excerpt.chars for excerpt in excerpts) < 3000
 
 
+def _cite(url: str, quote: str) -> DS.DiscoverAnswer:
+    return DS.parse_answer(
+        f'The item is a tomb.\nPROPOSED: Tomb\nSOURCE: {url} - "{quote}"\nVERDICT: WRONG\n'
+    )
+
+
+def test_a_truthy_line_is_cited_through_the_short_address_the_prompt_shows(tmp_path: Path) -> None:
+    """The WDQS GET address is ~2 KB of percent-encoding and a citation is matched byte for byte.
+
+    `site_type` and `country` corrections rest on the P31/P17 lines; a finder that had to re-type
+    the query URL exactly would lose them to one slipped character. So the prompt shows - and the
+    citation check keys the page by - the item's own page, while the fetch still asks WDQS.
+    """
+    asked: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        asked.append(str(request.url))
+        return _handler(request)
+
+    record = _record(wikidata_route="narrow")
+    report, _ = _collect(tmp_path, record, handler)
+    truthy = next(t for t in F.targets_for_site(record) if t.feature == F.FEATURE_WIKIDATA_TRUTHY)
+    assert truthy.url == f"https://www.wikidata.org/wiki/{QID}#{F.FEATURE_WIKIDATA_TRUTHY}"
+    assert truthy.request_url == F.wikidata_truthy_url(QID) and len(truthy.request_url) > 1000
+    assert truthy.request_url in asked and truthy.url not in asked  # WDQS is what is asked
+    # the fetch report records what was requested, and names both addresses for the target
+    site = json.loads(report.to_json())["sites"][0]
+    outcome = next(o for o in site["outcomes"] if o["feature"] == F.FEATURE_WIKIDATA_TRUTHY)
+    assert outcome["url"] == truthy.request_url
+    listed = next(t for t in site["targets"] if t["feature"] == F.FEATURE_WIKIDATA_TRUTHY)
+    assert (listed["url"], listed["request_url"]) == (truthy.url, truthy.request_url)
+    # the prompt shows the short address, and a P31 line cited through it passes the check
+    excerpts = MS.evidence_excerpts(
+        site_id=SITE, site=record, store=F.EvidenceStore(tmp_path / "evidence")
+    )
+    shown = next(e for e in excerpts if e.feature == F.FEATURE_WIKIDATA_TRUTHY)
+    assert shown.url == truthy.url
+    assert f'url="{truthy.url}"' in MS.evidence_block(excerpts)
+    pages = DS.pages_from_excerpts(excerpts)
+    line = "P31 instance of: Q381885 tomb"
+    assert DS.source_problems(_cite(truthy.url, line), pages) == ()
+    assert DS.source_problems(_cite(truthy.url, "P31 instance of: Q1 fortress"), pages)
+    # a record without the route still shows and asks one and the same address per target
+    plain = F.targets_for_site(_record())
+    assert all(t.query_url is None and t.request_url == t.url for t in plain)
+
+
+def test_the_truthy_addresses_refuse_a_qid_that_is_not_a_q_number() -> None:
+    for build in (F.wikidata_truthy_url, F.wikidata_truthy_citation_url, F.wikidata_truthy_query):
+        with pytest.raises(InputError, match="is not a Q-number"):
+            build("Q1 } UNION { ?s ?p ?o")
+
+
 def test_a_rendered_answer_that_hit_the_cap_is_refused_not_rendered(tmp_path: Path) -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         if urlsplit(str(request.url)).path == "/":
@@ -454,7 +507,9 @@ def test_a_shared_item_is_refused_without_a_request_and_the_rest_are_resolved() 
     """212 sites share 90 items; 'Dolmens of Sardinia' links 'Dolmen', which is no one site."""
     fetcher = _Recorder(
         {
-            "Q10": {"sitelinks": {"enwiki": {"site": "enwiki", "title": "Larisa (Argos)"}}},
+            "Q10": {
+                "sitelinks": {"enwiki": {"site": "enwiki", "title": "Larisa (Argos)", "badges": []}}
+            },
             "Q11": {"sitelinks": {}},
         }
     )
@@ -484,4 +539,90 @@ def test_a_failed_or_missing_lookup_stops_the_resolution() -> None:
     with pytest.raises(F.EvidenceUnrenderable, match="does not exist"):
         F.resolve_enwiki_sitelinks(
             {"site-a": "Q10"}, shared={}, fetcher=_Recorder({"Q10": {"missing": ""}})
+        )
+
+
+class _Fixed:
+    """A `Fetcher` whose every answer is one body, whatever it was asked."""
+
+    def __init__(self, entities: dict[str, Any], *, truncated: bool = False) -> None:
+        self.body = json.dumps({"entities": entities}).encode()
+        self.truncated = truncated
+        self.asked: list[str] = []
+
+    def get(self, url: str) -> F.FetchedPage:
+        self.asked.append(url)
+        return F.FetchedPage(status=200, final_url=url, body=self.body, truncated=self.truncated)
+
+
+def _sitelink(title: str, *badges: str) -> dict[str, Any]:
+    return {"sitelinks": {"enwiki": {"site": "enwiki", "title": title, "badges": list(badges)}}}
+
+
+def test_a_sitelink_badged_as_a_redirect_is_refused_with_the_badge_named() -> None:
+    """Q4810863 (Estipeon's item after the repair) links enwiki `Astibo`, badge Q70893996, and
+    `Astibo` redirects to `Štip#History`: the extract route would judge the site on the modern town.
+    """
+    resolved = F.resolve_enwiki_sitelinks(
+        {"estipeon": "Q4810863", "andriake": "Q510000", "other": "Q7"},
+        shared={},
+        fetcher=_Fixed(
+            {
+                "Q4810863": _sitelink("Astibo", "Q70893996"),
+                "Q510000": _sitelink("Andriake"),
+                "Q7": _sitelink("Somewhere", "Q70894304"),
+            }
+        ),
+    )
+    assert resolved["andriake"].to_record() == {"qid": "Q510000", "title": "Andriake"}
+    for site, badge in (("estipeon", "Q70893996 sitelink to redirect"), ("other", "Q70894304")):
+        refused = str(resolved[site].refused)
+        assert badge in refused and "is a redirect" in refused
+        with pytest.raises(InputError, match="no usable sitelink"):
+            resolved[site].to_record()
+
+
+def test_a_sitelink_without_its_badges_list_is_refused_not_read_as_unbadged() -> None:
+    with pytest.raises(F.EvidenceUnrenderable, match="without title and badges"):
+        F.resolve_enwiki_sitelinks(
+            {"site-a": "Q10"},
+            shared={},
+            fetcher=_Fixed({"Q10": {"sitelinks": {"enwiki": {"title": "Larisa (Argos)"}}}}),
+        )
+
+
+def test_an_answer_that_omits_an_asked_item_or_was_cut_stops_the_resolution() -> None:
+    with pytest.raises(F.EvidenceUnrenderable, match="Q11: asked for, and absent"):
+        F.resolve_enwiki_sitelinks(
+            {"site-a": "Q10", "site-b": "Q11"},
+            shared={},
+            fetcher=_Fixed({"Q10": _sitelink("Larisa (Argos)")}),
+        )
+    with pytest.raises(F.EvidenceUnrenderable, match="truncated=True"):
+        F.resolve_enwiki_sitelinks(
+            {"site-a": "Q10"},
+            shared={},
+            fetcher=_Fixed({"Q10": _sitelink("Larisa (Argos)")}, truncated=True),
+        )
+
+
+def test_the_sitelinks_request_takes_one_to_fifty_items() -> None:
+    assert "ids=Q1%7CQ2" in F.wikidata_sitelinks_url(["Q1", "Q2"])
+    F.wikidata_sitelinks_url([f"Q{n}" for n in range(1, 51)])
+    for count in (0, 51):
+        with pytest.raises(InputError, match="1 to 50 per request"):
+            F.wikidata_sitelinks_url([f"Q{n}" for n in range(1, count + 1)])
+
+
+def test_a_resolution_with_a_title_and_a_refusal_has_no_record() -> None:
+    """A redirect keeps its title for the report, and still gives the plan nothing to route by."""
+    both = F.SitelinkResolution(qid="Q1", title="Astibo", refused="a redirect")
+    with pytest.raises(InputError, match="no usable sitelink \\(a redirect\\)"):
+        both.to_record()
+
+
+def test_a_sitelink_record_with_an_extra_key_is_refused() -> None:
+    with pytest.raises(InputError, match="not \\{qid, title\\}"):
+        F.targets_for_site(
+            _record(enwiki_sitelink={"qid": QID, "title": "Giza pyramid complex", "badges": []})
         )
