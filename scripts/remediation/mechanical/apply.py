@@ -3,7 +3,9 @@
 The plan (`PLAN.jsonl`) is what a lane's planner decided; this module is the only place that writes
 anything, and it writes through one transaction:
 
-* `--emit` writes `APPLY.sql` - generated, never hand-edited.
+* `--emit` writes `APPLY.sql` - generated, never hand-edited - and pins it to the plan: its first
+  line is `-- plan sha256 <digest of PLAN.jsonl>`. It refuses unless `ROLLBACK.sql` exists and is
+  the reversal of *this* plan, pinned the same way.
 * `--rehearse` writes `REHEARSAL.sql` (the byte-identical statement with `COMMIT` replaced by
   `ROLLBACK`, plus read-backs) and runs it against production, so the guards are exercised on the
   real rows before anything is kept.
@@ -12,6 +14,14 @@ anything, and it writes through one transaction:
 * `--apply` runs the read-only verification, applies, and runs it again. Before and after come
   from the database, not from this plan.
 * `--verify` is read-only.
+
+`--rehearse`, `--rehearse-rollback` and `--apply` never re-emit: they send the file on disk, and
+only when it is still the statement its plan renders and its pin names the plan as it is now
+(`[H] SECURITY 3 / BACKEND B7`). A plan changed after the emit, a hand edit, or a file from another
+plan is refused. After a psql timeout or a failed exit, `--apply` reads the journal for its run
+stamp and says whether the transaction COMMITTED (all rows journalled) or did NOT (none), instead
+of leaving it ambiguous; if even that read fails, the outcome is reported as UNKNOWN with the query
+to run before any retry.
 
 `--lane` names the lane (`mechanical/lane.py`): the column, the journal identity and the values it
 owns. It defaults to `t05`, the country lane applied on 2026-09-21, whose statement this module
@@ -26,7 +36,6 @@ from __future__ import annotations
 import argparse
 import json
 import logging
-import shlex
 import subprocess
 import sys
 from collections.abc import Iterable, Sequence
@@ -40,6 +49,8 @@ for _root in (str(REPO), str(REPO / "scripts" / "remediation")):
     if _root not in sys.path:
         sys.path.insert(0, _root)
 
+from prod_write import SSH_HOST, OutcomeUnknown, send  # noqa: E402
+
 from mechanical.lane import LANE_READBACKS, LANES, T05, Lane  # noqa: E402
 from mechanical.lane import sql_literal as _literal  # noqa: E402
 from mechanical.plan import (  # noqa: E402
@@ -49,16 +60,21 @@ from mechanical.plan import (  # noqa: E402
     TEST_ID,
     UUID_RE,
     PlanError,
+    pinned,
+    plan_sha256,
+    render_rollback_sql,
+    verify_pinned,
 )
 
 log = logging.getLogger("mechanical.apply")
 
-SSH_HOST = "ancientnerds"
-PSQL = "docker exec -i ancient_nerds_db psql -U ancient_map -d ancient_map -v ON_ERROR_STOP=1"
-#: psql is asked for unaligned rows only for the read-only metrics, where the output is parsed.
-#: No `-F|`: ssh hands this command to the remote login shell, which reads a bare `|` as a pipe
-#: (measured: `bash: -c: line 2: syntax error`). Unaligned output already separates on `|`.
-PSQL_ROWS = PSQL + " -t -A"
+EXIT_OK = 0
+EXIT_REFUSED = 1
+EXIT_NOT_COMMITTED = 3
+EXIT_COMMITTED_UNCLEAN = 4
+EXIT_UNKNOWN = 5
+COMMITTED = "COMMITTED"
+NOT_COMMITTED = "NOT COMMITTED"
 
 
 def lane_dir(lane: Lane) -> Path:
@@ -677,15 +693,12 @@ def rehearse(
 def run_psql(
     sql: str, *, host: str = SSH_HOST, timeout: int = 900, rows: bool = False, check: bool = True
 ) -> subprocess.CompletedProcess[str]:
-    """Send `sql` to production the way this project does it: ssh, then psql in the container."""
-    proc = subprocess.run(
-        shlex.split(f"ssh {host} {PSQL_ROWS if rows else PSQL}"),
-        input=sql,
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        timeout=timeout,
-    )
+    """Send `sql` to production the way this project does it (`prod_write.send`).
+
+    A timeout raises `OutcomeUnknown` (the COMMIT may or may not have reached the database); a
+    non-zero exit raises `PlanError` unless `check=False`, when the caller reads the journal.
+    """
+    proc = send(sql, host=host, timeout=timeout, rows=rows)
     if check and proc.returncode != 0:
         raise PlanError(f"psql exited {proc.returncode}:\n{proc.stdout}\n{proc.stderr}".strip())
     return proc
@@ -694,6 +707,66 @@ def run_psql(
 def read_rows(sql: str) -> list[list[str]]:
     proc = run_psql(sql, rows=True)
     return [line.split("|") for line in proc.stdout.splitlines() if line.strip()]
+
+
+def journal_count(run_stamp: str) -> int:
+    """How many journal rows a run stamp holds - the one question a lost COMMIT is answered by."""
+    rows = read_rows(
+        f"SELECT count(*) FROM remediation_change_log WHERE run_stamp = {_literal(run_stamp)}"
+    )
+    if len(rows) != 1 or len(rows[0]) != 1:
+        raise PlanError(f"the journal count for {run_stamp!r} came back as {rows!r}")
+    return int(rows[0][0])
+
+
+def commit_state(records: Sequence[ChangeRecord], lane: Lane = T05) -> str:
+    """Did the lane's one transaction commit? Read from the journal, never assumed.
+
+    The transaction journals every planned row or none: all of them under the run stamp means it
+    COMMITTED, none means it did NOT. Anything else - including a journal that cannot be read -
+    is an unknown outcome, reported with the query to run before any retry.
+    """
+    query = (
+        f"SELECT count(*) FROM remediation_change_log WHERE run_stamp = {_literal(lane.run_stamp)};"
+    )
+    try:
+        count = journal_count(lane.run_stamp)
+    except (OutcomeUnknown, PlanError) as exc:
+        raise OutcomeUnknown(
+            f"the journal could not be read either ({exc}). Before any retry run: {query} - the "
+            f"write landed only if it reads {len(records)}, and nothing was written if it reads 0"
+        ) from exc
+    if count == len(records):
+        return COMMITTED
+    if count == 0:
+        return NOT_COMMITTED
+    raise OutcomeUnknown(
+        f"the journal holds {count} of {len(records)} rows for {lane.run_stamp!r}; one transaction "
+        "cannot leave that behind - stop and find out what else wrote under this stamp"
+    )
+
+
+def settle(records: Sequence[ChangeRecord], lane: Lane, what: str) -> int:
+    """After a timeout or a failed psql exit: say from the journal what actually happened."""
+    state = commit_state(records, lane)
+    if state == NOT_COMMITTED:
+        print(
+            f"NOT COMMITTED: {what}, and the journal holds 0 rows for {lane.run_stamp!r} - "
+            "nothing was written."
+        )
+        return EXIT_NOT_COMMITTED
+    print(
+        f"COMMITTED: {what}, but the journal holds all {len(records)} rows for "
+        f"{lane.run_stamp!r} - the transaction committed. Reading it back:"
+    )
+    landed = assert_the_write_landed(records, lane=lane)
+    for name, value in landed.items():
+        print(f"  {name}: {value}")
+    print(
+        "APPLY LANDED: the read-back matches the plan, row for row; psql did not finish cleanly, "
+        "so its own post-commit output is missing - run --verify for the full read-back."
+    )
+    return EXIT_COMMITTED_UNCLEAN
 
 
 def _value_rows(lane: Lane) -> list[tuple[str, str, int]]:
@@ -727,7 +800,19 @@ def verify_interests(records: Sequence[ChangeRecord], lane: Lane = T05) -> str:
 
 
 # ------------------------------------------------------------------------------- the commands
-def emit(records: Sequence[ChangeRecord], out: Path, lane: Lane = T05) -> int:
+def apply_statement(records: Sequence[ChangeRecord], lane: Lane) -> str:
+    """The write this plan renders - what `APPLY.sql` must hold below its pin."""
+    return render_transaction(
+        records, run_stamp=lane.run_stamp, site_ids={r.site_id for r in records}, lane=lane
+    )
+
+
+def rollback_statement(records: Sequence[ChangeRecord], lane: Lane) -> str:
+    """The reversal this plan renders - what `ROLLBACK.sql` must hold below its pin."""
+    return render_rollback_sql(records, site_ids={r.site_id for r in records}, lane=lane)
+
+
+def emit(records: Sequence[ChangeRecord], out: Path, lane: Lane = T05, *, plan_path: Path) -> int:
     validate_records(records, lane=lane)
     apply_path = out / "APPLY.sql"
     rollback_path = out / "ROLLBACK.sql"
@@ -735,11 +820,15 @@ def emit(records: Sequence[ChangeRecord], out: Path, lane: Lane = T05) -> int:
         raise PlanError(
             f"{rollback_path} does not exist - the rollback is written before the apply, never after"
         )
-    sql = render_transaction(
-        records, run_stamp=lane.run_stamp, site_ids={r.site_id for r in records}, lane=lane
-    )
+    # The undo on disk must be the reversal of *this* plan, unedited: an undo pinned to another
+    # plan would be kept next to an apply it does not reverse.
+    verify_pinned(rollback_path, plan_path=plan_path, expected=rollback_statement(records, lane))
     apply_path.parent.mkdir(parents=True, exist_ok=True)
-    apply_path.write_text(sql, encoding="utf-8", newline="\n")
+    apply_path.write_text(
+        pinned(apply_statement(records, lane), plan_sha256(plan_path)),
+        encoding="utf-8",
+        newline="\n",
+    )
     log.info(
         "wrote %s (%d rows); ROLLBACK.sql is %s than APPLY.sql: %s",
         apply_path,
@@ -750,8 +839,12 @@ def emit(records: Sequence[ChangeRecord], out: Path, lane: Lane = T05) -> int:
     return len(records)
 
 
-def cmd_rehearse(records: Sequence[ChangeRecord], out: Path, lane: Lane = T05) -> str:
-    sql = (out / "APPLY.sql").read_text(encoding="utf-8")
+def cmd_rehearse(
+    records: Sequence[ChangeRecord], out: Path, lane: Lane = T05, *, plan_path: Path
+) -> str:
+    sql = verify_pinned(
+        out / "APPLY.sql", plan_path=plan_path, expected=apply_statement(records, lane)
+    )
     script = rehearse(sql, lane=lane)
     head = sql.partition("\nCOMMIT;\n")[0]
     if not script.startswith(head):
@@ -766,7 +859,9 @@ def cmd_rehearse(records: Sequence[ChangeRecord], out: Path, lane: Lane = T05) -
     return proc.stdout
 
 
-def cmd_rehearse_rollback(records: Sequence[ChangeRecord], out: Path, lane: Lane = T05) -> str:
+def cmd_rehearse_rollback(
+    records: Sequence[ChangeRecord], out: Path, lane: Lane = T05, *, plan_path: Path
+) -> str:
     """Run `ROLLBACK.sql` with `COMMIT` swapped for `ROLLBACK`.
 
     The reversal starts from the state the write left behind, so this needs no apply first: it is
@@ -780,6 +875,7 @@ def cmd_rehearse_rollback(records: Sequence[ChangeRecord], out: Path, lane: Lane
     head, sep, _ = sql.partition("\nCOMMIT;\n")
     if not sep:
         raise PlanError("ROLLBACK.sql has no COMMIT - refusing to rehearse it")
+    verify_pinned(path, plan_path=plan_path, expected=rollback_statement(records, lane))
     script = head + "\nROLLBACK;\n" + rollback_rehearsal_reads(records, lane)
     target = out / "REHEARSAL_ROLLBACK.sql"
     target.write_text(script, encoding="utf-8", newline="\n")
@@ -791,17 +887,37 @@ def cmd_rehearse_rollback(records: Sequence[ChangeRecord], out: Path, lane: Lane
     return proc.stdout
 
 
-def cmd_apply(records: Sequence[ChangeRecord], out: Path, lane: Lane = T05) -> str:
+def cmd_apply(
+    records: Sequence[ChangeRecord], out: Path, lane: Lane = T05, *, plan_path: Path
+) -> int:
+    """Send the pinned `APPLY.sql` - only if it is still this plan's - and prove what happened.
+
+    Returns an exit code: `EXIT_OK`, or after a timeout or a failed psql exit the journal's answer
+    (`EXIT_NOT_COMMITTED`, `EXIT_COMMITTED_UNCLEAN`); an unreadable journal raises `OutcomeUnknown`.
+    """
+    sql = verify_pinned(
+        out / "APPLY.sql", plan_path=plan_path, expected=apply_statement(records, lane)
+    )
+    already = journal_count(lane.run_stamp)
+    if already:
+        raise PlanError(
+            f"run stamp {lane.run_stamp!r} already journals {already} row(s): this write has "
+            "landed, or something else wrote under its stamp - run --verify; never apply twice"
+        )
     readback = READBACKS[lane.name]
     print("=== before ===")
     print(run_psql(readback).stdout)
     print(verify_interests(records, lane))
-    sql = (out / "APPLY.sql").read_text(encoding="utf-8")
-    proc = run_psql(sql)
+    try:
+        proc = run_psql(sql, check=False)
+    except OutcomeUnknown as exc:
+        return settle(records, lane, f"psql timed out ({exc})")
     print("=== the write ===")
     print(proc.stdout)
     if proc.stderr.strip():
         print(proc.stderr, file=sys.stderr)
+    if proc.returncode != 0:
+        return settle(records, lane, f"psql exited {proc.returncode}")
     print("=== after ===")
     print(run_psql(readback).stdout)
     print(verify_interests(records, lane))
@@ -810,7 +926,7 @@ def cmd_apply(records: Sequence[ChangeRecord], out: Path, lane: Lane = T05) -> s
     for name, value in landed.items():
         print(f"  {name}: {value}")
     print("APPLY OK: the read-back matches the plan, row for row")
-    return proc.stdout
+    return EXIT_OK
 
 
 def probe_cases(
@@ -963,33 +1079,45 @@ def main(argv: list[str] | None = None) -> int:
     plan = args.plan if args.plan is not None else out / "PLAN.jsonl"
 
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+    try:
+        return run(args, lane=lane, out=out, plan=plan, usage=ap.print_help)
+    except OutcomeUnknown as exc:
+        print(f"OUTCOME UNKNOWN: {exc}", file=sys.stderr)
+        return EXIT_UNKNOWN
+    except PlanError as exc:
+        print(f"REFUSED: {exc}", file=sys.stderr)
+        return EXIT_REFUSED
 
+
+def run(args: argparse.Namespace, *, lane: Lane, out: Path, plan: Path, usage: Any) -> int:
+    """The commands in their fixed order. Only `--emit` writes `APPLY.sql`; every command that
+    sends a file sends the one on disk, after proving it is still its plan's."""
     if args.check_primitive:
         print(run_psql(PRIMITIVE_CHECK_SQL).stdout)
-        return 0
+        return EXIT_OK
     if args.verify:
         print(run_psql(READBACKS[lane.name]).stdout)
-        return 0
+        return EXIT_OK
 
     records = load_records(plan)
     validate_records(records, lane=lane)
 
     if args.interests:
         print(verify_interests(records, lane))
-        return 0
+        return EXIT_OK
     if args.probe_guards:
         return cmd_probe_guards(records, out, lane)
-    if args.emit or args.apply or args.rehearse or args.rehearse_rollback:
-        emit(records, out, lane)
+    if args.emit:
+        emit(records, out, lane, plan_path=plan)
     if args.rehearse:
-        cmd_rehearse(records, out, lane)
+        cmd_rehearse(records, out, lane, plan_path=plan)
     if args.rehearse_rollback:
-        cmd_rehearse_rollback(records, out, lane)
+        cmd_rehearse_rollback(records, out, lane, plan_path=plan)
     if args.apply:
-        cmd_apply(records, out, lane)
-    if not any((args.emit, args.apply, args.rehearse, args.rehearse_rollback)):
-        ap.print_help()
-    return 0
+        return cmd_apply(records, out, lane, plan_path=plan)
+    if not any((args.emit, args.rehearse, args.rehearse_rollback)):
+        usage()
+    return EXIT_OK
 
 
 if __name__ == "__main__":

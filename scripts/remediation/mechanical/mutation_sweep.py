@@ -42,10 +42,12 @@ UK = MECHANICAL / "uk_parts.py"
 PERIOD = MECHANICAL / "period_name.py"
 SHAPE = MECHANICAL / "site_type_shape.py"
 TEXT = REPO / "pipeline/utils/text.py"
+PROD_WRITE = REPO / "scripts/remediation/prod_write.py"
 TESTFILE = "tests/remediation/test_mechanical.py"
 UK_TESTS = "tests/remediation/test_mechanical_uk.py"
 PERIOD_TESTS = "tests/remediation/test_mechanical_period_name.py"
 SHAPE_TESTS = "tests/remediation/test_mechanical_site_type.py"
+PROD_TESTS = "tests/remediation/test_prod_write.py"
 
 #: The interpreter that runs the sweep runs the tests too: a hard-coded `.venv` path does not exist in
 #: a git worktree, and a second interpreter could test different packages than the one reporting.
@@ -756,6 +758,212 @@ CASES: list[Case] = [
         '"add it to the vocabulary or map it to a canonical type - a vocabulary decision",',
         "test_a_real_word_outside_the_list_goes_to_review",
         SHAPE_TESTS,
+    ),
+    # --------------------------------- [H] SECURITY 3 / BACKEND B7: the pin and the commit state
+    *(
+        guard(f"pin: {label}", path, needle, test)
+        for label, path, needle, test in (
+            (
+                "a plan to pin to",
+                PLAN,
+                '    if not path.exists():\n        raise PlanError(f"{path} does not exist - there is no plan',
+                "test_a_missing_plan_cannot_pin_anything",
+            ),
+            (
+                "a statement to verify",
+                PLAN,
+                '    if not path.exists():\n        raise PlanError(f"{path} does not exist - emit it',
+                "test_a_missing_apply_is_refused",
+            ),
+            (
+                "a pin at all",
+                PLAN,
+                "    if not declared:",
+                "test_an_apply_without_a_pin_is_refused",
+            ),
+            ("one pin only", PLAN, "    if len(declared) > 1:", "test_two_pins_are_refused"),
+            (
+                "the pin names the plan as it is now",
+                PLAN,
+                "    if declared[0] != digest:",
+                "test_a_plan_changed_after_the_emit_is_refused",
+            ),
+            (
+                "the body is the plan's rendering",
+                PLAN,
+                "    if text != pinned(expected, digest):",
+                "test_a_hand_edited_apply_is_refused",
+            ),
+            (
+                "a stamp is applied once",
+                APPLY,
+                "    if already:",
+                "test_a_stamp_that_already_journals_rows_is_never_applied_again",
+            ),
+            (
+                "a failed exit is settled from the journal",
+                APPLY,
+                "    if proc.returncode != 0:\n        return settle(",
+                "test_a_failed_exit_is_settled_from_the_journal",
+            ),
+            (
+                "all rows journalled means committed",
+                APPLY,
+                "    if count == len(records):\n        return COMMITTED",
+                "test_a_timeout_after_the_commit_is_reported_as_committed",
+            ),
+            (
+                "no row journalled means not committed",
+                APPLY,
+                "    if count == 0:\n        return NOT_COMMITTED",
+                "test_a_timeout_before_the_commit_is_reported_as_not_committed",
+            ),
+            (
+                "settle says NOT COMMITTED",
+                APPLY,
+                "    if state == NOT_COMMITTED:",
+                "test_a_timeout_before_the_commit_is_reported_as_not_committed",
+            ),
+            (
+                "a journal count has one value",
+                APPLY,
+                "    if len(rows) != 1 or len(rows[0]) != 1:",
+                "test_a_journal_count_of_the_wrong_shape_is_refused",
+            ),
+        )
+    ),
+    *(
+        Case(f"pin: {label}", path, old, new, test, testfile)
+        for label, path, old, new, test, testfile in (
+            (
+                "the digest is of the text, not the checkout's bytes",
+                PLAN,
+                '    return hashlib.sha256(path.read_text(encoding="utf-8").encode("utf-8")).hexdigest()',
+                "    return hashlib.sha256(path.read_bytes()).hexdigest()",
+                "test_the_digest_is_the_same_on_a_crlf_checkout",
+                TESTFILE,
+            ),
+            (
+                "the undo is written pinned",
+                PLAN,
+                '    path.write_text(pinned(sql, plan_sha256(plan_path)), encoding="utf-8", newline="\\n")',
+                '    path.write_text(sql, encoding="utf-8", newline="\\n")',
+                "test_emit_writes_the_apply_next_to_an_existing_rollback",
+                TESTFILE,
+            ),
+            (
+                "emit refuses an undo of another plan",
+                APPLY,
+                "    verify_pinned(rollback_path, plan_path=plan_path, expected=rollback_statement(records, lane))",
+                "    pass",
+                "test_emit_refuses_the_rollback_of_another_plan",
+                TESTFILE,
+            ),
+            (
+                "emit pins the apply",
+                APPLY,
+                "        pinned(apply_statement(records, lane), plan_sha256(plan_path)),",
+                "        apply_statement(records, lane),",
+                "test_the_apply_is_pinned_to_the_plan_and_verifies",
+                TESTFILE,
+            ),
+            (
+                "the rehearsal sends only the verified statement",
+                APPLY,
+                '    sql = verify_pinned(\n        out / "APPLY.sql", plan_path=plan_path, expected=apply_statement(records, lane)\n    )\n    script = rehearse',
+                '    sql = (out / "APPLY.sql").read_text(encoding="utf-8")\n    script = rehearse',
+                "test_a_plan_changed_after_the_emit_is_refused",
+                TESTFILE,
+            ),
+            (
+                "the apply sends only the verified statement",
+                APPLY,
+                '    sql = verify_pinned(\n        out / "APPLY.sql", plan_path=plan_path, expected=apply_statement(records, lane)\n    )\n    already',
+                '    sql = (out / "APPLY.sql").read_text(encoding="utf-8")\n    already',
+                "test_a_hand_edited_apply_is_refused",
+                TESTFILE,
+            ),
+            (
+                "the rollback rehearsal sends only the verified undo",
+                APPLY,
+                "    verify_pinned(path, plan_path=plan_path, expected=rollback_statement(records, lane))",
+                "    pass",
+                "test_the_rollback_rehearsal_refuses_a_rollback_of_another_plan",
+                TESTFILE,
+            ),
+            (
+                "a timeout is settled from the journal",
+                APPLY,
+                '    except OutcomeUnknown as exc:\n        return settle(records, lane, f"psql timed out',
+                '    except KeyError as exc:\n        return settle(records, lane, f"psql timed out',
+                "test_a_timeout_after_the_commit_is_reported_as_committed",
+                TESTFILE,
+            ),
+            (
+                "a partial journal is no outcome",
+                APPLY,
+                '    raise OutcomeUnknown(\n        f"the journal holds {count} of',
+                '    return COMMITTED or OutcomeUnknown(\n        f"the journal holds {count} of',
+                "test_a_partial_journal_is_an_unknown_outcome",
+                TESTFILE,
+            ),
+            (
+                "an unreadable journal is an unknown outcome",
+                APPLY,
+                "    except (OutcomeUnknown, PlanError) as exc:",
+                "    except KeyError as exc:",
+                "test_a_journal_read_that_fails_is_an_unknown_outcome",
+                TESTFILE,
+            ),
+            (
+                "the CLI reports an unknown outcome",
+                APPLY,
+                '    except OutcomeUnknown as exc:\n        print(f"OUTCOME UNKNOWN',
+                '    except KeyError as exc:\n        print(f"OUTCOME UNKNOWN',
+                "test_main_reports_an_unknown_outcome_with_its_own_exit_code",
+                TESTFILE,
+            ),
+            (
+                "the CLI reports a refusal",
+                APPLY,
+                '    except PlanError as exc:\n        print(f"REFUSED',
+                '    except KeyError as exc:\n        print(f"REFUSED',
+                "test_the_cli_never_re_emits_before_it_sends",
+                TESTFILE,
+            ),
+            (
+                "only --emit writes APPLY.sql",
+                APPLY,
+                "    if args.emit:\n        emit(",
+                "    if args.emit or args.apply:\n        emit(",
+                "test_the_cli_never_re_emits_before_it_sends",
+                TESTFILE,
+            ),
+            (
+                "a timeout is never a plain failure",
+                PROD_WRITE,
+                "    except subprocess.TimeoutExpired as exc:",
+                "    except KeyError as exc:",
+                "test_a_timeout_is_an_unknown_outcome",
+                PROD_TESTS,
+            ),
+            (
+                "a dead channel cannot hang",
+                PROD_WRITE,
+                'shlex.split(f"ssh {SSH_OPTIONS} {host}',
+                'shlex.split(f"ssh {host}',
+                "test_a_dead_channel_cannot_hang",
+                PROD_TESTS,
+            ),
+            (
+                "the pin is a sha256 digest",
+                PROD_WRITE,
+                '    if not re.fullmatch(r"[0-9a-f]{64}", digest):',
+                "    if False:",
+                "test_pin_line_refuses_what_is_not_a_digest",
+                PROD_TESTS,
+            ),
+        )
     ),
     Case(
         "categorize_period: the first bucket is open below",

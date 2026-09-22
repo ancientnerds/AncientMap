@@ -104,6 +104,7 @@ from __future__ import annotations
 
 import argparse
 import gzip
+import hashlib
 import json
 import logging
 import re
@@ -136,6 +137,7 @@ from census.tests.t05_country_values import (  # noqa: E402
     _iso,
     _vocabulary,
 )
+from prod_write import DIGEST_RE, pin_line  # noqa: E402
 
 from mechanical.lane import T05, Lane, sql_literal  # noqa: E402
 from pipeline.utils.country_lookup import canonicalize_country_display_name  # noqa: E402
@@ -1213,14 +1215,67 @@ def render_rollback_sql(
     )
 
 
-def write_rollback_sql(plan: Plan, path: Path) -> int:
-    """The reversal, written **before** the apply file - both from the same generator."""
+def write_rollback_sql(plan: Plan, path: Path, *, plan_path: Path) -> int:
+    """The reversal, written **before** the apply file - both from the same generator - and pinned
+    to the `PLAN.jsonl` it reverses, which must already be written."""
     sql = render_rollback_sql(
         plan.changes, site_ids=plan.sites, source_id=plan.source_id, lane=plan.lane
     )
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(sql, encoding="utf-8", newline="\n")
+    path.write_text(pinned(sql, plan_sha256(plan_path)), encoding="utf-8", newline="\n")
     return len(plan.changes)
+
+
+# ------------------------------------------------------------------------------------ the pin
+def plan_sha256(path: Path) -> str:
+    """sha256 of a `PLAN.jsonl` as text with LF line endings.
+
+    Text, not bytes: the plan is committed, and `core.autocrlf=true` checks the same commit out
+    with CRLF (measured on the delivered T05 plan: raw bytes da4201ef.. in a worktree, cc2e885f..
+    in the main tree, identical as text). A digest of the bytes would refuse a correct statement on
+    one checkout and pass it on the other.
+    """
+    if not path.exists():
+        raise PlanError(f"{path} does not exist - there is no plan to pin a statement to")
+    return hashlib.sha256(path.read_text(encoding="utf-8").encode("utf-8")).hexdigest()
+
+
+def pinned(sql: str, digest: str) -> str:
+    """`sql` with the pin as its first line: `-- plan sha256 <digest>` (a SQL comment)."""
+    return pin_line(digest) + "\n" + sql
+
+
+def verify_pinned(path: Path, *, plan_path: Path, expected: str) -> str:
+    """The statement in `path` - only if it is `expected`, pinned to the plan as it is now.
+
+    Refuses a file without a pin (not emitted from a plan, or edited), with more than one, pinned to
+    another digest (the plan changed after the emit: re-emit and re-rehearse), or whose body is not
+    what the plan renders (edited after the emit). Read in text mode, like the plan.
+    """
+    if not path.exists():
+        raise PlanError(f"{path} does not exist - emit it from the plan first")
+    text = path.read_text(encoding="utf-8")
+    declared = DIGEST_RE.findall(text)
+    if not declared:
+        raise PlanError(
+            f"{path.name} carries no '-- plan sha256' pin - it was not emitted from a plan, or it "
+            "was edited; refusing to send it to production"
+        )
+    if len(declared) > 1:
+        raise PlanError(f"{path.name} carries {len(declared)} pins - one statement, one plan")
+    digest = plan_sha256(plan_path)
+    if declared[0] != digest:
+        raise PlanError(
+            f"{path.name} was rendered from plan sha256 {declared[0]}, but {plan_path.name} now "
+            f"hashes to {digest}: the plan changed after the statement was emitted - re-emit and "
+            "re-rehearse before anything is sent"
+        )
+    if text != pinned(expected, digest):
+        raise PlanError(
+            f"{path.name} is pinned to this plan but is not the statement the plan renders - it was "
+            "edited after the emit; refusing to send it to production"
+        )
+    return text
 
 
 # ------------------------------------------------------------------------------------- CLI
@@ -1384,7 +1439,7 @@ def main(argv: list[str] | None = None) -> int:
         sql = render_rollback_sql(records, site_ids={r.site_id for r in records})
         target = args.out / "ROLLBACK.sql"
         target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(sql, encoding="utf-8", newline="\n")
+        target.write_text(pinned(sql, plan_sha256(plan_file)), encoding="utf-8", newline="\n")
         log.info("wrote %s (%d row(s)) from %s", target, len(records), plan_file)
         return 0
 
@@ -1457,7 +1512,9 @@ def main(argv: list[str] | None = None) -> int:
     skipped = write_skipped_jsonl(plan, args.out / "SKIPPED.jsonl")
     write_plan_md(plan, args.out / "PLAN.md", extra)
     # ROLLBACK before APPLY, both generated - never hand-typed, and in this order on disk.
-    rollback = write_rollback_sql(plan, args.out / "ROLLBACK.sql")
+    rollback = write_rollback_sql(
+        plan, args.out / "ROLLBACK.sql", plan_path=args.out / "PLAN.jsonl"
+    )
     log.info("PLAN.jsonl %d rows; SKIPPED.jsonl %d; ROLLBACK.sql %d", rows, skipped, rollback)
     print(json.dumps(plan.counters, indent=1, sort_keys=True))
     return 0

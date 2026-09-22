@@ -1,6 +1,6 @@
 # site_type values outside the canonical list - for hand review
 
-Built 2026-09-22T22:12:01+00:00 by `scripts/remediation/mechanical/site_type_shape.py`, read live (read-only). The canonical list is `pipeline/normalizers/site_type.py:CANONICAL_TYPES`, which mirrors the category colours of the globe (`ancient-nerds-map/src/constants/colors.ts`). None of these rows is written by the mechanical lane.
+Built 2026-09-22T22:28:06+00:00 by `scripts/remediation/mechanical/site_type_shape.py`, read live (read-only). The canonical list is `pipeline/normalizers/site_type.py:CANONICAL_TYPES`, which mirrors the category colours of the globe (`ancient-nerds-map/src/constants/colors.ts`). None of these rows is written by the mechanical lane.
 
 | site | value | journal | why not written | the decision it needs |
 |---|---|---|---|---|

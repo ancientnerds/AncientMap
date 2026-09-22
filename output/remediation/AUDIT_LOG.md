@@ -5264,3 +5264,43 @@ covered - every one of the 17 fires once its mutant compiles - but the delivered
 All three runs are in `mechanical/evidence/13_mutation_sweep_audit.txt`; the published
 `10_mutation_sweep.txt` is left as it was recorded.
 
+## 2026-09-22 - `[H] SECURITY 3 / BACKEND B7` closed in the mechanical lane
+
+The mechanical `--apply` sent whatever `APPLY.sql` held, and it re-emitted the file right before
+sending it, so the statement a reviewer had read and rehearsed was not provably the one that ran.
+A psql timeout escaped as a `subprocess.TimeoutExpired` traceback, and a non-zero exit as a plain
+error - neither said whether the COMMIT had reached the database.
+
+Now (`scripts/remediation/mechanical/apply.py`, helpers in `plan.py`):
+
+* `APPLY.sql` and `ROLLBACK.sql` carry `-- plan sha256 <digest>` as their first line - the sha256 of
+  the `PLAN.jsonl` they were rendered from, taken over the text with LF endings, because this
+  repository checks committed files out with CRLF (`core.autocrlf=true`; measured on the delivered
+  T05 plan: `da4201ef..` as bytes in a worktree, `cc2e885f..` as text on both checkouts).
+* `--rehearse`, `--rehearse-rollback` and `--apply` never re-emit. Each sends the file on disk only if
+  its pin is the plan's digest *now* and its body is exactly what the plan renders; a stale plan, a
+  hand edit, a second pin or a file from another plan is refused before any psql call. `--emit`
+  refuses unless `ROLLBACK.sql` is this plan's pinned reversal.
+* `--apply` refuses a run stamp that already journals rows. After a timeout or a failed exit it reads
+  the journal for its stamp: all planned rows means **COMMITTED** (then the read-back is asserted,
+  exit 4), none means **NOT COMMITTED** (exit 3), anything else - or a journal that cannot be read -
+  is **OUTCOME UNKNOWN** (exit 5) with the exact count query to run before any retry.
+* The transport, the timeout rule and the pin format live in one place,
+  `scripts/remediation/prod_write.py`, moved there from the gallery lane (which now imports them),
+  instead of a second copy in the mechanical lane. The mechanical transport gains the gallery's ssh
+  `ConnectTimeout`/keepalive options on the way.
+
+The delivered T05 `ROLLBACK.sql` (the undo, an action not yet taken) was re-rendered with its pin
+(`plan.py --render-rollback`); its body is the current rendering, sha256 `832b7b6a..`, which differs
+from the delivered file only by that pin and the one comment the lane had already reworded. The
+delivered T05 `APPLY.sql` is kept as it ran, without a pin - which `--apply` now refuses, as it must
+for a lane that has been applied. Checked read-only against production the same day: the 35 journal
+rows of `2026-09-21_mechanical-country` are exactly the 35 `(site, old, new)` of the delivered plan,
+with their `country-canonical:` keys and `T05/country-canonical` test id
+(`mechanical/evidence/14_repin.txt`).
+
+Tests: `TestThePin`, `TestTheDeliveredT05Pin` and `TestTheCommitState` in
+`tests/remediation/test_mechanical.py` (the commit-state tests drive `cmd_apply` against a fake that
+answers only the statements the real path sends) and `tests/remediation/test_prod_write.py`. Every
+new guard has a mutation case: sweep `cases: 140  fired: 140  skipped: 0  survived: 0`.
+

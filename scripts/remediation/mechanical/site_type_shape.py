@@ -396,7 +396,7 @@ def main(argv: list[str] | None = None) -> int:
     write_plan_md(result, args.out / "PLAN.md")
     write_review_md(result, args.out / "REVIEW.md")
     # ROLLBACK before APPLY: apply.py --emit refuses to write an apply without its undo.
-    write_rollback_sql(result.plan, args.out / "ROLLBACK.sql")
+    write_rollback_sql(result.plan, args.out / "ROLLBACK.sql", plan_path=args.out / "PLAN.jsonl")
     log.info("PLAN.jsonl %d, SKIPPED.jsonl %d, review %d", rows, skipped, len(result.review))
     print(json.dumps(dict(result.counters), indent=1, sort_keys=True))
     return 0

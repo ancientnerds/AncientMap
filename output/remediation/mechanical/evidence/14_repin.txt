@@ -1,0 +1,15 @@
+# 14 - the T05 undo re-pinned to its plan (2026-09-22, [H] SECURITY 3 / BACKEND B7)
+
+PLAN.jsonl sha256 (text, LF):          cc2e885f980f2467f7bbddfbafc5fdf8c58396dde3969411cc303ca4f490b3f3
+PLAN.jsonl raw bytes on this checkout:  da4201efd33f9a46c7d4b1eec01ac17a89b847b3917d9f2e7c49c370ee7ceef2
+render_rollback_sql sha256 (unpinned):  832b7b6a55558d67c4ea202ca27938698a02e73a0deae8ac552e62b915b875d1
+ROLLBACK.sql first line:               -- plan sha256 cc2e885f980f2467f7bbddfbafc5fdf8c58396dde3969411cc303ca4f490b3f3
+verify_pinned(ROLLBACK.sql):            OK (pinned to the plan, body = the rendering)
+verify_pinned(APPLY.sql):               REFUSED - APPLY.sql carries no '-- plan sha256' pin - it was not emitted from a plan, or it was edited; refusing to send it to production
+
+Live journal, read-only: remediation_change_log WHERE run_stamp = '2026-09-21_mechanical-country'
+journal rows: 35; plan rows: 35
+(row_pk, old, new) identical to the plan: True
+every change_key is country-canonical:<row_pk>: True; every test_id T05/country-canonical: True
+in the plan, not journalled: []
+journalled, not in the plan: []

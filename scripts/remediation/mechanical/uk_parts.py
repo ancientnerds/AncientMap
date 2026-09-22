@@ -938,7 +938,7 @@ def main(argv: list[str] | None = None) -> int:
     consistent = write_consistent_jsonl(uk, args.out / "CONSISTENT.jsonl")
     write_plan_md(uk, args.out / "PLAN.md", witnesses)
     # ROLLBACK before APPLY: apply.py --emit refuses to write an apply without its undo.
-    write_rollback_sql(uk.plan, args.out / "ROLLBACK.sql")
+    write_rollback_sql(uk.plan, args.out / "ROLLBACK.sql", plan_path=args.out / "PLAN.jsonl")
     log.info("PLAN.jsonl %d, SKIPPED.jsonl %d, CONSISTENT.jsonl %d", rows, skipped, consistent)
     print(json.dumps(dict(uk.counters), indent=1, sort_keys=True))
     return 0

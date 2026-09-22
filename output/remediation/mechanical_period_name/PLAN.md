@@ -1,6 +1,6 @@
 # Phase 6 item 2 - period_name re-derived from period_start: plan
 
-Built 2026-09-22T22:00:26+00:00 by `scripts/remediation/mechanical/period_name.py`. Lane `period-name`: run stamp `2026-09-22_mechanical-period-name`, journal test id `P6/period-name-bucket`, change keys `period-name-bucket:<site_id>`, premise `u.period_start::text`.
+Built 2026-09-22T22:28:02+00:00 by `scripts/remediation/mechanical/period_name.py`. Lane `period-name`: run stamp `2026-09-22_mechanical-period-name`, journal test id `P6/period-name-bucket`, change keys `period-name-bucket:<site_id>`, premise `u.period_start::text`.
 
 **220 row(s) will be written, 4784 already carry their bucket, 0 refused.** 219 of the written rows had their `period_start` corrected by phase 3; the journal row is named in each record's evidence.
 

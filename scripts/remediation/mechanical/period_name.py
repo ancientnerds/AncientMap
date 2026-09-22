@@ -385,7 +385,7 @@ def main(argv: list[str] | None = None) -> int:
     skipped = write_skipped_jsonl(result.plan, args.out / "SKIPPED.jsonl")
     write_plan_md(result, args.out / "PLAN.md")
     # ROLLBACK before APPLY: apply.py --emit refuses to write an apply without its undo.
-    write_rollback_sql(result.plan, args.out / "ROLLBACK.sql")
+    write_rollback_sql(result.plan, args.out / "ROLLBACK.sql", plan_path=args.out / "PLAN.jsonl")
     log.info("PLAN.jsonl %d, SKIPPED.jsonl %d, consistent %d", rows, skipped, result.consistent)
     print(json.dumps(dict(result.counters), indent=1, sort_keys=True))
     return 0

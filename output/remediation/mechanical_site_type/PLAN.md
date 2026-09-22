@@ -1,6 +1,6 @@
 # Phase 6 item 1 - site_type values that are not site types: plan
 
-Built 2026-09-22T22:12:01+00:00 by `scripts/remediation/mechanical/site_type_shape.py`. Lane `site-type-shape`: run stamp `2026-09-22_mechanical-site-type-shape`, journal test id `P6/site-type-shape`, change keys `site-type-shape:<site_id>`.
+Built 2026-09-22T22:28:06+00:00 by `scripts/remediation/mechanical/site_type_shape.py`. Lane `site-type-shape`: run stamp `2026-09-22_mechanical-site-type-shape`, journal test id `P6/site-type-shape`, change keys `site-type-shape:<site_id>`.
 
 **3 row(s) will be restored to the value phase 3 replaced, 1 refused, 4 left for a vocabulary decision** (`REVIEW.md`). The lane restores; it does not judge whether the restored type is the best one.
 
