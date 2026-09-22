@@ -104,3 +104,20 @@ def test_final_drift_names_a_file_that_changed_under_the_sweep(tmp_path: Path) -
     assert was == before[str(TARGET)]
     assert now == S.digest(root / TARGET)
     assert was != now
+
+
+def test_every_mutation_names_an_anchor_and_a_test_that_exist() -> None:
+    """An entry whose anchor moved does not prove anything - it stops the whole sweep at its assert.
+
+    Measured 2026-09-23: the narrowed-route change rewrote `if feature == FEATURE_WIKIDATA_ENTITY and
+    not qid:` as `if slot == ...`, and the "no qid, no qid skip" entry had pointed at nothing since;
+    the gap branch ran only its own 19 entries, so no run noticed. This reads every entry against
+    the tree, without mutating anything, and fails on the first one that no longer lands.
+    """
+    stale = [
+        name
+        for name, rel, old, _new, test_file, test_name in S.MUTATIONS
+        if (REPO / rel).read_text(encoding="utf-8").count(old) < 1
+        or f"def {test_name}(" not in (REPO / test_file).read_text(encoding="utf-8")
+    ]
+    assert stale == []

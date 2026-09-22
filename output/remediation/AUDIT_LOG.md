@@ -5393,3 +5393,85 @@ byte-identical to the sweep's start for 8 files - the writer's citation and reru
 marker and its UTF-8 trim, the dates-not-through-WDQS rule, the WDQS pace and query form, the route and
 sitelink guards, the gate's lane and stale-plan guards, the reviewer ceiling, the chain acceptance,
 the hold pin, the repair statement's one-row guard and the gap plan's withheld ids.
+
+## 2026-09-23 - review round on the gap tools: what was found, what was fixed
+
+Two reviewers read the gap-tools branch. Every finding was re-checked before anything was changed;
+all of them held. What changed, with the measurement behind each:
+
+**The write gate walked past three things it had seen.** `write_stage.apply_chunk` writes none of a
+chunk whose pre-flight finds a moved row and exits 0; the gate then still wrote `APPLIED.json`, so a
+resume never looked again, and the acceptance counted the unwritten rows as withheld. A step read-back
+with deviations went on to the next hundred, and a hold whose change key names no planned row held
+nothing while the count said it held one. Now every writer report is checked against the rows the call
+was handed (written, journalled, matched_0, skipped chunks); a mismatch writes `STOPPED.json`, never
+`APPLIED.json`, and ends the wave; a later run refuses a stopped batch; a read-back deviation ends the
+wave; a stray hold is refused before anything is planned. The gate also stops over-counting sites in
+row-by-row mode (each call's report counts the whole batch's sites; the gate now counts the rows it
+wrote).
+
+**The acceptance was too forgiving.** It accepted a lane write of a value nobody planned, a lane that
+wrote one row twice, a planned row changed by *any* other stamp, and - with a wrong `--stamp-like` -
+every row as "moved". It now requires, per row: a lane journal row carries exactly the planned old and
+new value, is the lane's only write of the row, and is not a withheld row; a planned row without a lane
+journal row must be withheld (a hand-read hold or a boundary refusal, computed with the gate's own
+`withheld()`), else it is `NOT WRITTEN`; a later stamp may supersede or move a row only if the operator
+names it (`--allow-stamp`, for the UK lane `2026-09-22_mechanical-uk-parts`). Re-run read-only against
+production on 2026-09-23 with the mass lane's own rows and holds: **994 carried, 80 withheld and
+unchanged (72 held + 8 refused at the boundary - exactly the 80 of the wave), 0 moved, 0 superseded,
+1,022 of 1,022 sites read, RESULT: 0 deviation(s).** The docstring no longer claims "strictly
+stronger" for the two cases it accepts by design.
+
+**The plan a lane was written from is now pinned.** `write_dry_all.py` without flags overwrote the
+mass lane's 1,074-row plan with a 1,028-row re-plan, after which the acceptance read 44 correct
+production writes as 44 deviations (both reproduced). `write_dry_all.py` now refuses to write into the
+dry root of a lane that has an `APPLIED.json`; `verify_writes.py`, `write_gate.py` and `make_holds.py`
+refuse a rows file that is not a written lane's pinned plan (`lanes.REVIEWED_PLAN_KEYS_SHA256`, the
+mass lane's `0b7ad95d...`). The builder's regenerated 1,028-row file is now refused by name instead of
+producing 44 deviations.
+
+**One way to the database.** `lanes.psql`, `lanes.json_rows`, `qid_repair._text` and
+`write_gate.psql_json_rows` were copies of the writer's `run_sql`, `_json_rows` and `_sql_text` (the
+`json_rows` copy without the is-an-object check). The tools now use the writer's, re-exported through
+`lanes.py`; `gap_plan.batches` is `run.assign_batches` with a new `prefix` keyword (its size guard
+included).
+
+**A sitelink badged as a redirect is refused.** Verified with the project User-Agent: Q4810863 (the
+item the repair gives Estipeon, a gap site) links enwiki `Astibo` with badge `Q70893996` ("sitelink to
+redirect"), and `Astibo` redirects to `Štip#History` - after the repair, the sitelink step would have
+routed Estipeon to the whole article of the modern town, the failure the repair corrects. The five
+sitelinks the gap plan resolves today carry no badge. `Q70894304` ("intentional sitelink to redirect")
+is refused the same way; a sitelink without its `badges` list is refused, not read as unbadged.
+
+**The truthy page is cited by a short address.** The narrowed route's WDQS GET address is 1,951
+characters for Q10288, and the citation check matches URLs byte for byte. The mass run's URL fidelity,
+measured over its answer files: enwiki 4,672 exact / 9 miss (0.19 %), wikidata_entity 865 / 2
+(0.23 %), at 130-220 characters - no data exists for 2 KB. The target now shows and is cited as
+`https://www.wikidata.org/wiki/<qid>#wikidata_truthy` (`Target.url`) and still asks WDQS
+(`Target.query_url`); the ledger and the fetch report record the address actually requested. The
+prompt texts are untouched.
+
+**Smaller ones.** `gap_plan.enwiki_missing` read any answer without `query.pages` as "the article
+exists"; it now refuses an error body, `{}` and an `invalid` title (all 5,004 enwiki files of the mass
+run: 3,699 articles or cut pages, 1,305 missing, 0 of another shape). The fetch stage's docstring no
+longer claims `runs/mass` stores as before: the truncation marker applies to every page stored from
+now on. `vlm_pilot/rejected_kinds.py` resolves images through the exact-case tree listings again
+(the ruff fix had deleted them; the exact-case lookup reproduces all 30 versioned `resolved_path`
+values). `qid_repair.py check`/`verify` compare APPLY, REHEARSAL and ROLLBACK byte for byte with the
+rendered statements instead of trusting the digest header; the renderer still reproduces the versioned
+`APPLY.sql` and `ROLLBACK.sql` byte for byte. New output and comments are English; the acceptance
+prints `RESULT: N deviation(s)` (the token the mechanical lane's branch uses).
+
+**Mutation proofs.** `mutation_sweep.GAP_MUTATIONS` (19) and the new `REVIEW_MUTATIONS` (37), run
+through the sweep's own `main` with the main venv: **56/56 caught**, the tree byte-identical to the
+sweep's start for 11 files. Every guard above has its own entry, including the ones the reviewers'
+mutants survived: the gate's stale-plan call in `main`, the replan's run directory, the chain-missing
+link, the sitelinks answer that omits an id, the census's duplicate question, the record-vs-sitelink
+qid check, the repair's curated-site guard and invariant 1, and the rerun list's type check.
+
+One older entry had stopped landing: the narrowed-route change rewrote `if feature ==
+FEATURE_WIKIDATA_ENTITY and not qid:` as `if slot == ...`, so "no qid, no qid skip" pointed at nothing
+and a full sweep would have died on its anchor assert (the gap branch ran only its own 19 entries).
+The anchor is corrected (1/1 caught), and `test_phase3_sweep.py` now reads every entry's anchor and
+test name against the tree in the gate suite, so the next such drift is red before anyone runs a
+sweep: 176 entries, 0 stale.

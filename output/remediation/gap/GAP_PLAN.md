@@ -118,17 +118,22 @@ $PY scripts/remediation/phase3/mass_run.py --plan output/remediation/phase3_runn
     --live --jobs 4 --max-calls 1000 --max-usd 5
 # 4. the reviewer (ceiling = this pass's own spend)
 $PY $T/review_all.py --lane gap --cap-usd 2
-# 5. the dry plan, the hand-read, the holds
+# 5. the dry plan, the hand-read, the holds (the plan is refused once the lane has written a batch)
 $PY $T/write_dry_all.py --lane gap            # -> logs/_write_dry_gap/ALL_ROWS.jsonl
 $PY $T/show_rows.py --lane gap --count 200; $PY $T/scan_rows.py --lane gap
 #    a held row goes into logs/_write_apply_gap/HOLDS.jsonl: {"change_key": ..., "hold_reason": ...}
-# 6. the gate, dry: prints "Plan geprueft" and "Probelauf, es wird nichts geschrieben"
+#    - copy the change key from ALL_ROWS.jsonl: a key that names no planned row is refused
+# 6. the gate, dry: prints "plan checked: N open batches ..." and "dry run, nothing is written"
 $PY $T/write_gate.py --lane gap --step 100
-# 7. read the Probelauf numbers; then (production write, owner's rule: steps of 100, a check after each)
+# 7. read the dry-run numbers; then (production write, owner's rule: steps of 100, a check after each)
 $PY $T/write_gate.py --lane gap --apply --step 100
+#    a writer call that wrote less than it was handed, or a read-back deviation, STOPs the wave;
+#    the batch gets STOPPED.json (never APPLIED.json) and a resume refuses it until a person decides
 # 8. the acceptance, both lanes
-$PY $T/verify_writes.py --lane gap            # ERGEBNIS: 0 Abweichungen
-$PY $T/verify_writes.py                       # mass lane: 994 carried (or superseded), 80 unchanged, 0
+$PY $T/verify_writes.py --lane gap            # RESULT: 0 deviation(s)
+$PY $T/verify_writes.py                       # mass lane: 994 carried, 80 withheld unchanged, 0
+#    after the UK lane has written: add --allow-stamp 2026-09-22_mechanical-uk-parts to both;
+#    its re-spelled rows then read "superseded by <stamp>: 5", any other later stamp is a deviation
 ```
 
 A question that ends as a named failure is asked once more - not by `mass_run.py`, which counts a

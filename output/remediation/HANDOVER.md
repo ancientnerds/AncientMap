@@ -98,12 +98,20 @@ export PYTHONPATH="C:/PythonProjects/AncientMap;C:/PythonProjects/AncientMap/scr
 # the gate suite - DB-less, and the only definition of "green" (2026-09-22: 2467 passed, 3 skipped)
 ./.venv/Scripts/python.exe -m pytest -q -rs --timeout 90 -m "not integration and not live_llm"
 
-# the writer: dry first (it prints "Probelauf, es wird nichts geschrieben"), then for real
-./.venv/Scripts/python.exe output/remediation/logs/write_gate.py --step 100
-./.venv/Scripts/python.exe output/remediation/logs/write_gate.py --apply --step 100
+# the writer: dry first (it prints "dry run, nothing is written"), then for real; run the
+# versioned tools in output/remediation/tools/ - the copies in logs/ predate the lanes and the stops
+./.venv/Scripts/python.exe output/remediation/tools/write_gate.py --step 100
+./.venv/Scripts/python.exe output/remediation/tools/write_gate.py --apply --step 100
 
-# the independent acceptance - asks the database in both directions
-./.venv/Scripts/python.exe output/remediation/logs/verify_writes.py
+# the independent acceptance - asks the database in both directions; prints "RESULT: N deviation(s)"
+# (2026-09-23: 994 carried, 80 withheld unchanged - 72 held + 8 refused at the boundary - 0 deviations)
+./.venv/Scripts/python.exe output/remediation/tools/verify_writes.py
+# after a later lane re-wrote some of these rows on purpose (the UK lane), name its stamp:
+./.venv/Scripts/python.exe output/remediation/tools/verify_writes.py --allow-stamp 2026-09-22_mechanical-uk-parts
+
+# never re-plan a lane that has written: logs/_write_dry/ALL_ROWS.jsonl is the plan the 994 rows
+# were written from (pinned, lanes.REVIEWED_PLAN_KEYS_SHA256); write_dry_all.py refuses to replace
+# it, and a measurement goes to --out
 
 # a read-only database question (there is no local database; production is the one that counts)
 ssh ancientnerds "docker exec -i ancient_nerds_db psql -U ancient_map -d ancient_map \

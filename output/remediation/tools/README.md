@@ -14,8 +14,32 @@ directly. A fresh clone has no such data - the archive named in `../HANDOVER.md`
     tar -xzf output/remediation/run-2026-09-22-complete.tgz -C output/remediation
 
 The working copies that were run on 2026-09-21/22 are still in `logs/`; the copies here are newer
-(lanes, the chain acceptance, the stale-plan guard). Run these, or copy them over the old ones -
-`lanes.py` has to travel with them.
+(lanes, the chain acceptance, the stale-plan guard, the stops of 2026-09-23). Run these from here;
+the old copies in `logs/` should be deleted rather than run, because they lack every guard below.
+
+## A lane that has written keeps its plan
+
+A lane's `ALL_ROWS.jsonl` stops being scratch the moment its first batch is written: it is the plan
+the production rows were reviewed and written from, and the hold list and the acceptance read it. A
+re-plan with the writer's rules of today is a different file under the same name - on 2026-09-22 the
+citation check turned the mass lane's 1,074 rows into 1,028, and the acceptance then reported its 44
+correct production writes as deviations. So:
+
+* `write_dry_all.py` refuses to write into the dry root of a lane that has an `APPLIED.json`; a
+  measurement goes to `--out`;
+* `verify_writes.py` and `make_holds.py` refuse a rows file whose change keys are not the pinned plan
+  of a written lane (`lanes.REVIEWED_PLAN_KEYS_SHA256`; the mass lane's is `0b7ad95d...`);
+* `write_gate.py`'s stale-plan refusal does not tell anyone to re-plan a lane that has written.
+
+## What stops a wave
+
+`write_gate.py` stops, and marks nothing applied, when a writer call wrote fewer rows than it was
+handed (its pre-flight found a moved row and wrote none of the chunk - an exit code 0), when a step's
+read-back finds a deviation, and before anything when a hold names no planned row. A stopped batch
+carries `STOPPED.json`; a later run refuses it until a person has read it and removed the marker.
+`verify_writes.py` needs every planned row to be either written (with exactly the planned values) or
+withheld (a hold, or a boundary refusal of `write_gate.gate`); a planned row that is neither is a
+deviation. A later stamp may change a lane's rows only if it is named with `--allow-stamp`.
 
 ## Lanes
 
@@ -27,11 +51,11 @@ can still be overridden (`--run-dir`, `--out`, `--rows`, `--apply-root`, `--hold
 
 | script | what it does |
 | --- | --- |
-| `lanes.py` | the lanes' paths and the one JSON-lines reader; no entry point |
-| `write_dry_all.py` | builds the full write plan over every reviewed batch of a lane (`ALL_ROWS.jsonl`); touches no database |
-| `make_holds.py` | writes the mass lane's hand-hold list (`_write_apply/HOLDS.jsonl`), keyed by `change_key`; refuses a rows file whose line order is not the one its line numbers were read against |
-| `write_gate.py` | the writer: 100-site steps, conditional `WHERE`, journal row, read-back. Without `--apply` it is a dry run and says so. Refuses rows of another run and a rows file that is not the writer's plan today |
-| `verify_writes.py` | the independent acceptance: asks production in both directions, follows the journal chain, prints `ERGEBNIS:` |
+| `lanes.py` | the lanes' paths, the one JSON-lines reader, the database seam (the writer's `run_sql`, `_json_rows`, `_sql_text`) and the pins of written lanes' plans; no entry point |
+| `write_dry_all.py` | builds the full write plan over every reviewed batch of a lane (`ALL_ROWS.jsonl`); touches no database; refuses to replace the plan of a lane that has written |
+| `make_holds.py` | writes the mass lane's hand-hold list (`_write_apply/HOLDS.jsonl`), keyed by `change_key`; refuses a rows file that is not the mass lane's pinned plan |
+| `write_gate.py` | the writer: 100-site steps, conditional `WHERE`, journal row, read-back. Without `--apply` it is a dry run and says so. Refuses rows of another run, a rows file that is not the writer's plan today and a hold that names no row; stops on a short write and on a read-back deviation |
+| `verify_writes.py` | the independent acceptance: asks production in both directions, follows the journal chain, checks every row against the plan and the withheld set, prints `RESULT: N deviation(s)` (was `ERGEBNIS:` until 2026-09-23) |
 | `review_all.py` | drives the reviewer stage over every batch of a lane (4 workers, $8 cap on this pass's own spend) |
 | `review_totals.py` | the reviewer census (`review_totals.txt`) |
 | `found_summary.py` | the finder census over the model reports |
