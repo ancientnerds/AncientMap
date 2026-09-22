@@ -137,6 +137,7 @@ from census.tests.t05_country_values import (  # noqa: E402
     _vocabulary,
 )
 
+from mechanical.lane import T05, Lane, sql_literal  # noqa: E402
 from pipeline.utils.country_lookup import canonicalize_country_display_name  # noqa: E402
 
 if TYPE_CHECKING:
@@ -146,21 +147,15 @@ if TYPE_CHECKING:
 
 log = logging.getLogger("mechanical.plan")
 
-#: The run stamp identifies this lane in `remediation_change_log`. It is deliberately not the
-#: hero write's `2026-09-20_remediation`: the read-back query counts journal rows by run stamp,
-#: and a shared stamp would make "0 rows unaccounted" unprovable.
-RUN_STAMP = "2026-09-21_mechanical-country"
-ROLLBACK_RUN_STAMP = f"{RUN_STAMP}-rollback"
-
-#: Journalled test id. The census emits `T05/disambiguated` and `T05/compound`; this lane's
-#: transition is a decided write, and the finding that named the row is recorded in every
-#: record's evidence under `census-finding` - one test id for the whole run is what makes the
-#: journal read-back unambiguous.
-TEST_ID = "T05/country-canonical"
-CONFIDENCE = "authoritative"
+#: T05's journal identity. The values live on the lane (`mechanical/lane.py`, which explains them);
+#: these names stay because the delivered tests, `apply.VERIFY_SQL` and every caller import them.
+RUN_STAMP = T05.run_stamp
+ROLLBACK_RUN_STAMP = T05.rollback_run_stamp
+TEST_ID = T05.test_id
+CONFIDENCE = T05.confidence
 
 CURATED_SOURCE = "ancient_nerds"
-COUNTRY_COLUMN_CHARS = 100
+COUNTRY_COLUMN_CHARS = T05.max_chars
 HINT_WORDS = frozenset({"country", "state", "nation", "republic"})
 UUID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
 
@@ -192,10 +187,6 @@ class Finding:
     severity: str
     note: str
     dimension: str = "classification / country"
-
-    @property
-    def change_key(self) -> str:
-        return f"country-canonical:{self.site_id}"
 
 
 @dataclass(frozen=True)
@@ -233,10 +224,8 @@ class Verdict:
     phase3: bool
     finding_test_id: str
     evidence: tuple[dict[str, Any], ...] = ()
-
-    @property
-    def change_key(self) -> str:
-        return f"country-canonical:{self.site_id}"
+    #: The live input the value was derived from, as text, for a lane with `premise_sql`.
+    premise: str | None = None
 
 
 def load_findings(path: Path) -> list[Finding]:
@@ -384,13 +373,13 @@ def names_a_country(atlas: CountryNamer, part: str) -> bool:
     return any(key == _fold(f.admin) or key in f.name_keys for f in atlas.features)
 
 
-def _legible(value: str) -> str | None:
-    """Why the string cannot be written as a country at all, or None when it is fine."""
+def _legible(value: str, max_chars: int = COUNTRY_COLUMN_CHARS) -> str | None:
+    """Why the string cannot be written into the column at all, or None when it is fine."""
     if value != value.strip():
         return "leading or trailing whitespace"
     if unicodedata.normalize("NFC", value) != value:
         return "not NFC-normalised"
-    if len(value) > COUNTRY_COLUMN_CHARS:
+    if len(value) > max_chars:
         return f"{len(value)} characters, longer than the column"
     if any(ch in value for ch in "\r\n\t"):
         return "control characters"
@@ -699,11 +688,19 @@ class Plan:
 
     changes: tuple[Verdict, ...]
     skipped: tuple[Verdict, ...]
-    run_stamp: str = RUN_STAMP
-    test_id: str = TEST_ID
     source_id: str = CURATED_SOURCE
     built_at: str = ""
     counters: Mapping[str, int] = field(default_factory=dict)
+    #: The lane the plan is written for; its run stamp and test id are the lane's, never a copy.
+    lane: Lane = T05
+
+    @property
+    def run_stamp(self) -> str:
+        return self.lane.run_stamp
+
+    @property
+    def test_id(self) -> str:
+        return self.lane.test_id
 
     @property
     def sites(self) -> tuple[str, ...]:
@@ -1013,42 +1010,48 @@ def load_witnesses(path: Path) -> dict[str, Any]:
 
 
 # --------------------------------------------------------------------------------- the output
-def _quoted(value: str | None) -> str:
-    """A SQL literal, for the human-readable `condition` the plan records per row."""
-    return "NULL" if value is None else "'" + value.replace("'", "''") + "'"
+#: A SQL literal, for the human-readable `condition` the plan records per row - the lane's own
+#: quoting rule, not a second copy of it.
+_quoted = sql_literal
+
+
+def plan_record(change: Verdict, plan: Plan) -> dict[str, Any]:
+    """One `PLAN.jsonl` line: the row, its lane's journal identity, and its evidence."""
+    lane = plan.lane
+    record: dict[str, Any] = {
+        "site_id": change.site_id,
+        "site_name": change.site_name,
+        "table": "unified_sites",
+        "column": lane.column,
+        "key_column": "id",
+        "old_value": change.old_value,
+        "new_value": change.new_value,
+        "rule": change.rule,
+        "condition": f"id = {change.site_id} AND {lane.column} IS NOT DISTINCT FROM "
+        f"{_quoted(change.old_value)}",
+        "reason": f"{lane.key_prefix} ({change.rule}): {change.note}",
+        "change_key": lane.change_key(change.site_id),
+        "test_id": plan.test_id,
+        "run_stamp": plan.run_stamp,
+        "confidence": lane.confidence,
+        "source_id": plan.source_id,
+        "phase3": change.phase3,
+        "finding_test_id": change.finding_test_id,
+        "evidence": list(change.evidence),
+    }
+    if lane.premise_sql is not None:
+        if change.premise is None:
+            raise PlanError(f"{change.site_id}: the {lane.name} lane needs the row's premise")
+        record["premise_sql"] = lane.premise_sql
+        record["premise"] = change.premise
+    return record
 
 
 def write_plan_jsonl(plan: Plan, path: Path) -> int:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8", newline="\n") as fh:
         for change in plan.changes:
-            fh.write(
-                json.dumps(
-                    {
-                        "site_id": change.site_id,
-                        "site_name": change.site_name,
-                        "table": "unified_sites",
-                        "column": "country",
-                        "key_column": "id",
-                        "old_value": change.old_value,
-                        "new_value": change.new_value,
-                        "rule": change.rule,
-                        "condition": f"id = {change.site_id} AND country IS NOT DISTINCT FROM "
-                        f"{_quoted(change.old_value)}",
-                        "reason": f"country-canonical ({change.rule}): {change.note}",
-                        "change_key": change.change_key,
-                        "test_id": plan.test_id,
-                        "run_stamp": plan.run_stamp,
-                        "confidence": CONFIDENCE,
-                        "source_id": plan.source_id,
-                        "phase3": change.phase3,
-                        "finding_test_id": change.finding_test_id,
-                        "evidence": list(change.evidence),
-                    },
-                    ensure_ascii=False,
-                )
-                + "\n"
-            )
+            fh.write(json.dumps(plan_record(change, plan), ensure_ascii=False) + "\n")
     return len(plan.changes)
 
 
@@ -1066,7 +1069,7 @@ def write_skipped_jsonl(plan: Plan, path: Path) -> int:
                         "site_id": verdict.site_id,
                         "site_name": verdict.site_name,
                         "table": "unified_sites",
-                        "column": "country",
+                        "column": plan.lane.column,
                         "current_value": verdict.old_value,
                         "proposed_value": verdict.new_value,
                         "reason": verdict.reason,
@@ -1151,14 +1154,15 @@ def write_plan_md(plan: Plan, path: Path, extra: Mapping[str, Any]) -> None:
     path.write_text("\n".join(lines), encoding="utf-8", newline="\n")
 
 
-def reversed_records(records: Sequence[Any]) -> list[Any]:
+def reversed_records(records: Sequence[Any], lane: Lane = T05) -> list[Any]:
     """The reversal of a set of changes: old and new swapped, one record per row.
 
-    Takes anything carrying `site_id`, `site_name`, `old_value`, `new_value`, `rule`, `evidence`
-    and `phase3` - a `Verdict` from the plan, or an `apply.ChangeRecord` read back out of the
-    delivered `PLAN.jsonl`. Both produce the same records, which is what makes the delivered
+    Takes anything carrying `site_id`, `site_name`, `old_value`, `new_value`, `rule`, `evidence`,
+    `phase3` and `premise` - a `Verdict` from the plan, or an `apply.ChangeRecord` read back out of
+    the delivered `PLAN.jsonl`. Both produce the same records, which is what makes the delivered
     `ROLLBACK.sql` reproducible from the delivered plan (measured: byte-identical, see
-    `evidence/11_fingerprints.txt`).
+    `evidence/11_fingerprints.txt`). The premise is kept: a lane never writes the input its value
+    was derived from, so the reversal is conditioned on the same one.
     """
     from mechanical import apply as apply_mod
 
@@ -1169,17 +1173,23 @@ def reversed_records(records: Sequence[Any]) -> list[Any]:
             old_value=str(r.new_value),
             new_value=str(r.old_value),
             rule=f"rollback-{r.rule}",
-            condition=f"id = {r.site_id} AND country IS NOT DISTINCT FROM {_quoted(r.new_value)}",
-            reason=f"rollback of country-canonical: {r.old_value!r} restored on {r.site_name}",
+            condition=f"id = {r.site_id} AND {lane.column} IS NOT DISTINCT FROM "
+            f"{_quoted(r.new_value)}",
+            reason=f"rollback of {lane.key_prefix}: {r.old_value!r} restored on {r.site_name}",
             evidence=tuple(r.evidence),
             phase3=r.phase3,
+            premise=r.premise,
         )
         for r in reversed(list(records))
     ]
 
 
 def render_rollback_sql(
-    records: Sequence[Any], *, site_ids: Iterable[str], source_id: str = CURATED_SOURCE
+    records: Sequence[Any],
+    *,
+    site_ids: Iterable[str],
+    source_id: str = CURATED_SOURCE,
+    lane: Lane = T05,
 ) -> str:
     """The reversal of `records`, rendered - the one place the undo is produced.
 
@@ -1190,17 +1200,20 @@ def render_rollback_sql(
     from mechanical import apply as apply_mod
 
     return apply_mod.render_transaction(
-        reversed_records(records),
-        run_stamp=ROLLBACK_RUN_STAMP,
+        reversed_records(records, lane),
+        run_stamp=lane.rollback_run_stamp,
         site_ids=site_ids,
         source=source_id,
         rollback=True,
+        lane=lane,
     )
 
 
 def write_rollback_sql(plan: Plan, path: Path) -> int:
     """The reversal, written **before** the apply file - both from the same generator."""
-    sql = render_rollback_sql(plan.changes, site_ids=plan.sites, source_id=plan.source_id)
+    sql = render_rollback_sql(
+        plan.changes, site_ids=plan.sites, source_id=plan.source_id, lane=plan.lane
+    )
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(sql, encoding="utf-8", newline="\n")
     return len(plan.changes)

@@ -37,6 +37,7 @@ REPO = Path(__file__).resolve().parents[3]
 MECHANICAL = REPO / "scripts/remediation/mechanical"
 PLAN = MECHANICAL / "plan.py"
 APPLY = MECHANICAL / "apply.py"
+LANE = MECHANICAL / "lane.py"
 TESTFILE = "tests/remediation/test_mechanical.py"
 
 #: The interpreter that runs the sweep runs the tests too: a hard-coded `.venv` path does not exist in
@@ -206,7 +207,7 @@ CASES: list[Case] = [
     guard(
         "plan-side column length",
         APPLY,
-        "        if len(r.new_value) > COUNTRY_COLUMN_CHARS:",
+        "        if len(r.new_value) > lane.max_chars:",
         "test_the_plan_side_mirror_refuses_a_corrupt_record",
     ),
     guard(
@@ -281,6 +282,118 @@ CASES: list[Case] = [
         'reversal to rehearse")',
         "    if not path.exists():\n        pass",
         "test_the_rollback_rehearsal_refuses_without_a_reversal",
+    ),
+    # ------------------------------------------------------------------ the lane (2026-09-22)
+    guard(
+        "plan-side owned value",
+        APPLY,
+        "        if lane.allowed_new_values and owned not in lane.allowed_new_values:",
+        "test_the_plan_side_mirror_refuses_a_value_the_lane_does_not_own",
+    ),
+    Case(
+        "plan-side reversal owns its old value",
+        APPLY,
+        "        owned = r.old_value if rollback else r.new_value",
+        "        owned = r.new_value",
+        "test_a_reversal_that_undoes_a_value_the_lane_never_wrote_is_refused",
+    ),
+    guard(
+        "plan-side premise required",
+        APPLY,
+        "        if lane.premise_sql is not None and r.premise is None:",
+        "test_a_lane_with_a_premise_refuses_a_record_without_one",
+    ),
+    guard(
+        "plan-side premise nobody checks",
+        APPLY,
+        "        if lane.premise_sql is None and r.premise is not None:",
+        "test_a_lane_without_a_premise_refuses_one_it_would_not_check",
+    ),
+    guard(
+        "rendered guard 4 (owned values)",
+        APPLY,
+        "    if lane.allowed_new_values:\n        owned = ",
+        "test_the_fourth_guard_is_rendered_only_for_a_lane_that_owns_its_values",
+    ),
+    Case(
+        "rendered guard 4 reads the old value on a reversal",
+        APPLY,
+        '        owned = "p.old_value" if rollback else "p.new_value"',
+        '        owned = "p.new_value"',
+        "test_the_uk_reversal_undoes_only_values_the_lane_owns",
+    ),
+    guard(
+        "rendered guard 5 (premise)",
+        APPLY,
+        '    if premise:\n        add(\n            "    -- scope guard 5',
+        "test_the_fifth_guard_conditions_the_write_on_its_premise",
+    ),
+    Case(
+        "the writer journals the lane's test id",
+        APPLY,
+        'f"            {_literal(lane.test_id)}, {_literal(run_stamp)}, r.change_key, "',
+        'f"            {_literal(TEST_ID)}, {_literal(run_stamp)}, r.change_key, "',
+        "test_the_uk_statement_carries_its_own_journal_identity_and_none_of_t05s",
+    ),
+    Case(
+        "the rendered width is the lane's",
+        APPLY,
+        'add(f"        OR length(p.new_value) > {lane.max_chars};")',
+        'add("        OR length(p.new_value) > 100;")',
+        "test_the_column_width_is_the_lane_s",
+    ),
+    Case(
+        "the reversal has its own key",
+        LANE,
+        '        return f"{self.key_prefix}-rollback:{site_id}"',
+        '        return f"{self.key_prefix}:{site_id}"',
+        "test_the_uk_reversal_undoes_only_values_the_lane_owns",
+    ),
+    Case(
+        "the rollback rehearsal reads each row's value",
+        APPLY,
+        " WHERE u.{column} IS NOT DISTINCT FROM p.written",
+        " WHERE u.{column} IS NOT NULL",
+        "test_the_rollback_rehearsal_reads_name_the_planned_rows",
+    ),
+    guard(
+        "probe for guard 4",
+        APPLY,
+        "    if lane.allowed_new_values:\n        not_owned",
+        "test_every_rendered_guard_has_its_probe",
+    ),
+    guard(
+        "probe for guard 5",
+        APPLY,
+        "    if lane.premise_sql is not None:\n        moved",
+        "test_every_rendered_guard_has_its_probe",
+    ),
+    *(
+        guard(
+            f"lane refuses {what}",
+            LANE,
+            needle,
+            "test_a_lane_that_would_splice_something_unsafe_into_sql_is_refused",
+        )
+        for what, needle in (
+            ("an unsafe column", "        if not _IDENTIFIER.match(self.column):"),
+            (
+                "an unsafe temp table",
+                "        if not _IDENTIFIER.match(self.plan_table) or not "
+                'self.plan_table.startswith("_"):',
+            ),
+            ("an unsafe label", "        if not _LABEL.match(self.label):"),
+            ("an unsafe key prefix", "        if not _KEY_PREFIX.match(self.key_prefix):"),
+            ("a non-positive width", "        if self.max_chars <= 0:"),
+            (
+                "an incomplete journal identity",
+                "        if not self.run_stamp or not self.test_id or not self.confidence:",
+            ),
+            (
+                "an unwritable owned value",
+                "            if not value or len(value) > self.max_chars:",
+            ),
+        )
     ),
 ]
 

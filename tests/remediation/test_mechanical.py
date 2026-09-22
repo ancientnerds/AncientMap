@@ -16,6 +16,7 @@ cache; that class is skipped with its reason when the dataset is absent.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import sys
@@ -31,6 +32,7 @@ if str(CENSUS_PARENT) not in sys.path:
     sys.path.insert(0, str(CENSUS_PARENT))
 
 from mechanical import apply as A  # noqa: E402
+from mechanical import lane as L  # noqa: E402
 from mechanical import plan as P  # noqa: E402
 
 SITE_GEORGIA = "0060e6c0-8388-4762-bf51-9a3f88807899"  # Nekresi, Georgia
@@ -696,16 +698,23 @@ class TestReadBackStatements:
     """The statements that report on the write must name the write they report on."""
 
     def test_no_statement_reaches_the_database_with_a_placeholder(self) -> None:
+        """Every lane's statements, formatted the way the commands format them.
+
+        Extended 2026-09-22 from T05's four statements to every lane's: the templates are shared,
+        so a placeholder a new field forgot would reach production in some lane's statement.
+        """
         statements = {
             "VERIFY_SQL": A.VERIFY_SQL,
             "PRIMITIVE_CHECK_SQL": A.PRIMITIVE_CHECK_SQL,
-            "POST_COMMIT_READS": A.POST_COMMIT_READS.format(
-                run_stamp="'x'", test_id="'y'", source="'z'"
-            ),
-            "REHEARSAL_READS": A.REHEARSAL_READS.format(run_stamp="'x'", source="'z'"),
         }
+        for name, lane in L.LANES.items():
+            statements[f"{name}: readback"] = A.READBACKS[name]
+            statements[f"{name}: post-commit"] = A.post_commit_reads(lane, run_stamp="x")
+            statements[f"{name}: rehearsal"] = A.rehearsal_reads(lane, run_stamp="x")
+            statements[f"{name}: rollback rehearsal"] = A.rollback_rehearsal_reads([record()], lane)
         for name, sql in statements.items():
             assert not re.search(r"\{[A-Za-z_]+\}", sql), name
+        assert set(A.READBACKS) == set(L.LANES), "every lane needs its read-only verification"
 
     def test_the_rollback_rehearsal_refuses_without_a_reversal(self, tmp_path: Any) -> None:
         with pytest.raises(P.PlanError, match="no reversal to rehearse"):
@@ -719,11 +728,15 @@ class TestReadBackStatements:
             A.cmd_rehearse_rollback([record()], tmp_path)
 
     def test_the_rollback_rehearsal_reads_name_the_planned_rows(self) -> None:
-        sql = A.ROLLBACK_REHEARSAL_READS.format(
-            rollback_stamp="'x'", source="'y'", ids=f"'{SITE_GEORGIA}'::uuid"
-        )
+        """Each planned row is read against the value *that row* was given - rewritten from the
+        T05 form `country IN ('Georgia', 'Chile')`, which any row holding either value satisfied
+        and which no lane with a derived value (period_name) could have spelled out in advance."""
+        sql = A.rollback_rehearsal_reads([record(), second()])
         assert not re.search(r"\{[A-Za-z_]+\}", sql)
-        assert f"'{SITE_GEORGIA}'::uuid" in sql
+        assert f"('{SITE_GEORGIA}'::uuid, 'Georgia')" in sql
+        assert f"('{SITE_CHILE}'::uuid, 'Chile')" in sql
+        assert "u.country IS NOT DISTINCT FROM p.written" in sql
+        assert f"'{P.ROLLBACK_RUN_STAMP}'" in sql
 
     def test_the_verify_statement_names_the_run_it_reads_back(self) -> None:
         """A stamp that never reaches the SQL matches no row - and a count of 0 reads as clean."""
@@ -786,3 +799,187 @@ class TestTheDeliveredPlan:
             assert any(s.startswith("pipeline/utils/country_lookup.py") for s in sources)
             assert any(s.startswith("ancient-nerds-map/") for s in sources)
             assert any(s.startswith("naturalearth:") for s in sources)
+
+    def test_t05_rendering_is_unchanged_by_the_lane_refactor(self) -> None:
+        """The lane refactor must not touch a single byte of the statement T05 wrote with.
+
+        The digests were measured on 2026-09-22 from the code *before* the refactor, rendering the
+        delivered `PLAN.jsonl` - not from the delivered `APPLY.sql`/`ROLLBACK.sql`, which differ
+        from today's rendering by one reworded comment in scope guard 1 (the statements are the
+        same). `load_records` reads text mode, so the digest is the same on an LF and a CRLF
+        checkout of the plan (both measured).
+        """
+        records = A.load_records(DELIVERED_PLAN)
+        site_ids = {r.site_id for r in records}
+        apply_sql = A.render_transaction(records, run_stamp=P.RUN_STAMP, site_ids=site_ids)
+        rollback_sql = P.render_rollback_sql(records, site_ids=site_ids)
+        assert _sha(apply_sql) == T05_APPLY_SHA256
+        assert _sha(rollback_sql) == T05_ROLLBACK_SHA256
+        assert _sha(A.VERIFY_SQL) == T05_VERIFY_SHA256
+        # the lane defaults are T05's, so an explicit lane renders the same bytes
+        explicit = A.render_transaction(records, site_ids=site_ids, lane=L.T05)
+        assert _sha(explicit) == T05_APPLY_SHA256
+
+
+#: sha256 of T05's statements as the pre-refactor code rendered them from the delivered plan.
+T05_APPLY_SHA256 = "f27845273ff0b34a458036e9ee4fcbe3e97ea4a53d08340c205ea66c3667f2ff"
+T05_ROLLBACK_SHA256 = "832b7b6a55558d67c4ea202ca27938698a02e73a0deae8ac552e62b915b875d1"
+T05_VERIFY_SHA256 = "a3f1d62426db68f055185bbbbffd86cb7876a25b282a77afe40347162f0f9007"
+
+
+def _sha(text: str) -> str:
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+# --------------------------------------------------------------------------------- the lanes
+SITE_BOA = "037e3715-f5f7-4345-8216-8aa26f404009"  # Boa Island, stored 'Ireland', lies in NI
+SITE_GIANTS_RING = "e0d56737-6459-4329-9ef5-1a46e8d75f10"  # stored 'United Kingdom' by phase 3
+
+
+def uk_record(**over: Any) -> A.ChangeRecord:
+    base: dict[str, Any] = {
+        "site_id": SITE_BOA,
+        "site_name": "Boa Island",
+        "old_value": "Ireland",
+        "new_value": "Northern Ireland",
+        "rule": "geo-unit",
+        "condition": f"id = {SITE_BOA} AND country IS NOT DISTINCT FROM 'Ireland'",
+        "reason": "country-uk-part (geo-unit): 'Ireland' -> 'Northern Ireland'",
+        "evidence": ({"source": "test", "quote": "x"},),
+        "premise": "54.5168,-7.8333",
+    }
+    base.update(over)
+    return A.ChangeRecord(**base)
+
+
+def uk_second(**over: Any) -> A.ChangeRecord:
+    return uk_record(
+        site_id=SITE_GIANTS_RING,
+        site_name="Giant's Ring",
+        old_value="United Kingdom",
+        premise="54.5541,-5.9496",
+        **over,
+    )
+
+
+class TestTheLanes:
+    def test_the_uk_statement_carries_its_own_journal_identity_and_none_of_t05s(self) -> None:
+        sql = A.render_transaction(
+            [uk_record(), uk_second()], site_ids={SITE_BOA, SITE_GIANTS_RING}, lane=L.UK_PARTS
+        )
+        assert f"'{L.UK_PARTS.run_stamp}'" in sql and f"'{L.UK_PARTS.test_id}'" in sql
+        assert f"'country-uk-part:{SITE_BOA}'" in sql
+        assert P.RUN_STAMP not in sql and P.TEST_ID not in sql
+        assert "country-canonical" not in sql and "_country_plan" not in sql
+        assert sql.count("apply_remediation_change(") == 1
+        assert "'unified_sites', 'country', 'id', r.site_id::text," in sql
+
+    def test_the_fourth_guard_is_rendered_only_for_a_lane_that_owns_its_values(self) -> None:
+        uk = A.render_transaction([uk_record()], site_ids={SITE_BOA}, lane=L.UK_PARTS)
+        assert "scope guard 4" in uk
+        assert (
+            "WHERE p.new_value NOT IN ('England', 'Northern Ireland', 'Scotland', 'Wales');" in uk
+        )
+        assert "write a value this lane does not own" in uk
+        t05 = A.render_transaction([record()], site_ids={SITE_GEORGIA})
+        assert "scope guard 4" not in t05 and "does not own" not in t05
+
+    def test_the_fifth_guard_conditions_the_write_on_its_premise(self) -> None:
+        uk = A.render_transaction([uk_record()], site_ids={SITE_BOA}, lane=L.UK_PARTS)
+        assert "scope guard 5" in uk
+        assert f"WHERE ({L.UK_PARTS.premise_sql}) IS DISTINCT FROM p.premise;" in uk
+        assert "    premise     TEXT NOT NULL," in uk
+        assert "'54.5168,-7.8333'" in uk
+        t05 = A.render_transaction([record()], site_ids={SITE_GEORGIA})
+        assert "scope guard 5" not in t05 and "premise" not in t05
+
+    def test_the_uk_reversal_undoes_only_values_the_lane_owns(self) -> None:
+        sql = P.render_rollback_sql(
+            [uk_record(), uk_second()], site_ids={SITE_BOA, SITE_GIANTS_RING}, lane=L.UK_PARTS
+        )
+        assert f"'{L.UK_PARTS.rollback_run_stamp}'" in sql
+        assert L.UK_PARTS.rollback_run_stamp.endswith("-rollback")
+        assert f"'country-uk-part-rollback:{SITE_BOA}'" in sql
+        assert (
+            "WHERE p.old_value NOT IN ('England', 'Northern Ireland', 'Scotland', 'Wales');" in sql
+        )
+        assert "undo a value this lane does not own" in sql
+        assert "'54.5168,-7.8333'" in sql, "the reversal is conditioned on the same premise"
+
+    @pytest.mark.parametrize("value", ["United Kingdom", "Georgia", "Ireland"])
+    def test_the_plan_side_mirror_refuses_a_value_the_lane_does_not_own(self, value: str) -> None:
+        corrupt = uk_record(old_value="Isle of Man", new_value=value)
+        with pytest.raises(P.PlanError, match="is not a value the uk-parts lane owns"):
+            A.validate_records([corrupt], lane=L.UK_PARTS)
+
+    def test_a_reversal_that_undoes_a_value_the_lane_never_wrote_is_refused(self) -> None:
+        reversed_ = replace(uk_record(), old_value="Georgia", new_value="Ireland")
+        with pytest.raises(P.PlanError, match="'Georgia' is not a value the uk-parts lane owns"):
+            A.validate_records([reversed_], lane=L.UK_PARTS, rollback=True)
+        A.validate_records(
+            [replace(uk_record(), old_value="Northern Ireland", new_value="Ireland")],
+            lane=L.UK_PARTS,
+            rollback=True,
+        )
+
+    def test_a_lane_with_a_premise_refuses_a_record_without_one(self) -> None:
+        with pytest.raises(P.PlanError, match="carries no premise"):
+            A.validate_records([uk_record(premise=None)], lane=L.UK_PARTS)
+
+    def test_a_lane_without_a_premise_refuses_one_it_would_not_check(self) -> None:
+        with pytest.raises(P.PlanError, match="checks no premise"):
+            A.validate_records([record(premise="41.9,45.7")])
+
+    def test_the_column_width_is_the_lane_s(self) -> None:
+        narrow = replace(L.UK_PARTS, name="narrow", max_chars=10, allowed_new_values=())
+        with pytest.raises(P.PlanError, match="the column holds 10"):
+            A.validate_records([uk_record()], lane=narrow)
+        sql = A.render_transaction([uk_record(new_value="Wales")], site_ids={SITE_BOA}, lane=narrow)
+        assert "OR length(p.new_value) > 10;" in sql
+
+    def test_the_uk_read_statements_name_the_uk_run(self) -> None:
+        readback = A.READBACKS[L.UK_PARTS.name]
+        assert f"'{L.UK_PARTS.run_stamp}'" in readback
+        assert f"'{L.UK_PARTS.rollback_run_stamp}'" in readback
+        assert f"'{L.UK_PARTS.test_id}'" in readback
+        assert "'Northern Ireland'" in readback and "civilization" in readback
+        assert P.RUN_STAMP not in readback
+
+    def test_the_uk_rehearsal_reads_its_own_temp_table_and_residual(self) -> None:
+        sql = A.render_transaction([uk_record()], site_ids={SITE_BOA}, lane=L.UK_PARTS)
+        rehearsal = A.rehearse(sql, lane=L.UK_PARTS)
+        assert "to_regclass('pg_temp._uk_part_plan')" in rehearsal
+        assert "country IN ('United Kingdom', 'UK', 'Great Britain')" in rehearsal
+        assert f"'{L.UK_PARTS.run_stamp}'" in rehearsal.split("\nROLLBACK;\n", 1)[1]
+
+    def test_every_rendered_guard_has_its_probe(self) -> None:
+        foreign = ["11111111-1111-1111-1111-111111111111", "Somewhere", "Scotland", "56.0,-3.0"]
+        uk = {suffix for suffix, _, _ in A.probe_cases([uk_record()], L.UK_PARTS, foreign)}
+        assert {"guard4-not-owned", "guard5-premise"} <= uk
+        t05 = {suffix for suffix, _, _ in A.probe_cases([record()], L.T05, foreign[:3])}
+        assert "guard4-not-owned" not in t05 and "guard5-premise" not in t05
+        assert {"guard1-other-source", "guard2-no-op", "guard2-too-long"} <= t05
+
+    def test_an_unknown_lane_is_refused_by_the_cli(self, capsys: pytest.CaptureFixture) -> None:
+        with pytest.raises(SystemExit):
+            A.main(["--lane", "atlantis", "--verify"])
+        assert "invalid choice" in capsys.readouterr().err
+
+    @pytest.mark.parametrize(
+        ("field", "value", "message"),
+        [
+            ("column", "country; DROP TABLE x", "not a plain column name"),
+            ("plan_table", "plan", "temp-table name"),
+            ("label", "it's", "RAISE message"),
+            ("label", "100%", "RAISE message"),
+            ("key_prefix", "a:b", "change_key prefix"),
+            ("max_chars", 0, "must be positive"),
+            ("run_stamp", "", "journal identity"),
+            ("allowed_new_values", ("X" * 101,), "cannot be written"),
+        ],
+    )
+    def test_a_lane_that_would_splice_something_unsafe_into_sql_is_refused(
+        self, field: str, value: Any, message: str
+    ) -> None:
+        with pytest.raises(ValueError, match=message):
+            replace(L.UK_PARTS, **{field: value})

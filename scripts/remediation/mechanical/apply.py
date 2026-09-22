@@ -1,6 +1,6 @@
-"""Render, rehearse, apply and verify the mechanical country repairs.
+"""Render, rehearse, apply and verify the mechanical repairs of one lane.
 
-The plan (`PLAN.jsonl`) is what `plan.py` decided; this module is the only place that writes
+The plan (`PLAN.jsonl`) is what a lane's planner decided; this module is the only place that writes
 anything, and it writes through one transaction:
 
 * `--emit` writes `APPLY.sql` - generated, never hand-edited.
@@ -12,6 +12,10 @@ anything, and it writes through one transaction:
 * `--apply` runs the read-only verification, applies, and runs it again. Before and after come
   from the database, not from this plan.
 * `--verify` is read-only.
+
+`--lane` names the lane (`mechanical/lane.py`): the column, the journal identity and the values it
+owns. It defaults to `t05`, the country lane applied on 2026-09-21, whose statement this module
+still renders byte for byte (pinned in `tests/remediation/test_mechanical.py`).
 
 `--rollback` is deliberately not a mode: `ROLLBACK.sql` exists and is generated, but reversing a
 write is a decision, so running it is an explicit, reviewable `psql < ROLLBACK.sql`.
@@ -25,8 +29,8 @@ import logging
 import shlex
 import subprocess
 import sys
-from collections.abc import Iterable, Mapping, Sequence
-from dataclasses import dataclass, field, replace
+from collections.abc import Iterable, Sequence
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
@@ -36,8 +40,9 @@ for _root in (str(REPO), str(REPO / "scripts" / "remediation")):
     if _root not in sys.path:
         sys.path.insert(0, _root)
 
+from mechanical.lane import LANE_READBACKS, LANES, T05, Lane  # noqa: E402
+from mechanical.lane import sql_literal as _literal  # noqa: E402
 from mechanical.plan import (  # noqa: E402
-    CONFIDENCE,
     CURATED_SOURCE,
     ROLLBACK_RUN_STAMP,
     RUN_STAMP,
@@ -55,32 +60,24 @@ PSQL = "docker exec -i ancient_nerds_db psql -U ancient_map -d ancient_map -v ON
 #: (measured: `bash: -c: line 2: syntax error`). Unaligned output already separates on `|`.
 PSQL_ROWS = PSQL + " -t -A"
 
-DEFAULT_PLAN = REPO / "output/remediation/mechanical/PLAN.jsonl"
-DEFAULT_OUT = REPO / "output/remediation/mechanical"
 
-#: The country column is `character varying(100)` (measured: information_schema.columns,
-#: 2026-09-21). A longer value is an error, never a truncation.
-COUNTRY_COLUMN_CHARS = 100
-
-#: Probes write nothing that survives: each one is a copy of the real statement with COMMIT
-#: replaced by ROLLBACK and its own run stamp, so a survivor would be visible as a journal row.
-PROBE_RUN_STAMP = f"{RUN_STAMP}-probe"
+def lane_dir(lane: Lane) -> Path:
+    """Where a lane's plan and statements live: `output/remediation/<out_dir_name>/`."""
+    return REPO / "output" / "remediation" / lane.out_dir_name
 
 
-def change_key(site_id: str) -> str:
-    """The journal's identity for one row's *write*.
-
-    `change_key` names the exact transition, so the write and its reversal must not share one:
-    `Georgia (country) -> Georgia` and `Georgia -> Georgia (country)` are two different
-    transitions, and a single key for both makes them indistinguishable in
-    `remediation_change_log` - the reversal would read as a duplicate of the write it undoes.
-    """
-    return f"country-canonical:{site_id}"
+DEFAULT_PLAN = lane_dir(T05) / "PLAN.jsonl"
+DEFAULT_OUT = lane_dir(T05)
 
 
-def rollback_change_key(site_id: str) -> str:
-    """The journal's identity for one row's *reversal*: G0's `-rollback` suffix, same shape."""
-    return f"country-canonical-rollback:{site_id}"
+def change_key(site_id: str, lane: Lane = T05) -> str:
+    """The journal's identity for one row's *write* (see `Lane.change_key`)."""
+    return lane.change_key(site_id)
+
+
+def rollback_change_key(site_id: str, lane: Lane = T05) -> str:
+    """The journal's identity for one row's *reversal* (see `Lane.rollback_change_key`)."""
+    return lane.rollback_change_key(site_id)
 
 
 # --------------------------------------------------------------------------------- the records
@@ -97,6 +94,8 @@ class ChangeRecord:
     reason: str
     evidence: tuple[dict[str, Any], ...] = ()
     phase3: bool = False
+    #: The live input the value was derived from, as the database prints it (`Lane.premise_sql`).
+    premise: str | None = None
 
 
 def load_records(path: Path) -> list[ChangeRecord]:
@@ -109,6 +108,7 @@ def load_records(path: Path) -> list[ChangeRecord]:
             if not line:
                 continue
             payload = json.loads(line)
+            premise = payload.get("premise")
             records.append(
                 ChangeRecord(
                     site_id=str(payload["site_id"]),
@@ -120,6 +120,7 @@ def load_records(path: Path) -> list[ChangeRecord]:
                     reason=str(payload["reason"]),
                     evidence=tuple(payload.get("evidence") or ()),
                     phase3=bool(payload.get("phase3")),
+                    premise=None if premise is None else str(premise),
                 )
             )
     if not records:
@@ -127,11 +128,19 @@ def load_records(path: Path) -> list[ChangeRecord]:
     return records
 
 
-def validate_records(records: Sequence[ChangeRecord], *, source: str = CURATED_SOURCE) -> None:
+def validate_records(
+    records: Sequence[ChangeRecord],
+    *,
+    source: str = CURATED_SOURCE,
+    lane: Lane = T05,
+    rollback: bool = False,
+) -> None:
     """The plan-side mirror of the transaction's guards. Pure, so a test can break each one.
 
     The database guards are the authority (`render_transaction`); this exists so a corrupted plan
-    is refused *before* a statement is rendered as well as inside the transaction.
+    is refused *before* a statement is rendered as well as inside the transaction. For a reversal
+    (`rollback=True`) the value the lane owns is the one being undone, so the owned-value check
+    reads `old_value` instead of `new_value`.
     """
     if not records:
         raise PlanError("refusing to validate an empty plan")
@@ -150,30 +159,41 @@ def validate_records(records: Sequence[ChangeRecord], *, source: str = CURATED_S
             raise PlanError(f"{r.site_id}: no new value - this lane never clears the column")
         if r.new_value == r.old_value:
             raise PlanError(f"{r.site_id}: old and new are both {r.old_value!r} - not a change")
-        if len(r.new_value) > COUNTRY_COLUMN_CHARS:
+        if len(r.new_value) > lane.max_chars:
             raise PlanError(
                 f"{r.site_id}: the new value is {len(r.new_value)} characters, "
-                f"the column holds {COUNTRY_COLUMN_CHARS}"
+                f"the column holds {lane.max_chars}"
+            )
+        owned = r.old_value if rollback else r.new_value
+        if lane.allowed_new_values and owned not in lane.allowed_new_values:
+            raise PlanError(
+                f"{r.site_id}: {owned!r} is not a value the {lane.name} lane owns "
+                f"({', '.join(lane.allowed_new_values)})"
+            )
+        if lane.premise_sql is not None and r.premise is None:
+            raise PlanError(
+                f"{r.site_id}: the {lane.name} lane derives its value from {lane.premise_sql}, "
+                "and the record carries no premise to condition the write on"
+            )
+        if lane.premise_sql is None and r.premise is not None:
+            raise PlanError(
+                f"{r.site_id}: the {lane.name} lane checks no premise, and a premise nobody "
+                "checks is a false assurance"
             )
         if not r.reason or not r.evidence:
             raise PlanError(f"{r.site_id}: a write without a reason and evidence is not auditable")
 
 
 # ---------------------------------------------------------------------------------- rendering
-def _literal(value: str | None) -> str:
-    if value is None:
-        return "NULL"
-    return "'" + value.replace("'", "''") + "'"
-
-
 def render_transaction(
     records: Sequence[ChangeRecord],
     *,
-    run_stamp: str = RUN_STAMP,
+    run_stamp: str | None = None,
     site_ids: Iterable[str],
     source: str = CURATED_SOURCE,
     validate: bool = True,
     rollback: bool = False,
+    lane: Lane = T05,
 ) -> str:
     """One transaction that writes `records` and journals each row, or writes nothing.
 
@@ -186,14 +206,19 @@ def render_transaction(
     so the plan-side mirror must not refuse them a line earlier.
 
     `rollback=True` renders the reversal, and with it the reversal's own `change_key` (see
-    `rollback_change_key`): the two directions of one row are two transitions, not one.
+    `rollback_change_key`): the two directions of one row are two transitions, not one. A missing
+    `run_stamp` is the lane's own - the write's, or the reversal's.
     """
     records = list(records)
     if not records:
         raise PlanError("refusing to render a transaction with no rows")
     if validate:
-        validate_records(records, source=source)
-    key_of = rollback_change_key if rollback else change_key
+        validate_records(records, source=source, lane=lane, rollback=rollback)
+    if run_stamp is None:
+        run_stamp = lane.rollback_run_stamp if rollback else lane.run_stamp
+    key_of = lane.rollback_change_key if rollback else lane.change_key
+    table, column, label = lane.plan_table, lane.column, lane.label
+    premise = lane.premise_sql is not None
     sites = sorted({str(s) for s in site_ids})
     out: list[str] = []
     add = out.append
@@ -201,7 +226,7 @@ def render_transaction(
     add(
         f"-- {len(records)} row(s) over {len(sites)} site(s); scope source_id = {_literal(source)};"
     )
-    add(f"-- run stamp {_literal(run_stamp)}; journal test id {_literal(TEST_ID)}.")
+    add(f"-- run stamp {_literal(run_stamp)}; journal test id {_literal(lane.test_id)}.")
     add(
         "-- Every UPDATE is conditioned on the old value the plan names; every change is journalled"
     )
@@ -209,24 +234,29 @@ def render_transaction(
     add("\\set ON_ERROR_STOP on")
     add("BEGIN;")
     add("")
-    add("CREATE TEMP TABLE _country_plan (")
+    add(f"CREATE TEMP TABLE {table} (")
     add("    site_id     UUID PRIMARY KEY,")
     add("    old_value   TEXT NOT NULL,")
     add("    new_value   TEXT NOT NULL,")
     add("    change_key  TEXT NOT NULL,")
     add("    reason      TEXT NOT NULL,")
+    if premise:
+        add("    premise     TEXT NOT NULL,")
     add("    evidence    JSONB NOT NULL")
     add(") ON COMMIT DROP;")
     add("")
+    premise_column = " premise," if premise else ""
     add(
-        "INSERT INTO _country_plan (site_id, old_value, new_value, change_key, reason, evidence) VALUES"
+        f"INSERT INTO {table} (site_id, old_value, new_value, change_key, reason,{premise_column} "
+        "evidence) VALUES"
     )
     rows = []
     for r in sorted(records, key=lambda r: r.site_id):
+        premise_value = f"{_literal(r.premise)}, " if premise else ""
         rows.append(
             "    ("
             f"{_literal(r.site_id)}::uuid, {_literal(r.old_value)}, {_literal(r.new_value)}, "
-            f"{_literal(key_of(r.site_id))}, {_literal(r.reason)}, "
+            f"{_literal(key_of(r.site_id))}, {_literal(r.reason)}, {premise_value}"
             f"{_literal(json.dumps(list(r.evidence), ensure_ascii=False))}::jsonb)"
         )
     add(",\n".join(rows) + ";")
@@ -246,7 +276,7 @@ def render_transaction(
     add("")
     add("    -- scope guard 1: every planned row is a curated site that still exists")
     add("    SELECT count(*) INTO bad")
-    add("      FROM _country_plan p LEFT JOIN unified_sites u ON u.id = p.site_id")
+    add(f"      FROM {table} p LEFT JOIN unified_sites u ON u.id = p.site_id")
     add(f"     WHERE u.id IS NULL OR u.source_id <> {_literal(source)};")
     add("    IF bad > 0 THEN")
     add("        -- the source name is a RAISE argument, never part of the quoted message: a name")
@@ -256,95 +286,118 @@ def render_transaction(
     )
     add("        -- the shape this one copies.")
     add(
-        "        RAISE EXCEPTION 'country repair: % planned row(s) are not % sites', bad, "
+        f"        RAISE EXCEPTION '{label}: % planned row(s) are not % sites', bad, "
         f"{_literal(source)};"
     )
     add("    END IF;")
     add("")
     add("    -- scope guard 2: the plan is a set of real changes, each one writable in the column")
-    add("    SELECT count(*) INTO bad FROM _country_plan p")
+    add(f"    SELECT count(*) INTO bad FROM {table} p")
     add("     WHERE p.old_value IS NULL OR p.new_value = '' OR p.new_value = p.old_value")
-    add(f"        OR length(p.new_value) > {COUNTRY_COLUMN_CHARS};")
+    add(f"        OR length(p.new_value) > {lane.max_chars};")
     add("    IF bad > 0 THEN")
-    add("        RAISE EXCEPTION 'country repair: % planned row(s) are not writable changes', bad;")
+    add(f"        RAISE EXCEPTION '{label}: % planned row(s) are not writable changes', bad;")
     add("    END IF;")
     add("")
     add("    -- scope guard 3: every planned row still holds the old value the plan names")
     add("    SELECT count(*) INTO bad")
-    add("      FROM _country_plan p JOIN unified_sites u ON u.id = p.site_id")
-    add("     WHERE u.country IS DISTINCT FROM p.old_value;")
+    add(f"      FROM {table} p JOIN unified_sites u ON u.id = p.site_id")
+    add(f"     WHERE u.{column} IS DISTINCT FROM p.old_value;")
     add("    IF bad > 0 THEN")
     add(
-        "        RAISE EXCEPTION 'country repair: % planned row(s) no longer hold the planned old "
+        f"        RAISE EXCEPTION '{label}: % planned row(s) no longer hold the planned old "
         "value', bad;"
     )
     add("    END IF;")
     add("")
+    if lane.allowed_new_values:
+        owned = "p.old_value" if rollback else "p.new_value"
+        what = "undo" if rollback else "write"
+        add(
+            f"    -- scope guard 4: every planned row {what}s a value this lane owns "
+            f"({'old' if rollback else 'new'} value)"
+        )
+        add(f"    SELECT count(*) INTO bad FROM {table} p")
+        add(
+            f"     WHERE {owned} NOT IN ("
+            + ", ".join(_literal(v) for v in lane.allowed_new_values)
+            + ");"
+        )
+        add("    IF bad > 0 THEN")
+        add(
+            f"        RAISE EXCEPTION '{label}: % planned row(s) {what} a value this lane does "
+            "not own', bad;"
+        )
+        add("    END IF;")
+        add("")
+    if premise:
+        add(
+            "    -- scope guard 5: every planned row still holds the input its value was derived from"
+        )
+        add("    SELECT count(*) INTO bad")
+        add(f"      FROM {table} p JOIN unified_sites u ON u.id = p.site_id")
+        add(f"     WHERE ({lane.premise_sql}) IS DISTINCT FROM p.premise;")
+        add("    IF bad > 0 THEN")
+        add(
+            f"        RAISE EXCEPTION '{label}: % planned row(s) no longer hold the premise the "
+            "plan derived its value from', bad;"
+        )
+        add("    END IF;")
+        add("")
     add("    -- the only writer: the conditional UPDATE and its journal row commit together, and")
     add("    -- the function raises unless exactly one row matched")
-    add("    FOR r IN SELECT * FROM _country_plan ORDER BY site_id LOOP")
+    add(f"    FOR r IN SELECT * FROM {table} ORDER BY site_id LOOP")
     add("        moved := moved + apply_remediation_change(")
-    add("            'unified_sites', 'country', 'id', r.site_id::text,")
+    add(f"            'unified_sites', {_literal(column)}, 'id', r.site_id::text,")
     add("            r.old_value, r.new_value,")
     add(
-        f"            {_literal(TEST_ID)}, {_literal(run_stamp)}, r.change_key, "
-        f"{_literal(CONFIDENCE)}, r.evidence, r.site_id);"
+        f"            {_literal(lane.test_id)}, {_literal(run_stamp)}, r.change_key, "
+        f"{_literal(lane.confidence)}, r.evidence, r.site_id);"
     )
     add("    END LOOP;")
     add("")
     add("    IF moved <> expected THEN")
-    add("        RAISE EXCEPTION 'country repair: % row(s) changed, % planned', moved, expected;")
+    add(f"        RAISE EXCEPTION '{label}: % row(s) changed, % planned', moved, expected;")
     add("    END IF;")
     add("")
     add("    -- invariant 1: every planned row now holds the new value")
     add("    SELECT count(*) INTO bad")
-    add("      FROM _country_plan p JOIN unified_sites u ON u.id = p.site_id")
-    add("     WHERE u.country IS DISTINCT FROM p.new_value;")
+    add(f"      FROM {table} p JOIN unified_sites u ON u.id = p.site_id")
+    add(f"     WHERE u.{column} IS DISTINCT FROM p.new_value;")
     add("    IF bad > 0 THEN")
-    add(
-        "        RAISE EXCEPTION 'country repair: % planned row(s) do not hold the new value', bad;"
-    )
+    add(f"        RAISE EXCEPTION '{label}: % planned row(s) do not hold the new value', bad;")
     add("    END IF;")
     add("")
     add("    -- invariant 2: the journal and the data agree, row for row, in both directions")
     add("    SELECT count(*) INTO bad")
-    add("      FROM _country_plan p LEFT JOIN remediation_change_log l")
+    add(f"      FROM {table} p LEFT JOIN remediation_change_log l")
     add("        ON l.row_pk = p.site_id::text AND l.table_name = 'unified_sites'")
-    add("       AND l.column_name = 'country'")
+    add(f"       AND l.column_name = {_literal(column)}")
     add(f"       AND l.run_stamp = {_literal(run_stamp)}")
     add("     WHERE l.id IS NULL")
     add("        OR l.new_value IS DISTINCT FROM p.new_value")
     add("        OR l.old_value IS DISTINCT FROM p.old_value;")
     add("    IF bad > 0 THEN")
-    add(
-        "        RAISE EXCEPTION 'country repair: % planned row(s) have no matching journal row', "
-        "bad;"
-    )
+    add(f"        RAISE EXCEPTION '{label}: % planned row(s) have no matching journal row', bad;")
     add("    END IF;")
     add("")
     add("    SELECT count(*) INTO bad FROM remediation_change_log l")
     add("     WHERE l.run_stamp = " + _literal(run_stamp))
-    add("       AND (l.table_name <> 'unified_sites' OR l.column_name <> 'country');")
+    add(f"       AND (l.table_name <> 'unified_sites' OR l.column_name <> {_literal(column)});")
     add("    IF bad > 0 THEN")
     add(
-        "        RAISE EXCEPTION 'country repair: this run stamp journalled % row(s) outside "
-        "unified_sites.country', bad;"
+        f"        RAISE EXCEPTION '{label}: this run stamp journalled % row(s) outside "
+        f"unified_sites.{column}', bad;"
     )
     add("    END IF;")
     add("")
-    add(
-        "    RAISE NOTICE 'country repair: % row(s) changed and journalled over % curated site(s)',"
-    )
+    add(f"    RAISE NOTICE '{label}: % row(s) changed and journalled over % curated site(s)',")
     add("        moved, expected;")
     add("END $$;")
     add("")
     add("COMMIT;")
     add("")
-    add(
-        POST_COMMIT_READS.format(
-            run_stamp=_literal(run_stamp), test_id=_literal(TEST_ID), source=_literal(source)
-        )
-    )
+    add(post_commit_reads(lane, run_stamp=run_stamp, source=source))
     return "\n".join(out)
 
 
@@ -359,17 +412,31 @@ UNION ALL
 SELECT 'planned rows now holding the new value', count(*)::text
   FROM remediation_change_log l
  WHERE l.run_stamp = {run_stamp} AND l.table_name = 'unified_sites'
-   AND l.column_name = 'country'
+   AND l.column_name = {column_literal}
    AND EXISTS (SELECT 1 FROM unified_sites u
-                WHERE u.id::text = l.row_pk AND u.country = l.new_value)
+                WHERE u.id::text = l.row_pk AND u.{column} = l.new_value)
 UNION ALL
-SELECT 'curated rows still holding a parenthetical or comma country', count(*)::text
+SELECT {residual_metric}, count(*)::text
   FROM unified_sites
- WHERE source_id = {source} AND (country LIKE '%(%)%' OR country LIKE '%,%')
+ WHERE source_id = {source} AND {residual_predicate}
 UNION ALL
 SELECT 'curated sites', count(*)::text
   FROM unified_sites WHERE source_id = {source};
 """
+
+
+def post_commit_reads(lane: Lane, *, run_stamp: str, source: str = CURATED_SOURCE) -> str:
+    """`POST_COMMIT_READS` for one lane: its journal identity, its column, its residual."""
+    return POST_COMMIT_READS.format(
+        run_stamp=_literal(run_stamp),
+        test_id=_literal(lane.test_id),
+        source=_literal(source),
+        column=lane.column,
+        column_literal=_literal(lane.column),
+        residual_metric=_literal(lane.post_commit_residual.metric),
+        residual_predicate=lane.post_commit_residual.predicate,
+    )
+
 
 #: The post-write read-back as *numbers to be asserted*, not as text to be printed. Read with
 #: `-t -A` so the values are parsed, and built from the plan's own rows so it cannot be satisfied by
@@ -383,35 +450,43 @@ SELECT 'journal rows for this run stamp' AS metric, count(*)::text AS value
 UNION ALL
 SELECT 'planned rows now holding the planned new value', count(*)::text
   FROM planned p JOIN unified_sites u ON u.id = p.site_id
- WHERE u.country IS NOT DISTINCT FROM p.new_value
+ WHERE u.{column} IS NOT DISTINCT FROM p.new_value
 UNION ALL
 SELECT 'planned rows with no journal row for this run stamp', count(*)::text
   FROM planned p LEFT JOIN remediation_change_log l
     ON l.row_pk = p.site_id::text AND l.table_name = 'unified_sites'
-   AND l.column_name = 'country' AND l.run_stamp = {run_stamp}
+   AND l.column_name = {column_literal} AND l.run_stamp = {run_stamp}
  WHERE l.id IS NULL
 UNION ALL
-SELECT 'journal rows for this run outside unified_sites.country', count(*)::text
+SELECT 'journal rows for this run outside unified_sites.{column}', count(*)::text
   FROM remediation_change_log
  WHERE run_stamp = {run_stamp}
-   AND (table_name <> 'unified_sites' OR column_name <> 'country');
+   AND (table_name <> 'unified_sites' OR column_name <> {column_literal});
 """
 
 
 def assert_the_write_landed(
-    records: Sequence[ChangeRecord], *, run_stamp: str = RUN_STAMP
+    records: Sequence[ChangeRecord], *, run_stamp: str | None = None, lane: Lane = T05
 ) -> dict[str, int]:
     """Read the landed state back and refuse unless it is the plan, row for row.
 
     Read-only, and run after the COMMIT: the journal is counted for this run stamp, every planned
     site is checked against the value the plan names for *that* site, and nothing may be journalled
-    outside `unified_sites.country`. A mismatch raises, so `--apply` cannot report success over a
+    outside the lane's column. A mismatch raises, so `--apply` cannot report success over a
     read-back that disagrees with the plan it just wrote.
     """
     if not records:
         raise PlanError("refusing to check the read-back of an empty plan")
+    stamp = lane.run_stamp if run_stamp is None else run_stamp
     values = ", ".join(f"({_literal(r.site_id)}::uuid, {_literal(r.new_value)})" for r in records)
-    rows = read_rows(POST_WRITE_ASSERT_SQL.format(values=values, run_stamp=_literal(run_stamp)))
+    rows = read_rows(
+        POST_WRITE_ASSERT_SQL.format(
+            values=values,
+            run_stamp=_literal(stamp),
+            column=lane.column,
+            column_literal=_literal(lane.column),
+        )
+    )
     got = {name.strip(): int(value) for name, value in rows}
     expected = len(records)
     checks = (
@@ -431,9 +506,9 @@ def assert_the_write_landed(
             "every planned row is journalled",
         ),
         (
-            "journal rows for this run outside unified_sites.country",
+            f"journal rows for this run outside unified_sites.{lane.column}",
             0,
-            "this run stamp journals unified_sites.country only",
+            f"this run stamp journals unified_sites.{lane.column} only",
         ),
     )
     for name, want, why in checks:
@@ -450,20 +525,31 @@ REHEARSAL_READS = """\
 SELECT 'journal rows for this run stamp' AS metric, count(*)::text AS value
   FROM remediation_change_log WHERE run_stamp = {run_stamp}
 UNION ALL
-SELECT 'curated rows still holding the old value', count(*)::text
+SELECT {residual_metric}, count(*)::text
   FROM unified_sites
- WHERE source_id = {source} AND (country LIKE '%(%' OR country LIKE '%,%')
+ WHERE source_id = {source} AND {residual_predicate}
 UNION ALL
 SELECT 'curated sites', count(*)::text
   FROM unified_sites WHERE source_id = {source}
 UNION ALL
--- `_country_plan` is a CREATE TEMP TABLE, so it lives in this session's `pg_temp_N` schema and
+-- `{plan_table}` is a CREATE TEMP TABLE, so it lives in this session's `pg_temp_N` schema and
 -- `nspname = 'public'` could never match it - the old form of this read was 0 whatever happened.
 -- `to_regclass('pg_temp....')` resolves the current session's temp schema and is NULL when the
 -- table is gone, so this reads 1 exactly when a leftover exists.
-SELECT 'temp table _country_plan left behind',
-       (to_regclass('pg_temp._country_plan') IS NOT NULL)::int::text
+SELECT 'temp table {plan_table} left behind',
+       (to_regclass('pg_temp.{plan_table}') IS NOT NULL)::int::text
 """
+
+
+def rehearsal_reads(lane: Lane, *, run_stamp: str, source: str = CURATED_SOURCE) -> str:
+    return REHEARSAL_READS.format(
+        run_stamp=_literal(run_stamp),
+        source=_literal(source),
+        residual_metric=_literal(lane.rehearsal_residual.metric),
+        residual_predicate=lane.rehearsal_residual.predicate,
+        plan_table=lane.plan_table,
+    )
+
 
 VERIFY_SQL = f"""\
 -- Read-only. The same file before and after the apply, so the two runs are comparable.
@@ -522,20 +608,39 @@ SELECT 'card_stats rows whose civilization differs from the site country', count
 ORDER BY 1;
 """
 
+#: The read-only verification per lane. T05's is `VERIFY_SQL` above, unchanged since the write it
+#: verified (its sha256 is pinned in the tests); the later lanes' texts live in `lane.py`.
+READBACKS: dict[str, str] = {T05.name: VERIFY_SQL, **LANE_READBACKS}
+
 ROLLBACK_REHEARSAL_READS = """\
 -- after ROLLBACK of the reversal: the reversal must leave nothing behind either
+WITH planned(site_id, written) AS (VALUES {values})
 SELECT 'journal rows for the rollback stamp' AS metric, count(*)::text AS value
   FROM remediation_change_log WHERE run_stamp = {rollback_stamp}
 UNION ALL
 SELECT 'planned rows still holding the written value', count(*)::text
-  FROM unified_sites WHERE id IN ({ids}) AND country IN ('Georgia', 'Chile')
+  FROM planned p JOIN unified_sites u ON u.id = p.site_id
+ WHERE u.{column} IS NOT DISTINCT FROM p.written
 UNION ALL
 SELECT 'curated sites', count(*)::text
   FROM unified_sites WHERE source_id = {source}
 UNION ALL
-SELECT 'temp table _country_plan left behind',
-       (to_regclass('pg_temp._country_plan') IS NOT NULL)::int::text
+SELECT 'temp table {plan_table} left behind',
+       (to_regclass('pg_temp.{plan_table}') IS NOT NULL)::int::text
 """
+
+
+def rollback_rehearsal_reads(records: Sequence[ChangeRecord], lane: Lane = T05) -> str:
+    """The reads after a rehearsed reversal, per planned row and the value *that* row was given."""
+    values = ", ".join(f"({_literal(r.site_id)}::uuid, {_literal(r.new_value)})" for r in records)
+    return ROLLBACK_REHEARSAL_READS.format(
+        values=values,
+        rollback_stamp=_literal(lane.rollback_run_stamp),
+        source=_literal(CURATED_SOURCE),
+        column=lane.column,
+        plan_table=lane.plan_table,
+    )
+
 
 PRIMITIVE_CHECK_SQL = """\
 -- Which body of apply_remediation_change is deployed? (migrations/0017 and 0018)
@@ -549,20 +654,23 @@ SELECT pg_get_functiondef(p.oid) LIKE '%$1::%s WHERE%' AS casts_value_to_column_
 """
 
 
-def rehearse(sql: str, *, run_stamp: str = RUN_STAMP, source: str = CURATED_SOURCE) -> str:
+def rehearse(
+    sql: str,
+    *,
+    run_stamp: str | None = None,
+    source: str = CURATED_SOURCE,
+    lane: Lane = T05,
+) -> str:
     """The same statement with `COMMIT` swapped for `ROLLBACK`, plus reads of what must not change.
 
-    The point is to run the identical text - the same guards, the same 35 calls - against
+    The point is to run the identical text - the same guards, the same calls - against
     production without keeping any of it, so a broken guard is found before it is committing.
     """
     head, sep, _ = sql.partition("\nCOMMIT;\n")
     if not sep:
         raise PlanError("the emitted statement has no COMMIT - refusing to rehearse it")
-    return (
-        head
-        + "\nROLLBACK;\n"
-        + REHEARSAL_READS.format(run_stamp=_literal(run_stamp), source=_literal(source))
-    )
+    stamp = lane.run_stamp if run_stamp is None else run_stamp
+    return head + "\nROLLBACK;\n" + rehearsal_reads(lane, run_stamp=stamp, source=source)
 
 
 # --------------------------------------------------------------------------------- transport
@@ -588,44 +696,48 @@ def read_rows(sql: str) -> list[list[str]]:
     return [line.split("|") for line in proc.stdout.splitlines() if line.strip()]
 
 
-def _hub_rows() -> list[tuple[str, str, int]]:
-    """(country, slug, rows) for every curated country - the hub shape, from the database.
+def _value_rows(lane: Lane) -> list[tuple[str, str, int]]:
+    """(value, slug, rows) for every curated value of the lane's column, from the database.
 
-    The slug function is the pipeline's own, which the hub route imports
-    (`api/routes/sites_html.py:25`) and matches rows with: `/sites/{slug}` 404s once no row's
-    `country` slugs to it, and only redirects a *case variant* of a slug that still matches.
+    For the country column the slug is the hub's: the slug function is the pipeline's own, which
+    the hub route imports (`api/routes/sites_html.py:25`) and matches rows with - `/sites/{slug}`
+    404s once no row's `country` slugs to it, and only redirects a *case variant* of a slug that
+    still matches. Other columns have no hub page, so their slug is `-`.
     """
     from pipeline.sites_html_renderer import country_slug
 
     rows = read_rows(
-        "SELECT country, count(*) FROM unified_sites "
-        "WHERE source_id = 'ancient_nerds' GROUP BY country ORDER BY country"
+        f"SELECT {lane.column}, count(*) FROM unified_sites "
+        f"WHERE source_id = 'ancient_nerds' GROUP BY {lane.column} ORDER BY {lane.column}"
     )
-    return [(country, country_slug(country), int(count)) for country, count in rows]
-
-
-def verify_interests(records: Sequence[ChangeRecord]) -> str:
-    """The hub-slug table for the values this plan touches - measured, not asserted."""
-    wanted = {r.old_value for r in records} | {r.new_value for r in records}
-    rows = [row for row in _hub_rows() if row[0] in wanted]
-    width = max((len(c) for c, _, _ in rows), default=1)
-    lines = ["country value".ljust(width) + "  slug                     rows"]
-    lines += [
-        f"{country.ljust(width)}  {slug.ljust(23)} {count:>4}" for country, slug, count in rows
+    return [
+        (value, country_slug(value) if lane.column == "country" else "-", int(count))
+        for value, count in rows
     ]
+
+
+def verify_interests(records: Sequence[ChangeRecord], lane: Lane = T05) -> str:
+    """The value table (and hub slug) for the values this plan touches - measured, not asserted."""
+    wanted = {r.old_value for r in records} | {r.new_value for r in records}
+    rows = [row for row in _value_rows(lane) if row[0] in wanted]
+    width = max((len(c) for c, _, _ in rows), default=1)
+    lines = [f"{lane.column} value".ljust(width) + "  slug                     rows"]
+    lines += [f"{value.ljust(width)}  {slug.ljust(23)} {count:>4}" for value, slug, count in rows]
     return "\n".join(lines)
 
 
 # ------------------------------------------------------------------------------- the commands
-def emit(records: Sequence[ChangeRecord], out: Path) -> int:
-    validate_records(records)
+def emit(records: Sequence[ChangeRecord], out: Path, lane: Lane = T05) -> int:
+    validate_records(records, lane=lane)
     apply_path = out / "APPLY.sql"
     rollback_path = out / "ROLLBACK.sql"
     if not rollback_path.exists():
         raise PlanError(
             f"{rollback_path} does not exist - the rollback is written before the apply, never after"
         )
-    sql = render_transaction(records, run_stamp=RUN_STAMP, site_ids={r.site_id for r in records})
+    sql = render_transaction(
+        records, run_stamp=lane.run_stamp, site_ids={r.site_id for r in records}, lane=lane
+    )
     apply_path.parent.mkdir(parents=True, exist_ok=True)
     apply_path.write_text(sql, encoding="utf-8", newline="\n")
     log.info(
@@ -638,9 +750,9 @@ def emit(records: Sequence[ChangeRecord], out: Path) -> int:
     return len(records)
 
 
-def cmd_rehearse(records: Sequence[ChangeRecord], out: Path) -> str:
+def cmd_rehearse(records: Sequence[ChangeRecord], out: Path, lane: Lane = T05) -> str:
     sql = (out / "APPLY.sql").read_text(encoding="utf-8")
-    script = rehearse(sql)
+    script = rehearse(sql, lane=lane)
     head = sql.partition("\nCOMMIT;\n")[0]
     if not script.startswith(head):
         raise PlanError("the rehearsal is not the byte-identical statement up to COMMIT")
@@ -654,7 +766,7 @@ def cmd_rehearse(records: Sequence[ChangeRecord], out: Path) -> str:
     return proc.stdout
 
 
-def cmd_rehearse_rollback(records: Sequence[ChangeRecord], out: Path) -> str:
+def cmd_rehearse_rollback(records: Sequence[ChangeRecord], out: Path, lane: Lane = T05) -> str:
     """Run `ROLLBACK.sql` with `COMMIT` swapped for `ROLLBACK`.
 
     The reversal starts from the state the write left behind, so this needs no apply first: it is
@@ -668,14 +780,7 @@ def cmd_rehearse_rollback(records: Sequence[ChangeRecord], out: Path) -> str:
     head, sep, _ = sql.partition("\nCOMMIT;\n")
     if not sep:
         raise PlanError("ROLLBACK.sql has no COMMIT - refusing to rehearse it")
-    ids = ", ".join(_literal(str(r.site_id)) + "::uuid" for r in records)
-    script = (
-        head
-        + "\nROLLBACK;\n"
-        + ROLLBACK_REHEARSAL_READS.format(
-            rollback_stamp=_literal(ROLLBACK_RUN_STAMP), source=_literal(CURATED_SOURCE), ids=ids
-        )
-    )
+    script = head + "\nROLLBACK;\n" + rollback_rehearsal_reads(records, lane)
     target = out / "REHEARSAL_ROLLBACK.sql"
     target.write_text(script, encoding="utf-8", newline="\n")
     log.info("wrote %s (the reversal, COMMIT -> ROLLBACK)", target)
@@ -686,10 +791,11 @@ def cmd_rehearse_rollback(records: Sequence[ChangeRecord], out: Path) -> str:
     return proc.stdout
 
 
-def cmd_apply(records: Sequence[ChangeRecord], out: Path) -> str:
+def cmd_apply(records: Sequence[ChangeRecord], out: Path, lane: Lane = T05) -> str:
+    readback = READBACKS[lane.name]
     print("=== before ===")
-    print(run_psql(VERIFY_SQL).stdout)
-    print(verify_interests(records))
+    print(run_psql(readback).stdout)
+    print(verify_interests(records, lane))
     sql = (out / "APPLY.sql").read_text(encoding="utf-8")
     proc = run_psql(sql)
     print("=== the write ===")
@@ -697,27 +803,29 @@ def cmd_apply(records: Sequence[ChangeRecord], out: Path) -> str:
     if proc.stderr.strip():
         print(proc.stderr, file=sys.stderr)
     print("=== after ===")
-    print(run_psql(VERIFY_SQL).stdout)
-    print(verify_interests(records))
+    print(run_psql(readback).stdout)
+    print(verify_interests(records, lane))
     # Printed above, asserted here: a read-back that disagrees with the plan is a failed apply.
-    landed = assert_the_write_landed(records)
+    landed = assert_the_write_landed(records, lane=lane)
     for name, value in landed.items():
         print(f"  {name}: {value}")
     print("APPLY OK: the read-back matches the plan, row for row")
     return proc.stdout
 
 
-def cmd_probe_guards(records: Sequence[ChangeRecord], out: Path) -> int:
-    """Corrupt one copy per guard and show, on production, that the guard refuses.
+def probe_cases(
+    records: Sequence[ChangeRecord], lane: Lane, foreign: Sequence[str]
+) -> list[tuple[str, str, list[ChangeRecord]]]:
+    """One corrupted copy of the plan per in-transaction guard, each expected to be refused.
 
-    Each probe runs inside `BEGIN ... ROLLBACK` with its own run stamp. It writes nothing: the
-    guards fire before the loop, and the failed statement aborts the transaction. The journal is
-    read back afterwards to show that no probe left a row behind.
+    `foreign` is a row of another source (`id, name, value[, premise]`), read from production by
+    the caller. Pure, so a test can check that every guard the lane renders has its probe.
     """
+    first = records[0]
     probes: list[tuple[str, str, list[ChangeRecord]]] = []
 
     corrupted_old = list(records)
-    corrupted_old[0] = replace(corrupted_old[0], old_value="A country that was never there")
+    corrupted_old[0] = replace(first, old_value="A country that was never there")
     probes.append(
         (
             "guard3-foreign-old-value",
@@ -727,48 +835,78 @@ def cmd_probe_guards(records: Sequence[ChangeRecord], out: Path) -> int:
     )
 
     noop = list(records)
-    noop[0] = replace(noop[0], new_value=noop[0].old_value)
+    noop[0] = replace(first, new_value=first.old_value)
     probes.append(("guard2-no-op", "guard 2 - a planned row that is not a change", noop))
 
     too_long = list(records)
-    too_long[0] = replace(too_long[0], new_value="X" * 101)
+    too_long[0] = replace(first, new_value="X" * (lane.max_chars + 1))
     probes.append(("guard2-too-long", "guard 2 - a value longer than the column", too_long))
 
-    foreign = read_rows(
-        "SELECT id, name, coalesce(country, 'NULL') FROM unified_sites "
-        "WHERE source_id <> 'ancient_nerds' AND country IS NOT NULL AND country <> '' "
-        "AND source_id = 'canmore_scotland' LIMIT 1"
-    )
-    if not foreign:
-        raise PlanError("no non-curated row to probe the source guard with")
-    fid, fname, fcountry = foreign[0]
+    fid, fname, fvalue, *fpremise = foreign
     other_source = list(records)
     other_source[0] = ChangeRecord(
         site_id=fid,
         site_name=fname,
-        old_value=fcountry,
-        new_value="Georgia",
+        old_value=fvalue,
+        new_value=first.new_value,
         rule="probe",
         condition=f"id = {fid}",
         reason="probe: a row of another source, which must be refused",
         evidence=({"source": "probe", "quote": "corrupted copy"},),
+        premise=fpremise[0] if fpremise else None,
     )
     probes.append(
         ("guard1-other-source", "guard 1 - a row outside source_id = 'ancient_nerds'", other_source)
     )
 
-    failures = 0
-    for suffix, name, mutated in probes:
-        stamp = f"{PROBE_RUN_STAMP}-{suffix}"
-        sql = render_transaction(
-            mutated, run_stamp=stamp, site_ids={r.site_id for r in mutated}, validate=False
+    if lane.allowed_new_values:
+        not_owned = list(records)
+        not_owned[0] = replace(first, new_value="A value this lane does not own")
+        probes.append(
+            ("guard4-not-owned", "guard 4 - a planned value the lane does not own", not_owned)
         )
-        script = rehearse(sql, run_stamp=stamp, source=CURATED_SOURCE)
+
+    if lane.premise_sql is not None:
+        moved = list(records)
+        moved[0] = replace(first, premise="a premise the row never had")
+        probes.append(
+            ("guard5-premise", "guard 5 - a row whose premise has changed since the plan", moved)
+        )
+    return probes
+
+
+def cmd_probe_guards(records: Sequence[ChangeRecord], out: Path, lane: Lane = T05) -> int:
+    """Corrupt one copy per guard and show, on production, that the guard refuses.
+
+    Each probe runs inside `BEGIN ... ROLLBACK` with its own run stamp. It writes nothing: the
+    guards fire before the loop, and the failed statement aborts the transaction. The journal is
+    read back afterwards to show that no probe left a row behind.
+    """
+    premise = f", {lane.premise_sql}" if lane.premise_sql is not None else ""
+    foreign = read_rows(
+        f"SELECT u.id, u.name, u.{lane.column}{premise} FROM unified_sites u "
+        f"WHERE u.source_id <> 'ancient_nerds' AND u.{lane.column} IS NOT NULL "
+        f"AND u.{lane.column} <> '' LIMIT 1"
+    )
+    if not foreign:
+        raise PlanError("no non-curated row to probe the source guard with")
+
+    failures = 0
+    for suffix, name, mutated in probe_cases(records, lane, foreign[0]):
+        stamp = f"{lane.probe_run_stamp}-{suffix}"
+        sql = render_transaction(
+            mutated,
+            run_stamp=stamp,
+            site_ids={r.site_id for r in mutated},
+            validate=False,
+            lane=lane,
+        )
+        script = rehearse(sql, run_stamp=stamp, source=CURATED_SOURCE, lane=lane)
         proc = run_psql(script, check=False)
         raised = "ERROR" in proc.stdout or "ERROR" in proc.stderr
         print(f"[{name}] psql exit={proc.returncode} raised={raised}")
         for line in (proc.stdout + proc.stderr).splitlines():
-            if "ERROR" in line or "country repair:" in line:
+            if "ERROR" in line or f"{lane.label}:" in line:
                 print("   " + line.strip())
         left = read_rows(f"SELECT count(*) FROM remediation_change_log WHERE run_stamp = '{stamp}'")
         print(f"   journal rows left by this probe: {left[0][0] if left else '?'}")
@@ -780,9 +918,15 @@ def cmd_probe_guards(records: Sequence[ChangeRecord], out: Path) -> int:
 
 # ------------------------------------------------------------------------------------ CLI
 def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description="Apply the mechanical country-repair plan")
-    ap.add_argument("--plan", type=Path, default=DEFAULT_PLAN)
-    ap.add_argument("--out", type=Path, default=DEFAULT_OUT)
+    ap = argparse.ArgumentParser(description="Apply one mechanical lane's plan")
+    ap.add_argument(
+        "--lane",
+        choices=sorted(LANES),
+        default=T05.name,
+        help="the lane (column, journal identity, owned values); default t05",
+    )
+    ap.add_argument("--plan", type=Path, help="default: the lane's PLAN.jsonl")
+    ap.add_argument("--out", type=Path, help="default: the lane's output directory")
     ap.add_argument("--emit", action="store_true", help="write APPLY.sql only (no database)")
     ap.add_argument(
         "--rehearse",
@@ -801,7 +945,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument(
         "--interests",
         action="store_true",
-        help="read-only: the hub slug and row count of every value this plan touches",
+        help="read-only: the row count (and hub slug) of every value this plan touches",
     )
     ap.add_argument(
         "--probe-guards",
@@ -814,6 +958,9 @@ def main(argv: list[str] | None = None) -> int:
         help="report which body of apply_remediation_change is deployed",
     )
     args = ap.parse_args(argv)
+    lane = LANES[args.lane]
+    out = args.out if args.out is not None else lane_dir(lane)
+    plan = args.plan if args.plan is not None else out / "PLAN.jsonl"
 
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 
@@ -821,25 +968,25 @@ def main(argv: list[str] | None = None) -> int:
         print(run_psql(PRIMITIVE_CHECK_SQL).stdout)
         return 0
     if args.verify:
-        print(run_psql(VERIFY_SQL).stdout)
+        print(run_psql(READBACKS[lane.name]).stdout)
         return 0
 
-    records = load_records(args.plan)
-    validate_records(records)
+    records = load_records(plan)
+    validate_records(records, lane=lane)
 
     if args.interests:
-        print(verify_interests(records))
+        print(verify_interests(records, lane))
         return 0
     if args.probe_guards:
-        return cmd_probe_guards(records, args.out)
+        return cmd_probe_guards(records, out, lane)
     if args.emit or args.apply or args.rehearse or args.rehearse_rollback:
-        emit(records, args.out)
+        emit(records, out, lane)
     if args.rehearse:
-        cmd_rehearse(records, args.out)
+        cmd_rehearse(records, out, lane)
     if args.rehearse_rollback:
-        cmd_rehearse_rollback(records, args.out)
+        cmd_rehearse_rollback(records, out, lane)
     if args.apply:
-        cmd_apply(records, args.out)
+        cmd_apply(records, out, lane)
     if not any((args.emit, args.apply, args.rehearse, args.rehearse_rollback)):
         ap.print_help()
     return 0
