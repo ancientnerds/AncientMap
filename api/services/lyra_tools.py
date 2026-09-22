@@ -19,6 +19,7 @@ from pipeline.database import get_session
 from pipeline.lyra.site_search import escape_ilike
 from pipeline.lyra.site_search import search_sites as _search_sites
 from pipeline.lyra.text_sentences import split_sentences
+from pipeline.utils.public_sites import not_retired
 
 logger = logging.getLogger(__name__)
 
@@ -253,26 +254,27 @@ def get_site_details(site_id: str) -> str:
     except ValueError:
         is_uuid = False
 
+    # A retired site (E4) is gone from the platform: Lyra must not show it or link it.
     if is_uuid:
-        find_sql = """
+        find_sql = f"""
             SELECT s.id::text, s.name, s.lat, s.lon, s.site_type, s.period_name,
                    s.period_start, s.period_end, s.country, s.description,
                    s.source_url, s.source_id, s.thumbnail_url
             FROM unified_sites s
-            WHERE s.id = CAST(:site_id AS uuid)
+            WHERE s.id = CAST(:site_id AS uuid) AND {not_retired("s")}
         """
         find_params = {"site_id": site_id}
     else:
         # Name/slug lookup: replace hyphens with spaces, try exact match first (fast)
         # JOIN source_meta to prefer rich sources (ancient_nerds priority=0) over bare OSM rows
         search_name = site_id.replace("-", " ").replace("_", " ").strip()
-        find_sql = """
+        find_sql = f"""
             SELECT s.id::text, s.name, s.lat, s.lon, s.site_type, s.period_name,
                    s.period_start, s.period_end, s.country, s.description,
                    s.source_url, s.source_id, s.thumbnail_url
             FROM unified_sites s
             LEFT JOIN source_meta sm ON s.source_id = sm.id
-            WHERE lower(s.name) = lower(:name)
+            WHERE lower(s.name) = lower(:name) AND {not_retired("s")}
             ORDER BY sm.priority ASC NULLS LAST
             LIMIT 1
         """
@@ -1192,9 +1194,9 @@ def get_site_images(
         site_id = site
     else:
         # Resolve name to UUID
-        find_sql = """
+        find_sql = f"""
             SELECT id::text FROM unified_sites
-            WHERE lower(name) = lower(:name)
+            WHERE lower(name) = lower(:name) AND {not_retired()}
             LIMIT 1
         """
         with get_session() as session:
@@ -1219,7 +1221,7 @@ def get_site_images(
     # Fallback: if no images for this UUID, check other sites with the same name
     # (handles duplicates across sources like ancient_nerds vs osm_historic)
     if not rows:
-        fallback_sql = """
+        fallback_sql = f"""
             SELECT wi.filename, wi.original_url, wi.commons_page_url,
                    wi.author, wi.author_url, wi.license, wi.license_url,
                    wi.title, wi.is_hero, wi.is_lead, wi.source_type,
@@ -1228,6 +1230,7 @@ def get_site_images(
             JOIN unified_sites us_img ON us_img.id = wi.site_id
             JOIN unified_sites us_req ON us_req.id = CAST(:site_id AS uuid)
             WHERE unaccent(lower(us_img.name)) = unaccent(lower(us_req.name))
+              AND {not_retired("us_img")}
             ORDER BY wi.sort_order
             LIMIT :limit
         """

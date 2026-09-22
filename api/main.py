@@ -625,8 +625,10 @@ async def lifespan(app: FastAPI):
 
     get_redis_client()  # Initialize Redis connection
 
-    # Pre-warm cache in background so the health endpoint responds immediately
-    # Warm up connector status cache (non-blocking)
+    # Warm up connector status cache in the background (non-blocking), so the
+    # health endpoint responds immediately. (A sites pre-warm used to live here: it
+    # wrote 50,000 rows under "sites:all:all:all:all:0:50000", a key /api/sites/all
+    # has never read - removed 2026-09-22.)
     async def _warm_connector_cache():
         await asyncio.sleep(2)  # Let server finish binding
         try:
@@ -638,55 +640,6 @@ async def lifespan(app: FastAPI):
             logger.warning(f"[STARTUP] Connector cache warm-up failed (non-fatal): {e}")
 
     _create_background_task(_warm_connector_cache())
-
-    async def _warm_cache():
-        await asyncio.sleep(2)  # Let the server finish binding
-        try:
-            cache_key = "sites:all:all:all:all:0:50000"
-            if not cache_get(cache_key):
-                logger.info("[STARTUP] Pre-warming sites cache...")
-                start = time.time()
-
-                from sqlalchemy import text
-
-                from pipeline.database import get_session
-
-                with get_session() as session:
-                    query = text("""
-                        SELECT id::text, name, lat, lon, source_id, site_type,
-                               period_start, thumbnail_url, country
-                        FROM unified_sites
-                        LIMIT 50000
-                    """)
-                    result = session.execute(query)
-                    sites = []
-                    for row in result:
-                        site = {
-                            "id": row.id,
-                            "n": row.name,
-                            "la": row.lat,
-                            "lo": row.lon,
-                            "s": row.source_id,
-                            "t": row.site_type,
-                            "p": row.period_start,
-                        }
-                        if row.thumbnail_url:
-                            site["i"] = row.thumbnail_url
-                        if row.country:
-                            site["c"] = row.country
-                        sites.append(site)
-
-                    response = {"count": len(sites), "sites": sites}
-                    cache_set(cache_key, response, ttl=1800)  # 30 minutes
-                    logger.info(
-                        f"[STARTUP] Pre-warmed cache with {len(sites)} sites in {(time.time() - start) * 1000:.0f}ms"
-                    )
-            else:
-                logger.info("[STARTUP] Sites cache already warm")
-        except Exception as e:
-            logger.warning(f"[STARTUP] Failed to pre-warm cache: {e}")
-
-    _create_background_task(_warm_cache())
 
     yield
     # Shutdown

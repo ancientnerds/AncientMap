@@ -47,6 +47,7 @@ from qdrant_client import QdrantClient
 from qdrant_client.models import (
     Distance,
     Modifier,
+    PointIdsList,
     PointStruct,
     SparseVector,
     SparseVectorParams,
@@ -56,6 +57,7 @@ from sqlalchemy import text
 
 from api.services.lyra_embeddings import get_embeddings, get_sparse_model
 from pipeline.database import get_session
+from pipeline.utils.public_sites import is_retired, not_retired
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
@@ -108,26 +110,89 @@ def _content_hash(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
 
 
-def get_existing_hashes(client: QdrantClient, collection: str) -> dict[str, str]:
-    """Get {point_id: content_hash} for all points in the collection."""
-    existing: dict[str, str] = {}
+def get_existing_payloads(
+    client: QdrantClient, collection: str, fields: list[str]
+) -> dict[str, dict]:
+    """Get {point_id: {field: value}} for all points in the collection."""
+    existing: dict[str, dict] = {}
     offset = None
     while True:
         result = client.scroll(
             collection_name=collection,
             limit=1000,
             offset=offset,
-            with_payload=["content_hash"],
+            with_payload=fields,
             with_vectors=False,
         )
         points, next_offset = result
         for p in points:
-            pid = str(p.id)
-            existing[pid] = (p.payload or {}).get("content_hash", "")
+            existing[str(p.id)] = p.payload or {}
         if next_offset is None:
             break
         offset = next_offset
     return existing
+
+
+def get_existing_hashes(client: QdrantClient, collection: str) -> dict[str, str]:
+    """Get {point_id: content_hash} for all points in the collection."""
+    return {
+        pid: payload.get("content_hash", "")
+        for pid, payload in get_existing_payloads(client, collection, ["content_hash"]).items()
+    }
+
+
+def _site_hash_input(r) -> str:
+    """What the stored content_hash of a site point covers.
+
+    period_start is NOT part of it, although it is embedded ("Period: ... (1537 CE)") and
+    stored in the payload. Adding it here would change every one of the ~145,000 hashes and
+    re-embed the whole collection through Voyage; site_is_stale() compares the stored
+    period_start instead, which re-embeds only the points that are actually stale.
+    """
+    return (
+        f"{r.name}|{r.site_type or ''}|{r.period_name or ''}|{r.country or ''}"
+        f"|{(r.description or '')[:500]}"
+    )
+
+
+def site_is_stale(r, stored: dict | None, content_hash: str) -> bool:
+    """Whether the point of site row ``r`` must be (re-)embedded.
+
+    New points, a changed content hash, or a stored period_start that differs from the
+    database. The last case is the one the hash never saw: 345 sites whose only
+    correction was period_start (remediation phase 3, 2026-09-21/22) kept their old
+    year in Qdrant - Damascus Gate 1 instead of 1537 - and would have kept it forever.
+    """
+    if stored is None:
+        return True
+    return (
+        stored.get("content_hash", "") != content_hash
+        or stored.get("period_start") != r.period_start
+    )
+
+
+def delete_retired_points(client: QdrantClient, collection: str, existing: set[str]) -> int:
+    """Remove the points of retired sites (E4). Returns how many were deleted.
+
+    index_sites never deleted anything; a site retired after it was indexed would stay
+    searchable through Lyra forever.
+    """
+    with get_session() as session:
+        retired = {
+            row.id
+            for row in session.execute(
+                text("SELECT id::text AS id FROM unified_sites WHERE " + is_retired())
+            )
+        }
+    to_delete = sorted(retired & existing)
+    for i in range(0, len(to_delete), BATCH_SIZE):
+        client.delete(
+            collection_name=collection,
+            points_selector=PointIdsList(points=to_delete[i : i + BATCH_SIZE]),
+        )
+    if to_delete:
+        logger.info(f"Deleted {len(to_delete)} retired sites from '{collection}'")
+    return len(to_delete)
 
 
 def index_sites(
@@ -151,11 +216,18 @@ def index_sites(
     ensure_collection(client, collection, vector_size)
     create_payload_indexes(client, collection, ["country", "period_name", "site_type"])
 
-    existing_hashes = {} if rebuild else get_existing_hashes(client, collection)
-    logger.info(f"Sites collection has {len(existing_hashes)} existing points")
+    existing = (
+        {}
+        if rebuild
+        else get_existing_payloads(client, collection, ["content_hash", "period_start"])
+    )
+    logger.info(f"Sites collection has {len(existing)} existing points")
 
-    # Join with alternate names, raw_data for descriptions, and content links
-    sql = """
+    delete_retired_points(client, collection, set(existing))
+
+    # Join with alternate names, raw_data for descriptions, and content links.
+    # Retired sites (E4) are not indexed; their old points were deleted just above.
+    sql = f"""
         SELECT us.id::text, us.name, us.site_type, us.period_name, us.period_start,
                us.country, us.description, us.lat, us.lon, us.raw_data, us.thumbnail_url,
                array_agg(DISTINCT usn.name) FILTER (WHERE usn.name IS NOT NULL) AS alt_names,
@@ -164,6 +236,7 @@ def index_sites(
         LEFT JOIN unified_site_names usn ON usn.site_id = us.id
         LEFT JOIN site_content_links scl ON scl.site_id = us.id
         WHERE us.description IS NOT NULL AND LENGTH(us.description) > 20
+          AND {not_retired("us")}
         GROUP BY us.id
         ORDER BY us.id
     """
@@ -174,14 +247,10 @@ def index_sites(
 
     logger.info(f"Found {len(rows)} sites in database")
 
-    # Build hash input per site and filter to new/changed
-    def _site_hash_input(r) -> str:
-        return f"{r.name}|{r.site_type or ''}|{r.period_name or ''}|{r.country or ''}|{(r.description or '')[:500]}"
-
     to_index = []
     for r in rows:
         h = _content_hash(_site_hash_input(r))
-        if r.id in existing_hashes and existing_hashes[r.id] == h:
+        if not site_is_stale(r, existing.get(r.id), h):
             continue
         to_index.append((r, h))
 
@@ -234,7 +303,7 @@ def index_sites(
         sparse_vectors = list(sparse_model.embed(texts))
 
         points = []
-        for (r, h), dense_vec, sparse_vec in zip(batch, dense_vectors, sparse_vectors):
+        for (r, h), dense_vec, sparse_vec in zip(batch, dense_vectors, sparse_vectors, strict=True):
             points.append(
                 PointStruct(
                     id=r.id,
@@ -347,7 +416,9 @@ def index_news(
         sparse_vectors = list(sparse_model.embed(texts))
 
         points = []
-        for (r, point_id, h), dense_vec, sparse_vec in zip(batch, dense_vectors, sparse_vectors):
+        for (r, point_id, h), dense_vec, sparse_vec in zip(
+            batch, dense_vectors, sparse_vectors, strict=True
+        ):
             points.append(
                 PointStruct(
                     id=point_id,
@@ -552,7 +623,7 @@ def index_transcripts(
         sparse_vectors = list(sparse_model.embed(texts))
 
         points = []
-        for c, dense_vec, sparse_vec in zip(batch, dense_vectors, sparse_vectors):
+        for c, dense_vec, sparse_vec in zip(batch, dense_vectors, sparse_vectors, strict=True):
             points.append(
                 PointStruct(
                     id=c["point_id"],
@@ -718,7 +789,7 @@ def index_articles(
         sparse_vectors = list(sparse_model.embed(texts))
 
         points = []
-        for c, dense_vec, sparse_vec in zip(batch, dense_vectors, sparse_vectors):
+        for c, dense_vec, sparse_vec in zip(batch, dense_vectors, sparse_vectors, strict=True):
             points.append(
                 PointStruct(
                     id=c["point_id"],
@@ -922,7 +993,7 @@ def index_empires(
     sparse_vectors = list(sparse_model.embed(texts))
 
     points = []
-    for pt, dense_vec, sparse_vec in zip(new_points, dense_vectors, sparse_vectors):
+    for pt, dense_vec, sparse_vec in zip(new_points, dense_vectors, sparse_vectors, strict=True):
         p = pt["polity"]
         region = polity_id_to_region(pt["polity_id"])
         points.append(
@@ -1091,7 +1162,7 @@ def index_research(
         sparse_vectors = list(sparse_model.embed(texts))
 
         points = []
-        for c, dense_vec, sparse_vec in zip(batch, dense_vectors, sparse_vectors):
+        for c, dense_vec, sparse_vec in zip(batch, dense_vectors, sparse_vectors, strict=True):
             points.append(
                 PointStruct(
                     id=c["point_id"],

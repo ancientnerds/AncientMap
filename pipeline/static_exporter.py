@@ -11,6 +11,9 @@ Output files:
 - public/data/links.json           - Site-to-content relationships
 - public/data/sources.json         - Source metadata with colors
 
+Retired sites (E4, migration 0020) are left out of every site-keyed file: the index,
+the details, the image index, the content links, the hub list and the snapshot file.
+
 Usage:
     python -m pipeline.static_exporter
     python -m pipeline.static_exporter --sites-only
@@ -30,11 +33,22 @@ from sqlalchemy import text
 from pipeline.database import LibrarySource, get_session
 from pipeline.research_html_renderer import PUBLIC_PAPER_WHERE
 from pipeline.sites_html_renderer import country_path
+from pipeline.utils.public_sites import is_retired, not_retired
 
 # Output configuration
 OUTPUT_DIR = Path("public/data")
 GZIP_OUTPUT = True  # Also create .gz versions
 HUBS_SNAPSHOT_NAME = "hubs.snapshot.json"
+
+# Retention for file snapshots: keep the newest N, prune the rest (files +
+# manifest entries) after each new snapshot write. Without this the snapshot
+# dir and manifest grow unbounded (audit P6-16).
+MAX_FILE_SNAPSHOTS = 50
+
+# The E4 scope predicates this module needs, spelled once.
+_SHOWN = not_retired()
+_US_SHOWN = not_retired("us")
+_US_RETIRED = is_retired("us")
 
 # Region definitions for chunking site details
 REGIONS = {
@@ -104,13 +118,14 @@ def save_json(path: Path, data: Any, compress: bool = True):
 
 
 def fetch_hub_rows(session) -> list[Any]:
-    """Country hubs — same scope as sitemap-countries.xml."""
+    """Country hubs — same scope as sitemap-countries.xml (retired sites excluded)."""
     countries = session.execute(
-        text("""
+        text(f"""
             SELECT country, COUNT(*) AS sites
             FROM unified_sites
             WHERE source_id = 'ancient_nerds'
               AND country IS NOT NULL AND country != ''
+              AND {_SHOWN}
             GROUP BY country
             ORDER BY country
         """)
@@ -133,6 +148,141 @@ def build_hubs_payload(country_rows: list[Any]) -> dict:
         "exported_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
         "countries": countries,
     }
+
+
+def write_file_snapshot(session, snapshots_dir: Path) -> str:
+    """Write a dated snapshot of the curated sites plus the manifest entry; return its key.
+
+    The one writer of public/data/snapshots/ - the audit page's version history and the
+    source pins of /api/sites/all read these files. It used to exist twice (here with
+    fewer fields and no retention, and in api/services/snapshots.py), and POST
+    /api/sites/rebuild-static ran both, writing two manifest entries per rebuild - the
+    same key twice when both landed in one second.
+
+    Retired sites are left out: the files are public (nginx serves public/data/) and a pin
+    serves them on the globe. A corrupt manifest raises instead of being replaced by an
+    empty one, which would silently drop the whole version history.
+    """
+    snapshots_dir.mkdir(parents=True, exist_ok=True)
+
+    now = datetime.now(UTC)
+    snapshot_key = now.strftime("%Y-%m-%d_%H%M%S")
+
+    result = session.execute(
+        text(f"""
+        SELECT
+            us.id, us.name, us.lat, us.lon, us.source_id, us.site_type,
+            us.period_start, us.period_end, us.period_name, us.country,
+            us.description, us.thumbnail_url, us.source_url, us.edited_by,
+            us.created_at,
+            hero.original_url     AS hero_url,
+            hero.commons_page_url AS hero_attribution_url,
+            COALESCE(refs.links, '[]'::jsonb) AS reference_links
+        FROM unified_sites us
+        LEFT JOIN LATERAL (
+            SELECT original_url, commons_page_url
+            FROM wiki_images
+            WHERE site_id = us.id AND is_hero = true
+            ORDER BY id LIMIT 1
+        ) hero ON TRUE
+        LEFT JOIN LATERAL (
+            SELECT jsonb_agg(
+                jsonb_build_object('url', content_url, 'title', title)
+                ORDER BY id
+            ) AS links
+            FROM site_content_links
+            WHERE site_id = us.id AND content_type = 'reference'
+              AND content_url IS NOT NULL
+        ) refs ON TRUE
+        WHERE us.source_id IN ('ancient_nerds', 'lyra', 'ancient_nerds_community')
+          AND {_US_SHOWN}
+        ORDER BY us.source_id, us.name
+    """)
+    )
+
+    sites = []
+    source_counts: dict[str, int] = defaultdict(int)
+
+    for row in result:
+        site: dict[str, object] = {
+            "id": str(row.id),
+            "n": row.name[:100] if row.name else "",
+            "la": round(row.lat, 5),
+            "lo": round(row.lon, 5),
+            "s": row.source_id,
+        }
+        if row.site_type:
+            site["t"] = row.site_type
+        if row.period_start is not None:
+            site["p"] = row.period_start
+        if row.period_name:
+            site["pn"] = row.period_name
+        if row.country:
+            site["c"] = row.country
+        if row.description:
+            site["d"] = row.description[:500]
+        if row.thumbnail_url:
+            site["i"] = row.thumbnail_url
+        if row.source_url:
+            site["u"] = row.source_url
+        if row.edited_by and row.edited_by != "initial":
+            site["eb"] = row.edited_by
+        if row.created_at:
+            site["ea"] = row.created_at.isoformat()
+        if row.hero_url:
+            site["hu"] = row.hero_url
+        if row.hero_attribution_url:
+            site["ha"] = row.hero_attribution_url
+        if row.reference_links:
+            site["rl"] = row.reference_links
+
+        sites.append(site)
+        source_counts[row.source_id] += 1
+
+    snapshot_data = {
+        "snapshot_date": now.isoformat(),
+        "sites": sites,
+        "count": len(sites),
+        "by_source": dict(source_counts),
+    }
+
+    snapshot_file = f"{snapshot_key}.json"
+    with open(snapshots_dir / snapshot_file, "w", encoding="utf-8") as f:
+        json.dump(snapshot_data, f, separators=(",", ":"))
+
+    manifest_path = snapshots_dir / "manifest.json"
+    manifest: dict = {"snapshots": []}
+    if manifest_path.exists():
+        with open(manifest_path, encoding="utf-8") as f:
+            manifest = json.load(f)
+
+    snapshots = [e for e in manifest["snapshots"] if e["date"] != snapshot_key]
+    snapshots.append(
+        {
+            "date": snapshot_key,
+            "file": snapshot_file,
+            "sites": len(sites),
+            "by_source": dict(source_counts),
+        }
+    )
+    snapshots.sort(key=lambda e: e["date"], reverse=True)
+
+    # Retention sweep: keep the newest MAX_FILE_SNAPSHOTS, delete older files and
+    # drop their manifest entries.
+    pruned = snapshots[MAX_FILE_SNAPSHOTS:]
+    manifest["snapshots"] = snapshots[:MAX_FILE_SNAPSHOTS]
+    for entry in pruned:
+        (snapshots_dir / entry["file"]).unlink(missing_ok=True)
+
+    with open(manifest_path, "w", encoding="utf-8") as f:
+        json.dump(manifest, f, indent=2)
+
+    if pruned:
+        logger.info(
+            f"  Pruned {len(pruned)} file snapshot(s) beyond retention of {MAX_FILE_SNAPSHOTS}"
+        )
+    logger.info(f"  Snapshot {snapshot_key}: {len(sites):,} sites")
+    return snapshot_key
 
 
 def build_hubs_snapshot() -> dict:
@@ -165,8 +315,8 @@ class StaticExporter:
         self.output_dir = output_dir
         self.stats = {}
 
-    def export_all(self, sites_only: bool = False):
-        """Export all data to static files."""
+    def export_all(self, sites_only: bool = False) -> dict:
+        """Export all data to static files. Returns the export stats."""
         logger.info("=" * 60)
         logger.info("STATIC EXPORT - Ancient Nerds Map")
         logger.info("=" * 60)
@@ -203,6 +353,7 @@ class StaticExporter:
         self._save_audit_snapshot()
 
         self._print_summary()
+        return dict(self.stats)
 
     def _export_sources(self):
         """Export source metadata with colors and counts."""
@@ -265,13 +416,16 @@ class StaticExporter:
         and only Latin-script names (useful for search, not Arabic/Chinese/etc).
         """
         result = session.execute(
-            text("""
+            text(
+                """
             SELECT usn.site_id, usn.name
             FROM unified_site_names usn
             JOIN unified_sites us ON us.id = usn.site_id
             WHERE usn.name_normalized != us.name_normalized
             AND usn.name ~ '^[a-zA-Z\u00c0-\u024f\u1e00-\u1eff]'
-        """)
+            AND """
+                + _US_SHOWN
+            )
         )
 
         alt_names: dict[str, list[str]] = defaultdict(list)
@@ -301,7 +455,7 @@ class StaticExporter:
 
             # Get all sites with minimal data for markers
             result = session.execute(
-                text("""
+                text(f"""
                 SELECT
                     us.id,
                     us.name,
@@ -330,6 +484,7 @@ class StaticExporter:
                     ORDER BY is_hero DESC, is_lead DESC, sort_order
                     LIMIT 1
                 ) wi ON true
+                WHERE {_US_SHOWN}
                 ORDER BY us.source_id, us.name
             """)
             )
@@ -458,7 +613,7 @@ class StaticExporter:
                 bounds = region_config["bounds"]
 
                 result = session.execute(
-                    text("""
+                    text(f"""
                     SELECT
                         id,
                         source_id,
@@ -478,6 +633,7 @@ class StaticExporter:
                     FROM unified_sites
                     WHERE lat BETWEEN :min_lat AND :max_lat
                     AND lon BETWEEN :min_lon AND :max_lon
+                    AND {_SHOWN}
                 """),
                     {
                         "min_lat": bounds["min_lat"],
@@ -549,13 +705,17 @@ class StaticExporter:
 
         with get_session() as session:
             result = session.execute(
-                text("""
+                text(f"""
                 SELECT
                     site_id, filename, author, license,
                     commons_page_url, is_hero, is_lead,
                     width, height, sort_order
                 FROM wiki_images
                 WHERE is_excluded IS NOT TRUE
+                  AND NOT EXISTS (
+                      SELECT 1 FROM unified_sites us
+                      WHERE us.id = wiki_images.site_id AND {_US_RETIRED}
+                  )
                 ORDER BY site_id, sort_order
             """)
             )
@@ -603,7 +763,7 @@ class StaticExporter:
 
         with get_session() as session:
             result = session.execute(
-                text("""
+                text(f"""
                 SELECT
                     site_id,
                     content_type,
@@ -612,6 +772,10 @@ class StaticExporter:
                     relevance_score
                 FROM site_content_links
                 WHERE relevance_score >= 0.2
+                  AND NOT EXISTS (
+                      SELECT 1 FROM unified_sites us
+                      WHERE us.id = site_content_links.site_id AND {_US_RETIRED}
+                  )
                 ORDER BY site_id, relevance_score DESC
             """)
             )
@@ -786,97 +950,10 @@ class StaticExporter:
             logger.info(f"  Library: {len(sources)} sources across {len(index)} periods")
 
     def _save_audit_snapshot(self):
-        """Save a dated snapshot of audit-source sites for version history."""
+        """Save a dated snapshot of the curated sites for version history."""
         logger.info("\nSaving audit snapshot...")
-
-        snapshot_dir = self.output_dir / "snapshots"
-        snapshot_dir.mkdir(parents=True, exist_ok=True)
-
-        now = datetime.now(UTC)
-        snapshot_time = now.isoformat()
-        snapshot_key = now.strftime("%Y-%m-%d_%H%M%S")
-
         with get_session() as session:
-            result = session.execute(
-                text("""
-                SELECT
-                    id, name, lat, lon, source_id, site_type,
-                    period_start, period_end, period_name, country,
-                    description, thumbnail_url, source_url, edited_by,
-                    created_at
-                FROM unified_sites
-                WHERE source_id IN ('ancient_nerds', 'lyra', 'ancient_nerds_community')
-                ORDER BY source_id, name
-            """)
-            )
-
-            sites = []
-            source_counts = defaultdict(int)
-
-            for row in result:
-                site: dict[str, Any] = {
-                    "id": str(row.id),
-                    "n": row.name[:100] if row.name else "",
-                    "la": round(row.lat, 5),
-                    "lo": round(row.lon, 5),
-                    "s": row.source_id,
-                }
-                if row.site_type:
-                    site["t"] = row.site_type
-                if row.period_start is not None:
-                    site["p"] = row.period_start
-                if row.period_name:
-                    site["pn"] = row.period_name
-                if row.country:
-                    site["c"] = row.country
-                if row.description:
-                    site["d"] = row.description[:500]
-                if row.thumbnail_url:
-                    site["i"] = row.thumbnail_url
-                if row.source_url:
-                    site["u"] = row.source_url
-                if row.edited_by and row.edited_by != "initial":
-                    site["eb"] = row.edited_by
-                if row.created_at:
-                    site["ea"] = row.created_at.isoformat()
-
-                sites.append(site)
-                source_counts[row.source_id] += 1
-
-        snapshot_data = {
-            "snapshot_date": snapshot_time,
-            "sites": sites,
-            "count": len(sites),
-            "by_source": dict(source_counts),
-        }
-
-        snapshot_file = f"{snapshot_key}.json"
-        save_json(snapshot_dir / snapshot_file, snapshot_data)
-
-        # Update manifest
-        manifest_path = snapshot_dir / "manifest.json"
-        manifest = {"snapshots": []}
-        if manifest_path.exists():
-            with open(manifest_path, encoding="utf-8") as f:
-                manifest = json.load(f)
-
-        snapshots = manifest["snapshots"]
-        snapshots.append(
-            {
-                "date": snapshot_key,
-                "file": snapshot_file,
-                "sites": len(sites),
-                "by_source": dict(source_counts),
-            }
-        )
-        snapshots.sort(key=lambda s: s["date"], reverse=True)
-        manifest["snapshots"] = snapshots
-
-        save_json(manifest_path, manifest, compress=False)
-
-        logger.info(f"  Snapshot {snapshot_key}: {len(sites):,} sites")
-        for source, count in sorted(source_counts.items(), key=lambda x: -x[1]):
-            logger.info(f"    {source}: {count:,}")
+            self.stats["snapshot_key"] = write_file_snapshot(session, self.output_dir / "snapshots")
 
     def _print_summary(self):
         """Print export summary."""
@@ -897,10 +974,10 @@ class StaticExporter:
             logger.info(f"Total gzipped size: {total_gz_size / 1024 / 1024:.2f} MB")
 
 
-def build_static(output_dir: str | None = None, sites_only: bool = False):
-    """Build static files for deployment."""
+def build_static(output_dir: str | None = None, sites_only: bool = False) -> dict:
+    """Build static files for deployment. Returns the export stats."""
     exporter = StaticExporter(Path(output_dir) if output_dir else OUTPUT_DIR)
-    exporter.export_all(sites_only=sites_only)
+    return exporter.export_all(sites_only=sites_only)
 
 
 def main():

@@ -69,13 +69,15 @@ def register_commands(bot: discord.Client) -> None:
         try:
             from api.cardgame.models import CardStats
             from pipeline.database import UnifiedSite, get_session
+            from pipeline.utils.public_sites import RETIRED
 
             with get_session() as session:
-                # Fuzzy search by name
+                # Fuzzy search by name; a retired site (E4) has no card to show
                 site = (
                     session.query(UnifiedSite)
                     .filter(UnifiedSite.name.ilike(f"%{_escape_ilike(name)}%", escape="\\"))
                     .filter(UnifiedSite.source_id == "ancient_nerds")
+                    .filter(UnifiedSite.scope_status.is_distinct_from(RETIRED))
                     .first()
                 )
                 if not site:

@@ -25,9 +25,12 @@ UNKNOWN_ID = "00000000-0000-4000-8000-000000000000"
 
 
 def _db(curated: SimpleNamespace | None, exists: bool) -> MagicMock:
-    """Erster execute(): kuratierte Zeile. Zweiter: Existenz überhaupt."""
+    """Erster execute(): kuratierte Zeile. Zweiter: Existenz überhaupt (mit scope_status)."""
     db = MagicMock()
-    db.execute.return_value.fetchone.side_effect = [curated, (1,) if exists else None]
+    db.execute.return_value.fetchone.side_effect = [
+        curated,
+        SimpleNamespace(scope_status=None) if exists else None,
+    ]
     return db
 
 
@@ -69,7 +72,7 @@ def test_fehlende_id_ist_404():
 
 def _detail(curated, uncurated_id: str | None) -> MagicMock:
     db = MagicMock()
-    uncurated = SimpleNamespace(id=uncurated_id) if uncurated_id else None
+    uncurated = SimpleNamespace(id=uncurated_id, scope_status=None) if uncurated_id else None
     db.execute.return_value.fetchone.side_effect = [curated, uncurated]
     return db
 
@@ -95,7 +98,7 @@ def test_praefixsuche_nutzt_einen_uuid_bereich_keinen_ausdruck():
     als Ausdruck auf id::text wäre sie ein Seq-Scan pro 404."""
     db = MagicMock()
     db.execute.return_value.fetchone.return_value = None
-    sh._uncurated_site_exists("b7cd329f", db)
+    sh._site_by_prefix("b7cd329f", db)
     sql = str(db.execute.call_args[0][0])
     params = db.execute.call_args[0][1]
     assert "LEFT(REPLACE" not in sql

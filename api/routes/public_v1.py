@@ -64,6 +64,7 @@ from api.schemas.public_v1 import (
 from api.services.lyra_tools import _escape_ilike
 from api.services.rate_limiter import RateLimiter, get_client_ip
 from pipeline.database import get_db
+from pipeline.utils.public_sites import RETIRED, is_retired, not_retired
 
 logger = logging.getLogger(__name__)
 
@@ -128,6 +129,12 @@ def paper_summary_kwargs(row) -> dict:
         "license": RESEARCH_LICENSE,
         "attribution": attribution,
     }
+
+
+# E4 scope (migration 0020): the public API serves no retired site. Spelled once.
+_SHOWN = not_retired()
+_US_SHOWN = not_retired("us")
+_US_RETIRED = is_retired("us")
 
 
 def _make_rate_limit_dependency(limiter: RateLimiter, limit: int):
@@ -312,7 +319,7 @@ def create_public_api() -> FastAPI:
         if cached:
             return cached
 
-        total = db.execute(text("SELECT COUNT(*) FROM unified_sites")).scalar()
+        total = db.execute(text("SELECT COUNT(*) FROM unified_sites WHERE " + _SHOWN)).scalar()
         source_count = db.execute(
             text("SELECT COUNT(*) FROM source_meta WHERE enabled = true")
         ).scalar()
@@ -401,7 +408,7 @@ def create_public_api() -> FastAPI:
                     detail="Invalid bbox format. Expected: minlon,minlat,maxlon,maxlat",
                 ) from None
 
-        conditions = []
+        conditions = [_SHOWN]
         params: dict = {"limit": limit}
         if source:
             conditions.append("source_id = ANY(:sources)")
@@ -419,7 +426,7 @@ def create_public_api() -> FastAPI:
             conditions.append("geom && ST_MakeEnvelope(:minlon, :minlat, :maxlon, :maxlat, 4326)")
             params.update(bbox_parsed)
 
-        where_clause = " AND ".join(conditions) if conditions else "1=1"
+        where_clause = " AND ".join(conditions)
         query = text(f"""
             SELECT id::text, name, lat, lon, source_id, site_type,
                    period_start, period_name, country, description,
@@ -495,11 +502,11 @@ def create_public_api() -> FastAPI:
         q_escaped = _escape_ilike(q_clean)
 
         # Spaceless matching: compare with spaces/diacritics stripped
-        query = text("""
+        query = text(f"""
             SELECT id::text, name, lat, lon, source_id, site_type,
                    period_start, period_name, country, source_url
             FROM unified_sites
-            WHERE unaccent(name) ILIKE unaccent(:pattern)
+            WHERE unaccent(name) ILIKE unaccent(:pattern) AND {_SHOWN}
             ORDER BY
                 CASE WHEN LOWER(unaccent(name)) = LOWER(unaccent(:exact)) THEN 0 ELSE 1 END,
                 LENGTH(name),
@@ -563,7 +570,7 @@ def create_public_api() -> FastAPI:
         query = text("""
             SELECT id::text, name, lat, lon, source_id, site_type,
                    period_start, period_end, period_name, country,
-                   description, source_url, thumbnail_url
+                   description, source_url, thumbnail_url, scope_status
             FROM unified_sites
             WHERE id::text = :site_id
             LIMIT 1
@@ -571,6 +578,9 @@ def create_public_api() -> FastAPI:
         row = db.execute(query, {"site_id": site_id}).fetchone()
         if not row:
             raise HTTPException(status_code=404, detail="Site not found")
+        if row.scope_status == RETIRED:
+            # Withdrawn on purpose (E4) - same answer as /api/sites/{id}.
+            raise HTTPException(status_code=410, detail="This site has been withdrawn.")
 
         response = SiteDetailResponse(
             id=row.id,
@@ -609,7 +619,7 @@ def create_public_api() -> FastAPI:
         if cached:
             return cached
 
-        query = text("""
+        query = text(f"""
             SELECT
                 sm.id as source_id,
                 sm.name,
@@ -623,6 +633,7 @@ def create_public_api() -> FastAPI:
             LEFT JOIN (
                 SELECT source_id, COUNT(*) as count
                 FROM unified_sites
+                WHERE {_SHOWN}
                 GROUP BY source_id
             ) site_counts ON sm.id = site_counts.source_id
             LEFT JOIN source_databases sd ON sm.id = sd.id
@@ -690,7 +701,7 @@ def create_public_api() -> FastAPI:
 
         # Count sites
         count = db.execute(
-            text("SELECT COUNT(*) FROM unified_sites WHERE source_id = :source_id"),
+            text("SELECT COUNT(*) FROM unified_sites WHERE source_id = :source_id AND " + _SHOWN),
             {"source_id": source_id},
         ).scalar()
 
@@ -699,10 +710,10 @@ def create_public_api() -> FastAPI:
 
         # Type breakdown (top 20)
         type_result = db.execute(
-            text("""
+            text(f"""
             SELECT site_type, COUNT(*) as count
             FROM unified_sites
-            WHERE source_id = :source_id AND site_type IS NOT NULL
+            WHERE source_id = :source_id AND site_type IS NOT NULL AND {_SHOWN}
             GROUP BY site_type
             ORDER BY count DESC
             LIMIT 20
@@ -713,7 +724,7 @@ def create_public_api() -> FastAPI:
 
         # Period breakdown
         period_result = db.execute(
-            text("""
+            text(f"""
             SELECT
                 CASE
                     WHEN period_start IS NULL THEN 'Unknown'
@@ -729,7 +740,7 @@ def create_public_api() -> FastAPI:
                 END as period,
                 COUNT(*) as count
             FROM unified_sites
-            WHERE source_id = :source_id
+            WHERE source_id = :source_id AND {_SHOWN}
             GROUP BY period
             ORDER BY MIN(COALESCE(period_start, 0))
         """),
@@ -949,11 +960,12 @@ def create_public_api() -> FastAPI:
         if cached:
             return cached
 
-        total = db.execute(text("SELECT COUNT(*) FROM unified_sites")).scalar()
+        total = db.execute(text("SELECT COUNT(*) FROM unified_sites WHERE " + _SHOWN)).scalar()
         result = db.execute(
-            text("""
+            text(f"""
             SELECT source_id, COUNT(*) as count
             FROM unified_sites
+            WHERE {_SHOWN}
             GROUP BY source_id
             ORDER BY count DESC
         """)
@@ -961,7 +973,7 @@ def create_public_api() -> FastAPI:
         by_source = {row.source_id: row.count for row in result}
 
         last_updated_row = db.execute(
-            text("SELECT MAX(COALESCE(updated_at, created_at)) FROM unified_sites")
+            text("SELECT MAX(COALESCE(updated_at, created_at)) FROM unified_sites WHERE " + _SHOWN)
         ).scalar()
         last_updated = last_updated_row.isoformat() if last_updated_row else None
 
@@ -999,8 +1011,9 @@ def create_public_api() -> FastAPI:
         cat_result = db.execute(
             text(
                 "SELECT DISTINCT site_type FROM unified_sites "
-                "WHERE site_type IS NOT NULL AND site_type != '' "
-                "ORDER BY site_type"
+                "WHERE site_type IS NOT NULL AND site_type != '' AND "
+                + _SHOWN
+                + " ORDER BY site_type"
             )
         )
         categories = [row[0] for row in cat_result]
@@ -1009,15 +1022,14 @@ def create_public_api() -> FastAPI:
         country_result = db.execute(
             text(
                 "SELECT DISTINCT country FROM unified_sites "
-                "WHERE country IS NOT NULL AND country != '' "
-                "ORDER BY country"
+                "WHERE country IS NOT NULL AND country != '' AND " + _SHOWN + " ORDER BY country"
             )
         )
         countries = [row[0] for row in country_result]
 
         # Sources with counts
         source_result = db.execute(
-            text("""
+            text(f"""
             SELECT
                 sm.id as source_id,
                 sm.name,
@@ -1029,6 +1041,7 @@ def create_public_api() -> FastAPI:
             LEFT JOIN (
                 SELECT source_id, COUNT(*) as count
                 FROM unified_sites
+                WHERE {_SHOWN}
                 GROUP BY source_id
             ) sc ON sm.id = sc.source_id
             WHERE sm.enabled = true
@@ -1102,7 +1115,7 @@ def create_public_api() -> FastAPI:
         if cached:
             return cached
 
-        conditions = ["cs.card_description IS NOT NULL"]
+        conditions = ["cs.card_description IS NOT NULL", _US_SHOWN]
         params: dict = {"limit": limit, "offset": offset}
 
         if site_id:
@@ -1702,12 +1715,16 @@ def create_public_api() -> FastAPI:
         if cached:
             return cached
 
-        query = text("""
+        query = text(f"""
             SELECT filename, original_url, commons_page_url,
                    author, license, title, is_hero, source_type,
                    width, height
             FROM wiki_images
             WHERE site_id = CAST(:site_id AS uuid)
+              AND NOT EXISTS (
+                  SELECT 1 FROM unified_sites us
+                  WHERE us.id = wiki_images.site_id AND {_US_RETIRED}
+              )
             ORDER BY sort_order
             LIMIT :limit
         """)

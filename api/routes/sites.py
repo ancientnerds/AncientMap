@@ -6,7 +6,10 @@ Supports:
 - H3 clustering for zoom levels
 - Source/type/period filtering
 - Site updates, batch upload, and replace-source (admin)
-- Static JSON fallback when database is empty
+
+Scope (E4, migration 0020): every public read path hides retired sites through
+pipeline.utils.public_sites.not_retired(); a retired id answers 410 Gone. Nothing here
+falls back to static JSON - the database is the only source of /all.
 """
 
 import hashlib
@@ -21,11 +24,13 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from api.cache import cache_delete_pattern, cache_get, cache_set
+from api.services.background_jobs import JobAlreadyRunning, read_status, run_module, start_job
 from api.services.jwt_auth import require_founder
 from api.services.lyra_tools import _escape_ilike
 from api.services.rate_limiter import RateLimiter, get_client_ip
 from pipeline.database import DiscordUser, get_db
 from pipeline.normalizers.site_type import normalize_site_type
+from pipeline.utils.public_sites import RETIRED, is_retired, not_retired
 
 _heavy_limiter = RateLimiter(max_requests=50, window_seconds=60, namespace="heavy_sites")
 _viewport_limiter = RateLimiter(max_requests=60, window_seconds=60, namespace="viewport")
@@ -33,6 +38,12 @@ _search_limiter = RateLimiter(max_requests=20, window_seconds=60, namespace="sit
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+# E4 scope predicates (migration 0020), spelled once. Module constants, so the SQL below
+# concatenates fixed text only - request values are always bound parameters.
+_SHOWN = not_retired()
+_US_SHOWN = not_retired("us")
+_U_SHOWN = not_retired("u")
 
 # Paths to static sites JSON files (both need to be kept in sync)
 STATIC_SITES_PATH = (
@@ -44,92 +55,6 @@ STATIC_SITES_PATH = (
     / "index.json"
 )
 PUBLIC_SITES_PATH = Path(__file__).parent.parent.parent / "public" / "data" / "sites" / "index.json"
-
-# Cache for static sites (loaded once)
-_static_sites_cache = None
-
-
-def _load_static_sites():
-    """Load sites from static JSON file (cached)."""
-    global _static_sites_cache
-
-    if _static_sites_cache is not None:
-        return _static_sites_cache
-
-    # Try dist path first (local dev), then public path (Docker / fallback)
-    if STATIC_SITES_PATH.exists():
-        path = STATIC_SITES_PATH
-    elif PUBLIC_SITES_PATH.exists():
-        path = PUBLIC_SITES_PATH
-    else:
-        logger.warning(f"Static sites file not found at {STATIC_SITES_PATH} or {PUBLIC_SITES_PATH}")
-        return None
-
-    logger.info(f"Loading static sites from {path}")
-    try:
-        with open(path, encoding="utf-8") as f:
-            data = json.load(f)
-
-        sites = data.get("sites", [])
-        logger.info(f"Loaded {len(sites)} sites from static JSON")
-        _static_sites_cache = sites
-        return sites
-    except Exception as e:
-        logger.error(f"Failed to load static sites: {e}")
-        return None
-
-
-def _filter_static_sites(sites, sources=None, site_type=None, period_max=None, skip=0, limit=50000):
-    """Filter static sites by source, type, and period."""
-    filtered = sites
-
-    if sources:
-        filtered = [s for s in filtered if s.get("s") in sources]
-
-    if site_type:
-        filtered = [s for s in filtered if s.get("t") == site_type]
-
-    if period_max is not None:
-
-        def period_matches(site):
-            p = site.get("p")
-            if p is None:
-                return True  # Include sites without period
-            if isinstance(p, list) and len(p) > 0:
-                return p[0] <= period_max  # Check period_start
-            return True
-
-        filtered = [s for s in filtered if period_matches(s)]
-
-    # Apply pagination
-    return filtered[skip : skip + limit]
-
-
-def _convert_static_site(site):
-    """Convert static site format to API response format."""
-    result = {
-        "id": site.get("i"),
-        "n": site.get("n"),
-        "la": site.get("la"),
-        "lo": site.get("lo"),
-        "s": site.get("s"),
-        "t": site.get("t"),
-        "p": site.get("p")[0] if isinstance(site.get("p"), list) and site.get("p") else None,
-    }
-    # Include period_name if present (user-edited period)
-    if site.get("pn"):
-        result["pn"] = site.get("pn")
-    if site.get("d"):
-        result["d"] = site.get("d")
-    if site.get("im"):
-        result["i"] = site.get("im")
-    if site.get("c"):
-        result["c"] = site.get("c")
-    if site.get("u"):
-        result["u"] = site.get("u")
-    if site.get("an"):
-        result["an"] = site.get("an")
-    return result
 
 
 class SiteUpdateRequest(BaseModel):
@@ -227,13 +152,31 @@ def _update_static_json(site_id: str, site_update: "SiteUpdateRequest"):
     return dist_updated or public_updated
 
 
+def _retired_ids(db: Session, sources: list[str]) -> set[str]:
+    """Ids of the retired sites of ``sources`` - what a pinned snapshot must not show.
+
+    A snapshot file records the sites as they were; a site retired after the snapshot
+    was taken is still in it. E4 hides a retired site platform-wide, so the pin is
+    filtered against the live scope, not against the snapshot's own state.
+    """
+    rows = db.execute(
+        text(
+            "SELECT id::text AS id FROM unified_sites WHERE source_id = ANY(:sources) AND "
+            + is_retired()
+        ),
+        {"sources": sources},
+    ).fetchall()
+    return {row.id for row in rows}
+
+
 def _load_pinned_sites(
     source_id: str,
     snap_date: str,
+    retired: set[str],
     site_type: str | None = None,
     period_max: int | None = None,
 ) -> list[dict]:
-    """Load sites for a pinned source from a snapshot JSON file."""
+    """Load sites for a pinned source from a snapshot JSON file, minus ``retired`` ids."""
     from api.routes.snapshots import SNAPSHOTS_DIR
 
     path = SNAPSHOTS_DIR / f"{snap_date}.json"
@@ -242,7 +185,9 @@ def _load_pinned_sites(
         return []
     with open(path, encoding="utf-8") as f:
         data = json.load(f)
-    sites = [s for s in data.get("sites", []) if s.get("s") == source_id]
+    sites = [
+        s for s in data.get("sites", []) if s.get("s") == source_id and s.get("id") not in retired
+    ]
     if site_type:
         sites = [s for s in sites if s.get("t") == site_type]
     if period_max is not None:
@@ -269,7 +214,10 @@ def get_all_sites(
     Respects version pins: if a source is pinned to a snapshot, data for that
     source comes from the snapshot file instead of the live database.
 
-    Falls back to static JSON if database is empty.
+    Retired sites (E4) are never returned, pinned or live. A source without rows
+    answers an empty list: there is no static-JSON fallback. It loaded the whole
+    362 MB index (1.76M sites) into API memory whenever a request named an empty
+    source (measured 2026-09-22, ?source=david_rumsey) and served stale data.
     """
     if not _heavy_limiter.check(get_client_ip(req)):
         raise HTTPException(status_code=429, detail="Too many requests")
@@ -306,13 +254,15 @@ def get_all_sites(
     all_sites: list[dict] = []
 
     # Load pinned sources from snapshot files
-    for sid, snap_date in pinned_sources.items():
-        all_sites.extend(_load_pinned_sites(sid, snap_date, site_type, period_max))
+    if pinned_sources:
+        retired = _retired_ids(db, list(pinned_sources))
+        for sid, snap_date in pinned_sources.items():
+            all_sites.extend(_load_pinned_sites(sid, snap_date, retired, site_type, period_max))
 
     # Load live sources from database
     if live_sources:
         try:
-            conditions = ["us.source_id = ANY(:sources)"]
+            conditions = ["us.source_id = ANY(:sources)", _US_SHOWN]
             params: dict[str, object] = {"limit": limit, "skip": skip, "sources": live_sources}
 
             if site_type:
@@ -453,40 +403,13 @@ def get_all_sites(
                 status_code=500, detail="Database query failed for live sites"
             ) from e
 
-    data_source = "snapshot"
-    if live_sources:
-        data_source = "postgres"
-
-    if all_sites:
-        response = {
-            "count": len(all_sites),
-            "sites": all_sites,
-            "dataSource": data_source,
-        }
-        cache_set(cache_key, response, ttl=1800)
-        return response
-
-    # If no live sources were requested (all pinned) and no pinned sites found,
-    # or if DB was empty — try static JSON as final fallback
-    if not pinned_sources:
-        static_sites = _load_static_sites()
-        if static_sites:
-            filtered = _filter_static_sites(
-                static_sites, source, site_type, period_max, skip, limit
-            )
-            converted = [_convert_static_site(s) for s in filtered]
-            logger.info(f"Returning {len(converted)} sites from static JSON")
-            return {
-                "count": len(converted),
-                "sites": converted,
-                "dataSource": "json",
-            }
-
-    return {
-        "count": 0,
-        "sites": [],
-        "dataSource": "none",
+    response = {
+        "count": len(all_sites),
+        "sites": all_sites,
+        "dataSource": "postgres" if live_sources else "snapshot",
     }
+    cache_set(cache_key, response, ttl=1800)
+    return response
 
 
 @router.get("/viewport")
@@ -509,7 +432,10 @@ def get_sites_in_viewport(
         raise HTTPException(status_code=429, detail="Too many requests")
     # Use PostGIS bounding box operator (&&) which leverages spatial index
     # ST_MakeEnvelope(xmin, ymin, xmax, ymax, srid) creates a bounding box
-    conditions = ["geom && ST_MakeEnvelope(:min_lon, :min_lat, :max_lon, :max_lat, 4326)"]
+    conditions = [
+        "geom && ST_MakeEnvelope(:min_lon, :min_lat, :max_lon, :max_lat, 4326)",
+        _SHOWN,
+    ]
     params: dict[str, object] = {
         "min_lat": min_lat,
         "max_lat": max_lat,
@@ -615,7 +541,7 @@ def get_clustered_sites(
                 AVG(lon) as center_lon,
                 MODE() WITHIN GROUP (ORDER BY source_id) as primary_source
             FROM unified_sites
-            WHERE lat IS NOT NULL AND lon IS NOT NULL {source_filter}
+            WHERE lat IS NOT NULL AND lon IS NOT NULL AND {_SHOWN} {source_filter}
             GROUP BY cluster_key
         )
         SELECT
@@ -671,7 +597,11 @@ def random_sites(
     # Step 1: get per-source counts (drives proportional allocation and the
     # random-offset upper bounds in step 3)
     counts_result = db.execute(
-        text("SELECT source_id, COUNT(*) AS cnt FROM unified_sites GROUP BY source_id")
+        text(
+            "SELECT source_id, COUNT(*) AS cnt FROM unified_sites WHERE "
+            + _SHOWN
+            + " GROUP BY source_id"
+        )
     )
     source_counts = [(row.source_id, row.cnt) for row in counts_result]
     if not source_counts:
@@ -708,7 +638,7 @@ def random_sites(
         random.randint(0, max(counts_by_src[src] - allocations[src], 0))  # noqa: S311 — sampling offsets, not crypto
         for src in srcs
     ]
-    query = text("""
+    query = text(f"""
         SELECT us.id::text AS id, us.name, us.lat, us.lon, us.source_id, us.site_type,
                us.period_start, us.period_name, us.description, us.country, us.source_url,
                cs.card_description
@@ -718,7 +648,7 @@ def random_sites(
             SELECT id, name, lat, lon, source_id, site_type, period_start,
                    period_name, description, country, source_url
             FROM unified_sites u
-            WHERE u.source_id = alloc.source_id
+            WHERE u.source_id = alloc.source_id AND {_U_SHOWN}
             ORDER BY u.id
             OFFSET alloc.off LIMIT alloc.n
         ) us
@@ -793,7 +723,7 @@ def search_sites(
     spaceless_escaped = _escape_ilike(spaceless)
 
     # Single query: exact > spaceless > substring, prefer rows with card_description
-    query = text("""
+    query = text(f"""
         SELECT
             us.id::text, us.name, us.lat, us.lon, us.source_id, us.site_type,
             us.period_start, us.period_name, us.description, us.country, us.source_url,
@@ -805,10 +735,11 @@ def search_sites(
             END AS rank
         FROM unified_sites us
         LEFT JOIN card_stats cs ON cs.site_id = us.id
-        WHERE unaccent(us.name_normalized) = :norm
+        WHERE (unaccent(us.name_normalized) = :norm
            OR replace(unaccent(us.name_normalized), ' ', '') = :spaceless
            OR unaccent(us.name_normalized) ILIKE :pattern ESCAPE '\\'
-           OR replace(unaccent(us.name_normalized), ' ', '') ILIKE :spaceless_pattern ESCAPE '\\'
+           OR replace(unaccent(us.name_normalized), ' ', '') ILIKE :spaceless_pattern ESCAPE '\\')
+          AND {_US_SHOWN}
         ORDER BY (cs.card_description IS NULL), rank, us.name
         LIMIT :limit
     """)
@@ -964,9 +895,6 @@ def restore_snapshot_endpoint(
     if result["restored"] == 0:
         raise HTTPException(status_code=404, detail="Snapshot not found or empty")
 
-    global _static_sites_cache
-    _static_sites_cache = None
-
     return {
         "restored": result["restored"],
         "deleted": result.get("deleted", 0),
@@ -1026,6 +954,11 @@ def restore_all_upload_snapshots(
                 raw_data = snap.old_data->'raw_data',
                 parent_site_id = NULLIF(snap.old_data->>'parent_site_id', '')::uuid,
                 source_record_id = snap.old_data->>'source_record_id',
+                -- Same rule as restore_snapshot: the snapshot is the state to go back
+                -- to, scope included. A snapshot older than migration 0020 has no key,
+                -- which reads as NULL = in scope - the state the site was in then.
+                scope_status = snap.old_data->>'scope_status',
+                scope_reason = snap.old_data->>'scope_reason',
                 updated_at = NOW()
             FROM (
                 SELECT DISTINCT ON (sr.site_id) sr.site_id, sr.old_data
@@ -1042,9 +975,6 @@ def restore_all_upload_snapshots(
 
     db.commit()
     cache_delete_pattern("sites:*")
-
-    global _static_sites_cache
-    _static_sites_cache = None
 
     logger.info(
         "Bulk-restored %d sites from today's upload snapshots (by %s)",
@@ -1080,13 +1010,15 @@ def get_site_alternates(
     """
     # First get the site's location
     site_query = text("""
-        SELECT id, lat, lon FROM unified_sites WHERE id::text = :site_id
+        SELECT id, lat, lon, scope_status FROM unified_sites WHERE id::text = :site_id
     """)
     site_row = db.execute(site_query, {"site_id": site_id}).fetchone()
     if not site_row:
         raise HTTPException(status_code=404, detail="Site not found")
+    if site_row.scope_status == RETIRED:
+        raise _site_gone()
 
-    query = text("""
+    query = text(f"""
         WITH site_names AS (
             SELECT name_normalized FROM unified_site_names WHERE site_id = :site_uuid
         )
@@ -1110,6 +1042,7 @@ def get_site_alternates(
         LEFT JOIN source_meta sm ON sm.id = us.source_id
         WHERE usn.name_normalized IN (SELECT name_normalized FROM site_names)
           AND us.id != :site_uuid
+          AND {_US_SHOWN}
           AND ABS(us.lat - :lat) < 0.5
           AND ABS(us.lon - :lon) < 0.5
         ORDER BY us.source_id, us.name
@@ -1154,12 +1087,22 @@ def get_site_alternates(
     return {"alternates": alternates}
 
 
+def _site_gone() -> HTTPException:
+    """410 for a retired site (E4): it existed and was withdrawn on purpose.
+
+    Same answer as a withdrawn story (articles_html.story_page): crawlers drop a 410 far
+    faster than a 404, which reads as "maybe it comes back". The detail deliberately
+    names no reason - scope_reason is for the reviewer, not for the public.
+    """
+    return HTTPException(status_code=410, detail="This site has been withdrawn.")
+
+
 @router.get("/{site_id}")
 def get_site_detail(
     site_id: str,
     db: Session = Depends(get_db),
 ):
-    """Get full details for a single site."""
+    """Get full details for a single site. A retired site answers 410 Gone."""
     # Try UUID match first, then fall back to name search
     import uuid as _uuid
 
@@ -1170,10 +1113,13 @@ def get_site_detail(
         is_uuid = False
 
     if is_uuid:
+        # The id path reads the row whatever its scope, so a retired id can answer 410
+        # (withdrawn) instead of 404 (never existed).
         query = text("""
             SELECT us.id::text, us.source_id, us.source_record_id, us.name, us.lat, us.lon,
                    us.site_type, us.period_start, us.period_end, us.period_name,
                    us.country, us.description, us.thumbnail_url, us.source_url, us.raw_data,
+                   us.scope_status,
                    cs.card_description,
                    cs.best_wiki_url, cs.source_language
             FROM unified_sites us
@@ -1182,18 +1128,21 @@ def get_site_detail(
         """)
         result = db.execute(query, {"site_id": site_id})
     else:
-        query = text("""
+        # A name is not an identity: it resolves to a shown site or to nothing.
+        query = text(f"""
             SELECT us.id::text, us.source_id, us.source_record_id, us.name, us.lat, us.lon,
                    us.site_type, us.period_start, us.period_end, us.period_name,
                    us.country, us.description, us.thumbnail_url, us.source_url, us.raw_data,
+                   us.scope_status,
                    cs.card_description,
                    cs.best_wiki_url, cs.source_language
             FROM unified_sites us
             LEFT JOIN card_stats cs ON cs.site_id = us.id
-            WHERE unaccent(us.name) ILIKE unaccent(:name_pattern) ESCAPE '\\'
+            WHERE (unaccent(us.name) ILIKE unaccent(:name_pattern) ESCAPE '\\'
                OR unaccent(us.name_normalized) = LOWER(unaccent(:name))
                OR REPLACE(unaccent(us.name_normalized), ' ', '') = LOWER(REPLACE(unaccent(:name), ' ', ''))
-               OR us.id IN (SELECT site_id FROM unified_site_names WHERE unaccent(name) ILIKE unaccent(:name_pattern) ESCAPE '\\')
+               OR us.id IN (SELECT site_id FROM unified_site_names WHERE unaccent(name) ILIKE unaccent(:name_pattern) ESCAPE '\\'))
+              AND {_US_SHOWN}
             LIMIT 1
         """)
         # Escaped pattern for ILIKE; raw value for the exact-equality comparisons
@@ -1203,6 +1152,8 @@ def get_site_detail(
 
     if not row:
         raise HTTPException(status_code=404, detail="Site not found")
+    if row.scope_status == RETIRED:
+        raise _site_gone()
 
     resp = {
         "id": row.id,
@@ -1371,10 +1322,6 @@ def update_site(
     if synced > 0:
         cache_delete_pattern("radar:*")
 
-    # Clear the static sites cache so it reloads from file
-    global _static_sites_cache
-    _static_sites_cache = None
-
     logger.info(
         f"Updated site {site_id}: {site_update.title} (DB + static JSON: {static_updated}, radar synced: {synced}, invalidated {deleted} cache entries)"
     )
@@ -1496,9 +1443,6 @@ def batch_update_sites(
     if total_synced > 0:
         cache_delete_pattern("radar:*")
 
-    global _static_sites_cache
-    _static_sites_cache = None
-
     # Create file-based snapshot for version history dropdown
     from api.services.snapshots import export_file_snapshot
 
@@ -1517,29 +1461,42 @@ def batch_update_sites(
 # =============================================================================
 
 
-@router.post("/rebuild-static")
-def rebuild_static_json(
-    user: DiscordUser = Depends(require_founder),
+#: Background-job name of the static export (api/services/background_jobs.py).
+REBUILD_STATIC_JOB = "rebuild-static"
+
+#: The last full export took about 4 minutes; half an hour means something is stuck.
+_REBUILD_STATIC_TIMEOUT_S = 30 * 60
+
+
+def _run_static_export() -> dict:
+    """The job body: the full export in a child process (it also writes the file snapshot)."""
+    return run_module("pipeline.static_exporter", timeout_s=_REBUILD_STATIC_TIMEOUT_S)
+
+
+@router.post("/rebuild-static", status_code=202)
+def rebuild_static_json(user: DiscordUser = Depends(require_founder)):
+    """Start a rebuild of the static JSON files from the database (founders only).
+
+    Answers 202 at once and runs the export as a background job: the export takes
+    about four minutes and nginx cuts /api/ requests at 120 s, so the synchronous
+    version never returned. GET /rebuild-static/status reports the run. 409 while a
+    rebuild runs on either API instance. The export writes the file snapshot for the
+    version-history panel itself (pipeline.static_exporter.write_file_snapshot).
+    """
+    logger.info("Static rebuild requested by %s", user.username)
+    try:
+        return start_job(REBUILD_STATIC_JOB, _run_static_export)
+    except JobAlreadyRunning:
+        raise HTTPException(status_code=409, detail="A static rebuild is already running") from None
+
+
+@router.get("/rebuild-static/status")
+def rebuild_static_status(
+    _user: DiscordUser = Depends(require_founder),
     db: Session = Depends(get_db),
 ):
-    """Rebuild all static JSON files from the database (founders only).
-
-    Called by the frontend after uploads to ensure static data matches DB.
-    Runs synchronously — the frontend shows a progress indicator while waiting.
-    Also creates a file snapshot for the version history panel.
-    """
-    import time
-
-    from api.services.snapshots import export_file_snapshot
-    from pipeline.static_exporter import build_static
-
-    start = time.time()
-    logger.info("Rebuilding static JSON (triggered by %s)...", user.username)
-    build_static()
-    snapshot_key = export_file_snapshot(db)
-    elapsed = round(time.time() - start, 1)
-    logger.info("Static JSON rebuild complete in %ss (snapshot: %s)", elapsed, snapshot_key)
-    return {"rebuilt": True, "elapsed_seconds": elapsed, "snapshot_key": snapshot_key}
+    """State of the last static rebuild: running, ok, error, interrupted or never_run."""
+    return read_status(db, REBUILD_STATIC_JOB)
 
 
 class ParsedSitePayload(BaseModel):
@@ -1895,9 +1852,6 @@ def batch_upload_sites(
     db.commit()
     cache_delete_pattern("sites:*")
 
-    global _static_sites_cache
-    _static_sites_cache = None
-
     result = {
         "snapshot_id": snapshot_id,
         "inserted": inserted,
@@ -2252,9 +2206,6 @@ def replace_source(
 
     cache_delete_pattern("sites:*")
 
-    global _static_sites_cache
-    _static_sites_cache = None
-
     return {
         "snapshot_id": snapshot_id,
         "deleted": len(existing_ids),
@@ -2275,24 +2226,54 @@ def delete_site(
     user: DiscordUser = Depends(require_founder),
     db: Session = Depends(get_db),
 ):
-    """Delete a site and its card_stats row (founders only)."""
-    # Verify site exists
+    """Delete a non-curated site and its card_stats row (founders only).
+
+    Curated sites (CURATED_SOURCES) are refused with 409: owner decision E4 hides an
+    out-of-scope site through ``scope_status`` and never deletes it - the row keeps
+    matching and dedup from proposing the site again, and E1 forbids DELETE in the
+    remediation. For every other source the row is snapshotted first, so the delete can
+    be undone through the snapshot restore. The snapshot holds the unified_sites row
+    only; the site-owned rows that cascade with it (wiki_images, site_content_links,
+    unified_site_names, site_external_ids) come back from their loaders, not from it.
+    """
+    from api.services.snapshots import CURATED_SOURCES, create_snapshot
+
     row = db.execute(
-        text("SELECT id, name FROM unified_sites WHERE id::text = :site_id"),
+        text("SELECT id, name, source_id FROM unified_sites WHERE id::text = :site_id"),
         {"site_id": site_id},
     ).fetchone()
     if not row:
         raise HTTPException(status_code=404, detail="Site not found")
+    if row.source_id in CURATED_SOURCES:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Curated sites ({row.source_id}) are never deleted (decision E4): hide an "
+                "out-of-scope site by setting scope_status = 'retired' through "
+                "apply_remediation_change()."
+            ),
+        )
+
+    snapshot_id = create_snapshot(
+        db,
+        [site_id],
+        created_by=user.username,
+        description=f"Before delete of {row.name}"[:500],
+        snapshot_type="delete",
+        source_id=row.source_id,
+    )
+    if snapshot_id is None:
+        # The row was read in this transaction a moment ago; a missing snapshot means the
+        # snapshot write itself is broken. Nothing is deleted without one.
+        raise HTTPException(status_code=500, detail="Snapshot failed - nothing deleted")
 
     db.execute(text("DELETE FROM card_stats WHERE site_id::text = :site_id"), {"site_id": site_id})
     db.execute(text("DELETE FROM unified_sites WHERE id::text = :site_id"), {"site_id": site_id})
     db.commit()
 
     cache_delete_pattern("sites:*")
-    global _static_sites_cache
-    _static_sites_cache = None
 
-    return {"deleted": True, "site_id": site_id, "name": row.name}
+    return {"deleted": True, "site_id": site_id, "name": row.name, "snapshot_id": snapshot_id}
 
 
 # =============================================================================

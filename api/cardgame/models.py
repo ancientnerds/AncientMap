@@ -17,12 +17,14 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    exists,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, aliased, mapped_column, relationship
 from sqlalchemy.sql import func
 
-from pipeline.database import Base
+from pipeline.database import Base, UnifiedSite
+from pipeline.utils.public_sites import RETIRED
 
 
 class CardStats(Base):
@@ -64,6 +66,21 @@ class CardStats(Base):
     site: Mapped["UnifiedSite"] = relationship("UnifiedSite", lazy="joined")
 
     __table_args__ = (Index("idx_card_stats_rarity", "rarity_tier", "rarity_score"),)
+
+
+def card_site_in_scope():
+    """ORM criterion for every card draw: the card's site is not retired (E4).
+
+    One spelling for packs, the daily card, the starter deck, expedition and Lyra decks,
+    the quiz and the public card lists. A correlated NOT EXISTS, so it works in any query
+    over CardStats without a join (CardStats.site is eager-joined under an alias a filter
+    cannot reach). The subquery reads an ALIASED unified_sites: queries that also join
+    UnifiedSite themselves (the quiz, /random, the collection page) would otherwise
+    auto-correlate that table too, leaving the subquery without a FROM - SQLAlchemy raises
+    "returned no FROM clauses due to auto-correlation" on every such draw.
+    """
+    site = aliased(UnifiedSite)
+    return ~exists().where(site.id == CardStats.site_id, site.scope_status == RETIRED)
 
 
 class CardCollection(Base):

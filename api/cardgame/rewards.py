@@ -15,6 +15,7 @@ from api.cardgame.models import (
     CardCollection,
     CardPlayerStats,
     CardStats,
+    card_site_in_scope,
 )
 from pipeline.database import CreditGrant, DiscordUser
 
@@ -207,7 +208,7 @@ def claim_starter_deck(session: Session, user: DiscordUser) -> list[dict]:
 
     # First: one card per group (Common/Uncommon)
     for tier in [1, 2]:
-        query = session.query(CardStats).filter(CardStats.rarity_tier == tier)
+        query = session.query(CardStats).filter(CardStats.rarity_tier == tier, card_site_in_scope())
         if owned:
             query = query.filter(CardStats.site_id.notin_(owned))
         cards = query.order_by(func.random()).limit(50).all()
@@ -219,7 +220,9 @@ def claim_starter_deck(session: Session, user: DiscordUser) -> list[dict]:
     # Fill remaining slots
     if len(starter_cards) < STARTER_DECK_SIZE:
         exclude = owned | {c.site_id for c in starter_cards}
-        query = session.query(CardStats).filter(CardStats.rarity_tier.in_([1, 2]))
+        query = session.query(CardStats).filter(
+            CardStats.rarity_tier.in_([1, 2]), card_site_in_scope()
+        )
         if exclude:
             query = query.filter(CardStats.site_id.notin_(exclude))
         fill = query.order_by(func.random()).limit(STARTER_DECK_SIZE - len(starter_cards)).all()

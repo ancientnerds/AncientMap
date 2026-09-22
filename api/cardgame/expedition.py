@@ -20,6 +20,7 @@ from api.cardgame.models import (
     CardStats,
     EmpireCollection,
     ExpeditionProgress,
+    card_site_in_scope,
 )
 from pipeline.database import CreditGrant, DiscordUser
 
@@ -79,7 +80,18 @@ EXPEDITIONS: dict[str, dict] = {
     "british_isles": {
         "name": "Stones of Britain",
         "description": "From Stonehenge to Skara Brae, the megalithic mysteries of the British Isles.",
-        "countries": ["United Kingdom", "Ireland"],
+        # The dataset spells the UK by its parts (England 1,052, Wales 118, Scotland 83,
+        # Northern Ireland 4 cards on 2026-09-22; HUMAN_ONLY B9 keeps that convention).
+        # With only "United Kingdom" the pool held 69 cards and neither Stonehenge nor
+        # Skara Brae, which this description names.
+        "countries": [
+            "United Kingdom",
+            "England",
+            "Scotland",
+            "Wales",
+            "Northern Ireland",
+            "Ireland",
+        ],
         "lore": [
             "Stonehenge was built in stages over 1,500 years starting around 3000 BCE.",
             "Skara Brae in Orkney is older than Stonehenge and the Egyptian pyramids.",
@@ -188,6 +200,7 @@ def _build_npc_deck(
         .filter(
             CardStats.civilization.in_(countries),
             CardStats.rarity_tier >= min_tier,
+            card_site_in_scope(),
         )
         .order_by(func.random())
         .limit(10)
@@ -200,6 +213,7 @@ def _build_npc_deck(
             session.query(CardStats)
             .filter(
                 CardStats.rarity_tier >= min_tier,
+                card_site_in_scope(),
                 CardStats.site_id.notin_(existing_ids) if existing_ids else True,
             )
             .order_by(func.random())

@@ -12,6 +12,7 @@ from api.cardgame.models import (
     CardPackLog,
     CardPlayerStats,
     CardStats,
+    card_site_in_scope,
 )
 from pipeline.database import CreditGrant, DiscordUser
 
@@ -42,6 +43,7 @@ def _pick_card(session: Session, tier: int, owned_site_ids: set[uuid.UUID]) -> C
         session.query(CardStats)
         .filter(
             CardStats.rarity_tier == tier,
+            card_site_in_scope(),
             CardStats.site_id.notin_(owned_site_ids) if owned_site_ids else True,
         )
         .order_by(func.random())
@@ -53,7 +55,7 @@ def _pick_card(session: Session, tier: int, owned_site_ids: set[uuid.UUID]) -> C
     # All cards of this tier are owned — return any (will become evolution XP)
     return (
         session.query(CardStats)
-        .filter(CardStats.rarity_tier == tier)
+        .filter(CardStats.rarity_tier == tier, card_site_in_scope())
         .order_by(func.random())
         .first()
     )

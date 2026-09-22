@@ -21,12 +21,14 @@ from api.cardgame.models import (
     CardDeck,
     CardPlayerStats,
     CardStats,
+    card_site_in_scope,
 )
 from api.services.jwt_auth import get_current_user, get_optional_user
 from api.services.rate_limiter import RateLimiter, get_client_ip
 from pipeline.database import DiscordUser, UnifiedSite, get_session
 from pipeline.historical_boundaries.empire_metadata import EMPIRE_METADATA
 from pipeline.utils.country_lookup import normalize_country
+from pipeline.utils.public_sites import RETIRED
 
 router = APIRouter()
 
@@ -130,6 +132,7 @@ def get_random_cards(count: int = Query(100, ge=1, le=200)):
         rows = (
             session.query(CardStats, UnifiedSite)
             .join(UnifiedSite, CardStats.site_id == UnifiedSite.id)
+            .filter(card_site_in_scope())
             .order_by(func.random())
             .limit(count)
             .all()
@@ -176,6 +179,9 @@ def get_card_stats(site_id: str):
             raise HTTPException(status_code=404, detail="Card not found")
 
         site = session.get(UnifiedSite, sid)
+        if site is not None and site.scope_status == RETIRED:
+            # Same answer as /api/sites/{id} for a retired site (E4).
+            raise HTTPException(status_code=410, detail="This site has been withdrawn.")
         return _card_stats_to_dict(card, site)
 
 

@@ -1,4 +1,13 @@
-"""Vector DB (Qdrant) sync status and reindex endpoints."""
+"""Vector DB (Qdrant) sync status and reindex endpoints.
+
+One reindex at a time across BOTH API instances. api and api2 each start the nightly
+scheduler, and both logged "Starting nightly auto-reindex" at 03:00 UTC (plan 10.7): two
+build_lyra_index.py runs over the same collection, twice the Voyage calls for whatever
+changed. The runs are now serialised by a Postgres advisory lock (REINDEX_LOCK, see
+api/services/background_jobs.InstanceLock) held for the whole run, manual POST /reindex
+included; the nightly loser skips, and a nightly run that finds the night's run already
+completed by the other instance skips as well.
+"""
 
 import asyncio
 import json
@@ -12,8 +21,10 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import text
 
+from api.services.background_jobs import InstanceLock, lock_is_held
 from api.services.jwt_auth import require_founder
 from pipeline.database import DiscordUser, get_session
+from pipeline.utils.public_sites import not_retired
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -33,6 +44,9 @@ _nightly_task: asyncio.Task | None = None
 _next_run_utc: str | None = None
 
 NIGHTLY_HOUR_UTC = 3  # 3:00 AM UTC
+
+#: Advisory-lock name that serialises every reindex across the API instances.
+REINDEX_LOCK = "vector-reindex"
 
 
 def _load_persisted_state():
@@ -102,7 +116,10 @@ async def vector_sync_status():
     # PG counts
     with get_session() as session:
         pg_sites = session.execute(
-            text("SELECT COUNT(*) FROM unified_sites WHERE source_id = 'ancient_nerds'")
+            text(
+                "SELECT COUNT(*) FROM unified_sites WHERE source_id = 'ancient_nerds' AND "
+                + not_retired()
+            )
         ).scalar()
         pg_news = session.execute(text("SELECT COUNT(*) FROM news_items")).scalar()
         pg_transcripts = session.execute(
@@ -112,6 +129,8 @@ async def vector_sync_status():
         pg_research = session.execute(
             text("SELECT COUNT(*) FROM research_requests WHERE is_public = TRUE")
         ).scalar()
+        # Per instance the in-memory flag only knows its own runs; the lock knows both.
+        reindex_running = lock_is_held(session, REINDEX_LOCK)
 
     # Qdrant counts — both voyage and local collection sets
     qdrant_available = True
@@ -208,7 +227,7 @@ async def vector_sync_status():
             "boundary_count": boundary_count,
         },
         "reindex": {
-            "running": _reindex_state["running"],
+            "running": reindex_running,
             "started_at": _reindex_state["started_at"],
             "collection": _reindex_state["collection"],
             "last_completed_at": _reindex_state["last_completed_at"],
@@ -230,9 +249,12 @@ async def vector_reindex(
     body: ReindexRequest,
     _user: DiscordUser = Depends(require_founder),
 ):
-    """Trigger a background reindex of Qdrant collections (founders only)."""
+    """Trigger a background reindex of Qdrant collections (founders only).
 
-    if _reindex_state["running"]:
+    409 while a reindex runs on either API instance (the advisory lock is the arbiter).
+    """
+    lock = InstanceLock(REINDEX_LOCK)
+    if not await asyncio.to_thread(lock.try_acquire):
         raise HTTPException(status_code=409, detail="Reindex already running")
 
     cmd = [sys.executable, "scripts/build_lyra_index.py"]
@@ -245,7 +267,7 @@ async def vector_reindex(
     _reindex_state["started_at"] = datetime.now(UTC).isoformat()
     _reindex_state["collection"] = body.collection or "all"
 
-    asyncio.create_task(_run_reindex_sequence([cmd]))
+    asyncio.create_task(_run_reindex_sequence([cmd], lock))
 
     return {
         "status": "started",
@@ -254,8 +276,11 @@ async def vector_reindex(
     }
 
 
-async def _run_reindex_sequence(cmds: list[list[str]]):
-    """Run one or more build_lyra_index.py invocations sequentially."""
+async def _run_reindex_sequence(cmds: list[list[str]], lock: InstanceLock):
+    """Run one or more build_lyra_index.py invocations sequentially.
+
+    ``lock`` is held by the caller and released here, when the run is over.
+    """
     collection = _reindex_state["collection"] or "all"
     start = time.monotonic()
     results = []
@@ -285,13 +310,31 @@ async def _run_reindex_sequence(cmds: list[list[str]]):
         _reindex_state["last_duration_seconds"] = round(time.monotonic() - start)
         _reindex_state["last_result"] = f"error: {exc}"
     finally:
-        _reindex_state["running"] = False
-        _reindex_state["started_at"] = None
-        _reindex_state["collection"] = None
-        _persist_state(collection)
+        try:
+            _reindex_state["running"] = False
+            _reindex_state["started_at"] = None
+            _reindex_state["collection"] = None
+            _persist_state(collection)
+        finally:
+            await asyncio.to_thread(lock.release)
 
 
 # ─── Nightly auto-reindex scheduler ─────────────────────────────────────────
+def _nightly_already_ran(scheduled_for: datetime) -> bool:
+    """Whether a full reindex completed at or after this night's scheduled start.
+
+    The advisory lock stops two runs that overlap. This stops the second of two that
+    do not: the other instance's run takes ~30 s, and a loop that woke late would find
+    the lock free again and index a second time.
+    """
+    with get_session() as session:
+        last = session.execute(
+            text("SELECT last_completed_at FROM vector_sync_state WHERE collection = 'all'")
+        ).scalar()
+    # The column is a naive timestamp in UTC (the database runs in Etc/UTC).
+    return last is not None and last >= scheduled_for.astimezone(UTC).replace(tzinfo=None)
+
+
 def _seconds_until_next(hour_utc: int) -> float:
     """Seconds from now until the next occurrence of hour_utc:00 UTC."""
     now = datetime.now(UTC)
@@ -301,30 +344,49 @@ def _seconds_until_next(hour_utc: int) -> float:
     return (target - now).total_seconds()
 
 
+async def nightly_reindex_once(scheduled_for: datetime) -> str:
+    """One nightly run, unless another instance has it or already had it tonight.
+
+    Returns "locked" (the other instance is running it), "done" (tonight's run already
+    completed) or "ran".
+    """
+    lock = InstanceLock(REINDEX_LOCK)
+    if not await asyncio.to_thread(lock.try_acquire):
+        logger.info("[VECTOR-SYNC] Nightly reindex skipped — running on another instance")
+        return "locked"
+    try:
+        already_ran = await asyncio.to_thread(_nightly_already_ran, scheduled_for)
+    except BaseException:
+        # Never leave the lock held on an error path: it would block every reindex on
+        # both instances until this process exits.
+        await asyncio.to_thread(lock.release)
+        raise
+    if already_ran:
+        await asyncio.to_thread(lock.release)
+        logger.info("[VECTOR-SYNC] Nightly reindex skipped — tonight's run already done")
+        return "done"
+
+    logger.info("[VECTOR-SYNC] Starting nightly auto-reindex")
+    _reindex_state["running"] = True
+    _reindex_state["started_at"] = datetime.now(UTC).isoformat()
+    _reindex_state["collection"] = "all"
+    await _run_reindex_sequence([[sys.executable, "scripts/build_lyra_index.py"]], lock)
+    return "ran"
+
+
 async def schedule_nightly_reindex():
     """Loop forever: sleep until 3:00 AM UTC, then trigger a full incremental reindex."""
     global _next_run_utc
     while True:
         try:
             wait = _seconds_until_next(NIGHTLY_HOUR_UTC)
-            _next_run_utc = (datetime.now(UTC) + timedelta(seconds=wait)).isoformat()
+            scheduled_for = datetime.now(UTC) + timedelta(seconds=wait)
+            _next_run_utc = scheduled_for.isoformat()
             logger.info(
                 f"[VECTOR-SYNC] Next nightly reindex at {_next_run_utc} ({wait / 3600:.1f}h from now)"
             )
             await asyncio.sleep(wait)
-
-            if _reindex_state["running"]:
-                logger.info("[VECTOR-SYNC] Nightly reindex skipped — already running")
-                continue
-
-            logger.info("[VECTOR-SYNC] Starting nightly auto-reindex")
-            cmds = [
-                [sys.executable, "scripts/build_lyra_index.py"],
-            ]
-            _reindex_state["running"] = True
-            _reindex_state["started_at"] = datetime.now(UTC).isoformat()
-            _reindex_state["collection"] = "all"
-            await _run_reindex_sequence(cmds)
+            await nightly_reindex_once(scheduled_for)
         except asyncio.CancelledError:
             raise
         except Exception as e:

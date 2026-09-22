@@ -26,6 +26,7 @@ from pathlib import Path
 
 from pipeline.database import get_session
 from pipeline.lyra.minimax_shared import probe_minimax_quota
+from pipeline.utils.public_sites import not_retired
 from pipeline.utils.slugs import slugify
 from pipeline.video import (
     shorts_audit,
@@ -375,7 +376,8 @@ def quota_percentages() -> tuple[int, int]:
 
 def batch_candidates(tier_min: int, limit: int) -> list[dict]:
     """Card-bearing sites of at least `tier_min` with at least MIN_SITE_IMAGES
-    Commons images, best rarity first, that have no passing audit yet."""
+    Commons images, best rarity first, that have no passing audit yet. A retired site
+    (E4, migration 0020) is never planned: a short would advertise a page that is gone."""
     from sqlalchemy import text
 
     with get_session() as session:
@@ -385,6 +387,7 @@ def batch_candidates(tier_min: int, limit: int) -> list[dict]:
                     "SELECT s.id::text AS id, s.name FROM unified_sites s "
                     "JOIN card_stats c ON c.site_id = s.id "
                     "WHERE c.rarity_tier >= :tier AND c.card_description IS NOT NULL "
+                    "AND " + not_retired("s") + " "
                     "AND (SELECT count(*) FROM wiki_images w "
                     "     WHERE w.site_id = s.id AND NOT w.is_excluded) >= :min_images "
                     "ORDER BY c.rarity_score DESC NULLS LAST, s.name"

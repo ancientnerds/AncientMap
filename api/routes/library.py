@@ -11,6 +11,7 @@ from pydantic import BaseModel
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from api.services.background_jobs import JobAlreadyRunning, read_status, start_job
 from api.services.lyra_tools import _escape_ilike
 from api.services.rate_limiter import RateLimiter, get_client_ip
 from pipeline.database import LibrarySource, NewsItem, get_db
@@ -164,13 +165,15 @@ def library_by_site(site_id: str, db: Session = Depends(get_db)):
     ]
 
 
-@router.post("/refresh")
-def refresh_library(req: Request):
-    """Re-run the library aggregator and static export.
+#: Background-job name of the library refresh (api/services/background_jobs.py).
+LIBRARY_REFRESH_JOB = "library-refresh"
 
-    Internal endpoint: requires the X-Internal-Key header matching
-    LIBRARY_REFRESH_KEY (audit 2026-08-05, M2). The deploy pipeline reads the
-    key from the VPS .env; fails closed with 503 when unconfigured.
+
+def _require_internal_key(req: Request) -> None:
+    """X-Internal-Key must match LIBRARY_REFRESH_KEY (audit 2026-08-05, M2).
+
+    The deploy pipeline reads the key from the VPS .env; fails closed with 503 when
+    unconfigured.
     """
     expected = os.getenv("LIBRARY_REFRESH_KEY", "")
     if not expected:
@@ -178,12 +181,41 @@ def refresh_library(req: Request):
     provided = req.headers.get("X-Internal-Key", "")
     if not hmac.compare_digest(provided, expected):
         raise HTTPException(status_code=403, detail="Invalid internal key")
-    if not _refresh_limiter.check(get_client_ip(req)):
-        raise HTTPException(status_code=429, detail="Too many requests")
 
+
+def _refresh_library_job() -> dict:
+    """The job body: aggregate the citations, then write public/data/library/."""
     from pipeline.library_aggregator import aggregate_library
     from pipeline.static_exporter import StaticExporter
 
     count = aggregate_library()
     StaticExporter()._export_library()
-    return {"status": "ok", "sources": count}
+    return {"sources": count}
+
+
+@router.post("/refresh", status_code=202)
+def refresh_library(req: Request):
+    """Start a re-run of the library aggregator and the library export (internal).
+
+    Answers 202 at once; the work runs as a background job. The deploy curls this
+    with --max-time 120, and the synchronous version took longer than that (the site
+    scan alone spent 112 s materialising 1.74M rows, 2026-09-22), so a working
+    refresh was reported as failed. GET /refresh/status reports the run.
+    """
+    _require_internal_key(req)
+    if not _refresh_limiter.check(get_client_ip(req)):
+        raise HTTPException(status_code=429, detail="Too many requests")
+
+    try:
+        return start_job(LIBRARY_REFRESH_JOB, _refresh_library_job)
+    except JobAlreadyRunning:
+        raise HTTPException(
+            status_code=409, detail="A library refresh is already running"
+        ) from None
+
+
+@router.get("/refresh/status")
+def refresh_library_status(req: Request, db: Session = Depends(get_db)):
+    """State of the last library refresh: running, ok, error, interrupted or never_run."""
+    _require_internal_key(req)
+    return read_status(db, LIBRARY_REFRESH_JOB)

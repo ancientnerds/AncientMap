@@ -23,6 +23,7 @@ from pipeline.database import (
 )
 from pipeline.news_visibility import public_story_criteria
 from pipeline.sites_html_renderer import site_path
+from pipeline.utils.public_sites import RETIRED
 from pipeline.utils.slugs import slugify, story_slug
 from pipeline.utils.text import PERIOD_BUCKETS
 
@@ -33,6 +34,9 @@ _VALID_PERIODS = {label for label, _, _ in PERIOD_BUCKETS}
 
 # Skip these domains — they're video refs, not library sources
 _SKIP_DOMAINS = {"youtube.com", "youtu.be", "m.youtube.com"}
+
+# Rows per multi-row upsert in _flush_to_db (14,241 library sources on 2026-09-22).
+_FLUSH_CHUNK = 500
 
 
 def _url_id(url: str) -> str:
@@ -236,12 +240,33 @@ class LibraryAggregator:
         logger.info(f"  Scanned research papers: {count} citations")
 
     def _scan_sites(self, session):
-        """Scan UnifiedSite.raw_data['description_citations']."""
-        sites = session.query(UnifiedSite).filter(UnifiedSite.raw_data.isnot(None)).yield_per(1000)
+        """Scan UnifiedSite.raw_data['description_citations'] of the shown sites.
+
+        The filter runs in SQL and only the citations leave the database. The old
+        version loaded every row with any raw_data as a full ORM object - 1,736,055 of
+        1,759,676 rows, raw JSON included - to find the 2,217 that carry citations:
+        112 s for 3,009 citations on 2026-09-22, against 0.65 s for this query
+        (EXPLAIN ANALYZE on production, read-only). Retired sites (E4) are left out:
+        their page answers 410, so the library must not link it.
+        """
+        sites = (
+            session.query(
+                UnifiedSite.id,
+                UnifiedSite.name,
+                UnifiedSite.country,
+                UnifiedSite.source_id,
+                UnifiedSite.period_name,
+                UnifiedSite.raw_data["description_citations"].label("citations"),
+            )
+            .filter(
+                UnifiedSite.raw_data.has_key("description_citations"),
+                UnifiedSite.scope_status.is_distinct_from(RETIRED),
+            )
+            .all()
+        )
         count = 0
         for site in sites:
-            raw = site.raw_data or {}
-            citations = raw.get("description_citations")
+            citations = site.citations
             if not citations:
                 continue
             page_path = (
@@ -305,10 +330,14 @@ class LibraryAggregator:
 
         rows = list(self.pending.values())
         now = datetime.now(UTC)
-
         for row in rows:
             row["created_at"] = now
-            stmt = pg_insert(LibrarySource).values(**row)
+
+        # One multi-row upsert per chunk instead of one statement per source (14,241
+        # round trips per refresh on 2026-09-22). `pending` is keyed by id, so no chunk
+        # holds the same id twice - ON CONFLICT DO UPDATE refuses that.
+        for start in range(0, len(rows), _FLUSH_CHUNK):
+            stmt = pg_insert(LibrarySource).values(rows[start : start + _FLUSH_CHUNK])
             stmt = stmt.on_conflict_do_update(
                 index_elements=["id"],
                 set_={

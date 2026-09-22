@@ -10,6 +10,7 @@ from sqlalchemy import func, text
 
 from api.services.jwt_auth import get_current_user, get_optional_user
 from pipeline.database import DiscordUser, SiteBookmark, SiteLike, UnifiedSite, get_session
+from pipeline.utils.public_sites import RETIRED
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -150,6 +151,8 @@ def get_my_likes(user: DiscordUser = Depends(get_current_user)):
             session.query(UnifiedSite, SiteLike.created_at)
             .join(SiteLike, SiteLike.site_id == UnifiedSite.id)
             .filter(SiteLike.user_id == user.id)
+            # A retired site (E4) is gone from the platform; its page answers 410.
+            .filter(UnifiedSite.scope_status.is_distinct_from(RETIRED))
             .order_by(SiteLike.created_at.desc())
             .all()
         )
@@ -166,6 +169,7 @@ def get_my_bookmarks(user: DiscordUser = Depends(get_current_user)):
             session.query(UnifiedSite, SiteBookmark.created_at)
             .join(SiteBookmark, SiteBookmark.site_id == UnifiedSite.id)
             .filter(SiteBookmark.user_id == user.id)
+            .filter(UnifiedSite.scope_status.is_distinct_from(RETIRED))
             .order_by(SiteBookmark.created_at.desc())
             .all()
         )

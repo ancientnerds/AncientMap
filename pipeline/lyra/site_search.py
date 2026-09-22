@@ -17,6 +17,7 @@ from __future__ import annotations
 from sqlalchemy import text
 
 from pipeline.database import get_session
+from pipeline.utils.public_sites import not_retired
 
 # Columns every caller needs. Kept in one place so the two ORDER BY variants
 # below cannot drift apart.
@@ -53,7 +54,10 @@ def search_sites(
     """
     query = (query or "")[:500].strip()
     limit = max(1, min(limit, 25))
-    conditions = ["1=1"]
+    # Lyra's chat answers and Theo's journals cite what this returns; a retired site
+    # (E4, migration 0020) is gone from the platform. Matching is a different path
+    # (site_matcher, prospector dedup) and deliberately still sees retired rows.
+    conditions = [not_retired("s")]
     params: dict = {"limit": limit}
 
     if query:
