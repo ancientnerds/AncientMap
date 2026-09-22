@@ -255,6 +255,44 @@ def test_no_date_is_read_through_wdqs() -> None:
     assert url.startswith(F.WDQS_ENDPOINT + "?") and unquote(url).endswith("format=json")
 
 
+def test_the_truthy_query_names_every_predicate_instead_of_scanning_a_variable_one() -> None:
+    """Q99151: the variable-predicate form took 20.0 s on WDQS, the explicit one 0.3 s."""
+    query = F.wikidata_truthy_query(QID)
+    assert "?claim" not in query and "wikibase:claim" not in query
+    for pid in F.TRUTHY_PROPERTIES:
+        assert f"p:{pid} ?statement" in query and f"ps:{pid} ?value" in query
+    for pid in F.DATE_PROPERTIES:
+        assert f"p:{pid} " not in query
+
+
+class _Clock:
+    """One timeline for the pacer's clock and sleeper, so the wait is asserted, not slept."""
+
+    def __init__(self) -> None:
+        self.now = 1000.0
+        self.slept: list[float] = []
+
+    def time(self) -> float:
+        return self.now
+
+    def sleep(self, seconds: float) -> None:
+        self.slept.append(seconds)
+        self.now += seconds
+
+
+def test_wdqs_is_asked_at_most_once_a_second_and_other_hosts_at_the_default_pace(
+    tmp_path: Path,
+) -> None:
+    """WDQS answered 429 with Retry-After: 120 seven times at the default pace (2026-09-22)."""
+    clock = _Clock()
+    pacer = F.HostPacer(tmp_path / "pacing", clock=clock.time, sleep=clock.sleep)
+    assert pacer.wait("query.wikidata.org") == 0.0
+    assert pacer.wait("query.wikidata.org") == pytest.approx(1.0)
+    assert pacer.wait("www.wikidata.org") == 0.0
+    assert pacer.wait("www.wikidata.org") == pytest.approx(F.HOST_MIN_INTERVAL_SECONDS)
+    assert F.HOST_MIN_INTERVAL_OVERRIDES == {"query.wikidata.org": 1.0}
+
+
 def test_a_misspelt_or_unanchored_route_is_refused_not_ignored() -> None:
     with pytest.raises(InputError, match="the one route this stage knows"):
         F.targets_for_site(_record(wikidata_route="narrowed"))

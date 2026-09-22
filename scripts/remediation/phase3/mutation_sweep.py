@@ -1230,6 +1230,170 @@ MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     ),
 ]
 
+#: The guards of 2026-09-22 - the writer's citation and rerun checks, the fetch stage's new routes,
+#: the lane-aware write tools and the gap plan. Their own list, appended below, so entries another
+#: lane adds above cannot collide with these in a merge.
+FETCH_ROUTES_TEST = "tests/remediation/test_phase3_fetch_routes.py"
+TOOLS_TEST = "tests/remediation/test_remediation_tools.py"
+GAP_TEST = "tests/remediation/test_gap_plan.py"
+FETCH_STAGE = "scripts/remediation/phase3/fetch_stage.py"
+TOOLS = "output/remediation/tools/"
+GAP_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
+    (
+        "the writer no longer checks the finder's citation",
+        WRITE_STAGE,
+        "    citation = DS.source_problems(answer, pages())\n",
+        "    citation = ()  # mutant\n",
+        WRITE_TEST,
+        "test_a_quote_the_cited_page_does_not_carry_is_refused_as_a_citation_failure",
+    ),
+    (
+        "the writer re-decides a field the run was not built to ask",
+        WRITE_STAGE,
+        "            if asked is not None and field_name not in asked:\n",
+        "            if False:  # mutant\n",
+        WRITE_TEST,
+        "test_a_field_the_run_was_not_built_to_ask_is_not_written_though_cleared",
+    ),
+    (
+        "a page cut at the cap is stored without its marker",
+        FETCH_STAGE,
+        '        return _complete_utf8(page.body) + TRUNCATION_MARKER.encode("utf-8")\n',
+        "        return page.body\n",
+        FETCH_ROUTES_TEST,
+        "test_a_page_cut_at_the_cap_is_stored_with_the_truncation_marker",
+    ),
+    (
+        "a cut keeps half a character before the marker",
+        FETCH_STAGE,
+        '        return _complete_utf8(page.body) + TRUNCATION_MARKER.encode("utf-8")\n',
+        '        return page.body + TRUNCATION_MARKER.encode("utf-8")\n',
+        FETCH_ROUTES_TEST,
+        "test_a_cut_through_a_character_leaves_a_file_the_judge_can_read",
+    ),
+    (
+        "a date is read through WDQS",
+        FETCH_STAGE,
+        'TRUTHY_PROPERTIES: tuple[str, ...] = ("P31", "P17", "P131", "P2348", "P625")\n',
+        'TRUTHY_PROPERTIES: tuple[str, ...] = ("P31", "P17", "P131", "P2348", "P625", "P571")\n',
+        FETCH_ROUTES_TEST,
+        "test_no_date_is_read_through_wdqs",
+    ),
+    (
+        "WDQS is asked at the default pace",
+        FETCH_STAGE,
+        "        interval = max(self.min_interval, HOST_MIN_INTERVAL_OVERRIDES.get(host, 0.0))\n",
+        "        interval = self.min_interval\n",
+        FETCH_ROUTES_TEST,
+        "test_wdqs_is_asked_at_most_once_a_second_and_other_hosts_at_the_default_pace",
+    ),
+    (
+        "the truthy query scans a variable predicate again",
+        FETCH_STAGE,
+        '        f"{{ BIND(wd:{pid} AS ?property) {item} p:{pid} ?statement . "\n',
+        '        f"{{ BIND(wd:{pid} AS ?property) {item} ?claim ?statement . "\n',
+        FETCH_ROUTES_TEST,
+        "test_the_truthy_query_names_every_predicate_instead_of_scanning_a_variable_one",
+    ),
+    (
+        "a misspelt Wikidata route is read as the narrow one",
+        FETCH_STAGE,
+        "        if route != WIKIDATA_ROUTE_NARROW:\n",
+        "        if False:  # mutant\n",
+        FETCH_ROUTES_TEST,
+        "test_a_misspelt_or_unanchored_route_is_refused_not_ignored",
+    ),
+    (
+        "a shared item's sitelink is resolved",
+        FETCH_STAGE,
+        "        if count > 1:\n",
+        "        if False:  # mutant\n",
+        FETCH_ROUTES_TEST,
+        "test_a_shared_item_is_refused_without_a_request_and_the_rest_are_resolved",
+    ),
+    (
+        "a sitelink resolved for another item is used",
+        FETCH_STAGE,
+        '        if link["qid"] != site.get("wikidata_qid"):\n',
+        "        if False:  # mutant\n",
+        FETCH_ROUTES_TEST,
+        "test_a_sitelink_for_another_item_or_the_same_title_or_a_bad_shape_is_refused",
+    ),
+    (
+        "the gate reads the mass lane's APPLIED markers for every lane",
+        TOOLS + "write_gate.py",
+        '        if (apply_root / batch / "APPLIED.json").exists():\n',
+        '        if (apply_root.parent / "_write_apply" / batch / "APPLIED.json").exists():\n',
+        TOOLS_TEST,
+        "test_a_batch_applied_in_the_mass_lane_does_not_suppress_a_gap_batch",
+    ),
+    (
+        "the gate writes rows of another run",
+        TOOLS + "write_gate.py",
+        "    missing = sorted(batch for batch in by_batch if not (run_dir / batch).is_dir())\n",
+        "    missing: list[str] = []  # mutant\n",
+        TOOLS_TEST,
+        "test_rows_of_another_run_are_refused_before_anything_is_planned",
+    ),
+    (
+        "the gate writes a stale rows file by position",
+        TOOLS + "write_gate.py",
+        "    if expected == replanned:\n        return\n",
+        "    return\n",
+        TOOLS_TEST,
+        "test_a_rows_file_that_is_not_the_writers_plan_today_is_refused",
+    ),
+    (
+        "the reviewer ceiling keeps queueing after a STOP",
+        TOOLS + "review_all.py",
+        "            while queue and not stopped and len(pending) < workers:\n",
+        "            while queue and len(pending) < workers:\n",
+        TOOLS_TEST,
+        "test_the_reviewer_ceiling_counts_this_pass_and_really_stops_the_queue",
+    ),
+    (
+        "the acceptance passes a broken journal chain",
+        TOOLS + "verify_writes.py",
+        "        if link.old != previous.new:\n",
+        "        if False:  # mutant\n",
+        TOOLS_TEST,
+        "test_a_broken_chain_is_a_deviation_even_when_the_live_value_matches_its_end",
+    ),
+    (
+        "the acceptance counts a superseded row as carried",
+        TOOLS + "verify_writes.py",
+        "            if not later:\n",
+        "            if True:  # mutant\n",
+        TOOLS_TEST,
+        "test_a_write_superseded_by_a_later_journalled_lane_is_reported_not_a_deviation",
+    ),
+    (
+        "the hold list reads a rows file whose lines moved",
+        TOOLS + "make_holds.py",
+        "    if digest != ROWS_KEYS_SHA256:\n",
+        "    if False:  # mutant\n",
+        TOOLS_TEST,
+        "test_the_hold_list_refuses_a_rows_file_whose_lines_moved",
+    ),
+    (
+        "the external-id repair accepts an update that matched no row or two",
+        TOOLS + "qid_repair.py",
+        '        "        IF n <> 1 THEN",\n',
+        '        "        IF n < 0 THEN",\n',
+        TOOLS_TEST,
+        "test_the_repair_statement_is_guarded_journalled_and_pinned",
+    ),
+    (
+        "the gap plan gives the run an id the repair replaces",
+        TOOLS + "gap_plan.py",
+        "        if qid == repair.old_qid:\n",
+        "        if False:  # mutant\n",
+        GAP_TEST,
+        "test_a_repaired_or_unresolved_or_shared_item_is_withheld_and_the_rest_is_kept",
+    ),
+]
+MUTATIONS += GAP_MUTATIONS
+
 
 def digest(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()

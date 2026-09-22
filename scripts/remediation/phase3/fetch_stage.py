@@ -546,6 +546,11 @@ class HttpFetcher:
 
 
 HOST_MIN_INTERVAL_SECONDS = 0.2
+#: Hosts that are asked more slowly than `HOST_MIN_INTERVAL_SECONDS`. WDQS limits each client to 60
+#: seconds of query time per minute and answers `429` with `Retry-After: 120` beyond it (measured
+#: 2026-09-22, seven times in one scratch fetch of the gap plan at the default pace), so it gets one
+#: query per second from this machine. A chosen bound, not a measured optimum.
+HOST_MIN_INTERVAL_OVERRIDES: dict[str, float] = {"query.wikidata.org": 1.0}
 HOST_LOCK_STALE_SECONDS = 30.0
 HOST_LOCK_WAIT_SECONDS = 60.0
 HOST_LOCK_POLL_SECONDS = 0.05
@@ -637,7 +642,8 @@ class HostPacer:
         """Inside the lock: sleep the rest of the interval, then claim this request's time."""
         stamp = self.stamp_of(host)
         last = self._read_stamp(stamp)
-        wait = 0.0 if last is None else max(0.0, self.min_interval - (self._clock() - last))
+        interval = max(self.min_interval, HOST_MIN_INTERVAL_OVERRIDES.get(host, 0.0))
+        wait = 0.0 if last is None else max(0.0, interval - (self._clock() - last))
         if wait > 0:
             self._sleep(wait)
         stamp.write_text(f"{self._clock():.6f}", encoding="utf-8")
@@ -820,21 +826,28 @@ def wikidata_entity_url(qid: str) -> str:
 
 def wikidata_truthy_query(qid: str) -> str:
     """One WDQS query: the item's English label and description, and the best-rank values of the
-    `TRUTHY_PROPERTIES` with their English labels. No time-valued property is in it (docstring)."""
+    `TRUTHY_PROPERTIES` with their English labels. No time-valued property is in it (docstring).
+
+    One `UNION` branch per property, each naming its `p:`/`ps:` predicates, rather than one pattern
+    over a variable predicate: measured 2026-09-22 on Q99151 (Ourense), the variable-predicate form
+    took 20.0 s and the explicit one 0.3 s, and the gap run's scratch fetch with the first form drew
+    seven `429` answers (`Retry-After: 120`) and six read timeouts from WDQS over 194 sites.
+    """
     item = f"wd:{_require_qid(qid)}"
-    properties = " ".join(f"wd:{pid}" for pid in TRUTHY_PROPERTIES)
-    return (
-        "SELECT ?property ?value ?valueLabel WHERE { "
-        f"{{ VALUES ?property {{ {properties} }} "
-        "?property wikibase:claim ?claim ; wikibase:statementProperty ?ps . "
-        f"{item} ?claim ?statement . ?statement a wikibase:BestRank ; ?ps ?value . "
-        'OPTIONAL { ?value rdfs:label ?valueLabel . FILTER(LANG(?valueLabel) = "en") } } '
-        f'UNION {{ BIND("label" AS ?property) {item} rdfs:label ?value . '
-        'FILTER(LANG(?value) = "en") } '
-        f'UNION {{ BIND("description" AS ?property) {item} schema:description ?value . '
-        'FILTER(LANG(?value) = "en") } '
-        "}"
+    branches = [
+        f"{{ BIND(wd:{pid} AS ?property) {item} p:{pid} ?statement . "
+        f"?statement ps:{pid} ?value ; a wikibase:BestRank . "
+        'OPTIONAL { ?value rdfs:label ?valueLabel . FILTER(LANG(?valueLabel) = "en") } }'
+        for pid in TRUTHY_PROPERTIES
+    ]
+    branches.append(
+        f'{{ BIND("label" AS ?property) {item} rdfs:label ?value . FILTER(LANG(?value) = "en") }}'
     )
+    branches.append(
+        f'{{ BIND("description" AS ?property) {item} schema:description ?value . '
+        'FILTER(LANG(?value) = "en") }'
+    )
+    return "SELECT ?property ?value ?valueLabel WHERE { " + " UNION ".join(branches) + " }"
 
 
 def wikidata_truthy_url(qid: str) -> str:
