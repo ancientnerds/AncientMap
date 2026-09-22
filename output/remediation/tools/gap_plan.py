@@ -228,7 +228,13 @@ SP_CURATED = "ancient_nerds"
 
 # ------------------------------------------------------------------------------------ the routes
 def enwiki_missing(path: pathlib.Path) -> bool:
-    """Was the mass run's enwiki-by-name page a missing page? A page cut at the cap is not."""
+    """Was the mass run's enwiki-by-name page a missing page? A page cut at the cap is not.
+
+    Only two answers are read: a page with a `pageid` (the article exists) and a page marked
+    `missing`. Anything else - an API error body, a title the API calls `invalid`, an answer without
+    `query.pages` - is refused by name: read as "exists" it would silently keep the site off the
+    sitelink route, read as "missing" it would route a site whose own question was never answered.
+    """
     text = path.read_text(encoding="utf-8")
     try:
         payload = json.loads(text)
@@ -236,7 +242,19 @@ def enwiki_missing(path: pathlib.Path) -> bool:
         if len(text.encode("utf-8")) >= F.MAX_PAGE_BYTES:
             return False  # an article so long it was cut; certainly not missing
         raise SystemExit(f"{path}: an enwiki evidence file that is neither JSON nor cut") from None
-    pages = (payload.get("query") or {}).get("pages") or {}
+    query = payload.get("query") if isinstance(payload, dict) else None
+    pages = query.get("pages") if isinstance(query, dict) else None
+    if not isinstance(pages, dict) or not pages:
+        raise SystemExit(f"{path}: an enwiki answer without query.pages: {text[:200]!r}")
+    unread = [
+        page
+        for page in pages.values()
+        if not isinstance(page, dict) or ("missing" not in page and "pageid" not in page)
+    ]
+    if unread:
+        raise SystemExit(
+            f"{path}: a page that is neither an article (pageid) nor missing: {unread[0]!r}"
+        )
     return any("missing" in page for page in pages.values())
 
 
@@ -328,15 +346,9 @@ def site_records(
 
 def batches(records: list[dict[str, Any]], size: int = BATCH_SIZE) -> list[R.Batch]:
     """`gap-0001`, `gap-0002`, ... - never `batch-NNNN`, whose stamps the mass lane owns."""
-    return [
-        R.Batch(
-            batch_id=f"{lanes.BATCH_PREFIX['gap']}-{ordinal:04d}",
-            ordinal=ordinal,
-            sites=tuple(records[start : start + size]),
-            pass_name=R.DISCOVER_PASS,
-        )
-        for ordinal, start in enumerate(range(0, len(records), size), start=1)
-    ]
+    return R.assign_batches(
+        records, size, pass_name=R.DISCOVER_PASS, prefix=lanes.BATCH_PREFIX["gap"]
+    )
 
 
 # ------------------------------------------------------------------------------------ the measure

@@ -128,14 +128,23 @@ def select_phase3(records: list[dict[str, Any]], origin: Path) -> list[dict[str,
 
 
 def assign_batches(
-    records: list[dict[str, Any]], size: int, *, pass_name: str | None = None
+    records: list[dict[str, Any]],
+    size: int,
+    *,
+    pass_name: str | None = None,
+    prefix: str = "batch",
 ) -> list[Batch]:
-    """Chunk the records, preserving their order. `size` must be a positive integer."""
+    """Chunk the records, preserving their order. `size` must be a positive integer.
+
+    `prefix` names the batches `<prefix>-NNNN`. A second run over the same database takes its own
+    (`gap-NNNN`, `output/remediation/tools/lanes.py`): the batch id is the writer's journal stamp,
+    so two runs that shared `batch-NNNN` could not be told apart in the journal.
+    """
     if size < 1:
         raise InputError(f"batch size must be >= 1, got {size}")
     return [
         Batch(
-            batch_id=f"batch-{ordinal:04d}",
+            batch_id=f"{prefix}-{ordinal:04d}",
             ordinal=ordinal,
             sites=tuple(records[start : start + size]),
             pass_name=pass_name,

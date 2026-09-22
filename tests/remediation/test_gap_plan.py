@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -188,6 +189,10 @@ def test_the_gap_batches_never_take_the_mass_lanes_ids() -> None:
     assert [b.batch_id for b in planned] == ["gap-0001", "gap-0002", "gap-0003"]
     assert [len(b.sites) for b in planned] == [15, 15, 1]
     assert {b.pass_name for b in planned} == {G.R.DISCOVER_PASS}
+    # one chunking, the runner's own: its size guard holds here too
+    with pytest.raises(G.R.InputError, match="batch size must be >= 1"):
+        G.batches(records, size=0)
+    assert [b.batch_id for b in G.R.assign_batches(records, 30)] == ["batch-0001", "batch-0002"]
 
 
 def test_a_missing_article_is_told_from_a_page_and_from_a_cut_page(tmp_path: Path) -> None:
@@ -196,7 +201,9 @@ def test_a_missing_article_is_told_from_a_page_and_from_a_cut_page(tmp_path: Pat
         json.dumps({"query": {"pages": {"-1": {"title": "X", "missing": ""}}}}), encoding="utf-8"
     )
     present = tmp_path / "present.txt"
-    present.write_text(json.dumps({"query": {"pages": {"1": {"extract": "x"}}}}), encoding="utf-8")
+    present.write_text(
+        json.dumps({"query": {"pages": {"1": {"pageid": 1, "extract": "x"}}}}), encoding="utf-8"
+    )
     cut = tmp_path / "cut.txt"
     cut.write_text('{"query": {"pages": {"1": {"extract": "' + "x" * F.MAX_PAGE_BYTES, "utf-8")
     broken = tmp_path / "broken.txt"
@@ -206,3 +213,76 @@ def test_a_missing_article_is_told_from_a_page_and_from_a_cut_page(tmp_path: Pat
     assert G.enwiki_missing(cut) is False
     with pytest.raises(SystemExit, match="neither JSON nor cut"):
         G.enwiki_missing(broken)
+
+
+@pytest.mark.parametrize(
+    ("answer", "why"),
+    [
+        ({"error": {"code": "maxlag"}}, "without query.pages"),
+        ({}, "without query.pages"),
+        ({"batchcomplete": "", "query": {"pages": {}}}, "without query.pages"),
+        (
+            {"batchcomplete": "", "query": {"pages": {"-1": {"title": "A#B", "invalid": ""}}}},
+            "neither an article",
+        ),
+    ],
+)
+def test_an_enwiki_answer_that_is_neither_an_article_nor_missing_is_refused(
+    tmp_path: Path, answer: dict, why: str
+) -> None:
+    """Read as 'the article exists', each of these would silently keep a site off the sitelink route.
+
+    Measured 2026-09-23 over all 5,004 enwiki files of the mass run: 3,699 articles or cut pages,
+    1,305 missing, 0 of any other shape - so the refusal costs the real run nothing.
+    """
+    path = tmp_path / "answer.txt"
+    path.write_text(json.dumps(answer), encoding="utf-8")
+    with pytest.raises(SystemExit, match=why):
+        G.enwiki_missing(path)
+
+
+def test_a_question_the_census_finds_twice_is_refused(tmp_path: Path) -> None:
+    """Two records of one (site, field) mean the run's own record is not the shape the census reads."""
+    run = _mass_run(tmp_path)
+    model = run / "batch-0007" / "model.json"
+    payload = json.loads(model.read_text(encoding="utf-8"))
+    payload["failures"].append(dict(payload["failures"][0]))
+    model.write_text(json.dumps(payload), encoding="utf-8")
+    with pytest.raises(SystemExit, match="is a gap question twice"):
+        G.census(run)
+
+
+def test_a_sitelink_resolved_for_another_item_than_the_exports_is_refused(tmp_path: Path) -> None:
+    questions = G.census(_mass_run(tmp_path))
+    export = _export(
+        tmp_path,
+        [_row(BIG, "Big Site"), _row(SMALL, "Small Site")],
+        [
+            {"site_id": BIG, "kind": "wikidata_qid", "value": "Q1000"},
+            {"site_id": SMALL, "kind": "wikidata_qid", "value": "Q2000"},
+        ],
+    )
+    stale = {SMALL: {"qid": "Q1999", "title": "Small Site (Greece)", "refused": None}}
+    with pytest.raises(SystemExit, match="resolved for Q1999, not Q2000"):
+        G.site_records(questions, export_dir=export, sitelinks=stale)
+
+
+def _export_answers(rows: list[dict]) -> Any:
+    def run(sql: str) -> str:
+        if "FROM unified_sites WHERE" in sql:
+            return "".join(json.dumps(row) + "\n" for row in rows)
+        return ""
+
+    return run
+
+
+def test_an_export_that_misses_a_site_or_returns_a_foreign_one_is_refused(tmp_path: Path) -> None:
+    questions = G.census(_mass_run(tmp_path))
+    full = [_row(BIG, "Big Site"), _row(SMALL, "Small Site")]
+    counts = G.export(questions, tmp_path / "ok", run=_export_answers(full))
+    assert counts["unified_sites"] == 2
+    with pytest.raises(SystemExit, match="missing"):
+        G.export(questions, tmp_path / "short", run=_export_answers(full[:1]))
+    foreign = [full[0], _row(SMALL, "Small Site", source_id="lyra")]
+    with pytest.raises(SystemExit, match="not curated"):
+        G.export(questions, tmp_path / "foreign", run=_export_answers(foreign))
