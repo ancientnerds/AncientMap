@@ -10,9 +10,10 @@ sonst nicht kennt. Quellen und Datum stehen jeweils dabei; Stand ist der 19.09.2
 - **Ein Deploy kann „success" melden, ohne neu gebaut zu haben.** Nach jedem Deploy den
   `commit` im Health-Endpoint prüfen (`curl localhost:8000/`), nicht den grünen Haken.
   *(`reference-deployment-lessons`, 2026-09-17)*
-- **Der Deploy rebuildet nur `api`.** Änderungen an `pipeline/` für Lyra brauchen ein
-  manuelles `docker compose up -d --build lyra` auf dem VPS.
-  *(`reference-deployment-lessons`, 2026-09-17)*
+- **Der Deploy baut nur, was der Diff berührt.** Eine Änderung unter `pipeline/` baut `api`
+  **und** `lyra` neu (so seit `ea3f30a`, 2026-02-05); der Theo-Worker wird nur neu gebaut, wenn
+  kein Lauf `running` ist. Die frühere Notiz „der Deploy rebuildet nur `api`, Lyra braucht ein
+  manuelles `--build lyra`" war veraltet. *(`ci.yml`, deploy-Job, geprüft 2026-09-22)*
 - **`pipeline/` läuft in ZWEI Images mit ungleichen Fähigkeiten.** `Dockerfile.lyra` kopiert
   nur `pipeline/`; dort gibt es kein `api`, kein `markdown`, kein `nh3`. Solche Imports
   gaten (`importlib.util.find_spec("api")`), sonst Crash-Loop.

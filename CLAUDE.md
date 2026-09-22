@@ -1,4 +1,6 @@
-# Claude Code Instructions for AncientMap
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## Where the 2026-09 sites remediation stands
 
@@ -75,11 +77,48 @@ their source and date; a "no longer valid" section names what the 2026-09-20 dec
 ## Architecture
 
 ### Stack
-- **Frontend**: Three.js globe in `ancient-nerds-map/` (Vite + TypeScript), served as static files
-- **API**: FastAPI in `api/`, runs in Docker container `ancient_nerds_api` on port 8000
-- **Database**: PostgreSQL + PostGIS in Docker container `ancient_nerds_db`
+- **Frontend**: React 18 + Three.js/Mapbox in `ancient-nerds-map/` (Vite + TypeScript). A
+  multi-page app without a client router: every area is one `*.html` entry plus its own
+  `src/*Main.tsx`, registered in `vite.config.ts` under `build.rollupOptions.input`.
+- **API**: FastAPI in `api/` (`api/main.py` mounts every router), built from `Dockerfile` and run
+  twice — `ancient_nerds_api` on 8000, `ancient_nerds_api2` on 8001 — so the deploy restarts one
+  at a time behind nginx.
+- **SSR sidecar** (`ancient_nerds_ssr`, `Dockerfile.ssr`, port 8500): renders the indexed pages —
+  `/sites/…`, `/articles/…` (journals), `/news-archive/…` (stories), `/research/…`, landing. Path:
+  the `api/routes/*_html.py` routers → `api/seo_shell.py` → `api/ssr_client.py` POSTs a route
+  payload → `ancient-nerds-map/ssr/server.mjs` → `src/entry-server.tsx` → `src/seo/registry.tsx`.
+  No fallback renderer: a failing sidecar turns into a 502. The same components hydrate in the
+  browser, so browser storage in a render path breaks every SSR page (guard:
+  `src/seo/__tests__/render.test.tsx`).
+- **Lyra** (`ancient_nerds_lyra`, `Dockerfile.lyra`, `python -m pipeline.lyra.orchestrator`): the
+  hourly news/story cycle. **Theo** research runs in `ancient_nerds_theo_worker` (API image,
+  `scripts/run_theo_worker.py`); one paper takes 7–15 h. The LLM backend is `LYRA_LLM_BACKEND`
+  (`anthropic` | `minimax`, `pipeline/lyra/config.py`); MiniMax is called through the Anthropic
+  SDK against its Anthropic-compatible endpoint (`minimax_shared.py`, pacing in
+  `minimax_limiter.py`).
+- **Database**: PostgreSQL + PostGIS in `ancient_nerds_db`, with Redis (cache, rate limits) and
+  Qdrant (vector search) beside it. SQLAlchemy models live in `pipeline/database.py`, shared by
+  `api/` and `pipeline/`.
 - **Static data**: Pre-exported JSON in `public/data/` (sites, sources, content, links)
 - **Pipeline**: Data connectors and exporters in `pipeline/`
+
+### Cross-cutting rules that span several files
+- **`pipeline/` ships in two images.** The API image has `api/` too; the Lyra image copies only
+  `pipeline/` and lacks `markdown` and `nh3`. Before pushing a change to anything Lyra imports:
+  `./.venv/Scripts/python.exe -c "import sys; sys.modules['markdown']=None; sys.modules['nh3']=None; import pipeline.lyra.orchestrator"`.
+  Gate optional `api` imports with `importlib.util.find_spec("api")` (top-level package only).
+- **Layer contracts** (`[tool.importlinter]` in `pyproject.toml`, gate `lint-imports`): `pipeline`
+  must not import `api` beyond the frozen exceptions; `api` may import only the listed `pipeline`
+  families. A new crossing fails CI. Code both images need belongs under `pipeline/`.
+- **Schema changes have two paths.** Numbered `migrations/NNNN_*.sql` are applied once by the
+  deploy and tracked by filename in the `applied_migrations` table — editing an applied file never
+  runs again, add a new one. Lyra's boot migrations (`_run_migrations` in
+  `pipeline/lyra/orchestrator.py`) run as one transaction: one failure rolls back all of them on
+  every boot. `create_all_tables()` creates tables but never adds columns.
+- **Generated frontend data**: `ancient-nerds-map/src/data/*.generated.json` come from Python
+  constants (`pipeline/historical_boundaries/empire_metadata.py`, `api/cardgame/constants.py`).
+  Edit the Python, then run `./.venv/Scripts/python.exe pipeline/generate_shared_data.py`; CI
+  fails on stale output (`--verify`).
 
 ### Key data flow
 1. Connectors in `pipeline/connectors/` fetch from external APIs → write to `unified_sites` table
@@ -111,6 +150,26 @@ cd ancient-nerds-map && npm run type-check && npm run test
 #   2026-09-20: type-check clean, 432 tests in 40 files passed
 #   (394/36 war der Stand vom Vormittag; die Linsen-Tests kamen danach dazu)
 ```
+
+Single tests. Always pass the gate's marker filter: `pyproject.toml` deselects only `live_llm`, so
+a file marked `integration` (e.g. `tests/api/test_health.py`) otherwise errors on a missing
+Postgres instead of being deselected.
+
+```bash
+M='not integration and not live_llm'
+./.venv/Scripts/python.exe -m pytest tests/api/test_seo_shell.py -q -m "$M"
+./.venv/Scripts/python.exe -m pytest "tests/api/test_seo_shell.py::test_splices_ssr_output" -q -m "$M"
+./.venv/Scripts/python.exe -m pytest -k "radar and gates" -q -m "$M"
+cd ancient-nerds-map && npx vitest run src/seo/__tests__/render.test.tsx   # or: npx vitest run -t "<name>"
+```
+
+`tests/conftest.py` sets `DATABASE_URL=sqlite:///:memory:` and zeroes the MiniMax limiter's pacing
+for every test (opt out with the `real_limiter_pacing` marker). Only `tests/` is collected.
+
+Dev server: `cd ancient-nerds-map && npm run dev` (http://localhost:5173). Vite serves `/data`
+from the repo-root `public/data/` and proxies `/api` and `/goto` to `VITE_DEV_API_TARGET` (default
+`http://localhost:8000`, which does not exist here; the video recorder points it at
+`https://ancientnerds.com`). `npm run build:ssr` builds `dist-ssr/` for the SSR sidecar.
 
 Local equivalents of the CI gates: `ruff check api/ pipeline/`, `lint-imports`,
 `vulture api/ pipeline/ .vulture_whitelist.py --min-confidence 80`,
@@ -174,7 +233,8 @@ files,dependencies,devDependencies`). It aborts the push when a gate is red, whe
 differs from the pushed commit, or when a gate cannot run at all (no venv, no npm): fail-closed.
 Pushes to other branches skip the gates. The git-lfs forwarding runs afterwards, so LFS pushes keep
 working. The hook is not a CI replacement: semgrep, gitleaks, pip-audit, trivy, mypy,
-`ruff format --check` and `npm run build`/`build:ssr` still run only in CI. Each clone has to
+`ruff format --check`, `python pipeline/generate_shared_data.py --verify`, `npm run build`/`build:ssr`
+and `npx size-limit` still run only in CI. Each clone has to
 activate the hook once with `git config core.hooksPath .githooks`; `.gitattributes` pins
 `.githooks/*` and `scripts/*.sh` to LF (`text eol=lf`) so shell scripts do not break on CRLF
 checkouts.
@@ -202,12 +262,22 @@ not part of the pushed commit, but they can still change what the gates see. `gi
 --force` can overwrite `.githooks/pre-push` — restore it from git if that ever happens. `workflow_dispatch` triggers a run manually (also deploys) — useful when push-event processing is degraded. The sast job (semgrep + gitleaks + LLM-prompt-guard check) and container-scan job (trivy) block the deploy like the lint jobs. Local equivalents: `semgrep scan --config .semgrep`, `lint-imports`, `vulture api/ pipeline/ .vulture_whitelist.py --min-confidence 80`, `npx knip` (in ancient-nerds-map/).
 
 ### Deploy script (`.github/workflows/ci.yml`)
-On the VPS at `/var/www/ancientnerds`:
-1. `git checkout -- .` — discard any manual VPS edits (prevents pull conflicts)
+On the VPS at `/var/www/ancientnerds` (the `deploy` job; verified against `ci.yml` 2026-09-22):
+1. `git checkout -- .` and `git clean` of both `public/data/` dirs — discard manual VPS edits
 2. `git pull origin main` + `git lfs pull` — get latest code and LFS data files
-3. `cd ancient-nerds-map && npm ci && npm run build` — rebuild frontend
-4. `docker compose up -d --build api` — rebuild and restart API container
-5. Health check on `http://localhost:8000/`
+3. Apply pending `migrations/*.sql` (see "Schema changes" above)
+4. Frontend, only if `ancient-nerds-map/` changed: `npm ci && npm run build -- --outDir dist-new`,
+   swapped in; the previous builds' `/assets` chunks are kept for 30 days because Googlebot renders
+   from cache. Then `npm run build:ssr`.
+5. Rebuild only what the diff touches: `api` (`api/`, `pipeline/`, `Dockerfile`, `requirements*`),
+   `lyra` (`pipeline/`, `Dockerfile.lyra`, `requirements.lyra.txt`), `ssr` (any frontend change,
+   and always together with `api`), `webcam-proxy`. `theo-worker` is rebuilt only when no
+   `research_requests` row is `running` — a busy worker stays on the old image.
+6. Images are built while the old containers serve; then a rolling restart ssr → api (:8000) →
+   api2 (:8001), each gated by a health check.
+7. Drift guard: if the `commit` reported by `http://localhost:8000/` differs from HEAD, api and
+   lyra are rebuilt regardless of the diff. Check that same field after a deploy — a green run
+   alone does not prove the new code is live.
 
 The DB container (`ancient_nerds_db`) is **not** rebuilt on deploy — it persists data in a Docker volume.
 
