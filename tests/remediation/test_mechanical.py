@@ -59,9 +59,12 @@ def vocabulary() -> tuple[dict[str, str], Any]:
     return P._vocabulary()
 
 
-@needs_dataset
 @pytest.fixture(scope="module")
 def atlas() -> Any:
+    # A mark on a fixture never applied (and is an error since pytest 9.1), so the skip that
+    # `needs_dataset` describes has to happen here, for every test that asks for the atlas.
+    if not NE_SHAPEFILE.exists():
+        pytest.skip(f"Natural Earth cache not present ({NE_SHAPEFILE}); run plan.py --collect")
     return P._atlas()[0]
 
 

@@ -36,6 +36,14 @@ from phase3 import run as R  # noqa: E402
 WORKLIST = REPO / "output" / "remediation" / "phase3_worklist" / "WORKLIST.jsonl"
 PHASE3_MODULES = (M, L, R)
 
+#: The worklist is built from the production snapshot and is **not** in the repository
+#: (`.gitignore`), so a CI checkout does not have it; the tests that assert facts about the real
+#: worklist are skipped there with a reason, the shape `needs_snapshot` uses in
+#: `test_phase3_discover.py`.
+needs_worklist = pytest.mark.skipif(
+    not WORKLIST.exists(), reason=f"phase-3 worklist not present ({WORKLIST})"
+)
+
 #: One writer in the ledger race below, as its own file so pytest's own process stays clean. It shells
 #: out through the *real* `Ledger.append`, which is the point: a re-implementation would prove nothing
 #: about the writer the mass run uses.
@@ -576,6 +584,7 @@ def test_a_truncated_ledger_line_raises(tmp_path: Path) -> None:
 # ── run: deterministic plan, offline ────────────────────────────────────────────────────────
 
 
+@needs_worklist
 def test_plan_of_the_real_worklist_is_byte_identical_across_runs(tmp_path: Path) -> None:
     first, second = tmp_path / "a.jsonl", tmp_path / "b.jsonl"
     assert R.main(["plan", "--worklist", str(WORKLIST), "--out", str(first)]) == 0
@@ -591,6 +600,7 @@ def test_plan_of_the_real_worklist_is_byte_identical_across_runs(tmp_path: Path)
     assert not re.search(rb'"(at|ts|timestamp|generated_at|date)"', one)
 
 
+@needs_worklist
 def test_plan_has_the_ratified_batch_arithmetic(tmp_path: Path) -> None:
     out = tmp_path / "plan.jsonl"
     R.main(["plan", "--worklist", str(WORKLIST), "--out", str(out)])
@@ -624,12 +634,16 @@ def test_plan_refuses_a_record_it_cannot_place(tmp_path: Path) -> None:
 
 
 def test_plan_refuses_a_batch_size_below_one(tmp_path: Path) -> None:
+    # The refusal is about the argument, not the data: one placeable record is enough, and it
+    # keeps the test independent of the gitignored real worklist.
+    worklist = tmp_path / "worklist.jsonl"
+    worklist.write_text('{"site_id": "a", "phase3": true}\n', encoding="utf-8", newline="\n")
     with pytest.raises(R.InputError, match="batch size must be >= 1"):
         R.main(
             [
                 "plan",
                 "--worklist",
-                str(WORKLIST),
+                str(worklist),
                 "--out",
                 str(tmp_path / "out.jsonl"),
                 "--batch-size",

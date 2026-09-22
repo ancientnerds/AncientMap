@@ -64,6 +64,10 @@ needs_snapshot = pytest.mark.skipif(
     not (SNAPSHOT / SP.UNIFIED_SITES_FILE).exists(),
     reason=f"production snapshot not present ({SNAPSHOT})",
 )
+#: The phase-3 worklist is built from that snapshot and is gitignored as well.
+needs_worklist = pytest.mark.skipif(
+    not WORKLIST.exists(), reason=f"phase-3 worklist not present ({WORKLIST})"
+)
 NO_EXTENSIONS = Path(__file__).resolve().parent / "fixtures" / "pi_probe_no_extensions.json"
 
 #: Piece 1's plan anchor, recorded in `PIECE1.md:120-124` and re-measured on 2026-09-21. The
@@ -1075,6 +1079,7 @@ def test_plan_refuses_the_two_inputs_at_once_and_site_ids_without_the_snapshot_f
         R.main(["plan", "--site-ids", str(TRUTH_SITE_IDS), "--out", str(out)])
 
 
+@needs_worklist
 def test_the_worklist_plan_still_hashes_to_the_piece_1_anchor(tmp_path: Path) -> None:
     """The existing plan's bytes are frozen: a new plan may not move the old one.
 

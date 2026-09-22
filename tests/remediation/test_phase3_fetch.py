@@ -40,6 +40,12 @@ from phase3.model import Stage  # noqa: E402
 
 WORKLIST = REPO / "output" / "remediation" / "phase3_worklist" / "WORKLIST.jsonl"
 
+#: The worklist is built from the production snapshot and is gitignored, so a CI checkout does not
+#: have it; the test that walks the real records is skipped there with a reason.
+needs_worklist = pytest.mark.skipif(
+    not WORKLIST.exists(), reason=f"phase-3 worklist not present ({WORKLIST})"
+)
+
 #: The chunk the counting stream hands out. A reader that buffers the page pulls all of them.
 CHUNK = 8192
 
@@ -233,6 +239,7 @@ def test_a_t02_finding_buys_no_fetch_at_all() -> None:
     assert F.targets_for_site(site) == []
 
 
+@needs_worklist
 def test_every_target_of_every_phase3_worklist_record_is_a_named_feature_query() -> None:
     """The binding rule, checked against the real 1,813-site input instead of a fixture."""
     checked = 0
