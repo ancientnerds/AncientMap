@@ -23,6 +23,15 @@ report rather than dropped:
   is a complete `WRONG` with a `PROPOSED:` value. The proposal is **not** in `model.json` - the
   `judgements` there are call records - so the answer text is the only place it exists, and the stored
   value comes from the batch's own record (`discover_stage.field_finding`).
+* every page the finder cites is a page **this batch fetched**, and every quoted sentence occurs in
+  the text stored for it (`discover_stage.source_problems`, over the same excerpts the finder's prompt
+  was built from: `model_stage.evidence_excerpts` on the batch's `evidence/` and `fetch.json`). This is
+  what `AUDIT_LOG.md` promised piece 6 would do and what the writer did not do until 2026-09-22:
+  measured then, 44 of the 994 rows already in production and 2 of the 80 planned-but-unwritten rows
+  carry a citation that fails this check (quotes with an ellipsis, re-typed Wikidata JSON, a URL that
+  was never fetched). A row whose citation cannot be found in the evidence is refused as
+  `finder-citation-not-in-evidence`; a batch whose evidence is missing *with nothing recorded about
+  it* raises, because that is a hole in the record rather than a property of one row.
 * the field has a table (`snapshot_plan.FIELD_STORED_IN`), the value is a **fixed point** of every
   producer that rewrites the column on a container start (below), and it is a real change in the
   column's own shape (`docs/procedures/FIELD_CONTRACT.md` §3).
@@ -112,13 +121,14 @@ from __future__ import annotations
 
 import argparse
 import dataclasses
+import functools
 import hashlib
 import json
 import shlex
 import subprocess
 import sys
 import uuid
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Protocol
@@ -133,6 +143,7 @@ if __package__ in (None, ""):
 from phase3 import discover_stage as DS  # noqa: E402
 from phase3 import fetch_stage as F  # noqa: E402
 from phase3 import model as M  # noqa: E402
+from phase3 import model_stage as MS  # noqa: E402  - the excerpts the finder's prompt was built from
 from phase3 import review_stage as RS  # noqa: E402  - the reviewer's own `applies`, not a copy
 from phase3 import snapshot_plan as SP  # noqa: E402
 from phase3.run import (
@@ -156,6 +167,10 @@ DEFAULT_CHUNK_SIZE = 100
 INPUT_FILE = "input.json"
 REVIEW_FILE = "review.json"
 ANSWERS_DIR = "answers"
+#: The batch's own evidence and fetch report: what the finder's prompt quoted, and why a target that
+#: has no file has none. The citation check reads both, exactly as the finder stage did.
+EVIDENCE_DIR = "evidence"
+FETCH_REPORT_FILE = "fetch.json"
 WRITES_DIR = "writes"
 PLAN_FILE = "PLAN.jsonl"
 REFUSED_FILE = "REFUSED.jsonl"
@@ -233,6 +248,10 @@ RULE_SHAPE = "not-writable-in-the-columns-shape"
 RULE_NOT_A_CHANGE = "not-a-change"
 RULE_TEST_ID = "foreign-test-id"
 RULE_MATCHED_0 = "matched-0"
+#: The finder cited a page this batch never fetched, or a sentence that is not in the page it stored.
+#: The reviewer may still have cleared it - the reviewer judges the claim, not the citation's bytes -
+#: which is why the writer checks it itself (`discover_stage.source_problems`, the finder's own rule).
+RULE_CITATION = "finder-citation-not-in-evidence"
 
 
 class WriteRefused(ValueError):
@@ -533,6 +552,27 @@ def rebuilt_verdict(raw: Mapping[str, Any]) -> RS.ReviewVerdict:
     )
 
 
+def cited_pages(
+    *,
+    site_id: str,
+    site: Mapping[str, Any],
+    evidence: F.EvidenceStore,
+    failures: Mapping[str, str] | None,
+) -> dict[str, str]:
+    """`url -> stored text` for the pages the finder's prompt carried for this site.
+
+    Built by the finder's own two functions (`model_stage.evidence_excerpts`, then
+    `discover_stage.pages_from_excerpts`) over the batch's own store and fetch report, so the page a
+    citation is checked against is byte for byte the page the finder was shown - not a re-fetch, and
+    not a second spelling of which targets a site buys. A target the fetch stage recorded as failed
+    has no text and is therefore not a page a quote can come from; a target with no file and no
+    recorded failure raises `model_stage.EvidenceUnusable`, as it does for the finder.
+    """
+    return DS.pages_from_excerpts(
+        MS.evidence_excerpts(site_id=site_id, site=site, store=evidence, failures=failures)
+    )
+
+
 def _row_for(
     *,
     site_id: str,
@@ -541,8 +581,13 @@ def _row_for(
     field_name: str,
     cleared: RS.ReviewVerdict,
     answers: F.EvidenceStore,
+    pages: Callable[[], Mapping[str, str]],
 ) -> WriteRow | Refusal:
-    """The row for one cleared finding, or the refusal that stands in its place - never both."""
+    """The row for one cleared finding, or the refusal that stands in its place - never both.
+
+    `pages` is called only for a finding that got as far as the citation check, so a batch whose
+    rows are all refused earlier never reads its evidence.
+    """
     if field_name in M.REPORT_ONLY_FIELDS:
         return Refusal(site_id, field_name, RULE_REPORT_ONLY, REPORT_ONLY_REASON[field_name])
     if field_name not in SP.FIELD_STORED_IN or field_name not in COLUMN_COMPARE:
@@ -578,6 +623,15 @@ def _row_for(
             RULE_NO_PROPOSAL,
             f"the finder's verdict is {answer.verdict!r} and it proposes {answer.proposed!r}, so "
             "there is no value to write",
+        )
+    citation = DS.source_problems(answer, pages())
+    if citation:
+        return Refusal(
+            site_id,
+            field_name,
+            RULE_CITATION,
+            "the finder's citation is not in the evidence this batch fetched "
+            "(discover_stage.source_problems): " + "; ".join(citation),
         )
 
     finding = DS.field_finding(site, field_name)
@@ -639,11 +693,17 @@ def build_plan(
     batch: Mapping[str, Any],
     review: Mapping[str, Any],
     answers: F.EvidenceStore,
+    evidence: F.EvidenceStore,
+    fetch_failures: Mapping[str, Mapping[str, str]],
 ) -> WritePlan:
     """Turn one batch's reviewer verdicts into the rows a guarded write can be rendered from.
 
     It refuses rather than skips: a site or field without a usable verdict is recorded with its rule,
     so an empty plan cannot be mistaken for a batch where everything was already right.
+
+    `evidence` and `fetch_failures` are required, not defaulted: they are what the citation check
+    reads (`cited_pages`), and a writer that could be called without them would be a writer that
+    could skip the check.
     """
     batch_id = str(batch.get("batch_id") or "")
     if not batch_id:
@@ -680,6 +740,16 @@ def build_plan(
         if not site_id:
             raise InputError(f"batch {batch_id}: a site record carries no site_id")
         site_name = str(site.get("name") or "")
+        # Read once per site, and only when a finding reaches the citation check.
+        pages = functools.cache(
+            functools.partial(
+                cited_pages,
+                site_id=site_id,
+                site=site,
+                evidence=evidence,
+                failures=fetch_failures.get(site_id),
+            )
+        )
         for field_name in DS.DISCOVER_FIELDS:
             cleared = by_field.get((site_id, field_name))
             if cleared is None:
@@ -704,6 +774,7 @@ def build_plan(
                 field_name=field_name,
                 cleared=cleared,
                 answers=answers,
+                pages=pages,
             )
             if isinstance(decided, WriteRow):
                 plan.rows.append(decided)
@@ -776,11 +847,13 @@ def validate_rows(rows: Sequence[WriteRow]) -> None:
 
 
 def load_plan(batch_dir: Path) -> WritePlan:
-    """Read one batch's three inputs and build its plan."""
+    """Read one batch's inputs - record, review, answers, evidence, fetch report - and plan it."""
     return build_plan(
         batch=_load_json(batch_dir / INPUT_FILE),
         review=_load_json(batch_dir / REVIEW_FILE),
         answers=F.EvidenceStore(batch_dir / ANSWERS_DIR),
+        evidence=F.EvidenceStore(batch_dir / EVIDENCE_DIR),
+        fetch_failures=MS.read_fetch_failures(batch_dir / FETCH_REPORT_FILE),
     )
 
 

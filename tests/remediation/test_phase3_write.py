@@ -49,7 +49,24 @@ from phase3.run import InputError  # noqa: E402
 SITE_A = "11111111-1111-4111-8111-111111111111"
 SITE_B = "22222222-2222-4222-8222-222222222222"
 BATCH = "batch-0001"
-PAGE = "https://example.org/one-page"
+#: The sentence every fixture page carries, and the one a fixture answer quotes by default.
+QUOTE = "the page states the corrected value"
+
+
+def _name(site_id: str) -> str:
+    return f"Site {site_id[:8]}"
+
+
+def _page(site_id: str) -> str:
+    """The one page a fixture site's record buys (`fetch_stage.targets_for_site`: enwiki by name).
+
+    A citation must name a page the batch fetched, so the fixture's answers cite the site's own
+    target URL rather than an invented one - the writer checks exactly that since 2026-09-22.
+    """
+    return F.wikipedia_extract_url(_name(site_id))
+
+
+PAGE = _page(SITE_A)
 
 #: The stored values the fixture batches carry, one per planned field.
 STORED: dict[str, Any] = {
@@ -91,7 +108,7 @@ def _answer(
     proposed: str | None,
     verdict: str = "WRONG",
     url: str = PAGE,
-    quote: str = "the page states the corrected value",
+    quote: str = QUOTE,
 ) -> str:
     """One finder answer, in the shape `discover_stage.parse_answer` reads."""
     lines = [
@@ -125,7 +142,7 @@ def _verdict_row(
         "applies": computed if applies is None else applies,
         "refuted": refuted,
         "reason": reason,
-        "sources": [{"url": PAGE, "quote": "the page states the corrected value"}]
+        "sources": [{"url": PAGE, "quote": QUOTE}]
         if refuted is False
         else [],
         "problems": list(problems),
@@ -138,21 +155,31 @@ def _cleared(site_id: str, field: str, **kwargs: Any) -> dict[str, Any]:
     return _verdict_row(site_id, field, refuted=False, **kwargs)
 
 
+def _enwiki_page(text: str) -> str:
+    """An enwiki evidence file the way the fetch stage stores it: the API's JSON, escapes and all."""
+    return json.dumps(
+        {"query": {"pages": {"1": {"title": "Site", "extract": text}}}}, ensure_ascii=True
+    )
+
+
 def _batch(
     tmp_path: Path,
     *,
     sites: tuple[str, ...] = (SITE_A,),
     cleared: dict[tuple[str, str], dict[str, Any]] | None = None,
     answers: dict[tuple[str, str], str] | None = None,
+    pages: dict[str, str] | None = None,
 ) -> Path:
-    """One batch directory: `input.json`, `review.json` and the answers the finder wrote.
+    """One batch directory: `input.json`, `review.json`, the answers and the evidence they cite.
 
     Every field of every site gets a verdict, by default a refuting one, so a test that clears one
     field is not also testing the "no verdict" path. `cleared` names the verdicts a test replaces and
-    `answers` the answer texts it writes.
+    `answers` the answer texts it writes. Every site's one evidence target (`_page`) is on disk and,
+    unless `pages` gives its stored text, carries `QUOTE` - the page a real batch's finder was shown.
     """
     cleared = dict(cleared or {})
     answers = dict(answers or {})
+    pages = dict(pages or {})
     batch_dir = tmp_path / "batch"
     batch_dir.mkdir(parents=True, exist_ok=True)
     (batch_dir / W.INPUT_FILE).write_text(
@@ -164,7 +191,7 @@ def _batch(
                 "sites": [
                     {
                         "site_id": site_id,
-                        "name": f"Site {site_id[:8]}",
+                        "name": _name(site_id),
                         "findings": [
                             SP.finding_row(field, STORED[field]) for field in SP.DISCOVER_FIELDS
                         ],
@@ -196,6 +223,10 @@ def _batch(
     store = F.EvidenceStore(batch_dir / W.ANSWERS_DIR)
     for (site_id, field), text in answers.items():
         store.write(site_id=site_id, feature=field, body=text.encode("utf-8"))
+    evidence = F.EvidenceStore(batch_dir / W.EVIDENCE_DIR)
+    for site_id in sites:
+        stored = pages.get(site_id, _enwiki_page(f"Some context. {QUOTE.capitalize()}. More."))
+        evidence.write(site_id=site_id, feature=F.FEATURE_ENWIKI, body=stored.encode("utf-8"))
     return batch_dir
 
 
@@ -257,7 +288,9 @@ def _row(site_id: str, column: str, new_value: str, *, old_value: str = "Georgia
         old_value=old_value,
         new_value=new_value,
         test_id=f"{SP.TEST_ID_PREFIX}{column}",
-        evidence=({"source": "finder-answer", "url": PAGE, "quote": "q", "host": "example.org"},),
+        evidence=(
+            {"source": "finder-answer", "url": PAGE, "quote": "q", "host": "en.wikipedia.org"},
+        ),
         verdict=_cleared(site_id, column),
         change_key=W.change_key(
             site_id=site_id,
@@ -597,7 +630,7 @@ def test_the_evidence_carries_the_finders_citations_and_the_reviewers_reason(
             "sites": [
                 {
                     "site_id": SITE_A,
-                    "name": "Site A",
+                    "name": _name(SITE_A),
                     "findings": [SP.finding_row("country", "Georgia")],
                 }
             ],
@@ -609,12 +642,130 @@ def test_the_evidence_carries_the_finders_citations_and_the_reviewers_reason(
             ],
         },
         answers=_texts(tmp_path, {(SITE_A, "country"): _answer(proposed="United States")}),
+        evidence=_texts(
+            tmp_path / "evidence", {(SITE_A, F.FEATURE_ENWIKI): _enwiki_page(QUOTE)}
+        ),
+        fetch_failures={},
     )
     evidence = plan.rows[0].evidence
-    assert evidence[0]["url"] == PAGE and evidence[0]["host"] == "example.org"
-    assert evidence[0]["quote"] == "the page states the corrected value"
+    assert evidence[0]["url"] == PAGE and evidence[0]["host"] == "en.wikipedia.org"
+    assert evidence[0]["quote"] == QUOTE
     assert evidence[-1]["source"] == "reviewer"
     assert evidence[-1]["quote"] == "the page is about this site"
+
+
+# ── the citation check (W7, 2026-09-22) ────────────────────────────────────────────────────────
+#
+# Before this check the writer never ran the finder's own citation rule, and 44 of the 994 rows in
+# production carry a quote their batch's evidence does not contain (AUDIT_LOG.md, 2026-09-22). Each
+# test below fails when `_row_for` stops calling `discover_stage.source_problems`.
+
+
+def test_a_quote_the_cited_page_does_not_carry_is_refused_as_a_citation_failure(
+    tmp_path: Path,
+) -> None:
+    """The reviewer cleared it, but the sentence is not on the page the finder was shown."""
+    plan = W.load_plan(
+        _cleared_batch(tmp_path, pages={SITE_A: _enwiki_page("A page about something else.")})
+    )
+    assert plan.rows == []
+    refusal = plan.refused_fields(W.RULE_CITATION)[0]
+    assert refusal.field == "country"
+    assert "quote does not occur" in refusal.detail and QUOTE in refusal.detail
+
+
+def test_an_honest_quote_passes_through_the_json_escapes_of_the_stored_page(
+    tmp_path: Path,
+) -> None:
+    """The stored enwiki page is API JSON (`\\u00c1`, `\\n`); a quote of what it says still passes."""
+    page = _enwiki_page("The fort at Ávila\nwas built in 1500 BC. It stands.")
+    assert "\\u00c1vila\\nwas" in page  # the file really carries the escapes the model reads through
+    batch_dir = _batch(
+        tmp_path,
+        cleared={(SITE_A, "country"): _cleared(SITE_A, "country")},
+        answers={
+            (SITE_A, "country"): _answer(
+                proposed="Spain", quote="The fort at Ávila was built in 1500 BC."
+            )
+        },
+        pages={SITE_A: page},
+    )
+    plan = W.load_plan(batch_dir)
+    assert [(row.column, row.new_value) for row in plan.rows] == [("country", "Spain")]
+    assert plan.refused_fields(W.RULE_CITATION) == []
+
+
+def test_a_citation_of_a_page_the_batch_never_fetched_is_refused(tmp_path: Path) -> None:
+    """A URL that is not one of the site's targets cannot be checked, so it cannot be written."""
+    plan = W.load_plan(
+        _batch(
+            tmp_path,
+            cleared={(SITE_A, "country"): _cleared(SITE_A, "country")},
+            answers={
+                (SITE_A, "country"): _answer(
+                    proposed="United States", url="https://example.org/elsewhere"
+                )
+            },
+        )
+    )
+    assert plan.rows == []
+    detail = plan.refused_fields(W.RULE_CITATION)[0].detail
+    assert "not fetched by this run: https://example.org/elsewhere" in detail
+
+
+def test_a_citation_is_checked_against_its_own_sites_pages_not_a_neighbours(
+    tmp_path: Path,
+) -> None:
+    """Site A quoting site B's page is refused: the pages are read per site, not per batch."""
+    batch_dir = _batch(
+        tmp_path,
+        sites=(SITE_A, SITE_B),
+        cleared={
+            (SITE_A, "country"): _cleared(SITE_A, "country"),
+            (SITE_B, "country"): _cleared(SITE_B, "country"),
+        },
+        answers={
+            (SITE_A, "country"): _answer(proposed="United States", url=_page(SITE_B)),
+            (SITE_B, "country"): _answer(proposed="United States", url=_page(SITE_B)),
+        },
+    )
+    plan = W.load_plan(batch_dir)
+    assert [row.site_id for row in plan.rows] == [SITE_B]
+    assert [refusal.site_id for refusal in plan.refused_fields(W.RULE_CITATION)] == [SITE_A]
+
+
+def test_a_cited_page_whose_fetch_failed_is_not_a_page_a_quote_can_come_from(
+    tmp_path: Path,
+) -> None:
+    """The fetch report says the page was never read: a quote from it is refused, not trusted."""
+    batch_dir = _cleared_batch(tmp_path)
+    F.EvidenceStore(batch_dir / W.EVIDENCE_DIR).path_for(SITE_A, F.FEATURE_ENWIKI).unlink()
+    (batch_dir / W.FETCH_REPORT_FILE).write_text(
+        json.dumps(
+            {
+                "sites": [
+                    {
+                        "site_id": SITE_A,
+                        "outcomes": [
+                            {"feature": F.FEATURE_ENWIKI, "failure": "HTTP 404 (1 request(s))"}
+                        ],
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    plan = W.load_plan(batch_dir)
+    assert plan.rows == []
+    assert "was not fetched by this run" in plan.refused_fields(W.RULE_CITATION)[0].detail
+
+
+def test_evidence_missing_with_nothing_recorded_about_it_stops_the_plan(tmp_path: Path) -> None:
+    """A hole in the record is not one row's property: the batch is refused whole, loudly."""
+    batch_dir = _cleared_batch(tmp_path)
+    F.EvidenceStore(batch_dir / W.EVIDENCE_DIR).path_for(SITE_A, F.FEATURE_ENWIKI).unlink()
+    with pytest.raises(W.MS.EvidenceUnusable, match="fetch report records no failure"):
+        W.load_plan(batch_dir)
 
 
 def _texts(tmp_path: Path, texts: dict[tuple[str, str], str]) -> F.EvidenceStore:
