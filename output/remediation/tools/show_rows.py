@@ -11,33 +11,31 @@ verdict, so nothing has to be joined: `verdict.reason` is the sentence the revie
 from __future__ import annotations
 
 import argparse
-import json
 import pathlib
+import sys
 
-LOGS = pathlib.Path(__file__).resolve().parent
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+
+import lanes  # noqa: E402 - the lane's paths and the one JSON-lines reader
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(prog="show-rows")
-    parser.add_argument("--rows", default=str(LOGS / "_write_dry" / "ALL_ROWS.jsonl"))
+    parser.add_argument("--lane", default=lanes.MASS, help="which run's paths (lanes.py)")
+    parser.add_argument("--rows", default=None, help="override the lane's ALL_ROWS.jsonl")
     parser.add_argument("--from", dest="first", type=int, default=1)
     parser.add_argument("--count", type=int, default=40)
-    parser.add_argument("--reason", type=int, default=260, help="characters of the reviewer's reason")
+    parser.add_argument(
+        "--reason", type=int, default=260, help="characters of the reviewer's reason"
+    )
     args = parser.parse_args()
+    rows_path = pathlib.Path(args.rows) if args.rows else lanes.lane(args.lane).rows
 
-    rows: list[dict] = []
-    for number, line in enumerate(
-        pathlib.Path(args.rows).read_text(encoding="utf-8").splitlines(), start=1
+    rows = lanes.read_jsonl(rows_path)
+    print(f"{len(rows)} geplante Zeilen in {rows_path}")
+    for number, row in enumerate(
+        rows[args.first - 1 : args.first - 1 + args.count], start=args.first
     ):
-        if not line.strip():
-            continue
-        try:
-            rows.append(json.loads(line))
-        except json.JSONDecodeError as exc:
-            raise SystemExit(f"{args.rows}:{number}: not readable JSON: {exc}") from exc
-
-    print(f"{len(rows)} geplante Zeilen in {args.rows}")
-    for number, row in enumerate(rows[args.first - 1 : args.first - 1 + args.count], start=args.first):
         verdict = row.get("verdict") or {}
         quote = ((row.get("evidence") or [{}])[0]).get("quote", "")
         print(

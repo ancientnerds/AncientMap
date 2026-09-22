@@ -19,6 +19,21 @@ is a check rather than a promise. A batch that is done gets a marker file, so a 
 instead of rewriting rows whose old value is no longer there to match.
 
 Without `--apply` this is a report.
+
+Which run it writes is the lane's (`lanes.py`): the default is the mass run, its `_write_dry/` rows,
+its `_write_apply/` markers and holds - the paths it always had. `--lane gap` reads `runs/gap`,
+`_write_dry_gap/ALL_ROWS.jsonl` and marks `_write_apply_gap/`, so an `APPLIED.json` of the mass lane
+can never make a batch of another lane look done. Two guards were added with the lanes (2026-09-22),
+both refusals before anything is written:
+
+* every row's batch directory must exist in the run directory the rows are applied to - rows of one
+  lane handed to another lane's run are refused, not re-planned from the wrong files;
+* the writer re-plans each batch from its files, and the per-row apply addresses rows **by their
+  position** in that plan (`--chunk-size 1 --chunk K`). A rows file that no longer matches the
+  writer's plan - it was built before the writer gained a rule, such as the citation check - would
+  shift every position after the first difference and write a different row than the one reviewed.
+  So every open batch is re-planned dry first - in the dry run too, so the report is the proof -
+  and its change keys must equal the rows file's, in order, before the first row of the wave.
 """
 
 from __future__ import annotations
@@ -26,7 +41,6 @@ from __future__ import annotations
 import argparse
 import collections
 import json
-import os
 import pathlib
 import subprocess
 import sys
@@ -39,32 +53,17 @@ for _stream in (sys.stdout, sys.stderr):
     if _reconfigure is not None:
         _reconfigure(encoding="utf-8", errors="replace")
 
-ROOT = pathlib.Path(r"C:/PythonProjects/AncientMap")
-SCRIPTS = ROOT / "scripts/remediation"
-LOGS = ROOT / "output/remediation/logs"
-RUN = ROOT / "output/remediation/phase3_runner/runs/mass"
-WRITER = SCRIPTS / "phase3/write_stage.py"
-PYTHON = ROOT / ".venv/Scripts/python.exe"
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
-sys.path.insert(0, str(SCRIPTS))
-sys.path.insert(0, str(LOGS))
+import lanes  # noqa: E402 - the lane's paths and the one JSON-lines reader
+
+sys.path.insert(0, str(lanes.REPO / "scripts" / "remediation"))
 
 import country_census as C  # noqa: E402 - the one alias map and point-in-polygon test
+import write_dry_all  # noqa: E402 - the writer's child environment, one spelling
 from phase3 import (
     write_stage as W,  # noqa: E402 - its psql seam and SQL quoting are the tested ones
 )
-
-
-def read_rows(path: pathlib.Path) -> list[dict]:
-    rows: list[dict] = []
-    for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
-        if not line.strip():
-            continue
-        try:
-            rows.append(json.loads(line))
-        except json.JSONDecodeError as exc:
-            raise SystemExit(f"{path}:{number}: not readable JSON: {exc}") from exc
-    return rows
 
 
 def psql_json_rows(sql: str, *, host: str) -> list[dict]:
@@ -144,16 +143,87 @@ def load_holds(path: pathlib.Path) -> dict[str, str]:
     """
     if not path.exists():
         return {}
-    holds: dict[str, str] = {}
-    for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
-        if not line.strip():
+    return {record["change_key"]: record["hold_reason"] for record in lanes.read_jsonl(path)}
+
+
+def open_batches(
+    rows: list[dict],
+    verdicts: dict[str, tuple[bool, str]],
+    *,
+    run_dir: pathlib.Path,
+    apply_root: pathlib.Path,
+) -> list[tuple[str, list[dict], list[int]]]:
+    """(batch, its rows, the 1-based positions to write) for every batch still to be written.
+
+    A batch is done when **this lane's** apply root carries its `APPLIED.json` - never another lane's,
+    which is the whole point of the lane. A row whose batch directory is not in `run_dir` is refused:
+    the writer would re-plan it from files that are not the ones the rows came from.
+    """
+    by_batch: dict[str, list[dict]] = collections.OrderedDict()
+    for row in rows:
+        by_batch.setdefault(row["batch_id"], []).append(row)
+    missing = sorted(batch for batch in by_batch if not (run_dir / batch).is_dir())
+    if missing:
+        raise SystemExit(
+            f"{len(missing)} batch(es) of the rows file are not in {run_dir}: {missing[:5]} - "
+            "the rows belong to another run; pass the lane they were planned in"
+        )
+    todo = []
+    for batch, batch_rows in sorted(by_batch.items()):
+        if (apply_root / batch / "APPLIED.json").exists():
             continue
-        try:
-            record = json.loads(line)
-        except json.JSONDecodeError as exc:
-            raise SystemExit(f"{path}:{number}: not readable JSON: {exc}") from exc
-        holds[record["change_key"]] = record["hold_reason"]
-    return holds
+        ok_indexes = [
+            index for index, row in enumerate(batch_rows, start=1) if verdicts[row["change_key"]][0]
+        ]
+        if ok_indexes:
+            todo.append((batch, batch_rows, ok_indexes))
+    return todo
+
+
+def replan_keys(batch: str, *, run_dir: pathlib.Path, scratch: pathlib.Path) -> list[str]:
+    """The change keys, in order, of the plan the writer builds for this batch **now** (dry)."""
+    out = scratch / batch
+    out.mkdir(parents=True, exist_ok=True)
+    proc = subprocess.run(
+        [sys.executable, str(lanes.WRITER), "--batch-dir", str(run_dir / batch), "--out", str(out)],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=900,
+        env=write_dry_all.writer_env(),
+    )
+    if proc.returncode != 0:
+        raise SystemExit(
+            f"der Schreiber konnte {batch} nicht trocken planen, exit {proc.returncode}:"
+            f"\n{proc.stderr.strip()[-600:]}"
+        )
+    return [row["change_key"] for row in lanes.read_jsonl(out / W.PLAN_FILE)]
+
+
+def assert_same_plan(batch: str, rows: list[dict], replanned: list[str]) -> None:
+    """Refuse a batch whose rows file is not the plan the writer builds today, position by position.
+
+    The per-row apply names rows by position (`--chunk K`), so one row missing from the writer's plan
+    - a row a newer rule refuses - moves every later position onto a different row. Refused here,
+    before any statement for the batch is run.
+    """
+    expected = [row["change_key"] for row in rows]
+    if expected == replanned:
+        return
+    first = next(
+        (
+            index
+            for index, (want, got) in enumerate(zip(expected, replanned, strict=False), start=1)
+            if want != got
+        ),
+        min(len(expected), len(replanned)) + 1,
+    )
+    raise SystemExit(
+        f"{batch}: the rows file names {len(expected)} row(s), the writer plans {len(replanned)} "
+        f"today, and they first differ at position {first}. The rows file is stale - re-run "
+        "write_dry_all.py for this lane (and re-read the holds) before writing"
+    )
 
 
 def read_back(rows: list[dict], *, host: str) -> list[str]:
@@ -182,9 +252,17 @@ def read_back(rows: list[dict], *, host: str) -> list[str]:
     return problems
 
 
-def write_batch(batch: str, rows: list[dict], ok_indexes: list[int], *, host: str) -> dict:
+def write_batch(
+    batch: str,
+    rows: list[dict],
+    ok_indexes: list[int],
+    *,
+    host: str,
+    run_dir: pathlib.Path,
+    apply_root: pathlib.Path,
+) -> dict:
     """Apply one batch - the whole plan, or exactly the allowed rows of it."""
-    out = LOGS / "_write_apply" / batch
+    out = apply_root / batch
     out.mkdir(parents=True, exist_ok=True)
     calls: list[tuple[str, list[str]]] = []
     if len(ok_indexes) == len(rows):
@@ -196,10 +274,10 @@ def write_batch(batch: str, rows: list[dict], ok_indexes: list[int], *, host: st
     written = sites = matched_0 = journal = 0
     for tag, extra in calls:
         command = [
-            str(PYTHON),
-            str(WRITER),
+            sys.executable,
+            str(lanes.WRITER),
             "--batch-dir",
-            str(RUN / batch),
+            str(run_dir / batch),
             "--out",
             str(out),
             "--host",
@@ -217,7 +295,7 @@ def write_batch(batch: str, rows: list[dict], ok_indexes: list[int], *, host: st
             # `phase3.model` imports `pipeline.normalizers`, so the child needs the repository on its
             # own import path. Carrying it here rather than inheriting it from the calling shell means
             # the gate runs the same way from a bare prompt as it does from the acceptance above.
-            env={**os.environ, "PYTHONPATH": f"{ROOT}{os.pathsep}{SCRIPTS}"},
+            env=write_dry_all.writer_env(),
         )
         (out / f"{tag}.json").write_text(proc.stdout, encoding="utf-8")
         (out / f"{tag}.stderr.txt").write_text(proc.stderr, encoding="utf-8")
@@ -254,24 +332,33 @@ def write_batch(batch: str, rows: list[dict], ok_indexes: list[int], *, host: st
     return {"written": written, "sites": sites, "matched_0": matched_0, "journal": journal}
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="write-gate")
-    parser.add_argument("--rows", default=str(LOGS / "_write_dry" / "ALL_ROWS.jsonl"))
+    parser.add_argument("--lane", default=lanes.MASS, help="which run's paths (lanes.py)")
+    parser.add_argument("--run-dir", default=None, help="override the lane's run directory")
+    parser.add_argument("--rows", default=None, help="override the lane's ALL_ROWS.jsonl")
+    parser.add_argument("--apply-root", default=None, help="override the lane's apply root")
+    parser.add_argument("--hold", default=None, help="override the lane's HOLDS.jsonl")
     parser.add_argument("--host", default=W.SSH_HOST)
     parser.add_argument("--step", type=int, default=100, help="sites per step, checked after each")
     parser.add_argument("--limit", type=int, default=0, help="stop after this many sites (0 = all)")
-    parser.add_argument("--hold", default=str(LOGS / "_write_apply" / "HOLDS.jsonl"))
     parser.add_argument("--apply", action="store_true")
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
+    paths = lanes.lane(args.lane)
+    run_dir = pathlib.Path(args.run_dir) if args.run_dir else paths.run_dir
+    rows_path = pathlib.Path(args.rows) if args.rows else paths.rows
+    apply_root = pathlib.Path(args.apply_root) if args.apply_root else paths.apply_root
+    hold_path = pathlib.Path(args.hold) if args.hold else paths.holds
+    print(f"Spur {paths.name}: {run_dir} | Zeilen {rows_path} | Marker {apply_root}")
 
-    rows = read_rows(pathlib.Path(args.rows))
+    rows = lanes.read_jsonl(rows_path)
     if not rows:
-        raise SystemExit(f"{args.rows}: no planned rows")
+        raise SystemExit(f"{rows_path}: no planned rows")
     positions = coordinates(
         {row["site_id"] for row in rows if row["column"] == "country"}, host=args.host
     )
     verdicts = gate(rows, positions)
-    holds = load_holds(pathlib.Path(args.hold))
+    holds = load_holds(hold_path)
     for row in rows:
         if row["change_key"] in holds:
             verdicts[row["change_key"]] = (
@@ -290,19 +377,12 @@ def main() -> int:
             f"{row['old_value']!r} -> {row['new_value']!r}: {verdicts[row['change_key']][1]}"
         )
 
-    by_batch: dict[str, list[dict]] = collections.OrderedDict()
-    for row in rows:
-        by_batch.setdefault(row["batch_id"], []).append(row)
-
-    todo = []
-    for batch, batch_rows in sorted(by_batch.items()):
-        if (LOGS / "_write_apply" / batch / "APPLIED.json").exists():
-            continue
-        ok_indexes = [
-            index for index, row in enumerate(batch_rows, start=1) if verdicts[row["change_key"]][0]
-        ]
-        if ok_indexes:
-            todo.append((batch, batch_rows, ok_indexes))
+    todo = open_batches(rows, verdicts, run_dir=run_dir, apply_root=apply_root)
+    for batch, batch_rows, _ in todo:
+        assert_same_plan(
+            batch, batch_rows, replan_keys(batch, run_dir=run_dir, scratch=apply_root / "_replan")
+        )
+    print(f"Plan geprueft: {len(todo)} offene Batches entsprechen dem heutigen Plan des Schreibers")
     sites_todo = sum(len(indexes) for _, _, indexes in todo)
     print(
         f"offene Batches: {len(todo)} | Zeilen darin: {sites_todo}"
@@ -315,7 +395,14 @@ def main() -> int:
     written_rows: list[dict] = []
     next_check = args.step
     for batch, batch_rows, ok_indexes in todo:
-        outcome = write_batch(batch, batch_rows, ok_indexes, host=args.host)
+        outcome = write_batch(
+            batch,
+            batch_rows,
+            ok_indexes,
+            host=args.host,
+            run_dir=run_dir,
+            apply_root=apply_root,
+        )
         done_sites += outcome["sites"]
         done_rows += outcome["written"]
         done_journal += outcome["journal"]

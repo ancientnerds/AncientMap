@@ -8,14 +8,17 @@ the proposal and the reviewer's own reason, so a human can read the first chunk 
 
 from __future__ import annotations
 
+import argparse
 import collections
 import json
 import pathlib
 import sys
 
-ROOT = pathlib.Path(r"C:/PythonProjects/AncientMap")
-RUN = ROOT / "output/remediation/phase3_runner/runs/mass"
-sys.path.insert(0, str(ROOT / "scripts/remediation"))
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+
+import lanes  # noqa: E402 - the lane's paths
+
+sys.path.insert(0, str(lanes.REPO / "scripts" / "remediation"))
 
 from phase3 import discover_stage as DS  # noqa: E402  (the path has to exist first)
 from phase3 import model as M  # noqa: E402
@@ -23,12 +26,15 @@ from phase3 import model as M  # noqa: E402
 WRITABLE = ("site_type", "period_start", "country")
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(prog="review-totals")
+    parser.add_argument("--lane", default=lanes.MASS, help="which run's paths (lanes.py)")
+    run = lanes.lane(parser.parse_args(argv).lane).run_dir
     totals: collections.Counter[str] = collections.Counter()
     per_field: dict[str, collections.Counter[str]] = collections.defaultdict(collections.Counter)
     cleared: list[tuple[str, str, str, str, str]] = []
     unreadable: list[str] = []
-    reports = sorted(RUN.glob("*/review.json"))
+    reports = sorted(run.glob("*/review.json"))
 
     for report_path in reports:
         try:
@@ -62,12 +68,12 @@ def main() -> int:
             site_id = str(verdict.get("site_id") or "")
             if not applies or field in M.REPORT_ONLY_FIELDS:
                 continue
-            answer = RUN / report_path.parent.name / "answers" / f"{site_id}%2F{field}.txt"
+            answer = run / report_path.parent.name / "answers" / f"{site_id}%2F{field}.txt"
             proposed = "(keine Antwortdatei)"
             if answer.exists():
                 parsed = DS.parse_answer(answer.read_text(encoding="utf-8"))
                 proposed = parsed.proposed or "(kein Vorschlag)"
-            detail = RUN / report_path.parent.name / "input.json"
+            detail = run / report_path.parent.name / "input.json"
             stored = "?"
             if detail.exists():
                 try:
