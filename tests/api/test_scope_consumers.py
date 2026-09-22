@@ -53,7 +53,13 @@ def test_sitemap_serves_the_journal_date_it_is_given():
 
     journaled = datetime(2026, 9, 21, 18, 10)
     db = RecordingSession(
-        {"FROM unified_sites u": [SimpleNamespace(name="Damascus Gate", country="Syria", id=SITE_ID, lastmod=journaled)]}
+        {
+            "FROM unified_sites u": [
+                SimpleNamespace(
+                    name="Damascus Gate", country="Syria", id=SITE_ID, lastmod=journaled
+                )
+            ]
+        }
     )
     resp = asyncio.run(sm.sitemap_sites(db=db))
     assert b"<lastmod>2026-09-21</lastmod>" in resp.body

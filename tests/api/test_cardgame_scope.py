@@ -96,7 +96,7 @@ def test_lyra_decks_skip_retired_sites():
 
 
 def test_every_quiz_question_draws_only_shown_sites():
-    rng = random.Random(1)
+    rng = random.Random(1)  # noqa: S311 - quiz shuffling, not crypto
     for generate in (
         quiz._generate_age_comparison,
         quiz._generate_country_question,
@@ -152,7 +152,9 @@ def test_card_stats_of_a_retired_site_answer_410(monkeypatch):
     from api.cardgame import routes
 
     sid = uuid.uuid4()
-    session = OrmSession([[SimpleNamespace(site_id=sid)], [SimpleNamespace(scope_status="retired")]])
+    session = OrmSession(
+        [[SimpleNamespace(site_id=sid)], [SimpleNamespace(scope_status="retired")]]
+    )
     monkeypatch.setattr(routes, "get_session", lambda: _ctx(session))
     with pytest.raises(HTTPException) as exc:
         routes.get_card_stats(str(sid))

@@ -194,7 +194,11 @@ def test_a_name_lookup_never_resolves_to_a_retired_site():
 
 def test_alternates_of_a_retired_site_answer_410():
     db = RecordingSession(
-        {"SELECT id, lat, lon, scope_status": [SimpleNamespace(id=SITE_ID, lat=1, lon=2, scope_status="retired")]}
+        {
+            "SELECT id, lat, lon, scope_status": [
+                SimpleNamespace(id=SITE_ID, lat=1, lon=2, scope_status="retired")
+            ]
+        }
     )
     with pytest.raises(HTTPException) as exc:
         sr.get_site_alternates(SITE_ID, db=db)
@@ -203,7 +207,11 @@ def test_alternates_of_a_retired_site_answer_410():
 
 def test_alternates_never_list_a_retired_row():
     db = RecordingSession(
-        {"SELECT id, lat, lon, scope_status": [SimpleNamespace(id=SITE_ID, lat=1, lon=2, scope_status=None)]}
+        {
+            "SELECT id, lat, lon, scope_status": [
+                SimpleNamespace(id=SITE_ID, lat=1, lon=2, scope_status=None)
+            ]
+        }
     )
     sr.get_site_alternates(SITE_ID, db=db)
     assert US in db.statement_with("DISTINCT ON (us.source_id)")
@@ -217,7 +225,11 @@ def test_alternates_never_list_a_retired_row():
 @pytest.mark.parametrize("source", ["ancient_nerds", "lyra", "ancient_nerds_community"])
 def test_delete_refuses_every_curated_source_and_deletes_nothing(source):
     db = RecordingSession(
-        {"SELECT id, name, source_id": [SimpleNamespace(id=SITE_ID, name="Petra", source_id=source)]}
+        {
+            "SELECT id, name, source_id": [
+                SimpleNamespace(id=SITE_ID, name="Petra", source_id=source)
+            ]
+        }
     )
     with pytest.raises(HTTPException) as exc:
         sr.delete_site(SITE_ID, user=SimpleNamespace(username="founder"), db=db)
@@ -229,7 +241,11 @@ def test_delete_refuses_every_curated_source_and_deletes_nothing(source):
 
 def test_delete_of_another_source_snapshots_before_it_deletes():
     db = RecordingSession(
-        {"SELECT id, name, source_id": [SimpleNamespace(id=SITE_ID, name="Tell X", source_id="wikidata")]}
+        {
+            "SELECT id, name, source_id": [
+                SimpleNamespace(id=SITE_ID, name="Tell X", source_id="wikidata")
+            ]
+        }
     )
     calls: list[str] = []
 
@@ -250,7 +266,11 @@ def test_delete_of_another_source_snapshots_before_it_deletes():
 
 def test_delete_without_a_snapshot_deletes_nothing():
     db = RecordingSession(
-        {"SELECT id, name, source_id": [SimpleNamespace(id=SITE_ID, name="Tell X", source_id="osm")]}
+        {
+            "SELECT id, name, source_id": [
+                SimpleNamespace(id=SITE_ID, name="Tell X", source_id="osm")
+            ]
+        }
     )
     with (
         patch("api.services.snapshots.create_snapshot", return_value=None),
@@ -281,7 +301,9 @@ def test_restore_all_uploads_restores_the_scope_columns():
 
 
 def test_rebuild_static_starts_a_job_and_returns_at_once():
-    with patch.object(sr, "start_job", return_value={"job": "rebuild-static", "state": "running"}) as start:
+    with patch.object(
+        sr, "start_job", return_value={"job": "rebuild-static", "state": "running"}
+    ) as start:
         resp = sr.rebuild_static_json(user=SimpleNamespace(username="founder"))
     assert resp["state"] == "running"
     name, work = start.call_args.args

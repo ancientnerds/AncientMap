@@ -65,7 +65,9 @@ def test_site_index_and_alt_names_leave_retired_sites_out(tmp_path, monkeypatch)
 
     session = _exporter_session(monkeypatch)
     StaticExporter(tmp_path)._export_site_index()
-    assert US in session.statement_with("FROM unified_sites us\n                LEFT JOIN card_stats")
+    assert US in session.statement_with(
+        "FROM unified_sites us\n                LEFT JOIN card_stats"
+    )
     assert US in session.statement_with("FROM unified_site_names usn")
 
 
@@ -90,6 +92,21 @@ def test_image_index_and_content_links_leave_retired_sites_out(tmp_path, monkeyp
     for fragment in ("FROM wiki_images", "FROM site_content_links"):
         sql = session.statement_with(fragment)
         assert "NOT EXISTS" in sql and is_retired("us") in sql, fragment
+
+
+def test_a_whole_sites_export_runs_to_the_end(tmp_path, monkeypatch):
+    """End to end over empty tables: every step, the snapshot and the summary. A string in
+    the stats once made the summary's number formatting raise after all files were
+    written - the job would have reported a failed export that had succeeded."""
+    from pipeline.static_exporter import StaticExporter
+
+    session = _exporter_session(monkeypatch)
+    StaticExporter(tmp_path).export_all(sites_only=True)
+    for produced in ("sources.json", "sites/index.json", "images/index.json", "hubs.snapshot.json"):
+        assert (tmp_path / produced).exists(), produced
+    manifest = json.loads((tmp_path / "snapshots" / "manifest.json").read_text(encoding="utf-8"))
+    assert len(manifest["snapshots"]) == 1
+    assert any("FROM unified_sites us" in sql for sql in session.statements())
 
 
 def _snapshot_row(site_id: str, name: str) -> SimpleNamespace:
@@ -186,7 +203,13 @@ def test_indexnow_announces_retirements_as_removed_urls():
     from pipeline import indexnow as ix
 
     session = RecordingSession(
-        {"FROM remediation_change_log l": [SimpleNamespace(country="Syria", name="Damascus Gate", id="17cf019a-0000-4000-8000-000000000000")]}
+        {
+            "FROM remediation_change_log l": [
+                SimpleNamespace(
+                    country="Syria", name="Damascus Gate", id="17cf019a-0000-4000-8000-000000000000"
+                )
+            ]
+        }
     )
     paths = ix.recent_retired_paths(session, datetime(2026, 9, 22, tzinfo=UTC))
     assert paths == ["/sites/syria/damascus-gate-17cf019a", "/sites/"]
@@ -212,7 +235,9 @@ def test_submit_recent_sends_changed_and_retired_pages(monkeypatch):
 
 
 def test_indexnow_catch_up_script_keeps_only_pages_changed_since_a_date():
-    spec = importlib.util.spec_from_file_location("indexnow_submit", REPO / "scripts" / "indexnow_submit.py")
+    spec = importlib.util.spec_from_file_location(
+        "indexnow_submit", REPO / "scripts" / "indexnow_submit.py"
+    )
     module = importlib.util.module_from_spec(spec)
     assert spec.loader is not None
     spec.loader.exec_module(module)
@@ -371,7 +396,14 @@ def test_a_point_without_a_date_matches_a_site_without_a_date(lyra_index):
 
 
 def test_retired_points_are_deleted_and_only_those(lyra_index, monkeypatch):
-    session = RecordingSession({"scope_status = 'retired'": [SimpleNamespace(id="gone"), SimpleNamespace(id="never-indexed")]})
+    session = RecordingSession(
+        {
+            "scope_status = 'retired'": [
+                SimpleNamespace(id="gone"),
+                SimpleNamespace(id="never-indexed"),
+            ]
+        }
+    )
     monkeypatch.setattr(lyra_index, "get_session", lambda: _ctx(session))
     deleted: list[list[str]] = []
     client = SimpleNamespace(

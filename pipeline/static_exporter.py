@@ -315,8 +315,8 @@ class StaticExporter:
         self.output_dir = output_dir
         self.stats = {}
 
-    def export_all(self, sites_only: bool = False) -> dict:
-        """Export all data to static files. Returns the export stats."""
+    def export_all(self, sites_only: bool = False):
+        """Export all data to static files."""
         logger.info("=" * 60)
         logger.info("STATIC EXPORT - Ancient Nerds Map")
         logger.info("=" * 60)
@@ -353,7 +353,6 @@ class StaticExporter:
         self._save_audit_snapshot()
 
         self._print_summary()
-        return dict(self.stats)
 
     def _export_sources(self):
         """Export source metadata with colors and counts."""
@@ -952,8 +951,9 @@ class StaticExporter:
     def _save_audit_snapshot(self):
         """Save a dated snapshot of the curated sites for version history."""
         logger.info("\nSaving audit snapshot...")
+        # Not into self.stats: _print_summary formats every stat as a number.
         with get_session() as session:
-            self.stats["snapshot_key"] = write_file_snapshot(session, self.output_dir / "snapshots")
+            write_file_snapshot(session, self.output_dir / "snapshots")
 
     def _print_summary(self):
         """Print export summary."""
@@ -974,10 +974,10 @@ class StaticExporter:
             logger.info(f"Total gzipped size: {total_gz_size / 1024 / 1024:.2f} MB")
 
 
-def build_static(output_dir: str | None = None, sites_only: bool = False) -> dict:
-    """Build static files for deployment. Returns the export stats."""
+def build_static(output_dir: str | None = None, sites_only: bool = False):
+    """Build static files for deployment."""
     exporter = StaticExporter(Path(output_dir) if output_dir else OUTPUT_DIR)
-    return exporter.export_all(sites_only=sites_only)
+    exporter.export_all(sites_only=sites_only)
 
 
 def main():

@@ -24,7 +24,9 @@ from pipeline.utils.public_sites import (
     not_retired,
 )
 
-MIGRATION = Path(__file__).resolve().parents[2] / "migrations" / "0020_unified_sites_scope_status.sql"
+MIGRATION = (
+    Path(__file__).resolve().parents[2] / "migrations" / "0020_unified_sites_scope_status.sql"
+)
 
 
 @pytest.fixture

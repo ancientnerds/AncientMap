@@ -1,6 +1,16 @@
 # Static Exporter
 
-Exports PostgreSQL data to optimized static JSON files served directly by Nginx. Zero API involvement at runtime — the frontend loads these files and filters client-side.
+Exports PostgreSQL data to static JSON files under `public/data/`, served by nginx.
+
+**The globe does not read the site files.** `DataStore` fetches `/api/sites/all` and
+`/api/sources/`, and since 2026-09-22 both answer from the database only (their static-JSON
+fallbacks are gone). What does read the output: the frontend build (`hubs.snapshot.json`,
+baked into `index.html`), the audit page's version history and the source pins of
+`/api/sites/all` (`snapshots/`), and the library page (`library/`).
+
+**Scope (E4, migration 0020):** retired sites are left out of every site-keyed file — the
+index, the details, the image index, the links, the hub list and the snapshot file
+(`pipeline.utils.public_sites.not_retired()`).
 
 **File:** `pipeline/static_exporter.py`
 
@@ -8,7 +18,13 @@ Exports PostgreSQL data to optimized static JSON files served directly by Nginx.
 
 | Caller | Function | What it exports |
 |--------|----------|-----------------|
-| `python -m pipeline.static_exporter` | `StaticExporter.export_all()` | Globe data (sources, sites, content, links) |
+| `python -m pipeline.static_exporter` | `StaticExporter.export_all()` | Everything below |
+| `python -m pipeline.static_exporter --hubs-only` | `export_hubs_snapshot()` | `hubs.snapshot.json` only |
+| `POST /api/sites/rebuild-static` (founders) | the CLI above, in a child process | Background job: answers 202, `GET /api/sites/rebuild-static/status` reports it (the export takes ~4 min, nginx cuts `/api/` at 120 s) |
+| `POST /api/library/refresh` (internal key) | `aggregate_library()` + `_export_library()` | Background job: answers 202, `GET /api/library/refresh/status` reports it |
+
+Both jobs run once across `api` and `api2` (Postgres advisory lock) and keep their status in
+`pipeline_heartbeats` as `job:<name>` (`api/services/background_jobs.py`).
 
 News feed is served live by the API (`/news/feed`), not exported to static JSON.
 
@@ -18,6 +34,10 @@ News feed is served live by the API (`/news/feed`), not exported to static JSON.
 public/data/
 ├── sources.json                  Source metadata (colors, counts, enabled_by_default)
 ├── links.json                    Site-to-content relationships
+├── hubs.snapshot.json            Homepage country hub list (baked in at frontend build)
+├── images/index.json             Non-excluded wiki images per site
+├── snapshots/                    Dated curated-site snapshots + manifest.json (newest 50)
+├── library/                      Library sources by period
 ├── sites/
 │   ├── index.json                Compact markers for Three.js globe
 │   └── details/
@@ -107,12 +127,22 @@ save_json(path, data, compress=True)
 4. If `GZIP_OUTPUT` is true, writes `.json.gz` at compression level 9
 5. Logs gzipped size
 
+## Snapshot files: `write_file_snapshot()`
+
+The one writer of `snapshots/` (the API's `export_file_snapshot()` calls it too). Keys are
+`YYYY-MM-DD_HHMMSS`; a second write in the same second replaces its manifest entry instead of
+adding a duplicate; the newest 50 are kept. A corrupt `manifest.json` raises — replacing it
+with an empty one would drop the whole version history silently.
+
 ## When Things Run
 
 ```
 Manual deploy / data refresh:
-  python -m pipeline.static_exporter
-  └─→ export_all() → sources + sites + content + links
+  python -m pipeline.static_exporter            (or POST /api/sites/rebuild-static)
+  └─→ export_all() → sources + sites + images + hubs + content + links + library + snapshot
 ```
+
+The files must be writable by the container user (uid 1000). Files created as root (as on
+2026-08-18) make the export fail with a PermissionError, which the job status reports.
 
 News feed is served live by the FastAPI endpoint `GET /news/feed`.

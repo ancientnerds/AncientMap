@@ -59,7 +59,7 @@ _PARENT_SQL = text(
 # Easter Island site). A 301 hands their link signals to the hub that replaced them.
 # /sites/united-kingdom is deliberately NOT here: the UK lane splits those rows into
 # England / Scotland / Wales / Northern Ireland, so no single hub replaces it and it
-# stays a 404 (tests/api/test_sites_scope.py pins this).
+# stays a 404 (tests/api/test_sites_html_scope.py pins this).
 _RETIRED_HUBS = {
     "georgia-country": "georgia",
     "chile-easter-island": "chile",

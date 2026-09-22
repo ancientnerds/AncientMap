@@ -31,7 +31,9 @@ def _key_and_limits(monkeypatch):
 
 
 def test_refresh_starts_the_job_and_returns_202():
-    with patch.object(library, "start_job", return_value={"job": "library-refresh", "state": "running"}) as start:
+    with patch.object(
+        library, "start_job", return_value={"job": "library-refresh", "state": "running"}
+    ) as start:
         resp = library.refresh_library(_req("k3y"))
     assert resp["state"] == "running"
     name, work = start.call_args.args
@@ -63,8 +65,14 @@ def test_both_routes_require_the_internal_key(route):
 def test_the_job_aggregates_and_then_exports():
     calls: list[str] = []
     with (
-        patch("pipeline.library_aggregator.aggregate_library", side_effect=lambda: calls.append("aggregate") or 14241),
-        patch("pipeline.static_exporter.StaticExporter._export_library", side_effect=lambda self=None: calls.append("export")),
+        patch(
+            "pipeline.library_aggregator.aggregate_library",
+            side_effect=lambda: calls.append("aggregate") or 14241,
+        ),
+        patch(
+            "pipeline.static_exporter.StaticExporter._export_library",
+            side_effect=lambda self=None: calls.append("export"),
+        ),
     ):
         assert library._refresh_library_job() == {"sources": 14241}
     assert calls == ["aggregate", "export"]

@@ -4,6 +4,11 @@
 > MiniMax narration + ffmpeg, no Remotion/ElevenLabs) is a separate product in the same package —
 > spec in `docs/superpowers/specs/2026-09-16-site-shorts-prototype-design.md`. This weekly pipeline
 > has no `ELEVENLABS_API_KEY` configured and has not been run in production (status 2026-09-16).
+> Every rendered short is recorded in the `site_shorts` ledger (migration 0021,
+> `pipeline/video/shorts_ledger.py`): card text + sha256, images on screen, voice, commit and the
+> video's sha256, keyed by site id. The render step writes it and fails without it; the renders
+> made before the ledger are entered by `scripts/backfill_site_shorts_ledger.py --apply`. The
+> batch never plans a retired site (E4, migration 0020).
 
 Automated "This Week in Archaeology" — transforms weekly articles into ~10-15 minute narrated YouTube videos.
 

@@ -90,7 +90,9 @@ def test_locks_of_different_jobs_do_not_collide():
 def _run_job(monkeypatch, work, lock) -> list[tuple[str, dict, str | None]]:
     written: list[tuple[str, dict, str | None]] = []
     monkeypatch.setattr(
-        bj, "_write_status", lambda name, status, data, error=None: written.append((status, data, error))
+        bj,
+        "_write_status",
+        lambda name, status, data, error=None: written.append((status, data, error)),
     )
     bj.start_job("demo", work, lock=lock)
     for thread in threading.enumerate():
