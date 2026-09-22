@@ -22,6 +22,7 @@ import shutil
 import subprocess
 import sys
 import time
+from datetime import UTC, datetime
 from pathlib import Path
 
 from pipeline.database import get_session
@@ -32,6 +33,7 @@ from pipeline.video import (
     shorts_audit,
     shorts_export,
     shorts_images,
+    shorts_ledger,
     shorts_render,
     shorts_select,
     shorts_tts,
@@ -347,7 +349,7 @@ def run_short(args: argparse.Namespace) -> Path | None:
         selection = json.loads((site_dir / "selection.json").read_text(encoding="utf-8"))
         # Derived from the country here (not the stored field) so older exports get a flag too.
         code = shorts_export.country_code_for(site.get("country"))
-        return shorts_render.render_short(
+        video = shorts_render.render_short(
             site,
             selection["stills"],
             site_dir,
@@ -358,7 +360,34 @@ def run_short(args: argparse.Namespace) -> Path | None:
             music_start=args.music_start,
             whoosh=Path(args.whoosh) if args.whoosh else None,
         )
+        record_render(site, site_dir, video, voice_id=args.voice)
+        return video
     return None
+
+
+def record_render(site: dict, site_dir: Path, video: Path, *, voice_id: str) -> None:
+    """Write the render into the site_shorts ledger (migration 0021, plan 10.4).
+
+    Part of the render step, not an afterthought: a video without its ledger row is
+    exactly the untraceable short the ledger exists to prevent, so a failed write fails
+    the step. voice_id is the one the description.txt names (render_short's voice_id).
+    """
+    row = shorts_ledger.row_for_render(
+        site,
+        site_dir,
+        video,
+        voice_id=voice_id,
+        pipeline_commit=shorts_ledger.current_commit(),
+        rendered_at=datetime.now(UTC),
+    )
+    with get_session() as session:
+        inserted = shorts_ledger.record(session, row)
+    logging.info(
+        "ledger: %s %s (%s)",
+        "recorded" if inserted else "already had",
+        video.name,
+        row.status if not row.status_reason else f"{row.status}: {row.status_reason}",
+    )
 
 
 def quota_percentages() -> tuple[int, int]:
