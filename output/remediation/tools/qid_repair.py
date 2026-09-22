@@ -2,14 +2,16 @@
 
 `site_external_ids` is filled by `pipeline/lyra/prospector/external_ids.py` from each curated site's
 `source_url`: the enwiki title in the URL is resolved (redirects followed) and its title and Wikidata
-item are stored. Twenty curated sites carry an id that names something other than the site, and the
-cause is visible in the data: their `source_url` is `https://en.wikipedia.org/wiki/History`,
-`.../Archaeology`, `.../Theatre`, `.../Temples_(band)` - the *section fragment* of a redirect (`Estipeon`
-redirects to `Štip#History`, `Castellum Onagrinum` to `Begeč#Archaeology`, `Tomb of Artaxerxes III` to
-`Persepolis#Tombs`) taken as an article title. So seven sites are routed to Q309 ("history", the
-discipline), two to Q23498 ("archaeology"), three to Q11635 ("theatre"), Stabiae to an English rock
-band, and six Gyeongju records to their shared World Heritage parent. Every later pass that asks
-Wikidata about these sites asks about the wrong thing.
+item are stored. Twenty curated sites carry an id that names something other than the site. For the
+thirteen generic ids the `source_url` itself names the generic article
+(`https://en.wikipedia.org/wiki/History`, `.../Archaeology`, `.../Theatre`, `.../Temples_(band)`); for two
+of them the stored name redirects to exactly that section of another article (`Estipeon` -> `Štip#History`,
+`Castellum Onagrinum` -> `Begeč#Archaeology`), which looks like a section fragment taken as a title - for
+the other eleven how the URL was made is not established. The Tomb of Artaxerxes III's URL is its own
+title, which redirects to `Persepolis#Tombs`, so the redirect gave it Persepolis' item. So seven sites
+are routed to Q309 ("history", the discipline), two to Q23498 ("archaeology"), three to Q11635
+("theatre"), Stabiae to an English rock band, and five Gyeongju belts to their shared World Heritage
+parent. Every later pass that asks Wikidata about these sites asks about the wrong thing.
 
 Each site was re-resolved **one at a time** on 2026-09-22 (read-only: `wbsearchentities` by name and
 variants, `wbgetentities` for every candidate, a WDQS `wikibase:around` search of 0.6 km for the three
@@ -650,7 +652,8 @@ def plan_markdown(rows: list[Change]) -> str:
         "own fixed-point analysis.",
         "* The already-judged sites whose phase-3 Wikidata evidence was the wrong item should be "
         "re-judged after the repair: City of Enns, Crantit Chambered Cairn, Castellum Onagrinum, the "
-        "three theatres and the five Gyeongju belts (the gap run re-asks the others).",
+        "three theatres and four of the Gyeongju belts (Mount Namsan, Hwangnyongsa, Sanseong, Tumuli "
+        "Park); the gap run (output/remediation/gap/GAP_PLAN.md) re-asks the other ten.",
         "",
         "## How to run it (the orchestrator's job, in this order)",
         "",
