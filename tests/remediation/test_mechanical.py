@@ -991,6 +991,26 @@ class TestTheLanes:
         assert "guard4-not-owned" not in t05 and "guard5-premise" not in t05
         assert {"guard1-other-source", "guard2-no-op", "guard2-too-long"} <= t05
 
+    def test_the_uk_rollback_rehearsal_reads_each_row_against_its_part(self) -> None:
+        """Each planned row is checked against the unit *it* was given - a set of the four parts
+        would pass with any row holding any part."""
+        sql = A.rollback_rehearsal_reads([uk_record(), uk_second(new_value="England")], L.UK_PARTS)
+        assert f"('{SITE_BOA}'::uuid, 'Northern Ireland')" in sql
+        assert f"('{SITE_GIANTS_RING}'::uuid, 'England')" in sql
+        assert f"'{L.UK_PARTS.rollback_run_stamp}'" in sql
+        assert "to_regclass('pg_temp._uk_part_plan')" in sql
+
+    @pytest.mark.parametrize("name", sorted(L.LANES))
+    def test_every_lane_has_its_own_identity(self, name: str) -> None:
+        """Two lanes sharing a stamp, a key prefix, a temp table or a directory would read each
+        other's rows back as their own."""
+        lane = L.LANES[name]
+        others = [other for other in L.LANES.values() if other is not lane]
+        for attribute in ("run_stamp", "key_prefix", "plan_table", "out_dir_name", "test_id"):
+            assert getattr(lane, attribute) not in {getattr(o, attribute) for o in others}, (
+                attribute
+            )
+
     def test_an_unknown_lane_is_refused_by_the_cli(self, capsys: pytest.CaptureFixture) -> None:
         with pytest.raises(SystemExit):
             A.main(["--lane", "atlantis", "--verify"])
@@ -1136,6 +1156,63 @@ class TestThePin:
         assert code == A.EXIT_REFUSED
         assert "REFUSED" in capsys.readouterr().err
         assert path.read_text(encoding="utf-8") == edited
+
+
+NEW_LANES = [
+    name
+    for name in sorted(L.LANES)
+    if name != L.T05.name and (A.lane_dir(L.LANES[name]) / "PLAN.jsonl").exists()
+]
+
+
+class TestTheDeliveredLanes:
+    """The committed statements of the lanes not yet applied are exactly what `--emit` renders."""
+
+    def test_every_new_lane_has_a_delivered_plan(self) -> None:
+        assert sorted(NEW_LANES) == sorted(n for n in L.LANES if n != L.T05.name)
+
+    @pytest.mark.parametrize("name", NEW_LANES)
+    def test_the_committed_statements_are_the_plan_s_own(self, name: str) -> None:
+        lane = L.LANES[name]
+        directory = A.lane_dir(lane)
+        plan_path = directory / "PLAN.jsonl"
+        records = A.load_records(plan_path)
+        A.validate_records(records, lane=lane)
+        P.verify_pinned(
+            directory / "APPLY.sql", plan_path=plan_path, expected=A.apply_statement(records, lane)
+        )
+        P.verify_pinned(
+            directory / "ROLLBACK.sql",
+            plan_path=plan_path,
+            expected=A.rollback_statement(records, lane),
+        )
+
+    @pytest.mark.parametrize("name", NEW_LANES)
+    def test_the_cli_re_emits_the_committed_apply_byte_for_byte(
+        self, name: str, tmp_path: Path
+    ) -> None:
+        """What the orchestrator's `--emit` will write is what is committed: no surprise diff."""
+        lane = L.LANES[name]
+        directory = A.lane_dir(lane)
+        for file in ("PLAN.jsonl", "ROLLBACK.sql"):
+            (tmp_path / file).write_text(
+                (directory / file).read_text(encoding="utf-8"), encoding="utf-8", newline="\n"
+            )
+        code = A.main(
+            [
+                "--lane",
+                name,
+                "--emit",
+                "--plan",
+                str(tmp_path / "PLAN.jsonl"),
+                "--out",
+                str(tmp_path),
+            ]
+        )
+        assert code == A.EXIT_OK
+        assert (tmp_path / "APPLY.sql").read_text(encoding="utf-8") == (
+            directory / "APPLY.sql"
+        ).read_text(encoding="utf-8")
 
 
 @needs_deliverable
