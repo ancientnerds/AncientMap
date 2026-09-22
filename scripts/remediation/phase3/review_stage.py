@@ -18,6 +18,11 @@ Three things this module is **not**:
   no change a writer could apply, so reviewing it would spend a call to produce a verdict nobody can
   act on. Those findings are recorded as `unreviewable` **with the finder's own reason** - which is
   also the honest producer of "there is no correction here" that the wave-6 gap named.
+* it does not re-open a decision. In the search lane a rerun field can be a planned write the mass
+  lane did not write (held by hand, `HUMAN_ONLY.md` B7, or stopped by the boundary check, B8; the
+  plan carries it under `rerun_unwritten`). A rerun answer that proposes that same value again is
+  recorded as `unreviewable` naming the decision, and never reaches the writer: whether a new
+  source changes the decision is Martin's call, not the lane's.
 
 The finding the reviewer reads is the finder's answer **verbatim**, next to the same stored value and
 the same evidence files the finder had. It judges the finding that was actually made; a re-rendered
@@ -50,6 +55,7 @@ from phase3 import fetch_stage as F  # noqa: E402  - the evidence store both sta
 from phase3 import ledger as L  # noqa: E402
 from phase3 import model as M  # noqa: E402
 from phase3 import model_stage as MS  # noqa: E402  - the seam this stage builds its calls through
+from phase3 import search_evidence as SE  # noqa: E402  - the proposals the mass lane did not write
 from phase3.run import InputError  # noqa: E402  - one spelling per concept, not a second
 
 #: The stage of a review call, pinned rather than a parameter: the question below is the reviewer's,
@@ -58,6 +64,18 @@ STAGE = M.Stage.REVIEWER
 
 #: The only finder verdict that proposes a change, and so the only one a reviewer is asked about.
 REVIEWED_VERDICT = "WRONG"
+
+#: The decision behind each kind of unwritten proposal (`search_evidence.UNWRITTEN_KINDS`), named in
+#: the refusal of a rerun answer that repeats one.
+UNWRITTEN_DECISION: dict[str, str] = {
+    "held": "held by hand; HUMAN_ONLY.md B7, decided 2026-09-21: not written",
+    "write_gate": (
+        "stopped by write_gate.py's country-boundary check; HUMAN_ONLY.md B8, decided 2026-09-21: "
+        "such rows are not written"
+    ),
+}
+if set(UNWRITTEN_DECISION) != set(SE.UNWRITTEN_KINDS):
+    raise InputError(f"every unwritten kind {SE.UNWRITTEN_KINDS} needs its decision named here")
 
 #: The answer's shape, parsed. One refutation per finding, and a refutation that cannot be read is a
 #: problem rahter than a `False`: "unreadable" and "not refuted" must not be the same value.
@@ -297,6 +315,7 @@ def plan_site(
         raise InputError(f"batch {batch_id}: a site record carries no site_id")
     plan = ReviewPlan()
     findings: list[tuple[str, str]] = []
+    unwritten = SE.unwritten_proposals(site)
     for name in DS.DISCOVER_FIELDS:
         path = answers.path_for(site_id, name)
         if not path.exists():
@@ -328,6 +347,18 @@ def plan_site(
                     name,
                     "the finding is not usable as it stands, so there is nothing to refute: "
                     + "; ".join(answer.problems),
+                )
+            )
+            continue
+        repeat = unwritten.get(name)
+        if repeat is not None and SE.same_value(str(answer.proposed), repeat.proposed):
+            plan.unreviewable.append(
+                _unreviewable(
+                    site_id,
+                    name,
+                    f"the rerun proposes {answer.proposed!r} again, the proposal the mass lane did "
+                    f"not write ({UNWRITTEN_DECISION[repeat.kind]}; {repeat.change_key}); a repeat "
+                    "is recorded for Martin and never cleared by this lane",
                 )
             )
             continue

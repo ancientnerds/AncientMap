@@ -14,15 +14,23 @@ their own.
   written**: the 72 rows held by hand (`HOLDS.jsonl`) and the rows `write_gate.py`'s country-boundary
   check stopped. Which rows were written is the production journal's answer, exported read-only into
   a key file. These fields are re-examined with the new evidence: the rerun buys a fresh answer in a
-  fresh answer store, so the old proposal is never the thing that gets written.
+  fresh answer store, and the old proposal travels along under `rerun_unwritten` only so that
+  `review_stage` can refuse a rerun answer that repeats it (B7/B8: that proposal is not written);
+* minus every rerun field whose value production no longer holds: a read-only export of
+  production's `country`, `site_type` and `period_start` (`read_current_values`) is compared with
+  the snapshot's stored value, and a field another lane has changed since is left out and listed -
+  the finder would judge a value that is no longer there, and the writer's pre-flight would refuse
+  the row anyway.
 
 **What a plan line is**: one batch per mass batch that holds a selected site, `batch_id`
 `<prefix>-NNNN` with the mass batch's own number (so `srch-0011` is `batch-0011`'s rerun and the
 journal stamps `phase3:srch-0011:chunk-NNNN` cannot collide with the 428 `phase3:batch-*` stamps
 already in production), `pass: "discover"`, and the site records copied **verbatim** from the mass
 batch's `input.json` - all five findings, name, qid - plus `rerun_fields` (what is asked again),
-`rerun_why` (why, per field) and `source_batch`. The batch names the run directory it came from in
-`source_run_dir`.
+`rerun_why` (why, per field), `rerun_unwritten` (the proposals the mass lane did not write, per
+field; `{}` for none), `query_values` (production's value of every field a query reads -
+`search_stage.SLOT_FIELDS` - because the snapshot is older than the corrections production holds)
+and `source_batch`. The batch names the run directory it came from in `source_run_dir`.
 
 **Why a new run directory**: `model_stage.judge_site` returns an answer already on disk without asking
 (measured, `AUDIT_LOG.md`: a changed question written to the same key reuses the recorded answer), so
@@ -44,7 +52,7 @@ import json
 import re
 from collections import Counter
 from collections.abc import Iterable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 from urllib.parse import unquote
@@ -59,6 +67,7 @@ from phase3 import fetch_stage as F  # noqa: E402
 from phase3 import model as M  # noqa: E402  - which fields are report-only
 from phase3 import model_stage as MS  # noqa: E402  - the evidence and its bound
 from phase3 import search_evidence as SE  # noqa: E402
+from phase3 import search_stage as SS  # noqa: E402  - which fields a query reads, the name rule
 from phase3.run import DISCOVER_PASS, InputError, read_jsonl  # noqa: E402
 from phase3.snapshot_plan import DISCOVER_FIELDS  # noqa: E402
 
@@ -78,7 +87,26 @@ PREFIX_RE = re.compile(r"[a-z]{2,8}")
 
 #: The keys this plan adds to a copied site record. A source record that already carries one was not
 #: produced by the mass run, and planning from it would stack one rerun on another.
-ADDED_SITE_KEYS = ("rerun_fields", "rerun_why", "source_batch")
+ADDED_SITE_KEYS = (
+    SE.RERUN_FIELDS_KEY,
+    SE.RERUN_WHY_KEY,
+    SE.RERUN_UNWRITTEN_KEY,
+    SE.QUERY_VALUES_KEY,
+    SE.SOURCE_BATCH_KEY,
+)
+
+#: The columns the production export carries (`read_current_values`): the writable fields. Every
+#: field a query reads is one of them.
+CURRENT_VALUE_FIELDS: tuple[str, ...] = SCOPES["writable"]
+if not set(SS.SLOT_FIELDS) <= set(CURRENT_VALUE_FIELDS):
+    raise InputError(f"a query reads {SS.SLOT_FIELDS}, the export carries {CURRENT_VALUE_FIELDS}")
+
+#: The read-only export `read_current_values` expects, one JSON object per line.
+CURRENT_VALUES_SQL = (
+    "SELECT json_build_object('site_id', id, 'country', country, 'site_type', site_type, "
+    "'period_start', period_start)::text FROM unified_sites WHERE source_id='ancient_nerds' "
+    "ORDER BY id"
+)
 
 WHY_UNVERIFIABLE = "the mass run's finder answered UNVERIFIABLE"
 WHY_HELD = "planned write held by hand, not written: {reason}"
@@ -146,10 +174,47 @@ def _read_lines(path: Path) -> list[str]:
     return [line for line in lines if line]
 
 
+@dataclass(frozen=True)
+class UnwrittenRow:
+    """A planned write of the mass lane that was not written, as the search plan needs it."""
+
+    batch_id: str
+    why: str
+    kind: str
+    change_key: str
+    old_value: str | None
+    proposed: str
+
+
+def read_current_values(path: Path) -> dict[str, dict[str, Any]]:
+    """`site_id -> {field: production's value}` from the read-only export (`CURRENT_VALUES_SQL`).
+
+    Every line is one object with exactly `site_id` and the `CURRENT_VALUE_FIELDS`; a site twice,
+    another key or a missing one raises - a partial export must not read as "nothing changed".
+    """
+    values: dict[str, dict[str, Any]] = {}
+    wanted = {"site_id", *CURRENT_VALUE_FIELDS}
+    for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+        if not line.strip():
+            continue
+        row = json.loads(line)
+        if not isinstance(row, dict) or set(row) != wanted:
+            raise InputError(
+                f"{path}:{number}: not an object of exactly {sorted(wanted)}: {line!r}"
+            )
+        site_id = str(row["site_id"])
+        if site_id in values:
+            raise InputError(f"{path}:{number}: site {site_id} is exported twice")
+        values[site_id] = {name: row[name] for name in CURRENT_VALUE_FIELDS}
+    if not values:
+        raise InputError(f"{path}: the export of production's values is empty")
+    return values
+
+
 def unwritten_rows(
     *, all_rows: Path, written_keys: Path, holds: Path | None
-) -> dict[tuple[str, str], tuple[str, str]]:
-    """`(site_id, column) -> (mass batch_id, why)` for every planned row that was not written.
+) -> dict[tuple[str, str], UnwrittenRow]:
+    """`(site_id, column) -> UnwrittenRow` for every planned row that was not written.
 
     `written_keys` holds one `change_key` per line - the production journal's
     `phase3:batch-%` keys, exported read-only. Every written key must be a planned row, every hold
@@ -171,7 +236,7 @@ def unwritten_rows(
         raise InputError(f"{holds}: {len(set(held) - keys)} hold(s) are not planned rows")
     if set(held) & written:
         raise InputError(f"{holds}: {len(set(held) & written)} hold(s) were written after all")
-    unwritten: dict[tuple[str, str], tuple[str, str]] = {}
+    unwritten: dict[tuple[str, str], UnwrittenRow] = {}
     for row in rows:
         key = str(row["change_key"])
         if key in written:
@@ -179,8 +244,20 @@ def unwritten_rows(
         pair = (str(row["site_id"]), str(row["column"]))
         if pair in unwritten:
             raise InputError(f"{all_rows}: {pair} is planned twice")
-        why = WHY_HELD.format(reason=held[key]) if key in held else WHY_GATE
-        unwritten[pair] = (str(row["batch_id"]), why)
+        proposed = row.get("new_value")
+        old_value = row.get("old_value")
+        if not isinstance(proposed, str) or not proposed.strip():
+            raise InputError(f"{all_rows}: {pair} carries no proposed new_value: {proposed!r}")
+        if old_value is not None and not isinstance(old_value, str):
+            raise InputError(f"{all_rows}: {pair} carries old_value {old_value!r}, not text")
+        unwritten[pair] = UnwrittenRow(
+            batch_id=str(row["batch_id"]),
+            why=WHY_HELD.format(reason=held[key]) if key in held else WHY_GATE,
+            kind="held" if key in held else "write_gate",
+            change_key=key,
+            old_value=old_value,
+            proposed=proposed,
+        )
     return unwritten
 
 
@@ -196,25 +273,43 @@ def _why_class(why: str) -> str:
 
 
 def _search_site(
-    site: Mapping[str, Any], *, fields: Mapping[str, str], source_batch: str
+    site: Mapping[str, Any],
+    *,
+    fields: Mapping[str, str],
+    unwritten: Mapping[str, UnwrittenRow],
+    production: Mapping[str, Any],
+    source_batch: str,
 ) -> dict[str, Any]:
-    """The mass record verbatim, plus what is rerun, why, and where it came from."""
+    """The mass record verbatim, plus what is rerun and why, the proposals that were not written,
+    the values a query reads, and where the record came from."""
     site_id = str(site.get("site_id") or "")
     present = [key for key in ADDED_SITE_KEYS if key in site]
     if present:
         raise InputError(f"{site_id}: the source record already carries {present}")
     record = dict(site)
-    record["rerun_fields"] = [name for name in DISCOVER_FIELDS if name in fields]
-    record["rerun_why"] = {name: fields[name] for name in record["rerun_fields"]}
-    record["source_batch"] = source_batch
+    rerun = [name for name in DISCOVER_FIELDS if name in fields]
+    record[SE.RERUN_FIELDS_KEY] = rerun
+    record[SE.RERUN_WHY_KEY] = {name: fields[name] for name in rerun}
+    record[SE.RERUN_UNWRITTEN_KEY] = {
+        name: {"change_key": row.change_key, "kind": row.kind, "proposed": row.proposed}
+        for name, row in unwritten.items()
+        if name in rerun
+    }
+    record[SE.QUERY_VALUES_KEY] = {name: production[name] for name in SS.SLOT_FIELDS}
+    record[SE.SOURCE_BATCH_KEY] = source_batch
     return record
 
 
 @dataclass
 class SearchPlan:
-    """The plan's lines and the counts a human checks them against."""
+    """The plan's lines and the counts a human checks them against.
+
+    `changed_in_production` lists the selected fields left out because production no longer holds
+    the snapshot's value (see the module docstring).
+    """
 
     batches: list[dict[str, Any]]
+    changed_in_production: list[dict[str, Any]] = field(default_factory=list)
 
     def text(self) -> str:
         return "".join(
@@ -229,11 +324,18 @@ class SearchPlan:
             for name, why in site["rerun_why"].items():
                 by_field[name] += 1
                 by_why[_why_class(why)] += 1
+        carried: Counter[str] = Counter(
+            name for site in sites for name in SS.carried_by_queries(site)
+        )
         return {
             "batches": len(self.batches),
+            "changed_in_production": self.changed_in_production,
             "fields": sum(by_field.values()),
             "fields_by_field": dict(sorted(by_field.items())),
             "fields_by_reason": dict(sorted(by_why.items())),
+            # Sites whose name or fixed query wording still carries a value under test, per field:
+            # the one place `build_query` cannot take it out (`search_stage.query_carries`).
+            "queries_still_carry_the_value_under_test": dict(sorted(carried.items())),
             "searches": sum(len(SE.search_slots(site)) for site in sites),
             "sites": len(sites),
         }
@@ -244,13 +346,16 @@ def build_search_plan(
     source_run_dir: Path,
     scope: str,
     prefix: str,
+    current: Mapping[str, Mapping[str, Any]],
     site_ids: Iterable[str] | None = None,
-    extra: Mapping[tuple[str, str], tuple[str, str]] | None = None,
+    extra: Mapping[tuple[str, str], UnwrittenRow] | None = None,
 ) -> SearchPlan:
     """One search batch per mass batch that holds a selected (site, field). See the module docstring.
 
-    `extra` is `unwritten_rows`'s result; it is only meaningful in the writable scope, and every one
-    of its rows must land on a site of the batch it names, or the build raises.
+    `current` is `read_current_values`'s result: production's values, which every planned site must
+    have. `extra` is `unwritten_rows`'s result; it is only meaningful in the writable scope, every
+    one of its rows must land on a site of the batch it names, and its `old_value` must be the
+    snapshot's stored value, or the build raises.
     """
     if scope not in SCOPES:
         raise InputError(f"scope {scope!r} is not one of {sorted(SCOPES)}")
@@ -267,6 +372,7 @@ def build_search_plan(
     source_root = source_run_dir.resolve()
     placed: set[tuple[str, str]] = set()
     seen_sites: set[str] = set()
+    changed: list[dict[str, Any]] = []
     batches: list[dict[str, Any]] = []
     for source in read_source_batches(source_run_dir):
         found = unverifiable_fields(source)
@@ -279,21 +385,54 @@ def build_search_plan(
             fields = {
                 name: WHY_UNVERIFIABLE for name in found.get(site_id, []) if name in SCOPES[scope]
             }
+            unwritten: dict[str, UnwrittenRow] = {}
             for name in SCOPES[scope]:
                 row = extra.get((site_id, name))
                 if row is None:
                     continue
-                if row[0] != source.batch_id:
+                if row.batch_id != source.batch_id:
                     raise InputError(
-                        f"{site_id}/{name}: the write plan puts it in {row[0]}, the run in "
+                        f"{site_id}/{name}: the write plan puts it in {row.batch_id}, the run in "
                         f"{source.batch_id}"
                     )
                 if name in fields:
                     raise InputError(f"{site_id}/{name} is both UNVERIFIABLE and a planned write")
-                fields[name] = row[1]
+                stored = DS.field_finding(site, name).get("current_value")
+                if row.old_value != (None if stored is None else str(stored)):
+                    raise InputError(
+                        f"{site_id}/{name}: the write plan's old value {row.old_value!r} is not the "
+                        f"snapshot's stored {stored!r}"
+                    )
+                fields[name] = row.why
+                unwritten[name] = row
                 placed.add((site_id, name))
+            if not fields:
+                continue
+            production = current.get(site_id)
+            if production is None:
+                raise InputError(f"{site_id}: the export of production's values lacks this site")
+            for name in [n for n in fields if n in CURRENT_VALUE_FIELDS]:
+                stored = DS.field_finding(site, name).get("current_value")
+                if production[name] != stored:
+                    changed.append(
+                        {
+                            "field": name,
+                            "production": production[name],
+                            "site_id": site_id,
+                            "snapshot": stored,
+                        }
+                    )
+                    del fields[name]
             if fields:
-                sites.append(_search_site(site, fields=fields, source_batch=source.batch_id))
+                sites.append(
+                    _search_site(
+                        site,
+                        fields=fields,
+                        unwritten=unwritten,
+                        production=production,
+                        source_batch=source.batch_id,
+                    )
+                )
         if sites:
             batches.append(
                 {
@@ -312,7 +451,7 @@ def build_search_plan(
         raise InputError(f"{len(stray)} unwritten row(s) found no site in the run: {stray[:5]}")
     if not batches:
         raise InputError(f"the {scope!r} scope selects nothing in {source_run_dir}")
-    return SearchPlan(batches=batches)
+    return SearchPlan(batches=batches, changed_in_production=changed)
 
 
 def write_plan(path: Path, plan: SearchPlan) -> str:
@@ -339,19 +478,8 @@ def _source_of(batch: Mapping[str, Any]) -> tuple[Path, str]:
 
 
 def _copy_bytes(src: Path, dst: Path) -> bool:
-    """Copy `src` to `dst` byte for byte; an identical `dst` is left alone, a different one raises."""
-    body = src.read_bytes()
-    if dst.exists():
-        if dst.read_bytes() != body:
-            raise F.EvidenceConflict(
-                f"{dst} holds different bytes than {src}; refusing to overwrite"
-            )
-        return False
-    dst.parent.mkdir(parents=True, exist_ok=True)
-    tmp = dst.with_suffix(dst.suffix + ".tmp")
-    tmp.write_bytes(body)
-    tmp.replace(dst)
-    return True
+    """Copy `src` to `dst` byte for byte, under the evidence store's own write rule."""
+    return F.write_once(dst, src.read_bytes(), source=str(src))
 
 
 def prepare_search_batch(batch: Mapping[str, Any], batch_dir: Path) -> dict[str, int]:

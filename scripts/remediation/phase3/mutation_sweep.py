@@ -237,7 +237,7 @@ S_AGREE = "test_the_three_write_records_must_agree"
 S_PREFIX = "test_a_prefix_that_could_collide_or_is_not_letters_is_refused"
 S_PREPARE = "test_prepare_refuses_a_changed_record_a_changed_copy_and_a_hole"
 S_BUDGET = "test_the_budget_dry_run_counts_the_sites_a_search_could_push_over_the_bound"
-S_RUN_STOP = "test_a_search_that_asks_the_run_to_stop_stops_it"
+S_RUN_STOP = "test_a_search_that_asks_the_run_to_stop_stops_it_and_says_why"
 S_CEILING = "test_the_search_ceiling_counts_this_runs_search_requests"
 S_INCOMPLETE = "test_a_batch_whose_search_is_incomplete_is_never_done"
 S_STAGES = "test_the_stage_sequence_must_fit_the_plan"
@@ -249,6 +249,61 @@ X_RANKED = "test_a_successful_search_keeps_every_entry_and_ranks_the_ones_that_n
 X_STATUS = "test_every_non_2xx_raises_its_own_type_and_the_wrapper_still_returns_empty"
 X_TRANSPORT = "test_no_response_at_all_is_a_transport_error_with_no_status"
 X_VLM = "test_every_vlm_failure_raises_strictly_and_reads_as_a_reject_through_the_wrapper"
+
+# ── the search lane's review fixes (2026-09-23) ─────────────────────────────────────────────────
+BLOCKED_TEST = "tests/pipeline/test_blocked_domains.py"
+BLOCKED_DOMAINS_PY = "pipeline/lyra/blocked_domains.py"
+VLM_PILOT_TEST = "tests/remediation/test_vlm_pilot_common.py"
+REVIEW_STAGE = "scripts/remediation/phase3/review_stage.py"
+MASS_RUN = "scripts/remediation/phase3/mass_run.py"
+RUN_PY = "scripts/remediation/phase3/run.py"
+B_WALK = "test_a_host_is_listed_by_itself_or_a_parent_domain_never_by_substring"
+B_SHARED = "test_the_three_lists_share_the_walk"
+F_WRITE_ONCE = "test_the_write_once_rule_keeps_identical_bytes_and_leaves_no_temp_file"
+V_EXACT = "test_only_the_exact_case_name_resolves_and_the_main_tree_comes_first"
+S_POOLED = "test_no_query_of_a_site_carries_the_value_of_any_field_it_reruns"
+S_CROSS_LEAK = (
+    "test_a_slot_value_that_contains_another_rerun_fields_value_is_refused_in_every_query"
+)
+S_PRODUCTION = "test_a_query_reads_productions_values_never_the_older_snapshot"
+S_NAME = "test_a_name_ending_in_the_value_under_test_loses_it_and_one_that_carries_it_is_counted"
+S_NAMELESS = "test_a_site_without_a_name_cannot_be_searched"
+S_TEMPLATE_NAMES = (
+    "test_a_template_that_names_a_field_it_does_not_declare_or_a_key_without_one_is_refused"
+)
+S_STORED_QUERY = "test_a_stored_search_is_reused_only_for_the_query_it_answered"
+S_RESUME_QUOTA = "test_a_resumed_batch_keeps_what_its_first_run_measured"
+S_QUOTA_DAMAGE = "test_a_damaged_quota_history_raises_instead_of_being_dropped"
+S_PROBE_ERROR = "test_a_failed_probe_is_recorded_with_its_error"
+S_NO_STATUS = "test_an_error_that_carries_no_status_is_ledgered_as_a_transport_failure"
+S_SETTINGS = "test_the_real_searcher_is_built_only_from_a_key_and_a_base_url"
+S_LIVE = "test_search_live_writes_its_report_and_exits_with_what_happened"
+S_GATE_REASON = "test_the_gate_refusal_is_the_reason_not_the_probes_nested_error"
+S_THIS_CALL = "test_the_stop_reason_is_read_from_this_calls_output_only"
+S_OWN_ERROR = "test_only_a_reports_own_error_key_is_its_error"
+S_DAMAGED_REPORT = "test_a_damaged_search_report_stops_the_driver_before_it_starts"
+S_UNION = "test_a_site_failed_in_both_reports_keeps_both_failures"
+S_REPEAT = "test_a_rerun_answer_that_repeats_an_unwritten_proposal_is_never_cleared"
+S_UNWRITTEN_DAMAGE = (
+    "test_a_damaged_unwritten_record_raises_instead_of_letting_a_held_value_through"
+)
+S_SAME_VALUE = "test_a_repeat_is_recognised_across_case_spacing_and_leading_zeros"
+S_CHANGED = "test_a_query_value_is_productions_and_a_field_production_changed_is_not_rerun"
+S_EXPORT = "test_a_partial_or_damaged_export_of_production_is_refused"
+S_SOURCE_INPUT = "test_a_source_batch_that_is_not_its_own_discover_batch_is_refused"
+S_ROW_SHAPE = "test_an_unwritten_row_without_its_proposal_or_planned_twice_is_refused"
+S_ROW_DISAGREES = "test_an_unwritten_row_that_disagrees_with_the_snapshot_or_the_answers_raises"
+S_UNPLACED = "test_an_answer_nobody_can_place_is_refused"
+S_PREPARE_SOURCE = "test_prepare_refuses_a_source_input_that_is_not_the_batch_the_plan_names"
+S_CLI_CURRENT = (
+    "test_plan_search_needs_productions_values_and_the_written_keys_outside_the_text_scope"
+)
+S_GOLD = "test_the_pilot_selects_the_gold_standards_own_sites"
+S_CARRIED_COUNT = "test_the_plan_counts_the_queries_that_still_carry_the_value_under_test"
+X_MALFORMED_BASE = (
+    "test_a_malformed_base_resp_is_a_new_raise_where_the_old_wrapper_returned_the_hits"
+)
+X_BUDGET_FIRST = "test_a_body_that_names_both_the_budget_and_the_rate_cap_is_the_budget"
 
 #: (name, file, the exact text to replace, what to replace it with, test file, test name)
 MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
@@ -1328,18 +1383,34 @@ MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "our own site becomes evidence",
         SEARCH_EVIDENCE,
-        "    for domain in OWN_DOMAINS:\n",
-        "    for domain in ():  # mutated\n",
+        "    if listed_domain_of(host, OWN_DOMAINS) is not None:\n",
+        "    if False:  # mutated\n",
         SEARCH_TEST,
         S_HOSTS,
     ),
     (
         "blocked hosts are matched by substring",
-        SEARCH_EVIDENCE,
-        "        if candidate in BLOCKED_DOMAINS:\n",
-        "        if any(domain in host for domain in BLOCKED_DOMAINS):\n",
+        BLOCKED_DOMAINS_PY,
+        "        if candidate in domains:\n",
+        "        if any(entry in host for entry in domains):  # mutated\n",
         SEARCH_TEST,
         S_HOSTS,
+    ),
+    (
+        "every blocklist matches by substring",
+        BLOCKED_DOMAINS_PY,
+        "        if candidate in domains:\n",
+        "        if any(entry in host for entry in domains):  # mutated\n",
+        BLOCKED_TEST,
+        B_WALK,
+    ),
+    (
+        "theo_sources keeps its own walk and loses the parent domains",
+        "pipeline/lyra/theo_sources.py",
+        "    return listed_domain_of(_extract_domain(url), BLOCKED_DOMAINS) is not None\n",
+        "    return _extract_domain(url) in BLOCKED_DOMAINS  # mutated\n",
+        BLOCKED_TEST,
+        B_SHARED,
     ),
     (
         "search hits never reach the evidence",
@@ -1448,7 +1519,7 @@ MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "a query may carry the value under test",
         SEARCH_STAGE,
-        "            if stored and stored in value.casefold():\n",
+        "            if stored.casefold() in value.casefold():\n",
         "            if False:  # mutated\n",
         SEARCH_TEST,
         S_LEAK,
@@ -1560,11 +1631,19 @@ MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     ),
     (
         "prepare overwrites a copy that differs",
-        SEARCH_PLAN,
-        "        if dst.read_bytes() != body:\n",
+        "scripts/remediation/phase3/fetch_stage.py",
+        "        if path.read_bytes() != body:\n",
         "        if False:  # mutated\n",
         SEARCH_TEST,
         S_PREPARE,
+    ),
+    (
+        "the evidence store overwrites a recorded file",
+        "scripts/remediation/phase3/fetch_stage.py",
+        "        if path.read_bytes() != body:\n",
+        "        if False:  # mutated\n",
+        FETCH_TEST,
+        F_WRITE_ONCE,
     ),
     (
         "prepare accepts a record that drifted from its source",
@@ -1701,6 +1780,430 @@ MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         "    if False:  # mutated\n",
         MINIMAX_TEST,
         X_VLM,
+    ),
+    # ── the search lane's review fixes (2026-09-23) ─────────────────────────────────────────────
+    (
+        "a slot whose field the site reruns stays in the query",
+        SEARCH_STAGE,
+        '        slot_field: "" if slot_field in rerun else _as_text(production[slot_field])\n',
+        "        slot_field: _as_text(production[slot_field])  # mutated\n",
+        SEARCH_TEST,
+        S_POOLED,
+    ),
+    (
+        "a slot value is checked against its own fields only",
+        SEARCH_STAGE,
+        "    for asked, stored in _under_test(site).items():\n",
+        "    for asked, stored in {k: v for k, v in _under_test(site).items() if k in slot.fields}"
+        ".items():  # mutated\n",
+        SEARCH_TEST,
+        S_CROSS_LEAK,
+    ),
+    (
+        "a query reads the snapshot instead of production",
+        SEARCH_STAGE,
+        '        slot_field: "" if slot_field in rerun else _as_text(production[slot_field])\n',
+        '        slot_field: "" if slot_field in rerun else _stored_text(site, slot_field)  # mutated\n',
+        SEARCH_TEST,
+        S_PRODUCTION,
+    ),
+    (
+        "a record without all query values is searched",
+        SEARCH_STAGE,
+        "    if not isinstance(values, dict) or set(values) != set(SLOT_FIELDS):\n",
+        "    if not isinstance(values, dict):  # mutated\n",
+        SEARCH_TEST,
+        S_PRODUCTION,
+    ),
+    (
+        "a name keeps its trailing value under test",
+        SEARCH_STAGE,
+        "        if comma and tail.strip().casefold() == value.casefold():\n",
+        "        if False:  # mutated\n",
+        SEARCH_TEST,
+        S_NAME,
+    ),
+    (
+        "a query that still carries the value is not counted",
+        SEARCH_STAGE,
+        "        if span and any(words[i : i + span] == wanted for i in range(len(words) - span + 1)):\n",
+        "        if False:  # mutated\n",
+        SEARCH_TEST,
+        S_NAME,
+    ),
+    (
+        "the plan summary does not count carried values",
+        SEARCH_STAGE,
+        "        if span and any(words[i : i + span] == wanted for i in range(len(words) - span + 1)):\n",
+        "        if False:  # mutated\n",
+        SEARCH_TEST,
+        S_CARRIED_COUNT,
+    ),
+    (
+        "a nameless site is searched",
+        SEARCH_STAGE,
+        "    if not name:\n"
+        '        raise InputError(f"{site_id}: a search starts from the stored name, and there is none")\n',
+        "    if False:  # mutated\n"
+        '        raise InputError(f"{site_id}: a search starts from the stored name, and there is none")\n',
+        SEARCH_TEST,
+        S_NAMELESS,
+    ),
+    (
+        "a template may name a field it does not declare",
+        SEARCH_STAGE,
+        '        if named != {"name", *slots}:\n',
+        "        if False:  # mutated\n",
+        SEARCH_TEST,
+        S_TEMPLATE_NAMES,
+    ),
+    (
+        "a search key may lack its template",
+        SEARCH_STAGE,
+        "    if set(QUERY_TEMPLATES) != set(SE.SEARCH_KEY_FOR_FIELD.values()):\n",
+        "    if False:  # mutated\n",
+        SEARCH_TEST,
+        S_TEMPLATE_NAMES,
+    ),
+    (
+        "a stored search is reused for a query it never answered",
+        SEARCH_STAGE,
+        "            if record.query != query:\n",
+        "            if False:  # mutated\n",
+        SEARCH_TEST,
+        S_STORED_QUERY,
+    ),
+    (
+        "a resumed run drops the quota readings of earlier runs",
+        SEARCH_STAGE,
+        "        return [*self.earlier_quota, this_run]\n",
+        "        return [this_run]  # mutated\n",
+        SEARCH_TEST,
+        S_RESUME_QUOTA,
+    ),
+    (
+        "the search command does not carry the earlier readings forward",
+        RUN_PY,
+        "            earlier_quota=SS.read_quota(report_path),\n",
+        "            earlier_quota=(),  # mutated\n",
+        SEARCH_TEST,
+        S_LIVE,
+    ),
+    (
+        "a damaged quota history is read as a clean one",
+        SEARCH_STAGE,
+        "        isinstance(entry, dict) and set(entry) == QUOTA_ENTRY_KEYS for entry in quota\n",
+        "        True for entry in quota  # mutated\n",
+        SEARCH_TEST,
+        S_QUOTA_DAMAGE,
+    ),
+    (
+        "a failed probe's error is dropped from its reading",
+        SEARCH_STAGE,
+        '        reading["error"] = probe.get("error")\n',
+        "        pass  # mutated\n",
+        SEARCH_TEST,
+        S_PROBE_ERROR,
+    ),
+    (
+        "an error without a status is ledgered as an answer",
+        SEARCH_STAGE,
+        "    if isinstance(exc, CodingPlanTransportError) or exc.http_status is None:\n",
+        "    if isinstance(exc, CodingPlanTransportError):  # mutated\n",
+        SEARCH_TEST,
+        S_NO_STATUS,
+    ),
+    (
+        "the searcher is built without a key",
+        SEARCH_STAGE,
+        "        if not settings.minimax_api_key or not settings.minimax_base_url:\n",
+        "        if False:  # mutated\n",
+        SEARCH_TEST,
+        S_SETTINGS,
+    ),
+    (
+        "the driver loses the readings of batches it skips",
+        MASS_RUN,
+        "            progress.quota[planned.batch_id] = earlier\n",
+        "            pass  # mutated\n",
+        SEARCH_TEST,
+        S_QUOTA,
+    ),
+    (
+        "the stop reason is read from a nested error",
+        MASS_RUN,
+        "        if not line.startswith(TOP_LEVEL_ERROR):\n"
+        "            continue\n"
+        "        try:\n"
+        '            error = json.loads(line[len(TOP_LEVEL_ERROR) :].strip().rstrip(","))\n',
+        "        if not line.strip().startswith('\"error\":'):  # mutated\n"
+        "            continue\n"
+        "        try:\n"
+        '            error = json.loads(line.strip()[len(\'"error":\') :].rstrip(",").strip())\n',
+        SEARCH_TEST,
+        S_RUN_STOP,
+    ),
+    (
+        "report_error reads any error key",
+        MASS_RUN,
+        "        if not line.startswith(TOP_LEVEL_ERROR):\n"
+        "            continue\n"
+        "        try:\n"
+        '            error = json.loads(line[len(TOP_LEVEL_ERROR) :].strip().rstrip(","))\n',
+        "        if not line.strip().startswith('\"error\":'):  # mutated\n"
+        "            continue\n"
+        "        try:\n"
+        '            error = json.loads(line.strip()[len(\'"error":\') :].rstrip(",").strip())\n',
+        SEARCH_TEST,
+        S_OWN_ERROR,
+    ),
+    (
+        "the stop reason is read from the whole appended log",
+        MASS_RUN,
+        '                written = log.read_bytes()[start:].decode("utf-8", errors="replace")\n',
+        '                written = log.read_bytes().decode("utf-8", errors="replace")  # mutated\n',
+        SEARCH_TEST,
+        S_THIS_CALL,
+    ),
+    (
+        "the last batch's stop request is not recorded",
+        MASS_RUN,
+        "        progress.stopped = stop_of()\n",
+        "        pass  # mutated\n",
+        SEARCH_TEST,
+        S_GATE_REASON,
+    ),
+    (
+        "a search report without its verdict fields reads as clean",
+        MASS_RUN,
+        '    if not isinstance(failed, int) or isinstance(failed, bool) or "stopped" not in payload:\n',
+        "    if False:  # mutated\n",
+        SEARCH_TEST,
+        S_INCOMPLETE,
+    ),
+    (
+        "a damaged search report does not stop the driver",
+        SEARCH_STAGE,
+        "        isinstance(entry, dict) and set(entry) == QUOTA_ENTRY_KEYS for entry in quota\n",
+        "        True for entry in quota  # mutated\n",
+        SEARCH_TEST,
+        S_DAMAGED_REPORT,
+    ),
+    (
+        "a search failure replaces the site's fetch failures",
+        "scripts/remediation/phase3/model_stage.py",
+        "        mine = failures.setdefault(site_id, {})\n",
+        "        mine = failures[site_id] = {}  # mutated\n",
+        SEARCH_TEST,
+        S_UNION,
+    ),
+    (
+        "a rerun may repeat a proposal the mass lane did not write",
+        REVIEW_STAGE,
+        "        if repeat is not None and SE.same_value(str(answer.proposed), repeat.proposed):\n",
+        "        if False:  # mutated\n",
+        SEARCH_TEST,
+        S_REPEAT,
+    ),
+    (
+        "a missing unwritten record reads as none",
+        SEARCH_EVIDENCE,
+        "    if not isinstance(value, dict):\n",
+        "    if value is None:\n        value = {}\n    if not isinstance(value, dict | list):  # mutated\n",
+        SEARCH_TEST,
+        S_UNWRITTEN_DAMAGE,
+    ),
+    (
+        "an unwritten proposal may name a field that is not rerun",
+        SEARCH_EVIDENCE,
+        "        if name not in fields:\n",
+        "        if False:  # mutated\n",
+        SEARCH_TEST,
+        S_UNWRITTEN_DAMAGE,
+    ),
+    (
+        "an unwritten proposal may carry any kind",
+        SEARCH_EVIDENCE,
+        '        if row["kind"] not in UNWRITTEN_KINDS:\n',
+        "        if False:  # mutated\n",
+        SEARCH_TEST,
+        S_UNWRITTEN_DAMAGE,
+    ),
+    (
+        "a repeated year with a leading zero is a new value",
+        SEARCH_EVIDENCE,
+        "        return int(left) == int(right)\n",
+        "        return left == right  # mutated\n",
+        SEARCH_TEST,
+        S_SAME_VALUE,
+    ),
+    (
+        "the plan drops the proposals it did not write",
+        SEARCH_PLAN,
+        "        for name, row in unwritten.items()\n",
+        "        for name, row in {}.items()  # mutated\n",
+        SEARCH_TEST,
+        S_UNWRITTEN,
+    ),
+    (
+        "an unwritten row may disagree with the snapshot",
+        SEARCH_PLAN,
+        "                if row.old_value != (None if stored is None else str(stored)):\n",
+        "                if False:  # mutated\n",
+        SEARCH_TEST,
+        S_ROW_DISAGREES,
+    ),
+    (
+        "a field may be both UNVERIFIABLE and a planned write",
+        SEARCH_PLAN,
+        "                if name in fields:\n",
+        "                if False:  # mutated\n",
+        SEARCH_TEST,
+        S_ROW_DISAGREES,
+    ),
+    (
+        "an unwritten row without its proposal is planned",
+        SEARCH_PLAN,
+        "        if not isinstance(proposed, str) or not proposed.strip():\n",
+        "        if False:  # mutated\n",
+        SEARCH_TEST,
+        S_ROW_SHAPE,
+    ),
+    (
+        "a row planned twice is taken once",
+        SEARCH_PLAN,
+        "        if pair in unwritten:\n",
+        "        if False:  # mutated\n",
+        SEARCH_TEST,
+        S_ROW_SHAPE,
+    ),
+    (
+        "a field production changed is rerun anyway",
+        SEARCH_PLAN,
+        "                if production[name] != stored:\n",
+        "                if False:  # mutated\n",
+        SEARCH_TEST,
+        S_CHANGED,
+    ),
+    (
+        "the plan's query values are the snapshot's",
+        SEARCH_PLAN,
+        "    record[SE.QUERY_VALUES_KEY] = {name: production[name] for name in SS.SLOT_FIELDS}\n",
+        "    record[SE.QUERY_VALUES_KEY] = {name: DS.field_finding(site, name).get('current_value') "
+        "for name in SS.SLOT_FIELDS}  # mutated\n",
+        SEARCH_TEST,
+        S_CHANGED,
+    ),
+    (
+        "a site missing from the export is planned",
+        SEARCH_PLAN,
+        "            if production is None:\n",
+        "            if False:  # mutated\n",
+        SEARCH_TEST,
+        S_CHANGED,
+    ),
+    (
+        "an export line with other keys is read",
+        SEARCH_PLAN,
+        "        if not isinstance(row, dict) or set(row) != wanted:\n",
+        "        if not isinstance(row, dict):  # mutated\n",
+        SEARCH_TEST,
+        S_EXPORT,
+    ),
+    (
+        "a site exported twice is read",
+        SEARCH_PLAN,
+        "        if site_id in values:\n",
+        "        if False:  # mutated\n",
+        SEARCH_TEST,
+        S_EXPORT,
+    ),
+    (
+        "a source input for another batch is planned from",
+        SEARCH_PLAN,
+        '        if len(records) != 1 or records[0].get("batch_id") != root.name:\n',
+        "        if False:  # mutated\n",
+        SEARCH_TEST,
+        S_SOURCE_INPUT,
+    ),
+    (
+        "a source input of another pass is planned from",
+        SEARCH_PLAN,
+        '        if batch.get("pass") != DISCOVER_PASS or not isinstance(batch.get("sites"), list):\n',
+        "        if False:  # mutated\n",
+        SEARCH_TEST,
+        S_SOURCE_INPUT,
+    ),
+    (
+        "an answer for a field the pass never asks is read",
+        SEARCH_PLAN,
+        "        if site_id not in site_ids or field_name not in DISCOVER_FIELDS:\n",
+        "        if site_id not in site_ids:  # mutated\n",
+        SEARCH_TEST,
+        S_UNPLACED,
+    ),
+    (
+        "prepare copies from a source input that is another batch",
+        SEARCH_PLAN,
+        '    if len(records) != 1 or records[0].get("batch_id") != source_batch:\n',
+        "    if False:  # mutated\n",
+        SEARCH_TEST,
+        S_PREPARE_SOURCE,
+    ),
+    (
+        "a plan is built without production's values",
+        RUN_PY,
+        "    if not args.current_values:\n",
+        "    if False:  # mutated\n",
+        SEARCH_TEST,
+        S_CLI_CURRENT,
+    ),
+    (
+        "the gold selection accepts a site twice",
+        RUN_PY,
+        '    if "" in ids or len(set(ids)) != len(ids):\n',
+        "    if False:  # mutated\n",
+        SEARCH_TEST,
+        S_GOLD,
+    ),
+    (
+        "two selections are taken at once",
+        RUN_PY,
+        "    if args.site_ids and args.gold_sites:\n",
+        "    if False:  # mutated\n",
+        SEARCH_TEST,
+        S_GOLD,
+    ),
+    (
+        "a boolean status code reads as success",
+        MINIMAX_SHARED,
+        "    if not isinstance(code, int) or isinstance(code, bool):\n",
+        "    if not isinstance(code, int):  # mutated\n",
+        MINIMAX_TEST,
+        X_MALFORMED_BASE,
+    ),
+    (
+        "the rate cap is checked before the budget",
+        MINIMAX_SHARED,
+        "    if is_quota_error(body):\n"
+        "        raise CodingPlanQuotaError(detail, http_status=status, body_bytes=size)\n"
+        "    if is_plan_rate_throttle(body):\n"
+        "        raise CodingPlanThrottleError(detail, http_status=status, body_bytes=size)\n",
+        "    if is_plan_rate_throttle(body):  # mutated\n"
+        "        raise CodingPlanThrottleError(detail, http_status=status, body_bytes=size)\n"
+        "    if is_quota_error(body):\n"
+        "        raise CodingPlanQuotaError(detail, http_status=status, body_bytes=size)\n",
+        MINIMAX_TEST,
+        X_BUDGET_FIRST,
+    ),
+    (
+        "an image file is found by a case-insensitive probe",
+        "scripts/remediation/vlm_pilot/common.py",
+        "        if hit is not None:\n            return root / shard_for(site_id) / filename, hit[1]\n",
+        "        if (root / shard_for(site_id) / filename).is_file():  # mutated\n"
+        "            return root / shard_for(site_id) / filename, 0\n",
+        VLM_PILOT_TEST,
+        V_EXACT,
     ),
 ]
 

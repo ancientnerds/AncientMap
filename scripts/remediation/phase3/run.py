@@ -854,6 +854,12 @@ def cmd_plan_search(args: argparse.Namespace) -> int:
 
     if args.site_ids and args.gold_sites:
         raise InputError("--site-ids and --gold-sites are two selections; give one")
+    if not args.current_values:
+        raise InputError(
+            "--current-values is required: a query reads production's values, not the snapshot's, "
+            f"and a field production changed is not rerun. Export them read-only with: "
+            f"{SPL.CURRENT_VALUES_SQL}"
+        )
     site_ids: list[str] | None = None
     if args.site_ids:
         site_ids = SP.read_site_ids(Path(args.site_ids))
@@ -878,6 +884,7 @@ def cmd_plan_search(args: argparse.Namespace) -> int:
         source_run_dir=Path(args.source_run_dir),
         scope=args.scope,
         prefix=args.prefix,
+        current=SPL.read_current_values(Path(args.current_values)),
         site_ids=site_ids,
         extra=extra,
     )
@@ -914,6 +921,7 @@ def cmd_search_budget(args: argparse.Namespace) -> int:
 def cmd_search(args: argparse.Namespace) -> int:
     """One prepared search batch's searches. Nothing leaves the machine unless `--live` is passed."""
     from phase3 import fetch_stage as F
+    from phase3 import model_stage as MS
     from phase3 import search_evidence as SE
     from phase3 import search_stage as SS
 
@@ -923,17 +931,21 @@ def cmd_search(args: argparse.Namespace) -> int:
     store = F.EvidenceStore(run_dir / batch_id / "evidence")
 
     if not args.live:
-        slots = [
-            {
-                "fields": list(slot.fields),
-                "feature": slot.feature,
-                "label": f"{site['site_id']}/{slot.feature}",
-                "query": SS.build_query(site, slot),
-                "searched": store.exists(str(site["site_id"]), slot.feature),
-            }
-            for site in batch["sites"]
-            for slot in SE.search_slots(site)
-        ]
+        slots: list[dict[str, Any]] = []
+        for site in batch["sites"]:
+            for slot in SE.search_slots(site):
+                query = SS.build_query(site, slot)
+                slots.append(
+                    {
+                        # The rerun fields whose value the name or the fixed wording still carries.
+                        "carries": list(SS.query_carries(site, query)),
+                        "fields": list(slot.fields),
+                        "feature": slot.feature,
+                        "label": f"{site['site_id']}/{slot.feature}",
+                        "query": query,
+                        "searched": store.exists(str(site["site_id"]), slot.feature),
+                    }
+                )
         print(
             json.dumps(
                 {
@@ -966,6 +978,7 @@ def cmd_search(args: argparse.Namespace) -> int:
         return STOP_RUN_EXIT
     pacer = F.HostPacer(Path(args.pacing_dir), min_interval=SS.SEARCH_MIN_INTERVAL_SECONDS)
     host = F.host_of(searcher.endpoint)
+    report_path = run_dir / batch_id / MS.SEARCH_REPORT_NAME
     try:
         report = SS.search_batch(
             batch=batch,
@@ -975,10 +988,12 @@ def cmd_search(args: argparse.Namespace) -> int:
             probe=lambda: minimax_shared.probe_minimax_quota(force=True),
             now=SS.utc_now,
             wait=lambda: pacer.wait(host),
+            # What earlier runs of this stage measured stays in the report a resume rewrites.
+            earlier_quota=SS.read_quota(report_path),
         )
     finally:
         searcher.close()
-    SS.write_report(run_dir / batch_id / "search.json", report)
+    SS.write_report(report_path, report)
     payload = json.loads(report.to_json())
     payload.update({"ledger": str(args.ledger), "live": True, "run_dir": str(run_dir)})
     if report.stopped is not None:
@@ -1121,6 +1136,12 @@ def build_parser() -> argparse.ArgumentParser:
         default="",
         help="one change_key per line: the production journal's phase3:batch-% keys, exported "
         "read-only (required for the writable and all scopes)",
+    )
+    plan_search.add_argument(
+        "--current-values",
+        default="",
+        help="production's country, site_type and period_start per site, one JSON object per "
+        "line, exported read-only (search_plan.CURRENT_VALUES_SQL); required",
     )
     plan_search.add_argument("--site-ids", default="", help="one site id per line; selects")
     plan_search.add_argument(

@@ -21,6 +21,11 @@ import without importing each other:
   `pipeline/lyra/blocked_domains.txt` is a source the project already refuses elsewhere. Both are
   excluded when the evidence is built, so the stored record stays what the engine answered and the
   policy can be read next to it.
+* **What the mass lane decided not to write.** A rerun field that was a planned write the mass lane
+  held back (72 held by hand, `HUMAN_ONLY.md` B7; 8 stopped by `write_gate.py`'s boundary check, B8)
+  carries that proposal under `rerun_unwritten`. The field is open again, but that exact proposal
+  is not: `review_stage.plan_site` refuses to clear a rerun answer that repeats it
+  (`unwritten_proposals`, `same_value`), so the lane can never write a held value back.
 """
 
 from __future__ import annotations
@@ -46,11 +51,22 @@ if str(REPO) not in sys.path:
 
 from phase3.run import InputError  # noqa: E402  - one spelling per concept, not a second
 from phase3.snapshot_plan import DISCOVER_FIELDS  # noqa: E402
-from pipeline.lyra.blocked_domains import BLOCKED_DOMAINS  # noqa: E402
+from pipeline.lyra.blocked_domains import BLOCKED_DOMAINS, listed_domain_of  # noqa: E402
 from pipeline.lyra.minimax_shared import MINIMAX_SEARCH_PATH  # noqa: E402
 
 #: The key a search plan's site record carries its rerun fields under.
 RERUN_FIELDS_KEY = "rerun_fields"
+
+#: The keys a search plan adds to a mass record besides `rerun_fields`: why each field is rerun, the
+#: proposals the mass lane did not write, the values a query may read (production's, at plan time),
+#: and the mass batch the record was copied from.
+RERUN_WHY_KEY = "rerun_why"
+RERUN_UNWRITTEN_KEY = "rerun_unwritten"
+QUERY_VALUES_KEY = "query_values"
+SOURCE_BATCH_KEY = "source_batch"
+
+#: Why a planned write was not written: held by hand (B7) or stopped by the boundary check (B8).
+UNWRITTEN_KINDS = ("held", "write_gate")
 
 #: The evidence feature of one search: `minimax_search.<key>`, the fetch stage's `<site>/<feature>`
 #: naming, so `fetch_stage.EvidenceStore` stores it beside the pages it was bought to complement.
@@ -138,6 +154,68 @@ def search_slots(site: Mapping[str, Any]) -> tuple[SearchSlot, ...]:
 
 
 @dataclass(frozen=True)
+class UnwrittenProposal:
+    """A planned write of the mass lane that was not written: its key, its value, and why not."""
+
+    change_key: str
+    proposed: str
+    kind: str
+
+
+def unwritten_proposals(site: Mapping[str, Any]) -> dict[str, UnwrittenProposal]:
+    """`field -> the proposal the mass lane did not write`, for this search-plan record.
+
+    A record without `rerun_fields` (the mass run's shape) has none. A search-plan record must carry
+    `rerun_unwritten` - `{}` when no rerun field was an unwritten row - and every entry must name a
+    rerun field, a change key, a non-empty proposed value and one of `UNWRITTEN_KINDS`. Anything else
+    raises: a damaged record must not quietly drop the one thing that keeps a held value out.
+    """
+    fields = rerun_fields(site)
+    if fields is None:
+        return {}
+    site_id = str(site.get("site_id") or "")
+    value = site.get(RERUN_UNWRITTEN_KEY)
+    if not isinstance(value, dict):
+        raise InputError(
+            f"{site_id}: {RERUN_UNWRITTEN_KEY}={value!r} is not an object; a search plan names the "
+            "proposals the mass lane did not write ({} for none)"
+        )
+    proposals: dict[str, UnwrittenProposal] = {}
+    for name, row in value.items():
+        if name not in fields:
+            raise InputError(f"{site_id}: {RERUN_UNWRITTEN_KEY} names {name!r}, not a rerun field")
+        if not isinstance(row, dict) or set(row) != {"change_key", "kind", "proposed"}:
+            raise InputError(
+                f"{site_id}/{name}: an unwritten proposal is not {{change_key, kind, proposed}}: "
+                f"{row!r}"
+            )
+        texts = (row["change_key"], row["proposed"])
+        if not all(isinstance(text, str) and text.strip() for text in texts):
+            raise InputError(f"{site_id}/{name}: an unwritten proposal without its key or value")
+        if row["kind"] not in UNWRITTEN_KINDS:
+            raise InputError(
+                f"{site_id}/{name}: kind {row['kind']!r} is not one of {UNWRITTEN_KINDS}"
+            )
+        proposals[name] = UnwrittenProposal(
+            change_key=row["change_key"], proposed=row["proposed"], kind=row["kind"]
+        )
+    return proposals
+
+
+def same_value(one: str, other: str) -> bool:
+    """Whether two proposed values are the same value, for the unwritten-proposal refusal.
+
+    Deliberately wide, because it guards a refusal: case and whitespace runs are folded, and two
+    integers (a `period_start`) compare as numbers, so `-0500` repeats `-500`.
+    """
+    left, right = (" ".join(value.split()).casefold() for value in (one, other))
+    try:
+        return int(left) == int(right)
+    except ValueError:
+        return left == right
+
+
+@dataclass(frozen=True)
 class StoredHit:
     """One result that names a page, as stored. Every field is text except the engine rank."""
 
@@ -221,8 +299,8 @@ def excluded_because(url: str) -> str | None:
 
     Matched by host and its parent domains (`old.reddit.com` is `reddit.com`), never by substring:
     a substring match on `x.com` would refuse `linux.com` (the defect `web_research.py` records for
-    its own list). The two existing matchers in `pipeline/lyra/` are private to their modules and
-    bound to their own lists, so neither can be reused for this one.
+    its own list). The walk is `blocked_domains.listed_domain_of`, the one `theo_sources` and
+    `web_research` use for their own lists.
     """
     try:
         parts = urlsplit(url)
@@ -231,12 +309,9 @@ def excluded_because(url: str) -> str | None:
         return "the url does not parse"
     if parts.scheme not in ("http", "https") or not host:
         return "not an http(s) url with a host"
-    for domain in OWN_DOMAINS:
-        if host == domain or host.endswith("." + domain):
-            return f"{host} is this project's own site: a quote from it would cite our own value"
-    labels = host.split(".")
-    for start in range(len(labels) - 1):
-        candidate = ".".join(labels[start:])
-        if candidate in BLOCKED_DOMAINS:
-            return f"{host} is on pipeline/lyra/blocked_domains.txt ({candidate})"
+    if listed_domain_of(host, OWN_DOMAINS) is not None:
+        return f"{host} is this project's own site: a quote from it would cite our own value"
+    blocked = listed_domain_of(host, BLOCKED_DOMAINS)
+    if blocked is not None:
+        return f"{host} is on pipeline/lyra/blocked_domains.txt ({blocked})"
     return None

@@ -49,8 +49,11 @@ Usage:
         --max-calls 4500 --max-usd 8 --max-searches 4600
 
 A search batch's `search` stage gates itself on the MiniMax quota and exits `run.STOP_RUN_EXIT` when
-the gate refuses or a stop-class error arrives; the driver then stops the whole run (`stop_of`). Its
-quota readings before and after each batch are copied into `progress.json` under `quota`.
+the gate refuses or a stop-class error arrives; the driver then stops the whole run (`stop_of`), with
+the reason the stage printed at the top level of its own report. The quota readings each batch's
+`search.json` holds - one entry per run of the stage that probed, carried forward across resumes - are
+copied into `progress.json` under `quota`, seeded from every existing report when the run starts, so
+a resumed run's progress file still holds what earlier runs measured.
 """
 
 from __future__ import annotations
@@ -81,6 +84,7 @@ from phase3 import fetch_stage as F  # noqa: E402
 from phase3 import ledger as L  # noqa: E402
 from phase3 import model_stage as MS  # noqa: E402  - one spelling for a named failure's shape
 from phase3 import search_evidence as SE  # noqa: E402  - a search plan's rerun fields
+from phase3 import search_stage as SS  # noqa: E402  - the search report's quota readings
 from phase3.run import STOP_RUN_EXIT, InputError  # noqa: E402  - search's "stop the run" exit
 
 DEFAULT_PLAN = REPO / "output" / "remediation" / "phase3_runner" / "PLAN.jsonl"
@@ -120,6 +124,9 @@ SPAWN_RETRY_WAIT_SECONDS = 15.0
 #: The child's own words when a program *it* started never came up (`model_stage.ModelCallFailed`,
 #: its `OSError` branch). A child that did run says so in the `error` of its own JSON report.
 UNSTARTABLE_PROGRAM = "could not be started"
+#: How a child report's own `error` line opens: `run.py` prints its reports with `indent=1`, so a
+#: top-level key sits behind exactly one space and a nested one behind more (`report_error`).
+TOP_LEVEL_ERROR = ' "error":'
 STAGES = ("prepare", "fetch", "judge")
 #: The search lane's sequence (block A3): the evidence is the mass run's, copied by `prepare`, plus
 #: MiniMax search hits - so `search` takes `fetch`'s place.
@@ -137,10 +144,6 @@ class PlanError(ValueError):
 
 class LedgerDamage(ValueError):
     """The ledger has an unparsable line *inside* it: a charge may have gone unrecorded."""
-
-
-class ReportDamage(ValueError):
-    """A stage's report exists and lacks what that stage always writes (the search quota readings)."""
 
 
 def utc_now() -> str:
@@ -374,7 +377,7 @@ def search_state(root: Path) -> tuple[str, str] | None:
     stopped search leaves it partial, so the driver retries the searches before the judge - whose
     answers, once written, would be reused and never see the evidence a retried search adds.
     """
-    path = root / "search.json"
+    path = root / MS.SEARCH_REPORT_NAME
     if not path.exists():
         return None
     try:
@@ -390,19 +393,16 @@ def search_state(root: Path) -> tuple[str, str] | None:
     return None
 
 
-def search_quota(run_dir: Path, batch_id: str) -> dict[str, Any] | None:
-    """The quota readings a finished search batch recorded before and after its searches."""
-    path = run_dir / batch_id / "search.json"
+def search_quota(run_dir: Path, batch_id: str) -> list[dict[str, Any]] | None:
+    """Every quota reading a search batch's `search.json` holds, or `None` when it has none yet.
+
+    The list is the report's own (`search_stage.read_quota`): one entry per run of the stage that
+    probed, carried forward across resumes. A damaged report raises there.
+    """
+    path = run_dir / batch_id / MS.SEARCH_REPORT_NAME
     if not path.exists():
         return None
-    try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as exc:
-        raise ReportDamage(f"{path}: does not parse: {exc}") from None
-    quota = payload.get("quota") if isinstance(payload, dict) else None
-    if not isinstance(quota, dict) or set(quota) != {"before", "after"}:
-        raise ReportDamage(f"{path}: carries no quota readings before and after")
-    return quota
+    return SS.read_quota(path)
 
 
 def batch_state(run_dir: Path, batch_id: str) -> tuple[str, str]:
@@ -480,9 +480,9 @@ class Progress:
     not_reached: list[str] = field(default_factory=list)
     spend: dict[str, Any] = field(default_factory=dict)
     stopped: str | None = None
-    #: A search batch's MiniMax quota readings, before and after its searches, keyed by batch id
-    #: (`search.json`'s own `quota`). `weekly_remains_tokens` across them is the plan's cost signal,
-    #: an upper bound when Lyra or Theo spend in parallel.
+    #: A search batch's MiniMax quota readings keyed by batch id: `search.json`'s own `quota` list,
+    #: one `{before, after, requests}` entry per run of the stage that probed. `weekly_remains_tokens`
+    #: across them is the plan's cost signal, an upper bound when Lyra or Theo spend in parallel.
     quota: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -521,14 +521,16 @@ def report_error(text: str) -> str | None:
     `run.py` prints that report to stdout, which the driver sends to the stage log, so the log is the
     only place a failed spawn *inside* the child is visible. The report is indented (`json.dumps(...,
     indent=1, sort_keys=True)`), so its key's line is read rather than the whole document: the value
-    is a JSON string, and only a line that really opens with an `"error"` key counts.
+    is a JSON string, and only a line that opens with the report's **own** `"error"` key counts - one
+    space of indentation, the top level. A nested `error` (the search report's
+    `sites[].outcomes[].attempts[].error`, null for every answered request) sorts after the top-level
+    one and would otherwise be read first from the bottom up, turning the stop reason into `None`.
     """
     for line in reversed(text.splitlines()):
-        stripped = line.strip()
-        if not stripped.startswith('"error":'):
+        if not line.startswith(TOP_LEVEL_ERROR):
             continue
         try:
-            error = json.loads(stripped[len('"error":') :].rstrip(",").strip())
+            error = json.loads(line[len(TOP_LEVEL_ERROR) :].strip().rstrip(","))
         except json.JSONDecodeError:
             continue
         return error if isinstance(error, str) else None
@@ -694,10 +696,13 @@ class StageRunner:
     def batch(self, planned: PlannedBatch) -> tuple[bool, str]:
         """All three stages for one batch. Returns `(ok, detail)`; `detail` says where it stands."""
         for stage in self.stages:
+            log = self.log_dir / f"{planned.batch_id}.{stage}.log"
+            # The log is appended to across runs; only what this call writes may name its stop.
+            start = log.stat().st_size if log.exists() else 0
             code = self.call(stage, planned.batch_id)
             if code == STOP_RUN_EXIT and stage == "search":
-                log = self.log_dir / f"{planned.batch_id}.{stage}.log"
-                why = report_error(log.read_text(encoding="utf-8", errors="replace"))
+                written = log.read_bytes()[start:].decode("utf-8", errors="replace")
+                why = report_error(written)
                 self.stop_reason = f"{planned.batch_id}: {stage} stopped the run: {why}"
             if code != 0:
                 return False, f"{stage} exited {code}"
@@ -731,6 +736,12 @@ def run_mass(
     queue = list(batches)
     consecutive = 0
     pending: dict[Future[tuple[bool, str]], PlannedBatch] = {}
+    # What earlier runs measured, including batches this run will skip as done: a resumed run's
+    # progress file must not lose the readings a first run took.
+    for planned in batches:
+        earlier = search_quota(runner.run_dir, planned.batch_id)
+        if earlier is not None:
+            progress.quota[planned.batch_id] = earlier
     # What the ledger holds *now* is not this run's spend: the pilot and six recall rounds are in
     # there too. The ceilings are measured from here.
     baseline = Spend.from_ledger(ledger)

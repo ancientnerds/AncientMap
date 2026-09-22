@@ -14,10 +14,17 @@ What one batch does, in order (`search_batch`):
    refuses to run inside Theo's end-of-week batch window. Unlike the prospector it **fails closed**: a
    probe that failed, or that is missing any value the gate reads, stops the batch - a missing field
    never satisfies it.
-2. **One query per search slot** (`build_query`): the stored name as a phrase plus the *other* stored
-   fields that narrow it. A query never carries the stored value of a field it is asked for: the
-   templates cannot name one (`QUERY_SLOTS`, checked when this module loads), and a slot value that
-   happens to contain it raises rather than being sent.
+2. **One query per search slot** (`build_query`): the stored name as a phrase plus other fields
+   that narrow it, read from production's values at plan time (`query_values`), never from the
+   older snapshot. Every search of a site pools into the one evidence set all of its rerun fields
+   are judged on, so a query never carries the stored value of **any** field the site reruns: the
+   templates cannot name their own field (`QUERY_SLOTS`, checked when this module loads), a slot
+   whose field is rerun at this site is left out, a slot value that contains a value under test
+   raises rather than being sent, and a name ending in `, <value under test>` loses that suffix.
+   What cannot be taken out is the name itself (`Runestones of Sweden` names its country) and the
+   template's fixed wording (the site-type query says `archaeological site`, the generic type a few
+   sites store). Such a query is counted (`query_carries`; the plan summary and the dry listing
+   carry the counts), not refused, and the pilot reads those queries by hand.
 3. **One ledger line per request**, `kind="fetch"`, label `<site>/minimax_search.<key>`, the url the
    endpoint plus `?q=<query>` - the key travels in a header and appears nowhere else. A transport
    failure, a 408/429/5xx and a 2xx whose body carries no usable answer are retried up to
@@ -25,13 +32,15 @@ What one batch does, in order (`search_batch`):
    the plan's rate cap (2062) and a contract break stop the stage at once: each one would repeat on
    the next request.
 4. **One evidence file per search**, `search_evidence.SearchRecord` in the batch's own evidence
-   store. An existing file means "already searched" (a re-run costs nothing), and the store refuses
-   different bytes over it.
+   store. An existing file means "already searched" (a re-run costs nothing) once its stored query
+   is the one the plan builds now - a different one raises - and the store refuses different bytes
+   over it.
 5. **The report**, `search.json`, in `fetch.json`'s own shape (`sites[].outcomes[].failure`), so
    `model_stage.read_fetch_failures` reads a failed search exactly like a failed fetch - "the search
-   failed" and "the search found nothing" stay two different facts in front of the judge - plus the
-   quota readings before and after the batch: `weekly_remains_tokens` is the only honest cost signal
-   the plan has (the API's own usage figure misses billed tokens by ~7x).
+   failed" and "the search found nothing" stay two different facts in front of the judge - plus one
+   `quota` entry per run of the stage that probed, carried forward across resumes, each with the
+   readings before and after it and its request count: `weekly_remains_tokens` is the only honest
+   cost signal the plan has (the API's own usage figure misses billed tokens by ~7x).
 
 `run.py search` exits 0 when every slot has a stored search, `SEARCH_INCOMPLETE_EXIT` when some failed
 (the mass driver then does not judge the batch, and a re-run retries only those), and `STOP_RUN_EXIT`
@@ -46,8 +55,9 @@ and the gold-standard pilot (W9) is where the 2062 throttle gets measured.
 from __future__ import annotations
 
 import json
+import re
 import time
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -146,32 +156,127 @@ def _check_templates() -> None:
 _check_templates()
 
 
-def _stored_text(site: Mapping[str, Any], field_name: str) -> str:
-    """A stored value as query text: `""` when the field stores nothing."""
-    value = DS.field_finding(site, field_name).get("current_value")
+#: Every stored field a query may read besides the name. A search plan's record carries production's
+#: value of each under `query_values` (`search_plan.build_search_plan`), and a query reads nothing
+#: else: the snapshot the record was copied from is older than the corrections production holds.
+SLOT_FIELDS: tuple[str, ...] = tuple(
+    sorted({name for slots in QUERY_SLOTS.values() for name in slots})
+)
+
+#: The rerun fields whose stored value is stripped off the end of a name (`"Stina, Ukraine"` asks for
+#: the country) and counted when it stays inside one (`"Runestones of Sweden"`). Short categorical
+#: values; a year inside a name (`"Cave 1"`) is part of what the site is called.
+NAME_CHECKED_FIELDS = ("country", "site_type")
+
+
+def _as_text(value: Any) -> str:
+    """A value as query text: `""` for nothing, strings stripped, anything else as JSON."""
     if value is None:
         return ""
     return value.strip() if isinstance(value, str) else json.dumps(value, ensure_ascii=False)
 
 
-def build_query(site: Mapping[str, Any], slot: SE.SearchSlot) -> str:
-    """The one query of this slot: the name as a phrase, plus the other stored fields.
+def _stored_text(site: Mapping[str, Any], field_name: str) -> str:
+    """The snapshot's stored value of a field - the value under test when the field is rerun."""
+    return _as_text(DS.field_finding(site, field_name).get("current_value"))
+
+
+def query_values(site: Mapping[str, Any]) -> dict[str, Any]:
+    """The record's `query_values`: production's value of every `SLOT_FIELDS` field, nothing else."""
+    site_id = str(site.get("site_id") or "")
+    values = site.get(SE.QUERY_VALUES_KEY)
+    if not isinstance(values, dict) or set(values) != set(SLOT_FIELDS):
+        raise InputError(
+            f"{site_id}: {SE.QUERY_VALUES_KEY}={values!r} does not hold exactly {list(SLOT_FIELDS)}; "
+            "a query reads production's values, which the search plan records"
+        )
+    return values
+
+
+def _under_test(site: Mapping[str, Any]) -> dict[str, str]:
+    """`field -> stored value` for every rerun field of the site that stores one."""
+    return {
+        name: text for name in SE.rerun_fields(site) or () if (text := _stored_text(site, name))
+    }
+
+
+def query_name(site: Mapping[str, Any]) -> str:
+    """The stored name as a query phrase, with a trailing `, <value under test>` taken off.
 
     A `"` inside the name is removed, because a phrase cannot contain its own delimiter (one of the
-    5,004 snapshot names has one: `Arkheologicheskiy Muzey-Zapovednik "Tanais"`). A slot that
-    stores nothing is left out rather than filled with a guess.
+    5,004 snapshot names has one: `Arkheologicheskiy Muzey-Zapovednik "Tanais"`). A name that ends in
+    the stored value of a rerun `NAME_CHECKED_FIELDS` field (`Stina, Ukraine` while the country is
+    asked) loses that suffix, so the query does not search for the value under test.
     """
     site_id = str(site.get("site_id") or "")
     name = str(site.get("name") or "").replace('"', "").strip()
+    under_test = _under_test(site)
+    for field_name in NAME_CHECKED_FIELDS:
+        value = under_test.get(field_name)
+        if value is None:
+            continue
+        head, comma, tail = name.rpartition(",")
+        if comma and tail.strip().casefold() == value.casefold():
+            name = head.strip()
     if not name:
         raise InputError(f"{site_id}: a search starts from the stored name, and there is none")
-    values = {slot_field: _stored_text(site, slot_field) for slot_field in QUERY_SLOTS[slot.key]}
-    for asked in slot.fields:
-        stored = _stored_text(site, asked).casefold()
+    return name
+
+
+def query_carries(site: Mapping[str, Any], query: str) -> tuple[str, ...]:
+    """The rerun `NAME_CHECKED_FIELDS` whose value under test is still whole words of this query.
+
+    `build_query` refuses a slot value that carries one, so what remains is the name (`Runestones of
+    Sweden` while the country is asked) or the template's fixed wording (the site-type query ends in
+    `archaeological site`, the generic type some sites store). Neither can be left out without
+    losing the site or the query, so such a query is counted for the pilot's review, not refused.
+    """
+    words = re.findall(r"\w+", query.casefold())
+    carried: list[str] = []
+    for field_name, value in _under_test(site).items():
+        if field_name not in NAME_CHECKED_FIELDS:
+            continue
+        wanted = re.findall(r"\w+", value.casefold())
+        span = len(wanted)
+        if span and any(words[i : i + span] == wanted for i in range(len(words) - span + 1)):
+            carried.append(field_name)
+    return tuple(carried)
+
+
+def carried_by_queries(site: Mapping[str, Any]) -> tuple[str, ...]:
+    """The rerun fields whose value under test at least one of the site's queries still carries."""
+    carried = {
+        name
+        for slot in SE.search_slots(site)
+        for name in query_carries(site, build_query(site, slot))
+    }
+    return tuple(name for name in NAME_CHECKED_FIELDS if name in carried)
+
+
+def build_query(site: Mapping[str, Any], slot: SE.SearchSlot) -> str:
+    """The one query of this slot: the name as a phrase, plus other fields that narrow it.
+
+    A slot value is production's (`query_values`), never the snapshot's. A slot whose field is itself
+    rerun at this site is left out: every search of a site ends up in the one evidence set every
+    rerun field of the site is judged on (`model_stage._search_excerpts`), so a country query that
+    names the stored site type would bias the site-type question as surely as a site-type query
+    would. For the same reason every remaining slot value is checked against the stored value of
+    **every** rerun field, and one that contains it raises rather than being sent. A slot that
+    stores nothing is left out rather than filled with a guess.
+    """
+    site_id = str(site.get("site_id") or "")
+    name = query_name(site)
+    rerun = set(SE.rerun_fields(site) or ())
+    production = query_values(site)
+    values = {
+        slot_field: "" if slot_field in rerun else _as_text(production[slot_field])
+        for slot_field in QUERY_SLOTS[slot.key]
+    }
+    for asked, stored in _under_test(site).items():
         for slot_field, value in values.items():
-            if stored and stored in value.casefold():
+            if stored.casefold() in value.casefold():
                 raise InputError(
-                    f"{site_id}: the stored {slot_field} {value!r} contains the stored {asked} "
+                    f"{site_id}: the {slot_field} {value!r} contains the stored {asked} "
                     f"{stored!r}; a query that carried it would search for the value under test"
                 )
     query = QUERY_TEMPLATES[slot.key].format(name=name, **values)
@@ -350,9 +455,21 @@ class SiteSearch:
         return {"site_id": self.site_id, "outcomes": [o.to_dict() for o in self.outcomes]}
 
 
+#: The keys of one entry of `search.json`'s `quota` list: the probe before and after one run of the
+#: stage on this batch, and how many requests that run made between them.
+QUOTA_ENTRY_KEYS = frozenset({"after", "before", "requests"})
+
+
 @dataclass
 class SearchReport:
-    """One batch's search stage. Deterministic but for the quota readings (the ledger has the clock)."""
+    """One batch's search stage. Deterministic but for the quota readings (the ledger has the clock).
+
+    `quota` in `search.json` is a list with one entry per run of this stage on this batch that
+    probed: `earlier_quota` carries the entries of the runs before this one forward (`cmd_search`
+    reads them out of the previous report), so a resumed batch keeps what its first run measured -
+    the only honest cost signal the plan has. A run with nothing pending neither probes nor adds an
+    entry.
+    """
 
     batch_id: str
     endpoint: str
@@ -360,6 +477,7 @@ class SearchReport:
     quota_before: dict[str, Any] | None = None
     quota_after: dict[str, Any] | None = None
     stopped: str | None = None
+    earlier_quota: list[dict[str, Any]] = field(default_factory=list)
 
     @property
     def outcomes(self) -> list[SlotOutcome]:
@@ -369,12 +487,20 @@ class SearchReport:
     def failed(self) -> list[SlotOutcome]:
         return [o for o in self.outcomes if o.failure is not None]
 
+    def quota(self) -> list[dict[str, Any]]:
+        """Every probed run of this stage on this batch, oldest first, this run last."""
+        if self.quota_before is None:
+            return list(self.earlier_quota)
+        requests = sum(len(o.attempts) for o in self.outcomes)
+        this_run = {"after": self.quota_after, "before": self.quota_before, "requests": requests}
+        return [*self.earlier_quota, this_run]
+
     def to_json(self) -> str:
         outcomes = self.outcomes
         payload = {
             "batch_id": self.batch_id,
             "endpoint": self.endpoint,
-            "quota": {"after": self.quota_after, "before": self.quota_before},
+            "quota": self.quota(),
             "sites": [s.to_dict() for s in self.sites],
             "stopped": self.stopped,
             "totals": {
@@ -397,6 +523,29 @@ def write_report(path: Path, report: SearchReport) -> None:
     tmp = path.with_suffix(".tmp")
     tmp.write_text(report.to_json() + "\n", encoding="utf-8", newline="\n")
     tmp.replace(path)
+
+
+def read_quota(path: Path) -> list[dict[str, Any]]:
+    """The `quota` list of an existing `search.json`, or `[]` when the batch was never searched.
+
+    A report that exists but does not parse, or whose `quota` is not a list of `QUOTA_ENTRY_KEYS`
+    entries, raises: carrying a damaged history forward would silently lose the readings it was
+    written to keep. Read by the next run of the stage and by the mass driver's progress file.
+    """
+    if not path.exists():
+        return []
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise InputError(f"{path}: the search report does not parse: {exc}") from exc
+    quota = payload.get("quota") if isinstance(payload, dict) else None
+    if not isinstance(quota, list) or not all(
+        isinstance(entry, dict) and set(entry) == QUOTA_ENTRY_KEYS for entry in quota
+    ):
+        raise InputError(
+            f"{path}: `quota` is not a list of {sorted(QUOTA_ENTRY_KEYS)} entries: {quota!r}"
+        )
+    return quota
 
 
 def stored_record(query: str, response: SearchResponse) -> SE.SearchRecord:
@@ -422,6 +571,11 @@ def stored_record(query: str, response: SearchResponse) -> SE.SearchRecord:
             texts[name] = value
         hits.append(SE.StoredHit(rank=hit.rank, url=hit.result.url, **texts))
     return SE.SearchRecord(query=query, hits=tuple(hits), linkless=response.linkless)
+
+
+def excluded_hits(record: SE.SearchRecord) -> int:
+    """How many stored hits the evidence will leave out (`search_evidence.excluded_because`)."""
+    return sum(SE.excluded_because(hit.url) is not None for hit in record.hits)
 
 
 def _attempt_line(exc: CodingPlanError | None, response: SearchResponse | None) -> SearchAttempt:
@@ -503,7 +657,7 @@ def search_slot(
             outcome.stored = True
             outcome.hits = len(record.hits)
             outcome.linkless = record.linkless
-            outcome.excluded = sum(SE.excluded_because(h.url) is not None for h in record.hits)
+            outcome.excluded = excluded_hits(record)
             return outcome
         assert error is not None
         if last:
@@ -524,6 +678,7 @@ def search_batch(
     now: Callable[[], datetime],
     wait: Callable[[], None],
     sleep: Callable[[float], None] = time.sleep,
+    earlier_quota: Sequence[Mapping[str, Any]] = (),
 ) -> SearchReport:
     """Search every slot of every site of one search batch. Never raises for a failed search.
 
@@ -531,15 +686,25 @@ def search_batch(
     `stopped` and no request is made. A stop-class error during the batch ends it the same way. Slots
     the batch did not reach are recorded as failed with that reason, so no slot is missing from the
     report and a judge run cannot mistake an unasked search for an empty one. A batch whose searches
-    are all on disk already makes no request, so it is neither probed nor gated (its quota readings
-    stay `None`): a resumed batch must not be kept from its judge by a quota it will not touch.
+    are all on disk already makes no request, so it is neither probed nor gated and adds no quota
+    entry: a resumed batch must not be kept from its judge by a quota it will not touch.
+    `earlier_quota` (the previous report's `quota`) is carried forward either way.
+
+    A search already on disk is read, not trusted by its file name: its stored query must be the one
+    this plan builds now, or the run raises. A template or a query value changed after the pilot
+    needs a new run directory - otherwise one evidence set would mix hits for two different queries,
+    and the report would name queries that were never sent.
     """
     batch_id = str(batch.get("batch_id") or "")
     sites = batch.get("sites")
     if not batch_id or not isinstance(sites, list) or not sites:
         raise InputError(f"{batch_id or 'a batch'}: a search batch needs a batch_id and sites")
     plan: list[tuple[str, SE.SearchSlot, str]] = []
-    report = SearchReport(batch_id=batch_id, endpoint=searcher.endpoint)
+    report = SearchReport(
+        batch_id=batch_id,
+        endpoint=searcher.endpoint,
+        earlier_quota=[dict(entry) for entry in earlier_quota],
+    )
     for site in sites:
         site_id = str(site.get("site_id") or "")
         slots = SE.search_slots(site)
@@ -563,6 +728,12 @@ def search_batch(
     by_site = {s.site_id: s for s in report.sites}
     for site_id, slot, query in plan:
         if store.exists(site_id, slot.feature):
+            record = SE.read_record(store.path_for(site_id, slot.feature))
+            if record.query != query:
+                raise InputError(
+                    f"{site_id}/{slot.feature}: the stored search asked {record.query!r}, this plan "
+                    f"builds {query!r}; a changed query needs a new run directory"
+                )
             by_site[site_id].outcomes.append(
                 SlotOutcome(
                     feature=slot.feature,
@@ -570,6 +741,9 @@ def search_batch(
                     query=query,
                     url=search_ledger_url(searcher.endpoint, query),
                     existing=True,
+                    hits=len(record.hits),
+                    linkless=record.linkless,
+                    excluded=excluded_hits(record),
                 )
             )
             continue
