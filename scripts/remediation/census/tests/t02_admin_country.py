@@ -167,6 +167,16 @@ NE_ARCHIVE = "ne_10m_admin_0_countries.zip"
 NE_SHAPEFILE = "ne_10m_admin_0_countries.shp"
 CACHE_DIRNAME = "naturalearth"
 
+#: The same release's admin-0 *map units* (v5.1.1 like the countries file), which split the United
+#: Kingdom into its four geo units (GEOUNIT England/Scotland/Wales/Northern Ireland, GU_A3
+#: ENG/SCT/WLS/NIR). Verified with a live request on 2026-09-22: 200, 5,003,719 bytes,
+#: Last-Modified Fri, 13 May 2022, sha256 45bebe2aaf8bf42b.... Not used by T02 itself; the
+#: mechanical UK lane (`scripts/remediation/mechanical/uk_parts.py`) reads it.
+NE_MAP_UNITS_URL = "https://naciscdn.org/naturalearth/10m/cultural/ne_10m_admin_0_map_units.zip"
+NE_MAP_UNITS_ARCHIVE = "ne_10m_admin_0_map_units.zip"
+NE_MAP_UNITS_SHAPEFILE = "ne_10m_admin_0_map_units.shp"
+MAP_UNITS_DIRNAME = "naturalearth_map_units"
+
 #: Fields carrying the feature's own name and ISO code. POSTAL is deliberately excluded:
 #: it collides across unrelated features (Northern Cyprus is `CN`, as is China).
 ISO_FIELDS = ("ISO_A2_EH", "ISO_A2", "ISO_A3_EH", "ISO_A3", "WB_A2")
@@ -425,11 +435,13 @@ def _sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def _download(url: str, archive: Path, state_path: Path, fetched_at: str) -> None:
+def _download(
+    url: str, archive: Path, state_path: Path, fetched_at: str, member: str = NE_SHAPEFILE
+) -> None:
     """Fetch the archive to `archive` and record what was fetched, or raise.
 
-    Raises `FetchError` on anything that is not a 200 with a real ZIP body: an unreachable
-    mirror is a hole in the census, never an empty result.
+    Raises `FetchError` on anything that is not a 200 with a real ZIP body that contains
+    `member`: an unreachable mirror is a hole in the census, never an empty result.
     """
     partial = archive.with_suffix(".part")
     with httpx.stream(
@@ -443,8 +455,8 @@ def _download(url: str, archive: Path, state_path: Path, fetched_at: str) -> Non
     try:
         with zipfile.ZipFile(partial) as zf:
             members = zf.namelist()
-            if NE_SHAPEFILE not in members:
-                raise FetchError(f"{url}: archive has no {NE_SHAPEFILE} (members: {members[:5]})")
+            if member not in members:
+                raise FetchError(f"{url}: archive has no {member} (members: {members[:5]})")
     except zipfile.BadZipFile as exc:
         partial.unlink(missing_ok=True)
         raise FetchError(f"{url}: response was not a ZIP archive ({exc})") from exc
@@ -466,31 +478,38 @@ def _download(url: str, archive: Path, state_path: Path, fetched_at: str) -> Non
     log.info("T02: fetched %s (%d bytes)", url, archive.stat().st_size)
 
 
-def collect(ctx: Context) -> None:
-    """Download the Natural Earth 10m admin-0 dataset into the cache and unpack it.
+def collect_archive(base: Path, url: str, archive_name: str, member: str) -> Path:
+    """Download a Natural Earth archive into `base` once, unpack it, return `member`'s path.
 
-    Idempotent: an archive whose sha256 matches the recorded one is never refetched, and
-    the unpack step is skipped when the shapefile is already there. The only network call
-    this module ever makes.
+    Idempotent: an archive whose sha256 matches the recorded one (`base/source.json`) is never
+    refetched, and the unpack step is skipped when the member is already there.
     """
-    ctx.net()  # no Fetcher is a hard error: skipping the download would fake a clean run
-    base = _dataset_dir(ctx.cache)
     base.mkdir(parents=True, exist_ok=True)
-    archive = base / NE_ARCHIVE
+    archive = base / archive_name
     state_path = base / "source.json"
     state = json.loads(state_path.read_text(encoding="utf-8")) if state_path.exists() else {}
     if archive.exists() and state.get("sha256") == _sha256(archive):
         log.info("T02: archive already cached (%s)", str(state.get("sha256"))[:16])
     else:
-        _download(NE_URL, archive, state_path, now_iso())
+        _download(url, archive, state_path, now_iso(), member)
 
-    shapefile = base / NE_SHAPEFILE
-    if not shapefile.exists():
+    target = base / member
+    if not target.exists():
         with zipfile.ZipFile(archive) as zf:
             zf.extractall(base)
-        log.info("T02: unpacked %s into %s", NE_ARCHIVE, base)
-    if not shapefile.exists():
-        raise FetchError(f"{archive} does not contain {NE_SHAPEFILE}")
+        log.info("T02: unpacked %s into %s", archive_name, base)
+    if not target.exists():
+        raise FetchError(f"{archive} does not contain {member}")
+    return target
+
+
+def collect(ctx: Context) -> None:
+    """Download the Natural Earth 10m admin-0 dataset into the cache and unpack it.
+
+    Idempotent (see `collect_archive`). The only network call this module ever makes.
+    """
+    ctx.net()  # no Fetcher is a hard error: skipping the download would fake a clean run
+    collect_archive(_dataset_dir(ctx.cache), NE_URL, NE_ARCHIVE, NE_SHAPEFILE)
 
 
 def _atlas(ctx: Context) -> _Atlas:

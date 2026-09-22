@@ -38,7 +38,9 @@ MECHANICAL = REPO / "scripts/remediation/mechanical"
 PLAN = MECHANICAL / "plan.py"
 APPLY = MECHANICAL / "apply.py"
 LANE = MECHANICAL / "lane.py"
+UK = MECHANICAL / "uk_parts.py"
 TESTFILE = "tests/remediation/test_mechanical.py"
+UK_TESTS = "tests/remediation/test_mechanical_uk.py"
 
 #: The interpreter that runs the sweep runs the tests too: a hard-coded `.venv` path does not exist in
 #: a git worktree, and a second interpreter could test different packages than the one reporting.
@@ -392,6 +394,189 @@ CASES: list[Case] = [
             (
                 "an unwritable owned value",
                 "            if not value or len(value) > self.max_chars:",
+            ),
+        )
+    ),
+    # ------------------------------------------------------------- the UK lane (2026-09-22)
+    *(
+        guard(f"uk: {label}", UK, needle, test, UK_TESTS)
+        for label, needle, test in (
+            (
+                "curated source only",
+                "    if site.source_id != CURATED_SOURCE:",
+                "test_a_row_of_another_source_is_refused",
+            ),
+            (
+                "Ireland and United Kingdom rows only",
+                "    if stored not in IN_SCOPE:",
+                "test_a_region_that_is_already_spelled_out_is_never_touched",
+            ),
+            (
+                "a point to locate",
+                "    if site.lat is None or site.lon is None:",
+                "test_a_row_without_a_point_is_refused",
+            ),
+            (
+                "journal chain unbroken",
+                "            if after.old_value != before.new_value:",
+                "test_a_broken_journal_chain_is_refused",
+            ),
+            (
+                "journal agrees with the row",
+                "        if last is not None and last.new_value != stored:",
+                "test_a_journal_that_disagrees_with_the_row_is_refused",
+            ),
+            (
+                "a decided unit",
+                "    if where.unit is None:",
+                "test_a_point_at_sea_is_undecided",
+            ),
+            (
+                "the Republic's side of the border",
+                "    if unit == IRELAND:",
+                "test_a_united_kingdom_row_in_the_republic_is_a_contradiction",
+            ),
+            (
+                "an Ireland row in the Republic is consistent",
+                "        if stored == IRELAND:\n            return verdict(",
+                "test_an_ireland_row_in_the_republic_is_consistent_and_not_written",
+            ),
+            (
+                "one of the four UK units",
+                "    if unit not in UK_UNITS:",
+                "test_a_crown_dependency_is_not_a_uk_part",
+            ),
+            (
+                "not at the border",
+                "        if to_ireland <= TOLERANCE_M:",
+                "test_an_ireland_row_300_m_from_the_border_is_ambiguous",
+            ),
+            (
+                "GB in both vocabularies",
+                '    if codes.get(new) != "GB" or new_iso != "GB":',
+                "test_without_the_vocabulary_change_every_northern_irish_row_is_refused",
+            ),
+            (
+                "the expected ISO transition",
+                "    if (old_iso, new_iso) != EXPECTED_ISO[str(stored)]:",
+                "test_an_unexpected_iso_transition_is_refused",
+            ),
+            (
+                "fixed point",
+                "    if not _is_canonical(new, dict(codes), normalize):",
+                "test_a_value_the_census_would_flag_again_is_refused",
+            ),
+            (
+                "exactly one entity",
+                "    if len(candidate.qids) != 1:",
+                "test_a_site_needs_exactly_one_entity",
+            ),
+            (
+                "the entity was collected",
+                "    if entity is None:",
+                "test_an_entity_missing_from_the_cache_is_refused",
+            ),
+            (
+                "the entity has a point",
+                "    if point is None:",
+                "test_an_entity_without_a_point_is_refused",
+            ),
+            (
+                "the entity point is in the same unit",
+                "    if wd_where.unit != unit:",
+                "test_an_entity_point_in_another_unit_is_refused",
+            ),
+            (
+                "P17 does not contradict",
+                "    if p17_ok is False:",
+                "test_a_preferred_p17_of_ireland_contradicts",
+            ),
+            (
+                "P131* reaches no other unit",
+                "    if others:",
+                "test_a_p131_chain_to_england_contradicts_a_northern_irish_point",
+            ),
+            (
+                "categories name no other unit",
+                "    if named - {unit}:",
+                "test_a_category_naming_the_republic_contradicts",
+            ),
+            (
+                "a category can witness",
+                "    if states_neither and unit in named:",
+                "test_a_category_counts_only_when_it_names_the_unit",
+            ),
+            (
+                "an ISO change needs a witness",
+                "    if iso_changes and not witnessed:",
+                "test_an_ireland_row_without_a_positive_witness_is_refused",
+            ),
+            (
+                "unique unit names",
+                "        if not units or len(names) != len(set(names)):",
+                "test_duplicate_unit_names_are_refused",
+            ),
+            (
+                "one covering unit decides",
+                "        if len(covering) == 1:",
+                "test_an_ireland_row_in_northern_ireland_is_written_as_northern_ireland",
+            ),
+            (
+                "one unit within tolerance decides",
+                "        if len(near) == 1:",
+                "test_an_offshore_point_takes_the_only_unit_within_tolerance",
+            ),
+            (
+                "no identifier is interpolated unchecked",
+                "        if not UUID_RE.match(sid):",
+                "test_a_non_uuid_is_never_interpolated",
+            ),
+        )
+    ),
+    *(
+        Case(f"uk: {label}", UK, old, new, test, UK_TESTS)
+        for label, old, new, test in (
+            (
+                "a category only when the entity states neither P17 nor P131",
+                "    if states_neither and unit in named:",
+                "    if unit in named:",
+                "test_a_category_is_no_witness_for_an_entity_that_states_p131",
+            ),
+            (
+                "a category must name the unit",
+                '        if title.endswith(f" in {suffix}")',
+                "        if True",
+                "test_a_category_counts_only_when_it_names_the_unit",
+            ),
+            (
+                "the tolerance is T02's 1000 m",
+                "if (metres := self.distance_m(u.name, lat, lon)) <= TOLERANCE_M",
+                "if (metres := self.distance_m(u.name, lat, lon)) <= 10 * TOLERANCE_M",
+                "test_open_water_5_km_out_is_undecided",
+            ),
+            (
+                "a phase-3 value is flagged as superseded",
+                '    phase3 = last is not None and last.run_stamp.startswith("phase3:")',
+                "    phase3 = False",
+                "test_a_phase3_write_is_superseded_and_named",
+            ),
+            (
+                "a write carries its premise",
+                "            premise=candidate.premise if ok else None,",
+                "            premise=None,",
+                "test_an_ireland_row_in_northern_ireland_is_written_as_northern_ireland",
+            ),
+            (
+                "an offshore write is named as such",
+                '        rule="geo-unit" if where.inside else "geo-unit-within-tolerance",',
+                '        rule="geo-unit",',
+                "test_an_offshore_row_is_written_by_the_unit_within_tolerance",
+            ),
+            (
+                "the unit is GEOUNIT, not NAME",
+                "        units.append(Unit(_text(row.GEOUNIT), _text(row.SOVEREIGNT), geom))",
+                "        units.append(Unit(_text(row.NAME), _text(row.SOVEREIGNT), geom))",
+                "test_the_unit_is_the_geounit_and_not_the_short_name",
             ),
         )
     ),

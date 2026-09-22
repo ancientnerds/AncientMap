@@ -822,18 +822,21 @@ def load_sites(site_ids: Iterable[str], *, reader: Any, strict: bool = True) -> 
 
 
 # ------------------------------------------------------------------------------- the witnesses
-def _wikidata(params: Mapping[str, str], *, timeout: int = 60) -> dict[str, Any]:
-    url = (
-        WIKIDATA_API
-        + "?"
-        + urllib.parse.urlencode({**params, "format": "json", "formatversion": "2"})
-    )
+def get_json(endpoint: str, params: Mapping[str, str], *, timeout: int = 60) -> dict[str, Any]:
+    """One GET with the project's `USER_AGENT`, parsed as JSON - one attempt, no mirror loop."""
+    url = endpoint + "?" + urllib.parse.urlencode(dict(params))
     request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
     try:
         with urllib.request.urlopen(request, timeout=timeout) as response:
             return json.loads(response.read().decode("utf-8"))
     except Exception as exc:  # one attempt, no mirror loop: a failure must be visible
-        raise PlanError(f"Wikidata request failed: {url}: {exc}") from exc
+        raise PlanError(f"request failed: {url}: {exc}") from exc
+
+
+def _wikidata(params: Mapping[str, str], *, timeout: int = 60) -> dict[str, Any]:
+    return get_json(
+        WIKIDATA_API, {**params, "format": "json", "formatversion": "2"}, timeout=timeout
+    )
 
 
 def _claims(entity: Mapping[str, Any], prop: str) -> list[Any]:
@@ -937,6 +940,35 @@ def resolve_anchors(sites: Mapping[str, Site], known_qids: Mapping[str, str]) ->
     return anchors
 
 
+def fetch_entities(qids: Iterable[str], props: str, **extra: str) -> dict[str, Any]:
+    """`wbgetentities` for `qids`, 40 per request; a missing entity is an error, not a gap."""
+    wanted = sorted(set(qids))
+    entities: dict[str, Any] = {}
+    for chunk in [wanted[i : i + 40] for i in range(0, len(wanted), 40)]:
+        got = (
+            _wikidata(
+                {"action": "wbgetentities", "ids": "|".join(chunk), "props": props, **extra}
+            ).get("entities")
+            or {}
+        )
+        for qid, entity in got.items():
+            if entity.get("missing"):
+                raise PlanError(f"{qid} is missing on Wikidata")
+            entities[qid] = entity
+    return entities
+
+
+def country_codes(country_qids: Iterable[str]) -> dict[str, dict[str, Any]]:
+    """`P297` (ISO 3166-1 alpha-2) and the English label of every country entity named."""
+    return {
+        qid: {
+            "label": ((entity.get("labels") or {}).get("en") or {}).get("value"),
+            "p297": next(iter(_claim_strings(entity, "P297")), None),
+        }
+        for qid, entity in fetch_entities(country_qids, "claims|labels", languages="en").items()
+    }
+
+
 def collect_witnesses(
     sites: Mapping[str, Site], anchors: Mapping[str, Anchor], *, fetched_at: str
 ) -> dict[str, Any]:
@@ -944,37 +976,11 @@ def collect_witnesses(
     qids = sorted({a.qid for a in anchors.values()})
     if not qids:
         raise PlanError("no Wikidata entity for any candidate - the external witness is empty")
-    site_claims: dict[str, Any] = {}
-    for chunk in [qids[i : i + 40] for i in range(0, len(qids), 40)]:
-        got = (
-            _wikidata({"action": "wbgetentities", "ids": "|".join(chunk), "props": "claims"}).get(
-                "entities"
-            )
-            or {}
-        )
-        for qid, entity in got.items():
-            if entity.get("missing"):
-                raise PlanError(f"{qid} is missing on Wikidata")
-            site_claims[qid] = _p17_claims(entity)
+    site_claims = {
+        qid: _p17_claims(entity) for qid, entity in fetch_entities(qids, "claims").items()
+    }
     countries = sorted({str(c["id"]) for claims in site_claims.values() for c in claims})
-    country_claims: dict[str, Any] = {}
-    for chunk in [countries[i : i + 40] for i in range(0, len(countries), 40)]:
-        got = (
-            _wikidata(
-                {
-                    "action": "wbgetentities",
-                    "ids": "|".join(chunk),
-                    "props": "claims|labels",
-                    "languages": "en",
-                }
-            ).get("entities")
-            or {}
-        )
-        for qid, entity in got.items():
-            country_claims[qid] = {
-                "label": ((entity.get("labels") or {}).get("en") or {}).get("value"),
-                "p297": next(iter(_claim_strings(entity, "P297")), None),
-            }
+    country_claims = country_codes(countries)
     return {
         "generated_at": fetched_at,
         "endpoint": WIKIDATA_API,
