@@ -25,7 +25,7 @@ and after a STOP only the ones already running finish; the ones never started ar
 Which run it reviews is the lane's (`lanes.py`): the default is the mass run and `logs/review/`, as
 it always was; `--lane gap` reviews `runs/gap` into `logs/review_gap/`.
 
-    ./.venv/Scripts/python.exe output/remediation/logs/review_all.py --lane gap
+    ./.venv/Scripts/python.exe output/remediation/tools/review_all.py --lane gap
 """
 
 from __future__ import annotations
@@ -143,7 +143,9 @@ def review_batches(
     stopped, only watched.
     """
     baseline, _ = spend()
-    print(f"Prueferkosten im Ledger vor diesem Lauf: {baseline:.4f} (Grenze gilt ab hier)")
+    print(
+        f"reviewer spend in the ledger before this pass: {baseline:.4f} (the ceiling counts from here)"
+    )
     failed: list[str] = []
     queue = list(todo)
     pending: dict[Future[tuple[str, int]], str] = {}
@@ -164,7 +166,7 @@ def review_batches(
                 cost, unreadable = spend()
                 print(
                     f"{number}/{len(todo)} {batch} exit={code} "
-                    f"prueferkosten={cost - baseline:.4f} ohne_summe={unreadable}",
+                    f"reviewer_usd={cost - baseline:.4f} unreadable={unreadable}",
                     flush=True,
                 )
                 if code != 0:
@@ -172,8 +174,8 @@ def review_batches(
                 if not stopped and over_cap(cost, baseline, cap):
                     stopped = True
                     print(
-                        f"STOP: {cost - baseline:.4f} ueber der Grenze {cap}; kein weiterer "
-                        f"Batch, {len(pending)} laufen noch zu Ende",
+                        f"STOP: {cost - baseline:.4f} over the ceiling {cap}; no further "
+                        f"batch, {len(pending)} still running finish",
                         flush=True,
                     )
     return failed, queue
@@ -198,7 +200,7 @@ def main(argv: list[str] | None = None) -> int:
     ledger = pathlib.Path(args.ledger)
     log_dir.mkdir(parents=True, exist_ok=True)
     todo, done = batches_to_review(run_dir)
-    print(f"Lauf: {run_dir} | Batches mit Pruefbericht: {done} | offen: {len(todo)}", flush=True)
+    print(f"run: {run_dir} | batches with a review: {done} | open: {len(todo)}", flush=True)
     if not todo:
         return 0
 
@@ -214,8 +216,8 @@ def main(argv: list[str] | None = None) -> int:
     )
     remaining, _ = batches_to_review(run_dir)
     print(
-        f"fertig | fehlgeschlagen: {failed} | nicht gestartet: {len(not_reached)} "
-        f"| ohne review.json: {len(remaining)}"
+        f"done | failed: {failed} | never started: {len(not_reached)} "
+        f"| without review.json: {len(remaining)}"
     )
     return 1 if failed or remaining else 0
 

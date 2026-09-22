@@ -20,17 +20,30 @@ gap run's batches are `gap-NNNN`, never `batch-NNNN`.
 The paths are derived from this file's own location (`output/remediation/tools/` or its working copy
 in `output/remediation/logs/` - both three levels below the repository), so the tools run the same from
 either place and from any clone.
+
+Two more things live here because every tool needs them once: the way to the database - the writer's
+own `run_sql`, `_json_rows` and `_sql_text`, re-exported rather than copied - and the pin of the plan
+each written lane was applied from (`REVIEWED_PLAN_KEYS_SHA256`).
 """
 
 from __future__ import annotations
 
+import hashlib
 import json
 import pathlib
-import subprocess
-from collections.abc import Iterable
+import sys
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
+from typing import Any
 
 REPO = pathlib.Path(__file__).resolve().parents[3]
+# The writer imports `phase3` (from `scripts/remediation`) and `pipeline` (from the repository root).
+for _root in (REPO, REPO / "scripts" / "remediation"):
+    if str(_root) not in sys.path:
+        sys.path.insert(0, str(_root))
+
+from phase3 import write_stage as W  # noqa: E402 - the one psql seam, parser and quoting
+
 REMEDIATION = REPO / "output" / "remediation"
 LOGS = REMEDIATION / "logs"
 RUNS = REMEDIATION / "phase3_runner" / "runs"
@@ -105,46 +118,82 @@ def read_jsonl(path: pathlib.Path) -> list[dict]:
     return records
 
 
-#: The production database, read-only, the way this project asks it: ssh, then psql in the container.
-HOST = "ancientnerds"
-PSQL = "docker exec -i ancient_nerds_db psql -U ancient_map -d ancient_map -v ON_ERROR_STOP=1 -t -A"
+# ------------------------------------------------------------------ the database, through the writer
+# The tools reach production through the writer's own seam and read its answers with the writer's own
+# parser - one spelling each (`write_stage.run_sql`, `_json_rows`, `_sql_text`), not a copy per tool.
+# The writer raises `WriteRefused`; a tool is a command line, so here that becomes a named exit.
+
+#: The production database's ssh alias - the writer's.
+HOST = W.SSH_HOST
 
 
 def psql(sql: str, *, host: str = HOST) -> str:
-    """Send one statement to production and return psql's output. A non-zero exit stops the tool."""
-    result = subprocess.run(
-        ["ssh", "-o", "BatchMode=yes", host, PSQL],
-        input=sql.encode("utf-8"),
-        capture_output=True,
-        check=False,
-    )
-    if result.returncode != 0:
-        raise SystemExit(
-            f"psql failed ({result.returncode}): {result.stderr.decode('utf-8', 'replace')}"
-        )
-    return result.stdout.decode("utf-8")
+    """Send one statement to production through `write_stage.run_sql`; a failure stops the tool."""
+    try:
+        return W.run_sql(sql, host=host)
+    except W.WriteRefused as exc:
+        raise SystemExit(f"the database did not answer: {exc}") from exc
 
 
 def json_rows(text: str) -> list[dict]:
-    """One `to_jsonb(...)::text` object per line; anything else is damage, not a line to skip.
+    """One `to_jsonb(...)::text` object per line (`write_stage._json_rows`); anything else stops.
 
     Every read goes through `to_jsonb`, so a value that contains the field separator or a newline
     cannot shift a column or split a row.
     """
-    rows: list[dict] = []
-    for number, line in enumerate(text.splitlines(), start=1):
-        if not line.strip():
-            continue
-        try:
-            rows.append(json.loads(line))
-        except json.JSONDecodeError as exc:
-            raise SystemExit(f"psql line {number} is not JSON: {line[:120]!r}") from exc
-    return rows
+    try:
+        return W._json_rows(text)
+    except W.WriteRefused as exc:
+        raise SystemExit(
+            f"psql answered something that is not one JSON object per line: {exc}"
+        ) from exc
+
+
+#: A SQL text literal, quotes doubled, `NULL` for `None` - the writer's quoting.
+sql_text = W._sql_text
 
 
 def sql_literals(values: Iterable[str]) -> str:
-    """A comma-separated list of SQL text literals, quotes doubled."""
-    return ", ".join("'" + value.replace("'", "''") + "'" for value in values)
+    """A comma-separated list of SQL text literals (`sql_text` each)."""
+    return ", ".join(sql_text(value) for value in values)
+
+
+# ------------------------------------------------------------------ the plan a lane was written from
+#: The plan each **written** lane's production rows were reviewed and applied against, pinned by the
+#: sha256 of its change keys in file order (LF-joined, trailing LF). The rows file is regenerable -
+#: `write_dry_all.py` re-plans from the batch files with the writer's rules of *today* - and a re-plan
+#: after the writer gained a rule is a different file under the same name: on 2026-09-22 the citation
+#: check turned the mass lane's 1,074 rows into 1,028, and the acceptance then read the 44 correct
+#: production writes the new plan no longer names as 44 deviations. So the acceptance and the hold
+#: list refuse a rows file that is not the pinned one, and `write_dry_all.py` refuses to overwrite a
+#: lane that has written. A lane is pinned here once its wave is written and accepted.
+REVIEWED_PLAN_KEYS_SHA256: dict[str, str] = {
+    #: 1,074 rows, `logs/_write_dry/ALL_ROWS.jsonl` of 2026-09-22 (994 written, 80 withheld).
+    MASS: "0b7ad95dc6b2ee626d281e31c9a9a2532d0b6ea423acf75ed710be6384ae039b",
+}
+
+
+def keys_digest(rows: Iterable[Mapping[str, Any]]) -> str:
+    """sha256 over the rows' change keys in file order, one per line, LF-joined, trailing LF."""
+    return hashlib.sha256(
+        "".join(str(row["change_key"]) + "\n" for row in rows).encode("utf-8")
+    ).hexdigest()
+
+
+def assert_reviewed_plan(name: str, rows: list[dict], *, path: pathlib.Path) -> None:
+    """Refuse a rows file that is not the plan a written lane was pinned to. A lane without a pin
+    (nothing written yet) has no reviewed plan to compare with; `write_dry_all.py` guards it instead."""
+    pinned = REVIEWED_PLAN_KEYS_SHA256.get(name)
+    if pinned is None:
+        return
+    digest = keys_digest(rows)
+    if digest != pinned:
+        raise SystemExit(
+            f"{path}: its change keys hash to {digest[:16]}, but lane {name!r} was written from the "
+            f"plan {pinned[:16]} ({len(rows)} rows here). This is not the plan the production rows "
+            "were reviewed against - a re-plan names other rows, or the same rows at other lines. "
+            "Restore the reviewed rows file from the archive named in HANDOVER.md"
+        )
 
 
 def write_jsonl(path: pathlib.Path, records: list[dict]) -> None:

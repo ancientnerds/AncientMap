@@ -99,7 +99,7 @@ def main(argv: list[str] | None = None) -> int:
     print(
         f"Treffer gesamt: {len(hits)} | bereits entschieden: {len(hits) - len(fresh)} | offen: {len(fresh)}"
     )
-    print(f"vollstaendig in {out}")
+    print(f"in full in {out}")
     print()
     print("\n".join(fresh))
     return 0

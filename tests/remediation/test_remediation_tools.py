@@ -1,23 +1,32 @@
 """The write and acceptance instruments (`output/remediation/tools/`), tested without a database.
 
 These scripts wrote and accepted the 994 production rows of 2026-09-22 and had no tests of their own.
-Three things are pinned here, each by a test that goes red when its guard is removed:
+What is pinned here, each by a test that goes red when its guard is removed:
 
 * **lanes** - a second run (the gap run) must never be read as the mass run: its batches are planned
   from its own directory, and a batch applied in the mass lane cannot suppress a gap batch. The
-  default lane is still exactly the mass run's paths.
-* **the write gate's stale-plan guard** - the per-row apply addresses rows by position in the writer's
-  plan, so a rows file built before a new writer rule must be refused, not written by position.
-* **the acceptance follows the journal chain** - a phase-3 row superseded by a later journalled lane is
-  reported as superseded, a broken chain is a deviation, and everything the per-row check caught is
-  still caught.
+  default lane is still exactly the mass run's paths. The database is reached through the writer's
+  own seam, parser and quoting, and a written lane's plan is pinned.
+* **the write gate** - a rows file built before a new writer rule is refused, not written by
+  position, *in `main`* and not only in the comparator; a hold that names no planned row is refused;
+  a writer call that wrote less than it was handed stops the wave and never marks its batch applied;
+  a read-back deviation stops the wave.
+* **the acceptance** - it follows the journal chain, but only an operator-listed stamp may change a
+  lane's row after it; a lane write must carry the planned values; a planned row that is neither
+  withheld nor written is a deviation, never "unchanged".
+* **the plan a lane wrote from** - the dry planner refuses to overwrite it, the acceptance and the
+  hold list refuse any other file.
+* **the external-id repair** - every guard and invariant is in the statement, and `check`/`verify`
+  refuse a statement on disk that is not byte for byte the rendered one.
 """
 
 from __future__ import annotations
 
 import json
+import subprocess
 import sys
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -34,6 +43,7 @@ import review_all  # noqa: E402
 import verify_writes as V  # noqa: E402
 import write_dry_all  # noqa: E402
 import write_gate  # noqa: E402
+from phase3 import write_stage as W  # noqa: E402
 
 SITE = "11111111-1111-4111-8111-111111111111"
 OTHER = "22222222-2222-4222-8222-222222222222"
@@ -71,11 +81,113 @@ def test_every_tool_defaults_to_the_mass_lane() -> None:
     assert review_all.build_parser().parse_args([]).lane == "mass"
 
 
+def test_the_tools_reach_the_database_through_the_writers_seam(monkeypatch: Any) -> None:
+    """One psql seam, one parser, one quoting - the writer's - and a refusal becomes a named exit."""
+    sent: list[tuple[str, str]] = []
+
+    def fake_run_sql(sql: str, *, host: str) -> str:
+        sent.append((sql, host))
+        return json.dumps({"id": 1}) + "\n"
+
+    monkeypatch.setattr(W, "run_sql", fake_run_sql)
+    assert lanes.json_rows(lanes.psql("SELECT 1;", host="somewhere")) == [{"id": 1}]
+    assert sent == [("SELECT 1;", "somewhere")]
+    assert lanes.HOST == W.SSH_HOST and lanes.sql_text is W._sql_text
+
+    def refusing(sql: str, *, host: str) -> str:
+        raise W.WriteRefused("psql exited 2")
+
+    monkeypatch.setattr(W, "run_sql", refusing)
+    with pytest.raises(SystemExit, match="did not answer: psql exited 2"):
+        lanes.psql("SELECT 1;")
+
+
+def test_a_database_answer_that_is_not_one_object_per_line_stops_the_tool() -> None:
+    rows = lanes.json_rows(json.dumps({"id": 1}) + "\n\n" + json.dumps({"id": 2}) + "\n")
+    assert [row["id"] for row in rows] == [1, 2]
+    with pytest.raises(SystemExit, match="not JSON"):
+        lanes.json_rows("1|a|b\n")
+    with pytest.raises(SystemExit, match="not a JSON object"):
+        lanes.json_rows("[1, 2]\n")  # valid JSON, and still not a row
+    assert lanes.sql_literals(["a", "O'Brien"]) == "'a', 'O''Brien'"
+
+
+# ── the plan a written lane was applied from ───────────────────────────────────────────────────
+
+
+def _keys(*keys: str) -> list[dict]:
+    return [{"change_key": key} for key in keys]
+
+
+def test_a_written_lanes_rows_file_must_be_the_pinned_plan(tmp_path: Path) -> None:
+    rows = _keys("phase3:a", "phase3:b")
+    assert lanes.keys_digest(rows) != lanes.keys_digest(rows[::-1])  # order is part of the pin
+    with pytest.raises(SystemExit, match="not the plan the production rows were reviewed"):
+        lanes.assert_reviewed_plan(lanes.MASS, rows, path=tmp_path / "ALL_ROWS.jsonl")
+    lanes.assert_reviewed_plan("gap", rows, path=tmp_path / "ALL_ROWS.jsonl")  # nothing written yet
+    assert lanes.REVIEWED_PLAN_KEYS_SHA256[lanes.MASS].startswith("0b7ad95d")
+
+
+def test_the_hold_list_refuses_a_rows_file_whose_lines_moved(
+    tmp_path: Path, monkeypatch: Any
+) -> None:
+    rows = _keys("phase3:0", "phase3:1", "phase3:2")
+    with pytest.raises(SystemExit, match="not the plan the production rows were reviewed"):
+        make_holds.assert_pinned(rows)
+    moved = tmp_path / "ALL_ROWS.jsonl"
+    lanes.write_jsonl(moved, rows)
+    monkeypatch.setattr(make_holds, "ROWS", moved)
+    monkeypatch.setattr(make_holds, "OUT", tmp_path / "apply")
+    with pytest.raises(SystemExit, match="not the plan"):
+        make_holds.main()  # the wiring: main checks before it writes a line
+    assert not (tmp_path / "apply" / "HOLDS.jsonl").exists()
+
+
+def _lane(tmp_path: Path, name: str = "gap") -> lanes.Lane:
+    return lanes.Lane(
+        name=name,
+        run_dir=tmp_path / "runs" / name,
+        dry_root=tmp_path / f"_write_dry_{name}",
+        apply_root=tmp_path / f"_write_apply_{name}",
+        review_logs=tmp_path / f"review_{name}",
+        stamp_like=f"phase3:{name}-%",
+    )
+
+
+def test_the_dry_planner_refuses_to_replace_the_plan_a_lane_has_written_from(
+    tmp_path: Path, monkeypatch: Any
+) -> None:
+    """A re-plan of the mass lane turned 1,074 rows into 1,028 and 44 correct writes into deviations."""
+    lane = _lane(tmp_path)
+    write_dry_all.assert_plan_replaceable(lane, lane.dry_root)  # nothing written: re-plan freely
+    (lane.apply_root / "gap-0001").mkdir(parents=True)
+    (lane.apply_root / "gap-0001" / "APPLIED.json").write_text("{}", encoding="utf-8")
+    with pytest.raises(SystemExit, match="has written"):
+        write_dry_all.assert_plan_replaceable(lane, lane.dry_root)
+    write_dry_all.assert_plan_replaceable(
+        lane, tmp_path / "scratch"
+    )  # a measurement goes elsewhere
+    # the wiring: main refuses before it plans or writes anything
+    monkeypatch.setattr(write_dry_all.lanes, "lane", lambda name: lane)
+    with pytest.raises(SystemExit, match="has written"):
+        write_dry_all.main(["--lane", "gap"])
+    assert not lane.rows.exists()
+
+
 # ── the write gate ───────────────────────────────────────────────────────────────────────────────
 
 
-def _row(batch: str, key: str) -> dict:
-    return {"batch_id": batch, "change_key": key, "column": "site_type", "site_id": SITE}
+def _row(batch: str, key: str, *, site: str = SITE, column: str = "site_type") -> dict:
+    return {
+        "batch_id": batch,
+        "change_key": key,
+        "column": column,
+        "site_id": site,
+        "pk": site,
+        "site_name": f"site {key}",
+        "old_value": "Temple",
+        "new_value": "Ruin",
+    }
 
 
 def test_a_batch_applied_in_the_mass_lane_does_not_suppress_a_gap_batch(tmp_path: Path) -> None:
@@ -119,17 +231,228 @@ def test_a_rows_file_that_is_not_the_writers_plan_today_is_refused() -> None:
         write_gate.assert_same_plan("gap-0001", rows, ["k1", "k2", "k3", "k4"])
 
 
-def test_the_dry_plan_driver_reads_only_batches_with_a_review(tmp_path: Path) -> None:
-    for name, reviewed in (("gap-0001", True), ("gap-0002", False)):
-        (tmp_path / name).mkdir()
-        if reviewed:
-            (tmp_path / name / "review.json").write_text("{}", encoding="utf-8")
-    assert write_dry_all.batches_to_plan(tmp_path) == ["gap-0001"]
+def _gate_tree(tmp_path: Path, batches: dict[str, list[str]]) -> tuple[Path, Path, Path]:
+    """A run dir with the batches, a rows file naming their keys, and an apply root."""
+    run_dir = tmp_path / "runs" / "gap"
+    rows = []
+    for batch, keys in batches.items():
+        (run_dir / batch).mkdir(parents=True)
+        rows.extend(_row(batch, key, site=f"site-{key}") for key in keys)
+    rows_path = tmp_path / "ALL_ROWS.jsonl"
+    lanes.write_jsonl(rows_path, rows)
+    return run_dir, rows_path, tmp_path / "_write_apply_gap"
 
 
-def test_a_writer_that_exited_zero_without_its_plan_file_is_damage(tmp_path: Path) -> None:
-    with pytest.raises(SystemExit, match="wrote no PLAN.jsonl"):
-        write_dry_all._batch_lines(tmp_path / "PLAN.jsonl", "gap-0001")
+def _gate_args(run_dir: Path, rows_path: Path, apply_root: Path, *extra: str) -> list[str]:
+    return [
+        "--lane",
+        "gap",
+        "--run-dir",
+        str(run_dir),
+        "--rows",
+        str(rows_path),
+        "--apply-root",
+        str(apply_root),
+        "--hold",
+        str(apply_root / "HOLDS.jsonl"),
+        *extra,
+    ]
+
+
+def _no_database(monkeypatch: Any) -> None:
+    monkeypatch.setattr(write_gate, "coordinates", lambda site_ids, host: {})
+    monkeypatch.setattr(
+        write_gate, "gate", lambda rows, positions: {row["change_key"]: (True, "") for row in rows}
+    )
+
+
+def _no_write(monkeypatch: Any) -> list[str]:
+    calls: list[str] = []
+
+    def write_batch(batch: str, *args: Any, **kwargs: Any) -> dict:
+        calls.append(batch)
+        return {"written": 1, "sites": 1, "matched_0": 0, "journal": 1}
+
+    monkeypatch.setattr(write_gate, "write_batch", write_batch)
+    return calls
+
+
+@pytest.mark.parametrize("apply", [False, True])
+def test_main_refuses_a_stale_rows_file_before_the_first_write(
+    tmp_path: Path, monkeypatch: Any, apply: bool
+) -> None:
+    """The guard is only a guard if `main` calls it - in the dry run (the report is the proof) and
+    before the first row of a real wave."""
+    run_dir, rows_path, apply_root = _gate_tree(tmp_path, {"gap-0001": ["k1", "k2"]})
+    _no_database(monkeypatch)
+    calls = _no_write(monkeypatch)
+    asked: list[Path] = []
+
+    def replan(batch: str, *, run_dir: Path, scratch: Path) -> list[str]:
+        asked.append(run_dir / batch)
+        return ["k2"]  # the writer's plan of today lost k1: every position moved
+
+    monkeypatch.setattr(write_gate, "replan_keys", replan)
+    extra = ("--apply",) if apply else ()
+    with pytest.raises(SystemExit, match="stale"):
+        write_gate.main(_gate_args(run_dir, rows_path, apply_root, *extra))
+    assert asked == [run_dir / "gap-0001"] and calls == []
+
+
+def test_the_replan_asks_the_writer_about_this_lanes_own_batch_directory(
+    tmp_path: Path, monkeypatch: Any
+) -> None:
+    run_dir = tmp_path / "runs" / "gap"
+    seen: list[list[str]] = []
+
+    def fake_run(command: list[str], **kwargs: Any) -> subprocess.CompletedProcess:
+        seen.append(command)
+        out = Path(command[command.index("--out") + 1])
+        lanes.write_jsonl(out / W.PLAN_FILE, _keys("k1", "k2"))
+        return subprocess.CompletedProcess(command, 0, stdout="{}", stderr="")
+
+    monkeypatch.setattr(write_gate.subprocess, "run", fake_run)
+    keys = write_gate.replan_keys("gap-0003", run_dir=run_dir, scratch=tmp_path / "replan")
+    assert keys == ["k1", "k2"]
+    command = seen[0]
+    assert command[command.index("--batch-dir") + 1] == str(run_dir / "gap-0003")
+    assert "--apply" not in command
+
+
+def test_a_hold_that_names_no_planned_row_is_refused(tmp_path: Path, monkeypatch: Any) -> None:
+    """One character off in a hand-typed key would hold nothing and let the held row through."""
+    rows = [_row("gap-0001", "phase3:" + "a" * 64)]
+    holds = tmp_path / "HOLDS.jsonl"
+    lanes.write_jsonl(holds, [{"change_key": "phase3:" + "a" * 63, "hold_reason": "typed by hand"}])
+    with pytest.raises(SystemExit, match="name no planned row"):
+        write_gate.load_holds(holds, rows)
+    lanes.write_jsonl(holds, [{"change_key": rows[0]["change_key"], "hold_reason": "read"}])
+    assert write_gate.load_holds(holds, rows) == {rows[0]["change_key"]: "read"}
+    assert write_gate.load_holds(tmp_path / "none.jsonl", rows) == {}
+    # the wiring: main reads the holds through the refusal, before any plan is checked
+    run_dir, rows_path, apply_root = _gate_tree(tmp_path / "wave", {"gap-0001": ["k1"]})
+    lanes.write_jsonl(apply_root / "HOLDS.jsonl", [{"change_key": "k9", "hold_reason": "typo"}])
+    _no_database(monkeypatch)
+    monkeypatch.setattr(write_gate, "replan_keys", lambda *a, **k: pytest.fail("planned"))
+    with pytest.raises(SystemExit, match="name no planned row"):
+        write_gate.main(_gate_args(run_dir, rows_path, apply_root))
+
+
+def test_a_held_row_is_withheld_whatever_the_boundary_says(monkeypatch: Any) -> None:
+    rows = [_row("gap-0001", "k1"), _row("gap-0001", "k2")]
+    monkeypatch.setattr(
+        write_gate, "gate", lambda rows, positions: {row["change_key"]: (True, "") for row in rows}
+    )
+    verdicts = write_gate.withheld(rows, positions={}, holds={"k2": "reason"})
+    assert verdicts["k1"] == (True, "") and verdicts["k2"][0] is False
+
+
+def _report(**values: Any) -> dict:
+    report = {
+        "dry_run": False,
+        "rows_written": 2,
+        "rows_matched_0": 0,
+        "rows_matched_0_reasons": [],
+        "journal_rows_added": 2,
+        "chunk_results": [{"chunk": "chunk-0001", "skipped": None}],
+    }
+    report.update(values)
+    return report
+
+
+def test_a_writer_report_that_is_not_every_row_written_and_journalled_is_a_problem() -> None:
+    assert write_gate.call_problems(_report(), expected=2) == []
+    skipped = _report(
+        rows_written=0,
+        rows_matched_0=1,
+        journal_rows_added=0,
+        chunk_results=[{"chunk": "chunk-0001", "skipped": "1 of 2 row(s) no longer hold"}],
+    )
+    problems = write_gate.call_problems(skipped, expected=2)
+    assert any("0 row(s) written, 2 handed" in p for p in problems)
+    assert any("no longer held" in p for p in problems)
+    assert any("chunk chunk-0001 skipped" in p for p in problems)
+    assert write_gate.call_problems(_report(dry_run=True), expected=2)
+    assert write_gate.call_problems(_report(journal_rows_added=1), expected=2)
+    assert write_gate.call_problems(_report(rows_written=1, journal_rows_added=1), expected=2)
+
+
+def _fake_writer(monkeypatch: Any, reports: list[dict]) -> list[list[str]]:
+    seen: list[list[str]] = []
+
+    def fake_run(command: list[str], **kwargs: Any) -> subprocess.CompletedProcess:
+        seen.append(command)
+        return subprocess.CompletedProcess(
+            command, 0, stdout=json.dumps(reports[len(seen) - 1]), stderr=""
+        )
+
+    monkeypatch.setattr(write_gate.subprocess, "run", fake_run)
+    return seen
+
+
+def test_a_chunk_the_writer_skipped_stops_the_wave_and_is_never_marked_applied(
+    tmp_path: Path, monkeypatch: Any
+) -> None:
+    """The writer exits 0 when its pre-flight finds a moved row and writes none of the chunk."""
+    rows = [_row("gap-0003", "k1"), _row("gap-0003", "k2", site=OTHER)]
+    skipped = _report(
+        rows_written=0,
+        rows_matched_0=1,
+        journal_rows_added=0,
+        chunk_results=[{"chunk": "chunk-0001", "skipped": "1 of 2 row(s) moved"}],
+    )
+    _fake_writer(monkeypatch, [skipped])
+    apply_root = tmp_path / "apply"
+    with pytest.raises(SystemExit, match="STOP at gap-0003 all"):
+        write_gate.write_batch(
+            "gap-0003", rows, [1, 2], host="h", run_dir=tmp_path, apply_root=apply_root
+        )
+    assert not (apply_root / "gap-0003" / "APPLIED.json").exists()
+    stopped = json.loads((apply_root / "gap-0003" / "STOPPED.json").read_text(encoding="utf-8"))
+    assert stopped["stopped_at_call"] == "all" and stopped["report"]["rows_written"] == 0
+    # a later wave does not walk past it
+    (tmp_path / "gap-0003").mkdir()
+    with pytest.raises(SystemExit, match="stopped in an earlier wave"):
+        write_gate.open_batches(
+            rows, {"k1": (True, ""), "k2": (True, "")}, run_dir=tmp_path, apply_root=apply_root
+        )
+
+
+def test_a_batch_whose_calls_all_wrote_what_they_were_handed_is_marked_applied(
+    tmp_path: Path, monkeypatch: Any
+) -> None:
+    rows = [_row("gap-0004", key, site=f"s{key}") for key in ("k1", "k2", "k3")]
+    one = _report(rows_written=1, journal_rows_added=1)
+    seen = _fake_writer(monkeypatch, [one, one])
+    outcome = write_gate.write_batch(
+        "gap-0004", rows, [1, 3], host="h", run_dir=tmp_path, apply_root=tmp_path / "apply"
+    )
+    assert [command[command.index("--chunk") + 1] for command in seen] == ["1", "3"]
+    assert outcome == {"written": 2, "sites": 2, "matched_0": 0, "journal": 2}
+    applied = json.loads((tmp_path / "apply" / "gap-0004" / "APPLIED.json").read_text("utf-8"))
+    assert applied == {"batch_id": "gap-0004", "rows_written": 2, "sites": 2}
+
+
+def test_a_step_read_back_with_deviations_stops_the_wave(tmp_path: Path, monkeypatch: Any) -> None:
+    run_dir, rows_path, apply_root = _gate_tree(tmp_path, {"gap-0001": ["k1"], "gap-0002": ["k2"]})
+    _no_database(monkeypatch)
+    calls = _no_write(monkeypatch)
+    monkeypatch.setattr(
+        write_gate,
+        "replan_keys",
+        lambda batch, **kwargs: ["k1"] if batch == "gap-0001" else ["k2"],
+    )
+    monkeypatch.setattr(write_gate, "read_back", lambda rows, host: ["site k1.site_type: planned"])
+    with pytest.raises(SystemExit, match="STOP after 1 sites"):
+        write_gate.main(_gate_args(run_dir, rows_path, apply_root, "--apply", "--step", "1"))
+    assert calls == ["gap-0001"]
+    # no step reached: the final read-back's deviations are the wave's exit code
+    calls.clear()
+    args = _gate_args(run_dir, rows_path, apply_root, "--apply", "--step", "100")
+    assert write_gate.main(args) == 1
+    assert calls == ["gap-0001", "gap-0002"]
+    monkeypatch.setattr(write_gate, "read_back", lambda rows, host: [])
+    assert write_gate.main(args) == 0
 
 
 # ── the reviewer driver's ceiling ────────────────────────────────────────────────────────────────
@@ -156,22 +479,34 @@ def test_the_reviewer_ceiling_counts_this_pass_and_really_stops_the_queue() -> N
     assert not_reached == todo[3:]
 
 
-# ── the hold list's pin ──────────────────────────────────────────────────────────────────────────
+# ── the dry planner ──────────────────────────────────────────────────────────────────────────────
 
 
-def test_the_hold_list_refuses_a_rows_file_whose_lines_moved() -> None:
-    rows = [{"change_key": f"phase3:{n}"} for n in range(3)]
-    with pytest.raises(SystemExit, match="would now name other rows"):
-        make_holds.assert_pinned(rows)
-    assert make_holds.keys_digest(rows) == make_holds.keys_digest(list(rows))
-    assert make_holds.keys_digest(rows) != make_holds.keys_digest(rows[::-1])
+def test_the_dry_plan_driver_reads_only_batches_with_a_review(tmp_path: Path) -> None:
+    for name, reviewed in (("gap-0001", True), ("gap-0002", False)):
+        (tmp_path / name).mkdir()
+        if reviewed:
+            (tmp_path / name / "review.json").write_text("{}", encoding="utf-8")
+    assert write_dry_all.batches_to_plan(tmp_path) == ["gap-0001"]
+
+
+def test_a_writer_that_exited_zero_without_its_plan_file_is_damage(tmp_path: Path) -> None:
+    with pytest.raises(SystemExit, match="wrote no PLAN.jsonl"):
+        write_dry_all._batch_lines(tmp_path / "PLAN.jsonl", "gap-0001")
 
 
 # ── the acceptance follows the journal chain ────────────────────────────────────────────────────
 
 
-def _planned(pk: str, column: str, old: str, new: str) -> dict:
-    return {"pk": pk, "column": column, "old_value": old, "new_value": new, "site_name": pk[:8]}
+def _planned(pk: str, column: str, old: str, new: str, *, key: str | None = None) -> dict:
+    return {
+        "pk": pk,
+        "column": column,
+        "old_value": old,
+        "new_value": new,
+        "site_name": pk[:8],
+        "change_key": key or f"key-{pk[:8]}-{column}",
+    }
 
 
 def _link(id_: int, pk: str, column: str, old: str | None, new: str | None, stamp: str) -> V.Link:
@@ -183,7 +518,13 @@ UK = "2026-09-23_mechanical-uk-parts"
 
 
 def _accept(
-    planned: list[dict], lane: list[V.Link], others: list[V.Link], live: dict
+    planned: list[dict],
+    lane: list[V.Link],
+    others: list[V.Link],
+    live: dict,
+    *,
+    withheld: set[str] = frozenset(),  # type: ignore[assignment]
+    allowed: set[str] = frozenset(),  # type: ignore[assignment]
 ) -> V.Acceptance:
     chains: dict = {}
     for link in sorted(lane + others, key=lambda link: link.id):
@@ -194,7 +535,13 @@ def _accept(
         chains=chains,
         live=live,
         present={pk for _column, pk in live},
+        withheld=withheld,
+        allowed=allowed,
     )
+
+
+def _starts(result: V.Acceptance, label: str) -> bool:
+    return any(line.startswith(label) for line in result.deviations)
 
 
 def test_a_write_that_holds_its_value_is_carried() -> None:
@@ -208,19 +555,54 @@ def test_a_write_that_holds_its_value_is_carried() -> None:
     assert (result.carried, dict(result.superseded), result.deviations) == (1, {}, [])
 
 
-def test_a_write_superseded_by_a_later_journalled_lane_is_reported_not_a_deviation() -> None:
+def test_a_write_superseded_by_a_listed_later_lane_is_reported_not_a_deviation() -> None:
     """The five phase-3 'United Kingdom' rows the Northern-Ireland lane re-spells."""
     write = _link(1, SITE, "country", "Ireland", "United Kingdom", PHASE3)
     later = _link(2, SITE, "country", "United Kingdom", "Northern Ireland", UK)
-    result = _accept(
-        [_planned(SITE, "country", "Ireland", "United Kingdom")],
-        [write],
-        [later],
-        {("country", SITE): "Northern Ireland"},
-    )
+    planned = [_planned(SITE, "country", "Ireland", "United Kingdom")]
+    live = {("country", SITE): "Northern Ireland"}
+    result = _accept(planned, [write], [later], live, allowed={UK})
     assert result.deviations == []
     assert result.carried == 0
     assert dict(result.superseded) == {UK: 1}
+    # ...and the same later write by a stamp nobody listed is a deviation, not "superseded"
+    unlisted = _accept(planned, [write], [later], live)
+    assert _starts(unlisted, "CHANGED LATER BY AN UNLISTED STAMP")
+    assert dict(unlisted.superseded) == {}
+
+
+def test_a_lane_write_of_a_value_nobody_planned_is_a_deviation() -> None:
+    """The plan said Temple -> Ruin; the journal says the lane wrote Tomb -> Monastery."""
+    write = _link(1, SITE, "site_type", "Tomb", "Monastery", PHASE3)
+    result = _accept(
+        [_planned(SITE, "site_type", "Temple", "Ruin")],
+        [write],
+        [],
+        {("site_type", SITE): "Monastery"},
+    )
+    assert _starts(result, "OTHER VALUE")
+
+
+def test_a_lane_that_wrote_one_row_twice_is_a_deviation() -> None:
+    first = _link(1, SITE, "country", "Ireland", "United Kingdom", PHASE3)
+    second = _link(2, SITE, "country", "United Kingdom", "France", "phase3:batch-0009:chunk-0001")
+    result = _accept(
+        [_planned(SITE, "country", "Ireland", "United Kingdom")],
+        [first, second],
+        [],
+        {("country", SITE): "France"},
+    )
+    assert _starts(result, "WRITTEN TWICE")
+    assert dict(result.superseded) == {}
+
+
+def test_a_withheld_row_the_lane_wrote_is_a_deviation() -> None:
+    row = _planned(SITE, "site_type", "Temple", "Ruin")
+    write = _link(1, SITE, "site_type", "Temple", "Ruin", PHASE3)
+    result = _accept(
+        [row], [write], [], {("site_type", SITE): "Ruin"}, withheld={row["change_key"]}
+    )
+    assert _starts(result, "WRITTEN THOUGH WITHHELD")
 
 
 def test_a_broken_chain_is_a_deviation_even_when_the_live_value_matches_its_end() -> None:
@@ -231,8 +613,25 @@ def test_a_broken_chain_is_a_deviation_even_when_the_live_value_matches_its_end(
         [write],
         [later],
         {("country", SITE): "Northern Ireland"},
+        allowed={UK},
     )
-    assert any(line.startswith("KETTE GERISSEN") for line in result.deviations)
+    assert _starts(result, "BROKEN CHAIN")
+
+
+def test_a_lane_row_missing_from_its_own_chain_is_a_deviation() -> None:
+    """The chain read and the lane read disagree - a window lost, or a filter dropped a row."""
+    write = _link(7, SITE, "country", "Ireland", "United Kingdom", PHASE3)
+    result = V.accept(
+        planned=[_planned(SITE, "country", "Ireland", "United Kingdom")],
+        lane_links=[write],
+        chains={},
+        live={("country", SITE): "United Kingdom"},
+        present={SITE},
+        withheld=set(),
+        allowed=set(),
+    )
+    assert _starts(result, "CHAIN INCOMPLETE")
+    assert result.carried == 0
 
 
 def test_a_live_value_that_is_not_the_chains_last_value_is_a_deviation() -> None:
@@ -243,38 +642,67 @@ def test_a_live_value_that_is_not_the_chains_last_value_is_a_deviation() -> None
         [write],
         [later],
         {("country", SITE): "United Kingdom"},  # the later lane's journal says otherwise
+        allowed={UK},
     )
-    assert any(line.startswith("NICHT NEU") for line in result.deviations)
+    assert _starts(result, "NOT NEW")
 
 
-def test_a_planned_row_the_lane_did_not_write_must_still_hold_its_old_value() -> None:
+def test_a_planned_row_neither_withheld_nor_written_is_a_deviation_not_unchanged() -> None:
+    """A chunk the writer skipped, a wave that stopped: its rows must not read as 'unchanged'."""
+    row = _planned(OTHER, "site_type", "Temple", "Ruin")
+    result = _accept([row], [], [], {("site_type", OTHER): "Temple"})
+    assert _starts(result, "NOT WRITTEN") and result.untouched == 0
+
+
+def test_a_withheld_row_must_still_hold_its_old_value() -> None:
     held = _planned(OTHER, "site_type", "Temple", "Ruin")
-    untouched = _accept([held], [], [], {("site_type", OTHER): "Temple"})
+    untouched = _accept(
+        [held], [], [], {("site_type", OTHER): "Temple"}, withheld={held["change_key"]}
+    )
     assert (untouched.untouched, untouched.deviations) == (1, [])
-    silently = _accept([held], [], [], {("site_type", OTHER): "Ruin"})
-    assert any(line.startswith("DOCH GEAENDERT") for line in silently.deviations)
+    silently = _accept(
+        [held], [], [], {("site_type", OTHER): "Ruin"}, withheld={held["change_key"]}
+    )
+    assert _starts(silently, "CHANGED ANYWAY")
 
 
-def test_a_planned_row_another_lane_changed_is_moved_by_that_lane_and_checked() -> None:
+def test_a_withheld_row_another_lane_changed_is_moved_only_for_a_listed_stamp() -> None:
     held = _planned(OTHER, "country", "Ireland", "United Kingdom")
     other = _link(5, OTHER, "country", "Ireland", "Northern Ireland", UK)
-    moved = _accept([held], [], [other], {("country", OTHER): "Northern Ireland"})
+    live = {("country", OTHER): "Northern Ireland"}
+    moved = _accept([held], [], [other], live, withheld={held["change_key"]}, allowed={UK})
     assert (dict(moved.moved), moved.deviations) == ({UK: 1}, [])
+    unlisted = _accept([held], [], [other], live, withheld={held["change_key"]})
+    assert _starts(unlisted, "CHANGED BY AN UNLISTED STAMP")
     foreign = _link(5, OTHER, "country", "Scotland", "Northern Ireland", UK)
-    unrelated = _accept([held], [], [foreign], {("country", OTHER): "Northern Ireland"})
-    assert any(line.startswith("FREMDE KETTE") for line in unrelated.deviations)
+    unrelated = _accept([held], [], [foreign], live, withheld={held["change_key"]}, allowed={UK})
+    assert _starts(unrelated, "FOREIGN CHAIN")
+    # history before the planned state is not a change after it
+    before = _link(3, OTHER, "country", "Eire", "Ireland", "2026-09-20_mechanical")
+    history = _accept(
+        [held], [], [before], {("country", OTHER): "Ireland"}, withheld={held["change_key"]}
+    )
+    assert (history.untouched, history.deviations) == (1, [])
 
 
 def test_a_lane_journal_row_outside_the_plan_is_a_deviation() -> None:
     write = _link(1, SITE, "site_type", "Temple", "Ruin", PHASE3)
     result = _accept([], [write], [], {("site_type", SITE): "Ruin"})
-    assert any(line.startswith("AUSSERHALB") for line in result.deviations)
+    assert _starts(result, "OUTSIDE THE PLAN")
 
 
 def test_a_planned_site_missing_from_the_database_is_a_deviation() -> None:
     held = _planned(OTHER, "site_type", "Temple", "Ruin")
-    result = V.accept(planned=[held], lane_links=[], chains={}, live={}, present=set())
-    assert any(line.startswith("FEHLT") for line in result.deviations)
+    result = V.accept(
+        planned=[held],
+        lane_links=[],
+        chains={},
+        live={},
+        present=set(),
+        withheld={held["change_key"]},
+        allowed=set(),
+    )
+    assert _starts(result, "MISSING")
 
 
 def test_the_lane_query_leaves_out_reversals_but_the_chain_query_reads_every_stamp() -> None:
@@ -283,6 +711,84 @@ def test_the_lane_query_leaves_out_reversals_but_the_chain_query_reads_every_sta
     chain_sql = V.chain_sql([SITE])
     assert "run_stamp" not in chain_sql.split("WHERE", 1)[1]
     assert f"'{SITE}'" in chain_sql and "ORDER BY id" in chain_sql
+
+
+def _journal_line(link: V.Link) -> str:
+    return json.dumps(
+        {
+            "id": link.id,
+            "table_name": link.table,
+            "column_name": link.column,
+            "row_pk": link.pk,
+            "old_value": link.old,
+            "new_value": link.new,
+            "run_stamp": link.stamp,
+        }
+    )
+
+
+def test_the_database_read_windows_the_rows_and_orders_every_chain_by_id() -> None:
+    pks = [f"{n:08d}-0000-4000-8000-000000000000" for n in range(450)]
+    first, last = pks[0], pks[-1]
+    calls: list[str] = []
+
+    def run(sql: str) -> str:
+        calls.append(sql)
+        if "run_stamp LIKE" in sql:
+            return _journal_line(_link(9, last, "site_type", "Temple", "Ruin", PHASE3)) + "\n"
+        if "FROM remediation_change_log" in sql:
+            lines = []
+            if f"'{last}'" in sql:  # returned out of id order on purpose
+                lines.append(_link(9, last, "site_type", "Temple", "Ruin", PHASE3))
+                lines.append(_link(3, last, "site_type", "Tomb", "Temple", "2026-09-20_x"))
+            return "".join(_journal_line(link) + "\n" for link in lines)
+        window = [pk for pk in pks if f"'{pk}'" in sql]
+        return "".join(
+            json.dumps({"id": pk, "site_type": "Ruin", "period_start": -500, "country": None})
+            + "\n"
+            for pk in window
+        )
+
+    lane_links, chains, live, present = V.read_database(pks, stamp_like="phase3:batch-%", run=run)
+    assert len(calls) == 1 + 3 * 2  # the lane's journal, then 3 windows of chain + live
+    assert present == set(pks)
+    assert [link.id for link in chains[(V.TABLE, "site_type", last)]] == [3, 9]
+    assert live[("period_start", first)] == "-500" and live[("country", first)] is None
+    assert [link.id for link in lane_links] == [9]
+
+
+def test_main_accepts_a_lane_from_what_the_database_answers(
+    tmp_path: Path, monkeypatch: Any
+) -> None:
+    written = _planned(SITE, "site_type", "Temple", "Ruin", key="k-written")
+    held = _planned(OTHER, "site_type", "Temple", "Ruin", key="k-held")
+    rows_path = tmp_path / "ALL_ROWS.jsonl"
+    lanes.write_jsonl(rows_path, [written, held])
+    holds = tmp_path / "HOLDS.jsonl"
+    lanes.write_jsonl(holds, [{"change_key": "k-held", "hold_reason": "read by hand"}])
+    monkeypatch.setattr(write_gate, "coordinates", lambda site_ids, host: {})
+    monkeypatch.setattr(
+        write_gate, "gate", lambda rows, positions: {row["change_key"]: (True, "") for row in rows}
+    )
+    link = _link(1, SITE, "site_type", "Temple", "Ruin", "phase3:gap-0001:chunk-0001")
+    live = {SITE: "Ruin", OTHER: "Temple"}
+
+    def psql(sql: str, *, host: str) -> str:
+        if "run_stamp LIKE" in sql or "FROM remediation_change_log" in sql:
+            return _journal_line(link) + "\n"
+        return "".join(
+            json.dumps({"id": pk, "site_type": value, "period_start": None, "country": None}) + "\n"
+            for pk, value in live.items()
+        )
+
+    monkeypatch.setattr(lanes, "psql", psql)
+    args = ["--lane", "gap", "--rows", str(rows_path), "--hold", str(holds)]
+    assert V.main(args) == 0
+    # without the hold, the second row is a planned row nobody wrote
+    assert V.main(["--lane", "gap", "--rows", str(rows_path), "--hold", str(tmp_path / "x")]) == 1
+    # the mass lane refuses a rows file that is not the plan it was written from
+    with pytest.raises(SystemExit, match="not the plan"):
+        V.main(["--rows", str(rows_path), "--hold", str(holds)])
 
 
 # ── the site_external_ids repair (rendered, never applied here) ─────────────────────────────────
@@ -317,7 +823,7 @@ def test_a_site_planned_twice_or_an_unresolved_site_with_a_value_is_refused() ->
 def test_the_repair_statement_is_guarded_journalled_and_pinned() -> None:
     rows = qid_repair.changes()
     apply_sql = qid_repair.render(rows, reversal=False)
-    assert qid_repair.pinned(apply_sql) == qid_repair.plan_digest(rows)
+    assert f"{qid_repair.DIGEST_HEADER}{qid_repair.plan_digest(rows)}" in apply_sql
     assert apply_sql.rstrip().count("COMMIT;") == 1 and "\nROLLBACK;" not in apply_sql
     # the conditional update names the full key, and exactly one row must match
     assert "WHERE site_id = r.site_id AND kind = r.kind AND value = r.old_value;" in apply_sql
@@ -328,6 +834,34 @@ def test_the_repair_statement_is_guarded_journalled_and_pinned() -> None:
     assert f"'{qid_repair.RUN_STAMP}'" in apply_sql
     rehearsal = qid_repair.render(rows, reversal=False, rehearsal=True)
     assert "\nROLLBACK;" in rehearsal and "COMMIT;" not in rehearsal
+
+
+def test_every_guard_and_invariant_of_the_repair_statement_raises() -> None:
+    """Each check is a predicate and a RAISE; both halves are pinned, so deleting either is red."""
+    sql = qid_repair.render(qid_repair.changes(), reversal=False)
+    # guard 1: only curated sites that still exist
+    assert "WHERE u.id IS NULL OR u.source_id <> 'ancient_nerds';" in sql
+    assert "RAISE EXCEPTION 'external-id repair: % row(s) are not curated sites', bad;" in sql
+    # guard 2: exactly one row of the kind, and it holds the planned old value
+    assert (
+        "     WHERE (SELECT count(*) FROM site_external_ids e\n"
+        "             WHERE e.site_id = p.site_id AND e.kind = p.kind) <> 1\n"
+        "        OR NOT EXISTS (SELECT 1 FROM site_external_ids e WHERE e.site_id = p.site_id\n"
+        "                          AND e.kind = p.kind AND e.value = p.old_value);"
+    ) in sql
+    assert "no longer hold the planned old value', bad;" in sql
+    # the count of changed rows
+    assert "IF moved <> expected THEN" in sql and "row(s) changed, % planned'" in sql
+    # invariant 1: every row holds the new value, and only one row of the kind is left
+    assert (
+        "             AND e.kind = p.kind AND e.value = p.new_value) <> 1\n"
+        "        OR (SELECT count(*) FROM site_external_ids e\n"
+        "             WHERE e.site_id = p.site_id AND e.kind = p.kind) <> 1;"
+    ) in sql
+    assert "row(s) do not hold the new value', bad;" in sql
+    # invariant 2: journal and plan agree in both directions
+    assert "     WHERE l.id IS NULL;" in sql
+    assert "AND NOT EXISTS (SELECT 1 FROM _ext_plan p WHERE p.change_key = l.change_key);" in sql
 
 
 def test_the_undo_swaps_the_values_and_journals_under_its_own_stamp() -> None:
@@ -347,8 +881,48 @@ def test_the_pre_flight_and_the_acceptance_compare_the_full_row() -> None:
     assert qid_repair.compare([row], {}, want="old")
 
 
-def test_the_database_reads_are_parsed_as_json_lines_and_damage_is_refused() -> None:
-    rows = V.json_rows(json.dumps({"id": 1}) + "\n\n" + json.dumps({"id": 2}) + "\n")
-    assert [row["id"] for row in rows] == [1, 2]
-    with pytest.raises(SystemExit, match="not JSON"):
-        V.json_rows("1|a|b\n")
+def _repair_database(monkeypatch: Any, *, state: str, journal: bool) -> None:
+    rows = qid_repair.changes()
+
+    def psql(sql: str, *, host: str) -> str:
+        if "FROM remediation_change_log" in sql:
+            keys = [row.change_key for row in rows] if journal else []
+            return "".join(json.dumps({"change_key": key}) + "\n" for key in keys)
+        return "".join(
+            json.dumps(
+                {
+                    "site_id": row.site_id,
+                    "kind": row.kind,
+                    "value": row.old_value if state == "old" else row.new_value,
+                }
+            )
+            + "\n"
+            for row in rows
+        )
+
+    monkeypatch.setattr(lanes, "psql", psql)
+
+
+def test_check_and_verify_read_the_database_and_refuse_an_edited_statement(
+    tmp_path: Path, monkeypatch: Any
+) -> None:
+    out = ["--dir", str(tmp_path)]
+    assert qid_repair.main(["render", *out]) == 0
+    _repair_database(monkeypatch, state="old", journal=False)
+    assert qid_repair.main(["check", *out]) == 0
+    assert qid_repair.main(["verify", *out]) == 1  # nothing applied yet: the old values are there
+    _repair_database(monkeypatch, state="new", journal=True)
+    assert qid_repair.main(["verify", *out]) == 0
+    _repair_database(monkeypatch, state="new", journal=False)
+    assert qid_repair.main(["verify", *out]) == 1  # the rows moved, but nobody journalled it
+    # a hand edit to the body, under an untouched digest header, is refused before any read
+    apply_sql = tmp_path / "APPLY.sql"
+    text = apply_sql.read_text(encoding="utf-8")
+    apply_sql.write_text(text.replace("IF n <> 1 THEN", "IF n < 0 THEN"), encoding="utf-8")
+    monkeypatch.setattr(lanes, "psql", lambda sql, host: pytest.fail("read an edited plan"))
+    with pytest.raises(SystemExit, match="APPLY.sql is not the statement this plan renders"):
+        qid_repair.main(["check", *out])
+    (tmp_path / "REHEARSAL.sql").unlink()
+    apply_sql.write_text(text, encoding="utf-8")
+    with pytest.raises(SystemExit, match="REHEARSAL.sql does not exist"):
+        qid_repair.main(["check", *out])

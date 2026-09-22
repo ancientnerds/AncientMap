@@ -16,7 +16,7 @@ import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
-import lanes  # noqa: E402 - die Pfade der Spur (Standard: der Massenlauf)
+import lanes  # noqa: E402 - the lane's paths (default: the mass run)
 
 
 def load(path: pathlib.Path) -> dict | None:

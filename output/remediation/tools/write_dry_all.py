@@ -13,8 +13,15 @@ Which run it plans is the lane's (`lanes.py`): the default is the mass run and `
 always was; `--lane gap` plans `runs/gap` into `_write_dry_gap/`. `--run-dir` and `--out` override the
 lane's two paths - for a measurement that must read one tree and write into another.
 
-    ./.venv/Scripts/python.exe output/remediation/logs/write_dry_all.py
-    ./.venv/Scripts/python.exe output/remediation/logs/write_dry_all.py --lane gap
+**A lane that has written keeps its plan** (2026-09-23). Once any batch of a lane carries an
+`APPLIED.json`, the lane's `ALL_ROWS.jsonl` is the plan its production rows were reviewed and written
+from - the acceptance and the hold list read it - and re-planning with the writer's rules of today
+would silently replace it: the citation check of 2026-09-22 turns the mass lane's 1,074 rows into
+1,028, and the acceptance then reports its 44 correct writes as deviations. So this refuses to write
+into such a lane's own dry root; a measurement goes to `--out`.
+
+    ./.venv/Scripts/python.exe output/remediation/tools/write_dry_all.py --lane gap
+    ./.venv/Scripts/python.exe output/remediation/tools/write_dry_all.py --out <scratch dir>
 """
 
 from __future__ import annotations
@@ -117,15 +124,29 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def assert_plan_replaceable(paths: lanes.Lane, out_root: pathlib.Path) -> None:
+    """Refuse to overwrite the plan a lane has written from (module docstring)."""
+    if out_root.resolve() != paths.dry_root.resolve():
+        return
+    applied = sorted(paths.apply_root.glob("*/APPLIED.json"))
+    if applied:
+        raise SystemExit(
+            f"lane {paths.name!r} has written ({len(applied)} batch(es) carry APPLIED.json under "
+            f"{paths.apply_root}), so {paths.rows} is the plan its production rows were reviewed "
+            "and written from; re-planning would replace it. Plan into --out instead"
+        )
+
+
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     paths = lanes.lane(args.lane)
     run_dir = pathlib.Path(args.run_dir) if args.run_dir else paths.run_dir
     out_root = pathlib.Path(args.out) if args.out else paths.dry_root
+    assert_plan_replaceable(paths, out_root)
     out_root.mkdir(parents=True, exist_ok=True)
     todo = batches_to_plan(run_dir)
-    print(f"Lauf: {run_dir} -> {out_root}", flush=True)
-    print(f"Batches mit Pruefbericht: {len(todo)}", flush=True)
+    print(f"run: {run_dir} -> {out_root}", flush=True)
+    print(f"batches with a review report: {len(todo)}", flush=True)
 
     rows: list[dict] = []
     refused: list[dict] = []
@@ -141,7 +162,7 @@ def main(argv: list[str] | None = None) -> int:
         for batch, code, report, problem in pool.map(plan, todo):
             if report is None:
                 failed.append(f"{batch}: exit={code} {problem}")
-                print(f"{batch} FEHLER exit={code} {problem}", flush=True)
+                print(f"{batch} FAILED exit={code} {problem}", flush=True)
                 continue
             planned += report.get("rows_planned") or 0
             sites += report.get("sites_planned") or 0
@@ -151,16 +172,16 @@ def main(argv: list[str] | None = None) -> int:
             if not report.get("rows_planned"):
                 zeros += 1
             print(
-                f"{batch} zeilen={report.get('rows_planned')} sites={report.get('sites_planned')} "
-                f"abgelehnt={sum((report.get('refused_by_rule') or {}).values())}",
+                f"{batch} rows={report.get('rows_planned')} sites={report.get('sites_planned')} "
+                f"refused={sum((report.get('refused_by_rule') or {}).values())}",
                 flush=True,
             )
 
     lanes.write_jsonl(out_root / "ALL_ROWS.jsonl", rows)
     lanes.write_jsonl(out_root / "ALL_REFUSED.jsonl", refused)
-    print(f"\nzeilen geplant: {planned} | sites: {sites} | batches ohne Zeile: {zeros}")
-    print(f"abgelehnt nach Regel: {dict(by_rule.most_common())}")
-    print(f"fehlgeschlagen: {failed}")
+    print(f"\nrows planned: {planned} | sites: {sites} | batches without a row: {zeros}")
+    print(f"refused by rule: {dict(by_rule.most_common())}")
+    print(f"failed: {failed}")
     return 1 if failed else 0
 
 

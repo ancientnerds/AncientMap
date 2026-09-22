@@ -32,7 +32,7 @@ def main() -> int:
     rows_path = pathlib.Path(args.rows) if args.rows else lanes.lane(args.lane).rows
 
     rows = lanes.read_jsonl(rows_path)
-    print(f"{len(rows)} geplante Zeilen in {rows_path}")
+    print(f"{len(rows)} planned rows in {rows_path}")
     for number, row in enumerate(
         rows[args.first - 1 : args.first - 1 + args.count], start=args.first
     ):
