@@ -35,6 +35,7 @@
 ## How to run it (the orchestrator's job, in this order)
 
 ```bash
+./.venv/Scripts/python.exe output/remediation/tools/qid_repair.py render    # REHEARSAL.sql is not versioned
 ./.venv/Scripts/python.exe output/remediation/tools/qid_repair.py check     # read-only
 ssh ancientnerds "docker exec -i ancient_nerds_db psql -U ancient_map -d ancient_map -v ON_ERROR_STOP=1" < output/remediation/qid_repair/REHEARSAL.sql
 ssh ancientnerds "docker exec -i ancient_nerds_db psql -U ancient_map -d ancient_map -v ON_ERROR_STOP=1" < output/remediation/qid_repair/APPLY.sql
