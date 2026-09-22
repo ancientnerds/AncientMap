@@ -29,6 +29,7 @@ for path in (TOOLS, REPO / "scripts" / "remediation"):
 
 import lanes  # noqa: E402
 import make_holds  # noqa: E402
+import qid_repair  # noqa: E402
 import review_all  # noqa: E402
 import verify_writes as V  # noqa: E402
 import write_dry_all  # noqa: E402
@@ -282,6 +283,68 @@ def test_the_lane_query_leaves_out_reversals_but_the_chain_query_reads_every_sta
     chain_sql = V.chain_sql([SITE])
     assert "run_stamp" not in chain_sql.split("WHERE", 1)[1]
     assert f"'{SITE}'" in chain_sql and "ORDER BY id" in chain_sql
+
+
+# ── the site_external_ids repair (rendered, never applied here) ─────────────────────────────────
+
+
+def test_the_repair_changes_only_settled_sites_and_never_the_unresolved_one() -> None:
+    rows = qid_repair.changes()
+    unresolved = {site.site_id for site in qid_repair.SITES if site.rule == "unresolved"}
+    assert unresolved and not unresolved & {row.site_id for row in rows}
+    assert all(row.old_value != row.new_value for row in rows)
+    assert len({(row.site_id, row.kind) for row in rows}) == len(rows)
+    for site in qid_repair.SITES:
+        mine = {row.kind: row for row in rows if row.site_id == site.site_id}
+        if site.rule == "unresolved":
+            continue
+        assert mine["wikidata_qid"].old_value == site.old_qid
+        assert mine["wikidata_qid"].confidence == (
+            "two_source" if site.rule == "A" else "authoritative"
+        )
+        assert ("enwiki_title" in mine) == (site.new_title is not None)
+
+
+def test_a_site_planned_twice_or_an_unresolved_site_with_a_value_is_refused() -> None:
+    site = qid_repair.SITES[0]
+    with pytest.raises(SystemExit, match="planned twice"):
+        qid_repair.changes((site, site))
+    bad = qid_repair.Site(site.site_id, site.name, "unresolved", "Q1", "Q2", "T", None, ())
+    with pytest.raises(SystemExit, match="cannot carry a new value"):
+        qid_repair.changes((bad,))
+
+
+def test_the_repair_statement_is_guarded_journalled_and_pinned() -> None:
+    rows = qid_repair.changes()
+    apply_sql = qid_repair.render(rows, reversal=False)
+    assert qid_repair.pinned(apply_sql) == qid_repair.plan_digest(rows)
+    assert apply_sql.rstrip().count("COMMIT;") == 1 and "\nROLLBACK;" not in apply_sql
+    # the conditional update names the full key, and exactly one row must match
+    assert "WHERE site_id = r.site_id AND kind = r.kind AND value = r.old_value;" in apply_sql
+    assert "IF n <> 1 THEN" in apply_sql
+    # the journal row is written in the same transaction, and checked in both directions
+    assert "INSERT INTO remediation_change_log" in apply_sql
+    assert "outside the plan" in apply_sql and "no matching journal row" in apply_sql
+    assert f"'{qid_repair.RUN_STAMP}'" in apply_sql
+    rehearsal = qid_repair.render(rows, reversal=False, rehearsal=True)
+    assert "\nROLLBACK;" in rehearsal and "COMMIT;" not in rehearsal
+
+
+def test_the_undo_swaps_the_values_and_journals_under_its_own_stamp() -> None:
+    rows = qid_repair.changes()[:1]
+    undo = qid_repair.render(rows, reversal=True)
+    row = rows[0]
+    assert f"'{row.new_value}', '{row.old_value}', '{row.change_key}-rollback'" in undo
+    assert f"'{qid_repair.ROLLBACK_STAMP}'" in undo and f"'{qid_repair.RUN_STAMP}'" not in undo
+
+
+def test_the_pre_flight_and_the_acceptance_compare_the_full_row() -> None:
+    row = qid_repair.changes()[0]
+    key = (row.site_id, row.kind)
+    assert qid_repair.compare([row], {key: [row.old_value]}, want="old") == []
+    assert qid_repair.compare([row], {key: [row.new_value]}, want="new") == []
+    assert qid_repair.compare([row], {key: [row.old_value, row.new_value]}, want="new")
+    assert qid_repair.compare([row], {}, want="old")
 
 
 def test_the_database_reads_are_parsed_as_json_lines_and_damage_is_refused() -> None:
