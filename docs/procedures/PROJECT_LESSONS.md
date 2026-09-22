@@ -29,6 +29,24 @@ sonst nicht kennt. Quellen und Datum stehen jeweils dabei; Stand ist der 19.09.2
   stdin-geskriptete Eingaben; `docker logs --since` rechnet in Host-Lokalzeit (CEST), nicht
   UTC; `pkill -f` matcht die eigene SSH-Session (stattdessen PID-Dateien).
   *(`reference-deployment-lessons:44,47,48,59`, 2026-09-17)*
+- **Der Deploy scheitert am `git pull`, nicht an den Gates — drei Ursachen, je ein Deploy
+  (2026-09-22):** (1) Eine Datei, die erst als ungetrackte Kopie auf den VPS kam und später
+  committet wurde, blockiert den Merge („untracked working tree files would be overwritten“).
+  (2) Ein root-eigenes Verzeichnis im Deploy-Baum (`output/`, seit März) bricht den Checkout
+  **mittendrin** ab: HEAD bleibt alt, die Platte ist halb neu, und jeder weitere Pull scheitert
+  an diesen Resten. Aufräumen: `git checkout -- .` plus genau die Dateien aus
+  `git diff --name-only --diff-filter=A HEAD FETCH_HEAD` löschen, die auf der Platte liegen.
+  (3) Vorab prüfen lässt sich beides auf dem VPS, ohne etwas zu ändern: `git fetch`, dann für jeden
+  Pfad aus `git diff --name-only HEAD FETCH_HEAD` Kollision und Schreibrecht testen.
+- **Shell-Skripte, die der VPS direkt ausführt, brauchen `100755` im Index.** Auf diesem
+  Windows-Checkout ist `core.filemode=false`; `git add` speichert `100644`, und der Backup-Cron
+  (`./00_backup_and_drill.sh`, ruft seine Geschwister per Pfad) wäre nach dem ersten Pull still
+  gescheitert — der Cron hat kein `MAILTO`. Stagen mit `git add --chmod=+x`. *(2026-09-22)*
+- **Lokal grün ist nicht CI-grün, wenn die Umgebungen auseinanderlaufen.** Die CI installiert
+  pytest ungepinnt (9.1: Marker auf Fixtures sind ein Fehler) und nur `requirements-api.txt` +
+  `requirements.lyra.txt` (kein geopandas); Frontend und VPS laufen auf Node 20 (jsdom ≥ 30
+  verlangt Node 22.22+). Nachweis vor einem Push: sauberer Worktree ohne gitignorierte Daten, ein
+  venv mit exakt der CI-Installationszeile, vitest unter `npx -p node@20`. *(2026-09-22)*
 
 ## Datenbank
 

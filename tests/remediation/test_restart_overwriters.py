@@ -29,6 +29,8 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
+from sqlalchemy.exc import ArgumentError
+from sqlalchemy.sql.base import Executable
 
 from api.services.card_descriptions import import_card_descriptions
 from pipeline.lyra.site_key import site_key_sql
@@ -67,6 +69,14 @@ class _Conn:
         self.rows_for = rows_for or {}
 
     def execute(self, stmt: Any, params: dict[str, Any] | None = None) -> _Result:
+        # The real Session/Connection of SQLAlchemy 2 executes only Executable objects and raises
+        # on a plain string. A fake that accepted strings let a startup import ship that failed
+        # on every production boot (2026-09-22: "Textual SQL expression ... should be explicitly
+        # declared as text(...)").
+        if not isinstance(stmt, Executable):
+            raise ArgumentError(
+                f"SQLAlchemy 2 does not execute {type(stmt).__name__} - wrap raw SQL in text()"
+            )
         sql = str(stmt)
         self.log.append((sql, dict(params or {})))
         for fragment, rows in self.rows_for.items():

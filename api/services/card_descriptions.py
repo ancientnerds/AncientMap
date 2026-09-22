@@ -39,22 +39,22 @@ CARD_DESCRIPTIONS_PATH = Path("public/data/card_descriptions.json")
 # commit c37cc07).
 CARD_DESCRIPTION_MAX_LENGTH = 200
 
-_UPSERT_SQL = """
+_UPSERT_SQL = text("""
     INSERT INTO card_stats (site_id, card_description, antiquity, fortification,
         cultural_influence, mystery, legacy, total_power, rarity_score, rarity_tier, category_group)
     VALUES (:id, :desc, 0, 0, 0, 0, 0, 0, 0, 0, 'unknown')
     ON CONFLICT (site_id) DO UPDATE SET card_description = :desc
     WHERE card_stats.card_description IS DISTINCT FROM :desc
-"""
+""")
 
 # Descriptions may reference sites deleted since the JSON was generated — one
 # stale id would FK-abort the whole import.
-_STALE_IDS_SQL = "SELECT unnest(CAST(:ids AS uuid[])) EXCEPT SELECT id FROM unified_sites"
+_STALE_IDS_SQL = text("SELECT unnest(CAST(:ids AS uuid[])) EXCEPT SELECT id FROM unified_sites")
 
-_CURRENT_DESCRIPTIONS_SQL = """
+_CURRENT_DESCRIPTIONS_SQL = text("""
     SELECT site_id::text, card_description FROM card_stats
     WHERE site_id::text = ANY(:ids)
-"""
+""")
 
 
 def load_card_descriptions(path: Path | None = None) -> dict[str, str]:
