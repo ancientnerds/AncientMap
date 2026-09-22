@@ -21,7 +21,8 @@ T05 is the country lane that was applied on 2026-09-21. Its rendering is pinned 
 delivered plan), so it carries no fourth or fifth guard: `allowed_new_values=()` and
 `premise_sql=None` render exactly the statement that was rehearsed and written.
 
-A leaf module: it imports nothing from `plan.py` or `apply.py`, so both can import it.
+A leaf module: it imports nothing from `plan.py` or `apply.py`, so both can import it. It does
+import the pipeline's own vocabularies a lane owns (the period buckets), so they are never copied.
 """
 
 from __future__ import annotations
@@ -29,6 +30,8 @@ from __future__ import annotations
 import re
 from collections.abc import Sequence
 from dataclasses import dataclass
+
+from pipeline.utils.text import PERIOD_BUCKETS
 
 _IDENTIFIER = re.compile(r"^[a-z_][a-z0-9_]*$")
 #: The label is spliced into RAISE message literals: no quote (it would end the literal) and no `%`
@@ -269,8 +272,76 @@ UK_PARTS_READBACK = journal_readback(
     ],
 )
 
-LANES: dict[str, Lane] = {lane.name: lane for lane in (T05, UK_PARTS)}
+
+def bucket_case(column: str = "period_start") -> str:
+    """`categorize_period` as a SQL expression, built from the table it walks (upper bounds only).
+
+    The same rule as the pipeline function and the frontend's `categorizePeriod`: the first bucket
+    is open below, the last open above, and no year means no bucket.
+    """
+    whens = " ".join(
+        f"WHEN {column} < {hi} THEN {sql_literal(label)}" for label, _lo, hi in PERIOD_BUCKETS[:-1]
+    )
+    return f"(CASE WHEN {column} IS NULL THEN NULL {whens} ELSE {sql_literal(PERIOD_BUCKETS[-1][0])} END)"
+
+
+_PERIOD_MISMATCH = Residual(
+    "curated rows whose period_name is not the bucket of period_start",
+    f"period_name IS DISTINCT FROM {bucket_case()}",
+)
+
+#: Phase 6 item 2 (2026-09-22): `period_name` re-derived from `period_start` wherever the two
+#: disagree - the gold standard's own rule (`GOLD_STANDARD.md:79`: "equals
+#: categorize_period(period_start)"). Phase 3 corrected 389 `period_start` values and left 219 of
+#: their labels in another bucket. The lane owns the nine bucket labels and nothing else, and every
+#: write is conditioned on the `period_start` it was derived from.
+PERIOD_NAME = Lane(
+    name="period-name",
+    column="period_name",
+    max_chars=100,
+    key_prefix="period-name-bucket",
+    run_stamp="2026-09-22_mechanical-period-name",
+    test_id="P6/period-name-bucket",
+    confidence="authoritative",
+    label="period_name derivation",
+    plan_table="_period_name_plan",
+    out_dir_name="mechanical_period_name",
+    post_commit_residual=_PERIOD_MISMATCH,
+    rehearsal_residual=_PERIOD_MISMATCH,
+    allowed_new_values=tuple(label for label, _lo, _hi in PERIOD_BUCKETS),
+    premise_sql="u.period_start::text",
+)
+
+PERIOD_NAME_READBACK = journal_readback(
+    PERIOD_NAME,
+    [
+        (
+            _PERIOD_MISMATCH.metric,
+            f"FROM unified_sites WHERE source_id = 'ancient_nerds' AND {_PERIOD_MISMATCH.predicate}",
+        ),
+        (
+            "curated rows with period_name '> 1500 AD'",
+            "FROM unified_sites WHERE source_id = 'ancient_nerds' AND period_name = '> 1500 AD'",
+        ),
+        (
+            "curated rows with a period_name but no period_start",
+            "FROM unified_sites WHERE source_id = 'ancient_nerds' "
+            "AND period_start IS NULL AND period_name IS NOT NULL",
+        ),
+        (
+            "journal rows for this run whose value is not the row's bucket",
+            "FROM remediation_change_log l JOIN unified_sites u ON u.id::text = l.row_pk "
+            f"WHERE l.run_stamp = {sql_literal(PERIOD_NAME.run_stamp)} "
+            f"AND l.new_value IS DISTINCT FROM {bucket_case('u.period_start')}",
+        ),
+    ],
+)
+
+LANES: dict[str, Lane] = {lane.name: lane for lane in (T05, UK_PARTS, PERIOD_NAME)}
 
 #: The read-only verification per lane, except T05's: that one is `apply.VERIFY_SQL`, kept there
 #: unchanged since the write it verified.
-LANE_READBACKS: dict[str, str] = {UK_PARTS.name: UK_PARTS_READBACK}
+LANE_READBACKS: dict[str, str] = {
+    UK_PARTS.name: UK_PARTS_READBACK,
+    PERIOD_NAME.name: PERIOD_NAME_READBACK,
+}

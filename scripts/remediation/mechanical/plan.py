@@ -112,7 +112,7 @@ import unicodedata
 import urllib.parse
 import urllib.request
 from collections import Counter
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime, timezone
 from pathlib import Path
@@ -791,15 +791,13 @@ def load_sites(site_ids: Iterable[str], *, reader: Any, strict: bool = True) -> 
     instead of stopping the whole run.
     """
     ids = sorted({str(s) for s in site_ids})
-    for sid in ids:
-        if not UUID_RE.match(sid):
-            raise PlanError(f"{sid!r} is not a UUID - refusing to interpolate it")
+    listed = sql_ids(ids)
     if not ids:
         return {}
     sql = (
         "SELECT id, name, coalesce(country, '<NULL>'), "
         "coalesce(lat::text, ''), coalesce(lon::text, ''), source_id "
-        "FROM unified_sites WHERE id IN (" + ", ".join(f"'{sid}'::uuid" for sid in ids) + ")"
+        f"FROM unified_sites WHERE id::text IN ({listed})"
     )
     out: dict[str, Site] = {}
     for row in reader(sql):
@@ -1267,6 +1265,84 @@ def _psql_reader() -> Any:
         return rows
 
     return read
+
+
+def psql_json_reader() -> Callable[[str], list[dict[str, Any]]]:
+    """Rows from production as JSON objects, one per line - a name may contain the `|` that
+    unaligned psql separates on, so the later lanes read `row_to_json` instead of splitting."""
+    from mechanical import apply as apply_mod
+
+    def read(sql: str) -> list[dict[str, Any]]:
+        proc = apply_mod.run_psql(f"SELECT row_to_json(t) FROM ({sql}) t", rows=True)
+        return [json.loads(line) for line in proc.stdout.splitlines() if line.strip()]
+
+    return read
+
+
+def sql_ids(ids: Iterable[str]) -> str:
+    """A SQL list of UUID literals; anything that is not a UUID is refused, never interpolated."""
+    wanted = sorted(set(ids))
+    for sid in wanted:
+        if not UUID_RE.match(sid):
+            raise PlanError(f"{sid!r} is not a UUID - refusing to interpolate it")
+    return ", ".join(sql_literal(sid) for sid in wanted)
+
+
+# ------------------------------------------------------------------------------- the journal
+@dataclass(frozen=True)
+class JournalLink:
+    """One `remediation_change_log` row for one site's field."""
+
+    id: int
+    run_stamp: str
+    test_id: str
+    old_value: str | None
+    new_value: str | None
+
+
+def load_journal(
+    reader: Callable[[str], list[dict[str, Any]]], column: str, site_ids: Iterable[str]
+) -> dict[str, tuple[JournalLink, ...]]:
+    """Every journal row for `unified_sites.<column>` of these sites, oldest first - read-only."""
+    ids = list(site_ids)
+    if not ids:
+        return {}
+    out: dict[str, list[JournalLink]] = {}
+    for r in reader(
+        "SELECT id, row_pk, run_stamp, coalesce(test_id, '') AS test_id, old_value, new_value "
+        "FROM remediation_change_log WHERE table_name = 'unified_sites' "
+        f"AND column_name = {sql_literal(column)} AND row_pk IN ({sql_ids(ids)}) ORDER BY id"
+    ):
+        out.setdefault(str(r["row_pk"]), []).append(
+            JournalLink(
+                int(r["id"]), str(r["run_stamp"]), str(r["test_id"]), r["old_value"], r["new_value"]
+            )
+        )
+    return {sid: tuple(links) for sid, links in out.items()}
+
+
+def journal_break(links: Sequence[JournalLink], live: str | None) -> tuple[str, str] | None:
+    """`(reason, note)` when a field's journal does not end at its live value, else None.
+
+    Each link must start where the one before it ended, and the last must have written the value
+    the row holds: otherwise something wrote the field around the journal, and a plan built on
+    the live value would supersede a write nobody can account for.
+    """
+    for before, after in zip(links, links[1:], strict=False):
+        if after.old_value != before.new_value:
+            return (
+                "journal-chain-broken",
+                f"journal row {after.id} starts from {after.old_value!r}, but the row before it "
+                f"({before.id}) ended at {before.new_value!r}",
+            )
+    if links and links[-1].new_value != live:
+        last = links[-1]
+        return (
+            "journal-disagrees",
+            f"the last journal row ({last.id}, {last.run_stamp}) wrote {last.new_value!r}, the "
+            f"row holds {live!r} - something wrote it without the journal",
+        )
+    return None
 
 
 def main(argv: list[str] | None = None) -> int:

@@ -75,8 +75,8 @@ from census.tests.t05_country_values import _is_canonical, _iso, _vocabulary  # 
 from mechanical.lane import UK_PARTS, sql_literal  # noqa: E402
 from mechanical.plan import (  # noqa: E402
     CURATED_SOURCE,
-    UUID_RE,
     Anchor,
+    JournalLink,
     Plan,
     PlanError,
     Site,
@@ -89,6 +89,10 @@ from mechanical.plan import (  # noqa: E402
     country_codes,
     fetch_entities,
     get_json,
+    journal_break,
+    load_journal,
+    psql_json_reader,
+    sql_ids,
     write_plan_jsonl,
     write_rollback_sql,
     write_skipped_jsonl,
@@ -250,17 +254,6 @@ def map_units_dir(cache: Path) -> Path:
 
 # ------------------------------------------------------------------------------ the candidates
 @dataclass(frozen=True)
-class JournalLink:
-    """One `remediation_change_log` row for this site's `country`."""
-
-    id: int
-    run_stamp: str
-    test_id: str
-    old_value: str | None
-    new_value: str | None
-
-
-@dataclass(frozen=True)
 class Candidate:
     """A live row in scope, with its premise, its entity and its journal chain."""
 
@@ -279,41 +272,19 @@ CANDIDATE_SQL = (
 )
 
 
-def _ids(ids: Iterable[str]) -> str:
-    wanted = sorted(set(ids))
-    for sid in wanted:
-        if not UUID_RE.match(sid):
-            raise PlanError(f"{sid!r} is not a UUID - refusing to interpolate it")
-    return ", ".join(sql_literal(sid) for sid in wanted)
-
-
 def load_candidates(reader: Callable[[str], list[dict[str, Any]]]) -> list[Candidate]:
     """The rows in scope, read from production with their QIDs and journal - read-only."""
     rows = reader(CANDIDATE_SQL)
     if not rows:
         raise PlanError("no curated row holds 'Ireland' or 'United Kingdom' - nothing to plan")
-    ids = _ids(str(r["id"]) for r in rows)
+    ids = sql_ids(str(r["id"]) for r in rows)
     qids: dict[str, list[str]] = {}
     for r in reader(
         "SELECT site_id::text AS site_id, value FROM site_external_ids "
         f"WHERE kind = 'wikidata_qid' AND site_id::text IN ({ids}) ORDER BY value"
     ):
         qids.setdefault(str(r["site_id"]), []).append(str(r["value"]))
-    journal: dict[str, list[JournalLink]] = {}
-    for r in reader(
-        "SELECT id, row_pk, run_stamp, coalesce(test_id, '') AS test_id, old_value, new_value "
-        "FROM remediation_change_log WHERE table_name = 'unified_sites' "
-        f"AND column_name = 'country' AND row_pk IN ({ids}) ORDER BY id"
-    ):
-        journal.setdefault(str(r["row_pk"]), []).append(
-            JournalLink(
-                int(r["id"]),
-                str(r["run_stamp"]),
-                str(r["test_id"]),
-                r["old_value"],
-                r["new_value"],
-            )
-        )
+    journal = load_journal(reader, LANE.column, [str(r["id"]) for r in rows])
     out: list[Candidate] = []
     for r in rows:
         sid = str(r["id"])
@@ -333,17 +304,6 @@ def load_candidates(reader: Callable[[str], list[dict[str, Any]]]) -> list[Candi
             )
         )
     return out
-
-
-def json_reader() -> Callable[[str], list[dict[str, Any]]]:
-    """Rows from production as JSON objects: a name may contain the `|` psql separates on."""
-    from mechanical import apply as apply_mod
-
-    def read(sql: str) -> list[dict[str, Any]]:
-        proc = apply_mod.run_psql(f"SELECT row_to_json(t) FROM ({sql}) t", rows=True)
-        return [json.loads(line) for line in proc.stdout.splitlines() if line.strip()]
-
-    return read
 
 
 # ------------------------------------------------------------------------------ the decision
@@ -411,20 +371,9 @@ def classify_uk(
         return refuse("no-point", "the row carries no point to locate")
 
     # the journal must agree with the live value, or the row was written around it
-    if candidate.journal:
-        for before, after in zip(candidate.journal, candidate.journal[1:], strict=False):
-            if after.old_value != before.new_value:
-                return refuse(
-                    "journal-chain-broken",
-                    f"journal row {after.id} starts from {after.old_value!r}, but the row before "
-                    f"it ({before.id}) ended at {before.new_value!r}",
-                )
-        if last is not None and last.new_value != stored:
-            return refuse(
-                "journal-disagrees",
-                f"the last journal row ({last.id}, {last.run_stamp}) wrote {last.new_value!r}, "
-                f"the row holds {stored!r} - something wrote it without the journal",
-            )
+    broken = journal_break(candidate.journal, stored)
+    if broken is not None:
+        return refuse(*broken)
 
     # 4: the geo unit
     where = units.locate(site.lat, site.lon)
@@ -955,7 +904,7 @@ def main(argv: list[str] | None = None) -> int:
             t02.NE_MAP_UNITS_ARCHIVE,
             t02.NE_MAP_UNITS_SHAPEFILE,
         )
-        candidates = load_candidates(json_reader())
+        candidates = load_candidates(psql_json_reader())
         qids = sorted({q for c in candidates for q in c.qids})
         payload = collect_witnesses(qids, fetched_at=_now())
         witness_path.parent.mkdir(parents=True, exist_ok=True)
@@ -974,7 +923,7 @@ def main(argv: list[str] | None = None) -> int:
     units = load_units(map_units_dir(args.cache) / t02.NE_MAP_UNITS_SHAPEFILE)
     codes, normalize = _vocabulary()
     uk = build_uk_plan(
-        load_candidates(json_reader()),
+        load_candidates(psql_json_reader()),
         units=units,
         codes=codes,
         normalize=normalize,

@@ -39,8 +39,11 @@ PLAN = MECHANICAL / "plan.py"
 APPLY = MECHANICAL / "apply.py"
 LANE = MECHANICAL / "lane.py"
 UK = MECHANICAL / "uk_parts.py"
+PERIOD = MECHANICAL / "period_name.py"
+TEXT = REPO / "pipeline/utils/text.py"
 TESTFILE = "tests/remediation/test_mechanical.py"
 UK_TESTS = "tests/remediation/test_mechanical_uk.py"
+PERIOD_TESTS = "tests/remediation/test_mechanical_period_name.py"
 
 #: The interpreter that runs the sweep runs the tests too: a hard-coded `.venv` path does not exist in
 #: a git worktree, and a second interpreter could test different packages than the one reporting.
@@ -417,16 +420,6 @@ CASES: list[Case] = [
                 "test_a_row_without_a_point_is_refused",
             ),
             (
-                "journal chain unbroken",
-                "            if after.old_value != before.new_value:",
-                "test_a_broken_journal_chain_is_refused",
-            ),
-            (
-                "journal agrees with the row",
-                "        if last is not None and last.new_value != stored:",
-                "test_a_journal_that_disagrees_with_the_row_is_refused",
-            ),
-            (
                 "a decided unit",
                 "    if where.unit is None:",
                 "test_a_point_at_sea_is_undecided",
@@ -526,11 +519,6 @@ CASES: list[Case] = [
                 "        if len(near) == 1:",
                 "test_an_offshore_point_takes_the_only_unit_within_tolerance",
             ),
-            (
-                "no identifier is interpolated unchecked",
-                "        if not UUID_RE.match(sid):",
-                "test_a_non_uuid_is_never_interpolated",
-            ),
         )
     ),
     *(
@@ -579,6 +567,118 @@ CASES: list[Case] = [
                 "test_the_unit_is_the_geounit_and_not_the_short_name",
             ),
         )
+    ),
+    # ------------------------------------------------ the planners' shared helpers (plan.py)
+    guard(
+        "journal chain unbroken",
+        PLAN,
+        "        if after.old_value != before.new_value:",
+        "test_a_broken_journal_chain_is_refused",
+        UK_TESTS,
+    ),
+    guard(
+        "journal agrees with the live value",
+        PLAN,
+        "    if links and links[-1].new_value != live:",
+        "test_a_journal_that_disagrees_with_the_row_is_refused",
+        UK_TESTS,
+    ),
+    guard(
+        "no identifier is interpolated unchecked",
+        PLAN,
+        "        if not UUID_RE.match(sid):",
+        "test_a_non_uuid_is_never_interpolated",
+        UK_TESTS,
+    ),
+    # ----------------------------------------------------------- the period lane (2026-09-22)
+    *(
+        guard(f"period: {label}", PERIOD, needle, test, PERIOD_TESTS)
+        for label, needle, test in (
+            (
+                "curated source only",
+                "    if row.source_id != CURATED_SOURCE:",
+                "test_a_row_of_another_source_is_refused",
+            ),
+            (
+                "no year, no bucket",
+                "    if row.period_start is None:",
+                "test_a_label_without_a_year_is_refused",
+            ),
+            (
+                "no year and no label is consistent",
+                "        if row.period_name is None:\n            return verdict(False, CONSISTENT",
+                "test_no_year_and_no_label_is_consistent",
+            ),
+            (
+                "the two implementations agree",
+                "    if bucket != shown:",
+                "test_two_implementations_that_disagree_refuse",
+            ),
+            (
+                "a label that is the bucket is left alone",
+                "    if bucket == row.period_name:",
+                "test_a_label_that_is_already_the_bucket_is_consistent",
+            ),
+            (
+                "a label to condition the write on",
+                "    if not row.period_name:",
+                "test_a_year_without_a_label_is_refused",
+            ),
+            (
+                "both journals end at the live values",
+                "        if broken is not None:\n            reason, note = broken",
+                "test_a_period_start_written_around_the_journal_is_refused",
+            ),
+            (
+                "the frontend function exists",
+                "    if len(body) != 2:",
+                "test_a_source_without_the_function_is_refused",
+            ),
+            (
+                "the frontend comparisons were read",
+                "    if not steps or last is None:",
+                "test_a_function_without_comparisons_is_refused",
+            ),
+        )
+    ),
+    *(
+        Case(f"period: {label}", PERIOD, old, new, test, PERIOD_TESTS)
+        for label, old, new, test in (
+            (
+                "the period_name journal is checked too",
+                '        ("period_name", row.name_journal, row.period_name),\n',
+                "",
+                "test_a_period_name_written_around_the_journal_is_refused",
+            ),
+            (
+                "a label after a phase-3 year is flagged",
+                '    phase3 = last_start is not None and last_start.run_stamp.startswith("phase3:")',
+                "    phase3 = False",
+                "test_a_label_left_behind_is_written_as_the_bucket",
+            ),
+            (
+                "a write carries its year",
+                "            premise=row.premise if ok else None,",
+                "            premise=None,",
+                "test_a_label_left_behind_is_written_as_the_bucket",
+            ),
+        )
+    ),
+    Case(
+        "period: the SQL bucket compares upper bounds strictly",
+        LANE,
+        'f"WHEN {column} < {hi} THEN {sql_literal(label)}"',
+        'f"WHEN {column} <= {hi} THEN {sql_literal(label)}"',
+        "test_the_sql_bucket_is_the_frontend_bucket",
+        PERIOD_TESTS,
+    ),
+    Case(
+        "categorize_period: the first bucket is open below",
+        TEXT,
+        "        if year < hi:",
+        "        if _lo <= year < hi:",
+        "test_a_year_below_the_table_floor_is_the_deep_past",
+        "tests/pipeline/test_categorize_period.py",
     ),
 ]
 

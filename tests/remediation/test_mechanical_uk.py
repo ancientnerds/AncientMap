@@ -102,7 +102,7 @@ def candidate(
     *,
     source_id: str = P.CURATED_SOURCE,
     qids: tuple[str, ...] = (QID,),
-    journal: tuple[U.JournalLink, ...] = (),
+    journal: tuple[P.JournalLink, ...] = (),
     name: str = "Boa Island",
 ) -> U.Candidate:
     return U.Candidate(
@@ -435,7 +435,7 @@ class TestClassifyUk:
         assert not verdict.ok and verdict.reason == "witness-not-collected"
 
     def test_a_phase3_write_is_superseded_and_named(self, units: Any, vocabulary: Any) -> None:
-        link = U.JournalLink(
+        link = P.JournalLink(
             28001, "phase3:batch-0148:chunk-0001", "P3/country", "Ireland", "United Kingdom"
         )
         verdict = decide(
@@ -450,7 +450,7 @@ class TestClassifyUk:
     def test_a_journal_that_disagrees_with_the_row_is_refused(
         self, units: Any, vocabulary: Any
     ) -> None:
-        link = U.JournalLink(
+        link = P.JournalLink(
             28001, "phase3:batch-0148:chunk-0001", "P3/country", "Ireland", "Wales"
         )
         verdict = decide(
@@ -459,8 +459,8 @@ class TestClassifyUk:
         assert not verdict.ok and verdict.reason == "journal-disagrees"
 
     def test_a_broken_journal_chain_is_refused(self, units: Any, vocabulary: Any) -> None:
-        first = U.JournalLink(1, "phase3:a", "P3/country", "Ireland", "United Kingdom")
-        second = U.JournalLink(2, "phase3:b", "P3/country", "Wales", "United Kingdom")
+        first = P.JournalLink(1, "phase3:a", "P3/country", "Ireland", "United Kingdom")
+        second = P.JournalLink(2, "phase3:b", "P3/country", "Wales", "United Kingdom")
         verdict = decide(
             units, vocabulary, candidate("United Kingdom", GIANTS_RING, journal=(first, second))
         )
@@ -523,7 +523,7 @@ class TestTheCollectionQuery:
 
     def test_a_non_uuid_is_never_interpolated(self) -> None:
         with pytest.raises(P.PlanError, match="not a UUID"):
-            U._ids(["x'; DROP TABLE unified_sites; --"])
+            P.sql_ids(["x'; DROP TABLE unified_sites; --"])
 
 
 # ------------------------------------------------------------------------- the delivered plan
