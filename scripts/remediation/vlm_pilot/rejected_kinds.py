@@ -39,6 +39,7 @@ from __future__ import annotations
 
 import json
 import sys
+from collections.abc import Mapping
 from pathlib import Path
 
 if str(Path(__file__).resolve().parent) not in sys.path:
@@ -50,8 +51,10 @@ from common import (  # noqa: E402
     OUT_DIR,
     REPO_ROOT,
     WIKI_IMAGES_SNAPSHOT,
+    build_tree,
     is_webp,
     read_jsonl_gz,
+    resolve,
     shard_for,
 )
 
@@ -80,10 +83,35 @@ def rejected_with_kind() -> list[dict]:
     return out
 
 
+def image_on_disk(
+    tree: Mapping[str, Mapping[str, int]],
+    collisions: Mapping[str, Mapping[str, int]],
+    site_id: str,
+    filename: str,
+) -> Path | None:
+    """The exact-case file of a `wiki_images` row: the main tree first, then the collision tree.
+
+    Looked up in `build_tree`'s listings, never with `Path.is_file()`: on this Windows checkout that
+    call is case-insensitive and would take `foo.webp` for `Foo.webp`.
+    """
+    shard = shard_for(site_id)
+    if resolve(tree, site_id, filename) is not None:
+        return OFFSITE_IMAGES / shard / filename
+    if resolve(collisions, site_id, filename) is not None:
+        return OFFSITE_CASE_COLLISIONS / shard / filename
+    return None
+
+
 def main() -> int:
     by_site: dict[str, list[dict]] = {}
     for row in read_jsonl_gz(WIKI_IMAGES_SNAPSHOT):
         by_site.setdefault(row["site_id"], []).append(row)
+
+    # One exact-case listing of each image tree (`build_tree` fails loudly on a missing root): on this
+    # Windows checkout `Path.is_file()` is case-insensitive and would accept a case-only mismatch as
+    # the file, which is the mistake the listing exists to prevent (`make_sample.py` resolves the same).
+    tree = build_tree(OFFSITE_IMAGES)
+    collisions = build_tree(OFFSITE_CASE_COLLISIONS)
 
     records: list[dict] = []
     for entry in rejected_with_kind():
@@ -164,12 +192,8 @@ def main() -> int:
         if image_id is not None:
             row = next((r for r in by_site.get(site_id or "", []) if r["id"] == image_id), None)
             if row is not None:
-                shard = shard_for(site_id)
-                path = OFFSITE_IMAGES / shard / row["filename"]
-                if not path.is_file():
-                    alt = OFFSITE_CASE_COLLISIONS / shard / row["filename"]
-                    path = alt if alt.is_file() else path
-                if path.is_file():
+                path = image_on_disk(tree, collisions, site_id, row["filename"])
+                if path is not None:
                     record["resolved_path"] = str(path)
                     record["is_riff_webp"] = is_webp(path)[0]
                     record["disk_file_size"] = path.stat().st_size

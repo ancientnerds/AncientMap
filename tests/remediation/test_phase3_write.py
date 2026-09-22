@@ -801,7 +801,9 @@ def test_a_field_the_run_was_not_built_to_ask_is_not_written_though_cleared(
 
 
 def test_a_malformed_rerun_list_is_refused_rather_than_read_generously(tmp_path: Path) -> None:
-    for bad in ([], ["country", "country"], ["name"], "country", None):
+    # `{"country": 1}` is the one only the list check catches: a mapping's keys are distinct field
+    # names, so every other test of the clause would read it as the list ["country"].
+    for bad in ([], ["country", "country"], ["name"], "country", None, {"country": 1}):
         batch_dir = _with_rerun_fields(_cleared_batch(tmp_path / str(len(str(bad)))), bad)
         with pytest.raises(InputError, match="rerun_fields"):
             W.load_plan(batch_dir)
