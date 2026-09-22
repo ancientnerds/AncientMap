@@ -165,3 +165,16 @@ before every batch, which is why nothing under `phase3/` may be edited while it 
   The harness is not what made this cheap; the model and the narrow context did.
 - Everything an agent writes down is **English**; `HUMAN_ONLY.md` and the chat stay German because
   Martin reads exactly those.
+
+### What a foreign machine does not get from this repository
+
+| needed | where it lives | who can supply it |
+| --- | --- | --- |
+| the 107 commits | local only, never pushed | Martin - a push to `main` is a live deploy, so it is his call |
+| the run state (195 MB) and the undo path | `output/remediation/run-2026-09-22-complete.tgz`, 34 MB | copy the file, then see the tools README for the restore order |
+| the SSH alias `ancientnerds` | the user's SSH config, outside the repo | Martin, or use the VPS address directly |
+| the database credentials | `.env`, policy-protected - never read it, establish a credential's presence functionally | Martin |
+| the Python environment | `.venv/` locally; the repo carries the `requirements*.txt` | rebuild it |
+| the Pi CLI | only the model stages need it (`pi -p --mode json`) | install Pi, or write the adapter |
+
+Everything else - the code, the plan, the audit, the instruments, the tests - is in git.

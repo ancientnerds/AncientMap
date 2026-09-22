@@ -7,9 +7,11 @@ They are working code, not a library: no package, no tests of their own, each on
 
 **They locate their data relative to their own path** (`Path(__file__).resolve().parent`), and that
 data - `_write_dry/`, `_write_apply/`, `phase3_runner/runs/` - lives in `output/remediation/logs/`.
-Run them from there, not from here. After a fresh clone, put them back where their path logic
-expects them:
+Run them from there, not from here. A fresh clone has no such directory - the archive named in
+`../HANDOVER.md` restores it - so restore the data first and then put the scripts beside it:
 
+    tar -xzf output/remediation/run-2026-09-22-complete.tgz -C output/remediation
+    mkdir -p output/remediation/logs
     cp output/remediation/tools/*.py output/remediation/logs/
 
 | script | what it does |
