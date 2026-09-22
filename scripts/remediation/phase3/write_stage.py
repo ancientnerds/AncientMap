@@ -32,6 +32,12 @@ report rather than dropped:
   was never fetched). A row whose citation cannot be found in the evidence is refused as
   `finder-citation-not-in-evidence`; a batch whose evidence is missing *with nothing recorded about
   it* raises, because that is a hole in the record rather than a property of one row.
+* the field is one the run was **built to ask**. A lane that re-asks only some fields of a site (the
+  gap run re-asks the 5 empty-stream and the 37 no-verdict fields of 42 sites, whose other fields the
+  mass run already decided and partly wrote) names them in the record's `rerun_fields`; a field outside
+  that list is refused as `field-not-asked-in-this-run` even if the finder answered it and the
+  reviewer cleared it, so a lane can never re-decide a field it was not planned for. A record without
+  the key is the whole site, as every record before 2026-09-22 was.
 * the field has a table (`snapshot_plan.FIELD_STORED_IN`), the value is a **fixed point** of every
   producer that rewrites the column on a container start (below), and it is a real change in the
   column's own shape (`docs/procedures/FIELD_CONTRACT.md` §3).
@@ -143,7 +149,7 @@ if __package__ in (None, ""):
 from phase3 import discover_stage as DS  # noqa: E402
 from phase3 import fetch_stage as F  # noqa: E402
 from phase3 import model as M  # noqa: E402
-from phase3 import model_stage as MS  # noqa: E402  - the excerpts the finder's prompt was built from
+from phase3 import model_stage as MS  # noqa: E402  - the finder's own evidence excerpts
 from phase3 import review_stage as RS  # noqa: E402  - the reviewer's own `applies`, not a copy
 from phase3 import snapshot_plan as SP  # noqa: E402
 from phase3.run import (
@@ -252,6 +258,9 @@ RULE_MATCHED_0 = "matched-0"
 #: The reviewer may still have cleared it - the reviewer judges the claim, not the citation's bytes -
 #: which is why the writer checks it itself (`discover_stage.source_problems`, the finder's own rule).
 RULE_CITATION = "finder-citation-not-in-evidence"
+#: The field is not one the run was built to ask (the record's `rerun_fields`).
+RULE_NOT_RERUN = "field-not-asked-in-this-run"
+RERUN_FIELDS_KEY = "rerun_fields"
 
 
 class WriteRefused(ValueError):
@@ -688,6 +697,28 @@ def _row_for(
     )
 
 
+def rerun_fields(site: Mapping[str, Any], *, batch_id: str) -> frozenset[str] | None:
+    """The fields this run was built to ask about the site, or `None` for all of them.
+
+    A present key must be a non-empty list of distinct discover fields; anything else is refused,
+    because a mistyped list would silently re-open - or silently close - fields nobody chose.
+    """
+    if RERUN_FIELDS_KEY not in site:
+        return None
+    value = site[RERUN_FIELDS_KEY]
+    if (
+        not isinstance(value, list)
+        or not value
+        or len(set(value)) != len(value)
+        or not set(value) <= set(DS.DISCOVER_FIELDS)
+    ):
+        raise InputError(
+            f"batch {batch_id}: {site.get('site_id')} carries {RERUN_FIELDS_KEY}={value!r}; it is a "
+            f"non-empty list of distinct fields out of {list(DS.DISCOVER_FIELDS)}"
+        )
+    return frozenset(value)
+
+
 def build_plan(
     *,
     batch: Mapping[str, Any],
@@ -740,6 +771,7 @@ def build_plan(
         if not site_id:
             raise InputError(f"batch {batch_id}: a site record carries no site_id")
         site_name = str(site.get("name") or "")
+        asked = rerun_fields(site, batch_id=batch_id)
         # Read once per site, and only when a finding reaches the citation check.
         pages = functools.cache(
             functools.partial(
@@ -751,6 +783,17 @@ def build_plan(
             )
         )
         for field_name in DS.DISCOVER_FIELDS:
+            if asked is not None and field_name not in asked:
+                plan.refusals.append(
+                    Refusal(
+                        site_id,
+                        field_name,
+                        RULE_NOT_RERUN,
+                        f"batch {batch_id} was built to ask {sorted(asked)} of this site; "
+                        f"{field_name} was decided elsewhere and is not re-decided here",
+                    )
+                )
+                continue
             cleared = by_field.get((site_id, field_name))
             if cleared is None:
                 plan.refusals.append(

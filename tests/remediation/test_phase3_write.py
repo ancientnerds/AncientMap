@@ -142,9 +142,7 @@ def _verdict_row(
         "applies": computed if applies is None else applies,
         "refuted": refuted,
         "reason": reason,
-        "sources": [{"url": PAGE, "quote": QUOTE}]
-        if refuted is False
-        else [],
+        "sources": [{"url": PAGE, "quote": QUOTE}] if refuted is False else [],
         "problems": list(problems),
         "unreviewable": None if asked else "the question did not fit in the evidence budget",
     }
@@ -642,9 +640,7 @@ def test_the_evidence_carries_the_finders_citations_and_the_reviewers_reason(
             ],
         },
         answers=_texts(tmp_path, {(SITE_A, "country"): _answer(proposed="United States")}),
-        evidence=_texts(
-            tmp_path / "evidence", {(SITE_A, F.FEATURE_ENWIKI): _enwiki_page(QUOTE)}
-        ),
+        evidence=_texts(tmp_path / "evidence", {(SITE_A, F.FEATURE_ENWIKI): _enwiki_page(QUOTE)}),
         fetch_failures={},
     )
     evidence = plan.rows[0].evidence
@@ -679,7 +675,8 @@ def test_an_honest_quote_passes_through_the_json_escapes_of_the_stored_page(
 ) -> None:
     """The stored enwiki page is API JSON (`\\u00c1`, `\\n`); a quote of what it says still passes."""
     page = _enwiki_page("The fort at Ávila\nwas built in 1500 BC. It stands.")
-    assert "\\u00c1vila\\nwas" in page  # the file really carries the escapes the model reads through
+    # the file really carries the escapes the model reads through
+    assert "\\u00c1vila\\nwas" in page
     batch_dir = _batch(
         tmp_path,
         cleared={(SITE_A, "country"): _cleared(SITE_A, "country")},
@@ -766,6 +763,48 @@ def test_evidence_missing_with_nothing_recorded_about_it_stops_the_plan(tmp_path
     F.EvidenceStore(batch_dir / W.EVIDENCE_DIR).path_for(SITE_A, F.FEATURE_ENWIKI).unlink()
     with pytest.raises(W.MS.EvidenceUnusable, match="fetch report records no failure"):
         W.load_plan(batch_dir)
+
+
+# ── the fields a run was built to ask (2026-09-22) ──────────────────────────────────────────────
+
+
+def _with_rerun_fields(batch_dir: Path, fields: Any) -> Path:
+    payload = json.loads((batch_dir / W.INPUT_FILE).read_text(encoding="utf-8"))
+    payload["sites"][0][W.RERUN_FIELDS_KEY] = fields
+    (batch_dir / W.INPUT_FILE).write_text(json.dumps(payload), encoding="utf-8", newline="\n")
+    return batch_dir
+
+
+def test_a_field_the_run_was_not_built_to_ask_is_not_written_though_cleared(
+    tmp_path: Path,
+) -> None:
+    """The gap run re-asks one field of 42 sites; their other fields were decided (and written)."""
+    batch_dir = _batch(
+        tmp_path,
+        cleared={
+            (SITE_A, "country"): _cleared(SITE_A, "country"),
+            (SITE_A, "period_start"): _cleared(SITE_A, "period_start"),
+        },
+        answers={
+            (SITE_A, "country"): _answer(proposed="United States"),
+            (SITE_A, "period_start"): _answer(proposed="-450"),
+        },
+    )
+    assert sorted(row.column for row in W.load_plan(batch_dir).rows) == [
+        "country",
+        "period_start",
+    ]
+    plan = W.load_plan(_with_rerun_fields(batch_dir, ["period_start"]))
+    assert [row.column for row in plan.rows] == ["period_start"]
+    refused = {refusal.field for refusal in plan.refused_fields(W.RULE_NOT_RERUN)}
+    assert refused == set(SP.DISCOVER_FIELDS) - {"period_start"}
+
+
+def test_a_malformed_rerun_list_is_refused_rather_than_read_generously(tmp_path: Path) -> None:
+    for bad in ([], ["country", "country"], ["name"], "country", None):
+        batch_dir = _with_rerun_fields(_cleared_batch(tmp_path / str(len(str(bad)))), bad)
+        with pytest.raises(InputError, match="rerun_fields"):
+            W.load_plan(batch_dir)
 
 
 def _texts(tmp_path: Path, texts: dict[tuple[str, str], str]) -> F.EvidenceStore:

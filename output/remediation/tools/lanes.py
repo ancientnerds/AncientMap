@@ -26,6 +26,8 @@ from __future__ import annotations
 
 import json
 import pathlib
+import subprocess
+from collections.abc import Iterable
 from dataclasses import dataclass
 
 REPO = pathlib.Path(__file__).resolve().parents[3]
@@ -101,6 +103,48 @@ def read_jsonl(path: pathlib.Path) -> list[dict]:
             raise SystemExit(f"{path}:{number}: not a JSON object")
         records.append(record)
     return records
+
+
+#: The production database, read-only, the way this project asks it: ssh, then psql in the container.
+HOST = "ancientnerds"
+PSQL = "docker exec -i ancient_nerds_db psql -U ancient_map -d ancient_map -v ON_ERROR_STOP=1 -t -A"
+
+
+def psql(sql: str, *, host: str = HOST) -> str:
+    """Send one statement to production and return psql's output. A non-zero exit stops the tool."""
+    result = subprocess.run(
+        ["ssh", "-o", "BatchMode=yes", host, PSQL],
+        input=sql.encode("utf-8"),
+        capture_output=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        raise SystemExit(
+            f"psql failed ({result.returncode}): {result.stderr.decode('utf-8', 'replace')}"
+        )
+    return result.stdout.decode("utf-8")
+
+
+def json_rows(text: str) -> list[dict]:
+    """One `to_jsonb(...)::text` object per line; anything else is damage, not a line to skip.
+
+    Every read goes through `to_jsonb`, so a value that contains the field separator or a newline
+    cannot shift a column or split a row.
+    """
+    rows: list[dict] = []
+    for number, line in enumerate(text.splitlines(), start=1):
+        if not line.strip():
+            continue
+        try:
+            rows.append(json.loads(line))
+        except json.JSONDecodeError as exc:
+            raise SystemExit(f"psql line {number} is not JSON: {line[:120]!r}") from exc
+    return rows
+
+
+def sql_literals(values: Iterable[str]) -> str:
+    """A comma-separated list of SQL text literals, quotes doubled."""
+    return ", ".join("'" + value.replace("'", "''") + "'" for value in values)
 
 
 def write_jsonl(path: pathlib.Path, records: list[dict]) -> None:

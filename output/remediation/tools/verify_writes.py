@@ -36,9 +36,7 @@ from __future__ import annotations
 
 import argparse
 import collections
-import json
 import pathlib
-import subprocess
 import sys
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field
@@ -47,10 +45,8 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
 import lanes  # noqa: E402 - the lane's paths and the one JSON-lines reader
 
-HOST = "ancientnerds"
 TABLE = "unified_sites"
 COLUMNS = ("site_type", "period_start", "country")
-PSQL = "docker exec -i ancient_nerds_db psql -U ancient_map -d ancient_map -v ON_ERROR_STOP=1 -t -A"
 #: A reversal's stamp suffix (`write_stage.ROLLBACK_KEY_SUFFIX`). Such a row is never counted as a
 #: write of the lane - but it is part of the chain, because a kept reversal changed the value.
 ROLLBACK_SUFFIX = "-rollback"
@@ -209,35 +205,8 @@ def accept(
 
 
 # ------------------------------------------------------------------------------------ the reads
-def psql(sql: str, *, host: str = HOST) -> str:
-    result = subprocess.run(
-        ["ssh", host, PSQL],
-        input=sql.encode("utf-8"),
-        capture_output=True,
-        check=False,
-    )
-    if result.returncode != 0:
-        raise SystemExit(
-            f"psql failed ({result.returncode}): {result.stderr.decode('utf-8', 'replace')}"
-        )
-    return result.stdout.decode("utf-8")
-
-
-def json_rows(text: str) -> list[dict]:
-    """One `to_jsonb(...)::text` object per line; anything else is damage, not a line to skip."""
-    rows: list[dict] = []
-    for number, line in enumerate(text.splitlines(), start=1):
-        if not line.strip():
-            continue
-        try:
-            rows.append(json.loads(line))
-        except json.JSONDecodeError as exc:
-            raise SystemExit(f"psql line {number} is not JSON: {line[:120]!r}") from exc
-    return rows
-
-
-def _literals(values: Iterable[str]) -> str:
-    return ", ".join("'" + value.replace("'", "''") + "'" for value in values)
+json_rows = lanes.json_rows
+_literals = lanes.sql_literals
 
 
 JOURNAL_COLUMNS = "id, table_name, column_name, row_pk, old_value, new_value, run_stamp"
@@ -295,7 +264,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--lane", default=lanes.MASS, help="which run's paths (lanes.py)")
     parser.add_argument("--rows", default=None, help="override the lane's ALL_ROWS.jsonl")
     parser.add_argument("--stamp-like", default=None, help="override the lane's stamp pattern")
-    parser.add_argument("--host", default=HOST)
+    parser.add_argument("--host", default=lanes.HOST)
     args = parser.parse_args(argv)
     paths = lanes.lane(args.lane)
     rows_path = pathlib.Path(args.rows) if args.rows else paths.rows
@@ -304,7 +273,7 @@ def main(argv: list[str] | None = None) -> int:
     planned = lanes.read_jsonl(rows_path)
     pks = sorted({row["pk"] for row in planned})
     lane_links, chains, live, present = read_database(
-        pks, stamp_like=stamp_like, run=lambda sql: psql(sql, host=args.host)
+        pks, stamp_like=stamp_like, run=lambda sql: lanes.psql(sql, host=args.host)
     )
     in_columns = [link for link in lane_links if link.column in COLUMNS and link.table == TABLE]
     print(f"Spur {paths.name}: {rows_path} | Stempel {stamp_like}")
