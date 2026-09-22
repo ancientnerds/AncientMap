@@ -20,6 +20,7 @@ from pipeline.article_html_renderer import (
 )
 from pipeline.database import NewsArticle, NewsItem, NewsVideo, get_db
 from pipeline.news_visibility import public_story_criteria
+from pipeline.utils.public_sites import RETIRED
 from pipeline.utils.slugs import BASE_URL, slugify, story_id_from_slug, story_slug
 
 logger = logging.getLogger(__name__)
@@ -317,8 +318,11 @@ def story_payload(item: NewsItem, related: list[dict]) -> dict:
         "significance": item.significance,
         # /sites/{country}/{slug} serves curated sites only (_CURATED_WHERE
         # in sites_html.py). Linking a bulk-imported site there is a 404 —
-        # 268 published stories did exactly that until 2026-08-09.
-        "site_curated": bool(site and site.source_id == "ancient_nerds"),
+        # 268 published stories did exactly that until 2026-08-09 — and a
+        # retired one (E4, migration 0020) is a 410.
+        "site_curated": bool(
+            site and site.source_id == "ancient_nerds" and site.scope_status != RETIRED
+        ),
         "screenshot_url": item.screenshot_url,
         "youtube_url": f"https://www.youtube.com/watch?v={video.id}" if video else "",
         "video_title": video.title if video else "",

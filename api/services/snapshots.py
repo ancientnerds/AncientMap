@@ -389,7 +389,8 @@ def restore_snapshot(db: Session, snapshot_id: str, restored_by: str = "system")
 
 
 #: Restores the scope columns from the snapshot rows that recorded them (the key is
-#: present from migration 0020 on). Shared by restore_snapshot and the bulk upload restore.
+#: present from migration 0020 on). restore-all-uploads (api/routes/sites.py) applies the
+#: same rule inside its single UPDATE, with a CASE on the key.
 _RESTORE_SCOPE_SQL = text("""
     UPDATE unified_sites us SET
         scope_status = sr.old_data->>'scope_status',
