@@ -88,6 +88,35 @@ that column is NULL in **all 5,004** snapshot rows and no code in this repositor
 only writer of a Q-id is `pipeline/lyra/prospector/external_ids.py:55`, into `site_external_ids`
 (`phase3/snapshot_plan.py` carries the measurement). A qid that is not a Q-number is refused
 rather than written into an `ids=` parameter that would answer with no entities at all.
+
+**2026-09-22: three additions for new runs only (the gap run of the 152 over-bound sites).** None of
+them changes a target of a record that does not ask for it, so `runs/mass` and every plan built before
+them fetch, store and prompt exactly as they did:
+
+* **A cut page says so.** A page that stopped at `MAX_PAGE_BYTES` is stored with `TRUNCATION_MARKER`
+  after the bytes read, so the prompt names what was not read instead of presenting half a page as a
+  page (27 already-judged sites of the mass run were judged against such a page, unmarked). An
+  incomplete UTF-8 sequence the cut left at the very end is dropped first - it is not text, and the
+  judge reads the file as UTF-8.
+* **A narrowed Wikidata route** (`wikidata_route: "narrow"` on the record). The full `wbgetentities`
+  answer is the bulk of an over-bound site's evidence: 92 of the 152 are cut at the page cap, and a
+  whitelist of the claims the five fields need is a median 2,147 characters. The narrowed route asks
+  for exactly that - the English label and description and the best-rank values of P31, P17, P131,
+  P2348 and P625 through the Wikidata Query Service (one query, the values' English labels included),
+  and the four time-valued properties P571, P580, P582, P1619 one by one through the JSON API
+  (`wbgetclaims`, every rank, each statement's rank shown). **Not the dates through WDQS**, measured
+  2026-09-22: WDQS rewrites a year-precision BCE date by one year (Q37200 P571: the API says
+  `-2560`, WDQS `-2559`, because XSD 1.1 counts a year 0) and converts Julian day dates to Gregorian
+  (Q12506: `537-12-27` becomes `537-12-29`), so a date read there is not the value Wikidata states.
+  Each answer is stored as a plain-text rendering, one statement per line, because that is a text a
+  finder can quote word for word - 12 of the 44 production rows whose citation fails the writer's
+  check quoted re-typed Wikidata JSON. The bytes actually read are kept beside it
+  (`evidence_raw/`), so the rendering is checkable against its source.
+* **The English article through the item's own sitelink** (`enwiki_sitelink: {qid, title}` on the
+  record, W12): 974 sites of the mass run had no article under their stored name while their item
+  links one. The title is resolved when the plan is built (`resolve_enwiki_sitelinks`), refused for
+  an item that more than one curated site shares (a parent or a generic item: 212 sites share 90
+  items), and fetched through the same extract URL as the name route.
 """
 
 from __future__ import annotations
@@ -136,6 +165,18 @@ NAMED_FEATURE_RADIUS_M = 2000
 OVERPASS_ENDPOINT = "https://overpass-api.de/api/interpreter"
 WIKIPEDIA_ENDPOINT = "https://en.wikipedia.org/w/api.php"
 WIKIDATA_ENDPOINT = "https://www.wikidata.org/w/api.php"
+#: The Wikidata Query Service. Verified 2026-09-22 with the project's User-Agent: a truthy query for
+#: Q10288 answered HTTP 200, `application/sparql-results+json`, 2,622 bytes.
+WDQS_ENDPOINT = "https://query.wikidata.org/sparql"
+
+#: What a stored page that stopped at `MAX_PAGE_BYTES` carries after its bytes. The finder reads it in
+#: the prompt and the citation check reads it in the page, and neither can mistake it for the page:
+#: it is in square brackets, like the prompt's other markers (`[failed:`, `[absent:`).
+TRUNCATION_MARKER = (
+    f"\n[truncated: this page was cut at the fetch stage's {MAX_PAGE_BYTES:,}-byte page cap "
+    "(fetch_stage.MAX_PAGE_BYTES). Everything after this point was never read, so it shows "
+    "nothing about the stored value either way.]\n"
+)
 
 #: The User-Agent this client sends, re-exported under this module's own name so the string is
 #: visible where the request is built. `census.fetch.USER_AGENT` is the project's one spelling of
@@ -207,6 +248,64 @@ FEATURE_ENWIKI = "enwiki"
 FEATURE_WIKIDATA_SEARCH = "wikidata_search"
 FEATURE_WIKIDATA_ENTITY = "wikidata_entity"
 FEATURE_OVERPASS_NAMED = "overpass_named"
+
+#: The narrowed Wikidata route (2026-09-22, new runs only; see the module docstring). It stands in for
+#: `FEATURE_WIKIDATA_ENTITY` on a record that carries `wikidata_route: "narrow"`, and only there.
+WIKIDATA_ROUTE_KEY = "wikidata_route"
+WIKIDATA_ROUTE_NARROW = "narrow"
+FEATURE_WIKIDATA_TRUTHY = "wikidata_truthy"
+#: The item-valued and coordinate properties read through WDQS, best rank, English labels included.
+TRUTHY_PROPERTIES: tuple[str, ...] = ("P31", "P17", "P131", "P2348", "P625")
+#: The time-valued properties, each read through the JSON API - never through WDQS, which rewrites
+#: BCE years and Julian dates (measured; module docstring).
+DATE_PROPERTIES: tuple[str, ...] = ("P571", "P580", "P582", "P1619")
+#: `wikidata_claims.P571` and so on: one target per time-valued property.
+DATE_FEATURE_PREFIX = "wikidata_claims."
+#: The English property labels the renderings print, as Wikidata states them (verified 2026-09-22).
+#: Fixed here rather than fetched, so a rendering is a function of the answer alone.
+PROPERTY_LABELS: dict[str, str] = {
+    "P31": "instance of",
+    "P17": "country",
+    "P131": "located in the administrative territorial entity",
+    "P2348": "time period",
+    "P625": "coordinate location",
+    "P571": "inception",
+    "P580": "start time",
+    "P582": "end time",
+    "P1619": "date of official opening",
+}
+#: The qualifiers a date statement carries that change what it says, and the values of the first,
+#: as Wikidata labels them (verified 2026-09-22). `circa` on a year is part of the year.
+QUALIFIER_LABELS: dict[str, str] = {
+    "P1480": "sourcing circumstances",
+    "P1319": "earliest date",
+    "P1326": "latest date",
+}
+SOURCING_CIRCUMSTANCES: dict[str, str] = {
+    "Q5727902": "circa",
+    "Q18122778": "presumably",
+    "Q56644435": "probably",
+    "Q18603603": "hypothetically",
+}
+#: Wikidata's time precisions (`wikibase:timePrecision`), named for the reader of a rendering.
+TIME_PRECISION: dict[int, str] = {
+    6: "millennium",
+    7: "century",
+    8: "decade",
+    9: "year",
+    10: "month",
+    11: "day",
+}
+#: The two calendar models Wikidata dates carry.
+CALENDAR_MODEL: dict[str, str] = {
+    "http://www.wikidata.org/entity/Q1985727": "proleptic Gregorian calendar",
+    "http://www.wikidata.org/entity/Q1985786": "proleptic Julian calendar",
+}
+#: The English article through the item's own sitelink (W12, new runs only).
+ENWIKI_SITELINK_KEY = "enwiki_sitelink"
+FEATURE_ENWIKI_SITELINK = "enwiki_sitelink"
+#: Where the bytes actually read are kept for a feature whose evidence file is a rendering.
+RAW_EVIDENCE_DIR = "evidence_raw"
 
 #: The fields the **discover pass** asks about (`phase3/snapshot_plan.py`), and what each buys.
 #: `card_description` lives in `card_stats` (see `snapshot_plan.FIELD_STORED_IN`); its evidence is
@@ -681,6 +780,15 @@ def wikidata_search_url(name: str) -> str:
     )
 
 
+def _require_qid(qid: str) -> str:
+    if not QID_PATTERN.fullmatch(qid):
+        raise InputError(
+            f"wikidata_qid {qid!r} is not a Q-number (Q followed by digits); refusing to build a "
+            "Wikidata URL that would answer with no entities"
+        )
+    return qid
+
+
 def wikidata_entity_url(qid: str) -> str:
     """The `wikidata_entity` target: one Q-id's claims, labels and descriptions, by id.
 
@@ -694,18 +802,13 @@ def wikidata_entity_url(qid: str) -> str:
     value answers `{"entities":{}}`, which reads as "the item says nothing" and would be recorded
     as evidence against the site's value.
     """
-    if not QID_PATTERN.fullmatch(qid):
-        raise InputError(
-            f"wikidata_qid {qid!r} is not a Q-number (Q followed by digits); refusing to build an "
-            "entity URL that would answer with no entities"
-        )
     return (
         WIKIDATA_ENDPOINT
         + "?"
         + urlencode(
             {
                 "action": "wbgetentities",
-                "ids": qid,
+                "ids": _require_qid(qid),
                 "props": "claims|labels|descriptions",
                 "languages": "en",
                 "format": "json",
@@ -713,6 +816,300 @@ def wikidata_entity_url(qid: str) -> str:
             quote_via=quote,
         )
     )
+
+
+def wikidata_truthy_query(qid: str) -> str:
+    """One WDQS query: the item's English label and description, and the best-rank values of the
+    `TRUTHY_PROPERTIES` with their English labels. No time-valued property is in it (docstring)."""
+    item = f"wd:{_require_qid(qid)}"
+    properties = " ".join(f"wd:{pid}" for pid in TRUTHY_PROPERTIES)
+    return (
+        "SELECT ?property ?value ?valueLabel WHERE { "
+        f"{{ VALUES ?property {{ {properties} }} "
+        "?property wikibase:claim ?claim ; wikibase:statementProperty ?ps . "
+        f"{item} ?claim ?statement . ?statement a wikibase:BestRank ; ?ps ?value . "
+        'OPTIONAL { ?value rdfs:label ?valueLabel . FILTER(LANG(?valueLabel) = "en") } } '
+        f'UNION {{ BIND("label" AS ?property) {item} rdfs:label ?value . '
+        'FILTER(LANG(?value) = "en") } '
+        f'UNION {{ BIND("description" AS ?property) {item} schema:description ?value . '
+        'FILTER(LANG(?value) = "en") } '
+        "}"
+    )
+
+
+def wikidata_truthy_url(qid: str) -> str:
+    """The `wikidata_truthy` target: `wikidata_truthy_query` as a WDQS GET."""
+    return (
+        WDQS_ENDPOINT
+        + "?"
+        + urlencode({"query": wikidata_truthy_query(qid), "format": "json"}, quote_via=quote)
+    )
+
+
+def wikidata_claims_url(qid: str, pid: str) -> str:
+    """One `wikidata_claims.<pid>` target: every statement of one property, as the JSON API has it.
+
+    `wbgetclaims` takes one property per request (a `P31|P17` list is refused with `param-invalid`,
+    measured by the remaining-work map), which is why each time-valued property is its own target.
+    """
+    if pid not in DATE_PROPERTIES:
+        raise InputError(f"{pid!r} is not one of the time-valued properties {DATE_PROPERTIES}")
+    return (
+        WIKIDATA_ENDPOINT
+        + "?"
+        + urlencode(
+            {
+                "action": "wbgetclaims",
+                "entity": _require_qid(qid),
+                "property": pid,
+                "format": "json",
+            },
+            quote_via=quote,
+        )
+    )
+
+
+def wikidata_sitelinks_url(qids: Iterable[str]) -> str:
+    """The items' English sitelinks, up to 50 ids per request (the API's own limit)."""
+    wanted = [_require_qid(qid) for qid in qids]
+    if not wanted or len(wanted) > 50:
+        raise InputError(f"{len(wanted)} ids: wbgetentities takes 1 to 50 per request")
+    return (
+        WIKIDATA_ENDPOINT
+        + "?"
+        + urlencode(
+            {
+                "action": "wbgetentities",
+                "ids": "|".join(wanted),
+                "props": "sitelinks",
+                "sitefilter": "enwiki",
+                "format": "json",
+            },
+            quote_via=quote,
+        )
+    )
+
+
+class EvidenceUnrenderable(ValueError):
+    """A 2xx answer for a rendered feature that is not the shape its renderer reads. Raised: a
+    rendering of an answer nobody can read would be evidence nobody fetched."""
+
+
+def _json_answer(body: bytes, *, what: str) -> Any:
+    try:
+        return json.loads(body.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise EvidenceUnrenderable(f"{what}: the answer is not JSON: {exc}") from None
+
+
+def _entity_id(uri: str) -> str:
+    """`http://www.wikidata.org/entity/Q41` -> `Q41`; any other value is returned unchanged."""
+    prefix = "http://www.wikidata.org/entity/"
+    return uri[len(prefix) :] if uri.startswith(prefix) else uri
+
+
+def render_truthy(qid: str, body: bytes) -> str:
+    """The WDQS answer as text: one line per value, sorted, and `none` for an absent property.
+
+    Sorted, so two answers with the same content render identically whatever order WDQS returned
+    them in; `none` is printed because "the item states no P2348" is evidence too, and a missing line
+    could not be told from a line that was lost.
+    """
+    what = f"{qid}/{FEATURE_WIKIDATA_TRUTHY}"
+    payload = _json_answer(body, what=what)
+    try:
+        bindings = payload["results"]["bindings"]
+    except (KeyError, TypeError):
+        raise EvidenceUnrenderable(f"{what}: no results.bindings in the answer") from None
+    label: list[str] = []
+    description: list[str] = []
+    values: dict[str, set[str]] = {pid: set() for pid in TRUTHY_PROPERTIES}
+    for binding in bindings:
+        try:
+            prop = _entity_id(binding["property"]["value"])
+            value = binding["value"]["value"]
+        except (KeyError, TypeError):
+            raise EvidenceUnrenderable(f"{what}: a binding without property/value") from None
+        if prop == "label":
+            label.append(value)
+        elif prop == "description":
+            description.append(value)
+        elif prop in values:
+            shown = _entity_id(value)
+            named = binding.get("valueLabel", {}).get("value")
+            if shown != value or named is not None:
+                shown = f"{shown} {named}" if named is not None else f"{shown} (no English label)"
+            values[prop].add(shown)
+        else:
+            raise EvidenceUnrenderable(f"{what}: a binding for a property nobody asked for: {prop}")
+    lines = [
+        f"Wikidata item {qid}, read through the Wikidata Query Service: its English label and "
+        f"description, and the best-rank values of {', '.join(TRUTHY_PROPERTIES)}.",
+        f"label (en): {' | '.join(sorted(label)) if label else 'none'}",
+        f"description (en): {' | '.join(sorted(description)) if description else 'none'}",
+    ]
+    for pid in TRUTHY_PROPERTIES:
+        head = f"{pid} {PROPERTY_LABELS[pid]}"
+        if not values[pid]:
+            lines.append(f"{head}: none")
+        lines.extend(f"{head}: {value}" for value in sorted(values[pid]))
+    return "\n".join(lines) + "\n"
+
+
+def _render_datavalue(snak: Mapping[str, Any]) -> str:
+    """One snak's value in words: a time with its precision and calendar, an item id, or the text."""
+    kind = snak.get("snaktype")
+    if kind == "novalue":
+        return "no value"
+    if kind == "somevalue":
+        return "unknown value"
+    datavalue = snak.get("datavalue") or {}
+    value = datavalue.get("value")
+    if datavalue.get("type") == "time" and isinstance(value, Mapping):
+        precision = value.get("precision")
+        calendar = CALENDAR_MODEL.get(str(value.get("calendarmodel")), value.get("calendarmodel"))
+        return (
+            f"{value.get('time')} (precision {precision} = "
+            f"{TIME_PRECISION.get(precision, 'unnamed')}, {calendar})"
+        )
+    if datavalue.get("type") == "wikibase-entityid" and isinstance(value, Mapping):
+        item = str(value.get("id"))
+        return f"{item} {SOURCING_CIRCUMSTANCES[item]}" if item in SOURCING_CIRCUMSTANCES else item
+    if isinstance(value, Mapping):
+        return json.dumps(value, ensure_ascii=False, sort_keys=True)
+    return str(value)
+
+
+def render_claims(qid: str, pid: str, body: bytes) -> str:
+    """The `wbgetclaims` answer for one property as text: one line per statement, every rank.
+
+    References are left out (they are what makes an entity 60 KB); qualifiers stay, because a
+    `sourcing circumstances: circa` qualifier is part of what a date says.
+    """
+    what = f"{qid}/{DATE_FEATURE_PREFIX}{pid}"
+    payload = _json_answer(body, what=what)
+    if not isinstance(payload, Mapping) or "claims" not in payload:
+        raise EvidenceUnrenderable(f"{what}: no `claims` in the answer: {str(payload)[:200]}")
+    claims = payload["claims"]
+    statements = claims.get(pid, []) if isinstance(claims, Mapping) else None
+    if statements is None or (isinstance(claims, Mapping) and set(claims) - {pid}):
+        raise EvidenceUnrenderable(f"{what}: the answer carries claims other than {pid}")
+    head = f"{pid} {PROPERTY_LABELS[pid]}"
+    lines = [
+        f"Wikidata item {qid}, property {head}, read through the Wikidata API (wbgetclaims), "
+        "every statement with its rank; references are not shown."
+    ]
+    if not statements:
+        lines.append(f"{head}: none")
+    for statement in statements:
+        lines.append(
+            f"{head}: {_render_datavalue(statement.get('mainsnak') or {})} "
+            f"(rank {statement.get('rank')})"
+        )
+        for qualifier, snaks in sorted((statement.get("qualifiers") or {}).items()):
+            named = (
+                f"{qualifier} {QUALIFIER_LABELS[qualifier]}"
+                if qualifier in QUALIFIER_LABELS
+                else qualifier
+            )
+            for snak in snaks:
+                lines.append(f"  qualifier {named}: {_render_datavalue(snak)}")
+    return "\n".join(lines) + "\n"
+
+
+def rendered_evidence(target: Target, body: bytes) -> str | None:
+    """The text a rendered feature stores instead of the answer, or `None` for a verbatim feature."""
+    qid = target.qid
+    if target.feature == FEATURE_WIKIDATA_TRUTHY:
+        return render_truthy(str(qid), body)
+    if target.feature.startswith(DATE_FEATURE_PREFIX):
+        return render_claims(str(qid), target.feature[len(DATE_FEATURE_PREFIX) :], body)
+    return None
+
+
+def enwiki_titles_from_sitelinks(body: bytes) -> dict[str, str | None]:
+    """`{qid: English article title or None}` out of a `wikidata_sitelinks_url` answer.
+
+    An id the answer marks `missing` raises: that item does not exist, which is a fact about the
+    record's id, not an item without an article.
+    """
+    payload = _json_answer(body, what="wbgetentities sitelinks")
+    entities = payload.get("entities") if isinstance(payload, Mapping) else None
+    if not isinstance(entities, Mapping):
+        raise EvidenceUnrenderable(f"sitelinks answer carries no entities: {str(payload)[:200]}")
+    titles: dict[str, str | None] = {}
+    for qid, entity in entities.items():
+        if "missing" in entity:
+            raise EvidenceUnrenderable(f"{qid}: Wikidata says this item does not exist")
+        link = (entity.get("sitelinks") or {}).get("enwiki")
+        titles[qid] = link.get("title") if isinstance(link, Mapping) else None
+    return titles
+
+
+@dataclass(frozen=True)
+class SitelinkResolution:
+    """What the item's sitelink gives a site: an article title, or the reason it gives none."""
+
+    qid: str
+    title: str | None
+    refused: str | None
+
+    def to_record(self) -> dict[str, str]:
+        """The record field targets_for_site reads. Only a resolution with a title has one."""
+        if self.title is None or self.refused is not None:
+            raise InputError(f"{self.qid}: no usable sitelink ({self.refused or 'no article'})")
+        return {"qid": self.qid, "title": self.title}
+
+
+def resolve_enwiki_sitelinks(
+    qids_by_site: Mapping[str, str],
+    *,
+    shared: Mapping[str, int],
+    fetcher: Fetcher,
+) -> dict[str, SitelinkResolution]:
+    """`{site_id: resolution}` for the sites to route through their item's English sitelink.
+
+    `shared` is `{qid: number of curated sites carrying it}` over the whole curated set, not over
+    this selection: an item that more than one site shares is a parent or a generic item (212 sites
+    share 90 items; `Dolmens of Sardinia` links `Dolmen`), and its article describes something other
+    than any one of them - so it is refused, with the count, and nothing is fetched for it. Every
+    other item is asked in batches of 50; a request that is not a 2xx raises (the plan builder is
+    run by hand, and a plan built on a failed lookup would silently route fewer sites).
+    """
+    resolutions: dict[str, SitelinkResolution] = {}
+    wanted: dict[str, list[str]] = {}
+    for site_id, qid in sorted(qids_by_site.items()):
+        count = shared.get(_require_qid(qid), 0)
+        if count > 1:
+            resolutions[site_id] = SitelinkResolution(
+                qid=qid,
+                title=None,
+                refused=f"{qid} is carried by {count} curated sites: a shared item describes a "
+                "parent or a generic entity, not this site",
+            )
+            continue
+        wanted.setdefault(qid, []).append(site_id)
+    ordered = sorted(wanted)
+    for start in range(0, len(ordered), 50):
+        window = ordered[start : start + 50]
+        url = wikidata_sitelinks_url(window)
+        page = fetcher.get(url)
+        if not page.ok or page.truncated:
+            raise EvidenceUnrenderable(
+                f"GET {url}: HTTP {page.status}, truncated={page.truncated}; no sitelink resolved"
+            )
+        titles = enwiki_titles_from_sitelinks(page.body)
+        for qid in window:
+            if qid not in titles:
+                raise EvidenceUnrenderable(f"{qid}: asked for, and absent from the answer")
+            for site_id in wanted[qid]:
+                title = titles[qid]
+                resolutions[site_id] = SitelinkResolution(
+                    qid=qid,
+                    title=title,
+                    refused=None if title else f"{qid} has no English Wikipedia sitelink",
+                )
+    return resolutions
 
 
 def overpass_named_feature_url(name: str, *, lat: float, lon: float) -> str:
@@ -753,6 +1150,8 @@ class Target:
     feature: str
     url: str
     reason: str  #: "<test_id> <field>" of the finding that bought this target
+    #: The item a rendered Wikidata feature is about - its rendering names it. `None` elsewhere.
+    qid: str | None = None
 
     @property
     def label(self) -> str:
@@ -810,6 +1209,7 @@ def targets_for_site(site: Mapping[str, Any]) -> list[Target]:
         f for f in findings if str(f.get("test_id", "")).partition("/")[0] not in NO_FETCH_PREFIXES
     ]
     qid = site.get("wikidata_qid")
+    routes = _routes(site, site_id, name)
     targets: dict[str, Target] = {}
     for finding in usable:
         test_id = str(_finding(finding, "test_id", f"site {site_id}"))
@@ -820,23 +1220,88 @@ def targets_for_site(site: Mapping[str, Any]) -> list[Target]:
                 f"covers (known fields: {sorted(FEATURES_FOR_FIELD)})"
             )
         reason = f"{test_id} {field_name}"
-        for feature in FEATURES_FOR_FIELD[field_name]:
-            if feature in targets:
+        for slot in FEATURES_FOR_FIELD[field_name]:
+            if slot == FEATURE_WIKIDATA_ENTITY and not qid:
                 continue
-            if feature == FEATURE_WIKIDATA_ENTITY and not qid:
-                continue
-            targets[feature] = Target(
-                site_id=site_id,
-                feature=feature,
-                url=_url_for(feature, site, site_id, name),
-                reason=reason,
-            )
+            for feature in routes.get(slot, (slot,)):
+                if feature in targets:
+                    continue
+                targets[feature] = Target(
+                    site_id=site_id,
+                    feature=feature,
+                    url=_url_for(feature, site, site_id, name),
+                    reason=reason,
+                    qid=str(qid) if feature in _QID_FEATURES or _is_date(feature) else None,
+                )
     return list(targets.values())
+
+
+#: The rendered features whose rendering names the item.
+_QID_FEATURES = frozenset({FEATURE_WIKIDATA_TRUTHY})
+
+
+def _is_date(feature: str) -> bool:
+    return feature.startswith(DATE_FEATURE_PREFIX)
+
+
+def _routes(site: Mapping[str, Any], site_id: str, name: str) -> dict[str, tuple[str, ...]]:
+    """Which concrete features a record's slots expand to. Empty for every record that asks for
+    nothing new - so a plan built before 2026-09-22 buys exactly the targets it always bought.
+
+    `wikidata_route: "narrow"` puts the narrowed features in the `wikidata_entity` slot;
+    `enwiki_sitelink: {qid, title}` adds the item's English article after the name route. Any other
+    value of either key is refused rather than ignored: a misspelt route would silently buy the full
+    entity again, the evidence the route exists to avoid.
+    """
+    routes: dict[str, tuple[str, ...]] = {}
+    route = site.get(WIKIDATA_ROUTE_KEY)
+    if route is not None:
+        if route != WIKIDATA_ROUTE_NARROW:
+            raise InputError(
+                f"{site_id}: {WIKIDATA_ROUTE_KEY}={route!r}; the one route this stage knows is "
+                f"{WIKIDATA_ROUTE_NARROW!r}"
+            )
+        if not site.get("wikidata_qid"):
+            raise InputError(
+                f"{site_id}: {WIKIDATA_ROUTE_KEY}={route!r} on a record without a wikidata_qid"
+            )
+        routes[FEATURE_WIKIDATA_ENTITY] = (
+            FEATURE_WIKIDATA_TRUTHY,
+            *(f"{DATE_FEATURE_PREFIX}{pid}" for pid in DATE_PROPERTIES),
+        )
+    link = site.get(ENWIKI_SITELINK_KEY)
+    if link is not None:
+        if not isinstance(link, Mapping) or set(link) != {"qid", "title"}:
+            raise InputError(f"{site_id}: {ENWIKI_SITELINK_KEY} is {link!r}, not {{qid, title}}")
+        if link["qid"] != site.get("wikidata_qid"):
+            raise InputError(
+                f"{site_id}: the sitelink was resolved for {link['qid']!r}, the record carries "
+                f"{site.get('wikidata_qid')!r} - a stale resolution routes to another item's article"
+            )
+        title = link["title"]
+        if not isinstance(title, str) or not title.strip():
+            raise InputError(f"{site_id}: {ENWIKI_SITELINK_KEY} carries no title")
+        if title == name:
+            raise InputError(
+                f"{site_id}: the sitelink title is the stored name {name!r}; the name route already "
+                "fetches that article, and a second copy would count twice against the bound"
+            )
+        routes[FEATURE_ENWIKI] = (FEATURE_ENWIKI, FEATURE_ENWIKI_SITELINK)
+    return routes
 
 
 def _url_for(feature: str, site: Mapping[str, Any], site_id: str, name: str) -> str:
     if feature == FEATURE_ENWIKI:
         return wikipedia_extract_url(name)
+    if feature == FEATURE_ENWIKI_SITELINK:
+        return wikipedia_extract_url(str(site[ENWIKI_SITELINK_KEY]["title"]))
+    if feature == FEATURE_WIKIDATA_TRUTHY:
+        return wikidata_truthy_url(str(_finding(site, "wikidata_qid", f"site {site_id}")))
+    if _is_date(feature):
+        return wikidata_claims_url(
+            str(_finding(site, "wikidata_qid", f"site {site_id}")),
+            feature[len(DATE_FEATURE_PREFIX) :],
+        )
     if feature == FEATURE_WIKIDATA_SEARCH:
         return wikidata_search_url(name)
     if feature == FEATURE_WIKIDATA_ENTITY:
@@ -879,6 +1344,21 @@ class EvidenceStore:
 
     def exists(self, site_id: str, feature: str) -> bool:
         return self.path_for(site_id, feature).exists()
+
+    def raw_path_for(self, site_id: str, feature: str) -> Path:
+        """Where the bytes read for a rendered feature are kept: `evidence_raw/` beside the store."""
+        return self.root.parent / RAW_EVIDENCE_DIR / f"{self.slug(site_id, feature)}.txt"
+
+    def write_raw(self, *, site_id: str, feature: str, body: bytes) -> Path:
+        """Keep the bytes a rendering was made from. Overwritten on a re-fetch, because the rendered
+        file - not this one - is the record `exists` reads, and a re-fetch only happens when that
+        file was deleted to ask again."""
+        path = self.raw_path_for(site_id, feature)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_suffix(".tmp")
+        tmp.write_bytes(body)
+        tmp.replace(path)
+        return path
 
     def write(self, *, site_id: str, feature: str, body: bytes) -> EvidenceFile:
         path = self.path_for(site_id, feature)
@@ -1004,6 +1484,7 @@ class TargetOutcome:
             "failure": self.failure,
             "not_attempted": self.not_attempted,
             "requests": self.requests,
+            "truncated": self.truncated,
             "url": self.url,
         }
 
@@ -1301,7 +1782,11 @@ def one_attempt(
         if page is not None and page.ok:
             # A valid *empty* answer (Overpass `"elements": []`) is an OK attempt like any other:
             # the file is the record that the question was asked *and answered with nothing*.
-            store.write(site_id=target.site_id, feature=target.feature, body=page.body)
+            store.write(
+                site_id=target.site_id,
+                feature=target.feature,
+                body=stored_body(target, store, page),
+            )
             outcome.stored = True
             outcome.truncated = page.truncated
         outcome.attempts.append(attempt)
@@ -1312,6 +1797,43 @@ def one_attempt(
             wait = asked
         sleep(wait)
     raise AssertionError("unreachable: the loop returns on its last attempt")  # pragma: no cover
+
+
+def _complete_utf8(body: bytes) -> bytes:
+    """`body` without the incomplete UTF-8 sequence a cut can leave at its very end.
+
+    Only the last three bytes are looked at: a cut splits at most one character, and anything wrong
+    earlier in the page is the page's own and stays as it was read.
+    """
+    for drop in range(0, min(3, len(body)) + 1):
+        try:
+            (body[: len(body) - drop] if drop else body).decode("utf-8")
+        except UnicodeDecodeError:
+            continue
+        return body[: len(body) - drop] if drop else body
+    return body
+
+
+def stored_body(target: Target, store: EvidenceStore, page: FetchedPage) -> bytes:
+    """What goes into the evidence file for one 2xx answer.
+
+    A verbatim feature stores the bytes read, plus `TRUNCATION_MARKER` when the page stopped at the
+    cap. A rendered feature (the narrowed Wikidata route) keeps the bytes read in `evidence_raw/` and
+    stores its rendering; such an answer is a few kilobytes, and one that nevertheless hit the cap is
+    refused rather than rendered from half a JSON document.
+    """
+    if target.feature in _QID_FEATURES or _is_date(target.feature):
+        if page.truncated:
+            raise EvidenceUnrenderable(
+                f"{target.label}: the answer hit the {MAX_PAGE_BYTES}-byte cap; a rendering of a "
+                "cut JSON document would be a rendering of evidence nobody read"
+            )
+        store.write_raw(site_id=target.site_id, feature=target.feature, body=page.body)
+        rendered = rendered_evidence(target, page.body)
+        return str(rendered).encode("utf-8")
+    if page.truncated:
+        return _complete_utf8(page.body) + TRUNCATION_MARKER.encode("utf-8")
+    return page.body
 
 
 def _ask(
