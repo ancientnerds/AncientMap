@@ -13,6 +13,8 @@ import re
 import threading
 import time
 from dataclasses import dataclass
+from datetime import datetime, timedelta
+from typing import Any, NamedTuple
 
 import httpx
 
@@ -174,19 +176,223 @@ def create_minimax_client(base_url: str, api_key: str) -> httpx.Client:
     )
 
 
-def minimax_search(client: httpx.Client, query: str) -> list[WebSearchResult]:
-    """Call MiniMax search endpoint."""
-    try:
-        resp = client.post(MINIMAX_SEARCH_PATH, json={"q": query})
-        resp.raise_for_status()
-        data = resp.json()
-    except Exception as e:
-        logger.warning(f"MiniMax search failed for '{query}': {e}")
-        return []
+# --- Coding-plan endpoints (search, VLM): one strict call, typed errors ------
+# `/v1/coding_plan/search` and `/v1/coding_plan/vlm` share one failure grammar:
+# an HTTP status, and inside a 2xx body a `base_resp.status_code` that is 0 on
+# success (docs/research/minimax-web-search-mcp-research.md: 1004 invalid key,
+# 2038 real-name verification; minimax_limiter: 2056 budget, 2062 plan rate
+# cap). Until 2026-09-22 both helpers turned every one of those into an empty
+# result, so "the key is dead" and "nothing was found" were the same value.
+# The strict functions below raise instead; `minimax_search` / `minimax_vlm`
+# stay as thin wrappers that keep their callers' empty-on-failure behaviour.
 
-    results = []
-    for item in data.get("organic", []):
-        results.append(
+#: `base_resp.status_code` values that mean the account cannot use the
+#: endpoint at all: an invalid key (1004) and a missing real-name
+#: verification (2038). No retry changes either, so both are auth failures.
+_CODING_PLAN_AUTH_CODES = frozenset({1004, 2038})
+
+
+class CodingPlanError(RuntimeError):
+    """A `/v1/coding_plan/*` call that produced no usable answer.
+
+    `http_status` is the status that arrived (None when no response arrived
+    at all) and `body_bytes` the length of the body that was read, so a
+    caller that records every request - the phase-3 search stage writes one
+    ledger line per call - can do so without re-deriving either.
+    """
+
+    def __init__(self, message: str, *, http_status: int | None = None, body_bytes: int = 0):
+        super().__init__(message)
+        self.http_status = http_status
+        self.body_bytes = body_bytes
+
+
+class CodingPlanTransportError(CodingPlanError):
+    """No response arrived (DNS, connect, TLS, reset, timeout mid-body)."""
+
+
+class CodingPlanAuthError(MiniMaxAuthError, CodingPlanError):
+    """401/403, an auth-worded error body, or base_resp 1004/2038."""
+
+
+class CodingPlanQuotaError(QuotaExhaustedError, CodingPlanError):
+    """The plan's budget is spent (2056 / 'usage limit reached')."""
+
+
+class CodingPlanThrottleError(CodingPlanError):
+    """The plan's short-window rate cap (2062): a trough, not the budget."""
+
+
+class CodingPlanHTTPError(MiniMaxTerminalError, CodingPlanError):
+    """Any other non-2xx answer (5xx, a plain 429, 400, 404 ...)."""
+
+
+class CodingPlanResponseError(CodingPlanError):
+    """A 2xx answer that carries no usable result: a body that is not JSON,
+    a non-zero `base_resp.status_code` that is none of the codes above, or a
+    required field (`organic`, `content`) that is absent or empty."""
+
+
+class CodingPlanShapeError(CodingPlanError):
+    """A 2xx JSON body that contradicts the documented shape (not an object,
+    `organic` not a list, a result that is not an object, `content` that is
+    not text). A contract break, not an empty answer."""
+
+
+def _coding_plan_post(
+    client: httpx.Client, path: str, payload: dict, *, timeout: float | None = None
+) -> httpx.Response:
+    """POST once. Only a transport failure is turned into a typed error here."""
+    try:
+        if timeout is None:
+            return client.post(path, json=payload)
+        return client.post(path, json=payload, timeout=timeout)
+    except httpx.HTTPError as exc:
+        raise CodingPlanTransportError(f"POST {path}: {type(exc).__name__}: {exc}") from exc
+
+
+def _raise_for_coding_plan_status(resp: httpx.Response, *, what: str) -> None:
+    """Raise the typed error a non-2xx answer stands for. A 2xx returns."""
+    status = resp.status_code
+    if 200 <= status < 300:
+        return
+    body = resp.text or ""
+    size = len(resp.content)
+    detail = f"{what}: HTTP {status}: {body[:300]}"
+    if status in (401, 403):
+        raise CodingPlanAuthError(detail, http_status=status, body_bytes=size)
+    # Budget before throttle: a body carrying both markers is read as the
+    # budget (minimax_limiter.is_plan_rate_throttle's own rule).
+    if is_quota_error(body):
+        raise CodingPlanQuotaError(detail, http_status=status, body_bytes=size)
+    if is_plan_rate_throttle(body):
+        raise CodingPlanThrottleError(detail, http_status=status, body_bytes=size)
+    if _is_auth_error(body):
+        raise CodingPlanAuthError(detail, http_status=status, body_bytes=size)
+    raise CodingPlanHTTPError(detail, http_status=status, body_bytes=size)
+
+
+def _coding_plan_json(resp: httpx.Response, *, what: str) -> dict[str, Any]:
+    """The 2xx body as a JSON object whose `base_resp` signals no error.
+
+    A `base_resp` without a `status_code` signals nothing and is accepted;
+    a present, non-zero code raises the typed error it stands for.
+    """
+    status = resp.status_code
+    size = len(resp.content)
+    try:
+        data = resp.json()
+    except ValueError as exc:  # json.JSONDecodeError and UnicodeDecodeError
+        raise CodingPlanResponseError(
+            f"{what}: HTTP {status} body is not JSON: {exc}", http_status=status, body_bytes=size
+        ) from exc
+    if not isinstance(data, dict):
+        raise CodingPlanShapeError(
+            f"{what}: HTTP {status} body is {type(data).__name__}, not a JSON object",
+            http_status=status,
+            body_bytes=size,
+        )
+    base = data.get("base_resp")
+    if base is None:
+        return data
+    if not isinstance(base, dict):
+        raise CodingPlanShapeError(
+            f"{what}: base_resp is {type(base).__name__}, not an object",
+            http_status=status,
+            body_bytes=size,
+        )
+    code = base.get("status_code")
+    if code is None:
+        return data
+    if not isinstance(code, int) or isinstance(code, bool):
+        raise CodingPlanShapeError(
+            f"{what}: base_resp.status_code={code!r} is not an integer",
+            http_status=status,
+            body_bytes=size,
+        )
+    if code == 0:
+        return data
+    message = base.get("status_msg")
+    detail = f"{what}: base_resp.status_code={code} ({message!r})"
+    marker = f"{message} ({code})"
+    if code in _CODING_PLAN_AUTH_CODES:
+        raise CodingPlanAuthError(detail, http_status=status, body_bytes=size)
+    if is_quota_error(marker):
+        raise CodingPlanQuotaError(detail, http_status=status, body_bytes=size)
+    if is_plan_rate_throttle(marker):
+        raise CodingPlanThrottleError(detail, http_status=status, body_bytes=size)
+    raise CodingPlanResponseError(detail, http_status=status, body_bytes=size)
+
+
+class SearchHit(NamedTuple):
+    """One organic result that names a page, with its 1-based engine rank."""
+
+    rank: int
+    result: WebSearchResult
+
+
+@dataclass(frozen=True)
+class SearchResponse:
+    """One answered search.
+
+    `items` is every organic entry in engine order, built exactly as the
+    legacy loop built them (`.get(key, "")`) - that is what `minimax_search`
+    returns, so its three callers see the same objects as before. `hits` is
+    the strict view: only the entries whose `link` is a non-empty string, each
+    with its engine rank. An entry without a link names no page and cannot be
+    cited; it is counted in `linkless`, never turned into a url of "".
+    """
+
+    query: str
+    items: tuple[WebSearchResult, ...]
+    http_status: int
+    body_bytes: int
+
+    @property
+    def hits(self) -> tuple[SearchHit, ...]:
+        return tuple(
+            SearchHit(rank=rank, result=item)
+            for rank, item in enumerate(self.items, start=1)
+            if isinstance(item.url, str) and item.url
+        )
+
+    @property
+    def linkless(self) -> int:
+        return len(self.items) - len(self.hits)
+
+
+def minimax_search_strict(client: httpx.Client, query: str) -> SearchResponse:
+    """Call the MiniMax search endpoint once; raise a typed error on failure.
+
+    `organic: []` is a real "no hits" and comes back as an empty response;
+    a body without `organic` is not one and raises. Nothing is retried here.
+    """
+    what = f"MiniMax search {query!r}"
+    resp = _coding_plan_post(client, MINIMAX_SEARCH_PATH, {"q": query})
+    _raise_for_coding_plan_status(resp, what=what)
+    data = _coding_plan_json(resp, what=what)
+    status = resp.status_code
+    size = len(resp.content)
+    if "organic" not in data:
+        raise CodingPlanResponseError(
+            f"{what}: the answer carries no `organic` field", http_status=status, body_bytes=size
+        )
+    organic = data["organic"]
+    if not isinstance(organic, list):
+        raise CodingPlanShapeError(
+            f"{what}: `organic` is {type(organic).__name__}, not a list",
+            http_status=status,
+            body_bytes=size,
+        )
+    items: list[WebSearchResult] = []
+    for position, item in enumerate(organic, start=1):
+        if not isinstance(item, dict):
+            raise CodingPlanShapeError(
+                f"{what}: organic result {position} is {type(item).__name__}, not an object",
+                http_status=status,
+                body_bytes=size,
+            )
+        items.append(
             WebSearchResult(
                 title=item.get("title", ""),
                 url=item.get("link", ""),
@@ -194,7 +400,32 @@ def minimax_search(client: httpx.Client, query: str) -> list[WebSearchResult]:
                 date=item.get("date", ""),
             )
         )
-    return results
+    return SearchResponse(query=query, items=tuple(items), http_status=status, body_bytes=size)
+
+
+def minimax_search(client: httpx.Client, query: str) -> list[WebSearchResult]:
+    """Call MiniMax search endpoint. Legacy contract: a failed call is ``[]``.
+
+    A thin wrapper over `minimax_search_strict` for the three callers written
+    against that contract (web_research.MiniMaxWebResearch._search,
+    tweet_verifier._web_verify_items, theo_sources.MiniMaxSearchAdapter).
+    For the documented success body and every HTTP, transport and JSON failure
+    the result is the same as before, entries without a link included.
+    Differences, all outside that envelope: a 2xx body whose ``base_resp``
+    reports an error is ``[]`` even if it also carries results (the old code
+    read them as hits); a contract break (`CodingPlanShapeError`) raises, as
+    the old code raised AttributeError/TypeError on the same bodies - except
+    an `organic` that is an empty non-list, which the old loop read as ``[]``;
+    and an exception from the client that is not an ``httpx.HTTPError``
+    (a malformed base URL's InvalidURL) propagates instead of reading as ``[]``.
+    """
+    try:
+        return list(minimax_search_strict(client, query).items)
+    except CodingPlanShapeError:
+        raise
+    except CodingPlanError as e:
+        logger.warning(f"MiniMax search failed for '{query}': {e}")
+        return []
 
 
 def minimax_chat(
@@ -531,6 +762,22 @@ def clear_quota_cache() -> None:
         _quota_cache.clear()
 
 
+def hours_until_weekly_reset(now_utc: datetime) -> float:
+    """Hours until the next MiniMax weekly reset (Monday 00:00 UTC).
+
+    Moved here from api/services/theo_worker.py (2026-09-22) so the phase-3
+    search stage, which runs without the api package, reads Theo's batch
+    window off the same function instead of a copy of it.
+    """
+    days_ahead = (7 - now_utc.weekday()) % 7
+    reset = (now_utc + timedelta(days=days_ahead)).replace(
+        hour=0, minute=0, second=0, microsecond=0
+    )
+    if reset <= now_utc:
+        reset += timedelta(days=7)
+    return (reset - now_utc).total_seconds() / 3600
+
+
 # --- /Quota probe -------------------------------------------------------
 
 
@@ -538,28 +785,68 @@ MINIMAX_VLM_PATH = "/v1/coding_plan/vlm"
 MINIMAX_VLM_TIMEOUT = 90.0
 
 
-def minimax_vlm(client: httpx.Client, image_bytes: bytes, prompt: str) -> str:
-    """Call MiniMax's Coding-Plan VLM endpoint for image understanding.
+def minimax_vlm_strict(client: httpx.Client, image_bytes: bytes, prompt: str) -> str:
+    """Call MiniMax's Coding-Plan VLM endpoint once; raise a typed error on failure.
 
-    Returns the model's `content` string (caller is responsible for parsing
-    JSON out of it). Returns empty string on any HTTP error so callers can
-    treat absence as a reject verdict.
+    Returns the model's non-empty `content` string (the caller parses JSON
+    out of it). The endpoint answers 200; any other 2xx is not its answer.
     """
     import base64
 
+    what = "MiniMax VLM"
     data_uri = f"data:image/jpeg;base64,{base64.b64encode(image_bytes).decode('ascii')}"
-    try:
-        resp = client.post(
-            MINIMAX_VLM_PATH,
-            json={"prompt": prompt, "image_url": data_uri},
-            timeout=MINIMAX_VLM_TIMEOUT,
+    resp = _coding_plan_post(
+        client,
+        MINIMAX_VLM_PATH,
+        {"prompt": prompt, "image_url": data_uri},
+        timeout=MINIMAX_VLM_TIMEOUT,
+    )
+    _raise_for_coding_plan_status(resp, what=what)
+    status = resp.status_code
+    size = len(resp.content)
+    if status != 200:
+        raise CodingPlanResponseError(
+            f"{what}: HTTP {status}, not the 200 this endpoint answers with",
+            http_status=status,
+            body_bytes=size,
         )
-        if resp.status_code != 200:
-            logger.warning("MiniMax VLM HTTP %s: %s", resp.status_code, resp.text[:200])
-            return ""
-        data = resp.json()
-        return data.get("content", "") or ""
-    except Exception as exc:
+    data = _coding_plan_json(resp, what=what)
+    content = data.get("content")
+    if content is None:
+        raise CodingPlanResponseError(
+            f"{what}: the answer carries no `content`", http_status=status, body_bytes=size
+        )
+    if not isinstance(content, str):
+        raise CodingPlanShapeError(
+            f"{what}: `content` is {type(content).__name__}, not text",
+            http_status=status,
+            body_bytes=size,
+        )
+    if not content:
+        raise CodingPlanResponseError(
+            f"{what}: `content` is empty", http_status=status, body_bytes=size
+        )
+    return content
+
+
+def minimax_vlm(client: httpx.Client, image_bytes: bytes, prompt: str) -> str:
+    """Call MiniMax's Coding-Plan VLM endpoint for image understanding.
+
+    Legacy contract: returns the model's `content` string, or an empty string
+    for any failure, so callers can treat absence as a reject verdict. A thin
+    wrapper over `minimax_vlm_strict` for the callers written against that
+    contract (handlers/probative_images, video/shorts_select,
+    scripts/pick_meaningful_gallery and two e2e scripts). For the documented
+    success body and every HTTP, transport and JSON failure the result is the
+    same as before. Differences, all outside that envelope: a 200 whose
+    ``base_resp`` reports an error, or whose `content` is not text, is ``""``
+    (the old code returned what it found); and an exception from the client
+    that is not an ``httpx.HTTPError`` (a malformed base URL's InvalidURL, a
+    test double's RuntimeError) propagates instead of reading as a reject.
+    """
+    try:
+        return minimax_vlm_strict(client, image_bytes, prompt)
+    except CodingPlanError as exc:
         logger.warning("MiniMax VLM failed: %s", exc)
         return ""
 
