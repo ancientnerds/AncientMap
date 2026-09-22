@@ -35,7 +35,7 @@ from common import OUT_DIR, read_jsonl  # noqa: E402
 try:
     from PIL import Image, ImageDraw, ImageFont
 except ImportError as exc:  # pragma: no cover - environment guard
-    raise SystemExit(f"Pillow is not installed in this interpreter: {exc}")
+    raise SystemExit(f"Pillow is not installed in this interpreter: {exc}") from exc
 
 COLS = 5
 ROWS = 10
