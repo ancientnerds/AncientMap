@@ -1,6 +1,6 @@
 # B9 - the United Kingdom's parts, spelled by region: plan
 
-Built 2026-09-22T22:27:58+00:00 by `scripts/remediation/mechanical/uk_parts.py`. Lane `uk-parts`: run stamp `2026-09-22_mechanical-uk-parts`, journal test id `B9/uk-country-part`, change keys `country-uk-part:<site_id>`, source `ancient_nerds`.
+Built 2026-09-22T23:11:37+00:00 by `scripts/remediation/mechanical/uk_parts.py`. Lane `uk-parts`: run stamp `2026-09-22_mechanical-uk-parts`, journal test id `B9/uk-country-part`, change keys `country-uk-part:<site_id>`, source `ancient_nerds`.
 
 **23 row(s) will be written, 46 are already right, 0 refused.** 5 of the written rows supersede a phase-3 write (`Ireland -> United Kingdom`); their journal row is named in each record's evidence.
 

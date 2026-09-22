@@ -139,9 +139,9 @@ DECISION: tuple[dict[str, Any], ...] = (
         "not `United Kingdom`.",
     },
     {
-        "source": "output/remediation/HUMAN_ONLY.md:49 (B9)",
+        "source": "output/remediation/HUMAN_ONLY.md:49 (B9, Schreibweise Nordirland)",
         "url": "output/remediation/HUMAN_ONLY.md",
-        "quote": "B9 Schreibweise Nordirland - entschieden 2026-09-21: `Northern Ireland`",
+        "quote": "**entschieden 2026-09-21: `Northern Ireland`**",
     },
 )
 
