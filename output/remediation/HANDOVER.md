@@ -18,22 +18,38 @@ conditional `WHERE` with a journal entry. Only three columns are writable: `coun
 
 ## 2. State, measured 2026-09-22
 
-| | |
-| --- | --- |
-| sites examined | **5,004** (all of them, not the 1,813 worklist) |
-| fields judged | 24,255 over 4,852 sites |
-| verdicts: correct / wrong / unverifiable | 11,747 / 4,708 / 7,761 (plus 37 with no readable verdict) |
-| reviewer over the decided cases | confirmed 2,204 · refuted 2,202 |
-| planned writes (writable columns only) | 1,074 rows at 1,022 sites |
-| **written to production** | **994 rows at 1,022 sites** - 596 `site_type`, 389 `period_start`, 9 `country` |
-| held by hand / stopped by the boundary check | 72 / 8 |
-| planned rows deliberately left unchanged | 80 |
-| acceptance, both directions | **0 deviations** |
-| spend | ~**$31** (finder 25.87 + reviewer 4.65) |
+Re-derived on 2026-09-22 from the run's own files with the pipeline's own parser
+(`discover_stage.parse_answer`) and from production (read-only). Four figures of the first version of
+this table were wrong; they stay visible in the last column rather than being overwritten.
 
-The 7,761 unverifiable fields are a **search** problem, not a model problem: the pipeline has no
-search route. Decision (2026-09-22): MiniMax supplies search, the reasoning stays on
-`opencode-go/deepseek-v4.1-flash`.
+| | | first version said |
+| --- | --- | --- |
+| sites examined | **5,004** (all of them, not the 1,813 worklist), in 334 batches (333 x 15 + 1 x 9) | |
+| fields | 25,020 = 24,255 answered + 760 never asked (152 sites over the evidence bound, `model.json` `skipped`) + 5 empty model streams (`model.json` `failures`) | |
+| fields answered | 24,255 over 4,852 sites | |
+| verdicts: correct / wrong / unverifiable / none | 11,747 / **4,710** / 7,761 / 37 (sum 24,255) | wrong 4,708 (the row then summed to 24,253) |
+| answers with two different `VERDICT:` values | 42 (the first one counts); none of them reached the write plan | |
+| reviewer | 4,579 asked (4,569 calls + 10 resumed): **2,108 cleared** (`applies`), 2,202 refuted, 173 unresolved, 161 with problems | confirmed 2,204 (= asked - refuted - unresolved, which counts 96 answers with problems as confirmed) |
+| planned writes (writable columns only) | 1,074 rows at 1,022 sites | |
+| **written to production** | **994 rows at 952 sites** - 596 `site_type`, 389 `period_start`, 9 `country` | 994 rows at 1,022 sites (1,022 is the *planned* site count) |
+| held by hand / stopped by the boundary check | 72 / 8 | |
+| planned rows deliberately left unchanged | 80 | |
+| acceptance, both directions | **0 deviations** - re-run 2026-09-22 with the chain-following acceptance: 994 carried, 0 superseded, 80 unchanged, 0 moved | |
+| written rows whose finder citation is not in the batch's own evidence | **44** (22 `site_type`, 22 `period_start`), plus 2 of the 80 unwritten; the writer refuses such rows since 2026-09-22 (`RULE_CITATION`) | not measured |
+| judged sites shown an evidence page cut at the 61,440-byte cap, unmarked | 27 (23 `wikidata_entity`, 4 `enwiki` pages) | not measured |
+| spend | ~**$27**: finder $22.51 over 24,260 calls (`model.json` totals of `runs/mass`; the ledger holds $23.72 for every finder call including the gold rounds), reviewer $4.63 over 4,569 calls (`review.json`; ledger $4.65) | ~$31 (finder 25.87 + reviewer 4.65; the 25.87 has no derivation in the run's files) |
+
+The 7,761 unverifiable fields are a **search** problem, not a model problem: the phase-3 pipeline has
+no search route. (`pipeline/lyra/minimax_shared.minimax_search` exists and serves Lyra, the tweet
+verifier and Theo, but it turns every failure into an empty list; the first version of this file said
+no search route existed anywhere.) Decision (2026-09-22): MiniMax supplies search, the reasoning stays
+on `opencode-go/deepseek-v4.1-flash`.
+
+The 760 never-asked fields, the 5 empty streams and the 37 answers without a verdict are the **gap
+run**: 802 questions over 194 sites, planned in `PLAN.gap.jsonl` from a fresh production export
+(`output/remediation/gap/GAP_PLAN.md`). Twenty sites carry a Wikidata item or title that names
+something else (Q309 "history" and similar); the reviewed repair is planned, not applied
+(`output/remediation/qid_repair/PLAN.md`).
 
 ## 3. Where everything lives
 
@@ -46,7 +62,7 @@ search route. Decision (2026-09-22): MiniMax supplies search, the reasoning stay
 | `output/remediation/AUDIT_LOG.md` | the full record, every number and every adjudicated finding |
 | `output/remediation/HUMAN_ONLY.md` | what only Martin can do (German, addressed to him) |
 | `output/remediation/HANDOVER.md` | this file |
-| `output/remediation/tools/` | the 12 instruments the write was run with - see their README |
+| `output/remediation/tools/` | the instruments the write was run with, lane-aware since 2026-09-22 (`--lane gap`), plus the gap-plan builder and the external-id repair - see their README |
 | `output/remediation/phase3_runner/PIECE*.md` | the design briefs, including the 100-step write rule (PIECE6 §7) |
 | `tests/remediation/` | the gate suite for all of the above |
 | `docs/procedures/SITES_DB_REMEDIATION_2026-09.md` | the plan itself |
@@ -55,13 +71,13 @@ search route. Decision (2026-09-22): MiniMax supplies search, the reasoning stay
 
 | path | what | size |
 | --- | --- | --- |
-| `phase3_runner/runs/mass/batch-*/` | **334 batch directories**, one per five sites: `answers/<site-id>%2F<field>.txt` (38,456 files), `evidence/<site-id>%2F<source>.txt`, `reviews/`, `writes/`, plus `input.json`, `fetch.json`, `model.json`, `review.json` | 195 MB |
+| `phase3_runner/runs/mass/batch-*/` | **334 batch directories**, 15 sites each (the last 9): `answers/<site-id>%2F<field>.txt` (24,255 files), `evidence/<site-id>%2F<source>.txt` (9,622), `reviews/` (4,579), `writes/`, plus `input.json`, `fetch.json`, `model.json`, `review.json`. The first version said "one per five sites" and "38,456 answer files" - 38,456 is answers, reviews and evidence together | 195 MB |
 | `logs/_write_apply/` | one `ROLLBACK.sql` per written chunk (428 files) and the `APPLIED.json` marker per batch (317) - the undo path | 27 MB |
 | `logs/_write_dry/` | the full write plan `ALL_ROWS.jsonl` (1,074 rows) and `ALL_REFUSED.jsonl` (23,946) | 35 MB |
 | `logs/` (the rest) | gate and acceptance logs, the hold list, the working copies of the instruments | ~150 MB |
 | `phase3_runner/LEDGER.jsonl` | the cost ledger. It is *tracked* and 18 MB, which is worth a look | 18 MB |
 
-Everything here is regenerable at ~$31 and a few hours, which is why it is not in git. To carry the
+Everything here is regenerable at ~$27 (the first version said ~$31) and a few hours, which is why it is not in git. To carry the
 whole movable state to another machine there is one archive, made for exactly that:
 
     output/remediation/run-2026-09-22-complete.tgz     # 34 MB, 49,470 entries
@@ -116,12 +132,18 @@ before every batch, which is why nothing under `phase3/` may be edited while it 
   it is frozen at round 5's wording and a second wording would mix two conventions into one answer
   store. The right home is the **mechanical lane** (`scripts/remediation/mechanical/`), which
   rehearses its statement against production and can be shown to fail.
-- **The MiniMax search route.** No search route exists in the pipeline today. This is the lever for
+- **The MiniMax search route.** The phase-3 pipeline has no search route today (the Lyra helper
+  `minimax_search` exists but swallows every failure). This is the lever for
   the 7,761 unverifiable fields.
 - Remaining strands, all recorded: the 6th `P3/scope` question, the third evidence route
   (`unified_sites.source_url`), `[H] SECURITY 3 / BACKEND B7`, the mypy `api/` debt, Phase 4-6
   (22 Irish rows + the 83-census worklist), the final adversarial self-audit.
-- `HUMAN_ONLY.md` holds everything that needs Martin: the push (104 commits, local only), the export
+- **The gap run** (802 questions over 194 sites) and the **external-id repair** (26 row changes at 19
+  sites, planned and pre-flight-checked, not applied): `output/remediation/gap/GAP_PLAN.md` gives the
+  exact sequence.
+- `HUMAN_ONLY.md` holds everything that needs Martin: the push (the commits of 2026-09-21/22 are pushed
+  since - `origin/main` was `7fbc646` on 2026-09-22 22:39; the first version said 104 local-only
+  commits), the export
   of the corrected data to the globe, and the (site, field) questions.
 
 ## 7. Traps that cost real time here
@@ -170,7 +192,7 @@ before every batch, which is why nothing under `phase3/` may be edited while it 
 
 | needed | where it lives | who can supply it |
 | --- | --- | --- |
-| the 107 commits | local only, never pushed | Martin - a push to `main` is a live deploy, so it is his call |
+| the commits | pushed: `origin/main` = `7fbc646` on 2026-09-22 (this row said "107 commits, local only" when it was written) | - |
 | the run state (195 MB) and the undo path | `output/remediation/run-2026-09-22-complete.tgz`, 34 MB | copy the file, then see the tools README for the restore order |
 | the SSH alias `ancientnerds` | the user's SSH config, outside the repo | Martin, or use the VPS address directly |
 | the database credentials | `.env`, policy-protected - never read it, establish a credential's presence functionally | Martin |
