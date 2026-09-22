@@ -28,8 +28,9 @@ import gzip
 import json
 import os
 import sys
+from collections.abc import Iterator, Mapping
 from pathlib import Path
-from typing import Any, Iterator, Mapping
+from typing import Any
 
 #: Repository root, derived from this file's location (`scripts/remediation/vlm_pilot/`).
 REPO_ROOT = Path(__file__).resolve().parents[3]

@@ -136,7 +136,7 @@ def main() -> int:
     print(f"frame sizes per tier: { {t: len(v) for t, v in frames.items()} }")
     print(f"rows dropped from the frame: {rejected}")
 
-    rng = random.Random(SEED)
+    rng = random.Random(SEED)  # noqa: S311 - a reproducible sample draw, not cryptography
     records: list[dict] = []
     for tier in TIERS:
         pool = sorted(frames[tier], key=lambda f: f["current"]["image_id"])
