@@ -5129,7 +5129,7 @@ retry is bounded (`MAX_SPAWN_ATTEMPTS = 3`), loud (one line per retry in the sta
 their **first** exit, because a retry that hides real breakage is worse than the stop it replaces.
 `spawn_retries` in `progress.json` is how a human sees whether the protection was ever needed.
 
-### The owner's five decisions, 2026-09-21
+### The owner's decisions, 2026-09-21 and 2026-09-22
 
 Asked as an interactive multiple-choice list - Pi ships the tool as an example, installed unchanged as
 `~/.pi/agent/extensions/60-questionnaire.ts`. Each answer is recorded with what it *changes*, because a
@@ -5141,7 +5141,8 @@ decision that changes nothing is not a decision.
 | 2 | the Northern-Irish spelling | **`Northern Ireland`** | the two open plan rows and the one already written row are re-spelled, and the discover prompt gets the dataset's convention as a note |
 | 3 | the 4 refused rows | **write none of them** | nothing: the writer already refuses all four (boundary and fixed point) |
 | 4 | the 29 geopolitical census rows | **leave them as they are** | nothing: they are census findings, not planned rows |
-| 5 | when to deploy | **only after all 5,004 are through** | nothing today: 102 commits stay local until the run is complete |
+| 5 | when to deploy | **only after all 5,004 are through** | nothing today: the commits stay local until the run is complete |
+| 6 | the missing search route (A3) | **solve it with MiniMax** | the 5,569 "unverifiable" answers get a search service; only structured hits (title, url, snippet) are taken and the reasoning stays on `deepseek-v4.1-flash` |
 
 **B9 was asked twice, and the first answer was worthless because my framing was wrong.** The first version
 called `United Kingdom` "one spelling for the whole country - like England, Scotland, Wales". Measured on
@@ -5164,4 +5165,69 @@ outlasted 3 x 5 s = 10 s. So the window was widened to `MAX_SPAWN_ATTEMPTS = 6` 
 `SPAWN_RETRY_WAIT_SECONDS = 15.0` - 75 s of coverage - which is still bounded, still loud, and still blind
 to every real failure. The number that matters is not the constant but `spawn_retries`: it says whether
 the protection was needed, and how often.
+
+### What the finder has said, counted from its own answers
+
+The finder pass over the plan is **complete**: 334 of 334 batches are done - 333 of them in the run, and
+`batch-0272` retried on its own after a single `judge exited 2` (a real failure, not a start failure, which
+is why the spawn protection stayed out of it) and finished too. Read straight out of the answer files -
+24,255 fields over 4,852 sites - measured 2026-09-22:
+
+| verdict | fields | share |
+|---|---|---|
+| CORRECT | 11,747 | 48 % |
+| UNVERIFIABLE | 7,761 | 32 % |
+| WRONG | 4,708 | 19 % |
+| no readable verdict | 37 | 0.2 % |
+
+Proposals by field: `card_description` 1,881, `site_type` 1,037, `description` 947, `period_start` 808,
+`country` 43 - and only **1,888** of them sit in a writable column, because `description` and
+`card_description` are report-only (`model.py:49`).
+
+An earlier count of this, taken when 256 of the batches were through, read 3,595 wrong over 3,840 sites -
+the same distribution. It stays here rather than being replaced, because a reader who saw the earlier number
+has to be able to find it again.
+
+**The first count of this reported 668 answers "without a verdict", and that number was my instrument, not
+the data.** The pattern demanded `VERDICT:` at the start of a line, while the answers put it inside a
+numbered list (`2. VERDICT: CORRECT`). Counted again unanchored: 37. The wrong number is written down here
+instead of quietly dropped, because a number that reached a reader has to be corrected where it was read.
+
+### The write wave was killed by a print, not by the database
+
+The first attempt at the second write wave ended with `WRITE_EXIT=1` and **nothing written**. The
+traceback is a `UnicodeEncodeError` on `\u0259` in a site name, raised while the gate printed its
+refusal list - which it does *before* it writes the first row, so the wave aborted with the database
+untouched.
+
+The cause was mine and it was an environment variable: the background launch set `PYTHONPATH` and
+`PI_SKIP_VERSION_CHECK` but not `PYTHONIOENCODING=utf-8`, so Python encoded stdout with the console's
+cp1252. The same command in an interactive shell - where that variable is set - had run cleanly minutes
+earlier, and that difference is the whole bug.
+
+Two things followed. The immediate one: the untouched state is *proved*, not assumed. A fresh dry run
+after the crash still reports `168 offene Stapel | 584 Zeilen`, the same numbers as before it, and the
+`APPLIED.json` count is unchanged at 149 - all of them from the first wave - so no row and no marker
+was written. The lasting one: `write_gate.py` now reconfigures its own stdout and stderr to UTF-8 with
+`errors="replace"` at import time, because a tool that writes to production must not be killable by the
+encoding of whichever console it was started from.
+
+### The second write wave: 584 rows, checked at six points, 0 deviations
+
+The gate wrote **584 rows at 601 sites** in six steps of a hundred, and the writer's own check after each
+step found **0 deviations** every time. `matched_0=0` is the load-bearing number: not one planned row
+failed to match the old value the plan had assumed, so nothing was written on a stale premise.
+
+The independent acceptance (`logs/verify_writes.py`) asks production in both directions instead of
+trusting the writer, and it puts the whole action at **994 journal rows** - both waves together - of which
+**994 carry the new value** and **80 planned rows still carry the old one unchanged**: the 72 held by hand
+plus the 8 the boundary check stopped. 994 + 80 = 1074, exactly the plan, so no row was changed silently.
+Read back: 1022 of 1022 sites, **0 deviations**. By field: `site_type` 596, `period_start` 389,
+`country` 9.
+
+The 8 boundary refusals are worth naming as a class, because they are the check working: in each of them
+the evidence had matched a *different place of the same name* - the Temple of Artemis proposal would have
+moved a point in Greece to Turkey, Flevum's a point in Germany to the Netherlands. A wrong coordinate
+there looks exactly like a wrong country, and the boundary test is what tells them apart. Those eight are
+among the 8 `(site, field)` questions in `HUMAN_ONLY.md` for their own reasons.
 
