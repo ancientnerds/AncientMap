@@ -32,7 +32,7 @@ from pipeline.sites_html_renderer import (
     site_path,
     site_slug,
 )
-from pipeline.utils.public_sites import RETIRED, not_retired
+from pipeline.utils.public_sites import RETIRED, curated_page, not_retired
 from pipeline.utils.slugs import story_slug
 
 logger = logging.getLogger(__name__)
@@ -40,9 +40,7 @@ router = APIRouter()
 
 _HTML_HEADERS = {"Cache-Control": "public, max-age=3600"}
 
-_CURATED_WHERE = (
-    "source_id = 'ancient_nerds' AND country IS NOT NULL AND country != '' AND " + not_retired()
-)
+_CURATED_WHERE = curated_page()
 
 # Plain concatenation of two module constants — the id is bound, never formatted in.
 _LEGACY_SITE_SQL = text(

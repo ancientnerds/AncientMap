@@ -286,13 +286,21 @@ def test_delete_without_a_snapshot_deletes_nothing():
 # --------------------------------------------------------------------------------------
 
 
-def test_restore_all_uploads_restores_the_scope_columns():
+def test_restore_all_uploads_restores_scope_only_from_a_snapshot_that_recorded_it():
+    """A pre-0020 snapshot has no scope key; restoring NULL from it would un-retire a
+    site with no journal row. Such rows keep their current scope."""
     db = RecordingSession({"COUNT(DISTINCT sr.site_id)": [(3,)]})
     with patch.object(sr, "cache_delete_pattern", lambda p: 0):
         sr.restore_all_upload_snapshots(_user=SimpleNamespace(username="f"), db=db)
-    update = db.statement_with("UPDATE unified_sites us SET")
-    assert "scope_status = snap.old_data->>'scope_status'" in update
-    assert "scope_reason = snap.old_data->>'scope_reason'" in update
+    update = " ".join(db.statement_with("UPDATE unified_sites us SET").split())
+    assert (
+        "scope_status = CASE WHEN snap.old_data ? 'scope_status' "
+        "THEN snap.old_data->>'scope_status' ELSE us.scope_status END"
+    ) in update
+    assert (
+        "scope_reason = CASE WHEN snap.old_data ? 'scope_status' "
+        "THEN snap.old_data->>'scope_reason' ELSE us.scope_reason END"
+    ) in update
 
 
 # --------------------------------------------------------------------------------------
@@ -325,7 +333,8 @@ def test_the_export_runs_in_a_child_process():
     """The 1.76M-site index must not be built inside the serving API process."""
     with patch.object(sr, "run_module", return_value={"elapsed_seconds": 1.0}) as run:
         assert sr._run_static_export() == {"elapsed_seconds": 1.0}
-    assert run.call_args.args == ("pipeline.static_exporter",)
+    # --no-library: public/data/library/ belongs to the library refresh job
+    assert run.call_args.args == ("pipeline.static_exporter", "--no-library")
     assert run.call_args.kwargs["timeout_s"] == sr._REBUILD_STATIC_TIMEOUT_S
 
 
@@ -334,3 +343,25 @@ def test_rebuild_static_status_reads_the_shared_job_row():
     with patch.object(sr, "read_status", return_value={"state": "ok"}) as read:
         assert sr.rebuild_static_status(_user=None, db=db) == {"state": "ok"}
     assert read.call_args.args == (db, sr.REBUILD_STATIC_JOB)
+
+
+# --------------------------------------------------------------------------------------
+# replace-source never wipes a curated source
+# --------------------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "source", ["ancient_nerds", "lyra", "ancient_nerds_community", "community"]
+)
+def test_replace_source_refuses_every_protected_source_and_touches_nothing(source):
+    """A replace deletes every row of the source - retired rows, journaled corrections and
+    card_stats included - and re-inserts without their scope (E1/E4)."""
+    db = RecordingSession()
+    body = sr.ReplaceSourceRequest(
+        sites=[sr.ParsedSitePayload(name="X", lat=1.0, lon=2.0)], target_source=source
+    )
+    with pytest.raises(HTTPException) as exc:
+        sr.replace_source(body, user=SimpleNamespace(username="founder"), db=db)
+    assert exc.value.status_code == 400
+    assert "protected" in exc.value.detail
+    assert db.log == []

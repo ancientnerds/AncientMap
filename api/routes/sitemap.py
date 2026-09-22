@@ -26,7 +26,7 @@ from sqlalchemy.orm import Session
 from api.routes.articles_html import STORIES_PER_PAGE, public_stories_query
 from pipeline.database import NewsArticle, NewsItem, NewsVideo, get_db
 from pipeline.sites_html_renderer import country_path, encode_path, site_path
-from pipeline.utils.public_sites import journal_join, last_change, not_retired
+from pipeline.utils.public_sites import curated_page, journal_join, last_change
 from pipeline.utils.slugs import slugify, story_slug
 
 router = APIRouter()
@@ -99,12 +99,9 @@ def _sites_lastmod(row_lastmod: datetime | None) -> datetime:
     return max(row_lastmod, _SITES_TEMPLATE_CHANGED) if row_lastmod else _SITES_TEMPLATE_CHANGED
 
 
-# The curated pages the /sites/ routes serve: ancient_nerds, with a country, not retired
-# (E4, migration 0020). A retired page answers 410 and must not be advertised.
-_CURATED_SHOWN = (
-    "u.source_id = 'ancient_nerds' AND u.country IS NOT NULL AND u.country != '' AND "
-    + not_retired("u")
-)
+# The curated pages the /sites/ routes serve (pipeline.utils.public_sites.curated_page):
+# ancient_nerds, with a country, not retired (E4). A retired page answers 410.
+_CURATED_SHOWN = curated_page("u")
 
 # lastmod of a site page: its own timestamp or its newest remediation journal write,
 # whichever is later - apply_remediation_change() leaves updated_at alone, so without the

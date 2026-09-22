@@ -13,7 +13,7 @@ from sqlalchemy import text
 
 from api.cache import cache_get, cache_set
 from pipeline.database import get_session
-from pipeline.utils.public_sites import not_retired
+from pipeline.utils.public_sites import curated_page, not_retired
 
 # v2: the pre-2026-09 value under "api:stats" has no curated_countries and
 # survives a deploy in Redis — the homepage hero would KeyError on it.
@@ -27,9 +27,9 @@ _BY_SOURCE_SQL = text(
     + _SHOWN
     + " GROUP BY source_id ORDER BY count DESC"
 )
+# The same set the /sites/{country} hubs are built from (curated_page).
 _CURATED_COUNTRIES_SQL = text(
-    "SELECT COUNT(DISTINCT country) FROM unified_sites "
-    "WHERE source_id = 'ancient_nerds' AND country IS NOT NULL AND country <> '' AND " + _SHOWN
+    "SELECT COUNT(DISTINCT country) FROM unified_sites WHERE " + curated_page()
 )
 
 

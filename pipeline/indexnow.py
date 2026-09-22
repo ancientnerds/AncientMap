@@ -43,7 +43,7 @@ from sqlalchemy.orm import Session
 from pipeline.database import NewsArticle, NewsItem, get_session
 from pipeline.news_visibility import public_story_criteria
 from pipeline.sites_html_renderer import encode_path, site_path
-from pipeline.utils.public_sites import is_retired, journal_join, last_change, not_retired
+from pipeline.utils.public_sites import curated_page, is_retired, journal_join, last_change
 from pipeline.utils.slugs import BASE_URL, slugify, story_slug
 
 logger = logging.getLogger(__name__)
@@ -63,6 +63,7 @@ CHUNK = 10_000
 WINDOW = timedelta(hours=2)
 
 _CURATED = "u.source_id = 'ancient_nerds' AND u.country IS NOT NULL AND u.country != ''"
+_CURATED_SHOWN = curated_page("u")
 
 # Shown curated sites whose page changed since :since - by the sitemap's rule, journal
 # writes included (pipeline.utils.public_sites.last_change).
@@ -70,9 +71,7 @@ _CHANGED_SITES_SQL = text(
     "SELECT u.country, u.name, u.id FROM unified_sites u "
     + journal_join("u")
     + " WHERE "
-    + _CURATED
-    + " AND "
-    + not_retired("u")
+    + _CURATED_SHOWN
     + " AND "
     + last_change("u")
     + " >= :since"

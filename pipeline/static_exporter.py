@@ -17,6 +17,7 @@ the details, the image index, the content links, the hub list and the snapshot f
 Usage:
     python -m pipeline.static_exporter
     python -m pipeline.static_exporter --sites-only
+    python -m pipeline.static_exporter --no-library   # what POST /api/sites/rebuild-static runs
 """
 
 import gzip
@@ -33,7 +34,7 @@ from sqlalchemy import text
 from pipeline.database import LibrarySource, get_session
 from pipeline.research_html_renderer import PUBLIC_PAPER_WHERE
 from pipeline.sites_html_renderer import country_path
-from pipeline.utils.public_sites import is_retired, not_retired
+from pipeline.utils.public_sites import curated_page, is_retired, not_retired
 
 # Output configuration
 OUTPUT_DIR = Path("public/data")
@@ -48,6 +49,7 @@ MAX_FILE_SNAPSHOTS = 50
 # The E4 scope predicates this module needs, spelled once.
 _SHOWN = not_retired()
 _US_SHOWN = not_retired("us")
+_CURATED_PAGE = curated_page()
 _US_RETIRED = is_retired("us")
 
 # Region definitions for chunking site details
@@ -123,9 +125,7 @@ def fetch_hub_rows(session) -> list[Any]:
         text(f"""
             SELECT country, COUNT(*) AS sites
             FROM unified_sites
-            WHERE source_id = 'ancient_nerds'
-              AND country IS NOT NULL AND country != ''
-              AND {_SHOWN}
+            WHERE {_CURATED_PAGE}
             GROUP BY country
             ORDER BY country
         """)
@@ -315,8 +315,14 @@ class StaticExporter:
         self.output_dir = output_dir
         self.stats = {}
 
-    def export_all(self, sites_only: bool = False):
-        """Export all data to static files."""
+    def export_all(self, sites_only: bool = False, library: bool = True):
+        """Export all data to static files.
+
+        library=False leaves public/data/library/ alone. The rebuild job passes it: the
+        library has its own job (POST /api/library/refresh), which aggregates the
+        citations first and then writes the same files - two jobs under two locks would
+        otherwise write them at the same time.
+        """
         logger.info("=" * 60)
         logger.info("STATIC EXPORT - Ancient Nerds Map")
         logger.info("=" * 60)
@@ -347,7 +353,8 @@ class StaticExporter:
             self._export_content()
 
             # Export library sources by period
-            self._export_library()
+            if library:
+                self._export_library()
 
         # Save dated audit snapshot for version history
         self._save_audit_snapshot()
@@ -974,10 +981,10 @@ class StaticExporter:
             logger.info(f"Total gzipped size: {total_gz_size / 1024 / 1024:.2f} MB")
 
 
-def build_static(output_dir: str | None = None, sites_only: bool = False):
+def build_static(output_dir: str | None = None, sites_only: bool = False, library: bool = True):
     """Build static files for deployment."""
     exporter = StaticExporter(Path(output_dir) if output_dir else OUTPUT_DIR)
-    exporter.export_all(sites_only=sites_only)
+    exporter.export_all(sites_only=sites_only, library=library)
 
 
 def main():
@@ -991,6 +998,11 @@ def main():
     )
     parser.add_argument("--no-gzip", action="store_true", help="Skip gzip compression")
     parser.add_argument(
+        "--no-library",
+        action="store_true",
+        help="Leave public/data/library/ alone (the library refresh job owns it)",
+    )
+    parser.add_argument(
         "--hubs-only", action="store_true", help="Only refresh hubs.snapshot.json (homepage lists)"
     )
     args = parser.parse_args()
@@ -1003,7 +1015,7 @@ def main():
         print(export_hubs_snapshot(Path(args.output)))
         return
 
-    build_static(output_dir=args.output, sites_only=args.sites_only)
+    build_static(output_dir=args.output, sites_only=args.sites_only, library=not args.no_library)
 
 
 if __name__ == "__main__":

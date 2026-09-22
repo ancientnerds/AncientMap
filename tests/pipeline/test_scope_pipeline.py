@@ -424,3 +424,51 @@ def test_index_sites_reads_only_shown_sites_and_deletes_retired_points(lyra_inde
     lyra_index.index_sites(client=None, embeddings=None, sparse_model=None)
     assert calls == ["delete"]
     assert US in session.statement_with("FROM unified_sites us")
+
+
+def test_an_export_without_the_library_leaves_library_files_alone(tmp_path, monkeypatch):
+    from pipeline.static_exporter import StaticExporter
+
+    session = _exporter_session(monkeypatch)
+    calls: list[str] = []
+    monkeypatch.setattr(StaticExporter, "_export_library", lambda self: calls.append("library"))
+    monkeypatch.setattr(StaticExporter, "_export_content", lambda self: None)
+    monkeypatch.setattr(StaticExporter, "_export_content_links", lambda self: None)
+    StaticExporter(tmp_path).export_all(library=False)
+    assert calls == []
+    StaticExporter(tmp_path).export_all()
+    assert calls == ["library"]
+    assert session.statements()
+
+
+def test_the_cli_flag_reaches_the_export(monkeypatch):
+    from pipeline import static_exporter
+
+    seen: list[dict] = []
+    monkeypatch.setattr(static_exporter, "build_static", lambda **kw: seen.append(kw))
+    monkeypatch.setattr("sys.argv", ["static_exporter", "--no-library"])
+    static_exporter.main()
+    assert seen[0]["library"] is False
+
+
+def test_library_refs_to_retired_sites_are_dropped_from_stored_rows():
+    """A source cited only by a now-retired site keeps its row but loses the link to
+    the page that answers 410; rows the upsert saw this run are rewritten anyway."""
+    from pipeline.library_aggregator import LibraryAggregator
+
+    session = RecordingSession()
+    LibraryAggregator()._strip_retired_refs(session)
+    (sql,) = session.statements()
+    assert sql.startswith("WITH retired AS (SELECT id::text AS id FROM unified_sites WHERE ")
+    assert is_retired() in sql
+    assert "UPDATE library_sources ls" in sql
+    assert "e.ref->>'type' = 'site' AND e.ref->>'id' IN (SELECT id FROM retired)" in sql
+    assert "DELETE" not in sql.upper()
+
+
+def test_the_research_graph_never_seeds_a_retired_site():
+    from pipeline.lyra.graph_injectors import inject_from_sites
+
+    session = RecordingSession()
+    inject_from_sites(session)
+    assert not_retired("us") in session.statement_with("FROM card_stats cs")

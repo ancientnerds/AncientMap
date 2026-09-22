@@ -161,9 +161,12 @@ def test_card_stats_of_a_retired_site_answer_410(monkeypatch):
     assert exc.value.status_code == 410
 
 
-def test_the_collection_page_hides_retired_cards():
+def test_the_collection_page_keeps_owned_cards_of_retired_sites():
+    """Owned cards stay the player's - in the collection as in their decks and battles
+    (which load straight from card_ids). Only new draws skip a retired site; hiding the
+    card from the collection alone would leave it playing in decks the player can't see."""
     from api.cardgame.leaderboard_service import fetch_collection_page
 
     session = OrmSession()
     fetch_collection_page(session, uuid.uuid4())
-    assert all(in_scope(sql) for sql in session.sql) and session.sql
+    assert session.sql and not any(in_scope(sql) for sql in session.sql)

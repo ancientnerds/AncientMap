@@ -6,7 +6,7 @@ places — audit P7-17. This module is the single implementation both call;
 presentation (JSON response vs Discord embed) stays with each consumer.
 """
 
-from api.cardgame.models import CardCollection, CardPlayerStats, CardStats, card_site_in_scope
+from api.cardgame.models import CardCollection, CardPlayerStats, CardStats
 from api.services.lyra_tools import _escape_ilike
 from pipeline.database import DiscordUser, UnifiedSite
 
@@ -67,7 +67,7 @@ def fetch_collection_page(
         session.query(CardCollection, CardStats, UnifiedSite)
         .join(CardStats, CardCollection.site_id == CardStats.site_id)
         .join(UnifiedSite, CardCollection.site_id == UnifiedSite.id)
-        .filter(CardCollection.user_id == user_id, card_site_in_scope())
+        .filter(CardCollection.user_id == user_id)
     )
     if rarity is not None:
         query = query.filter(CardStats.rarity_tier == rarity)

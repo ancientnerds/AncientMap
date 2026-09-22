@@ -66,6 +66,21 @@ def is_retired(alias: str = "") -> str:
     return f"{_column(alias, 'scope_status')} = '{RETIRED}'"
 
 
+def curated_page(alias: str = "") -> str:
+    """SQL predicate: the row has a crawlable page at /sites/{country}/{slug}.
+
+    An Ancient Nerds Original with a country, not retired. The SSR routes serve exactly
+    these pages, so the sitemap, IndexNow, the country hubs and the homepage hub list must
+    use exactly this rule - a mismatch advertises URLs that answer 404/410 or never
+    announces pages that exist.
+    """
+    country = _column(alias, "country")
+    return (
+        f"{_column(alias, 'source_id')} = 'ancient_nerds' "
+        f"AND {country} IS NOT NULL AND {country} != '' AND {not_retired(alias)}"
+    )
+
+
 #: LEFT JOIN target: the newest journal write per site. Joined as ``jlast``; the
 #: grouped subquery reads the whole journal once (6,572 rows on 2026-09-22) instead of
 #: one lookup per site.

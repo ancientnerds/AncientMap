@@ -18,6 +18,7 @@ import pytest
 from pipeline.utils.public_sites import (
     RETIRED,
     SCOPE_STATUSES,
+    curated_page,
     is_retired,
     journal_join,
     last_change,
@@ -108,3 +109,24 @@ def test_the_check_is_added_not_valid_and_validated_outside_that_transaction():
     # the self-test reads the catalog and aborts the migration when the check is missing
     assert "SELFTEST FAILED: unified_sites_scope_status_vocab does not exist" in code
     assert "convalidated" in code
+
+
+def test_curated_page_is_the_curated_rule_plus_the_scope_filter():
+    assert curated_page("u") == (
+        "u.source_id = 'ancient_nerds' AND u.country IS NOT NULL AND u.country != '' "
+        "AND u.scope_status IS DISTINCT FROM 'retired'"
+    )
+
+
+def test_every_page_advertiser_uses_the_one_curated_rule():
+    """Sitemap, SSR hubs/pages, IndexNow, the homepage hub list and the hero counter must
+    agree on which pages exist - a mismatch advertises 404/410s or hides real pages."""
+    from api.routes import sitemap, sites_html
+    from api.services import site_stats
+    from pipeline import indexnow, static_exporter
+
+    assert sites_html._CURATED_WHERE == curated_page()
+    assert sitemap._CURATED_SHOWN == curated_page("u")
+    assert indexnow._CURATED_SHOWN == curated_page("u")
+    assert static_exporter._CURATED_PAGE == curated_page()
+    assert curated_page() in site_stats._CURATED_COUNTRIES_SQL.text

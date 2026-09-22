@@ -321,15 +321,20 @@ async def _run_reindex_sequence(cmds: list[list[str]], lock: InstanceLock):
 
 # ─── Nightly auto-reindex scheduler ─────────────────────────────────────────
 def _nightly_already_ran(scheduled_for: datetime) -> bool:
-    """Whether a full reindex completed at or after this night's scheduled start.
+    """Whether a full reindex SUCCEEDED at or after this night's scheduled start.
 
     The advisory lock stops two runs that overlap. This stops the second of two that
     do not: the other instance's run takes ~30 s, and a loop that woke late would find
-    the lock free again and index a second time.
+    the lock free again and index a second time. A failed run does not count - the
+    state row records it with its error as last_result, and the late instance gets to
+    try again, as it did before the lock existed.
     """
     with get_session() as session:
         last = session.execute(
-            text("SELECT last_completed_at FROM vector_sync_state WHERE collection = 'all'")
+            text(
+                "SELECT last_completed_at FROM vector_sync_state "
+                "WHERE collection = 'all' AND last_result = 'success'"
+            )
         ).scalar()
     # The column is a naive timestamp in UTC (the database runs in Etc/UTC).
     return last is not None and last >= scheduled_for.astimezone(UTC).replace(tzinfo=None)

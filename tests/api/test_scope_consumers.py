@@ -174,7 +174,7 @@ def test_create_snapshot_captures_the_scope_columns():
     assert "'scope_reason', scope_reason" in capture
 
 
-def test_restore_writes_the_scope_columns_in_both_branches():
+def test_restore_brings_scope_back_only_from_a_snapshot_that_recorded_it():
     from api.services import snapshots
 
     db = RecordingSession(
@@ -188,12 +188,16 @@ def test_restore_writes_the_scope_columns_in_both_branches():
         patch.object(snapshots, "cache_delete_pattern", return_value=0),
     ):
         snapshots.restore_snapshot(db, "snap", restored_by="t")
+    # The upsert leaves scope alone: a pre-0020 snapshot has no scope key, and NULL from
+    # it would un-retire a site without a journal row.
     upsert = db.statement_with("ON CONFLICT (id) DO UPDATE SET")
-    insert_part, update_part = upsert.split("ON CONFLICT (id) DO UPDATE SET")
-    assert "old_data->>'scope_status'" in insert_part
-    assert "old_data->>'scope_reason'" in insert_part
-    assert "scope_status = EXCLUDED.scope_status" in update_part
-    assert "scope_reason = EXCLUDED.scope_reason" in update_part
+    assert "scope_status" not in upsert and "scope_reason" not in upsert
+    # A follow-up UPDATE restores it from the rows that recorded it, after the upsert.
+    scope = db.statement_with("sr.old_data ? 'scope_status'")
+    assert "scope_status = sr.old_data->>'scope_status'" in scope
+    assert "scope_reason = sr.old_data->>'scope_reason'" in scope
+    statements = db.statements()
+    assert statements.index(scope) > statements.index(upsert)
 
 
 def test_preview_shows_an_un_retirement():

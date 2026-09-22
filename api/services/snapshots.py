@@ -301,7 +301,6 @@ def restore_snapshot(db: Session, snapshot_id: str, restored_by: str = "system")
                 period_start, period_end, period_name,
                 country, description, thumbnail_url, source_url,
                 edited_by, raw_data, parent_site_id,
-                scope_status, scope_reason,
                 created_at, updated_at
             )
             SELECT
@@ -327,8 +326,6 @@ def restore_snapshot(db: Session, snapshot_id: str, restored_by: str = "system")
                 COALESCE(old_data->>'edited_by', 'initial'),
                 old_data->'raw_data',
                 NULLIF(old_data->>'parent_site_id', '')::uuid,
-                old_data->>'scope_status',
-                old_data->>'scope_reason',
                 COALESCE((old_data->>'created_at')::timestamp, NOW()),
                 NOW()
             FROM snapshot_rows
@@ -356,17 +353,19 @@ def restore_snapshot(db: Session, snapshot_id: str, restored_by: str = "system")
                 -- raw_data clears the column instead of keeping the newer
                 -- citations.
                 raw_data = EXCLUDED.raw_data,
-                -- The scope decision (E4, migration 0020) is part of the state a restore
-                -- goes back to, like every other column. A snapshot taken before 0020 has
-                -- no scope key: it restores NULL = in scope, which is what the site was
-                -- then - the same rule as raw_data above.
-                scope_status = EXCLUDED.scope_status,
-                scope_reason = EXCLUDED.scope_reason,
                 updated_at = NOW()
         """),
         {"sid": snapshot_id},
     )
     restored = upserted.rowcount
+
+    # The scope decision (E4, migration 0020) comes back only from a snapshot that
+    # recorded it. A snapshot taken before 0020 has no scope key and knows nothing about
+    # a later retirement - restoring NULL from it would un-retire the site without a
+    # journal row. Such a row keeps its current scope; a re-created row starts at NULL.
+    # A snapshot that did record it restores it like any other column, and the restore
+    # preview lists the change (scope_status is a _DIFF_FIELD).
+    db.execute(_RESTORE_SCOPE_SQL, {"sid": snapshot_id})
 
     deleted = 0
     if restore_sources:
@@ -387,6 +386,19 @@ def restore_snapshot(db: Session, snapshot_id: str, restored_by: str = "system")
         f"Restored snapshot {snapshot_id}: {restored} upserts, {deleted} deletes (undo: {undo_id})"
     )
     return {"restored": restored, "deleted": deleted, "undo_snapshot_id": undo_id}
+
+
+#: Restores the scope columns from the snapshot rows that recorded them (the key is
+#: present from migration 0020 on). Shared by restore_snapshot and the bulk upload restore.
+_RESTORE_SCOPE_SQL = text("""
+    UPDATE unified_sites us SET
+        scope_status = sr.old_data->>'scope_status',
+        scope_reason = sr.old_data->>'scope_reason'
+    FROM snapshot_rows sr
+    WHERE sr.snapshot_id::text = :sid
+      AND us.id = sr.site_id
+      AND sr.old_data ? 'scope_status'
+""")
 
 
 _DIFF_FIELDS = [

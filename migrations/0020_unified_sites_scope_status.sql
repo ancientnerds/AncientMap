@@ -22,7 +22,9 @@
 -- rows and would hide every site nobody has assessed.
 --
 -- Writes go through apply_remediation_change() (migration 0017): its allowlist is a list of
--- TABLE names and already contains unified_sites, so no allowlist change is needed.
+-- TABLE names and already contains unified_sites, so no allowlist change is needed. The one
+-- other writer is a founder's snapshot restore, and only from a snapshot that recorded the
+-- column (taken after this migration); its preview lists the scope change before it runs.
 --
 -- Restart behaviour: survives. No boot-time writer touches these columns (FIELD_CONTRACT
 -- section 2 names exactly three: unified_sites.site_type, unified_sites.name_normalized,
@@ -79,7 +81,8 @@ $$;
 COMMENT ON COLUMN unified_sites.scope_status IS
     'E4 scope decision. NULL = never assessed (shown); in_scope; pending (shown); retired = '
     'hidden platform-wide but kept for matching. Read through '
-    'pipeline/utils/public_sites.not_retired(); written only through apply_remediation_change().';
+    'pipeline/utils/public_sites.not_retired(); written through apply_remediation_change() '
+    '(and by a snapshot restore, from a snapshot that recorded it).';
 COMMENT ON COLUMN unified_sites.scope_reason IS
     'Why the scope_status was set, in words, for the human reviewer. Free text.';
 

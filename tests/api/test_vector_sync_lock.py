@@ -130,6 +130,8 @@ def test_already_ran_compares_with_the_naive_utc_column(monkeypatch):
     assert vs._nightly_already_ran(SCHEDULED) is True
     session.answers["FROM vector_sync_state"] = [(datetime(2026, 9, 22, 3, 0, 34),)]
     assert vs._nightly_already_ran(SCHEDULED) is False
+    # only a SUCCESSFUL run counts: a failed one leaves the night to the other instance
+    assert "last_result = 'success'" in session.statements()[0]
 
 
 def test_a_manual_reindex_is_refused_while_any_instance_runs_one():

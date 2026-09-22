@@ -9,7 +9,8 @@ unified_sites - SQL ``FROM``/``JOIN unified_sites`` or an ORM query/join/get on
 ``UnifiedSite`` - and requires one of two things:
 
 * the scope has visibly been handled: the function (or a module constant it uses) mentions
-  ``scope_status``, ``not_retired``, ``is_retired``, ``RETIRED`` or ``card_site_in_scope``
+  ``scope_status``, ``not_retired``, ``is_retired``, ``RETIRED``, ``card_site_in_scope`` or
+  ``curated_page``
   (a snapshot that copies the scope columns counts - it handles them on purpose);
 * or the read path is in ``EXEMPT`` below, with the reason it must not filter.
 
@@ -36,7 +37,14 @@ _READ_SQL = re.compile(r"(?<!DELETE )\b(?:FROM|JOIN)\s+unified_sites\b", re.IGNO
 #: ORM calls that read the table: session.query(UnifiedSite ...), .join(UnifiedSite ...),
 #: session.get(UnifiedSite, ...), select(UnifiedSite ...).
 _ORM_READERS = frozenset({"query", "join", "get", "select"})
-_SCOPE_TOKENS = ("scope_status", "not_retired", "is_retired", "RETIRED", "card_site_in_scope")
+_SCOPE_TOKENS = (
+    "scope_status",
+    "not_retired",
+    "is_retired",
+    "RETIRED",
+    "card_site_in_scope",
+    "curated_page",  # carries not_retired() - pipeline/utils/public_sites.py
+)
 
 #: Read paths that deliberately do NOT filter retired sites, with the reason. Keyed by
 #: "path::function" (innermost function) or "path::<module>:CONSTANT".
@@ -100,6 +108,10 @@ EXEMPT: dict[str, str] = {
     # --- a player's own cards and history -----------------------------------------------
     "api/cardgame/achievements.py::_check_single": (
         "counts what the player liked, bookmarked or owns - their history, not a draw"
+    ),
+    "api/cardgame/leaderboard_service.py::fetch_collection_page": (
+        "the player's own collection: cards they already own stay theirs, consistent with "
+        "their decks and battles; only new draws skip a retired site"
     ),
     "api/cardgame/discord_commands.py::deck_command": "shows the player's own deck",
     "api/cardgame/discord_commands.py::_build_round_lines": "shows cards already in a battle",

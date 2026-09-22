@@ -954,11 +954,13 @@ def restore_all_upload_snapshots(
                 raw_data = snap.old_data->'raw_data',
                 parent_site_id = NULLIF(snap.old_data->>'parent_site_id', '')::uuid,
                 source_record_id = snap.old_data->>'source_record_id',
-                -- Same rule as restore_snapshot: the snapshot is the state to go back
-                -- to, scope included. A snapshot older than migration 0020 has no key,
-                -- which reads as NULL = in scope - the state the site was in then.
-                scope_status = snap.old_data->>'scope_status',
-                scope_reason = snap.old_data->>'scope_reason',
+                -- Same rule as restore_snapshot: the scope comes back only from a
+                -- snapshot that recorded it (migration 0020 on). An older one knows
+                -- nothing of a later retirement and must not undo it.
+                scope_status = CASE WHEN snap.old_data ? 'scope_status'
+                    THEN snap.old_data->>'scope_status' ELSE us.scope_status END,
+                scope_reason = CASE WHEN snap.old_data ? 'scope_status'
+                    THEN snap.old_data->>'scope_reason' ELSE us.scope_reason END,
                 updated_at = NOW()
             FROM (
                 SELECT DISTINCT ON (sr.site_id) sr.site_id, sr.old_data
@@ -1469,8 +1471,14 @@ _REBUILD_STATIC_TIMEOUT_S = 30 * 60
 
 
 def _run_static_export() -> dict:
-    """The job body: the full export in a child process (it also writes the file snapshot)."""
-    return run_module("pipeline.static_exporter", timeout_s=_REBUILD_STATIC_TIMEOUT_S)
+    """The job body: the export in a child process (it also writes the file snapshot).
+
+    --no-library: public/data/library/ belongs to the library refresh job, which runs
+    under its own lock; this export would only re-write the same table's rows there.
+    """
+    return run_module(
+        "pipeline.static_exporter", "--no-library", timeout_s=_REBUILD_STATIC_TIMEOUT_S
+    )
 
 
 @router.post("/rebuild-static", status_code=202)
@@ -1884,12 +1892,16 @@ def replace_source(
     Safety guarantees:
     - Snapshot is committed FIRST in its own transaction. If it fails, nothing is deleted.
     - Delete + insert happen in a second transaction. If insert fails, delete is rolled back.
-    - Protected sources (community, lyra) cannot be replaced.
+    - Protected sources (community and every curated source) cannot be replaced.
     - Verifies snapshot row count matches existing site count before proceeding.
+
+    ancient_nerds joined the protected set on 2026-09-22 (E1/E4): a replace deletes every
+    row of the source, retired rows included, and re-inserts without their scope, their
+    journaled corrections or their card_stats - the same reason DELETE refuses them.
     """
     import uuid as _uuid
 
-    from api.services.snapshots import create_snapshot
+    from api.services.snapshots import CURATED_SOURCES, create_snapshot
     from pipeline.utils.text import normalize_name
 
     edited_by = user.username
@@ -1900,11 +1912,14 @@ def replace_source(
         raise HTTPException(status_code=400, detail="No sites provided")
 
     # Guard: never wipe protected sources
-    protected = {"community", "lyra", "ancient_nerds_community"}
+    protected = {"community", *CURATED_SOURCES}
     if target_source in protected:
         raise HTTPException(
             status_code=400,
-            detail=f"Source '{target_source}' is protected and cannot be replaced",
+            detail=(
+                f"Source '{target_source}' is protected and cannot be replaced "
+                "(curated sites are corrected or retired row by row, never wiped - E1/E4)"
+            ),
         )
 
     # ── PHASE 1: Snapshot (committed independently) ──────────────────

@@ -13,6 +13,8 @@ import re
 import urllib.parse
 from datetime import UTC, datetime
 
+from sqlalchemy import text
+
 from pipeline.database import (
     LibrarySource,
     NewsArticle,
@@ -23,7 +25,7 @@ from pipeline.database import (
 )
 from pipeline.news_visibility import public_story_criteria
 from pipeline.sites_html_renderer import site_path
-from pipeline.utils.public_sites import RETIRED
+from pipeline.utils.public_sites import RETIRED, is_retired
 from pipeline.utils.slugs import slugify, story_slug
 from pipeline.utils.text import PERIOD_BUCKETS
 
@@ -37,6 +39,27 @@ _SKIP_DOMAINS = {"youtube.com", "youtu.be", "m.youtube.com"}
 
 # Rows per multi-row upsert in _flush_to_db (14,241 library sources on 2026-09-22).
 _FLUSH_CHUNK = 500
+
+# Drops the parent refs that point at a retired site (E4) from stored rows. The scan
+# skips retired sites, and the upsert replaces parent_refs only for the sources it saw
+# this run - a source cited by nothing but a now-retired site would keep linking a page
+# that answers 410. The row itself stays (the aggregator never deletes).
+_STRIP_RETIRED_REFS = text(
+    "WITH retired AS (SELECT id::text AS id FROM unified_sites WHERE "
+    + is_retired()
+    + """)
+    UPDATE library_sources ls
+    SET parent_refs = (
+        SELECT COALESCE(jsonb_agg(e.ref ORDER BY e.ord), '[]'::jsonb)
+        FROM jsonb_array_elements(ls.parent_refs) WITH ORDINALITY AS e(ref, ord)
+        WHERE NOT (e.ref->>'type' = 'site' AND e.ref->>'id' IN (SELECT id FROM retired))
+    )
+    WHERE EXISTS (
+        SELECT 1 FROM jsonb_array_elements(ls.parent_refs) AS r(ref)
+        WHERE r.ref->>'type' = 'site' AND r.ref->>'id' IN (SELECT id FROM retired)
+    )
+    """
+)
 
 
 def _url_id(url: str) -> str:
@@ -361,6 +384,13 @@ class LibraryAggregator:
         logger.info(f"  Upserted {new_this_run} sources ({total} total in library)")
         return total
 
+    def _strip_retired_refs(self, session) -> int:
+        """Drop parent refs to retired sites from the stored rows; returns rows changed."""
+        stripped = session.execute(_STRIP_RETIRED_REFS).rowcount
+        if stripped:
+            logger.info(f"  Dropped retired-site refs from {stripped} stored sources")
+        return stripped
+
     def aggregate_all(self) -> int:
         """Run full aggregation: scan all sources, write to DB. Returns source count."""
         logger.info("=" * 50)
@@ -373,6 +403,7 @@ class LibraryAggregator:
             self._scan_sites(session)
             self._scan_articles(session)
             total = self._flush_to_db(session)
+            self._strip_retired_refs(session)
 
         logger.info(f"Library aggregation complete: {total} unique sources")
         logger.info(f"  Breakdown: {self.stats}")
