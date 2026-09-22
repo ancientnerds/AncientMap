@@ -22,7 +22,8 @@ delivered plan), so it carries no fourth or fifth guard: `allowed_new_values=()`
 `premise_sql=None` render exactly the statement that was rehearsed and written.
 
 A leaf module: it imports nothing from `plan.py` or `apply.py`, so both can import it. It does
-import the pipeline's own vocabularies a lane owns (the period buckets), so they are never copied.
+import the pipeline's own vocabularies a lane owns (the period buckets, the canonical site types),
+so they are never copied.
 """
 
 from __future__ import annotations
@@ -31,6 +32,7 @@ import re
 from collections.abc import Sequence
 from dataclasses import dataclass
 
+from pipeline.normalizers.site_type import CANONICAL_TYPES
 from pipeline.utils.text import PERIOD_BUCKETS
 
 _IDENTIFIER = re.compile(r"^[a-z_][a-z0-9_]*$")
@@ -337,11 +339,64 @@ PERIOD_NAME_READBACK = journal_readback(
     ],
 )
 
-LANES: dict[str, Lane] = {lane.name: lane for lane in (T05, UK_PARTS, PERIOD_NAME)}
+#: What a `site_type` value that is *not a site type* looks like, measured on the phase-3 writes of
+#: 2026-09-21/22: a lowercase snake_case marker a program emitted (`suspect_modern`, twice) and the
+#: model's own statement that no type fits (`Grave (burial site) — not representable`). No canonical
+#: type matches either (pinned by a test), so the shape alone cannot misread a real type.
+NOT_A_TYPE_MARKER = r"^[a-z0-9]+(_[a-z0-9]+)+$"
+NOT_A_TYPE_PHRASE = "not representable"
+
+_NOT_A_TYPE = Residual(
+    "curated rows whose site_type is a marker token or a model refusal",
+    f"(site_type ~ {sql_literal(NOT_A_TYPE_MARKER)} "
+    f"OR site_type ILIKE {sql_literal('%' + NOT_A_TYPE_PHRASE + '%')})",
+)
+
+#: Phase 6 item 1 (2026-09-22): phase 3 wrote three values into `site_type` that are not site types
+#: and are live in page titles. The lane restores the value each of those writes replaced - the
+#: journal's `old_value` - and owns the canonical types only (`pipeline/normalizers/site_type.py`).
+SITE_TYPE_SHAPE = Lane(
+    name="site-type-shape",
+    column="site_type",
+    max_chars=100,
+    key_prefix="site-type-shape",
+    run_stamp="2026-09-22_mechanical-site-type-shape",
+    test_id="P6/site-type-shape",
+    confidence="authoritative",
+    label="site_type shape repair",
+    plan_table="_site_type_plan",
+    out_dir_name="mechanical_site_type",
+    post_commit_residual=_NOT_A_TYPE,
+    rehearsal_residual=_NOT_A_TYPE,
+    allowed_new_values=tuple(CANONICAL_TYPES),
+)
+
+SITE_TYPE_SHAPE_READBACK = journal_readback(
+    SITE_TYPE_SHAPE,
+    [
+        (
+            _NOT_A_TYPE.metric,
+            f"FROM unified_sites WHERE source_id = 'ancient_nerds' AND {_NOT_A_TYPE.predicate}",
+        ),
+        (
+            "curated rows whose site_type is outside the canonical list",
+            "FROM unified_sites WHERE source_id = 'ancient_nerds' AND (site_type IS NULL OR "
+            "site_type NOT IN (" + ", ".join(sql_literal(t) for t in CANONICAL_TYPES) + "))",
+        ),
+        (
+            "journal rows for this run whose value is not canonical",
+            f"FROM remediation_change_log WHERE run_stamp = {sql_literal(SITE_TYPE_SHAPE.run_stamp)} "
+            "AND new_value NOT IN (" + ", ".join(sql_literal(t) for t in CANONICAL_TYPES) + ")",
+        ),
+    ],
+)
+
+LANES: dict[str, Lane] = {lane.name: lane for lane in (T05, UK_PARTS, PERIOD_NAME, SITE_TYPE_SHAPE)}
 
 #: The read-only verification per lane, except T05's: that one is `apply.VERIFY_SQL`, kept there
 #: unchanged since the write it verified.
 LANE_READBACKS: dict[str, str] = {
     UK_PARTS.name: UK_PARTS_READBACK,
     PERIOD_NAME.name: PERIOD_NAME_READBACK,
+    SITE_TYPE_SHAPE.name: SITE_TYPE_SHAPE_READBACK,
 }

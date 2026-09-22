@@ -40,10 +40,12 @@ APPLY = MECHANICAL / "apply.py"
 LANE = MECHANICAL / "lane.py"
 UK = MECHANICAL / "uk_parts.py"
 PERIOD = MECHANICAL / "period_name.py"
+SHAPE = MECHANICAL / "site_type_shape.py"
 TEXT = REPO / "pipeline/utils/text.py"
 TESTFILE = "tests/remediation/test_mechanical.py"
 UK_TESTS = "tests/remediation/test_mechanical_uk.py"
 PERIOD_TESTS = "tests/remediation/test_mechanical_period_name.py"
+SHAPE_TESTS = "tests/remediation/test_mechanical_site_type.py"
 
 #: The interpreter that runs the sweep runs the tests too: a hard-coded `.venv` path does not exist in
 #: a git worktree, and a second interpreter could test different packages than the one reporting.
@@ -671,6 +673,89 @@ CASES: list[Case] = [
         'f"WHEN {column} <= {hi} THEN {sql_literal(label)}"',
         "test_the_sql_bucket_is_the_frontend_bucket",
         PERIOD_TESTS,
+    ),
+    # ------------------------------------------------------- the site_type lane (2026-09-22)
+    *(
+        guard(f"site_type: {label}", SHAPE, needle, test, SHAPE_TESTS)
+        for label, needle, test in (
+            (
+                "curated source only",
+                "    if row.source_id != CURATED_SOURCE:",
+                "test_a_row_of_another_source_is_refused",
+            ),
+            (
+                "a type to repair",
+                "    if row.site_type is None:",
+                "test_a_row_without_a_type_is_refused",
+            ),
+            (
+                "only a not-a-type shape is repaired",
+                "    if shape is None:",
+                "test_a_real_word_outside_the_list_goes_to_review",
+            ),
+            (
+                "the journal ends at the live value",
+                "    if broken is not None:\n        return verdict(False, *broken)",
+                "test_a_journal_that_disagrees_with_the_row_is_refused",
+            ),
+            (
+                "a written value to restore",
+                "    if last is None:",
+                "test_a_value_without_a_journal_row_is_refused",
+            ),
+            (
+                "only phase 3's writes",
+                '    if not last.run_stamp.startswith("phase3:"):',
+                "test_a_value_written_by_another_lane_is_refused",
+            ),
+            (
+                "the restore is canonical",
+                "    if restore not in CANONICAL_TYPES:",
+                "test_a_non_canonical_restore_is_refused",
+            ),
+            (
+                "the restore survives the boot normaliser",
+                "    if normalize_site_type(restore) != restore:",
+                "test_a_restore_the_boot_normaliser_would_rewrite_is_refused",
+            ),
+            (
+                "the snapshot knows the site",
+                "    if row.site_id not in snapshot:",
+                "test_a_site_missing_from_the_snapshot_is_refused",
+            ),
+            (
+                "the snapshot confirms the journal",
+                "    if snapshot[row.site_id] != first.old_value:",
+                "test_a_snapshot_that_disagrees_with_the_journal_is_refused",
+            ),
+            (
+                "a marker is not a type",
+                "    if MARKER.match(value):",
+                "test_only_a_marker_or_a_refusal_is_not_a_type",
+            ),
+            (
+                "a refusal is not a type",
+                "    if NOT_A_TYPE_PHRASE in value.casefold():",
+                "test_only_a_marker_or_a_refusal_is_not_a_type",
+            ),
+        )
+    ),
+    Case(
+        "site_type: the marker is lowercase snake_case only",
+        LANE,
+        'NOT_A_TYPE_MARKER = r"^[a-z0-9]+(_[a-z0-9]+)+$"',
+        'NOT_A_TYPE_MARKER = r"^[A-Za-z0-9]+(_[a-z0-9]+)+$"',
+        "test_only_a_marker_or_a_refusal_is_not_a_type",
+        SHAPE_TESTS,
+    ),
+    Case(
+        "site_type: a review item names the write it reviews",
+        SHAPE,
+        '"add it to the vocabulary or map it to a canonical type - a vocabulary decision",\n'
+        "            written,",
+        '"add it to the vocabulary or map it to a canonical type - a vocabulary decision",',
+        "test_a_real_word_outside_the_list_goes_to_review",
+        SHAPE_TESTS,
     ),
     Case(
         "categorize_period: the first bucket is open below",

@@ -301,6 +301,8 @@ output/remediation/mechanical/REHEARSAL.sql
 output/remediation/mechanical_uk/REHEARSAL.sql
 !output/remediation/mechanical_period_name/
 output/remediation/mechanical_period_name/REHEARSAL.sql
+!output/remediation/mechanical_site_type/
+output/remediation/mechanical_site_type/REHEARSAL.sql
 !output/remediation/phase3_pilot/
 
 # Raw third-party response bodies, fetched as evidence during the Phase-3 pilot, are NOT versioned.
