@@ -189,6 +189,10 @@ public/data/links.json.gz
 public/data/content/
 public/data/images/
 public/data/research-images/
+# Written by the library refresh job (POST /api/library/refresh). Unignored, every deploy's
+# `git clean -fd public/data/` deleted it and /data/library answered 404 until the refresh
+# ran again - after the failed deploy of 2026-09-22, for the whole night.
+public/data/library/
 # Portal poster screenshots — captured by .github/workflows/previews.yml, uploaded to the VPS
 public/data/previews/
 
