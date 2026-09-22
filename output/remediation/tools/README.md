@@ -19,7 +19,7 @@ Run them from there, not from here. A fresh clone has no such directory - the ar
 | `write_dry_all.py` | builds the full write plan over every batch (`_write_dry/ALL_ROWS.jsonl`); touches no database |
 | `make_holds.py` | writes the hand-hold list (`_write_apply/HOLDS.jsonl`), keyed by `change_key`; must be re-run after every edit |
 | `write_gate.py` | the writer: 100-site steps, conditional `WHERE`, journal row, read-back. Without `--apply` it is a dry run and says so |
-| `verify_writes.py` | the independent acceptance: asks production in both directions, prints `ERGEBNIS:` |
+| `verify_writes.py` | the independent acceptance: asks production in both directions and follows each field's journal chain across later lanes; prints `RESULT: N deviation(s)` and the fields superseded by a later journalled write, by stamp (was `ERGEBNIS:` until 2026-09-22) |
 | `review_all.py` | drives the reviewer stage over every batch (4 workers, $8 cap) |
 | `review_totals.py` | the reviewer census (`review_totals.txt`) |
 | `found_summary.py` | the finder census over the answer files |

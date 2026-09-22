@@ -43,11 +43,13 @@ PERIOD = MECHANICAL / "period_name.py"
 SHAPE = MECHANICAL / "site_type_shape.py"
 TEXT = REPO / "pipeline/utils/text.py"
 PROD_WRITE = REPO / "scripts/remediation/prod_write.py"
+VERIFY_WRITES = REPO / "output/remediation/tools/verify_writes.py"
 TESTFILE = "tests/remediation/test_mechanical.py"
 UK_TESTS = "tests/remediation/test_mechanical_uk.py"
 PERIOD_TESTS = "tests/remediation/test_mechanical_period_name.py"
 SHAPE_TESTS = "tests/remediation/test_mechanical_site_type.py"
 PROD_TESTS = "tests/remediation/test_prod_write.py"
+VERIFY_TESTS = "tests/remediation/test_verify_writes.py"
 
 #: The interpreter that runs the sweep runs the tests too: a hard-coded `.venv` path does not exist in
 #: a git worktree, and a second interpreter could test different packages than the one reporting.
@@ -962,6 +964,80 @@ CASES: list[Case] = [
                 "    if False:",
                 "test_pin_line_refuses_what_is_not_a_digest",
                 PROD_TESTS,
+            ),
+        )
+    ),
+    # ------------------------------ the phase-3 acceptance follows the journal chain (2026-09-22)
+    *(
+        guard(f"acceptance: {label}", VERIFY_WRITES, needle, test, VERIFY_TESTS)
+        for label, needle, test in (
+            (
+                "a chain is continuous",
+                "        if after.old != before.new:",
+                "test_a_broken_chain_is_a_deviation",
+            ),
+            (
+                "a journalled site must exist",
+                "        if pk not in stored:",
+                "test_a_missing_site_is_a_deviation",
+            ),
+            (
+                "a broken chain is reported",
+                '        if problem is not None:\n            verdict.deviations.append(f"  BROKEN CHAIN {pk}',
+                "test_a_broken_chain_is_a_deviation",
+            ),
+            (
+                "the chain ends at the live value",
+                "        if live(column, pk) != chain[-1].new:",
+                "test_a_live_value_the_journal_does_not_end_at_is_a_deviation",
+            ),
+            (
+                "a superseded write is reported by stamp",
+                "        if not chain[-1].stamp.startswith(PHASE3):",
+                "test_a_superseded_phase3_write_is_reported_by_stamp_not_as_a_deviation",
+            ),
+            (
+                "a planned site must exist",
+                '        if row["pk"] not in stored:',
+                "test_a_missing_site_is_a_deviation",
+            ),
+            (
+                "an unjournalled field keeps its old value",
+                "            if live(*key) != old:",
+                "test_a_held_field_changed_without_a_journal_row_is_a_deviation",
+            ),
+            (
+                "a later chain starts from the planned value",
+                "        if problem is None and chain[0].old != old:",
+                "test_a_later_chain_on_a_held_field_must_start_from_the_planned_old_value",
+            ),
+            (
+                "a later chain ends at the live value",
+                "        if problem is None and live(*key) != chain[-1].new:",
+                "test_a_later_chain_on_a_held_field_must_end_at_the_live_value",
+            ),
+            (
+                "a broken later chain is reported",
+                "        if problem is not None:\n            verdict.deviations.append(\n"
+                '                f"  BROKEN CHAIN {row',
+                "test_a_later_chain_on_a_held_field_must_be_unbroken",
+            ),
+        )
+    ),
+    *(
+        Case(f"acceptance: {label}", VERIFY_WRITES, old, new, test, VERIFY_TESTS)
+        for label, old, new, test in (
+            (
+                "only a phase-3 chain counts as written",
+                "any(k.stamp.startswith(PHASE3) for k in chain)",
+                "True",
+                "test_a_later_chain_on_a_held_field_must_start_from_the_planned_old_value",
+            ),
+            (
+                "only the three phase-3 columns are judged",
+                "        if (column, pk) not in written or column not in COLUMNS:",
+                "        if (column, pk) not in written:",
+                "test_a_field_outside_the_three_columns_is_not_judged",
             ),
         )
     ),

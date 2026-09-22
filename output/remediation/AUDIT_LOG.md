@@ -5304,3 +5304,22 @@ Tests: `TestThePin`, `TestTheDeliveredT05Pin` and `TestTheCommitState` in
 answers only the statements the real path sends) and `tests/remediation/test_prod_write.py`. Every
 new guard has a mutation case: sweep `cases: 140  fired: 140  skipped: 0  survived: 0`.
 
+## 2026-09-22 - the phase-3 acceptance follows the journal chain
+
+`tools/verify_writes.py` compared every phase-3 journal row's `new_value` with the live value. The
+B9 lane rewrites five of those rows (`United Kingdom` -> `Northern Ireland`) and the site_type shape
+lane three more, so after those writes the documented **0 deviations** would have become **8
+`NICHT NEU`** - for writes that are journalled and correct. It now reads every planned field's whole
+journal chain, across all stamps: each link must start where the one before ended, the chain must
+end at the live value, and a planned field phase 3 did not write must start from its planned old
+value. A replaced phase-3 value is reported as *superseded by <stamp>*, never counted and never
+silently passed. NULL is kept apart from `''` with a marker, which the per-row version could not.
+
+Read-only run against production the same day, before any of the new lanes: `994 phase-3 field(s)
+journalled, 80 planned field(s) phase 3 did not write, 1022 sites read - RESULT: 0 deviation(s)`, the
+same numbers as the documented acceptance. Predicted after the UK and site_type lanes apply (from their
+plans against `ALL_ROWS.jsonl`): still 0 deviations, with 5 fields superseded by
+`2026-09-22_mechanical-uk-parts` and 3 by `2026-09-22_mechanical-site-type-shape`; the period lane
+writes `period_name`, which this acceptance does not judge. DB-less tests in
+`tests/remediation/test_verify_writes.py`; every new check has a mutation case.
+
