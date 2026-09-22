@@ -44,8 +44,8 @@ from common import (  # noqa: E402
     image_rows,
     image_url,
     is_webp,
+    locate,
     read_jsonl,
-    resolve,
     shard_for,
     site_names,
     write_jsonl,
@@ -84,8 +84,10 @@ def main() -> int:
             f"rows {len(findings)} (report {T10_TOTAL}), tiers {counts} (report {T10_ROW_TOTALS})"
         )
 
-    tree = build_tree(OFFSITE_IMAGES)
-    collisions = build_tree(OFFSITE_CASE_COLLISIONS)
+    trees = (
+        (OFFSITE_IMAGES, build_tree(OFFSITE_IMAGES)),
+        (OFFSITE_CASE_COLLISIONS, build_tree(OFFSITE_CASE_COLLISIONS)),
+    )
     names = site_names()
     cards = card_descriptions()
     images = image_rows()
@@ -112,14 +114,11 @@ def main() -> int:
         if seen[(shard_for(site_id), filename)] > 1:
             rejected["filename_shared_by_rows"] = rejected.get("filename_shared_by_rows", 0) + 1
             continue
-        hit = resolve(tree, site_id, filename)
-        path = OFFSITE_IMAGES / shard_for(site_id) / filename
-        if hit is None:
-            hit = resolve(collisions, site_id, filename)
-            path = OFFSITE_CASE_COLLISIONS / shard_for(site_id) / filename
+        hit = locate(trees, site_id, filename)
         if hit is None:
             rejected["no_file_on_disk"] = rejected.get("no_file_on_disk", 0) + 1
             continue
+        path = hit[0]
         if not is_webp(path)[0]:
             rejected["not_webp"] = rejected.get("not_webp", 0) + 1
             continue

@@ -50,9 +50,10 @@ from common import (  # noqa: E402
     OUT_DIR,
     REPO_ROOT,
     WIKI_IMAGES_SNAPSHOT,
+    build_tree,
     is_webp,
+    locate,
     read_jsonl_gz,
-    shard_for,
 )
 
 SHORTS_DIR = REPO_ROOT / "video-assets" / "shorts"
@@ -84,6 +85,12 @@ def main() -> int:
     by_site: dict[str, list[dict]] = {}
     for row in read_jsonl_gz(WIKI_IMAGES_SNAPSHOT):
         by_site.setdefault(row["site_id"], []).append(row)
+    # Built up front: a missing image tree fails here, loudly, instead of every record quietly
+    # getting `resolved_path: None`.
+    trees = (
+        (OFFSITE_IMAGES, build_tree(OFFSITE_IMAGES)),
+        (OFFSITE_CASE_COLLISIONS, build_tree(OFFSITE_CASE_COLLISIONS)),
+    )
 
     records: list[dict] = []
     for entry in rejected_with_kind():
@@ -164,15 +171,13 @@ def main() -> int:
         if image_id is not None:
             row = next((r for r in by_site.get(site_id or "", []) if r["id"] == image_id), None)
             if row is not None:
-                shard = shard_for(site_id)
-                path = OFFSITE_IMAGES / shard / row["filename"]
-                if not path.is_file():
-                    alt = OFFSITE_CASE_COLLISIONS / shard / row["filename"]
-                    path = alt if alt.is_file() else path
-                if path.is_file():
-                    record["resolved_path"] = str(path)
-                    record["is_riff_webp"] = is_webp(path)[0]
-                    record["disk_file_size"] = path.stat().st_size
+                # Exact case against the directory listing: `Path.is_file()` would accept a
+                # case-only sibling on this NTFS checkout (common.py's module docstring).
+                hit = locate(trees, site_id, row["filename"])
+                if hit is not None:
+                    record["resolved_path"] = str(hit[0])
+                    record["is_riff_webp"] = is_webp(hit[0])[0]
+                    record["disk_file_size"] = hit[1]
                 else:
                     record["resolved_path"] = None
         records.append(record)
