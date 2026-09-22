@@ -38,7 +38,7 @@ import json
 import logging
 import subprocess
 import sys
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
@@ -62,6 +62,7 @@ from mechanical.plan import (  # noqa: E402
     PlanError,
     pinned,
     plan_sha256,
+    psql_json_reader,
     render_rollback_sql,
     verify_pinned,
 )
@@ -930,12 +931,13 @@ def cmd_apply(
 
 
 def probe_cases(
-    records: Sequence[ChangeRecord], lane: Lane, foreign: Sequence[str]
+    records: Sequence[ChangeRecord], lane: Lane, foreign: Mapping[str, Any]
 ) -> list[tuple[str, str, list[ChangeRecord]]]:
     """One corrupted copy of the plan per in-transaction guard, each expected to be refused.
 
-    `foreign` is a row of another source (`id, name, value[, premise]`), read from production by
-    the caller. Pure, so a test can check that every guard the lane renders has its probe.
+    `foreign` is a row of another source (`id`, `name`, `value` and, for a lane with a premise,
+    `premise`), read from production by the caller. Pure, so a test can check that every guard the
+    lane renders has its probe.
     """
     first = records[0]
     probes: list[tuple[str, str, list[ChangeRecord]]] = []
@@ -958,18 +960,17 @@ def probe_cases(
     too_long[0] = replace(first, new_value="X" * (lane.max_chars + 1))
     probes.append(("guard2-too-long", "guard 2 - a value longer than the column", too_long))
 
-    fid, fname, fvalue, *fpremise = foreign
     other_source = list(records)
     other_source[0] = ChangeRecord(
-        site_id=fid,
-        site_name=fname,
-        old_value=fvalue,
+        site_id=str(foreign["id"]),
+        site_name=str(foreign["name"]),
+        old_value=str(foreign["value"]),
         new_value=first.new_value,
         rule="probe",
-        condition=f"id = {fid}",
+        condition=f"id = {foreign['id']}",
         reason="probe: a row of another source, which must be refused",
         evidence=({"source": "probe", "quote": "corrupted copy"},),
-        premise=fpremise[0] if fpremise else None,
+        premise=None if lane.premise_sql is None else str(foreign["premise"]),
     )
     probes.append(
         ("guard1-other-source", "guard 1 - a row outside source_id = 'ancient_nerds'", other_source)
@@ -998,11 +999,12 @@ def cmd_probe_guards(records: Sequence[ChangeRecord], out: Path, lane: Lane = T0
     guards fire before the loop, and the failed statement aborts the transaction. The journal is
     read back afterwards to show that no probe left a row behind.
     """
-    premise = f", {lane.premise_sql}" if lane.premise_sql is not None else ""
-    foreign = read_rows(
-        f"SELECT u.id, u.name, u.{lane.column}{premise} FROM unified_sites u "
-        f"WHERE u.source_id <> 'ancient_nerds' AND u.{lane.column} IS NOT NULL "
-        f"AND u.{lane.column} <> '' LIMIT 1"
+    # Read as JSON: a name may contain the `|` unaligned psql separates fields on.
+    premise = f", {lane.premise_sql} AS premise" if lane.premise_sql is not None else ""
+    foreign = psql_json_reader()(
+        f"SELECT u.id::text AS id, u.name, u.{lane.column}::text AS value{premise} "
+        f"FROM unified_sites u WHERE u.source_id <> 'ancient_nerds' "
+        f"AND u.{lane.column} IS NOT NULL AND u.{lane.column} <> '' LIMIT 1"
     )
     if not foreign:
         raise PlanError("no non-curated row to probe the source guard with")

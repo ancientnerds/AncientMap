@@ -984,12 +984,46 @@ class TestTheLanes:
         assert f"'{L.UK_PARTS.run_stamp}'" in rehearsal.split("\nROLLBACK;\n", 1)[1]
 
     def test_every_rendered_guard_has_its_probe(self) -> None:
-        foreign = ["11111111-1111-1111-1111-111111111111", "Somewhere", "Scotland", "56.0,-3.0"]
+        foreign = {
+            "id": "11111111-1111-1111-1111-111111111111",
+            "name": "Somewhere",
+            "value": "Scotland",
+            "premise": "56.0,-3.0",
+        }
         uk = {suffix for suffix, _, _ in A.probe_cases([uk_record()], L.UK_PARTS, foreign)}
         assert {"guard4-not-owned", "guard5-premise"} <= uk
-        t05 = {suffix for suffix, _, _ in A.probe_cases([record()], L.T05, foreign[:3])}
+        t05 = {suffix for suffix, _, _ in A.probe_cases([record()], L.T05, foreign)}
         assert "guard4-not-owned" not in t05 and "guard5-premise" not in t05
         assert {"guard1-other-source", "guard2-no-op", "guard2-too-long"} <= t05
+
+    def test_the_probes_read_the_foreign_row_whole_even_with_a_pipe_in_its_name(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
+    ) -> None:
+        """Unaligned psql separates fields with `|`: a name holding one would have shifted the
+        foreign row's value and premise into the wrong fields of the guard-1 probe."""
+        foreign = {
+            "id": "11111111-1111-1111-1111-111111111111",
+            "name": "Broch | Dun",
+            "value": "Scotland",
+            "premise": "58.1,-3.9",
+        }
+        monkeypatch.setattr(A, "psql_json_reader", lambda: lambda sql: [foreign])
+        sent: list[str] = []
+
+        def refuse_every_probe(sql: str, *, rows: bool = False, check: bool = True, **_: Any):
+            sent.append(sql)
+            if rows:
+                return _done("0\n")
+            return _done("", returncode=3) if "RAISE" not in sql else _done("ERROR: x\n", 3)
+
+        monkeypatch.setattr(A, "run_psql", refuse_every_probe)
+        assert A.cmd_probe_guards([uk_record()], Path("."), L.UK_PARTS) == 0
+        guard1 = next(s for s in sent if "guard1-other-source" in s)
+        assert (
+            "'11111111-1111-1111-1111-111111111111'::uuid, 'Scotland', 'Northern Ireland'" in guard1
+        )
+        assert "'58.1,-3.9'" in guard1
+        assert "guard 5" in capsys.readouterr().out
 
     def test_the_uk_rollback_rehearsal_reads_each_row_against_its_part(self) -> None:
         """Each planned row is checked against the unit *it* was given - a set of the four parts
