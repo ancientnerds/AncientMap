@@ -51,16 +51,26 @@ search route. Decision (2026-09-22): MiniMax supplies search, the reasoning stay
 | `tests/remediation/` | the gate suite for all of the above |
 | `docs/procedures/SITES_DB_REMEDIATION_2026-09.md` | the plan itself |
 
-**Local only** (gitignored, on this machine; not in a clone):
+**Local only** (gitignored, on this machine, and not in a clone):
 
-| path | what | why it is ignored |
+| path | what | size |
 | --- | --- | --- |
-| `output/remediation/phase3_runner/runs/mass/batch-*` | **334 batch directories**: the answers, the evidence files, `model.json`, `review.json` | 12 MB+ of generated JSON; regenerable at ~$31 |
-| `output/remediation/logs/` | the run's scratch: plans, hold list, gate and acceptance logs, the working copies of the instruments | regenerable |
-| `output/remediation/phase3_runner/LEDGER.jsonl` | the cost ledger | machine state |
+| `phase3_runner/runs/mass/batch-*/` | **334 batch directories**, one per five sites: `answers/<site-id>%2F<field>.txt` (38,456 files), `evidence/<site-id>%2F<source>.txt`, `reviews/`, `writes/`, plus `input.json`, `fetch.json`, `model.json`, `review.json` | 195 MB |
+| `logs/_write_apply/` | one `ROLLBACK.sql` per written chunk (428 files) and the `APPLIED.json` marker per batch (317) - the undo path | 27 MB |
+| `logs/_write_dry/` | the full write plan `ALL_ROWS.jsonl` (1,074 rows) and `ALL_REFUSED.jsonl` (23,946) | 35 MB |
+| `logs/` (the rest) | gate and acceptance logs, the hold list, the working copies of the instruments | ~150 MB |
+| `phase3_runner/LEDGER.jsonl` | the cost ledger. It is *tracked* and 18 MB, which is worth a look | 18 MB |
 
-The **results** of the write are durable in production: every one of the 994 rows has a
-`remediation_change_log` row with old and new value, and a `ROLLBACK.sql` per chunk.
+Everything here is regenerable at ~$31 and a few hours, which is why it is not in git. To carry the
+whole movable state to another machine there is one archive, made for exactly that:
+
+    output/remediation/run-2026-09-22-complete.tgz     # 34 MB, 49,470 entries
+    # tar -czf run-2026-09-22-complete.tgz -C output/remediation phase3_runner/runs \
+    #     logs/_write_apply logs/_write_dry logs/_country_mismatches.txt logs/review_totals.txt
+
+The **results** of the write are durable in production regardless: every one of the 994 rows has a
+`remediation_change_log` row with old and new value, so the undo path is reconstructible from the
+database even without those files.
 
 ## 4. How to run it
 
@@ -138,6 +148,10 @@ before every batch, which is why nothing under `phase3/` may be edited while it 
   encodes a superseded defect, rewrite it strictly stronger and say why.
 - **Do not trust `comm`/`sort` across Linux and Windows** without fixed collation, and remember a
   Windows Python writing `/tmp/x.sql` writes `C:\tmp\x.sql`, not Git Bash's `/tmp`.
+- **Commit messages and apostrophes.** A message written through a Python single-quoted triple
+  string makes the apostrophe awkward, and rather than escape it I wrote around it - which is how
+  three commit messages in this action came out as "the file is own numbers". Escape it, or use a
+  double-quoted string.
 
 ## 8. Portability to another harness
 
