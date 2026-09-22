@@ -1,5 +1,15 @@
 # Claude Code Instructions for AncientMap
 
+## Where the 2026-09 sites remediation stands
+
+All 5,004 `ancient_nerds` sites have been examined; **994 corrections are in the production database**
+(1,022 sites, 0 deviations, each with a journal entry and a rollback file). Start with
+`output/remediation/HANDOVER.md` - task, state, commands, decisions, open work and the traps that
+cost time here. The evidence behind every number is `output/remediation/AUDIT_LOG.md`; what only
+Martin can decide is `output/remediation/HUMAN_ONLY.md`. Two things are open: five Northern-Ireland
+spelling rows (route: the mechanical lane, never the frozen discover prompt) and the search route for
+the 7,761 unverifiable fields (decided: MiniMax).
+
 ## Code Quality Standards
 
 ### NO FALLBACK CODE
