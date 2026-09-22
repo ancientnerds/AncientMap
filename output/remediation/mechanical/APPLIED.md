@@ -312,6 +312,13 @@ value to the writer, and the read-back statements naming the run they read.
 The two guards that were **found broken while writing this lane** are in §10; both now have tests and
 mutation cases of their own.
 
+**Correction, 2026-09-22.** The line above overstates what the recorded run proved. That sweep counted
+a skipped case as fired (`statement must commit` was skipped: its needle occurred twice), and 17 of its
+30 mutants did not compile, so their named tests never ran. The corrected sweep fires only on a
+compiling mutant whose named test fails by name, and reads `cases: 31  fired: 31  skipped: 0
+survived: 0` (the 31st case is the `ROLLBACK.sql has no COMMIT` guard, untested until then). Details:
+`AUDIT_LOG.md` (2026-09-22) and `evidence/13_mutation_sweep_audit.txt`.
+
 ## 9. Residuals — what this lane leaves behind (with check SQL)
 
 1. **Two hub URLs now 404.** `/sites/georgia-country` and `/sites/chile-easter-island` matched rows

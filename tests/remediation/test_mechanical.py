@@ -711,6 +711,13 @@ class TestReadBackStatements:
         with pytest.raises(P.PlanError, match="no reversal to rehearse"):
             A.cmd_rehearse_rollback([], tmp_path)
 
+    def test_a_rollback_without_a_commit_cannot_be_rehearsed(self, tmp_path: Path) -> None:
+        """Swapping COMMIT for ROLLBACK needs a COMMIT to swap: without one, the "rehearsal" would
+        be the file itself, and whatever it does would be kept. Raised before any psql call."""
+        (tmp_path / "ROLLBACK.sql").write_text("BEGIN;\nSELECT 1;\n", encoding="utf-8")
+        with pytest.raises(P.PlanError, match="no COMMIT"):
+            A.cmd_rehearse_rollback([record()], tmp_path)
+
     def test_the_rollback_rehearsal_reads_name_the_planned_rows(self) -> None:
         sql = A.ROLLBACK_REHEARSAL_READS.format(
             rollback_stamp="'x'", source="'y'", ids=f"'{SITE_GEORGIA}'::uuid"

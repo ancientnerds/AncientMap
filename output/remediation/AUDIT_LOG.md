@@ -5231,3 +5231,36 @@ moved a point in Greece to Turkey, Flevum's a point in Germany to the Netherland
 there looks exactly like a wrong country, and the boundary test is what tells them apart. Those eight are
 among the 8 `(site, field)` questions in `HUMAN_ONLY.md` for their own reasons.
 
+## 2026-09-22 - the mechanical lane's mutation proof proved 12 of its 30 cases, not 30
+
+`mechanical/APPLIED.md` section 8 reports `cases: 30  fired: 30  survived: 0` and says every guard of
+the country lane has a test that fails when the guard is removed. The table behind it
+(`mechanical/evidence/10_mutation_sweep.txt`) does not show that, for three reasons found while
+extending the lane:
+
+1. **A skipped case printed as fired.** A needle that occurs more than once was reported `SKIPPED`,
+   but `fired` was computed as `len(rows) - len(survived)` and the exit code looked at survivors only.
+   `statement must commit` (`    if not sep:`, twice in `apply.py`) was skipped in the recorded run,
+   next to `fired: 30`.
+2. **17 mutants did not compile.** The `if False:` replacement dropped the guard's indentation, so
+   17 of the 30 mutants were `IndentationError`s. pytest then failed at *collection* (exit 2), the
+   named test never ran, and any non-zero exit counted as fired. The recorded table shows exactly
+   those 17 as `fired: ` with no test name after the colon. Measured by compiling each delivered
+   mutant against the LF sources in `HEAD`: 17 do not compile, 1 needle is not unique, 12 are real.
+3. **On a CRLF checkout** (`core.autocrlf=true`, as in any fresh worktree of this repo) the three
+   two-line needles match nothing, and the run still exits 0 with `fired: 30`.
+
+The corrected sweep (`scripts/remediation/mechanical/mutation_sweep.py`) fires a case only when the
+mutant compiles, the named test passed (not skipped) on the original, and pytest reports that test
+FAILED by name on the mutant; a skipped, invalid, unproven, errored or surviving case fails the run.
+It keeps the guard's indentation, matches needles in the file's own line endings, and runs the tests
+with the interpreter that runs it. `tests/remediation/test_mechanical_sweep.py` pins each of those
+rules, and checks every real case statically in the normal test run (needle unique, mutant compiles,
+test exists). The `statement must commit` needle is unique now, and the second COMMIT guard
+(`ROLLBACK.sql has no COMMIT`), which had no test at all, has one.
+
+Result on 2026-09-22: **`cases: 31  fired: 31  skipped: 0  survived: 0`**. So the guards *were*
+covered - every one of the 17 fires once its mutant compiles - but the delivered run did not show it.
+All three runs are in `mechanical/evidence/13_mutation_sweep_audit.txt`; the published
+`10_mutation_sweep.txt` is left as it was recorded.
+

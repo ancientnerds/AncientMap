@@ -1,0 +1,111 @@
+# Mutation sweep audit, 2026-09-22 (scripts/remediation/mechanical/mutation_sweep.py)
+
+## A. The delivered sweep (HEAD 7fbc646), re-run unchanged on a core.autocrlf=true worktree
+##    (only PY pointed at the running interpreter: the worktree has no .venv). Exit code 0.
+
+guard removed                    test asked to fail                                   result
+finding not applicable           test_a_review_finding_is_refused                     fired: 
+curated source only              test_a_row_of_another_source_is_refused              fired: 
+snapshot matches live            test_a_snapshot_value_the_database_no_longer_holds_is_refused fired: 
+finding not stale                test_a_stale_finding_is_refused                      fired: 
+canonical equals proposal        test_a_canonical_form_that_disagrees_with_the_proposal_is_refused fired: 
+ISO code unchanged               test_a_write_that_would_change_the_iso_code_is_refused fired: 
+value is a frontend key          test_a_frontend_map_that_carries_another_code_is_refused fired: 
+point inside the polygon         test_a_point_in_another_country_is_refused           SKIPPED needle appears 0x
+wikidata non-contradicting       test_an_external_contradiction_refuses               fired: 
+fixed point                      test_a_value_the_census_would_flag_again_is_refused  fired: 
+the value is a change            test_a_reduction_that_changes_nothing_is_refused     fired: 
+preferred rank is decisive       test_history_beside_a_preferred_country_is_not_a_contradiction fired: TestWikidataWitness::test_history_beside_a_preferred_country_is_not_a_contradiction
+compound needs a state           test_compound_reduces_to_the_state_not_the_territory fired: TestReduceValue::test_compound_reduces_to_the_state_not_the_territory
+Natural Earth names the state    test_both_vocabularies_know_the_territory_as_chile   fired: TestReduceValue::test_both_vocabularies_know_the_territory_as_chile
+compound refuses two countries   test_two_candidate_countries_refuse                  fired: TestReduceValue::test_two_candidate_countries_refuse
+plan-side source check           test_a_foreign_source_is_refused                     fired: 
+plan-side old value              test_the_plan_side_mirror_refuses_a_corrupt_record   fired: 
+plan-side new value              test_the_plan_side_mirror_refuses_a_corrupt_record   fired: 
+plan-side is a change            test_the_plan_side_mirror_refuses_a_corrupt_record   fired: 
+plan-side column length          test_the_plan_side_mirror_refuses_a_corrupt_record   fired: 
+plan-side evidence               test_the_plan_side_mirror_refuses_a_corrupt_record   fired: TestRenderTransaction::test_the_plan_side_mirror_refuses_a_corrupt_record[change5-not
+plan-side duplicates             test_the_same_site_twice_is_refused                  fired: 
+no empty transaction             test_an_empty_plan_is_refused                        SKIPPED needle appears 0x
+rollback written first           test_emit_refuses_when_the_rollback_does_not_exist   fired: 
+statement must commit            test_a_statement_without_a_commit_cannot_be_rehearsed SKIPPED needle appears 2x
+in-transaction scope guard       test_the_scope_guard_names_the_curated_source        fired: TestRenderTransaction::test_the_scope_guard_names_the_curated_source
+journal reconciles the data      test_the_journal_is_reconciled_inside_the_transaction fired: TestRenderTransaction::test_the_journal_is_reconciled_inside_the_transaction
+the write uses the old value     test_the_conditional_write_uses_the_planned_old_value fired: TestRenderTransaction::test_the_conditional_write_uses_the_planned_old_value
+the read-back names its run      test_the_verify_statement_names_the_run_it_reads_back fired: TestReadBackStatements::test_the_verify_statement_names_the_run_it_reads_back
+the reversal must exist          test_the_rollback_rehearsal_refuses_without_a_reversal SKIPPED needle appears 0x
+
+cases: 30  fired: 30  survived: 0
+
+## B. The delivered sweep's mutants, compiled against the LF sources in HEAD (git show)
+
+finding not applicable             mutant is an IndentationError (unindent does not match any outer indentation level) -> collection error, pytest exit 2, counted as fired
+curated source only                mutant is an IndentationError (unindent does not match any outer indentation level) -> collection error, pytest exit 2, counted as fired
+snapshot matches live              mutant is an IndentationError (unindent does not match any outer indentation level) -> collection error, pytest exit 2, counted as fired
+finding not stale                  mutant is an IndentationError (unindent does not match any outer indentation level) -> collection error, pytest exit 2, counted as fired
+canonical equals proposal          mutant is an IndentationError (unindent does not match any outer indentation level) -> collection error, pytest exit 2, counted as fired
+ISO code unchanged                 mutant is an IndentationError (unindent does not match any outer indentation level) -> collection error, pytest exit 2, counted as fired
+value is a frontend key            mutant is an IndentationError (unindent does not match any outer indentation level) -> collection error, pytest exit 2, counted as fired
+point inside the polygon           mutant compiles
+wikidata non-contradicting         mutant is an IndentationError (unindent does not match any outer indentation level) -> collection error, pytest exit 2, counted as fired
+fixed point                        mutant is an IndentationError (unindent does not match any outer indentation level) -> collection error, pytest exit 2, counted as fired
+the value is a change              mutant is an IndentationError (unindent does not match any outer indentation level) -> collection error, pytest exit 2, counted as fired
+preferred rank is decisive         mutant compiles
+compound needs a state             mutant compiles
+Natural Earth names the state      mutant compiles
+compound refuses two countries     mutant compiles
+plan-side source check             mutant is an IndentationError (unindent does not match any outer indentation level) -> collection error, pytest exit 2, counted as fired
+plan-side old value                mutant is an IndentationError (unindent does not match any outer indentation level) -> collection error, pytest exit 2, counted as fired
+plan-side new value                mutant is an IndentationError (unindent does not match any outer indentation level) -> collection error, pytest exit 2, counted as fired
+plan-side is a change              mutant is an IndentationError (unindent does not match any outer indentation level) -> collection error, pytest exit 2, counted as fired
+plan-side column length            mutant is an IndentationError (unindent does not match any outer indentation level) -> collection error, pytest exit 2, counted as fired
+plan-side evidence                 mutant compiles
+plan-side duplicates               mutant is an IndentationError (unindent does not match any outer indentation level) -> collection error, pytest exit 2, counted as fired
+no empty transaction               mutant compiles
+rollback written first             mutant is an IndentationError (unindent does not match any outer indentation level) -> collection error, pytest exit 2, counted as fired
+statement must commit              needle 2x -> SKIPPED, counted as fired
+in-transaction scope guard         mutant compiles
+journal reconciles the data        mutant compiles
+the write uses the old value       mutant compiles
+the read-back names its run        mutant compiles
+the reversal must exist            mutant compiles
+delivered cases: 30; mutants that do not compile: 17; needles not unique: 1
+
+## C. The corrected sweep: a case fires only when its mutant compiles and its named test
+##    PASSED on the original and FAILED on the mutant; skipped, invalid, unproven, errored
+##    and survived cases fail the run. Exit code 0.
+
+guard removed                      test asked to fail                                               result
+finding not applicable             test_a_review_finding_is_refused                                 fired (pytest exit 1: ['FAILED'])
+curated source only                test_a_row_of_another_source_is_refused                          fired (pytest exit 1: ['FAILED'])
+snapshot matches live              test_a_snapshot_value_the_database_no_longer_holds_is_refused    fired (pytest exit 1: ['FAILED'])
+finding not stale                  test_a_stale_finding_is_refused                                  fired (pytest exit 1: ['FAILED'])
+canonical equals proposal          test_a_canonical_form_that_disagrees_with_the_proposal_is_refused fired (pytest exit 1: ['FAILED'])
+ISO code unchanged                 test_a_write_that_would_change_the_iso_code_is_refused           fired (pytest exit 1: ['FAILED'])
+value is a frontend key            test_a_frontend_map_that_carries_another_code_is_refused         fired (pytest exit 1: ['FAILED'])
+point inside the polygon           test_a_point_in_another_country_is_refused                       fired (pytest exit 1: ['FAILED'])
+wikidata non-contradicting         test_an_external_contradiction_refuses                           fired (pytest exit 1: ['FAILED'])
+fixed point                        test_a_value_the_census_would_flag_again_is_refused              fired (pytest exit 1: ['FAILED'])
+the value is a change              test_a_reduction_that_changes_nothing_is_refused                 fired (pytest exit 1: ['FAILED'])
+preferred rank is decisive         test_history_beside_a_preferred_country_is_not_a_contradiction   fired (pytest exit 1: ['FAILED'])
+compound needs a state             test_compound_reduces_to_the_state_not_the_territory             fired (pytest exit 1: ['FAILED'])
+Natural Earth names the state      test_both_vocabularies_know_the_territory_as_chile               fired (pytest exit 1: ['FAILED'])
+compound refuses two countries     test_two_candidate_countries_refuse                              fired (pytest exit 1: ['FAILED'])
+plan-side source check             test_a_foreign_source_is_refused                                 fired (pytest exit 1: ['FAILED'])
+plan-side old value                test_the_plan_side_mirror_refuses_a_corrupt_record               fired (pytest exit 1: ['PASSED', 'FAILED', 'PASSED', 'PASSED', 'PASSED', 'PASSED'])
+plan-side new value                test_the_plan_side_mirror_refuses_a_corrupt_record               fired (pytest exit 1: ['PASSED', 'PASSED', 'FAILED', 'PASSED', 'PASSED', 'PASSED'])
+plan-side is a change              test_the_plan_side_mirror_refuses_a_corrupt_record               fired (pytest exit 1: ['PASSED', 'PASSED', 'PASSED', 'FAILED', 'PASSED', 'PASSED'])
+plan-side column length            test_the_plan_side_mirror_refuses_a_corrupt_record               fired (pytest exit 1: ['PASSED', 'PASSED', 'PASSED', 'PASSED', 'FAILED', 'PASSED'])
+plan-side evidence                 test_the_plan_side_mirror_refuses_a_corrupt_record               fired (pytest exit 1: ['PASSED', 'PASSED', 'PASSED', 'PASSED', 'PASSED', 'FAILED'])
+plan-side duplicates               test_the_same_site_twice_is_refused                              fired (pytest exit 1: ['FAILED'])
+no empty transaction               test_an_empty_plan_is_refused                                    fired (pytest exit 1: ['FAILED'])
+rollback written first             test_emit_refuses_when_the_rollback_does_not_exist               fired (pytest exit 1: ['FAILED'])
+statement must commit              test_a_statement_without_a_commit_cannot_be_rehearsed            fired (pytest exit 1: ['FAILED'])
+rollback rehearsal must commit     test_a_rollback_without_a_commit_cannot_be_rehearsed             fired (pytest exit 1: ['FAILED'])
+in-transaction scope guard         test_the_scope_guard_names_the_curated_source                    fired (pytest exit 1: ['FAILED'])
+journal reconciles the data        test_the_journal_is_reconciled_inside_the_transaction            fired (pytest exit 1: ['FAILED'])
+the write uses the old value       test_the_conditional_write_uses_the_planned_old_value            fired (pytest exit 1: ['FAILED'])
+the read-back names its run        test_the_verify_statement_names_the_run_it_reads_back            fired (pytest exit 1: ['FAILED'])
+the reversal must exist            test_the_rollback_rehearsal_refuses_without_a_reversal           fired (pytest exit 1: ['FAILED'])
+
+cases: 31  fired: 31  skipped: 0  survived: 0  invalid: 0  unproven: 0  errored: 0
