@@ -304,6 +304,7 @@ X_MALFORMED_BASE = (
     "test_a_malformed_base_resp_is_a_new_raise_where_the_old_wrapper_returned_the_hits"
 )
 X_BUDGET_FIRST = "test_a_body_that_names_both_the_budget_and_the_rate_cap_is_the_budget"
+S_PLAN_LINE = "test_a_plan_line_with_mixed_or_damaged_rerun_fields_is_refused_with_its_line"
 
 #: (name, file, the exact text to replace, what to replace it with, test file, test name)
 MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
@@ -2195,6 +2196,22 @@ MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         "        raise CodingPlanQuotaError(detail, http_status=status, body_bytes=size)\n",
         MINIMAX_TEST,
         X_BUDGET_FIRST,
+    ),
+    (
+        "the driver accepts a plan line without query values",
+        MASS_RUN,
+        "                    SS.query_values(site)\n",
+        "                    pass  # mutated\n",
+        SEARCH_TEST,
+        S_PLAN_LINE,
+    ),
+    (
+        "the driver accepts a plan line without its unwritten proposals",
+        MASS_RUN,
+        "                    SE.unwritten_proposals(site)\n",
+        "                    pass  # mutated\n",
+        SEARCH_TEST,
+        S_PLAN_LINE,
     ),
     (
         "an image file is found by a case-insensitive probe",

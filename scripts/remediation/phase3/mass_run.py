@@ -213,6 +213,12 @@ def read_plan(path: Path) -> list[PlannedBatch]:
         try:
             rerun = [SE.rerun_fields(site) for site in sites]
             searches = sum(len(SE.search_slots(site)) for site in sites)
+            for site, fields in zip(sites, rerun, strict=True):
+                if fields is not None:
+                    # What the search stage and the reviewer read, checked before anything is
+                    # bought: a plan built before these keys existed is refused here, not later.
+                    SE.unwritten_proposals(site)
+                    SS.query_values(site)
         except InputError as exc:
             raise PlanError(f"{path}:{number}: {exc}") from None
         if any(fields is None for fields in rerun) and any(fields is not None for fields in rerun):

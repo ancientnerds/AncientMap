@@ -1676,6 +1676,14 @@ def test_a_plan_line_with_mixed_or_damaged_rerun_fields_is_refused_with_its_line
     path.write_text(json.dumps(damaged) + "\n", encoding="utf-8")
     with pytest.raises(MR.PlanError, match=":1: "):
         MR.read_plan(path)
+    # A plan built before the search plan carried these keys is refused before anything is bought.
+    for key in ("query_values", "rerun_unwritten"):
+        stale = _site("a", rerun=["country"])
+        del stale[key]
+        line = {"batch_id": "srch-0001", "ordinal": 1, "sites": [stale]}
+        path.write_text(json.dumps(line) + "\n", encoding="utf-8")
+        with pytest.raises(MR.PlanError, match=f":1: .*{key}"):
+            MR.read_plan(path)
 
 
 def test_the_stage_sequence_must_fit_the_plan(tmp_path: Path) -> None:
@@ -1885,10 +1893,12 @@ def test_a_batch_whose_search_is_incomplete_is_never_done(tmp_path: Path) -> Non
 def test_the_progress_file_carries_each_search_batchs_quota_readings(
     tmp_path: Path, done_before: bool
 ) -> None:
-    """Also for a batch this run skips as done: a resumed run starts a fresh progress file, and the
-    readings an earlier run took must be in it (they are the plan's only cost signal)."""
+    """Both ways a reading reaches the progress file: copied after a batch whose search stage wrote
+    it during this run, and seeded at the start for a batch this run skips as done - a resumed run
+    starts a fresh progress file, and an earlier run's readings are the plan's only cost signal."""
     run_dir = tmp_path / "runs"
-    _search_json(run_dir / "srch-0001", judged=done_before)
+    if done_before:
+        _search_json(run_dir / "srch-0001", judged=True)
     ran: list[str] = []
 
     class Stub:
@@ -1899,6 +1909,7 @@ def test_the_progress_file_carries_each_search_batchs_quota_readings(
 
         def batch(self, planned: MR.PlannedBatch) -> tuple[bool, str]:
             ran.append(planned.batch_id)
+            _search_json(run_dir / planned.batch_id)  # what the search stage writes
             return True, "done"
 
     progress = MR.Progress(plan="p", run_dir=str(run_dir), live=True, jobs=1, batches_total=1)
@@ -1921,7 +1932,8 @@ def test_the_progress_file_carries_each_search_batchs_quota_readings(
 def test_a_damaged_search_report_stops_the_driver_before_it_starts(tmp_path: Path) -> None:
     run_dir = tmp_path / "runs"
     _search_json(run_dir / "srch-0001")
-    (run_dir / "srch-0001" / "search.json").write_text(json.dumps({"quota": {}}), encoding="utf-8")
+    damaged = {"quota": [{"before": {"weekly_remains_tokens": 9}}]}  # an entry without its after
+    (run_dir / "srch-0001" / "search.json").write_text(json.dumps(damaged), encoding="utf-8")
     progress = MR.Progress(plan="p", run_dir=str(run_dir), live=True, jobs=1, batches_total=1)
     runner = types.SimpleNamespace(run_dir=run_dir, spawn_retries=0, batch=None)
     with pytest.raises(R.InputError, match="quota"):
