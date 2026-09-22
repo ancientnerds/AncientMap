@@ -106,6 +106,7 @@ if __package__ in (None, ""):
 from phase3 import fetch_stage as F  # noqa: E402  - the evidence this stage reads
 from phase3 import ledger as L  # noqa: E402
 from phase3 import model as M  # noqa: E402  - the census vocabulary a verdict is spelled in
+from phase3 import search_evidence as SE  # noqa: E402  - the search lane's stored hits
 from phase3.model import Stage  # noqa: E402
 from phase3.run import InputError  # noqa: E402  - one spelling per concept, not a second
 
@@ -690,27 +691,49 @@ def failed_target_block(excerpts: list[EvidenceExcerpt]) -> str:
     return f"<failed_targets>\n{PARTIAL_EVIDENCE_NOTE}\n{rows}</failed_targets>\n"
 
 
-def read_fetch_failures(path: Path) -> dict[str, dict[str, str]]:
-    """`site_id -> {feature: why it has no evidence}`, read from the fetch stage's own report.
+#: The search stage's report, written beside `fetch.json` in the same batch directory and in the same
+#: `sites[].outcomes[].failure` shape (`phase3/search_stage.py`).
+SEARCH_REPORT_NAME = "search.json"
 
-    An absent `fetch.json` means this batch was never fetched live, and `{}` is the honest answer:
-    no target's absence is explained, so every one of them still raises at prompt time. A report
-    that **exists** but is unreadable, or whose shape is not the one `fetch_stage.write_report`
-    writes, raises - an unreadable record must not look like a clean one.
+
+def read_fetch_failures(path: Path) -> dict[str, dict[str, str]]:
+    """`site_id -> {feature: why it has no evidence}`, from the fetch report and the search report.
+
+    `path` is the batch's `fetch.json`; the search stage's `search.json` in the same directory is read
+    too, because a failed search is the same fact as a failed fetch - a target that was asked and
+    bought nothing - and every caller that reads the one must see the other. The two never share a
+    feature (`minimax_search.*` is the search stage's alone), so the result is their union.
+
+    An absent report means that stage never ran live, and it contributes nothing: no target's absence
+    is explained by it, so every such target still raises at prompt time. A report that **exists** but
+    is unreadable, or whose shape is not the one its stage writes, raises - an unreadable record must
+    not look like a clean one.
     """
+    failures = _read_outcome_failures(path)
+    for site_id, rows in _read_outcome_failures(path.with_name(SEARCH_REPORT_NAME)).items():
+        mine = failures.setdefault(site_id, {})
+        clash = sorted(set(mine) & set(rows))
+        if clash:
+            raise InputError(f"{path.parent}: {site_id} has failures for {clash} in both reports")
+        mine.update(rows)
+    return failures
+
+
+def _read_outcome_failures(path: Path) -> dict[str, dict[str, str]]:
+    """One report's `site_id -> {feature: failure}`. See `read_fetch_failures`."""
     if not path.exists():
         return {}
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
     except json.JSONDecodeError as exc:
-        raise InputError(f"{path}: the fetch report is not JSON: {exc}") from exc
+        raise InputError(f"{path}: the report is not JSON: {exc}") from exc
     sites = payload.get("sites") if isinstance(payload, dict) else None
     if not isinstance(sites, list):
-        raise InputError(f"{path}: the fetch report carries no `sites` list: {payload!r}")
+        raise InputError(f"{path}: the report carries no `sites` list: {payload!r}")
     failures: dict[str, dict[str, str]] = {}
     for site in sites:
         if not isinstance(site, dict) or not site.get("site_id"):
-            raise InputError(f"{path}: a fetch report entry carries no site_id: {site!r}")
+            raise InputError(f"{path}: a report entry carries no site_id: {site!r}")
         rows = site.get("outcomes")
         if not isinstance(rows, list):
             raise InputError(f"{path}: {site['site_id']} carries no `outcomes` list: {site!r}")
@@ -732,7 +755,8 @@ def evidence_excerpts(
     allow_absent: bool = False,
     failures: Mapping[str, str] | None = None,
 ) -> list[EvidenceExcerpt]:
-    """The site's evidence, read once: one excerpt per target `fetch_stage` built for it.
+    """The site's evidence, read once: one excerpt per target `fetch_stage` built for it, then one per
+    page the site's searches found (`_search_excerpts`; a site without `rerun_fields` has none).
 
     Extracted from `prepare_call` for the discover pass, which builds one prompt per (site, field)
     from the same excerpts (`phase3/discover_stage.py`): the guard below is the thing that must not
@@ -764,7 +788,91 @@ def evidence_excerpts(
                 feature=target.feature, url=target.url, path=path, text=text, failure=failure
             )
         )
+    excerpts.extend(
+        _search_excerpts(
+            site_id=site_id,
+            site=site,
+            store=store,
+            recorded=recorded,
+            allow_absent=allow_absent,
+            taken={excerpt.url for excerpt in excerpts},
+        )
+    )
     return excerpts
+
+
+def _search_excerpts(
+    *,
+    site_id: str,
+    site: Mapping[str, Any],
+    store: F.EvidenceStore,
+    recorded: Mapping[str, str],
+    allow_absent: bool,
+    taken: set[str],
+) -> list[EvidenceExcerpt]:
+    """One excerpt per page the site's searches found, after the fetched targets (the search lane).
+
+    A site without `rerun_fields` buys no search (`search_evidence.search_slots` is empty), so the
+    mass run's excerpts - and every prompt built from them - are exactly what they were.
+
+    For a site that has searches, each one is on disk, or recorded as failed by the search stage, or
+    (in a preview) absent; anything else raises, the same rule as a fetched target. A stored hit
+    becomes one excerpt: the url is the hit's link, the text is `search_evidence.hit_text` (plain
+    text, so a quote copied from a snippet passes `discover_stage.quote_occurs`). Hits on our own
+    site or on a blocked host are left out (`search_evidence.excluded_because`).
+
+    The same url found by two searches becomes **one** excerpt carrying both texts: the citation
+    check reads the pages as a dict keyed by url (`discover_stage.pages_from_excerpts`), and a second
+    excerpt under the same key would replace the first, failing an honest quote from it. For the
+    same reason a hit whose url is already a fetched target's raises instead of being merged into a
+    page of a different kind.
+    """
+    merged: dict[str, tuple[list[str], list[str], Path]] = {}
+    unread: list[EvidenceExcerpt] = []
+    for slot in SE.search_slots(site):
+        path = store.path_for(site_id, slot.feature)
+        if not path.exists():
+            if slot.feature in recorded:
+                failure: str | None = recorded[slot.feature]
+            elif allow_absent:
+                failure = None
+            else:
+                raise EvidenceUnusable(
+                    f"{site_id}: the search {slot.feature} is not at {path}, and the search report "
+                    "records no failure for it; the model is never asked to judge evidence that "
+                    "is not on disk"
+                )
+            unread.append(
+                EvidenceExcerpt(
+                    feature=slot.feature,
+                    url=SE.SEARCH_TARGET_URL,
+                    path=path,
+                    text=None,
+                    failure=failure,
+                )
+            )
+            continue
+        for hit in SE.read_record(path).hits:
+            if SE.excluded_because(hit.url) is not None:
+                continue
+            if hit.url in taken:
+                raise EvidenceUnusable(
+                    f"{site_id}: the search {slot.feature} found {hit.url}, which is already a "
+                    "fetched target of this site; one url cannot be two pages in the citation check"
+                )
+            features, texts, _ = merged.setdefault(hit.url, ([], [], path))
+            if slot.feature not in features:
+                features.append(slot.feature)
+            text = SE.hit_text(hit)
+            if text not in texts:
+                texts.append(text)
+    pages = [
+        EvidenceExcerpt(
+            feature="+".join(features), url=url, path=path, text="\n".join(texts), failure=None
+        )
+        for url, (features, texts, path) in merged.items()
+    ]
+    return pages + unread
 
 
 def check_evidence_bound(site_id: str, excerpts: Iterable[EvidenceExcerpt]) -> None:

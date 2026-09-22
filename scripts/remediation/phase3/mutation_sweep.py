@@ -202,13 +202,61 @@ MASSRUN_HOLE_VERDICT = "test_a_failure_that_carries_a_verdict_is_not_a_named_fai
 MASSRUN_HOLE_SHAPE = "test_a_failures_list_of_bare_strings_is_broken_rather_than_settled"
 WRITE_HOLE = "test_a_field_whose_finder_call_was_a_hole_is_refused_and_no_row_is_planned"
 
+# ── the search lane (block A3, 2026-09-22) ───────────────────────────────────────────────────────
+SEARCH_TEST = "tests/remediation/test_phase3_search.py"
+FROZEN_TEST = "tests/remediation/test_phase3_frozen.py"
+MINIMAX_TEST = "tests/pipeline/test_minimax_search.py"
+SEARCH_EVIDENCE = "scripts/remediation/phase3/search_evidence.py"
+SEARCH_STAGE = "scripts/remediation/phase3/search_stage.py"
+SEARCH_PLAN = "scripts/remediation/phase3/search_plan.py"
+MINIMAX_SHARED = "pipeline/lyra/minimax_shared.py"
+FROZEN = "test_the_question_texts_are_byte_identical_to_the_ones_the_mass_run_was_asked_with"
+S_DAMAGED = "test_a_damaged_rerun_fields_value_raises_and_never_widens_to_all_fields"
+S_TEXTS = "test_rerun_fields_come_back_in_plan_order_and_the_two_texts_share_one_search"
+S_RECORD = "test_a_record_this_module_would_not_write_is_refused"
+S_HOSTS = "test_own_and_blocked_hosts_are_excluded_by_host_never_by_substring"
+S_HIT = "test_a_hit_becomes_one_excerpt_and_the_filters_drop_our_own_and_blocked_hosts"
+S_MERGE = "test_one_url_found_by_two_searches_is_one_page_carrying_both_texts"
+S_COLLIDE = "test_a_hit_on_a_fetched_targets_url_raises_instead_of_hiding_a_page"
+S_MISSING = "test_a_search_missing_with_no_record_raises_a_recorded_failure_is_named"
+S_TWO_FACTS = "test_search_failed_and_no_hits_reach_the_judge_as_two_different_facts"
+S_CLASH = "test_a_failure_for_one_feature_in_both_reports_raises"
+S_ONLY = "test_the_finder_asks_only_the_rerun_fields"
+S_GATE = "test_the_gate_fails_closed"
+S_GATE_FIELD = "test_a_missing_quota_field_never_satisfies_the_gate"
+S_WINDOW = "test_the_gate_refuses_to_start_inside_theos_batch_window"
+S_LEAK = "test_a_slot_value_that_contains_the_value_under_test_is_refused"
+S_TEMPLATE = "test_a_template_that_reads_a_field_it_is_asked_about_is_refused"
+S_EXISTING = "test_an_existing_search_is_never_bought_again"
+S_STOP = "test_a_stop_class_error_ends_the_stage_after_one_request"
+S_GATE_BUYS = "test_the_gate_refusing_buys_no_search_and_writes_no_ledger_line"
+S_KEEPS_FAILING = "test_a_search_that_keeps_failing_is_a_recorded_failure_not_no_hits"
+S_UNDECIDED = "test_the_plan_takes_only_undecided_fields_of_its_scope_verbatim_under_new_ids"
+S_UNWRITTEN = "test_held_and_gate_stopped_rows_are_rerun_and_written_rows_are_not"
+S_AGREE = "test_the_three_write_records_must_agree"
+S_PREFIX = "test_a_prefix_that_could_collide_or_is_not_letters_is_refused"
+S_PREPARE = "test_prepare_refuses_a_changed_record_a_changed_copy_and_a_hole"
+S_BUDGET = "test_the_budget_dry_run_counts_the_sites_a_search_could_push_over_the_bound"
+S_RUN_STOP = "test_a_search_that_asks_the_run_to_stop_stops_it"
+S_CEILING = "test_the_search_ceiling_counts_this_runs_search_requests"
+S_INCOMPLETE = "test_a_batch_whose_search_is_incomplete_is_never_done"
+S_STAGES = "test_the_stage_sequence_must_fit_the_plan"
+S_QUOTA = "test_the_progress_file_carries_each_search_batchs_quota_readings"
+X_BASE_RESP = "test_a_2xx_whose_base_resp_reports_an_error_raises_and_is_never_read_as_hits"
+X_SHAPE = "test_a_contract_break_raises_from_both_the_strict_call_and_the_wrapper"
+X_NO_HITS = "test_an_empty_organic_list_is_a_real_no_hits_and_not_an_error"
+X_RANKED = "test_a_successful_search_keeps_every_entry_and_ranks_the_ones_that_name_a_page"
+X_STATUS = "test_every_non_2xx_raises_its_own_type_and_the_wrapper_still_returns_empty"
+X_TRANSPORT = "test_no_response_at_all_is_a_transport_error_with_no_status"
+X_VLM = "test_every_vlm_failure_raises_strictly_and_reads_as_a_reject_through_the_wrapper"
+
 #: (name, file, the exact text to replace, what to replace it with, test file, test name)
 MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "reversed field order",
         "scripts/remediation/phase3/discover_stage.py",
-        "for name in DISCOVER_FIELDS\n    ]",
-        "for name in reversed(DISCOVER_FIELDS)\n    ]",
+        "for name in fields\n    ]",
+        "for name in reversed(fields)\n    ]",
         TEST,
         RUN,
     ),
@@ -232,7 +280,7 @@ MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         "over-bound evidence no longer becomes the site's own outcome",
         "scripts/remediation/phase3/discover_stage.py",
         "    try:\n        MS.check_evidence_bound(site_id, excerpts)\n    except MS.EvidenceOverBound as exc:\n"
-        "        skipped = [_over_bound_skip(site, field=name, exc=exc) for name in DISCOVER_FIELDS]\n"
+        "        skipped = [_over_bound_skip(site, field=name, exc=exc) for name in fields]\n"
         "        return DiscoverPlan(skipped=skipped)\n",
         "    MS.check_evidence_bound(site_id, excerpts)\n",
         TEST,
@@ -1227,6 +1275,424 @@ MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         "    path = answers.path_for(site_id, field_name)\n    if False:  # mutant: a missing answer no longer refuses the row\n",
         WRITE_TEST,
         WRITE_HOLE,
+    ),
+    # ── the search lane (block A3, 2026-09-22) ──────────────────────────────────────────────────
+    (
+        "a frozen question word changes",
+        "scripts/remediation/phase3/discover_stage.py",
+        '    "You propose; you do not write."\n)',
+        '    "You propose; you never write."\n)',
+        FROZEN_TEST,
+        FROZEN,
+    ),
+    (
+        "the partial-evidence note changes",
+        "scripts/remediation/phase3/model_stage.py",
+        "neither confirmation nor a clean bill of health.",
+        "neither confirmation nor a full bill of health.",
+        FROZEN_TEST,
+        FROZEN,
+    ),
+    (
+        "a damaged rerun_fields value widens to all fields",
+        SEARCH_EVIDENCE,
+        "    if not isinstance(value, list) or not value:\n",
+        "    if False:  # mutated\n",
+        SEARCH_TEST,
+        S_DAMAGED,
+    ),
+    (
+        "an unknown rerun field is accepted",
+        SEARCH_EVIDENCE,
+        "    if unknown:\n",
+        "    if False:  # mutated\n",
+        SEARCH_TEST,
+        S_DAMAGED,
+    ),
+    (
+        "the two text fields get a search each",
+        SEARCH_EVIDENCE,
+        "        served.setdefault(SEARCH_KEY_FOR_FIELD[name], []).append(name)\n",
+        "        served.setdefault(name, []).append(name)  # mutated\n",
+        SEARCH_TEST,
+        S_TEXTS,
+    ),
+    (
+        "a stored search with foreign keys is read",
+        SEARCH_EVIDENCE,
+        "    if not isinstance(payload, dict) or set(payload) != RECORD_KEYS:\n",
+        "    if not isinstance(payload, dict):\n",
+        SEARCH_TEST,
+        S_RECORD,
+    ),
+    (
+        "our own site becomes evidence",
+        SEARCH_EVIDENCE,
+        "    for domain in OWN_DOMAINS:\n",
+        "    for domain in ():  # mutated\n",
+        SEARCH_TEST,
+        S_HOSTS,
+    ),
+    (
+        "blocked hosts are matched by substring",
+        SEARCH_EVIDENCE,
+        "        if candidate in BLOCKED_DOMAINS:\n",
+        "        if any(domain in host for domain in BLOCKED_DOMAINS):\n",
+        SEARCH_TEST,
+        S_HOSTS,
+    ),
+    (
+        "search hits never reach the evidence",
+        "scripts/remediation/phase3/model_stage.py",
+        "    for slot in SE.search_slots(site):\n",
+        "    for slot in ():  # mutated\n",
+        SEARCH_TEST,
+        S_HIT,
+    ),
+    (
+        "the evidence keeps hits on our own and blocked hosts",
+        "scripts/remediation/phase3/model_stage.py",
+        "            if SE.excluded_because(hit.url) is not None:\n                continue\n",
+        "",
+        SEARCH_TEST,
+        S_HIT,
+    ),
+    (
+        "one url found by two searches becomes two pages",
+        "scripts/remediation/phase3/model_stage.py",
+        "merged.setdefault(hit.url, ([], [], path))",
+        'merged.setdefault(hit.url + "#" + slot.feature, ([], [], path))',
+        SEARCH_TEST,
+        S_MERGE,
+    ),
+    (
+        "a hit on a fetched target's url is accepted",
+        "scripts/remediation/phase3/model_stage.py",
+        "            if hit.url in taken:\n",
+        "            if False:  # mutated\n",
+        SEARCH_TEST,
+        S_COLLIDE,
+    ),
+    (
+        "a missing search is judged as if it were empty",
+        "scripts/remediation/phase3/model_stage.py",
+        "            elif allow_absent:\n                failure = None\n",
+        "            elif True:  # mutated\n                failure = None\n",
+        SEARCH_TEST,
+        S_MISSING,
+    ),
+    (
+        "the judge never reads the search report's failures",
+        "scripts/remediation/phase3/model_stage.py",
+        "    for site_id, rows in _read_outcome_failures(path.with_name(SEARCH_REPORT_NAME)).items():\n",
+        "    for site_id, rows in {}.items():  # mutated\n",
+        SEARCH_TEST,
+        S_TWO_FACTS,
+    ),
+    (
+        "a feature failed in both reports is merged",
+        "scripts/remediation/phase3/model_stage.py",
+        "        if clash:\n",
+        "        if False:  # mutated\n",
+        SEARCH_TEST,
+        S_CLASH,
+    ),
+    (
+        "a search plan asks all five fields again",
+        "scripts/remediation/phase3/discover_stage.py",
+        "    fields = DISCOVER_FIELDS if rerun is None else rerun\n",
+        "    fields = DISCOVER_FIELDS  # mutated\n",
+        SEARCH_TEST,
+        S_ONLY,
+    ),
+    (
+        "a probe that did not answer satisfies the gate",
+        SEARCH_STAGE,
+        '    if probe.get("ok") is not True:\n',
+        '    if probe.get("ok") is False:\n',
+        SEARCH_TEST,
+        S_GATE,
+    ),
+    (
+        "a missing quota field satisfies the gate",
+        SEARCH_STAGE,
+        "        if not _number(probe.get(name)):\n",
+        "        if name in probe and not _number(probe.get(name)):\n",
+        SEARCH_TEST,
+        S_GATE_FIELD,
+    ),
+    (
+        "the weekly floor lets its own value through",
+        SEARCH_STAGE,
+        "    if weekly <= QUOTA_WEEKLY_FLOOR_PCT:\n",
+        "    if weekly < QUOTA_WEEKLY_FLOOR_PCT:\n",
+        SEARCH_TEST,
+        S_GATE,
+    ),
+    (
+        "the 5h floor lets its own value through",
+        SEARCH_STAGE,
+        "    if five <= QUOTA_FIVE_HOUR_FLOOR_PCT:\n",
+        "    if five < QUOTA_FIVE_HOUR_FLOOR_PCT:\n",
+        SEARCH_TEST,
+        S_GATE,
+    ),
+    (
+        "the search runs inside Theo's batch window",
+        SEARCH_STAGE,
+        "    if days_left <= THEO_BATCH_MAX_DAYS_TO_RESET:\n",
+        "    if False:  # mutated\n",
+        SEARCH_TEST,
+        S_WINDOW,
+    ),
+    (
+        "a query may carry the value under test",
+        SEARCH_STAGE,
+        "            if stored and stored in value.casefold():\n",
+        "            if False:  # mutated\n",
+        SEARCH_TEST,
+        S_LEAK,
+    ),
+    (
+        "a template may read the field it is asked about",
+        SEARCH_STAGE,
+        "        if leaked:\n",
+        "        if False:  # mutated\n",
+        SEARCH_TEST,
+        S_TEMPLATE,
+    ),
+    (
+        "a search already on disk is bought again",
+        SEARCH_STAGE,
+        "        if store.exists(site_id, slot.feature):\n",
+        "        if False:  # mutated\n",
+        SEARCH_TEST,
+        S_EXISTING,
+    ),
+    (
+        "a resumed batch with nothing to search is gated anyway",
+        SEARCH_STAGE,
+        "    if pending:\n        # The gate guards MiniMax requests.",
+        "    if True:  # mutated\n        # The gate guards MiniMax requests.",
+        SEARCH_TEST,
+        "test_a_resumed_batch_with_every_search_on_disk_is_not_gated",
+    ),
+    (
+        "a stop-class error is retried like weather",
+        SEARCH_STAGE,
+        "    if isinstance(exc, STOP_ERRORS):\n        return False\n",
+        "",
+        SEARCH_TEST,
+        S_STOP,
+    ),
+    (
+        "the stage searches on after it stopped",
+        SEARCH_STAGE,
+        "        if report.stopped is not None:\n            by_site",
+        "        if False:  # mutated\n            by_site",
+        SEARCH_TEST,
+        S_GATE_BUYS,
+    ),
+    (
+        "a search that failed is recorded as no failure",
+        SEARCH_STAGE,
+        '            outcome.failure = f"search failed: {error} ({number} request(s) recorded)"\n'
+        "            outcome.stops = isinstance(error, STOP_ERRORS)\n",
+        "            outcome.stops = isinstance(error, STOP_ERRORS)\n",
+        SEARCH_TEST,
+        S_KEEPS_FAILING,
+    ),
+    (
+        "the last failed request is not marked given up",
+        SEARCH_STAGE,
+        "                given_up=last and error is not None,\n",
+        "                given_up=False,  # mutated\n",
+        SEARCH_TEST,
+        S_KEEPS_FAILING,
+    ),
+    (
+        "the plan reruns decided fields too",
+        SEARCH_PLAN,
+        '        if verdict == "UNVERIFIABLE":\n',
+        '        if verdict in ("UNVERIFIABLE", "CORRECT"):  # mutated\n',
+        SEARCH_TEST,
+        S_UNDECIDED,
+    ),
+    (
+        "the held and gate-stopped rows fall out of the plan",
+        SEARCH_PLAN,
+        "    extra = dict(extra or {})\n",
+        "    extra = {}  # mutated\n",
+        SEARCH_TEST,
+        S_UNWRITTEN,
+    ),
+    (
+        "a written row is rerun as if it were not written",
+        SEARCH_PLAN,
+        "        if key in written:\n            continue\n",
+        "        if False:  # mutated\n            continue\n",
+        SEARCH_TEST,
+        S_UNWRITTEN,
+    ),
+    (
+        "a hold that was written after all is accepted",
+        SEARCH_PLAN,
+        "    if set(held) & written:\n",
+        "    if False:  # mutated\n",
+        SEARCH_TEST,
+        S_AGREE,
+    ),
+    (
+        "the batch prefix may collide with the mass run's stamps",
+        SEARCH_PLAN,
+        '    if not PREFIX_RE.fullmatch(prefix) or prefix == "batch":\n',
+        "    if not PREFIX_RE.fullmatch(prefix):  # mutated\n",
+        SEARCH_TEST,
+        S_PREFIX,
+    ),
+    (
+        "prepare overwrites a copy that differs",
+        SEARCH_PLAN,
+        "        if dst.read_bytes() != body:\n",
+        "        if False:  # mutated\n",
+        SEARCH_TEST,
+        S_PREPARE,
+    ),
+    (
+        "prepare accepts a record that drifted from its source",
+        SEARCH_PLAN,
+        "        if by_id.get(site_id) != original:\n",
+        "        if False:  # mutated\n",
+        SEARCH_TEST,
+        S_PREPARE,
+    ),
+    (
+        "prepare accepts a hole in the source record",
+        SEARCH_PLAN,
+        "                if target.feature not in failures.get(site_id, {}):\n",
+        "                if False:  # mutated\n",
+        SEARCH_TEST,
+        S_PREPARE,
+    ),
+    (
+        "the budget dry run ignores the added hits",
+        SEARCH_PLAN,
+        "if base <= bound < base + plus",
+        "if base <= bound < base",
+        SEARCH_TEST,
+        S_BUDGET,
+    ),
+    (
+        "the driver ignores a stage that asked the run to stop",
+        "scripts/remediation/phase3/mass_run.py",
+        "        if stop:\n            return stop\n",
+        "        if False:  # mutated\n            return stop\n",
+        SEARCH_TEST,
+        S_RUN_STOP,
+    ),
+    (
+        "the runner does not record a stage's stop request",
+        "scripts/remediation/phase3/mass_run.py",
+        '            if code == STOP_RUN_EXIT and stage == "search":\n',
+        "            if False:  # mutated\n",
+        SEARCH_TEST,
+        S_RUN_STOP,
+    ),
+    (
+        "the search ceiling is never reached",
+        "scripts/remediation/phase3/mass_run.py",
+        "        if self.max_searches is not None and searched >= self.max_searches:\n",
+        "        if False:  # mutated\n",
+        SEARCH_TEST,
+        S_CEILING,
+    ),
+    (
+        "a batch with an incomplete search counts as done",
+        "scripts/remediation/phase3/mass_run.py",
+        '    if payload["stopped"] is not None or failed:\n',
+        "    if False:  # mutated\n",
+        SEARCH_TEST,
+        S_INCOMPLETE,
+    ),
+    (
+        "a plan runs under the other lane's stages",
+        "scripts/remediation/phase3/mass_run.py",
+        "    if mismatched:\n",
+        "    if False:  # mutated\n",
+        SEARCH_TEST,
+        S_STAGES,
+    ),
+    (
+        "the quota readings are not carried into progress.json",
+        "scripts/remediation/phase3/mass_run.py",
+        "                if quota is not None:\n",
+        "                if False:  # mutated\n",
+        SEARCH_TEST,
+        S_QUOTA,
+    ),
+    (
+        "a 2xx body's base_resp error is read as hits",
+        MINIMAX_SHARED,
+        '    base = data.get("base_resp")\n    if base is None:\n',
+        '    base = data.get("base_resp")\n    if True:  # mutated\n',
+        MINIMAX_TEST,
+        X_BASE_RESP,
+    ),
+    (
+        "the legacy search wrapper swallows a contract break",
+        MINIMAX_SHARED,
+        "    except CodingPlanShapeError:\n        raise\n",
+        "",
+        MINIMAX_TEST,
+        X_SHAPE,
+    ),
+    (
+        "no hits raises like a missing field",
+        MINIMAX_SHARED,
+        '    if "organic" not in data:\n',
+        '    if not data.get("organic"):  # mutated\n',
+        MINIMAX_TEST,
+        X_NO_HITS,
+    ),
+    (
+        "a result without a link counts as a hit",
+        MINIMAX_SHARED,
+        "            if isinstance(item.url, str) and item.url\n",
+        "            if isinstance(item.url, str)\n",
+        MINIMAX_TEST,
+        X_RANKED,
+    ),
+    (
+        "a 401 is not an auth error",
+        MINIMAX_SHARED,
+        "    if status in (401, 403):\n",
+        "    if False:  # mutated\n",
+        MINIMAX_TEST,
+        X_STATUS,
+    ),
+    (
+        "a spent budget is read as a plain HTTP error",
+        MINIMAX_SHARED,
+        "    if is_quota_error(body):\n",
+        "    if False:  # mutated\n",
+        MINIMAX_TEST,
+        X_STATUS,
+    ),
+    (
+        "a transport failure escapes untyped",
+        MINIMAX_SHARED,
+        '        raise CodingPlanTransportError(f"POST {path}: {type(exc).__name__}: {exc}") from exc\n',
+        "        raise  # mutated\n",
+        MINIMAX_TEST,
+        X_TRANSPORT,
+    ),
+    (
+        "an empty VLM answer is returned as a result",
+        MINIMAX_SHARED,
+        "    if not content:\n",
+        "    if False:  # mutated\n",
+        MINIMAX_TEST,
+        X_VLM,
     ),
 ]
 

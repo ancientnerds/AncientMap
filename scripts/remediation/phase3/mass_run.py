@@ -41,6 +41,16 @@ Usage:
     # for real, with ceilings
     ./.venv/Scripts/python.exe scripts/remediation/phase3/mass_run.py --live --jobs 4 \
         --max-calls 25020 --max-usd 25
+
+    # the search lane (block A3): a search plan, its own run directory, a search ceiling
+    ./.venv/Scripts/python.exe scripts/remediation/phase3/mass_run.py --live --jobs 4 \
+        --plan output/remediation/phase3_runner/PLAN.search.jsonl \
+        --run-dir output/remediation/phase3_runner/runs/search1 --stages prepare,search,judge \
+        --max-calls 4500 --max-usd 8 --max-searches 4600
+
+A search batch's `search` stage gates itself on the MiniMax quota and exits `run.STOP_RUN_EXIT` when
+the gate refuses or a stop-class error arrives; the driver then stops the whole run (`stop_of`). Its
+quota readings before and after each batch are copied into `progress.json` under `quota`.
 """
 
 from __future__ import annotations
@@ -70,6 +80,8 @@ if __package__ in (None, ""):
 from phase3 import fetch_stage as F  # noqa: E402
 from phase3 import ledger as L  # noqa: E402
 from phase3 import model_stage as MS  # noqa: E402  - one spelling for a named failure's shape
+from phase3 import search_evidence as SE  # noqa: E402  - a search plan's rerun fields
+from phase3.run import STOP_RUN_EXIT, InputError  # noqa: E402  - search's "stop the run" exit
 
 DEFAULT_PLAN = REPO / "output" / "remediation" / "phase3_runner" / "PLAN.jsonl"
 DEFAULT_RUN_DIR = REPO / "output" / "remediation" / "phase3_runner" / "runs" / "mass1"
@@ -109,6 +121,13 @@ SPAWN_RETRY_WAIT_SECONDS = 15.0
 #: its `OSError` branch). A child that did run says so in the `error` of its own JSON report.
 UNSTARTABLE_PROGRAM = "could not be started"
 STAGES = ("prepare", "fetch", "judge")
+#: The search lane's sequence (block A3): the evidence is the mass run's, copied by `prepare`, plus
+#: MiniMax search hits - so `search` takes `fetch`'s place.
+SEARCH_STAGES = ("prepare", "search", "judge")
+STAGE_SEQUENCES: dict[str, tuple[str, ...]] = {
+    ",".join(STAGES): STAGES,
+    ",".join(SEARCH_STAGES): SEARCH_STAGES,
+}
 DONE, PARTIAL, BROKEN, ABSENT = "done", "partial", "broken", "absent"
 
 
@@ -118,6 +137,10 @@ class PlanError(ValueError):
 
 class LedgerDamage(ValueError):
     """The ledger has an unparsable line *inside* it: a charge may have gone unrecorded."""
+
+
+class ReportDamage(ValueError):
+    """A stage's report exists and lacks what that stage always writes (the search quota readings)."""
 
 
 def utc_now() -> str:
@@ -137,14 +160,27 @@ def python_executable() -> Path:
 
 @dataclass(frozen=True)
 class PlannedBatch:
-    """One line of the plan, as `snapshot_plan` writes it: `{batch_id, ordinal, sites}`."""
+    """One line of the plan, as `snapshot_plan` writes it: `{batch_id, ordinal, sites}`.
+
+    A search plan's line (`phase3/search_plan.py`) names the fields it reruns per site; then
+    `rerun_fields` is their count and `searches` the searches they buy. `None` is the snapshot plan,
+    whose every site is asked all five fields.
+    """
 
     batch_id: str
     ordinal: int
     sites: int
+    rerun_fields: int | None = None
+    searches: int = 0
+
+    @property
+    def search(self) -> bool:
+        return self.rerun_fields is not None
 
     @property
     def expected_calls(self) -> int:
+        if self.rerun_fields is not None:
+            return self.rerun_fields
         return self.sites * FIELDS_PER_SITE
 
 
@@ -171,7 +207,24 @@ def read_plan(path: Path) -> list[PlannedBatch]:
         sites = record.get("sites")
         if not isinstance(sites, list) or not sites:
             raise PlanError(f"{path}:{number}: a batch with no sites is not a batch")
-        batches.append(PlannedBatch(batch_id=batch_id, ordinal=ordinal, sites=len(sites)))
+        try:
+            rerun = [SE.rerun_fields(site) for site in sites]
+            searches = sum(len(SE.search_slots(site)) for site in sites)
+        except InputError as exc:
+            raise PlanError(f"{path}:{number}: {exc}") from None
+        if any(fields is None for fields in rerun) and any(fields is not None for fields in rerun):
+            raise PlanError(f"{path}:{number}: some sites name rerun_fields and some do not")
+        batches.append(
+            PlannedBatch(
+                batch_id=batch_id,
+                ordinal=ordinal,
+                sites=len(sites),
+                rerun_fields=None
+                if rerun[0] is None
+                else sum(len(fields or ()) for fields in rerun),
+                searches=searches,
+            )
+        )
     if not batches:
         raise PlanError(f"{path}: no batches")
     seen = {batch.batch_id for batch in batches}
@@ -188,6 +241,9 @@ class Spend:
     cost_usd: float = 0.0
     fetch_lines: int = 0
     torn_lines: int = 0
+    #: The fetch lines of the search lane: one per MiniMax search request, retries included, told
+    #: apart by their label `<site>/minimax_search.<key>` (`phase3/search_stage.py`).
+    searches: int = 0
 
     @classmethod
     def from_ledger(cls, path: Path) -> Spend:
@@ -223,6 +279,8 @@ class Spend:
                 spend.calls += 1
             elif kind == L.LedgerKind.FETCH.value:
                 spend.fetch_lines += 1
+                if f"/{SE.SEARCH_FEATURE_PREFIX}" in str(row.get("label") or ""):
+                    spend.searches += 1
             cost = row.get("cost_usd")
             if cost is not None:
                 if isinstance(cost, bool) or not isinstance(cost, (int, float)):
@@ -247,6 +305,7 @@ class Spend:
             "calls": self.calls,
             "cost_usd": round(self.cost_usd, 6),
             "fetch_lines": self.fetch_lines,
+            "searches": self.searches,
             "torn_lines": self.torn_lines,
         }
 
@@ -257,6 +316,8 @@ class Budget:
 
     max_calls: int | None = None
     max_usd: float | None = None
+    #: MiniMax search requests this run may make (the search lane's `--max-searches`).
+    max_searches: int | None = None
 
     def stop_reason(self, spend: Spend, baseline: Spend | None = None) -> str | None:
         """The ceiling is for **this run**, counted from the ledger as it was when the run started.
@@ -279,12 +340,20 @@ class Budget:
                 f"dollar ceiling reached: {spent:.6f} >= {self.max_usd:.6f} this run "
                 f"(the ledger holds {spend.cost_usd:.6f})"
             )
+        searched = spend.searches - (baseline.searches if baseline is not None else 0)
+        if self.max_searches is not None and searched >= self.max_searches:
+            return (
+                f"search ceiling reached: {searched} >= {self.max_searches} search requests this "
+                f"run (the ledger holds {spend.searches})"
+            )
         return None
 
     def as_text(self) -> str:
         return (
             f"calls<={self.max_calls if self.max_calls is not None else 'unbounded'}, "
-            f"usd<={self.max_usd if self.max_usd is not None else 'unbounded'} per run"
+            f"usd<={self.max_usd if self.max_usd is not None else 'unbounded'}, "
+            f"searches<={self.max_searches if self.max_searches is not None else 'unbounded'}"
+            " per run"
         )
 
 
@@ -297,11 +366,53 @@ def package_digest(root: Path = PACKAGE) -> str:
     return digest.hexdigest()
 
 
+def search_state(root: Path) -> tuple[str, str] | None:
+    """What a search batch's `search.json` says against "done", or `None` when it says nothing.
+
+    A batch without the file is not a search batch (or its search has not run, which the stage
+    sequence catches). With the file, a batch is done only when every search is on disk: a failed or
+    stopped search leaves it partial, so the driver retries the searches before the judge - whose
+    answers, once written, would be reused and never see the evidence a retried search adds.
+    """
+    path = root / "search.json"
+    if not path.exists():
+        return None
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        return BROKEN, f"search.json does not parse: {exc}"
+    totals = payload.get("totals") if isinstance(payload, dict) else None
+    failed = totals.get("failed") if isinstance(totals, dict) else None
+    if not isinstance(failed, int) or isinstance(failed, bool) or "stopped" not in payload:
+        return BROKEN, "search.json carries no totals.failed or no stopped"
+    if payload["stopped"] is not None or failed:
+        return PARTIAL, f"search incomplete: {failed} failed, stopped={payload['stopped']!r}"
+    return None
+
+
+def search_quota(run_dir: Path, batch_id: str) -> dict[str, Any] | None:
+    """The quota readings a finished search batch recorded before and after its searches."""
+    path = run_dir / batch_id / "search.json"
+    if not path.exists():
+        return None
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise ReportDamage(f"{path}: does not parse: {exc}") from None
+    quota = payload.get("quota") if isinstance(payload, dict) else None
+    if not isinstance(quota, dict) or set(quota) != {"before", "after"}:
+        raise ReportDamage(f"{path}: carries no quota readings before and after")
+    return quota
+
+
 def batch_state(run_dir: Path, batch_id: str) -> tuple[str, str]:
     """`(state, reason)`: `done` only when the artefacts parse and every written answer is on disk."""
     root = run_dir / batch_id
     if not (root / "input.json").exists():
         return ABSENT, "no input.json (prepare has not run)"
+    search = search_state(root)
+    if search is not None:
+        return search
     model: dict[str, Any] = {}
     for name in ("fetch.json", "model.json"):
         path = root / name
@@ -369,6 +480,10 @@ class Progress:
     not_reached: list[str] = field(default_factory=list)
     spend: dict[str, Any] = field(default_factory=dict)
     stopped: str | None = None
+    #: A search batch's MiniMax quota readings, before and after its searches, keyed by batch id
+    #: (`search.json`'s own `quota`). `weekly_remains_tokens` across them is the plan's cost signal,
+    #: an upper bound when Lyra or Theo spend in parallel.
+    quota: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -386,6 +501,7 @@ class Progress:
             "in_flight": sorted(self.in_flight),
             "failed": dict(sorted(self.failed.items())),
             "not_reached": self.not_reached,
+            "quota": dict(sorted(self.quota.items())),
             "spend": self.spend,
             "stopped": self.stopped,
         }
@@ -464,7 +580,10 @@ class StageRunner:
         pacing_dir: Path | None = DEFAULT_PACING_DIR,
         python: Path | None = None,
         runner: Path = RUNNER,
+        stages: tuple[str, ...] = STAGES,
     ) -> None:
+        if stages not in STAGE_SEQUENCES.values():
+            raise PlanError(f"stages {stages!r} are not one of {sorted(STAGE_SEQUENCES)}")
         self.plan = plan
         self.run_dir = run_dir
         self.ledger = ledger
@@ -475,9 +594,14 @@ class StageRunner:
         self.pacing_dir = pacing_dir
         self.python = python or python_executable()
         self.runner = runner
+        self.stages = stages
         #: Counted here and carried into `progress.json`: a retry nobody can see is indistinguishable
         #: from a run that never needed one.
         self.spawn_retries = 0
+        #: Set when a stage asked the whole run to stop (`run.STOP_RUN_EXIT`: the search stage's
+        #: quota gate refused, or an auth, budget, rate-cap or contract error arrived). `run_mass`
+        #: reads it between batches through its `stop_of` hook.
+        self.stop_reason: str | None = None
 
     def argv(self, stage: str, batch_id: str) -> list[str]:
         """The argv of one stage, built from what that stage of `run.py` actually accepts.
@@ -509,6 +633,13 @@ class StageRunner:
             # exists to keep. Hence a shared directory of lock files, and hence the driver being the
             # one that names it: the driver is what creates concurrency.
             argv += ["--pacing-dir", str(self.pacing_dir)]
+        if stage == "search":
+            # A search is always paced (`run.py search` defaults to the shared directory), so the
+            # driver can only name the directory, never switch the pace off. Its client carries its
+            # own timeout (`minimax_shared.MINIMAX_SEARCH_TIMEOUT`); `--timeout` is not its flag.
+            if self.pacing_dir is not None:
+                argv += ["--pacing-dir", str(self.pacing_dir)]
+            return argv
         if self.request_timeout is not None:
             argv += ["--timeout", f"{self.request_timeout:g}"]
         return argv
@@ -562,8 +693,12 @@ class StageRunner:
 
     def batch(self, planned: PlannedBatch) -> tuple[bool, str]:
         """All three stages for one batch. Returns `(ok, detail)`; `detail` says where it stands."""
-        for stage in STAGES:
+        for stage in self.stages:
             code = self.call(stage, planned.batch_id)
+            if code == STOP_RUN_EXIT and stage == "search":
+                log = self.log_dir / f"{planned.batch_id}.{stage}.log"
+                why = report_error(log.read_text(encoding="utf-8", errors="replace"))
+                self.stop_reason = f"{planned.batch_id}: {stage} stopped the run: {why}"
             if code != 0:
                 return False, f"{stage} exited {code}"
         state, reason = batch_state(self.run_dir, planned.batch_id)
@@ -585,8 +720,14 @@ def run_mass(
     plan_digest: str | None = None,
     digest_of: Callable[[], str] = package_digest,
     on_event: Callable[[str], None] | None = None,
+    stop_of: Callable[[], str | None] | None = None,
 ) -> int:
-    """Walk the plan. Returns 0 when everything asked for is done, 1 when something stopped it."""
+    """Walk the plan. Returns 0 when everything asked for is done, 1 when something stopped it.
+
+    `stop_of` is read before every batch: a reason there stops the run like a ceiling does. The
+    driver passes `StageRunner.stop_reason`, so a search stage that met the quota floor, a dead key,
+    the budget or the plan's rate cap ends the run instead of feeding the next batch into it.
+    """
     queue = list(batches)
     consecutive = 0
     pending: dict[Future[tuple[bool, str]], PlannedBatch] = {}
@@ -604,6 +745,9 @@ def run_mass(
         reason = budget.stop_reason(Spend.from_ledger(ledger), baseline=baseline)
         if reason:
             return reason
+        stop = stop_of() if stop_of is not None else None
+        if stop:
+            return stop
         if consecutive >= failures_before_stop:
             return f"circuit breaker: {consecutive} consecutive batch failures"
         if plan_digest is not None and digest_of() != plan_digest:
@@ -634,6 +778,9 @@ def run_mass(
             for future in finished:
                 planned = pending.pop(future)
                 ok, detail = future.result()
+                quota = search_quota(runner.run_dir, planned.batch_id)
+                if quota is not None:
+                    progress.quota[planned.batch_id] = quota
                 if ok:
                     consecutive = 0
                     progress.batches_done += 1
@@ -648,6 +795,10 @@ def run_mass(
             progress.spend = Spend.from_ledger(ledger).to_dict()
             progress.write(progress_path)
 
+    if progress.stopped is None and stop_of is not None:
+        # The batch that asked for the stop may have been the last one started, so no later guard
+        # read it; the progress file still has to say why the run ended.
+        progress.stopped = stop_of()
     if progress.stopped is None:
         progress.not_reached = []
     progress.spawn_retries = runner.spawn_retries
@@ -670,6 +821,18 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--live", action="store_true", help="actually run the stages")
     parser.add_argument("--max-calls", type=int, default=None)
     parser.add_argument("--max-usd", type=float, default=None)
+    parser.add_argument(
+        "--max-searches",
+        type=int,
+        default=None,
+        help="MiniMax search requests this run may make, retries included (the search lane)",
+    )
+    parser.add_argument(
+        "--stages",
+        default=",".join(STAGES),
+        choices=sorted(STAGE_SEQUENCES),
+        help="prepare,fetch,judge for a snapshot plan; prepare,search,judge for a search plan",
+    )
     parser.add_argument("--failures-before-stop", type=int, default=DEFAULT_FAILURES_BEFORE_STOP)
     parser.add_argument("--stage-timeout", type=float, default=DEFAULT_STAGE_TIMEOUT)
     parser.add_argument("--request-timeout", type=float, default=None)
@@ -702,20 +865,36 @@ def main(argv: list[str] | None = None) -> int:
         raise PlanError(f"--jobs {args.jobs}: at least one batch at a time")
     if args.failures_before_stop < 1:
         raise PlanError("--failures-before-stop 0 would stop before the first batch")
+    stages = STAGE_SEQUENCES[args.stages]
+    searching = "search" in stages
+    mismatched = [b.batch_id for b in batches if b.search != searching]
+    if mismatched:
+        raise PlanError(
+            f"--stages {args.stages} does not fit {len(mismatched)} batch(es) of this plan (first: "
+            f"{mismatched[0]}): a search plan names rerun_fields and runs prepare,search,judge; a "
+            "snapshot plan names none and runs prepare,fetch,judge"
+        )
 
     sites = sum(b.sites for b in batches)
+    calls = sum(b.expected_calls for b in batches)
     spend = Spend.from_ledger(ledger)
     digest = None if args.no_digest_guard else package_digest()
+    budget = Budget(args.max_calls, args.max_usd, args.max_searches)
     print(f"plan          {plan_path}")
     print(f"run dir       {run_dir}")
     print(f"ledger        {ledger}")
+    print(f"stages        {args.stages}")
     print(f"batches       {len(batches)} ({sites} sites)")
-    print(f"expected      {sites * FIELDS_PER_SITE} calls at {FIELDS_PER_SITE} per site")
+    if searching:
+        print(f"expected      {calls} calls, one per rerun field")
+        print(f"searches      {sum(b.searches for b in batches)} (before retries)")
+    else:
+        print(f"expected      {sites * FIELDS_PER_SITE} calls at {FIELDS_PER_SITE} per site")
     print(
-        f"projected     ${sites * FIELDS_PER_SITE * MEASURED_COST_PER_CALL:.4f} "
+        f"projected     ${calls * MEASURED_COST_PER_CALL:.4f} "
         f"at the measured ${MEASURED_COST_PER_CALL} per call"
     )
-    print(f"budget        {Budget(args.max_calls, args.max_usd).as_text()}")
+    print(f"budget        {budget.as_text()}")
     print(
         f"already spent {spend.calls} calls, ${spend.cost_usd:.6f} (the ceilings count from here)"
     )
@@ -746,17 +925,19 @@ def main(argv: list[str] | None = None) -> int:
         live=True,
         stage_timeout=args.stage_timeout,
         request_timeout=args.request_timeout,
+        stages=stages,
     )
     return run_mass(
         batches=batches,
         runner=runner,
-        budget=Budget(args.max_calls, args.max_usd),
+        budget=budget,
         ledger=ledger,
         progress=progress,
         progress_path=progress_path,
         failures_before_stop=args.failures_before_stop,
         jobs=args.jobs,
         plan_digest=digest,
+        stop_of=lambda: runner.stop_reason,
     )
 
 
