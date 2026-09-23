@@ -116,6 +116,10 @@ def test_the_globe_query_reads_how_the_unreached_loads_ended():
     # Background failures belong to loads that reached the globe. left(), not
     # LIKE: a LIKE pattern needs the percent sign the guard above forbids.
     assert "left(phase, 3) <> 'bg:'" in sql
+    # A globe_error after globe_ready (phase 'live': the error boundary caught
+    # a render error of a globe that was up, or a loader failed later) is no
+    # start failure either.
+    assert "phase <> 'live'" in sql
     assert "'webgl_lost'" in sql and "phase = 'loading'" in sql
     # globe_bg fires after the globe is up: nothing here may count it.
     assert "'globe_bg'" not in sql
@@ -148,6 +152,42 @@ def test_the_ending_events_the_globe_query_reads_are_in_the_frontend_taxonomy():
     ):
         assert f"| '{name}'" in union, name
         assert f"'{name}'" in u.SQL_GLOBE, name
+
+
+def test_the_literals_the_globe_query_depends_on_are_the_ones_the_frontend_sends():
+    """SQL_GLOBE buckets the unreached loads by string literals that the
+    frontend writes in another language: the gate choice 'globe' (not an
+    ending), the abandon phase 'gate', the error phases 'live' and 'bg:<task>'
+    (not start failures) and webgl_lost's 'loading'. A rename on either side
+    would silently move loads between buckets, so both sides are pinned here."""
+    src = Path(__file__).resolve().parents[2] / "ancient-nerds-map" / "src"
+
+    def read(*parts: str) -> str:
+        return src.joinpath(*parts).read_text(encoding="utf-8")
+
+    sql = u.SQL_GLOBE
+    abandon = read("analytics", "globeAbandon.ts")
+    # The globe button is the one gate choice that is no ending
+    assert "if (choice === 'globe') track('globe_gate', { choice })" in abandon
+    assert "choice <> 'globe'" in sql
+    # globe_abandon's phase while the gate shows
+    assert "if (gateShowing) return 'gate'" in abandon
+    assert "installGlobeAbandon" in read("App.tsx")
+    assert "phase = 'gate'" in sql
+    # Errors after globe_ready carry 'live', from App (boundary) and the Globe's loaders
+    assert "export const LIVE_PHASE = 'live'" in read("utils", "globeStartError.ts")
+    assert "if (phase === LIVE_PHASE) track('globe_error', { phase, message })" in read("App.tsx")
+    assert "track('globe_error', { phase: LIVE_PHASE," in read(
+        "components", "GlobeErrorBoundary.tsx"
+    )
+    assert "phase <> 'live'" in sql
+    # Background failures carry 'bg:<task>'
+    assert "phase: `bg:${task}`" in read("analytics", "globeBackground.ts")
+    assert "phase: 'bg:hires'" in read("components", "Globe.tsx")
+    assert "left(phase, 3) <> 'bg:'" in sql
+    # webgl_lost before globe_ready is a start failure (test_stats_analysis pins the ternary too)
+    assert "layersReadyCalledRef.current ? 'live' : 'loading'" in read("components", "Globe.tsx")
+    assert "phase = 'loading'" in sql
 
 
 def test_the_scroll_depth_funnel_needs_no_query_of_its_own():

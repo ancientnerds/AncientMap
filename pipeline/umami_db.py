@@ -317,9 +317,11 @@ GLOBE_PATH = "/globe.html"
 #:   gate_quit     - globe_abandon{phase:'gate'}: left while the gate showed.
 #:   unsupported   - globe_unsupported: the capability check failed.
 #:   failed        - globe_error of the start. Background failures carry
-#:                   phase 'bg:<task>' and belong to loads that reached the
-#:                   globe, so they are excluded; left(), because a LIKE
-#:                   pattern needs the percent sign the guard test forbids.
+#:                   phase 'bg:<task>' and failures after globe_ready carry
+#:                   'live' (the error boundary caught a globe that was up,
+#:                   or a loader failed later); both belong to loads that
+#:                   reached the globe, so they are excluded. left(), because
+#:                   a LIKE pattern needs the percent sign the guard test forbids.
 #:   context_lost  - webgl_lost{phase:'loading'}: the start failure the globe
 #:                   reported before globe_error existed. Uncounted, it would
 #:                   land in "no signal", which reads as a crash.
@@ -357,7 +359,8 @@ SELECT session_id,
        count(*) FILTER (WHERE event_name = 'globe_abandon' AND phase = 'gate')  AS gate_quit,
        count(*) FILTER (WHERE event_name = 'globe_unsupported')                 AS unsupported,
        count(*) FILTER (WHERE event_name = 'globe_error'
-                          AND (phase IS NULL OR left(phase, 3) <> 'bg:'))       AS failed,
+                          AND (phase IS NULL
+                               OR (left(phase, 3) <> 'bg:' AND phase <> 'live'))) AS failed,
        count(*) FILTER (WHERE event_name = 'webgl_lost' AND phase = 'loading')  AS context_lost,
        count(*) FILTER (WHERE event_name = 'globe_abandon'
                           AND phase IS DISTINCT FROM 'gate')                    AS abandoned,

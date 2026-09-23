@@ -654,7 +654,8 @@ def globe_funnel(rows: list[dict[str, Any]]) -> dict[str, Any]:
     session, never to a page load, so the split is per session: the session's
     unreached loads (`views - min(ready, views)`) are handed to the endings in
     GLOBE_ENDINGS order, each capped by what is left. Background failures
-    (`globe_error{phase:'bg:…'}`) are not endings - SQL_GLOBE excludes them,
+    (`globe_error{phase:'bg:…'}`) and failures after globe_ready
+    (`globe_error{phase:'live'}`) are not endings - SQL_GLOBE excludes them,
     they belong to loads that reached the globe. `webgl_lost` while loading
     is an error: it is a start failure, and uncounted it would read as a
     crash. What no ending claims is `no_signal` - the page loaded and nothing
