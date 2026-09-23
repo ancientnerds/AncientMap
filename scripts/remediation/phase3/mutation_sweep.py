@@ -6367,18 +6367,43 @@ PHASE4_WRITE_SUP_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "p4 api: another table's write moves the site page's lastmod",
         "pipeline/utils/public_sites.py",
-        "    \"AND table_name = 'unified_sites' \"\n",
-        '    ""  # mutant\n',
+        "    return f\"(table_name = '{table}' AND column_name IN ({listed}))\"\n",
+        '    return f"(column_name IN ({listed}))"  # mutant\n',
         P4_SITEMAP_TEST,
         "test_a_journalled_write_the_page_does_not_render_does_not_advance_it",
     ),
     (
         "p4 api: a column the page does not render moves its lastmod",
         "pipeline/utils/public_sites.py",
-        '    f"AND column_name IN ({_PAGE_COLUMN_LIST}) "\n',
-        '    ""  # mutant\n',
+        "    return f\"(table_name = '{table}' AND column_name IN ({listed}))\"\n",
+        "    return f\"(table_name = '{table}')\"  # mutant\n",
         P4_SITEMAP_TEST,
         "test_a_journalled_write_the_page_does_not_render_does_not_advance_it",
+    ),
+    # -- decision D6: a hero change moves the page's lastmod, and the lists are the route's
+    (
+        "p4 api: a hero change does not move the page's lastmod",
+        "pipeline/utils/public_sites.py",
+        '_PAGE_WRITE = " OR ".join(_page_write(table, columns) for table, columns in PAGE_COLUMNS.items())\n',
+        '_PAGE_WRITE = " OR ".join(_page_write(t, c) for t, c in PAGE_COLUMNS.items() if t != "wiki_images")  # mutant\n',
+        P4_SITEMAP_TEST,
+        "test_a_hero_change_advances_the_page",
+    ),
+    (
+        "p4 api: a column that picks the page's image is not counted",
+        "pipeline/utils/public_sites.py",
+        '        "is_lead",\n',
+        "",
+        P4_SITEMAP_TEST,
+        "test_the_page_columns_are_exactly_the_ones_the_ssr_route_reads",
+    ),
+    (
+        "p4 api: the page's Wikipedia link is not counted",
+        "pipeline/utils/public_sites.py",
+        '    "card_stats": ("best_wiki_url", "source_language"),\n',
+        '    "card_stats": ("source_language",),  # mutant\n',
+        P4_SITEMAP_TEST,
+        "test_the_page_columns_are_exactly_the_ones_the_ssr_route_reads",
     ),
     # -- decision D4 (C5): a site absent from snapshot d4526691 gets no lane-L claim
     (

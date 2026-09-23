@@ -16,6 +16,7 @@ timestamptz to naive UTC is taken out for the evaluation and pinned as a string 
 from __future__ import annotations
 
 import asyncio
+import inspect
 import re
 import sqlite3
 import xml.etree.ElementTree as ET
@@ -24,6 +25,7 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 from api.routes import sitemap as sm
+from api.routes import sites_html
 from pipeline.utils import public_sites as PS
 
 NS = "{http://www.sitemaps.org/schemas/sitemap/0.9}"
@@ -75,25 +77,85 @@ def test_a_journalled_write_the_page_does_not_render_does_not_advance_it():
         [
             (SITE, "unified_sites", "description", "2026-10-02 09:00:00"),
             (SITE, "card_stats", "card_description", "2026-10-09 09:00:00"),
+            (SITE, "card_stats", "antiquity", "2026-10-09 10:00:00"),  # the card game's stats
             (SITE, "unified_sites", "geom", "2026-10-10 09:00:00"),
+            (SITE, "unified_sites", "thumbnail_url", "2026-10-10 10:00:00"),  # the hub's fallback
             (SITE, "wiki_images", "image_kind", "2026-10-11 09:00:00"),
+            (SITE, "wiki_images", "author_url", "2026-10-11 10:00:00"),
+            (SITE, "wiki_images", "original_url", "2026-10-11 11:00:00"),
+            (SITE, "wiki_images", "file_size_bytes", "2026-10-11 12:00:00"),
             (SITE, "wiki_images", "description", "2026-10-12 09:00:00"),  # a page column's name
+            (SITE, "card_stats", "is_hero", "2026-10-12 10:00:00"),  # an image column's name
         ]
     )
     assert _newest(conn) == {SITE: "2026-10-02 09:00:00"}
 
 
-def test_every_column_the_site_page_renders_advances_it():
-    """The design's six (description, raw_data, name, country, site_type, period_start) and the
-    other unified_sites columns the SSR site page renders, which later lanes journal
-    (period_name, the coordinates)."""
-    for column in PS.PAGE_COLUMNS:
-        conn = _journal_engine([(SITE, "unified_sites", column, "2026-10-02 09:00:00")])
-        assert _newest(conn) == {SITE: "2026-10-02 09:00:00"}, column
+def test_a_hero_change_advances_the_page():
+    """The page shows one image - the hero, else the lead, else the first by sort order, never an
+    excluded one - with its author, licence and Commons link (decision D6, 2026-09-23). An image
+    lane that sets a new hero or excludes the shown one changes the page, so the page's date moves
+    and the hourly IndexNow cycle announces it."""
+    for column in ("is_hero", "is_excluded"):
+        conn = _journal_engine(
+            [
+                (SITE, "unified_sites", "description", "2026-10-02 09:00:00"),
+                (SITE, "wiki_images", column, "2026-10-20 09:00:00"),
+            ]
+        )
+        assert _newest(conn) == {SITE: "2026-10-20 09:00:00"}, column
+
+
+def test_every_column_the_site_page_reads_advances_it():
+    """The design's six (description, raw_data, name, country, site_type, period_start), the other
+    unified_sites columns the SSR site page renders, which later lanes journal (period_name, the
+    coordinates), the two card_stats columns the page shows (its Wikipedia link and language), and
+    the image columns: every one of them moves the date, in its own table only."""
+    for table, columns in PS.PAGE_COLUMNS.items():
+        for column in columns:
+            conn = _journal_engine([(SITE, table, column, "2026-10-02 09:00:00")])
+            assert _newest(conn) == {SITE: "2026-10-02 09:00:00"}, (table, column)
     assert {"description", "raw_data", "name", "country", "site_type", "period_start"} <= set(
-        PS.PAGE_COLUMNS
+        PS.PAGE_COLUMNS["unified_sites"]
     )
-    assert "card_description" not in PS.PAGE_COLUMNS
+    assert "card_description" not in PS.PAGE_COLUMNS["card_stats"]
+
+
+def _columns(listed: str) -> set[str]:
+    """The column names of a comma-separated SQL list: casts, JSON paths, aliases, table prefixes
+    and sort directions are cut off."""
+    names = set()
+    for item in listed.split(","):
+        name = re.split(r"::|->| AS | DESC| ASC", item.strip())[0].strip()
+        names.add(name.split(".")[-1])
+    return names
+
+
+def test_the_page_columns_are_exactly_the_ones_the_ssr_route_reads():
+    """The date must move for a write of every column the page reads and of nothing else, so the
+    list is taken from the route's own queries: the detail SELECT (unified_sites, and card_stats
+    through `cs.`) and the one-image query of `_related_content` (its SELECT list, the exclusion in
+    its WHERE and its ORDER BY, which picks the hero). A column the route starts to render, or
+    stops rendering, turns this red until PAGE_COLUMNS follows."""
+    detail = inspect.getsource(sites_html.site_detail)
+    listed = re.search(r"SELECT (id::text AS id,.*?)\n\s*FROM unified_sites", detail, re.S)
+    assert listed is not None
+    items = [item.strip() for item in listed.group(1).split(",")]
+    own = _columns(",".join(item for item in items if not item.startswith("cs.")))
+    card = _columns(",".join(item for item in items if item.startswith("cs.")))
+    assert set(PS.PAGE_COLUMNS["unified_sites"]) == own - {"id"}
+    assert set(PS.PAGE_COLUMNS["card_stats"]) == card
+
+    related = inspect.getsource(sites_html._related_content)
+    image = re.search(
+        r"SELECT (?P<select>[^\n]*)\n\s*FROM wiki_images\n\s*WHERE (?P<where>[^\n]*)\n"
+        r"\s*ORDER BY (?P<order>[^\n]*)\n\s*LIMIT 1",
+        related,
+    )
+    assert image is not None
+    chooses = set(re.findall(r"\b(is_[a-z_]+)\b", image["where"])) | _columns(image["order"])
+    assert set(PS.PAGE_COLUMNS["wiki_images"]) == _columns(image["select"]) | chooses
+    assert set(PS.PAGE_COLUMNS) == {"unified_sites", "card_stats", "wiki_images"}
 
 
 def test_the_route_exposes_a_date_and_nothing_of_the_journal():
