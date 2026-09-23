@@ -19,6 +19,86 @@ import { CACHE_BUSTER } from '../constants/buildInfo'
 /** API Base URL - from environment config */
 const API_BASE_URL = config.api.baseUrl
 
+/**
+ * The source the first request loads. Hardcoded because enabledByDefault is only
+ * known after the sources load, and both requests run in parallel.
+ */
+const DEFAULT_SOURCE = 'ancient_nerds'
+
+/**
+ * Which site fields `/api/sites/all` sends (api/routes/sites.py `fields`): `globe` only
+ * what the dots, filters, tooltips and lists draw; `all` the details as well.
+ */
+export type SiteFields = 'globe' | 'all'
+
+/**
+ * The default source's bulk payload. The service worker's `api-sites-globe` rule
+ * (src/pwa/runtimeCaching.ts) keys on this query shape.
+ */
+function defaultSourceSitesUrl(fields: SiteFields): string {
+  return `${API_BASE_URL}/sites/all?limit=100000&source=${DEFAULT_SOURCE}&fields=${fields}&${CACHE_BUSTER}`
+}
+
+/**
+ * One site of `/api/sites/all`. `fields=globe` sends only id, n, la, lo, s, t, p, pn, c;
+ * a pinned snapshot may lack t, p, pn and c as well, so they count as null when absent.
+ */
+interface ApiSite {
+  id: string
+  n: string
+  la: number
+  lo: number
+  s: string
+  t?: string | null
+  p?: number | null
+  pn?: string
+  c?: string
+  d?: string
+  cd?: string
+  i?: string
+  u?: string
+  an?: string[]
+  wu?: string
+  sl?: string
+  rf?: Array<{ u: string; t: string; d: string; k: string }>
+  dc?: Array<{ n: number; url: string; title: string; domain: string }>
+}
+
+/** The fields `fields=globe` leaves out (the ones search and popups read). */
+type SiteDetailFields = Pick<Site,
+  'description' | 'cardDescription' | 'image' | 'sourceUrl' | 'altNames' |
+  'bestWikiUrl' | 'sourceLanguage' | 'referenceLinks' | 'descriptionCitations'>
+
+function detailFieldsOf(s: ApiSite): SiteDetailFields {
+  return {
+    description: s.d || undefined,
+    cardDescription: s.cd || undefined,
+    image: s.i || null,
+    sourceUrl: s.u || undefined,
+    altNames: s.an || undefined,
+    bestWikiUrl: s.wu || undefined,
+    sourceLanguage: s.sl || undefined,
+    referenceLinks: s.rf || undefined,
+    descriptionCitations: s.dc || undefined,
+  }
+}
+
+function toSite(s: ApiSite): Site {
+  return {
+    id: s.id,
+    name: s.n,
+    lat: s.la,
+    lon: s.lo,
+    sourceId: s.s,
+    type: s.t || undefined,
+    periodStart: s.p ?? null,
+    periodEnd: null,
+    period: s.pn || undefined,  // User-edited period name from database
+    location: s.c || undefined,
+    ...detailFieldsOf(s),
+  }
+}
+
 // =============================================================================
 // DataStore Class
 // =============================================================================
@@ -27,12 +107,15 @@ class DataStoreClass {
   // Cached data
   private sources: Map<string, SourceMeta> = new Map()
   private sitesBySource: Map<string, Site[]> = new Map()
+  private sitesById: Map<string, Site> = new Map()
   private siteDetails: Map<string, SiteDetail> = new Map()
 
   // Loading state
   private isInitialized = false
   private initPromise: Promise<void> | null = null
   private isOfflineMode = false
+  private hasSiteDetails = false
+  private detailsPromise: Promise<Site[]> | null = null
 
   // Stats
   private stats = {
@@ -44,16 +127,20 @@ class DataStoreClass {
 
   /**
    * Initialize the data store from API.
+   *
+   * `fields` picks the default source's payload: the globe starts on `'globe'` and
+   * fetches the details later through loadSiteDetails(); pages that render or search
+   * descriptions from the start (SearchPage) keep `'all'`. The first call decides.
    */
-  async initialize(): Promise<void> {
+  async initialize(fields: SiteFields = 'all'): Promise<void> {
     if (this.isInitialized) return
     if (this.initPromise) return this.initPromise
 
-    this.initPromise = this._doInitialize()
+    this.initPromise = this._doInitialize(fields)
     await this.initPromise
   }
 
-  private async _doInitialize(): Promise<void> {
+  private async _doInitialize(fields: SiteFields): Promise<void> {
     // Check if offline and has cached data
     const isOffline = !navigator.onLine
     const hasOfflineData = await OfflineStorage.isOfflineEnabled()
@@ -64,12 +151,9 @@ class DataStoreClass {
     }
 
     // PARALLEL FETCH: Load sources + initial sites simultaneously for faster startup
-    // Must hardcode initial source since enabledByDefault is only known after sources load
-    const DEFAULT_SOURCE = 'ancient_nerds'
-
     const [sourcesResponse, sitesResponse] = await Promise.all([
       offlineFetch(`${API_BASE_URL}/sources/?${CACHE_BUSTER}`),
-      offlineFetch(`${API_BASE_URL}/sites/all?limit=100000&source=${DEFAULT_SOURCE}&${CACHE_BUSTER}`),
+      offlineFetch(defaultSourceSitesUrl(fields)),
     ])
 
     if (!sourcesResponse.ok) {
@@ -108,7 +192,7 @@ class DataStoreClass {
 
 
     // Convert compact API format to Site format
-    const sites = this._parseSitesData(sitesData.sites)
+    const sites = (sitesData.sites as ApiSite[]).map(toSite)
     this._storeSitesBySource(sites)
 
     this.stats.totalSites = sitesData.count
@@ -116,8 +200,53 @@ class DataStoreClass {
     this.stats.dataSource = sitesData.dataSource || 'json'
     this._updateBySourceStats()
 
+    this.hasSiteDetails = fields === 'all'
     this.isInitialized = true
     this.isOfflineMode = false
+  }
+
+  /**
+   * Fetch the default source's detail fields that `initialize('globe')` left out and
+   * assign them onto the sites already held (same objects). Only detail fields are
+   * written, never position, name, type, period or country, and a site the first
+   * payload did not have is ignored: the two requests can come from different cache
+   * generations, and no dot may move or appear. Resolves with the updated sites.
+   *
+   * Memoised: every caller shares one request, and a failure stays a failure (the
+   * caller reports it; there is no retry). Nothing to fetch after `initialize('all')`
+   * or in offline mode, which has no details and no network.
+   */
+  loadSiteDetails(): Promise<Site[]> {
+    const init = this.initPromise
+    if (!init) return Promise.reject(new Error('DataStore.loadSiteDetails() called before initialize()'))
+    this.detailsPromise ??= this._loadSiteDetails(init)
+    return this.detailsPromise
+  }
+
+  private async _loadSiteDetails(init: Promise<void>): Promise<Site[]> {
+    await init
+    if (this.hasSiteDetails) return []
+
+    const response = await offlineFetch(defaultSourceSitesUrl('all'))
+    if (!response.ok) {
+      throw new Error(`Failed to load site details: HTTP ${response.status}`)
+    }
+    const data: { sites: ApiSite[] } = await response.json()
+
+    const updated: Site[] = []
+    for (const apiSite of data.sites) {
+      const site = this.sitesById.get(apiSite.id)
+      if (!site) continue
+      Object.assign(site, detailFieldsOf(apiSite))
+      updated.push(site)
+    }
+    this.hasSiteDetails = true
+    return updated
+  }
+
+  /** True once the sites carry their detail fields (see loadSiteDetails()). */
+  get detailsReady(): boolean {
+    return this.hasSiteDetails
   }
 
   /**
@@ -144,8 +273,9 @@ class DataStoreClass {
     }
 
     // Load sites from IndexedDB
-    const allSites = await OfflineStorage.getAllSites()
-    const sites = this._parseCompactSites(allSites)
+    // The compact offline records are the API's site keys without details.
+    const allSites: CompactSite[] = await OfflineStorage.getAllSites()
+    const sites = allSites.map(toSite)
     this._storeSitesBySource(sites)
 
     this.stats.totalSites = sites.length
@@ -153,26 +283,10 @@ class DataStoreClass {
     this.stats.dataSource = 'offline'
     this._updateBySourceStats()
 
+    // Offline data never had details and there is no network to fetch them.
+    this.hasSiteDetails = true
     this.isInitialized = true
     this.isOfflineMode = true
-  }
-
-  /**
-   * Parse CompactSite array from IndexedDB to Site array
-   */
-  private _parseCompactSites(sites: CompactSite[]): Site[] {
-    return sites.map(s => ({
-      id: s.id,
-      name: s.n,
-      lat: s.la,
-      lon: s.lo,
-      sourceId: s.s,
-      type: s.t || undefined,
-      periodStart: s.p,
-      periodEnd: null,
-      image: s.i || null,
-      location: s.c || undefined,
-    }))
   }
 
   private _storeSitesBySource(sites: Site[]): void {
@@ -180,6 +294,7 @@ class DataStoreClass {
       const existing = this.sitesBySource.get(site.sourceId) || []
       existing.push(site)
       this.sitesBySource.set(site.sourceId, existing)
+      this.sitesById.set(site.id, site)
     }
   }
 
@@ -187,7 +302,9 @@ class DataStoreClass {
    * Add sites for a specific source (called by SourceLoader).
    */
   addSourceSites(sourceId: string, sites: Site[]): void {
+    for (const site of this.sitesBySource.get(sourceId) ?? []) this.sitesById.delete(site.id)
     this.sitesBySource.set(sourceId, sites)
+    for (const site of sites) this.sitesById.set(site.id, site)
     this._updateBySourceStats()
   }
 
@@ -197,30 +314,6 @@ class DataStoreClass {
   getAdditionalSourceIds(): string[] {
     const defaultIds = this.getDefaultEnabledSourceIds()
     return Array.from(this.sources.keys()).filter(id => !defaultIds.includes(id))
-  }
-
-  private _parseSitesData(sites: Array<{ id: string; n: string; la: number; lo: number; s: string; t: string | null; p: number | null; pn?: string; d?: string; cd?: string; i?: string; c?: string; u?: string; an?: string[]; wu?: string; sl?: string; rf?: Array<{ u: string; t: string; d: string; k: string }>; dc?: Array<{ n: number; url: string; title: string; domain: string }> }>): Site[] {
-    return sites.map(s => ({
-      id: s.id,
-      name: s.n,
-      lat: s.la,
-      lon: s.lo,
-      sourceId: s.s,
-      type: s.t || undefined,
-      periodStart: s.p,
-      periodEnd: null,
-      period: s.pn || undefined,  // User-edited period name from database
-      description: s.d || undefined,
-      cardDescription: s.cd || undefined,
-      image: s.i || null,
-      location: s.c || undefined,
-      sourceUrl: s.u || undefined,
-      altNames: s.an || undefined,
-      bestWikiUrl: s.wu || undefined,
-      sourceLanguage: s.sl || undefined,
-      referenceLinks: s.rf || undefined,
-      descriptionCitations: s.dc || undefined,
-    }))
   }
 
   private _updateBySourceStats(): void {
@@ -250,6 +343,10 @@ class DataStoreClass {
       if (sites) result.push(...sites)
     }
     return result
+  }
+
+  getSiteById(id: string): Site | undefined {
+    return this.sitesById.get(id)
   }
 
   getSources(): SourceMeta[] {

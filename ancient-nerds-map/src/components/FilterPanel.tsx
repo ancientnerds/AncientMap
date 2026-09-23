@@ -52,6 +52,10 @@ interface FilterPanelProps {
   searchWithinProximity: boolean
   onSearchWithinProximityChange: (enabled: boolean) => void
   searchResults: SearchResult[]
+  /** The search cannot answer yet (site details loading, or the API search in flight). */
+  isSearching: boolean
+  /** Why the search cannot answer at all; shown in the results header. */
+  searchError: string | null
   filterMode: FilterMode
   ageRange: [number, number]
   onCategoryChange: (categories: string[]) => void
@@ -126,6 +130,8 @@ function FilterPanel({
   searchWithinProximity,
   onSearchWithinProximityChange,
   searchResults,
+  isSearching,
+  searchError,
   filterMode,
   ageRange,
   onCategoryChange,
@@ -807,7 +813,7 @@ function FilterPanel({
       {activeTab === 'search' && searchQuery.trim() && (
         <div className={`glass-panel search-results-panel ${searchResultsMinimized ? 'minimized' : ''} ${searchResults.length <= 3 ? 'few-results' : 'many-results'}`}>
           <div className="search-results-header">
-            <span>{searchResults.length} result{searchResults.length !== 1 ? 's' : ''} found</span>
+            <span>{searchError ?? (isSearching ? 'Searching...' : `${searchResults.length} result${searchResults.length !== 1 ? 's' : ''} found`)}</span>
             <button
               className="panel-minimize-btn"
               onClick={() => setSearchResultsMinimized(prev => !prev)}
@@ -857,7 +863,7 @@ function FilterPanel({
                     />
                   ))}
                 </div>
-              ) : (
+              ) : !isSearching && !searchError && (
                 <div className="search-results-empty">No sites found</div>
               )}
             </>
