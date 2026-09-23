@@ -1623,6 +1623,10 @@ def test_wave_four_writes_source_url_through_the_primitive_and_new_rows_only_whe
         "      JOIN site_external_ids e ON e.kind = p.kind AND e.value = p.new_value "
         "AND e.site_id <> p.site_id"
     ) in sql
+    assert (
+        "      JOIN unified_sites u ON u.id = e.site_id AND u.source_id = 'ancient_nerds'\n"
+        "     WHERE p.kind = 'wikidata_qid';"
+    ) in sql
     assert "planned item(s) are carried by another curated site', bad;" in sql
     # the writes: an insert where the old value is NULL, else a conditional update - no DELETE
     assert "        IF r.old_value IS NULL THEN\n            INSERT INTO site_external_ids" in sql

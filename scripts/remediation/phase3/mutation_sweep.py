@@ -7682,6 +7682,247 @@ QID_WAVE3_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
 ]
 MUTATIONS += QID_WAVE3_MUTATIONS
 
+#: The 20 curated source_url values that hold two URLs (2026-09-23): the parser's refusal
+#: (`pipeline/lyra/prospector/wiki.py`), the external-id repair's wave 4 and migration 0023. Labels
+#: start with "source url: " so `mutation_sweep.py "source url: "` runs them alone.
+_SU_WIKI = "pipeline/lyra/prospector/wiki.py"
+_SU_WIKI_TEST = "tests/pipeline/test_prospector_units.py"
+_SU_REPAIR = TOOLS + "qid_repair.py"
+_SU_M0023 = "migrations/0023_source_url_no_control_chars.sql"
+_SU_M0023_TEST = "tests/remediation/test_migration_0023.py"
+_SU_LEFT = "test_what_the_rules_do_not_write_is_left_with_its_reason"
+_SU_STATEMENT = (
+    "test_wave_four_writes_source_url_through_the_primitive_and_new_rows_only_where_none_is"
+)
+_SU_CHECK = "test_wave_four_check_and_verify_read_both_tables"
+SOURCE_URL_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
+    (
+        "source url: a URL with a control character becomes a title",
+        _SU_WIKI,
+        "    if CONTROL_RE.search(url):\n",
+        "    if False:  # mutant\n",
+        _SU_WIKI_TEST,
+        "TestWikiResolution::test_a_url_with_a_control_character_is_refused_not_turned_into_a_title",
+    ),
+    (
+        "source url: a decoded title with a control character passes",
+        _SU_WIKI,
+        "    if CONTROL_RE.search(title):\n",
+        "    if False:  # mutant\n",
+        _SU_WIKI_TEST,
+        "TestWikiResolution::test_a_percent_encoded_control_character_is_refused_after_decoding",
+    ),
+    (
+        "source url: an invalid title reads as a page",
+        _SU_WIKI,
+        '        if page is None or page.get("missing") or page.get("invalid"):\n',
+        '        if page is None or page.get("missing"):  # mutant\n',
+        _SU_WIKI_TEST,
+        "TestWikiResolution::test_an_invalid_title_is_no_page",
+    ),
+    (
+        "source url: the second URL is kept",
+        _SU_REPAIR,
+        "        first, second = value.split(SEPARATOR)\n",
+        "        second, first = value.split(SEPARATOR)  # mutant\n",
+        TOOLS_TEST,
+        "test_wave_four_keeps_the_first_url_and_stores_the_article_as_the_boot_refresh_would",
+    ),
+    (
+        "source url: an item another curated site carries is written",
+        _SU_REPAIR,
+        "    if others:\n",
+        "    if False:  # mutant\n",
+        TOOLS_TEST,
+        _SU_LEFT,
+    ),
+    (
+        "source url: two sites of the wave on one item are written",
+        _SU_REPAIR,
+        "    if twins:\n",
+        "    if False:  # mutant\n",
+        TOOLS_TEST,
+        _SU_LEFT,
+    ),
+    (
+        "source url: a disambiguation page is written",
+        _SU_REPAIR,
+        '    if res["disambiguation"]:\n',
+        "    if False:  # mutant\n",
+        TOOLS_TEST,
+        _SU_LEFT,
+    ),
+    (
+        "source url: a missing page passes as a resolution",
+        _SU_REPAIR,
+        '    if not res["canonical_title"]:\n',
+        "    if False:  # mutant\n",
+        TOOLS_TEST,
+        _SU_LEFT,
+    ),
+    (
+        "source url: a clean stored value is written over",
+        _SU_REPAIR,
+        "            elif have:\n",
+        "            elif False:  # mutant\n",
+        TOOLS_TEST,
+        _SU_LEFT,
+    ),
+    (
+        "source url: any single stored value is corrected",
+        _SU_REPAIR,
+        "            if len(have) == 1 and CONTROL_RE.search(have[0]):\n",
+        "            if len(have) == 1:  # mutant\n",
+        TOOLS_TEST,
+        _SU_LEFT,
+    ),
+    (
+        "source url: a row that is not curated is split",
+        _SU_REPAIR,
+        '    if site["source_id"] != CURATED:\n',
+        "    if False:  # mutant\n",
+        TOOLS_TEST,
+        _SU_LEFT,
+    ),
+    (
+        "source url: a value of three URLs is split",
+        _SU_REPAIR,
+        "    if len(parts) != 2 or not all(URL_RE.fullmatch(part) for part in parts):\n",
+        "    if len(parts) < 2:  # mutant\n",
+        TOOLS_TEST,
+        _SU_LEFT,
+    ),
+    (
+        "source url: the pre-pass reads a site the wave does not split",
+        _SU_REPAIR,
+        "        if _shape_problem(site) is not None:\n            continue\n",
+        "        if False:  # mutant\n            continue\n",
+        TOOLS_TEST,
+        _SU_LEFT,
+    ),
+    (
+        "source url: the apply statement may delete",
+        _SU_REPAIR,
+        "    if reversal:\n        write_ext += [\n",
+        "    if True:  # mutant\n        write_ext += [\n",
+        TOOLS_TEST,
+        _SU_STATEMENT,
+    ),
+    (
+        "source url: guard 4 lets a new row meet an existing one",
+        _SU_REPAIR,
+        '        "     WHERE p.old_value IS NULL",\n',
+        '        "     WHERE FALSE",  # mutant\n',
+        TOOLS_TEST,
+        _SU_STATEMENT,
+    ),
+    (
+        "source url: guard 5 never looks at another curated site's item",
+        _SU_REPAIR,
+        "        \"     WHERE p.kind = 'wikidata_qid';\",\n",
+        '        "     WHERE FALSE;",  # mutant\n',
+        TOOLS_TEST,
+        _SU_STATEMENT,
+    ),
+    (
+        "source url: a control character stands raw in a literal",
+        _SU_REPAIR,
+        '            pieces.append(f"chr({ord(piece)})")\n',
+        "            pieces.append(lanes.sql_text(piece))  # mutant\n",
+        TOOLS_TEST,
+        "test_a_control_character_is_spelled_outside_the_quotes",
+    ),
+    (
+        "source url: a new value with a control character is rendered",
+        _SU_REPAIR,
+        "    if any(row.new_value is None or CONTROL_RE.search(row.new_value) for row in rows):\n",
+        "    if False:  # mutant\n",
+        TOOLS_TEST,
+        "test_a_statement_is_refused_for_a_new_value_with_a_control_character",
+    ),
+    (
+        "source url: the plan lines of waves 1-3 gain a table key",
+        _SU_REPAIR,
+        "        if self.table == TABLE:\n",
+        "        if False:  # mutant\n",
+        TOOLS_TEST,
+        "test_waves_one_to_three_still_render_byte_for_byte_beside_wave_four",
+    ),
+    (
+        "source url: a new row is compared as a NULL value",
+        _SU_REPAIR,
+        "        if values != ([] if expected is None else [expected]):\n",
+        "        if values != [expected]:  # mutant\n",
+        TOOLS_TEST,
+        "test_a_new_row_is_compared_as_no_row",
+    ),
+    (
+        "source url: check plans wave 4 from researched sites",
+        _SU_REPAIR,
+        "        return split_plan(load_resolution(out)).rows\n",
+        "        return changes(wave.sites, gate_m=wave.gate_m)  # mutant\n",
+        TOOLS_TEST,
+        _SU_CHECK,
+    ),
+    (
+        "source url: the command line does not know wave 4",
+        _SU_REPAIR,
+        "WAVES = {wave.number: wave for wave in (WAVE1, WAVE2, WAVE3, WAVE4)}\n",
+        "WAVES = {wave.number: wave for wave in (WAVE1, WAVE2, WAVE3)}  # mutant\n",
+        TOOLS_TEST,
+        _SU_CHECK,
+    ),
+    (
+        "source url: wave 4 journals under wave 3's stamp",
+        _SU_REPAIR,
+        '    "2026-09-23_source-url-split-wave4",\n',
+        '    "2026-09-23_external-id-repair-wave3",  # mutant\n',
+        TOOLS_TEST,
+        "test_the_delivered_wave_four_files_are_the_rendered_ones",
+    ),
+    (
+        "source url: 0023 adds its constraint whatever the count",
+        _SU_M0023,
+        "    IF v_bad > 0 THEN\n",
+        "    IF FALSE THEN -- mutant\n",
+        _SU_M0023_TEST,
+        "test_the_first_transaction_refuses_before_it_adds_anything",
+    ),
+    (
+        "source url: 0023 validates while it adds",
+        _SU_M0023,
+        "            NOT VALID;\n",
+        "            ;\n",
+        _SU_M0023_TEST,
+        "test_the_constraint_is_added_not_valid_and_only_when_the_catalog_lacks_it",
+    ),
+    (
+        "source url: 0023 adds its constraint without asking the catalog",
+        _SU_M0023,
+        "    IF NOT EXISTS (\n",
+        "    IF TRUE OR EXISTS (\n",
+        _SU_M0023_TEST,
+        "test_the_constraint_is_added_not_valid_and_only_when_the_catalog_lacks_it",
+    ),
+    (
+        "source url: 0023 checks another character class",
+        _SU_M0023,
+        "            CHECK (source_url !~ '[\\x00-\\x1f\\x7f]')\n",
+        "            CHECK (source_url !~ '[\\x00-\\x1f]')\n",
+        _SU_M0023_TEST,
+        "test_the_check_is_the_control_class_the_wiki_parser_refuses",
+    ),
+    (
+        "source url: the 0023 selftest reads the definition with LIKE",
+        _SU_M0023,
+        "    IF strpos(v_def, 'source_url !~ ''[\\x00-\\x1f\\x7f]''') = 0 THEN\n",
+        "    IF v_def NOT LIKE '%source_url !~ ''[\\x00-\\x1f\\x7f]''%' THEN\n",
+        _SU_M0023_TEST,
+        "test_the_validation_runs_in_its_own_transaction_then_the_catalog_is_asserted",
+    ),
+]
+MUTATIONS += SOURCE_URL_MUTATIONS
+
 
 def digest(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
