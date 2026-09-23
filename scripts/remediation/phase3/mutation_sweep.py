@@ -5964,8 +5964,8 @@ PHASE4_SELECT_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "p4 sentences: a paired insertion keeps its second comma",
         P4B_SENT,
-        "            found.append((M.SpanKind.A, first, second + 1))\n",
-        "            found.append((M.SpanKind.A, first, second))  # mutant\n",
+        "            found.append((M.SpanKind.A, commas[k], commas[k + 1] + 1))\n",
+        "            found.append((M.SpanKind.A, commas[k], commas[k + 1]))  # mutant\n",
         P4B_SENT_TEST,
         "test_a_paired_comma_insertion_takes_both_commas",
     ),
@@ -10879,8 +10879,8 @@ PHASE4_SELECT_SUP_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "p4 sentences: a list link is offered as an insertion",
         P4B_SENT,
-        "        if s[first + 1 : second].strip() and not link:\n",
-        "        if s[first + 1 : second].strip():  # mutant\n",
+        "        bool(s[first + 1 : second].strip()) and not link\n",
+        "        bool(s[first + 1 : second].strip())  # mutant\n",
         P4B_SENT_TEST,
         "test_a_comma_pair_inside_a_list_is_no_insertion",
     ),
@@ -10951,6 +10951,57 @@ PHASE4_SELECT_SUP_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         "        opens_conjunct = False  # mutant\n",
         P4B_SENT_TEST,
         "test_a_leading_phrase_that_opens_a_list_or_a_conjunct_is_not_offered",
+    ),
+    # -- the orchestrator's decision of 2026-09-23: two insertion pairs that share a comma offer
+    # neither (section 7 rule 5)
+    (
+        "p4 sentences: two insertion pairs that share a comma are both offered",
+        P4B_SENT,
+        "        if insertion and not shares:\n",
+        "        if insertion:  # mutant\n",
+        P4B_SENT_TEST,
+        "test_two_comma_pairs_that_share_a_comma_offer_neither",
+    ),
+    (
+        "p4 sentences: only the pair after an insertion pair refuses it",
+        P4B_SENT,
+        "        shares = (k > 0 and insertions[k - 1]) or (k + 1 < len(insertions) and insertions[k + 1])\n",
+        "        shares = k + 1 < len(insertions) and insertions[k + 1]  # mutant\n",
+        P4B_SENT_TEST,
+        "test_two_comma_pairs_that_share_a_comma_offer_neither",
+    ),
+    (
+        "p4 sentences: only the pair before an insertion pair refuses it",
+        P4B_SENT,
+        "        shares = (k > 0 and insertions[k - 1]) or (k + 1 < len(insertions) and insertions[k + 1])\n",
+        "        shares = k > 0 and insertions[k - 1]  # mutant\n",
+        P4B_SENT_TEST,
+        "test_two_comma_pairs_that_share_a_comma_offer_neither",
+    ),
+    (
+        "p4 sentences: a list link beside an insertion refuses it",
+        P4B_SENT,
+        "        shares = (k > 0 and insertions[k - 1]) or (k + 1 < len(insertions) and insertions[k + 1])\n",
+        "        shares = len(insertions) > 1  # mutant\n",
+        P4B_SENT_TEST,
+        "test_an_insertion_beside_a_list_is_still_offered",
+    ),
+    (
+        "p4 sentences: a protected neighbour no longer refuses its partner",
+        P4B_SENT,
+        "        bool(s[first + 1 : second].strip()) and not link\n",
+        "        bool(s[first + 1 : second].strip()) and not link"
+        " and not carries_protected_token(s[first : second + 1])  # mutant\n",
+        P4B_SENT_TEST,
+        "test_two_comma_pairs_that_share_a_comma_offer_neither",
+    ),
+    (
+        "p4 sentences: the shared-comma cases leave the parity fixture",
+        P4B_SENT,
+        "        if insertion and not shares:\n",
+        "        if insertion:  # mutant\n",
+        P4B_SENT_TEST,
+        "test_the_span_cases_both_finders_share",
     ),
     # -- D3: SPAN_CASES, the fixture verify4's parity test shares, pins every refusal of section 7
     (

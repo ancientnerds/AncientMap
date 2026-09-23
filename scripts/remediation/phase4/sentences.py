@@ -28,7 +28,8 @@ marker in front of; a `T.<lang>` sentence offers none (the protected tokens are 
   the start of the sentence the space after it instead (`"(...) "`); with no space on either side,
   the parenthesis alone.
 * `a` - a paired insertion: from a delimiter comma through the next delimiter comma, `", built by
-  Khufu,"`, unless the pair is a link of a list or a conjunct (`_list_links`); or from the space
+  Khufu,"`, unless the pair is a link of a list or a conjunct (`_list_links`) or shares a comma
+  with another such insertion pair (`, bavn, in Bavnehøj,`: neither is offered); or from the space
   before a spaced dash (` - ` as en or em dash) through the next one, the dashes paired in order
   (first with second, third with fourth, none on an odd count), never a pair with a range dash (a
   digit beside it) or a top-level `;` between them. The pair is the insertion's delimiter, so both
@@ -300,9 +301,16 @@ def _candidates(s: str) -> list[tuple[M.SpanKind, int, int]]:
         i for i, ch in enumerate(s) if ch == "," and top[i] and i + 1 < len(s) and s[i + 1] == " "
     ]
     links = _list_links(s, commas)
-    for (first, second), link in zip(zip(commas, commas[1:], strict=False), links, strict=True):
-        if s[first + 1 : second].strip() and not link:
-            found.append((M.SpanKind.A, first, second + 1))
+    insertions = [
+        bool(s[first + 1 : second].strip()) and not link
+        for (first, second), link in zip(zip(commas, commas[1:], strict=False), links, strict=True)
+    ]
+    for k, insertion in enumerate(insertions):
+        # Two insertion pairs that share a comma leave no reading of which two commas enclose the
+        # insertion (Agri Bavnehøj W11: ", bavn," beside ", in Bavnehøj,"): neither is offered.
+        shares = (k > 0 and insertions[k - 1]) or (k + 1 < len(insertions) and insertions[k + 1])
+        if insertion and not shares:
+            found.append((M.SpanKind.A, commas[k], commas[k + 1] + 1))
     dashes = [
         i
         for i, ch in enumerate(s)

@@ -359,14 +359,26 @@ is the sentence text (`text[start:end]`), offsets are relative to it until the l
    - (iv) its inner is at most 3 tokens, it is the last pair, and its tail is at most 3 tokens; or
    - (v) its inner, left-stripped, opens with `and` or `or` as a whole word (`(?:and|or)\b` at
      the start, case-insensitive): a conjunct, not an insertion.
-   A pair whose stripped inner is not empty and that is no list link offers `[c_k, c_{k+1} + 1)`
-   (`", built by Khufu,"`). Dropping a list link would join two list items into a false one
+   A pair whose stripped inner is not empty and that is no list link is an **insertion pair**. An
+   insertion pair offers `[c_k, c_{k+1} + 1)` (`", built by Khufu,"`) **unless the pair before it
+   (`k - 1`) or the pair after it (`k + 1`) is an insertion pair too**: two insertion pairs that
+   share a comma leave no reading of which two commas enclose the insertion, so **neither** is
+   offered (decision of the orchestrator, 2026-09-23). Agri Bavnehøj W11: "The old Danish word,
+   bavn, in Bavnehøj, means ..." offered `, bavn,` and `, in Bavnehøj,`, and dropping the second
+   read "The old Danish word, bavn means ..."; Babylon W1 offered `, within modern-day Hillah,`
+   beside `, Iraq,`. The judgement is made here, on rule 5 alone, before rule 9's filter: a
+   neighbour refused for a protected token (`, probably bavn,`) still refuses its partner. A
+   neighbour that is a list link is no insertion pair and refuses nothing (`The finds, which were
+   made in 1900, included pottery, coins, and tools.` offers `, which were made in 1900,`).
+   Dropping a list link would join two list items into a false one
    (Bela Palanka W11: "Constantine I Tiberius Claudius Nero"); dropping a conjunct hangs what
    follows it on the item before it (Sparta W58: "inscriptions, sculptures founded by Stamatakis
    in 1872" from ", and other objects collected in the local museum,"). The heuristic also
    refuses some genuine insertions; that stays so (decision D7: safety over coverage; the pilot's
    T8 measures coverage). Rule (v) alone took 2,413 of the 25,408 `a` spans of the 3,661 local
-   enwiki pools (2026-09-23).
+   enwiki pools (2026-09-23). The shared-comma refusal took a further 12,750 of the 22,881 comma
+   `a` spans of those pools (55.7 %; 10,131 remain), measured on wip/p4-select-sup 2026-09-23;
+   the 114 dash `a` spans and every `p`, `l` and `t` span are unchanged.
 6. **`a`, dash pairs.** With the spaced dashes `d_1 < ... < d_m`: none when `m` is odd; otherwise
    the pairs are `(d_1, d_2), (d_3, d_4), ...` in order (never `(d_2, d_3)`). A pair `(d, e)`
    offers `[d - 1, e + 1)` (`" – near the old road –"`) when `s[d + 1 : e - 1]` stripped is not
@@ -387,8 +399,7 @@ is the sentence text (`text[start:end]`), offsets are relative to it until the l
    enwiki pools it took 1,951 of the 15,261 offered `l` spans (1,746 by the list link, 205 by the
    opening coordinator), some of them genuine leading phrases before a coordinated clause (Babylon
    W161: "Under Nabopolassar, Babylon escaped Assyrian rule, and ..."). **The orchestrator
-   confirms or reverses this refusal** (it was not among decisions D1-D7); a reversal must also
-   restore the `l1` of the list cases in `SPAN_CASES`.
+   confirmed this refusal on 2026-09-23**; it stands as written here.
 8. **`t`**: with a last delimiter comma `c_n`, `[c_n, len(s) - 1)` when
    `s[c_n + 1 : len(s) - 1]` stripped is not empty (`", whose tomb lies nearby"`).
 9. **Protected tokens.** A candidate whose range text contains an entry of
