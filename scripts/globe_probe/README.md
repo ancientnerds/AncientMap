@@ -180,3 +180,22 @@ Noise floor: the same shot taken twice on production, then `diff`.
 | 1.31, DPR 2 | 0.0002 | 0 % |
 
 A comparison above these values is a real difference.
+
+## `strip_upload_check.py` — the basemap upload in a real WebGL2 context
+
+Bundles `ancient-nerds-map/src/services/basemapUpgrade.ts` with the project's esbuild, runs it
+against three's real `WebGLRenderer` and reads the texels back through a framebuffer: the strip
+upload and the whole upload must match the old `<img>` upload (rows mirrored, because the
+ImageBitmap textures pair with the `(u, v)` UVs in `sceneInit.ts`) at level 0 and mip level 1,
+with no GL error and the strip source never registered in the renderer. It also times every
+strip copy, the allocation and the out-of-memory check.
+
+```bash
+$PY scripts/globe_probe/strip_upload_check.py                                  # pattern 1024x512, headless
+$PY scripts/globe_probe/strip_upload_check.py --gpu --rows 256 --image public/data/basemaps/gray_dark_high.webp
+$PY scripts/globe_probe/strip_upload_check.py --browser webkit --tolerance 1   # needs `playwright install webkit`
+```
+
+Measured 2026-09-24: all six basemap files byte-identical in Chromium (SwiftShader and a D3D11
+GPU) and WebKit 26.6; the synthetic pattern differs by 1 in ~0.1 % of the channels in WebKit
+only (WebKit colour-tags the PNG `canvas.toBlob` writes).

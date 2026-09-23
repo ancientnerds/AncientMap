@@ -39,16 +39,6 @@ export interface MapboxInitEffectDeps {
 }
 
 /**
- * All refs and state setters needed by the texture-ready effect.
- */
-export interface TextureReadyEffectDeps {
-  texturesReady: boolean
-  texturesReadyRef: React.MutableRefObject<boolean>
-  basemapMeshRef: React.MutableRefObject<THREE.Mesh | null>
-  sceneRef: React.MutableRefObject<SceneRefs | null>
-}
-
-/**
  * All refs and state setters needed by the auto-switch effect.
  */
 export interface AutoSwitchEffectDeps {
@@ -209,34 +199,6 @@ export function createMapboxInitEffect(
   return () => {
     mapboxService.dispose()
     deps.mapboxServiceRef.current = null
-  }
-}
-
-/**
- * Creates the texture-ready effect body.
- * Forces basemap visible when textures become ready.
- * Corresponds to Globe.tsx lines ~7055-7071.
- *
- * Usage in useEffect:
- *   useEffect(() => createTextureReadyEffect(deps), [texturesReady])
- */
-export function createTextureReadyEffect(
-  deps: TextureReadyEffectDeps
-): void {
-  deps.texturesReadyRef.current = deps.texturesReady
-  if (!deps.texturesReady) return
-
-  const basemapMesh = deps.basemapMeshRef.current
-  const globeBase = deps.sceneRef.current?.globe
-
-  if (basemapMesh && !basemapMesh.visible) {
-    basemapMesh.visible = true
-  }
-
-  // Hide globe base visual (set opacity to 0, NOT visible=false which hides children/vector layers)
-  if (globeBase && basemapMesh?.visible) {
-    const globeMaterial = globeBase.material as THREE.MeshBasicMaterial
-    globeMaterial.opacity = 0
   }
 }
 

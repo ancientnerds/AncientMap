@@ -5,6 +5,7 @@ import { FilterMode } from '../App'
 import { offlineFetch, OfflineFetch } from '../services/OfflineFetch'
 import { useOffline } from '../contexts/OfflineContext'
 import { track } from '../analytics'
+import { trackBackgroundFailure } from '../analytics/globeBackground'
 import { EMPIRES } from '../config/empireData'
 import { AWMC_ROADS_CONFIG, getRouteById } from '../config/routeData'
 import { LAYER_CONFIG, getLayerUrl, type VectorLayerKey, type VectorLayerVisibility } from '../config/vectorLayers'
@@ -265,7 +266,9 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
     glaciers: false,
     plateBoundaries: false
   })
-  const [tileLayers, setTileLayers] = useState<{ satellite: boolean; streets: boolean }>({
+  // What the visitor switched on. The satellite view shows only once its texture
+  // is on the GPU, so every renderer reads the derived `tileLayers` further down.
+  const [requestedTileLayers, setTileLayers] = useState<{ satellite: boolean; streets: boolean }>({
     satellite: false,
     streets: false
   })
@@ -338,9 +341,6 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
   // Fly-to animation: camera movement to coordinates from search results
   useFlyToAnimation({ refs, flyTo })
 
-  // Satellite mode: toggle between gray basemap and satellite imagery
-  useSatelliteMode({ refs, satellite: tileLayers.satellite, vectorLayers, showMapbox, mapboxServiceRef })
-
   // Contribute picker: map picker mode for adding new sites
   useContributePicker({
     refs,
@@ -373,10 +373,48 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
   })
 
   // Texture loading and application
-  const { texturesReady, backgroundLoadingComplete, lowFpsReady } = useTextureLoading({
+  const {
+    texturesReady, backgroundLoadingComplete, lowFpsReady,
+    satelliteReady, basemapPlan, loadSatellite, upgradeGray, requestSatellite,
+  } = useTextureLoading({
     refs,
     sceneReady,
+    satelliteRequested: requestedTileLayers.satellite,
+    onStartError: (phase, err) => console.error('[globe start]', phase, err),
+    onSatelliteFailed: () => setTileLayers(prev => ({ ...prev, satellite: false })),
   })
+  // Active tile layers: the satellite counts once its texture is on the GPU
+  // (until then the toggle shows satellitePending and the view stays gray).
+  const satelliteActive = requestedTileLayers.satellite && satelliteReady
+  const tileLayers = useMemo(
+    () => ({ ...requestedTileLayers, satellite: satelliteActive }),
+    [requestedTileLayers, satelliteActive],
+  )
+  const satellitePending = requestedTileLayers.satellite && !satelliteReady
+
+  // Interim until the background queue (U10) owns these tasks: once the intro
+  // starts, the satellite preload (desktops) and the gray upgrade run in queue order.
+  useEffect(() => {
+    if (!splashDone || !basemapPlan) return
+    const ctrl = new AbortController()
+    const tasks: Array<['satellite' | 'basemap', (signal: AbortSignal) => Promise<void>]> = []
+    if (basemapPlan.preloadSatellite) tasks.push(['satellite', loadSatellite])
+    if (basemapPlan.upgradeGray) tasks.push(['basemap', upgradeGray])
+    void (async () => {
+      for (const [task, run] of tasks) {
+        try {
+          await run(ctrl.signal)
+        } catch (err) {
+          if (ctrl.signal.aborted) return // unmounted
+          trackBackgroundFailure(task, err)
+        }
+      }
+    })()
+    return () => ctrl.abort(new Error('globe unmounted'))
+  }, [splashDone, basemapPlan, loadSatellite, upgradeGray])
+
+  // Satellite mode: toggle between gray basemap and satellite imagery
+  useSatelliteMode({ refs, satellite: tileLayers.satellite, vectorLayers, showMapbox, mapboxServiceRef })
 
   // Layers ready coordination hook called below (after labelsLoaded and layersLoaded are declared)
 
@@ -2524,11 +2562,15 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
       <MapLayersPanel
         minimized={mapLayersMinimized}
         onToggleMinimize={() => setMapLayersMinimized(prev => !prev)}
-        tileLayers={tileLayers}
-        onTileLayerToggle={(layer) => setTileLayers(prev => ({
-          satellite: layer === 'satellite' ? !prev.satellite : false,
-          streets: layer === 'streets' ? !prev.streets : false
-        }))}
+        tileLayers={requestedTileLayers}
+        satellitePending={satellitePending}
+        onTileLayerToggle={(layer) => {
+          if (layer === 'satellite' && !requestedTileLayers.satellite && !satelliteReady) requestSatellite()
+          setTileLayers(prev => ({
+            satellite: layer === 'satellite' ? !prev.satellite : false,
+            streets: layer === 'streets' ? !prev.streets : false
+          }))
+        }}
         vectorLayers={vectorLayers}
         onVectorLayerToggle={(key) => setVectorLayers(prev => ({ ...prev, [key]: !prev[key] }))}
         isLoadingLayers={isLoadingLayers}

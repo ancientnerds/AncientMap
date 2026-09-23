@@ -37,10 +37,7 @@ export function useGlobeRefs(): GlobeRefs {
   // ========== Basemap Refs ==========
   const basemapMesh = useRef<THREE.Mesh | null>(null)
   const basemapBackMesh = useRef<THREE.Mesh | null>(null)
-  const basemapTexture = useRef<THREE.Texture | null>(null)
-  const currentBasemap = useRef<string>('')
   const basemapSectionMeshes = useRef<THREE.Mesh[]>([])
-  const landMaskMesh = useRef<THREE.Mesh | null>(null)
 
   // ========== Stars and Visual Effects ==========
   const stars = useRef<THREE.Group | null>(null)
@@ -214,8 +211,6 @@ export function useGlobeRefs(): GlobeRefs {
 
   // ========== Satellite Mode Refs ==========
   const satelliteMode = useRef<boolean>(false)
-  const highResGrayLoaded = useRef<boolean>(false)
-  const highResSatelliteLoaded = useRef<boolean>(false)
 
   // ========== Loading State Refs ==========
   const texturesReady = useRef<boolean>(false)
@@ -285,15 +280,6 @@ export function useGlobeRefs(): GlobeRefs {
   const prevReplaceCoastlines = useRef<boolean>(false)
   const prevPaleoshorelineVisible = useRef<boolean>(false)
 
-  // ========== Texture Cache Refs ==========
-  const textureCache = useRef<{
-    grayBasemap: THREE.Texture | null
-    satellite: THREE.Texture | null
-  }>({
-    grayBasemap: null,
-    satellite: null
-  })
-
   // ========== Preloading Refs ==========
   const vectorPreloaded = useRef<boolean>(false)
 
@@ -316,10 +302,7 @@ export function useGlobeRefs(): GlobeRefs {
     // Basemap Refs
     basemapMesh,
     basemapBackMesh,
-    basemapTexture,
-    currentBasemap,
     basemapSectionMeshes,
-    landMaskMesh,
 
     // Stars and Visual Effects
     stars,
@@ -471,8 +454,6 @@ export function useGlobeRefs(): GlobeRefs {
 
     // Satellite Mode Refs
     satelliteMode,
-    highResGrayLoaded,
-    highResSatelliteLoaded,
 
     // Loading State Refs
     texturesReady,
@@ -533,9 +514,6 @@ export function useGlobeRefs(): GlobeRefs {
     prevSeaLevel,
     prevReplaceCoastlines,
     prevPaleoshorelineVisible,
-
-    // Texture Cache Refs
-    textureCache,
 
     // Preloading Refs
     vectorPreloaded,

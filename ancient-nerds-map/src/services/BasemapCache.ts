@@ -4,6 +4,7 @@
  */
 
 import { OfflineStorage } from './OfflineStorage'
+import { BASEMAP_TIERS, getBasemapAssets, getBasemapTier, tierRank, type BasemapTier } from '../utils/deviceTier'
 
 export type BasemapType = 'satellite' | 'labels'
 
@@ -14,28 +15,46 @@ interface BasemapItemInfo {
   totalSize: number
 }
 
-// Satellite imagery - single high quality file
-const SATELLITE_FILES = [
-  { url: '/data/basemaps/satellite_high.webp', size: 17 * 1024 * 1024 }, // ~17 MB (WebP)
-]
+// Byte sizes of the basemap files (public/data/basemaps, content-stable).
+const BASEMAP_BYTES: Record<BasemapTier, { gray: number; satellite: number }> = {
+  low: { gray: 109_724, satellite: 714_326 },
+  med: { gray: 482_678, satellite: 2_657_496 },
+  high: { gray: 3_301_588, satellite: 17_001_226 },
+}
+
+/**
+ * Basemap imagery for offline use: what the globe's loader requests on this
+ * device - the gray (critical at the start tier) and the satellite, at every
+ * tier up to the device's maximum. The start tier follows the window height
+ * at load time, so all of them. The GPU limit is unknown here (0 = the
+ * largest the device class allows); the service worker's basemap rule serves
+ * these entries from the same 'basemaps' cache under the same URLs.
+ */
+function basemapFiles(): { url: string; size: number }[] {
+  const max = getBasemapTier(0)
+  return BASEMAP_TIERS.filter(tier => tierRank(tier) <= tierRank(max)).flatMap(tier => {
+    const assets = getBasemapAssets(tier)
+    return [
+      { url: assets.gray, size: BASEMAP_BYTES[tier].gray },
+      { url: assets.satellite, size: BASEMAP_BYTES[tier].satellite },
+    ]
+  })
+}
 
 // Labels data file
 const LABELS_FILES = [
   { url: '/data/labels.json', size: 1.1 * 1024 * 1024 },
 ]
 
-const BASEMAP_ITEMS: Record<BasemapType, BasemapItemInfo> = {
-  satellite: {
-    id: 'satellite',
-    name: 'Satellite',
-    files: SATELLITE_FILES,
-    totalSize: SATELLITE_FILES.reduce((sum, f) => sum + f.size, 0)
-  },
-  labels: {
-    id: 'labels',
-    name: 'Labels',
-    files: LABELS_FILES,
-    totalSize: LABELS_FILES.reduce((sum, f) => sum + f.size, 0)
+function item(id: BasemapType, name: string, files: { url: string; size: number }[]): BasemapItemInfo {
+  return { id, name, files, totalSize: files.reduce((sum, f) => sum + f.size, 0) }
+}
+
+/** Built on use: the satellite item depends on the device (window/navigator, never at module scope). */
+function basemapItems(): Record<BasemapType, BasemapItemInfo> {
+  return {
+    satellite: item('satellite', 'Satellite', basemapFiles()),
+    labels: item('labels', 'Labels', LABELS_FILES),
   }
 }
 
@@ -46,14 +65,14 @@ class BasemapCacheClass {
    * Get list of available basemap items (Satellite, Labels)
    */
   getBasemapItems(): BasemapItemInfo[] {
-    return Object.values(BASEMAP_ITEMS)
+    return Object.values(basemapItems())
   }
 
   /**
    * Get info for a specific basemap item
    */
   getBasemapItemInfo(id: BasemapType): BasemapItemInfo {
-    return BASEMAP_ITEMS[id]
+    return basemapItems()[id]
   }
 
   /**
@@ -63,7 +82,7 @@ class BasemapCacheClass {
     id: BasemapType,
     onProgress?: (loaded: number, total: number) => void
   ): Promise<void> {
-    const item = BASEMAP_ITEMS[id]
+    const item = basemapItems()[id]
     const cache = await caches.open(CACHE_NAME)
     let totalLoaded = 0
     const totalSize = item.totalSize
@@ -126,7 +145,7 @@ class BasemapCacheClass {
    * Remove a specific basemap item from cache
    */
   async clearBasemapItem(id: BasemapType): Promise<void> {
-    const item = BASEMAP_ITEMS[id]
+    const item = basemapItems()[id]
     const cache = await caches.open(CACHE_NAME)
 
     for (const file of item.files) {
@@ -152,7 +171,8 @@ class BasemapCacheClass {
    * Estimate total size for selected items
    */
   estimateSize(ids: BasemapType[]): number {
-    return ids.reduce((total, id) => total + BASEMAP_ITEMS[id].totalSize, 0)
+    const items = basemapItems()
+    return ids.reduce((total, id) => total + items[id].totalSize, 0)
   }
 
   // Legacy compatibility methods
