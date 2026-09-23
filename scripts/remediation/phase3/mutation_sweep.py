@@ -6607,6 +6607,14 @@ PHASE4_WRITE_SUP_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         P4_CLOSE_REVERTED,
     ),
     (
+        "p4 write_gate4: the unclaimed sites are one sum",
+        P4_GATE,
+        "    counts = Counter(entry.reason.value for item in planned for entry in item.plan.unclaimed)\n",
+        '    counts = Counter("x" for item in planned for entry in item.plan.unclaimed)  # mutant\n',
+        P4_WRITE_TEST,
+        "test_the_unclaimed_sites_are_counted_by_reason",
+    ),
+    (
         "p4 revert4: a reversal answer of other lines is read",
         P4_REVERT,
         "        if metric not in (MATCHED, KEPT) or metric in counts or not value.isdigit():\n",

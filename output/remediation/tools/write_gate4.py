@@ -66,6 +66,7 @@ import pathlib
 import re
 import sys
 import uuid
+from collections import Counter
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
@@ -614,6 +615,12 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def unclaimed_by_reason(planned: Sequence[Planned]) -> dict[str, int]:
+    """The sites lane L makes no claim for (HUMAN_ONLY D7), counted by reason - never one sum."""
+    counts = Counter(entry.reason.value for item in planned for entry in item.plan.unclaimed)
+    return dict(sorted(counts.items()))
+
+
 def _run(argv: list[str] | None, runner: W.SqlRunner | None) -> int:
     args = build_parser().parse_args(argv)
     group = W4.Group(args.group)
@@ -665,11 +672,10 @@ def _run(argv: list[str] | None, runner: W.SqlRunner | None) -> int:
     for item in planned:
         for rule, count in item.plan.refusals_by_rule().items():
             refused[rule] = refused.get(rule, 0) + count
-    unclaimed = sum(len(item.plan.unclaimed) for item in planned)
     open_items = [item for item in planned if item.chunk is not None and not item.applied]
     print(
-        f"rows planned: {rows} | refused by rule: {refused} | unclaimed (HUMAN_ONLY): {unclaimed} "
-        f"| open batches: {len(open_items)} | "
+        f"rows planned: {rows} | refused by rule: {refused} | unclaimed by reason (HUMAN_ONLY "
+        f"D7): {unclaimed_by_reason(planned)} | open batches: {len(open_items)} | "
         + (
             "REHEARSING"
             if args.rehearse

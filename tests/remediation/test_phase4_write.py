@@ -1540,6 +1540,23 @@ def test_the_acceptance_must_have_read_every_round_its_stamps_cover(
     assert ("it was run before this step" in printed) is not accepted
 
 
+def test_the_unclaimed_sites_are_counted_by_reason(tmp_path: Path) -> None:
+    """HUMAN_ONLY D7 lists them by reason: a text equal to the pre-March one and a site the snapshot
+    does not have are two counts, never one sum."""
+    no_claim = W4.legacy4.NoClaim
+    plan = W4.WritePlan4(
+        W4.Group.L,
+        "p4l-0001",
+        unclaimed=[
+            W4.legacy4.Unclaimed(FX.SITE_A, "A", no_claim.SAME_AS_SNAPSHOT),
+            W4.legacy4.Unclaimed(FX.SITE_B, "B", no_claim.NOT_IN_SNAPSHOT),
+            W4.legacy4.Unclaimed(FX.SITE_C, "C", no_claim.NOT_IN_SNAPSHOT),
+        ],
+    )
+    planned = [G.Planned(out=tmp_path, plan=plan, chunk=None)]
+    assert G.unclaimed_by_reason(planned) == {"not-in-snapshot": 2, "same-as-snapshot": 1}
+
+
 def test_written_sites_counts_only_full_provenance(tmp_path: Path) -> None:
     rows = [
         {"id": FX.SITE_A, "lane": "W", "card": "a" * 64},
