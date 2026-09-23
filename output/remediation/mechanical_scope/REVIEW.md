@@ -1,6 +1,6 @@
 # E4 scope decisions - per-site review
 
-Built 2026-09-23T07:41:10+00:00 from the production export of 2026-09-23 07:41:01.276622+00. Read this before `apply.py --lane scope-e4 --apply`: every row below becomes two journalled cells (`scope_status`, `scope_reason`). `retired` hides the site everywhere a visitor, a crawler or a card draw reaches it; `pending` keeps it shown and flags it; `in_scope` records the decision to keep it. T11 ran over the live export, not the 2026-09-20 snapshot its evidence lines are labelled with (`snapshot:unified_sites...` is T11's wording for the rows it was given).
+Built 2026-09-23T10:39:54+00:00 from the production export of 2026-09-23 07:41:01.276622+00. Read this before `apply.py --lane scope-e4 --apply`: every row below becomes two journalled cells (`scope_status`, `scope_reason`). `retired` hides the site everywhere a visitor, a crawler or a card draw reaches it; `pending` keeps it shown and flags it; `in_scope` records the decision to keep it. T11 ran over the live export, not the 2026-09-20 snapshot its evidence lines are labelled with (`snapshot:unified_sites...` is T11's wording for the rows it was given).
 
 What this lane does not do: it moves nothing. A retired duplicate keeps its images and content links; where the survivor has fewer (the counts are on each line below), moving them is a follow-up before the survivor's page is relied on. A `pending` row stays shown until its date or scope is settled - the evidence says what to settle.
 
@@ -432,22 +432,130 @@ What this lane does not do: it moves nothing. A retired duplicate keeps its imag
   * snapshot:unified_sites: period_start = None, period_end = None, period_name = None
   * docs/procedures/SITES_DB_REMEDIATION_2026-09.md:59 (1.3): The site is in scope (E3), or flagged as out of scope and hidden.
 
-## (c) true duplicates - 3 site(s)
+## (c) true duplicates - 19 site(s)
 
-### retired (3)
+### retired (19)
 
+* **Ancient Kourion** (`d120ca9a-703b-49e2-b333-ad6dfe508953`) - Cyprus, City/town/settlement, period_start -1050, 4 link(s), 20 image(s)
+  * reason: duplicate_of:9983bdce-9f35-47a3-a570-4021cfa41b97
+  * bcases:DUPLICATES.jsonl: listed for the scope lane; re-read in the export: both rows carry Q1785592, 469.4 m apart
+  * production:site_external_ids: both rows carry Q1785592; 'Ancient Kourion' and 'Kourion' are both names of it (labels, aliases or sitelinks); 469.4 m apart
+  * survivor rule: 'Kourion' survives by more content links: content links 5 vs 4, sources 2+url vs 2+url, created 2026-03-04 21:07:57.660461 vs 2026-03-04 21:07:57.660461
+  * follow-up: the loser carries 20 wiki_images and 4 content links that are not moved by retiring it; country 'Cyprus' vs survivor 'Cyprus'
+* **Archaeological Park Carnuntum** (`f3da4b6e-c4a3-4416-9c28-93bf761119ad`) - Austria, Fortress/citadel, period_start 1, 3 link(s), 20 image(s)
+  * reason: duplicate_of:1531d4a1-bb24-4727-9b25-f2089088acaf
+  * bcases:DUPLICATES.jsonl: listed for the scope lane; re-read in the export: both rows carry Q508815, 9.1 m apart
+  * production:site_external_ids: both rows carry Q508815; 'Archaeological Park Carnuntum' and 'Carnuntum' are both names of it (labels, aliases or sitelinks); 9.1 m apart
+  * survivor rule: 'Carnuntum' survives by more content links: content links 5 vs 3, sources 2+url vs 2+url, created 2026-03-04 21:07:57.660461 vs 2026-03-04 21:07:57.660461
+  * follow-up: the loser carries 20 wiki_images and 3 content links that are not moved by retiring it; country 'Austria' vs survivor 'Austria'
+* **Archaeological Site of Kition** (`55a670ec-c7c5-4f52-98ea-b25211aedd4e`) - Cyprus, City/town/settlement, period_start -3000, 4 link(s), 17 image(s)
+  * reason: duplicate_of:47c37ef9-98ee-41d8-879b-e78db06295da
+  * bcases:DUPLICATES.jsonl: listed for the scope lane; re-read in the export: both rows carry Q1743884, 62.9 m apart
+  * production:site_external_ids: both rows carry Q1743884; 'Archaeological Site of Kition' and 'Kition' are both names of it (labels, aliases or sitelinks); 62.9 m apart
+  * survivor rule: 'Kition' survives by more content links: content links 5 vs 4, sources 2+url vs 2+url, created 2026-03-04 21:07:57.660461 vs 2026-03-04 21:07:57.660461
+  * follow-up: the loser carries 17 wiki_images and 4 content links that are not moved by retiring it; country 'Cyprus' vs survivor 'Cyprus'
+* **Archaeological Site, Heraion** (`24676ed3-9308-42d4-bf35-1c739f0652e2`) - Greece, Temple complex, period_start -1500, 4 link(s), 20 image(s)
+  * reason: duplicate_of:9d9d94a0-f338-4392-860f-983c29fabb16
+  * bcases:DUPLICATES.jsonl: listed for the scope lane; re-read in the export: both rows carry Q2070087, 122.1 m apart
+  * production:site_external_ids: both rows carry Q2070087; 'Archaeological Site, Heraion' and 'Heraion of Perachora' are both names of it (labels, aliases or sitelinks); 122.1 m apart
+  * survivor rule: 'Heraion of Perachora' survives by more content links: content links 5 vs 4, sources 2+url vs 2+url, created 2026-03-04 21:07:57.660461 vs 2026-03-04 21:07:57.660461
+  * follow-up: the loser carries 20 wiki_images and 4 content links that are not moved by retiring it; country 'Greece' vs survivor 'Greece'
+* **Area Archeologica di Alba Fucens** (`13c3f25f-3887-49c1-9492-cf7e512e5782`) - Italy, City, period_start -303, 5 link(s), 0 image(s)
+  * reason: duplicate_of:13120650-2e61-45af-976c-b2e0665c49af
+  * bcases:DUPLICATES.jsonl: listed for the scope lane; re-read in the export: both rows carry Q944515, 89.1 m apart
+  * production:site_external_ids: both rows carry Q944515; 'Area Archeologica di Alba Fucens' and 'Alba Fucens' are both names of it (labels, aliases or sitelinks); 89.1 m apart
+  * survivor rule: 'Alba Fucens' survives by lower id (tie-break): content links 5 vs 5, sources 2+url vs 2+url, created 2026-03-04 21:07:57.660461 vs 2026-03-04 21:07:57.660461
+  * follow-up: the loser carries 0 wiki_images and 5 content links that are not moved by retiring it; country 'Italy' vs survivor 'Italy'
+* **Augusta Bilbilis** (`577b13cd-242b-4951-a8c4-ab3ecde0e5b1`) - Spain, City/town/settlement, period_start -500, 4 link(s), 8 image(s)
+  * reason: duplicate_of:23576019-c749-4ee9-95b1-cdae21f5ff06
+  * bcases:DUPLICATES.jsonl: listed for the scope lane; re-read in the export: both rows carry Q860500, 102.5 m apart
+  * production:site_external_ids: both rows carry Q860500; 'Augusta Bilbilis' and 'Bilbilis' are both names of it (labels, aliases or sitelinks); 102.5 m apart
+  * survivor rule: 'Bilbilis' survives by more content links: content links 5 vs 4, sources 2+url vs 2+url, created 2026-03-04 21:07:57.660461 vs 2026-03-04 21:07:57.660461
+  * follow-up: the loser carries 8 wiki_images and 4 content links that are not moved by retiring it; country 'Spain' vs survivor 'Spain'
 * **Bishop's Basilica of Philippopolis** (`b46b6969-3160-4cbd-a574-8727ee7c53c5`) - Bulgaria, Temple complex, period_start 1, 3 link(s), 20 image(s)
   * reason: duplicate_of:891ad351-7985-4c16-b6a6-830c26bc268f
   * wikidata:Q20500169: both 'Great Basilica, Plovdiv' and "Bishop's Basilica of Philippopolis" are names of Q20500169, and the two rows are 6.2 m apart
   * survivor rule: older row, then more content links, description citations, images: survivor Great Basilica, Plovdiv (5 links, 1 citations, 20 images) over Bishop's Basilica of Philippopolis (3 links, 0 citations, 20 images)
+  * bcases:DUPLICATES.jsonl: listed for the scope lane; re-read in the export: both rows carry Q20500169, 6.2 m apart
+  * production:site_external_ids: both rows carry Q20500169; "Bishop's Basilica of Philippopolis" and 'Great Basilica, Plovdiv' are both names of it (labels, aliases or sitelinks); 6.2 m apart
+  * survivor rule: 'Great Basilica, Plovdiv' survives by more content links: content links 5 vs 3, sources 2+url vs 2+url, created 2026-03-04 21:07:57.660461 vs 2026-03-04 21:07:57.660461
+  * follow-up: the loser carries 20 wiki_images and 3 content links that are not moved by retiring it; country 'Bulgaria' vs survivor 'Bulgaria'
+* **Ciudad Romana de Cáparra** (`cf49332c-0a05-4ba7-bf4f-48a703ee7a1e`) - Spain, Gate/archway/bridge, period_start 1, 0 link(s), 0 image(s)
+  * reason: duplicate_of:577f2ec4-3dc0-4d10-9425-39f1cb654009
+  * bcases:DUPLICATES.jsonl: listed for the scope lane; re-read in the export: both rows carry Q2580972, 343.1 m apart
+  * production:site_external_ids: both rows carry Q2580972; 'Ciudad Romana de Cáparra' and 'Cáparra' are both names of it (labels, aliases or sitelinks); 343.1 m apart
+  * survivor rule: 'Cáparra' survives by more content links: content links 4 vs 0, sources 2+url vs 2+url, created 2026-03-04 21:07:57.660461 vs 2026-03-04 21:07:57.660461
+  * follow-up: the loser carries 0 wiki_images and 0 content links that are not moved by retiring it; country 'Spain' vs survivor 'Spain'
+* **Coricancha** (`4e6247b0-7416-413f-b7a3-b31890a45f3b`) - Peru, Temple complex, period_start 1000, 0 link(s), 20 image(s)
+  * reason: duplicate_of:4a9b3802-1067-4f6b-a144-4c2ffe9619a4
+  * bcases:DUPLICATES.jsonl: listed for the scope lane; re-read in the export: both rows carry Q817594, 100.6 m apart
+  * production:site_external_ids: both rows carry Q817594; 'Coricancha' and 'Qorikancha' are both names of it (labels, aliases or sitelinks); 100.6 m apart
+  * survivor rule: 'Qorikancha' survives by lower id (tie-break): content links 0 vs 0, sources 2+url vs 2+url, created 2026-03-04 21:07:57.660461 vs 2026-03-04 21:07:57.660461
+  * follow-up: the loser carries 20 wiki_images and 0 content links that are not moved by retiring it; country 'Peru' vs survivor 'Peru'
+* **Dodona** (`5a04d6f3-c82d-4c82-b1e9-3d70bff135ae`) - Greece, Temple complex, period_start -2000, 5 link(s), 20 image(s)
+  * reason: duplicate_of:56f594fc-6819-4d51-98a4-1cf5b4a265a6
+  * bcases:DUPLICATES.jsonl: listed for the scope lane; re-read in the export: both rows carry Q382317, 250.1 m apart
+  * production:site_external_ids: both rows carry Q382317; 'Dodona' and 'Archaeological Site of Dodoni' are both names of it (labels, aliases or sitelinks); 250.1 m apart
+  * survivor rule: 'Archaeological Site of Dodoni' survives by lower id (tie-break): content links 5 vs 5, sources 2+url vs 2+url, created 2026-03-04 21:07:57.660461 vs 2026-03-04 21:07:57.660461
+  * follow-up: the loser carries 20 wiki_images and 5 content links that are not moved by retiring it; country 'Greece' vs survivor 'Greece'
+* **Dolmen of Menga** (`ab03fa75-bbdc-46a2-ba55-25e2f5edd5c4`) - Spain, Dolmen, period_start -4000, 0 link(s), 20 image(s)
+  * reason: duplicate_of:485c3c0c-31f0-45a7-a06b-797c4c021466
+  * bcases:DUPLICATES.jsonl: listed for the scope lane; re-read in the export: both rows carry Q1143218, 178.9 m apart
+  * production:site_external_ids: both rows carry Q1143218; 'Dolmen of Menga' and 'Dolmen de Menga' are both names of it (labels, aliases or sitelinks); 178.9 m apart
+  * survivor rule: 'Dolmen de Menga' survives by more content links: content links 5 vs 0, sources 2+url vs 2+url, created 2026-03-04 21:07:57.660461 vs 2026-03-04 21:07:57.660461
+  * follow-up: the loser carries 20 wiki_images and 0 content links that are not moved by retiring it; country 'Spain' vs survivor 'Spain'
 * **Dooey's Cairn** (`f5ca382a-3725-4cbb-961a-6afbf5c21507`) - Northern Ireland, Cairn, period_start -4000, 0 link(s), 3 image(s)
   * reason: duplicate_of:f6b6e039-36f1-4107-b730-dc2aa34b7a92
   * wikidata:Q1242421: both 'Ballymacaldrack Court Tomb' and "Dooey's Cairn" are names of Q1242421, and the two rows are 7.1 m apart
   * survivor rule: older row, then more content links, description citations, images: survivor Ballymacaldrack Court Tomb (5 links, 3 citations, 3 images) over Dooey's Cairn (0 links, 2 citations, 3 images)
+  * bcases:DUPLICATES.jsonl: listed for the scope lane; re-read in the export: both rows carry Q1242421, 7.1 m apart
+  * production:site_external_ids: both rows carry Q1242421; "Dooey's Cairn" and 'Ballymacaldrack Court Tomb' are both names of it (labels, aliases or sitelinks); 7.0 m apart
+  * survivor rule: 'Ballymacaldrack Court Tomb' survives by more content links: content links 5 vs 0, sources 2+url vs 2+url, created 2026-03-04 21:07:57.660461 vs 2026-03-04 21:07:57.660461
+  * follow-up: the loser carries 3 wiki_images and 0 content links that are not moved by retiring it; country 'Northern Ireland' vs survivor 'Northern Ireland'
+* **Hattuşa Örenyeri** (`7e33b1ac-bb32-4b6c-b070-2c4fdcaf19fb`) - Türkiye, Megalithic stones, period_start -2000, 0 link(s), 20 image(s)
+  * reason: duplicate_of:109fcdea-c114-4143-87ac-77c4c9c20f16
+  * bcases:DUPLICATES.jsonl: listed for the scope lane; re-read in the export: both rows carry Q181007, 1216.4 m apart
+  * production:site_external_ids: both rows carry Q181007; 'Hattuşa Örenyeri' and 'Hattusas' are both names of it (labels, aliases or sitelinks); 1216.4 m apart
+  * survivor rule: 'Hattusas' survives by lower id (tie-break): content links 0 vs 0, sources 2+url vs 2+url, created 2026-03-04 21:07:57.660461 vs 2026-03-04 21:07:57.660461
+  * follow-up: the loser carries 20 wiki_images and 0 content links that are not moved by retiring it; country 'Türkiye' vs survivor 'Türkiye'
+* **Olympos Ruins** (`04d8ce82-4fa3-4e48-88b7-bb41b354260c`) - Türkiye, City/town/settlement, period_start -1500, 0 link(s), 20 image(s)
+  * reason: duplicate_of:00f522ff-8e1b-4983-961c-ef6cb1ff27d1
+  * bcases:DUPLICATES.jsonl: listed for the scope lane; re-read in the export: both rows carry Q1380189, 111.8 m apart
+  * production:site_external_ids: both rows carry Q1380189; 'Olympos Ruins' and 'Olympos Antique City' are both names of it (labels, aliases or sitelinks); 111.8 m apart
+  * survivor rule: 'Olympos Antique City' survives by lower id (tie-break): content links 0 vs 0, sources 2+url vs 2+url, created 2026-03-04 21:07:57.660461 vs 2026-03-04 21:07:57.660461
+  * follow-up: the loser carries 20 wiki_images and 0 content links that are not moved by retiring it; country 'Türkiye' vs survivor 'Türkiye'
+* **Pinara Antique City** (`8cecb38f-08cf-4a93-b350-9ccbb74109bb`) - Türkiye, Necropolis/tombs complex, period_start -3000, 5 link(s), 20 image(s)
+  * reason: duplicate_of:5025eee3-28ea-46d6-b2c3-dbb1f38a24d6
+  * bcases:DUPLICATES.jsonl: listed for the scope lane; re-read in the export: both rows carry Q1318876, 38.9 m apart
+  * production:site_external_ids: both rows carry Q1318876; 'Pinara Antique City' and 'Pinara' are both names of it (labels, aliases or sitelinks); 38.9 m apart
+  * survivor rule: 'Pinara' survives by lower id (tie-break): content links 5 vs 5, sources 2+url vs 2+url, created 2026-03-04 21:07:57.660461 vs 2026-03-04 21:07:57.660461
+  * follow-up: the loser carries 20 wiki_images and 5 content links that are not moved by retiring it; country 'Türkiye' vs survivor 'Türkiye'
 * **Tarxien Temples** (`4a5a324f-832f-4dca-b688-d4a006d297c7`) - Malta, Temple complex, period_start -4500, 0 link(s), 20 image(s)
   * reason: duplicate_of:318414bc-098b-4459-95c0-41e1ec49c8a8
   * wikidata:Q1064331: both 'Templos de Tarxien' and 'Tarxien Temples' are names of Q1064331, and the two rows are 38.2 m apart
   * survivor rule: older row, then more content links, description citations, images: survivor Templos de Tarxien (5 links, 0 citations, 0 images) over Tarxien Temples (0 links, 0 citations, 20 images)
+  * bcases:DUPLICATES.jsonl: listed for the scope lane; re-read in the export: both rows carry Q1064331, 38.2 m apart
+  * production:site_external_ids: both rows carry Q1064331; 'Tarxien Temples' and 'Templos de Tarxien' are both names of it (labels, aliases or sitelinks); 38.2 m apart
+  * survivor rule: 'Templos de Tarxien' survives by more content links: content links 5 vs 0, sources 2+url vs 2+url, created 2026-03-04 21:07:57.660461 vs 2026-03-04 21:07:57.660461
+  * follow-up: the loser carries 20 wiki_images and 0 content links that are not moved by retiring it; country 'Malta' vs survivor 'Malta'
+* **Templo Romano Évora** (`07fb4e2f-26e5-4720-a949-9c28d4712e11`) - Portugal, Temple complex, period_start 1, 0 link(s), 20 image(s)
+  * reason: duplicate_of:9152beea-f7ab-40ef-a692-ef63ac8e9ca6
+  * bcases:DUPLICATES.jsonl: listed for the scope lane; re-read in the export: both rows carry Q737441, 51.8 m apart
+  * production:site_external_ids: both rows carry Q737441; 'Templo Romano Évora' and 'Roman Temple of Évora' are both names of it (labels, aliases or sitelinks); 51.8 m apart
+  * survivor rule: 'Roman Temple of Évora' survives by more content links: content links 5 vs 0, sources 2+url vs 2+url, created 2026-03-04 21:07:57.660461 vs 2026-03-04 21:07:57.660461
+  * follow-up: the loser carries 20 wiki_images and 0 content links that are not moved by retiring it; country 'Portugal' vs survivor 'Portugal'
+* **Termantia** (`93391ee6-8e80-42db-922c-11f64ea57db9`) - Spain, Fortress/citadel, period_start -500, 5 link(s), 20 image(s)
+  * reason: duplicate_of:84ef64f3-394a-4b35-ba4a-7e81b3b6a317
+  * bcases:DUPLICATES.jsonl: listed for the scope lane; re-read in the export: both rows carry Q2429023, 162.7 m apart
+  * production:site_external_ids: both rows carry Q2429023; 'Termantia' and 'Tiermes Archaeological Site' are both names of it (labels, aliases or sitelinks); 162.7 m apart
+  * survivor rule: 'Tiermes Archaeological Site' survives by lower id (tie-break): content links 5 vs 5, sources 2+url vs 2+url, created 2026-03-04 21:07:57.660461 vs 2026-03-04 21:07:57.660461
+  * follow-up: the loser carries 20 wiki_images and 5 content links that are not moved by retiring it; country 'Spain' vs survivor 'Spain'
+* **The Aqueduct of Jerwan** (`4687a49a-c987-4c56-bc6e-5094aa57667d`) - Iraq, Megalithic structures, period_start -1500, 0 link(s), 20 image(s)
+  * reason: duplicate_of:c6d9487d-d138-4d73-beb1-5735e50da048
+  * bcases:DUPLICATES.jsonl: listed for the scope lane; re-read in the export: both rows carry Q17064815, 5.5 m apart
+  * production:site_external_ids: both rows carry Q17064815; 'The Aqueduct of Jerwan' and 'Jerwan' are both names of it (labels, aliases or sitelinks); 5.5 m apart
+  * survivor rule: 'Jerwan' survives by more content links: content links 5 vs 0, sources 2+url vs 2+url, created 2026-03-04 21:07:57.660461 vs 2026-03-04 21:07:57.660461
+  * follow-up: the loser carries 20 wiki_images and 0 content links that are not moved by retiring it; country 'Iraq' vs survivor 'Iraq'
 
 ## (d) Museum rows (plan section 8.2) - 20 site(s)
 
