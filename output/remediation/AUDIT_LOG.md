@@ -7844,3 +7844,104 @@ Their inputs: `PLAN4.census.jsonl` `644b9032...b591`, `S0_ROUTELESS.json`
 
 `tests/remediation/test_phase4_pilot.py` pins the three digests against this section and checks the
 pilot's members and the verbatim blocks.
+
+## 2026-09-24 - the Phase-4 pilot's non-model stages and its select export (no model called, nothing written)
+
+After the seal above (commit `e0e3e13`, 01:29:41 +02:00; the first question was exported at 01:30:25),
+`plan4.py build --pilot PILOT.jsonl` wrote `PLAN4.jsonl` from the same export (sha256
+`a39a8c9558cede1a62e8668d0dc79fa4742b8394b31794ee97252da24ca3aabb`, gitignored): **the pilot is its
+first 9 batches, `p4-0001` .. `p4-0009`** (8 x 15 + 12, in PILOT.jsonl's order, no other site among
+them), the rest follows from `p4-0010` (334 batches). The mass run can later continue in the pilot's
+run directory; the census run directory cannot be reused (its batches are the census plan's).
+
+    mass4.py --plan PLAN4.jsonl --run-dir runs/pilot-2026-09-24 --only p4-0001,..,p4-0009 --live \
+        --stages prepare,sources,routes,select --searches-off \
+        --handoff-export output/remediation/handoff/p4-pilot-select --jobs 3
+
+2026-09-23 23:30-23:31 UTC, `STAGE_EXIT=0`, every batch "done" for its round. 228 fetch lines in
+`LEDGER.jsonl` (en.wikipedia.org 160, www.wikidata.org 52, other Wikipedias 16), all 200; 0 searches;
+0 model calls (the ledger has no `model_call` line). Every lane equals the census's.
+
+| stage | result |
+|---|---|
+| S0 plan | 132 sites in 9 batches |
+| S1 sources | pinned 96, scope-pending 3, no-title 19, rejected 14 |
+| S1b routes | **lane W 77, S 19, 0 36**; 0 searches |
+| S3 select, export | **91 questions** (lane W 77, lane S 14); prompts 1,681-34,448 characters, median 4,047 |
+| S3R restricted | no lane-R site: nothing asked |
+
+The 96 selecting sites (lane W or S, not held) minus 91 questions are 5 lane-S sites whose article
+offers no sentence that names them (`sentences.candidate_pool`, lane S): Amyntas Rock Tombs, Priene
+Ruins, Hebbariyeh Roman Temple (gold), Templos de Tarxien (identity trap), Pergamon Amfitiyatrosu
+(long extract). The import holds them `no-source` with no call bought (`select_stage`).
+
+**The 36 holds** (`HOLDS4.jsonl`): `scope-pending` 3 - Midford Castle (gold and B5 fixture, 1775), Ksar
+el Barka (1690), Museo Campano (1869); `search-stopped` 33 - every site whose free routes found no own
+English article: the gold sites Font dels Coms and Temple of Dedun (article 'Dedun': verdict none); the
+canaries El Tintal (verdict none) and Ahin Posh Tape (verdict wrong); the Q309 traps Tlalpan, Estipeon
+and Crantit Chambered Cairn (the last two on the title 'History'); the 3 'Theatre' and 4 'Mortuary
+temple' traps (the generic article is a class and shared: verdict wrong; for Mortuary Temple of Seti I
+geosearch found its own article and the gate called it shared); all 6 T candidates, each with an
+other-language article and no English langlink - the gate called 3 of those articles `own` (Poblat de
+Son Catlar, Cirque Romain de Vienne, Pozzo Sacro del Predio Canopoli: lane T if a search found no English
+article) and 3 `none`; all 8 R candidates; all 5 B3 sites. By stratum:
+gold 26 W / 5 S / 5 held (28 exported); canaries 8 W (all 8 exported) / 2 held; B5 2 W / 1 held;
+named traps 4 W / 4 S (7 exported); Q309 4 W / 3 held; Theatre and Mortuary temple 7 held; f6b8fa8a
+and Wroxeter Stone W; draws W 30 and S 8 all exported; T, R and B3 all held; long extracts 3 W / 2 S (4
+exported).
+
+**Handoff directory** `output/remediation/handoff/p4-pilot-select` (gitignored, left in place; 91
+prompts, 816 KB, stage `finder`, labels `<site_id>/select`). `opus_handoff.py validate` on it: 91
+questions, 91 missing, 0 answered, 0 stale, 0 malformed, 0 orphans (exit 1 until they are answered).
+The run directory `runs/pilot-2026-09-24` (7.5 MB) travels with it: the import rebuilds each prompt
+from its evidence and refuses an answer to any other prompt.
+
+### What the thresholds can and cannot measure now
+
+T11 and T12 cannot be met (no lane-R or lane-T site) - lanes T and R do not pass their pilot and stay
+closed; T13 has no search; T9's dollars are unmetered (the note in `PILOT_THRESHOLDS.md`). T7: of the
+25 gold and canary errors, the canaries El Tintal and Ahin Posh Tape and the gold errors FC-2 (Font
+dels Coms) and TD-1 (Temple of Dedun) sit on sites held `search-stopped`, and AM-1 (Amyntas Rock Tombs)
+on a lane-S site the import will hold `no-source` - closed-list reasons, which T7 accepts; the other 20
+are asked.
+
+### The orchestrator's next commands (from this worktree, main venv)
+
+```bash
+cd /c/PythonProjects/AncientMap/.claude/worktrees/p4-pilot && export PYTHONIOENCODING=utf-8
+PY=C:/PythonProjects/AncientMap/.venv/Scripts/python.exe; M=output/remediation; R4=$M/phase4_runner
+P4=scripts/remediation/phase4; OH=scripts/remediation/opus_handoff.py; H=$M/handoff/p4-pilot
+RUN=$R4/runs/pilot-2026-09-24; ONLY=p4-0001,p4-0002,p4-0003,p4-0004,p4-0005,p4-0006,p4-0007,p4-0008,p4-0009
+ROUND="--plan $R4/PLAN4.jsonl --run-dir $RUN --log-dir $M/logs/p4_pilot --only $ONLY --searches-off --live"
+# 1. answer the 91 selector questions: for each line of $H-select/*/MANIFEST.jsonl, an Opus agent reads
+#    $H-select/<prompt_path>, writes only DESC:/CARD: lines (or ABSTAIN:) to a file, and runs
+$PY $OH answer --dir $H-select --batch-id <batch_id> --stage finder --label <site_id>/select \
+    --answered-by <agent> --text-file <answer.txt>
+$PY $OH validate --dir $H-select                                   # exit 0: 91 answered
+$PY $P4/mass4.py $ROUND --stages select --handoff-import $H-select  # S3 (+S3R: nothing to ask)
+# 2. the translate round: lane T is empty, so the export writes no question and no directory -
+#    skip `validate` when every batch reports 0 calls; the import still runs assemble and verify
+$PY $P4/mass4.py $ROUND --stages translate --handoff-export $H-translate
+$PY $P4/mass4.py $ROUND --stages translate,assemble,verify --handoff-import $H-translate
+# 3. the review round (stage `reviewer`, labels <site_id>/review)
+$PY $P4/mass4.py $ROUND --stages review --handoff-export $H-review
+$PY $OH answer --dir $H-review --batch-id <batch_id> --stage reviewer --label <site_id>/review \
+    --answered-by <agent> --text-file <answer.txt>
+$PY $OH validate --dir $H-review
+$PY $P4/mass4.py $ROUND --stages review --handoff-import $H-review  # the batches are then done
+$PY $P4/run4.py holds --run-dir $RUN                               # HOLDS4.jsonl
+# 4. the Claude Code audit of every sentence and card of the pilot (design S6b; T1-T7), against the
+#    pinned passages and gold_prose_errors.json - the reviewer's verdicts are never shown
+$PY -c "import sys; sys.path.insert(0, 'scripts/remediation'); from pathlib import Path; \
+from phase4 import audit4; print('\n'.join(sorted(audit4.reviewed_sites(Path('$RUN')))))" > $M/logs/p4_pilot/reviewed.txt
+$PY $P4/audit4.py sheet --run-dir $RUN --site-ids $M/logs/p4_pilot/reviewed.txt --out $M/logs/p4_pilot/AUDIT_SHEETS.md
+# 5. score T1-T13 against PILOT_THRESHOLDS.md; only the lanes whose pilot passed are opened
+# 6. P4 and P5 rehearsed against production (APPLY ending in ROLLBACK; nothing is written)
+$PY $M/tools/write_gate4.py --group P4 --run pilot-2026-09-24 --open-lanes W,S            # dry: plan + render
+$PY $M/tools/write_gate4.py --group P4 --run pilot-2026-09-24 --open-lanes W,S --rehearse
+$PY $M/tools/write_gate4.py --group P5 --run pilot-2026-09-24 --rehearse
+```
+
+P5 plans cards only for sites that carry a live Phase-4 provenance (a read-only question the gate
+asks), so before the committed P4 write of step 5 of the design's PILOT RUN its rehearsal may plan
+no row; `--open-lanes` names only lanes whose pilot passed (W and S at most; T and R are closed).
