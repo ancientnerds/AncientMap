@@ -51,33 +51,87 @@ def test_every_wave_of_the_reviewed_repair_is_read() -> None:
         assert set(wave.sites) <= set(SL.REPAIRS), wave.number
 
 
+def _verdict(qid: str, rule: str = "suspect-link") -> SL.Verdict:
+    return SL.Verdict(qid=qid, rule=rule, why=f"the classifier's words on {qid}")
+
+
 def test_a_link_wave_three_found_right_is_given_although_the_classifier_suspected_it() -> None:
     """Psychro Cave's Q1643807 met Q2 (shared) until wave 2 repaired the Idaean Cave; wave 3's
     research reads it as right, and that verdict is the answer to the classifier's suspicion."""
     right = _wave3("link-right", "Psychro Cave")
-    suspect = {right.site_id: (right.old_qid, "Q2")}
-    assert SL.item_for(right.site_id, right.old_qid, shared={}, suspect=suspect) == (
+    verdicts = {right.site_id: (_verdict(right.old_qid),)}
+    assert SL.item_for(right.site_id, right.old_qid, shared={}, verdicts=verdicts) == (
         right.old_qid,
         None,
     )
 
 
 def test_a_suspect_link_no_wave_answered_stays_withheld() -> None:
-    suspect = {A: ("Q42", "Q1")}
-    kept, why = SL.item_for(A, "Q42", shared={}, suspect=suspect)
-    assert kept is None and "marks this link suspect (Q1" in str(why)
+    verdicts = {A: (_verdict("Q42"),)}
+    kept, why = SL.item_for(A, "Q42", shared={}, verdicts=verdicts)
+    assert kept is None and why == "Q42: suspect-link - the classifier's words on Q42"
     # a suspicion about another item than the one production carries now says nothing about it
-    assert SL.item_for(A, "Q43", shared={}, suspect=suspect) == ("Q43", None)
+    assert SL.item_for(A, "Q43", shared={}, verdicts=verdicts) == ("Q43", None)
+
+
+@pytest.mark.parametrize("rule", ["container-item", "item-is-not-the-site", "item-is-a-locality"])
+def test_an_item_the_classifier_found_is_not_the_site_is_withheld_under_its_rule(rule: str) -> None:
+    """The town, the commune, the state or the island that holds the site: its articles give the
+    place's date and type, not the site's."""
+    verdicts = {A: (_verdict("Q42", rule),)}
+    kept, why = SL.item_for(A, "Q42", shared={}, verdicts=verdicts)
+    assert kept is None and why == f"Q42: {rule} - the classifier's words on Q42"
+    assert SL.item_for(A, "Q43", shared={}, verdicts=verdicts) == ("Q43", None)
+
+
+def test_wave_threes_right_link_answers_the_suspicion_and_no_other_verdict() -> None:
+    """Wave 3 researched the suspect links (a generic or a shared item); whether the item is the
+    place that holds the site is a question it never asked."""
+    right = _wave3("link-right", "Psychro Cave")
+    for rule in sorted(SL.NOT_THE_SITE_RULES):
+        verdicts = {right.site_id: (_verdict(right.old_qid), _verdict(right.old_qid, rule))}
+        kept, why = SL.item_for(right.site_id, right.old_qid, shared={}, verdicts=verdicts)
+        assert kept is None and f"{right.old_qid}: {rule} - " in str(why)
 
 
 def test_a_type_link_and_a_duplicate_of_wave_three_are_withheld_by_the_repair() -> None:
     keep_type = _wave3("keep-type", "Nuraghes of Sardinia")
-    suspect = {keep_type.site_id: (keep_type.old_qid, "Q1")}
-    kept, why = SL.item_for(keep_type.site_id, keep_type.old_qid, shared={}, suspect=suspect)
+    verdicts = {keep_type.site_id: (_verdict(keep_type.old_qid),)}
+    kept, why = SL.item_for(keep_type.site_id, keep_type.old_qid, shared={}, verdicts=verdicts)
     assert kept is None and "a type the record stands for" in str(why)
     duplicate = _wave3("duplicate-candidate")
-    kept, why = SL.item_for(duplicate.site_id, duplicate.old_qid, shared={}, suspect={})
+    kept, why = SL.item_for(duplicate.site_id, duplicate.old_qid, shared={}, verdicts={})
     assert kept is None and "duplicate candidate" in str(why)
+
+
+#: The cases the independent check of 2026-09-23 named, and the pilot's Hebbariyeh Roman Temple,
+#: which it did not: `site_id -> (the item the classifier judged, the rule the site is withheld by)`.
+#: The first verdict read wins - `names.jsonl` before `coords.jsonl`.
+OWNER_CASES = {
+    # Colima - Eastern Shaft Tomb: Q61309 is the Mexican state of Colima
+    "a2704598-c3b7-4cbb-9fdc-4055c445cec1": ("Q61309", "item-is-not-the-site"),
+    # Kintradwell Broch: Q990677 is the village of Brora
+    "43ee9ef2-ada7-4796-98eb-4d2ba9728d74": ("Q990677", "item-is-a-locality"),
+    # Kameishi: Q752397 is the village of Asuka
+    "9b5751dd-d54e-4e8a-b4c0-7b4dc2a863c7": ("Q752397", "item-is-a-locality"),
+    # Site de Tiklat: Q1649095 is the commune of El Kseur
+    "37321e41-a629-4d79-820d-3104c7713860": ("Q1649095", "item-is-a-locality"),
+    # The Roman Bridge (Elguentra): Q3050002 is the commune of El Kantara
+    "6a43a3e7-66c7-4133-a91c-58a52cc5e0dc": ("Q3050002", "item-is-a-locality"),
+    # Archaeological Site of Ancient Thasos: Q204096 is the island
+    "33d2d754-e50a-4305-beff-87d2ad2c0227": ("Q204096", "container-item"),
+    # Ahin Posh Tape: Q4695118 is a village in Pakistan (HUMAN_ONLY B1/B2 item 4, open)
+    "786cada5-1feb-4c5c-9e79-b8ffdf8aacc6": ("Q4695118", "container-item"),
+    # Hebbariyeh Roman Temple, a pilot site: Q5695359 is the village of Hebbariye
+    "6a20e653-5320-440d-ac6c-2e86bb56e09e": ("Q5695359", "item-is-a-locality"),
+}
+
+
+def test_the_named_owner_cases_are_withheld_on_the_classifiers_own_output() -> None:
+    verdicts = SL.classifier_verdicts(lanes.REMEDIATION / "bcases")
+    for site_id, (qid, rule) in OWNER_CASES.items():
+        kept, why = SL.item_for(site_id, qid, shared={}, verdicts=verdicts)
+        assert kept is None and str(why).startswith(f"{qid}: {rule} - "), (site_id, why)
 
 
 # ── what is still open ────────────────────────────────────────────────────────────────────────
@@ -436,19 +490,134 @@ def test_a_journal_row_without_its_site_is_refused(tmp_path: Path) -> None:
         SL.Export.read(root)
 
 
+def _name_row(site_id: str, cls: str, qid: str, **extra: Any) -> dict[str, Any]:
+    return {
+        "site_id": site_id,
+        "class": cls,
+        "qid": qid,
+        "qid_now": qid,
+        "link_suspect": [],
+        **extra,
+    }
+
+
+def _coord_row(site_id: str, cls: str | None, qid: str | None, **extra: Any) -> dict[str, Any]:
+    row = {"site_id": site_id, "qid": qid, "p31": ["village"], "reason": f"why {cls}", **extra}
+    return row if cls is None else {**row, "class": cls}
+
+
+def _write_verdicts(root: Path, names: list[dict], coords: list[dict]) -> Path:
+    lanes.write_jsonl(root / "names.jsonl", names)
+    lanes.write_jsonl(root / "coords.jsonl", coords)
+    return root
+
+
 def test_a_suspect_link_is_read_from_the_classifiers_class_or_its_link_suspect_list(
     tmp_path: Path,
 ) -> None:
-    lanes.write_jsonl(
-        tmp_path / "names.jsonl",
+    _write_verdicts(
+        tmp_path,
         [
-            {"site_id": A, "class": "Q2", "qid_now": "Q10"},
-            {"site_id": B, "class": "N1", "link_suspect": ["Q4", "Q1"], "qid_now": "Q11"},
-            {"site_id": "c", "class": "N1", "link_suspect": [], "qid_now": "Q12"},
-            {"site_id": "d", "class": "Q3", "qid_now": None},
+            _name_row(A, "Q2", "Q10"),
+            _name_row(B, "N1", "Q11", link_suspect=["Q4", "Q1"]),
+            _name_row("c", "N1", "Q12"),
+        ],
+        [],
+    )
+    verdicts = SL.classifier_verdicts(tmp_path)
+    assert {site: [(v.qid, v.rule) for v in rows] for site, rows in verdicts.items()} == {
+        A: [("Q10", "suspect-link")],
+        B: [("Q11", "suspect-link")],
+    }
+    assert verdicts[B][0].why == (
+        "the owner-case classifier marks this link suspect (Q1/Q4, bcases/names.jsonl)"
+    )
+
+
+def test_a_verdict_is_about_the_item_it_judged_not_the_link_the_site_carried_later(
+    tmp_path: Path,
+) -> None:
+    """Kourion's amphitheatre met Q1 on the census's Q11635 ("amphitheatre", the class); wave 1
+    replaced it with Q4453457 before the classifier ran. The suspicion is about Q11635."""
+    _write_verdicts(
+        tmp_path,
+        [{**_name_row(A, "Q1", "Q11635"), "qid_now": "Q4453457"}],
+        [_coord_row(B, "container-item", "Q7", p31=["commune of France"])],
+    )
+    verdicts = SL.classifier_verdicts(tmp_path)
+    assert [v.qid for v in verdicts[A]] == ["Q11635"]
+    assert SL.item_for(A, "Q4453457", shared={}, verdicts=verdicts) == ("Q4453457", None)
+    assert SL.item_for(B, "Q7", shared={}, verdicts=verdicts)[0] is None
+
+
+def test_the_verdicts_that_the_item_is_not_the_site_are_read_and_no_other(tmp_path: Path) -> None:
+    _write_verdicts(
+        tmp_path,
+        [
+            _name_row("e", "N7", "Q13", n7="anchor-is-locality", p31=["village"]),
+            _name_row("f", "N7", "Q14", n7="anchor-is-a-site", p31=["palace"]),
+        ],
+        [
+            _coord_row("g", "container-item", "Q15", p31=["state of Mexico"]),
+            _coord_row("h", "item-is-not-the-site", "Q16", p31=["archaeological site"]),
+            # a point somewhere on a road or in a park: a question of the point, not of the item
+            _coord_row("i", "linear-or-areal-item", "Q17"),
+            # counted from production's own links by the shared rule, not from the census's
+            _coord_row("j", "shared-item", "Q18"),
+            _coord_row("k", None, "Q19", verdict="stored-agrees"),
         ],
     )
-    assert SL.suspect_links(tmp_path) == {A: ("Q10", "Q2"), B: ("Q11", "Q1/Q4")}
+    verdicts = SL.classifier_verdicts(tmp_path)
+    assert {site: [(v.qid, v.rule) for v in rows] for site, rows in verdicts.items()} == {
+        "e": [("Q13", "item-is-a-locality")],
+        "g": [("Q15", "container-item")],
+        "h": [("Q16", "item-is-not-the-site")],
+    }
+    assert verdicts["e"][0].why == (
+        "the owner-case classifier reads the place the stored name is anchored to as a locality, "
+        "not the site (N7 anchor-is-locality; P31 village; bcases/names.jsonl)"
+    )
+    assert verdicts["g"][0].why == (
+        "the owner-case classifier: why container-item (P31 state of Mexico; bcases/coords.jsonl)"
+    )
+
+
+def test_the_plans_inputs_withhold_the_item_the_classifier_found_is_not_the_site(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    remediation = tmp_path / "remediation"
+    _write_verdicts(
+        remediation / "bcases", [], [_coord_row(A, "container-item", "Q1", p31=["island"])]
+    )
+    monkeypatch.setattr(lanes, "REMEDIATION", remediation)
+    exported = SL.Export(
+        sites={A: _site(A), B: _site(B)},
+        cards={},
+        external=_external((A, "Q1"), (B, "Q2")),
+        journal=[],
+    )
+    inputs = SL.site_inputs(
+        [_q(A, "period_start"), _q(B, "site_type")], exported=exported, mass=tmp_path
+    )
+    assert inputs[A]["qid"] is None
+    assert str(inputs[A]["withheld"]).startswith("Q1: container-item - the owner-case classifier")
+    assert (inputs[B]["qid"], inputs[B]["withheld"]) == ("Q2", None)
+
+
+@pytest.mark.parametrize(
+    ("names", "coords"),
+    [
+        ([_name_row(A, "Q2", "Q10") | {"qid": None}], []),
+        ([_name_row(A, "N7", "Q10", n7="anchor-is-locality") | {"qid": None}], []),
+        ([], [_coord_row(A, "container-item", None)]),
+    ],
+)
+def test_a_verdict_that_does_not_name_the_item_it_judged_stops_the_build(
+    tmp_path: Path, names: list[dict], coords: list[dict]
+) -> None:
+    _write_verdicts(tmp_path, names, coords)
+    with pytest.raises(SystemExit, match="does not name the item it judged"):
+        SL.classifier_verdicts(tmp_path)
 
 
 # ── which of the item's articles are read ─────────────────────────────────────────────────────

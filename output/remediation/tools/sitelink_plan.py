@@ -37,9 +37,11 @@ key that is not open any more, each named with its reason in the summary:
 external-id repair (all three waves, `qid_repair.py`) replaces it, leaves it unresolved, keeps it as
 the monument type the record stands for (wave 3 `keep-type`) or as the item of a duplicate candidate
 (wave 3 `duplicate-candidate`), when more than one curated site carries it (a parent or a generic
-item, `gap_plan.shared_counts`), or when the owner-case classifier marks the link suspect
-(`bcases/names.jsonl`: a wrong-link class or `link_suspect`) and wave 3 did not read it as right
-(`link-right`).
+item, `gap_plan.shared_counts`), or when the owner-case classifier judged that very item
+(`classifier_verdicts`, each verdict named by its rule): `suspect-link` (`bcases/names.jsonl`: a
+wrong-link class or `link_suspect`; answered only by wave 3's `link-right`), or the item is a place
+that holds the site, not the site - `container-item` and `item-is-not-the-site`
+(`bcases/coords.jsonl`) and `item-is-a-locality` (`bcases/names.jsonl`, N7 `anchor-is-locality`).
 
 **Which articles** (`candidates`, `order`, `select`), deterministic:
 
@@ -516,16 +518,81 @@ LINK_RIGHT: frozenset[str] = frozenset(
 )
 #: The owner-case classifier's wrong-link classes (`bcases/classify.py`).
 WRONG_LINK_CLASSES = frozenset({"Q1", "Q2", "Q3", "Q4"})
+#: The withholding rule of a link the classifier suspects (a wrong-link class or `link_suspect`).
+SUSPECT_LINK = "suspect-link"
+#: The classifier's verdicts that the item is not the site but a place that holds it, each read from
+#: its versioned output under its own name (`bcases/classify.py` decides them, this plan only reads
+#: them): `coords.jsonl` classes an item `container-item` ("the item is a settlement,
+#: administrative unit or natural feature that contains the site") or `item-is-not-the-site` ("the
+#: stored name is not a name of the item (N1/N2): the item may be the site's parent or a part of
+#: it"), and `names.jsonl` reads the place a stored name is anchored to as a locality (`n7`). The
+#: articles of such an item are about the town, the commune, the state or the island: they give the
+#: place's date and type, not the site's - Colima - Eastern Shaft Tomb would be asked its period from
+#: the articles on the Mexican state, Kintradwell Broch from those on the village of Brora, Ahin
+#: Posh Tape (HUMAN_ONLY B1/B2 item 4, open) from those on a village in Pakistan. **Safety over
+#: coverage**: an ancient city among them (Abusir, Karpasia) is withheld too; the owner reads the N7
+#: names (HUMAN_ONLY B1/B2 item 6), and no research has read the containers. A `linear-or-areal-item`
+#: (a road, a wall, a park) is not among them: that class is about its point, not about which place
+#: the item is, and its names are the site's (the Icknield Way, the Pannonian Limes).
+CONTAINER_CLASSES: frozenset[str] = frozenset({"container-item", "item-is-not-the-site"})
+LOCALITY_ANCHOR = "anchor-is-locality"
+LOCALITY_RULE = "item-is-a-locality"
+NOT_THE_SITE_RULES: frozenset[str] = CONTAINER_CLASSES | {LOCALITY_RULE}
 
 
-def suspect_links(bcases: pathlib.Path) -> dict[str, tuple[str, str]]:
-    """`site_id -> (the item the classifier judged, why the link is suspect)` from `names.jsonl`."""
-    suspect: dict[str, tuple[str, str]] = {}
-    for row in lanes.read_jsonl(bcases / "names.jsonl"):
+@dataclass(frozen=True)
+class Verdict:
+    """One verdict of the owner-case classifier on a site's item."""
+
+    qid: str  #: the item it judged - a verdict on another item says nothing about the one carried
+    rule: str  #: the withholding rule's name: `SUSPECT_LINK` or one of `NOT_THE_SITE_RULES`
+    why: str  #: the classifier's own words, and the file they are in
+
+
+def _judged(row: Mapping[str, Any], path: pathlib.Path) -> str:
+    """The item a verdict row judged; a verdict that does not name it cannot be matched to any."""
+    if not row.get("qid"):
+        raise SystemExit(
+            f"{path}: the verdict on {row['site_id']} does not name the item it judged"
+        )
+    return str(row["qid"])
+
+
+def classifier_verdicts(bcases: pathlib.Path) -> dict[str, tuple[Verdict, ...]]:
+    """`site_id -> the classifier's verdicts on its item`, `names.jsonl` first, then `coords.jsonl`.
+
+    Each verdict is about the item the classifier judged (`qid`), not the link the site carried when
+    it ran (`qid_now`): a link the repair replaced since is another item, and nobody judged it.
+    """
+    verdicts: dict[str, list[Verdict]] = collections.defaultdict(list)
+    names = bcases / "names.jsonl"
+    for row in lanes.read_jsonl(names):
         codes = sorted(set(row.get("link_suspect") or ()) | ({row["class"]} & WRONG_LINK_CLASSES))
-        if codes and row.get("qid_now"):
-            suspect[str(row["site_id"])] = (str(row["qid_now"]), "/".join(codes))
-    return suspect
+        if codes:
+            qid = _judged(row, names)
+            why = (
+                f"the owner-case classifier marks this link suspect ({'/'.join(codes)}, "
+                "bcases/names.jsonl)"
+            )
+            verdicts[str(row["site_id"])].append(Verdict(qid, SUSPECT_LINK, why))
+        if row.get("n7") == LOCALITY_ANCHOR:
+            qid = _judged(row, names)
+            why = (
+                "the owner-case classifier reads the place the stored name is anchored to as a "
+                f"locality, not the site (N7 {LOCALITY_ANCHOR}; P31 {', '.join(row['p31'])}; "
+                "bcases/names.jsonl)"
+            )
+            verdicts[str(row["site_id"])].append(Verdict(qid, LOCALITY_RULE, why))
+    coords = bcases / "coords.jsonl"
+    for row in lanes.read_jsonl(coords):
+        if row.get("class") in CONTAINER_CLASSES:
+            qid = _judged(row, coords)
+            why = (
+                f"the owner-case classifier: {row['reason']} (P31 {', '.join(row['p31'])}; "
+                "bcases/coords.jsonl)"
+            )
+            verdicts[str(row["site_id"])].append(Verdict(qid, row["class"], why))
+    return {site_id: tuple(rows) for site_id, rows in verdicts.items()}
 
 
 def item_for(
@@ -533,20 +600,21 @@ def item_for(
     qid: str | None,
     *,
     shared: Mapping[str, int],
-    suspect: Mapping[str, tuple[str, str]],
+    verdicts: Mapping[str, Sequence[Verdict]],
 ) -> tuple[str | None, str | None]:
     """`(the item whose sitelinks the site is given, or None; why none)`: the repair's and the shared
-    item's rules (`gap_plan.withheld_reason`), then the classifier's suspicion of the link it still
-    carries - unless wave 3's research answered that suspicion (`LINK_RIGHT`)."""
+    item's rules (`gap_plan.withheld_reason`), then the first of the classifier's verdicts on the
+    item the site still carries, named by its rule - a suspicion only while wave 3's research did not
+    answer it (`LINK_RIGHT`); that research never asked whether the item is the site's place."""
     kept, reason = G.withheld_reason(site_id, qid, shared=shared, repairs=REPAIRS)
     if kept is None:
         return None, reason or "the site carries no Wikidata item"
-    flagged = suspect.get(site_id)
-    if flagged is not None and flagged[0] == kept and site_id not in LINK_RIGHT:
-        return None, (
-            f"{kept}: the owner-case classifier marks this link suspect ({flagged[1]}, "
-            "bcases/names.jsonl)"
-        )
+    for verdict in verdicts.get(site_id, ()):
+        if verdict.qid != kept:
+            continue
+        if verdict.rule == SUSPECT_LINK and site_id in LINK_RIGHT:
+            continue
+        return None, f"{kept}: {verdict.rule} - {verdict.why}"
     return kept, None
 
 
@@ -851,13 +919,13 @@ def site_inputs(
     `resolve` is given, and what `plan` checks `sitelinks.json` against (`stale_sites`)."""
     qids = SP.qids_by_site(exported.external, origin="site_external_ids.jsonl")
     shared = G.shared_counts(exported.external, repairs=REPAIRS)
-    suspect = suspect_links(lanes.REMEDIATION / "bcases")
+    verdicts = classifier_verdicts(lanes.REMEDIATION / "bcases")
     sites: dict[str, dict[str, Any]] = {}
     for question in kept:
         if question.site_id in sites:
             continue
         qid, withheld = item_for(
-            question.site_id, qids.get(question.site_id), shared=shared, suspect=suspect
+            question.site_id, qids.get(question.site_id), shared=shared, verdicts=verdicts
         )
         sites[question.site_id] = {
             "qid": qid,
