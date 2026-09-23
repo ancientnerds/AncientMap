@@ -1,6 +1,6 @@
 # Journal reversal - plan (journal-reversal-1)
 
-Built 2026-09-23T10:53:52+00:00 by `scripts/remediation/mechanical/reversal.py`. Lane `journal-reversal-1`: run stamp `2026-09-23_mechanical-journal-reversal-1`, journal test id `P6/journal-reversal`, change keys `journal-reversal-1:<site_id>:<column>`.
+Built 2026-09-23T17:15:08+00:00 by `scripts/remediation/mechanical/reversal.py`. Lane `journal-reversal-1`: run stamp `2026-09-23_mechanical-journal-reversal-1`, journal test id `P6/journal-reversal`, change keys `journal-reversal-1:<site_id>:<column>`.
 
 **3 cell(s) will be written, 0 refused.** Each restores the value a journal row replaced, conditioned on the live value being the value that row wrote, and on that row being the last write of its cell (guard 6).
 
