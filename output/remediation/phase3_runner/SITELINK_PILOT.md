@@ -106,3 +106,40 @@ $PY $T/score_search_pilot.py --lane sitelink
 The lane's run does not start. The failure is recorded here and in `AUDIT_LOG.md` with the cases,
 and the cause is fixed (the article order, the evidence shape, or the route itself) before a new
 pilot with a new run directory.
+
+## Addendum 2026-09-23: the answering model is Opus (owner order), written before any model call
+
+Below the seal, which it does not change: every byte above this heading is the re-sealed document
+(its 6,978 bytes hash to `9467e7259b3cc164b60e5cb754ade2e2ed07ae9e909e7b3e2b4eb3b3f69b3d1e`, the
+sha256 `AUDIT_LOG.md` recorded at the re-seal). The sha256 of the file with this addendum is
+recorded in `AUDIT_LOG.md`, in the section on the sitelink lane's move to the Opus handoff.
+
+**What changed.** Owner order (Martin, 2026-09-23): "no DeepSeek any more - everything with Opus".
+Every model judgement of the remediation is now answered by an Opus agent of the orchestrating
+Claude Code session through the handoff (`scripts/remediation/opus_handoff.py`): a stage exports its
+exact prompts, the agents answer them, `opus_handoff.py validate` checks every answer, and the stage
+imports them. This pilot's finder and reviewer are therefore answered by
+`anthropic/claude-opus-5-5 (Claude Code agent)` (`opus_handoff.OPUS_MODEL`), not by the DeepSeek
+model "What is measured" names. The questions are the same: the discover prompt frozen at round 5
+and the reviewer's, built by the same stages from the same evidence.
+
+**When.** Before any model call. No model call was ever made for this pilot, by any model: when this
+addendum was committed, `phase3_runner/LEDGER.jsonl` held no row with an `slkg` (or `slk`) label -
+on this branch and in the main checkout alike - no `runs/sitelink-gold` existed, the three dry
+fetches (`runs/sitelink-gold-dry`, `-dry2`, `-dry3`) held no answer, no review and no `model.json`,
+their scratch ledgers no `model_call` row, and no handoff directory existed.
+
+**What did not change.** The four pass thresholds (not loosened, still the text of
+`SEARCH_PILOT.md`), the stated reading of threshold 4, the plan `PLAN.sitelink-gold.jsonl`
+(`d8a78e58...8b81`) with its 18 sites, 39 fields and 49 articles, the human verdicts, the scorer
+(`score_search_pilot.py --lane sitelink`) and what happens if a threshold fails.
+
+**Two sections above are read with the handoff:**
+
+- *Reported, not gated*: an Opus answer has no per-call meter; its ledger line says
+  `"metering": "unmetered"` with `cost_usd` 0. "The model cost per call" is reported as the number
+  of unmetered calls, never as a price.
+- *How it runs*: those commands predate the handoff and are refused now - a live `mass_run.py` needs
+  `--handoff-export DIR` or `--handoff-import DIR`, and `review_all.py` one of the two. The pilot runs
+  by the runbook in `AUDIT_LOG.md` (the same section) and in `output/remediation/tools/README.md`
+  ("The sitelink lane's runbook"), on the same plan, run directory, ledger and scorer.

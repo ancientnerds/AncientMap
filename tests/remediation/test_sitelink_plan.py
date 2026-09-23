@@ -8,6 +8,7 @@ lookup answer are small fabricated files and fetchers in the shape the real ones
 
 from __future__ import annotations
 
+import hashlib
 import json
 import sys
 from pathlib import Path
@@ -24,6 +25,7 @@ for path in (REPO / "output" / "remediation" / "tools", REPO / "scripts" / "reme
 import gap_plan as G  # noqa: E402
 import lanes  # noqa: E402
 import qid_repair  # noqa: E402
+import opus_handoff  # noqa: E402
 import sitelink_plan as SL  # noqa: E402
 from phase3 import fetch_stage as F  # noqa: E402
 from phase3 import search_evidence as SE  # noqa: E402
@@ -1175,6 +1177,26 @@ def _thresholds(document: str) -> str:
 def test_the_sitelink_pilot_seals_the_search_pilots_four_thresholds_verbatim() -> None:
     """The lane's reading of threshold 4 is stated beside the text, never written into it."""
     assert _thresholds("SITELINK_PILOT.md") == _thresholds("SEARCH_PILOT.md")
+
+
+#: `SITELINK_PILOT.md` as re-sealed before any model call (commit d10d469): the sha256 of its text
+#: (LF, UTF-8) and its length in bytes. The document grows only below that text, by dated addenda.
+SITELINK_SEAL_SHA256 = "9467e7259b3cc164b60e5cb754ade2e2ed07ae9e909e7b3e2b4eb3b3f69b3d1e"
+SITELINK_SEAL_BYTES = 6978
+
+
+def test_the_sitelink_pilot_keeps_its_sealed_text_and_names_opus_only_below_it() -> None:
+    """The owner's order moved the answering model to Opus before any model call of the pilot; that
+    is an addendum below the seal, and the sealed text - thresholds, plan, fields - stays byte for
+    byte. Read as text, so a CRLF checkout hashes the committed LF text too."""
+    text = (REPO / "output" / "remediation" / "phase3_runner" / "SITELINK_PILOT.md").read_text(
+        encoding="utf-8"
+    )
+    data = text.encode("utf-8")
+    sealed, below = data[:SITELINK_SEAL_BYTES], data[SITELINK_SEAL_BYTES:].decode("utf-8")
+    assert hashlib.sha256(sealed).hexdigest() == SITELINK_SEAL_SHA256
+    assert below.startswith("\n## Addendum 2026-09-23: the answering model is Opus")
+    assert opus_handoff.OPUS_MODEL in below
 
 
 def test_each_lane_scores_its_own_pilot_with_its_own_transport() -> None:

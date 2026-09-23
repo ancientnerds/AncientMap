@@ -14362,6 +14362,7 @@ _SL_RECORD = "test_a_record_asks_its_open_fields_with_its_pinned_articles_and_sa
 _SL_GEOMETRY = "test_a_country_is_verified_by_geometry_only_on_a_t02_pass_nobody_moved_since"
 _SL_STALE = "test_a_resolution_made_under_other_inputs_is_named_stale"
 _SL_WAVE3 = "test_wave_three_withholds_a_type_link_and_a_duplicate_and_keeps_a_right_link"
+_SL_SEALED = "test_the_sitelink_pilot_keeps_its_sealed_text_and_names_opus_only_below_it"
 SITELINK_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     # ── the fetch stage: the ledger line and the refused answer
     (
@@ -15647,6 +15648,31 @@ SITELINK_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         "args.prefix or PREFIX)",
         _SLP_TEST,
         "test_the_scorer_reads_the_sitelink_pilot_with_the_sitelink_transport",
+    ),
+    # ── the pilot after the owner's Opus order: the seal byte for byte, Opus named only below it
+    (
+        "sitelink: a sealed line of the pilot is edited above its addenda",
+        "output/remediation/phase3_runner/SITELINK_PILOT.md",
+        "`slkg-0002`), 49 articles",
+        "`slkg-0002`), 50 articles",
+        _SLP_TEST,
+        _SL_SEALED,
+    ),
+    (
+        "sitelink: the Opus addendum is joined onto the sealed text",
+        "output/remediation/phase3_runner/SITELINK_PILOT.md",
+        "pilot with a new run directory.\n\n## Addendum 2026-09-23",
+        "pilot with a new run directory.\n## Addendum 2026-09-23",
+        _SLP_TEST,
+        _SL_SEALED,
+    ),
+    (
+        "sitelink: the pilot's addendum does not name the Opus model",
+        "output/remediation/phase3_runner/SITELINK_PILOT.md",
+        "`anthropic/claude-opus-5-5 (Claude Code agent)`",
+        "`anthropic/claude-opus-5-5`",
+        _SLP_TEST,
+        _SL_SEALED,
     ),
 ]
 MUTATIONS += SITELINK_MUTATIONS
