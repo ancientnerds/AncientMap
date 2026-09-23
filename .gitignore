@@ -303,6 +303,16 @@ output/remediation/mechanical_uk/REHEARSAL.sql
 output/remediation/mechanical_period_name/REHEARSAL.sql
 !output/remediation/mechanical_site_type/
 output/remediation/mechanical_site_type/REHEARSAL.sql
+# The site_external_ids repair (2026-09-22): hand-researched, not regenerable from any run, and not yet
+# applied - the plan, the statement, the undo and the evidence are versioned; the rehearsal keeps
+# nothing and is rendered again by `qid_repair.py render`.
+!output/remediation/qid_repair/
+output/remediation/qid_repair/REHEARSAL.sql
+# The gap run's decision record is versioned; its production export is bulk and regenerable
+# (`gap_plan.py export`), and PLAN.gap.jsonl is covered by the phase3_runner PLAN*.jsonl rule.
+!output/remediation/gap/
+output/remediation/gap/export/
+output/remediation/gap/scratch/
 !output/remediation/phase3_pilot/
 
 # Raw third-party response bodies, fetched as evidence during the Phase-3 pilot, are NOT versioned.

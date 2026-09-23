@@ -1,0 +1,6418 @@
+[
+ {
+  "site_id": "9d3a0f75-ce6d-4778-891e-e3fc60310f76",
+  "field": "description",
+  "source_batch": "batch-0001",
+  "position": 4,
+  "why": "over-bound",
+  "detail": "evidence 74766 characters, bound 64000"
+ },
+ {
+  "site_id": "9d3a0f75-ce6d-4778-891e-e3fc60310f76",
+  "field": "period_start",
+  "source_batch": "batch-0001",
+  "position": 4,
+  "why": "over-bound",
+  "detail": "evidence 74766 characters, bound 64000"
+ },
+ {
+  "site_id": "9d3a0f75-ce6d-4778-891e-e3fc60310f76",
+  "field": "site_type",
+  "source_batch": "batch-0001",
+  "position": 4,
+  "why": "over-bound",
+  "detail": "evidence 74766 characters, bound 64000"
+ },
+ {
+  "site_id": "9d3a0f75-ce6d-4778-891e-e3fc60310f76",
+  "field": "country",
+  "source_batch": "batch-0001",
+  "position": 4,
+  "why": "over-bound",
+  "detail": "evidence 74766 characters, bound 64000"
+ },
+ {
+  "site_id": "9d3a0f75-ce6d-4778-891e-e3fc60310f76",
+  "field": "card_description",
+  "source_batch": "batch-0001",
+  "position": 4,
+  "why": "over-bound",
+  "detail": "evidence 74766 characters, bound 64000"
+ },
+ {
+  "site_id": "b25977e0-0c67-4b01-96e4-d720919676ac",
+  "field": "description",
+  "source_batch": "batch-0001",
+  "position": 9,
+  "why": "over-bound",
+  "detail": "evidence 83236 characters, bound 64000"
+ },
+ {
+  "site_id": "b25977e0-0c67-4b01-96e4-d720919676ac",
+  "field": "period_start",
+  "source_batch": "batch-0001",
+  "position": 9,
+  "why": "over-bound",
+  "detail": "evidence 83236 characters, bound 64000"
+ },
+ {
+  "site_id": "b25977e0-0c67-4b01-96e4-d720919676ac",
+  "field": "site_type",
+  "source_batch": "batch-0001",
+  "position": 9,
+  "why": "over-bound",
+  "detail": "evidence 83236 characters, bound 64000"
+ },
+ {
+  "site_id": "b25977e0-0c67-4b01-96e4-d720919676ac",
+  "field": "country",
+  "source_batch": "batch-0001",
+  "position": 9,
+  "why": "over-bound",
+  "detail": "evidence 83236 characters, bound 64000"
+ },
+ {
+  "site_id": "b25977e0-0c67-4b01-96e4-d720919676ac",
+  "field": "card_description",
+  "source_batch": "batch-0001",
+  "position": 9,
+  "why": "over-bound",
+  "detail": "evidence 83236 characters, bound 64000"
+ },
+ {
+  "site_id": "e0191dff-1a40-4bd3-bfb4-1ea65cc1c2ca",
+  "field": "description",
+  "source_batch": "batch-0001",
+  "position": 10,
+  "why": "over-bound",
+  "detail": "evidence 71301 characters, bound 64000"
+ },
+ {
+  "site_id": "e0191dff-1a40-4bd3-bfb4-1ea65cc1c2ca",
+  "field": "period_start",
+  "source_batch": "batch-0001",
+  "position": 10,
+  "why": "over-bound",
+  "detail": "evidence 71301 characters, bound 64000"
+ },
+ {
+  "site_id": "e0191dff-1a40-4bd3-bfb4-1ea65cc1c2ca",
+  "field": "site_type",
+  "source_batch": "batch-0001",
+  "position": 10,
+  "why": "over-bound",
+  "detail": "evidence 71301 characters, bound 64000"
+ },
+ {
+  "site_id": "e0191dff-1a40-4bd3-bfb4-1ea65cc1c2ca",
+  "field": "country",
+  "source_batch": "batch-0001",
+  "position": 10,
+  "why": "over-bound",
+  "detail": "evidence 71301 characters, bound 64000"
+ },
+ {
+  "site_id": "e0191dff-1a40-4bd3-bfb4-1ea65cc1c2ca",
+  "field": "card_description",
+  "source_batch": "batch-0001",
+  "position": 10,
+  "why": "over-bound",
+  "detail": "evidence 71301 characters, bound 64000"
+ },
+ {
+  "site_id": "40e48fb3-769d-47c5-ac69-995bcd9e86b8",
+  "field": "description",
+  "source_batch": "batch-0001",
+  "position": 12,
+  "why": "over-bound",
+  "detail": "evidence 108523 characters, bound 64000"
+ },
+ {
+  "site_id": "40e48fb3-769d-47c5-ac69-995bcd9e86b8",
+  "field": "period_start",
+  "source_batch": "batch-0001",
+  "position": 12,
+  "why": "over-bound",
+  "detail": "evidence 108523 characters, bound 64000"
+ },
+ {
+  "site_id": "40e48fb3-769d-47c5-ac69-995bcd9e86b8",
+  "field": "site_type",
+  "source_batch": "batch-0001",
+  "position": 12,
+  "why": "over-bound",
+  "detail": "evidence 108523 characters, bound 64000"
+ },
+ {
+  "site_id": "40e48fb3-769d-47c5-ac69-995bcd9e86b8",
+  "field": "country",
+  "source_batch": "batch-0001",
+  "position": 12,
+  "why": "over-bound",
+  "detail": "evidence 108523 characters, bound 64000"
+ },
+ {
+  "site_id": "40e48fb3-769d-47c5-ac69-995bcd9e86b8",
+  "field": "card_description",
+  "source_batch": "batch-0001",
+  "position": 12,
+  "why": "over-bound",
+  "detail": "evidence 108523 characters, bound 64000"
+ },
+ {
+  "site_id": "2e53c7cf-072e-465a-a53a-ba2128f50c08",
+  "field": "description",
+  "source_batch": "batch-0002",
+  "position": 1,
+  "why": "over-bound",
+  "detail": "evidence 118524 characters, bound 64000"
+ },
+ {
+  "site_id": "2e53c7cf-072e-465a-a53a-ba2128f50c08",
+  "field": "period_start",
+  "source_batch": "batch-0002",
+  "position": 1,
+  "why": "over-bound",
+  "detail": "evidence 118524 characters, bound 64000"
+ },
+ {
+  "site_id": "2e53c7cf-072e-465a-a53a-ba2128f50c08",
+  "field": "site_type",
+  "source_batch": "batch-0002",
+  "position": 1,
+  "why": "over-bound",
+  "detail": "evidence 118524 characters, bound 64000"
+ },
+ {
+  "site_id": "2e53c7cf-072e-465a-a53a-ba2128f50c08",
+  "field": "country",
+  "source_batch": "batch-0002",
+  "position": 1,
+  "why": "over-bound",
+  "detail": "evidence 118524 characters, bound 64000"
+ },
+ {
+  "site_id": "2e53c7cf-072e-465a-a53a-ba2128f50c08",
+  "field": "card_description",
+  "source_batch": "batch-0002",
+  "position": 1,
+  "why": "over-bound",
+  "detail": "evidence 118524 characters, bound 64000"
+ },
+ {
+  "site_id": "4c6ce4c1-8c8c-4982-a0fc-8df781a35ef6",
+  "field": "description",
+  "source_batch": "batch-0003",
+  "position": 2,
+  "why": "over-bound",
+  "detail": "evidence 100330 characters, bound 64000"
+ },
+ {
+  "site_id": "4c6ce4c1-8c8c-4982-a0fc-8df781a35ef6",
+  "field": "period_start",
+  "source_batch": "batch-0003",
+  "position": 2,
+  "why": "over-bound",
+  "detail": "evidence 100330 characters, bound 64000"
+ },
+ {
+  "site_id": "4c6ce4c1-8c8c-4982-a0fc-8df781a35ef6",
+  "field": "site_type",
+  "source_batch": "batch-0003",
+  "position": 2,
+  "why": "over-bound",
+  "detail": "evidence 100330 characters, bound 64000"
+ },
+ {
+  "site_id": "4c6ce4c1-8c8c-4982-a0fc-8df781a35ef6",
+  "field": "country",
+  "source_batch": "batch-0003",
+  "position": 2,
+  "why": "over-bound",
+  "detail": "evidence 100330 characters, bound 64000"
+ },
+ {
+  "site_id": "4c6ce4c1-8c8c-4982-a0fc-8df781a35ef6",
+  "field": "card_description",
+  "source_batch": "batch-0003",
+  "position": 2,
+  "why": "over-bound",
+  "detail": "evidence 100330 characters, bound 64000"
+ },
+ {
+  "site_id": "8fed20ca-19ed-4876-b286-0fb23e0fbc90",
+  "field": "description",
+  "source_batch": "batch-0004",
+  "position": 9,
+  "why": "over-bound",
+  "detail": "evidence 87075 characters, bound 64000"
+ },
+ {
+  "site_id": "8fed20ca-19ed-4876-b286-0fb23e0fbc90",
+  "field": "period_start",
+  "source_batch": "batch-0004",
+  "position": 9,
+  "why": "over-bound",
+  "detail": "evidence 87075 characters, bound 64000"
+ },
+ {
+  "site_id": "8fed20ca-19ed-4876-b286-0fb23e0fbc90",
+  "field": "site_type",
+  "source_batch": "batch-0004",
+  "position": 9,
+  "why": "over-bound",
+  "detail": "evidence 87075 characters, bound 64000"
+ },
+ {
+  "site_id": "8fed20ca-19ed-4876-b286-0fb23e0fbc90",
+  "field": "country",
+  "source_batch": "batch-0004",
+  "position": 9,
+  "why": "over-bound",
+  "detail": "evidence 87075 characters, bound 64000"
+ },
+ {
+  "site_id": "8fed20ca-19ed-4876-b286-0fb23e0fbc90",
+  "field": "card_description",
+  "source_batch": "batch-0004",
+  "position": 9,
+  "why": "over-bound",
+  "detail": "evidence 87075 characters, bound 64000"
+ },
+ {
+  "site_id": "837acdbf-bd97-4f73-acf7-876e5ad6f78b",
+  "field": "description",
+  "source_batch": "batch-0005",
+  "position": 8,
+  "why": "over-bound",
+  "detail": "evidence 104387 characters, bound 64000"
+ },
+ {
+  "site_id": "837acdbf-bd97-4f73-acf7-876e5ad6f78b",
+  "field": "period_start",
+  "source_batch": "batch-0005",
+  "position": 8,
+  "why": "over-bound",
+  "detail": "evidence 104387 characters, bound 64000"
+ },
+ {
+  "site_id": "837acdbf-bd97-4f73-acf7-876e5ad6f78b",
+  "field": "site_type",
+  "source_batch": "batch-0005",
+  "position": 8,
+  "why": "over-bound",
+  "detail": "evidence 104387 characters, bound 64000"
+ },
+ {
+  "site_id": "837acdbf-bd97-4f73-acf7-876e5ad6f78b",
+  "field": "country",
+  "source_batch": "batch-0005",
+  "position": 8,
+  "why": "over-bound",
+  "detail": "evidence 104387 characters, bound 64000"
+ },
+ {
+  "site_id": "837acdbf-bd97-4f73-acf7-876e5ad6f78b",
+  "field": "card_description",
+  "source_batch": "batch-0005",
+  "position": 8,
+  "why": "over-bound",
+  "detail": "evidence 104387 characters, bound 64000"
+ },
+ {
+  "site_id": "e8acbde6-7c73-409f-a4cb-6bb47736f4c7",
+  "field": "description",
+  "source_batch": "batch-0013",
+  "position": 4,
+  "why": "over-bound",
+  "detail": "evidence 74848 characters, bound 64000"
+ },
+ {
+  "site_id": "e8acbde6-7c73-409f-a4cb-6bb47736f4c7",
+  "field": "period_start",
+  "source_batch": "batch-0013",
+  "position": 4,
+  "why": "over-bound",
+  "detail": "evidence 74848 characters, bound 64000"
+ },
+ {
+  "site_id": "e8acbde6-7c73-409f-a4cb-6bb47736f4c7",
+  "field": "site_type",
+  "source_batch": "batch-0013",
+  "position": 4,
+  "why": "over-bound",
+  "detail": "evidence 74848 characters, bound 64000"
+ },
+ {
+  "site_id": "e8acbde6-7c73-409f-a4cb-6bb47736f4c7",
+  "field": "country",
+  "source_batch": "batch-0013",
+  "position": 4,
+  "why": "over-bound",
+  "detail": "evidence 74848 characters, bound 64000"
+ },
+ {
+  "site_id": "e8acbde6-7c73-409f-a4cb-6bb47736f4c7",
+  "field": "card_description",
+  "source_batch": "batch-0013",
+  "position": 4,
+  "why": "over-bound",
+  "detail": "evidence 74848 characters, bound 64000"
+ },
+ {
+  "site_id": "8e116b0a-fbaa-4375-a211-ba18767ed1e5",
+  "field": "description",
+  "source_batch": "batch-0015",
+  "position": 7,
+  "why": "over-bound",
+  "detail": "evidence 74784 characters, bound 64000"
+ },
+ {
+  "site_id": "8e116b0a-fbaa-4375-a211-ba18767ed1e5",
+  "field": "period_start",
+  "source_batch": "batch-0015",
+  "position": 7,
+  "why": "over-bound",
+  "detail": "evidence 74784 characters, bound 64000"
+ },
+ {
+  "site_id": "8e116b0a-fbaa-4375-a211-ba18767ed1e5",
+  "field": "site_type",
+  "source_batch": "batch-0015",
+  "position": 7,
+  "why": "over-bound",
+  "detail": "evidence 74784 characters, bound 64000"
+ },
+ {
+  "site_id": "8e116b0a-fbaa-4375-a211-ba18767ed1e5",
+  "field": "country",
+  "source_batch": "batch-0015",
+  "position": 7,
+  "why": "over-bound",
+  "detail": "evidence 74784 characters, bound 64000"
+ },
+ {
+  "site_id": "8e116b0a-fbaa-4375-a211-ba18767ed1e5",
+  "field": "card_description",
+  "source_batch": "batch-0015",
+  "position": 7,
+  "why": "over-bound",
+  "detail": "evidence 74784 characters, bound 64000"
+ },
+ {
+  "site_id": "5a68414e-22b9-4e2e-a9b7-d2a46b25be9b",
+  "field": "description",
+  "source_batch": "batch-0017",
+  "position": 5,
+  "why": "over-bound",
+  "detail": "evidence 74017 characters, bound 64000"
+ },
+ {
+  "site_id": "5a68414e-22b9-4e2e-a9b7-d2a46b25be9b",
+  "field": "period_start",
+  "source_batch": "batch-0017",
+  "position": 5,
+  "why": "over-bound",
+  "detail": "evidence 74017 characters, bound 64000"
+ },
+ {
+  "site_id": "5a68414e-22b9-4e2e-a9b7-d2a46b25be9b",
+  "field": "site_type",
+  "source_batch": "batch-0017",
+  "position": 5,
+  "why": "over-bound",
+  "detail": "evidence 74017 characters, bound 64000"
+ },
+ {
+  "site_id": "5a68414e-22b9-4e2e-a9b7-d2a46b25be9b",
+  "field": "country",
+  "source_batch": "batch-0017",
+  "position": 5,
+  "why": "over-bound",
+  "detail": "evidence 74017 characters, bound 64000"
+ },
+ {
+  "site_id": "5a68414e-22b9-4e2e-a9b7-d2a46b25be9b",
+  "field": "card_description",
+  "source_batch": "batch-0017",
+  "position": 5,
+  "why": "over-bound",
+  "detail": "evidence 74017 characters, bound 64000"
+ },
+ {
+  "site_id": "6ca3b4c8-5cd6-485c-9290-d24b2caca0c0",
+  "field": "description",
+  "source_batch": "batch-0018",
+  "position": 0,
+  "why": "over-bound",
+  "detail": "evidence 85533 characters, bound 64000"
+ },
+ {
+  "site_id": "6ca3b4c8-5cd6-485c-9290-d24b2caca0c0",
+  "field": "period_start",
+  "source_batch": "batch-0018",
+  "position": 0,
+  "why": "over-bound",
+  "detail": "evidence 85533 characters, bound 64000"
+ },
+ {
+  "site_id": "6ca3b4c8-5cd6-485c-9290-d24b2caca0c0",
+  "field": "site_type",
+  "source_batch": "batch-0018",
+  "position": 0,
+  "why": "over-bound",
+  "detail": "evidence 85533 characters, bound 64000"
+ },
+ {
+  "site_id": "6ca3b4c8-5cd6-485c-9290-d24b2caca0c0",
+  "field": "country",
+  "source_batch": "batch-0018",
+  "position": 0,
+  "why": "over-bound",
+  "detail": "evidence 85533 characters, bound 64000"
+ },
+ {
+  "site_id": "6ca3b4c8-5cd6-485c-9290-d24b2caca0c0",
+  "field": "card_description",
+  "source_batch": "batch-0018",
+  "position": 0,
+  "why": "over-bound",
+  "detail": "evidence 85533 characters, bound 64000"
+ },
+ {
+  "site_id": "30d3fb78-6b80-42f9-87f8-7616e63bec4f",
+  "field": "description",
+  "source_batch": "batch-0018",
+  "position": 11,
+  "why": "over-bound",
+  "detail": "evidence 65696 characters, bound 64000"
+ },
+ {
+  "site_id": "30d3fb78-6b80-42f9-87f8-7616e63bec4f",
+  "field": "period_start",
+  "source_batch": "batch-0018",
+  "position": 11,
+  "why": "over-bound",
+  "detail": "evidence 65696 characters, bound 64000"
+ },
+ {
+  "site_id": "30d3fb78-6b80-42f9-87f8-7616e63bec4f",
+  "field": "site_type",
+  "source_batch": "batch-0018",
+  "position": 11,
+  "why": "over-bound",
+  "detail": "evidence 65696 characters, bound 64000"
+ },
+ {
+  "site_id": "30d3fb78-6b80-42f9-87f8-7616e63bec4f",
+  "field": "country",
+  "source_batch": "batch-0018",
+  "position": 11,
+  "why": "over-bound",
+  "detail": "evidence 65696 characters, bound 64000"
+ },
+ {
+  "site_id": "30d3fb78-6b80-42f9-87f8-7616e63bec4f",
+  "field": "card_description",
+  "source_batch": "batch-0018",
+  "position": 11,
+  "why": "over-bound",
+  "detail": "evidence 65696 characters, bound 64000"
+ },
+ {
+  "site_id": "51db73ea-a48b-40dc-9d9e-f0f9b3a27cf6",
+  "field": "description",
+  "source_batch": "batch-0020",
+  "position": 6,
+  "why": "over-bound",
+  "detail": "evidence 74340 characters, bound 64000"
+ },
+ {
+  "site_id": "51db73ea-a48b-40dc-9d9e-f0f9b3a27cf6",
+  "field": "period_start",
+  "source_batch": "batch-0020",
+  "position": 6,
+  "why": "over-bound",
+  "detail": "evidence 74340 characters, bound 64000"
+ },
+ {
+  "site_id": "51db73ea-a48b-40dc-9d9e-f0f9b3a27cf6",
+  "field": "site_type",
+  "source_batch": "batch-0020",
+  "position": 6,
+  "why": "over-bound",
+  "detail": "evidence 74340 characters, bound 64000"
+ },
+ {
+  "site_id": "51db73ea-a48b-40dc-9d9e-f0f9b3a27cf6",
+  "field": "country",
+  "source_batch": "batch-0020",
+  "position": 6,
+  "why": "over-bound",
+  "detail": "evidence 74340 characters, bound 64000"
+ },
+ {
+  "site_id": "51db73ea-a48b-40dc-9d9e-f0f9b3a27cf6",
+  "field": "card_description",
+  "source_batch": "batch-0020",
+  "position": 6,
+  "why": "over-bound",
+  "detail": "evidence 74340 characters, bound 64000"
+ },
+ {
+  "site_id": "c763d97d-a16f-41ae-b9e7-082ec0e0dcad",
+  "field": "description",
+  "source_batch": "batch-0022",
+  "position": 11,
+  "why": "over-bound",
+  "detail": "evidence 87875 characters, bound 64000"
+ },
+ {
+  "site_id": "c763d97d-a16f-41ae-b9e7-082ec0e0dcad",
+  "field": "period_start",
+  "source_batch": "batch-0022",
+  "position": 11,
+  "why": "over-bound",
+  "detail": "evidence 87875 characters, bound 64000"
+ },
+ {
+  "site_id": "c763d97d-a16f-41ae-b9e7-082ec0e0dcad",
+  "field": "site_type",
+  "source_batch": "batch-0022",
+  "position": 11,
+  "why": "over-bound",
+  "detail": "evidence 87875 characters, bound 64000"
+ },
+ {
+  "site_id": "c763d97d-a16f-41ae-b9e7-082ec0e0dcad",
+  "field": "country",
+  "source_batch": "batch-0022",
+  "position": 11,
+  "why": "over-bound",
+  "detail": "evidence 87875 characters, bound 64000"
+ },
+ {
+  "site_id": "c763d97d-a16f-41ae-b9e7-082ec0e0dcad",
+  "field": "card_description",
+  "source_batch": "batch-0022",
+  "position": 11,
+  "why": "over-bound",
+  "detail": "evidence 87875 characters, bound 64000"
+ },
+ {
+  "site_id": "1f9d65ff-7a7d-4885-85d4-2d581dbc3081",
+  "field": "period_start",
+  "source_batch": "batch-0023",
+  "position": 1,
+  "why": "no-verdict",
+  "detail": "no `VERDICT:` line naming CORRECT, WRONG or UNVERIFIABLE"
+ },
+ {
+  "site_id": "b6945bd6-a99e-4034-b451-2f6c7faec322",
+  "field": "description",
+  "source_batch": "batch-0023",
+  "position": 9,
+  "why": "over-bound",
+  "detail": "evidence 82661 characters, bound 64000"
+ },
+ {
+  "site_id": "b6945bd6-a99e-4034-b451-2f6c7faec322",
+  "field": "period_start",
+  "source_batch": "batch-0023",
+  "position": 9,
+  "why": "over-bound",
+  "detail": "evidence 82661 characters, bound 64000"
+ },
+ {
+  "site_id": "b6945bd6-a99e-4034-b451-2f6c7faec322",
+  "field": "site_type",
+  "source_batch": "batch-0023",
+  "position": 9,
+  "why": "over-bound",
+  "detail": "evidence 82661 characters, bound 64000"
+ },
+ {
+  "site_id": "b6945bd6-a99e-4034-b451-2f6c7faec322",
+  "field": "country",
+  "source_batch": "batch-0023",
+  "position": 9,
+  "why": "over-bound",
+  "detail": "evidence 82661 characters, bound 64000"
+ },
+ {
+  "site_id": "b6945bd6-a99e-4034-b451-2f6c7faec322",
+  "field": "card_description",
+  "source_batch": "batch-0023",
+  "position": 9,
+  "why": "over-bound",
+  "detail": "evidence 82661 characters, bound 64000"
+ },
+ {
+  "site_id": "bc28c81f-db22-46a5-bc4e-18cb8c2ecbec",
+  "field": "description",
+  "source_batch": "batch-0024",
+  "position": 11,
+  "why": "over-bound",
+  "detail": "evidence 65804 characters, bound 64000"
+ },
+ {
+  "site_id": "bc28c81f-db22-46a5-bc4e-18cb8c2ecbec",
+  "field": "period_start",
+  "source_batch": "batch-0024",
+  "position": 11,
+  "why": "over-bound",
+  "detail": "evidence 65804 characters, bound 64000"
+ },
+ {
+  "site_id": "bc28c81f-db22-46a5-bc4e-18cb8c2ecbec",
+  "field": "site_type",
+  "source_batch": "batch-0024",
+  "position": 11,
+  "why": "over-bound",
+  "detail": "evidence 65804 characters, bound 64000"
+ },
+ {
+  "site_id": "bc28c81f-db22-46a5-bc4e-18cb8c2ecbec",
+  "field": "country",
+  "source_batch": "batch-0024",
+  "position": 11,
+  "why": "over-bound",
+  "detail": "evidence 65804 characters, bound 64000"
+ },
+ {
+  "site_id": "bc28c81f-db22-46a5-bc4e-18cb8c2ecbec",
+  "field": "card_description",
+  "source_batch": "batch-0024",
+  "position": 11,
+  "why": "over-bound",
+  "detail": "evidence 65804 characters, bound 64000"
+ },
+ {
+  "site_id": "7db98f75-a99f-4163-893e-583876aad86e",
+  "field": "description",
+  "source_batch": "batch-0026",
+  "position": 3,
+  "why": "over-bound",
+  "detail": "evidence 118587 characters, bound 64000"
+ },
+ {
+  "site_id": "7db98f75-a99f-4163-893e-583876aad86e",
+  "field": "period_start",
+  "source_batch": "batch-0026",
+  "position": 3,
+  "why": "over-bound",
+  "detail": "evidence 118587 characters, bound 64000"
+ },
+ {
+  "site_id": "7db98f75-a99f-4163-893e-583876aad86e",
+  "field": "site_type",
+  "source_batch": "batch-0026",
+  "position": 3,
+  "why": "over-bound",
+  "detail": "evidence 118587 characters, bound 64000"
+ },
+ {
+  "site_id": "7db98f75-a99f-4163-893e-583876aad86e",
+  "field": "country",
+  "source_batch": "batch-0026",
+  "position": 3,
+  "why": "over-bound",
+  "detail": "evidence 118587 characters, bound 64000"
+ },
+ {
+  "site_id": "7db98f75-a99f-4163-893e-583876aad86e",
+  "field": "card_description",
+  "source_batch": "batch-0026",
+  "position": 3,
+  "why": "over-bound",
+  "detail": "evidence 118587 characters, bound 64000"
+ },
+ {
+  "site_id": "4a4937bf-ef17-43d7-b7c4-28afa1b0f230",
+  "field": "description",
+  "source_batch": "batch-0028",
+  "position": 12,
+  "why": "over-bound",
+  "detail": "evidence 69659 characters, bound 64000"
+ },
+ {
+  "site_id": "4a4937bf-ef17-43d7-b7c4-28afa1b0f230",
+  "field": "period_start",
+  "source_batch": "batch-0028",
+  "position": 12,
+  "why": "over-bound",
+  "detail": "evidence 69659 characters, bound 64000"
+ },
+ {
+  "site_id": "4a4937bf-ef17-43d7-b7c4-28afa1b0f230",
+  "field": "site_type",
+  "source_batch": "batch-0028",
+  "position": 12,
+  "why": "over-bound",
+  "detail": "evidence 69659 characters, bound 64000"
+ },
+ {
+  "site_id": "4a4937bf-ef17-43d7-b7c4-28afa1b0f230",
+  "field": "country",
+  "source_batch": "batch-0028",
+  "position": 12,
+  "why": "over-bound",
+  "detail": "evidence 69659 characters, bound 64000"
+ },
+ {
+  "site_id": "4a4937bf-ef17-43d7-b7c4-28afa1b0f230",
+  "field": "card_description",
+  "source_batch": "batch-0028",
+  "position": 12,
+  "why": "over-bound",
+  "detail": "evidence 69659 characters, bound 64000"
+ },
+ {
+  "site_id": "d44c1dff-0bee-4500-befe-9b16ae420e23",
+  "field": "country",
+  "source_batch": "batch-0031",
+  "position": 5,
+  "why": "no-verdict",
+  "detail": "no `VERDICT:` line naming CORRECT, WRONG or UNVERIFIABLE"
+ },
+ {
+  "site_id": "ec0a83d5-737e-48de-a79c-d709ad794e60",
+  "field": "description",
+  "source_batch": "batch-0033",
+  "position": 0,
+  "why": "over-bound",
+  "detail": "evidence 106962 characters, bound 64000"
+ },
+ {
+  "site_id": "ec0a83d5-737e-48de-a79c-d709ad794e60",
+  "field": "period_start",
+  "source_batch": "batch-0033",
+  "position": 0,
+  "why": "over-bound",
+  "detail": "evidence 106962 characters, bound 64000"
+ },
+ {
+  "site_id": "ec0a83d5-737e-48de-a79c-d709ad794e60",
+  "field": "site_type",
+  "source_batch": "batch-0033",
+  "position": 0,
+  "why": "over-bound",
+  "detail": "evidence 106962 characters, bound 64000"
+ },
+ {
+  "site_id": "ec0a83d5-737e-48de-a79c-d709ad794e60",
+  "field": "country",
+  "source_batch": "batch-0033",
+  "position": 0,
+  "why": "over-bound",
+  "detail": "evidence 106962 characters, bound 64000"
+ },
+ {
+  "site_id": "ec0a83d5-737e-48de-a79c-d709ad794e60",
+  "field": "card_description",
+  "source_batch": "batch-0033",
+  "position": 0,
+  "why": "over-bound",
+  "detail": "evidence 106962 characters, bound 64000"
+ },
+ {
+  "site_id": "dfd4d30e-1a29-4917-9626-787b823d7748",
+  "field": "description",
+  "source_batch": "batch-0036",
+  "position": 10,
+  "why": "over-bound",
+  "detail": "evidence 90031 characters, bound 64000"
+ },
+ {
+  "site_id": "dfd4d30e-1a29-4917-9626-787b823d7748",
+  "field": "period_start",
+  "source_batch": "batch-0036",
+  "position": 10,
+  "why": "over-bound",
+  "detail": "evidence 90031 characters, bound 64000"
+ },
+ {
+  "site_id": "dfd4d30e-1a29-4917-9626-787b823d7748",
+  "field": "site_type",
+  "source_batch": "batch-0036",
+  "position": 10,
+  "why": "over-bound",
+  "detail": "evidence 90031 characters, bound 64000"
+ },
+ {
+  "site_id": "dfd4d30e-1a29-4917-9626-787b823d7748",
+  "field": "country",
+  "source_batch": "batch-0036",
+  "position": 10,
+  "why": "over-bound",
+  "detail": "evidence 90031 characters, bound 64000"
+ },
+ {
+  "site_id": "dfd4d30e-1a29-4917-9626-787b823d7748",
+  "field": "card_description",
+  "source_batch": "batch-0036",
+  "position": 10,
+  "why": "over-bound",
+  "detail": "evidence 90031 characters, bound 64000"
+ },
+ {
+  "site_id": "ccfefb01-6020-4d87-8ae3-2fa94ba33837",
+  "field": "description",
+  "source_batch": "batch-0037",
+  "position": 4,
+  "why": "over-bound",
+  "detail": "evidence 65618 characters, bound 64000"
+ },
+ {
+  "site_id": "ccfefb01-6020-4d87-8ae3-2fa94ba33837",
+  "field": "period_start",
+  "source_batch": "batch-0037",
+  "position": 4,
+  "why": "over-bound",
+  "detail": "evidence 65618 characters, bound 64000"
+ },
+ {
+  "site_id": "ccfefb01-6020-4d87-8ae3-2fa94ba33837",
+  "field": "site_type",
+  "source_batch": "batch-0037",
+  "position": 4,
+  "why": "over-bound",
+  "detail": "evidence 65618 characters, bound 64000"
+ },
+ {
+  "site_id": "ccfefb01-6020-4d87-8ae3-2fa94ba33837",
+  "field": "country",
+  "source_batch": "batch-0037",
+  "position": 4,
+  "why": "over-bound",
+  "detail": "evidence 65618 characters, bound 64000"
+ },
+ {
+  "site_id": "ccfefb01-6020-4d87-8ae3-2fa94ba33837",
+  "field": "card_description",
+  "source_batch": "batch-0037",
+  "position": 4,
+  "why": "over-bound",
+  "detail": "evidence 65618 characters, bound 64000"
+ },
+ {
+  "site_id": "3d166b88-6f0c-4634-8eb0-03abf17decb6",
+  "field": "description",
+  "source_batch": "batch-0041",
+  "position": 3,
+  "why": "over-bound",
+  "detail": "evidence 64168 characters, bound 64000"
+ },
+ {
+  "site_id": "3d166b88-6f0c-4634-8eb0-03abf17decb6",
+  "field": "period_start",
+  "source_batch": "batch-0041",
+  "position": 3,
+  "why": "over-bound",
+  "detail": "evidence 64168 characters, bound 64000"
+ },
+ {
+  "site_id": "3d166b88-6f0c-4634-8eb0-03abf17decb6",
+  "field": "site_type",
+  "source_batch": "batch-0041",
+  "position": 3,
+  "why": "over-bound",
+  "detail": "evidence 64168 characters, bound 64000"
+ },
+ {
+  "site_id": "3d166b88-6f0c-4634-8eb0-03abf17decb6",
+  "field": "country",
+  "source_batch": "batch-0041",
+  "position": 3,
+  "why": "over-bound",
+  "detail": "evidence 64168 characters, bound 64000"
+ },
+ {
+  "site_id": "3d166b88-6f0c-4634-8eb0-03abf17decb6",
+  "field": "card_description",
+  "source_batch": "batch-0041",
+  "position": 3,
+  "why": "over-bound",
+  "detail": "evidence 64168 characters, bound 64000"
+ },
+ {
+  "site_id": "5e1bd6c1-43bd-4a34-a7ae-7ea240f9f7b2",
+  "field": "description",
+  "source_batch": "batch-0043",
+  "position": 6,
+  "why": "over-bound",
+  "detail": "evidence 65155 characters, bound 64000"
+ },
+ {
+  "site_id": "5e1bd6c1-43bd-4a34-a7ae-7ea240f9f7b2",
+  "field": "period_start",
+  "source_batch": "batch-0043",
+  "position": 6,
+  "why": "over-bound",
+  "detail": "evidence 65155 characters, bound 64000"
+ },
+ {
+  "site_id": "5e1bd6c1-43bd-4a34-a7ae-7ea240f9f7b2",
+  "field": "site_type",
+  "source_batch": "batch-0043",
+  "position": 6,
+  "why": "over-bound",
+  "detail": "evidence 65155 characters, bound 64000"
+ },
+ {
+  "site_id": "5e1bd6c1-43bd-4a34-a7ae-7ea240f9f7b2",
+  "field": "country",
+  "source_batch": "batch-0043",
+  "position": 6,
+  "why": "over-bound",
+  "detail": "evidence 65155 characters, bound 64000"
+ },
+ {
+  "site_id": "5e1bd6c1-43bd-4a34-a7ae-7ea240f9f7b2",
+  "field": "card_description",
+  "source_batch": "batch-0043",
+  "position": 6,
+  "why": "over-bound",
+  "detail": "evidence 65155 characters, bound 64000"
+ },
+ {
+  "site_id": "7c40fd0e-0b13-4b8a-979c-96f11452525f",
+  "field": "description",
+  "source_batch": "batch-0043",
+  "position": 14,
+  "why": "over-bound",
+  "detail": "evidence 65105 characters, bound 64000"
+ },
+ {
+  "site_id": "7c40fd0e-0b13-4b8a-979c-96f11452525f",
+  "field": "period_start",
+  "source_batch": "batch-0043",
+  "position": 14,
+  "why": "over-bound",
+  "detail": "evidence 65105 characters, bound 64000"
+ },
+ {
+  "site_id": "7c40fd0e-0b13-4b8a-979c-96f11452525f",
+  "field": "site_type",
+  "source_batch": "batch-0043",
+  "position": 14,
+  "why": "over-bound",
+  "detail": "evidence 65105 characters, bound 64000"
+ },
+ {
+  "site_id": "7c40fd0e-0b13-4b8a-979c-96f11452525f",
+  "field": "country",
+  "source_batch": "batch-0043",
+  "position": 14,
+  "why": "over-bound",
+  "detail": "evidence 65105 characters, bound 64000"
+ },
+ {
+  "site_id": "7c40fd0e-0b13-4b8a-979c-96f11452525f",
+  "field": "card_description",
+  "source_batch": "batch-0043",
+  "position": 14,
+  "why": "over-bound",
+  "detail": "evidence 65105 characters, bound 64000"
+ },
+ {
+  "site_id": "6be27ced-3d16-4603-8957-845c16d7bd8a",
+  "field": "description",
+  "source_batch": "batch-0044",
+  "position": 7,
+  "why": "over-bound",
+  "detail": "evidence 79541 characters, bound 64000"
+ },
+ {
+  "site_id": "6be27ced-3d16-4603-8957-845c16d7bd8a",
+  "field": "period_start",
+  "source_batch": "batch-0044",
+  "position": 7,
+  "why": "over-bound",
+  "detail": "evidence 79541 characters, bound 64000"
+ },
+ {
+  "site_id": "6be27ced-3d16-4603-8957-845c16d7bd8a",
+  "field": "site_type",
+  "source_batch": "batch-0044",
+  "position": 7,
+  "why": "over-bound",
+  "detail": "evidence 79541 characters, bound 64000"
+ },
+ {
+  "site_id": "6be27ced-3d16-4603-8957-845c16d7bd8a",
+  "field": "country",
+  "source_batch": "batch-0044",
+  "position": 7,
+  "why": "over-bound",
+  "detail": "evidence 79541 characters, bound 64000"
+ },
+ {
+  "site_id": "6be27ced-3d16-4603-8957-845c16d7bd8a",
+  "field": "card_description",
+  "source_batch": "batch-0044",
+  "position": 7,
+  "why": "over-bound",
+  "detail": "evidence 79541 characters, bound 64000"
+ },
+ {
+  "site_id": "6fa8cd4d-074f-4b88-9f98-95465b49c9ae",
+  "field": "description",
+  "source_batch": "batch-0045",
+  "position": 14,
+  "why": "over-bound",
+  "detail": "evidence 64696 characters, bound 64000"
+ },
+ {
+  "site_id": "6fa8cd4d-074f-4b88-9f98-95465b49c9ae",
+  "field": "period_start",
+  "source_batch": "batch-0045",
+  "position": 14,
+  "why": "over-bound",
+  "detail": "evidence 64696 characters, bound 64000"
+ },
+ {
+  "site_id": "6fa8cd4d-074f-4b88-9f98-95465b49c9ae",
+  "field": "site_type",
+  "source_batch": "batch-0045",
+  "position": 14,
+  "why": "over-bound",
+  "detail": "evidence 64696 characters, bound 64000"
+ },
+ {
+  "site_id": "6fa8cd4d-074f-4b88-9f98-95465b49c9ae",
+  "field": "country",
+  "source_batch": "batch-0045",
+  "position": 14,
+  "why": "over-bound",
+  "detail": "evidence 64696 characters, bound 64000"
+ },
+ {
+  "site_id": "6fa8cd4d-074f-4b88-9f98-95465b49c9ae",
+  "field": "card_description",
+  "source_batch": "batch-0045",
+  "position": 14,
+  "why": "over-bound",
+  "detail": "evidence 64696 characters, bound 64000"
+ },
+ {
+  "site_id": "7b061e76-f20f-447d-9650-c334492b86dc",
+  "field": "description",
+  "source_batch": "batch-0046",
+  "position": 9,
+  "why": "over-bound",
+  "detail": "evidence 70422 characters, bound 64000"
+ },
+ {
+  "site_id": "7b061e76-f20f-447d-9650-c334492b86dc",
+  "field": "period_start",
+  "source_batch": "batch-0046",
+  "position": 9,
+  "why": "over-bound",
+  "detail": "evidence 70422 characters, bound 64000"
+ },
+ {
+  "site_id": "7b061e76-f20f-447d-9650-c334492b86dc",
+  "field": "site_type",
+  "source_batch": "batch-0046",
+  "position": 9,
+  "why": "over-bound",
+  "detail": "evidence 70422 characters, bound 64000"
+ },
+ {
+  "site_id": "7b061e76-f20f-447d-9650-c334492b86dc",
+  "field": "country",
+  "source_batch": "batch-0046",
+  "position": 9,
+  "why": "over-bound",
+  "detail": "evidence 70422 characters, bound 64000"
+ },
+ {
+  "site_id": "7b061e76-f20f-447d-9650-c334492b86dc",
+  "field": "card_description",
+  "source_batch": "batch-0046",
+  "position": 9,
+  "why": "over-bound",
+  "detail": "evidence 70422 characters, bound 64000"
+ },
+ {
+  "site_id": "ee0017b2-44f4-426d-8901-5842c832eb30",
+  "field": "description",
+  "source_batch": "batch-0047",
+  "position": 6,
+  "why": "over-bound",
+  "detail": "evidence 79781 characters, bound 64000"
+ },
+ {
+  "site_id": "ee0017b2-44f4-426d-8901-5842c832eb30",
+  "field": "period_start",
+  "source_batch": "batch-0047",
+  "position": 6,
+  "why": "over-bound",
+  "detail": "evidence 79781 characters, bound 64000"
+ },
+ {
+  "site_id": "ee0017b2-44f4-426d-8901-5842c832eb30",
+  "field": "site_type",
+  "source_batch": "batch-0047",
+  "position": 6,
+  "why": "over-bound",
+  "detail": "evidence 79781 characters, bound 64000"
+ },
+ {
+  "site_id": "ee0017b2-44f4-426d-8901-5842c832eb30",
+  "field": "country",
+  "source_batch": "batch-0047",
+  "position": 6,
+  "why": "over-bound",
+  "detail": "evidence 79781 characters, bound 64000"
+ },
+ {
+  "site_id": "ee0017b2-44f4-426d-8901-5842c832eb30",
+  "field": "card_description",
+  "source_batch": "batch-0047",
+  "position": 6,
+  "why": "over-bound",
+  "detail": "evidence 79781 characters, bound 64000"
+ },
+ {
+  "site_id": "16818a72-af8e-4397-a814-36c1502b27d3",
+  "field": "period_start",
+  "source_batch": "batch-0048",
+  "position": 7,
+  "why": "no-verdict",
+  "detail": "no `VERDICT:` line naming CORRECT, WRONG or UNVERIFIABLE"
+ },
+ {
+  "site_id": "a979b657-533e-4561-aa38-8b889f449c59",
+  "field": "description",
+  "source_batch": "batch-0052",
+  "position": 1,
+  "why": "over-bound",
+  "detail": "evidence 96086 characters, bound 64000"
+ },
+ {
+  "site_id": "a979b657-533e-4561-aa38-8b889f449c59",
+  "field": "period_start",
+  "source_batch": "batch-0052",
+  "position": 1,
+  "why": "over-bound",
+  "detail": "evidence 96086 characters, bound 64000"
+ },
+ {
+  "site_id": "a979b657-533e-4561-aa38-8b889f449c59",
+  "field": "site_type",
+  "source_batch": "batch-0052",
+  "position": 1,
+  "why": "over-bound",
+  "detail": "evidence 96086 characters, bound 64000"
+ },
+ {
+  "site_id": "a979b657-533e-4561-aa38-8b889f449c59",
+  "field": "country",
+  "source_batch": "batch-0052",
+  "position": 1,
+  "why": "over-bound",
+  "detail": "evidence 96086 characters, bound 64000"
+ },
+ {
+  "site_id": "a979b657-533e-4561-aa38-8b889f449c59",
+  "field": "card_description",
+  "source_batch": "batch-0052",
+  "position": 1,
+  "why": "over-bound",
+  "detail": "evidence 96086 characters, bound 64000"
+ },
+ {
+  "site_id": "6fb66867-1ba1-405d-b451-14767885ab53",
+  "field": "description",
+  "source_batch": "batch-0052",
+  "position": 12,
+  "why": "over-bound",
+  "detail": "evidence 70071 characters, bound 64000"
+ },
+ {
+  "site_id": "6fb66867-1ba1-405d-b451-14767885ab53",
+  "field": "period_start",
+  "source_batch": "batch-0052",
+  "position": 12,
+  "why": "over-bound",
+  "detail": "evidence 70071 characters, bound 64000"
+ },
+ {
+  "site_id": "6fb66867-1ba1-405d-b451-14767885ab53",
+  "field": "site_type",
+  "source_batch": "batch-0052",
+  "position": 12,
+  "why": "over-bound",
+  "detail": "evidence 70071 characters, bound 64000"
+ },
+ {
+  "site_id": "6fb66867-1ba1-405d-b451-14767885ab53",
+  "field": "country",
+  "source_batch": "batch-0052",
+  "position": 12,
+  "why": "over-bound",
+  "detail": "evidence 70071 characters, bound 64000"
+ },
+ {
+  "site_id": "6fb66867-1ba1-405d-b451-14767885ab53",
+  "field": "card_description",
+  "source_batch": "batch-0052",
+  "position": 12,
+  "why": "over-bound",
+  "detail": "evidence 70071 characters, bound 64000"
+ },
+ {
+  "site_id": "0371ed0a-82f5-4578-b7bf-10dc40faf580",
+  "field": "description",
+  "source_batch": "batch-0057",
+  "position": 11,
+  "why": "over-bound",
+  "detail": "evidence 122880 characters, bound 64000"
+ },
+ {
+  "site_id": "0371ed0a-82f5-4578-b7bf-10dc40faf580",
+  "field": "period_start",
+  "source_batch": "batch-0057",
+  "position": 11,
+  "why": "over-bound",
+  "detail": "evidence 122880 characters, bound 64000"
+ },
+ {
+  "site_id": "0371ed0a-82f5-4578-b7bf-10dc40faf580",
+  "field": "site_type",
+  "source_batch": "batch-0057",
+  "position": 11,
+  "why": "over-bound",
+  "detail": "evidence 122880 characters, bound 64000"
+ },
+ {
+  "site_id": "0371ed0a-82f5-4578-b7bf-10dc40faf580",
+  "field": "country",
+  "source_batch": "batch-0057",
+  "position": 11,
+  "why": "over-bound",
+  "detail": "evidence 122880 characters, bound 64000"
+ },
+ {
+  "site_id": "0371ed0a-82f5-4578-b7bf-10dc40faf580",
+  "field": "card_description",
+  "source_batch": "batch-0057",
+  "position": 11,
+  "why": "over-bound",
+  "detail": "evidence 122880 characters, bound 64000"
+ },
+ {
+  "site_id": "9ceb5947-c91f-4a1f-8c8f-6a67dbb88de2",
+  "field": "description",
+  "source_batch": "batch-0058",
+  "position": 13,
+  "why": "over-bound",
+  "detail": "evidence 102212 characters, bound 64000"
+ },
+ {
+  "site_id": "9ceb5947-c91f-4a1f-8c8f-6a67dbb88de2",
+  "field": "period_start",
+  "source_batch": "batch-0058",
+  "position": 13,
+  "why": "over-bound",
+  "detail": "evidence 102212 characters, bound 64000"
+ },
+ {
+  "site_id": "9ceb5947-c91f-4a1f-8c8f-6a67dbb88de2",
+  "field": "site_type",
+  "source_batch": "batch-0058",
+  "position": 13,
+  "why": "over-bound",
+  "detail": "evidence 102212 characters, bound 64000"
+ },
+ {
+  "site_id": "9ceb5947-c91f-4a1f-8c8f-6a67dbb88de2",
+  "field": "country",
+  "source_batch": "batch-0058",
+  "position": 13,
+  "why": "over-bound",
+  "detail": "evidence 102212 characters, bound 64000"
+ },
+ {
+  "site_id": "9ceb5947-c91f-4a1f-8c8f-6a67dbb88de2",
+  "field": "card_description",
+  "source_batch": "batch-0058",
+  "position": 13,
+  "why": "over-bound",
+  "detail": "evidence 102212 characters, bound 64000"
+ },
+ {
+  "site_id": "0017f6df-44e0-4b24-ac21-0565406e1210",
+  "field": "description",
+  "source_batch": "batch-0061",
+  "position": 8,
+  "why": "over-bound",
+  "detail": "evidence 70108 characters, bound 64000"
+ },
+ {
+  "site_id": "0017f6df-44e0-4b24-ac21-0565406e1210",
+  "field": "period_start",
+  "source_batch": "batch-0061",
+  "position": 8,
+  "why": "over-bound",
+  "detail": "evidence 70108 characters, bound 64000"
+ },
+ {
+  "site_id": "0017f6df-44e0-4b24-ac21-0565406e1210",
+  "field": "site_type",
+  "source_batch": "batch-0061",
+  "position": 8,
+  "why": "over-bound",
+  "detail": "evidence 70108 characters, bound 64000"
+ },
+ {
+  "site_id": "0017f6df-44e0-4b24-ac21-0565406e1210",
+  "field": "country",
+  "source_batch": "batch-0061",
+  "position": 8,
+  "why": "over-bound",
+  "detail": "evidence 70108 characters, bound 64000"
+ },
+ {
+  "site_id": "0017f6df-44e0-4b24-ac21-0565406e1210",
+  "field": "card_description",
+  "source_batch": "batch-0061",
+  "position": 8,
+  "why": "over-bound",
+  "detail": "evidence 70108 characters, bound 64000"
+ },
+ {
+  "site_id": "7caf1620-133b-4038-bc01-0ba854a84505",
+  "field": "description",
+  "source_batch": "batch-0066",
+  "position": 5,
+  "why": "over-bound",
+  "detail": "evidence 64312 characters, bound 64000"
+ },
+ {
+  "site_id": "7caf1620-133b-4038-bc01-0ba854a84505",
+  "field": "period_start",
+  "source_batch": "batch-0066",
+  "position": 5,
+  "why": "over-bound",
+  "detail": "evidence 64312 characters, bound 64000"
+ },
+ {
+  "site_id": "7caf1620-133b-4038-bc01-0ba854a84505",
+  "field": "site_type",
+  "source_batch": "batch-0066",
+  "position": 5,
+  "why": "over-bound",
+  "detail": "evidence 64312 characters, bound 64000"
+ },
+ {
+  "site_id": "7caf1620-133b-4038-bc01-0ba854a84505",
+  "field": "country",
+  "source_batch": "batch-0066",
+  "position": 5,
+  "why": "over-bound",
+  "detail": "evidence 64312 characters, bound 64000"
+ },
+ {
+  "site_id": "7caf1620-133b-4038-bc01-0ba854a84505",
+  "field": "card_description",
+  "source_batch": "batch-0066",
+  "position": 5,
+  "why": "over-bound",
+  "detail": "evidence 64312 characters, bound 64000"
+ },
+ {
+  "site_id": "86a32957-57c8-424d-bc27-78c2d3ebaedc",
+  "field": "description",
+  "source_batch": "batch-0067",
+  "position": 2,
+  "why": "over-bound",
+  "detail": "evidence 122880 characters, bound 64000"
+ },
+ {
+  "site_id": "86a32957-57c8-424d-bc27-78c2d3ebaedc",
+  "field": "period_start",
+  "source_batch": "batch-0067",
+  "position": 2,
+  "why": "over-bound",
+  "detail": "evidence 122880 characters, bound 64000"
+ },
+ {
+  "site_id": "86a32957-57c8-424d-bc27-78c2d3ebaedc",
+  "field": "site_type",
+  "source_batch": "batch-0067",
+  "position": 2,
+  "why": "over-bound",
+  "detail": "evidence 122880 characters, bound 64000"
+ },
+ {
+  "site_id": "86a32957-57c8-424d-bc27-78c2d3ebaedc",
+  "field": "country",
+  "source_batch": "batch-0067",
+  "position": 2,
+  "why": "over-bound",
+  "detail": "evidence 122880 characters, bound 64000"
+ },
+ {
+  "site_id": "86a32957-57c8-424d-bc27-78c2d3ebaedc",
+  "field": "card_description",
+  "source_batch": "batch-0067",
+  "position": 2,
+  "why": "over-bound",
+  "detail": "evidence 122880 characters, bound 64000"
+ },
+ {
+  "site_id": "0aa03558-b60a-46d3-8a77-7dcce6f7e015",
+  "field": "period_start",
+  "source_batch": "batch-0067",
+  "position": 14,
+  "why": "no-verdict",
+  "detail": "no `VERDICT:` line naming CORRECT, WRONG or UNVERIFIABLE"
+ },
+ {
+  "site_id": "d49017eb-8e45-45af-a6d4-f90f3d35f3e3",
+  "field": "description",
+  "source_batch": "batch-0068",
+  "position": 8,
+  "why": "over-bound",
+  "detail": "evidence 69185 characters, bound 64000"
+ },
+ {
+  "site_id": "d49017eb-8e45-45af-a6d4-f90f3d35f3e3",
+  "field": "period_start",
+  "source_batch": "batch-0068",
+  "position": 8,
+  "why": "over-bound",
+  "detail": "evidence 69185 characters, bound 64000"
+ },
+ {
+  "site_id": "d49017eb-8e45-45af-a6d4-f90f3d35f3e3",
+  "field": "site_type",
+  "source_batch": "batch-0068",
+  "position": 8,
+  "why": "over-bound",
+  "detail": "evidence 69185 characters, bound 64000"
+ },
+ {
+  "site_id": "d49017eb-8e45-45af-a6d4-f90f3d35f3e3",
+  "field": "country",
+  "source_batch": "batch-0068",
+  "position": 8,
+  "why": "over-bound",
+  "detail": "evidence 69185 characters, bound 64000"
+ },
+ {
+  "site_id": "d49017eb-8e45-45af-a6d4-f90f3d35f3e3",
+  "field": "card_description",
+  "source_batch": "batch-0068",
+  "position": 8,
+  "why": "over-bound",
+  "detail": "evidence 69185 characters, bound 64000"
+ },
+ {
+  "site_id": "db35f2ee-809e-45ab-997b-50a3b0135c44",
+  "field": "description",
+  "source_batch": "batch-0068",
+  "position": 13,
+  "why": "over-bound",
+  "detail": "evidence 122880 characters, bound 64000"
+ },
+ {
+  "site_id": "db35f2ee-809e-45ab-997b-50a3b0135c44",
+  "field": "period_start",
+  "source_batch": "batch-0068",
+  "position": 13,
+  "why": "over-bound",
+  "detail": "evidence 122880 characters, bound 64000"
+ },
+ {
+  "site_id": "db35f2ee-809e-45ab-997b-50a3b0135c44",
+  "field": "site_type",
+  "source_batch": "batch-0068",
+  "position": 13,
+  "why": "over-bound",
+  "detail": "evidence 122880 characters, bound 64000"
+ },
+ {
+  "site_id": "db35f2ee-809e-45ab-997b-50a3b0135c44",
+  "field": "country",
+  "source_batch": "batch-0068",
+  "position": 13,
+  "why": "over-bound",
+  "detail": "evidence 122880 characters, bound 64000"
+ },
+ {
+  "site_id": "db35f2ee-809e-45ab-997b-50a3b0135c44",
+  "field": "card_description",
+  "source_batch": "batch-0068",
+  "position": 13,
+  "why": "over-bound",
+  "detail": "evidence 122880 characters, bound 64000"
+ },
+ {
+  "site_id": "fe252099-6b31-4704-bb59-2b03b02252f5",
+  "field": "description",
+  "source_batch": "batch-0071",
+  "position": 1,
+  "why": "over-bound",
+  "detail": "evidence 80701 characters, bound 64000"
+ },
+ {
+  "site_id": "fe252099-6b31-4704-bb59-2b03b02252f5",
+  "field": "period_start",
+  "source_batch": "batch-0071",
+  "position": 1,
+  "why": "over-bound",
+  "detail": "evidence 80701 characters, bound 64000"
+ },
+ {
+  "site_id": "fe252099-6b31-4704-bb59-2b03b02252f5",
+  "field": "site_type",
+  "source_batch": "batch-0071",
+  "position": 1,
+  "why": "over-bound",
+  "detail": "evidence 80701 characters, bound 64000"
+ },
+ {
+  "site_id": "fe252099-6b31-4704-bb59-2b03b02252f5",
+  "field": "country",
+  "source_batch": "batch-0071",
+  "position": 1,
+  "why": "over-bound",
+  "detail": "evidence 80701 characters, bound 64000"
+ },
+ {
+  "site_id": "fe252099-6b31-4704-bb59-2b03b02252f5",
+  "field": "card_description",
+  "source_batch": "batch-0071",
+  "position": 1,
+  "why": "over-bound",
+  "detail": "evidence 80701 characters, bound 64000"
+ },
+ {
+  "site_id": "6b978047-cbc3-4901-9d6d-7fb40104f015",
+  "field": "description",
+  "source_batch": "batch-0071",
+  "position": 2,
+  "why": "over-bound",
+  "detail": "evidence 75692 characters, bound 64000"
+ },
+ {
+  "site_id": "6b978047-cbc3-4901-9d6d-7fb40104f015",
+  "field": "period_start",
+  "source_batch": "batch-0071",
+  "position": 2,
+  "why": "over-bound",
+  "detail": "evidence 75692 characters, bound 64000"
+ },
+ {
+  "site_id": "6b978047-cbc3-4901-9d6d-7fb40104f015",
+  "field": "site_type",
+  "source_batch": "batch-0071",
+  "position": 2,
+  "why": "over-bound",
+  "detail": "evidence 75692 characters, bound 64000"
+ },
+ {
+  "site_id": "6b978047-cbc3-4901-9d6d-7fb40104f015",
+  "field": "country",
+  "source_batch": "batch-0071",
+  "position": 2,
+  "why": "over-bound",
+  "detail": "evidence 75692 characters, bound 64000"
+ },
+ {
+  "site_id": "6b978047-cbc3-4901-9d6d-7fb40104f015",
+  "field": "card_description",
+  "source_batch": "batch-0071",
+  "position": 2,
+  "why": "over-bound",
+  "detail": "evidence 75692 characters, bound 64000"
+ },
+ {
+  "site_id": "f31b4aea-5e0d-42f8-80f0-60fcf2f3c37f",
+  "field": "description",
+  "source_batch": "batch-0071",
+  "position": 5,
+  "why": "over-bound",
+  "detail": "evidence 102791 characters, bound 64000"
+ },
+ {
+  "site_id": "f31b4aea-5e0d-42f8-80f0-60fcf2f3c37f",
+  "field": "period_start",
+  "source_batch": "batch-0071",
+  "position": 5,
+  "why": "over-bound",
+  "detail": "evidence 102791 characters, bound 64000"
+ },
+ {
+  "site_id": "f31b4aea-5e0d-42f8-80f0-60fcf2f3c37f",
+  "field": "site_type",
+  "source_batch": "batch-0071",
+  "position": 5,
+  "why": "over-bound",
+  "detail": "evidence 102791 characters, bound 64000"
+ },
+ {
+  "site_id": "f31b4aea-5e0d-42f8-80f0-60fcf2f3c37f",
+  "field": "country",
+  "source_batch": "batch-0071",
+  "position": 5,
+  "why": "over-bound",
+  "detail": "evidence 102791 characters, bound 64000"
+ },
+ {
+  "site_id": "f31b4aea-5e0d-42f8-80f0-60fcf2f3c37f",
+  "field": "card_description",
+  "source_batch": "batch-0071",
+  "position": 5,
+  "why": "over-bound",
+  "detail": "evidence 102791 characters, bound 64000"
+ },
+ {
+  "site_id": "097e94ed-e1c1-4fd4-8f61-878aea9de121",
+  "field": "description",
+  "source_batch": "batch-0071",
+  "position": 8,
+  "why": "over-bound",
+  "detail": "evidence 93889 characters, bound 64000"
+ },
+ {
+  "site_id": "097e94ed-e1c1-4fd4-8f61-878aea9de121",
+  "field": "period_start",
+  "source_batch": "batch-0071",
+  "position": 8,
+  "why": "over-bound",
+  "detail": "evidence 93889 characters, bound 64000"
+ },
+ {
+  "site_id": "097e94ed-e1c1-4fd4-8f61-878aea9de121",
+  "field": "site_type",
+  "source_batch": "batch-0071",
+  "position": 8,
+  "why": "over-bound",
+  "detail": "evidence 93889 characters, bound 64000"
+ },
+ {
+  "site_id": "097e94ed-e1c1-4fd4-8f61-878aea9de121",
+  "field": "country",
+  "source_batch": "batch-0071",
+  "position": 8,
+  "why": "over-bound",
+  "detail": "evidence 93889 characters, bound 64000"
+ },
+ {
+  "site_id": "097e94ed-e1c1-4fd4-8f61-878aea9de121",
+  "field": "card_description",
+  "source_batch": "batch-0071",
+  "position": 8,
+  "why": "over-bound",
+  "detail": "evidence 93889 characters, bound 64000"
+ },
+ {
+  "site_id": "9e633e39-f2e4-41ef-8b0a-173ca0c9b15b",
+  "field": "period_start",
+  "source_batch": "batch-0073",
+  "position": 4,
+  "why": "no-verdict",
+  "detail": "no `VERDICT:` line naming CORRECT, WRONG or UNVERIFIABLE"
+ },
+ {
+  "site_id": "a2cebbc3-c055-478c-bf8c-79dc18acaaa0",
+  "field": "description",
+  "source_batch": "batch-0076",
+  "position": 8,
+  "why": "over-bound",
+  "detail": "evidence 89793 characters, bound 64000"
+ },
+ {
+  "site_id": "a2cebbc3-c055-478c-bf8c-79dc18acaaa0",
+  "field": "period_start",
+  "source_batch": "batch-0076",
+  "position": 8,
+  "why": "over-bound",
+  "detail": "evidence 89793 characters, bound 64000"
+ },
+ {
+  "site_id": "a2cebbc3-c055-478c-bf8c-79dc18acaaa0",
+  "field": "site_type",
+  "source_batch": "batch-0076",
+  "position": 8,
+  "why": "over-bound",
+  "detail": "evidence 89793 characters, bound 64000"
+ },
+ {
+  "site_id": "a2cebbc3-c055-478c-bf8c-79dc18acaaa0",
+  "field": "country",
+  "source_batch": "batch-0076",
+  "position": 8,
+  "why": "over-bound",
+  "detail": "evidence 89793 characters, bound 64000"
+ },
+ {
+  "site_id": "a2cebbc3-c055-478c-bf8c-79dc18acaaa0",
+  "field": "card_description",
+  "source_batch": "batch-0076",
+  "position": 8,
+  "why": "over-bound",
+  "detail": "evidence 89793 characters, bound 64000"
+ },
+ {
+  "site_id": "fa2075b9-ae78-4ce0-b00f-673d0139f0ff",
+  "field": "description",
+  "source_batch": "batch-0076",
+  "position": 10,
+  "why": "over-bound",
+  "detail": "evidence 82908 characters, bound 64000"
+ },
+ {
+  "site_id": "fa2075b9-ae78-4ce0-b00f-673d0139f0ff",
+  "field": "period_start",
+  "source_batch": "batch-0076",
+  "position": 10,
+  "why": "over-bound",
+  "detail": "evidence 82908 characters, bound 64000"
+ },
+ {
+  "site_id": "fa2075b9-ae78-4ce0-b00f-673d0139f0ff",
+  "field": "site_type",
+  "source_batch": "batch-0076",
+  "position": 10,
+  "why": "over-bound",
+  "detail": "evidence 82908 characters, bound 64000"
+ },
+ {
+  "site_id": "fa2075b9-ae78-4ce0-b00f-673d0139f0ff",
+  "field": "country",
+  "source_batch": "batch-0076",
+  "position": 10,
+  "why": "over-bound",
+  "detail": "evidence 82908 characters, bound 64000"
+ },
+ {
+  "site_id": "fa2075b9-ae78-4ce0-b00f-673d0139f0ff",
+  "field": "card_description",
+  "source_batch": "batch-0076",
+  "position": 10,
+  "why": "over-bound",
+  "detail": "evidence 82908 characters, bound 64000"
+ },
+ {
+  "site_id": "4c6f2c0a-abdb-4a1d-a12c-a71403776fe4",
+  "field": "site_type",
+  "source_batch": "batch-0081",
+  "position": 9,
+  "why": "no-verdict",
+  "detail": "no `VERDICT:` line naming CORRECT, WRONG or UNVERIFIABLE"
+ },
+ {
+  "site_id": "3e634b8b-68d6-4601-80d9-f795a6fa217f",
+  "field": "description",
+  "source_batch": "batch-0082",
+  "position": 5,
+  "why": "over-bound",
+  "detail": "evidence 68200 characters, bound 64000"
+ },
+ {
+  "site_id": "3e634b8b-68d6-4601-80d9-f795a6fa217f",
+  "field": "period_start",
+  "source_batch": "batch-0082",
+  "position": 5,
+  "why": "over-bound",
+  "detail": "evidence 68200 characters, bound 64000"
+ },
+ {
+  "site_id": "3e634b8b-68d6-4601-80d9-f795a6fa217f",
+  "field": "site_type",
+  "source_batch": "batch-0082",
+  "position": 5,
+  "why": "over-bound",
+  "detail": "evidence 68200 characters, bound 64000"
+ },
+ {
+  "site_id": "3e634b8b-68d6-4601-80d9-f795a6fa217f",
+  "field": "country",
+  "source_batch": "batch-0082",
+  "position": 5,
+  "why": "over-bound",
+  "detail": "evidence 68200 characters, bound 64000"
+ },
+ {
+  "site_id": "3e634b8b-68d6-4601-80d9-f795a6fa217f",
+  "field": "card_description",
+  "source_batch": "batch-0082",
+  "position": 5,
+  "why": "over-bound",
+  "detail": "evidence 68200 characters, bound 64000"
+ },
+ {
+  "site_id": "4d056246-58ef-4d82-8b67-79a8b3def7a5",
+  "field": "description",
+  "source_batch": "batch-0083",
+  "position": 2,
+  "why": "over-bound",
+  "detail": "evidence 107110 characters, bound 64000"
+ },
+ {
+  "site_id": "4d056246-58ef-4d82-8b67-79a8b3def7a5",
+  "field": "period_start",
+  "source_batch": "batch-0083",
+  "position": 2,
+  "why": "over-bound",
+  "detail": "evidence 107110 characters, bound 64000"
+ },
+ {
+  "site_id": "4d056246-58ef-4d82-8b67-79a8b3def7a5",
+  "field": "site_type",
+  "source_batch": "batch-0083",
+  "position": 2,
+  "why": "over-bound",
+  "detail": "evidence 107110 characters, bound 64000"
+ },
+ {
+  "site_id": "4d056246-58ef-4d82-8b67-79a8b3def7a5",
+  "field": "country",
+  "source_batch": "batch-0083",
+  "position": 2,
+  "why": "over-bound",
+  "detail": "evidence 107110 characters, bound 64000"
+ },
+ {
+  "site_id": "4d056246-58ef-4d82-8b67-79a8b3def7a5",
+  "field": "card_description",
+  "source_batch": "batch-0083",
+  "position": 2,
+  "why": "over-bound",
+  "detail": "evidence 107110 characters, bound 64000"
+ },
+ {
+  "site_id": "0e7825f5-26f0-483e-8cd0-687a9228a894",
+  "field": "description",
+  "source_batch": "batch-0086",
+  "position": 1,
+  "why": "over-bound",
+  "detail": "evidence 74965 characters, bound 64000"
+ },
+ {
+  "site_id": "0e7825f5-26f0-483e-8cd0-687a9228a894",
+  "field": "period_start",
+  "source_batch": "batch-0086",
+  "position": 1,
+  "why": "over-bound",
+  "detail": "evidence 74965 characters, bound 64000"
+ },
+ {
+  "site_id": "0e7825f5-26f0-483e-8cd0-687a9228a894",
+  "field": "site_type",
+  "source_batch": "batch-0086",
+  "position": 1,
+  "why": "over-bound",
+  "detail": "evidence 74965 characters, bound 64000"
+ },
+ {
+  "site_id": "0e7825f5-26f0-483e-8cd0-687a9228a894",
+  "field": "country",
+  "source_batch": "batch-0086",
+  "position": 1,
+  "why": "over-bound",
+  "detail": "evidence 74965 characters, bound 64000"
+ },
+ {
+  "site_id": "0e7825f5-26f0-483e-8cd0-687a9228a894",
+  "field": "card_description",
+  "source_batch": "batch-0086",
+  "position": 1,
+  "why": "over-bound",
+  "detail": "evidence 74965 characters, bound 64000"
+ },
+ {
+  "site_id": "7d39dd8c-cca7-4b3a-a412-6bbe5afa9307",
+  "field": "description",
+  "source_batch": "batch-0086",
+  "position": 3,
+  "why": "over-bound",
+  "detail": "evidence 70900 characters, bound 64000"
+ },
+ {
+  "site_id": "7d39dd8c-cca7-4b3a-a412-6bbe5afa9307",
+  "field": "period_start",
+  "source_batch": "batch-0086",
+  "position": 3,
+  "why": "over-bound",
+  "detail": "evidence 70900 characters, bound 64000"
+ },
+ {
+  "site_id": "7d39dd8c-cca7-4b3a-a412-6bbe5afa9307",
+  "field": "site_type",
+  "source_batch": "batch-0086",
+  "position": 3,
+  "why": "over-bound",
+  "detail": "evidence 70900 characters, bound 64000"
+ },
+ {
+  "site_id": "7d39dd8c-cca7-4b3a-a412-6bbe5afa9307",
+  "field": "country",
+  "source_batch": "batch-0086",
+  "position": 3,
+  "why": "over-bound",
+  "detail": "evidence 70900 characters, bound 64000"
+ },
+ {
+  "site_id": "7d39dd8c-cca7-4b3a-a412-6bbe5afa9307",
+  "field": "card_description",
+  "source_batch": "batch-0086",
+  "position": 3,
+  "why": "over-bound",
+  "detail": "evidence 70900 characters, bound 64000"
+ },
+ {
+  "site_id": "21b2278e-c3f2-4723-ae40-fa8a6161e3fb",
+  "field": "description",
+  "source_batch": "batch-0086",
+  "position": 8,
+  "why": "over-bound",
+  "detail": "evidence 122880 characters, bound 64000"
+ },
+ {
+  "site_id": "21b2278e-c3f2-4723-ae40-fa8a6161e3fb",
+  "field": "period_start",
+  "source_batch": "batch-0086",
+  "position": 8,
+  "why": "over-bound",
+  "detail": "evidence 122880 characters, bound 64000"
+ },
+ {
+  "site_id": "21b2278e-c3f2-4723-ae40-fa8a6161e3fb",
+  "field": "site_type",
+  "source_batch": "batch-0086",
+  "position": 8,
+  "why": "over-bound",
+  "detail": "evidence 122880 characters, bound 64000"
+ },
+ {
+  "site_id": "21b2278e-c3f2-4723-ae40-fa8a6161e3fb",
+  "field": "country",
+  "source_batch": "batch-0086",
+  "position": 8,
+  "why": "over-bound",
+  "detail": "evidence 122880 characters, bound 64000"
+ },
+ {
+  "site_id": "21b2278e-c3f2-4723-ae40-fa8a6161e3fb",
+  "field": "card_description",
+  "source_batch": "batch-0086",
+  "position": 8,
+  "why": "over-bound",
+  "detail": "evidence 122880 characters, bound 64000"
+ },
+ {
+  "site_id": "f5c6a56e-79b4-4f06-a064-d0e33524a118",
+  "field": "description",
+  "source_batch": "batch-0088",
+  "position": 3,
+  "why": "over-bound",
+  "detail": "evidence 69251 characters, bound 64000"
+ },
+ {
+  "site_id": "f5c6a56e-79b4-4f06-a064-d0e33524a118",
+  "field": "period_start",
+  "source_batch": "batch-0088",
+  "position": 3,
+  "why": "over-bound",
+  "detail": "evidence 69251 characters, bound 64000"
+ },
+ {
+  "site_id": "f5c6a56e-79b4-4f06-a064-d0e33524a118",
+  "field": "site_type",
+  "source_batch": "batch-0088",
+  "position": 3,
+  "why": "over-bound",
+  "detail": "evidence 69251 characters, bound 64000"
+ },
+ {
+  "site_id": "f5c6a56e-79b4-4f06-a064-d0e33524a118",
+  "field": "country",
+  "source_batch": "batch-0088",
+  "position": 3,
+  "why": "over-bound",
+  "detail": "evidence 69251 characters, bound 64000"
+ },
+ {
+  "site_id": "f5c6a56e-79b4-4f06-a064-d0e33524a118",
+  "field": "card_description",
+  "source_batch": "batch-0088",
+  "position": 3,
+  "why": "over-bound",
+  "detail": "evidence 69251 characters, bound 64000"
+ },
+ {
+  "site_id": "1ada3660-1f43-4840-b8a0-f75580a45a6a",
+  "field": "description",
+  "source_batch": "batch-0091",
+  "position": 3,
+  "why": "over-bound",
+  "detail": "evidence 76570 characters, bound 64000"
+ },
+ {
+  "site_id": "1ada3660-1f43-4840-b8a0-f75580a45a6a",
+  "field": "period_start",
+  "source_batch": "batch-0091",
+  "position": 3,
+  "why": "over-bound",
+  "detail": "evidence 76570 characters, bound 64000"
+ },
+ {
+  "site_id": "1ada3660-1f43-4840-b8a0-f75580a45a6a",
+  "field": "site_type",
+  "source_batch": "batch-0091",
+  "position": 3,
+  "why": "over-bound",
+  "detail": "evidence 76570 characters, bound 64000"
+ },
+ {
+  "site_id": "1ada3660-1f43-4840-b8a0-f75580a45a6a",
+  "field": "country",
+  "source_batch": "batch-0091",
+  "position": 3,
+  "why": "over-bound",
+  "detail": "evidence 76570 characters, bound 64000"
+ },
+ {
+  "site_id": "1ada3660-1f43-4840-b8a0-f75580a45a6a",
+  "field": "card_description",
+  "source_batch": "batch-0091",
+  "position": 3,
+  "why": "over-bound",
+  "detail": "evidence 76570 characters, bound 64000"
+ },
+ {
+  "site_id": "e2f8cf43-f499-4363-8fcb-af93e79ea756",
+  "field": "description",
+  "source_batch": "batch-0095",
+  "position": 13,
+  "why": "over-bound",
+  "detail": "evidence 66721 characters, bound 64000"
+ },
+ {
+  "site_id": "e2f8cf43-f499-4363-8fcb-af93e79ea756",
+  "field": "period_start",
+  "source_batch": "batch-0095",
+  "position": 13,
+  "why": "over-bound",
+  "detail": "evidence 66721 characters, bound 64000"
+ },
+ {
+  "site_id": "e2f8cf43-f499-4363-8fcb-af93e79ea756",
+  "field": "site_type",
+  "source_batch": "batch-0095",
+  "position": 13,
+  "why": "over-bound",
+  "detail": "evidence 66721 characters, bound 64000"
+ },
+ {
+  "site_id": "e2f8cf43-f499-4363-8fcb-af93e79ea756",
+  "field": "country",
+  "source_batch": "batch-0095",
+  "position": 13,
+  "why": "over-bound",
+  "detail": "evidence 66721 characters, bound 64000"
+ },
+ {
+  "site_id": "e2f8cf43-f499-4363-8fcb-af93e79ea756",
+  "field": "card_description",
+  "source_batch": "batch-0095",
+  "position": 13,
+  "why": "over-bound",
+  "detail": "evidence 66721 characters, bound 64000"
+ },
+ {
+  "site_id": "de42523e-9322-4dba-9448-016174872c48",
+  "field": "description",
+  "source_batch": "batch-0096",
+  "position": 4,
+  "why": "over-bound",
+  "detail": "evidence 101971 characters, bound 64000"
+ },
+ {
+  "site_id": "de42523e-9322-4dba-9448-016174872c48",
+  "field": "period_start",
+  "source_batch": "batch-0096",
+  "position": 4,
+  "why": "over-bound",
+  "detail": "evidence 101971 characters, bound 64000"
+ },
+ {
+  "site_id": "de42523e-9322-4dba-9448-016174872c48",
+  "field": "site_type",
+  "source_batch": "batch-0096",
+  "position": 4,
+  "why": "over-bound",
+  "detail": "evidence 101971 characters, bound 64000"
+ },
+ {
+  "site_id": "de42523e-9322-4dba-9448-016174872c48",
+  "field": "country",
+  "source_batch": "batch-0096",
+  "position": 4,
+  "why": "over-bound",
+  "detail": "evidence 101971 characters, bound 64000"
+ },
+ {
+  "site_id": "de42523e-9322-4dba-9448-016174872c48",
+  "field": "card_description",
+  "source_batch": "batch-0096",
+  "position": 4,
+  "why": "over-bound",
+  "detail": "evidence 101971 characters, bound 64000"
+ },
+ {
+  "site_id": "9da5ad49-9327-44f5-bcbf-80deb823aabd",
+  "field": "description",
+  "source_batch": "batch-0097",
+  "position": 8,
+  "why": "over-bound",
+  "detail": "evidence 68694 characters, bound 64000"
+ },
+ {
+  "site_id": "9da5ad49-9327-44f5-bcbf-80deb823aabd",
+  "field": "period_start",
+  "source_batch": "batch-0097",
+  "position": 8,
+  "why": "over-bound",
+  "detail": "evidence 68694 characters, bound 64000"
+ },
+ {
+  "site_id": "9da5ad49-9327-44f5-bcbf-80deb823aabd",
+  "field": "site_type",
+  "source_batch": "batch-0097",
+  "position": 8,
+  "why": "over-bound",
+  "detail": "evidence 68694 characters, bound 64000"
+ },
+ {
+  "site_id": "9da5ad49-9327-44f5-bcbf-80deb823aabd",
+  "field": "country",
+  "source_batch": "batch-0097",
+  "position": 8,
+  "why": "over-bound",
+  "detail": "evidence 68694 characters, bound 64000"
+ },
+ {
+  "site_id": "9da5ad49-9327-44f5-bcbf-80deb823aabd",
+  "field": "card_description",
+  "source_batch": "batch-0097",
+  "position": 8,
+  "why": "over-bound",
+  "detail": "evidence 68694 characters, bound 64000"
+ },
+ {
+  "site_id": "2f8e6a44-0802-497a-aeb5-5f680ebae88f",
+  "field": "description",
+  "source_batch": "batch-0099",
+  "position": 9,
+  "why": "over-bound",
+  "detail": "evidence 85497 characters, bound 64000"
+ },
+ {
+  "site_id": "2f8e6a44-0802-497a-aeb5-5f680ebae88f",
+  "field": "period_start",
+  "source_batch": "batch-0099",
+  "position": 9,
+  "why": "over-bound",
+  "detail": "evidence 85497 characters, bound 64000"
+ },
+ {
+  "site_id": "2f8e6a44-0802-497a-aeb5-5f680ebae88f",
+  "field": "site_type",
+  "source_batch": "batch-0099",
+  "position": 9,
+  "why": "over-bound",
+  "detail": "evidence 85497 characters, bound 64000"
+ },
+ {
+  "site_id": "2f8e6a44-0802-497a-aeb5-5f680ebae88f",
+  "field": "country",
+  "source_batch": "batch-0099",
+  "position": 9,
+  "why": "over-bound",
+  "detail": "evidence 85497 characters, bound 64000"
+ },
+ {
+  "site_id": "2f8e6a44-0802-497a-aeb5-5f680ebae88f",
+  "field": "card_description",
+  "source_batch": "batch-0099",
+  "position": 9,
+  "why": "over-bound",
+  "detail": "evidence 85497 characters, bound 64000"
+ },
+ {
+  "site_id": "5fffbfc9-f83c-4cd3-9b8d-d2570ce63dbd",
+  "field": "description",
+  "source_batch": "batch-0102",
+  "position": 9,
+  "why": "over-bound",
+  "detail": "evidence 79887 characters, bound 64000"
+ },
+ {
+  "site_id": "5fffbfc9-f83c-4cd3-9b8d-d2570ce63dbd",
+  "field": "period_start",
+  "source_batch": "batch-0102",
+  "position": 9,
+  "why": "over-bound",
+  "detail": "evidence 79887 characters, bound 64000"
+ },
+ {
+  "site_id": "5fffbfc9-f83c-4cd3-9b8d-d2570ce63dbd",
+  "field": "site_type",
+  "source_batch": "batch-0102",
+  "position": 9,
+  "why": "over-bound",
+  "detail": "evidence 79887 characters, bound 64000"
+ },
+ {
+  "site_id": "5fffbfc9-f83c-4cd3-9b8d-d2570ce63dbd",
+  "field": "country",
+  "source_batch": "batch-0102",
+  "position": 9,
+  "why": "over-bound",
+  "detail": "evidence 79887 characters, bound 64000"
+ },
+ {
+  "site_id": "5fffbfc9-f83c-4cd3-9b8d-d2570ce63dbd",
+  "field": "card_description",
+  "source_batch": "batch-0102",
+  "position": 9,
+  "why": "over-bound",
+  "detail": "evidence 79887 characters, bound 64000"
+ },
+ {
+  "site_id": "e607e5aa-4028-4ffc-89ed-bae34f368810",
+  "field": "period_start",
+  "source_batch": "batch-0104",
+  "position": 14,
+  "why": "no-verdict",
+  "detail": "no `VERDICT:` line naming CORRECT, WRONG or UNVERIFIABLE"
+ },
+ {
+  "site_id": "775adc1b-7af2-4452-824b-5cc575b2ec8c",
+  "field": "description",
+  "source_batch": "batch-0105",
+  "position": 5,
+  "why": "over-bound",
+  "detail": "evidence 83628 characters, bound 64000"
+ },
+ {
+  "site_id": "775adc1b-7af2-4452-824b-5cc575b2ec8c",
+  "field": "period_start",
+  "source_batch": "batch-0105",
+  "position": 5,
+  "why": "over-bound",
+  "detail": "evidence 83628 characters, bound 64000"
+ },
+ {
+  "site_id": "775adc1b-7af2-4452-824b-5cc575b2ec8c",
+  "field": "site_type",
+  "source_batch": "batch-0105",
+  "position": 5,
+  "why": "over-bound",
+  "detail": "evidence 83628 characters, bound 64000"
+ },
+ {
+  "site_id": "775adc1b-7af2-4452-824b-5cc575b2ec8c",
+  "field": "country",
+  "source_batch": "batch-0105",
+  "position": 5,
+  "why": "over-bound",
+  "detail": "evidence 83628 characters, bound 64000"
+ },
+ {
+  "site_id": "775adc1b-7af2-4452-824b-5cc575b2ec8c",
+  "field": "card_description",
+  "source_batch": "batch-0105",
+  "position": 5,
+  "why": "over-bound",
+  "detail": "evidence 83628 characters, bound 64000"
+ },
+ {
+  "site_id": "274600b9-31f5-45ce-96da-b0f326977dd5",
+  "field": "description",
+  "source_batch": "batch-0106",
+  "position": 5,
+  "why": "over-bound",
+  "detail": "evidence 65602 characters, bound 64000"
+ },
+ {
+  "site_id": "274600b9-31f5-45ce-96da-b0f326977dd5",
+  "field": "period_start",
+  "source_batch": "batch-0106",
+  "position": 5,
+  "why": "over-bound",
+  "detail": "evidence 65602 characters, bound 64000"
+ },
+ {
+  "site_id": "274600b9-31f5-45ce-96da-b0f326977dd5",
+  "field": "site_type",
+  "source_batch": "batch-0106",
+  "position": 5,
+  "why": "over-bound",
+  "detail": "evidence 65602 characters, bound 64000"
+ },
+ {
+  "site_id": "274600b9-31f5-45ce-96da-b0f326977dd5",
+  "field": "country",
+  "source_batch": "batch-0106",
+  "position": 5,
+  "why": "over-bound",
+  "detail": "evidence 65602 characters, bound 64000"
+ },
+ {
+  "site_id": "274600b9-31f5-45ce-96da-b0f326977dd5",
+  "field": "card_description",
+  "source_batch": "batch-0106",
+  "position": 5,
+  "why": "over-bound",
+  "detail": "evidence 65602 characters, bound 64000"
+ },
+ {
+  "site_id": "d1877f2c-7bdb-46ee-8368-950eacc0edd5",
+  "field": "site_type",
+  "source_batch": "batch-0107",
+  "position": 1,
+  "why": "no-verdict",
+  "detail": "no `VERDICT:` line naming CORRECT, WRONG or UNVERIFIABLE"
+ },
+ {
+  "site_id": "132d4298-f6ef-4099-b360-a80ea4202afa",
+  "field": "period_start",
+  "source_batch": "batch-0107",
+  "position": 4,
+  "why": "no-verdict",
+  "detail": "no `VERDICT:` line naming CORRECT, WRONG or UNVERIFIABLE"
+ },
+ {
+  "site_id": "b427d092-8349-4f90-b2e9-6fb6036fb3e2",
+  "field": "description",
+  "source_batch": "batch-0107",
+  "position": 9,
+  "why": "over-bound",
+  "detail": "evidence 118655 characters, bound 64000"
+ },
+ {
+  "site_id": "b427d092-8349-4f90-b2e9-6fb6036fb3e2",
+  "field": "period_start",
+  "source_batch": "batch-0107",
+  "position": 9,
+  "why": "over-bound",
+  "detail": "evidence 118655 characters, bound 64000"
+ },
+ {
+  "site_id": "b427d092-8349-4f90-b2e9-6fb6036fb3e2",
+  "field": "site_type",
+  "source_batch": "batch-0107",
+  "position": 9,
+  "why": "over-bound",
+  "detail": "evidence 118655 characters, bound 64000"
+ },
+ {
+  "site_id": "b427d092-8349-4f90-b2e9-6fb6036fb3e2",
+  "field": "country",
+  "source_batch": "batch-0107",
+  "position": 9,
+  "why": "over-bound",
+  "detail": "evidence 118655 characters, bound 64000"
+ },
+ {
+  "site_id": "b427d092-8349-4f90-b2e9-6fb6036fb3e2",
+  "field": "card_description",
+  "source_batch": "batch-0107",
+  "position": 9,
+  "why": "over-bound",
+  "detail": "evidence 118655 characters, bound 64000"
+ },
+ {
+  "site_id": "a85f5309-ddd4-445e-b447-75f1cb48c76b",
+  "field": "period_start",
+  "source_batch": "batch-0108",
+  "position": 11,
+  "why": "no-verdict",
+  "detail": "no `VERDICT:` line naming CORRECT, WRONG or UNVERIFIABLE"
+ },
+ {
+  "site_id": "14ca23b2-2208-4930-99f7-632db64ca953",
+  "field": "description",
+  "source_batch": "batch-0109",
+  "position": 7,
+  "why": "over-bound",
+  "detail": "evidence 91741 characters, bound 64000"
+ },
+ {
+  "site_id": "14ca23b2-2208-4930-99f7-632db64ca953",
+  "field": "period_start",
+  "source_batch": "batch-0109",
+  "position": 7,
+  "why": "over-bound",
+  "detail": "evidence 91741 characters, bound 64000"
+ },
+ {
+  "site_id": "14ca23b2-2208-4930-99f7-632db64ca953",
+  "field": "site_type",
+  "source_batch": "batch-0109",
+  "position": 7,
+  "why": "over-bound",
+  "detail": "evidence 91741 characters, bound 64000"
+ },
+ {
+  "site_id": "14ca23b2-2208-4930-99f7-632db64ca953",
+  "field": "country",
+  "source_batch": "batch-0109",
+  "position": 7,
+  "why": "over-bound",
+  "detail": "evidence 91741 characters, bound 64000"
+ },
+ {
+  "site_id": "14ca23b2-2208-4930-99f7-632db64ca953",
+  "field": "card_description",
+  "source_batch": "batch-0109",
+  "position": 7,
+  "why": "over-bound",
+  "detail": "evidence 91741 characters, bound 64000"
+ },
+ {
+  "site_id": "69af1cc6-e1f5-40e3-bb14-c506c147a62b",
+  "field": "description",
+  "source_batch": "batch-0111",
+  "position": 0,
+  "why": "over-bound",
+  "detail": "evidence 80205 characters, bound 64000"
+ },
+ {
+  "site_id": "69af1cc6-e1f5-40e3-bb14-c506c147a62b",
+  "field": "period_start",
+  "source_batch": "batch-0111",
+  "position": 0,
+  "why": "over-bound",
+  "detail": "evidence 80205 characters, bound 64000"
+ },
+ {
+  "site_id": "69af1cc6-e1f5-40e3-bb14-c506c147a62b",
+  "field": "site_type",
+  "source_batch": "batch-0111",
+  "position": 0,
+  "why": "over-bound",
+  "detail": "evidence 80205 characters, bound 64000"
+ },
+ {
+  "site_id": "69af1cc6-e1f5-40e3-bb14-c506c147a62b",
+  "field": "country",
+  "source_batch": "batch-0111",
+  "position": 0,
+  "why": "over-bound",
+  "detail": "evidence 80205 characters, bound 64000"
+ },
+ {
+  "site_id": "69af1cc6-e1f5-40e3-bb14-c506c147a62b",
+  "field": "card_description",
+  "source_batch": "batch-0111",
+  "position": 0,
+  "why": "over-bound",
+  "detail": "evidence 80205 characters, bound 64000"
+ },
+ {
+  "site_id": "2dcaaefa-e48b-4eab-993e-982418c3c8eb",
+  "field": "description",
+  "source_batch": "batch-0112",
+  "position": 7,
+  "why": "over-bound",
+  "detail": "evidence 82999 characters, bound 64000"
+ },
+ {
+  "site_id": "2dcaaefa-e48b-4eab-993e-982418c3c8eb",
+  "field": "period_start",
+  "source_batch": "batch-0112",
+  "position": 7,
+  "why": "over-bound",
+  "detail": "evidence 82999 characters, bound 64000"
+ },
+ {
+  "site_id": "2dcaaefa-e48b-4eab-993e-982418c3c8eb",
+  "field": "site_type",
+  "source_batch": "batch-0112",
+  "position": 7,
+  "why": "over-bound",
+  "detail": "evidence 82999 characters, bound 64000"
+ },
+ {
+  "site_id": "2dcaaefa-e48b-4eab-993e-982418c3c8eb",
+  "field": "country",
+  "source_batch": "batch-0112",
+  "position": 7,
+  "why": "over-bound",
+  "detail": "evidence 82999 characters, bound 64000"
+ },
+ {
+  "site_id": "2dcaaefa-e48b-4eab-993e-982418c3c8eb",
+  "field": "card_description",
+  "source_batch": "batch-0112",
+  "position": 7,
+  "why": "over-bound",
+  "detail": "evidence 82999 characters, bound 64000"
+ },
+ {
+  "site_id": "ffd8b3fc-4127-4b2b-9df1-212aac377683",
+  "field": "period_start",
+  "source_batch": "batch-0113",
+  "position": 2,
+  "why": "no-verdict",
+  "detail": "no `VERDICT:` line naming CORRECT, WRONG or UNVERIFIABLE"
+ },
+ {
+  "site_id": "7a43d34c-2051-48b6-b598-d4482adb4623",
+  "field": "description",
+  "source_batch": "batch-0113",
+  "position": 6,
+  "why": "over-bound",
+  "detail": "evidence 106442 characters, bound 64000"
+ },
+ {
+  "site_id": "7a43d34c-2051-48b6-b598-d4482adb4623",
+  "field": "period_start",
+  "source_batch": "batch-0113",
+  "position": 6,
+  "why": "over-bound",
+  "detail": "evidence 106442 characters, bound 64000"
+ },
+ {
+  "site_id": "7a43d34c-2051-48b6-b598-d4482adb4623",
+  "field": "site_type",
+  "source_batch": "batch-0113",
+  "position": 6,
+  "why": "over-bound",
+  "detail": "evidence 106442 characters, bound 64000"
+ },
+ {
+  "site_id": "7a43d34c-2051-48b6-b598-d4482adb4623",
+  "field": "country",
+  "source_batch": "batch-0113",
+  "position": 6,
+  "why": "over-bound",
+  "detail": "evidence 106442 characters, bound 64000"
+ },
+ {
+  "site_id": "7a43d34c-2051-48b6-b598-d4482adb4623",
+  "field": "card_description",
+  "source_batch": "batch-0113",
+  "position": 6,
+  "why": "over-bound",
+  "detail": "evidence 106442 characters, bound 64000"
+ },
+ {
+  "site_id": "d13aa6ef-bc9c-4815-968e-35bbf1543e9a",
+  "field": "card_description",
+  "source_batch": "batch-0118",
+  "position": 5,
+  "why": "no-verdict",
+  "detail": "no `VERDICT:` line naming CORRECT, WRONG or UNVERIFIABLE"
+ },
+ {
+  "site_id": "d83c15cf-679a-4e80-b138-344df541e860",
+  "field": "description",
+  "source_batch": "batch-0118",
+  "position": 13,
+  "why": "over-bound",
+  "detail": "evidence 76109 characters, bound 64000"
+ },
+ {
+  "site_id": "d83c15cf-679a-4e80-b138-344df541e860",
+  "field": "period_start",
+  "source_batch": "batch-0118",
+  "position": 13,
+  "why": "over-bound",
+  "detail": "evidence 76109 characters, bound 64000"
+ },
+ {
+  "site_id": "d83c15cf-679a-4e80-b138-344df541e860",
+  "field": "site_type",
+  "source_batch": "batch-0118",
+  "position": 13,
+  "why": "over-bound",
+  "detail": "evidence 76109 characters, bound 64000"
+ },
+ {
+  "site_id": "d83c15cf-679a-4e80-b138-344df541e860",
+  "field": "country",
+  "source_batch": "batch-0118",
+  "position": 13,
+  "why": "over-bound",
+  "detail": "evidence 76109 characters, bound 64000"
+ },
+ {
+  "site_id": "d83c15cf-679a-4e80-b138-344df541e860",
+  "field": "card_description",
+  "source_batch": "batch-0118",
+  "position": 13,
+  "why": "over-bound",
+  "detail": "evidence 76109 characters, bound 64000"
+ },
+ {
+  "site_id": "3cfc623b-724a-4b48-9c86-2889278efe57",
+  "field": "period_start",
+  "source_batch": "batch-0121",
+  "position": 3,
+  "why": "no-verdict",
+  "detail": "no `VERDICT:` line naming CORRECT, WRONG or UNVERIFIABLE"
+ },
+ {
+  "site_id": "efcf67b6-1267-4b97-aac3-80d1be6438bb",
+  "field": "description",
+  "source_batch": "batch-0122",
+  "position": 7,
+  "why": "over-bound",
+  "detail": "evidence 73161 characters, bound 64000"
+ },
+ {
+  "site_id": "efcf67b6-1267-4b97-aac3-80d1be6438bb",
+  "field": "period_start",
+  "source_batch": "batch-0122",
+  "position": 7,
+  "why": "over-bound",
+  "detail": "evidence 73161 characters, bound 64000"
+ },
+ {
+  "site_id": "efcf67b6-1267-4b97-aac3-80d1be6438bb",
+  "field": "site_type",
+  "source_batch": "batch-0122",
+  "position": 7,
+  "why": "over-bound",
+  "detail": "evidence 73161 characters, bound 64000"
+ },
+ {
+  "site_id": "efcf67b6-1267-4b97-aac3-80d1be6438bb",
+  "field": "country",
+  "source_batch": "batch-0122",
+  "position": 7,
+  "why": "over-bound",
+  "detail": "evidence 73161 characters, bound 64000"
+ },
+ {
+  "site_id": "efcf67b6-1267-4b97-aac3-80d1be6438bb",
+  "field": "card_description",
+  "source_batch": "batch-0122",
+  "position": 7,
+  "why": "over-bound",
+  "detail": "evidence 73161 characters, bound 64000"
+ },
+ {
+  "site_id": "f7a88213-58c1-4ee4-b791-4babfa0cd67a",
+  "field": "description",
+  "source_batch": "batch-0129",
+  "position": 1,
+  "why": "over-bound",
+  "detail": "evidence 95964 characters, bound 64000"
+ },
+ {
+  "site_id": "f7a88213-58c1-4ee4-b791-4babfa0cd67a",
+  "field": "period_start",
+  "source_batch": "batch-0129",
+  "position": 1,
+  "why": "over-bound",
+  "detail": "evidence 95964 characters, bound 64000"
+ },
+ {
+  "site_id": "f7a88213-58c1-4ee4-b791-4babfa0cd67a",
+  "field": "site_type",
+  "source_batch": "batch-0129",
+  "position": 1,
+  "why": "over-bound",
+  "detail": "evidence 95964 characters, bound 64000"
+ },
+ {
+  "site_id": "f7a88213-58c1-4ee4-b791-4babfa0cd67a",
+  "field": "country",
+  "source_batch": "batch-0129",
+  "position": 1,
+  "why": "over-bound",
+  "detail": "evidence 95964 characters, bound 64000"
+ },
+ {
+  "site_id": "f7a88213-58c1-4ee4-b791-4babfa0cd67a",
+  "field": "card_description",
+  "source_batch": "batch-0129",
+  "position": 1,
+  "why": "over-bound",
+  "detail": "evidence 95964 characters, bound 64000"
+ },
+ {
+  "site_id": "70466849-1cf9-4af9-a442-7a4ffa6e24c9",
+  "field": "period_start",
+  "source_batch": "batch-0129",
+  "position": 11,
+  "why": "no-verdict",
+  "detail": "no `VERDICT:` line naming CORRECT, WRONG or UNVERIFIABLE"
+ },
+ {
+  "site_id": "c086510a-dc65-4f32-ae34-f86578bd7cdf",
+  "field": "description",
+  "source_batch": "batch-0130",
+  "position": 8,
+  "why": "no-verdict",
+  "detail": "no `VERDICT:` line naming CORRECT, WRONG or UNVERIFIABLE"
+ },
+ {
+  "site_id": "e20a253e-63e2-4423-9852-c05615206f93",
+  "field": "description",
+  "source_batch": "batch-0131",
+  "position": 5,
+  "why": "over-bound",
+  "detail": "evidence 73710 characters, bound 64000"
+ },
+ {
+  "site_id": "e20a253e-63e2-4423-9852-c05615206f93",
+  "field": "period_start",
+  "source_batch": "batch-0131",
+  "position": 5,
+  "why": "over-bound",
+  "detail": "evidence 73710 characters, bound 64000"
+ },
+ {
+  "site_id": "e20a253e-63e2-4423-9852-c05615206f93",
+  "field": "site_type",
+  "source_batch": "batch-0131",
+  "position": 5,
+  "why": "over-bound",
+  "detail": "evidence 73710 characters, bound 64000"
+ },
+ {
+  "site_id": "e20a253e-63e2-4423-9852-c05615206f93",
+  "field": "country",
+  "source_batch": "batch-0131",
+  "position": 5,
+  "why": "over-bound",
+  "detail": "evidence 73710 characters, bound 64000"
+ },
+ {
+  "site_id": "e20a253e-63e2-4423-9852-c05615206f93",
+  "field": "card_description",
+  "source_batch": "batch-0131",
+  "position": 5,
+  "why": "over-bound",
+  "detail": "evidence 73710 characters, bound 64000"
+ },
+ {
+  "site_id": "af407cc1-1f93-4570-b93c-b38952a87fa0",
+  "field": "description",
+  "source_batch": "batch-0131",
+  "position": 13,
+  "why": "over-bound",
+  "detail": "evidence 102534 characters, bound 64000"
+ },
+ {
+  "site_id": "af407cc1-1f93-4570-b93c-b38952a87fa0",
+  "field": "period_start",
+  "source_batch": "batch-0131",
+  "position": 13,
+  "why": "over-bound",
+  "detail": "evidence 102534 characters, bound 64000"
+ },
+ {
+  "site_id": "af407cc1-1f93-4570-b93c-b38952a87fa0",
+  "field": "site_type",
+  "source_batch": "batch-0131",
+  "position": 13,
+  "why": "over-bound",
+  "detail": "evidence 102534 characters, bound 64000"
+ },
+ {
+  "site_id": "af407cc1-1f93-4570-b93c-b38952a87fa0",
+  "field": "country",
+  "source_batch": "batch-0131",
+  "position": 13,
+  "why": "over-bound",
+  "detail": "evidence 102534 characters, bound 64000"
+ },
+ {
+  "site_id": "af407cc1-1f93-4570-b93c-b38952a87fa0",
+  "field": "card_description",
+  "source_batch": "batch-0131",
+  "position": 13,
+  "why": "over-bound",
+  "detail": "evidence 102534 characters, bound 64000"
+ },
+ {
+  "site_id": "3b4f0f7c-3828-49a3-bd1a-5392e2a34731",
+  "field": "description",
+  "source_batch": "batch-0132",
+  "position": 9,
+  "why": "over-bound",
+  "detail": "evidence 77837 characters, bound 64000"
+ },
+ {
+  "site_id": "3b4f0f7c-3828-49a3-bd1a-5392e2a34731",
+  "field": "period_start",
+  "source_batch": "batch-0132",
+  "position": 9,
+  "why": "over-bound",
+  "detail": "evidence 77837 characters, bound 64000"
+ },
+ {
+  "site_id": "3b4f0f7c-3828-49a3-bd1a-5392e2a34731",
+  "field": "site_type",
+  "source_batch": "batch-0132",
+  "position": 9,
+  "why": "over-bound",
+  "detail": "evidence 77837 characters, bound 64000"
+ },
+ {
+  "site_id": "3b4f0f7c-3828-49a3-bd1a-5392e2a34731",
+  "field": "country",
+  "source_batch": "batch-0132",
+  "position": 9,
+  "why": "over-bound",
+  "detail": "evidence 77837 characters, bound 64000"
+ },
+ {
+  "site_id": "3b4f0f7c-3828-49a3-bd1a-5392e2a34731",
+  "field": "card_description",
+  "source_batch": "batch-0132",
+  "position": 9,
+  "why": "over-bound",
+  "detail": "evidence 77837 characters, bound 64000"
+ },
+ {
+  "site_id": "9ba7c034-6aec-492e-b66e-4541ce3c987c",
+  "field": "description",
+  "source_batch": "batch-0133",
+  "position": 11,
+  "why": "over-bound",
+  "detail": "evidence 75988 characters, bound 64000"
+ },
+ {
+  "site_id": "9ba7c034-6aec-492e-b66e-4541ce3c987c",
+  "field": "period_start",
+  "source_batch": "batch-0133",
+  "position": 11,
+  "why": "over-bound",
+  "detail": "evidence 75988 characters, bound 64000"
+ },
+ {
+  "site_id": "9ba7c034-6aec-492e-b66e-4541ce3c987c",
+  "field": "site_type",
+  "source_batch": "batch-0133",
+  "position": 11,
+  "why": "over-bound",
+  "detail": "evidence 75988 characters, bound 64000"
+ },
+ {
+  "site_id": "9ba7c034-6aec-492e-b66e-4541ce3c987c",
+  "field": "country",
+  "source_batch": "batch-0133",
+  "position": 11,
+  "why": "over-bound",
+  "detail": "evidence 75988 characters, bound 64000"
+ },
+ {
+  "site_id": "9ba7c034-6aec-492e-b66e-4541ce3c987c",
+  "field": "card_description",
+  "source_batch": "batch-0133",
+  "position": 11,
+  "why": "over-bound",
+  "detail": "evidence 75988 characters, bound 64000"
+ },
+ {
+  "site_id": "21bd525e-fe10-40dd-96be-32d3c8d36d26",
+  "field": "description",
+  "source_batch": "batch-0134",
+  "position": 13,
+  "why": "over-bound",
+  "detail": "evidence 69547 characters, bound 64000"
+ },
+ {
+  "site_id": "21bd525e-fe10-40dd-96be-32d3c8d36d26",
+  "field": "period_start",
+  "source_batch": "batch-0134",
+  "position": 13,
+  "why": "over-bound",
+  "detail": "evidence 69547 characters, bound 64000"
+ },
+ {
+  "site_id": "21bd525e-fe10-40dd-96be-32d3c8d36d26",
+  "field": "site_type",
+  "source_batch": "batch-0134",
+  "position": 13,
+  "why": "over-bound",
+  "detail": "evidence 69547 characters, bound 64000"
+ },
+ {
+  "site_id": "21bd525e-fe10-40dd-96be-32d3c8d36d26",
+  "field": "country",
+  "source_batch": "batch-0134",
+  "position": 13,
+  "why": "over-bound",
+  "detail": "evidence 69547 characters, bound 64000"
+ },
+ {
+  "site_id": "21bd525e-fe10-40dd-96be-32d3c8d36d26",
+  "field": "card_description",
+  "source_batch": "batch-0134",
+  "position": 13,
+  "why": "over-bound",
+  "detail": "evidence 69547 characters, bound 64000"
+ },
+ {
+  "site_id": "3dbbef3c-4605-4a1f-b04f-cadd63462673",
+  "field": "description",
+  "source_batch": "batch-0139",
+  "position": 13,
+  "why": "over-bound",
+  "detail": "evidence 81096 characters, bound 64000"
+ },
+ {
+  "site_id": "3dbbef3c-4605-4a1f-b04f-cadd63462673",
+  "field": "period_start",
+  "source_batch": "batch-0139",
+  "position": 13,
+  "why": "over-bound",
+  "detail": "evidence 81096 characters, bound 64000"
+ },
+ {
+  "site_id": "3dbbef3c-4605-4a1f-b04f-cadd63462673",
+  "field": "site_type",
+  "source_batch": "batch-0139",
+  "position": 13,
+  "why": "over-bound",
+  "detail": "evidence 81096 characters, bound 64000"
+ },
+ {
+  "site_id": "3dbbef3c-4605-4a1f-b04f-cadd63462673",
+  "field": "country",
+  "source_batch": "batch-0139",
+  "position": 13,
+  "why": "over-bound",
+  "detail": "evidence 81096 characters, bound 64000"
+ },
+ {
+  "site_id": "3dbbef3c-4605-4a1f-b04f-cadd63462673",
+  "field": "card_description",
+  "source_batch": "batch-0139",
+  "position": 13,
+  "why": "over-bound",
+  "detail": "evidence 81096 characters, bound 64000"
+ },
+ {
+  "site_id": "fe6b3da9-80c2-4692-a859-cd645550fabd",
+  "field": "period_start",
+  "source_batch": "batch-0142",
+  "position": 3,
+  "why": "no-verdict",
+  "detail": "no `VERDICT:` line naming CORRECT, WRONG or UNVERIFIABLE"
+ },
+ {
+  "site_id": "6eabe5c3-03f4-4155-8b7d-dbd5616f5d59",
+  "field": "description",
+  "source_batch": "batch-0144",
+  "position": 0,
+  "why": "over-bound",
+  "detail": "evidence 84649 characters, bound 64000"
+ },
+ {
+  "site_id": "6eabe5c3-03f4-4155-8b7d-dbd5616f5d59",
+  "field": "period_start",
+  "source_batch": "batch-0144",
+  "position": 0,
+  "why": "over-bound",
+  "detail": "evidence 84649 characters, bound 64000"
+ },
+ {
+  "site_id": "6eabe5c3-03f4-4155-8b7d-dbd5616f5d59",
+  "field": "site_type",
+  "source_batch": "batch-0144",
+  "position": 0,
+  "why": "over-bound",
+  "detail": "evidence 84649 characters, bound 64000"
+ },
+ {
+  "site_id": "6eabe5c3-03f4-4155-8b7d-dbd5616f5d59",
+  "field": "country",
+  "source_batch": "batch-0144",
+  "position": 0,
+  "why": "over-bound",
+  "detail": "evidence 84649 characters, bound 64000"
+ },
+ {
+  "site_id": "6eabe5c3-03f4-4155-8b7d-dbd5616f5d59",
+  "field": "card_description",
+  "source_batch": "batch-0144",
+  "position": 0,
+  "why": "over-bound",
+  "detail": "evidence 84649 characters, bound 64000"
+ },
+ {
+  "site_id": "4599daa4-93cc-4c55-872c-41e9c7875a59",
+  "field": "description",
+  "source_batch": "batch-0145",
+  "position": 10,
+  "why": "over-bound",
+  "detail": "evidence 66490 characters, bound 64000"
+ },
+ {
+  "site_id": "4599daa4-93cc-4c55-872c-41e9c7875a59",
+  "field": "period_start",
+  "source_batch": "batch-0145",
+  "position": 10,
+  "why": "over-bound",
+  "detail": "evidence 66490 characters, bound 64000"
+ },
+ {
+  "site_id": "4599daa4-93cc-4c55-872c-41e9c7875a59",
+  "field": "site_type",
+  "source_batch": "batch-0145",
+  "position": 10,
+  "why": "over-bound",
+  "detail": "evidence 66490 characters, bound 64000"
+ },
+ {
+  "site_id": "4599daa4-93cc-4c55-872c-41e9c7875a59",
+  "field": "country",
+  "source_batch": "batch-0145",
+  "position": 10,
+  "why": "over-bound",
+  "detail": "evidence 66490 characters, bound 64000"
+ },
+ {
+  "site_id": "4599daa4-93cc-4c55-872c-41e9c7875a59",
+  "field": "card_description",
+  "source_batch": "batch-0145",
+  "position": 10,
+  "why": "over-bound",
+  "detail": "evidence 66490 characters, bound 64000"
+ },
+ {
+  "site_id": "cdd96b01-efff-4896-acca-a97484a9f87c",
+  "field": "description",
+  "source_batch": "batch-0146",
+  "position": 0,
+  "why": "over-bound",
+  "detail": "evidence 87768 characters, bound 64000"
+ },
+ {
+  "site_id": "cdd96b01-efff-4896-acca-a97484a9f87c",
+  "field": "period_start",
+  "source_batch": "batch-0146",
+  "position": 0,
+  "why": "over-bound",
+  "detail": "evidence 87768 characters, bound 64000"
+ },
+ {
+  "site_id": "cdd96b01-efff-4896-acca-a97484a9f87c",
+  "field": "site_type",
+  "source_batch": "batch-0146",
+  "position": 0,
+  "why": "over-bound",
+  "detail": "evidence 87768 characters, bound 64000"
+ },
+ {
+  "site_id": "cdd96b01-efff-4896-acca-a97484a9f87c",
+  "field": "country",
+  "source_batch": "batch-0146",
+  "position": 0,
+  "why": "over-bound",
+  "detail": "evidence 87768 characters, bound 64000"
+ },
+ {
+  "site_id": "cdd96b01-efff-4896-acca-a97484a9f87c",
+  "field": "card_description",
+  "source_batch": "batch-0146",
+  "position": 0,
+  "why": "over-bound",
+  "detail": "evidence 87768 characters, bound 64000"
+ },
+ {
+  "site_id": "9cb8e16e-1f97-47da-b7f9-558216c9b543",
+  "field": "site_type",
+  "source_batch": "batch-0148",
+  "position": 7,
+  "why": "no-verdict",
+  "detail": "no `VERDICT:` line naming CORRECT, WRONG or UNVERIFIABLE"
+ },
+ {
+  "site_id": "285a2a92-7213-48ca-b4d9-fd157697e096",
+  "field": "description",
+  "source_batch": "batch-0148",
+  "position": 11,
+  "why": "over-bound",
+  "detail": "evidence 78917 characters, bound 64000"
+ },
+ {
+  "site_id": "285a2a92-7213-48ca-b4d9-fd157697e096",
+  "field": "period_start",
+  "source_batch": "batch-0148",
+  "position": 11,
+  "why": "over-bound",
+  "detail": "evidence 78917 characters, bound 64000"
+ },
+ {
+  "site_id": "285a2a92-7213-48ca-b4d9-fd157697e096",
+  "field": "site_type",
+  "source_batch": "batch-0148",
+  "position": 11,
+  "why": "over-bound",
+  "detail": "evidence 78917 characters, bound 64000"
+ },
+ {
+  "site_id": "285a2a92-7213-48ca-b4d9-fd157697e096",
+  "field": "country",
+  "source_batch": "batch-0148",
+  "position": 11,
+  "why": "over-bound",
+  "detail": "evidence 78917 characters, bound 64000"
+ },
+ {
+  "site_id": "285a2a92-7213-48ca-b4d9-fd157697e096",
+  "field": "card_description",
+  "source_batch": "batch-0148",
+  "position": 11,
+  "why": "over-bound",
+  "detail": "evidence 78917 characters, bound 64000"
+ },
+ {
+  "site_id": "29936379-8628-4125-8f2b-25d841e8eb5e",
+  "field": "description",
+  "source_batch": "batch-0151",
+  "position": 0,
+  "why": "over-bound",
+  "detail": "evidence 65082 characters, bound 64000"
+ },
+ {
+  "site_id": "29936379-8628-4125-8f2b-25d841e8eb5e",
+  "field": "period_start",
+  "source_batch": "batch-0151",
+  "position": 0,
+  "why": "over-bound",
+  "detail": "evidence 65082 characters, bound 64000"
+ },
+ {
+  "site_id": "29936379-8628-4125-8f2b-25d841e8eb5e",
+  "field": "site_type",
+  "source_batch": "batch-0151",
+  "position": 0,
+  "why": "over-bound",
+  "detail": "evidence 65082 characters, bound 64000"
+ },
+ {
+  "site_id": "29936379-8628-4125-8f2b-25d841e8eb5e",
+  "field": "country",
+  "source_batch": "batch-0151",
+  "position": 0,
+  "why": "over-bound",
+  "detail": "evidence 65082 characters, bound 64000"
+ },
+ {
+  "site_id": "29936379-8628-4125-8f2b-25d841e8eb5e",
+  "field": "card_description",
+  "source_batch": "batch-0151",
+  "position": 0,
+  "why": "over-bound",
+  "detail": "evidence 65082 characters, bound 64000"
+ },
+ {
+  "site_id": "c1c984e7-1391-4153-b140-f9bcd446d759",
+  "field": "description",
+  "source_batch": "batch-0152",
+  "position": 10,
+  "why": "over-bound",
+  "detail": "evidence 84316 characters, bound 64000"
+ },
+ {
+  "site_id": "c1c984e7-1391-4153-b140-f9bcd446d759",
+  "field": "period_start",
+  "source_batch": "batch-0152",
+  "position": 10,
+  "why": "over-bound",
+  "detail": "evidence 84316 characters, bound 64000"
+ },
+ {
+  "site_id": "c1c984e7-1391-4153-b140-f9bcd446d759",
+  "field": "site_type",
+  "source_batch": "batch-0152",
+  "position": 10,
+  "why": "over-bound",
+  "detail": "evidence 84316 characters, bound 64000"
+ },
+ {
+  "site_id": "c1c984e7-1391-4153-b140-f9bcd446d759",
+  "field": "country",
+  "source_batch": "batch-0152",
+  "position": 10,
+  "why": "over-bound",
+  "detail": "evidence 84316 characters, bound 64000"
+ },
+ {
+  "site_id": "c1c984e7-1391-4153-b140-f9bcd446d759",
+  "field": "card_description",
+  "source_batch": "batch-0152",
+  "position": 10,
+  "why": "over-bound",
+  "detail": "evidence 84316 characters, bound 64000"
+ },
+ {
+  "site_id": "40ce67f7-1961-49cd-beff-33c03f702a17",
+  "field": "description",
+  "source_batch": "batch-0153",
+  "position": 8,
+  "why": "over-bound",
+  "detail": "evidence 90815 characters, bound 64000"
+ },
+ {
+  "site_id": "40ce67f7-1961-49cd-beff-33c03f702a17",
+  "field": "period_start",
+  "source_batch": "batch-0153",
+  "position": 8,
+  "why": "over-bound",
+  "detail": "evidence 90815 characters, bound 64000"
+ },
+ {
+  "site_id": "40ce67f7-1961-49cd-beff-33c03f702a17",
+  "field": "site_type",
+  "source_batch": "batch-0153",
+  "position": 8,
+  "why": "over-bound",
+  "detail": "evidence 90815 characters, bound 64000"
+ },
+ {
+  "site_id": "40ce67f7-1961-49cd-beff-33c03f702a17",
+  "field": "country",
+  "source_batch": "batch-0153",
+  "position": 8,
+  "why": "over-bound",
+  "detail": "evidence 90815 characters, bound 64000"
+ },
+ {
+  "site_id": "40ce67f7-1961-49cd-beff-33c03f702a17",
+  "field": "card_description",
+  "source_batch": "batch-0153",
+  "position": 8,
+  "why": "over-bound",
+  "detail": "evidence 90815 characters, bound 64000"
+ },
+ {
+  "site_id": "192467da-7219-4481-9b2d-34fc4cd5c6fd",
+  "field": "period_start",
+  "source_batch": "batch-0154",
+  "position": 3,
+  "why": "no-verdict",
+  "detail": "no `VERDICT:` line naming CORRECT, WRONG or UNVERIFIABLE"
+ },
+ {
+  "site_id": "bfaefa82-2722-4642-bfde-305970f14ebe",
+  "field": "description",
+  "source_batch": "batch-0154",
+  "position": 11,
+  "why": "over-bound",
+  "detail": "evidence 71759 characters, bound 64000"
+ },
+ {
+  "site_id": "bfaefa82-2722-4642-bfde-305970f14ebe",
+  "field": "period_start",
+  "source_batch": "batch-0154",
+  "position": 11,
+  "why": "over-bound",
+  "detail": "evidence 71759 characters, bound 64000"
+ },
+ {
+  "site_id": "bfaefa82-2722-4642-bfde-305970f14ebe",
+  "field": "site_type",
+  "source_batch": "batch-0154",
+  "position": 11,
+  "why": "over-bound",
+  "detail": "evidence 71759 characters, bound 64000"
+ },
+ {
+  "site_id": "bfaefa82-2722-4642-bfde-305970f14ebe",
+  "field": "country",
+  "source_batch": "batch-0154",
+  "position": 11,
+  "why": "over-bound",
+  "detail": "evidence 71759 characters, bound 64000"
+ },
+ {
+  "site_id": "bfaefa82-2722-4642-bfde-305970f14ebe",
+  "field": "card_description",
+  "source_batch": "batch-0154",
+  "position": 11,
+  "why": "over-bound",
+  "detail": "evidence 71759 characters, bound 64000"
+ },
+ {
+  "site_id": "22a7c5e7-a5dd-46b3-a168-ab73f7cf77d4",
+  "field": "country",
+  "source_batch": "batch-0158",
+  "position": 3,
+  "why": "no-verdict",
+  "detail": "no `VERDICT:` line naming CORRECT, WRONG or UNVERIFIABLE"
+ },
+ {
+  "site_id": "6cef20ff-4a03-4476-a80e-b44447f6764a",
+  "field": "description",
+  "source_batch": "batch-0161",
+  "position": 12,
+  "why": "no-verdict",
+  "detail": "no `VERDICT:` line naming CORRECT, WRONG or UNVERIFIABLE"
+ },
+ {
+  "site_id": "ce1d8e3d-924e-4667-9ba6-9e32a3fac6d3",
+  "field": "card_description",
+  "source_batch": "batch-0162",
+  "position": 4,
+  "why": "no-verdict",
+  "detail": "no `VERDICT:` line naming CORRECT, WRONG or UNVERIFIABLE"
+ },
+ {
+  "site_id": "7e2b3ee7-ffb0-40d3-ae9d-7c8044dd42d2",
+  "field": "description",
+  "source_batch": "batch-0164",
+  "position": 14,
+  "why": "over-bound",
+  "detail": "evidence 71664 characters, bound 64000"
+ },
+ {
+  "site_id": "7e2b3ee7-ffb0-40d3-ae9d-7c8044dd42d2",
+  "field": "period_start",
+  "source_batch": "batch-0164",
+  "position": 14,
+  "why": "over-bound",
+  "detail": "evidence 71664 characters, bound 64000"
+ },
+ {
+  "site_id": "7e2b3ee7-ffb0-40d3-ae9d-7c8044dd42d2",
+  "field": "site_type",
+  "source_batch": "batch-0164",
+  "position": 14,
+  "why": "over-bound",
+  "detail": "evidence 71664 characters, bound 64000"
+ },
+ {
+  "site_id": "7e2b3ee7-ffb0-40d3-ae9d-7c8044dd42d2",
+  "field": "country",
+  "source_batch": "batch-0164",
+  "position": 14,
+  "why": "over-bound",
+  "detail": "evidence 71664 characters, bound 64000"
+ },
+ {
+  "site_id": "7e2b3ee7-ffb0-40d3-ae9d-7c8044dd42d2",
+  "field": "card_description",
+  "source_batch": "batch-0164",
+  "position": 14,
+  "why": "over-bound",
+  "detail": "evidence 71664 characters, bound 64000"
+ },
+ {
+  "site_id": "6313cd62-456d-4a85-8782-57613c7fc0e1",
+  "field": "description",
+  "source_batch": "batch-0167",
+  "position": 11,
+  "why": "over-bound",
+  "detail": "evidence 110881 characters, bound 64000"
+ },
+ {
+  "site_id": "6313cd62-456d-4a85-8782-57613c7fc0e1",
+  "field": "period_start",
+  "source_batch": "batch-0167",
+  "position": 11,
+  "why": "over-bound",
+  "detail": "evidence 110881 characters, bound 64000"
+ },
+ {
+  "site_id": "6313cd62-456d-4a85-8782-57613c7fc0e1",
+  "field": "site_type",
+  "source_batch": "batch-0167",
+  "position": 11,
+  "why": "over-bound",
+  "detail": "evidence 110881 characters, bound 64000"
+ },
+ {
+  "site_id": "6313cd62-456d-4a85-8782-57613c7fc0e1",
+  "field": "country",
+  "source_batch": "batch-0167",
+  "position": 11,
+  "why": "over-bound",
+  "detail": "evidence 110881 characters, bound 64000"
+ },
+ {
+  "site_id": "6313cd62-456d-4a85-8782-57613c7fc0e1",
+  "field": "card_description",
+  "source_batch": "batch-0167",
+  "position": 11,
+  "why": "over-bound",
+  "detail": "evidence 110881 characters, bound 64000"
+ },
+ {
+  "site_id": "f7ed0deb-1206-4b70-b798-80ad7d442261",
+  "field": "description",
+  "source_batch": "batch-0172",
+  "position": 2,
+  "why": "over-bound",
+  "detail": "evidence 109386 characters, bound 64000"
+ },
+ {
+  "site_id": "f7ed0deb-1206-4b70-b798-80ad7d442261",
+  "field": "period_start",
+  "source_batch": "batch-0172",
+  "position": 2,
+  "why": "over-bound",
+  "detail": "evidence 109386 characters, bound 64000"
+ },
+ {
+  "site_id": "f7ed0deb-1206-4b70-b798-80ad7d442261",
+  "field": "site_type",
+  "source_batch": "batch-0172",
+  "position": 2,
+  "why": "over-bound",
+  "detail": "evidence 109386 characters, bound 64000"
+ },
+ {
+  "site_id": "f7ed0deb-1206-4b70-b798-80ad7d442261",
+  "field": "country",
+  "source_batch": "batch-0172",
+  "position": 2,
+  "why": "over-bound",
+  "detail": "evidence 109386 characters, bound 64000"
+ },
+ {
+  "site_id": "f7ed0deb-1206-4b70-b798-80ad7d442261",
+  "field": "card_description",
+  "source_batch": "batch-0172",
+  "position": 2,
+  "why": "over-bound",
+  "detail": "evidence 109386 characters, bound 64000"
+ },
+ {
+  "site_id": "be2bb871-ba24-49cf-9172-d20d673a2c3d",
+  "field": "description",
+  "source_batch": "batch-0172",
+  "position": 13,
+  "why": "over-bound",
+  "detail": "evidence 122452 characters, bound 64000"
+ },
+ {
+  "site_id": "be2bb871-ba24-49cf-9172-d20d673a2c3d",
+  "field": "period_start",
+  "source_batch": "batch-0172",
+  "position": 13,
+  "why": "over-bound",
+  "detail": "evidence 122452 characters, bound 64000"
+ },
+ {
+  "site_id": "be2bb871-ba24-49cf-9172-d20d673a2c3d",
+  "field": "site_type",
+  "source_batch": "batch-0172",
+  "position": 13,
+  "why": "over-bound",
+  "detail": "evidence 122452 characters, bound 64000"
+ },
+ {
+  "site_id": "be2bb871-ba24-49cf-9172-d20d673a2c3d",
+  "field": "country",
+  "source_batch": "batch-0172",
+  "position": 13,
+  "why": "over-bound",
+  "detail": "evidence 122452 characters, bound 64000"
+ },
+ {
+  "site_id": "be2bb871-ba24-49cf-9172-d20d673a2c3d",
+  "field": "card_description",
+  "source_batch": "batch-0172",
+  "position": 13,
+  "why": "over-bound",
+  "detail": "evidence 122452 characters, bound 64000"
+ },
+ {
+  "site_id": "d4ead0d9-4f61-4021-a84d-da1b667f002d",
+  "field": "site_type",
+  "source_batch": "batch-0175",
+  "position": 3,
+  "why": "no-verdict",
+  "detail": "no `VERDICT:` line naming CORRECT, WRONG or UNVERIFIABLE"
+ },
+ {
+  "site_id": "5c4b2afd-f915-4625-a841-790460fddef5",
+  "field": "description",
+  "source_batch": "batch-0179",
+  "position": 3,
+  "why": "over-bound",
+  "detail": "evidence 68883 characters, bound 64000"
+ },
+ {
+  "site_id": "5c4b2afd-f915-4625-a841-790460fddef5",
+  "field": "period_start",
+  "source_batch": "batch-0179",
+  "position": 3,
+  "why": "over-bound",
+  "detail": "evidence 68883 characters, bound 64000"
+ },
+ {
+  "site_id": "5c4b2afd-f915-4625-a841-790460fddef5",
+  "field": "site_type",
+  "source_batch": "batch-0179",
+  "position": 3,
+  "why": "over-bound",
+  "detail": "evidence 68883 characters, bound 64000"
+ },
+ {
+  "site_id": "5c4b2afd-f915-4625-a841-790460fddef5",
+  "field": "country",
+  "source_batch": "batch-0179",
+  "position": 3,
+  "why": "over-bound",
+  "detail": "evidence 68883 characters, bound 64000"
+ },
+ {
+  "site_id": "5c4b2afd-f915-4625-a841-790460fddef5",
+  "field": "card_description",
+  "source_batch": "batch-0179",
+  "position": 3,
+  "why": "over-bound",
+  "detail": "evidence 68883 characters, bound 64000"
+ },
+ {
+  "site_id": "b803b66a-768d-4040-bdac-6176611241da",
+  "field": "description",
+  "source_batch": "batch-0181",
+  "position": 9,
+  "why": "over-bound",
+  "detail": "evidence 76906 characters, bound 64000"
+ },
+ {
+  "site_id": "b803b66a-768d-4040-bdac-6176611241da",
+  "field": "period_start",
+  "source_batch": "batch-0181",
+  "position": 9,
+  "why": "over-bound",
+  "detail": "evidence 76906 characters, bound 64000"
+ },
+ {
+  "site_id": "b803b66a-768d-4040-bdac-6176611241da",
+  "field": "site_type",
+  "source_batch": "batch-0181",
+  "position": 9,
+  "why": "over-bound",
+  "detail": "evidence 76906 characters, bound 64000"
+ },
+ {
+  "site_id": "b803b66a-768d-4040-bdac-6176611241da",
+  "field": "country",
+  "source_batch": "batch-0181",
+  "position": 9,
+  "why": "over-bound",
+  "detail": "evidence 76906 characters, bound 64000"
+ },
+ {
+  "site_id": "b803b66a-768d-4040-bdac-6176611241da",
+  "field": "card_description",
+  "source_batch": "batch-0181",
+  "position": 9,
+  "why": "over-bound",
+  "detail": "evidence 76906 characters, bound 64000"
+ },
+ {
+  "site_id": "5ae4b331-f6a3-4307-9b5a-6c4c65f111b3",
+  "field": "period_start",
+  "source_batch": "batch-0182",
+  "position": 0,
+  "why": "no-verdict",
+  "detail": "no `VERDICT:` line naming CORRECT, WRONG or UNVERIFIABLE"
+ },
+ {
+  "site_id": "56ba3b1c-2d33-465b-b4d0-85fb987fbdc2",
+  "field": "description",
+  "source_batch": "batch-0185",
+  "position": 5,
+  "why": "over-bound",
+  "detail": "evidence 71324 characters, bound 64000"
+ },
+ {
+  "site_id": "56ba3b1c-2d33-465b-b4d0-85fb987fbdc2",
+  "field": "period_start",
+  "source_batch": "batch-0185",
+  "position": 5,
+  "why": "over-bound",
+  "detail": "evidence 71324 characters, bound 64000"
+ },
+ {
+  "site_id": "56ba3b1c-2d33-465b-b4d0-85fb987fbdc2",
+  "field": "site_type",
+  "source_batch": "batch-0185",
+  "position": 5,
+  "why": "over-bound",
+  "detail": "evidence 71324 characters, bound 64000"
+ },
+ {
+  "site_id": "56ba3b1c-2d33-465b-b4d0-85fb987fbdc2",
+  "field": "country",
+  "source_batch": "batch-0185",
+  "position": 5,
+  "why": "over-bound",
+  "detail": "evidence 71324 characters, bound 64000"
+ },
+ {
+  "site_id": "56ba3b1c-2d33-465b-b4d0-85fb987fbdc2",
+  "field": "card_description",
+  "source_batch": "batch-0185",
+  "position": 5,
+  "why": "over-bound",
+  "detail": "evidence 71324 characters, bound 64000"
+ },
+ {
+  "site_id": "565a3dc3-f8a7-4d38-a672-17c57f9401e9",
+  "field": "site_type",
+  "source_batch": "batch-0186",
+  "position": 1,
+  "why": "no-verdict",
+  "detail": "no `VERDICT:` line naming CORRECT, WRONG or UNVERIFIABLE"
+ },
+ {
+  "site_id": "7a1fc276-f5b2-42d1-b57f-95f2dc6eb115",
+  "field": "site_type",
+  "source_batch": "batch-0187",
+  "position": 13,
+  "why": "no-verdict",
+  "detail": "no `VERDICT:` line naming CORRECT, WRONG or UNVERIFIABLE"
+ },
+ {
+  "site_id": "8b423740-32d5-47e6-80ed-c764f7be5af5",
+  "field": "description",
+  "source_batch": "batch-0190",
+  "position": 14,
+  "why": "over-bound",
+  "detail": "evidence 90795 characters, bound 64000"
+ },
+ {
+  "site_id": "8b423740-32d5-47e6-80ed-c764f7be5af5",
+  "field": "period_start",
+  "source_batch": "batch-0190",
+  "position": 14,
+  "why": "over-bound",
+  "detail": "evidence 90795 characters, bound 64000"
+ },
+ {
+  "site_id": "8b423740-32d5-47e6-80ed-c764f7be5af5",
+  "field": "site_type",
+  "source_batch": "batch-0190",
+  "position": 14,
+  "why": "over-bound",
+  "detail": "evidence 90795 characters, bound 64000"
+ },
+ {
+  "site_id": "8b423740-32d5-47e6-80ed-c764f7be5af5",
+  "field": "country",
+  "source_batch": "batch-0190",
+  "position": 14,
+  "why": "over-bound",
+  "detail": "evidence 90795 characters, bound 64000"
+ },
+ {
+  "site_id": "8b423740-32d5-47e6-80ed-c764f7be5af5",
+  "field": "card_description",
+  "source_batch": "batch-0190",
+  "position": 14,
+  "why": "over-bound",
+  "detail": "evidence 90795 characters, bound 64000"
+ },
+ {
+  "site_id": "90e808a1-7ea7-44ce-a1c9-05cf10c133be",
+  "field": "description",
+  "source_batch": "batch-0193",
+  "position": 2,
+  "why": "over-bound",
+  "detail": "evidence 93750 characters, bound 64000"
+ },
+ {
+  "site_id": "90e808a1-7ea7-44ce-a1c9-05cf10c133be",
+  "field": "period_start",
+  "source_batch": "batch-0193",
+  "position": 2,
+  "why": "over-bound",
+  "detail": "evidence 93750 characters, bound 64000"
+ },
+ {
+  "site_id": "90e808a1-7ea7-44ce-a1c9-05cf10c133be",
+  "field": "site_type",
+  "source_batch": "batch-0193",
+  "position": 2,
+  "why": "over-bound",
+  "detail": "evidence 93750 characters, bound 64000"
+ },
+ {
+  "site_id": "90e808a1-7ea7-44ce-a1c9-05cf10c133be",
+  "field": "country",
+  "source_batch": "batch-0193",
+  "position": 2,
+  "why": "over-bound",
+  "detail": "evidence 93750 characters, bound 64000"
+ },
+ {
+  "site_id": "90e808a1-7ea7-44ce-a1c9-05cf10c133be",
+  "field": "card_description",
+  "source_batch": "batch-0193",
+  "position": 2,
+  "why": "over-bound",
+  "detail": "evidence 93750 characters, bound 64000"
+ },
+ {
+  "site_id": "a25850c8-b73b-4eed-9eff-8fc6dc28ff73",
+  "field": "description",
+  "source_batch": "batch-0197",
+  "position": 5,
+  "why": "over-bound",
+  "detail": "evidence 69515 characters, bound 64000"
+ },
+ {
+  "site_id": "a25850c8-b73b-4eed-9eff-8fc6dc28ff73",
+  "field": "period_start",
+  "source_batch": "batch-0197",
+  "position": 5,
+  "why": "over-bound",
+  "detail": "evidence 69515 characters, bound 64000"
+ },
+ {
+  "site_id": "a25850c8-b73b-4eed-9eff-8fc6dc28ff73",
+  "field": "site_type",
+  "source_batch": "batch-0197",
+  "position": 5,
+  "why": "over-bound",
+  "detail": "evidence 69515 characters, bound 64000"
+ },
+ {
+  "site_id": "a25850c8-b73b-4eed-9eff-8fc6dc28ff73",
+  "field": "country",
+  "source_batch": "batch-0197",
+  "position": 5,
+  "why": "over-bound",
+  "detail": "evidence 69515 characters, bound 64000"
+ },
+ {
+  "site_id": "a25850c8-b73b-4eed-9eff-8fc6dc28ff73",
+  "field": "card_description",
+  "source_batch": "batch-0197",
+  "position": 5,
+  "why": "over-bound",
+  "detail": "evidence 69515 characters, bound 64000"
+ },
+ {
+  "site_id": "da488c94-540b-4fdc-8d3a-0d5aba57b372",
+  "field": "description",
+  "source_batch": "batch-0198",
+  "position": 6,
+  "why": "over-bound",
+  "detail": "evidence 73902 characters, bound 64000"
+ },
+ {
+  "site_id": "da488c94-540b-4fdc-8d3a-0d5aba57b372",
+  "field": "period_start",
+  "source_batch": "batch-0198",
+  "position": 6,
+  "why": "over-bound",
+  "detail": "evidence 73902 characters, bound 64000"
+ },
+ {
+  "site_id": "da488c94-540b-4fdc-8d3a-0d5aba57b372",
+  "field": "site_type",
+  "source_batch": "batch-0198",
+  "position": 6,
+  "why": "over-bound",
+  "detail": "evidence 73902 characters, bound 64000"
+ },
+ {
+  "site_id": "da488c94-540b-4fdc-8d3a-0d5aba57b372",
+  "field": "country",
+  "source_batch": "batch-0198",
+  "position": 6,
+  "why": "over-bound",
+  "detail": "evidence 73902 characters, bound 64000"
+ },
+ {
+  "site_id": "da488c94-540b-4fdc-8d3a-0d5aba57b372",
+  "field": "card_description",
+  "source_batch": "batch-0198",
+  "position": 6,
+  "why": "over-bound",
+  "detail": "evidence 73902 characters, bound 64000"
+ },
+ {
+  "site_id": "5639ccb8-8d69-4268-b4f1-5d52245214da",
+  "field": "description",
+  "source_batch": "batch-0201",
+  "position": 6,
+  "why": "over-bound",
+  "detail": "evidence 69920 characters, bound 64000"
+ },
+ {
+  "site_id": "5639ccb8-8d69-4268-b4f1-5d52245214da",
+  "field": "period_start",
+  "source_batch": "batch-0201",
+  "position": 6,
+  "why": "over-bound",
+  "detail": "evidence 69920 characters, bound 64000"
+ },
+ {
+  "site_id": "5639ccb8-8d69-4268-b4f1-5d52245214da",
+  "field": "site_type",
+  "source_batch": "batch-0201",
+  "position": 6,
+  "why": "over-bound",
+  "detail": "evidence 69920 characters, bound 64000"
+ },
+ {
+  "site_id": "5639ccb8-8d69-4268-b4f1-5d52245214da",
+  "field": "country",
+  "source_batch": "batch-0201",
+  "position": 6,
+  "why": "over-bound",
+  "detail": "evidence 69920 characters, bound 64000"
+ },
+ {
+  "site_id": "5639ccb8-8d69-4268-b4f1-5d52245214da",
+  "field": "card_description",
+  "source_batch": "batch-0201",
+  "position": 6,
+  "why": "over-bound",
+  "detail": "evidence 69920 characters, bound 64000"
+ },
+ {
+  "site_id": "f7d0fdbc-8e4f-488c-879a-774eff5dfb4e",
+  "field": "description",
+  "source_batch": "batch-0202",
+  "position": 0,
+  "why": "over-bound",
+  "detail": "evidence 64175 characters, bound 64000"
+ },
+ {
+  "site_id": "f7d0fdbc-8e4f-488c-879a-774eff5dfb4e",
+  "field": "period_start",
+  "source_batch": "batch-0202",
+  "position": 0,
+  "why": "over-bound",
+  "detail": "evidence 64175 characters, bound 64000"
+ },
+ {
+  "site_id": "f7d0fdbc-8e4f-488c-879a-774eff5dfb4e",
+  "field": "site_type",
+  "source_batch": "batch-0202",
+  "position": 0,
+  "why": "over-bound",
+  "detail": "evidence 64175 characters, bound 64000"
+ },
+ {
+  "site_id": "f7d0fdbc-8e4f-488c-879a-774eff5dfb4e",
+  "field": "country",
+  "source_batch": "batch-0202",
+  "position": 0,
+  "why": "over-bound",
+  "detail": "evidence 64175 characters, bound 64000"
+ },
+ {
+  "site_id": "f7d0fdbc-8e4f-488c-879a-774eff5dfb4e",
+  "field": "card_description",
+  "source_batch": "batch-0202",
+  "position": 0,
+  "why": "over-bound",
+  "detail": "evidence 64175 characters, bound 64000"
+ },
+ {
+  "site_id": "27190db9-7e95-4f0e-a757-a897fcf7c390",
+  "field": "description",
+  "source_batch": "batch-0203",
+  "position": 3,
+  "why": "over-bound",
+  "detail": "evidence 74163 characters, bound 64000"
+ },
+ {
+  "site_id": "27190db9-7e95-4f0e-a757-a897fcf7c390",
+  "field": "period_start",
+  "source_batch": "batch-0203",
+  "position": 3,
+  "why": "over-bound",
+  "detail": "evidence 74163 characters, bound 64000"
+ },
+ {
+  "site_id": "27190db9-7e95-4f0e-a757-a897fcf7c390",
+  "field": "site_type",
+  "source_batch": "batch-0203",
+  "position": 3,
+  "why": "over-bound",
+  "detail": "evidence 74163 characters, bound 64000"
+ },
+ {
+  "site_id": "27190db9-7e95-4f0e-a757-a897fcf7c390",
+  "field": "country",
+  "source_batch": "batch-0203",
+  "position": 3,
+  "why": "over-bound",
+  "detail": "evidence 74163 characters, bound 64000"
+ },
+ {
+  "site_id": "27190db9-7e95-4f0e-a757-a897fcf7c390",
+  "field": "card_description",
+  "source_batch": "batch-0203",
+  "position": 3,
+  "why": "over-bound",
+  "detail": "evidence 74163 characters, bound 64000"
+ },
+ {
+  "site_id": "2b2d0e62-5cbc-4427-be06-542064fb5076",
+  "field": "period_start",
+  "source_batch": "batch-0204",
+  "position": 9,
+  "why": "no-verdict",
+  "detail": "no `VERDICT:` line naming CORRECT, WRONG or UNVERIFIABLE"
+ },
+ {
+  "site_id": "3c56c4c5-f5a8-48bb-8b93-9e3a92feac09",
+  "field": "description",
+  "source_batch": "batch-0204",
+  "position": 14,
+  "why": "over-bound",
+  "detail": "evidence 79614 characters, bound 64000"
+ },
+ {
+  "site_id": "3c56c4c5-f5a8-48bb-8b93-9e3a92feac09",
+  "field": "period_start",
+  "source_batch": "batch-0204",
+  "position": 14,
+  "why": "over-bound",
+  "detail": "evidence 79614 characters, bound 64000"
+ },
+ {
+  "site_id": "3c56c4c5-f5a8-48bb-8b93-9e3a92feac09",
+  "field": "site_type",
+  "source_batch": "batch-0204",
+  "position": 14,
+  "why": "over-bound",
+  "detail": "evidence 79614 characters, bound 64000"
+ },
+ {
+  "site_id": "3c56c4c5-f5a8-48bb-8b93-9e3a92feac09",
+  "field": "country",
+  "source_batch": "batch-0204",
+  "position": 14,
+  "why": "over-bound",
+  "detail": "evidence 79614 characters, bound 64000"
+ },
+ {
+  "site_id": "3c56c4c5-f5a8-48bb-8b93-9e3a92feac09",
+  "field": "card_description",
+  "source_batch": "batch-0204",
+  "position": 14,
+  "why": "over-bound",
+  "detail": "evidence 79614 characters, bound 64000"
+ },
+ {
+  "site_id": "d6c6520a-dc96-4a47-bb30-3c742c4509dc",
+  "field": "card_description",
+  "source_batch": "batch-0206",
+  "position": 12,
+  "why": "empty-stream",
+  "detail": "d6c6520a-dc96-4a47-bb30-3c742c4509dc/card_description stdout:9 assistant message_end: the assistant message carries no text - an empty answer is not a result"
+ },
+ {
+  "site_id": "e8bc112c-9e95-4728-b181-e78d7de1fa26",
+  "field": "description",
+  "source_batch": "batch-0207",
+  "position": 1,
+  "why": "no-verdict",
+  "detail": "no `VERDICT:` line naming CORRECT, WRONG or UNVERIFIABLE"
+ },
+ {
+  "site_id": "56e12b4a-f51a-40ab-8026-846a76db0d6e",
+  "field": "description",
+  "source_batch": "batch-0207",
+  "position": 8,
+  "why": "over-bound",
+  "detail": "evidence 66173 characters, bound 64000"
+ },
+ {
+  "site_id": "56e12b4a-f51a-40ab-8026-846a76db0d6e",
+  "field": "period_start",
+  "source_batch": "batch-0207",
+  "position": 8,
+  "why": "over-bound",
+  "detail": "evidence 66173 characters, bound 64000"
+ },
+ {
+  "site_id": "56e12b4a-f51a-40ab-8026-846a76db0d6e",
+  "field": "site_type",
+  "source_batch": "batch-0207",
+  "position": 8,
+  "why": "over-bound",
+  "detail": "evidence 66173 characters, bound 64000"
+ },
+ {
+  "site_id": "56e12b4a-f51a-40ab-8026-846a76db0d6e",
+  "field": "country",
+  "source_batch": "batch-0207",
+  "position": 8,
+  "why": "over-bound",
+  "detail": "evidence 66173 characters, bound 64000"
+ },
+ {
+  "site_id": "56e12b4a-f51a-40ab-8026-846a76db0d6e",
+  "field": "card_description",
+  "source_batch": "batch-0207",
+  "position": 8,
+  "why": "over-bound",
+  "detail": "evidence 66173 characters, bound 64000"
+ },
+ {
+  "site_id": "2207dced-e1db-4547-bac5-2d90984550a3",
+  "field": "description",
+  "source_batch": "batch-0209",
+  "position": 2,
+  "why": "over-bound",
+  "detail": "evidence 101403 characters, bound 64000"
+ },
+ {
+  "site_id": "2207dced-e1db-4547-bac5-2d90984550a3",
+  "field": "period_start",
+  "source_batch": "batch-0209",
+  "position": 2,
+  "why": "over-bound",
+  "detail": "evidence 101403 characters, bound 64000"
+ },
+ {
+  "site_id": "2207dced-e1db-4547-bac5-2d90984550a3",
+  "field": "site_type",
+  "source_batch": "batch-0209",
+  "position": 2,
+  "why": "over-bound",
+  "detail": "evidence 101403 characters, bound 64000"
+ },
+ {
+  "site_id": "2207dced-e1db-4547-bac5-2d90984550a3",
+  "field": "country",
+  "source_batch": "batch-0209",
+  "position": 2,
+  "why": "over-bound",
+  "detail": "evidence 101403 characters, bound 64000"
+ },
+ {
+  "site_id": "2207dced-e1db-4547-bac5-2d90984550a3",
+  "field": "card_description",
+  "source_batch": "batch-0209",
+  "position": 2,
+  "why": "over-bound",
+  "detail": "evidence 101403 characters, bound 64000"
+ },
+ {
+  "site_id": "033b359c-dc2e-4fea-a61e-cd2ad0ca9bbe",
+  "field": "description",
+  "source_batch": "batch-0209",
+  "position": 14,
+  "why": "over-bound",
+  "detail": "evidence 76230 characters, bound 64000"
+ },
+ {
+  "site_id": "033b359c-dc2e-4fea-a61e-cd2ad0ca9bbe",
+  "field": "period_start",
+  "source_batch": "batch-0209",
+  "position": 14,
+  "why": "over-bound",
+  "detail": "evidence 76230 characters, bound 64000"
+ },
+ {
+  "site_id": "033b359c-dc2e-4fea-a61e-cd2ad0ca9bbe",
+  "field": "site_type",
+  "source_batch": "batch-0209",
+  "position": 14,
+  "why": "over-bound",
+  "detail": "evidence 76230 characters, bound 64000"
+ },
+ {
+  "site_id": "033b359c-dc2e-4fea-a61e-cd2ad0ca9bbe",
+  "field": "country",
+  "source_batch": "batch-0209",
+  "position": 14,
+  "why": "over-bound",
+  "detail": "evidence 76230 characters, bound 64000"
+ },
+ {
+  "site_id": "033b359c-dc2e-4fea-a61e-cd2ad0ca9bbe",
+  "field": "card_description",
+  "source_batch": "batch-0209",
+  "position": 14,
+  "why": "over-bound",
+  "detail": "evidence 76230 characters, bound 64000"
+ },
+ {
+  "site_id": "fd07993c-983b-4d37-b01d-6ef8f8aeb7a6",
+  "field": "description",
+  "source_batch": "batch-0212",
+  "position": 6,
+  "why": "over-bound",
+  "detail": "evidence 69964 characters, bound 64000"
+ },
+ {
+  "site_id": "fd07993c-983b-4d37-b01d-6ef8f8aeb7a6",
+  "field": "period_start",
+  "source_batch": "batch-0212",
+  "position": 6,
+  "why": "over-bound",
+  "detail": "evidence 69964 characters, bound 64000"
+ },
+ {
+  "site_id": "fd07993c-983b-4d37-b01d-6ef8f8aeb7a6",
+  "field": "site_type",
+  "source_batch": "batch-0212",
+  "position": 6,
+  "why": "over-bound",
+  "detail": "evidence 69964 characters, bound 64000"
+ },
+ {
+  "site_id": "fd07993c-983b-4d37-b01d-6ef8f8aeb7a6",
+  "field": "country",
+  "source_batch": "batch-0212",
+  "position": 6,
+  "why": "over-bound",
+  "detail": "evidence 69964 characters, bound 64000"
+ },
+ {
+  "site_id": "fd07993c-983b-4d37-b01d-6ef8f8aeb7a6",
+  "field": "card_description",
+  "source_batch": "batch-0212",
+  "position": 6,
+  "why": "over-bound",
+  "detail": "evidence 69964 characters, bound 64000"
+ },
+ {
+  "site_id": "5fd8a068-ea2a-46e7-a2b3-4ca669d83d1e",
+  "field": "description",
+  "source_batch": "batch-0217",
+  "position": 9,
+  "why": "over-bound",
+  "detail": "evidence 70790 characters, bound 64000"
+ },
+ {
+  "site_id": "5fd8a068-ea2a-46e7-a2b3-4ca669d83d1e",
+  "field": "period_start",
+  "source_batch": "batch-0217",
+  "position": 9,
+  "why": "over-bound",
+  "detail": "evidence 70790 characters, bound 64000"
+ },
+ {
+  "site_id": "5fd8a068-ea2a-46e7-a2b3-4ca669d83d1e",
+  "field": "site_type",
+  "source_batch": "batch-0217",
+  "position": 9,
+  "why": "over-bound",
+  "detail": "evidence 70790 characters, bound 64000"
+ },
+ {
+  "site_id": "5fd8a068-ea2a-46e7-a2b3-4ca669d83d1e",
+  "field": "country",
+  "source_batch": "batch-0217",
+  "position": 9,
+  "why": "over-bound",
+  "detail": "evidence 70790 characters, bound 64000"
+ },
+ {
+  "site_id": "5fd8a068-ea2a-46e7-a2b3-4ca669d83d1e",
+  "field": "card_description",
+  "source_batch": "batch-0217",
+  "position": 9,
+  "why": "over-bound",
+  "detail": "evidence 70790 characters, bound 64000"
+ },
+ {
+  "site_id": "cee33cc0-9de5-493c-b43b-82678a6b1d8b",
+  "field": "description",
+  "source_batch": "batch-0218",
+  "position": 1,
+  "why": "over-bound",
+  "detail": "evidence 71775 characters, bound 64000"
+ },
+ {
+  "site_id": "cee33cc0-9de5-493c-b43b-82678a6b1d8b",
+  "field": "period_start",
+  "source_batch": "batch-0218",
+  "position": 1,
+  "why": "over-bound",
+  "detail": "evidence 71775 characters, bound 64000"
+ },
+ {
+  "site_id": "cee33cc0-9de5-493c-b43b-82678a6b1d8b",
+  "field": "site_type",
+  "source_batch": "batch-0218",
+  "position": 1,
+  "why": "over-bound",
+  "detail": "evidence 71775 characters, bound 64000"
+ },
+ {
+  "site_id": "cee33cc0-9de5-493c-b43b-82678a6b1d8b",
+  "field": "country",
+  "source_batch": "batch-0218",
+  "position": 1,
+  "why": "over-bound",
+  "detail": "evidence 71775 characters, bound 64000"
+ },
+ {
+  "site_id": "cee33cc0-9de5-493c-b43b-82678a6b1d8b",
+  "field": "card_description",
+  "source_batch": "batch-0218",
+  "position": 1,
+  "why": "over-bound",
+  "detail": "evidence 71775 characters, bound 64000"
+ },
+ {
+  "site_id": "7ef9ec08-db40-406b-b2bd-330e6f3b28ad",
+  "field": "period_start",
+  "source_batch": "batch-0218",
+  "position": 3,
+  "why": "no-verdict",
+  "detail": "no `VERDICT:` line naming CORRECT, WRONG or UNVERIFIABLE"
+ },
+ {
+  "site_id": "250714e7-df78-444d-bfc0-303dfd6a3a03",
+  "field": "card_description",
+  "source_batch": "batch-0218",
+  "position": 14,
+  "why": "empty-stream",
+  "detail": "250714e7-df78-444d-bfc0-303dfd6a3a03/card_description stdout:9 assistant message_end: the assistant message carries no text - an empty answer is not a result"
+ },
+ {
+  "site_id": "a45b9287-fe45-43b0-a8d6-8c434e16e65b",
+  "field": "description",
+  "source_batch": "batch-0219",
+  "position": 4,
+  "why": "over-bound",
+  "detail": "evidence 70552 characters, bound 64000"
+ },
+ {
+  "site_id": "a45b9287-fe45-43b0-a8d6-8c434e16e65b",
+  "field": "period_start",
+  "source_batch": "batch-0219",
+  "position": 4,
+  "why": "over-bound",
+  "detail": "evidence 70552 characters, bound 64000"
+ },
+ {
+  "site_id": "a45b9287-fe45-43b0-a8d6-8c434e16e65b",
+  "field": "site_type",
+  "source_batch": "batch-0219",
+  "position": 4,
+  "why": "over-bound",
+  "detail": "evidence 70552 characters, bound 64000"
+ },
+ {
+  "site_id": "a45b9287-fe45-43b0-a8d6-8c434e16e65b",
+  "field": "country",
+  "source_batch": "batch-0219",
+  "position": 4,
+  "why": "over-bound",
+  "detail": "evidence 70552 characters, bound 64000"
+ },
+ {
+  "site_id": "a45b9287-fe45-43b0-a8d6-8c434e16e65b",
+  "field": "card_description",
+  "source_batch": "batch-0219",
+  "position": 4,
+  "why": "over-bound",
+  "detail": "evidence 70552 characters, bound 64000"
+ },
+ {
+  "site_id": "6069036e-08d0-48dc-b808-ba568efe707f",
+  "field": "description",
+  "source_batch": "batch-0219",
+  "position": 6,
+  "why": "over-bound",
+  "detail": "evidence 85940 characters, bound 64000"
+ },
+ {
+  "site_id": "6069036e-08d0-48dc-b808-ba568efe707f",
+  "field": "period_start",
+  "source_batch": "batch-0219",
+  "position": 6,
+  "why": "over-bound",
+  "detail": "evidence 85940 characters, bound 64000"
+ },
+ {
+  "site_id": "6069036e-08d0-48dc-b808-ba568efe707f",
+  "field": "site_type",
+  "source_batch": "batch-0219",
+  "position": 6,
+  "why": "over-bound",
+  "detail": "evidence 85940 characters, bound 64000"
+ },
+ {
+  "site_id": "6069036e-08d0-48dc-b808-ba568efe707f",
+  "field": "country",
+  "source_batch": "batch-0219",
+  "position": 6,
+  "why": "over-bound",
+  "detail": "evidence 85940 characters, bound 64000"
+ },
+ {
+  "site_id": "6069036e-08d0-48dc-b808-ba568efe707f",
+  "field": "card_description",
+  "source_batch": "batch-0219",
+  "position": 6,
+  "why": "over-bound",
+  "detail": "evidence 85940 characters, bound 64000"
+ },
+ {
+  "site_id": "4acf93dc-6942-41bf-90f2-107407872c9a",
+  "field": "description",
+  "source_batch": "batch-0219",
+  "position": 9,
+  "why": "empty-stream",
+  "detail": "4acf93dc-6942-41bf-90f2-107407872c9a/description stdout:9 assistant message_end: the assistant message carries no text - an empty answer is not a result"
+ },
+ {
+  "site_id": "b06e5cec-35e1-409c-aff9-ed4bfcd30556",
+  "field": "site_type",
+  "source_batch": "batch-0221",
+  "position": 5,
+  "why": "empty-stream",
+  "detail": "b06e5cec-35e1-409c-aff9-ed4bfcd30556/site_type stdout:9 assistant message_end: the assistant message carries no text - an empty answer is not a result"
+ },
+ {
+  "site_id": "3d4fbf16-e80f-42c3-853c-4a22206dee24",
+  "field": "description",
+  "source_batch": "batch-0221",
+  "position": 10,
+  "why": "no-verdict",
+  "detail": "no `VERDICT:` line naming CORRECT, WRONG or UNVERIFIABLE"
+ },
+ {
+  "site_id": "c345810f-7f8d-4845-88c7-64c652fa34d1",
+  "field": "description",
+  "source_batch": "batch-0222",
+  "position": 11,
+  "why": "over-bound",
+  "detail": "evidence 68692 characters, bound 64000"
+ },
+ {
+  "site_id": "c345810f-7f8d-4845-88c7-64c652fa34d1",
+  "field": "period_start",
+  "source_batch": "batch-0222",
+  "position": 11,
+  "why": "over-bound",
+  "detail": "evidence 68692 characters, bound 64000"
+ },
+ {
+  "site_id": "c345810f-7f8d-4845-88c7-64c652fa34d1",
+  "field": "site_type",
+  "source_batch": "batch-0222",
+  "position": 11,
+  "why": "over-bound",
+  "detail": "evidence 68692 characters, bound 64000"
+ },
+ {
+  "site_id": "c345810f-7f8d-4845-88c7-64c652fa34d1",
+  "field": "country",
+  "source_batch": "batch-0222",
+  "position": 11,
+  "why": "over-bound",
+  "detail": "evidence 68692 characters, bound 64000"
+ },
+ {
+  "site_id": "c345810f-7f8d-4845-88c7-64c652fa34d1",
+  "field": "card_description",
+  "source_batch": "batch-0222",
+  "position": 11,
+  "why": "over-bound",
+  "detail": "evidence 68692 characters, bound 64000"
+ },
+ {
+  "site_id": "41109fda-7c50-4e94-8441-4e372e2623a5",
+  "field": "description",
+  "source_batch": "batch-0223",
+  "position": 3,
+  "why": "over-bound",
+  "detail": "evidence 64340 characters, bound 64000"
+ },
+ {
+  "site_id": "41109fda-7c50-4e94-8441-4e372e2623a5",
+  "field": "period_start",
+  "source_batch": "batch-0223",
+  "position": 3,
+  "why": "over-bound",
+  "detail": "evidence 64340 characters, bound 64000"
+ },
+ {
+  "site_id": "41109fda-7c50-4e94-8441-4e372e2623a5",
+  "field": "site_type",
+  "source_batch": "batch-0223",
+  "position": 3,
+  "why": "over-bound",
+  "detail": "evidence 64340 characters, bound 64000"
+ },
+ {
+  "site_id": "41109fda-7c50-4e94-8441-4e372e2623a5",
+  "field": "country",
+  "source_batch": "batch-0223",
+  "position": 3,
+  "why": "over-bound",
+  "detail": "evidence 64340 characters, bound 64000"
+ },
+ {
+  "site_id": "41109fda-7c50-4e94-8441-4e372e2623a5",
+  "field": "card_description",
+  "source_batch": "batch-0223",
+  "position": 3,
+  "why": "over-bound",
+  "detail": "evidence 64340 characters, bound 64000"
+ },
+ {
+  "site_id": "676dbe65-abbf-4e30-8e56-70cae048f1e0",
+  "field": "description",
+  "source_batch": "batch-0224",
+  "position": 8,
+  "why": "over-bound",
+  "detail": "evidence 91826 characters, bound 64000"
+ },
+ {
+  "site_id": "676dbe65-abbf-4e30-8e56-70cae048f1e0",
+  "field": "period_start",
+  "source_batch": "batch-0224",
+  "position": 8,
+  "why": "over-bound",
+  "detail": "evidence 91826 characters, bound 64000"
+ },
+ {
+  "site_id": "676dbe65-abbf-4e30-8e56-70cae048f1e0",
+  "field": "site_type",
+  "source_batch": "batch-0224",
+  "position": 8,
+  "why": "over-bound",
+  "detail": "evidence 91826 characters, bound 64000"
+ },
+ {
+  "site_id": "676dbe65-abbf-4e30-8e56-70cae048f1e0",
+  "field": "country",
+  "source_batch": "batch-0224",
+  "position": 8,
+  "why": "over-bound",
+  "detail": "evidence 91826 characters, bound 64000"
+ },
+ {
+  "site_id": "676dbe65-abbf-4e30-8e56-70cae048f1e0",
+  "field": "card_description",
+  "source_batch": "batch-0224",
+  "position": 8,
+  "why": "over-bound",
+  "detail": "evidence 91826 characters, bound 64000"
+ },
+ {
+  "site_id": "6f73b33c-bd37-46f0-9b52-a9bde97574da",
+  "field": "description",
+  "source_batch": "batch-0226",
+  "position": 9,
+  "why": "over-bound",
+  "detail": "evidence 67597 characters, bound 64000"
+ },
+ {
+  "site_id": "6f73b33c-bd37-46f0-9b52-a9bde97574da",
+  "field": "period_start",
+  "source_batch": "batch-0226",
+  "position": 9,
+  "why": "over-bound",
+  "detail": "evidence 67597 characters, bound 64000"
+ },
+ {
+  "site_id": "6f73b33c-bd37-46f0-9b52-a9bde97574da",
+  "field": "site_type",
+  "source_batch": "batch-0226",
+  "position": 9,
+  "why": "over-bound",
+  "detail": "evidence 67597 characters, bound 64000"
+ },
+ {
+  "site_id": "6f73b33c-bd37-46f0-9b52-a9bde97574da",
+  "field": "country",
+  "source_batch": "batch-0226",
+  "position": 9,
+  "why": "over-bound",
+  "detail": "evidence 67597 characters, bound 64000"
+ },
+ {
+  "site_id": "6f73b33c-bd37-46f0-9b52-a9bde97574da",
+  "field": "card_description",
+  "source_batch": "batch-0226",
+  "position": 9,
+  "why": "over-bound",
+  "detail": "evidence 67597 characters, bound 64000"
+ },
+ {
+  "site_id": "8a9ece01-983b-4bca-bb70-5f7d8f756781",
+  "field": "description",
+  "source_batch": "batch-0229",
+  "position": 1,
+  "why": "over-bound",
+  "detail": "evidence 100595 characters, bound 64000"
+ },
+ {
+  "site_id": "8a9ece01-983b-4bca-bb70-5f7d8f756781",
+  "field": "period_start",
+  "source_batch": "batch-0229",
+  "position": 1,
+  "why": "over-bound",
+  "detail": "evidence 100595 characters, bound 64000"
+ },
+ {
+  "site_id": "8a9ece01-983b-4bca-bb70-5f7d8f756781",
+  "field": "site_type",
+  "source_batch": "batch-0229",
+  "position": 1,
+  "why": "over-bound",
+  "detail": "evidence 100595 characters, bound 64000"
+ },
+ {
+  "site_id": "8a9ece01-983b-4bca-bb70-5f7d8f756781",
+  "field": "country",
+  "source_batch": "batch-0229",
+  "position": 1,
+  "why": "over-bound",
+  "detail": "evidence 100595 characters, bound 64000"
+ },
+ {
+  "site_id": "8a9ece01-983b-4bca-bb70-5f7d8f756781",
+  "field": "card_description",
+  "source_batch": "batch-0229",
+  "position": 1,
+  "why": "over-bound",
+  "detail": "evidence 100595 characters, bound 64000"
+ },
+ {
+  "site_id": "baf13030-1578-4edc-a351-ca627828a326",
+  "field": "description",
+  "source_batch": "batch-0230",
+  "position": 9,
+  "why": "over-bound",
+  "detail": "evidence 120040 characters, bound 64000"
+ },
+ {
+  "site_id": "baf13030-1578-4edc-a351-ca627828a326",
+  "field": "period_start",
+  "source_batch": "batch-0230",
+  "position": 9,
+  "why": "over-bound",
+  "detail": "evidence 120040 characters, bound 64000"
+ },
+ {
+  "site_id": "baf13030-1578-4edc-a351-ca627828a326",
+  "field": "site_type",
+  "source_batch": "batch-0230",
+  "position": 9,
+  "why": "over-bound",
+  "detail": "evidence 120040 characters, bound 64000"
+ },
+ {
+  "site_id": "baf13030-1578-4edc-a351-ca627828a326",
+  "field": "country",
+  "source_batch": "batch-0230",
+  "position": 9,
+  "why": "over-bound",
+  "detail": "evidence 120040 characters, bound 64000"
+ },
+ {
+  "site_id": "baf13030-1578-4edc-a351-ca627828a326",
+  "field": "card_description",
+  "source_batch": "batch-0230",
+  "position": 9,
+  "why": "over-bound",
+  "detail": "evidence 120040 characters, bound 64000"
+ },
+ {
+  "site_id": "f21ef7bb-7a5b-4877-83cd-e7fb1b45e080",
+  "field": "description",
+  "source_batch": "batch-0231",
+  "position": 14,
+  "why": "over-bound",
+  "detail": "evidence 79656 characters, bound 64000"
+ },
+ {
+  "site_id": "f21ef7bb-7a5b-4877-83cd-e7fb1b45e080",
+  "field": "period_start",
+  "source_batch": "batch-0231",
+  "position": 14,
+  "why": "over-bound",
+  "detail": "evidence 79656 characters, bound 64000"
+ },
+ {
+  "site_id": "f21ef7bb-7a5b-4877-83cd-e7fb1b45e080",
+  "field": "site_type",
+  "source_batch": "batch-0231",
+  "position": 14,
+  "why": "over-bound",
+  "detail": "evidence 79656 characters, bound 64000"
+ },
+ {
+  "site_id": "f21ef7bb-7a5b-4877-83cd-e7fb1b45e080",
+  "field": "country",
+  "source_batch": "batch-0231",
+  "position": 14,
+  "why": "over-bound",
+  "detail": "evidence 79656 characters, bound 64000"
+ },
+ {
+  "site_id": "f21ef7bb-7a5b-4877-83cd-e7fb1b45e080",
+  "field": "card_description",
+  "source_batch": "batch-0231",
+  "position": 14,
+  "why": "over-bound",
+  "detail": "evidence 79656 characters, bound 64000"
+ },
+ {
+  "site_id": "2f8f4a6f-2480-49a1-ae22-23ad1102f77d",
+  "field": "description",
+  "source_batch": "batch-0232",
+  "position": 14,
+  "why": "over-bound",
+  "detail": "evidence 77778 characters, bound 64000"
+ },
+ {
+  "site_id": "2f8f4a6f-2480-49a1-ae22-23ad1102f77d",
+  "field": "period_start",
+  "source_batch": "batch-0232",
+  "position": 14,
+  "why": "over-bound",
+  "detail": "evidence 77778 characters, bound 64000"
+ },
+ {
+  "site_id": "2f8f4a6f-2480-49a1-ae22-23ad1102f77d",
+  "field": "site_type",
+  "source_batch": "batch-0232",
+  "position": 14,
+  "why": "over-bound",
+  "detail": "evidence 77778 characters, bound 64000"
+ },
+ {
+  "site_id": "2f8f4a6f-2480-49a1-ae22-23ad1102f77d",
+  "field": "country",
+  "source_batch": "batch-0232",
+  "position": 14,
+  "why": "over-bound",
+  "detail": "evidence 77778 characters, bound 64000"
+ },
+ {
+  "site_id": "2f8f4a6f-2480-49a1-ae22-23ad1102f77d",
+  "field": "card_description",
+  "source_batch": "batch-0232",
+  "position": 14,
+  "why": "over-bound",
+  "detail": "evidence 77778 characters, bound 64000"
+ },
+ {
+  "site_id": "8a082425-b949-4e34-a37a-02238d6a2817",
+  "field": "description",
+  "source_batch": "batch-0233",
+  "position": 11,
+  "why": "over-bound",
+  "detail": "evidence 72296 characters, bound 64000"
+ },
+ {
+  "site_id": "8a082425-b949-4e34-a37a-02238d6a2817",
+  "field": "period_start",
+  "source_batch": "batch-0233",
+  "position": 11,
+  "why": "over-bound",
+  "detail": "evidence 72296 characters, bound 64000"
+ },
+ {
+  "site_id": "8a082425-b949-4e34-a37a-02238d6a2817",
+  "field": "site_type",
+  "source_batch": "batch-0233",
+  "position": 11,
+  "why": "over-bound",
+  "detail": "evidence 72296 characters, bound 64000"
+ },
+ {
+  "site_id": "8a082425-b949-4e34-a37a-02238d6a2817",
+  "field": "country",
+  "source_batch": "batch-0233",
+  "position": 11,
+  "why": "over-bound",
+  "detail": "evidence 72296 characters, bound 64000"
+ },
+ {
+  "site_id": "8a082425-b949-4e34-a37a-02238d6a2817",
+  "field": "card_description",
+  "source_batch": "batch-0233",
+  "position": 11,
+  "why": "over-bound",
+  "detail": "evidence 72296 characters, bound 64000"
+ },
+ {
+  "site_id": "76c51ba8-fb3f-4a54-9cc2-8f6feafa9594",
+  "field": "site_type",
+  "source_batch": "batch-0237",
+  "position": 4,
+  "why": "no-verdict",
+  "detail": "no `VERDICT:` line naming CORRECT, WRONG or UNVERIFIABLE"
+ },
+ {
+  "site_id": "7d24f980-7f63-4e6a-8bb1-1f83d16435f2",
+  "field": "card_description",
+  "source_batch": "batch-0239",
+  "position": 12,
+  "why": "no-verdict",
+  "detail": "no `VERDICT:` line naming CORRECT, WRONG or UNVERIFIABLE"
+ },
+ {
+  "site_id": "bf2191b8-eab6-451b-9893-b638890d63b9",
+  "field": "description",
+  "source_batch": "batch-0240",
+  "position": 10,
+  "why": "over-bound",
+  "detail": "evidence 76308 characters, bound 64000"
+ },
+ {
+  "site_id": "bf2191b8-eab6-451b-9893-b638890d63b9",
+  "field": "period_start",
+  "source_batch": "batch-0240",
+  "position": 10,
+  "why": "over-bound",
+  "detail": "evidence 76308 characters, bound 64000"
+ },
+ {
+  "site_id": "bf2191b8-eab6-451b-9893-b638890d63b9",
+  "field": "site_type",
+  "source_batch": "batch-0240",
+  "position": 10,
+  "why": "over-bound",
+  "detail": "evidence 76308 characters, bound 64000"
+ },
+ {
+  "site_id": "bf2191b8-eab6-451b-9893-b638890d63b9",
+  "field": "country",
+  "source_batch": "batch-0240",
+  "position": 10,
+  "why": "over-bound",
+  "detail": "evidence 76308 characters, bound 64000"
+ },
+ {
+  "site_id": "bf2191b8-eab6-451b-9893-b638890d63b9",
+  "field": "card_description",
+  "source_batch": "batch-0240",
+  "position": 10,
+  "why": "over-bound",
+  "detail": "evidence 76308 characters, bound 64000"
+ },
+ {
+  "site_id": "e5e74a71-b666-42a3-917b-cec6e80c81ca",
+  "field": "period_start",
+  "source_batch": "batch-0240",
+  "position": 14,
+  "why": "no-verdict",
+  "detail": "no `VERDICT:` line naming CORRECT, WRONG or UNVERIFIABLE"
+ },
+ {
+  "site_id": "ff76a431-09d7-40b4-8dc5-b80211b2e246",
+  "field": "description",
+  "source_batch": "batch-0241",
+  "position": 8,
+  "why": "over-bound",
+  "detail": "evidence 122880 characters, bound 64000"
+ },
+ {
+  "site_id": "ff76a431-09d7-40b4-8dc5-b80211b2e246",
+  "field": "period_start",
+  "source_batch": "batch-0241",
+  "position": 8,
+  "why": "over-bound",
+  "detail": "evidence 122880 characters, bound 64000"
+ },
+ {
+  "site_id": "ff76a431-09d7-40b4-8dc5-b80211b2e246",
+  "field": "site_type",
+  "source_batch": "batch-0241",
+  "position": 8,
+  "why": "over-bound",
+  "detail": "evidence 122880 characters, bound 64000"
+ },
+ {
+  "site_id": "ff76a431-09d7-40b4-8dc5-b80211b2e246",
+  "field": "country",
+  "source_batch": "batch-0241",
+  "position": 8,
+  "why": "over-bound",
+  "detail": "evidence 122880 characters, bound 64000"
+ },
+ {
+  "site_id": "ff76a431-09d7-40b4-8dc5-b80211b2e246",
+  "field": "card_description",
+  "source_batch": "batch-0241",
+  "position": 8,
+  "why": "over-bound",
+  "detail": "evidence 122880 characters, bound 64000"
+ },
+ {
+  "site_id": "c4e4da78-fe4a-4cd6-8a71-044ad0855ba1",
+  "field": "country",
+  "source_batch": "batch-0243",
+  "position": 4,
+  "why": "empty-stream",
+  "detail": "c4e4da78-fe4a-4cd6-8a71-044ad0855ba1/country stdout:9 assistant message_end: the assistant message carries no text - an empty answer is not a result"
+ },
+ {
+  "site_id": "3bcf804a-ff18-4066-89bd-cfaa8a3b5a46",
+  "field": "description",
+  "source_batch": "batch-0252",
+  "position": 8,
+  "why": "over-bound",
+  "detail": "evidence 64465 characters, bound 64000"
+ },
+ {
+  "site_id": "3bcf804a-ff18-4066-89bd-cfaa8a3b5a46",
+  "field": "period_start",
+  "source_batch": "batch-0252",
+  "position": 8,
+  "why": "over-bound",
+  "detail": "evidence 64465 characters, bound 64000"
+ },
+ {
+  "site_id": "3bcf804a-ff18-4066-89bd-cfaa8a3b5a46",
+  "field": "site_type",
+  "source_batch": "batch-0252",
+  "position": 8,
+  "why": "over-bound",
+  "detail": "evidence 64465 characters, bound 64000"
+ },
+ {
+  "site_id": "3bcf804a-ff18-4066-89bd-cfaa8a3b5a46",
+  "field": "country",
+  "source_batch": "batch-0252",
+  "position": 8,
+  "why": "over-bound",
+  "detail": "evidence 64465 characters, bound 64000"
+ },
+ {
+  "site_id": "3bcf804a-ff18-4066-89bd-cfaa8a3b5a46",
+  "field": "card_description",
+  "source_batch": "batch-0252",
+  "position": 8,
+  "why": "over-bound",
+  "detail": "evidence 64465 characters, bound 64000"
+ },
+ {
+  "site_id": "2d89e6d4-8fa0-4258-a70a-bc42ad3c47bf",
+  "field": "description",
+  "source_batch": "batch-0252",
+  "position": 13,
+  "why": "over-bound",
+  "detail": "evidence 97984 characters, bound 64000"
+ },
+ {
+  "site_id": "2d89e6d4-8fa0-4258-a70a-bc42ad3c47bf",
+  "field": "period_start",
+  "source_batch": "batch-0252",
+  "position": 13,
+  "why": "over-bound",
+  "detail": "evidence 97984 characters, bound 64000"
+ },
+ {
+  "site_id": "2d89e6d4-8fa0-4258-a70a-bc42ad3c47bf",
+  "field": "site_type",
+  "source_batch": "batch-0252",
+  "position": 13,
+  "why": "over-bound",
+  "detail": "evidence 97984 characters, bound 64000"
+ },
+ {
+  "site_id": "2d89e6d4-8fa0-4258-a70a-bc42ad3c47bf",
+  "field": "country",
+  "source_batch": "batch-0252",
+  "position": 13,
+  "why": "over-bound",
+  "detail": "evidence 97984 characters, bound 64000"
+ },
+ {
+  "site_id": "2d89e6d4-8fa0-4258-a70a-bc42ad3c47bf",
+  "field": "card_description",
+  "source_batch": "batch-0252",
+  "position": 13,
+  "why": "over-bound",
+  "detail": "evidence 97984 characters, bound 64000"
+ },
+ {
+  "site_id": "710c3160-5b62-42df-af62-62557101ba13",
+  "field": "description",
+  "source_batch": "batch-0253",
+  "position": 14,
+  "why": "no-verdict",
+  "detail": "no `VERDICT:` line naming CORRECT, WRONG or UNVERIFIABLE"
+ },
+ {
+  "site_id": "5fc3dde6-5284-41ba-af51-d91420bd0299",
+  "field": "description",
+  "source_batch": "batch-0254",
+  "position": 9,
+  "why": "over-bound",
+  "detail": "evidence 76120 characters, bound 64000"
+ },
+ {
+  "site_id": "5fc3dde6-5284-41ba-af51-d91420bd0299",
+  "field": "period_start",
+  "source_batch": "batch-0254",
+  "position": 9,
+  "why": "over-bound",
+  "detail": "evidence 76120 characters, bound 64000"
+ },
+ {
+  "site_id": "5fc3dde6-5284-41ba-af51-d91420bd0299",
+  "field": "site_type",
+  "source_batch": "batch-0254",
+  "position": 9,
+  "why": "over-bound",
+  "detail": "evidence 76120 characters, bound 64000"
+ },
+ {
+  "site_id": "5fc3dde6-5284-41ba-af51-d91420bd0299",
+  "field": "country",
+  "source_batch": "batch-0254",
+  "position": 9,
+  "why": "over-bound",
+  "detail": "evidence 76120 characters, bound 64000"
+ },
+ {
+  "site_id": "5fc3dde6-5284-41ba-af51-d91420bd0299",
+  "field": "card_description",
+  "source_batch": "batch-0254",
+  "position": 9,
+  "why": "over-bound",
+  "detail": "evidence 76120 characters, bound 64000"
+ },
+ {
+  "site_id": "ba452543-f3d8-436b-bef5-4329382d234e",
+  "field": "description",
+  "source_batch": "batch-0259",
+  "position": 7,
+  "why": "over-bound",
+  "detail": "evidence 122880 characters, bound 64000"
+ },
+ {
+  "site_id": "ba452543-f3d8-436b-bef5-4329382d234e",
+  "field": "period_start",
+  "source_batch": "batch-0259",
+  "position": 7,
+  "why": "over-bound",
+  "detail": "evidence 122880 characters, bound 64000"
+ },
+ {
+  "site_id": "ba452543-f3d8-436b-bef5-4329382d234e",
+  "field": "site_type",
+  "source_batch": "batch-0259",
+  "position": 7,
+  "why": "over-bound",
+  "detail": "evidence 122880 characters, bound 64000"
+ },
+ {
+  "site_id": "ba452543-f3d8-436b-bef5-4329382d234e",
+  "field": "country",
+  "source_batch": "batch-0259",
+  "position": 7,
+  "why": "over-bound",
+  "detail": "evidence 122880 characters, bound 64000"
+ },
+ {
+  "site_id": "ba452543-f3d8-436b-bef5-4329382d234e",
+  "field": "card_description",
+  "source_batch": "batch-0259",
+  "position": 7,
+  "why": "over-bound",
+  "detail": "evidence 122880 characters, bound 64000"
+ },
+ {
+  "site_id": "ed78d548-5409-4909-abc0-793390dfed1c",
+  "field": "description",
+  "source_batch": "batch-0266",
+  "position": 8,
+  "why": "over-bound",
+  "detail": "evidence 65881 characters, bound 64000"
+ },
+ {
+  "site_id": "ed78d548-5409-4909-abc0-793390dfed1c",
+  "field": "period_start",
+  "source_batch": "batch-0266",
+  "position": 8,
+  "why": "over-bound",
+  "detail": "evidence 65881 characters, bound 64000"
+ },
+ {
+  "site_id": "ed78d548-5409-4909-abc0-793390dfed1c",
+  "field": "site_type",
+  "source_batch": "batch-0266",
+  "position": 8,
+  "why": "over-bound",
+  "detail": "evidence 65881 characters, bound 64000"
+ },
+ {
+  "site_id": "ed78d548-5409-4909-abc0-793390dfed1c",
+  "field": "country",
+  "source_batch": "batch-0266",
+  "position": 8,
+  "why": "over-bound",
+  "detail": "evidence 65881 characters, bound 64000"
+ },
+ {
+  "site_id": "ed78d548-5409-4909-abc0-793390dfed1c",
+  "field": "card_description",
+  "source_batch": "batch-0266",
+  "position": 8,
+  "why": "over-bound",
+  "detail": "evidence 65881 characters, bound 64000"
+ },
+ {
+  "site_id": "caf19500-efd7-4258-b429-2b41bec64d3e",
+  "field": "description",
+  "source_batch": "batch-0267",
+  "position": 2,
+  "why": "over-bound",
+  "detail": "evidence 65113 characters, bound 64000"
+ },
+ {
+  "site_id": "caf19500-efd7-4258-b429-2b41bec64d3e",
+  "field": "period_start",
+  "source_batch": "batch-0267",
+  "position": 2,
+  "why": "over-bound",
+  "detail": "evidence 65113 characters, bound 64000"
+ },
+ {
+  "site_id": "caf19500-efd7-4258-b429-2b41bec64d3e",
+  "field": "site_type",
+  "source_batch": "batch-0267",
+  "position": 2,
+  "why": "over-bound",
+  "detail": "evidence 65113 characters, bound 64000"
+ },
+ {
+  "site_id": "caf19500-efd7-4258-b429-2b41bec64d3e",
+  "field": "country",
+  "source_batch": "batch-0267",
+  "position": 2,
+  "why": "over-bound",
+  "detail": "evidence 65113 characters, bound 64000"
+ },
+ {
+  "site_id": "caf19500-efd7-4258-b429-2b41bec64d3e",
+  "field": "card_description",
+  "source_batch": "batch-0267",
+  "position": 2,
+  "why": "over-bound",
+  "detail": "evidence 65113 characters, bound 64000"
+ },
+ {
+  "site_id": "e9d865b7-643e-4acd-89ac-e73c6182664c",
+  "field": "description",
+  "source_batch": "batch-0267",
+  "position": 4,
+  "why": "over-bound",
+  "detail": "evidence 73396 characters, bound 64000"
+ },
+ {
+  "site_id": "e9d865b7-643e-4acd-89ac-e73c6182664c",
+  "field": "period_start",
+  "source_batch": "batch-0267",
+  "position": 4,
+  "why": "over-bound",
+  "detail": "evidence 73396 characters, bound 64000"
+ },
+ {
+  "site_id": "e9d865b7-643e-4acd-89ac-e73c6182664c",
+  "field": "site_type",
+  "source_batch": "batch-0267",
+  "position": 4,
+  "why": "over-bound",
+  "detail": "evidence 73396 characters, bound 64000"
+ },
+ {
+  "site_id": "e9d865b7-643e-4acd-89ac-e73c6182664c",
+  "field": "country",
+  "source_batch": "batch-0267",
+  "position": 4,
+  "why": "over-bound",
+  "detail": "evidence 73396 characters, bound 64000"
+ },
+ {
+  "site_id": "e9d865b7-643e-4acd-89ac-e73c6182664c",
+  "field": "card_description",
+  "source_batch": "batch-0267",
+  "position": 4,
+  "why": "over-bound",
+  "detail": "evidence 73396 characters, bound 64000"
+ },
+ {
+  "site_id": "ac5c3d55-1122-4aad-bcee-90a514c56f4b",
+  "field": "description",
+  "source_batch": "batch-0268",
+  "position": 1,
+  "why": "over-bound",
+  "detail": "evidence 78488 characters, bound 64000"
+ },
+ {
+  "site_id": "ac5c3d55-1122-4aad-bcee-90a514c56f4b",
+  "field": "period_start",
+  "source_batch": "batch-0268",
+  "position": 1,
+  "why": "over-bound",
+  "detail": "evidence 78488 characters, bound 64000"
+ },
+ {
+  "site_id": "ac5c3d55-1122-4aad-bcee-90a514c56f4b",
+  "field": "site_type",
+  "source_batch": "batch-0268",
+  "position": 1,
+  "why": "over-bound",
+  "detail": "evidence 78488 characters, bound 64000"
+ },
+ {
+  "site_id": "ac5c3d55-1122-4aad-bcee-90a514c56f4b",
+  "field": "country",
+  "source_batch": "batch-0268",
+  "position": 1,
+  "why": "over-bound",
+  "detail": "evidence 78488 characters, bound 64000"
+ },
+ {
+  "site_id": "ac5c3d55-1122-4aad-bcee-90a514c56f4b",
+  "field": "card_description",
+  "source_batch": "batch-0268",
+  "position": 1,
+  "why": "over-bound",
+  "detail": "evidence 78488 characters, bound 64000"
+ },
+ {
+  "site_id": "e00a1e45-3c66-48f4-8cac-3169146aad21",
+  "field": "description",
+  "source_batch": "batch-0272",
+  "position": 1,
+  "why": "over-bound",
+  "detail": "evidence 93663 characters, bound 64000"
+ },
+ {
+  "site_id": "e00a1e45-3c66-48f4-8cac-3169146aad21",
+  "field": "period_start",
+  "source_batch": "batch-0272",
+  "position": 1,
+  "why": "over-bound",
+  "detail": "evidence 93663 characters, bound 64000"
+ },
+ {
+  "site_id": "e00a1e45-3c66-48f4-8cac-3169146aad21",
+  "field": "site_type",
+  "source_batch": "batch-0272",
+  "position": 1,
+  "why": "over-bound",
+  "detail": "evidence 93663 characters, bound 64000"
+ },
+ {
+  "site_id": "e00a1e45-3c66-48f4-8cac-3169146aad21",
+  "field": "country",
+  "source_batch": "batch-0272",
+  "position": 1,
+  "why": "over-bound",
+  "detail": "evidence 93663 characters, bound 64000"
+ },
+ {
+  "site_id": "e00a1e45-3c66-48f4-8cac-3169146aad21",
+  "field": "card_description",
+  "source_batch": "batch-0272",
+  "position": 1,
+  "why": "over-bound",
+  "detail": "evidence 93663 characters, bound 64000"
+ },
+ {
+  "site_id": "931415bf-1cf2-4132-89ec-10b88eadf5d1",
+  "field": "period_start",
+  "source_batch": "batch-0277",
+  "position": 13,
+  "why": "no-verdict",
+  "detail": "no `VERDICT:` line naming CORRECT, WRONG or UNVERIFIABLE"
+ },
+ {
+  "site_id": "aba8058b-c938-4e75-ac3f-79ce2777e95f",
+  "field": "period_start",
+  "source_batch": "batch-0280",
+  "position": 1,
+  "why": "no-verdict",
+  "detail": "no `VERDICT:` line naming CORRECT, WRONG or UNVERIFIABLE"
+ },
+ {
+  "site_id": "7ec11470-fc03-404c-a2bc-db2f6507bb4a",
+  "field": "description",
+  "source_batch": "batch-0281",
+  "position": 3,
+  "why": "over-bound",
+  "detail": "evidence 98788 characters, bound 64000"
+ },
+ {
+  "site_id": "7ec11470-fc03-404c-a2bc-db2f6507bb4a",
+  "field": "period_start",
+  "source_batch": "batch-0281",
+  "position": 3,
+  "why": "over-bound",
+  "detail": "evidence 98788 characters, bound 64000"
+ },
+ {
+  "site_id": "7ec11470-fc03-404c-a2bc-db2f6507bb4a",
+  "field": "site_type",
+  "source_batch": "batch-0281",
+  "position": 3,
+  "why": "over-bound",
+  "detail": "evidence 98788 characters, bound 64000"
+ },
+ {
+  "site_id": "7ec11470-fc03-404c-a2bc-db2f6507bb4a",
+  "field": "country",
+  "source_batch": "batch-0281",
+  "position": 3,
+  "why": "over-bound",
+  "detail": "evidence 98788 characters, bound 64000"
+ },
+ {
+  "site_id": "7ec11470-fc03-404c-a2bc-db2f6507bb4a",
+  "field": "card_description",
+  "source_batch": "batch-0281",
+  "position": 3,
+  "why": "over-bound",
+  "detail": "evidence 98788 characters, bound 64000"
+ },
+ {
+  "site_id": "cc89fe8f-328b-470e-adcd-0d1244f28acf",
+  "field": "description",
+  "source_batch": "batch-0281",
+  "position": 14,
+  "why": "over-bound",
+  "detail": "evidence 78464 characters, bound 64000"
+ },
+ {
+  "site_id": "cc89fe8f-328b-470e-adcd-0d1244f28acf",
+  "field": "period_start",
+  "source_batch": "batch-0281",
+  "position": 14,
+  "why": "over-bound",
+  "detail": "evidence 78464 characters, bound 64000"
+ },
+ {
+  "site_id": "cc89fe8f-328b-470e-adcd-0d1244f28acf",
+  "field": "site_type",
+  "source_batch": "batch-0281",
+  "position": 14,
+  "why": "over-bound",
+  "detail": "evidence 78464 characters, bound 64000"
+ },
+ {
+  "site_id": "cc89fe8f-328b-470e-adcd-0d1244f28acf",
+  "field": "country",
+  "source_batch": "batch-0281",
+  "position": 14,
+  "why": "over-bound",
+  "detail": "evidence 78464 characters, bound 64000"
+ },
+ {
+  "site_id": "cc89fe8f-328b-470e-adcd-0d1244f28acf",
+  "field": "card_description",
+  "source_batch": "batch-0281",
+  "position": 14,
+  "why": "over-bound",
+  "detail": "evidence 78464 characters, bound 64000"
+ },
+ {
+  "site_id": "865dcc6d-fa4c-429b-8c16-908cb96dcec2",
+  "field": "description",
+  "source_batch": "batch-0284",
+  "position": 4,
+  "why": "over-bound",
+  "detail": "evidence 80199 characters, bound 64000"
+ },
+ {
+  "site_id": "865dcc6d-fa4c-429b-8c16-908cb96dcec2",
+  "field": "period_start",
+  "source_batch": "batch-0284",
+  "position": 4,
+  "why": "over-bound",
+  "detail": "evidence 80199 characters, bound 64000"
+ },
+ {
+  "site_id": "865dcc6d-fa4c-429b-8c16-908cb96dcec2",
+  "field": "site_type",
+  "source_batch": "batch-0284",
+  "position": 4,
+  "why": "over-bound",
+  "detail": "evidence 80199 characters, bound 64000"
+ },
+ {
+  "site_id": "865dcc6d-fa4c-429b-8c16-908cb96dcec2",
+  "field": "country",
+  "source_batch": "batch-0284",
+  "position": 4,
+  "why": "over-bound",
+  "detail": "evidence 80199 characters, bound 64000"
+ },
+ {
+  "site_id": "865dcc6d-fa4c-429b-8c16-908cb96dcec2",
+  "field": "card_description",
+  "source_batch": "batch-0284",
+  "position": 4,
+  "why": "over-bound",
+  "detail": "evidence 80199 characters, bound 64000"
+ },
+ {
+  "site_id": "6b808340-302a-4866-9c2d-46391aff4ce3",
+  "field": "description",
+  "source_batch": "batch-0286",
+  "position": 5,
+  "why": "over-bound",
+  "detail": "evidence 64128 characters, bound 64000"
+ },
+ {
+  "site_id": "6b808340-302a-4866-9c2d-46391aff4ce3",
+  "field": "period_start",
+  "source_batch": "batch-0286",
+  "position": 5,
+  "why": "over-bound",
+  "detail": "evidence 64128 characters, bound 64000"
+ },
+ {
+  "site_id": "6b808340-302a-4866-9c2d-46391aff4ce3",
+  "field": "site_type",
+  "source_batch": "batch-0286",
+  "position": 5,
+  "why": "over-bound",
+  "detail": "evidence 64128 characters, bound 64000"
+ },
+ {
+  "site_id": "6b808340-302a-4866-9c2d-46391aff4ce3",
+  "field": "country",
+  "source_batch": "batch-0286",
+  "position": 5,
+  "why": "over-bound",
+  "detail": "evidence 64128 characters, bound 64000"
+ },
+ {
+  "site_id": "6b808340-302a-4866-9c2d-46391aff4ce3",
+  "field": "card_description",
+  "source_batch": "batch-0286",
+  "position": 5,
+  "why": "over-bound",
+  "detail": "evidence 64128 characters, bound 64000"
+ },
+ {
+  "site_id": "27781284-7698-46ff-b6aa-096800327282",
+  "field": "description",
+  "source_batch": "batch-0290",
+  "position": 2,
+  "why": "no-verdict",
+  "detail": "no `VERDICT:` line naming CORRECT, WRONG or UNVERIFIABLE"
+ },
+ {
+  "site_id": "ba0ce1ee-9848-4de1-9884-0e0bb37e2abd",
+  "field": "description",
+  "source_batch": "batch-0290",
+  "position": 13,
+  "why": "over-bound",
+  "detail": "evidence 68522 characters, bound 64000"
+ },
+ {
+  "site_id": "ba0ce1ee-9848-4de1-9884-0e0bb37e2abd",
+  "field": "period_start",
+  "source_batch": "batch-0290",
+  "position": 13,
+  "why": "over-bound",
+  "detail": "evidence 68522 characters, bound 64000"
+ },
+ {
+  "site_id": "ba0ce1ee-9848-4de1-9884-0e0bb37e2abd",
+  "field": "site_type",
+  "source_batch": "batch-0290",
+  "position": 13,
+  "why": "over-bound",
+  "detail": "evidence 68522 characters, bound 64000"
+ },
+ {
+  "site_id": "ba0ce1ee-9848-4de1-9884-0e0bb37e2abd",
+  "field": "country",
+  "source_batch": "batch-0290",
+  "position": 13,
+  "why": "over-bound",
+  "detail": "evidence 68522 characters, bound 64000"
+ },
+ {
+  "site_id": "ba0ce1ee-9848-4de1-9884-0e0bb37e2abd",
+  "field": "card_description",
+  "source_batch": "batch-0290",
+  "position": 13,
+  "why": "over-bound",
+  "detail": "evidence 68522 characters, bound 64000"
+ },
+ {
+  "site_id": "f5131959-47d4-4052-a049-a92f51837614",
+  "field": "description",
+  "source_batch": "batch-0292",
+  "position": 8,
+  "why": "over-bound",
+  "detail": "evidence 68991 characters, bound 64000"
+ },
+ {
+  "site_id": "f5131959-47d4-4052-a049-a92f51837614",
+  "field": "period_start",
+  "source_batch": "batch-0292",
+  "position": 8,
+  "why": "over-bound",
+  "detail": "evidence 68991 characters, bound 64000"
+ },
+ {
+  "site_id": "f5131959-47d4-4052-a049-a92f51837614",
+  "field": "site_type",
+  "source_batch": "batch-0292",
+  "position": 8,
+  "why": "over-bound",
+  "detail": "evidence 68991 characters, bound 64000"
+ },
+ {
+  "site_id": "f5131959-47d4-4052-a049-a92f51837614",
+  "field": "country",
+  "source_batch": "batch-0292",
+  "position": 8,
+  "why": "over-bound",
+  "detail": "evidence 68991 characters, bound 64000"
+ },
+ {
+  "site_id": "f5131959-47d4-4052-a049-a92f51837614",
+  "field": "card_description",
+  "source_batch": "batch-0292",
+  "position": 8,
+  "why": "over-bound",
+  "detail": "evidence 68991 characters, bound 64000"
+ },
+ {
+  "site_id": "71765908-34a8-4811-8e82-2e238a2bddfe",
+  "field": "description",
+  "source_batch": "batch-0293",
+  "position": 0,
+  "why": "over-bound",
+  "detail": "evidence 69374 characters, bound 64000"
+ },
+ {
+  "site_id": "71765908-34a8-4811-8e82-2e238a2bddfe",
+  "field": "period_start",
+  "source_batch": "batch-0293",
+  "position": 0,
+  "why": "over-bound",
+  "detail": "evidence 69374 characters, bound 64000"
+ },
+ {
+  "site_id": "71765908-34a8-4811-8e82-2e238a2bddfe",
+  "field": "site_type",
+  "source_batch": "batch-0293",
+  "position": 0,
+  "why": "over-bound",
+  "detail": "evidence 69374 characters, bound 64000"
+ },
+ {
+  "site_id": "71765908-34a8-4811-8e82-2e238a2bddfe",
+  "field": "country",
+  "source_batch": "batch-0293",
+  "position": 0,
+  "why": "over-bound",
+  "detail": "evidence 69374 characters, bound 64000"
+ },
+ {
+  "site_id": "71765908-34a8-4811-8e82-2e238a2bddfe",
+  "field": "card_description",
+  "source_batch": "batch-0293",
+  "position": 0,
+  "why": "over-bound",
+  "detail": "evidence 69374 characters, bound 64000"
+ },
+ {
+  "site_id": "b3d37445-fbc6-479b-8f04-d4cbf95f2292",
+  "field": "description",
+  "source_batch": "batch-0294",
+  "position": 14,
+  "why": "over-bound",
+  "detail": "evidence 99272 characters, bound 64000"
+ },
+ {
+  "site_id": "b3d37445-fbc6-479b-8f04-d4cbf95f2292",
+  "field": "period_start",
+  "source_batch": "batch-0294",
+  "position": 14,
+  "why": "over-bound",
+  "detail": "evidence 99272 characters, bound 64000"
+ },
+ {
+  "site_id": "b3d37445-fbc6-479b-8f04-d4cbf95f2292",
+  "field": "site_type",
+  "source_batch": "batch-0294",
+  "position": 14,
+  "why": "over-bound",
+  "detail": "evidence 99272 characters, bound 64000"
+ },
+ {
+  "site_id": "b3d37445-fbc6-479b-8f04-d4cbf95f2292",
+  "field": "country",
+  "source_batch": "batch-0294",
+  "position": 14,
+  "why": "over-bound",
+  "detail": "evidence 99272 characters, bound 64000"
+ },
+ {
+  "site_id": "b3d37445-fbc6-479b-8f04-d4cbf95f2292",
+  "field": "card_description",
+  "source_batch": "batch-0294",
+  "position": 14,
+  "why": "over-bound",
+  "detail": "evidence 99272 characters, bound 64000"
+ },
+ {
+  "site_id": "21c82bf9-ef46-4b65-86c7-d4f10001159e",
+  "field": "description",
+  "source_batch": "batch-0301",
+  "position": 13,
+  "why": "over-bound",
+  "detail": "evidence 69903 characters, bound 64000"
+ },
+ {
+  "site_id": "21c82bf9-ef46-4b65-86c7-d4f10001159e",
+  "field": "period_start",
+  "source_batch": "batch-0301",
+  "position": 13,
+  "why": "over-bound",
+  "detail": "evidence 69903 characters, bound 64000"
+ },
+ {
+  "site_id": "21c82bf9-ef46-4b65-86c7-d4f10001159e",
+  "field": "site_type",
+  "source_batch": "batch-0301",
+  "position": 13,
+  "why": "over-bound",
+  "detail": "evidence 69903 characters, bound 64000"
+ },
+ {
+  "site_id": "21c82bf9-ef46-4b65-86c7-d4f10001159e",
+  "field": "country",
+  "source_batch": "batch-0301",
+  "position": 13,
+  "why": "over-bound",
+  "detail": "evidence 69903 characters, bound 64000"
+ },
+ {
+  "site_id": "21c82bf9-ef46-4b65-86c7-d4f10001159e",
+  "field": "card_description",
+  "source_batch": "batch-0301",
+  "position": 13,
+  "why": "over-bound",
+  "detail": "evidence 69903 characters, bound 64000"
+ },
+ {
+  "site_id": "8fc0c418-49b4-459a-abc9-9c54c09ef5ba",
+  "field": "description",
+  "source_batch": "batch-0303",
+  "position": 11,
+  "why": "over-bound",
+  "detail": "evidence 70576 characters, bound 64000"
+ },
+ {
+  "site_id": "8fc0c418-49b4-459a-abc9-9c54c09ef5ba",
+  "field": "period_start",
+  "source_batch": "batch-0303",
+  "position": 11,
+  "why": "over-bound",
+  "detail": "evidence 70576 characters, bound 64000"
+ },
+ {
+  "site_id": "8fc0c418-49b4-459a-abc9-9c54c09ef5ba",
+  "field": "site_type",
+  "source_batch": "batch-0303",
+  "position": 11,
+  "why": "over-bound",
+  "detail": "evidence 70576 characters, bound 64000"
+ },
+ {
+  "site_id": "8fc0c418-49b4-459a-abc9-9c54c09ef5ba",
+  "field": "country",
+  "source_batch": "batch-0303",
+  "position": 11,
+  "why": "over-bound",
+  "detail": "evidence 70576 characters, bound 64000"
+ },
+ {
+  "site_id": "8fc0c418-49b4-459a-abc9-9c54c09ef5ba",
+  "field": "card_description",
+  "source_batch": "batch-0303",
+  "position": 11,
+  "why": "over-bound",
+  "detail": "evidence 70576 characters, bound 64000"
+ },
+ {
+  "site_id": "e5558c53-90b5-42ca-aa79-ba2d05d56eac",
+  "field": "description",
+  "source_batch": "batch-0304",
+  "position": 7,
+  "why": "over-bound",
+  "detail": "evidence 122880 characters, bound 64000"
+ },
+ {
+  "site_id": "e5558c53-90b5-42ca-aa79-ba2d05d56eac",
+  "field": "period_start",
+  "source_batch": "batch-0304",
+  "position": 7,
+  "why": "over-bound",
+  "detail": "evidence 122880 characters, bound 64000"
+ },
+ {
+  "site_id": "e5558c53-90b5-42ca-aa79-ba2d05d56eac",
+  "field": "site_type",
+  "source_batch": "batch-0304",
+  "position": 7,
+  "why": "over-bound",
+  "detail": "evidence 122880 characters, bound 64000"
+ },
+ {
+  "site_id": "e5558c53-90b5-42ca-aa79-ba2d05d56eac",
+  "field": "country",
+  "source_batch": "batch-0304",
+  "position": 7,
+  "why": "over-bound",
+  "detail": "evidence 122880 characters, bound 64000"
+ },
+ {
+  "site_id": "e5558c53-90b5-42ca-aa79-ba2d05d56eac",
+  "field": "card_description",
+  "source_batch": "batch-0304",
+  "position": 7,
+  "why": "over-bound",
+  "detail": "evidence 122880 characters, bound 64000"
+ },
+ {
+  "site_id": "113ce1a7-3e6a-49cb-9120-e6e230191646",
+  "field": "description",
+  "source_batch": "batch-0306",
+  "position": 10,
+  "why": "over-bound",
+  "detail": "evidence 65888 characters, bound 64000"
+ },
+ {
+  "site_id": "113ce1a7-3e6a-49cb-9120-e6e230191646",
+  "field": "period_start",
+  "source_batch": "batch-0306",
+  "position": 10,
+  "why": "over-bound",
+  "detail": "evidence 65888 characters, bound 64000"
+ },
+ {
+  "site_id": "113ce1a7-3e6a-49cb-9120-e6e230191646",
+  "field": "site_type",
+  "source_batch": "batch-0306",
+  "position": 10,
+  "why": "over-bound",
+  "detail": "evidence 65888 characters, bound 64000"
+ },
+ {
+  "site_id": "113ce1a7-3e6a-49cb-9120-e6e230191646",
+  "field": "country",
+  "source_batch": "batch-0306",
+  "position": 10,
+  "why": "over-bound",
+  "detail": "evidence 65888 characters, bound 64000"
+ },
+ {
+  "site_id": "113ce1a7-3e6a-49cb-9120-e6e230191646",
+  "field": "card_description",
+  "source_batch": "batch-0306",
+  "position": 10,
+  "why": "over-bound",
+  "detail": "evidence 65888 characters, bound 64000"
+ },
+ {
+  "site_id": "67568bad-9a47-45b1-bae3-002ad8b28545",
+  "field": "description",
+  "source_batch": "batch-0312",
+  "position": 8,
+  "why": "over-bound",
+  "detail": "evidence 71150 characters, bound 64000"
+ },
+ {
+  "site_id": "67568bad-9a47-45b1-bae3-002ad8b28545",
+  "field": "period_start",
+  "source_batch": "batch-0312",
+  "position": 8,
+  "why": "over-bound",
+  "detail": "evidence 71150 characters, bound 64000"
+ },
+ {
+  "site_id": "67568bad-9a47-45b1-bae3-002ad8b28545",
+  "field": "site_type",
+  "source_batch": "batch-0312",
+  "position": 8,
+  "why": "over-bound",
+  "detail": "evidence 71150 characters, bound 64000"
+ },
+ {
+  "site_id": "67568bad-9a47-45b1-bae3-002ad8b28545",
+  "field": "country",
+  "source_batch": "batch-0312",
+  "position": 8,
+  "why": "over-bound",
+  "detail": "evidence 71150 characters, bound 64000"
+ },
+ {
+  "site_id": "67568bad-9a47-45b1-bae3-002ad8b28545",
+  "field": "card_description",
+  "source_batch": "batch-0312",
+  "position": 8,
+  "why": "over-bound",
+  "detail": "evidence 71150 characters, bound 64000"
+ },
+ {
+  "site_id": "f166fc6f-310e-4ca1-8b61-edb98e2c7ec2",
+  "field": "description",
+  "source_batch": "batch-0319",
+  "position": 4,
+  "why": "over-bound",
+  "detail": "evidence 96276 characters, bound 64000"
+ },
+ {
+  "site_id": "f166fc6f-310e-4ca1-8b61-edb98e2c7ec2",
+  "field": "period_start",
+  "source_batch": "batch-0319",
+  "position": 4,
+  "why": "over-bound",
+  "detail": "evidence 96276 characters, bound 64000"
+ },
+ {
+  "site_id": "f166fc6f-310e-4ca1-8b61-edb98e2c7ec2",
+  "field": "site_type",
+  "source_batch": "batch-0319",
+  "position": 4,
+  "why": "over-bound",
+  "detail": "evidence 96276 characters, bound 64000"
+ },
+ {
+  "site_id": "f166fc6f-310e-4ca1-8b61-edb98e2c7ec2",
+  "field": "country",
+  "source_batch": "batch-0319",
+  "position": 4,
+  "why": "over-bound",
+  "detail": "evidence 96276 characters, bound 64000"
+ },
+ {
+  "site_id": "f166fc6f-310e-4ca1-8b61-edb98e2c7ec2",
+  "field": "card_description",
+  "source_batch": "batch-0319",
+  "position": 4,
+  "why": "over-bound",
+  "detail": "evidence 96276 characters, bound 64000"
+ },
+ {
+  "site_id": "3f40b195-d3cf-422b-b903-9f3d68b62903",
+  "field": "description",
+  "source_batch": "batch-0320",
+  "position": 14,
+  "why": "over-bound",
+  "detail": "evidence 79403 characters, bound 64000"
+ },
+ {
+  "site_id": "3f40b195-d3cf-422b-b903-9f3d68b62903",
+  "field": "period_start",
+  "source_batch": "batch-0320",
+  "position": 14,
+  "why": "over-bound",
+  "detail": "evidence 79403 characters, bound 64000"
+ },
+ {
+  "site_id": "3f40b195-d3cf-422b-b903-9f3d68b62903",
+  "field": "site_type",
+  "source_batch": "batch-0320",
+  "position": 14,
+  "why": "over-bound",
+  "detail": "evidence 79403 characters, bound 64000"
+ },
+ {
+  "site_id": "3f40b195-d3cf-422b-b903-9f3d68b62903",
+  "field": "country",
+  "source_batch": "batch-0320",
+  "position": 14,
+  "why": "over-bound",
+  "detail": "evidence 79403 characters, bound 64000"
+ },
+ {
+  "site_id": "3f40b195-d3cf-422b-b903-9f3d68b62903",
+  "field": "card_description",
+  "source_batch": "batch-0320",
+  "position": 14,
+  "why": "over-bound",
+  "detail": "evidence 79403 characters, bound 64000"
+ },
+ {
+  "site_id": "698f577f-cfce-45b6-b2a7-6ddeaa1f5923",
+  "field": "description",
+  "source_batch": "batch-0321",
+  "position": 3,
+  "why": "over-bound",
+  "detail": "evidence 88719 characters, bound 64000"
+ },
+ {
+  "site_id": "698f577f-cfce-45b6-b2a7-6ddeaa1f5923",
+  "field": "period_start",
+  "source_batch": "batch-0321",
+  "position": 3,
+  "why": "over-bound",
+  "detail": "evidence 88719 characters, bound 64000"
+ },
+ {
+  "site_id": "698f577f-cfce-45b6-b2a7-6ddeaa1f5923",
+  "field": "site_type",
+  "source_batch": "batch-0321",
+  "position": 3,
+  "why": "over-bound",
+  "detail": "evidence 88719 characters, bound 64000"
+ },
+ {
+  "site_id": "698f577f-cfce-45b6-b2a7-6ddeaa1f5923",
+  "field": "country",
+  "source_batch": "batch-0321",
+  "position": 3,
+  "why": "over-bound",
+  "detail": "evidence 88719 characters, bound 64000"
+ },
+ {
+  "site_id": "698f577f-cfce-45b6-b2a7-6ddeaa1f5923",
+  "field": "card_description",
+  "source_batch": "batch-0321",
+  "position": 3,
+  "why": "over-bound",
+  "detail": "evidence 88719 characters, bound 64000"
+ },
+ {
+  "site_id": "417445b4-e0db-49ac-99db-fe236794e9ff",
+  "field": "description",
+  "source_batch": "batch-0321",
+  "position": 4,
+  "why": "over-bound",
+  "detail": "evidence 109561 characters, bound 64000"
+ },
+ {
+  "site_id": "417445b4-e0db-49ac-99db-fe236794e9ff",
+  "field": "period_start",
+  "source_batch": "batch-0321",
+  "position": 4,
+  "why": "over-bound",
+  "detail": "evidence 109561 characters, bound 64000"
+ },
+ {
+  "site_id": "417445b4-e0db-49ac-99db-fe236794e9ff",
+  "field": "site_type",
+  "source_batch": "batch-0321",
+  "position": 4,
+  "why": "over-bound",
+  "detail": "evidence 109561 characters, bound 64000"
+ },
+ {
+  "site_id": "417445b4-e0db-49ac-99db-fe236794e9ff",
+  "field": "country",
+  "source_batch": "batch-0321",
+  "position": 4,
+  "why": "over-bound",
+  "detail": "evidence 109561 characters, bound 64000"
+ },
+ {
+  "site_id": "417445b4-e0db-49ac-99db-fe236794e9ff",
+  "field": "card_description",
+  "source_batch": "batch-0321",
+  "position": 4,
+  "why": "over-bound",
+  "detail": "evidence 109561 characters, bound 64000"
+ },
+ {
+  "site_id": "7446fda2-a380-40c3-bd00-5547f545a7f3",
+  "field": "period_start",
+  "source_batch": "batch-0321",
+  "position": 5,
+  "why": "no-verdict",
+  "detail": "no `VERDICT:` line naming CORRECT, WRONG or UNVERIFIABLE"
+ },
+ {
+  "site_id": "52827c54-91cb-4902-99fb-7b0860a71e36",
+  "field": "description",
+  "source_batch": "batch-0326",
+  "position": 9,
+  "why": "over-bound",
+  "detail": "evidence 113794 characters, bound 64000"
+ },
+ {
+  "site_id": "52827c54-91cb-4902-99fb-7b0860a71e36",
+  "field": "period_start",
+  "source_batch": "batch-0326",
+  "position": 9,
+  "why": "over-bound",
+  "detail": "evidence 113794 characters, bound 64000"
+ },
+ {
+  "site_id": "52827c54-91cb-4902-99fb-7b0860a71e36",
+  "field": "site_type",
+  "source_batch": "batch-0326",
+  "position": 9,
+  "why": "over-bound",
+  "detail": "evidence 113794 characters, bound 64000"
+ },
+ {
+  "site_id": "52827c54-91cb-4902-99fb-7b0860a71e36",
+  "field": "country",
+  "source_batch": "batch-0326",
+  "position": 9,
+  "why": "over-bound",
+  "detail": "evidence 113794 characters, bound 64000"
+ },
+ {
+  "site_id": "52827c54-91cb-4902-99fb-7b0860a71e36",
+  "field": "card_description",
+  "source_batch": "batch-0326",
+  "position": 9,
+  "why": "over-bound",
+  "detail": "evidence 113794 characters, bound 64000"
+ },
+ {
+  "site_id": "4b4a9785-3993-4bc1-91f2-6df76949b100",
+  "field": "description",
+  "source_batch": "batch-0327",
+  "position": 3,
+  "why": "over-bound",
+  "detail": "evidence 76727 characters, bound 64000"
+ },
+ {
+  "site_id": "4b4a9785-3993-4bc1-91f2-6df76949b100",
+  "field": "period_start",
+  "source_batch": "batch-0327",
+  "position": 3,
+  "why": "over-bound",
+  "detail": "evidence 76727 characters, bound 64000"
+ },
+ {
+  "site_id": "4b4a9785-3993-4bc1-91f2-6df76949b100",
+  "field": "site_type",
+  "source_batch": "batch-0327",
+  "position": 3,
+  "why": "over-bound",
+  "detail": "evidence 76727 characters, bound 64000"
+ },
+ {
+  "site_id": "4b4a9785-3993-4bc1-91f2-6df76949b100",
+  "field": "country",
+  "source_batch": "batch-0327",
+  "position": 3,
+  "why": "over-bound",
+  "detail": "evidence 76727 characters, bound 64000"
+ },
+ {
+  "site_id": "4b4a9785-3993-4bc1-91f2-6df76949b100",
+  "field": "card_description",
+  "source_batch": "batch-0327",
+  "position": 3,
+  "why": "over-bound",
+  "detail": "evidence 76727 characters, bound 64000"
+ },
+ {
+  "site_id": "4f366f34-983c-42e1-a89d-7e8f5f77cdce",
+  "field": "description",
+  "source_batch": "batch-0327",
+  "position": 12,
+  "why": "over-bound",
+  "detail": "evidence 101738 characters, bound 64000"
+ },
+ {
+  "site_id": "4f366f34-983c-42e1-a89d-7e8f5f77cdce",
+  "field": "period_start",
+  "source_batch": "batch-0327",
+  "position": 12,
+  "why": "over-bound",
+  "detail": "evidence 101738 characters, bound 64000"
+ },
+ {
+  "site_id": "4f366f34-983c-42e1-a89d-7e8f5f77cdce",
+  "field": "site_type",
+  "source_batch": "batch-0327",
+  "position": 12,
+  "why": "over-bound",
+  "detail": "evidence 101738 characters, bound 64000"
+ },
+ {
+  "site_id": "4f366f34-983c-42e1-a89d-7e8f5f77cdce",
+  "field": "country",
+  "source_batch": "batch-0327",
+  "position": 12,
+  "why": "over-bound",
+  "detail": "evidence 101738 characters, bound 64000"
+ },
+ {
+  "site_id": "4f366f34-983c-42e1-a89d-7e8f5f77cdce",
+  "field": "card_description",
+  "source_batch": "batch-0327",
+  "position": 12,
+  "why": "over-bound",
+  "detail": "evidence 101738 characters, bound 64000"
+ },
+ {
+  "site_id": "4ce83e01-a19d-40d0-a739-d6b571b9e824",
+  "field": "description",
+  "source_batch": "batch-0331",
+  "position": 4,
+  "why": "over-bound",
+  "detail": "evidence 71465 characters, bound 64000"
+ },
+ {
+  "site_id": "4ce83e01-a19d-40d0-a739-d6b571b9e824",
+  "field": "period_start",
+  "source_batch": "batch-0331",
+  "position": 4,
+  "why": "over-bound",
+  "detail": "evidence 71465 characters, bound 64000"
+ },
+ {
+  "site_id": "4ce83e01-a19d-40d0-a739-d6b571b9e824",
+  "field": "site_type",
+  "source_batch": "batch-0331",
+  "position": 4,
+  "why": "over-bound",
+  "detail": "evidence 71465 characters, bound 64000"
+ },
+ {
+  "site_id": "4ce83e01-a19d-40d0-a739-d6b571b9e824",
+  "field": "country",
+  "source_batch": "batch-0331",
+  "position": 4,
+  "why": "over-bound",
+  "detail": "evidence 71465 characters, bound 64000"
+ },
+ {
+  "site_id": "4ce83e01-a19d-40d0-a739-d6b571b9e824",
+  "field": "card_description",
+  "source_batch": "batch-0331",
+  "position": 4,
+  "why": "over-bound",
+  "detail": "evidence 71465 characters, bound 64000"
+ },
+ {
+  "site_id": "ac46cdfd-877f-47d4-8403-90d21983364f",
+  "field": "description",
+  "source_batch": "batch-0332",
+  "position": 12,
+  "why": "over-bound",
+  "detail": "evidence 85464 characters, bound 64000"
+ },
+ {
+  "site_id": "ac46cdfd-877f-47d4-8403-90d21983364f",
+  "field": "period_start",
+  "source_batch": "batch-0332",
+  "position": 12,
+  "why": "over-bound",
+  "detail": "evidence 85464 characters, bound 64000"
+ },
+ {
+  "site_id": "ac46cdfd-877f-47d4-8403-90d21983364f",
+  "field": "site_type",
+  "source_batch": "batch-0332",
+  "position": 12,
+  "why": "over-bound",
+  "detail": "evidence 85464 characters, bound 64000"
+ },
+ {
+  "site_id": "ac46cdfd-877f-47d4-8403-90d21983364f",
+  "field": "country",
+  "source_batch": "batch-0332",
+  "position": 12,
+  "why": "over-bound",
+  "detail": "evidence 85464 characters, bound 64000"
+ },
+ {
+  "site_id": "ac46cdfd-877f-47d4-8403-90d21983364f",
+  "field": "card_description",
+  "source_batch": "batch-0332",
+  "position": 12,
+  "why": "over-bound",
+  "detail": "evidence 85464 characters, bound 64000"
+ },
+ {
+  "site_id": "c8a346a9-bed2-4420-83db-3a6fcca051e4",
+  "field": "description",
+  "source_batch": "batch-0332",
+  "position": 13,
+  "why": "over-bound",
+  "detail": "evidence 68785 characters, bound 64000"
+ },
+ {
+  "site_id": "c8a346a9-bed2-4420-83db-3a6fcca051e4",
+  "field": "period_start",
+  "source_batch": "batch-0332",
+  "position": 13,
+  "why": "over-bound",
+  "detail": "evidence 68785 characters, bound 64000"
+ },
+ {
+  "site_id": "c8a346a9-bed2-4420-83db-3a6fcca051e4",
+  "field": "site_type",
+  "source_batch": "batch-0332",
+  "position": 13,
+  "why": "over-bound",
+  "detail": "evidence 68785 characters, bound 64000"
+ },
+ {
+  "site_id": "c8a346a9-bed2-4420-83db-3a6fcca051e4",
+  "field": "country",
+  "source_batch": "batch-0332",
+  "position": 13,
+  "why": "over-bound",
+  "detail": "evidence 68785 characters, bound 64000"
+ },
+ {
+  "site_id": "c8a346a9-bed2-4420-83db-3a6fcca051e4",
+  "field": "card_description",
+  "source_batch": "batch-0332",
+  "position": 13,
+  "why": "over-bound",
+  "detail": "evidence 68785 characters, bound 64000"
+ },
+ {
+  "site_id": "75dccc9d-fb68-40a9-aa2e-e58a47067580",
+  "field": "description",
+  "source_batch": "batch-0333",
+  "position": 1,
+  "why": "over-bound",
+  "detail": "evidence 68389 characters, bound 64000"
+ },
+ {
+  "site_id": "75dccc9d-fb68-40a9-aa2e-e58a47067580",
+  "field": "period_start",
+  "source_batch": "batch-0333",
+  "position": 1,
+  "why": "over-bound",
+  "detail": "evidence 68389 characters, bound 64000"
+ },
+ {
+  "site_id": "75dccc9d-fb68-40a9-aa2e-e58a47067580",
+  "field": "site_type",
+  "source_batch": "batch-0333",
+  "position": 1,
+  "why": "over-bound",
+  "detail": "evidence 68389 characters, bound 64000"
+ },
+ {
+  "site_id": "75dccc9d-fb68-40a9-aa2e-e58a47067580",
+  "field": "country",
+  "source_batch": "batch-0333",
+  "position": 1,
+  "why": "over-bound",
+  "detail": "evidence 68389 characters, bound 64000"
+ },
+ {
+  "site_id": "75dccc9d-fb68-40a9-aa2e-e58a47067580",
+  "field": "card_description",
+  "source_batch": "batch-0333",
+  "position": 1,
+  "why": "over-bound",
+  "detail": "evidence 68389 characters, bound 64000"
+ },
+ {
+  "site_id": "4b24c412-e5fc-418b-a48b-c8b54ac28315",
+  "field": "description",
+  "source_batch": "batch-0333",
+  "position": 5,
+  "why": "over-bound",
+  "detail": "evidence 104517 characters, bound 64000"
+ },
+ {
+  "site_id": "4b24c412-e5fc-418b-a48b-c8b54ac28315",
+  "field": "period_start",
+  "source_batch": "batch-0333",
+  "position": 5,
+  "why": "over-bound",
+  "detail": "evidence 104517 characters, bound 64000"
+ },
+ {
+  "site_id": "4b24c412-e5fc-418b-a48b-c8b54ac28315",
+  "field": "site_type",
+  "source_batch": "batch-0333",
+  "position": 5,
+  "why": "over-bound",
+  "detail": "evidence 104517 characters, bound 64000"
+ },
+ {
+  "site_id": "4b24c412-e5fc-418b-a48b-c8b54ac28315",
+  "field": "country",
+  "source_batch": "batch-0333",
+  "position": 5,
+  "why": "over-bound",
+  "detail": "evidence 104517 characters, bound 64000"
+ },
+ {
+  "site_id": "4b24c412-e5fc-418b-a48b-c8b54ac28315",
+  "field": "card_description",
+  "source_batch": "batch-0333",
+  "position": 5,
+  "why": "over-bound",
+  "detail": "evidence 104517 characters, bound 64000"
+ },
+ {
+  "site_id": "935c0e07-0e4c-4bf9-a2ea-0113c70a3e3c",
+  "field": "description",
+  "source_batch": "batch-0333",
+  "position": 11,
+  "why": "over-bound",
+  "detail": "evidence 66937 characters, bound 64000"
+ },
+ {
+  "site_id": "935c0e07-0e4c-4bf9-a2ea-0113c70a3e3c",
+  "field": "period_start",
+  "source_batch": "batch-0333",
+  "position": 11,
+  "why": "over-bound",
+  "detail": "evidence 66937 characters, bound 64000"
+ },
+ {
+  "site_id": "935c0e07-0e4c-4bf9-a2ea-0113c70a3e3c",
+  "field": "site_type",
+  "source_batch": "batch-0333",
+  "position": 11,
+  "why": "over-bound",
+  "detail": "evidence 66937 characters, bound 64000"
+ },
+ {
+  "site_id": "935c0e07-0e4c-4bf9-a2ea-0113c70a3e3c",
+  "field": "country",
+  "source_batch": "batch-0333",
+  "position": 11,
+  "why": "over-bound",
+  "detail": "evidence 66937 characters, bound 64000"
+ },
+ {
+  "site_id": "935c0e07-0e4c-4bf9-a2ea-0113c70a3e3c",
+  "field": "card_description",
+  "source_batch": "batch-0333",
+  "position": 11,
+  "why": "over-bound",
+  "detail": "evidence 66937 characters, bound 64000"
+ },
+ {
+  "site_id": "feb1899e-d74e-4f5f-b22e-1fe3ff5c1f8e",
+  "field": "description",
+  "source_batch": "batch-0333",
+  "position": 12,
+  "why": "over-bound",
+  "detail": "evidence 81645 characters, bound 64000"
+ },
+ {
+  "site_id": "feb1899e-d74e-4f5f-b22e-1fe3ff5c1f8e",
+  "field": "period_start",
+  "source_batch": "batch-0333",
+  "position": 12,
+  "why": "over-bound",
+  "detail": "evidence 81645 characters, bound 64000"
+ },
+ {
+  "site_id": "feb1899e-d74e-4f5f-b22e-1fe3ff5c1f8e",
+  "field": "site_type",
+  "source_batch": "batch-0333",
+  "position": 12,
+  "why": "over-bound",
+  "detail": "evidence 81645 characters, bound 64000"
+ },
+ {
+  "site_id": "feb1899e-d74e-4f5f-b22e-1fe3ff5c1f8e",
+  "field": "country",
+  "source_batch": "batch-0333",
+  "position": 12,
+  "why": "over-bound",
+  "detail": "evidence 81645 characters, bound 64000"
+ },
+ {
+  "site_id": "feb1899e-d74e-4f5f-b22e-1fe3ff5c1f8e",
+  "field": "card_description",
+  "source_batch": "batch-0333",
+  "position": 12,
+  "why": "over-bound",
+  "detail": "evidence 81645 characters, bound 64000"
+ },
+ {
+  "site_id": "e8e302a0-70b2-4346-ac75-340a4d6499a2",
+  "field": "description",
+  "source_batch": "batch-0333",
+  "position": 13,
+  "why": "over-bound",
+  "detail": "evidence 104622 characters, bound 64000"
+ },
+ {
+  "site_id": "e8e302a0-70b2-4346-ac75-340a4d6499a2",
+  "field": "period_start",
+  "source_batch": "batch-0333",
+  "position": 13,
+  "why": "over-bound",
+  "detail": "evidence 104622 characters, bound 64000"
+ },
+ {
+  "site_id": "e8e302a0-70b2-4346-ac75-340a4d6499a2",
+  "field": "site_type",
+  "source_batch": "batch-0333",
+  "position": 13,
+  "why": "over-bound",
+  "detail": "evidence 104622 characters, bound 64000"
+ },
+ {
+  "site_id": "e8e302a0-70b2-4346-ac75-340a4d6499a2",
+  "field": "country",
+  "source_batch": "batch-0333",
+  "position": 13,
+  "why": "over-bound",
+  "detail": "evidence 104622 characters, bound 64000"
+ },
+ {
+  "site_id": "e8e302a0-70b2-4346-ac75-340a4d6499a2",
+  "field": "card_description",
+  "source_batch": "batch-0333",
+  "position": 13,
+  "why": "over-bound",
+  "detail": "evidence 104622 characters, bound 64000"
+ },
+ {
+  "site_id": "4fb5bdfa-4ff6-4897-a54c-7533e2bd2308",
+  "field": "description",
+  "source_batch": "batch-0334",
+  "position": 1,
+  "why": "over-bound",
+  "detail": "evidence 78430 characters, bound 64000"
+ },
+ {
+  "site_id": "4fb5bdfa-4ff6-4897-a54c-7533e2bd2308",
+  "field": "period_start",
+  "source_batch": "batch-0334",
+  "position": 1,
+  "why": "over-bound",
+  "detail": "evidence 78430 characters, bound 64000"
+ },
+ {
+  "site_id": "4fb5bdfa-4ff6-4897-a54c-7533e2bd2308",
+  "field": "site_type",
+  "source_batch": "batch-0334",
+  "position": 1,
+  "why": "over-bound",
+  "detail": "evidence 78430 characters, bound 64000"
+ },
+ {
+  "site_id": "4fb5bdfa-4ff6-4897-a54c-7533e2bd2308",
+  "field": "country",
+  "source_batch": "batch-0334",
+  "position": 1,
+  "why": "over-bound",
+  "detail": "evidence 78430 characters, bound 64000"
+ },
+ {
+  "site_id": "4fb5bdfa-4ff6-4897-a54c-7533e2bd2308",
+  "field": "card_description",
+  "source_batch": "batch-0334",
+  "position": 1,
+  "why": "over-bound",
+  "detail": "evidence 78430 characters, bound 64000"
+ }
+]

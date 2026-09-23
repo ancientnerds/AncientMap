@@ -5,18 +5,21 @@ writes the whole hit list to a file and prints only the rows that are **not yet 
 ones still to be judged. The filter is a reading aid, never the verdict: it narrows what has to be read.
 
     ./.venv/Scripts/python.exe output/remediation/logs/scan_rows.py
+    ./.venv/Scripts/python.exe output/remediation/logs/scan_rows.py --lane gap
+
+The rows, the holds and the hit list are the lane's (`lanes.py`); the default is the mass lane.
 """
 
 from __future__ import annotations
 
-import json
+import argparse
 import pathlib
 import re
+import sys
 
-LOGS = pathlib.Path(__file__).resolve().parent
-ROWS = LOGS / "_write_dry" / "ALL_ROWS.jsonl"
-HOLDS = LOGS / "_write_apply" / "HOLDS.jsonl"
-OUT = LOGS / "_mark_hits.txt"
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+
+import lanes  # noqa: E402 - the lane's paths and the one JSON-lines reader
 
 #: The reviewer says, in these words, that its own finding does not carry. A hit is a candidate.
 REFUTES = re.compile(
@@ -31,19 +34,6 @@ REFUTES = re.compile(
 )
 
 
-def read_jsonl(path: pathlib.Path) -> list[dict]:
-    """Read a JSON-lines file, naming the line that does not parse."""
-    records: list[dict] = []
-    for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
-        if not line.strip():
-            continue
-        try:
-            records.append(json.loads(line))
-        except json.JSONDecodeError as exc:
-            raise SystemExit(f"{path}:{number}: not readable JSON: {exc}") from exc
-    return records
-
-
 def unreadable(quote: str) -> str:
     """An evidence quote that is not a sentence shows no value: a bare property id or raw JSON."""
     stripped = quote.strip()
@@ -56,9 +46,21 @@ def unreadable(quote: str) -> str:
     return ""
 
 
-def main() -> int:
-    rows = read_jsonl(ROWS)
-    hold_keys = {record["change_key"] for record in read_jsonl(HOLDS)}
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(prog="scan-rows")
+    parser.add_argument("--lane", default=lanes.MASS, help="which run's paths (lanes.py)")
+    args = parser.parse_args(argv)
+    paths = lanes.lane(args.lane)
+    out = (
+        paths.dry_root.parent
+        / f"_mark_hits{'' if paths.name == lanes.MASS else '_' + paths.name}.txt"
+    )
+    rows = lanes.read_jsonl(paths.rows)
+    hold_keys = (
+        {record["change_key"] for record in lanes.read_jsonl(paths.holds)}
+        if paths.holds.exists()
+        else set()
+    )
     hits: list[str] = []
     fresh: list[str] = []
     for number, row in enumerate(rows, start=1):
@@ -88,7 +90,7 @@ def main() -> int:
                 f"{row['old_value']!r} -> {row['new_value']!r} [{'+'.join(marks)}]\n"
                 f"     {reason[:300]}"
             )
-    OUT.write_text(
+    out.write_text(
         f"{len(hits)} Treffer, {len(hits) - len(fresh)} davon bereits entschieden\n\n"
         + "\n".join(hits)
         + "\n",
@@ -97,7 +99,7 @@ def main() -> int:
     print(
         f"Treffer gesamt: {len(hits)} | bereits entschieden: {len(hits) - len(fresh)} | offen: {len(fresh)}"
     )
-    print(f"vollstaendig in {OUT}")
+    print(f"in full in {out}")
     print()
     print("\n".join(fresh))
     return 0

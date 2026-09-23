@@ -5,16 +5,35 @@ sixty rows whose OWN reviewer reason does not carry both halves of the claim, or
 not checkable at the artefact. Every held row is one the writer would otherwise have written.
 
     ./.venv/Scripts/python.exe output/remediation/logs/make_holds.py
+
+**The numbers below are line numbers of one exact file**, and the file is regenerable: a re-run of
+`write_dry_all.py` after the writer gained a rule (the citation check of 2026-09-22 drops 46 of the
+1,074 rows) would move every later line - and a hold keyed by line 88 would then hold some other row
+while the row it was written for went through. So the list is pinned to the sequence of change keys it
+was read against - the mass lane's reviewed plan, `lanes.REVIEWED_PLAN_KEYS_SHA256["mass"]` (sha256
+over the keys joined by LF, measured on `ALL_ROWS.jsonl` of 2026-09-22) - and a rows file with any
+other sequence is refused. These holds belong to the mass lane only; another lane's hand-read is its
+own list.
 """
 
 from __future__ import annotations
 
 import json
 import pathlib
+import sys
 
-LOGS = pathlib.Path(__file__).resolve().parent
-ROWS = LOGS / "_write_dry" / "ALL_ROWS.jsonl"
-OUT = LOGS / "_write_apply"
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+
+import lanes  # noqa: E402 - the mass lane's paths, its reviewed-plan pin and the JSON-lines reader
+
+ROWS = lanes.lane(lanes.MASS).rows
+OUT = lanes.lane(lanes.MASS).apply_root
+
+
+def assert_pinned(rows: list[dict]) -> None:
+    """Refuse a rows file whose order is not the one the line numbers were written against."""
+    lanes.assert_reviewed_plan(lanes.MASS, rows, path=ROWS)
+
 
 #: 1-based line number in ALL_ROWS.jsonl -> the reason it was held.
 HOLDS: dict[int, str] = {
@@ -118,15 +137,8 @@ HOLDS: dict[int, str] = {
 
 
 def main() -> int:
-    lines = ROWS.read_text(encoding="utf-8").splitlines()
-    rows: list[dict] = []
-    for number, line in enumerate(lines, start=1):
-        if not line.strip():
-            continue
-        try:
-            rows.append(json.loads(line))
-        except json.JSONDecodeError as exc:
-            raise SystemExit(f"{ROWS}:{number}: not readable JSON: {exc}") from exc
+    rows = lanes.read_jsonl(ROWS)
+    assert_pinned(rows)
     OUT.mkdir(parents=True, exist_ok=True)
 
     records: list[dict] = []

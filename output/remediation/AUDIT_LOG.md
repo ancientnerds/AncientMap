@@ -3217,7 +3217,10 @@ provider key, the 285 name/coordinate cases, the 117 T02 cases, the 17 sites wit
 42 without `source_url`, image spot-check, style calls).
 
 **No search route exists in this codebase** (checked: no `*SEARCH*`/`SERP`/`TAVILY`/`EXA` accessor
-anywhere in `api/`, `pipeline/`, `scripts/`). "Research online" therefore means, until a provider is
+anywhere in `api/`, `pipeline/`, `scripts/`). *[Corrected 2026-09-22: wrong -
+`pipeline/lyra/minimax_shared.minimax_search` exists and serves Lyra, the tweet verifier and Theo; the
+true statement is that the phase-3 pipeline has no search route. See the 2026-09-22 corrections at
+the end of this log.]* "Research online" therefore means, until a provider is
 named: more and independent *fetched* routes, not a model with a browser.
 
 #### The trap inside "with sources": the evidence is API JSON
@@ -5142,7 +5145,7 @@ decision that changes nothing is not a decision.
 | 3 | the 4 refused rows | **write none of them** | nothing: the writer already refuses all four (boundary and fixed point) |
 | 4 | the 29 geopolitical census rows | **leave them as they are** | nothing: they are census findings, not planned rows |
 | 5 | when to deploy | **only after all 5,004 are through** | nothing today: the commits stay local until the run is complete |
-| 6 | the missing search route (A3) | **solve it with MiniMax** | the 5,569 "unverifiable" answers get a search service; only structured hits (title, url, snippet) are taken and the reasoning stays on `deepseek-v4.1-flash` |
+| 6 | the missing search route (A3) | **solve it with MiniMax** | the 5,569 "unverifiable" answers *[corrected 2026-09-22: 7,761 by the answer files; 5,569 has no derivation]* get a search service; only structured hits (title, url, snippet) are taken and the reasoning stays on `deepseek-v4.1-flash` |
 
 **B9 was asked twice, and the first answer was worthless because my framing was wrong.** The first version
 called `United Kingdom` "one spelling for the whole country - like England, Scotland, Wales". Measured on
@@ -5177,7 +5180,7 @@ is why the spawn protection stayed out of it) and finished too. Read straight ou
 |---|---|---|
 | CORRECT | 11,747 | 48 % |
 | UNVERIFIABLE | 7,761 | 32 % |
-| WRONG | 4,708 | 19 % |
+| WRONG | 4,708 *[corrected 2026-09-22: 4,710 by `parse_answer`; this row made the table sum to 24,253]* | 19 % |
 | no readable verdict | 37 | 0.2 % |
 
 Proposals by field: `card_description` 1,881, `site_type` 1,037, `description` 947, `period_start` 808,
@@ -5411,3 +5414,244 @@ skipped: 0  survived: 0  invalid: 0  unproven: 0  errored: 0`**, exit 0
 (`mechanical/evidence/16_mutation_sweep_review.txt`). The first run, with the cache, found one
 survivor: the schematic sea point lay outside every unit's envelope, so the 1000 m tolerance was
 never measured there. The bay fixed that.
+## 2026-09-22 (late) - the gap, the writer's citation check, the lanes and the id repair
+
+Branch `wip/tools-gap`. Every number here was re-derived from the run's own files with the pipeline's
+own parser (`discover_stage.parse_answer`) or read from production with `SELECT`s; nothing was written to
+production, and no model was called.
+
+### Corrections to numbers this log and HANDOVER carried
+
+The wrong figures stay where they were read, marked as corrected, as this log does elsewhere:
+
+* **WRONG is 4,710, not 4,708.** `parse_answer` over the 24,255 answer files: CORRECT 11,747, WRONG
+  4,710, UNVERIFIABLE 7,761, no verdict 37 - sum 24,255. The table above summed to 24,253.
+* **The fields add up to 25,020 only with the two classes nobody counted:** 24,255 answered + 760 never
+  asked (152 sites whose evidence was over the 64,000-character bound; the reason is only in
+  `model.json` `skipped`) + 5 empty model streams (`model.json` `failures`). `ALL_REFUSED.jsonl` names
+  the 760 as "the finder bought no call for this field (... not on disk)" and never names the bound.
+* **42 answers carry two different `VERDICT:` values** (the first one counts): 21 WRONG then CORRECT, 10
+  WRONG then UNVERIFIABLE, 7 CORRECT then WRONG, 4 CORRECT then UNVERIFIABLE (count from the remaining
+  map, re-measured: 42). None of them reached the write plan.
+* **27 judged sites were shown an evidence page cut at the 61,440-byte cap with nothing saying so**
+  (23 `wikidata_entity`, 4 `enwiki` pages). The fetch stage now appends `TRUNCATION_MARKER` to such a
+  page (new runs; `runs/mass` is unchanged).
+* **The reviewer**: 4,579 asked (4,569 calls + 10 resumed), 2,108 cleared (`applies`), 2,202 refuted,
+  173 unresolved, 161 with problems (`review.json` totals). HANDOVER's "confirmed 2,204" is asked minus
+  refuted minus unresolved and counts 96 answers with problems as confirmed.
+* **994 rows at 952 sites**, not "at 1,022 sites": 1,022 is the planned site count
+  (`SELECT count(DISTINCT row_pk) ... LIKE 'phase3:batch-%'` = 952).
+* **Spend ~$27, not ~$31**: finder $22.51 over 24,260 calls (`model.json` totals), reviewer $4.63 over
+  4,569 calls (`review.json`); the ledger holds $23.72 for every finder call including the gold rounds,
+  and $4.65 reviewer. HANDOVER's "finder 25.87" has no derivation in the run's files.
+* **Decision 6's "5,569 unverifiable answers"** has no derivation; the answer files give 7,761.
+* HANDOVER also said batches of five sites (they hold 15; 333 x 15 + 1 x 9) and 38,456 answer files
+  (24,255 answers; 38,456 is answers + 4,579 reviews + 9,622 evidence files).
+
+### The writer never ran the finder's citation check - 44 rows in production fail it
+
+`write_stage` now builds the pages exactly as the finder's prompt was built (`model_stage.evidence_excerpts`
+over the batch's `evidence/` and `fetch.json`, then `discover_stage.pages_from_excerpts`) and refuses a
+row whose citation `discover_stage.source_problems` rejects (`RULE_CITATION`,
+`finder-citation-not-in-evidence`). The dry plan over the whole mass run with that rule (read-only,
+into a scratch directory): **1,028 rows instead of 1,074**, refused by rule
+`{'reviewer-did-not-clear': 22912, 'report-only-field': 1031, 'finder-citation-not-in-evidence': 46,
+'not-a-change': 2, 'not-writable-in-the-columns-shape': 1}`. The 46 are exactly the old plan minus the
+new one: **44 are in production** (22 `site_type`, 22 `period_start`) and 2 are among the 80 unwritten.
+By kind, over the 46 (my classifier; the remaining map split the non-ellipsis quotes differently, 12 JSON / 19
+other): 12 quotes with an ellipsis, 9 quotes of re-typed Wikidata JSON, 24 other quotes not found in
+the stored page, 1 cited URL that was never fetched. The rows stay as they are - changing or holding
+them reopens HANDOVER section 5 and is the owner's decision:
+
+| # | site | site_id | field | old -> new | stamp | written |
+| --- | --- | --- | --- | --- | --- | --- |
+| 1 | Acrocorinth | `f6d1da2a-f957-47fb-9ccf-58f2197eacc8` | period_start | `-1500` -> `-700` | `phase3:batch-0169:chunk-0001` | yes |
+| 2 | Adulis | `0349db41-4fca-4804-b614-e075164512b3` | period_start | `-2000` -> `-1450` | `phase3:batch-0033:chunk-0001` | yes |
+| 3 | Alba Fucens | `13120650-2e61-45af-976c-b2e0665c49af` | period_start | `-3000` -> `-303` | `phase3:batch-0151:chunk-0001` | yes |
+| 4 | Asclepieion of Athens | `629670bb-a4ec-4a5a-97a5-7623f86f46d8` | period_start | `-1500` -> `-419` | `phase3:batch-0306:chunk-0001` | yes |
+| 5 | Brauroneion | `44354857-115b-44d3-b155-cae373565602` | period_start | `-1500` -> `-430` | `phase3:batch-0171:chunk-0001` | yes |
+| 6 | Carteia | `504bf30a-c4a0-48e7-8bbc-378b585b59b5` | period_start | `-3000` -> `-940` | `phase3:batch-0309:chunk-0001` | yes |
+| 7 | Castlestrange Stone | `6848b0cc-552a-4e7d-b767-281d3658a5ac` | period_start | `-500` -> `-300` | `phase3:batch-0199:chunk-0001` | yes |
+| 8 | Chagres and Fort San Lorenzo | `6991377d-fbb5-4c0b-9e24-6dc294033fda` | period_start | `1000` -> `1590` | `phase3:batch-0266:chunk-0001` | yes |
+| 9 | Combe Hill, East Sussex | `9ae31b41-d78d-44da-824d-43487ec611f0` | period_start | `-4500` -> `-3001` | `phase3:batch-0244:chunk-0001` | yes |
+| 10 | Dykyi Sad Archaeological Site | `86c101ad-fcdb-413a-8aec-6aad2d1574e7` | period_start | `-1500` -> `-1250` | `phase3:batch-0300:chunk-0001` | yes |
+| 11 | Er-Grah Tumulus | `c2628a93-7c87-4a98-8d13-8301f7063403` | period_start | `-4500` -> `-5000` | `phase3:batch-0246:chunk-0004` | yes |
+| 12 | Foso e Interior Citadelle De Victoria | `fad5c73f-8725-47d0-b13c-372fefba62ea` | period_start | `-3000` -> `1500` | `phase3:batch-0029:chunk-0001` | yes |
+| 13 | Madjedbebe | `e3df9803-11c3-47ca-8cd2-39265d32470b` | period_start | `-500` -> `-63000` | `phase3:batch-0091:chunk-0005` | yes |
+| 14 | Nokalakevi | `a621b66e-1fda-41b4-9c34-d1a3e7486bd5` | period_start | `-500` -> `-1000` | `phase3:batch-0133:chunk-0001` | yes |
+| 15 | Phanagoria | `3e9107fa-e54c-407c-aaa7-a6f198e48c0f` | period_start | `-1500` -> `-543` | `phase3:batch-0150:chunk-0001` | yes |
+| 16 | Porte Noire | `9b4f553e-24bf-4860-9790-4f8184426360` | period_start | `1` -> `176` | `phase3:batch-0095:chunk-0001` | yes |
+| 17 | Prince of the Lilies | `e4631001-b923-4f36-be7f-c961f9e287ba` | period_start | `-3000` -> `-1550` | `phase3:batch-0102:chunk-0001` | yes |
+| 18 | Quoyness Chambered Cairn | `657dbfe1-7b3f-4548-93c6-99be8674a6ff` | period_start | `-4500` -> `-3000` | `phase3:batch-0135:chunk-0001` | yes |
+| 19 | Skara Brae | `2cbc1c11-5750-4b96-973b-7f1f8c847003` | period_start | `-4000` -> `-3180` | `phase3:batch-0136:chunk-0002` | yes |
+| 20 | Skopje Aqueduct | `d570a6d4-f4a9-4a82-856f-e66c4b55d056` | period_start | `1` -> `1600` | `phase3:batch-0140:chunk-0002` | yes |
+| 21 | Temple of Hera, Olympia | `4c7f6521-241f-48c0-93da-f8d7893f5446` | period_start | `-3000` -> `-600` | `phase3:batch-0259:chunk-0001` | yes |
+| 22 | Tomb of Leonidas | `f80ffef9-a3c9-472f-a429-dd591ce7372b` | period_start | `-1500` -> `-430` | `phase3:batch-0053:chunk-0005` | yes |
+| 23 | Amantia | `c720b595-63d5-4f41-ba14-47ebf79c6098` | site_type | `Temple complex` -> `City/town/settlement` | `phase3:batch-0033:chunk-0004` | yes |
+| 24 | Ashley, Northamptonshire | `c8370b05-1d32-491a-a735-344f6534b4d8` | site_type | `Residence/villa/farmhouse` -> `City/town/settlement` | `phase3:batch-0111:chunk-0001` | yes |
+| 25 | Barclodiad y Gawres | `643b79ca-d609-475e-839e-28c9858fa00a` | site_type | `Necropolis/tombs complex` -> `Tomb` | `phase3:batch-0121:chunk-0007` | yes |
+| 26 | Butrint | `17c94d52-2df2-44ba-83f1-41c26ee6eea3` | site_type | `Temple complex` -> `City/town/settlement` | `phase3:batch-0266:chunk-0001` | yes |
+| 27 | Dougga | `867e1487-3a96-4974-ae74-eaf5448927b9` | site_type | `Temple complex` -> `City/town/settlement` | `phase3:batch-0024:chunk-0001` | yes |
+| 28 | El Kab | `a71d8ba8-3ca0-4845-a519-609b286b4eb3` | site_type | `Temple complex` -> `Archaeological site` | `phase3:batch-0060:chunk-0004` | yes |
+| 29 | Hammam Essalihine | `9212f10a-d866-4d70-bb38-0cbffc49a2c5` | site_type | `Megalithic structures` -> `Bath` | `phase3:batch-0061:chunk-0001` | yes |
+| 30 | Huilai Monument Archaeology Park | `316b3d27-1295-41ce-a5c0-3b9c8251647e` | site_type | `City/town/settlement` -> `Archaeological site` | `phase3:batch-0315:chunk-0001` | yes |
+| 31 | Jubail Church | `b7319c81-70e7-4c3b-9b06-b39bf9cc7dd0` | site_type | `Temple complex` -> `Church/cathedral` | `phase3:batch-0129:chunk-0002` | yes |
+| 32 | Lohum Jo Daro | `8718faea-a442-445c-b369-c8572ec0be7e` | site_type | `City/town/settlement` -> `Archaeological site` | `phase3:batch-0233:chunk-0001` | yes |
+| 33 | Manikyala Stupa | `dd425ddf-0128-45e2-84dd-c442978149e3` | site_type | `Temple complex` -> `Monument` | `phase3:batch-0281:chunk-0001` | yes |
+| 34 | Menelaion | `041bcb70-5676-4ef5-bab2-07f2153098c0` | site_type | `City/town/settlement` -> `Archaeological site` | `phase3:batch-0099:chunk-0001` | yes |
+| 35 | Mulinuyuq | `c8855169-8cd1-40ae-9f2a-cfc8be715d8b` | site_type | `City/town/settlement` -> `Archaeological site` | `phase3:batch-0013:chunk-0005` | yes |
+| 36 | Preah Palilay | `41705e94-8ffd-45f3-943e-df6fac317144` | site_type | `Temple complex` -> `Temple` | `phase3:batch-0106:chunk-0003` | yes |
+| 37 | Pukara, Coporaque | `64137ead-762b-4621-a59c-5c7395ef4826` | site_type | `City/town/settlement` -> `Archaeological site` | `phase3:batch-0015:chunk-0001` | yes |
+| 38 | Sidrón Cave | `a4ac2a6f-0159-447e-a6d2-7300fbc986ef` | site_type | `Megalithic structures` -> `Cave Structures` | `phase3:batch-0191:chunk-0001` | yes |
+| 39 | Sudheran-Jo-Thul | `6fa3017d-6545-48c6-b54b-c041b9f860b8` | site_type | `Temple complex` -> `Monument` | `phase3:batch-0098:chunk-0001` | yes |
+| 40 | Takht-i-Bahi | `49037cfb-5c88-4863-aa23-c317502fc6d8` | site_type | `Temple complex` -> `Monastery` | `phase3:batch-0218:chunk-0001` | yes |
+| 41 | Thul Hairo Khan | `16419886-7d47-4007-86ae-2fef6dd1fa38` | site_type | `Temple complex` -> `Sacred site` | `phase3:batch-0167:chunk-0001` | yes |
+| 42 | Ugarit | `4a1c0e1a-7ef6-4e1f-bbdb-6334304bcf52` | site_type | `Megalithic structures` -> `City/town/settlement` | `phase3:batch-0288:chunk-0001` | yes |
+| 43 | Wayna Q'inti | `660397b7-a480-4ae7-9742-5ff0970c8e31` | site_type | `City/town/settlement` -> `Archaeological site` | `phase3:batch-0238:chunk-0001` | yes |
+| 44 | Xpuhil | `27c3bfef-7374-4231-9c14-3c1c09ee6ec2` | site_type | `City/town/settlement` -> `Archaeological site` | `phase3:batch-0219:chunk-0001` | yes |
+| 45 | Uruk | `d0b9e72f-73a8-4671-a01f-5cafa6e53bf8` | period_start | `-4500` -> `-3200` | - | no (held / boundary) |
+| 46 | Adulis | `0349db41-4fca-4804-b614-e075164512b3` | site_type | `Temple complex` -> `City/town/settlement` | - | no (held / boundary) |
+
+### The tools are lanes, and three defects came out of giving them tests
+
+`output/remediation/tools/` now names a *lane* (`lanes.py`: run dir, dry plan, apply root, holds,
+reviewer logs and journal stamp pattern at once; `--lane mass` is the old default). Defects found and
+fixed on the way, each with a test that fails without the fix:
+
+* `review_all.py`'s $8 ceiling never stopped anything: it broke out of `pool.map`, which had already
+  queued every batch, and the pool then ran them all (a fake batch: 10 of 10 ran after a STOP at the
+  third). It also compared the whole ledger's reviewer spend (already $4.65) with the ceiling.
+* `write_gate.py` writes rows by their *position* in the writer's plan (`--chunk K`). A rows file built
+  before the writer gained a rule would shift every later position onto another row; the gate now
+  re-plans each open batch dry and refuses unless the change keys match in order.
+* `make_holds.py` keys its 72 holds by line number of `ALL_ROWS.jsonl`; it now refuses a rows file whose
+  change-key sequence is not the one those numbers were read against (sha256 `0b7ad95d...`).
+
+**The acceptance follows the journal chain** (`verify_writes.py`): for every row the lane touched or
+planned it reads every journal row of every stamp in `id` order, demands a continuous chain ending at
+the live value, and reports a lane row a later lane re-wrote as *superseded by that stamp* instead of as
+a deviation. Run read-only against production on 2026-09-22 with the mass lane's own `ALL_ROWS.jsonl`:
+**994 carried, 0 superseded, 80 unchanged, 0 moved, 1,022 of 1,022 sites read, ERGEBNIS: 0
+Abweichungen** - the 994/80/0 of the write wave, reproduced.
+
+### WDQS rewrites dates - measured, and why the narrowed route does not read dates there
+
+Q37200 P571 is `-2560-00-00T00:00:00Z` (precision year, Julian) through `wbgetclaims`, and
+`-2559-01-01T00:00:00Z` through WDQS (XSD 1.1 counts a year 0). Q12506's Julian `+0537-12-27` is
+`0537-12-29` through WDQS (converted to Gregorian). Century- and decade-precision dates came back
+unchanged (Q10288 `-0500`, Q5690 `-0900`). So the narrowed Wikidata route reads P571, P580, P582 and
+P1619 through `wbgetclaims` and only the item-valued properties and the coordinate through WDQS.
+
+### The gap plan, and its measurement
+
+`output/remediation/gap/GAP_PLAN.md` is the record: 802 questions over 194 sites, 13 batches `gap-NNNN`,
+from a fresh production export (2026-09-22T21:46:19Z). Measured with a scratch fetch (1,152 read-only requests over
+a first pass and one re-fetch) and the discover stage's own evidence selection: **all 152 over-bound sites now fit under
+64,000** (median 78,134 -> 29,763, max 63,279), so the bound stays and the 14 sites with an English
+extract cut at the page cap are judged on it with the truncation marker. WDQS answered seven `429`
+(`Retry-After: 120`) and six timeouts with the first query form; the explicit form and a one-second
+WDQS pace left 0 failed targets after one re-fetch.
+
+### Twenty curated sites point at the wrong Wikidata item
+
+Q309 "history" (7 sites), Q23498 "archaeology" (2), Q11635 "theatre" (3), a rock band for Stabiae,
+Persepolis for the Tomb of Artaxerxes III, the World Heritage parent for five Gyeongju belts, Mundo
+Perdido for Tikal. What the data shows about the cause: `external_ids.py` resolved each id from the
+curated `source_url`, and for the 13 generic ids that URL itself names the generic article
+(`/wiki/History`, `/wiki/Archaeology`, `/wiki/Theatre`, `/wiki/Temples_(band)`). For two of them the
+stored name redirects to exactly that section of another article (`Estipeon` -> `Štip#History`,
+`Castellum Onagrinum` -> `Begeč#Archaeology`), which looks like a section fragment taken as a title;
+the other eleven show no such trace, so how their URLs were made is not established. Each site was
+re-resolved one at a time; the reviewed repair (26 row changes at 19 sites, Tikal unresolved) is rendered with evidence,
+statement, rehearsal and undo in `output/remediation/qid_repair/`, pre-flight-checked read-only
+(26 rows, 0 deviations), **not applied**.
+
+### Mutation proofs
+
+`mutation_sweep.GAP_MUTATIONS`, run through the sweep's own `main`: **19/19 caught**, the tree
+byte-identical to the sweep's start for 8 files - the writer's citation and rerun checks, the cut-page
+marker and its UTF-8 trim, the dates-not-through-WDQS rule, the WDQS pace and query form, the route and
+sitelink guards, the gate's lane and stale-plan guards, the reviewer ceiling, the chain acceptance,
+the hold pin, the repair statement's one-row guard and the gap plan's withheld ids.
+
+## 2026-09-23 - review round on the gap tools: what was found, what was fixed
+
+Two reviewers read the gap-tools branch. Every finding was re-checked before anything was changed;
+all of them held. What changed, with the measurement behind each:
+
+**The write gate walked past three things it had seen.** `write_stage.apply_chunk` writes none of a
+chunk whose pre-flight finds a moved row and exits 0; the gate then still wrote `APPLIED.json`, so a
+resume never looked again, and the acceptance counted the unwritten rows as withheld. A step read-back
+with deviations went on to the next hundred, and a hold whose change key names no planned row held
+nothing while the count said it held one. Now every writer report is checked against the rows the call
+was handed (written, journalled, matched_0, skipped chunks); a mismatch writes `STOPPED.json`, never
+`APPLIED.json`, and ends the wave; a later run refuses a stopped batch; a read-back deviation ends the
+wave; a stray hold is refused before anything is planned. The gate also stops over-counting sites in
+row-by-row mode (each call's report counts the whole batch's sites; the gate now counts the rows it
+wrote).
+
+**The acceptance was too forgiving.** It accepted a lane write of a value nobody planned, a lane that
+wrote one row twice, a planned row changed by *any* other stamp, and - with a wrong `--stamp-like` -
+every row as "moved". It now requires, per row: a lane journal row carries exactly the planned old and
+new value, is the lane's only write of the row, and is not a withheld row; a planned row without a lane
+journal row must be withheld (a hand-read hold or a boundary refusal, computed with the gate's own
+`withheld()`), else it is `NOT WRITTEN`; a later stamp may supersede or move a row only if the operator
+names it (`--allow-stamp`, for the UK lane `2026-09-22_mechanical-uk-parts`). Re-run read-only against
+production on 2026-09-23 with the mass lane's own rows and holds: **994 carried, 80 withheld and
+unchanged (72 held + 8 refused at the boundary - exactly the 80 of the wave), 0 moved, 0 superseded,
+1,022 of 1,022 sites read, RESULT: 0 deviation(s).** The docstring no longer claims "strictly
+stronger" for the two cases it accepts by design.
+
+**The plan a lane was written from is now pinned.** `write_dry_all.py` without flags overwrote the
+mass lane's 1,074-row plan with a 1,028-row re-plan, after which the acceptance read 44 correct
+production writes as 44 deviations (both reproduced). `write_dry_all.py` now refuses to write into the
+dry root of a lane that has an `APPLIED.json`; `verify_writes.py`, `write_gate.py` and `make_holds.py`
+refuse a rows file that is not a written lane's pinned plan (`lanes.REVIEWED_PLAN_KEYS_SHA256`, the
+mass lane's `0b7ad95d...`). The builder's regenerated 1,028-row file is now refused by name instead of
+producing 44 deviations.
+
+**One way to the database.** `lanes.psql`, `lanes.json_rows`, `qid_repair._text` and
+`write_gate.psql_json_rows` were copies of the writer's `run_sql`, `_json_rows` and `_sql_text` (the
+`json_rows` copy without the is-an-object check). The tools now use the writer's, re-exported through
+`lanes.py`; `gap_plan.batches` is `run.assign_batches` with a new `prefix` keyword (its size guard
+included).
+
+**A sitelink badged as a redirect is refused.** Verified with the project User-Agent: Q4810863 (the
+item the repair gives Estipeon, a gap site) links enwiki `Astibo` with badge `Q70893996` ("sitelink to
+redirect"), and `Astibo` redirects to `Štip#History` - after the repair, the sitelink step would have
+routed Estipeon to the whole article of the modern town, the failure the repair corrects. The five
+sitelinks the gap plan resolves today carry no badge. `Q70894304` ("intentional sitelink to redirect")
+is refused the same way; a sitelink without its `badges` list is refused, not read as unbadged.
+
+**The truthy page is cited by a short address.** The narrowed route's WDQS GET address is 1,951
+characters for Q10288, and the citation check matches URLs byte for byte. The mass run's URL fidelity,
+measured over its answer files: enwiki 4,672 exact / 9 miss (0.19 %), wikidata_entity 865 / 2
+(0.23 %), at 130-220 characters - no data exists for 2 KB. The target now shows and is cited as
+`https://www.wikidata.org/wiki/<qid>#wikidata_truthy` (`Target.url`) and still asks WDQS
+(`Target.query_url`); the ledger and the fetch report record the address actually requested. The
+prompt texts are untouched.
+
+**Smaller ones.** `gap_plan.enwiki_missing` read any answer without `query.pages` as "the article
+exists"; it now refuses an error body, `{}` and an `invalid` title (all 5,004 enwiki files of the mass
+run: 3,699 articles or cut pages, 1,305 missing, 0 of another shape). The fetch stage's docstring no
+longer claims `runs/mass` stores as before: the truncation marker applies to every page stored from
+now on. `vlm_pilot/rejected_kinds.py` resolves images through the exact-case tree listings again
+(the ruff fix had deleted them; the exact-case lookup reproduces all 30 versioned `resolved_path`
+values). `qid_repair.py check`/`verify` compare APPLY, REHEARSAL and ROLLBACK byte for byte with the
+rendered statements instead of trusting the digest header; the renderer still reproduces the versioned
+`APPLY.sql` and `ROLLBACK.sql` byte for byte. New output and comments are English; the acceptance
+prints `RESULT: N deviation(s)` (the token the mechanical lane's branch uses).
+
+**Mutation proofs.** `mutation_sweep.GAP_MUTATIONS` (19) and the new `REVIEW_MUTATIONS` (37), run
+through the sweep's own `main` with the main venv: **56/56 caught**, the tree byte-identical to the
+sweep's start for 11 files. Every guard above has its own entry, including the ones the reviewers'
+mutants survived: the gate's stale-plan call in `main`, the replan's run directory, the chain-missing
+link, the sitelinks answer that omits an id, the census's duplicate question, the record-vs-sitelink
+qid check, the repair's curated-site guard and invariant 1, and the rerun list's type check.
+
+One older entry had stopped landing: the narrowed-route change rewrote `if feature ==
+FEATURE_WIKIDATA_ENTITY and not qid:` as `if slot == ...`, so "no qid, no qid skip" pointed at nothing
+and a full sweep would have died on its anchor assert (the gap branch ran only its own 19 entries).
+The anchor is corrected (1/1 caught), and `test_phase3_sweep.py` now reads every entry's anchor and
+test name against the tree in the gate suite, so the next such drift is red before anyone runs a
+sweep: 176 entries, 0 stale.

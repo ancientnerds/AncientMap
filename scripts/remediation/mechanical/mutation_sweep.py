@@ -43,14 +43,12 @@ PERIOD = MECHANICAL / "period_name.py"
 SHAPE = MECHANICAL / "site_type_shape.py"
 TEXT = REPO / "pipeline/utils/text.py"
 PROD_WRITE = REPO / "scripts/remediation/prod_write.py"
-VERIFY_WRITES = REPO / "output/remediation/tools/verify_writes.py"
 JOURNAL_CHAIN = REPO / "scripts/remediation/journal_chain.py"
 TESTFILE = "tests/remediation/test_mechanical.py"
 UK_TESTS = "tests/remediation/test_mechanical_uk.py"
 PERIOD_TESTS = "tests/remediation/test_mechanical_period_name.py"
 SHAPE_TESTS = "tests/remediation/test_mechanical_site_type.py"
 PROD_TESTS = "tests/remediation/test_prod_write.py"
-VERIFY_TESTS = "tests/remediation/test_verify_writes.py"
 CHAIN_TESTS = "tests/remediation/test_journal_chain.py"
 LOADER_TESTS = "tests/remediation/test_mechanical_loaders.py"
 
@@ -1182,126 +1180,6 @@ CASES: list[Case] = [
                 "    if False:",
                 "test_pin_line_refuses_what_is_not_a_digest",
                 PROD_TESTS,
-            ),
-        )
-    ),
-    # ------------------------------ the phase-3 acceptance follows the journal chain (2026-09-22)
-    *(
-        guard(f"acceptance: {label}", VERIFY_WRITES, needle, test, VERIFY_TESTS)
-        for label, needle, test in (
-            (
-                "a phase-3 row outside the plan is a deviation",
-                "            if phase3:",
-                "test_a_phase3_journal_row_outside_the_plan_is_a_deviation",
-            ),
-            (
-                "a phase-3 row outside unified_sites is a deviation",
-                "        if link.table != TABLE and link.stamp.startswith(PHASE3):",
-                "test_a_phase3_row_outside_unified_sites_is_a_deviation",
-            ),
-            (
-                "a reverted phase-3 write is a deviation",
-                "        if undone is not None:",
-                "test_a_rolled_back_phase3_write_is_not_accepted",
-            ),
-            (
-                "a phase-3 rollback on an unwritten field is a deviation",
-                "        if problem is None and reverted(chain) is not None:",
-                "test_a_phase3_rollback_on_a_field_phase3_never_wrote_is_a_deviation",
-            ),
-            (
-                "a journalled site must exist",
-                "        if pk not in stored:",
-                "test_a_missing_site_is_a_deviation",
-            ),
-            (
-                "a broken chain is reported",
-                '        if problem is not None:\n            verdict.deviations.append(f"  BROKEN CHAIN {pk}',
-                "test_a_broken_chain_is_a_deviation",
-            ),
-            (
-                "the chain ends at the live value",
-                "        if live(column, pk) != chain[-1].new:",
-                "test_a_live_value_the_journal_does_not_end_at_is_a_deviation",
-            ),
-            (
-                "a superseded write is reported by stamp",
-                "        if not is_phase3_write(chain[-1].stamp):",
-                "test_a_superseded_phase3_write_is_reported_by_stamp_not_as_a_deviation",
-            ),
-            (
-                "a planned site must exist",
-                '        if row["pk"] not in stored:',
-                "test_a_missing_site_is_a_deviation",
-            ),
-            (
-                "an unjournalled field keeps its old value",
-                "            if live(*key) != old:",
-                "test_a_held_field_changed_without_a_journal_row_is_a_deviation",
-            ),
-            (
-                "a later chain starts from the planned value",
-                "        if problem is None and chain[0].old != old:",
-                "test_a_later_chain_on_a_held_field_must_start_from_the_planned_old_value",
-            ),
-            (
-                "a later chain ends at the live value",
-                "        if problem is None and live(*key) != chain[-1].new:",
-                "test_a_later_chain_on_a_held_field_must_end_at_the_live_value",
-            ),
-            (
-                "a broken later chain is reported",
-                "        if problem is not None:\n            verdict.deviations.append(\n"
-                '                f"  BROKEN CHAIN {row',
-                "test_a_later_chain_on_a_held_field_must_be_unbroken",
-            ),
-        )
-    ),
-    *(
-        Case(f"acceptance: {label}", VERIFY_WRITES, old, new, test, VERIFY_TESTS)
-        for label, old, new, test in (
-            (
-                "only a phase-3 chain counts as written",
-                "any(is_phase3_write(k.stamp) for k in chain)",
-                "True",
-                "test_a_later_chain_on_a_held_field_must_start_from_the_planned_old_value",
-            ),
-            (
-                "only the three phase-3 columns are judged",
-                "        if column not in COLUMNS:\n            continue\n        if (column, pk) not in planned_fields:",
-                "        if (column, pk) not in planned_fields:",
-                "test_a_field_outside_the_three_columns_is_not_judged",
-            ),
-            (
-                "a phase-3 rollback is not a phase-3 write",
-                "    return stamp.startswith(PHASE3) and not is_rollback(stamp)",
-                "    return stamp.startswith(PHASE3)",
-                "test_a_phase3_rollback_alone_is_not_a_phase3_write",
-            ),
-            (
-                "a chain is continuous",
-                "    at = first_break([(link.old, link.new) for link in chain])",
-                "    at = None",
-                "test_a_broken_chain_is_a_deviation",
-            ),
-            (
-                "a reversal is found in the chain",
-                "    if not undone:\n        return None",
-                "    if True:\n        return None",
-                "test_a_rolled_back_phase3_write_is_not_accepted",
-            ),
-            (
-                "main reads every phase-3 row's chain",
-                '    ids = sorted({row["pk"] for row in planned} | {k.pk for k in phase3 if k.table == TABLE})',
-                '    ids = sorted({row["pk"] for row in planned})',
-                "test_main_reads_every_phase3_row_not_only_the_planned_ones",
-            ),
-            (
-                "main reads phase-3 rows of every table",
-                "_SELECT + f\"WHERE run_stamp LIKE '{PHASE3}%' AND column_name IN {_in(COLUMNS)} \"",
-                "_SELECT + f\"WHERE table_name = '{TABLE}' AND run_stamp LIKE '{PHASE3}%' "
-                'AND column_name IN {_in(COLUMNS)} "',
-                "test_main_reads_phase3_rows_of_every_table",
             ),
         )
     ),

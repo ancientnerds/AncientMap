@@ -8,11 +8,15 @@ uebersprungen, nicht stillschweigend als leer behandelt.
 
 from __future__ import annotations
 
+import argparse
 import collections
 import json
 import pathlib
+import sys
 
-RUN = pathlib.Path("output/remediation/phase3_runner/runs/mass")
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+
+import lanes  # noqa: E402 - the lane's paths (default: the mass run)
 
 
 def load(path: pathlib.Path) -> dict | None:
@@ -32,8 +36,11 @@ def value_counts(items: list[dict], field: str, limit: int = 12) -> str:
     return ", ".join(f"{k} {v}" for k, v in counts.most_common(limit))
 
 
-def main() -> None:
-    batches = sorted(p for p in RUN.glob("batch-*") if p.is_dir())
+def main(argv: list[str] | None = None) -> None:
+    parser = argparse.ArgumentParser(prog="found-summary")
+    parser.add_argument("--lane", default=lanes.MASS, help="which run's paths (lanes.py)")
+    run = lanes.lane(parser.parse_args(argv).lane).run_dir
+    batches = sorted(p for p in run.iterdir() if p.is_dir() and (p / "input.json").exists())
     models: dict[str, dict] = {}
     reviews: dict[str, dict] = {}
     torn: list[str] = []

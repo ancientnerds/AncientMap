@@ -20,7 +20,8 @@ import shapely
 from shapely.geometry import shape
 from shapely.geometry.base import BaseGeometry
 
-ROOT = pathlib.Path(r"C:/PythonProjects/AncientMap")
+#: The repository this file sits in (three levels up from `output/remediation/tools/` or `logs/`).
+ROOT = pathlib.Path(__file__).resolve().parents[3]
 BOUNDARIES = ROOT / "data/boundaries/countries.geojson"
 
 #: The ten rows the reviewer cleared on `country`, with the stored and the proposed value, read from
