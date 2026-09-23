@@ -1,0 +1,13 @@
+{
+ "chunk": 1,
+ "confidence": "authoritative",
+ "label": "img attribution",
+ "lane": "img-attrib",
+ "may_empty": [],
+ "rollback_stamp": "img-attrib-2026-09-23-001-rollback",
+ "rows": 133,
+ "run_stamp": "img-attrib-2026-09-23-001",
+ "sites": 53,
+ "stamp": "img-attrib-2026-09-23",
+ "test_id": "T09/attribution"
+}
