@@ -1068,3 +1068,8 @@ def test_a_planned_row_must_cite_a_ledger_verdict_about_todays_bytes(tmp_path: P
     assert "is not in the ledger" in decide.verify_evidence(planned, [], images)[0]
     (root / SHARD / "Temple.webp").write_bytes(data + b"changed")
     assert "offsite file changed" in decide.verify_evidence(planned, [entry], images)[0]
+
+
+def test_a_commons_title_keeps_everything_but_its_extension() -> None:
+    state = _state([_row(1, _commons="A:_detail_of_the.v2_frieze.jpg")])
+    assert worklist.g3_jobs(state)[0].title == "A: detail of the.v2 frieze"

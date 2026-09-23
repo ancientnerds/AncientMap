@@ -287,8 +287,10 @@ def job_for(state: State, row: Mapping[str, Any], pass_: str, stage: str) -> vis
     excluded, the gold rows include one) is titled by its stored `title`, and says so."""
     site = state.site(str(row["site_id"]))
     name = row["_commons"]
+    # The extension is cut as text: `Path(name).stem` parses per OS, and on Windows a Commons name
+    # such as "A: detail.jpg" would read as a drive.
     title = image_title(
-        {"title": Path(name).stem if name else row.get("title"), "filename": row["filename"]}
+        {"title": name.rsplit(".", 1)[0] if name else row.get("title"), "filename": row["filename"]}
     )
     return vision.Job(
         image_id=int(row["id"]),
