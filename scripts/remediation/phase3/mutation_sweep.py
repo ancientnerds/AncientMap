@@ -5289,8 +5289,8 @@ PHASE4_SELECT_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "p4 prompts: the stored description reaches the selector",
         P4B_PROMPTS,
-        "        f'lat=\"{site.lat}\" lon=\"{site.lon}\"/>'\n",
-        "        f'lat=\"{site.lat}\" lon=\"{site.lon}\" description=\"{site.description}\"/>'\n",
+        '        f\'lat="{site.lat}" lon="{site.lon}"/>\'\n',
+        '        f\'lat="{site.lat}" lon="{site.lon}" description="{site.description}"/>\'\n',
         P4B_SELECT_TEST,
         "test_the_selector_never_sees_the_stored_description_and_sees_every_offered_span",
     ),
@@ -5452,7 +5452,7 @@ PHASE4_SELECT_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "p4 assemble: a card reads c. aloud",
         P4B_ASSEMBLE,
-        "    return _SPOKEN_CIRCA.sub(lambda m: f\"{'Circa' if m['c'] == 'C' else 'circa'} \", card_sentence)\n",
+        '    return M.CIRCA_PATTERN.sub(lambda m: "Circa " if m["c"] == "C" else "circa ", card_sentence)\n',
         "    return card_sentence  # mutant\n",
         P4B_ASSEMBLE_TEST,
         "test_the_card_is_its_desc_sentence_with_the_spoken_edit_and_no_marker",
@@ -8376,6 +8376,112 @@ QID_WAVE3_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     ),
 ]
 MUTATIONS += QID_WAVE3_MUTATIONS
+
+#: The supplemental fix of Track B (wip/p4-select-sup, 2026-09-23): the guards the reviews of WB-B2
+#: to WB-B4 asked for (wf_57d89c7d-7ac__review_p4-select_correctness/_rules) and the orchestrator's
+#: decisions D1-D3 (the circa pattern and the protected additions in `model4`, the span rules of
+#: PHASE4_CONTRACTS section 7). One guard, one test that must fail when it is broken.
+PHASE4_SELECT_SUP_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
+    # -- D2: the one circa pattern (model4) and the spoken edit (assemble)
+    (
+        "p4 model: a circa before a thin space is not read",
+        P4_MODEL,
+        "a?\\.\\s*(?=\\d|(?:AD|BC|BCE|CE)\\s*\\d)",
+        "a?\\. ?(?=\\d|(?:AD|BC|BCE|CE)\\s*\\d)",
+        P4_MODEL_TEST,
+        "test_the_circa_pattern_reads_every_circa_form",
+    ),
+    (
+        "p4 model: an era-first circa is not read",
+        P4_MODEL,
+        "(?=\\d|(?:AD|BC|BCE|CE)\\s*\\d)",
+        "(?=\\d)",
+        P4_MODEL_TEST,
+        "test_the_circa_pattern_reads_every_circa_form",
+    ),
+    (
+        "p4 model: a capital C is no circa",
+        P4_MODEL,
+        "(?<![\\w.])(?P<c>[Cc])a?\\.",
+        "(?<![\\w.])(?P<c>c)a?\\.",
+        P4_MODEL_TEST,
+        "test_the_circa_pattern_reads_every_circa_form",
+    ),
+    (
+        "p4 model: a century c. is read as circa",
+        P4_MODEL,
+        'a?\\.\\s*(?=\\d|(?:AD|BC|BCE|CE)\\s*\\d)")',
+        'a?\\.\\s*")',
+        P4_MODEL_TEST,
+        "test_the_circa_pattern_reads_no_century_and_no_word_end",
+    ),
+    (
+        "p4 model: an initial after a full stop is read as circa",
+        P4_MODEL,
+        "(?<![\\w.])(?P<c>[Cc])a?\\.",
+        "(?<!\\w)(?P<c>[Cc])a?\\.",
+        P4_MODEL_TEST,
+        "test_the_circa_pattern_reads_no_century_and_no_word_end",
+    ),
+    (
+        "p4 assemble: a capital circa is spoken in lower case",
+        P4B_ASSEMBLE,
+        '"Circa " if m["c"] == "C" else "circa "',
+        '"circa "',
+        P4B_ASSEMBLE_TEST,
+        "test_the_spoken_edit_reads_every_circa_form_and_no_century",
+    ),
+    # -- C1: the protected additions (model4) and the leading-star entry rule (sentences)
+    (
+        "p4 model: the review's hedges are not protected",
+        P4_MODEL,
+        '            "presum*", "apparent*", "arguabl*", "seem*", "appear*", "suppos*", "reputed*",\n',
+        "",
+        P4B_SENT_TEST,
+        "test_a_span_carrying_an_unlisted_hedge_or_a_contracted_negation_is_never_offered",
+    ),
+    (
+        "p4 model: a contracted negation is not protected",
+        P4_MODEL,
+        '"negations": ("cannot", "*n\'t", "*n’t"),',
+        '"negations": ("cannot",),',
+        P4B_SENT_TEST,
+        "test_a_span_carrying_an_unlisted_hedge_or_a_contracted_negation_is_never_offered",
+    ),
+    (
+        "p4 model: cannot is not protected",
+        P4_MODEL,
+        '"negations": ("cannot", "*n\'t", "*n’t"),',
+        '"negations": ("*n\'t", "*n’t"),',
+        P4B_SENT_TEST,
+        "test_a_span_carrying_an_unlisted_hedge_or_a_contracted_negation_is_never_offered",
+    ),
+    (
+        "p4 model: unknown is not protected",
+        P4_MODEL,
+        '        "refutation": ("unknown",),\n',
+        "",
+        P4B_SENT_TEST,
+        "test_a_span_carrying_an_unlisted_hedge_or_a_contracted_negation_is_never_offered",
+    ),
+    (
+        "p4 model: the consumers read the design list without the additions",
+        P4_MODEL,
+        "        group: entries + PROTECTED_TOKEN_ADDITIONS.get(group, ())\n",
+        "        group: entries  # mutant\n",
+        P4B_SENT_TEST,
+        "test_a_span_carrying_an_unlisted_hedge_or_a_contracted_negation_is_never_offered",
+    ),
+    (
+        "p4 sentences: a leading star matches only a whole word",
+        P4B_SENT,
+        'alternatives.append(rf"\\b\\w*{re.escape(entry[1:])}\\b")',
+        'alternatives.append(rf"\\b{re.escape(entry[1:])}\\b")',
+        P4B_SENT_TEST,
+        "test_a_span_carrying_an_unlisted_hedge_or_a_contracted_negation_is_never_offered",
+    ),
+]
+MUTATIONS += PHASE4_SELECT_SUP_MUTATIONS
 
 
 def digest(path: Path) -> str:

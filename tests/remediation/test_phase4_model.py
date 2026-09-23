@@ -830,17 +830,7 @@ ADDED_PROTECTED = {
         "presum* apparent* arguabl* seem* appear* suppos* reputed* purported* evidently assum* "
         "possible probable maybe"
     ).split(),
-    "negations": [
-        "cannot",
-        *(
-            f"{stem}n{apostrophe}t"
-            for stem in (
-                "ca could did does do had has have is are was were wo would should must need "
-                "might sha ai"
-            ).split()
-            for apostrophe in ("'", "’")
-        ),
-    ],
+    "negations": ["cannot", "*n't", "*n’t"],
     "refutation": ["unknown"],
 }
 
@@ -859,12 +849,47 @@ def test_the_protected_tokens_every_consumer_reads_are_the_design_list_then_the_
         group: [*design, *ADDED_PROTECTED.get(group, [])]
         for group, design in DESIGN_PROTECTED.items()
     }
-    assert "don't" in M.PROTECTED_TOKENS["negations"]
-    assert "don’t" in M.PROTECTED_TOKENS["negations"]
 
 
 def test_the_pronoun_openers_are_the_design_list_verbatim() -> None:
     assert list(M.PRONOUN_OPENERS) == DESIGN_PRONOUNS
+
+
+@pytest.mark.parametrize(
+    ("text", "circa"),
+    [
+        ("built c. 2500 BC", "c. "),
+        ("built ca.300 AD", "ca."),
+        # {{circa}} renders `c.` and a thin space (U+2009); an NBSP is whitespace too
+        ("grew c.\u20091770 BC", "c.\u2009"),
+        ("settled c.\u00a012,500 years ago", "c.\u00a0"),
+        # era-first dates
+        ("built c. AD 79 on the shore", "c. "),
+        ("built ca. BC 500 on the hill", "ca. "),
+        ("built c. BCE 500 on the hill", "c. "),
+        # a capital C, at the start of a sentence
+        ("C. 1200 BC the city was burnt", "C. "),
+        ("Ca. 1200 BC the city was burnt", "Ca. "),
+    ],
+)
+def test_the_circa_pattern_reads_every_circa_form(text: str, circa: str) -> None:
+    (match,) = M.CIRCA_PATTERN.finditer(text)
+    assert match.group() == circa
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "It dates to the 5th c. BCE and later.",  # c. is a century: no number follows
+        "It dates to the 5th c. and the 4th c.",
+        "It was dug by B.c. 1990 surveyors.",  # an initial after a full stop
+        "Tools from Africa. 1990 was the year.",  # the end of a word, not an abbreviation
+        "Tools, pots etc. 5 of them.",
+        "It was built c. ad 79.",  # an era word is upper case
+    ],
+)
+def test_the_circa_pattern_reads_no_century_and_no_word_end(text: str) -> None:
+    assert M.CIRCA_PATTERN.search(text) is None
 
 
 def test_the_word_lists_match_the_design_file() -> None:

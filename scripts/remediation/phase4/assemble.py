@@ -45,12 +45,6 @@ from phase4 import model4 as M  # noqa: E402
 from phase4 import prompts4 as P  # noqa: E402
 
 TERMINAL = ".!?"
-#: The one spoken edit of a card (card_texts): `c.`/`ca.` before a number is read "circa", so the
-#: narrator never reads a bare `c`. Any whitespace may follow the stop ({{circa}} renders `c.` and a
-#: thin space, U+2009); the number may be an era-first date (`c. AD 79`). A `c.` after a word
-#: character or a full stop is no circa (`B.c.`), and neither is one no number follows (`5th c. BCE`,
-#: a century).
-_SPOKEN_CIRCA = re.compile(r"(?<![\w.])(?P<c>[Cc])a?\.\s*(?=\d|(?:AD|BC|BCE|CE)\s*\d)")
 _SPACES = re.compile(r" {2,}")
 
 
@@ -94,9 +88,9 @@ def with_marker(sentence: str, n: int) -> str:
 
 
 def spoken(card_sentence: str) -> str:
-    """The card's one non-source edit: `c.`/`ca.` in front of a number becomes `circa` (`Circa`
-    for a capital `C`), followed by one space."""
-    return _SPOKEN_CIRCA.sub(lambda m: f"{'Circa' if m['c'] == 'C' else 'circa'} ", card_sentence)
+    """The card's one non-source edit: every `model4.CIRCA_PATTERN` match becomes `circa ` (`Circa `
+    for a capital `C`)."""
+    return M.CIRCA_PATTERN.sub(lambda m: "Circa " if m["c"] == "C" else "circa ", card_sentence)
 
 
 def domain_of(url: str) -> str:

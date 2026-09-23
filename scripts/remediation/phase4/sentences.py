@@ -123,14 +123,17 @@ _OPENS_WITH_COORDINATOR = re.compile(r"(?:and|or)\b", re.IGNORECASE)
 def _protected_pattern() -> re.Pattern[str]:
     """One regex for every entry of `model4.PROTECTED_TOKENS`, by the list's own entry rules.
 
-    Whole words, case-insensitive; a trailing `*` matches any word that starts with the rest; an
-    entry with a space is a phrase of consecutive words; `c.` and `ca.` carry their full stop.
+    Whole words, case-insensitive; a trailing `*` matches any word that starts with the rest, a
+    leading `*` any word that ends with it; an entry with a space is a phrase of consecutive words;
+    `c.` and `ca.` carry their full stop.
     """
     alternatives = []
     for entries in M.PROTECTED_TOKENS.values():
         for entry in entries:
             if entry.endswith("*"):
                 alternatives.append(rf"\b{re.escape(entry[:-1])}\w*")
+            elif entry.startswith("*"):
+                alternatives.append(rf"\b\w*{re.escape(entry[1:])}\b")
             elif entry.endswith("."):
                 alternatives.append(rf"\b{re.escape(entry)}")
             else:

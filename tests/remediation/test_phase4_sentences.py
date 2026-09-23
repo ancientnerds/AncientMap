@@ -262,6 +262,10 @@ def test_a_span_carrying_a_protected_token_is_never_offered(text: str, word: str
         ("They don't have any drilled holes, which shows the talons were worn loose.", "don't"),
         ("They don’t have any drilled holes, which shows the talons were worn loose.", "don’t"),
         ("The bishopric was moved, and the see wasn't restored after the war.", "wasn't"),
+        # every contracted negation, not a list of them
+        ("The finds, which oughtn't be moved, lie in the museum of the town.", "oughtn't"),
+        ("The shepherds, who daren't enter the cave, graze the slope below.", "daren't"),
+        ("The mound, which won’t yield to the plough, rises above the field.", "won’t"),
     ],
 )
 def test_a_span_carrying_an_unlisted_hedge_or_a_contracted_negation_is_never_offered(
@@ -275,7 +279,12 @@ def test_a_span_carrying_an_unlisted_hedge_or_a_contracted_negation_is_never_off
 def test_every_protected_group_is_honoured() -> None:
     for group, entries in M.PROTECTED_TOKENS.items():
         for entry in entries:
-            sample = entry.replace("*", "ed") if entry.endswith("*") else entry
+            if entry.endswith("*"):
+                sample = entry.replace("*", "ed")
+            elif entry.startswith("*"):
+                sample = entry.replace("*", "ought")
+            else:
+                sample = entry
             assert S.carries_protected_token(f"x {sample} y"), (group, entry)
     assert not S.carries_protected_token("the ridge of the island")
     assert not S.carries_protected_token("etc. and so on")  # `c.` only as its own word

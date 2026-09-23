@@ -328,30 +328,21 @@ DESIGN_PROTECTED_TOKENS: Mapping[str, tuple[str, ...]] = MappingProxyType(
     }
 )  # fmt: skip
 
-#: The `n't` forms, in both apostrophes the extracts carry (`'` and `’`): `don't` negates like
-#: `not`, and `\bnot\b` never matches inside it (nor inside `cannot`).
-_NOT_CONTRACTIONS = tuple(
-    f"{stem}n{apostrophe}t"
-    for stem in (
-        "ca", "could", "did", "does", "do", "had", "has", "have", "is", "are", "was", "were",
-        "wo", "would", "should", "must", "need", "might", "sha", "ai",
-    )
-    for apostrophe in ("'", "’")
-)  # fmt: skip
-
-#: What the review of WB-B2 added to the design's list (WB-00 contract change, 2026-09-23). The
-#: design promises that hedges, negations and restrictions survive by construction (card_texts;
-#: pilot T3 stops the run on one lost), and its list let the real pools offer `Presumably, `,
-#: `, it seems,`, `, arguably,`, `cannot` and `don't` spans for deletion: 1,037 offered spans over
-#: the 3,681 local extracts carried a word below. Every entry uses the entry rules above, so a
-#: matcher that implements them (S2's and V4's) reads the additions without a code change.
+#: What the review of WB-B2 added to the design's list (accepted by the orchestrator 2026-09-23,
+#: decision D1). The design promises that hedges, negations and restrictions survive by
+#: construction (card_texts; pilot T3 stops the run on one lost), and its list let the real pools
+#: offer `Presumably, `, `, it seems,`, `, arguably,`, `cannot` and `don't` spans for deletion:
+#: measured over the 3,681 local enwiki extracts' pools, 990 offered spans carried an entry below
+#: with the design's list alone and 0 carry one with it (2026-09-23). `*n't` is every contracted
+#: negation (`don't`, `won't`, `oughtn't`), in both apostrophes the extracts carry: `\bnot\b` never
+#: matches inside one (nor inside `cannot`).
 PROTECTED_TOKEN_ADDITIONS: Mapping[str, tuple[str, ...]] = MappingProxyType(
     {
         "hedges": (
             "presum*", "apparent*", "arguabl*", "seem*", "appear*", "suppos*", "reputed*",
             "purported*", "evidently", "assum*", "possible", "probable", "maybe",
         ),
-        "negations": ("cannot", *_NOT_CONTRACTIONS),
+        "negations": ("cannot", "*n't", "*n’t"),
         "refutation": ("unknown",),
     }
 )  # fmt: skip
@@ -359,8 +350,9 @@ PROTECTED_TOKEN_ADDITIONS: Mapping[str, tuple[str, ...]] = MappingProxyType(
 #: The protected tokens every consumer reads: the design's list, then the additions, per group. A
 #: span containing one is never offered for deletion (S2) and a drop containing one fails V4.
 #: Meaning of an entry: matched case-insensitively as whole words; a trailing `*` matches any word
-#: that starts with the rest (`suggest*`: suggests, suggested, suggestion); an entry with a space
-#: is a phrase of consecutive words; `c.` and `ca.` include their full stop.
+#: that starts with the rest (`suggest*`: suggests, suggested, suggestion); a leading `*` matches
+#: any word that ends with the rest (`*n't`: don't, can't, oughtn't); an entry with a space is a
+#: phrase of consecutive words; `c.` and `ca.` include their full stop.
 PROTECTED_TOKENS: Mapping[str, tuple[str, ...]] = MappingProxyType(
     {
         group: entries + PROTECTED_TOKEN_ADDITIONS.get(group, ())
@@ -375,6 +367,17 @@ PRONOUN_OPENERS: tuple[str, ...] = (
     "It", "Its", "This", "These", "They", "Their", "He", "She", "His", "Her", "The latter",
     "The former", "Here", "There",
 )  # fmt: skip
+
+#: The card's one spoken edit (card_texts: "the closed spoken-form rule 'c.'/'ca.' -> 'circa', so
+#: the narrator never reads a bare 'c'"), the one definition S4 (`assemble.spoken`) and V10 import
+#: (orchestrator decision D2, 2026-09-23). A match is `c.` or `ca.` (either with a capital `C`) in
+#: front of a number or of an era-first date (`c. AD 79`, `ca. BC 500`), with any whitespace after
+#: the stop ({{circa}} renders `c.` and a thin space, U+2009; an NBSP is whitespace too) or none
+#: (`ca.300`). No circa: a `c.` right after a word character or a full stop (`B.c.`, `Africa.`), and
+#: one no number follows (`5th c. BCE`, where c. is a century). The edit replaces the whole match -
+#: the letter, the optional `a`, the stop and the whitespace after it - with `circa ` (`Circa ` when
+#: the letter, group `c`, is a capital `C`).
+CIRCA_PATTERN = re.compile(r"(?<![\w.])(?P<c>[Cc])a?\.\s*(?=\d|(?:AD|BC|BCE|CE)\s*\d)")
 
 # --------------------------------------------------------------------------------------------
 # Run-directory files that cross a track boundary (one record per line, `to_json()`)
