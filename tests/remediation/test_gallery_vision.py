@@ -654,6 +654,55 @@ def test_the_fixture_is_derived_byte_for_byte_and_every_collection_span_is_verba
         assert all(member.span in entry for member in collection.members)
 
 
+class _Snap:
+    """The three things `derive` reads from a snapshot."""
+
+    def __init__(self, sites: list[dict[str, Any]], images: list[dict[str, Any]]) -> None:
+        self.sites = sites
+        self._images = images
+
+    def images(self, site_id: str) -> list[dict[str, Any]]:
+        return [row for row in self._images if row["site_id"] == site_id]
+
+    def exported_at(self) -> str:
+        return "2026-09-20T20:20:01+02:00"
+
+
+def _cobata(tmp_path: Path, problems: list[str], checked: int) -> tuple[Path, _Snap]:
+    source = tmp_path / "labels.json"
+    block = {"name": "La Cobata", "checked": checked, "usable": 0, "problems": problems}
+    source.write_text(json.dumps([block]), encoding="utf-8")
+    rows = [
+        _row(1, filename="San_Lorenzo_Colossal_Head_10.webp", title="San Lorenzo Colossal Head 10"),
+        _row(2, filename="Olmec2.webp", title="Olmec2"),
+        _row(3, filename="Old.webp", title="Old", is_excluded=True),
+    ]
+    return source, _Snap([{"id": SITE, "name": "La Cobata"}], rows)
+
+
+def test_derive_resolves_single_entries_and_refuses_a_span_its_entry_does_not_hold(
+    tmp_path: Path,
+) -> None:
+    source, snap = _cobata(tmp_path, ["karte_oder_plan: Olmec2.webp - a map"], 2)
+    lines, meta = labels.derive(source, snap)
+    assert [(line["image_id"], line["labels"]) for line in lines] == [
+        (1, []),
+        (2, ["karte_oder_plan"]),
+    ]
+    assert meta["rows"] == 2 and meta["matched"] == {"single": 1}
+    source, snap = _cobata(
+        tmp_path, ["fremde_staette: San_Lorenzo_Colossal_Head_10.webp - no list here"], 2
+    )
+    with pytest.raises(labels.LabelError, match="is not in its entry"):
+        labels.derive(source, snap)
+
+
+def test_derive_refuses_a_checked_count_that_is_not_the_live_rows(tmp_path: Path) -> None:
+    source, snap = _cobata(tmp_path, [], 3)  # 3 rows, one of them excluded: 2 were checked
+    with pytest.raises(labels.LabelError, match="checked population"):
+        labels.derive(source, snap)
+
+
 def test_a_collection_member_must_name_exactly_one_row() -> None:
     rows = _keyed(
         _row(1, filename="Thesanctuary.webp"), _row(2, filename="ThesanctuaryWilliamStukeley.webp")
@@ -825,12 +874,16 @@ def test_the_hero_moves_to_the_best_strict_confirmed_candidate() -> None:
     }
     gallery = {i: _v(i) for i in (2, 3, 4, 5)} | {1: _v(1, kind="painting_or_artwork")}
     hero = {i: _v(i, vision.HERO) for i in (2, 3, 4, 5)}
-    truth = _truth(1, 2, 3, 5) | {"File_4.jpg": {"status": "ok", "width": 2000, "height": 1000}}
+    # 4 and 5 outrank 3 on true area, so only their refusals keep them out: 4's 1600 px derivative
+    # is 600 px high, and 5 lacks the author its licence needs
+    truth = _truth(1, 2, 3) | {
+        "File_4.jpg": {"status": "ok", "width": 8000, "height": 3000},
+        "File_5.jpg": {"status": "ok", "width": 6000, "height": 4500},
+    }
     planned, _ = decide.plan_vision(
         rows, {}, gallery, hero, decide.Admission(True, True, False, False, False, "t"), truth
     )
     moves = [(p.key, p.old, p.new, p.role) for p in planned if p.column == "is_hero"]
-    # 4 is D but its 1600 px derivative is 800 high; 5 lacks the author its licence needs; 3 wins
     assert moves == [(1, True, False, "hero-demote"), (3, False, True, "hero-promote")]
     decide.check_plan(planned, rows)
 
