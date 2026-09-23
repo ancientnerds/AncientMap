@@ -6571,3 +6571,155 @@ apply, read back. Commands from the repo root with `PYTHONIOENCODING=utf-8`;
    of the five stats` 0, `journal rows for this run whose row is not a card_stats row` 0, plus the
    tier counts. Completion: `card_stats.py --wave 2026-09-23b --export --write` must print
    `"cells": 0` and write no statement (a read-back, not a wave: do not apply or commit it).
+## 2026-09-23 - owner-case coordinates, wave 2: a third witness from the web (planned, not applied)
+
+Wave 1 (`2026-09-23_owner-case-coordinates`, 9 sites, 27 journal rows) is applied. It left 171 of its
+cases `review` (`bcases/coords.jsonl`): one witness only, two witnesses that are one (a copy, a rounded
+copy, one point), two that disagree, none. This lane looks for a third statement of where each site
+is, outside Wikipedia and Wikidata, and weighs it under wave 1's rule. **Nothing was written to
+production.** Production contacts, all reads: `bcases/run.py check --wave 2` and one journal count
+per coordinate stamp.
+
+The builder of this lane (workflow `wf_bb241314-8a0`) died with its work uncommitted; the salvaged
+state was committed as it stood, merged with `integrate/wave1`, and its review phase - which never
+ran - was done here, with every finding fixed test-first (below).
+
+### The lane (`scripts/remediation/bcases/web_witness.py`, `run.py web-verify|reweigh|plan|check --wave 2`)
+
+* **Research** (agents, untrusted): `coords3/RESEARCH.jsonl`, one line per case, candidates with a
+  URL, the two numbers and the page's own words (`coord_text`). 171 lines, 108 with candidates,
+  141 candidates, 63 with a `none_reason`.
+* **web-verify** (network) proves each candidate from the live page or rejects it with the first check
+  that fails: not a Wikipedia/Wikidata host or mirror (`WIKI_HOSTS`), not our own site or a blocked
+  host, a public address (every redirect hop too, inside the transport; the host checks run again on
+  the URL a redirect ends at), one request through `census.fetch.Fetcher` with the project user agent
+  (an HTTP error or a transport failure is a rejection with its status, never asked another way), an
+  HTML page and no challenge page, `coord_text` standing whole in the page text (Lyra's reader,
+  entities undone, NFKC and glyph variants unified), parsed to exactly the candidate's numbers
+  (1e-6 degrees; decimal, D M, D M S; grid references refused), and a distinctive word of the stored
+  name within 1,500 characters. Output: `coords3/WEB_WITNESSES.jsonl`, one row per candidate.
+* **reweigh** (offline) classifies each case again with the same cache - first without web witnesses,
+  which must reproduce `coords.jsonl` row for row, then with its accepted ones - under wave 1's rule:
+  two independent witnesses agree within the tolerance and the stored point lies outside it. A web
+  witness is named by its publisher (the registered domain) and comes last in priority. A move into
+  another country is held as `review`; a wave-1 site is refused. Output: `coords3/VERDICTS.jsonl`,
+  `coords3/COUNTS.json`.
+* **plan --wave 2 / check --wave 2**: wave 1's renderer, parameterised (`coord_plan.Wave`): stamp
+  `2026-09-23_owner-case-coordinates-wave2`, directory `bcases/coords_plan_wave2/`, confidence
+  `two_source`, three journalled changes per site (`geom`, `lat`, `lon`), conditional on the old value,
+  a stamp-scoped journal guard, `ROLLBACK.sql` under its own stamp. Wave 1's `APPLY.sql`,
+  `ROLLBACK.sql`, `PLAN.jsonl` and `PLAN.md` still render byte for byte (a test compares all four).
+
+### Review findings, each fixed with a test that goes red without it and a mutation case
+
+1. A redirect was checked against the wiki list only: a page redirecting to our own site or to a
+   blocked host passed. The final URL now goes through every host check.
+2. `--wave` was accepted and silently ignored by every command but plan/check/verify; it is now a
+   parser error there.
+3. A web witness was named by its host minus `www.`, so two subdomains of one publisher
+   (`whc.unesco.org`, `en.unesco.org`) were two independent witnesses. It is now the registered domain
+   (three labels under a country's shared second level such as `co.uk`, `gov.pk`); an unknown shared
+   level groups more hosts, never fewer.
+4. A sign parted from its number by a space, or an en dash the glyph table does not make a minus, was
+   dropped: the number read positive. Such a text is now unparsed.
+5. Two signed decimals were read latitude first whatever the labels said ("Longitude / Latitude
+   -0.358, 51.754"). A signed quote whose first axis label is a longitude one is now unparsed.
+6. The quote was matched as a plain substring, so a quote cut from a longer or signed number matched
+   ("17.5744" inside "-17.5744", "-89.9958" inside "-89.99583"): a sign error in the stored point could
+   so be confirmed. A quote now counts only where it stands whole; for a quote without hemisphere
+   letters also no sign, dash or lone hemisphere letter one space away. (A first version refused a
+   dash before a lettered quote - measured on cestenfrance.fr, "Franche-Comte – 47°14'02.9"N" - and
+   was narrowed to signed quotes.)
+7. Independence was tested pair by pair: two pages that are each the item's point (within an
+   arcsecond, or roundings of it) but 40 m apart moved the site on one statement counted three times.
+   `copy_groups` now follows "are one" through chains; with two witnesses a group is the pair itself.
+8. Measured on the live run: Pusilha's P625 was imported from the Cebuano Wikipedia, whose geographic
+   articles were generated from GeoNames, and its web witness was geonames.org - a planned 5.2 km move
+   on one source. Mersinaki's P625 cites phrc.it by URL, its web witness is phrc.it. A P625 whose
+   references name the page's publisher (`cited_publishers`: P854 URLs; P143 Q837615 and P248 Q830106
+   for GeoNames) is now one with that page.
+9. `COUNTS.json` counted "one witness only (web:geonames.org)" as "one witness only (web" - the reason
+   class now keeps the bracket.
+10. The sweep itself found one: after finding 6, "the quote occurs in the page" was subsumed by "the
+    quote stands whole in the page", so its mutation case survived (93/94). The two are one check now,
+    with the same two messages.
+
+Findings 7 and 8 change `classify.py`; the field they add is not part of a verdict's record, and a full
+reclassification over the main checkout's cache still reproduces `COUNTS.json` and all seven delivered
+files of the first wave.
+
+### The run (2026-09-23)
+
+web-verify, 141 candidates, each page asked once (cache: the main checkout's gitignored
+`output/remediation/cache/bcases/web/`, 82 pages):
+
+| outcome | candidates | what |
+| --- | --- | --- |
+| accepted | 45 | 23 publishers: geonames.org 8, ahlfeldt.se (DARE) 7, topostext.org 5, vici.org 5, paganplaces.com 2, 18 others 1 each |
+| http | 59 | megalithic.co.uk 47 read timeouts (30 s), whc.unesco.org 10 HTTP 403, patrimoniocultural.gov.pt 1 HTTP 403, culture.tw 1 TLS certificate failure |
+| unparsed | 13 | labels this parser does not read (`geo:` 3, Lonxitude 2, Latitud/Longitud 2, Chinese hemisphere words), a longitude-first quote twice, a decimal comma, degrees written with `d` or without a degree sign |
+| not-on-page | 10 | the quoted text is not in the page's text - numbers in a map link, a script or a JavaScript-drawn page (OpenStreetMap 4, wikimapia, alaska.org, heritagemalta, sindhculture, mersin.bel.tr, isprambiente) |
+| identity | 6 | no distinctive word of the name within 1,500 characters |
+| not-html | 4 | Pleiades answered JSON and Turtle, two PDFs |
+| grid-reference | 2 | "Easting ... Northing" and a decimal comma read as a projected value |
+| mismatch | 2 | datahub.drago.pe prints longitude first; the agent's latitude-first numbers did not match |
+
+megalithic.co.uk (47 candidates, the largest source) and whc.unesco.org (10) were not readable from this
+workstation with the project user agent; their candidates were never checked, not rejected on content.
+
+reweigh, 171 cases: **7 move, 8 stored-agrees, 156 review** (35 cases have one web witness, 5 two,
+131 none). One move is held for its country (Flevum: Wikidata and vici.org agree in the Netherlands,
+225 km from the stored point in Germany). `plan --wave 2`: 7 sites, 21 journalled changes.
+`check --wave 2` against production: **21 rows, 0 deviations**; the journal holds 27 rows of wave 1's
+stamp and none of wave 2's.
+
+| site | moved | Wikidata P625 | web witness (quote) | pair |
+| --- | --- | --- | --- | --- |
+| Teanum Apulum | 27.26 km | Q3017180 41.763700, 15.241690 | imperium.ahlfeldt.se/places/23226 "41.77125, 15.23548" | 985 m |
+| Aziz Dheri | 15.81 km | Q88078046 34.245464, 72.393405 | doam.gov.pk/public/sites/2330 "Latitude: 34.241666667 Longitude: 72.402333333" | 923 m |
+| Kephala, Kea | 4.15 km | Q1739125 37.680899, 24.328623 | topostext.org/place/377243XKef "Latitude: 37.681700 Longitude: 24.328600" | 89 m |
+| Jordbro Grave Field | 3.92 km | Q10540828 59.131944, 18.122694 | guidebook-sweden.com "59°7′53.7″N 18°7′29.0″E" | 122 m |
+| Dalj | 2.69 km | Q912341 45.484361, 18.987394 | geonames.org/3202215 "45.48438, 18.98610" | 101 m |
+| Great Dolmen of Dwasieden | 1.39 km | Q575698 54.502100, 13.609100 | paganplaces.com "54.5020817, 13.6069502" | 139 m |
+| Karnak Temple Complex | 1.14 km | Q522862 25.718333, 32.658333 (imported from enwiki) | imperium.ahlfeldt.se/places/21108 "25.7191736, 32.6566111" | 196 m |
+
+Every move goes to the Wikidata point (first in priority). Stored-agrees (no change): Tenam Puente,
+Baking Pot and Argishtikhinili (geonames.org), Colybrassus (nomisma.org), Tower of Elahbel (vici.org),
+Talgua Caves (showcaves.com), Menir da Cabeça do Rochedo (prehistoricportugal.com, 3 m) and Lycaean
+Tomb (allovergreece.com).
+
+### For the reader of the plan
+
+* Dalj's record describes the village (its item is "settlement in Croatia"); the move puts it at the
+  village's Wikidata and GeoNames point.
+* Teanum Apulum's pair agrees within 985 m of a 1,000 m tolerance.
+* Two accepted witnesses matched their name on a type word only (Lycaean Tomb: "tomb", page "Lykian
+  Grave | Kastelorizo"; Menir da Cabeça do Rochedo: "menir", the full name in the page title). Both
+  pages were read by hand: they are the site's own pages. Both are stored-agrees, no move.
+* Three pairs rest on a P625 "stated in" an item this workstation could not identify offline:
+  Xultun and Cusichaca River (P248 Q1194038, web witness geonames.org) and Mankby (P248 Q31017965,
+  web witness kyppi.fi). None of them is a move; if Q1194038 is a source GeoNames copies, or Q31017965
+  the register kyppi.fi publishes, `REFERENCE_PUBLISHERS` should name them before a later run.
+* Stored points far from every witness while the witnesses are one source stay `review`: Trajan's
+  Forum 374 km, Petroglyph Beach 236 km from Wikidata/enwiki (1.7 km from its web witness), Hadrian's
+  Gate 42 km, Cusichaca River 35 km, El Kab 26 km. These are wrong points the rule cannot move.
+
+### Tests and proofs
+
+* `tests/remediation/test_bcases_web.py`: 74 tests, no network (a scripted fetcher that refuses what
+  the real one refuses, the real fetcher on a mock transport, a fake psql reader); with
+  `BCASES_CACHE` at the main checkout's cache all 74 pass, including the reproduction of the delivered
+  second wave and the no-web-witness identity with the first.
+* `mutation_sweep.py bcases` after the last code change: **180/180 caught**, among them all
+  **94/94 "bcases web:"** cases (70 from the builder, 24 added for the findings above); the tree
+  byte-identical to the sweep's start for 9 files - and again 180/180 after the second merge of
+  `integrate/wave1` (wip/ops2). The standalone "bcases web" run before finding 10
+  read 93/94. The sweep now runs from a worktree with the interpreter that runs it (`sys.executable`,
+  from `integrate/wave1`), so no wrapper was needed.
+* Gates on the merged tree (after the second merge of `integrate/wave1`): full suite (`pytest -q -rs
+  --timeout 300 -m "not integration and not live_llm"`) **4,275 passed**, 110 skipped - every skip is gitignored data this worktree does not
+  carry (Natural Earth caches, snapshots, worklists, the bcases caches; the three bcases ones pass
+  with `BCASES_CACHE` at the main checkout's cache, and the full reclassification was reproduced by
+  hand) - 57 deselected; `ruff check` over api, pipeline, scripts/remediation, tests and
+  output/remediation/tools clean; `ruff format --check` on the six touched Python files clean;
+  `lint-imports` 2 kept, 0 broken; `vulture` clean.

@@ -10,6 +10,15 @@
     $PY scripts/remediation/bcases/run.py check       # production, read-only: the old values hold
     $PY scripts/remediation/bcases/run.py verify      # production, read-only: after an apply
 
+The coordinates' second wave (`web_witness.py`), a third witness from the web:
+
+    $PY scripts/remediation/bcases/run.py web-verify  # the pages (cached): coords3/WEB_WITNESSES.jsonl
+    $PY scripts/remediation/bcases/run.py web-verify --from-cache   # again, from the cached pages only
+    $PY scripts/remediation/bcases/run.py reweigh     # offline: coords3/VERDICTS.jsonl, COUNTS.json
+    $PY scripts/remediation/bcases/run.py plan --wave 2     # coords_plan_wave2/
+    $PY scripts/remediation/bcases/run.py check --wave 2    # production, read-only
+    $PY scripts/remediation/bcases/run.py verify --wave 2   # production, read-only
+
 `--data` names the directory with the census findings, the census snapshot and the T01 cache (a git
 worktree points it at the main checkout's `output/remediation`), `--cache` the derived files `collect`
 writes, `--out` the deliverables. Nothing here writes to production; the plan's statements are sent by
@@ -24,6 +33,8 @@ import logging
 import sys
 from pathlib import Path
 
+import httpx
+
 _REPO = Path(__file__).resolve().parents[3]
 for _root in (str(_REPO), str(_REPO / "scripts" / "remediation")):
     if _root not in sys.path:
@@ -37,6 +48,7 @@ from bcases import collect as K  # noqa: E402
 from bcases import coord_plan as P  # noqa: E402
 from bcases import inputs  # noqa: E402
 from bcases import qid_research as R  # noqa: E402
+from bcases import web_witness as W  # noqa: E402
 
 
 def collect(data: Path, cache: Path) -> dict[str, int]:
@@ -94,19 +106,45 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="bcases")
     parser.add_argument(
         "command",
-        choices=("export", "collect", "classify", "research", "plan", "check", "verify"),
+        choices=(
+            "export",
+            "collect",
+            "classify",
+            "research",
+            "web-verify",
+            "reweigh",
+            "plan",
+            "check",
+            "verify",
+        ),
     )
     parser.add_argument("--data", default=str(inputs.DATA))
     parser.add_argument("--cache", default=str(inputs.CACHE))
     parser.add_argument("--out", default=str(inputs.OUT))
     parser.add_argument(
+        "--wave",
+        type=int,
+        choices=sorted(P.WAVES),
+        help="plan, check, verify: the coordinate plan's wave (default 1)",
+    )
+    parser.add_argument(
         "--suspects",
         action="store_true",
         help="research: the kept names on a suspect link (wave 3), not the wrong links (wave 2)",
     )
+    parser.add_argument(
+        "--from-cache",
+        action="store_true",
+        help="web-verify: prove the candidates again from the previous run's cached pages, "
+        "asking nothing",
+    )
     args = parser.parse_args(argv)
     if args.suspects and args.command != "research":
         parser.error("--suspects belongs to the research command")
+    if args.from_cache and args.command != "web-verify":
+        parser.error("--from-cache belongs to web-verify")
+    if args.wave is not None and args.command not in ("plan", "check", "verify"):
+        parser.error("--wave belongs to plan, check and verify")
     logging.basicConfig(level=logging.WARNING, format="%(levelname)s %(name)s: %(message)s")
     data, cache, out = Path(args.data), Path(args.cache), Path(args.out)
     if args.command == "export":
@@ -124,13 +162,25 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "research":
         print(json.dumps(research(cache, out, suspects=args.suspects)))
         return 0
+    if args.command == "web-verify":
+        inner = W.CacheOnly() if args.from_cache else httpx.HTTPTransport()
+        with W.open_fetcher(cache / "web", inner) as net:
+            print(json.dumps(W.web_verify(net, out, from_cache=args.from_cache), indent=1))
+        return 0
+    if args.command == "reweigh":
+        counts = W.reweigh(cache, out, atlas=C.CC.load_countries())
+        print(json.dumps(counts, indent=1, ensure_ascii=False))
+        return 0
+    wave = P.WAVES[1 if args.wave is None else args.wave]
     if args.command == "plan":
-        rows = P.write_files(out)
+        rows = P.write_files(out, wave)
+        which = "" if wave.number == 1 else f", wave {wave.number}"
         print(
-            f"coordinate plan: {len(rows) // len(P.COLUMNS)} sites, {len(rows)} journalled changes"
+            f"coordinate plan{which}: {len(rows) // len(P.COLUMNS)} sites, "
+            f"{len(rows)} journalled changes"
         )
         return 0
-    return P.run_readonly(args.command, out)
+    return P.run_readonly(args.command, out, wave=wave)
 
 
 if __name__ == "__main__":
