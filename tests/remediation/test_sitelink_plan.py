@@ -985,3 +985,111 @@ def test_the_scorer_reads_the_sitelink_pilot_with_the_sitelink_transport(
     argv = ["--lane", "sitelink", "--run-dir", str(tmp_path / "runs"), "--gold", str(gold)]
     assert SSP.main([*argv, "--progress", str(progress)]) == 0
     assert seen == [([batch], SSP.sitelink_unaccounted)]
+
+
+def test_a_census_line_that_is_not_its_six_fields_stops_the_build(tmp_path: Path) -> None:
+    census = _census_list(tmp_path / "m.txt", SL.B10_ROWS)
+    census.write_text(census.read_text(encoding="utf-8") + "x|Kourion|Cyprus\n", encoding="utf-8")
+    with pytest.raises(SystemExit, match="not id\\|name\\|stored\\|found\\|lat\\|lon"):
+        SL.HandDecided.read(_write_bcases(tmp_path / "bcases"), census)
+
+
+def test_the_room_is_spent_by_every_article_taken() -> None:
+    """Two articles that each fit the room alone, and not together: the second one is skipped."""
+    order = [_c("dewiki"), _c("frwiki")]
+    each = SL.article_estimate(_pin("dewiki", 6_000, "T dewiki"))
+    pins: dict[tuple[str, str], SL.Pin | str] = {
+        order[0].key: _pin("dewiki", 6_000, "T dewiki"),
+        order[1].key: _pin("frwiki", 6_000, "T frwiki"),
+    }
+    selection = SL.select(order, pins, room=each + each // 2)
+    assert [pin.wiki for pin in selection.chosen] == ["dewiki"]
+    assert [row["rule"] for row in selection.skipped] == ["room"]
+
+
+def test_threshold_four_counts_what_the_lanes_transport_counts(tmp_path: Path) -> None:
+    import score_search_pilot as SSP
+
+    batch = _pilot_batch(tmp_path)
+    record = json.loads((batch / "input.json").read_text(encoding="utf-8"))
+    record["sites"][0][SE.RERUN_FIELDS_KEY] = ["period_start"]
+    (batch / "input.json").write_text(json.dumps(record), encoding="utf-8")
+    store = F.EvidenceStore(batch / "evidence")
+    store.write(site_id=A, feature=F.FEATURE_ENWIKI, body=b"The temple of A.")
+    store.write(site_id=A, feature=F.FEATURE_WIKIDATA_ENTITY, body=b"{}")
+    F.EvidenceStore(batch / "answers").write(
+        site_id=A, feature="period_start", body=b"Nothing dates it.\nVERDICT: UNVERIFIABLE\n"
+    )
+    (batch / "review.json").write_text(json.dumps({"verdicts": []}), encoding="utf-8")
+    progress = {"stopped": None, "failed": {}}
+    passed, lines = SSP.sealed([batch], {}, progress, transport=lambda _batch: 2)
+    assert "  FAIL  4 transport: unaccounted slots 2, stopped None, failed {}" in lines
+    passed, lines = SSP.sealed([batch], {}, progress, transport=SSP.sitelink_unaccounted)
+    assert "  PASS  4 transport: unaccounted slots 0, stopped None, failed {}" in lines
+
+
+# ── the command: census, then plan from the recorded resolution ───────────────────────────────
+
+
+def _plan_inputs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, Path]:
+    """Every file `plan` reads, fabricated: A and B each asked one field; A resolved to one article."""
+    run = _mass_run(tmp_path, {A: {"period_start": "UNVERIFIABLE"}, B: {"country": "UNVERIFIABLE"}})
+    paths = {"mass": run, "questions": tmp_path / "questions.json"}
+    assert SL.main(["census", "--mass-run", str(run), "--questions", str(paths["questions"])]) == 0
+    export = tmp_path / "export"
+    lanes.write_jsonl(export / "unified_sites.jsonl", [_site(A), _site(B, period_start=-300)])
+    lanes.write_jsonl(export / "card_stats.jsonl", [])
+    lanes.write_jsonl(export / "site_external_ids.jsonl", _external((A, "Q1"), (B, "Q2")))
+    lanes.write_jsonl(export / "journal.jsonl", [])
+    rows = [{"change_key": "phase3:k1", "site_id": "elsewhere", "column": "site_type"}]
+    lanes.write_jsonl(tmp_path / "ALL_ROWS.jsonl", rows)
+    _pin_mass_plan(monkeypatch, rows)
+    (tmp_path / "written_keys.txt").write_text("phase3:k1\n", encoding="utf-8")
+    census = _census_list(tmp_path / "mismatches.txt", SL.B10_ROWS)
+    data = _census_data(tmp_path / "data", {A: "pass", B: "pass"}, [_site(A), _site(B)])
+    questions = G.read_questions(paths["questions"])
+    inputs = SL.site_inputs(questions, exported=SL.Export.read(export), mass=run)
+    decided = {
+        A: {**inputs[A], "chosen": [_chosen("elwiki", "Ναός", 5)], "skipped": []},
+        B: {**inputs[B], "chosen": [], "skipped": []},
+    }
+    (tmp_path / "sitelinks.json").write_text(json.dumps(decided), encoding="utf-8")
+    argv = ["plan", "--mass-run", str(run), "--questions", str(paths["questions"])]
+    argv += ["--export", str(export), "--rows", str(tmp_path / "ALL_ROWS.jsonl")]
+    argv += ["--written-keys", str(tmp_path / "written_keys.txt"), "--country-census", str(census)]
+    argv += ["--data", str(data), "--sitelinks", str(tmp_path / "sitelinks.json")]
+    argv += ["--out", str(tmp_path / "PLAN.jsonl"), "--summary", str(tmp_path / "summary.json")]
+    paths["argv"] = argv  # type: ignore[assignment]
+    return paths
+
+
+def test_plan_writes_the_lanes_batches_and_counts_the_country_the_point_verifies(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    argv = _plan_inputs(tmp_path, monkeypatch)["argv"]
+    assert SL.main(list(argv)) == 0  # type: ignore[call-overload]
+    plan = (tmp_path / "PLAN.jsonl").read_text(encoding="utf-8")
+    (batch,) = [json.loads(line) for line in plan.splitlines()]
+    assert batch["batch_id"] == "slk-0001"
+    assert [site["site_id"] for site in batch["sites"]] == [A]
+    summary = json.loads((tmp_path / "summary.json").read_text(encoding="utf-8"))
+    assert (summary["sites"], summary["fields"], summary["articles"]) == (1, 1, 1)
+    assert summary["no_article"] == {"no-article": {"country": 1}}
+    assert summary["country_geometry"]["counts"] == {
+        "asked": 1,
+        "verified_by_geometry": 1,
+        "verified_by_geometry_and_in_this_plan": 0,
+    }
+    assert summary["sha256"] == SL.R._sha256(tmp_path / "PLAN.jsonl")
+
+
+def test_plan_refuses_a_resolution_recorded_under_other_inputs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    argv = _plan_inputs(tmp_path, monkeypatch)["argv"]
+    recorded = json.loads((tmp_path / "sitelinks.json").read_text(encoding="utf-8"))
+    recorded[A]["room"] -= 1
+    (tmp_path / "sitelinks.json").write_text(json.dumps(recorded), encoding="utf-8")
+    with pytest.raises(SystemExit, match="resolved under other inputs"):
+        SL.main(list(argv))  # type: ignore[call-overload]
+    assert not (tmp_path / "PLAN.jsonl").exists()
