@@ -141,9 +141,13 @@ def test_a4_refuses_what_it_cannot_read_exactly(author, says):
 
 def test_an_empty_or_doubled_information_template_gives_no_route():
     assert isinstance(A.resolve(_page(wikitext=_info(""))), A.Refused)
-    doubled = "{{Information\n|Date=== {{int:filedesc}} ==\n" + _info("[[User:X|X]]") + "}}"
-    found = A.resolve(_page(wikitext=doubled))
-    assert isinstance(found, A.Refused) and found.rule == "-"
+    # the Dispilio page: an unclosed template swallowed a second one
+    nested = "{{Information\n|Date=== {{int:filedesc}} ==\n" + _info("[[User:X|X]]") + "}}"
+    # and two complete templates that name two authors: which one is the file's is not ours to pick
+    two = _info("[[User:A|A]]") + _info("[[User:B|B]]")
+    for wikitext in (nested, two):
+        found = A.resolve(_page(wikitext=wikitext))
+        assert isinstance(found, A.Refused) and found.rule == "-", wikitext
 
 
 def test_an_entity_parse_attribution_would_store_literally_is_refused():
