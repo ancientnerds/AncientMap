@@ -50,7 +50,7 @@ import json
 import re
 import subprocess
 import sys
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -438,11 +438,18 @@ def plan_records(
     ]
 
 
-def plan_digest(records: Iterable[Mapping[str, object]]) -> str:
+#: The fields a G0 record is identified by. `gallery_audit/chunk_writer.py` digests its own,
+#: wider rows (table, column, key, change key) through the same function.
+PLAN_DIGEST_KEYS = ("image_id", "site_id", "old_value", "new_value")
+
+
+def plan_digest(
+    records: Iterable[Mapping[str, object]], keys: Sequence[str] = PLAN_DIGEST_KEYS
+) -> str:
     """sha256 over a record set: order-independent, one canonical JSON line per row."""
     lines = [
         json.dumps(
-            {key: record.get(key) for key in ("image_id", "site_id", "old_value", "new_value")},
+            {key: record.get(key) for key in keys},
             sort_keys=True,
             ensure_ascii=False,
         )

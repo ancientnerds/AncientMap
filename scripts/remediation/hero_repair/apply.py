@@ -41,7 +41,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
-import shlex
+import re
 import subprocess
 import sys
 from collections.abc import Iterable, Mapping, Sequence
@@ -54,8 +54,12 @@ for _parent in (_HERE.parent.parent, _HERE.parent.parent.parent.parent):
         sys.path.insert(0, str(_parent))
 
 REPO = _HERE.parents[3]
-SSH_HOST = "ancientnerds"
-PSQL = "docker exec -i ancient_nerds_db psql -U ancient_map -d ancient_map -v ON_ERROR_STOP=1"
+
+#: The production transport is `prod_write.send` (ssh, then psql in the container). Until
+#: 2026-09-23 this module carried its own copy without a timeout rule, so a psql that did not
+#: answer surfaced as a bare `subprocess.TimeoutExpired`: a caller could read it as "nothing
+#: happened" and retry a write whose COMMIT may already have landed.
+from prod_write import SSH_HOST, OutcomeUnknown, send  # noqa: E402
 
 from hero_repair.plan import (  # noqa: E402
     CONFIDENCE,
@@ -67,6 +71,9 @@ from hero_repair.plan import (  # noqa: E402
 )
 
 log = logging.getLogger("hero_repair.apply")
+
+#: The exit code of a run whose write may or may not have landed (the other lanes use 5 too).
+EXIT_UNKNOWN = 5
 
 #: The rollback is its own run stamp, so `remediation_change_history` can tell a reversal from
 #: the change it reverses.
@@ -140,6 +147,40 @@ SELECT pg_get_functiondef(p.oid) LIKE '%$1::%s WHERE%' AS casts_value_to_column_
 
 
 # ------------------------------------------------------------------------------- rendering
+def one_hero_invariant_sql(
+    plan_table: str = "_hero_plan", *, label: str = "hero repair", at_most: bool = False
+) -> list[str]:
+    """The hero-count invariant over every site a plan touches, as lines of a DO block.
+
+    The default is the hero repair's own check, byte for byte: every touched site ends with
+    *exactly* one `is_hero` row. `at_most=True` is the image lanes' form
+    (`gallery_audit/chunk_writer.py`): at most one, because a lane that excludes a site's only
+    image may leave it with none, and a second hero is the defect either way - the served pick
+    `ORDER BY is_hero DESC, is_lead DESC, sort_order` then chooses between two flagged rows.
+    The block expects an `integer` variable `bad` in the enclosing DECLARE.
+    """
+    if not plan_table.isidentifier() or not plan_table.startswith("_"):
+        raise PlanError(f"{plan_table!r} is not a temp plan table name")
+    if not re.fullmatch(r"[A-Za-z0-9 _./-]+", label):
+        raise PlanError(f"{label!r} cannot stand inside a quoted RAISE message")
+    if at_most:
+        heroes, rows, wrong, says = "at most one hero", "several rows", "> 1", "end with more than one hero"
+    else:
+        heroes, rows, wrong, says = "one hero", "two rows", "<> 1", "do not end with exactly one hero"
+    return [
+        f"    -- the invariant the repair must leave behind: {heroes} per touched site",
+        f"    -- (DISTINCT: {plan_table} holds {rows} per site, and a plain join would count each",
+        "    --  hero row twice - the check would then fail on a correct repair)",
+        "    SELECT count(*) INTO bad FROM (",
+        f"        SELECT s.site_id FROM (SELECT DISTINCT site_id FROM {plan_table}) s",
+        "          JOIN wiki_images w ON w.site_id = s.site_id",
+        f"         GROUP BY s.site_id HAVING count(*) FILTER (WHERE w.is_hero) {wrong}) x;",
+        "    IF bad > 0 THEN",
+        f"        RAISE EXCEPTION '{label}: % touched site(s) {says}', bad;",
+        "    END IF;",
+    ]
+
+
 def _literal(value: str | None) -> str:
     if value is None:
         return "NULL"
@@ -279,17 +320,7 @@ def render_transaction(
     add("        RAISE EXCEPTION 'hero repair: % row(s) changed, % planned', moved, expected;")
     add("    END IF;")
     add("")
-    add("    -- the invariant the repair must leave behind: one hero per touched site")
-    add("    -- (DISTINCT: _hero_plan holds two rows per site, and a plain join would count each")
-    add("    --  hero row twice - the check would then fail on a correct repair)")
-    add("    SELECT count(*) INTO bad FROM (")
-    add("        SELECT s.site_id FROM (SELECT DISTINCT site_id FROM _hero_plan) s")
-    add("          JOIN wiki_images w ON w.site_id = s.site_id")
-    add("         GROUP BY s.site_id HAVING count(*) FILTER (WHERE w.is_hero) <> 1) x;")
-    add("    IF bad > 0 THEN")
-    add("        RAISE EXCEPTION 'hero repair: % touched site(s) do not end with exactly one "
-        "hero', bad;")
-    add("    END IF;")
+    out.extend(one_hero_invariant_sql())
     add("")
     add("    RAISE NOTICE 'hero repair: % row(s) changed and journalled over % site(s)',")
     add("        moved, (SELECT count(DISTINCT site_id) FROM _hero_plan);")
@@ -315,15 +346,12 @@ def render_transaction(
 
 # ------------------------------------------------------------------------------- transport
 def run_psql(sql: str, *, host: str = SSH_HOST, timeout: int = 900) -> subprocess.CompletedProcess[str]:
-    """Send `sql` to production the way this project does: ssh, then psql in the container."""
-    proc = subprocess.run(
-        shlex.split(f"ssh {host} {PSQL}"),
-        input=sql,
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        timeout=timeout,
-    )
+    """Send `sql` to production through `prod_write.send`.
+
+    A timeout raises `OutcomeUnknown` - the COMMIT may or may not have landed, and only the
+    journal can say which; a non-zero exit raises `PlanError`.
+    """
+    proc = send(sql, host=host, timeout=timeout)
     if proc.returncode != 0:
         raise PlanError(
             f"psql exited {proc.returncode}:\n{proc.stdout}\n{proc.stderr}".strip()
@@ -387,7 +415,19 @@ def main(argv: list[str] | None = None) -> int:
     args = ap.parse_args(argv)
 
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+    try:
+        return run(args, ap)
+    except OutcomeUnknown as exc:
+        print(
+            f"OUTCOME UNKNOWN: {exc} Before any retry run: SELECT count(*) FROM "
+            f"remediation_change_log WHERE run_stamp = {_literal(RUN_STAMP)}; - the write "
+            "landed only if it reads the plan's row count, and nothing was written if it reads 0",
+            file=sys.stderr,
+        )
+        return EXIT_UNKNOWN
 
+
+def run(args: argparse.Namespace, ap: argparse.ArgumentParser) -> int:
     if args.check_primitive:
         print(run_psql(PRIMITIVE_CHECK_SQL).stdout)
         return 0
