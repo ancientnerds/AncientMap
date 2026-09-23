@@ -29,10 +29,11 @@ already in production), `pass: "discover"`, and the site records copied **verbat
 batch's `input.json` - all five findings, name, qid - plus `rerun_fields` (what is asked again),
 `search_fields` (what a MiniMax search is bought for: here the same fields, since every field this
 lane reruns is rerun *because* the search adds evidence; `search_evidence.search_fields` requires it
-to be a subset of `rerun_fields`), `rerun_why` (why, per field), `rerun_unwritten` (the proposals the mass lane did not write, per
-field; `{}` for none), `query_values` (production's value of every field a query reads -
-`search_stage.SLOT_FIELDS` - because the snapshot is older than the corrections production holds)
-and `source_batch`. The batch names the run directory it came from in `source_run_dir`.
+to be a subset of `rerun_fields`), `rerun_why` (why, per field), `rerun_unwritten` (the proposals
+the mass lane did not write, per field; `{}` for none), `query_values` (production's value of every
+field a query reads - `search_stage.SLOT_FIELDS` - because the snapshot is older than the
+corrections production holds) and `source_batch`. The batch names the run directory it came from in
+`source_run_dir`.
 
 **Why a new run directory**: `model_stage.judge_site` returns an answer already on disk without asking
 (measured, `AUDIT_LOG.md`: a changed question written to the same key reuses the recorded answer), so
