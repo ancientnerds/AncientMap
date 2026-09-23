@@ -46,7 +46,7 @@ class TitleResolution:
 
 
 #: C0 controls and DEL - the set migration 0023 keeps out of unified_sites.source_url.
-_CONTROL_RE = re.compile(r"[\x00-\x1f\x7f]")
+CONTROL_RE = re.compile(r"[\x00-\x1f\x7f]")
 
 
 def enwiki_title_from_url(url: str | None) -> str | None:
@@ -58,14 +58,14 @@ def enwiki_title_from_url(url: str | None) -> str | None:
     """
     if not url:
         return None
-    if _CONTROL_RE.search(url):
+    if CONTROL_RE.search(url):
         raise ValueError(f"a URL with a control character names no page: {url!r}")
     prefix = "https://en.wikipedia.org/wiki/"
     if not url.startswith(prefix):
         return None
     tail = url[len(prefix) :].split("#", 1)[0].split("?", 1)[0]
     title = urllib.parse.unquote(tail).replace("_", " ").strip()
-    if _CONTROL_RE.search(title):
+    if CONTROL_RE.search(title):
         raise ValueError(f"{url!r} decodes to a title with a control character: {title!r}")
     return title or None
 

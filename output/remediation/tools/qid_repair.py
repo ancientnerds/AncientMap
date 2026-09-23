@@ -104,6 +104,33 @@ curated row is the same site, the owner's merge and not a link repair; **link-ri
 does not hold (the other row's link was wave 2's repair, or the other row is a part of this site);
 **unresolved** - no rule proves a replacement. Only **A**/**B** change a row, under the gate. Wave 3
 renders into `output/remediation/qid_repair/wave3/` under its own run stamp (`--wave 3`).
+
+## Wave 4 (2026-09-23): the curated `source_url` values that hold two URLs
+
+Twenty `unified_sites` rows - all curated, all from the 2026-03-04 import - carry
+`source_url = '<url1>\\n<url2>'`, and no other row of the table carries a control character there.
+Nineteen are Mesoamerican sites with a megalithic.co.uk URL first and (except Cantil de las animas,
+whose second URL is a blog) an English Wikipedia article second, so `refresh_site_external_ids`
+(which reads `source_url LIKE 'https://en.wikipedia.org/wiki/%'`) never gave them an id. Petra has the
+article first and a Khan Academy page second: `enwiki_title_from_url` took the whole value for a
+title, the API answered it as `invalid`, and `_parse_query` stored it (both fixed in
+`pipeline/lyra/prospector/wiki.py`). The orchestrator's decisions (2026-09-23):
+
+* `source_url` keeps the **first** URL, the curator's order; the old value stays in the journal. The
+  write goes through `apply_remediation_change()` (its allow-list names the table `unified_sites`,
+  migrations 0017/0018/0022 - every column of it).
+* the English Wikipedia URL (second for 18 Mesoamerican sites, first for Petra) becomes
+  `enwiki_title` + `wikidata_qid` through the **same path** the boot refresh takes
+  (`enwiki_title_from_url` + `resolve_titles`: the canonical title after redirects, the page's item);
+  Petra's broken title is corrected. A resolution that finds no page, a disambiguation page, or an
+  item another curated site already carries is not written; it is listed with its reason.
+* a new `(site, kind)` row is an `INSERT` with old value `NULL` ("no row"), guarded by "no row of
+  that kind exists"; its reversal deletes exactly that row, conditional on its value, and journals it.
+
+`resolve --wave 4` reads production (read-only) and asks Wikipedia (the project user agent) and
+writes `wave4/RESOLUTION.json`; `render --wave 4` plans from that file alone. Once migration 0023
+(`CHECK (source_url !~ '[\\x00-\\x1f\\x7f]')`) is applied, the `source_url` half of this wave's
+ROLLBACK.sql can no longer run: the constraint refuses the two-URL value it would restore.
 """
 
 from __future__ import annotations
@@ -112,13 +139,23 @@ import argparse
 import hashlib
 import json
 import pathlib
+import re
 import sys
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import asdict, dataclass
+from datetime import UTC, datetime
+from typing import Any
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
 import lanes  # noqa: E402 - paths, the JSON-lines reader and the read-only psql seam
+
+from pipeline.lyra.prospector.wiki import (  # noqa: E402
+    CONTROL_RE,
+    TitleResolution,
+    enwiki_title_from_url,
+    resolve_titles,
+)
 
 OUT = lanes.REMEDIATION / "qid_repair"
 RUN_STAMP = "2026-09-22_external-id-repair"
@@ -1516,34 +1553,65 @@ WAVE3 = Wave(
     "qid-repair research 2026-09-23 (wave 3)",
     GATE_M,
 )
-WAVES = {wave.number: wave for wave in (WAVE1, WAVE2, WAVE3)}
+#: Wave 4 plans from its resolution record (`RESOLUTION.json` in its directory), not from sites.
+WAVE4 = Wave(
+    4,
+    (),
+    "2026-09-23_source-url-split-wave4",
+    OUT / "wave4",
+    "source-url split 2026-09-23 (wave 4)",
+    None,
+)
+WAVES = {wave.number: wave for wave in (WAVE1, WAVE2, WAVE3, WAVE4)}
+
+#: The table and column wave 4 writes beside `site_external_ids`.
+SITES_TABLE = "unified_sites"
+URL_COLUMN = "source_url"
 
 
 @dataclass(frozen=True)
 class Change:
-    """One conditional update of one `site_external_ids` row, and what the journal records."""
+    """One conditional change of one row, and what the journal records.
+
+    A `site_external_ids` row (waves 1-4): `kind` is its kind, `old_value` None means the site has
+    no row of the kind and the row is inserted (wave 4). A `unified_sites` row (wave 4 only):
+    `kind` is the column, written through `apply_remediation_change()`.
+    """
 
     site_id: str
     name: str
     kind: str
-    old_value: str
+    old_value: str | None
     new_value: str
     test_id: str
     confidence: str
     evidence: tuple[str, ...]
     change_key: str
+    table: str = TABLE
+
+    @property
+    def column(self) -> str:
+        """The journal's `column_name`: an external id's `value`, or the site column itself."""
+        return "value" if self.table == TABLE else self.kind
 
     @property
     def row_pk(self) -> str:
-        """The journal's `row_pk`: the site and the kind, which name the row across the change."""
-        return f"{self.site_id}/{self.kind}"
+        """The journal's `row_pk`: the site and the kind, which name the row across the change -
+        or, for a site column, the site's id (what `apply_remediation_change` journals)."""
+        return f"{self.site_id}/{self.kind}" if self.table == TABLE else self.site_id
 
     def to_json_line(self) -> str:
-        return json.dumps(asdict(self), ensure_ascii=False, sort_keys=True)
+        record = asdict(self)
+        if self.table == TABLE:
+            # waves 1-3 wrote their site_external_ids rows without the key; their plans stay theirs
+            del record["table"]
+        return json.dumps(record, ensure_ascii=False, sort_keys=True)
 
 
-def change_key(site_id: str, kind: str, old: str, new: str, test_id: str) -> str:
-    parts = json.dumps([site_id, TABLE, kind, old, new, test_id], ensure_ascii=False)
+def change_key(
+    site_id: str, kind: str, old: str | None, new: str, test_id: str, *, table: str = TABLE
+) -> str:
+    parts = json.dumps([site_id, table, kind, old, new, test_id], ensure_ascii=False)
     return "external-id:" + hashlib.sha256(parts.encode("utf-8")).hexdigest()
 
 
@@ -1726,11 +1794,12 @@ def render(
 
 
 def statements(rows: list[Change], wave: Wave = WAVE1) -> dict[str, str]:
-    """Every SQL file the runbook runs, as `render` writes it."""
+    """Every SQL file the runbook runs, as `render` (wave 4: `render_split`) writes it."""
+    make = render_split if wave.number == SPLIT_WAVE else render
     return {
-        "APPLY.sql": render(rows, reversal=False, wave=wave),
-        "REHEARSAL.sql": render(rows, reversal=False, rehearsal=True, wave=wave),
-        "ROLLBACK.sql": render(rows, reversal=True, wave=wave),
+        "APPLY.sql": make(rows, reversal=False, wave=wave),
+        "REHEARSAL.sql": make(rows, reversal=False, rehearsal=True, wave=wave),
+        "ROLLBACK.sql": make(rows, reversal=True, wave=wave),
     }
 
 
@@ -1977,7 +2046,626 @@ def wave3_markdown(rows: list[Change]) -> str:
     return "\n".join(lines)
 
 
-#: Each wave's decision record.
+# ── wave 4: the curated source_url values that hold two URLs ──────────────────────────────────
+SPLIT_WAVE = WAVE4.number
+RESOLUTION = "RESOLUTION.json"
+CURATED = "ancient_nerds"
+ENWIKI = "https://en.wikipedia.org/wiki/"
+#: The one separator the values carry (measured 2026-09-23: 20 rows, each exactly one '\n', no '\r').
+SEPARATOR = "\n"
+#: One URL: a scheme and no whitespace or control character.
+URL_RE = re.compile(r"https?://[^\s\x00-\x1f\x7f]+")
+
+#: Every row whose source_url carries a control character, whatever its source: the plan refuses a
+#: row that is not curated, and migration 0023 needs every one of them fixed.
+SCOPE_SQL = (
+    "SELECT to_jsonb(t)::text FROM (SELECT id::text AS site_id, name, source_id, source_url, "
+    "created_at::date::text AS created FROM unified_sites "
+    r"WHERE source_url ~ '[\x00-\x1f\x7f]' ORDER BY id) t;"
+)
+EXTERNAL_SQL = (
+    "SELECT to_jsonb(t)::text FROM (SELECT site_id::text AS site_id, kind, value "
+    f"FROM {TABLE} WHERE site_id::text IN ({{ids}}) ORDER BY site_id, kind, value) t;"
+)
+HOLDERS_SQL = (
+    "SELECT to_jsonb(t)::text FROM (SELECT e.value AS qid, e.site_id::text AS site_id, u.name "
+    f"FROM {TABLE} e JOIN unified_sites u ON u.id = e.site_id WHERE e.kind = 'wikidata_qid' "
+    f"AND u.source_id = '{CURATED}' AND e.value IN ({{qids}}) ORDER BY e.value, e.site_id) t;"
+)
+
+
+#: The resolution of a URL that names no title.
+NO_PAGE = {"canonical_title": None, "qid": None, "disambiguation": False, "redirected": False}
+
+
+@dataclass(frozen=True)
+class Left:
+    """A wave-4 value the rules do not write, and why."""
+
+    site_id: str
+    name: str
+    what: str
+    reason: str
+
+
+@dataclass(frozen=True)
+class SplitPlan:
+    rows: list[Change]
+    left: list[Left]
+    record: Mapping[str, Any]
+
+
+def _utc_now() -> str:
+    return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def resolve_split(
+    run: Callable[[str], str],
+    *,
+    resolve: Callable[[list[str]], dict[str, TitleResolution]] = resolve_titles,
+    now: Callable[[], str] = _utc_now,
+) -> dict[str, Any]:
+    """Wave 4's input: production (read-only) and the boot refresh's own Wikipedia resolution."""
+    read_at = now()
+    sites = lanes.json_rows(run(SCOPE_SQL))
+    if not sites:
+        raise SystemExit("no source_url carries a control character - there is nothing to plan")
+    ids = [str(site["site_id"]) for site in sites]
+    held: dict[str, dict[str, list[str]]] = {sid: {} for sid in ids}
+    for row in lanes.json_rows(run(EXTERNAL_SQL.format(ids=lanes.sql_literals(ids)))):
+        held[row["site_id"]].setdefault(row["kind"], []).append(row["value"])
+    titles = sorted(
+        {
+            title
+            for site in sites
+            for part in str(site["source_url"]).split(SEPARATOR)
+            if URL_RE.fullmatch(part) and part.startswith(ENWIKI)
+            for title in (enwiki_title_from_url(part),)
+            if title
+        }
+    )
+    resolved_at = now()
+    resolutions = resolve(titles)
+    qids = sorted({r.qid for r in resolutions.values() if r.qid})
+    holders: dict[str, list[dict[str, str]]] = {qid: [] for qid in qids}
+    if qids:
+        for row in lanes.json_rows(run(HOLDERS_SQL.format(qids=lanes.sql_literals(qids)))):
+            holders[row["qid"]].append({"site_id": row["site_id"], "name": row["name"]})
+    return {
+        "read_at": read_at,
+        "resolved_at": resolved_at,
+        "scope": SCOPE_SQL,
+        "sites": [{**site, "external_ids": held[str(site["site_id"])]} for site in sites],
+        "resolutions": {
+            title: {
+                "canonical_title": r.canonical_title,
+                "qid": r.qid,
+                "disambiguation": r.disambiguation,
+                "redirected": r.redirected,
+            }
+            for title, r in sorted(resolutions.items())
+        },
+        "qid_holders": holders,
+    }
+
+
+def write_resolution(out: pathlib.Path, record: Mapping[str, Any]) -> None:
+    out.mkdir(parents=True, exist_ok=True)
+    (out / RESOLUTION).write_text(
+        json.dumps(record, ensure_ascii=False, sort_keys=True, indent=1) + "\n",
+        encoding="utf-8",
+        newline="\n",
+    )
+
+
+def load_resolution(out: pathlib.Path) -> dict[str, Any]:
+    path = out / RESOLUTION
+    if not path.exists():
+        raise SystemExit(f"{path} does not exist; run `resolve --wave {SPLIT_WAVE}` first")
+    record = json.loads(path.read_text(encoding="utf-8"))
+    missing = {"read_at", "resolved_at", "sites", "resolutions", "qid_holders"} - set(record)
+    if missing:
+        raise SystemExit(f"{path} is not a wave-4 resolution record (missing {sorted(missing)})")
+    return record
+
+
+def _split_change(
+    site: Mapping[str, Any],
+    kind: str,
+    old: str | None,
+    new: str,
+    confidence: str,
+    evidence: tuple[str, ...],
+    *,
+    table: str = TABLE,
+) -> Change:
+    sid, test_id = str(site["site_id"]), f"EXT/{kind}"
+    return Change(
+        site_id=sid,
+        name=str(site["name"]),
+        kind=kind,
+        old_value=old,
+        new_value=new,
+        test_id=test_id,
+        confidence=confidence,
+        evidence=evidence,
+        change_key=change_key(sid, kind, old, new, test_id, table=table),
+        table=table,
+    )
+
+
+def _not_written(
+    sid: str,
+    res: Mapping[str, Any],
+    by_qid: Mapping[str, list[str]],
+    holders: Mapping[str, list[Mapping[str, str]]],
+    names: Mapping[str, str],
+) -> str | None:
+    """Why a resolution is not written (no page, a disambiguation page, a taken item), or None."""
+    if not res["canonical_title"]:
+        return "no English Wikipedia page by that title"
+    if res["disambiguation"]:
+        return f"{res['canonical_title']!r} is a disambiguation page"
+    qid = res["qid"]
+    if qid is None:
+        return None
+    others = [h for h in holders.get(qid, []) if h["site_id"] != sid]
+    if others:
+        carried = ", ".join(f"{h['name']} ({h['site_id']})" for h in others)
+        return f"{qid} is already carried by the curated site {carried}"
+    twins = [other for other in by_qid[qid] if other != sid]
+    if twins:
+        return f"{qid} is the item of " + ", ".join(f"{names[t]} ({t})" for t in twins) + " too"
+    return None
+
+
+def _shape_problem(site: Mapping[str, Any]) -> str | None:
+    """Why this wave does not split a row's source_url, or None: a curated row, two URLs."""
+    if site["source_id"] != CURATED:
+        return f"a {site['source_id']} row, not curated"
+    parts = str(site["source_url"]).split(SEPARATOR)
+    if len(parts) != 2 or not all(URL_RE.fullmatch(part) for part in parts):
+        return "not two URLs joined by one newline"
+    return None
+
+
+def split_plan(record: Mapping[str, Any]) -> SplitPlan:
+    """Wave 4's rows from its resolution record. Pure: the record is the only input.
+
+    Per site, in name order: `source_url` keeps its first URL; the one English Wikipedia URL among
+    the two becomes `enwiki_title` + `wikidata_qid` as the boot refresh would store them - a new row
+    where the site has none of the kind, a correction only of a value that carries a control
+    character. Anything else is left, with its reason.
+    """
+    sites = sorted(record["sites"], key=lambda s: (str(s["name"]).casefold(), str(s["site_id"])))
+    if len({s["site_id"] for s in sites}) != len(sites):
+        raise SystemExit("the resolution record names a site twice")
+    names = {str(s["site_id"]): str(s["name"]) for s in sites}
+    # the article of every site whose source_url this wave splits (one English Wikipedia URL)
+    articles: dict[str, tuple[str, Mapping[str, Any]]] = {}
+    for site in sites:
+        if _shape_problem(site) is not None:
+            continue
+        wiki = [p for p in str(site["source_url"]).split(SEPARATOR) if p.startswith(ENWIKI)]
+        if len(wiki) == 1:
+            title = enwiki_title_from_url(wiki[0])
+            if title is None:  # the URL ends at /wiki/: it names no page
+                articles[str(site["site_id"])] = (wiki[0], NO_PAGE)
+                continue
+            if title not in record["resolutions"]:
+                raise SystemExit(f"{site['name']}: no resolution of {title!r}; run `resolve` again")
+            articles[str(site["site_id"])] = (wiki[0], record["resolutions"][title])
+    by_qid: dict[str, list[str]] = {}
+    for sid, (_, res) in articles.items():
+        if res["qid"]:
+            by_qid.setdefault(res["qid"], []).append(sid)
+
+    rows: list[Change] = []
+    left: list[Left] = []
+    for site in sites:
+        sid, name, value = str(site["site_id"]), str(site["name"]), str(site["source_url"])
+        problem = _shape_problem(site)
+        if problem is not None:
+            left.append(Left(sid, name, URL_COLUMN, problem))
+            continue
+        first, second = value.split(SEPARATOR)
+        parts = [first, second]
+        rows.append(
+            _split_change(
+                site,
+                URL_COLUMN,
+                value,
+                first,
+                "authoritative",
+                (
+                    f"source_url holds two URLs joined by a newline (row created {site['created']}): "
+                    f"{first} and {second}",
+                    "the curator's first URL is kept (orchestrator decision 2026-09-23); the whole "
+                    "old value stays in this journal row",
+                ),
+                table=SITES_TABLE,
+            )
+        )
+        wiki = [part for part in parts if part.startswith(ENWIKI)]
+        if len(wiki) != 1:
+            left.append(
+                Left(
+                    sid,
+                    name,
+                    "external ids",
+                    "neither URL is an English Wikipedia article"
+                    if not wiki
+                    else "both URLs are English Wikipedia articles",
+                )
+            )
+            continue
+        url, res = articles[sid]
+        why = _not_written(sid, res, by_qid, record["qid_holders"], names)
+        if why is not None:
+            left.append(Left(sid, name, "external ids", f"{url}: {why}"))
+            continue
+        resolved = (
+            f"{url}: resolve_titles, the path of refresh_site_external_ids "
+            f"({record['resolved_at']}): page {res['canonical_title']!r}"
+            + (" (after a redirect)" if res["redirected"] else "")
+            + (f", item {res['qid']}" if res["qid"] else ", no Wikidata item")
+        )
+        for kind, new in (("enwiki_title", res["canonical_title"]), ("wikidata_qid", res["qid"])):
+            if new is None:
+                continue
+            have = list(site["external_ids"].get(kind, []))
+            if have == [new]:
+                continue
+            evidence = [resolved]
+            old: str | None = None
+            if len(have) == 1 and CONTROL_RE.search(have[0]):
+                old = have[0]
+                evidence.append(
+                    f"the stored {kind} is the whole two-URL source_url taken for a title; the "
+                    "API answers it as invalid"
+                )
+            elif have:
+                left.append(Left(sid, name, kind, f"the site already carries {have!r}"))
+                continue
+            if kind == "wikidata_qid":
+                evidence.append(
+                    f"no other curated site carries {new} (production, {record['read_at']})"
+                )
+            rows.append(_split_change(site, kind, old, new, "two_source", tuple(evidence)))
+    return SplitPlan(rows, left, record)
+
+
+def sql_value(value: str | None) -> str:
+    """`lanes.sql_text`, with each control character spelled `chr(n)` outside the quotes.
+
+    A raw newline inside a literal would put the value's line break into the statement file, where
+    a CRLF working copy turns it into CR LF and the guard then compares another value. A value
+    without a control character is spelled exactly as `lanes.sql_text` spells it.
+    """
+    if value is None or not CONTROL_RE.search(value):
+        return lanes.sql_text(value)
+    pieces = []
+    for piece in re.split(f"({CONTROL_RE.pattern})", value):
+        if CONTROL_RE.fullmatch(piece):
+            pieces.append(f"chr({ord(piece)})")
+        elif piece:
+            pieces.append(lanes.sql_text(piece))
+    return "(" + " || ".join(pieces) + ")"
+
+
+def render_split(
+    rows: list[Change], *, reversal: bool, rehearsal: bool = False, wave: Wave = WAVE4
+) -> str:
+    """Wave 4's transaction: the source_url rows through `apply_remediation_change()`, the
+    external-id rows by their full key (a new row inserted where the site holds none of its kind;
+    the reversal deletes exactly that row), each journalled, then guards and invariants."""
+    if not rows:
+        raise SystemExit("refusing to render a statement with no rows")
+    urls = [row for row in rows if row.table == SITES_TABLE]
+    ext = [row for row in rows if row.table == TABLE]
+    if len(urls) + len(ext) != len(rows) or any(row.kind != URL_COLUMN for row in urls):
+        raise SystemExit("wave 4 writes unified_sites.source_url and site_external_ids only")
+    if any(row.new_value is None or CONTROL_RE.search(row.new_value) for row in rows):
+        raise SystemExit("a planned new value carries a control character or is missing")
+    stamp = wave.rollback_stamp if reversal else wave.run_stamp
+    s = lanes.sql_text(stamp)
+
+    def values(group: list[Change], *, with_kind: bool) -> str:
+        out = []
+        for row in group:
+            old, new = (
+                (row.new_value, row.old_value) if reversal else (row.old_value, row.new_value)
+            )
+            key = row.change_key + ("-rollback" if reversal else "")
+            kind = f"{lanes.sql_text(row.kind)}, " if with_kind else ""
+            out.append(
+                f"    ({lanes.sql_text(row.site_id)}::uuid, {kind}{sql_value(old)}, "
+                f"{sql_value(new)}, {lanes.sql_text(key)}, {lanes.sql_text(row.test_id)}, "
+                f"{lanes.sql_text(row.confidence)}, {_evidence_json(row, wave.research)})"
+            )
+        return ",\n".join(out) + ";"
+
+    lines = [
+        "-- Generated by output/remediation/tools/qid_repair.py - do not edit by hand.",
+        f"{DIGEST_HEADER}{plan_digest(rows)}",
+        f"-- the {'reversal' if reversal else 'repair'} of {len(rows)} row(s): {len(urls)} "
+        f"unified_sites.source_url and {len(ext)} site_external_ids; run stamp '{stamp}'.",
+        "-- source_url goes through apply_remediation_change() (migrations 0017/0018/0022). An",
+        "-- external-id row is addressed by its full key (site_id, kind, value = the old value) and",
+        "-- must match exactly one row; an old value NULL means the site holds no row of the kind and",
+        "-- the row is inserted. Every row is journalled in the same transaction.",
+    ]
+    if reversal:
+        lines += [
+            "-- The reversal deletes exactly the rows the repair inserted, by their value. Once",
+            "-- migration 0023 is applied, its CHECK refuses the two-URL source_url restored here.",
+        ]
+    lines += [
+        "\\set ON_ERROR_STOP on",
+        "BEGIN;",
+        "",
+        "CREATE TEMP TABLE _url_plan (",
+        "    site_id    UUID PRIMARY KEY,",
+        "    old_value  TEXT NOT NULL,",
+        "    new_value  TEXT NOT NULL,",
+        "    change_key TEXT NOT NULL,",
+        "    test_id    TEXT NOT NULL,",
+        "    confidence TEXT NOT NULL,",
+        "    evidence   JSONB NOT NULL",
+        ") ON COMMIT DROP;",
+        "",
+        "CREATE TEMP TABLE _ext_plan (",
+        "    site_id    UUID NOT NULL,",
+        "    kind       TEXT NOT NULL,",
+        "    old_value  TEXT,",
+        "    new_value  TEXT,",
+        "    change_key TEXT NOT NULL,",
+        "    test_id    TEXT NOT NULL,",
+        "    confidence TEXT NOT NULL,",
+        "    evidence   JSONB NOT NULL,",
+        "    PRIMARY KEY (site_id, kind),",
+        "    CHECK (old_value IS NOT NULL OR new_value IS NOT NULL)",
+        ") ON COMMIT DROP;",
+        "",
+    ]
+    if urls:
+        lines += [
+            "INSERT INTO _url_plan (site_id, old_value, new_value, change_key, test_id,",
+            "                       confidence, evidence) VALUES",
+            values(urls, with_kind=False),
+            "",
+        ]
+    if ext:
+        lines += [
+            "INSERT INTO _ext_plan (site_id, kind, old_value, new_value, change_key, test_id,",
+            "                       confidence, evidence) VALUES",
+            values(ext, with_kind=True),
+            "",
+        ]
+    write_ext = [
+        "        IF r.old_value IS NULL THEN",
+        f"            INSERT INTO {TABLE} (site_id, kind, value) VALUES (r.site_id, r.kind, r.new_value);",
+    ]
+    if reversal:
+        write_ext += [
+            "        ELSIF r.new_value IS NULL THEN",
+            f"            DELETE FROM {TABLE}",
+            "             WHERE site_id = r.site_id AND kind = r.kind AND value = r.old_value;",
+        ]
+    write_ext += [
+        "        ELSE",
+        f"            UPDATE {TABLE} SET value = r.new_value",
+        "             WHERE site_id = r.site_id AND kind = r.kind AND value = r.old_value;",
+        "        END IF;",
+    ]
+    lines += [
+        "DO $$",
+        "DECLARE",
+        "    bad      INTEGER;",
+        "    n        INTEGER;",
+        "    moved    INTEGER := 0;",
+        f"    expected INTEGER := {len(rows)};",
+        "    r        RECORD;",
+        "BEGIN",
+        "    -- guard 1: every site is a curated site that still exists",
+        "    SELECT count(*) INTO bad",
+        "      FROM (SELECT site_id FROM _url_plan UNION SELECT site_id FROM _ext_plan) p",
+        "      LEFT JOIN unified_sites u ON u.id = p.site_id",
+        f"     WHERE u.id IS NULL OR u.source_id <> '{CURATED}';",
+        "    IF bad > 0 THEN RAISE EXCEPTION 'source-url split: % site(s) are not curated sites', bad;",
+        "    END IF;",
+        "    -- guard 2: every source_url still holds the planned old value",
+        "    SELECT count(*) INTO bad FROM _url_plan p JOIN unified_sites u ON u.id = p.site_id",
+        "     WHERE u.source_url IS DISTINCT FROM p.old_value;",
+        "    IF bad > 0 THEN",
+        "        RAISE EXCEPTION 'source-url split: % source_url value(s) no longer hold the planned old value', bad;",
+        "    END IF;",
+        "    -- guard 3: an external-id row with an old value is the one row of its kind and holds it",
+        "    SELECT count(*) INTO bad FROM _ext_plan p",
+        "     WHERE p.old_value IS NOT NULL",
+        f"       AND ((SELECT count(*) FROM {TABLE} e",
+        "              WHERE e.site_id = p.site_id AND e.kind = p.kind) <> 1",
+        f"         OR NOT EXISTS (SELECT 1 FROM {TABLE} e WHERE e.site_id = p.site_id",
+        "                           AND e.kind = p.kind AND e.value = p.old_value));",
+        "    IF bad > 0 THEN",
+        "        RAISE EXCEPTION 'source-url split: % external-id row(s) no longer hold the planned old value', bad;",
+        "    END IF;",
+        "    -- guard 4: a row planned as new is new - the site holds no row of its kind",
+        "    SELECT count(*) INTO bad FROM _ext_plan p",
+        "     WHERE p.old_value IS NULL",
+        f"       AND EXISTS (SELECT 1 FROM {TABLE} e WHERE e.site_id = p.site_id AND e.kind = p.kind);",
+        "    IF bad > 0 THEN",
+        "        RAISE EXCEPTION 'source-url split: % site(s) already hold a row of a kind planned as new', bad;",
+        "    END IF;",
+        "    -- guard 5: no other curated site carries a planned item",
+        "    SELECT count(*) INTO bad FROM _ext_plan p",
+        f"      JOIN {TABLE} e ON e.kind = p.kind AND e.value = p.new_value AND e.site_id <> p.site_id",
+        f"      JOIN unified_sites u ON u.id = e.site_id AND u.source_id = '{CURATED}'",
+        "     WHERE p.kind = 'wikidata_qid';",
+        "    IF bad > 0 THEN",
+        "        RAISE EXCEPTION 'source-url split: % planned item(s) are carried by another curated site', bad;",
+        "    END IF;",
+        "    -- the source_url writes: the journal primitive, one call and one journal row each",
+        "    FOR r IN SELECT * FROM _url_plan ORDER BY site_id LOOP",
+        "        moved := moved + apply_remediation_change(",
+        f"            '{SITES_TABLE}', '{URL_COLUMN}', 'id', r.site_id::text, r.old_value, r.new_value,",
+        f"            r.test_id, {s}, r.change_key, r.confidence, r.evidence, r.site_id);",
+        "    END LOOP;",
+        "    -- the external-id writes: exactly one row each, and its journal row",
+        "    FOR r IN SELECT * FROM _ext_plan ORDER BY site_id, kind LOOP",
+        *write_ext,
+        "        GET DIAGNOSTICS n = ROW_COUNT;",
+        "        IF n <> 1 THEN",
+        "            RAISE EXCEPTION 'source-url split: %/% matched % row(s), not 1',",
+        "                r.site_id, r.kind, n;",
+        "        END IF;",
+        "        INSERT INTO remediation_change_log (run_stamp, test_id, table_name, column_name,",
+        "            row_pk, old_value, new_value, change_key, confidence, evidence, site_id_ref)",
+        f"        VALUES ({s}, r.test_id, {lanes.sql_text(TABLE)}, 'value',",
+        "            r.site_id::text || '/' || r.kind, r.old_value, r.new_value, r.change_key,",
+        "            r.confidence, r.evidence, r.site_id);",
+        "        moved := moved + n;",
+        "    END LOOP;",
+        "    IF moved <> expected THEN",
+        "        RAISE EXCEPTION 'source-url split: % row(s) changed, % planned', moved, expected;",
+        "    END IF;",
+        "    -- invariant 1: every source_url holds its new value",
+        "    SELECT count(*) INTO bad FROM _url_plan p JOIN unified_sites u ON u.id = p.site_id",
+        "     WHERE u.source_url IS DISTINCT FROM p.new_value;",
+        "    IF bad > 0 THEN",
+        "        RAISE EXCEPTION 'source-url split: % source_url value(s) do not hold the new value', bad;",
+        "    END IF;",
+        "    -- invariant 2: an external-id row holds its new value and is the one row of its kind;",
+        "    -- a row the plan removes is gone",
+        "    SELECT count(*) INTO bad FROM _ext_plan p",
+        "     WHERE (p.new_value IS NOT NULL",
+        f"            AND ((SELECT count(*) FROM {TABLE} e WHERE e.site_id = p.site_id",
+        "                   AND e.kind = p.kind AND e.value = p.new_value) <> 1",
+        f"              OR (SELECT count(*) FROM {TABLE} e",
+        "                   WHERE e.site_id = p.site_id AND e.kind = p.kind) <> 1))",
+        "        OR (p.new_value IS NULL",
+        f"            AND EXISTS (SELECT 1 FROM {TABLE} e WHERE e.site_id = p.site_id AND e.kind = p.kind));",
+        "    IF bad > 0 THEN",
+        "        RAISE EXCEPTION 'source-url split: % external-id row(s) do not hold the new value', bad;",
+        "    END IF;",
+        "    -- invariant 3: the journal and the plan agree in both directions",
+        "    SELECT count(*) INTO bad FROM (",
+        f"        SELECT change_key, '{SITES_TABLE}' AS table_name, '{URL_COLUMN}' AS column_name,",
+        "               site_id::text AS row_pk, old_value, new_value FROM _url_plan",
+        "        UNION ALL",
+        f"        SELECT change_key, {lanes.sql_text(TABLE)}, 'value', site_id::text || '/' || kind,",
+        "               old_value, new_value FROM _ext_plan",
+        "    ) p LEFT JOIN remediation_change_log l",
+        f"        ON l.run_stamp = {s} AND l.change_key = p.change_key",
+        "       AND l.table_name = p.table_name AND l.column_name = p.column_name",
+        "       AND l.row_pk = p.row_pk AND l.old_value IS NOT DISTINCT FROM p.old_value",
+        "       AND l.new_value IS NOT DISTINCT FROM p.new_value",
+        "     WHERE l.id IS NULL;",
+        "    IF bad > 0 THEN",
+        "        RAISE EXCEPTION 'source-url split: % row(s) have no matching journal row', bad;",
+        "    END IF;",
+        "    SELECT count(*) INTO bad FROM remediation_change_log l",
+        f"     WHERE l.run_stamp = {s}",
+        "       AND NOT EXISTS (SELECT 1 FROM _url_plan p WHERE p.change_key = l.change_key)",
+        "       AND NOT EXISTS (SELECT 1 FROM _ext_plan p WHERE p.change_key = l.change_key);",
+        "    IF bad > 0 THEN",
+        "        RAISE EXCEPTION 'source-url split: this stamp journalled % row(s) outside the plan',",
+        "            bad;",
+        "    END IF;",
+        "    RAISE NOTICE 'source-url split: % row(s) changed and journalled', moved;",
+        "END $$;",
+        "",
+        "ROLLBACK;" if rehearsal else "COMMIT;",
+        "",
+        "SELECT 'journal rows for this stamp' AS metric, count(*)::text AS value",
+        f"  FROM remediation_change_log WHERE run_stamp = {s};",
+        "",
+    ]
+    return "\n".join(lines)
+
+
+def _cell(value: str | None) -> str:
+    if value is None:
+        return "(no row)"
+    return "<br>".join(f"`{part}`" for part in value.split(SEPARATOR))
+
+
+def wave4_markdown(plan: SplitPlan) -> str:
+    """Wave 4's decision record: every row, every value left and why, and how to run it."""
+    wave, record, rows = WAVE4, plan.record, plan.rows
+    urls = [row for row in rows if row.table == SITES_TABLE]
+    new = [row for row in rows if row.table == TABLE and row.old_value is None]
+    corrected = [row for row in rows if row.table == TABLE and row.old_value is not None]
+    lines = [
+        "# Source-url split, wave 4 (2026-09-23) - planned, not applied",
+        "",
+        f"{len(rows)} row changes (run stamp `{wave.run_stamp}`): {len(urls)} "
+        f"`unified_sites.source_url` values keep their first URL, {len(new)} `site_external_ids` "
+        f"rows are new and {len(corrected)} corrected; {len(plan.left)} value(s) are left, each with "
+        f"its reason. The input is `wave4/{RESOLUTION}`: production read {record['read_at']} (every "
+        f"`unified_sites` row whose `source_url` carries a control character: "
+        f"{len(record['sites'])}), English Wikipedia resolved {record['resolved_at']} through "
+        "`pipeline.lyra.prospector.wiki.resolve_titles`. The rules are in the module docstring of "
+        "`output/remediation/tools/qid_repair.py`.",
+        "",
+        "| site | column / kind | old | new |",
+        "| --- | --- | --- | --- |",
+    ]
+    for row in rows:
+        lines.append(
+            f"| {row.name} (`{row.site_id}`) | {row.kind} | {_cell(row.old_value)} | "
+            f"{_cell(row.new_value)} |"
+        )
+    lines += [
+        "",
+        "## Left as they are, and why",
+        "",
+        "| site | what | reason |",
+        "| --- | --- | --- |",
+        *(
+            f"| {item.name} (`{item.site_id}`) | {item.what} | {item.reason} |"
+            for item in plan.left
+        ),
+        "",
+        "## Order and fixed point",
+        "",
+        "* After the apply the boot refresh (`refresh_site_external_ids(only_missing=True)`) reads none "
+        "of these sites again (each either has rows or no longer has an English Wikipedia "
+        "`source_url`), and the `--all` path resolves Petra's single URL to the rows written here.",
+        "* `migrations/0023_source_url_no_control_chars.sql` may reach the deploy only after this "
+        "wave is applied and verified: it fails while any `source_url` carries a control character, "
+        "and a failing migration stops the deploy. Once it is applied, the `source_url` half of "
+        "`ROLLBACK.sql` cannot run (the CHECK refuses the two-URL value).",
+        "",
+        "## How to run it (the orchestrator's job, in this order)",
+        "",
+        f"`resolve --wave 4` (read-only: production and English Wikipedia) wrote `{RESOLUTION}`, "
+        "the versioned input of this plan. Run it again only to re-plan: it renews both "
+        "timestamps, so every row's evidence and the plan digest change with it.",
+        "",
+        "```bash",
+        "PY=./.venv/Scripts/python.exe",
+        "$PY output/remediation/tools/qid_repair.py render --wave 4   # REHEARSAL.sql is not versioned",
+        "$PY output/remediation/tools/qid_repair.py check --wave 4    # read-only",
+        'ssh ancientnerds "docker exec -i ancient_nerds_db psql -U ancient_map -d ancient_map '
+        '-v ON_ERROR_STOP=1" < output/remediation/qid_repair/wave4/REHEARSAL.sql',
+        'ssh ancientnerds "docker exec -i ancient_nerds_db psql -U ancient_map -d ancient_map '
+        '-v ON_ERROR_STOP=1" < output/remediation/qid_repair/wave4/APPLY.sql',
+        "$PY output/remediation/tools/qid_repair.py verify --wave 4   # read-only",
+        "```",
+        "",
+    ]
+    return "\n".join(lines)
+
+
+def planned_rows(wave: Wave, out: pathlib.Path) -> list[Change]:
+    """The rows a wave changes: waves 1-3 from their researched sites, wave 4 from its record."""
+    if wave.number == SPLIT_WAVE:
+        return split_plan(load_resolution(out)).rows
+    return changes(wave.sites, gate_m=wave.gate_m)
+
+
+#: Each wave's decision record (wave 4's is `wave4_markdown`, over its whole plan).
 MARKDOWN: dict[int, Callable[[list[Change]], str]] = {
     1: plan_markdown,
     2: wave2_markdown,
@@ -1986,51 +2674,86 @@ MARKDOWN: dict[int, Callable[[list[Change]], str]] = {
 
 
 def write_files(out: pathlib.Path = OUT, wave: Wave = WAVE1) -> list[Change]:
-    rows = changes(wave.sites, gate_m=wave.gate_m)
+    if wave.number == SPLIT_WAVE:
+        plan = split_plan(load_resolution(out))
+        rows, markdown = plan.rows, wave4_markdown(plan)
+    else:
+        rows = changes(wave.sites, gate_m=wave.gate_m)
+        markdown = MARKDOWN[wave.number](rows)
     out.mkdir(parents=True, exist_ok=True)
     (out / "PLAN.jsonl").write_text(
         "".join(row.to_json_line() + "\n" for row in rows), encoding="utf-8", newline="\n"
     )
     for name, sql in statements(rows, wave).items():
         (out / name).write_text(sql, encoding="utf-8", newline="\n")
-    (out / "PLAN.md").write_text(MARKDOWN[wave.number](rows), encoding="utf-8", newline="\n")
+    (out / "PLAN.md").write_text(markdown, encoding="utf-8", newline="\n")
     return rows
 
 
 def read_rows(rows: list[Change], *, run: Callable[[str], str]) -> dict[tuple[str, str], list[str]]:
-    """`{(site_id, kind): [values]}` for the planned rows, read-only."""
-    ids = sorted({row.site_id for row in rows})
+    """`{(site_id, kind): [values]}` for the planned rows, read-only (a site column's key is
+    `(site_id, column)`)."""
     found: dict[tuple[str, str], list[str]] = {}
-    sql = (
-        "SELECT to_jsonb(t)::text FROM (SELECT site_id::text AS site_id, kind, value "
-        f"FROM {TABLE} WHERE site_id::text IN ({lanes.sql_literals(ids)}) "
-        f"AND kind IN ({lanes.sql_literals(KINDS)})) t;"
-    )
-    for record in lanes.json_rows(run(sql)):
-        found.setdefault((record["site_id"], record["kind"]), []).append(record["value"])
+    ext = [row for row in rows if row.table == TABLE]
+    if ext:
+        ids = sorted({row.site_id for row in ext})
+        sql = (
+            "SELECT to_jsonb(t)::text FROM (SELECT site_id::text AS site_id, kind, value "
+            f"FROM {TABLE} WHERE site_id::text IN ({lanes.sql_literals(ids)}) "
+            f"AND kind IN ({lanes.sql_literals(KINDS)})) t;"
+        )
+        for record in lanes.json_rows(run(sql)):
+            found.setdefault((record["site_id"], record["kind"]), []).append(record["value"])
+    urls = [row for row in rows if row.table == SITES_TABLE]
+    if urls:
+        # by the key in its own type, so the primary-key index is used (the 0022 lesson)
+        keys = ", ".join(
+            f"{lanes.sql_text(sid)}::uuid" for sid in sorted({r.site_id for r in urls})
+        )
+        sql = (
+            f"SELECT to_jsonb(t)::text FROM (SELECT id::text AS site_id, {URL_COLUMN} AS value "
+            f"FROM {SITES_TABLE} WHERE id IN ({keys})) t;"
+        )
+        for record in lanes.json_rows(run(sql)):
+            found[(record["site_id"], URL_COLUMN)] = [record["value"]]
     return found
 
 
 def compare(rows: list[Change], found: dict[tuple[str, str], list[str]], *, want: str) -> list[str]:
-    """What differs from the plan's `old` (pre-flight) or `new` (after the apply) values."""
+    """What differs from the plan's `old` (pre-flight) or `new` (after the apply) values. An old
+    value None is "no row of the kind"."""
     problems = []
     for row in rows:
         expected = row.old_value if want == "old" else row.new_value
         values = found.get((row.site_id, row.kind), [])
-        if values != [expected]:
+        if values != ([] if expected is None else [expected]):
             problems.append(f"{row.name} {row.kind}: expected [{expected!r}], found {values!r}")
     return problems
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="qid-repair")
-    parser.add_argument("command", choices=("render", "check", "verify"))
+    parser.add_argument("command", choices=("resolve", "render", "check", "verify"))
     parser.add_argument("--wave", type=int, choices=sorted(WAVES), default=1)
     parser.add_argument("--dir", default=None, help="where the plan and statements live")
     parser.add_argument("--host", default=lanes.HOST)
     args = parser.parse_args(argv)
     wave = WAVES[args.wave]
     out = pathlib.Path(args.dir) if args.dir else wave.out
+
+    def run(sql: str) -> str:
+        return lanes.psql(sql, host=args.host)
+
+    if args.command == "resolve":
+        if wave.number != SPLIT_WAVE:
+            raise SystemExit(f"only wave {SPLIT_WAVE} is resolved; waves 1-3 are researched sites")
+        record = resolve_split(run)
+        write_resolution(out, record)
+        print(
+            f"{len(record['sites'])} site(s), {len(record['resolutions'])} title(s) resolved "
+            f"into {out / RESOLUTION}"
+        )
+        return 0
     if args.command == "render":
         rows = write_files(out, wave)
         print(f"{len(rows)} changes rendered into {out} (digest {plan_digest(rows)[:16]})")
@@ -2039,12 +2762,9 @@ def main(argv: list[str] | None = None) -> int:
         Change(**{**r, "evidence": tuple(r["evidence"])})
         for r in lanes.read_jsonl(out / "PLAN.jsonl")
     ]
-    if rows != changes(wave.sites, gate_m=wave.gate_m):
+    if rows != planned_rows(wave, out):
         raise SystemExit("PLAN.jsonl is not the plan this script renders; run `render` again")
     assert_rendered(out, rows, wave)
-
-    def run(sql: str) -> str:
-        return lanes.psql(sql, host=args.host)
 
     problems = compare(
         rows, read_rows(rows, run=run), want="old" if args.command == "check" else "new"
