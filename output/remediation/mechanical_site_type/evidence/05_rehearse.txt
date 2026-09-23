@@ -1,0 +1,20 @@
+[32m2026-09-23 03:22:35[0m | [1mINFO    [0m | [36mpipeline.utils.logging[0m:[36msetup_logging[0m:[36m57[0m - [1mLogging configured: level=INFO[0m
+INFO mechanical.apply: wrote C:\PythonProjects\AncientMap\output\remediation\mechanical_site_type\REHEARSAL.sql (COMMIT -> ROLLBACK)
+NOTICE:  site_type shape repair: 3 row(s) changed and journalled over 3 curated site(s)
+
+BEGIN
+SET
+SET
+CREATE TABLE
+INSERT 0 3
+DO
+ROLLBACK
+                              metric                               | value 
+-------------------------------------------------------------------+-------
+ journal rows for this run stamp                                   | 0
+ curated rows whose site_type is a marker token or a model refusal | 4
+ curated sites                                                     | 5004
+ temp table _site_type_plan left behind                            | 0
+(4 rows)
+
+
