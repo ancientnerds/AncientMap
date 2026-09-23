@@ -1162,6 +1162,21 @@ def test_the_sitelink_transport_counts_every_article_with_neither_a_file_nor_a_f
     assert SSP.sitelink_unaccounted(batch) == 2
 
 
+def _thresholds(document: str) -> str:
+    """A pilot document's four pass thresholds, from the first one's number to the last one's end."""
+    text = (REPO / "output" / "remediation" / "phase3_runner" / document).read_text(
+        encoding="utf-8"
+    )
+    start = text.index("1. **No fabricated citation.**")
+    end = text.index("the run is not stopped by an auth or contract error.", start)
+    return text[start:end]
+
+
+def test_the_sitelink_pilot_seals_the_search_pilots_four_thresholds_verbatim() -> None:
+    """The lane's reading of threshold 4 is stated beside the text, never written into it."""
+    assert _thresholds("SITELINK_PILOT.md") == _thresholds("SEARCH_PILOT.md")
+
+
 def test_each_lane_scores_its_own_pilot_with_its_own_transport() -> None:
     import score_search_pilot as SSP
 

@@ -29,10 +29,12 @@ asserted. On the first pilot: (a) alone refuses nothing, (b) alone refuses Ahu T
 unsupported (Lake Mungo `site_type`), 1 harmful (Aubrey Holes).
 
 **Two lanes** (`--lane`, 2026-09-23). The sitelink lane's pilot
-(`phase3_runner/SITELINK_PILOT.md`) is measured against the same four thresholds, unchanged; the lane
-buys no search, so its transport is read off the fetch stage instead (`TRANSPORTS`): every sitelink
-article of every pilot site is on disk or recorded as failed in `fetch.json`. `--lane` sets the
-defaults of `--run-dir`, `--prefix` and `--progress`; the search lane's output is what it was.
+(`phase3_runner/SITELINK_PILOT.md`) is measured against the same four thresholds, their text copied
+verbatim; thresholds 1-3 are counted as for the search lane, and threshold 4 under the reading that
+document states: the lane buys no search, so its slots are its articles, read off the fetch stage
+(`TRANSPORTS`) - every sitelink article of every pilot site is on disk or recorded as failed in
+`fetch.json`. `--lane` sets the defaults of `--run-dir`, `--prefix` and `--progress`; the search
+lane's output is what it was.
 
 Read-only; no database, no network.
 

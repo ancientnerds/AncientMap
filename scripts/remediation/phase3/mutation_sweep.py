@@ -8819,6 +8819,14 @@ SITELINK_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         "test_the_scorer_reads_the_sitelink_pilot_with_the_sitelink_transport",
     ),
     (
+        "sitelink: the pilot rewrites threshold 4 instead of reading it",
+        "output/remediation/phase3_runner/SITELINK_PILOT.md",
+        "4. **Transport.** Every search ends in a stored result or a recorded failure; 0 slots",
+        "4. **Transport.** Every sitelink article ends in a stored evidence file or a recorded failure; 0 articles",
+        _SLP_TEST,
+        "test_the_sitelink_pilot_seals_the_search_pilots_four_thresholds_verbatim",
+    ),
+    (
         "sitelink: the scorer takes the search pilot's prefix for every lane",
         TOOLS + "score_search_pilot.py",
         "args.prefix or lane.prefix)",
