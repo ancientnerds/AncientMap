@@ -1039,6 +1039,20 @@ def test_reweigh_writes_the_verdicts_and_the_counts_it_returns(tmp_path: Path) -
     assert [r["verdict"] for r in rows] == ["move"]
 
 
+def test_the_counted_reason_drops_the_publisher_and_the_numbers_only() -> None:
+    """COUNTS.json groups reasons with their publishers and numbers taken out - and nothing more: a
+    bracket closing after a publisher stays (measured: "one witness only (web" in the first count)."""
+    assert W._reason_class("one witness only (web:maya.example)") == "one witness only (web)"
+    assert (
+        W._reason_class(
+            "wikidata and web:topostext.org agree within 89 m (independent), the stored point is "
+            "4.15 km away"
+        )
+        == "wikidata and web agree within N m (independent), the stored point is N km away"
+    )
+    assert W._reason_class("lies in ['Netherlands'], not") == "lies in [...], not"
+
+
 def test_reweigh_refuses_a_research_input_that_is_not_the_review_cases(tmp_path: Path) -> None:
     cache, out = _chain(tmp_path)
     _jsonl(out / "coords3" / "RESEARCH_INPUT.jsonl", [{"site_id": OTHER, "name": "X"}])

@@ -8085,6 +8085,14 @@ WEB_WITNESS_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         "test_the_subdomains_of_one_publisher_are_one_witness",
     ),
     (
+        "bcases web: the counted reason swallows the bracket after a publisher",
+        _WW,
+        '    reason = re.sub(r"web:[^\\s,;)]+", "web", reason)\n',
+        '    reason = re.sub(r"web:[^\\s,;]+", "web", reason)  # mutant\n',
+        _WW_TEST,
+        "test_the_counted_reason_drops_the_publisher_and_the_numbers_only",
+    ),
+    (
         "bcases web: the two ends of a chain of copies pair",
         _CL,
         "        if groups[i] != groups[j] and _m(ordered[i], ordered[j]) <= tol\n",

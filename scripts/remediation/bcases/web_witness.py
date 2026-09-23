@@ -819,7 +819,7 @@ def reweigh_rows(
 
 def _reason_class(reason: str) -> str:
     """A reason with its numbers, lists and web hosts taken out, for counting."""
-    reason = re.sub(r"web:[^\s,;]+", "web", reason)
+    reason = re.sub(r"web:[^\s,;)]+", "web", reason)
     reason = re.sub(r"\[[^\]]*\]", "[...]", reason)
     return re.sub(r"[\d.]+ (k?m)\b", r"N \1", reason)
 
