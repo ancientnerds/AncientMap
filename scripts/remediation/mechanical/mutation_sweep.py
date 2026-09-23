@@ -2046,8 +2046,59 @@ CASES: list[Case] = [
             ),
             (
                 "every quote is where it says",
-                "        if problem is not None:",
+                '        if problem is not None:\n            return verdict(False, "evidence-not-found", problem)',
                 "test_evidence_that_is_not_where_it_says_refuses",
+            ),
+            # ---- 2026-09-23: the second list - the re-review, the journal quote, the period label
+            (
+                "the re-review file exists",
+                '    if not path.exists():\n        raise PlanError(f"{path} is missing - the re-review',
+                "test_the_re_review_file_is_read_by_change_key_once_each",
+            ),
+            (
+                "the re-review decides a write once",
+                '        if row["change_key"] in rows:',
+                "test_the_re_review_file_is_read_by_change_key_once_each",
+            ),
+            (
+                "a re-review quote names a row of the re-review",
+                "    if row is None:",
+                "test_a_re_review_row_that_did_not_reverse_this_write_refuses",
+            ),
+            (
+                "the re-review decided to reverse",
+                '    if row["decision"] != "reverse":',
+                "test_a_re_review_row_that_did_not_reverse_this_write_refuses",
+            ),
+            (
+                "the re-review row is the journal row's write",
+                "    if decided != written:",
+                "test_a_re_review_row_that_did_not_reverse_this_write_refuses",
+            ),
+            (
+                "a re-review problem refuses the quote",
+                "        if problem is not None:\n            return problem",
+                "test_a_re_review_row_that_did_not_reverse_this_write_refuses",
+            ),
+            (
+                "the undone row carries evidence",
+                '        if entry.get("evidence") is None:',
+                "test_a_journal_row_without_evidence_refuses",
+            ),
+            (
+                "a restored label is its start's bucket",
+                "        if v.new_value != bucket:",
+                "test_a_label_whose_start_is_not_restored_is_refused",
+            ),
+            (
+                "a start never leaves its label behind",
+                "        if _bucket(v.new_value) != label:",
+                "test_a_start_that_would_leave_its_label_behind_is_refused",
+            ),
+            (
+                "a pair broken before the list does not hold a start",
+                "        if _bucket(site[PERIOD_START]) != site[PERIOD_NAME]:",
+                "test_a_label_that_was_not_the_bucket_before_does_not_hold_the_start",
             ),
             (
                 "the gold standard judged it CORRECT",
@@ -2067,7 +2118,7 @@ CASES: list[Case] = [
             # ---- 2026-09-23 review: the guards it found without a test or a case
             (
                 "the reasons file exists",
-                "    if not path.exists():",
+                '    if not path.exists():\n        raise PlanError(f"{path} is missing - the reviewed reasons',
                 "test_a_missing_reasons_file_is_refused",
             ),
             (
@@ -2108,7 +2159,57 @@ CASES: list[Case] = [
                 "        text = quote.text",
                 "test_a_quote_of_a_source_this_lane_cannot_check_refuses",
             ),
+            (
+                "a journal quote names no other row",
+                '    elif kind == "journal" and not ref:',
+                '    elif kind == "journal":',
+                "test_a_journal_quote_names_no_other_row",
+            ),
+            (
+                "a restored label follows the list's start",
+                "            starts[v.site_id].new_value if v.site_id in starts else sites[v.site_id][PERIOD_START]",
+                "            sites[v.site_id][PERIOD_START]",
+                "test_a_start_and_its_label_go_back_together",
+            ),
+            (
+                "a start is checked against the list's label",
+                "        label = names[v.site_id].new_value if v.site_id in names else site[PERIOD_NAME]",
+                "        label = site[PERIOD_NAME]",
+                "test_a_start_and_its_label_go_back_together",
+            ),
+            (
+                "the list keeps the period label",
+                "    verdicts = keep_the_period_label(verdicts, sites)",
+                "    pass",
+                "test_a_start_that_would_leave_its_label_behind_is_refused",
+            ),
+            (
+                "the period pair is read for every site",
+                "    return (*lane.columns, *(c for c in (PERIOD_START, PERIOD_NAME) if c not in lane.columns))",
+                "    return lane.columns",
+                "test_load_state_reads_the_row_the_site_and_the_chain",
+            ),
+            (
+                "a list that quotes the re-review is found",
+                '    return any(q.source.partition(":")[0] == REREVIEW_KIND for r in reasons for q in r.quotes)',
+                "    return False",
+                "test_only_a_list_that_cites_the_re_review_needs_it",
+            ),
+            (
+                "--write reads the re-review copy",
+                "            rereview = load_rereview(out / REREVIEW_FILE) if cites_the_rereview(reasons) else {}",
+                "            rereview = {}",
+                "test_write_plans_a_rereview_quoted_list_from_the_lane_s_copy",
+            ),
         )
+    ),
+    Case(
+        "reversal: the second list reads back the period pair",
+        LANE,
+        "        (\n            _PERIOD_MISMATCH.metric,\n            f\"FROM unified_sites WHERE source_id = 'ancient_nerds' AND {_PERIOD_MISMATCH.predicate}\",\n        ),\n    ],\n)\n\n#: Each reversal lane",
+        "    ],\n)\n\n#: Each reversal lane",
+        "test_the_second_list_reads_back_the_period_pair_and_its_own_residual",
+        REVERSAL_TESTS,
     ),
     # ------------------------------------------ the tagged export the cell lanes share (plan.py)
     *(

@@ -788,21 +788,32 @@ REVERSAL_1 = Lane(
     reverses_journal=True,
 )
 
-REVERSAL_1_READBACK = journal_readback(
-    REVERSAL_1,
-    [
+
+def reversal_metrics(
+    lane: Lane, journal_ids: Sequence[int], residual: Residual
+) -> list[tuple[str, str]]:
+    """The two counts every reversal lane reads back: the cells still holding a value the list
+    undoes, and the listed journal rows a write other than this lane's has superseded since."""
+    return [
         (
-            _REVERSAL_1_RESIDUAL.metric,
-            f"FROM unified_sites WHERE source_id = 'ancient_nerds' AND {_REVERSAL_1_RESIDUAL.predicate}",
+            residual.metric,
+            f"FROM unified_sites WHERE source_id = 'ancient_nerds' AND {residual.predicate}",
         ),
         (
             "journal rows of this list that a later write superseded",
             "FROM remediation_change_log l WHERE l.id IN ("
-            + ", ".join(str(i) for i in REVERSAL_1_JOURNAL_IDS)
+            + ", ".join(str(i) for i in journal_ids)
             + ") AND EXISTS (SELECT 1 FROM remediation_change_log m WHERE m.table_name = "
             "l.table_name AND m.column_name = l.column_name AND m.row_pk = l.row_pk AND m.id > l.id "
-            f"AND m.run_stamp <> {sql_literal(REVERSAL_1.run_stamp)})",
+            f"AND m.run_stamp <> {sql_literal(lane.run_stamp)})",
         ),
+    ]
+
+
+REVERSAL_1_READBACK = journal_readback(
+    REVERSAL_1,
+    [
+        *reversal_metrics(REVERSAL_1, REVERSAL_1_JOURNAL_IDS, _REVERSAL_1_RESIDUAL),
         (
             "card_stats rows whose civilization differs from the site country",
             "FROM card_stats cs JOIN unified_sites u ON u.id = cs.site_id "
@@ -811,8 +822,64 @@ REVERSAL_1_READBACK = journal_readback(
     ],
 )
 
+#: The second reversal list (2026-09-23). 45 written phase-3 rows - 30 `site_type`, 15
+#: `period_start` - that the first re-review decided to reverse
+#: (`output/remediation/phase3_runner/REREVIEW_1.md`: one new reviewer call per row, the row kept
+#: only on a clean clearance; `REREVIEW_1_FINAL.jsonl` with its hand read), and the 8 `period_name`
+#: labels the period-name lane derived from 8 of those `period_start` values (30335-30536): with
+#: the start restored, its label goes back to the bucket it names (`reversal.py`,
+#: `mechanical_reversal_2/`).
+REVERSAL_2_JOURNAL_IDS: tuple[int, ...] = (
+    27752, 27924, 28004, 28092, 28325, 28597, 28607, 28621, 28627, 28632, 28663, 28670, 28675,
+    28744, 28757, 28770, 28776, 28785, 28804, 28870, 28872, 28970, 28978, 28998, 29025, 29073,
+    29082, 29136, 29176, 29246, 29272, 29275, 29285, 29326, 29410, 29436, 29497, 29552, 29563,
+    29578, 29617, 29618, 29628, 29633, 29642,
+    30335, 30386, 30405, 30441, 30451, 30454, 30512, 30536,
+)  # fmt: skip
+_REVERSAL_2_CELLS = (
+    Column("site_type", "character varying", max_chars=100),
+    Column("period_start", "integer"),
+    Column("period_name", "character varying", max_chars=100),
+)
+_REVERSAL_2_RESIDUAL = reversal_residual(REVERSAL_2_JOURNAL_IDS, _REVERSAL_2_CELLS)
+
+REVERSAL_2 = Lane(
+    name="journal-reversal-2",
+    key_prefix="journal-reversal-2",
+    run_stamp="2026-09-23_mechanical-journal-reversal-2",
+    test_id="P6/journal-reversal-2",
+    confidence="authoritative",
+    label="journal reversal",
+    plan_table="_journal_reversal_2_plan",
+    out_dir_name="mechanical_reversal_2",
+    post_commit_residual=_REVERSAL_2_RESIDUAL,
+    rehearsal_residual=_REVERSAL_2_RESIDUAL,
+    lock_timeout=LOCK_TIMEOUT,
+    statement_timeout=STATEMENT_TIMEOUT,
+    cells=_REVERSAL_2_CELLS,
+    reverses_journal=True,
+)
+
+REVERSAL_2_READBACK = journal_readback(
+    REVERSAL_2,
+    [
+        *reversal_metrics(REVERSAL_2, REVERSAL_2_JOURNAL_IDS, _REVERSAL_2_RESIDUAL),
+        (
+            _PERIOD_MISMATCH.metric,
+            f"FROM unified_sites WHERE source_id = 'ancient_nerds' AND {_PERIOD_MISMATCH.predicate}",
+        ),
+    ],
+)
+
+#: Each reversal lane and the journal rows it reverses - the list its `REASONS.json` must name.
+REVERSAL_LISTS: dict[str, tuple[int, ...]] = {
+    REVERSAL_1.name: REVERSAL_1_JOURNAL_IDS,
+    REVERSAL_2.name: REVERSAL_2_JOURNAL_IDS,
+}
+
 LANES: dict[str, Lane] = {
-    lane.name: lane for lane in (T05, UK_PARTS, PERIOD_NAME, SITE_TYPE_SHAPE, SCOPE, REVERSAL_1)
+    lane.name: lane
+    for lane in (T05, UK_PARTS, PERIOD_NAME, SITE_TYPE_SHAPE, SCOPE, REVERSAL_1, REVERSAL_2)
 }
 
 #: The read-only verification per lane, except T05's: that one is `apply.VERIFY_SQL`, kept there
@@ -823,6 +890,7 @@ LANE_READBACKS: dict[str, str] = {
     SITE_TYPE_SHAPE.name: SITE_TYPE_SHAPE_READBACK,
     SCOPE.name: SCOPE_READBACK,
     REVERSAL_1.name: REVERSAL_1_READBACK,
+    REVERSAL_2.name: REVERSAL_2_READBACK,
 }
 
 #: A card_stats recompute is re-run after every later write wave, each wave a lane of its own

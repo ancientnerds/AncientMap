@@ -1,4 +1,4 @@
-"""Undo a named list of journal rows - the journal-reversal lane.
+"""Undo a named list of journal rows - the journal-reversal lanes.
 
 ## What it does
 
@@ -10,23 +10,32 @@ reversal gets its own run stamp, test id and change keys, so the phase-3 accepta
 (`output/remediation/tools/verify_writes.py --allow-stamp <stamp>`) reads the reversed rows as
 superseded, never as deviations.
 
-The list is explicit and reviewed: `lane.REVERSAL_1_JOURNAL_IDS` in code, and per row the reason and
-the evidence in `output/remediation/mechanical_reversal_1/REASONS.json`. Both must name the same
-rows.
+Each list is explicit and reviewed: `lane.REVERSAL_LISTS` in code (`journal-reversal-1`: 3 rows,
+`journal-reversal-2`: 53), and per row the reason and the evidence in the lane directory's
+`REASONS.json`. Both must name the same rows.
 
 ## How a row is decided (`classify_reversal`, first failure refuses)
 
 1. the journal row exists and is the `unified_sites` cell `REASONS.json` names; 2. the column is
-   one the lane owns (`country`, `period_start`); 3. the site is curated; 4. the cell's journal is
-   continuous and ends at the live value (`plan.journal_break`); 5. the named row is the cell's last
-   link; 6. the value it replaced is not NULL and reads in the column's type; 7. every quote of its
-   evidence is where it says: the live description, the page `--collect` fetched (English
-   Wikipedia, Wikidata), or the gold-standard record - and a gold-standard quote also needs that
-   record to judge the restored value CORRECT.
+   one the lane owns; 3. the site is curated; 4. the cell's journal is continuous and ends at the
+   live value (`plan.journal_break`); 5. the named row is the cell's last link; 6. the value it
+   replaced is not NULL and reads in the column's type; 7. every quote of its evidence is where it
+   says: the live description, the page `--collect` fetched (English Wikipedia, Wikidata), the
+   gold-standard record - which must also judge the restored value CORRECT -, the evidence the
+   undone journal row itself carries (`journal`), or the re-review row that decided to reverse
+   exactly this write (`rereview:<change_key>`, `REREVIEW_1_FINAL.jsonl` in the lane directory).
+
+## The period label (`keep_the_period_label`, over the whole list)
+
+`period_name` is the bucket of `period_start` (`categorize_period`; the period-name lane of
+2026-09-22 re-derived it wherever the two disagreed). A reversal must not undo that: a
+`period_name` row is restored only to the bucket of the `period_start` the list leaves the site
+with, and a `period_start` row that would move the site out of its label's bucket is refused
+unless the list also restores the label - so a refused start takes its label with it.
 
 `--collect` fetches the pages the quotes name (read-only, the project USER_AGENT) into
 `export/pages.json`; `--write` reads production (read-only) and writes `PLAN.jsonl`, `PLAN.md`,
-`SKIPPED.jsonl`, `ROLLBACK.sql`. `apply.py --lane journal-reversal-1` renders and runs it.
+`SKIPPED.jsonl`, `ROLLBACK.sql`. `apply.py --lane <lane>` renders and runs it.
 """
 
 from __future__ import annotations
@@ -36,7 +45,7 @@ import json
 import logging
 import sys
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
@@ -46,8 +55,8 @@ for _root in (str(REPO), str(REPO / "scripts" / "remediation")):
     if _root not in sys.path:
         sys.path.insert(0, _root)
 
-from mechanical.apply import typed_value  # noqa: E402
-from mechanical.lane import REVERSAL_1, REVERSAL_1_JOURNAL_IDS, Lane, sql_literal  # noqa: E402
+from mechanical.apply import lane_dir, typed_value  # noqa: E402
+from mechanical.lane import LANES, REVERSAL_LISTS, Lane, sql_literal  # noqa: E402
 from mechanical.plan import (  # noqa: E402
     CURATED_SOURCE,
     WIKIDATA_API,
@@ -68,10 +77,13 @@ from pipeline.utils.text import categorize_period  # noqa: E402
 
 log = logging.getLogger("mechanical.reversal")
 
-LANE = REVERSAL_1
-DEFAULT_OUT = REPO / "output" / "remediation" / LANE.out_dir_name
 GOLD = REPO / "output" / "remediation" / "gold_standard" / "sites.json"
 ENWIKI_API = "https://en.wikipedia.org/w/api.php"
+#: The re-review's decisions as it delivered them, copied into the lane directory that quotes them.
+REREVIEW_FILE = "REREVIEW_1_FINAL.jsonl"
+REREVIEW_KIND = "rereview"
+#: The two columns whose agreement a reversal must not break, read for every site of a list.
+PERIOD_START, PERIOD_NAME = "period_start", "period_name"
 
 
 # ------------------------------------------------------------------------------ the reasons
@@ -121,6 +133,23 @@ def load_reasons(path: Path, lane: Lane, expected: Sequence[int]) -> list[Reason
     return reasons
 
 
+def load_rereview(path: Path) -> dict[str, Mapping[str, Any]]:
+    """The re-review's rows by `change_key` - the decision and the WHY a `rereview:` quote cites."""
+    if not path.exists():
+        raise PlanError(f"{path} is missing - the re-review a quote cites is part of the plan")
+    rows: dict[str, Mapping[str, Any]] = {}
+    for line in path.read_text(encoding="utf-8").splitlines():
+        row = json.loads(line)
+        if row["change_key"] in rows:
+            raise PlanError(f"{path.name} decides {row['change_key']} twice")
+        rows[str(row["change_key"])] = row
+    return rows
+
+
+def cites_the_rereview(reasons: Sequence[Reason]) -> bool:
+    return any(q.source.partition(":")[0] == REREVIEW_KIND for r in reasons for q in r.quotes)
+
+
 # ------------------------------------------------------------------------------- the state
 @dataclass(frozen=True)
 class Cell:
@@ -132,8 +161,13 @@ class Cell:
     live: str | None
 
 
+def site_columns(lane: Lane) -> tuple[str, ...]:
+    """The columns read for every site of a list: the lane's own, and the period pair."""
+    return (*lane.columns, *(c for c in (PERIOD_START, PERIOD_NAME) if c not in lane.columns))
+
+
 def load_state(
-    reader: Callable[[str], list[dict[str, Any]]], reasons: Sequence[Reason], lane: Lane = LANE
+    reader: Callable[[str], list[dict[str, Any]]], reasons: Sequence[Reason], lane: Lane
 ) -> dict[int, Cell]:
     """The journal rows, their sites and every journal row of each cell - read-only.
 
@@ -144,11 +178,11 @@ def load_state(
         int(e["id"]): e
         for e in reader(
             "SELECT id, row_pk, table_name, column_name, old_value, new_value, run_stamp, "
-            "coalesce(test_id, '') AS test_id FROM remediation_change_log "
+            "coalesce(test_id, '') AS test_id, change_key, evidence FROM remediation_change_log "
             f"WHERE id IN ({ids})"
         )
     }
-    values = ", ".join(f"{column}::text AS {column}" for column in lane.columns)
+    values = ", ".join(f"{column}::text AS {column}" for column in site_columns(lane))
     sites = {
         str(s["id"]): s
         for s in reader(
@@ -237,15 +271,39 @@ def load_gold(path: Path = GOLD) -> dict[str, Mapping[str, Any]]:
     return {str(r["site_id"]): r for r in raw["records"]}
 
 
+def _rereview_text(
+    ref: str, reason: Reason, entry: Mapping[str, Any], rereview: Mapping[str, Mapping[str, Any]]
+) -> tuple[str | None, str]:
+    """`(problem, text)`: the re-review row `ref` must have decided to reverse exactly this write."""
+    row = rereview.get(ref)
+    if row is None:
+        return f"{REREVIEW_KIND}:{ref} is not a row of the re-review", ""
+    if row["decision"] != "reverse":
+        return f"the re-review decided {row['decision']!r} for {ref}, not 'reverse'", ""
+    written = (entry["change_key"], reason.site_id, reason.column)
+    written += (entry["old_value"], entry["new_value"])
+    decided = (row["change_key"], row["site_id"], row["column"], row["old_value"], row["new_value"])
+    if decided != written:
+        return (
+            f"the re-review row {ref} decided {decided[2:]!r} of {decided[1]}, journal row "
+            f"{reason.journal_id} wrote {written[2:]!r} of {written[1]}",
+            "",
+        )
+    return None, f"{row['why']}\n{row['new_reason']}"
+
+
 def quote_problem(
     quote: Quote,
     reason: Reason,
     cell: Cell,
     pages: Mapping[str, str],
     gold: Mapping[str, Mapping[str, Any]],
+    rereview: Mapping[str, Mapping[str, Any]],
 ) -> str | None:
-    """Why a quote is not where it says it is - or None when it is."""
+    """Why a quote is not where it says it is - or None when it is. `cell.entry` is the journal
+    row the reversal undoes (`classify_reversal` refuses a missing one first)."""
     kind, _, ref = quote.source.partition(":")
+    entry = cell.entry or {}
     if kind == "description":
         text = str((cell.site or {}).get("description") or "")
     elif kind in ("enwiki", "wikidata"):
@@ -260,13 +318,21 @@ def quote_problem(
         verdict = verdicts.get(reason.column)
         if verdict is None or verdict["verdict"] != "CORRECT":
             return f"the gold standard does not judge {reason.column} CORRECT"
-        restored = (cell.entry or {}).get("old_value")
+        restored = entry.get("old_value")
         if str(record["db_fields"].get(reason.column)) != str(restored):
             return (
                 f"the gold standard judged {record['db_fields'].get(reason.column)!r}, the "
                 f"reversal restores {restored!r}"
             )
         text = str(verdict["note"])
+    elif kind == "journal" and not ref:
+        if entry.get("evidence") is None:
+            return f"journal row {reason.journal_id} carries no evidence"
+        text = "\n".join(str(e.get("quote", "")) for e in entry["evidence"])
+    elif kind == REREVIEW_KIND:
+        problem, text = _rereview_text(ref, reason, entry, rereview)
+        if problem is not None:
+            return problem
     else:
         return f"{quote.source!r} is not a source this lane can check"
     if quote.text not in text:
@@ -282,6 +348,7 @@ def classify_reversal(
     lane: Lane,
     pages: Mapping[str, str],
     gold: Mapping[str, Mapping[str, Any]],
+    rereview: Mapping[str, Mapping[str, Any]],
 ) -> Verdict:
     """Decide one reversal. Every check is named, and the first failure is the reason."""
     entry, site = cell.entry, cell.site
@@ -342,7 +409,7 @@ def classify_reversal(
     except PlanError as exc:
         return verdict(False, "restored-value-unreadable", str(exc))
     for quote in reason.quotes:
-        problem = quote_problem(quote, reason, cell, pages, gold)
+        problem = quote_problem(quote, reason, cell, pages, gold, rereview)
         if problem is not None:
             return verdict(False, "evidence-not-found", problem)
     evidence: list[dict[str, Any]] = [
@@ -354,7 +421,7 @@ def classify_reversal(
         },
         *({"source": q.source, "url": _url(q.source), "quote": q.text} for q in reason.quotes),
     ]
-    if reason.column == "period_start":
+    if reason.column == PERIOD_START:
         before, after = categorize_period(int(restored)), categorize_period(int(str(cell.live)))
         evidence.append(
             {
@@ -378,7 +445,77 @@ def _url(source: str) -> str:
         return f"https://www.wikidata.org/wiki/{ref}"
     if kind == "gold_standard":
         return "output/remediation/gold_standard/sites.json"
+    if kind == "journal":
+        return "remediation_change_log.evidence"
+    if kind == REREVIEW_KIND:
+        return REREVIEW_FILE
     return "unified_sites.description"
+
+
+def _bucket(start: str | None) -> str | None:
+    return None if start is None else categorize_period(int(str(start)))
+
+
+def _refused(v: Verdict, why: str, note: str) -> Verdict:
+    return replace(v, ok=False, reason=why, note=note, evidence=(), journal_id=None)
+
+
+def keep_the_period_label(
+    verdicts: Sequence[Verdict], sites: Mapping[str, Mapping[str, Any]]
+) -> list[Verdict]:
+    """The list's decisions, with `period_name` kept the bucket of `period_start` (module doc).
+
+    First every planned label must be the bucket of the start the list leaves its site with; then
+    every planned start must not leave behind a label that was its bucket - with the labels that
+    survived the first step. A start refused on its own therefore takes its label with it, and a
+    label refused takes its start: the list never plans one without the other.
+    """
+    out = list(verdicts)
+    starts = {v.site_id: v for v in out if v.ok and v.column == PERIOD_START}
+    for i, v in enumerate(out):
+        if not (v.ok and v.column == PERIOD_NAME):
+            continue
+        start = (
+            starts[v.site_id].new_value if v.site_id in starts else sites[v.site_id][PERIOD_START]
+        )
+        bucket = _bucket(start)
+        if v.new_value != bucket:
+            out[i] = _refused(
+                v,
+                "period-name-not-the-bucket",
+                f"restores {v.new_value!r}, but the site is left with period_start {start} "
+                f"({bucket!r})",
+            )
+            continue
+        out[i] = replace(
+            v,
+            evidence=(
+                *v.evidence,
+                {
+                    "source": "pipeline/utils/text.py:categorize_period",
+                    "url": "pipeline/utils/text.py",
+                    "quote": f"categorize_period({start}) = {bucket!r} - the period_start the "
+                    "site is left with",
+                },
+            ),
+        )
+    names = {v.site_id: v for v in out if v.ok and v.column == PERIOD_NAME}
+    for i, v in enumerate(out):
+        if not (v.ok and v.column == PERIOD_START):
+            continue
+        site = sites[v.site_id]
+        if _bucket(site[PERIOD_START]) != site[PERIOD_NAME]:
+            # the label is not the live start's bucket today: this list does not break the pair
+            continue
+        label = names[v.site_id].new_value if v.site_id in names else site[PERIOD_NAME]
+        if _bucket(v.new_value) != label:
+            out[i] = _refused(
+                v,
+                "period-name-left-behind",
+                f"period_start {v.new_value} is in {_bucket(v.new_value)!r}, and the list leaves "
+                f"the label {label!r}",
+            )
+    return out
 
 
 def build_reversal_plan(
@@ -388,13 +525,18 @@ def build_reversal_plan(
     lane: Lane,
     pages: Mapping[str, str],
     gold: Mapping[str, Mapping[str, Any]],
+    rereview: Mapping[str, Mapping[str, Any]],
     built_at: str,
 ) -> Plan:
     """A pure function of its inputs: no database, no network, no clock of its own."""
     verdicts = [
-        classify_reversal(r, state[r.journal_id], lane=lane, pages=pages, gold=gold)
+        classify_reversal(
+            r, state[r.journal_id], lane=lane, pages=pages, gold=gold, rereview=rereview
+        )
         for r in sorted(reasons, key=lambda r: r.journal_id)
     ]
+    sites = {str(c.site["id"]): c.site for c in state.values() if c.site is not None}
+    verdicts = keep_the_period_label(verdicts, sites)
     changes = tuple(v for v in verdicts if v.ok)
     skipped = tuple(v for v in verdicts if not v.ok)
     return Plan(
@@ -441,9 +583,9 @@ def write_plan_md(plan: Plan, reasons: Sequence[Reason], path: Path) -> None:
     add("")
     add(
         "The phase-3 acceptance reads these cells as superseded once it is told the stamp: "
-        f"`verify_writes.py --allow-stamp {plan.lane.run_stamp}` (with the UK lane's stamp as "
-        "before). Re-plan the card_stats recompute afterwards: `civilization` and `antiquity` "
-        "derive from these cells."
+        f"`verify_writes.py --allow-stamp {plan.lane.run_stamp}`, with the stamps of the lanes "
+        "applied before it. Re-plan the scope lane and the card_stats recompute afterwards: the "
+        "scope premise and the cards derive from these columns."
     )
     add("")
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -453,7 +595,8 @@ def write_plan_md(plan: Plan, reasons: Sequence[Reason], path: Path) -> None:
 # ------------------------------------------------------------------------------------- CLI
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="Plan a journal reversal (mechanical lane)")
-    ap.add_argument("--out", type=Path, default=DEFAULT_OUT)
+    ap.add_argument("--lane", required=True, choices=sorted(REVERSAL_LISTS))
+    ap.add_argument("--out", type=Path, help="the lane's directory unless given")
     ap.add_argument("--collect", action="store_true", help="fetch the pages the quotes name")
     ap.add_argument("--write", action="store_true", help="read production (read-only) and plan")
     args = ap.parse_args(argv)
@@ -461,27 +604,31 @@ def main(argv: list[str] | None = None) -> int:
     if not (args.collect or args.write):
         ap.print_help()
         return 0
+    lane = LANES[args.lane]
+    out = lane_dir(lane) if args.out is None else args.out
     try:
-        reasons = load_reasons(args.out / "REASONS.json", LANE, REVERSAL_1_JOURNAL_IDS)
-        pages_path = args.out / "export" / "pages.json"
+        reasons = load_reasons(out / "REASONS.json", lane, REVERSAL_LISTS[lane.name])
+        pages_path = out / "export" / "pages.json"
         if args.collect:
             log.info("%d page(s) collected", collect_pages(reasons, pages_path))
         if args.write:
             if not pages_path.exists():
                 raise PlanError(f"{pages_path} is missing - run --collect")
             pages = json.loads(pages_path.read_text(encoding="utf-8"))["pages"]
+            rereview = load_rereview(out / REREVIEW_FILE) if cites_the_rereview(reasons) else {}
             plan = build_reversal_plan(
                 reasons,
-                load_state(psql_json_reader(), reasons),
-                lane=LANE,
+                load_state(psql_json_reader(), reasons, lane),
+                lane=lane,
                 pages=pages,
                 gold=load_gold(),
+                rereview=rereview,
                 built_at=_now(),
             )
-            write_plan_jsonl(plan, args.out / "PLAN.jsonl")
-            write_skipped_jsonl(plan, args.out / "SKIPPED.jsonl")
-            write_plan_md(plan, reasons, args.out / "PLAN.md")
-            write_rollback_sql(plan, args.out / "ROLLBACK.sql", plan_path=args.out / "PLAN.jsonl")
+            write_plan_jsonl(plan, out / "PLAN.jsonl")
+            write_skipped_jsonl(plan, out / "SKIPPED.jsonl")
+            write_plan_md(plan, reasons, out / "PLAN.md")
+            write_rollback_sql(plan, out / "ROLLBACK.sql", plan_path=out / "PLAN.jsonl")
             print(json.dumps(dict(plan.counters), indent=1, sort_keys=True))
     except PlanError as exc:
         print(f"REFUSED: {exc}", file=sys.stderr)
