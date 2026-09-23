@@ -28,9 +28,12 @@ key that is not open any more, each named with its reason in the summary:
 * **changed in production** - the export's value is not the value the mass finder judged.
 
 **Which item** (`item_for`): the site's `wikidata_qid` in the fresh export, withheld when the reviewed
-external-id repair (both waves, `qid_repair.py`) replaces it or leaves it unresolved, when more than one
-curated site carries it (a parent or a generic item, `gap_plan.shared_counts`), or when the owner-case
-classifier marks the link suspect (`bcases/names.jsonl`: a wrong-link class or `link_suspect`).
+external-id repair (all three waves, `qid_repair.py`) replaces it, leaves it unresolved, keeps it as
+the monument type the record stands for (wave 3 `keep-type`) or as the item of a duplicate candidate
+(wave 3 `duplicate-candidate`), when more than one curated site carries it (a parent or a generic
+item, `gap_plan.shared_counts`), or when the owner-case classifier marks the link suspect
+(`bcases/names.jsonl`: a wrong-link class or `link_suspect`) and wave 3 did not read it as right
+(`link-right`).
 
 **Which articles** (`candidates`, `order`, `select`), deterministic:
 
@@ -430,8 +433,13 @@ def open_questions(
 
 
 # ------------------------------------------------------------------------------------ the item
-#: Both waves of the reviewed external-id repair: their site sets do not overlap.
-REPAIRS: tuple[qid_repair.Site, ...] = (*qid_repair.SITES, *qid_repair.WAVE2_SITES)
+#: Every wave of the reviewed external-id repair (`qid_repair.WAVES`): their site sets do not overlap.
+REPAIRS: tuple[qid_repair.Site, ...] = tuple(
+    site for wave in qid_repair.WAVES.values() for site in wave.sites
+)
+#: The sites whose suspect link wave 3's research read as right (`link-right`): that verdict answers
+#: the classifier's suspicion, so `names.jsonl` withholds them no longer.
+LINK_RIGHT: frozenset[str] = frozenset(site.site_id for site in REPAIRS if site.rule == "link-right")
 #: The owner-case classifier's wrong-link classes (`bcases/classify.py`).
 WRONG_LINK_CLASSES = frozenset({"Q1", "Q2", "Q3", "Q4"})
 
@@ -453,12 +461,14 @@ def item_for(
     shared: Mapping[str, int],
     suspect: Mapping[str, tuple[str, str]],
 ) -> tuple[str | None, str | None]:
-    """`(the item whose sitelinks the site is given, or None; why none)`."""
+    """`(the item whose sitelinks the site is given, or None; why none)`: the repair's and the shared
+    item's rules (`gap_plan.withheld_reason`), then the classifier's suspicion of the link it still
+    carries - unless wave 3's research answered that suspicion (`LINK_RIGHT`)."""
     kept, reason = G.withheld_reason(site_id, qid, shared=shared, repairs=REPAIRS)
     if kept is None:
         return None, reason or "the site carries no Wikidata item"
     flagged = suspect.get(site_id)
-    if flagged is not None and flagged[0] == kept:
+    if flagged is not None and flagged[0] == kept and site_id not in LINK_RIGHT:
         return None, (
             f"{kept}: the owner-case classifier marks this link suspect ({flagged[1]}, "
             "bcases/names.jsonl)"
