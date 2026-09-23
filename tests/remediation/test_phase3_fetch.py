@@ -1241,6 +1241,54 @@ def test_a_lock_that_cannot_be_deleted_is_waited_out_not_spun_on(
         pacer.wait("en.wikipedia.org")
 
 
+def _refusing_lock_creation(monkeypatch: pytest.MonkeyPatch, lock: Path, times: int) -> list[str]:
+    """`os.open` refuses to create `lock` as access denied, `times` times: Windows' answer while
+    the file is "delete pending" (its holder deleted it, and a handle is still open)."""
+    real_open = os.open
+    refused: list[str] = []
+
+    def pending(path: Any, flags: int, *args: Any) -> int:
+        if Path(path) == lock and len(refused) < times:
+            refused.append(str(path))
+            raise PermissionError(13, "Permission denied", str(path))
+        return real_open(path, flags, *args)
+
+    monkeypatch.setattr(F.os, "open", pending)
+    return refused
+
+
+def test_a_lock_its_holder_is_deleting_is_waited_for_not_a_crash(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Windows keeps a deleted file "delete pending" until its last handle closes (a waiter
+    reading the lock's age holds one), and creating it again in that moment is refused as access
+    denied - errno 13 from `os.open`, not `FileExistsError`. Measured 2026-09-24: one S1 batch of
+    the Phase-4 census (four jobs on en.wikipedia.org) died of it. It is a lock in transit, so it is
+    waited for like a held one."""
+    clock = _PaceClock()
+    pacer = _pacer(tmp_path, clock)
+    refused = _refusing_lock_creation(monkeypatch, pacer.lock_of("en.wikipedia.org"), times=2)
+
+    assert pacer.wait("en.wikipedia.org") == 0.0
+
+    assert len(refused) == 2
+    assert clock.slept == [F.HOST_LOCK_POLL_SECONDS, F.HOST_LOCK_POLL_SECONDS]
+    assert not pacer.lock_of("en.wikipedia.org").exists()  # taken and released
+
+
+def test_a_lock_that_is_never_granted_ends_as_a_timeout_naming_the_refusal(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A directory that really refuses is not waited on forever: the wait ends at its deadline,
+    and the timeout says access was denied rather than that a holder is stuck."""
+    clock = _PaceClock()
+    pacer = _pacer(tmp_path, clock, wait_seconds=1.0)
+    _refusing_lock_creation(monkeypatch, pacer.lock_of("en.wikipedia.org"), times=10**6)
+
+    with pytest.raises(F.PacerTimeout, match="access denied"):
+        pacer.wait("en.wikipedia.org")
+
+
 def test_a_lock_whose_content_is_not_ours_is_not_deleted_by_us(tmp_path: Path) -> None:
     """A lock taken over by someone else is not ours to destroy: `_take_over` owns that decision."""
     pacer = F.HostPacer(tmp_path / "pacing")

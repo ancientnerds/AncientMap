@@ -22,6 +22,11 @@ stage process with its bounded spawn retry (`StageRunner.call`). What is Phase 4
 * **Searches** are bounded per run: each `routes` stage is told how many of the run's
   `--max-searches` are left, and the budget stops the run between batches. The routes stages of
   parallel batches take turns (`search_turn`), so no two are told the same remainder.
+  `--searches-off` (never together with `--max-searches`) tells every routes stage 0, so none of
+  them builds a MiniMax client and every site only a search could anchor is held
+  `search-stopped`; such a run carries no search ceiling, because a ceiling of 0 is reached before
+  its first batch (owner order 2026-09-23, "everything with Opus": the Phase-4 pilot of 2026-09-24
+  sends no search).
 * **A revision younger than 48 h defers the site to a later batch** (design S1). S1 and S1b hold
   such a site `revision-too-fresh`, and the hold is final for its batch directory (the stored
   answer is judged again on a re-run). The driver defers it: a site whose latest batch held it so is
@@ -333,6 +338,7 @@ class Phase4StageRunner(MR.StageRunner):
         requeued: Collection[str] = (),
         stages4: tuple[str, ...] = STAGES4,
         handoff: MR.Handoff | None = None,
+        searches_off: bool = False,
     ) -> None:
         # `StageRunner` checks its stage names against Phase 3's sequences; its default passes, and
         # the stages this runner walks are `stages4`.
@@ -350,6 +356,8 @@ class Phase4StageRunner(MR.StageRunner):
         )
         self.stages4 = stages4
         self.budget = budget
+        #: `--searches-off`: every routes stage is told 0 (`searches_left`).
+        self.searches_off = searches_off
         #: The batches `prepare` copies from the run's `REQUEUE4.jsonl` instead of the plan.
         self.requeued = frozenset(requeued)
         #: The ledger as it was when this run started: the search allowance counts from here.
@@ -360,6 +368,8 @@ class Phase4StageRunner(MR.StageRunner):
         self.search_turn = threading.Lock()
 
     def searches_left(self) -> int:
+        if self.searches_off:
+            return 0
         if self.budget.max_searches is None:
             raise InputError("a Phase-4 run needs --max-searches: routes buys MiniMax searches")
         spent = MR.Spend.from_ledger(self.ledger).searches - self.baseline.searches
@@ -439,7 +449,13 @@ def build_parser() -> argparse.ArgumentParser:
     half.add_argument("--handoff-export", metavar="DIR", default=None)
     half.add_argument("--handoff-import", metavar="DIR", default=None)
     parser.add_argument("--max-usd", type=float, default=DEFAULT_MAX_USD)
-    parser.add_argument("--max-searches", type=int, default=DEFAULT_MAX_SEARCHES)
+    searches = parser.add_mutually_exclusive_group()
+    searches.add_argument("--max-searches", type=int, default=DEFAULT_MAX_SEARCHES)
+    searches.add_argument(
+        "--searches-off",
+        action="store_true",
+        help="every routes stage is told 0: no MiniMax client, no search, no search ceiling",
+    )
     parser.add_argument("--failures-before-stop", type=int, default=MR.DEFAULT_FAILURES_BEFORE_STOP)
     parser.add_argument("--stage-timeout", type=float, default=MR.DEFAULT_STAGE_TIMEOUT)
     parser.add_argument("--only", default=None, help="comma-separated batch ids")
@@ -486,7 +502,11 @@ def drive(args: argparse.Namespace) -> int:
         batches = batches[: args.limit]
     if args.jobs < 1 or args.failures_before_stop < 1:
         raise MR.PlanError("--jobs and --failures-before-stop are at least 1")
-    budget = MR.Budget(max_calls=None, max_usd=args.max_usd, max_searches=args.max_searches)
+    budget = MR.Budget(
+        max_calls=None,
+        max_usd=args.max_usd,
+        max_searches=None if args.searches_off else args.max_searches,
+    )
     digest = MR.package_digest(root=PHASE4_DIR)
     spend = MR.Spend.from_ledger(ledger)
     print(f"plan          {plan}")
@@ -506,6 +526,8 @@ def drive(args: argparse.Namespace) -> int:
         + (f" (the first until {S1.iso_utc(waiting[0])})" if waiting else "")
     )
     print(f"budget        {budget.as_text()}")
+    if args.searches_off:
+        print("searches      off: every routes stage is told 0 and builds no MiniMax client")
     print(f"already spent {spend.calls} calls, ${spend.cost_usd:.6f}, {spend.searches} searches")
     print(f"sources       phase4 {digest[:16]}")
     if not args.live:
@@ -533,6 +555,7 @@ def drive(args: argparse.Namespace) -> int:
         requeued=[line.batch_id for line in requeued],
         stages4=stages,
         handoff=handoff,
+        searches_off=args.searches_off,
     )
     code = MR.run_mass(
         batches=batches,

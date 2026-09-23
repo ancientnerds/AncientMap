@@ -7732,3 +7732,241 @@ the mass run answered UNVERIFIABLE stay **unverifiable** (the outcome the remedi
 field no source decides), listed per field in the mass run's answers. A future route needs a source
 the gold standard can trust more than a Wikipedia of another language (national registers,
 excavation reports) - it is not built.
+
+## 2026-09-24 - the Phase-4 pilot, sealed before its first model question (no model called, nothing written)
+
+Branch `wip/p4-pilot` (worktree `.claude/worktrees/p4-pilot`, from `integrate/wave1` `3f54247`). The
+design is entry [6] of `output/remediation/logs/design_texts_images_2026-09-22.json` (sha256
+`515601c3e91a770ce096ee001e6bfc1659c875d008f11d1b508d07a31d20e5af`), key `pilot_and_thresholds`.
+**Nothing was written to production; no model and no MiniMax endpoint was called** - no DeepSeek, Pi,
+opencode gateway, MiniMax or other model API, and no MiniMax client was even built. Production was
+read only with SELECTs: `plan4.py read`, `pilot4.py routeless`, and a few hand queries (the named
+sites, the Q309/title sites, the routeless count); the network was Wikipedia and Wikidata with the project's
+user agent, paced per host.
+
+### The order the design's stages imply
+
+A draw by lane needs the lanes, and the lanes are the routes stage's (S1b), which needs S1, which
+needs S0. So the pilot was drawn from a **census**: every curated site through S0, S1 and S1b, with
+searches off, then the seeded draw (`scripts/remediation/phase4/pilot4.py`, its docstring has the
+commands):
+
+1. **S0** - `run4.py plan read` (the fresh read-only export: 5,004 rows, `S0_ROWS.jsonl` sha256
+   `2c99f96f899447000659ad3ff6b24bc2dc9eddd2f96cdfe73afeabb1829272a8`, gitignored), `plan names`
+   (76 shared items' labels and aliases, 9 Wikidata requests, `S0_ITEM_NAMES.json`), `plan build
+   --out PLAN4.census.jsonl` (335 batches, sha256
+   `644b9032ed43e8ecc285cc9c783a7852c6546fefcc2501e33534897d4676b591`; flags: scope-pending 96,
+   shared-qid 173, shared-title 205, duplicate-pair 14, cleared-description-defect 322,
+   cleared-card-defect 709, t03 875, t03-severe 185; no invalid title).
+2. **The B3 read** - `pilot4.py routeless`: the curated sites with no enwiki title, no QID, no
+   http(s) URL in `source_url` and no `site_content_links` URL (the AUDIT_LOG's "routing
+   measurement" definition; 17 on the 2026-09-21 snapshot, **20 today**). `S0_ROUTELESS.json`.
+3. **The census** - `mass4.py --plan PLAN4.census.jsonl --run-dir runs/census-2026-09-24 --live
+   --stages prepare,sources,routes --searches-off --jobs 4 --ledger LEDGER.census.jsonl`,
+   2026-09-23 22:50-23:25 UTC: 335 batches, 6,995 fetch lines (en.wikipedia.org 5,873,
+   www.wikidata.org 1,007, other Wikipedias 115; 77 answered 429 and were answered on retry, none
+   given up), 0 searches, 0 model calls. The Phase-3 mass run's 4,618 `wikidata_entity` files were
+   copied from the main checkout with their mtimes. **Lanes: W 3,887, S 372, 0 745** - the 745 are
+   held `search-stopped` 582, `scope-pending` 96, `revision-too-fresh` 67; S1 statuses pinned 4,251,
+   no-title 353, rejected 238, held 66, scope-pending 96. No lane T or R exists with searches off:
+   the route stage searches whenever no own English article was found, and a spent allowance holds
+   the site (`_assign`: `search-stopped` before lane S, T or R).
+4. **The draw** - `pilot4.py build --run-dir runs/census-2026-09-24` (seed 20260922,
+   `audit4.draw_sample`, each stratum excluding every site placed before it).
+
+**Found on the way, fixed with red-first tests** (commit `7481088`): one census batch (`p4-0054`) died
+in S1 with `PermissionError` (errno 13) from `os.open` in `fetch_stage.HostPacer.wait` - on Windows a
+lock file its holder is deleting stays "delete pending" while another process holds a handle, and
+creating it again is refused as access denied, not as `FileExistsError`. The pacer now waits for such
+a lock like a held one and ends at its deadline naming the refusal; the batch was re-run and
+completed. `route_stage.no_search` (a run told `--max-searches 0` builds no MiniMax client; its seams
+raise), `mass4.py --searches-off` (every routes stage told 0, no search ceiling - a ceiling of 0 stops
+a run before its first batch) and `plan4.py build --pilot` (the pilot from PILOT.jsonl, **in batches of
+its own**: 132 = 8 x 15 + 12, so a ninth batch would otherwise carry 3 sites that are not the
+pilot's into its model calls and its audit) are commit `2047a7f`.
+
+### The pilot set (`PILOT.jsonl`, 132 sites)
+
+Fixed, 70 sites: the 36 gold-standard sites; the 10 canaries; the 3 B5 fixtures (all three are also
+gold sites); the 8 named identity traps; the 7 sites on 'History'/Q309 (the external-id repair's plan
+moved all 7 off Q309 - `qid_repair/PLAN.jsonl`, applied; 2 still store the title 'History'); the 3
+'Theatre' and 4 'Mortuary temple' title sites; f6b8fa8a (Abri de la Madeleine) and Wroxeter Stone.
+Every canary, fixture and trap was resolved from its id prefix and carries the design's name.
+
+| stratum | asked | population | eligible | taken |
+|---|---|---|---|---|
+| draw-W (census lane W) | 30 | 3,887 | 3,843 | 30 |
+| draw-S (census lane S) | 8 | 372 | 363 | 8 |
+| draw-T-candidate | 6 | 38 | 38 | 6 |
+| draw-R-candidate | 8 | 252 | 251 | 8 |
+| draw-B3-routeless | 5 | 20 | 20 | 5 |
+| draw-extract-over-40000 | 5 | 65 | 63 | 5 |
+
+No stratum was smaller than asked. **The T and R strata are candidates**, because searches are off (owner
+order 2026-09-23, "everything with Opus"): the sites the census held `search-stopped` whose
+`source_url` names an article on another-language Wikipedia (T, the design's langlinks route) or only
+http(s) pages on no wiki host (R; design entry [2]: "whose only route is a non-Wikipedia source_url").
+They stay held in the pilot and are reported; nobody guesses their lane. The census lanes of the 132:
+W 77, S 19, 0 36.
+
+### The sealed artefacts (committed `fab4f57`, LF-pinned by `.gitattributes`)
+
+| file | sha256 |
+|---|---|
+| `output/remediation/phase4_runner/PILOT.jsonl` | `7f66f987186151108879105745f082da3b4c8623ca5bd0a201c32a95e4e063fc` |
+| `output/remediation/phase4_runner/gold_prose_errors.json` | `e4e63d56cbc9cca0f9cea018967fac40e897faddb9c43ad064e6203a74ebb7df` |
+| `output/remediation/phase4_runner/PILOT_THRESHOLDS.md` | `64ac53341068234c905cff00095a9d7244cd4703353f63bbd0997add63fe0c13` |
+
+Their inputs: `PLAN4.census.jsonl` `644b9032...b591`, `S0_ROUTELESS.json`
+`81c3b426421e5958ee4e6fbe43ab139fe967f7dad030bd795c77d68d37997746`, `gold_standard/sites.json`
+`18653fc12607bc7b25c160ab022d114b86500c5dd15641979dc4cfdb72d2b756`, `qid_repair/PLAN.jsonl`
+`9d57b4315bea6fe6c7cfc1d94cae8776b442bce1443159eef2328579f9a6ce4f`, the export `2c99f96f...72a8`.
+
+* **`gold_prose_errors.json`** (`pilot4.py prose-errors`): the 15 prose errors of the gold standard
+  (every `errors_found` entry whose field names `description` or `card_description`, 12 plain and 3
+  combined with `period_start`), each claim copied from `gold_standard/sites.json` by code and each
+  anchor checked to occur in that record's stored text (e.g. LS-1 `1000 BC-300 AD`); then the 10
+  canary defects, each claim checked verbatim in its source (plan sections 4.2 and 5.1, design
+  entries [2], [5], [6]) and each stored anchor checked in the fresh export (Choquequirao on
+  Hatunmarka, `10,000 BC` on House of Taga, `30,000 km` on Maray Qalla, `hillfort` on Kit Hill, the
+  Dacian fort on Partiscum, `3rd-century BC` on Justinianopolis, `from the 1st millennium BC` on Neos
+  Panteleimonas, `Pakistan` on Ahin Posh Tape as the wrong item's country). Two canaries carry no
+  prose anchor, and say why: Eileithyia Cave (a `period_start` defect its stored prose does not carry)
+  and El Tintal (a coordinate).
+* **`PILOT_THRESHOLDS.md`** (`pilot4.py thresholds`): T1-T13, "Reported, not gating" and ON FAILURE,
+  copied verbatim from the design by code (a test compares them with the design file), then the dated
+  note: the answering model is Opus through the handoff (owner order 2026-09-23); MiniMax route
+  searches are not used (owner order "everything with Opus"), so lane-R/S1b candidates that need a
+  search are held as the route stage's `search-stopped` hold and reported, never guessed; and what
+  follows under the unchanged thresholds - no search, so T13 records nothing; no lane T or R site,
+  so T11 and T12 cannot be met and lanes T and R do not pass their pilot; T9's dollar bound reads an
+  unmetered ledger, reported as a count of unmetered calls.
+
+`tests/remediation/test_phase4_pilot.py` pins the three digests against this section and checks the
+pilot's members and the verbatim blocks.
+
+## 2026-09-24 - the Phase-4 pilot's non-model stages and its select export (no model called, nothing written)
+
+After the seal above (commit `e0e3e13`, 01:29:41 +02:00; the first question was exported at 01:30:25),
+`plan4.py build --pilot PILOT.jsonl` wrote `PLAN4.jsonl` from the same export (sha256
+`a39a8c9558cede1a62e8668d0dc79fa4742b8394b31794ee97252da24ca3aabb`, gitignored): **the pilot is its
+first 9 batches, `p4-0001` .. `p4-0009`** (8 x 15 + 12, in PILOT.jsonl's order, no other site among
+them), the rest follows from `p4-0010` (334 batches). The mass run can later continue in the pilot's
+run directory; the census run directory cannot be reused (its batches are the census plan's).
+
+    mass4.py --plan PLAN4.jsonl --run-dir runs/pilot-2026-09-24 --only p4-0001,..,p4-0009 --live \
+        --stages prepare,sources,routes,select --searches-off \
+        --handoff-export output/remediation/handoff/p4-pilot-select --jobs 3
+
+2026-09-23 23:30-23:31 UTC, `STAGE_EXIT=0`, every batch "done" for its round. 228 fetch lines in
+`LEDGER.jsonl` (en.wikipedia.org 160, www.wikidata.org 52, other Wikipedias 16), all 200; 0 searches;
+0 model calls (the ledger has no `model_call` line). Every lane equals the census's.
+
+| stage | result |
+|---|---|
+| S0 plan | 132 sites in 9 batches |
+| S1 sources | pinned 96, scope-pending 3, no-title 19, rejected 14 |
+| S1b routes | **lane W 77, S 19, 0 36**; 0 searches |
+| S3 select, export | **91 questions** (lane W 77, lane S 14); prompts 1,681-34,448 characters, median 4,047 |
+| S3R restricted | no lane-R site: nothing asked |
+
+The 96 selecting sites (lane W or S, not held) minus 91 questions are 5 lane-S sites whose article
+offers no sentence that names them (`sentences.candidate_pool`, lane S): Amyntas Rock Tombs, Priene
+Ruins, Hebbariyeh Roman Temple (gold), Templos de Tarxien (identity trap), Pergamon Amfitiyatrosu
+(long extract). The import holds them `no-source` with no call bought (`select_stage`).
+
+**The 36 holds** (`HOLDS4.jsonl`): `scope-pending` 3 - Midford Castle (gold and B5 fixture, 1775), Ksar
+el Barka (1690), Museo Campano (1869); `search-stopped` 33 - every site whose free routes found no own
+English article: the gold sites Font dels Coms and Temple of Dedun (article 'Dedun': verdict none); the
+canaries El Tintal (verdict none) and Ahin Posh Tape (verdict wrong); the Q309 traps Tlalpan, Estipeon
+and Crantit Chambered Cairn (the last two on the title 'History'); the 3 'Theatre' and 4 'Mortuary
+temple' traps (the generic article is a class and shared: verdict wrong; for Mortuary Temple of Seti I
+geosearch found its own article and the gate called it shared); all 6 T candidates, each with an
+other-language article and no English langlink - the gate called 3 of those articles `own` (Poblat de
+Son Catlar, Cirque Romain de Vienne, Pozzo Sacro del Predio Canopoli: lane T if a search found no English
+article) and 3 `none`; all 8 R candidates; all 5 B3 sites. By stratum:
+gold 26 W / 5 S / 5 held (28 exported); canaries 8 W (all 8 exported) / 2 held; B5 2 W / 1 held;
+named traps 4 W / 4 S (7 exported); Q309 4 W / 3 held; Theatre and Mortuary temple 7 held; f6b8fa8a
+and Wroxeter Stone W; draws W 30 and S 8 all exported; T, R and B3 all held; long extracts 3 W / 2 S (4
+exported).
+
+**Handoff directory** `output/remediation/handoff/p4-pilot-select` (gitignored, left in place; 91
+prompts, 816 KB, stage `finder`, labels `<site_id>/select`). `opus_handoff.py validate` on it: 91
+questions, 91 missing, 0 answered, 0 stale, 0 malformed, 0 orphans (exit 1 until they are answered).
+The run directory `runs/pilot-2026-09-24` (7.5 MB) travels with it: the import rebuilds each prompt
+from its evidence and refuses an answer to any other prompt.
+
+### What the thresholds can and cannot measure now
+
+T11 and T12 cannot be met (no lane-R or lane-T site) - lanes T and R do not pass their pilot and stay
+closed; T13 has no search; T9's dollars are unmetered (the note in `PILOT_THRESHOLDS.md`). T7: of the
+25 gold and canary errors, the canaries El Tintal and Ahin Posh Tape and the gold errors FC-2 (Font
+dels Coms) and TD-1 (Temple of Dedun) sit on sites held `search-stopped`, and AM-1 (Amyntas Rock Tombs)
+on a lane-S site the import will hold `no-source` - closed-list reasons, which T7 accepts; the other 20
+are asked.
+
+### The orchestrator's next commands (from this worktree, main venv)
+
+```bash
+cd /c/PythonProjects/AncientMap/.claude/worktrees/p4-pilot && export PYTHONIOENCODING=utf-8
+PY=C:/PythonProjects/AncientMap/.venv/Scripts/python.exe; M=output/remediation; R4=$M/phase4_runner
+P4=scripts/remediation/phase4; OH=scripts/remediation/opus_handoff.py; H=$M/handoff/p4-pilot
+RUN=$R4/runs/pilot-2026-09-24; ONLY=p4-0001,p4-0002,p4-0003,p4-0004,p4-0005,p4-0006,p4-0007,p4-0008,p4-0009
+ROUND="--plan $R4/PLAN4.jsonl --run-dir $RUN --log-dir $M/logs/p4_pilot --only $ONLY --searches-off --live"
+# 1. answer the 91 selector questions: for each line of $H-select/*/MANIFEST.jsonl, an Opus agent reads
+#    $H-select/<prompt_path>, writes only DESC:/CARD: lines (or ABSTAIN:) to a file, and runs
+$PY $OH answer --dir $H-select --batch-id <batch_id> --stage finder --label <site_id>/select \
+    --answered-by <agent> --text-file <answer.txt>
+$PY $OH validate --dir $H-select                                   # exit 0: 91 answered
+$PY $P4/mass4.py $ROUND --stages select --handoff-import $H-select  # S3 (+S3R: nothing to ask)
+# 2. the translate round: lane T is empty, so the export writes no question and no directory -
+#    skip `validate` when every batch reports 0 calls; the import still runs assemble and verify
+$PY $P4/mass4.py $ROUND --stages translate --handoff-export $H-translate
+$PY $P4/mass4.py $ROUND --stages translate,assemble,verify --handoff-import $H-translate
+# 3. the review round (stage `reviewer`, labels <site_id>/review)
+$PY $P4/mass4.py $ROUND --stages review --handoff-export $H-review
+$PY $OH answer --dir $H-review --batch-id <batch_id> --stage reviewer --label <site_id>/review \
+    --answered-by <agent> --text-file <answer.txt>
+$PY $OH validate --dir $H-review
+$PY $P4/mass4.py $ROUND --stages review --handoff-import $H-review  # the batches are then done
+$PY $P4/run4.py holds --run-dir $RUN                               # HOLDS4.jsonl
+# 4. the Claude Code audit of every sentence and card of the pilot (design S6b; T1-T7), against the
+#    pinned passages and gold_prose_errors.json - the reviewer's verdicts are never shown
+$PY -c "import sys; sys.path.insert(0, 'scripts/remediation'); from pathlib import Path; \
+from phase4 import audit4; print('\n'.join(sorted(audit4.reviewed_sites(Path('$RUN')))))" > $M/logs/p4_pilot/reviewed.txt
+$PY $P4/audit4.py sheet --run-dir $RUN --site-ids $M/logs/p4_pilot/reviewed.txt --out $M/logs/p4_pilot/AUDIT_SHEETS.md
+# 5. score T1-T13 against PILOT_THRESHOLDS.md; only the lanes whose pilot passed are opened
+# 6. P4 and P5 rehearsed against production (APPLY ending in ROLLBACK; nothing is written)
+$PY $M/tools/write_gate4.py --group P4 --run pilot-2026-09-24 --open-lanes W,S            # dry: plan + render
+$PY $M/tools/write_gate4.py --group P4 --run pilot-2026-09-24 --open-lanes W,S --rehearse
+$PY $M/tools/write_gate4.py --group P5 --run pilot-2026-09-24 --rehearse
+```
+
+P5 plans cards only for sites that carry a live Phase-4 provenance (a read-only question the gate
+asks), so before the committed P4 write of step 5 of the design's PILOT RUN its rehearsal may plan
+no row; `--open-lanes` names only lanes whose pilot passed (W and S at most; T and R are closed).
+
+### Tests, sweep, gates (worktree `.claude/worktrees/p4-pilot`, main venv)
+
+* New tests, each guard red before its code existed except `pilot4.py`'s (a new module, proven by its
+  mutation cases): `test_phase4_pilot.py` 41 (the fixed members, the draws, the census read, the
+  prose errors, the thresholds, the seal); `test_phase4_routes.py` +4 (`no_search`);
+  `test_phase4_runner.py` +4 (a zero allowance builds no client, `--searches-off`);
+  `test_phase4_plan.py` +5 (`--pilot`, the pilot's own batches) and one test rewritten stronger (the
+  gold pilot now fills its own batch); `test_phase3_fetch.py` +2 (the pacer).
+* `mutation_sweep.P4_PILOT_MUTATIONS`: 44 `"p4 pilot: "` cases (searches off 8, the pacer 2, the
+  pilot's batches 5, the fixed members 5, the draws 8, the census 3, the prose errors 7, the seal 3,
+  the thresholds 2), registered once; 1,939 labels, all unique, every anchor present. The sweep's
+  own `main` with the main venv over the label: **44/44 caught**, the tree byte-identical to the
+  sweep's start for its 9 files, no `# mutant` line left.
+* Full gate suite (`-m "not integration and not live_llm"`, `--timeout 300`, `-p no:cacheprovider`):
+  **5,734 passed, 114 skipped, 57 deselected, 0 failed** (352 s); every skip names gitignored data
+  this worktree does not have (Natural Earth, the snapshot, the worklist, the fonts, the bcases
+  cache, ...) or an opt-in live test.
+* `ruff check` and `ruff format --check` clean on the 12 touched Python files (ruff 0.15.11); `ruff
+  check api/ pipeline/` clean; `lint-imports` 2 kept, 0 broken; `vulture api/ pipeline/
+  .vulture_whitelist.py --min-confidence 80` clean.
+* `phase3/fetch_stage.py` and `phase3/mutation_sweep.py` changed, so `mass_run.package_digest` over
+  `phase3/` changes with this branch: merge it while no Phase-3 mass run is in flight.
+  `docs/procedures/PHASE4_CONTRACTS.md` section 8 records the additions (`write_plan` now takes
+  `pilot`).

@@ -1067,6 +1067,46 @@ def open_search(
         searcher.close()
 
 
+#: What the search report of a run without searches names as its endpoint: no client was built, so
+#: there is no MiniMax url to name (`no_search`).
+SEARCHES_OFF_ENDPOINT = "searches-off"
+
+
+class SearchesOff(RuntimeError):
+    """A run that may send no search was asked to search, probe or pace MiniMax: a bug, never a
+    hold. `routes_batch` stops asking at the budget before it reaches any of the three."""
+
+
+class NoSearcher:
+    """The searcher of a run whose search allowance is 0: it holds no MiniMax client."""
+
+    endpoint = SEARCHES_OFF_ENDPOINT
+
+    def search(self, query: str) -> SS.SearchResponse:
+        raise SearchesOff(f"a run that may send no search was asked {query!r}")
+
+
+@contextmanager
+def no_search() -> Iterator[
+    tuple[SS.Searcher, Callable[[], Mapping[str, Any]], Callable[[], None]]
+]:
+    """The three search seams of a run that may send no search (`--max-searches 0`).
+
+    Owner order 2026-09-23 ("no DeepSeek any more - everything with Opus"): the Phase-4 pilot of
+    2026-09-24 sends no MiniMax search, so its routes stage builds no MiniMax client and reads no
+    key. Its routed sites that only a search could anchor are held `search-stopped` by the budget
+    rule, never guessed; each seam raises `SearchesOff` if it is ever reached.
+    """
+
+    def probe() -> Mapping[str, Any]:
+        raise SearchesOff("a run that may send no search was asked to probe the MiniMax quota")
+
+    def wait() -> None:
+        raise SearchesOff("a run that may send no search was asked to pace the MiniMax host")
+
+    yield NoSearcher(), probe, wait
+
+
 def routes_batch(
     batch_dir: Path,
     *,

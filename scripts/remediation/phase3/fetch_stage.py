@@ -770,6 +770,19 @@ class HostPacer:
                     ) from None
                 self._sleep(HOST_LOCK_POLL_SECONDS)
                 continue
+            except PermissionError:
+                # Windows: a lock its holder is deleting stays "delete pending" while any handle
+                # is open (a waiter reading its age holds one), and creating it again then is
+                # refused as access denied, not as "exists" - one S1 batch of the Phase-4 census
+                # died of it on 2026-09-24 (four jobs on en.wikipedia.org). It is a lock in
+                # transit, waited for like a held one; a directory that really refuses ends at the
+                # deadline, named as such.
+                if self._clock() > deadline:
+                    raise PacerTimeout(
+                        f"{lock} could not be created for {self._wait_seconds:.0f}s: access denied"
+                    ) from None
+                self._sleep(HOST_LOCK_POLL_SECONDS)
+                continue
             token = f"{self._clock():.6f} {os.urandom(8).hex()}"
             try:
                 os.write(handle, token.encode())
