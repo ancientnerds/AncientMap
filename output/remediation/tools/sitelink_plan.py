@@ -34,7 +34,7 @@ key that is not open any more, each named with its reason in the summary:
 * **changed in production** - the export's value is not the value the mass finder judged.
 
 **Which item** (`item_for`): the site's `wikidata_qid` in the fresh export, withheld when the reviewed
-external-id repair (all three waves, `qid_repair.py`) replaces it, leaves it unresolved, keeps it as
+external-id repair (every wave, `qid_repair.py`) replaces it, leaves it unresolved, keeps it as
 the monument type the record stands for (wave 3 `keep-type`) or as the item of a duplicate candidate
 (wave 3 `duplicate-candidate`), when more than one curated site carries it (a parent or a generic
 item, `gap_plan.shared_counts`), or when the owner-case classifier judged that very item

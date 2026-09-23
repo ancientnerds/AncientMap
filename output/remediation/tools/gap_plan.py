@@ -280,7 +280,8 @@ def shared_counts(
     does not make the item a shared one for the site it really belongs to (Persepolis). A link the
     repair keeps (`qid_repair.UNCHANGED`: unresolved, and wave 3's keep-type, duplicate-candidate and
     link-right) still counts: its item is still on that row. `repairs` is the first wave by default;
-    the sitelink lane passes all three.
+    the sitelink lane passes every wave's sites (wave 4 names none: it plans from its resolution
+    record and only inserts an item where a site holds none).
     """
     wrong = {
         (site.site_id, site.old_qid) for site in repairs if site.rule not in qid_repair.UNCHANGED
@@ -317,7 +318,7 @@ def withheld_reason(
     """(the item the run is given, or None; why an item is withheld, or None).
 
     `repairs` is the reviewed external-id repair's first wave by default (the gap run's); the
-    sitelink lane passes all three waves, whose site sets do not overlap. A link the repair keeps
+    sitelink lane passes every wave's, whose site sets do not overlap. A link the repair keeps
     (`qid_repair.UNCHANGED`) was judged as that link, so production must still carry it: an
     **unresolved** one is withheld, a **keep-type** one too (the item is the monument type the record
     stands for, and its articles describe the type, not this site), a **duplicate-candidate** one too
