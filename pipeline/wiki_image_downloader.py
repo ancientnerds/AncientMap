@@ -25,8 +25,10 @@ from pathlib import Path
 import httpx
 from loguru import logger
 from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 from pipeline.database import WikiImage, get_session
+from pipeline.utils.mediawiki import dereference
 
 # =============================================================================
 # Configuration
@@ -241,14 +243,21 @@ def fetch_image_metadata_batch(file_titles: list[str]) -> dict[str, dict]:
     """
     Fetch metadata for up to 50 images in one API call.
 
-    The MediaWiki imageinfo API accepts pipe-separated titles (max 50).
-    Returns {file_title: {author, author_url, license, license_url, width, height, original_url}}.
+    The MediaWiki imageinfo API accepts pipe-separated titles (max 50) and answers each under the
+    title it normalised it to (`File:A_b.jpg` -> `File:A b.jpg`, listed in `query.normalized`).
+    Returns {requested File: title: {author, author_url, license, license_url, width, height,
+    original_url}}, keyed by the title as it was asked: keyed by the answer's own title, 12 of 12
+    underscore titles of a live media-list (en.wikipedia `Stonehenge`, 2026-09-23) missed their
+    lookup, lost their width and failed to download. A Commons file redirect is answered under
+    the requested title itself (measured the same day, with and without `redirects=1`). The
+    original's URL and size are `parse_attribution`'s: the imageinfo url carries `?utm_...`
+    analytics parameters that an upload original never needs.
     """
     if not file_titles:
         return {}
 
-    normalized = [t if t.startswith("File:") else f"File:{t}" for t in file_titles]
-    titles_param = "|".join(normalized)
+    requested = [t if t.startswith("File:") else f"File:{t}" for t in file_titles]
+    titles_param = "|".join(requested)
 
     params = {
         "action": "query",
@@ -266,14 +275,18 @@ def fetch_image_metadata_batch(file_titles: list[str]) -> dict[str, dict]:
             return {}
 
         data = resp.json()
-        pages = data.get("query", {}).get("pages", {})
+        query = data.get("query", {})
     except Exception as e:
         logger.debug(f"batch imageinfo error: {e}")
         return {}
 
+    pages = {page.get("title", ""): page for page in query.get("pages", {}).values()}
+    normalized = {entry["from"]: entry["to"] for entry in query.get("normalized", [])}
     results: dict[str, dict] = {}
-    for page in pages.values():
-        page_title = page.get("title", "")
+    for title in requested:
+        page = pages.get(dereference(title, normalized))
+        if page is None:
+            continue
         info = (page.get("imageinfo") or [{}])[0]
         ext = info.get("extmetadata", {})
 
@@ -293,15 +306,16 @@ def fetch_image_metadata_batch(file_titles: list[str]) -> dict[str, dict]:
 
         license_name = ext.get("LicenseShortName", ext.get("License", {})).get("value", "")
         license_url = ext.get("LicenseUrl", {}).get("value", "")
+        original = parse_attribution(info)
 
-        results[page_title] = {
+        results[title] = {
             "author": author or None,
             "author_url": author_url,
             "license": license_name or None,
             "license_url": license_url or None,
-            "width": info.get("width"),
-            "height": info.get("height"),
-            "original_url": info.get("url"),
+            "width": original["width"],
+            "height": original["height"],
+            "original_url": original["original_url"],
         }
 
     return results
@@ -685,6 +699,10 @@ def fetch_plan(original_url: str, original_width: int) -> tuple[str, int | None]
     parsed = urllib.parse.urlparse(original_url)
     if parsed.scheme != "https" or parsed.netloc != "upload.wikimedia.org":
         raise DownloadError(original_url, "not an upload.wikimedia.org original")
+    # The URL is stored as the row's original_url: a query (imageinfo's `?utm_...`) would taint
+    # it, and urlparse keeps it out of the path the check below reads.
+    if parsed.query or parsed.fragment:
+        raise DownloadError(original_url, "an upload original carries no query or fragment")
     match = re.fullmatch(r"/wikipedia/([\w-]+)/([0-9a-f])/([0-9a-f]{2})/([^/]+)", parsed.path)
     if match is None:
         raise DownloadError(original_url, "not the path of an upload original")
@@ -934,7 +952,8 @@ def process_site(
     2. Wikidata curated images (P18, P3451, P4291, P5775)
     3. Wikimedia Commons category images (via Wikidata P373)
 
-    Returns (the number of images downloaded, every image that could not be stored).
+    Returns (the number of images stored or already registered, every image that could not be
+    stored or registered - a failed download, a failed insert, a file on disk no row names).
     """
     site_id = site["id"]
     site_name = site["name"]
@@ -1045,21 +1064,22 @@ def process_site(
     # --- Prepare download list and batch-fetch metadata ---
     downloaded = 0
     img_dir = site_image_dir(site_id)
+    failures: list[FailedDownload] = []
 
-    # Load existing DB entries for this site to skip already-downloaded images
+    # The site's rows, --force or not: a file on disk counts as done only when one of them
+    # registers it; without --force a row alone marks its image as done.
     existing_urls: set[str] = set()
     existing_filenames: set[str] = set()
-    if not force:
-        with get_session() as session:
-            rows = session.execute(
-                text("SELECT original_url, filename FROM wiki_images WHERE site_id = :sid"),
-                {"sid": site_id},
-            ).fetchall()
-            for row in rows:
-                if row.original_url:
-                    existing_urls.add(row.original_url)
-                if row.filename:
-                    existing_filenames.add(row.filename)
+    with get_session() as session:
+        rows = session.execute(
+            text("SELECT original_url, filename FROM wiki_images WHERE site_id = :sid"),
+            {"sid": site_id},
+        ).fetchall()
+        for row in rows:
+            if row.original_url:
+                existing_urls.add(row.original_url)
+            if row.filename:
+                existing_filenames.add(row.filename)
 
     # Build local filenames, skip images already in DB, identify metadata needs
     needs_metadata: list[str] = []
@@ -1078,11 +1098,25 @@ def process_site(
         img_filenames.append(local_filename)
 
         # A file on disk is never fetched again, --force or not: download_image refuses to
-        # overwrite one. --force only stops the database rows from counting as done.
+        # overwrite one. --force only stops the database rows from counting as done. A file no
+        # row of this site names - an insert that failed, a run stopped between download and
+        # insert - is named as a failure: it is never replaced, and never registered by guess
+        # (the image behind hero.webp can differ between two runs).
+        on_disk = (img_dir / local_filename).exists()
+        registered = local_filename in existing_filenames
+        if on_disk and not registered:
+            failures.append(
+                FailedDownload(
+                    file_title,
+                    str(img_dir / local_filename),
+                    "on disk without a wiki_images row of this site - never overwritten, "
+                    "never registered by guess",
+                )
+            )
+            skip_flags.append(True)
+            continue
         orig_url = img.get("original_url") or img.get("full_url", "")
-        already_done = (img_dir / local_filename).exists() or (
-            not force and (local_filename in existing_filenames or orig_url in existing_urls)
-        )
+        already_done = on_disk or (not force and (registered or orig_url in existing_urls))
         skip_flags.append(already_done)
 
         if already_done:
@@ -1132,11 +1166,12 @@ def process_site(
         )
 
     if not download_tasks:
-        return downloaded, []
+        return downloaded, failures
 
     # Download images sequentially (avoids Wikimedia 429s)
     logger.info(f"  Downloading {len(download_tasks)} images for {site_name}...")
-    dl_results, failures = download_images_sequential(download_tasks)
+    dl_results, dl_failures = download_images_sequential(download_tasks)
+    failures.extend(dl_failures)
 
     # Insert results into database
     for idx, img, original_url, result in dl_results:
@@ -1175,15 +1210,22 @@ def process_site(
                 )
                 session.add(wiki_img)
                 session.commit()
-                downloaded += 1
-        except Exception as e:
-            if "uq_wiki_image_site_url" in str(e):
-                downloaded += 1
-            else:
-                logger.warning(f"DB insert error for {file_title}: {e}")
+        except SQLAlchemyError as exc:
+            # The one expected refusal: this site already has a row for this original.
+            if not (isinstance(exc, IntegrityError) and "uq_wiki_image_site_url" in str(exc)):
+                failures.append(
+                    FailedDownload(
+                        file_title,
+                        original_url,
+                        f"stored as {img_dir / local_filename}, but its wiki_images row was not "
+                        f"written ({type(exc).__name__}: {str(exc).splitlines()[0]})",
+                    )
+                )
+                continue
+        downloaded += 1
 
         # Update unified_sites.thumbnail_url to local hero image path
-        # Runs after insert (whether new or duplicate) — the file is on disk either way
+        # Runs after an insert (new or duplicate) - never for a file whose row failed
         if is_hero:
             local_path = f"/data/images/wiki/{site_id[:8]}/{local_filename}"
             with get_session() as session:
@@ -1234,22 +1276,18 @@ def run_downloader(
         total_skipped = 0
 
     total_downloaded = 0
-    total_errors = 0
     all_failures: list[FailedDownload] = []
 
+    # No site-level catch: an error that is not a named image failure is a bug, and it stops the
+    # run with its traceback instead of a warning and an exit 0.
     for i, site in enumerate(to_process):
-        try:
-            name = site["name"]
-            count, failures = process_site(
-                site, dry_run=dry_run, max_per_category=max_per_category, force=force
-            )
-            total_downloaded += count
-            all_failures.extend(failures)
-            if count > 0:
-                logger.info(f"  [{i + 1}/{len(to_process)}] {name}: {count} images")
-        except Exception as e:
-            logger.warning(f"  Error processing {site['name']}: {e}")
-            total_errors += 1
+        count, failures = process_site(
+            site, dry_run=dry_run, max_per_category=max_per_category, force=force
+        )
+        total_downloaded += count
+        all_failures.extend(failures)
+        if count > 0:
+            logger.info(f"  [{i + 1}/{len(to_process)}] {site['name']}: {count} images")
 
     logger.info("=" * 60)
     logger.info("Download complete:")
@@ -1257,7 +1295,6 @@ def run_downloader(
     logger.info(f"  Sites skipped (already done): {total_skipped}")
     logger.info(f"  Images downloaded: {total_downloaded}")
     logger.info(f"  Images that could not be stored: {len(all_failures)}")
-    logger.info(f"  Errors: {total_errors}")
     return all_failures
 
 
