@@ -1,0 +1,67 @@
+[32m2026-09-23 03:23:01[0m | [1mINFO    [0m | [36mpipeline.utils.logging[0m:[36msetup_logging[0m:[36m57[0m - [1mLogging configured: level=INFO[0m
+NOTICE:  site_type shape repair: 3 row(s) changed and journalled over 3 curated site(s)
+
+=== before ===
+                              metric                               | value 
+-------------------------------------------------------------------+-------
+ curated rows whose site_type is a marker token or a model refusal | 4
+ curated rows whose site_type is outside the canonical list        | 8
+ curated sites                                                     | 5004
+ journal rows for the rollback stamp                               | 0
+ journal rows for this run on non-curated rows                     | 0
+ journal rows for this run outside unified_sites.site_type         | 0
+ journal rows for this run stamp                                   | 0
+ journal rows for this run whose value is not canonical            | 0
+ journal rows for this run with a site_id_ref of another site      | 0
+ journal rows for this test id                                     | 0
+
+
+site_type value                          slug                     rows
+City/town/settlement                     -                       1280
+Grave (burial site) — not representable  -                          1
+Monument                                 -                         49
+Necropolis/tombs complex                 -                        234
+suspect_modern                           -                          3
+=== the write ===
+BEGIN
+SET
+SET
+CREATE TABLE
+INSERT 0 3
+DO
+COMMIT
+                              metric                               | value 
+-------------------------------------------------------------------+-------
+ journal rows for this run stamp                                   | 3
+ curated sites                                                     | 5004
+ journal rows for this test id                                     | 3
+ curated rows whose site_type is a marker token or a model refusal | 1
+ planned rows now holding the new value                            | 3
+(5 rows)
+
+
+=== after ===
+                              metric                               | value 
+-------------------------------------------------------------------+-------
+ curated rows whose site_type is a marker token or a model refusal | 1
+ curated rows whose site_type is outside the canonical list        | 5
+ curated sites                                                     | 5004
+ journal rows for the rollback stamp                               | 0
+ journal rows for this run on non-curated rows                     | 0
+ journal rows for this run outside unified_sites.site_type         | 0
+ journal rows for this run stamp                                   | 3
+ journal rows for this run whose value is not canonical            | 0
+ journal rows for this run with a site_id_ref of another site      | 0
+ journal rows for this test id                                     | 3
+
+
+site_type value           slug                     rows
+City/town/settlement      -                       1281
+Monument                  -                         50
+Necropolis/tombs complex  -                        235
+suspect_modern            -                          1
+  journal rows for this run stamp: 3
+  planned rows now holding the planned new value: 3
+  planned rows with no journal row for this run stamp: 0
+  journal rows for this run outside unified_sites.site_type: 0
+APPLY OK: the read-back matches the plan, row for row

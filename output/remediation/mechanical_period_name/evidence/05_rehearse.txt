@@ -1,0 +1,13 @@
+[32m2026-09-23 03:23:51[0m | [1mINFO    [0m | [36mpipeline.utils.logging[0m:[36msetup_logging[0m:[36m57[0m - [1mLogging configured: level=INFO[0m
+INFO mechanical.apply: wrote C:\PythonProjects\AncientMap\output\remediation\mechanical_period_name\REHEARSAL.sql (COMMIT -> ROLLBACK)
+REFUSED: psql exited 3:
+BEGIN
+SET
+SET
+CREATE TABLE
+INSERT 0 220
+
+ERROR:  canceling statement due to statement timeout
+CONTEXT:  SQL statement "UPDATE unified_sites SET period_name = $1::character varying(100) WHERE id::text = $2 AND period_name IS NOT DISTINCT FROM $3::character varying(100)"
+PL/pgSQL function apply_remediation_change(text,text,text,text,text,text,text,text,text,text,jsonb,uuid) line 70 at EXECUTE
+PL/pgSQL function inline_code_block line 60 at assignment

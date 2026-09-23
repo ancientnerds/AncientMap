@@ -1,0 +1,7 @@
+phase-3 journal rows in the three columns: 994; journal rows read for 1022 sites' chains: 1010
+read from the database: 1022 of 1022 sites
+
+994 phase-3 field(s) journalled, 80 planned field(s) phase 3 did not write, 1022 sites read
+3 field(s) superseded by the later journalled write 2026-09-22_mechanical-site-type-shape
+5 field(s) superseded by the later journalled write 2026-09-22_mechanical-uk-parts
+RESULT: 0 deviation(s)

@@ -1,0 +1,16 @@
+[32m2026-09-23 03:22:46[0m | [1mINFO    [0m | [36mpipeline.utils.logging[0m:[36msetup_logging[0m:[36m57[0m - [1mLogging configured: level=INFO[0m
+[guard 3 - a planned old value the row does not hold] psql exit=3 refused by its own guard=True
+   ERROR:  site_type shape repair: 1 planned row(s) no longer hold the planned old value
+   journal rows left by this probe: 0
+[guard 2 - a planned row that is not a change] psql exit=3 refused by its own guard=True
+   ERROR:  site_type shape repair: 1 planned row(s) are not writable changes
+   journal rows left by this probe: 0
+[guard 2 - a value longer than the column] psql exit=3 refused by its own guard=True
+   ERROR:  site_type shape repair: 1 planned row(s) are not writable changes
+   journal rows left by this probe: 0
+[guard 1 - a row outside source_id = 'ancient_nerds'] psql exit=3 refused by its own guard=True
+   ERROR:  site_type shape repair: 1 planned row(s) are not ancient_nerds sites
+   journal rows left by this probe: 0
+[guard 4 - a planned value the lane does not own] psql exit=3 refused by its own guard=True
+   ERROR:  site_type shape repair: 1 planned row(s) write a value this lane does not own
+   journal rows left by this probe: 0

@@ -1,0 +1,12 @@
+[32m2026-09-23 03:22:20[0m | [1mINFO    [0m | [36mpipeline.utils.logging[0m:[36msetup_logging[0m:[36m57[0m - [1mLogging configured: level=INFO[0m
+                                             signature                                             
+---------------------------------------------------------------------------------------------------
+ apply_remediation_change(text, text, text, text, text, text, text, text, text, text, jsonb, uuid)
+(1 row)
+
+ casts_value_to_column_type | casts_old_value | rereads_stored_value 
+----------------------------+-----------------+----------------------
+ t                          | t               | t
+(1 row)
+
+

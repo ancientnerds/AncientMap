@@ -1,0 +1,63 @@
+Timing is on.
+BEGIN
+Time: 0.125 ms
+CREATE FUNCTION
+Time: 3.328 ms
+                   step                   | is_0022 
+------------------------------------------+---------
+ function replaced inside the transaction | t
+(1 row)
+
+Time: 0.606 ms
+NOTICE:  C1 OK   boolean column flips (false -> true)
+NOTICE:  C2 OK   journal row written for the change
+DO
+Time: 10.130 ms
+                step                
+------------------------------------
+ the 0018 selftest ran against 0022
+(1 row)
+
+Time: 0.046 ms
+SET
+Time: 0.049 ms
+SET
+Time: 0.057 ms
+NOTICE:  C3 OK   text column writes
+NOTICE:  C4 OK   integer column writes
+NOTICE:  C5 OK   NULL clears the column
+NOTICE:  C6 OK   truncation refused (journal cannot lie)
+NOTICE:  C7 OK   wrong old value raises (0 rows)
+NOTICE:  C8 OK   nonexistent pk raises
+NOTICE:  C9 OK   table allowlist holds
+NOTICE:  C10 OK  unknown column refused from the catalog
+NOTICE:  C11 OK   a no-op change is refused
+NOTICE:  C12 OK   no journal row for the refused no-op
+NOTICE:  selftest done: 12 ok, 0 failed
+CREATE TABLE
+Time: 1.494 ms
+INSERT 0 220
+Time: 5.348 ms
+DO
+Time: 115.945 ms
+NOTICE:  period_name derivation: 220 row(s) changed and journalled over 220 curated site(s)
+                   step                   |  n  
+------------------------------------------+-----
+ period_name: rows holding the bucket now | 220
+(1 row)
+
+Time: 0.784 ms
+ROLLBACK
+Time: 0.593 ms
+                   step                   | n 
+------------------------------------------+---
+ after ROLLBACK: journal rows of the lane | 0
+(1 row)
+
+Time: 1.486 ms
+                    step                    | still_0018 
+--------------------------------------------+------------
+ after ROLLBACK: the function is still 0018 | t
+(1 row)
+
+Time: 0.250 ms

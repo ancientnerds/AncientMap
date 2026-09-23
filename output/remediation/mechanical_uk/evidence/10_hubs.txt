@@ -1,0 +1,4 @@
+/sites/northern-ireland 200
+/sites/united-kingdom 404
+/sites/england     200
+/sites/ireland     200

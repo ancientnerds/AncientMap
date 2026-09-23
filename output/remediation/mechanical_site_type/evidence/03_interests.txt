@@ -1,0 +1,7 @@
+[32m2026-09-23 03:22:32[0m | [1mINFO    [0m | [36mpipeline.utils.logging[0m:[36msetup_logging[0m:[36m57[0m - [1mLogging configured: level=INFO[0m
+site_type value                          slug                     rows
+City/town/settlement                     -                       1280
+Grave (burial site) — not representable  -                          1
+Monument                                 -                         49
+Necropolis/tombs complex                 -                        234
+suspect_modern                           -                          3
