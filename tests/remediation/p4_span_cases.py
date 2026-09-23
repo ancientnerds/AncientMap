@@ -106,6 +106,30 @@ SPAN_CASES: list[tuple[str, str, dict[str, str]]] = [
             "t1": ", held statues of the gods of the river and of the sky",
         },
     ),
+    # two insertion pairs that share a comma offer neither (rule 5, decision 2026-09-23; Agri
+    # Bavnehøj W11, Babylon W1), also when the neighbour is refused for a protected token (rule 9
+    # filters only after rule 5); a neighbour that is a list link refuses nothing
+    (
+        "W",
+        "The old Danish word, bavn, in Bavnehøj, means a stack of wood placed on high ground.",
+        {"l1": "The old Danish word, ", "t1": ", means a stack of wood placed on high ground"},
+    ),
+    (
+        "W",
+        "The city lay on the river in the south, within modern Hillah, Iraq, 85 km south "
+        "of Baghdad.",
+        {"t1": ", 85 km south of Baghdad"},
+    ),
+    (
+        "W",
+        "The old word, probably bavn, in the name, means a stack of wood on high ground.",
+        {"l1": "The old word, ", "t1": ", means a stack of wood on high ground"},
+    ),
+    (
+        "W",
+        "The finds, which were made in 1900, included pottery, coins, and tools.",
+        {"l1": "The finds, ", "a1": ", which were made in 1900,", "t1": ", and tools"},
+    ),
     # the first of two conjuncts is no leading phrase either (rule 7)
     (
         "W",

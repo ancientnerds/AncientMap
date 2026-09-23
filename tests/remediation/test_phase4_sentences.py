@@ -214,6 +214,29 @@ def test_an_insertion_beside_a_list_is_still_offered() -> None:
     # a short insertion before a long tail that carries a coordinator is no list link
     text = "The temple, now ruined, held statues of the gods of the river and of the sky."
     assert _a_spans(text) == {", now ruined,"}
+    # the pair after it is a list link, not an insertion, so the shared comma refuses nothing
+    text = "The finds, which were made in 1900, included pottery, coins, and tools."
+    assert _a_spans(text) == {", which were made in 1900,"}
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        # Agri Bavnehøj W11: dropping ", in Bavnehøj," read "The old Danish word, bavn means ..."
+        "The old Danish word, bavn, in Bavnehøj, means a stack of wood placed on high ground.",
+        # Babylon W1: ", within modern-day Hillah," beside ", Iraq,"
+        "The city lay on the river in the south, within modern Hillah, Iraq, 85 km south "
+        "of Baghdad.",
+        # three insertion pairs in a row: each shares a comma with the next
+        "The hall, a long room, of timber, with a hearth, stood on the hill above.",
+        # the neighbour carries a protected token: it is refused, and it still refuses its partner
+        "The old word, probably bavn, in the name, means a stack of wood on high ground.",
+    ],
+)
+def test_two_comma_pairs_that_share_a_comma_offer_neither(text: str) -> None:
+    """Which two of three commas enclose the insertion is not in the text (decision 2026-09-23):
+    neither pair is offered, whichever one a reader would pick."""
+    assert _a_spans(text) == set()
 
 
 def test_a_leading_phrase_takes_its_comma_and_the_space_after_it() -> None:
