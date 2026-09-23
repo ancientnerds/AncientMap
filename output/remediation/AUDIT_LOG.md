@@ -6253,3 +6253,132 @@ answered 429 and was asked again) had the same outcome.
   and must be, if the pilot passes later than the pins hold.
 * Merging `wip/p4-write` onto this: `lanes.py` conflicts textually; keep `"sitelink": "slk"` in
   `PHASE3_BATCH_PREFIX`.
+
+
+## 2026-09-23 - the sitelink lane after its independent check: item rule, generated wikis, pilot re-sealed (no model call, nothing written)
+
+An independent check of `wip/sitelink` raised three findings. All three held; the first reached one
+case more than the check saw. **Production contacts, all reads:** Wikidata and the Wikipedias' `query`
+API (the lane's and the pilot's `sitelinks` again, 1 s per host; the first revision of 832 chosen
+pages, to see who wrote them) and one more dry fetch of the pilot's evidence into its own scratch
+ledger. No model call, no row in `phase3_runner/LEDGER.jsonl` (0 `slk`/`slkg` rows), no export,
+nothing written.
+
+### 1. The item rule ignored the classifier's "this item is the site's place" verdicts (major, confirmed)
+
+`item_for` withheld an item for the repair waves, a shared item and a suspect link, but never read the
+owner-case classifier's verdicts that the item is a town, commune, state or island holding the site:
+`bcases/coords.jsonl` classes `container-item` and `item-is-not-the-site`, and `bcases/names.jsonl`'s
+N7 `anchor-is-locality`. Measured on the first plan (`3dfd1d5e...`): **93 sites, 137 fields**
+(period_start 91, site_type 39, country 7) - Colima - Eastern Shaft Tomb asked from the articles on
+the Mexican state, Kintradwell Broch from Brora's, Kameishi from Asuka village's, Site de Tiklat from
+El Kseur's, the Roman Bridge (Elguentra) from El Kantara's, Ancient Thasos from the island's, Ahin Posh
+Tape (HUMAN_ONLY B1/B2 item 4, open) from a Pakistani village's. The check found none of them in the
+pilot; **one is**: Hebbariyeh Roman Temple (`slkg-0001`), whose item Q5695359 is the village of
+Hebbariye (N7 `anchor-is-locality`) - it was asked its period and card text from the village's
+arwiki, itwiki and fawiki articles.
+
+`classifier_verdicts` reads every verdict under its own rule name - `suspect-link`, `container-item`,
+`item-is-not-the-site`, `item-is-a-locality` - and `item_for` withholds on the first one about the item
+the site still carries, the rule named in the reason (`Q61309: item-is-not-the-site - ...`). Wave 3's
+`link-right` answers the suspicion only; nobody has read the containers, so an ancient city among them
+(Abusir, Karpasia) is withheld too (safety over coverage; the owner's N7 reading is HUMAN_ONLY item 6).
+`linear-or-areal-item` is not a withholding rule: the class is about a line's arbitrary point, and of
+the 20 such items in the first plan 19 are the site itself (the Icknield Way, the Pannonian Limes) and
+one the national park named after it (Yaxhá).
+
+**A second mismatch in the same reader:** a suspicion was paired with `qid_now` - the link the site
+carried when the classifier ran - instead of `qid`, the item it judged. For the 18 rows whose census
+item the repair had replaced before the classifier ran, the reviewed replacement was withheld for a
+suspicion about the old item (Kourion's amphitheatre: Q1 on Q11635 "amphitheatre" withheld
+Q4453457). Ten of them had an open question; they get their item back, five of them articles.
+
+### 2. Generated wikis still reached the finder (minor, confirmed, one more found)
+
+Read on each wiki's own API, the first revision of every page the first plan chose on `cewiki`,
+`lldwiki`, `zh_min_nanwiki` and `svwiki` (131 pages) and on the 81 wikis outside `FIXED_ORDER` (701):
+all 3 Chechen pages by `CheWikibot`; all 30 Ladin pages by one account with AWB in eleven days
+("creps using [[Project:AWB|AWB]]", 509-650 bytes); the Min Nan page by `Taigiholic.bot`; of 97
+Swedish pages, 53 of the 75 chosen for sites outside Sweden and Finland by Lsjbot ("Botskapande
+Storbritannien", "Botskapande Irland", ...) and none of the 22 chosen for Swedish and Finnish sites.
+**And Corsican**, which the check had not named: of 15 pages, 13 are Botu's "Automated import of
+articles" of 2005-10-18 and a 14th came the same day (220-253 bytes; 12 still under 400; 8 sites had
+nothing else).
+
+`fetch_stage.BOT_GENERATED_WIKIS` gains `cewiki`, `lldwiki`, `zh_min_nanwiki` and `cowiki`, each with
+its citation (ru.wikipedia "Чеченская Википедия" oldid 153105098; en.wikipedia "Ladin Wikipedia" oldid
+1375555468; zh.wikipedia "閩南語維基百科" oldid 93375724; Corsican by the measurement alone - no
+article says how it was written). Swedish is read only where it is the site's own language:
+`sitelink_plan.HOME_ONLY_WIKIS` refuses `svwiki` unless the stored country's `COUNTRY_WIKIS` name it
+(Sweden, Finland), and `svwiki` leaves `FIXED_ORDER`, where it could only rank a wiki the rule refuses.
+
+**Open, measured:** bot-created pages inside editor-written wikis stay readable - `srwiki` 5 of 37
+(FelixBot's 2007 census imports, 6-8 KB), `cywiki` 5 of 64, `urwiki` 3 of 18, `hrwiki` 2 of 37, `shwiki`
+2 of 6, `anwiki` 1 of 2; `astwiki`'s one page is Tradubot's translation of the Spanish article. A
+wiki-wide refusal would be disproportionate there, and a page-level check costs one more request per
+candidate (`creators_small_wikis_2026-09-23.json` in `logs/sitelink_scratch/`).
+
+### 3. The pilot's threshold 4 was not the search pilot's text (minor, confirmed)
+
+`SITELINK_PILOT.md` said "word for word" and rewrote threshold 4 with articles in place of searches
+and slots; the scorer said "unchanged". The document now copies all four thresholds verbatim and states,
+beside them, how the lane reads threshold 4 - it buys no search, so a search is one sitelink article,
+its stored result the evidence file, a recorded failure the fetch stage's record, a slot an article:
+what `TRANSPORTS["sitelink"]` counts. The scorer's docstring says the same. A test compares the two
+documents' threshold blocks.
+
+### The rebuilt lane and the re-sealed pilot
+
+| | first build | after the check |
+| --- | --- | --- |
+| sites with an open question / with a usable item | 3,109 / 2,579 | 3,109 / 2,491 |
+| withheld | 530: no item 361, shared 73, unresolved 50, suspect link 32, duplicate candidate 11, type 3 | 618: no item 361, shared 73, container-item 57, unresolved 50, item-is-not-the-site 23, suspect-link 22, item-is-a-locality 18, duplicate candidate 11, keep-type 3 |
+| sites given at least one article (3 / 2 / 1) | 2,040 (1,306 / 299 / 435) | 1,920 (1,210 / 281 / 429) |
+| articles | 4,951 | 4,621 |
+| not taken | cap 10,341, English 2,097, bot-generated 692, room 587, redirect badge 30 | cap 8,596, English 1,968, bot-generated 849, home-only 370, room 543, redirect badge 28 |
+| plan | 136 batches, 2,399 fields (period_start 1,970, site_type 389, country 40), `3dfd1d5e...9a12` | **128 batches, 2,236 fields (period_start 1,852, site_type 347, country 37), `0e3116558fd65ed4dad02760b70dec705e193e051073e96d4622267cefaf4923`** |
+| no article | 1,909: item withheld 1,303, no usable article 606 | 2,072: item withheld 1,422, no usable article 650 |
+
+Of the 125 sites the plan lost, 93 (137 fields) are the item rule's (container-item 54,
+item-is-not-the-site 22, item-is-a-locality 17) and 32 (40 fields) had nothing left but generated
+wikis (12 bot-generated only, 6 Swedish only, 14 both); it gained the 5 repaired sites of finding 1
+(14 fields). The country geometry is unchanged: 412 of 427 country fields verified by the stored
+point, all 37 in the plan among them. `plan` refused the old `sitelinks.json` for 130 sites and the
+pilot's for Hebbariyeh ("resolved under other inputs") before `sitelinks` ran again.
+
+**The pilot** (`PLAN.sitelink-gold.jsonl`, sha256
+`d8a78e58f02255570bd6a7c94dd42b0a04fdbddadca440b9bc12e39dabc28b81`): 18 sites, 39 fields
+(period_start 15, description 10, card_description 8, site_type 5, country 1; human verdicts CORRECT
+23, WRONG 10, UNVERIFIABLE 6), 2 batches, 49 articles - every pin the first build's revision,
+Hebbariyeh withheld. The mass driver's dry run projects 39 calls, $0.0322. Dry fetch
+(`runs/sitelink-gold-dry3`, scratch ledger `logs/sitelink_scratch/LEDGER.dry3.jsonl`): 181 requests,
+180 answered; one WDQS query (The Merry Maidens' narrowed Wikidata evidence) drew a 429 asking for 120
+s and was recorded as that target's failure; 49 of 49 articles stored, 0 cut, 0 refused; all 18 sites
+under 64,000 characters (largest 29,925); stored/estimate at most 0.806; 0 articles unaccounted for.
+`SITELINK_PILOT.md` re-sealed (commit d10d469), sha256 of the committed text
+**`9467e7259b3cc164b60e5cb754ade2e2ed07ae9e909e7b3e2b4eb3b3f69b3d1e`**. The first version
+(`47f9adc4...8dac6`, plan `593501ab...b522`) and the first lane plan (`3dfd1d5e...9a12`) recorded in
+the section above do not apply any more.
+
+### Tests and proofs
+
+Red first, each shown failing before its fix: the old `item_for` gave all eight named cases (the
+check's seven and Hebbariyeh) their item and withheld Kourion's repaired one; the fetch stage read a
+record naming `cewiki`, `lldwiki`, `zh_min_nanwiki` or `cowiki`, the plan offered them and Swedish for
+an Irish site; the old `SITELINK_PILOT.md`'s threshold block differed from `SEARCH_PILOT.md`'s.
+`test_sitelink_plan.py` 60 tests, 10 of them new (64 with parameters; the named owner cases are read
+on the classifier's own tracked output), `test_phase3_fetch_sitelinks.py` 4 more parameters. `mutation_sweep.SITELINK_MUTATIONS` 158 `"sitelink: "`
+entries, registered once, labels unique (1,012 in all): 18 new, the moved anchors re-pointed. The
+sweep's own `main`, with the main venv's interpreter, over every `"sitelink: "` entry and every older
+one anchored in a file this session changed (`fetch_stage.py`, `sitelink_plan.py`,
+`score_search_pilot.py`, `SITELINK_PILOT.md`): **208/208 caught**, the tree byte-identical to the
+sweep's start for 6 files (`logs/sitelink_scratch/sweep_after_check.txt`).
+Gate suite from the worktree: 4,295 passed, 108 skipped (the snapshot and Natural Earth caches are not
+in a worktree), 57 deselected; ruff, `ruff format --check` on the touched files, lint-imports and
+vulture clean.
+
+### Open
+
+* The pilot's run (39 finder calls, their reviews, the score) is the orchestrator's, by
+  `SITELINK_PILOT.md`'s commands; the lane runs only after the pilot passes, on a plan rebuilt then.
+* The page-level bot pages of finding 2 (18 pages of the first plan, in editor-written wikis).
