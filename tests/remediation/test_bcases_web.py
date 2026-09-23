@@ -165,6 +165,8 @@ WIKI_URLS = (
     "https://wiki2.org/en/El_Tintal",
     "https://www.wikizero.com/en/El_Tintal",
     "https://justapedia.org/wiki/El_Tintal",
+    "https://military-history.fandom.com/wiki/Scordisci",
+    "https://wikitia.com/wiki/El_Tintal",
 )
 
 
@@ -194,11 +196,45 @@ def test_the_named_mirrors_are_in_the_list_and_matched_by_domain_only() -> None:
         "wiki2.org",
         "wikizero.com",
         "justapedia.org",
+        "fandom.com",
+        "wikitia.com",
     }
     assert named <= W.WIKI_HOSTS, named - W.WIKI_HOSTS
     # a host that merely contains a wiki's name is not the wiki
     for url in ("https://www.notwikipedia.org/x", "https://wikipedia.org.example/x"):
         row, _ = _verify(Page(), url=url)
+        assert row["accepted"], (url, row["reason"])
+
+
+COPY_URLS = (
+    "https://en-m-wikipedia-org.translate.goog/wiki/Karnak?_x_tr_sl=en&_x_tr_tl=de",
+    "https://www-mayaruins-example.translate.goog/el-tintal?_x_tr_sl=es&_x_tr_tl=en",
+    "https://web.archive.org/web/2020/https://en.wikipedia.org/wiki/Karnak",
+    "https://web.archive.org/web/2020/https://www.mayaruins.example/el-tintal",
+    "https://archive.ph/abcd",
+    "https://archive.is/abcd",
+    "https://archive.today/abcd",
+    "https://archive.li/abcd",
+    "https://webcache.googleusercontent.com/search?q=cache:www.mayaruins.example/el-tintal",
+)
+
+
+def test_a_proxy_or_an_archive_copy_is_never_a_web_witness() -> None:
+    """A translation proxy or a web archive serves another publisher's page - a Wikipedia article
+    (an older revision, another language) as readily as any other: its host is not the page's
+    publisher, so the witness would be counted as a publisher of its own ("web:translate.goog",
+    "web:archive.org") beside the item and the article it copies. Refused before any request, and
+    where a redirect ends."""
+    for url in COPY_URLS:
+        row, net = _verify(url=url)
+        assert _code(row) == "copy-host", (url, row["reason"])
+        assert net.calls == [], url
+    final = "https://web.archive.org/web/2020/https://www.mayaruins.example/el-tintal"
+    row, _ = _verify(Page(final=final))
+    assert _code(row) == "copy-host" and f"{URL} redirected to {final}" in row["reason"]
+    # a host that merely contains an archive's name is not the archive
+    for url in ("https://www.notarchive.org/el-tintal", "https://translate.goog.example/x"):
+        row, _ = _verify(url=url)
         assert row["accepted"], (url, row["reason"])
 
 
@@ -1000,6 +1036,9 @@ def test_an_accepted_row_verify_candidate_did_not_write_is_refused() -> None:
     wiki = _accepted("https://en.wikipedia.org/wiki/El_Tintal", WEB_POINT)
     with pytest.raises(inputs.InputError, match="witness is on en.wikipedia.org"):
         W.web_witnesses([wiki])
+    archived = _accepted("https://web.archive.org/web/2020/https://maya.example/a", WEB_POINT)
+    with pytest.raises(inputs.InputError, match="witness is on web.archive.org"):
+        W.web_witnesses([archived])
     moved = {**row, "final_url": "https://other.example/"}
     with pytest.raises(inputs.InputError, match="is not the page read"):
         W.web_witnesses([moved])

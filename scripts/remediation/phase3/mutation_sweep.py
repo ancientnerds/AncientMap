@@ -7701,6 +7701,7 @@ _WW_WAVE1_SITE = "test_wave_two_refuses_a_site_of_wave_one"
 _WW_WHOLE = "test_the_quote_must_stand_whole_in_the_page"
 _WW_CHAIN = "test_two_witnesses_that_are_each_one_with_a_third_do_not_pair"
 _WW_CITES = "test_a_p625_that_cites_the_web_pages_publisher_is_one_with_it"
+_WW_COPY = "test_a_proxy_or_an_archive_copy_is_never_a_web_witness"
 WEB_WITNESS_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "bcases web: a Wikipedia or mirror page is asked for its coordinates",
@@ -8456,6 +8457,46 @@ WEB_WITNESS_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         "    if False:  # mutant\n",
         _WW_TEST,
         "test_the_wave_belongs_to_the_plan_commands_alone",
+    ),
+    (
+        "bcases web: a Wikipedia copy on a wiki farm is a witness",
+        _WW,
+        '        "fandom.com",\n',
+        "",
+        _WW_TEST,
+        _WW_HOST,
+    ),
+    (
+        "bcases web: a proxy or an archive copy is a witness",
+        _WW,
+        "    if copy is not None:\n        raise Rejected(\n",
+        "    if False:  # mutant\n        raise Rejected(\n",
+        _WW_TEST,
+        _WW_COPY,
+    ),
+    (
+        "bcases web: Google Translate's proxy drops off the copy list",
+        _WW,
+        '        "translate.goog",\n',
+        "",
+        _WW_TEST,
+        _WW_COPY,
+    ),
+    (
+        "bcases web: the copy list is matched by substring",
+        _WW,
+        "    copy = listed_domain_of(host, COPY_HOSTS)\n",
+        "    copy = next((d for d in COPY_HOSTS if d in host), None)  # mutant\n",
+        _WW_TEST,
+        _WW_COPY,
+    ),
+    (
+        "bcases web: a forged witness on an archive is weighed",
+        _WW,
+        "        if listed_domain_of(host, WIKI_HOSTS | COPY_HOSTS) is not None:\n",
+        "        if listed_domain_of(host, WIKI_HOSTS) is not None:  # mutant\n",
+        _WW_TEST,
+        _WW_FORGED,
     ),
 ]
 MUTATIONS += WEB_WITNESS_MUTATIONS

@@ -10,14 +10,17 @@ page itself or rejects it, and only a proven one becomes a witness.
 ## `web-verify` (network): one row per candidate in `coords3/WEB_WITNESSES.jsonl`
 
 A candidate is accepted only if every check holds; the first that fails is its reason, and the reason
-starts with the check's code (`wiki-host: ...`), so the counts group by it. The three host checks
-(`wiki-host`, `refused-host`, `not-public`) run on the URL given and again on the URL a redirect
-ends at:
+starts with the check's code (`wiki-host: ...`), so the counts group by it. The four host checks
+(`wiki-host`, `copy-host`, `refused-host`, `not-public`) run on the URL given and again on the URL a
+redirect ends at:
 
 * `malformed` - the candidate is not a URL, two finite numbers and a non-empty `coord_text`;
 * `wiki-host` - the page is on Wikipedia, Wikimedia, Wikidata or a mirror of them (`WIKI_HOSTS`,
   matched by host and parent domain): their coordinates are the two witnesses already asked, and a
   mirror is a copy, not a third statement;
+* `copy-host` - the page is served by a proxy or a web archive (`COPY_HOSTS`: Google Translate's
+  `translate.goog`, the Wayback Machine, archive.today...): a copy of another publisher's page, a
+  Wikipedia article as readily as any, that would be counted under the proxy's name;
 * `refused-host` - the project's own site (it publishes the stored point: circular) or a host on
   `pipeline/lyra/blocked_domains.txt` - the search lane's own policy, `search_evidence.excluded_because`;
 * `not-public` - a loopback, private or link-local address is never asked (`is_public_http_url`, the
@@ -148,6 +151,35 @@ WIKI_HOSTS = frozenset(
         "trek.zone",
         "wiki.kidzsearch.com",
         "wiki.alquds.edu",
+        # wiki farms whose history wikis copy Wikipedia's articles, and a republisher of them
+        "fandom.com",
+        "wikia.com",
+        "wikia.org",
+        "wikitia.com",
+    }
+)
+
+#: Proxies and web archives: they serve a copy of another publisher's page - a Wikipedia article as
+#: readily as any other - under their own host, so the witness would be counted as a publisher of
+#: its own ("web:translate.goog", "web:archive.org") beside the item and the article it may copy. The
+#: original page is the one to read. Matched by host and parent domain, like `WIKI_HOSTS`.
+COPY_HOSTS = frozenset(
+    {
+        "translate.goog",
+        "archive.org",
+        "archive.ph",
+        "archive.is",
+        "archive.today",
+        "archive.li",
+        "archive.vn",
+        "archive.md",
+        "archive.fo",
+        "archive-it.org",
+        "arquivo.pt",
+        "ghostarchive.org",
+        "webcitation.org",
+        "cachedview.nl",
+        "googleusercontent.com",
     }
 )
 
@@ -530,6 +562,12 @@ def _refuse_host(url: str, *, asked: str | None = None) -> None:
         raise Rejected(
             "wiki-host", f"{how}{host} is {wiki}: Wikipedia, Wikidata or a mirror of them"
         )
+    copy = listed_domain_of(host, COPY_HOSTS)
+    if copy is not None:
+        raise Rejected(
+            "copy-host",
+            f"{how}{host} is {copy}: a proxy or an archive serves another publisher's page",
+        )
     refused = excluded_because(url)
     if refused is not None:
         raise Rejected("refused-host", f"{how}{refused}")
@@ -737,7 +775,7 @@ def web_witnesses(
         host = _host(str(w["url"]))
         if w["kind"] != "web" or w["url"] != row["final_url"] or host is None:
             raise inputs.InputError(f"{WEB_WITNESSES}: {sid}'s witness is not the page read: {w}")
-        if listed_domain_of(host, WIKI_HOSTS) is not None:
+        if listed_domain_of(host, WIKI_HOSTS | COPY_HOSTS) is not None:
             raise inputs.InputError(f"{WEB_WITNESSES}: {sid}'s witness is on {host}")
         if w["step"] != C.grid_of(w["lat"], w["lon"]):
             raise inputs.InputError(f"{WEB_WITNESSES}: {sid}'s step is not its numbers' grid")
