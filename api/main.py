@@ -105,6 +105,7 @@ async def lifespan(app: FastAPI):
         import json as _json
 
         from sqlalchemy import text as _text
+        from sqlalchemy.engine import Connection
 
         from api.boot_schema import run_api_boot_schema, run_boot_step
 
@@ -327,11 +328,12 @@ async def lifespan(app: FastAPI):
         run_api_boot_schema(engine)
         for _sid, _dc in _citation_seed.items():
             _cite_params = {"id": _sid, "dc": _json.dumps(_dc)}
-            run_boot_step(
-                engine,
-                lambda conn, params=_cite_params: conn.execute(_cite_sql, params),
-                label="Citation seed",
-            )
+
+            # A def, not a lambda: mypy cannot type a lambda's bound default (CI mypy api/).
+            def _seed_citation(conn: Connection, params: dict[str, str] = _cite_params) -> None:
+                conn.execute(_cite_sql, params)
+
+            run_boot_step(engine, _seed_citation, label="Citation seed")
         logger.info(
             "[STARTUP] Database tables verified (includes discord_users, credit_grants, token_usage_logs)"
         )
