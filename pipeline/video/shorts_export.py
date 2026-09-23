@@ -1,8 +1,9 @@
 """Export one site's short-video inputs to `video-assets/shorts/<slug>/site.json`.
 
 Reads the card text and rarity from `card_stats`, the site row from
-`unified_sites`, and every non-excluded Commons image with its attribution from
-`wiki_images`. Raw SQL on purpose: `card_stats` is an api-side model and the
+`unified_sites` (with the card hash its `_description_provenance` pins, for the
+audit's S13 check), and every non-excluded Commons image with its attribution
+from `wiki_images`. Raw SQL on purpose: `card_stats` is an api-side model and the
 import-linter forbids pipeline -> api imports.
 """
 
@@ -184,7 +185,9 @@ _SITE_SQL = text(
            s.description, s.scope_status, s.scope_reason,
            c.card_description, c.rarity_tier, c.rarity_score, c.total_power,
            c.antiquity, c.fortification, c.cultural_influence, c.mystery, c.legacy,
-           c.civilization
+           c.civilization,
+           s.raw_data -> '_description_provenance' -> 'card' ->> 'text_sha256'
+               AS card_text_sha256
     FROM unified_sites s
     JOIN card_stats c ON c.site_id = s.id
     WHERE s.id = CAST(:site_id AS uuid)
@@ -231,6 +234,9 @@ def assemble_site(row: Mapping, images: list[Mapping]) -> dict:
         "period_name": row["period_name"],
         "page_path": site_path(row["country"] or "", row["name"], row["id"]),
         "card_text": (row["card_description"] or "").strip(),
+        # The sha256 the card's provenance pins (Phase 5); None when the card
+        # has none. The audit's S13 check compares it with the narrated text.
+        "card_text_sha256": row["card_text_sha256"],
         "description": (row["description"] or "").strip(),
         "rarity_tier": tier,
         "rarity_name": RARITY_NAMES[tier],

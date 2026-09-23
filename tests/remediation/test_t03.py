@@ -71,23 +71,23 @@ class TestExtraction:
         ],
     )
     def test_single_era_markers(self, text, intervals):
-        got = [(m.lo, m.hi) for m in t03._claims(text)]
+        got = [(m.lo, m.hi) for m in t03.claims(text)]
         assert got == intervals
 
     def test_range_across_the_era_boundary_is_one_span(self):
         """ "500 BC - 550 AD" (El Tintal) is one site phase, not two contradictions."""
-        got = t03._claims("500 BC – 550 AD: El Tintal is a Maya site")
+        got = t03.claims("500 BC – 550 AD: El Tintal is a Maya site")
         assert [(m.lo, m.hi) for m in got] == [(-500, 550)]
 
     def test_range_with_the_marker_only_on_the_last_endpoint(self):
         """ "4300-3900 BC" - the bare 4300 must count backwards, not as 4300 AD."""
-        got = t03._claims("Neolithic deposits dated 4300-3900 BC yielded decorated bowls")
+        got = t03.claims("Neolithic deposits dated 4300-3900 BC yielded decorated bowls")
         assert [(m.lo, m.hi) for m in got] == [(-4300, -3900)]
 
     def test_range_written_with_between_and_to(self):
-        got = t03._claims("occupied from approximately 5000 BC to 2500 BC")
+        got = t03.claims("occupied from approximately 5000 BC to 2500 BC")
         assert [(m.lo, m.hi) for m in got] == [(-5000, -2500)]
-        got = t03._claims("occupied 2500 to 2000 BC")
+        got = t03.claims("occupied 2500 to 2000 BC")
         assert [(m.lo, m.hi) for m in got] == [(-2500, -2000)]
 
     @pytest.mark.parametrize(
@@ -101,22 +101,22 @@ class TestExtraction:
     )
     def test_span_connectors_only_join_a_bare_endpoint(self, text, expected):
         """A filler word between a bare year and an ancient one means two statements."""
-        assert [(m.raw, m.lo) for m in t03._claims(text)] == expected
+        assert [(m.raw, m.lo) for m in t03.claims(text)] == expected
 
     def test_citation_marker_is_not_a_span_endpoint(self):
         """A footnote number next to a year is not the other end of a range (§7.2)."""
-        got = t03._claims("occupied from about 800 BC to AD 900 [1]. Kʼaxob is a Maya site")
+        got = t03.claims("occupied from about 800 BC to AD 900 [1]. Kʼaxob is a Maya site")
         assert [(m.lo, m.hi) for m in got] == [(-800, 900)]
 
     def test_relative_age_and_before_present(self):
-        got = t03._claims("used 1.2 million years ago")
+        got = t03.claims("used 1.2 million years ago")
         assert [(m.lo, m.hi) for m in got] == [(1950 - 1_200_000, 1950 - 1_200_000)]
-        got = t03._claims("dated to 10,400 BP")
+        got = t03.claims("dated to 10,400 BP")
         assert [(m.lo, m.hi) for m in got] == [(1950 - 10_400, 1950 - 10_400)]
 
     def test_relative_age_governs_a_leading_endpoint(self):
         """ "14,800 and 10,500 years ago" (Winnemucca) - both endpoints, one age phrase."""
-        got = t03._claims("dated to between 14,800 and 10,500 years ago")
+        got = t03.claims("dated to between 14,800 and 10,500 years ago")
         assert [(m.lo, m.hi) for m in got] == [(1950 - 14_800, 1950 - 10_500)]
 
     @pytest.mark.parametrize(
@@ -131,14 +131,14 @@ class TestExtraction:
     )
     def test_modern_dates_without_an_era_are_not_claims(self, text):
         """The main trap: a bare year is a survey, a price or a count - never a period."""
-        assert t03._claims(text) == []
+        assert t03.claims(text) == []
 
     def test_modern_era_claims_are_dropped(self):
-        assert t03._claims("The site was listed in AD 1985 and again in 1998 AD") == []
+        assert t03.claims("The site was listed in AD 1985 and again in 1998 AD") == []
 
     def test_era_words_without_a_number_are_not_claims(self):
         """Eileithyia Cave's real dating reads like this; the check stays numeric."""
-        assert t03._claims("used from the Neolithic to the Roman era") == []
+        assert t03.claims("used from the Neolithic to the Roman era") == []
 
 
 # ------------------------------------------------------------------ what is a finding

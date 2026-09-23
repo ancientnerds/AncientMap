@@ -136,8 +136,12 @@ def _citations(site: dict[str, Any]) -> Any:
     return raw.get("description_citations")
 
 
-def _marker_sequence(text: str) -> list[int]:
-    """Every cited number, in reading order, grouped and range forms expanded first."""
+def marker_sequence(text: str) -> list[int]:
+    """Every cited number, in reading order, grouped and range forms expanded first.
+
+    Public since 2026-09-23: the Phase-4 verifier (`phase4/verify4.py`, V8) and its acceptance
+    read markers with this function, so the census and the writer's checks cannot disagree.
+    """
     expanded, _ = _grouped_expander()(text)
     return [int(n) for n in _MARKER_RE.findall(expanded)]
 
@@ -149,8 +153,10 @@ def _distinct_in_order(numbers: list[int]) -> list[int]:
     return list(seen)
 
 
-def _entries(citations: Any, site_id: str) -> list[dict[str, Any]]:
+def entries(citations: Any, site_id: str) -> list[dict[str, Any]]:
     """The evidence array, validated. Absent or null means "no array" - a normal state.
+
+    Public since 2026-09-23, like `marker_sequence`, for the Phase-4 verifier (V8).
 
     A value that is not a list of objects carrying an integer `n` is a hole rather than a
     clean site: the marker relation cannot be evaluated, so this raises and the run records
@@ -164,13 +170,13 @@ def _entries(citations: Any, site_id: str) -> list[dict[str, Any]]:
             f"T08: {site_id}: raw_data.description_citations is {type(citations).__name__}, "
             "not a list - cannot evaluate the marker relation"
         )
-    entries: list[dict[str, Any]] = []
+    checked: list[dict[str, Any]] = []
     for entry in citations:
         n = entry.get("n") if isinstance(entry, dict) else None
         if isinstance(n, bool) or not isinstance(n, int):
             raise ValueError(f"T08: {site_id}: evidence entry without an integer n: {entry!r}")
-        entries.append(entry)
-    return entries
+        checked.append(entry)
+    return checked
 
 
 def _excerpt(text: str, number: int, span: int = 48) -> str:
@@ -194,7 +200,7 @@ def applies_to(site: dict[str, Any], ctx: Context) -> bool:
     look at on this row", so a malformed array still reaches `run` and fails loudly there
     instead of being filed as not-applicable.
     """
-    return bool(_citations(site)) or bool(_marker_sequence(_description(site)))
+    return bool(_citations(site)) or bool(marker_sequence(_description(site)))
 
 
 def run(ctx: Context) -> list[Finding]:
@@ -209,10 +215,10 @@ def run(ctx: Context) -> list[Finding]:
 
         sid = str(site["id"])
         text = _description(site)
-        entries = _entries(_citations(site), sid)
-        sequence = _marker_sequence(text)
+        array = entries(_citations(site), sid)
+        sequence = marker_sequence(text)
         cited = set(sequence)
-        declared = [e["n"] for e in entries]
+        declared = [e["n"] for e in array]
 
         if not cited:
             # Array without markers. Modes 2-4 are all moot here (there is no numbering to

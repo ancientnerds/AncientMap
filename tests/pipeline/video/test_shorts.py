@@ -1,12 +1,21 @@
 """Pure-function tests for the site-shorts pipeline (no network, no ffmpeg, no VLM)."""
 
+import hashlib
 from pathlib import Path
 
 import pytest
+from PIL import ImageFont
 
+from pipeline.video import shorts_audit
 from pipeline.video.__main__ import music_start_default, sfx
 from pipeline.video.media import ff_path
-from pipeline.video.shorts_audit import evaluate, longest_frozen_run, passed
+from pipeline.video.shorts_audit import (
+    card_sha256,
+    evaluate,
+    longest_frozen_run,
+    passed,
+    widest_word_px,
+)
 from pipeline.video.shorts_brand import FONT_HEADING, FONT_SOURCES, FONTS, missing_glyphs
 from pipeline.video.shorts_captions import Word, align_words, display_text, spoken_at, srt_text
 from pipeline.video.shorts_export import (
@@ -483,6 +492,7 @@ class TestExportShape:
             "mystery": 4,
             "legacy": 5,
             "civilization": "Inca",
+            "card_text_sha256": None,
         }
         imgs = [
             {
@@ -525,6 +535,35 @@ def test_local_image_name_is_filesystem_safe_and_keeps_original_extension():
     )
 
 
+#: A card and the hash its `_description_provenance` pins (S13), computed here with hashlib
+#: rather than with the module's own helper, so a wrong helper cannot move the expectation.
+CARD = "Machu Picchu is a 15th-century Inca citadel at 2,430 metres."
+CARD_SHA = hashlib.sha256(CARD.encode("utf-8")).hexdigest()
+
+#: One `_SITE_SQL` row, as the export reads it; a card without card provenance.
+_EXPORT_ROW = {
+    "id": "12345678-aaaa-bbbb-cccc-1234567890ab",
+    "name": "X",
+    "country": "Peru",
+    "lat": 0.0,
+    "lon": 0.0,
+    "site_type": "Tomb",
+    "period_name": None,
+    "description": "",
+    "card_description": "c",
+    "rarity_tier": 3,
+    "rarity_score": 1,
+    "total_power": 1,
+    "antiquity": 0,
+    "fortification": 0,
+    "cultural_influence": 0,
+    "mystery": 0,
+    "legacy": 0,
+    "civilization": None,
+    "card_text_sha256": None,
+}
+
+
 def _measurements(**over):
     m = {
         "width": 1080,
@@ -559,6 +598,8 @@ def _measurements(**over):
         "card_words": 27,
         "caption_words": 27,
         "captions_end": 15.1,
+        "card_sha256": CARD_SHA,
+        "card_provenance_sha256": CARD_SHA,
     }
     m.update(over)
     return m
@@ -633,6 +674,73 @@ class TestAudit:
         assert not passed(evaluate(_measurements(loop_seam=5.0)))
 
 
+class TestCardTrace:
+    """S13: the narrated card is the card its `_description_provenance` pins (Phase 5)."""
+
+    def test_the_card_hash_is_the_provenance_form(self):
+        assert card_sha256(CARD) == CARD_SHA
+        assert card_sha256("Ávila") == hashlib.sha256("Ávila".encode()).hexdigest()
+
+    def test_a_card_its_provenance_pins_passes(self):
+        checks = {c.name: c.ok for c in evaluate(_measurements())}
+        assert checks["card_traced"] is True
+
+    def test_a_card_that_is_not_the_pinned_one_fails(self):
+        other = card_sha256(CARD + " ")  # one byte off: the file was edited after the write
+        checks = evaluate(_measurements(card_sha256=other))
+        assert not passed(checks)
+        assert {c.name for c in checks if not c.ok} == {"card_traced"}
+
+    def test_a_card_without_card_provenance_is_not_shorts_eligible(self):
+        """A held card, or one written before Phase 5, carries no pinned hash."""
+        checks = evaluate(_measurements(card_provenance_sha256=None))
+        failed = [c for c in checks if not c.ok]
+        assert [c.name for c in failed] == ["card_traced"]
+        assert "carries no card" in failed[0].value
+
+    def test_the_export_carries_the_pinned_hash_into_site_json(self):
+        row = dict(_EXPORT_ROW, card_text_sha256=CARD_SHA)
+        assert assemble_site(row, [])["card_text_sha256"] == CARD_SHA
+        assert assemble_site(dict(_EXPORT_ROW), [])["card_text_sha256"] is None
+
+    def test_the_export_reads_the_hash_from_the_card_provenance(self):
+        from pipeline.video.shorts_export import _SITE_SQL
+
+        sql = " ".join(str(_SITE_SQL).split())
+        assert (
+            "s.raw_data -> '_description_provenance' -> 'card' ->> 'text_sha256' "
+            "AS card_text_sha256" in sql
+        )
+
+
+class TestWidestWord:
+    """S3 and the Phase-4 card check (V10) measure a caption word with one function."""
+
+    FONT = ImageFont.load_default(size=shorts_audit.CAPTION_SIZE)
+
+    def test_the_widest_word_is_measured_as_shown_with_its_outline(self):
+        word, px = widest_word_px(["An", "Intihuatana,", "stone"], self.FONT)
+        assert word == "Intihuatana"  # the trailing comma is not drawn
+        expected = int(self.FONT.getlength("Intihuatana")) + 2 * shorts_audit.CAPTION_BORDER
+        assert px == expected
+
+    def test_a_punctuation_only_token_has_no_width(self):
+        assert widest_word_px(["-", "—"], self.FONT) == ("", 0)
+
+    def test_the_caption_audit_measures_through_the_public_helper(self, monkeypatch):
+        seen = []
+
+        def spy(words, font):
+            seen.append((list(words), font))
+            return "x", 7
+
+        monkeypatch.setattr(shorts_audit, "widest_word_px", spy)
+        monkeypatch.setattr(shorts_audit, "caption_font", lambda path: self.FONT)
+        got = shorts_audit._widest_caption([{"text": "Inca"}, {"text": "citadel."}], Path("f"))
+        assert got == ("x", 7)
+        assert seen == [(["Inca", "citadel."], self.FONT)]
+
+
 class TestSpokenName:
     def test_site_and_country(self):
         assert spoken_name("Machu Picchu", "Peru") == "Machu Picchu, Peru."
@@ -657,27 +765,7 @@ class TestFlagAndMusic:
         assert country_code_for(None) is None
 
     def test_site_json_carries_the_country_code(self):
-        row = {
-            "id": "12345678-aaaa-bbbb-cccc-1234567890ab",
-            "name": "X",
-            "country": "Peru",
-            "lat": 0.0,
-            "lon": 0.0,
-            "site_type": "Tomb",
-            "period_name": None,
-            "description": "",
-            "card_description": "c",
-            "rarity_tier": 3,
-            "rarity_score": 1,
-            "total_power": 1,
-            "antiquity": 0,
-            "fortification": 0,
-            "cultural_influence": 0,
-            "mystery": 0,
-            "legacy": 0,
-            "civilization": None,
-        }
-        assert assemble_site(row, [])["country_code"] == "PE"
+        assert assemble_site(dict(_EXPORT_ROW), [])["country_code"] == "PE"
 
     def test_mix_graph_with_music_loops_fades_and_stays_silent_at_the_loop_point(self):
         g = mix_graph(16.7, 19.5, music=True)
