@@ -7535,6 +7535,7 @@ _WW_LABEL = "test_a_web_witness_is_named_by_its_host_and_one_host_is_one_witness
 _WW_WAVE2 = "test_wave_two_renders_under_its_own_stamp_and_directory"
 _WW_WAVE1_SITE = "test_wave_two_refuses_a_site_of_wave_one"
 _WW_WHOLE = "test_the_quote_must_stand_whole_in_the_page"
+_WW_CHAIN = "test_two_witnesses_that_are_each_one_with_a_third_do_not_pair"
 WEB_WITNESS_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "bcases web: a Wikipedia or mirror page is asked for its coordinates",
@@ -8067,6 +8068,30 @@ WEB_WITNESS_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         "    shared = False  # mutant\n",
         _WW_TEST,
         "test_the_subdomains_of_one_publisher_are_one_witness",
+    ),
+    (
+        "bcases web: the two ends of a chain of copies pair",
+        _CL,
+        "        if groups[i] != groups[j] and _m(ordered[i], ordered[j]) <= tol\n",
+        "        if independent(ordered[i], ordered[j]) and _m(ordered[i], ordered[j]) <= tol  # mutant\n",
+        _WW_TEST,
+        _WW_CHAIN,
+    ),
+    (
+        "bcases web: the copy groups do not join two witnesses that are one",
+        _CL,
+        "        if not independent(ws[i], ws[j]):\n            low, high",
+        "        if False:  # mutant\n            low, high",
+        _WW_TEST,
+        _WW_CHAIN,
+    ),
+    (
+        "bcases web: the reason calls a chain of copies a disagreement",
+        _CL,
+        "    if via:\n",
+        "    if False:  # mutant\n",
+        _WW_TEST,
+        _WW_CHAIN,
     ),
     (
         "bcases web: two agreeing pairs on two points move the site",

@@ -743,6 +743,27 @@ def test_a_web_page_that_copies_the_item_rounded_is_not_a_second_witness() -> No
     assert verdict["reason"] == ("the two witnesses are one: web is wikidata rounded to 4 decimals")
 
 
+def test_two_witnesses_that_are_each_one_with_a_third_do_not_pair() -> None:
+    """Two web pages 20 m either side of the item's point are each the item's point (one within an
+    arcsecond of it), 40 m apart from each other - not one pairwise, but both one with the item:
+    pairing them would count one statement three times. "Are one" is followed through the chain."""
+    north = (round(WD_POINT[0] + 0.00018, 6), WD_POINT[1])
+    south = (round(WD_POINT[0] - 0.00018, 6), WD_POINT[1])
+    wd, a, b = _wd(), _web("maya.example", north), _web("heritage.example", south)
+    assert not C.independent(wd, a) and not C.independent(wd, b) and C.independent(a, b)
+    assert C.copy_groups([wd, a, b]) == [0, 0, 0]
+    verdict = C.weigh(STORED, [wd, a, b])
+    assert verdict["verdict"] == "review", verdict["reason"]
+    assert (
+        "web:maya.example and web:heritage.example are one: both are one with wikidata"
+        in (verdict["reason"])
+    )
+    # a witness outside the chain still pairs with it
+    en = _en((WD_POINT[0] + 0.004, WD_POINT[1]))  # 445 m away: independent of all three
+    verdict = C.weigh(STORED, [wd, a, b, en])
+    assert verdict["verdict"] == "move" and verdict["agreeing"] == ["wikidata", "enwiki"]
+
+
 def test_two_agreeing_pairs_on_two_points_are_read_not_moved() -> None:
     far = (WD_POINT[0] + 0.03, WD_POINT[1])  # 3.3 km north
     ws = [_wd(), _web("maya.example"), _en(far), _web("heritage.example", (far[0] + 0.004, far[1]))]

@@ -59,7 +59,9 @@ whose coordinates were read from the live page. A web witness is named by its pu
 registered domain (`Witness.label`, "web:unesco.org"): two pages of one publisher count once, two of
 different publishers may pair under the same independence test, a web witness comes last in
 `PRIORITY`, and when two agreeing pairs name points further apart than the tolerance the case is
-read, not moved.
+read, not moved. With three or more witnesses "are one" is followed through chains (`copy_groups`):
+two pages that are each the item's point are one with each other too, so they never pair. With two
+witnesses the chain is the pair itself, and the first wave's verdicts are unchanged.
 
 ## B2 countries (the 117 `T02` findings)
 
@@ -674,6 +676,24 @@ def independent(a: Witness, b: Witness) -> bool:
     return _m(a, b) > same_point_m(a, b)
 
 
+def copy_groups(ws: Sequence[Witness]) -> list[int]:
+    """The group of each witness: two that are one (not `independent`) share a group, and so do two
+    joined through a chain of such pairs - two pages that are each the item's point are one with each
+    other as well, even where neither is the other's rounding. The group is the lowest index in it."""
+    group = list(range(len(ws)))
+
+    def root(i: int) -> int:
+        while group[i] != i:
+            i = group[i]
+        return i
+
+    for i, j in itertools.combinations(range(len(ws)), 2):
+        if not independent(ws[i], ws[j]):
+            low, high = sorted((root(i), root(j)))
+            group[high] = low
+    return [root(i) for i in range(len(ws))]
+
+
 def tolerance_m(ws: Sequence[Witness]) -> float:
     return max([TOLERANCE_M, *(w.precision_m for w in ws)])
 
@@ -682,8 +702,9 @@ def tolerance_m(ws: Sequence[Witness]) -> float:
 PRIORITY = {"wikidata": 0, "enwiki": 1, "web": 2}
 
 
-def _pair_state(a: Witness, b: Witness, tol: float) -> str:
-    """Why two witnesses are no agreeing pair: "are one: <how>" or "disagree: <how far>"."""
+def _pair_state(a: Witness, b: Witness, tol: float, via: Sequence[Witness] = ()) -> str:
+    """Why two witnesses are no agreeing pair: "are one: <how>" or "disagree: <how far>". `via` are
+    the other witnesses of their copy group when they share one (`copy_groups`)."""
     if a.label == b.label:
         return f"are one: both are {a.label}"
     if a.derived_from == b.kind or b.derived_from == a.kind:
@@ -695,6 +716,8 @@ def _pair_state(a: Witness, b: Witness, tol: float) -> str:
         return (
             f"are one: the same point ({_m(a, b):.0f} m apart, within {same_point_m(a, b):.0f} m)"
         )
+    if via:
+        return "are one: both are one with " + " and ".join(w.label for w in via)
     return f"disagree: {_m(a, b) / 1000:.2f} km apart (tolerance {tol:.0f} m)"
 
 
@@ -707,9 +730,20 @@ def _why_no_pair(ws: Sequence[Witness], tol: float) -> str:
         return f"one witness only ({ws[0].label})"
     if len(ws) == 2:
         return f"the two witnesses {_pair_state(ws[0], ws[1], tol)}"
+    groups = copy_groups(ws)
     return f"no two of the {len(ws)} witnesses are independent and agree: " + "; ".join(
-        f"{a.label} and {b.label} {_pair_state(a, b, tol)}"
-        for a, b in itertools.combinations(ws, 2)
+        f"{ws[i].label} and {ws[j].label} "
+        + _pair_state(
+            ws[i],
+            ws[j],
+            tol,
+            [
+                w
+                for k, w in enumerate(ws)
+                if k not in (i, j) and groups[k] == groups[i] == groups[j]
+            ],
+        )
+        for i, j in itertools.combinations(range(len(ws)), 2)
     )
 
 
@@ -724,10 +758,11 @@ def weigh(stored: tuple[float, float], ws: Sequence[Witness]) -> dict[str, Any]:
     """
     tol = tolerance_m(ws)
     ordered = sorted(ws, key=lambda w: PRIORITY[w.kind])
+    groups = copy_groups(ordered)
     pairs = [
-        (a, b)
-        for a, b in itertools.combinations(ordered, 2)
-        if independent(a, b) and _m(a, b) <= tol
+        (ordered[i], ordered[j])
+        for i, j in itertools.combinations(range(len(ordered)), 2)
+        if groups[i] != groups[j] and _m(ordered[i], ordered[j]) <= tol
     ]
     near = [w for w in ordered if _m(stored, w) <= tol]
     distances = {w.label: round(_m(stored, w), 1) for w in ordered}
