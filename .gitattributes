@@ -27,3 +27,5 @@ output/remediation/qid_repair/wave4/*.sql text eol=lf
 output/remediation/bcases/coords_plan/*.sql text eol=lf
 output/remediation/bcases/coords_plan_wave2/*.sql text eol=lf
 output/remediation/bcases/coords3/*.jsonl text eol=lf
+output/remediation/opus_audit/*.jsonl text eol=lf
+output/remediation/opus_audit/*.md text eol=lf
