@@ -7705,6 +7705,7 @@ _WW_COPY = "test_a_proxy_or_an_archive_copy_is_never_a_web_witness"
 _WW_TYPE = "test_a_type_word_of_the_name_does_not_identify_it"
 _WW_STATED = "test_the_precision_a_page_states_for_its_coordinates_is_read"
 _WW_OWN_TOL = "test_a_web_pages_stated_precision_is_its_own_tolerance"
+_WW_SETTLEMENT = "test_a_modern_settlement_by_country_is_a_container_where_a_web_page_takes_part"
 WEB_WITNESS_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "bcases web: a Wikipedia or mirror page is asked for its coordinates",
@@ -8599,6 +8600,48 @@ WEB_WITNESS_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         "                    if False  # mutant\n",
         _WW_TEST,
         _WW_OWN_TOL,
+    ),
+    (
+        "bcases web: a modern settlement by country is no container where a web page takes part",
+        _CL,
+        "        qid, site, claims=claims, labels=labels, names=names, shared=shared, strict=bool(web)\n",
+        "        qid, site, claims=claims, labels=labels, names=names, shared=shared, strict=False"
+        "  # mutant\n",
+        _WW_TEST,
+        _WW_SETTLEMENT,
+    ),
+    (
+        "bcases web: the strict gate reaches the first wave's verdicts",
+        _CL,
+        "        qid, site, claims=claims, labels=labels, names=names, shared=shared, strict=bool(web)\n",
+        "        qid, site, claims=claims, labels=labels, names=names, shared=shared, strict=True"
+        "  # mutant\n",
+        _WW_TEST,
+        _WW_SETTLEMENT,
+    ),
+    (
+        "bcases web: the strict gate forgets the settlements by country",
+        _CL,
+        "        strict and SETTLEMENT_IN_COUNTRY.search(label) is not None\n",
+        "        False  # mutant\n",
+        _WW_TEST,
+        _WW_SETTLEMENT,
+    ),
+    (
+        "bcases web: a settlement in a lower-case place is a country's",
+        _CL,
+        'SETTLEMENT_IN_COUNTRY = re.compile(r"(?<![\\w-])settlement(?: formation)? in [A-Z]")\n',
+        'SETTLEMENT_IN_COUNTRY = re.compile(r"(?<![\\w-])settlement(?: formation)? in \\w")  # mutant\n',
+        _WW_TEST,
+        _WW_SETTLEMENT,
+    ),
+    (
+        "bcases web: a site class by country counts as a modern settlement",
+        _CL,
+        "    if _has_word(label, SITE_WORDS):\n        return False\n",
+        "    if False:  # mutant\n        return False\n",
+        _WW_TEST,
+        _WW_SETTLEMENT,
     ),
     (
         "bcases web: a forged witness on an archive is weighed",

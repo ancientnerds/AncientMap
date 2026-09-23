@@ -67,7 +67,9 @@ import from the Cebuano Wikipedia) is one with that witness: it is where the val
 page that states the precision of its own point (DARE: "precision 2000 m") carries it as its
 `precision_m`: a witness within twice of it is one point with it (`same_point_m`), and the stored
 point within it is where that page puts the site (`_reach`). It is not the case's tolerance: the
-item's witnesses and every pair are held to the first wave's tolerance still.
+item's witnesses and every pair are held to the first wave's tolerance still. Where a web witness
+takes part the item gate reads Wikidata's modern settlements by country ("settlement in Croatia")
+as containers too (`SETTLEMENT_IN_COUNTRY`), a class the first wave's word list missed.
 
 ## B2 countries (the 117 `T02` findings)
 
@@ -275,8 +277,24 @@ def _has_word(label: str, words: Iterable[str]) -> bool:
     return any(re.search(r"(?<![\w-])" + re.escape(w) + r"(?![\w-])", low) for w in words)
 
 
-def is_container_class(label: str) -> bool:
-    return _has_word(label, CONTAINER_WORDS) and not _has_word(label, SITE_WORDS)
+#: Wikidata's classes of a modern settlement by country - "settlement in Croatia", "urban-type
+#: settlement in Russia", "settlement formation in Bulgaria": the census unit a village is. The first
+#: wave's `CONTAINER_WORDS` missed them; its three items of that class were no write (Bribir and
+#: Sotin stored-agrees, Dalj review), and its delivered verdicts stand as decided. Where a web witness
+#: takes part - the second wave, which could move such a site - the gate reads them as containers
+#: (`is_container_class(strict=True)`, `item_gate`). A capital after "in" names a country; "the land
+#: of Israel" is no census unit.
+SETTLEMENT_IN_COUNTRY = re.compile(r"(?<![\w-])settlement(?: formation)? in [A-Z]")
+
+
+def is_container_class(label: str, *, strict: bool = False) -> bool:
+    """Whether an item of class `label` contains the site (`CONTAINER_WORDS`, not a `SITE_WORDS`
+    class); `strict` adds the modern settlements by country (`SETTLEMENT_IN_COUNTRY`)."""
+    if _has_word(label, SITE_WORDS):
+        return False
+    return _has_word(label, CONTAINER_WORDS) or (
+        strict and SETTLEMENT_IN_COUNTRY.search(label) is not None
+    )
 
 
 def is_linear_or_areal_class(label: str) -> bool:
@@ -883,13 +901,15 @@ def item_gate(
     labels: Mapping[str, Any],
     names: Mapping[str, Any],
     shared: Mapping[str, int],
+    strict: bool = False,
 ) -> tuple[str | None, list[str]]:
-    """Why the item's point cannot be the site's point (a class), or None; and the P31 labels."""
+    """Why the item's point cannot be the site's point (a class), or None; and the P31 labels.
+    `strict` where a web witness takes part (`SETTLEMENT_IN_COUNTRY`)."""
     record = claims[qid]
     p31 = [labels.get(q) or q for q in record.get("p31") or ()]
     if shared.get(qid, 0) > 1:
         return "shared-item", p31
-    if any(map(is_container_class, p31)):
+    if any(is_container_class(label, strict=strict) for label in p31):
         return "container-item", p31
     if any(map(is_linear_or_areal_class, p31)):
         return "linear-or-areal-item", p31
@@ -1004,7 +1024,9 @@ def classify_coordinate(
             }
         verdict["rule"] = "museum-find-spot"
         return _finish(record, verdict)
-    gate, p31 = item_gate(qid, site, claims=claims, labels=labels, names=names, shared=shared)
+    gate, p31 = item_gate(
+        qid, site, claims=claims, labels=labels, names=names, shared=shared, strict=bool(web)
+    )
     record["p31"] = p31
     if gate is not None:
         return {**record, "verdict": "not-comparable", "class": gate, "reason": _GATE_REASON[gate]}

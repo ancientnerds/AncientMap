@@ -1049,7 +1049,8 @@ def _claim(point: tuple[float, float], **kw: Any) -> dict[str, Any]:
     }
 
 
-LABELS = {"Q839954": "archaeological site"}
+SETTLEMENT = "Q4845841"
+LABELS = {"Q839954": "archaeological site", SETTLEMENT: "settlement in Croatia"}
 NAMES = {"Q1": {"labels": {"en": NAME}}}
 
 
@@ -1108,6 +1109,37 @@ def test_a_move_into_another_country_is_held_for_review() -> None:
     assert row["verdict"] == "review" and "new" not in row
     assert "lies in ['Mexico'], not in the stored country 'Guatemala'" in row["reason"]
     assert (row["blocked_move"]["lat"], row["blocked_move"]["lon"]) == WD_POINT
+
+
+def test_a_modern_settlement_by_country_is_a_container_where_a_web_page_takes_part() -> None:
+    """Dalj, measured: its item Q912341 is the modern village (P31 "settlement in Croatia") and its
+    web witness GeoNames' populated place - both locate the village, not the late La Tene site the
+    record describes. `CONTAINER_WORDS` lists "village" and "human settlement", not this class. The
+    first wave's delivered verdicts stand as decided (its three items of the class were no write);
+    where a web witness takes part - the wave that could move such a site - the gate reads the class
+    as a container."""
+    assert not C.is_container_class("settlement in Croatia")
+    for modern in (
+        "settlement in Croatia",
+        "urban-type settlement in Russia",
+        "settlement formation in Bulgaria",
+    ):
+        assert C.is_container_class(modern, strict=True), modern
+    for site_class in (
+        "Jewish settlement in the land of Israel",
+        "Roman settlement in Britain",
+        "grave and settlement area",
+        "Neolithic settlement",
+    ):
+        assert not C.is_container_class(site_class, strict=True), site_class
+    claims = {"Q1": {**_claim(WD_POINT), "p31": [SETTLEMENT]}}
+    row = _reweigh(claims=claims)
+    assert (row["verdict"], row["reason"]) == ("review", "one witness only (wikidata)")
+    row = _reweigh([_web("geonames.org")], claims=claims)
+    assert (row["verdict"], row["class"]) == ("not-comparable", "container-item"), row["reason"]
+    assert row["p31"] == ["settlement in Croatia"] and row["first_wave_reason"] == (
+        "one witness only (wikidata)"
+    )
 
 
 def test_a_first_wave_site_is_never_reweighed() -> None:
