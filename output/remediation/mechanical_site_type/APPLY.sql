@@ -7,6 +7,12 @@
 \set ON_ERROR_STOP on
 BEGIN;
 
+-- The server bounds this transaction itself: a lock wait or a runaway statement raises
+-- here, psql stops the script (exit 3) and nothing is kept. A client that gives up does
+-- not stop the server - psql has the whole script on its stdin.
+SET LOCAL lock_timeout = '10s';
+SET LOCAL statement_timeout = '120s';
+
 CREATE TEMP TABLE _site_type_plan (
     site_id     UUID PRIMARY KEY,
     old_value   TEXT NOT NULL,

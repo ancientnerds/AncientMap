@@ -44,12 +44,15 @@ SHAPE = MECHANICAL / "site_type_shape.py"
 TEXT = REPO / "pipeline/utils/text.py"
 PROD_WRITE = REPO / "scripts/remediation/prod_write.py"
 VERIFY_WRITES = REPO / "output/remediation/tools/verify_writes.py"
+JOURNAL_CHAIN = REPO / "scripts/remediation/journal_chain.py"
 TESTFILE = "tests/remediation/test_mechanical.py"
 UK_TESTS = "tests/remediation/test_mechanical_uk.py"
 PERIOD_TESTS = "tests/remediation/test_mechanical_period_name.py"
 SHAPE_TESTS = "tests/remediation/test_mechanical_site_type.py"
 PROD_TESTS = "tests/remediation/test_prod_write.py"
 VERIFY_TESTS = "tests/remediation/test_verify_writes.py"
+CHAIN_TESTS = "tests/remediation/test_journal_chain.py"
+LOADER_TESTS = "tests/remediation/test_mechanical_loaders.py"
 
 #: The interpreter that runs the sweep runs the tests too: a hard-coded `.venv` path does not exist in
 #: a git worktree, and a second interpreter could test different packages than the one reporting.
@@ -413,117 +416,117 @@ CASES: list[Case] = [
             (
                 "curated source only",
                 "    if site.source_id != CURATED_SOURCE:",
-                "test_a_row_of_another_source_is_refused",
+                "test_schematic_a_row_of_another_source_is_refused",
             ),
             (
                 "Ireland and United Kingdom rows only",
                 "    if stored not in IN_SCOPE:",
-                "test_a_region_that_is_already_spelled_out_is_never_touched",
+                "test_schematic_a_region_already_spelled_out_is_out_of_scope",
             ),
             (
                 "a point to locate",
                 "    if site.lat is None or site.lon is None:",
-                "test_a_row_without_a_point_is_refused",
+                "test_schematic_a_row_without_a_point_is_refused",
             ),
             (
                 "a decided unit",
                 "    if where.unit is None:",
-                "test_a_point_at_sea_is_undecided",
+                "test_schematic_a_point_5_km_at_sea_is_undecided",
             ),
             (
                 "the Republic's side of the border",
                 "    if unit == IRELAND:",
-                "test_a_united_kingdom_row_in_the_republic_is_a_contradiction",
+                "test_schematic_a_united_kingdom_row_in_the_republic_contradicts",
             ),
             (
                 "an Ireland row in the Republic is consistent",
                 "        if stored == IRELAND:\n            return verdict(",
-                "test_an_ireland_row_in_the_republic_is_consistent_and_not_written",
+                "test_schematic_an_ireland_row_in_the_republic_is_consistent",
             ),
             (
                 "one of the four UK units",
                 "    if unit not in UK_UNITS:",
-                "test_a_crown_dependency_is_not_a_uk_part",
+                "test_schematic_a_crown_dependency_is_not_a_uk_part",
             ),
             (
                 "not at the border",
                 "        if to_ireland <= TOLERANCE_M:",
-                "test_an_ireland_row_300_m_from_the_border_is_ambiguous",
+                "test_schematic_an_ireland_row_300_m_from_the_border_is_ambiguous",
             ),
             (
                 "GB in both vocabularies",
                 '    if codes.get(new) != "GB" or new_iso != "GB":',
-                "test_without_the_vocabulary_change_every_northern_irish_row_is_refused",
+                "test_schematic_without_the_vocabulary_change_northern_ireland_is_refused",
             ),
             (
                 "the expected ISO transition",
                 "    if (old_iso, new_iso) != EXPECTED_ISO[str(stored)]:",
-                "test_an_unexpected_iso_transition_is_refused",
+                "test_schematic_an_unexpected_iso_transition_is_refused",
             ),
             (
                 "fixed point",
                 "    if not _is_canonical(new, dict(codes), normalize):",
-                "test_a_value_the_census_would_flag_again_is_refused",
+                "test_schematic_a_value_the_census_would_flag_again_is_refused",
             ),
             (
                 "exactly one entity",
                 "    if len(candidate.qids) != 1:",
-                "test_a_site_needs_exactly_one_entity",
+                "test_schematic_a_site_needs_exactly_one_entity",
             ),
             (
                 "the entity was collected",
                 "    if entity is None:",
-                "test_an_entity_missing_from_the_cache_is_refused",
+                "test_schematic_an_entity_missing_from_the_cache_is_refused",
             ),
             (
                 "the entity has a point",
                 "    if point is None:",
-                "test_an_entity_without_a_point_is_refused",
+                "test_schematic_an_entity_without_a_point_is_refused",
             ),
             (
                 "the entity point is in the same unit",
                 "    if wd_where.unit != unit:",
-                "test_an_entity_point_in_another_unit_is_refused",
+                "test_schematic_an_entity_point_in_another_unit_is_refused",
             ),
             (
                 "P17 does not contradict",
                 "    if p17_ok is False:",
-                "test_a_preferred_p17_of_ireland_contradicts",
+                "test_schematic_a_preferred_p17_of_ireland_contradicts",
             ),
             (
                 "P131* reaches no other unit",
                 "    if others:",
-                "test_a_p131_chain_to_england_contradicts_a_northern_irish_point",
+                "test_schematic_a_p131_chain_to_another_unit_contradicts",
             ),
             (
                 "categories name no other unit",
                 "    if named - {unit}:",
-                "test_a_category_naming_the_republic_contradicts",
+                "test_schematic_a_category_naming_the_republic_contradicts",
             ),
             (
                 "a category can witness",
                 "    if states_neither and unit in named:",
-                "test_a_category_counts_only_when_it_names_the_unit",
+                "test_schematic_a_category_counts_only_when_it_names_the_unit",
             ),
             (
                 "an ISO change needs a witness",
                 "    if iso_changes and not witnessed:",
-                "test_an_ireland_row_without_a_positive_witness_is_refused",
+                "test_schematic_an_ireland_row_without_a_positive_witness_is_refused",
             ),
             (
                 "unique unit names",
                 "        if not units or len(names) != len(set(names)):",
-                "test_duplicate_unit_names_are_refused",
+                "test_schematic_duplicate_unit_names_are_refused",
             ),
             (
                 "one covering unit decides",
                 "        if len(covering) == 1:",
-                "test_an_ireland_row_in_northern_ireland_is_written_as_northern_ireland",
+                "test_schematic_one_covering_unit_decides",
             ),
             (
                 "one unit within tolerance decides",
                 "        if len(near) == 1:",
-                "test_an_offshore_point_takes_the_only_unit_within_tolerance",
+                "test_schematic_an_offshore_row_takes_the_only_unit_within_tolerance",
             ),
         )
     ),
@@ -534,43 +537,43 @@ CASES: list[Case] = [
                 "a category only when the entity states neither P17 nor P131",
                 "    if states_neither and unit in named:",
                 "    if unit in named:",
-                "test_a_category_is_no_witness_for_an_entity_that_states_p131",
+                "test_schematic_a_category_is_no_witness_for_an_entity_that_states_p131",
             ),
             (
                 "a category must name the unit",
                 '        if title.endswith(f" in {suffix}")',
                 "        if True",
-                "test_a_category_counts_only_when_it_names_the_unit",
+                "test_schematic_a_category_counts_only_when_it_names_the_unit",
             ),
             (
                 "the tolerance is T02's 1000 m",
                 "if (metres := self.distance_m(u.name, lat, lon)) <= TOLERANCE_M",
                 "if (metres := self.distance_m(u.name, lat, lon)) <= 10 * TOLERANCE_M",
-                "test_open_water_5_km_out_is_undecided",
+                "test_schematic_a_point_5_km_at_sea_is_undecided",
             ),
             (
                 "a phase-3 value is flagged as superseded",
                 '    phase3 = last is not None and last.run_stamp.startswith("phase3:")',
                 "    phase3 = False",
-                "test_a_phase3_write_is_superseded_and_named",
+                "test_schematic_a_phase3_write_is_superseded_and_named",
             ),
             (
                 "a write carries its premise",
                 "            premise=candidate.premise if ok else None,",
                 "            premise=None,",
-                "test_an_ireland_row_in_northern_ireland_is_written_as_northern_ireland",
+                "test_schematic_one_covering_unit_decides",
             ),
             (
                 "an offshore write is named as such",
                 '        rule="geo-unit" if where.inside else "geo-unit-within-tolerance",',
                 '        rule="geo-unit",',
-                "test_an_offshore_row_is_written_by_the_unit_within_tolerance",
+                "test_schematic_an_offshore_row_takes_the_only_unit_within_tolerance",
             ),
             (
                 "the unit is GEOUNIT, not NAME",
                 "        units.append(Unit(_text(row.GEOUNIT), _text(row.SOVEREIGNT), geom))",
                 "        units.append(Unit(_text(row.NAME), _text(row.SOVEREIGNT), geom))",
-                "test_the_unit_is_the_geounit_and_not_the_short_name",
+                "test_schematic_the_unit_is_the_geounit_and_not_the_short_name",
             ),
         )
     ),
@@ -578,16 +581,85 @@ CASES: list[Case] = [
     guard(
         "journal chain unbroken",
         PLAN,
-        "        if after.old_value != before.new_value:",
-        "test_a_broken_journal_chain_is_refused",
-        UK_TESTS,
+        "    if at is not None:\n        before, after = links[at - 1], links[at]",
+        "test_the_planners_use_the_shared_rule",
+        CHAIN_TESTS,
     ),
     guard(
         "journal agrees with the live value",
         PLAN,
         "    if links and links[-1].new_value != live:",
-        "test_a_journal_that_disagrees_with_the_row_is_refused",
-        UK_TESTS,
+        "test_the_planners_use_the_shared_rule",
+        CHAIN_TESTS,
+    ),
+    guard(
+        "the chain rule: each link starts where the last ended",
+        JOURNAL_CHAIN,
+        "        if transitions[index][0] != transitions[index - 1][1]:",
+        "test_a_link_that_starts_elsewhere_breaks_the_chain_at_its_index",
+        CHAIN_TESTS,
+    ),
+    Case(
+        "a reversal is named by its suffix",
+        JOURNAL_CHAIN,
+        "    return stamp.endswith(ROLLBACK_SUFFIX)",
+        "    return False",
+        "test_every_writer_names_its_reversal_with_the_suffix",
+        CHAIN_TESTS,
+    ),
+    # ------------------------------------------- the planners read production as they assume
+    *(
+        Case(f"loader: {label}", path, old, new, test, testfile)
+        for label, path, old, new, test, testfile in (
+            (
+                "the journal is read oldest first",
+                PLAN,
+                'row_pk IN ({sql_ids(ids)}) ORDER BY id"',
+                'row_pk IN ({sql_ids(ids)})"',
+                "test_load_journal_reads_one_column_oldest_first",
+                LOADER_TESTS,
+            ),
+            (
+                "the journal is read for one column",
+                PLAN,
+                'f"AND column_name = {sql_literal(column)} AND row_pk IN',
+                'f"AND row_pk IN',
+                "test_load_journal_reads_one_column_oldest_first",
+                LOADER_TESTS,
+            ),
+            (
+                "the UK premise is the database's",
+                UK,
+                '                premise=r["premise"],',
+                "                premise=f\"{r['lat']},{r['lon']}\",",
+                "test_the_uk_candidates_carry_the_database_s_premise_qids_and_country_chain",
+                LOADER_TESTS,
+            ),
+            (
+                "the period premise is the database's",
+                PERIOD,
+                '            premise=r["premise"],',
+                '            premise=str(r["period_start"]),',
+                "test_the_period_rows_carry_both_journals_and_the_printed_year",
+                LOADER_TESTS,
+            ),
+            (
+                "the site_type restore is what the last write replaced",
+                SHAPE,
+                "    restore = last.old_value",
+                "    restore = row.journal[0].old_value",
+                "test_a_two_link_chain_restores_what_the_last_write_replaced",
+                SHAPE_TESTS,
+            ),
+            (
+                "the snapshot vouches for where the chain began",
+                SHAPE,
+                "    first = row.journal[0]",
+                "    first = row.journal[-1]",
+                "test_a_two_link_chain_restores_what_the_last_write_replaced",
+                SHAPE_TESTS,
+            ),
+        )
     ),
     guard(
         "no identifier is interpolated unchecked",
@@ -806,7 +878,7 @@ CASES: list[Case] = [
                 "a failed exit is settled from the journal",
                 APPLY,
                 "    if proc.returncode != 0:\n        return settle(",
-                "test_a_failed_exit_is_settled_from_the_journal",
+                "test_a_failed_exit_with_the_whole_journal_is_committed",
             ),
             (
                 "all rows journalled means committed",
@@ -817,14 +889,38 @@ CASES: list[Case] = [
             (
                 "no row journalled means not committed",
                 APPLY,
-                "    if count == 0:\n        return NOT_COMMITTED",
-                "test_a_timeout_before_the_commit_is_reported_as_not_committed",
+                "    if count == 0 and session_ended:\n        return NOT_COMMITTED",
+                "test_a_script_error_with_an_empty_journal_is_not_committed",
             ),
             (
                 "settle says NOT COMMITTED",
                 APPLY,
                 "    if state == NOT_COMMITTED:",
-                "test_a_timeout_before_the_commit_is_reported_as_not_committed",
+                "test_a_script_error_with_an_empty_journal_is_not_committed",
+            ),
+            (
+                "a committed read-back is asserted",
+                APPLY,
+                "        if got.get(name) != want:",
+                "test_every_disagreement_is_refused",
+            ),
+            (
+                "an empty journal after a lost answer is no answer",
+                APPLY,
+                "    if count == 0:\n        raise OutcomeUnknown(",
+                "test_a_timeout_with_an_empty_journal_is_an_unknown_outcome",
+            ),
+            (
+                "a probe that leaves a journal row fails",
+                APPLY,
+                "        if left:",
+                "test_a_probe_that_leaves_a_journal_row_is_a_failure",
+            ),
+            (
+                "the server bounds are rendered",
+                APPLY,
+                "    if lane.lock_timeout is not None or lane.statement_timeout is not None:",
+                "test_the_new_lanes_bound_the_transaction_on_the_server",
             ),
             (
                 "a journal count has one value",
@@ -902,6 +998,128 @@ CASES: list[Case] = [
                 TESTFILE,
             ),
             (
+                "an empty journal is final only after psql's own stop",
+                APPLY,
+                "    if count == 0 and session_ended:",
+                "    if count == 0:",
+                "test_a_timeout_with_an_empty_journal_is_an_unknown_outcome",
+                TESTFILE,
+            ),
+            (
+                "a timeout never ends the session",
+                APPLY,
+                'f"psql timed out ({exc})", session_ended=False)',
+                'f"psql timed out ({exc})", session_ended=True)',
+                "test_a_timeout_with_an_empty_journal_is_an_unknown_outcome",
+                TESTFILE,
+            ),
+            (
+                "only psql's exit 3 ends the session",
+                APPLY,
+                "            session_ended=proc.returncode == PSQL_SCRIPT_ERROR,",
+                "            session_ended=True,",
+                "test_a_dropped_channel_with_an_empty_journal_is_an_unknown_outcome",
+                TESTFILE,
+            ),
+            (
+                "the commit state counts this lane's stamp",
+                APPLY,
+                "        count = journal_count(lane.run_stamp)",
+                "        count = journal_count(lane.rollback_run_stamp)",
+                "test_a_timeout_after_the_commit_is_reported_as_committed",
+                TESTFILE,
+            ),
+            (
+                "apply-once counts this lane's stamp",
+                APPLY,
+                "    already = journal_count(lane.run_stamp)",
+                "    already = journal_count(lane.rollback_run_stamp)",
+                "test_a_stamp_that_already_journals_rows_is_never_applied_again",
+                TESTFILE,
+            ),
+            (
+                "a settled commit is read back",
+                APPLY,
+                "    unconfirmed = confirm_committed(records, lane, what)\n    if unconfirmed is not None:\n"
+                '        return unconfirmed\n    print(\n        "APPLY LANDED',
+                '    print(\n        "APPLY LANDED',
+                "test_a_read_back_that_disagrees_after_a_lost_answer_is_no_landing",
+                TESTFILE,
+            ),
+            (
+                "a clean commit is read back",
+                APPLY,
+                "    unconfirmed = confirm_committed(records, lane, what)\n    if unconfirmed is not None:\n"
+                '        return unconfirmed\n    print("APPLY OK',
+                '    print("APPLY OK',
+                "test_a_read_back_that_disagrees_after_a_clean_commit_is_no_success",
+                TESTFILE,
+            ),
+            (
+                "a disagreeing read-back is committed, not refused",
+                APPLY,
+                "    except (OutcomeUnknown, PlanError) as exc:\n        return committed_unconfirmed(lane, what, exc)\n    for name",
+                "    except KeyError as exc:\n        return committed_unconfirmed(lane, what, exc)\n    for name",
+                "test_a_read_back_that_disagrees_after_a_clean_commit_is_no_success",
+                TESTFILE,
+            ),
+            (
+                "a failing read-back after the COMMIT is never a refusal",
+                APPLY,
+                "    except (OutcomeUnknown, PlanError) as exc:\n        return committed_unconfirmed(lane, what, exc)\n    # Printed",
+                "    except KeyError as exc:\n        return committed_unconfirmed(lane, what, exc)\n    # Printed",
+                "test_a_read_back_that_fails_after_the_commit_is_never_a_refusal",
+                TESTFILE,
+            ),
+            (
+                "a probe counts only its own guard's refusal",
+                APPLY,
+                "        own = proc.returncode == PSQL_SCRIPT_ERROR and refused_by_its_guard(lane, expected, errors)",
+                "        own = bool(errors)",
+                "test_a_probe_refused_by_another_guard_is_a_failure",
+                TESTFILE,
+            ),
+            (
+                "a probe counts only when psql stopped the script",
+                APPLY,
+                "        own = proc.returncode == PSQL_SCRIPT_ERROR and refused_by_its_guard(lane, expected, errors)",
+                "        own = refused_by_its_guard(lane, expected, errors)",
+                "test_a_probe_that_psql_did_not_stop_on_its_guard_is_a_failure",
+                TESTFILE,
+            ),
+            (
+                "a probe's refusal names the guard's text",
+                APPLY,
+                '    own = re.compile(re.escape(f"{lane.label}: ") + r"\\d+ " + re.escape(says))',
+                '    own = re.compile(re.escape(f"{lane.label}: "))',
+                "test_a_probe_refused_by_another_guard_is_a_failure",
+                TESTFILE,
+            ),
+            (
+                "failed probes have an exit code of their own",
+                APPLY,
+                "        return EXIT_PROBE_FAILED if cmd_probe_guards(records, out, lane) else EXIT_OK",
+                "        return cmd_probe_guards(records, out, lane)",
+                "test_a_probe_refused_by_another_guard_is_a_failure",
+                TESTFILE,
+            ),
+            (
+                "the lane read-backs are ordered",
+                LANE,
+                '        + "\\nORDER BY 1;\\n"',
+                '        + ";\\n"',
+                "test_every_lane_readback_is_ordered_by_metric",
+                TESTFILE,
+            ),
+            (
+                "a server bound is a plain duration",
+                LANE,
+                "            if bound is not None and not _DURATION.match(bound):",
+                "            if False:",
+                "test_a_lane_that_would_splice_something_unsafe_into_sql_is_refused",
+                TESTFILE,
+            ),
+            (
                 "a partial journal is no outcome",
                 APPLY,
                 '    raise OutcomeUnknown(\n        f"the journal holds {count} of',
@@ -912,8 +1130,8 @@ CASES: list[Case] = [
             (
                 "an unreadable journal is an unknown outcome",
                 APPLY,
-                "    except (OutcomeUnknown, PlanError) as exc:",
-                "    except KeyError as exc:",
+                "    except (OutcomeUnknown, PlanError) as exc:\n        raise OutcomeUnknown(",
+                "    except KeyError as exc:\n        raise OutcomeUnknown(",
                 "test_a_journal_read_that_fails_is_an_unknown_outcome",
                 TESTFILE,
             ),
@@ -972,9 +1190,24 @@ CASES: list[Case] = [
         guard(f"acceptance: {label}", VERIFY_WRITES, needle, test, VERIFY_TESTS)
         for label, needle, test in (
             (
-                "a chain is continuous",
-                "        if after.old != before.new:",
-                "test_a_broken_chain_is_a_deviation",
+                "a phase-3 row outside the plan is a deviation",
+                "            if phase3:",
+                "test_a_phase3_journal_row_outside_the_plan_is_a_deviation",
+            ),
+            (
+                "a phase-3 row outside unified_sites is a deviation",
+                "        if link.table != TABLE and link.stamp.startswith(PHASE3):",
+                "test_a_phase3_row_outside_unified_sites_is_a_deviation",
+            ),
+            (
+                "a reverted phase-3 write is a deviation",
+                "        if undone is not None:",
+                "test_a_rolled_back_phase3_write_is_not_accepted",
+            ),
+            (
+                "a phase-3 rollback on an unwritten field is a deviation",
+                "        if problem is None and reverted(chain) is not None:",
+                "test_a_phase3_rollback_on_a_field_phase3_never_wrote_is_a_deviation",
             ),
             (
                 "a journalled site must exist",
@@ -993,7 +1226,7 @@ CASES: list[Case] = [
             ),
             (
                 "a superseded write is reported by stamp",
-                "        if not chain[-1].stamp.startswith(PHASE3):",
+                "        if not is_phase3_write(chain[-1].stamp):",
                 "test_a_superseded_phase3_write_is_reported_by_stamp_not_as_a_deviation",
             ),
             (
@@ -1029,15 +1262,46 @@ CASES: list[Case] = [
         for label, old, new, test in (
             (
                 "only a phase-3 chain counts as written",
-                "any(k.stamp.startswith(PHASE3) for k in chain)",
+                "any(is_phase3_write(k.stamp) for k in chain)",
                 "True",
                 "test_a_later_chain_on_a_held_field_must_start_from_the_planned_old_value",
             ),
             (
                 "only the three phase-3 columns are judged",
-                "        if (column, pk) not in written or column not in COLUMNS:",
-                "        if (column, pk) not in written:",
+                "        if column not in COLUMNS:\n            continue\n        if (column, pk) not in planned_fields:",
+                "        if (column, pk) not in planned_fields:",
                 "test_a_field_outside_the_three_columns_is_not_judged",
+            ),
+            (
+                "a phase-3 rollback is not a phase-3 write",
+                "    return stamp.startswith(PHASE3) and not is_rollback(stamp)",
+                "    return stamp.startswith(PHASE3)",
+                "test_a_phase3_rollback_alone_is_not_a_phase3_write",
+            ),
+            (
+                "a chain is continuous",
+                "    at = first_break([(link.old, link.new) for link in chain])",
+                "    at = None",
+                "test_a_broken_chain_is_a_deviation",
+            ),
+            (
+                "a reversal is found in the chain",
+                "    if not undone:\n        return None",
+                "    if True:\n        return None",
+                "test_a_rolled_back_phase3_write_is_not_accepted",
+            ),
+            (
+                "main reads every phase-3 row's chain",
+                '    ids = sorted({row["pk"] for row in planned} | {k.pk for k in phase3 if k.table == TABLE})',
+                '    ids = sorted({row["pk"] for row in planned})',
+                "test_main_reads_every_phase3_row_not_only_the_planned_ones",
+            ),
+            (
+                "main reads phase-3 rows of every table",
+                "_SELECT + f\"WHERE run_stamp LIKE '{PHASE3}%' AND column_name IN {_in(COLUMNS)} \"",
+                "_SELECT + f\"WHERE table_name = '{TABLE}' AND run_stamp LIKE '{PHASE3}%' "
+                'AND column_name IN {_in(COLUMNS)} "',
+                "test_main_reads_phase3_rows_of_every_table",
             ),
         )
     ),

@@ -6,9 +6,12 @@ independent Wikidata witness. Each refusal below has a test that fails when its 
 (read-only, 2026-09-22) or places whose unit is not in doubt, and the few constructed ones are
 *computed* against the dataset rather than typed in.
 
-The geo tests need the map-units cache (`uk_parts.py --collect`), and the planner needs the geo
-stack, which the CI `tests` job does not install; both skip with their reason, as T02 and T05 do.
-The delivered-plan tests read `output/remediation/mechanical_uk/PLAN.jsonl` only.
+The real-data tests need the map-units cache (`uk_parts.py --collect`, gitignored) and skip with
+their reason without it, as T02 and T05 do. Every decision guard is also decided on a schematic map
+of lon/lat boxes (`TestClassifyUkOnASchematicMap`, added 2026-09-23), which needs only the geo stack
+the CI `tests` job installs (geopandas, pyproj, shapely - `.github/workflows/ci.yml`), so the
+decision is tested in CI and in a fresh clone too; the mutation sweep names those tests. The
+delivered-plan tests read `output/remediation/mechanical_uk/PLAN.jsonl` only.
 """
 
 from __future__ import annotations
@@ -179,15 +182,6 @@ class TestTheMapUnits:
         )
         assert 4900 < units.distance_m("Northern Ireland", *at_sea) < 5100
         assert units.locate(*at_sea).unit is None
-
-    def test_two_units_within_tolerance_are_undecided(self) -> None:
-        pytest.importorskip("geopandas")
-        from shapely.geometry import box
-
-        west = U.Unit("West", "X", box(0.0, 0.0, 1.0, 1.0))
-        east = U.Unit("East", "X", box(1.01, 0.0, 2.0, 1.0))
-        where = U.MapUnits([west, east]).locate(0.5, 1.005)
-        assert where.unit is None and "2 units within 1000 m" in where.note
 
 
 # -------------------------------------------------------------------------------- the decision
@@ -507,6 +501,392 @@ class TestBuildUkPlan:
         assert uk.counters["skip:not-a-uk-part"] == 1
         assert uk.counters["transition:Ireland -> Northern Ireland"] == 1
         assert uk.plan.lane is L.UK_PARTS and uk.plan.run_stamp == L.UK_PARTS.run_stamp
+
+
+# ------------------------------------------- the decision, on a map drawn for the test
+def schematic_units() -> U.MapUnits:
+    """A schematic British Isles in lon/lat boxes. Every guard of `classify_uk` is decided on it
+    below, so the decision is tested where the Natural Earth cache is absent - CI and a fresh
+    clone, where the real-data classes above skip. Borders: Ireland | Northern Ireland at 8 W,
+    England | Wales at 3 W; the Isle of Man and Scotland stand apart. Northern Ireland has a bay
+    open to the east (6.2 W to the sea, 54.3 to 54.7 N), so a point at sea can lie inside the
+    unit's envelope - where `locate`'s index finds the unit and only the measured 1000 m decides,
+    as on a real coastline. Distances come from T02's geodesic rule, as on the real polygons."""
+    from shapely.geometry import box
+
+    bay = box(-6.2, 54.3, -5.4, 54.7)
+    return U.MapUnits(
+        [
+            U.Unit("Ireland", "Ireland", box(-10.0, 51.5, -8.0, 55.5)),
+            U.Unit(
+                "Northern Ireland", "United Kingdom", box(-8.0, 54.0, -5.5, 55.3).difference(bay)
+            ),
+            U.Unit("England", "United Kingdom", box(-3.0, 50.0, 1.5, 55.0)),
+            U.Unit("Wales", "United Kingdom", box(-5.0, 51.5, -3.0, 53.4)),
+            U.Unit("Scotland", "United Kingdom", box(-6.0, 55.5, -2.0, 58.5)),
+            U.Unit("Isle of Man", "Isle of Man", box(-4.8, 54.05, -4.3, 54.4)),
+        ]
+    )
+
+
+#: Points on the schematic map, each well inside its box.
+S_NI = (54.5, -6.8)
+S_NI_NORTH = (54.6, -6.8)  # 11 km from S_NI, same unit
+S_IRELAND = (53.0, -9.0)
+S_ENGLAND = (52.0, -1.0)
+S_MAN = (54.2, -4.5)
+
+
+@pytest.fixture(scope="module")
+def schematic() -> U.MapUnits:
+    return schematic_units()
+
+
+def ni_entity(**over: Any) -> dict[str, Any]:
+    return entity(**{"point": S_NI_NORTH, **over})
+
+
+class TestClassifyUkOnASchematicMap:
+    """The decision guards of `classify_uk`, one test each, on geometry built for them."""
+
+    def test_schematic_one_covering_unit_decides(self, schematic: Any, vocabulary: Any) -> None:
+        verdict = decide(schematic, vocabulary, candidate("Ireland", S_NI), ni_entity())
+        assert verdict.ok and verdict.new_value == "Northern Ireland"
+        assert verdict.rule == "geo-unit" and verdict.premise == f"{S_NI[0]},{S_NI[1]}"
+        assert U.witness_kinds(verdict) == ["P17", "P131*"]
+
+    def test_schematic_the_value_is_the_unit(self, schematic: Any, vocabulary: Any) -> None:
+        england = decide(
+            schematic,
+            vocabulary,
+            candidate("United Kingdom", S_ENGLAND),
+            entity(point=S_ENGLAND, units_reached=["Q21"]),
+        )
+        assert england.ok and england.new_value == "England"
+
+    def test_schematic_an_ireland_row_in_the_republic_is_consistent(
+        self, schematic: Any, vocabulary: Any
+    ) -> None:
+        verdict = decide(schematic, vocabulary, candidate("Ireland", S_IRELAND))
+        assert not verdict.ok and verdict.reason == U.CONSISTENT
+
+    def test_schematic_a_united_kingdom_row_in_the_republic_contradicts(
+        self, schematic: Any, vocabulary: Any
+    ) -> None:
+        verdict = decide(schematic, vocabulary, candidate("United Kingdom", S_IRELAND))
+        assert not verdict.ok and verdict.reason == "geography-contradicts"
+
+    def test_schematic_a_crown_dependency_is_not_a_uk_part(
+        self, schematic: Any, vocabulary: Any
+    ) -> None:
+        verdict = decide(schematic, vocabulary, candidate("United Kingdom", S_MAN))
+        assert not verdict.ok and verdict.reason == "not-a-uk-part"
+        assert "Isle of Man" in verdict.note
+
+    def test_schematic_a_region_already_spelled_out_is_out_of_scope(
+        self, schematic: Any, vocabulary: Any
+    ) -> None:
+        verdict = decide(schematic, vocabulary, candidate("England", S_ENGLAND))
+        assert not verdict.ok and verdict.reason == "out-of-scope"
+
+    def test_schematic_a_row_of_another_source_is_refused(
+        self, schematic: Any, vocabulary: Any
+    ) -> None:
+        verdict = decide(schematic, vocabulary, candidate(point=S_NI, source_id="lyra"))
+        assert not verdict.ok and verdict.reason == "row-not-in-curated-source"
+
+    def test_schematic_a_row_without_a_point_is_refused(
+        self, schematic: Any, vocabulary: Any
+    ) -> None:
+        verdict = decide(schematic, vocabulary, candidate(point=None))
+        assert not verdict.ok and verdict.reason == "no-point"
+
+    def test_schematic_an_ireland_row_300_m_from_the_border_is_ambiguous(
+        self, schematic: Any, vocabulary: Any
+    ) -> None:
+        near = moved_towards(schematic, S_NI, (54.5, -8.5), unit="Ireland", metres=300)
+        assert schematic.locate(*near).unit == "Northern Ireland"
+        assert 250 < schematic.distance_m("Ireland", *near) < 350
+        verdict = decide(schematic, vocabulary, candidate("Ireland", near), ni_entity())
+        assert not verdict.ok and verdict.reason == "border-ambiguous"
+
+    def test_schematic_an_offshore_row_takes_the_only_unit_within_tolerance(
+        self, schematic: Any, vocabulary: Any
+    ) -> None:
+        offshore = moved_towards(
+            schematic, S_NI, (54.5, -5.0), unit="Northern Ireland", metres=500, away=True
+        )
+        where = schematic.locate(*offshore)
+        assert where.unit == "Northern Ireland" and not where.inside and 400 < where.metres <= 500
+        verdict = decide(
+            schematic,
+            vocabulary,
+            candidate("United Kingdom", offshore),
+            ni_entity(units_reached=[]),
+        )
+        assert verdict.ok and verdict.rule == "geo-unit-within-tolerance"
+
+    def test_schematic_a_point_5_km_at_sea_is_undecided(
+        self, schematic: Any, vocabulary: Any
+    ) -> None:
+        at_sea = moved_towards(
+            schematic, S_NI, (54.5, -5.0), unit="Northern Ireland", metres=5000, away=True
+        )
+        from shapely.geometry import Point
+
+        assert 4900 < schematic.distance_m("Northern Ireland", *at_sea) <= 5000
+        envelope = schematic.units["Northern Ireland"].geom.envelope
+        assert envelope.contains(Point(at_sea[1], at_sea[0])), "in the bay, not beyond the map"
+        verdict = decide(schematic, vocabulary, candidate("United Kingdom", at_sea))
+        assert not verdict.ok and verdict.reason == "geography-undecided"
+
+    def test_two_units_within_tolerance_are_undecided(self) -> None:
+        from shapely.geometry import box
+
+        west = U.Unit("West", "X", box(0.0, 0.0, 1.0, 1.0))
+        east = U.Unit("East", "X", box(1.01, 0.0, 2.0, 1.0))
+        where = U.MapUnits([west, east]).locate(0.5, 1.005)
+        assert where.unit is None and "2 units within 1000 m" in where.note
+
+    def test_schematic_the_unit_is_the_geounit_and_not_the_short_name(self, tmp_path: Path) -> None:
+        """Natural Earth's `NAME` reads `N. Ireland`; the lane writes `GEOUNIT`. A shapefile with
+        the dataset's three columns, written here, is read the way the cached one is."""
+        import geopandas as gpd
+        from shapely.geometry import box
+
+        frame = gpd.GeoDataFrame(
+            {
+                "GEOUNIT": ["Northern Ireland", "Ireland"],
+                "NAME": ["N. Ireland", "Ireland"],
+                "SOVEREIGNT": ["United Kingdom", "Ireland"],
+            },
+            geometry=[box(-8.0, 54.0, -5.5, 55.3), box(-10.0, 51.5, -8.0, 55.5)],
+            crs="EPSG:4326",
+        )
+        path = tmp_path / "units.shp"
+        frame.to_file(path)
+        units = U.load_units(path)
+        assert set(units.units) == {"Northern Ireland", "Ireland"}
+        assert units.units["Northern Ireland"].sovereign == "United Kingdom"
+        assert units.locate(*S_NI).unit == "Northern Ireland"
+
+    def test_schematic_duplicate_unit_names_are_refused(self, schematic: Any) -> None:
+        wales = schematic.units["Wales"]
+        with pytest.raises(P.PlanError, match="unique GEOUNIT"):
+            U.MapUnits([wales, wales])
+
+    def test_schematic_without_the_vocabulary_change_northern_ireland_is_refused(
+        self, schematic: Any, vocabulary: Any
+    ) -> None:
+        codes, _ = vocabulary
+        without = {k: v for k, v in codes.items() if k != "Northern Ireland"}
+        verdict = decide(
+            schematic, vocabulary, candidate("Ireland", S_NI), ni_entity(), codes=without
+        )
+        assert not verdict.ok and verdict.reason == "not-a-country-code"
+
+    def test_schematic_an_unexpected_iso_transition_is_refused(
+        self, schematic: Any, vocabulary: Any
+    ) -> None:
+        _, normalize = vocabulary
+        verdict = decide(
+            schematic,
+            vocabulary,
+            candidate("Ireland", S_NI),
+            ni_entity(),
+            normalize=lambda v: "FR" if v == "Ireland" else normalize(v),
+        )
+        assert not verdict.ok and verdict.reason == "iso-transition-unexpected"
+
+    def test_schematic_a_value_the_census_would_flag_again_is_refused(
+        self, schematic: Any, vocabulary: Any, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(U, "_is_canonical", lambda *a, **k: False)
+        verdict = decide(schematic, vocabulary, candidate("Ireland", S_NI), ni_entity())
+        assert not verdict.ok and verdict.reason == "not-a-fixed-point"
+
+    def test_schematic_a_site_needs_exactly_one_entity(
+        self, schematic: Any, vocabulary: Any
+    ) -> None:
+        for qids in (("Q1", "Q2"), ()):
+            verdict = decide(schematic, vocabulary, candidate("Ireland", S_NI, qids=qids))
+            assert not verdict.ok and verdict.reason == "no-single-wikidata-entity"
+
+    def test_schematic_an_entity_missing_from_the_cache_is_refused(
+        self, schematic: Any, vocabulary: Any
+    ) -> None:
+        verdict = decide(schematic, vocabulary, candidate("Ireland", S_NI, qids=("Q999",)))
+        assert not verdict.ok and verdict.reason == "witness-not-collected"
+
+    def test_schematic_an_entity_without_a_point_is_refused(
+        self, schematic: Any, vocabulary: Any
+    ) -> None:
+        verdict = decide(schematic, vocabulary, candidate("Ireland", S_NI), ni_entity(point=None))
+        assert not verdict.ok and verdict.reason == "wikidata-point-missing"
+
+    def test_schematic_an_entity_point_in_another_unit_is_refused(
+        self, schematic: Any, vocabulary: Any
+    ) -> None:
+        verdict = decide(
+            schematic, vocabulary, candidate("Ireland", S_NI), ni_entity(point=S_ENGLAND)
+        )
+        assert not verdict.ok and verdict.reason == "wikidata-point-elsewhere"
+        assert "England" in verdict.note
+
+    def test_schematic_a_preferred_p17_of_ireland_contradicts(
+        self, schematic: Any, vocabulary: Any
+    ) -> None:
+        p17 = [{"id": "Q27", "rank": "preferred", "start": None, "end": None}]
+        verdict = decide(schematic, vocabulary, candidate("Ireland", S_NI), ni_entity(p17=p17))
+        assert not verdict.ok and verdict.reason == "wikidata-contradicts" and "IE" in verdict.note
+
+    def test_schematic_a_p131_chain_to_another_unit_contradicts(
+        self, schematic: Any, vocabulary: Any
+    ) -> None:
+        for reached in (["Q26", "Q21"], ["Q27"]):
+            verdict = decide(
+                schematic,
+                vocabulary,
+                candidate("Ireland", S_NI),
+                ni_entity(units_reached=reached),
+            )
+            assert not verdict.ok and verdict.reason == "wikidata-contradicts"
+
+    def test_schematic_an_ireland_row_without_a_positive_witness_is_refused(
+        self, schematic: Any, vocabulary: Any
+    ) -> None:
+        verdict = decide(
+            schematic,
+            vocabulary,
+            candidate("Ireland", S_NI),
+            ni_entity(p17=[], units_reached=[]),
+        )
+        assert not verdict.ok and verdict.reason == "no-external-witness"
+
+    def test_schematic_a_united_kingdom_row_without_a_witness_records_the_gap(
+        self, schematic: Any, vocabulary: Any
+    ) -> None:
+        verdict = decide(
+            schematic,
+            vocabulary,
+            candidate("United Kingdom", S_NI),
+            ni_entity(p17=[], p131=[], units_reached=[]),
+        )
+        assert verdict.ok and "gap" in verdict.note and U.witness_kinds(verdict) == []
+
+    @pytest.mark.parametrize(
+        ("category", "ok"),
+        [
+            ("Category:Megalithic monuments in Northern Ireland", True),
+            ("Category:Archaeological sites in County Donegal", False),
+            ("Category:Stone circles in Ireland", False),
+        ],
+    )
+    def test_schematic_a_category_counts_only_when_it_names_the_unit(
+        self, schematic: Any, vocabulary: Any, category: str, ok: bool
+    ) -> None:
+        verdict = decide(
+            schematic,
+            vocabulary,
+            candidate("Ireland", S_NI),
+            ni_entity(p17=[], p131=[], units_reached=[], categories=[category]),
+        )
+        assert verdict.ok is ok
+        if ok:
+            assert U.witness_kinds(verdict) == ["enwiki category"]
+        else:
+            assert verdict.reason == "no-external-witness"
+
+    def test_schematic_a_category_naming_the_republic_contradicts(
+        self, schematic: Any, vocabulary: Any
+    ) -> None:
+        categories = [
+            "Category:Megalithic monuments in Northern Ireland",
+            "Category:Megalithic monuments in the Republic of Ireland",
+        ]
+        verdict = decide(
+            schematic,
+            vocabulary,
+            candidate("Ireland", S_NI),
+            ni_entity(p17=[], p131=[], units_reached=[], categories=categories),
+        )
+        assert not verdict.ok and verdict.reason == "category-contradicts"
+
+    def test_schematic_a_category_is_no_witness_for_an_entity_that_states_p131(
+        self, schematic: Any, vocabulary: Any
+    ) -> None:
+        verdict = decide(
+            schematic,
+            vocabulary,
+            candidate("Ireland", S_NI),
+            ni_entity(
+                p17=[],
+                p131=["Q7830001"],
+                units_reached=[],
+                categories=["Category:Megalithic monuments in Northern Ireland"],
+            ),
+        )
+        assert not verdict.ok and verdict.reason == "no-external-witness"
+
+    def test_schematic_a_phase3_write_is_superseded_and_named(
+        self, schematic: Any, vocabulary: Any
+    ) -> None:
+        link = P.JournalLink(
+            28001, "phase3:batch-0148:chunk-0001", "P3/country", "Ireland", "United Kingdom"
+        )
+        verdict = decide(
+            schematic,
+            vocabulary,
+            candidate("United Kingdom", S_NI, journal=(link,)),
+            ni_entity(units_reached=[]),
+        )
+        assert verdict.ok and verdict.phase3
+        assert any(e["source"] == "remediation_change_log:28001" for e in verdict.evidence)
+
+    def test_schematic_a_journal_that_disagrees_or_breaks_is_refused(
+        self, schematic: Any, vocabulary: Any
+    ) -> None:
+        wales = P.JournalLink(1, "phase3:a", "P3/country", "Ireland", "Wales")
+        verdict = decide(schematic, vocabulary, candidate("United Kingdom", S_NI, journal=(wales,)))
+        assert not verdict.ok and verdict.reason == "journal-disagrees"
+        first = P.JournalLink(1, "phase3:a", "P3/country", "Ireland", "United Kingdom")
+        second = P.JournalLink(2, "phase3:b", "P3/country", "Wales", "United Kingdom")
+        verdict = decide(
+            schematic,
+            vocabulary,
+            candidate("United Kingdom", S_NI, journal=(first, second)),
+        )
+        assert not verdict.ok and verdict.reason == "journal-chain-broken"
+
+    def test_schematic_the_plan_is_a_partition_with_its_counters(
+        self, schematic: Any, vocabulary: Any
+    ) -> None:
+        codes, normalize = vocabulary
+
+        def at(stored: str, point: tuple[float, float], digit: str) -> U.Candidate:
+            base = candidate(stored, point)
+            sid = f"{digit * 8}-{digit * 4}-{digit * 4}-{digit * 4}-{digit * 12}"
+            return replace(base, site=replace(base.site, site_id=sid))
+
+        uk = U.build_uk_plan(
+            [
+                at("Ireland", S_NI, "1"),
+                at("Ireland", S_IRELAND, "2"),
+                at("United Kingdom", S_MAN, "3"),
+            ],
+            units=schematic,
+            codes=codes,
+            normalize=normalize,
+            witnesses={QID: ni_entity()},
+            countries=UK,
+            retrieved_at=None,
+            built_at="2026-09-23T00:00:00+00:00",
+        )
+        assert [v.new_value for v in uk.plan.changes] == ["Northern Ireland"]
+        assert [v.reason for v in uk.consistent] == [U.CONSISTENT]
+        assert [v.reason for v in uk.plan.skipped] == ["not-a-uk-part"]
+        assert uk.counters["transition:Ireland -> Northern Ireland"] == 1
+        assert uk.plan.lane is L.UK_PARTS
 
 
 class TestTheCollectionQuery:

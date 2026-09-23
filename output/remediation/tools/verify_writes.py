@@ -8,12 +8,33 @@ boundary-refused rows in the same pass.
 **It follows the journal chain** (2026-09-22). A field can be written again after phase 3 - the B9
 lane respells five phase-3 `United Kingdom` rows as `Northern Ireland` - and a per-row comparison of
 the phase-3 value with the live value would report every such row as a deviation. So every field
-this wave planned is read as its whole chain of journal rows, oldest first, across every run stamp:
-each link must start where the one before it ended, the chain must end at the live value, and a
-planned field that phase 3 did not write must start from the planned old value. A phase-3 write that
-a later journalled write replaced is *superseded* and reported by stamp - never silently accepted,
-never counted as a deviation. The check is strictly stronger than the per-row one it replaces: the
-live value must still equal the last journalled value, and the chain itself must be unbroken.
+is read as its whole chain of journal rows, oldest first, across every run stamp: each link must
+start where the one before it ended (`journal_chain.first_break`, the rule the mechanical planners
+use too), the chain must end at the live value, and a planned field that phase 3 did not write must
+start from the planned old value. A phase-3 write that a later journalled write replaced is
+*superseded* and reported by stamp - never silently accepted, never counted as a deviation.
+
+**What it reads** (corrected 2026-09-23). First every phase-3 journal row in the three columns, of
+any table and any row - not only the planned fields' - and then the whole chain of every planned
+field and of every field phase 3 journalled. A phase-3 row outside the plan, or outside
+`unified_sites`, is a deviation, as it was for the per-row check this replaced (`FEHLT`).
+
+**A phase-3 rollback is not a phase-3 write.** The writer names a chunk's reversal
+`<stamp>-rollback` (`phase3/write_stage.py:rollback_stamp`), which starts with `phase3:batch-` as
+well. A field whose chain holds such a link is a deviation (`REVERTED`): this acceptance vouches
+that the wave's corrections are in the database, and the per-row check reported a reverted write
+too (`NICHT NEU`).
+
+The 2026-09-22 version of this file counted a reversal as the phase-3 write and read the journal
+only for the planned rows, so a reverted write and a phase-3 write outside the plan both passed
+silently. Both gaps were latent - production held no phase-3 rollback row and every one of the 994
+phase-3 fields was planned (read-only, 2026-09-23) - and both are closed here.
+
+Against the per-row check it replaces: every deviation that check reported is still one, except a
+value the chain accounts for - a phase-3 write that a later journalled write replaced, reported by
+stamp. What it adds: the chain must be unbroken, a later write on a field phase 3 did not touch must
+start from the planned old value and end at the live one, and a phase-3 row must be a planned
+`unified_sites` field.
 
     ./.venv/Scripts/python.exe output/remediation/tools/verify_writes.py \
         --rows output/remediation/logs/_write_dry/ALL_ROWS.jsonl
@@ -31,8 +52,17 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 
 LOGS = pathlib.Path(__file__).resolve().parent
+#: This file runs from `output/remediation/tools/` and from its working copy in
+#: `output/remediation/logs/` (`tools/README.md`); the repository root is three levels up from both.
+REPO = pathlib.Path(__file__).resolve().parents[3]
+if str(REPO / "scripts" / "remediation") not in sys.path:
+    sys.path.insert(0, str(REPO / "scripts" / "remediation"))
+
+from journal_chain import first_break, is_rollback  # noqa: E402
+
 ROWS = LOGS / "_write_dry" / "ALL_ROWS.jsonl"
 HOST = "ancientnerds"
+TABLE = "unified_sites"
 COLUMNS = ("site_type", "period_start", "country")
 PHASE3 = "phase3:batch-"
 PSQL = "docker exec -i ancient_nerds_db psql -U ancient_map -d ancient_map -v ON_ERROR_STOP=1 -t -A -F '|'"
@@ -72,17 +102,17 @@ def _value(text: str) -> str | None:
     return None if text == NULL else text
 
 
+def _in(values: Sequence[str]) -> str:
+    return "('" + "', '".join(values) + "')"
+
+
 def stored_values(ids: list[str]) -> dict[str, list[str | None]]:
     """Read all three columns for these sites, in one query per 200."""
     rows: dict[str, list[str | None]] = {}
     columns = ", ".join(f"coalesce({c}::text, '{NULL}')" for c in COLUMNS)
     for start in range(0, len(ids), 200):
         window = ids[start : start + 200]
-        sql = (
-            f"SELECT id, {columns} FROM unified_sites WHERE id IN ('"
-            + "', '".join(window)
-            + "');\n"
-        )
+        sql = f"SELECT id, {columns} FROM {TABLE} WHERE id IN {_in(window)};\n"
         for row in psql(sql):
             rows[row[0]] = [_value(v) for v in row[1:]]
     return rows
@@ -99,6 +129,16 @@ class Link:
     pk: str
     old: str | None
     new: str | None
+    table: str = TABLE
+
+
+def is_phase3_write(stamp: str) -> bool:
+    """A phase-3 write: `phase3:batch-...`, and not the `-rollback` that reverses one."""
+    return stamp.startswith(PHASE3) and not is_rollback(stamp)
+
+
+def is_phase3_rollback(stamp: str) -> bool:
+    return stamp.startswith(PHASE3) and is_rollback(stamp)
 
 
 @dataclass
@@ -118,14 +158,23 @@ def chains(links: Sequence[Link]) -> dict[tuple[str, str], list[Link]]:
 
 
 def broken(chain: Sequence[Link]) -> str | None:
-    """Why a chain is not continuous, or None: each link starts where the one before ended."""
-    for before, after in zip(chain, chain[1:], strict=False):
-        if after.old != before.new:
-            return (
-                f"journal row {after.id} ({after.stamp}) starts from {after.old!r}, the row before "
-                f"it ({before.id}, {before.stamp}) ended at {before.new!r}"
-            )
-    return None
+    """Why a chain is not continuous, or None (`journal_chain.first_break`)."""
+    at = first_break([(link.old, link.new) for link in chain])
+    if at is None:
+        return None
+    before, after = chain[at - 1], chain[at]
+    return (
+        f"journal row {after.id} ({after.stamp}) starts from {after.old!r}, the row before "
+        f"it ({before.id}, {before.stamp}) ended at {before.new!r}"
+    )
+
+
+def reverted(chain: Sequence[Link]) -> str | None:
+    """Which phase-3 rollback a chain holds, or None: a reversed phase-3 write is no correction."""
+    undone = [link for link in chain if is_phase3_rollback(link.stamp)]
+    if not undone:
+        return None
+    return ", ".join(f"journal row {link.id} ({link.stamp})" for link in undone)
 
 
 def judge(
@@ -135,17 +184,35 @@ def judge(
 ) -> Verdict:
     """The acceptance as a pure function of the plan, the journal and the live values."""
     verdict = Verdict()
-    by_field = chains(links)
+    for link in links:
+        if link.table != TABLE and link.stamp.startswith(PHASE3):
+            verdict.deviations.append(
+                f"  OUTSIDE TABLE  {link.table}.{link.column} {link.pk}: journal row {link.id} "
+                f"({link.stamp}) - the wave writes {TABLE} only"
+            )
+    by_field = chains([link for link in links if link.table == TABLE])
+    planned_fields = {(row["column"], row["pk"]) for row in planned}
 
     def live(column: str, pk: str) -> str | None:
         row = stored.get(pk)
         return None if row is None else row[COLUMNS.index(column)]
 
     written = {
-        key for key, chain in by_field.items() if any(k.stamp.startswith(PHASE3) for k in chain)
+        key for key, chain in by_field.items() if any(is_phase3_write(k.stamp) for k in chain)
     }
     for (column, pk), chain in sorted(by_field.items()):
-        if (column, pk) not in written or column not in COLUMNS:
+        if column not in COLUMNS:
+            continue
+        if (column, pk) not in planned_fields:
+            phase3 = [k for k in chain if k.stamp.startswith(PHASE3)]
+            if phase3:
+                verdict.deviations.append(
+                    f"  OUTSIDE PLAN   {pk} {column}: journalled by "
+                    + ", ".join(f"{k.stamp} (row {k.id})" for k in phase3)
+                    + ", but no planned row names this field"
+                )
+            continue
+        if (column, pk) not in written:
             continue
         verdict.written += 1
         if pk not in stored:
@@ -161,7 +228,13 @@ def judge(
                 f"the row holds {live(column, pk)!r}"
             )
             continue
-        if not chain[-1].stamp.startswith(PHASE3):
+        undone = reverted(chain)
+        if undone is not None:
+            verdict.deviations.append(
+                f"  REVERTED     {pk} {column}: the phase-3 write was reversed by {undone}"
+            )
+            continue
+        if not is_phase3_write(chain[-1].stamp):
             verdict.superseded[chain[-1].stamp] += 1
 
     for row in planned:
@@ -186,6 +259,8 @@ def judge(
             problem = f"the first journal row starts from {chain[0].old!r}, the plan had {old!r}"
         if problem is None and live(*key) != chain[-1].new:
             problem = f"the journal ends at {chain[-1].new!r}, the row holds {live(*key)!r}"
+        if problem is None and reverted(chain) is not None:
+            problem = f"a phase-3 rollback on a field phase 3 never wrote: {reverted(chain)}"
         if problem is not None:
             verdict.deviations.append(
                 f"  BROKEN CHAIN {row['site_name'][:34]:35} {row['column']}: {problem}"
@@ -195,31 +270,59 @@ def judge(
     return verdict
 
 
+# ------------------------------------------------------------------------------ the reads
+def _links(raw: Sequence[Sequence[str]]) -> list[Link]:
+    return [
+        Link(int(i), stamp, column, pk, _value(old), _value(new), table)
+        for i, stamp, table, column, pk, old, new in raw
+    ]
+
+
+_SELECT = (
+    f"SELECT id, run_stamp, table_name, column_name, row_pk, coalesce(old_value, '{NULL}'), "
+    f"coalesce(new_value, '{NULL}') FROM remediation_change_log "
+)
+
+
+def phase3_links() -> list[Link]:
+    """Every phase-3 journal row in the three columns - of any table and any row, never only the
+    planned ones: a phase-3 write outside the plan must be seen to be reported."""
+    return _links(
+        psql(
+            _SELECT + f"WHERE run_stamp LIKE '{PHASE3}%' AND column_name IN {_in(COLUMNS)} "
+            "ORDER BY id;\n"
+        )
+    )
+
+
+def chain_links(ids: Sequence[str]) -> list[Link]:
+    """Every journal row, under any stamp, of the three `unified_sites` columns of these rows."""
+    links: list[Link] = []
+    for start in range(0, len(ids), 200):
+        window = list(ids[start : start + 200])
+        links += _links(
+            psql(
+                _SELECT + f"WHERE table_name = '{TABLE}' AND column_name IN {_in(COLUMNS)} "
+                f"AND row_pk IN {_in(window)} ORDER BY id;\n"
+            )
+        )
+    return links
+
+
 # ------------------------------------------------------------------------------------- CLI
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="Accept the phase-3 write wave against production")
     ap.add_argument("--rows", type=pathlib.Path, default=ROWS, help="the wave's ALL_ROWS.jsonl")
     args = ap.parse_args(argv)
     planned = read_jsonl(args.rows)
-    ids = sorted({row["pk"] for row in planned})
-    raw = []
-    for start in range(0, len(ids), 200):
-        window = ids[start : start + 200]
-        raw += psql(
-            f"SELECT id, run_stamp, column_name, row_pk, coalesce(old_value, '{NULL}'), "
-            f"coalesce(new_value, '{NULL}') FROM remediation_change_log "
-            "WHERE table_name = 'unified_sites' "
-            "AND column_name IN ('"
-            + "', '".join(COLUMNS)
-            + "') AND row_pk IN ('"
-            + "', '".join(window)
-            + "') ORDER BY id;\n"
-        )
-    links = [
-        Link(int(i), stamp, column, pk, _value(old), _value(new))
-        for i, stamp, column, pk, old, new in raw
-    ]
-    print(f"journal rows for the planned fields: {len(links)}")
+    phase3 = phase3_links()
+    elsewhere = [link for link in phase3 if link.table != TABLE]
+    ids = sorted({row["pk"] for row in planned} | {k.pk for k in phase3 if k.table == TABLE})
+    links = chain_links(ids) + elsewhere
+    print(
+        f"phase-3 journal rows in the three columns: {len(phase3)}; journal rows read for "
+        f"{len(ids)} sites' chains: {len(links) - len(elsewhere)}"
+    )
     stored = stored_values(ids)
     print(f"read from the database: {len(stored)} of {len(ids)} sites")
 

@@ -17,10 +17,11 @@ cache; that class is skipped with its reason when the dataset is absent.
 from __future__ import annotations
 
 import hashlib
+import inspect
 import json
 import re
 import sys
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
@@ -893,6 +894,113 @@ def uk_second(**over: Any) -> A.ChangeRecord:
     )
 
 
+def period_record(**over: Any) -> A.ChangeRecord:
+    base: dict[str, Any] = {
+        "site_id": SITE_BOA,
+        "site_name": "Boa Island",
+        "old_value": "< 4500 BC",
+        "new_value": "4500 - 3000 BC",
+        "rule": "bucket-of-period-start",
+        "condition": "x",
+        "reason": "period-name-bucket: '< 4500 BC' -> '4500 - 3000 BC'",
+        "evidence": ({"source": "test", "quote": "x"},),
+        "premise": "-4000",
+    }
+    base.update(over)
+    return A.ChangeRecord(**base)
+
+
+def shape_record(**over: Any) -> A.ChangeRecord:
+    base: dict[str, Any] = {
+        "site_id": SITE_BOA,
+        "site_name": "Boa Island",
+        "old_value": "suspect_modern",
+        "new_value": "Monument",
+        "rule": "restore-marker-token",
+        "condition": "x",
+        "reason": "site-type-shape: 'suspect_modern' -> 'Monument'",
+        "evidence": ({"source": "test", "quote": "x"},),
+    }
+    base.update(over)
+    return A.ChangeRecord(**base)
+
+
+#: A row of another source, as `--probe-guards` reads it from production.
+FOREIGN = {
+    "id": "11111111-1111-1111-1111-111111111111",
+    "name": "Somewhere",
+    "value": "Scotland",
+    "premise": "56.0,-3.0",
+}
+
+_RAISE = re.compile(r"RAISE EXCEPTION '((?:[^']|'')*)'((?:, [^,;]+)*);")
+
+
+def raise_messages(sql: str) -> list[str]:
+    """Every `RAISE EXCEPTION` of a rendered statement, formatted as plpgsql would print it for
+    one offending row: each `%` takes the next argument, a count reads 1, a literal its text."""
+    messages = []
+    for template, arguments in _RAISE.findall(sql):
+        values = [a.strip() for a in arguments.split(",") if a.strip()]
+        values = [v[1:-1].replace("''", "'") if v.startswith("'") else "1" for v in values]
+        parts = template.replace("''", "'").split("%")
+        assert len(parts) - 1 == len(values), template
+        messages.append(parts[0] + "".join(v + p for v, p in zip(values, parts[1:], strict=True)))
+    return messages
+
+
+class ProbeProduction:
+    """Answers `--probe-guards` the way production answers a refused probe: psql stops the script
+    (exit 3) with the ERROR line of the probe's own guard - unless `answers` says otherwise - and
+    the journal holds no row for the probe's stamp unless `left` says so."""
+
+    def __init__(
+        self,
+        lane: L.Lane,
+        records: list[A.ChangeRecord],
+        monkeypatch: pytest.MonkeyPatch,
+        *,
+        foreign: dict[str, str] | None = None,
+        answers: dict[str, tuple[int, str]] | None = None,
+        left: dict[str, int] | None = None,
+    ) -> None:
+        self.lane = lane
+        self.foreign = foreign or FOREIGN
+        self.answers = {
+            suffix: (A.PSQL_SCRIPT_ERROR, f"psql:<stdin>:52: ERROR:  {lane.label}: 1 {says}")
+            for suffix, _, _, says in A.probe_cases(records, lane, self.foreign)
+        }
+        self.answers.update(answers or {})
+        self.left = left or {}
+        self.sent: list[str] = []
+        monkeypatch.setattr(A, "psql_json_reader", lambda: lambda sql: [self.foreign])
+        monkeypatch.setattr(A, "run_psql", self.run_psql)
+
+    def run_psql(self, sql: str, *, rows: bool = False, check: bool = True, **_: Any) -> Any:
+        self.sent.append(sql)
+        for suffix, (code, stderr) in self.answers.items():
+            stamp = P.sql_literal(f"{self.lane.probe_run_stamp}-{suffix}")
+            if sql == f"SELECT count(*) FROM remediation_change_log WHERE run_stamp = {stamp}":
+                return _done(f"{self.left.get(suffix, 0)}\n")
+            if not rows and stamp in sql and "\nROLLBACK;\n" in sql:
+                done = _done("", returncode=code)
+                done.stderr = stderr + "\n"
+                return done
+        raise AssertionError(f"unexpected statement: {sql[:80]!r}")
+
+
+def probe_argv(lane: L.Lane, plan_path: Path) -> list[str]:
+    return [
+        "--lane",
+        lane.name,
+        "--probe-guards",
+        "--plan",
+        str(plan_path),
+        "--out",
+        str(plan_path.parent),
+    ]
+
+
 class TestTheLanes:
     def test_the_uk_statement_carries_its_own_journal_identity_and_none_of_t05s(self) -> None:
         sql = A.render_transaction(
@@ -984,46 +1092,118 @@ class TestTheLanes:
         assert f"'{L.UK_PARTS.run_stamp}'" in rehearsal.split("\nROLLBACK;\n", 1)[1]
 
     def test_every_rendered_guard_has_its_probe(self) -> None:
-        foreign = {
-            "id": "11111111-1111-1111-1111-111111111111",
-            "name": "Somewhere",
-            "value": "Scotland",
-            "premise": "56.0,-3.0",
-        }
-        uk = {suffix for suffix, _, _ in A.probe_cases([uk_record()], L.UK_PARTS, foreign)}
+        uk = {case[0] for case in A.probe_cases([uk_record()], L.UK_PARTS, FOREIGN)}
         assert {"guard4-not-owned", "guard5-premise"} <= uk
-        t05 = {suffix for suffix, _, _ in A.probe_cases([record()], L.T05, foreign)}
+        t05 = {case[0] for case in A.probe_cases([record()], L.T05, FOREIGN)}
         assert "guard4-not-owned" not in t05 and "guard5-premise" not in t05
         assert {"guard1-other-source", "guard2-no-op", "guard2-too-long"} <= t05
+
+    @pytest.mark.parametrize("name", sorted(L.LANES))
+    def test_each_probe_names_a_refusal_exactly_one_rendered_guard_raises(
+        self, name: str, tmp_path: Path
+    ) -> None:
+        """The text a probe waits for is a RAISE of its statement - and of no other guard, so a
+        probe refused by the wrong guard cannot pass for its own. The RAISE messages are formatted
+        the way plpgsql does it: `%` by `%`, the count as 1 (every probe corrupts one row)."""
+        lane = L.LANES[name]
+        records, _ = lane_plan(tmp_path, lane)
+        for suffix, _, mutated, says in A.probe_cases(records, lane, FOREIGN):
+            sql = A.render_transaction(
+                mutated, site_ids={r.site_id for r in mutated}, validate=False, lane=lane
+            )
+            raised = raise_messages(sql)
+            own = [m for m in raised if A.refused_by_its_guard(lane, says, [f"ERROR:  {m}"])]
+            assert len(own) == 1, (suffix, own)
 
     def test_the_probes_read_the_foreign_row_whole_even_with_a_pipe_in_its_name(
         self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
     ) -> None:
         """Unaligned psql separates fields with `|`: a name holding one would have shifted the
         foreign row's value and premise into the wrong fields of the guard-1 probe."""
-        foreign = {
-            "id": "11111111-1111-1111-1111-111111111111",
-            "name": "Broch | Dun",
-            "value": "Scotland",
-            "premise": "58.1,-3.9",
-        }
-        monkeypatch.setattr(A, "psql_json_reader", lambda: lambda sql: [foreign])
-        sent: list[str] = []
-
-        def refuse_every_probe(sql: str, *, rows: bool = False, check: bool = True, **_: Any):
-            sent.append(sql)
-            if rows:
-                return _done("0\n")
-            return _done("", returncode=3) if "RAISE" not in sql else _done("ERROR: x\n", 3)
-
-        monkeypatch.setattr(A, "run_psql", refuse_every_probe)
+        foreign = {**FOREIGN, "name": "Broch | Dun", "premise": "58.1,-3.9"}
+        probes = ProbeProduction(L.UK_PARTS, [uk_record()], monkeypatch, foreign=foreign)
         assert A.cmd_probe_guards([uk_record()], Path("."), L.UK_PARTS) == 0
-        guard1 = next(s for s in sent if "guard1-other-source" in s)
-        assert (
-            "'11111111-1111-1111-1111-111111111111'::uuid, 'Scotland', 'Northern Ireland'" in guard1
-        )
+        guard1 = next(s for s in probes.sent if "guard1-other-source" in s)
+        assert f"'{FOREIGN['id']}'::uuid, 'Scotland', 'Northern Ireland'" in guard1
         assert "'58.1,-3.9'" in guard1
         assert "guard 5" in capsys.readouterr().out
+
+    def test_every_probe_refused_by_its_own_guard_passes(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
+    ) -> None:
+        records, plan_path = lane_plan(tmp_path, L.UK_PARTS)
+        ProbeProduction(L.UK_PARTS, records, monkeypatch)
+        assert A.main(probe_argv(L.UK_PARTS, plan_path)) == A.EXIT_OK
+        assert capsys.readouterr().out.count("refused by its own guard=True") == 6
+
+    def test_a_probe_refused_by_another_guard_is_a_failure(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
+    ) -> None:
+        """Guard 4 refuses a 101-character value too: with guard 2 gone, the too-long probe would
+        still raise - through guard 4 - and the 2026-09-22 check ('ERROR' anywhere) passed it."""
+        records, plan_path = lane_plan(tmp_path, L.UK_PARTS)
+        guard4 = A.refusal(A.GUARD4_SAYS.format(what="write"))
+        ProbeProduction(
+            L.UK_PARTS,
+            records,
+            monkeypatch,
+            answers={"guard2-too-long": (3, f"ERROR:  {L.UK_PARTS.label}: 1 {guard4}")},
+        )
+        assert A.main(probe_argv(L.UK_PARTS, plan_path)) == A.EXIT_PROBE_FAILED
+        out = capsys.readouterr().out
+        assert out.count("refused by its own guard=False") == 1
+        assert "guard 2 - a value longer than the column: expected psql exit 3" in out
+
+    @pytest.mark.parametrize(
+        "answer",
+        [(0, ""), (0, "ERROR:  UK country part: 1 planned row(s) are not writable changes")],
+        ids=["not refused", "psql did not stop the script"],
+    )
+    def test_a_probe_that_psql_did_not_stop_on_its_guard_is_a_failure(
+        self, answer: tuple[int, str], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        records, _ = lane_plan(tmp_path, L.UK_PARTS)
+        ProbeProduction(L.UK_PARTS, records, monkeypatch, answers={"guard2-no-op": answer})
+        assert A.cmd_probe_guards(records, tmp_path, L.UK_PARTS) == 1
+
+    def test_a_probe_that_leaves_a_journal_row_is_a_failure(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
+    ) -> None:
+        records, _ = lane_plan(tmp_path, L.UK_PARTS)
+        ProbeProduction(L.UK_PARTS, records, monkeypatch, left={"guard5-premise": 1})
+        assert A.cmd_probe_guards(records, tmp_path, L.UK_PARTS) == 1
+        assert "the probe left 1 journal row(s) behind" in capsys.readouterr().out
+
+    def test_the_new_lanes_bound_the_transaction_on_the_server(self) -> None:
+        """A client that gives up does not stop the server; the transaction bounds itself."""
+        for lane in (L.UK_PARTS, L.PERIOD_NAME, L.SITE_TYPE_SHAPE):
+            records = {
+                L.UK_PARTS: [uk_record()],
+                L.PERIOD_NAME: [period_record()],
+                L.SITE_TYPE_SHAPE: [shape_record()],
+            }[lane]
+            for sql in (
+                A.render_transaction(records, site_ids={SITE_BOA}, lane=lane),
+                P.render_rollback_sql(records, site_ids={SITE_BOA}, lane=lane),
+            ):
+                head = sql.split("CREATE TEMP TABLE", 1)[0]
+                assert head.index("BEGIN;") < head.index("SET LOCAL lock_timeout = '10s';")
+                assert "SET LOCAL statement_timeout = '120s';" in head
+        assert "SET LOCAL" not in A.render_transaction([record()], site_ids={SITE_GEORGIA})
+
+    def test_the_server_bounds_end_the_transaction_before_the_client_gives_up(self) -> None:
+        """Four statements run inside the bound (CREATE, INSERT, the DO block, COMMIT); even at
+        the bound each, the server is done before `run_psql`'s client timeout."""
+        client = inspect.signature(A.run_psql).parameters["timeout"].default
+        for lane in L.LANES.values():
+            if lane.statement_timeout is not None:
+                assert lane.statement_timeout.endswith("s") and lane.lock_timeout is not None
+                assert 4 * int(lane.statement_timeout[:-1]) < client
+
+    @pytest.mark.parametrize("name", sorted(L.LANE_READBACKS))
+    def test_every_lane_readback_is_ordered_by_metric(self, name: str) -> None:
+        """A UNION ALL has no order of its own: before and after must compare line by line."""
+        assert L.LANE_READBACKS[name].endswith("\nORDER BY 1;\n")
 
     def test_the_uk_rollback_rehearsal_reads_each_row_against_its_part(self) -> None:
         """Each planned row is checked against the unit *it* was given - a set of the four parts
@@ -1061,6 +1241,8 @@ class TestTheLanes:
             ("max_chars", 0, "must be positive"),
             ("run_stamp", "", "journal identity"),
             ("allowed_new_values", ("X" * 101,), "cannot be written"),
+            ("lock_timeout", "10s'; COMMIT; --", "not a duration"),
+            ("statement_timeout", "0s", "not a duration"),
         ],
     )
     def test_a_lane_that_would_splice_something_unsafe_into_sql_is_refused(
@@ -1272,19 +1454,62 @@ class TestTheDeliveredT05Pin:
 
 
 # ------------------------------------ [H] SECURITY 3 / BACKEND B7: after a lost answer
-class FakeProduction:
-    """Answers the SQL `cmd_apply` sends, and refuses anything else - a stand-in that cannot be
-    satisfied by a statement the real path would not send."""
+def lane_plan(directory: Path, lane: L.Lane) -> tuple[list[A.ChangeRecord], Path]:
+    """A lane's plan with its pinned reversal in `directory`: T05's two fabricated rows, or the
+    committed plan of a lane not yet applied - so every lane's own records reach the fake."""
+    if lane is L.T05:
+        return delivered(directory)
+    plan_path = directory / "PLAN.jsonl"
+    plan_path.write_text(
+        (A.lane_dir(lane) / "PLAN.jsonl").read_text(encoding="utf-8"),
+        encoding="utf-8",
+        newline="\n",
+    )
+    records = A.load_records(plan_path)
+    (directory / "ROLLBACK.sql").write_text(
+        P.pinned(A.rollback_statement(records, lane), P.plan_sha256(plan_path)),
+        encoding="utf-8",
+        newline="\n",
+    )
+    return records, plan_path
 
-    def __init__(self, counts: list[Any], write: Any, planned: int) -> None:
+
+class FakeProduction:
+    """Answers the SQL `cmd_apply` sends for one lane, and refuses anything else - a stand-in that
+    cannot be satisfied by a statement the real path would not send.
+
+    Rewritten 2026-09-23. The first version answered *any* `run_stamp = ...` count with the next
+    queued number, so `commit_state` and the "never apply twice" check could have counted another
+    stamp (the reversal's, say) with every test green - and on production a landed write would have
+    been reported as NOT COMMITTED. Now a count must name this lane's run stamp exactly, and the
+    landed read-back must name the lane's stamp, its column and every planned site.
+    """
+
+    def __init__(
+        self,
+        lane: L.Lane,
+        counts: list[Any],
+        write: Any,
+        records: list[A.ChangeRecord],
+        *,
+        landed: dict[str, int] | None = None,
+        after: BaseException | None = None,
+    ) -> None:
+        self.lane = lane
         self.counts = list(counts)
         self.write = write
-        self.planned = planned
+        self.records = records
+        self.landed = landed or {}
+        self.after = after
+        self.readbacks = 0
         self.sent: list[str] = []
 
     def run_psql(self, sql: str, *, rows: bool = False, check: bool = True, **_: Any) -> Any:
         self.sent.append(sql)
+        stamp = P.sql_literal(self.lane.run_stamp)
         if sql.startswith("SELECT count(*) FROM remediation_change_log WHERE run_stamp = "):
+            if sql != f"SELECT count(*) FROM remediation_change_log WHERE run_stamp = {stamp}":
+                raise AssertionError(f"a journal count that is not this lane's stamp: {sql!r}")
             answer = self.counts.pop(0)
             if isinstance(answer, BaseException):
                 raise answer
@@ -1294,14 +1519,25 @@ class FakeProduction:
                 raise self.write
             return _done("", returncode=self.write)
         if sql.startswith("WITH planned(site_id, new_value)"):
-            n = self.planned
-            return _done(
-                f"journal rows for this run stamp|{n}\n"
-                f"planned rows now holding the planned new value|{n}\n"
-                "planned rows with no journal row for this run stamp|0\n"
-                "journal rows for this run outside unified_sites.country|0\n"
-            )
-        if sql is A.VERIFY_SQL:
+            column = self.lane.column
+            if f"run_stamp = {stamp}" not in sql or f"u.{column} IS NOT DISTINCT FROM" not in sql:
+                raise AssertionError("a landed read-back that is not this lane's stamp and column")
+            for r in self.records:
+                if f"({P.sql_literal(r.site_id)}::uuid, {P.sql_literal(r.new_value)})" not in sql:
+                    raise AssertionError(f"the landed read-back lacks the planned row {r.site_id}")
+            n = len(self.records)
+            metrics = {
+                "journal rows for this run stamp": n,
+                "planned rows now holding the planned new value": n,
+                "planned rows with no journal row for this run stamp": 0,
+                f"journal rows for this run outside unified_sites.{column}": 0,
+                **self.landed,
+            }
+            return _done("".join(f"{name}|{value}\n" for name, value in metrics.items()))
+        if sql is A.READBACKS[self.lane.name]:
+            self.readbacks += 1
+            if self.readbacks == 2 and self.after is not None:
+                raise self.after
             return _done("")
         raise AssertionError(f"unexpected statement: {sql[:80]!r}")
 
@@ -1314,76 +1550,176 @@ def _done(stdout: str, returncode: int = 0) -> Any:
     )
 
 
-@pytest.fixture
-def applied(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Any:
-    records, plan_path = delivered(tmp_path)
-    A.emit(records, tmp_path, plan_path=plan_path)
+@dataclass
+class Applied:
+    """One lane's emitted plan in a temp directory, and the commands run against a fake."""
+
+    lane: L.Lane
+    records: list[A.ChangeRecord]
+    plan_path: Path
+    out: Path
+    monkeypatch: pytest.MonkeyPatch
+
+    @property
+    def n(self) -> int:
+        return len(self.records)
+
+    def fake(self, counts: list[Any], write: Any, **options: Any) -> FakeProduction:
+        production = FakeProduction(self.lane, counts, write, self.records, **options)
+        self.monkeypatch.setattr(A, "run_psql", production.run_psql)
+        return production
+
+    def apply(self) -> int:
+        return A.cmd_apply(self.records, self.out, self.lane, plan_path=self.plan_path)
+
+    def main(self) -> int:
+        return A.main(
+            [
+                "--lane",
+                self.lane.name,
+                "--apply",
+                "--plan",
+                str(self.plan_path),
+                "--out",
+                str(self.out),
+            ]
+        )
+
+
+@pytest.fixture(params=sorted(L.LANES))
+def applied(request: pytest.FixtureRequest, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Any:
+    """Every lane, not T05 alone: the commit state is read under each lane's own stamp."""
+    lane = L.LANES[request.param]
+    records, plan_path = lane_plan(tmp_path, lane)
+    A.emit(records, tmp_path, lane, plan_path=plan_path)
     monkeypatch.setattr(A, "verify_interests", lambda *a, **k: "")
-
-    def run(counts: list[Any], write: Any) -> tuple[Any, FakeProduction]:
-        fake = FakeProduction(counts, write, len(records))
-        monkeypatch.setattr(A, "run_psql", fake.run_psql)
-        return lambda: A.cmd_apply(records, tmp_path, plan_path=plan_path), fake
-
-    return run
+    return Applied(lane, records, plan_path, tmp_path, monkeypatch)
 
 
 class TestTheCommitState:
     def test_a_timeout_after_the_commit_is_reported_as_committed(
-        self, applied: Any, capsys: pytest.CaptureFixture
+        self, applied: Applied, capsys: pytest.CaptureFixture
     ) -> None:
-        go, _ = applied([0, 2], prod_outcome_unknown())
-        assert go() == A.EXIT_COMMITTED_UNCLEAN
+        applied.fake([0, applied.n], prod_outcome_unknown())
+        assert applied.apply() == A.EXIT_COMMITTED_UNCLEAN
         out = capsys.readouterr().out
         assert "COMMITTED: psql timed out" in out and "APPLY LANDED" in out
 
-    def test_a_timeout_before_the_commit_is_reported_as_not_committed(
-        self, applied: Any, capsys: pytest.CaptureFixture
-    ) -> None:
-        go, _ = applied([0, 0], prod_outcome_unknown())
-        assert go() == A.EXIT_NOT_COMMITTED
-        assert "NOT COMMITTED: psql timed out" in capsys.readouterr().out
+    def test_a_timeout_with_an_empty_journal_is_an_unknown_outcome(self, applied: Applied) -> None:
+        """Rewritten 2026-09-23 from `test_a_timeout_before_the_commit_is_reported_as_not_committed`,
+        which pinned the defect: after a client timeout the server can still be running the script
+        towards its COMMIT (measured on the VPS: the remote psql ran the next statement 17 s after
+        the client ssh was killed), and its uncommitted journal rows are invisible to the count. An
+        empty journal is therefore not yet an answer; the outcome is UNKNOWN, with the queries."""
+        applied.fake([0, 0], prod_outcome_unknown())
+        with pytest.raises(A.OutcomeUnknown, match="may still be running it") as info:
+            applied.apply()
+        assert A.OPEN_SESSIONS_SQL in str(info.value)
+        assert f"run_stamp = '{applied.lane.run_stamp}'" in str(info.value)
 
-    def test_a_failed_exit_is_settled_from_the_journal(
-        self, applied: Any, capsys: pytest.CaptureFixture
+    def test_a_dropped_channel_with_an_empty_journal_is_an_unknown_outcome(
+        self, applied: Applied, capsys: pytest.CaptureFixture
     ) -> None:
-        """psql exits 3 when a post-commit read fails - after the COMMIT went through."""
-        go, _ = applied([0, 2], 3)
-        assert go() == A.EXIT_COMMITTED_UNCLEAN
-        assert "COMMITTED: psql exited 3" in capsys.readouterr().out
-        go, _ = applied([0, 0], 3)
-        assert go() == A.EXIT_NOT_COMMITTED
+        """ssh's 255 is the client's failure, not psql's: the server session can outlive it."""
+        applied.fake([0, 0], 255)
+        assert applied.main() == A.EXIT_UNKNOWN
+        captured = capsys.readouterr()
+        assert "OUTCOME UNKNOWN" in captured.err and "NOT COMMITTED" not in captured.out
+
+    def test_a_script_error_with_an_empty_journal_is_not_committed(
+        self, applied: Applied, capsys: pytest.CaptureFixture
+    ) -> None:
+        """psql's own exit 3: ON_ERROR_STOP ended the script and the session - final."""
+        applied.fake([0, 0], A.PSQL_SCRIPT_ERROR)
+        assert applied.apply() == A.EXIT_NOT_COMMITTED
+        assert "NOT COMMITTED: psql exited 3" in capsys.readouterr().out
+
+    @pytest.mark.parametrize("code", [3, 255, 1])
+    def test_a_failed_exit_with_the_whole_journal_is_committed(
+        self, applied: Applied, capsys: pytest.CaptureFixture, code: int
+    ) -> None:
+        """psql exits 3 when a post-commit read fails - after the COMMIT went through - and a
+        committed row cannot vanish, whatever ended the client."""
+        applied.fake([0, applied.n], code)
+        assert applied.apply() == A.EXIT_COMMITTED_UNCLEAN
+        assert f"COMMITTED: psql exited {code}" in capsys.readouterr().out
 
     def test_an_unreadable_journal_is_an_unknown_outcome_with_the_query_to_run(
-        self, applied: Any
+        self, applied: Applied
     ) -> None:
-        go, _ = applied([0, prod_outcome_unknown()], prod_outcome_unknown())
+        applied.fake([0, prod_outcome_unknown()], prod_outcome_unknown())
         with pytest.raises(A.OutcomeUnknown, match="Before any retry run: SELECT count"):
-            go()
+            applied.apply()
 
-    def test_a_journal_read_that_fails_is_an_unknown_outcome(self, applied: Any) -> None:
-        go, _ = applied([0, P.PlanError("psql exited 255")], 3)
+    def test_a_journal_read_that_fails_is_an_unknown_outcome(self, applied: Applied) -> None:
+        applied.fake([0, P.PlanError("psql exited 255")], 3)
         with pytest.raises(A.OutcomeUnknown, match="could not be read either"):
-            go()
+            applied.apply()
 
-    def test_a_partial_journal_is_an_unknown_outcome(self, applied: Any) -> None:
-        go, _ = applied([0, 1], prod_outcome_unknown())
-        with pytest.raises(A.OutcomeUnknown, match="1 of 2 rows"):
-            go()
+    def test_a_partial_journal_is_an_unknown_outcome(self, applied: Applied) -> None:
+        applied.fake([0, 1], prod_outcome_unknown())
+        with pytest.raises(A.OutcomeUnknown, match=f"1 of {applied.n} rows"):
+            applied.apply()
 
     def test_a_clean_apply_is_asserted_from_the_read_back(
-        self, applied: Any, capsys: pytest.CaptureFixture
+        self, applied: Applied, capsys: pytest.CaptureFixture
     ) -> None:
-        go, fake = applied([0], 0)
-        assert go() == A.EXIT_OK
+        production = applied.fake([0], 0)
+        assert applied.apply() == A.EXIT_OK
         assert "APPLY OK" in capsys.readouterr().out
-        assert any(s.startswith("-- plan sha256 ") for s in fake.sent)
+        assert any(s.startswith("-- plan sha256 ") for s in production.sent)
 
-    def test_a_stamp_that_already_journals_rows_is_never_applied_again(self, applied: Any) -> None:
-        go, fake = applied([2], 0)
+    def test_a_stamp_that_already_journals_rows_is_never_applied_again(
+        self, applied: Applied
+    ) -> None:
+        production = applied.fake([applied.n], 0)
         with pytest.raises(P.PlanError, match="never apply twice"):
-            go()
-        assert not any(s.startswith("-- plan sha256 ") for s in fake.sent)
+            applied.apply()
+        assert not any(s.startswith("-- plan sha256 ") for s in production.sent)
+
+    @pytest.mark.parametrize(
+        ("metric", "wrong"),
+        [
+            ("journal rows for this run stamp", -1),
+            ("planned rows now holding the planned new value", -1),
+            ("planned rows with no journal row for this run stamp", 1),
+            ("journal rows for this run outside unified_sites.{column}", 1),
+        ],
+    )
+    def test_a_read_back_that_disagrees_after_a_clean_commit_is_no_success(
+        self, applied: Applied, capsys: pytest.CaptureFixture, metric: str, wrong: int
+    ) -> None:
+        name = metric.format(column=applied.lane.column)
+        value = applied.n + wrong if wrong < 0 else wrong
+        applied.fake([0], 0, landed={name: value})
+        assert applied.apply() == A.EXIT_COMMITTED_UNCONFIRMED
+        out = capsys.readouterr().out
+        assert "COMMITTED BUT NOT CONFIRMED" in out and name in out
+        assert "APPLY OK" not in out
+
+    def test_a_read_back_that_disagrees_after_a_lost_answer_is_no_landing(
+        self, applied: Applied, capsys: pytest.CaptureFixture
+    ) -> None:
+        wrong = {"planned rows now holding the planned new value": applied.n - 1}
+        applied.fake([0, applied.n], prod_outcome_unknown(), landed=wrong)
+        assert applied.apply() == A.EXIT_COMMITTED_UNCONFIRMED
+        out = capsys.readouterr().out
+        assert "COMMITTED BUT NOT CONFIRMED" in out and "APPLY LANDED" not in out
+
+    @pytest.mark.parametrize(
+        "failure",
+        [P.PlanError("psql exited 255: Connection closed"), A.OutcomeUnknown("no answer in 900s")],
+    )
+    def test_a_read_back_that_fails_after_the_commit_is_never_a_refusal(
+        self, applied: Applied, capsys: pytest.CaptureFixture, failure: BaseException
+    ) -> None:
+        """psql exited 0 after the COMMIT: the write is in the database. The 2026-09-22 code let a
+        failing read-back escape as `REFUSED` (exit 1, "nothing was sent") or `OUTCOME UNKNOWN`."""
+        applied.fake([0], 0, after=failure)
+        assert applied.main() == A.EXIT_COMMITTED_UNCONFIRMED
+        captured = capsys.readouterr()
+        assert "COMMITTED BUT NOT CONFIRMED" in captured.out
+        assert "REFUSED" not in captured.err and "OUTCOME UNKNOWN" not in captured.err
 
     def test_a_journal_count_of_the_wrong_shape_is_refused(
         self, monkeypatch: pytest.MonkeyPatch
@@ -1403,6 +1739,74 @@ class TestTheCommitState:
         err = capsys.readouterr().err
         assert "OUTCOME UNKNOWN" in err and "REFUSED" not in err
 
+    def test_the_exit_codes_are_distinct(self) -> None:
+        codes = [
+            A.EXIT_OK,
+            A.EXIT_REFUSED,
+            A.EXIT_NOT_COMMITTED,
+            A.EXIT_COMMITTED_UNCLEAN,
+            A.EXIT_UNKNOWN,
+            A.EXIT_COMMITTED_UNCONFIRMED,
+            A.EXIT_PROBE_FAILED,
+        ]
+        assert len(set(codes)) == len(codes) and 2 not in codes, "2 is argparse's usage error"
+
 
 def prod_outcome_unknown() -> Any:
     return A.OutcomeUnknown("psql did not answer within 900s: UNKNOWN")
+
+
+class TestTheLandedCheck:
+    """`assert_the_write_landed` is the one read that turns a COMMIT into an `APPLY OK`."""
+
+    METRICS = (
+        "journal rows for this run stamp",
+        "planned rows now holding the planned new value",
+        "planned rows with no journal row for this run stamp",
+        "journal rows for this run outside unified_sites.{column}",
+    )
+
+    def answer(self, lane: L.Lane, n: int, **override: int) -> list[list[str]]:
+        right = dict(zip(self.METRICS, (n, n, 0, 0), strict=True))
+        values = {name.format(column=lane.column): v for name, v in right.items()}
+        values.update(override)
+        return [[name, str(value)] for name, value in values.items()]
+
+    @pytest.mark.parametrize("name", sorted(L.LANES))
+    def test_the_read_back_is_the_lane_s_own(
+        self, name: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        lane = L.LANES[name]
+        records, _ = lane_plan(tmp_path, lane)
+        sent: list[str] = []
+
+        def read(sql: str) -> list[list[str]]:
+            sent.append(sql)
+            return self.answer(lane, len(records))
+
+        monkeypatch.setattr(A, "read_rows", read)
+        landed = A.assert_the_write_landed(records, lane=lane)
+        assert landed[f"journal rows for this run outside unified_sites.{lane.column}"] == 0
+        (sql,) = sent
+        assert f"run_stamp = '{lane.run_stamp}'" in sql and f"u.{lane.column} " in sql
+        assert all(f"('{r.site_id}'::uuid, " in sql for r in records)
+
+    @pytest.mark.parametrize(("index", "value"), [(0, 1), (1, 1), (2, 1), (3, 1), (0, 3), (1, 0)])
+    def test_every_disagreement_is_refused(
+        self, index: int, value: int, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        records = [record(), second()]
+        metric = self.METRICS[index].format(column="country")
+        monkeypatch.setattr(
+            A, "read_rows", lambda sql: self.answer(L.T05, len(records), **{metric: value})
+        )
+        with pytest.raises(P.PlanError, match="disagrees with the plan"):
+            A.assert_the_write_landed(records, lane=L.T05)
+
+    def test_a_metric_the_read_back_did_not_return_is_a_disagreement(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        records = [record(), second()]
+        monkeypatch.setattr(A, "read_rows", lambda sql: self.answer(L.T05, 2)[:3])
+        with pytest.raises(P.PlanError, match="= None, expected 0"):
+            A.assert_the_write_landed(records, lane=L.T05)

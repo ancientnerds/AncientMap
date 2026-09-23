@@ -18,10 +18,20 @@ anything, and it writes through one transaction:
 `--rehearse`, `--rehearse-rollback` and `--apply` never re-emit: they send the file on disk, and
 only when it is still the statement its plan renders and its pin names the plan as it is now
 (`[H] SECURITY 3 / BACKEND B7`). A plan changed after the emit, a hand edit, or a file from another
-plan is refused. After a psql timeout or a failed exit, `--apply` reads the journal for its run
-stamp and says whether the transaction COMMITTED (all rows journalled) or did NOT (none), instead
-of leaving it ambiguous; if even that read fails, the outcome is reported as UNKNOWN with the query
-to run before any retry.
+plan is refused.
+
+After a psql timeout or a failed exit, `--apply` reads the journal for its run stamp. All rows
+journalled means the transaction COMMITTED - a committed row cannot vanish. None journalled means
+NOT COMMITTED only after psql's own exit 3: ON_ERROR_STOP stopped the script, so its session has
+ended and an uncommitted transaction can never commit. After a client timeout or ssh's 255 the
+server may still be running the script towards its COMMIT (measured 2026-09-23), so an empty journal
+is an UNKNOWN outcome, reported with the queries to run before any retry. Once psql has exited 0
+the write is in the database whatever its read-back says: a read-back that fails or disagrees is
+reported as COMMITTED BUT NOT CONFIRMED, never as a refusal.
+
+The exit codes the runbook reads: 0 OK, 1 REFUSED (nothing was sent), 3 NOT COMMITTED, 4 COMMITTED
+(read-back confirmed, psql did not finish cleanly), 5 OUTCOME UNKNOWN, 6 COMMITTED BUT NOT CONFIRMED,
+7 a guard probe did not see its own guard refuse.
 
 `--lane` names the lane (`mechanical/lane.py`): the column, the journal identity and the values it
 owns. It defaults to `t05`, the country lane applied on 2026-09-21, whose statement this module
@@ -36,6 +46,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import re
 import subprocess
 import sys
 from collections.abc import Iterable, Mapping, Sequence
@@ -74,8 +85,27 @@ EXIT_REFUSED = 1
 EXIT_NOT_COMMITTED = 3
 EXIT_COMMITTED_UNCLEAN = 4
 EXIT_UNKNOWN = 5
+EXIT_COMMITTED_UNCONFIRMED = 6
+EXIT_PROBE_FAILED = 7
 COMMITTED = "COMMITTED"
 NOT_COMMITTED = "NOT COMMITTED"
+
+#: psql's exit status when ON_ERROR_STOP stopped the script at an error (psql(1), "Exit Status").
+#: psql has then ended, and its session with it: a transaction that had not committed was aborted
+#: and can never commit, so an empty journal is final. No other failure says that - a client
+#: timeout, ssh's 255 or psql's 1 and 2 can leave the server session running the script.
+PSQL_SCRIPT_ERROR = 3
+
+#: What each in-transaction guard says when it refuses, after `<lane label>: <count> `. The renderer
+#: writes these into the RAISE messages, and `--probe-guards` counts a probe as proven only when
+#: psql's ERROR line carries its own guard's text: a probe refused by another guard (guard 4 also
+#: refuses a too-long value, the column itself refuses 101 characters) proves nothing about its own.
+#: Guard 1's second `%` is the curated source, a RAISE argument; guard 4's `{what}` is write/undo.
+GUARD1_SAYS = "planned row(s) are not % sites"
+GUARD2_SAYS = "planned row(s) are not writable changes"
+GUARD3_SAYS = "planned row(s) no longer hold the planned old value"
+GUARD4_SAYS = "planned row(s) {what} a value this lane does not own"
+GUARD5_SAYS = "planned row(s) no longer hold the premise the plan derived its value from"
 
 
 def lane_dir(lane: Lane) -> Path:
@@ -251,6 +281,19 @@ def render_transaction(
     add("\\set ON_ERROR_STOP on")
     add("BEGIN;")
     add("")
+    if lane.lock_timeout is not None or lane.statement_timeout is not None:
+        add(
+            "-- The server bounds this transaction itself: a lock wait or a runaway statement raises"
+        )
+        add(
+            "-- here, psql stops the script (exit 3) and nothing is kept. A client that gives up does"
+        )
+        add("-- not stop the server - psql has the whole script on its stdin.")
+        if lane.lock_timeout is not None:
+            add(f"SET LOCAL lock_timeout = {_literal(lane.lock_timeout)};")
+        if lane.statement_timeout is not None:
+            add(f"SET LOCAL statement_timeout = {_literal(lane.statement_timeout)};")
+        add("")
     add(f"CREATE TEMP TABLE {table} (")
     add("    site_id     UUID PRIMARY KEY,")
     add("    old_value   TEXT NOT NULL,")
@@ -302,10 +345,7 @@ def render_transaction(
         "        -- quote, which is a property of today's value and not of this code. G0's guard is"
     )
     add("        -- the shape this one copies.")
-    add(
-        f"        RAISE EXCEPTION '{label}: % planned row(s) are not % sites', bad, "
-        f"{_literal(source)};"
-    )
+    add(f"        RAISE EXCEPTION '{label}: % {GUARD1_SAYS}', bad, {_literal(source)};")
     add("    END IF;")
     add("")
     add("    -- scope guard 2: the plan is a set of real changes, each one writable in the column")
@@ -313,7 +353,7 @@ def render_transaction(
     add("     WHERE p.old_value IS NULL OR p.new_value = '' OR p.new_value = p.old_value")
     add(f"        OR length(p.new_value) > {lane.max_chars};")
     add("    IF bad > 0 THEN")
-    add(f"        RAISE EXCEPTION '{label}: % planned row(s) are not writable changes', bad;")
+    add(f"        RAISE EXCEPTION '{label}: % {GUARD2_SAYS}', bad;")
     add("    END IF;")
     add("")
     add("    -- scope guard 3: every planned row still holds the old value the plan names")
@@ -321,10 +361,7 @@ def render_transaction(
     add(f"      FROM {table} p JOIN unified_sites u ON u.id = p.site_id")
     add(f"     WHERE u.{column} IS DISTINCT FROM p.old_value;")
     add("    IF bad > 0 THEN")
-    add(
-        f"        RAISE EXCEPTION '{label}: % planned row(s) no longer hold the planned old "
-        "value', bad;"
-    )
+    add(f"        RAISE EXCEPTION '{label}: % {GUARD3_SAYS}', bad;")
     add("    END IF;")
     add("")
     if lane.allowed_new_values:
@@ -341,10 +378,7 @@ def render_transaction(
             + ");"
         )
         add("    IF bad > 0 THEN")
-        add(
-            f"        RAISE EXCEPTION '{label}: % planned row(s) {what} a value this lane does "
-            "not own', bad;"
-        )
+        add(f"        RAISE EXCEPTION '{label}: % {GUARD4_SAYS.format(what=what)}', bad;")
         add("    END IF;")
         add("")
     if premise:
@@ -355,10 +389,7 @@ def render_transaction(
         add(f"      FROM {table} p JOIN unified_sites u ON u.id = p.site_id")
         add(f"     WHERE ({lane.premise_sql}) IS DISTINCT FROM p.premise;")
         add("    IF bad > 0 THEN")
-        add(
-            f"        RAISE EXCEPTION '{label}: % planned row(s) no longer hold the premise the "
-            "plan derived its value from', bad;"
-        )
+        add(f"        RAISE EXCEPTION '{label}: % {GUARD5_SAYS}', bad;")
         add("    END IF;")
         add("")
     add("    -- the only writer: the conditional UPDATE and its journal row commit together, and")
@@ -720,12 +751,25 @@ def journal_count(run_stamp: str) -> int:
     return int(rows[0][0])
 
 
-def commit_state(records: Sequence[ChangeRecord], lane: Lane = T05) -> str:
+#: Every session still inside a transaction, other than the one asking. A psql session that ran a
+#: lane's script and has not ended shows here until its transaction commits or aborts.
+OPEN_SESSIONS_SQL = (
+    "SELECT pid, state, now() - xact_start AS open_for, left(query, 60) AS query "
+    "FROM pg_stat_activity WHERE pid <> pg_backend_pid() AND xact_start IS NOT NULL "
+    "AND application_name = 'psql';"
+)
+
+
+def commit_state(records: Sequence[ChangeRecord], lane: Lane = T05, *, session_ended: bool) -> str:
     """Did the lane's one transaction commit? Read from the journal, never assumed.
 
-    The transaction journals every planned row or none: all of them under the run stamp means it
-    COMMITTED, none means it did NOT. Anything else - including a journal that cannot be read -
-    is an unknown outcome, reported with the query to run before any retry.
+    The transaction journals every planned row or none. All of them under the run stamp means it
+    COMMITTED: a committed row cannot vanish. None means it did NOT only when `session_ended` - psql
+    stopped the script itself (`PSQL_SCRIPT_ERROR`), so the transaction was aborted with its
+    session. After a client timeout or a dropped channel the server can still be running the script
+    towards its COMMIT, and other sessions cannot see its uncommitted journal rows, so an empty
+    journal is not yet an answer. Anything else - a partial journal, a journal that cannot be read -
+    is an unknown outcome too, each reported with the queries to run before any retry.
     """
     query = (
         f"SELECT count(*) FROM remediation_change_log WHERE run_stamp = {_literal(lane.run_stamp)};"
@@ -739,17 +783,50 @@ def commit_state(records: Sequence[ChangeRecord], lane: Lane = T05) -> str:
         ) from exc
     if count == len(records):
         return COMMITTED
-    if count == 0:
+    if count == 0 and session_ended:
         return NOT_COMMITTED
+    if count == 0:
+        raise OutcomeUnknown(
+            f"the journal holds 0 rows for {lane.run_stamp!r} so far, but psql did not end the "
+            "script itself, and the server may still be running it towards its COMMIT. Before any "
+            f"retry: wait until {OPEN_SESSIONS_SQL} lists no session of this write, then run: "
+            f"{query} - the write landed only if it reads {len(records)}, and nothing was written "
+            "if it reads 0"
+        )
     raise OutcomeUnknown(
         f"the journal holds {count} of {len(records)} rows for {lane.run_stamp!r}; one transaction "
         "cannot leave that behind - stop and find out what else wrote under this stamp"
     )
 
 
-def settle(records: Sequence[ChangeRecord], lane: Lane, what: str) -> int:
+def confirm_committed(records: Sequence[ChangeRecord], lane: Lane, what: str) -> int | None:
+    """Read a committed write back: `None` when it is the plan, row for row, else the exit code.
+
+    The write is in the database by the time this runs, so a read-back that fails or disagrees is
+    reported as exactly that - COMMITTED BUT NOT CONFIRMED - and never as a refusal, which would
+    read as "nothing was sent". `--apply` refuses this run stamp from now on either way.
+    """
+    try:
+        landed = assert_the_write_landed(records, lane=lane)
+    except (OutcomeUnknown, PlanError) as exc:
+        return committed_unconfirmed(lane, what, exc)
+    for name, value in landed.items():
+        print(f"  {name}: {value}")
+    return None
+
+
+def committed_unconfirmed(lane: Lane, what: str, exc: Exception) -> int:
+    print(
+        f"COMMITTED BUT NOT CONFIRMED: {what}; the write is in the database, but its read-back "
+        f"did not confirm the plan: {exc}. Run --verify before anything else; --apply refuses "
+        f"{lane.run_stamp!r} from now on."
+    )
+    return EXIT_COMMITTED_UNCONFIRMED
+
+
+def settle(records: Sequence[ChangeRecord], lane: Lane, what: str, *, session_ended: bool) -> int:
     """After a timeout or a failed psql exit: say from the journal what actually happened."""
-    state = commit_state(records, lane)
+    state = commit_state(records, lane, session_ended=session_ended)
     if state == NOT_COMMITTED:
         print(
             f"NOT COMMITTED: {what}, and the journal holds 0 rows for {lane.run_stamp!r} - "
@@ -760,9 +837,9 @@ def settle(records: Sequence[ChangeRecord], lane: Lane, what: str) -> int:
         f"COMMITTED: {what}, but the journal holds all {len(records)} rows for "
         f"{lane.run_stamp!r} - the transaction committed. Reading it back:"
     )
-    landed = assert_the_write_landed(records, lane=lane)
-    for name, value in landed.items():
-        print(f"  {name}: {value}")
+    unconfirmed = confirm_committed(records, lane, what)
+    if unconfirmed is not None:
+        return unconfirmed
     print(
         "APPLY LANDED: the read-back matches the plan, row for row; psql did not finish cleanly, "
         "so its own post-commit output is missing - run --verify for the full read-back."
@@ -893,8 +970,10 @@ def cmd_apply(
 ) -> int:
     """Send the pinned `APPLY.sql` - only if it is still this plan's - and prove what happened.
 
-    Returns an exit code: `EXIT_OK`, or after a timeout or a failed psql exit the journal's answer
-    (`EXIT_NOT_COMMITTED`, `EXIT_COMMITTED_UNCLEAN`); an unreadable journal raises `OutcomeUnknown`.
+    Returns an exit code: `EXIT_OK`; after a timeout or a failed psql exit the journal's answer
+    (`EXIT_NOT_COMMITTED`, `EXIT_COMMITTED_UNCLEAN`); after a COMMIT whose read-back fails or
+    disagrees `EXIT_COMMITTED_UNCONFIRMED`. An outcome the journal cannot settle raises
+    `OutcomeUnknown`. Only a refusal *before* the write raises `PlanError`.
     """
     sql = verify_pinned(
         out / "APPLY.sql", plan_path=plan_path, expected=apply_statement(records, lane)
@@ -912,35 +991,61 @@ def cmd_apply(
     try:
         proc = run_psql(sql, check=False)
     except OutcomeUnknown as exc:
-        return settle(records, lane, f"psql timed out ({exc})")
+        return settle(records, lane, f"psql timed out ({exc})", session_ended=False)
     print("=== the write ===")
     print(proc.stdout)
     if proc.stderr.strip():
         print(proc.stderr, file=sys.stderr)
     if proc.returncode != 0:
-        return settle(records, lane, f"psql exited {proc.returncode}")
+        return settle(
+            records,
+            lane,
+            f"psql exited {proc.returncode}",
+            session_ended=proc.returncode == PSQL_SCRIPT_ERROR,
+        )
+    # psql exited 0 with ON_ERROR_STOP after the explicit COMMIT: the write is in the database, and
+    # nothing that fails from here on may be reported as a refusal.
+    what = "psql exited 0 after the COMMIT"
     print("=== after ===")
-    print(run_psql(readback).stdout)
-    print(verify_interests(records, lane))
-    # Printed above, asserted here: a read-back that disagrees with the plan is a failed apply.
-    landed = assert_the_write_landed(records, lane=lane)
-    for name, value in landed.items():
-        print(f"  {name}: {value}")
+    try:
+        print(run_psql(readback).stdout)
+        print(verify_interests(records, lane))
+    except (OutcomeUnknown, PlanError) as exc:
+        return committed_unconfirmed(lane, what, exc)
+    # Printed above, asserted here: a read-back that disagrees with the plan is no success.
+    unconfirmed = confirm_committed(records, lane, what)
+    if unconfirmed is not None:
+        return unconfirmed
     print("APPLY OK: the read-back matches the plan, row for row")
     return EXIT_OK
 
 
+def refusal(says: str) -> str:
+    """What a guard says after `<label>: <count> ` in psql's ERROR line (guard 1 names the source)."""
+    return says.replace("%", CURATED_SOURCE)
+
+
+def refused_by_its_guard(lane: Lane, says: str, errors: Sequence[str]) -> bool:
+    """Whether one of psql's ERROR lines is the lane's refusal `<label>: <count> <says>`."""
+    own = re.compile(re.escape(f"{lane.label}: ") + r"\d+ " + re.escape(says))
+    return any(own.search(line) for line in errors)
+
+
 def probe_cases(
     records: Sequence[ChangeRecord], lane: Lane, foreign: Mapping[str, Any]
-) -> list[tuple[str, str, list[ChangeRecord]]]:
+) -> list[tuple[str, str, list[ChangeRecord], str]]:
     """One corrupted copy of the plan per in-transaction guard, each expected to be refused.
+
+    Every probe corrupts exactly one row and names the refusal its own guard prints (`refusal`):
+    the probe is proven only when that text is in psql's ERROR line, so a probe that a later guard,
+    the primitive or the column type refuses instead is reported, not counted.
 
     `foreign` is a row of another source (`id`, `name`, `value` and, for a lane with a premise,
     `premise`), read from production by the caller. Pure, so a test can check that every guard the
     lane renders has its probe.
     """
     first = records[0]
-    probes: list[tuple[str, str, list[ChangeRecord]]] = []
+    probes: list[tuple[str, str, list[ChangeRecord], str]] = []
 
     corrupted_old = list(records)
     corrupted_old[0] = replace(first, old_value="A country that was never there")
@@ -949,16 +1054,31 @@ def probe_cases(
             "guard3-foreign-old-value",
             "guard 3 - a planned old value the row does not hold",
             corrupted_old,
+            refusal(GUARD3_SAYS),
         )
     )
 
     noop = list(records)
     noop[0] = replace(first, new_value=first.old_value)
-    probes.append(("guard2-no-op", "guard 2 - a planned row that is not a change", noop))
+    probes.append(
+        (
+            "guard2-no-op",
+            "guard 2 - a planned row that is not a change",
+            noop,
+            refusal(GUARD2_SAYS),
+        )
+    )
 
     too_long = list(records)
     too_long[0] = replace(first, new_value="X" * (lane.max_chars + 1))
-    probes.append(("guard2-too-long", "guard 2 - a value longer than the column", too_long))
+    probes.append(
+        (
+            "guard2-too-long",
+            "guard 2 - a value longer than the column",
+            too_long,
+            refusal(GUARD2_SAYS),
+        )
+    )
 
     other_source = list(records)
     other_source[0] = ChangeRecord(
@@ -973,31 +1093,48 @@ def probe_cases(
         premise=None if lane.premise_sql is None else str(foreign["premise"]),
     )
     probes.append(
-        ("guard1-other-source", "guard 1 - a row outside source_id = 'ancient_nerds'", other_source)
+        (
+            "guard1-other-source",
+            "guard 1 - a row outside source_id = 'ancient_nerds'",
+            other_source,
+            refusal(GUARD1_SAYS),
+        )
     )
 
     if lane.allowed_new_values:
         not_owned = list(records)
         not_owned[0] = replace(first, new_value="A value this lane does not own")
         probes.append(
-            ("guard4-not-owned", "guard 4 - a planned value the lane does not own", not_owned)
+            (
+                "guard4-not-owned",
+                "guard 4 - a planned value the lane does not own",
+                not_owned,
+                refusal(GUARD4_SAYS.format(what="write")),
+            )
         )
 
     if lane.premise_sql is not None:
         moved = list(records)
         moved[0] = replace(first, premise="a premise the row never had")
         probes.append(
-            ("guard5-premise", "guard 5 - a row whose premise has changed since the plan", moved)
+            (
+                "guard5-premise",
+                "guard 5 - a row whose premise has changed since the plan",
+                moved,
+                refusal(GUARD5_SAYS),
+            )
         )
     return probes
 
 
 def cmd_probe_guards(records: Sequence[ChangeRecord], out: Path, lane: Lane = T05) -> int:
-    """Corrupt one copy per guard and show, on production, that the guard refuses.
+    """Corrupt one copy per guard and show, on production, that *that* guard refuses.
 
     Each probe runs inside `BEGIN ... ROLLBACK` with its own run stamp. It writes nothing: the
-    guards fire before the loop, and the failed statement aborts the transaction. The journal is
-    read back afterwards to show that no probe left a row behind.
+    guards fire before the loop, and the failed statement aborts the transaction. A probe counts
+    only when psql stopped the script (`PSQL_SCRIPT_ERROR`) with an ERROR line carrying its own
+    guard's refusal, and the journal holds no row for its stamp afterwards. Returns the number of
+    probes that fell short.
     """
     # Read as JSON: a name may contain the `|` unaligned psql separates fields on.
     premise = f", {lane.premise_sql} AS premise" if lane.premise_sql is not None else ""
@@ -1010,7 +1147,7 @@ def cmd_probe_guards(records: Sequence[ChangeRecord], out: Path, lane: Lane = T0
         raise PlanError("no non-curated row to probe the source guard with")
 
     failures = 0
-    for suffix, name, mutated in probe_cases(records, lane, foreign[0]):
+    for suffix, name, mutated, expected in probe_cases(records, lane, foreign[0]):
         stamp = f"{lane.probe_run_stamp}-{suffix}"
         sql = render_transaction(
             mutated,
@@ -1021,16 +1158,23 @@ def cmd_probe_guards(records: Sequence[ChangeRecord], out: Path, lane: Lane = T0
         )
         script = rehearse(sql, run_stamp=stamp, source=CURATED_SOURCE, lane=lane)
         proc = run_psql(script, check=False)
-        raised = "ERROR" in proc.stdout or "ERROR" in proc.stderr
-        print(f"[{name}] psql exit={proc.returncode} raised={raised}")
-        for line in (proc.stdout + proc.stderr).splitlines():
-            if "ERROR" in line or f"{lane.label}:" in line:
-                print("   " + line.strip())
-        left = read_rows(f"SELECT count(*) FROM remediation_change_log WHERE run_stamp = '{stamp}'")
-        print(f"   journal rows left by this probe: {left[0][0] if left else '?'}")
-        if not raised:
+        errors = [line.strip() for line in (proc.stdout + proc.stderr).splitlines()]
+        errors = [line for line in errors if "ERROR:" in line]
+        own = proc.returncode == PSQL_SCRIPT_ERROR and refused_by_its_guard(lane, expected, errors)
+        print(f"[{name}] psql exit={proc.returncode} refused by its own guard={own}")
+        for line in errors:
+            print("   " + line)
+        left = journal_count(stamp)
+        print(f"   journal rows left by this probe: {left}")
+        if not own:
             failures += 1
-            print(f"   !! the guard did NOT fire for {name} - this is a broken guard")
+            print(
+                f"   !! {name}: expected psql exit {PSQL_SCRIPT_ERROR} with an ERROR saying "
+                f"'{lane.label}: <n> {expected}' - the guard did not refuse this probe itself"
+            )
+        if left:
+            failures += 1
+            print(f"   !! {name}: the probe left {left} journal row(s) behind")
     return failures
 
 
@@ -1108,7 +1252,8 @@ def run(args: argparse.Namespace, *, lane: Lane, out: Path, plan: Path, usage: A
         print(verify_interests(records, lane))
         return EXIT_OK
     if args.probe_guards:
-        return cmd_probe_guards(records, out, lane)
+        # The number of failed probes is not an exit code: 3 of them would read as NOT COMMITTED.
+        return EXIT_PROBE_FAILED if cmd_probe_guards(records, out, lane) else EXIT_OK
     if args.emit:
         emit(records, out, lane, plan_path=plan)
     if args.rehearse:

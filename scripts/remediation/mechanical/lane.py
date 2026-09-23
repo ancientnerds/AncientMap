@@ -14,12 +14,18 @@ depends on *which* repair the plan is, except what a `Lane` names:
 * `premise_sql`, the live input the plan derived its value from. When it is set, every planned row
   carries that input as text and a fifth guard refuses the transaction if the row no longer holds it:
   a derived value is only right while what it was derived from is unchanged;
+* `lock_timeout` and `statement_timeout`, the transaction's server-side bounds (2026-09-23). A
+  client timeout or a dropped ssh channel does not stop the server: psql has the whole script on
+  its stdin and runs it to the `COMMIT` after the client gave up (measured on the VPS: the remote
+  psql ran the next statement 17 s after the client ssh was killed). Bounded on the server, a lock
+  wait or a runaway statement raises inside the transaction instead - psql stops the script
+  (exit 3) and nothing is kept, well inside the client's 900 s;
 * the residual predicates the read-backs print, and the output directory.
 
 T05 is the country lane that was applied on 2026-09-21. Its rendering is pinned byte for byte in
 `tests/remediation/test_mechanical.py` (sha256 of `APPLY.sql`/`ROLLBACK.sql` rendered from the
-delivered plan), so it carries no fourth or fifth guard: `allowed_new_values=()` and
-`premise_sql=None` render exactly the statement that was rehearsed and written.
+delivered plan), so it carries no fourth or fifth guard and no server bounds: `allowed_new_values=()`,
+`premise_sql=None` and no timeouts render exactly the statement that was rehearsed and written.
 
 A leaf module: it imports nothing from `plan.py` or `apply.py`, so both can import it. It does
 import the pipeline's own vocabularies a lane owns (the period buckets, the canonical site types),
@@ -40,6 +46,8 @@ _IDENTIFIER = re.compile(r"^[a-z_][a-z0-9_]*$")
 #: (it would be read as a placeholder and consume an argument).
 _LABEL = re.compile(r"^[A-Za-z0-9 _/-]+$")
 _KEY_PREFIX = re.compile(r"^[a-z0-9-]+$")
+#: A Postgres duration as `SET LOCAL ... = '<value>'` takes it: digits and a unit, nothing else.
+_DURATION = re.compile(r"^[1-9][0-9]*(ms|s|min)$")
 
 
 def sql_literal(value: str | None) -> str:
@@ -75,6 +83,8 @@ class Lane:
     rehearsal_residual: Residual
     allowed_new_values: tuple[str, ...] = ()
     premise_sql: str | None = None
+    lock_timeout: str | None = None
+    statement_timeout: str | None = None
 
     def __post_init__(self) -> None:
         """Every field that reaches SQL unquoted is checked here, once, instead of trusted."""
@@ -95,6 +105,9 @@ class Lane:
         for value in self.allowed_new_values:
             if not value or len(value) > self.max_chars:
                 raise ValueError(f"{self.name}: {value!r} cannot be written into {self.column}")
+        for bound in (self.lock_timeout, self.statement_timeout):
+            if bound is not None and not _DURATION.match(bound):
+                raise ValueError(f"{self.name}: {bound!r} is not a duration like '10s'")
 
     @property
     def rollback_run_stamp(self) -> str:
@@ -149,6 +162,14 @@ T05 = Lane(
     ),
 )
 
+#: The server-side bounds of the lanes written after T05. A lane's statement changes a few hundred
+#: rows through `apply_remediation_change` and finishes in well under a second; 10 s is a lock held
+#: by another session (the API writing the same site), 120 s is a statement that has run away. Both
+#: raise inside the transaction, so the script stops at psql exit 3 with nothing kept - the one
+#: outcome `apply.py --apply` can settle as NOT COMMITTED from the journal alone.
+LOCK_TIMEOUT = "10s"
+STATEMENT_TIMEOUT = "120s"
+
 #: The United Kingdom's parts, spelled by region (owner decision B9, 2026-09-21). The lane owns the
 #: four Natural Earth geo units of the United Kingdom and nothing else, and every row's value is
 #: derived from its own point: `premise_sql` is that point as the database prints it.
@@ -173,6 +194,8 @@ UK_PARTS = Lane(
     ),
     allowed_new_values=("England", "Northern Ireland", "Scotland", "Wales"),
     premise_sql="u.lat::text || ',' || u.lon::text",
+    lock_timeout=LOCK_TIMEOUT,
+    statement_timeout=STATEMENT_TIMEOUT,
 )
 
 
@@ -184,6 +207,10 @@ def journal_readback(lane: Lane, extra: Sequence[tuple[str, str]]) -> str:
     test id and rollback stamp, and the three ways a row can land where it must not (another column,
     a non-curated row, another site's `site_id_ref`). `extra` is the lane's own measure of the data:
     `(metric, "FROM ... WHERE ...")` pairs, each counted.
+
+    Ordered by metric, like T05's `VERIFY_SQL`: a `UNION ALL` has no order of its own (read on
+    production 2026-09-22, the metrics came back scrambled), and the before and after runs of
+    `--apply` must be comparable line by line.
     """
     stamp, column = sql_literal(lane.run_stamp), sql_literal(lane.column)
     metrics: list[tuple[str, str]] = [
@@ -224,7 +251,7 @@ def journal_readback(lane: Lane, extra: Sequence[tuple[str, str]]) -> str:
     return (
         "-- Read-only. The same text before and after the apply.\n\\pset footer off\n"
         + body
-        + ";\n"
+        + "\nORDER BY 1;\n"
     )
 
 
@@ -312,6 +339,8 @@ PERIOD_NAME = Lane(
     rehearsal_residual=_PERIOD_MISMATCH,
     allowed_new_values=tuple(label for label, _lo, _hi in PERIOD_BUCKETS),
     premise_sql="u.period_start::text",
+    lock_timeout=LOCK_TIMEOUT,
+    statement_timeout=STATEMENT_TIMEOUT,
 )
 
 PERIOD_NAME_READBACK = journal_readback(
@@ -369,6 +398,8 @@ SITE_TYPE_SHAPE = Lane(
     post_commit_residual=_NOT_A_TYPE,
     rehearsal_residual=_NOT_A_TYPE,
     allowed_new_values=tuple(CANONICAL_TYPES),
+    lock_timeout=LOCK_TIMEOUT,
+    statement_timeout=STATEMENT_TIMEOUT,
 )
 
 SITE_TYPE_SHAPE_READBACK = journal_readback(

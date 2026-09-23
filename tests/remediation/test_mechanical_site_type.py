@@ -145,6 +145,21 @@ class TestClassifyShape:
         verdict = S.classify_shape(row(None, journal=()), snapshot=SNAPSHOT)
         assert not verdict.ok and verdict.reason == "no-site-type"
 
+    def test_a_two_link_chain_restores_what_the_last_write_replaced(self) -> None:
+        """Only the malformed write is undone: the value it replaced is restored (B), and the
+        snapshot vouches for where the chain began (A) - not for the restored value."""
+        first = P.JournalLink(1, "phase3:a", "P3/site_type", "Monument", "City/town/settlement")
+        last = P.JournalLink(
+            2, "phase3:b", "P3/site_type", "City/town/settlement", "suspect_modern"
+        )
+        verdict = S.classify_shape(row(journal=(first, last)), snapshot={WITHAM: "Monument"})
+        assert verdict.ok and verdict.new_value == "City/town/settlement"
+        assert verdict.evidence[0]["source"] == "remediation_change_log:2"
+        refused = S.classify_shape(
+            row(journal=(first, last)), snapshot={WITHAM: "City/town/settlement"}
+        )
+        assert not refused.ok and refused.reason == "snapshot-disagrees"
+
 
 class TestBuildShapePlan:
     def test_changes_review_and_refusals_are_disjoint(self) -> None:

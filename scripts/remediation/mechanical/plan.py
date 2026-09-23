@@ -137,6 +137,7 @@ from census.tests.t05_country_values import (  # noqa: E402
     _iso,
     _vocabulary,
 )
+from journal_chain import first_break  # noqa: E402
 from prod_write import DIGEST_RE, pin_line  # noqa: E402
 
 from mechanical.lane import T05, Lane, sql_literal  # noqa: E402
@@ -1381,15 +1382,17 @@ def journal_break(links: Sequence[JournalLink], live: str | None) -> tuple[str, 
 
     Each link must start where the one before it ended, and the last must have written the value
     the row holds: otherwise something wrote the field around the journal, and a plan built on
-    the live value would supersede a write nobody can account for.
+    the live value would supersede a write nobody can account for. The continuity rule is
+    `journal_chain.first_break`, the one the phase-3 acceptance judges the same chains with.
     """
-    for before, after in zip(links, links[1:], strict=False):
-        if after.old_value != before.new_value:
-            return (
-                "journal-chain-broken",
-                f"journal row {after.id} starts from {after.old_value!r}, but the row before it "
-                f"({before.id}) ended at {before.new_value!r}",
-            )
+    at = first_break([(link.old_value, link.new_value) for link in links])
+    if at is not None:
+        before, after = links[at - 1], links[at]
+        return (
+            "journal-chain-broken",
+            f"journal row {after.id} starts from {after.old_value!r}, but the row before it "
+            f"({before.id}) ended at {before.new_value!r}",
+        )
     if links and links[-1].new_value != live:
         last = links[-1]
         return (
