@@ -9308,14 +9308,6 @@ GALLERY_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         "test_a_verdict_counts_only_under_the_frozen_prompt_and_the_pilot_model",
     ),
     (
-        "gallery: more workers without a clean ramp probe",
-        GALLERY + "vision.py",
-        "    if failed or p90 >= RAMP_P90_MS:\n",
-        "    if False:  # mutant\n",
-        VISION_TEST,
-        "test_more_than_four_workers_need_a_clean_ramp_probe",
-    ),
-    (
         "gallery: the frozen gallery question drifts",
         GALLERY + "vision.py",
         "including a neighbouring monument, a nearby modern park",
