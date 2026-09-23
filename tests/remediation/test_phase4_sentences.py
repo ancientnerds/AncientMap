@@ -26,6 +26,7 @@ from phase4 import sentences as S  # noqa: E402
 from phase4 import subject_gate as SG  # noqa: E402
 
 from tests.remediation import p4_fixtures as X  # noqa: E402
+from tests.remediation.p4_span_cases import SPAN_CASES  # noqa: E402
 
 
 def _one(text: str) -> M.Sentence:
@@ -311,6 +312,13 @@ def test_every_protected_group_is_honoured() -> None:
             assert S.carries_protected_token(f"x {sample} y"), (group, entry)
     assert not S.carries_protected_token("the ridge of the island")
     assert not S.carries_protected_token("etc. and so on")  # `c.` only as its own word
+
+
+@pytest.mark.parametrize(("source_id", "text", "spans"), SPAN_CASES)
+def test_the_span_cases_both_finders_share(source_id: str, text: str, spans: dict) -> None:
+    """The fixture verify4's parity test runs its own finder over (PHASE4_CONTRACTS section 7)."""
+    (sentence,) = S.split_source(source_id, text)
+    assert {span.id: text[span.start : span.end] for span in sentence.spans} == spans
 
 
 def test_the_prompt_shows_the_exact_range() -> None:

@@ -13,20 +13,26 @@ keeps that id whatever the pool keeps.
 
 Spans (Track B's reading of the design, recorded in the contracts document)
 --------------------------------------------------------------------------
+The exact rules are PHASE4_CONTRACTS.md section 7, which verify4's own finder implements too; the
+cases both must agree on are `tests/remediation/p4_span_cases.py`.
+
 A span's range is exactly the text the prompt shows after its id and exactly what the assembler
 removes (edit 1); edits 2-5 run after it. Every range carries the delimiter the removal must take
 with it. "Top level" means outside every parenthesis; a sentence whose parentheses do not balance
-offers no span at all. A *delimiter comma* is a top-level comma followed by a space, so the comma
-of `4,500` never delimits anything. Spans are offered only on a sentence that ends in `.`, `!` or
-`?`, the punctuation edit 5 puts the marker in front of.
+(or close one before they open it) offers no span at all. A *delimiter comma* is a top-level comma
+followed by a space, so the comma of `4,500` never delimits anything. Spans are offered only on a
+sentence of an English source (`W`) that ends in `.`, `!` or `?`, the punctuation edit 5 puts the
+marker in front of; a `T.<lang>` sentence offers none (the protected tokens are English words).
 
 * `p` - a top-level balanced parenthesis `(...)` with the space in front of it: `" (c. 30 m)"`. At
   the start of the sentence the space after it instead (`"(...) "`); with no space on either side,
   the parenthesis alone.
 * `a` - a paired insertion: from a delimiter comma through the next delimiter comma, `", built by
-  Khufu,"`, or from the space before a spaced dash (` - ` as en or em dash) through the next one.
-  The pair is the insertion's delimiter, so both marks go: `A, X, B` becomes `A B`, never the
-  broken `A, B` that removing one comma would leave.
+  Khufu,"`, unless the pair is a link of a list (`_list_links`); or from the space before a spaced
+  dash (` - ` as en or em dash) through the next one, the dashes paired in order (first with second,
+  third with fourth, none on an odd count), never a pair with a range dash (a digit beside it) or
+  a top-level `;` between them. The pair is the insertion's delimiter, so both marks go: `A, X, B`
+  becomes `A B`, never the broken `A, B` that removing one comma would leave.
 * `l` - a leading phrase of at most 6 tokens before the first delimiter comma, with that comma and
   the space after it: `"In 1900, "`. Edit 4 restores the capital of what follows.
 * `t` - the last comma segment: from the last delimiter comma up to, not including, the final
@@ -39,11 +45,12 @@ contrast, refutation, restriction) is offered. Spans of different kinds may over
 
 The pool
 --------
-`candidate_pool` offers the lead and the first 6 sentences of each section that is not excluded,
-counting only sentences that can be published: a complete sentence (`is_complete_sentence`) that
-ends in `.`, `!` or `?` and is 25-400 characters long. Lane S first keeps only sentences that carry a
-stored name or alias, or sit under a heading that carries one. The pool stops before the 121st
-sentence or the 24,001st character, and stays in source order.
+`candidate_pool` offers the lead and the first 6 sentences of each section that is not excluded
+(the English apparatus, and the same in the languages lane T reads), counting only sentences that
+can be published: a complete sentence (`is_complete_sentence`) that ends in `.`, `!` or `?` and is
+25-400 characters long. Lane S first keeps only sentences that carry a stored name or alias, or sit
+under a heading that carries one, both folded by `subject_gate.fold`. The pool stops before the
+121st sentence or the 24,001st character, and stays in source order.
 """
 
 from __future__ import annotations
